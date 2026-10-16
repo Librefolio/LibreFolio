@@ -43,6 +43,7 @@ class EmailKind(StrEnum):
     EMAIL_VERIFICATION = "email_verification"
     ADMIN_SETUP = "admin_setup"
     TEST = "test"
+    EMAIL_CHANGED = "email_changed"
 
 
 @dataclass(frozen=True)
@@ -185,6 +186,19 @@ def build_test_message(*, language: str | None, username: str, instance: str) ->
     lang = email_language(language)
     values = {"username": username, "instance": instance}
     return _render(EmailKind.TEST, lang, greeting="greeting", before=["intro"], after=["outro"], values=values)
+
+
+def masked_address(address: str) -> str:
+    """An address as an email may show it to someone else: its domain only, ``***@example.com``; ``***`` without one."""
+    domain = address.strip().rpartition("@")[2] if "@" in address else ""
+    return f"***@{domain}" if domain else "***"
+
+
+def build_email_changed(*, language: str | None, username: str, new_address: str, instance: str) -> EmailContent:
+    """The notice to the address an account had before, when its email address changes: the new one masked, no link."""
+    lang = email_language(language)
+    values = {"username": username, "instance": instance, "address": masked_address(new_address)}
+    return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting", before=["intro"], after=["advice"], values=values)
 
 
 class EmailRecipientError(ValueError):

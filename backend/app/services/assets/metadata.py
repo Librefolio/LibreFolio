@@ -126,6 +126,7 @@ class MetadataOperations:
                             provider,
                             lambda _p=provider, _i=_id, _it=_id_type, _pr=_params: _p.fetch_asset_metadata(_i, _it, _pr),
                             timeout=30.0,
+                            scope=core.cooldown_scope_for(provider, _id, _id_type, _params),
                         )
                         core._asset_metadata_cache.set(meta_cache_key, patch_item)
                 except Exception as e:

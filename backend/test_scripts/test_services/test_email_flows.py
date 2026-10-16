@@ -75,6 +75,16 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     ``EmailUnavailableError`` with ``INSTANCE_BLOCKED`` before the configuration, the links, the token or a limiter is
     looked at — the links still live, nothing counted, nothing spent —; ``forgotten_password_work`` ends in silence
     without making a reset row or revoking any.
+14. ``email_changed_work(user_id, old_address, new_address, *, engine)`` (lot E4a), the notice of an email change: one
+    message to the OLD address only — never the new one —, exactly what ``build_email_changed`` writes in the account's
+    language, the new address masked, the instance being the host of ``LIBREFOLIO_PUBLIC_URL`` when links are ready and
+    ``INSTANCE_FALLBACK`` («LibreFolio») otherwise — never a request's host —; one unit spent. Nothing when the two
+    addresses are the same (letter case and spaces aside), nothing logged either; email off — the self-hosted default
+    — is an ``info`` line and no warning, decided before any session is opened; the account gone is an ``info`` line;
+    email set but unusable or the instance blocked, the budget spent, the server refusing, an old address that is not
+    one address: a warning ``not sent`` with the reason's type and code; any other error an error with its type alone,
+    without a traceback. It never raises, reads the configuration off the event loop, and no log event holds either
+    address.
 
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown), users written as rows, tokens issued by A's token service with the ``now``
@@ -120,7 +130,7 @@ from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError
 from backend.app.services.email.flows import account_language, send_test_email
 from backend.app.services.email.links import EmailLinksUnavailableError, email_link
-from backend.app.services.email.messages import EmailRecipientError, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
+from backend.app.services.email.messages import EmailRecipientError, build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer
@@ -1555,3 +1565,270 @@ async def test_a_database_error_is_logged_as_its_type_without_the_identifier(mon
     assert "exc_info" not in failures[0], f"no traceback: {failures[0]}"
     assert [event for event in events if identifier in repr(event)] == [], f"a log event holds the identifier: {events}"
     print_success("logged as OperationalError, no traceback, no identifier")
+
+
+# =============================================================================
+# 14. THE NOTICE OF AN EMAIL CHANGE (lot E4a)
+# =============================================================================
+
+#: The address an account changes to: a local part of its own, never shown, never a recipient.
+NEW_ADDRESS = "zq.new-alice.secret@example.org"
+NEW_LOCAL_PART = "zq.new-alice.secret"
+#: An old address that is not one address.
+NOT_ONE_ADDRESS = "zq_alice@example.com, zq-other@example.com"
+
+
+def _notices(events: list[dict[str, object]]) -> list[dict[str, object]]:
+    """The log events of the notice."""
+    return [event for event in events if str(event.get("event", "")).startswith("Email change notice")]
+
+
+def _lookups(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Records every account the work looks up — none means no session was put to work."""
+    lookups: list[int] = []
+    lookup = user_service.get_user_by_id
+
+    async def recording(session: AsyncSession, user_id: int) -> User | None:
+        lookups.append(user_id)
+        return await lookup(session, user_id)
+
+    monkeypatch.setattr(user_service, "get_user_by_id", recording)
+    return lookups
+
+
+def test_email_changed_work_has_its_signature_and_its_fallback_name() -> None:
+    """EMF-043 — contract 14: a coroutine function ``email_changed_work(user_id, old_address, new_address, *, engine=None)``; the instance's name without a usable public address is «LibreFolio»."""
+    print_section("EMF-043: signature")
+    parameters = inspect.signature(flows.email_changed_work).parameters
+
+    assert inspect.iscoroutinefunction(flows.email_changed_work)
+    assert [(parameter.name, parameter.kind) for parameter in parameters.values()] == [("user_id", POSITIONAL), ("old_address", POSITIONAL), ("new_address", POSITIONAL), ("engine", KEYWORD_ONLY)]
+    assert parameters["engine"].default is None
+    assert flows.INSTANCE_FALLBACK == "LibreFolio"
+    print_success("email_changed_work(user_id, old_address, new_address, *, engine=None); «LibreFolio»")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("own", "default", "language"), [pytest.param("it", "fr", "it", id="its-own-language"), pytest.param(None, "fr", "fr", id="the-instances-language"), pytest.param(None, "en", "en", id="english")])
+async def test_the_notice_goes_to_the_old_address_only_in_the_accounts_language(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, own: str | None, default: str, language: str) -> None:
+    """EMF-044 — contract 14: one message, to the old address only — the new one neither a recipient nor in a header —, from the configured sender, exactly what ``build_email_changed`` writes in the account's language with the new address masked and the public host as the instance; one unit spent; returns None and logs the notice sent by the account's id and the language."""
+    print_section(f"EMF-044: the notice in {language}")
+    alice = await _add_user(engine, ALICE)
+    await _set_default_language(engine, default)
+    if own is not None:
+        await _set_account_language(engine, alice.id, own)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            returned = await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+
+    assert returned is None
+    assert len(fake.messages) == 1
+    received = fake.messages[0]
+    assert received.rcpt_tos == [alice.email]
+    assert (_mailboxes(received.message["To"]), _mailboxes(received.message["From"])) == ([("", alice.email)], [SENDER])
+    assert (received.message["Cc"], received.message["Bcc"]) == (None, None)
+    _assert_is(received, build_email_changed(language=language, username=ALICE, new_address=NEW_ADDRESS, instance=PUBLIC_HOST))
+    assert NEW_LOCAL_PART not in _text(received) + _html(received)
+    assert budget.count() == 1
+    assert [(event.get("event"), event.get("log_level"), event.get("user_id"), event.get("language")) for event in _notices(events)] == [("Email change notice sent to the previous address", "info", alice.id, language)]
+    print_success(f"to the old address only, in {language}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("public_url", "instance"),
+    [
+        pytest.param(PUBLIC_URL, PUBLIC_HOST, id="the-public-host-when-links-are-ready"),
+        pytest.param(None, "LibreFolio", id="librefolio-without-a-public-url"),
+        pytest.param(NO_LINK_FROM_IT, "LibreFolio", id="librefolio-with-a-public-url-no-link-starts-from"),
+    ],
+)
+async def test_the_instance_is_the_public_host_or_librefolio(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, public_url: str | None, instance: str) -> None:
+    """EMF-045 — contract 14: the notice carries no link, so it goes without ``LIBREFOLIO_PUBLIC_URL`` too; the instance it names is the host of that address when links are ready, else «LibreFolio» — the work takes no request, so no request's host can reach it."""
+    print_section(f"EMF-045: instance {instance}")
+    alice = await _add_user(engine, ALICE)
+
+    with FakeSmtpServer() as fake:
+        _point_at(monkeypatch, fake)
+        if public_url is not None:
+            monkeypatch.setenv(PUBLIC_URL_VARIABLE, public_url)
+        await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+
+    assert len(fake.messages) == 1
+    _assert_is(fake.messages[0], build_email_changed(language="en", username=ALICE, new_address=NEW_ADDRESS, instance=instance))
+    print_success(f"named {instance}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("new", [pytest.param("zq_alice@example.com", id="the-same-address"), pytest.param("  ZQ_Alice@Example.COM ", id="the-same-address-in-other-letters-and-spaces")])
+async def test_nothing_when_the_address_did_not_change(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, new: str) -> None:
+    """EMF-046 — contract 14: the same address, whatever its letter case and the spaces around it: nothing is sent, no account is looked up, nothing is spent, nothing is logged."""
+    print_section(f"EMF-046: {new!r}")
+    alice = await _add_user(engine, ALICE)
+    lookups = _lookups(monkeypatch)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            returned = await flows.email_changed_work(alice.id, alice.email, new, engine=engine)
+
+    assert returned is None
+    assert (fake.connections, budget.count(), lookups) == (0, 0, [])
+    assert _notices(events) == []
+    print_success("nothing")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["off", "off-with-links-ready", "off-and-blocked"])
+async def test_email_off_is_an_info_line_before_any_session(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, case: str) -> None:
+    """EMF-047 — contract 14: email off — not configured, the default of a self-hosted instance —, with or without a public address, blocked or not: one ``info`` line «email is off, nothing sent» with the account's id, no warning nor error at all; decided before any session is put to work (no account looked up); nothing sent or spent."""
+    print_section(f"EMF-047: {case}")
+    alice = await _add_user(engine, ALICE)
+    lookups = _lookups(monkeypatch)
+    if case != "off":
+        monkeypatch.setenv(PUBLIC_URL_VARIABLE, PUBLIC_URL)
+    if case == "off-and-blocked":
+        monkeypatch.setenv(BLOCKED_VARIABLE, "1")
+
+    with capture_logs() as events:
+        returned = await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+
+    assert returned is None
+    assert (lookups, budget.count()) == ([], 0)
+    assert [(event.get("event"), event.get("log_level"), event.get("user_id")) for event in _notices(events)] == [("Email change notice: email is off, nothing sent", "info", alice.id)]
+    assert [event for event in events if event.get("log_level") in ("warning", "error")] == [], events
+    print_success("info: email is off")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("case", "reason", "code"),
+    [
+        pytest.param("email-unusable", "EmailUnavailableError", "SMTP_TLS_INVALID", id="email-set-but-unusable"),
+        pytest.param("blocked", "EmailUnavailableError", "INSTANCE_BLOCKED", id="blocked"),
+        pytest.param("block-unreadable", "EmailUnavailableError", "INSTANCE_BLOCKED", id="block-unreadable"),
+        pytest.param("budget-spent", "EmailRateLimitedError", "EMAIL_RATE_LIMITED", id="budget-spent"),
+        pytest.param("smtp-refuses", "EmailDeliveryError", "RECIPIENT_REFUSED", id="the-server-refuses-the-old-address"),
+        pytest.param("not-one-address", "EmailRecipientError", None, id="an-old-address-that-is-not-one-address"),
+    ],
+)
+async def test_a_notice_that_cannot_go_is_a_warning_never_raised(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, clock: FakeClock, case: str, reason: str, code: str | None) -> None:
+    """EMF-048 — contract 14: email set but unusable, the instance blocked (blocking or unreadable), the hourly budget spent, the server refusing the old address, an old address that is not one address: nothing delivered, nothing raised, and one warning «not sent» with the reason's type and code."""
+    print_section(f"EMF-048: {case}")
+    alice = await _add_user(engine, ALICE)
+    old = NOT_ONE_ADDRESS if case == "not-one-address" else alice.email
+
+    with FakeSmtpServer(refuse_recipients={alice.email} if case == "smtp-refuses" else ()) as fake:
+        _ready(monkeypatch, fake, **({"max_per_hour": "1"} if case == "budget-spent" else {"tls": "ssl"} if case == "email-unusable" else {}))
+        if case in ("blocked", "block-unreadable"):
+            monkeypatch.setenv(BLOCKED_VARIABLE, "1" if case == "blocked" else "maybe")
+        if case == "budget-spent":
+            clock.now = START
+            assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+            clock.now = START + 60
+        with capture_logs() as events:
+            returned = await flows.email_changed_work(alice.id, old, NEW_ADDRESS, engine=engine)
+
+    assert returned is None
+    assert fake.messages == []
+    assert [(event.get("event"), event.get("log_level"), event.get("reason"), event.get("code")) for event in _notices(events)] == [("Email change notice: not sent", "warning", reason, code)]
+    print_success(f"warning: {reason} {code}")
+
+
+@pytest.mark.asyncio
+async def test_an_account_gone_is_an_info_line(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter) -> None:
+    """EMF-049 — contract 14: the account no longer exists: one ``info`` line naming its id, no warning; nothing sent or spent."""
+    print_section("EMF-049: the account is gone")
+    gone = 4_242
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            returned = await flows.email_changed_work(gone, "zq_gone@example.com", NEW_ADDRESS, engine=engine)
+
+    assert returned is None
+    assert (fake.connections, budget.count()) == (0, 0)
+    assert [(event.get("event"), event.get("log_level"), event.get("user_id")) for event in _notices(events)] == [("Email change notice: the account no longer exists, nothing sent", "info", gone)]
+    print_success("info: no such account")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["the-builder-raises", "a-database-error-holding-both-addresses"])
+async def test_any_other_error_is_logged_as_its_type_alone(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, failure: str) -> None:
+    """EMF-050 — contract 14: an unexpected error — while the email is built, or a database error whose statement parameters hold both addresses (the precondition: its text does) —: nothing raised, nothing sent, and one error «the request failed» with the error's type alone, without a traceback; no log event holds either address."""
+    print_section(f"EMF-050: {failure}")
+    alice = await _add_user(engine, ALICE)
+    error = OperationalError("UPDATE users SET email = ? WHERE users.email = ?", (NEW_ADDRESS, alice.email), Exception("database is locked"))
+    assert NEW_ADDRESS in str(error) and alice.email in str(error), "precondition: the error's text holds both addresses"
+
+    def failing_builder(**arguments: object) -> object:
+        raise RuntimeError("zq-builder failure")
+
+    async def failing_lookup(session: AsyncSession, user_id: int) -> User:
+        raise error
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        if failure == "the-builder-raises":
+            monkeypatch.setattr(flows, "build_email_changed", failing_builder)
+        else:
+            monkeypatch.setattr(user_service, "get_user_by_id", failing_lookup)
+        with capture_logs() as events:
+            returned = await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+
+    assert returned is None
+    assert fake.messages == []
+    expected_type = "RuntimeError" if failure == "the-builder-raises" else "OperationalError"
+    failures = [event for event in events if event.get("log_level") in ("warning", "error")]
+    assert [(event.get("event"), event.get("log_level"), event.get("error")) for event in failures] == [("Email change notice: the request failed", "error", expected_type)], failures
+    assert "exc_info" not in failures[0], f"no traceback: {failures[0]}"
+    assert [event for event in events if NEW_ADDRESS in repr(event) or alice.email in repr(event)] == []
+    print_success(f"logged as {expected_type}, no traceback, no address")
+
+
+@pytest.mark.asyncio
+async def test_no_log_event_of_the_notice_holds_an_address(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine) -> None:
+    """EMF-051 — contract 14: through a notice sent, the same address, email off, email unusable, an account gone, a refused address and an old address that is not one address, the work logs (the barrier), and no event holds the old address, the new one or its local part."""
+    print_section("EMF-051: no address in the logs")
+    alice = await _add_user(engine, ALICE)
+
+    with capture_logs() as events:
+        await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+        with FakeSmtpServer(refuse_recipients={"zq_refused@example.com"}) as fake:
+            _ready(monkeypatch, fake)
+            await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+            await flows.email_changed_work(alice.id, alice.email, alice.email.upper(), engine=engine)
+            await flows.email_changed_work(4_242, "zq_gone@example.com", NEW_ADDRESS, engine=engine)
+            await flows.email_changed_work(alice.id, "zq_refused@example.com", NEW_ADDRESS, engine=engine)
+            await flows.email_changed_work(alice.id, NOT_ONE_ADDRESS, NEW_ADDRESS, engine=engine)
+            _configure(monkeypatch, {"tls": "ssl"})
+            await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+
+    assert len(fake.messages) == 1 and len(_notices(events)) == 6, f"barrier: the work logged: {_notices(events)}"
+    secrets = (alice.email, NEW_ADDRESS, NEW_LOCAL_PART, "zq_gone@example.com", "zq_refused@example.com", "zq-other@example.com")
+    assert [event for event in events if any(secret in repr(event) for secret in secrets)] == [], events
+    print_success(f"{len(events)} events, no address")
+
+
+@pytest.mark.asyncio
+async def test_the_notice_reads_the_configuration_off_the_event_loop(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine) -> None:
+    """EMF-052 — contract 14: every read of the email configuration — whether email is off, then the configuration the email needs — runs in a worker thread, never on the event loop."""
+    print_section("EMF-052: off the event loop")
+    alice = await _add_user(engine, ALICE)
+    read = delivery.email_config_state
+    on_the_loop: list[bool] = []
+
+    def recording() -> object:
+        on_the_loop.append(_loop_running())
+        return read()
+
+    monkeypatch.setattr(delivery, "email_config_state", recording)
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
+
+    assert len(fake.messages) == 1
+    assert on_the_loop and not any(on_the_loop), f"read on the event loop: {on_the_loop}"
+    print_success(f"{len(on_the_loop)} reads, all in a worker thread")

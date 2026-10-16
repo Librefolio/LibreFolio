@@ -34,6 +34,7 @@ from backend.app.schemas import (
 from backend.app.services.assets import core
 from backend.app.services.assets.base import (
     AssetHistoryStartDate,
+    AssetRateLimitedError,
     AssetSourceProvider,
 )
 from backend.app.services.assets.event_store import EventStoreOperations
@@ -192,14 +193,21 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
     prep: _PreparedRefreshItem,
     semaphore: asyncio.Semaphore,
     semaphore_timeout: int,
-) -> tuple[_FetchedRefreshData | None, str | None]:
-    """Fetch prices from provider for a single asset (no DB access)."""
+) -> tuple[_FetchedRefreshData | None, str | None, AssetRateLimitedError | None]:
+    """Fetch prices from provider for a single asset (no DB access).
+
+    Returns the data (or None), the error (or None), and the refusal for too many requests met on the way, if any: a
+    paused provider fails the item, or leaves it partial, and the result tells when to try again (``retry_after``).
+    """
+    refusal: AssetRateLimitedError | None = None
     prov = prep.provider
     identifier = prep.identifier
     # Map ProviderInputType (stored in DB) to IdentifierType (expected by plugin methods)
     identifier_type = AssetSourceProvider.map_input_type_to_identifier_type(prep.identifier_type)
     provider_params = prep.provider_params
     provider_code = prep.provider_code
+    # The part of the provider a pause after «too many requests» applies to (the host of a scraped site)
+    cooldown_scope = core.cooldown_scope_for(prov, identifier, identifier_type, provider_params)
     start = prep.start
     end = prep.end
 
@@ -262,6 +270,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                     prov,
                                     lambda: prov.get_history_value(identifier, identifier_type, provider_params, fetch_start, fetch_end),
                                     timeout=55.0,
+                                    scope=cooldown_scope,
                                 )
                                 if hist_data and hist_data.prices:
                                     fetched_points = [p.model_dump() for p in hist_data.prices]
@@ -283,6 +292,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                 prices_data = list(cached_dates.values())
 
                     except Exception as hist_e:
+                        refusal = _refusal_of(hist_e, refusal)
                         logger.warning(f"History fetch failed for asset {asset_id}: {hist_e}")
 
                 # 2. Fetch current value (with core cache)
@@ -293,7 +303,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                             current_data = cached_current
                             logger.debug(f"Current cache HIT for asset {asset_id}")
                         else:
-                            current_data = await core.call_provider(prov, lambda: prov.get_current_value(identifier, identifier_type, provider_params), timeout=15.0)
+                            current_data = await core.call_provider(prov, lambda: prov.get_current_value(identifier, identifier_type, provider_params), timeout=15.0, scope=cooldown_scope)
                             if current_data:
                                 core._asset_current_cache.set(cache_key, current_data)
 
@@ -307,10 +317,11 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                             prices_data.append(current_price)
                             logger.debug(f"Added current price for asset {asset_id}: {current_data.value}")
                     except Exception as curr_e:
+                        refusal = _refusal_of(curr_e, refusal)
                         logger.warning(f"Current value fetch failed for asset {asset_id}: {curr_e}")
 
                 if not prices_data:
-                    return None, "No price data available from provider"
+                    return None, (refusal.message if refusal is not None else "No price data available from provider"), refusal
 
                 return (
                     _FetchedRefreshData(
@@ -319,18 +330,19 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                         events=events_data,
                     ),
                     None,
+                    refusal,
                 )
 
     except Exception as e:
-        return None, str(e)
+        return None, str(e), _refusal_of(e, refusal)
 
 
 async def _fetch_refresh_items(
     prepared_items: dict[int, _PreparedRefreshItem],
     concurrency: int,
     semaphore_timeout: int,
-) -> tuple[dict[int, _FetchedRefreshData], dict[int, str]]:
-    """Fetch every prepared item without touching the database."""
+) -> tuple[dict[int, _FetchedRefreshData], dict[int, str], dict[int, AssetRateLimitedError]]:
+    """Fetch every prepared item without touching the database; the third map holds the refusals for too many requests."""
     semaphore = asyncio.Semaphore(concurrency)
     tasks = [
         _fetch_refresh_item(
@@ -345,7 +357,8 @@ async def _fetch_refresh_items(
 
     fetch_results: dict[int, _FetchedRefreshData] = {}
     fetch_errors: dict[int, str] = {}
-    for asset_id, (data, error) in zip(
+    fetch_refusals: dict[int, AssetRateLimitedError] = {}
+    for asset_id, (data, error, refusal) in zip(
         prepared_items,
         completed,
         strict=True,
@@ -354,7 +367,9 @@ async def _fetch_refresh_items(
             fetch_results[asset_id] = data
         if error is not None:
             fetch_errors[asset_id] = error
-    return fetch_results, fetch_errors
+        if refusal is not None:
+            fetch_refusals[asset_id] = refusal
+    return fetch_results, fetch_errors, fetch_refusals
 
 
 async def _count_actual_price_changes(
@@ -624,8 +639,13 @@ async def _persist_refresh_items(
     fetch_results: dict[int, _FetchedRefreshData],
     fetch_errors: dict[int, str],
     engine: AsyncEngine,
+    fetch_refusals: dict[int, AssetRateLimitedError] | None = None,
 ) -> list[FARefreshResult]:
-    """Persist fetched items with one isolated session per asset."""
+    """Persist fetched items with one isolated session per asset.
+
+    An item whose provider refused for too many requests carries ``error_code="RATE_LIMITED"`` and ``retry_after``,
+    whether it failed or saved what it got: a caller knows when the provider may be called again.
+    """
     asset_ids = [asset_id for asset_id in prepared_items if asset_id in fetch_results or asset_id in fetch_errors]
     tasks = [
         _persist_refresh_item(
@@ -637,7 +657,25 @@ async def _persist_refresh_items(
         )
         for asset_id in asset_ids
     ]
-    return list(await asyncio.gather(*tasks)) if tasks else []
+    results = list(await asyncio.gather(*tasks)) if tasks else []
+    refusals = fetch_refusals or {}
+    return [_with_refusal(result, refusals.get(result.asset_id)) for result in results]
+
+
+def _with_refusal(result: FARefreshResult, refusal: AssetRateLimitedError | None) -> FARefreshResult:
+    """``result`` with the refusal for too many requests its fetch met, if any."""
+    if refusal is None:
+        return result
+    return result.model_copy(update={"error_code": refusal.error_code, "retry_after": refusal.retry_after})
+
+
+def _refusal_of(error: BaseException, current: AssetRateLimitedError | None) -> AssetRateLimitedError | None:
+    """The refusal to report after ``error``: the error itself when it is one, with the longest wait; else ``current``."""
+    if not isinstance(error, AssetRateLimitedError):
+        return current
+    if current is None or (error.retry_after or 0.0) >= (current.retry_after or 0.0):
+        return error
+    return current
 
 
 class RefreshOperations:
@@ -665,7 +703,7 @@ class RefreshOperations:
             session,
             bulk_started_ns,
         )
-        fetch_results, fetch_errors = await _fetch_refresh_items(
+        fetch_results, fetch_errors, fetch_refusals = await _fetch_refresh_items(
             prepared_items,
             concurrency,
             semaphore_timeout,
@@ -675,6 +713,7 @@ class RefreshOperations:
             fetch_results,
             fetch_errors,
             get_async_engine(),
+            fetch_refusals,
         )
 
         results = immediate_results + persist_results

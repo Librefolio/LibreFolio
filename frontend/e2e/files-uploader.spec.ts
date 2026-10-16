@@ -29,6 +29,7 @@ function staticFile(id: string, original_name: string, uploaded_by_user_id: numb
         id,
         original_name,
         uploaded_by_user_id,
+        scope: 'common',
         mime_type: 'text/plain',
         size_bytes: 128,
         uploaded_at: CREATED_AT,

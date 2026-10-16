@@ -137,6 +137,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/brokers/lots/lotStateVisual.test.ts",
             "src/lib/components/brokers/lots/unifiedLotsTableHelpers.test.ts",
             "src/lib/components/brokers/lots/lotCustodyModalHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotCustodyModalHelpers.closureValueLabel.test.ts",
             "src/lib/components/brokers/lots/lotsAnalysisHelpers.test.ts",
             "src/lib/components/brokers/lots/lotDataQualityHelpers.test.ts",
             "src/lib/stores/chartSettingsStore.test.ts",
@@ -155,6 +156,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/format.test.ts",
             "src/lib/features/tools/pac-allocator/planner/modeText.test.ts",
             "src/lib/features/tools/pac-allocator/planner/categoryLabels.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/exposureBarColours.test.ts",
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/riskGlossary.test.ts",
@@ -175,6 +177,9 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/email/emailText.test.ts",
             "src/lib/features/email/emailApi.test.ts",
             "src/lib/features/email/emailLinks.test.ts",
+            "src/lib/features/email/verificationApi.test.ts",
+            "src/lib/features/email/sendLinkApi.test.ts",
+            "src/lib/features/email/forgotPasswordApi.test.ts",
             "src/lib/features/backup/backupApi.test.ts",
             "src/lib/features/backup/backupJob.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
@@ -307,6 +312,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/routes/page.authFlash.test.ts",
             "src/routes/invite/page.test.ts",
             "src/routes/reset-password/page.test.ts",
+            "src/routes/verify-email/page.test.ts",
             "src/lib/features/support/DonationPopupModal.test.ts",
             "src/lib/features/support/SupportActions.test.ts",
             "src/lib/features/support/SocialShareModal.test.ts",
@@ -348,11 +354,16 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/users/InviteDialog.test.ts",
             "src/lib/features/settings/users/ResetLinkDialog.test.ts",
             "src/lib/features/email/EmailSettingsTab.test.ts",
+            "src/lib/features/email/VerifyEmailCard.test.ts",
+            "src/lib/features/email/VerificationNotice.test.ts",
+            "src/lib/features/email/SendLinkByEmail.test.ts",
+            "src/lib/features/email/ForgotPasswordEmailForm.test.ts",
             "src/routes/(app)/settings/page.tabs.test.ts",
             "src/lib/features/tools/ToolsHub.test.ts",
             "src/lib/features/tools/ToolHost.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/StateNotice.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/ResultCell.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/ExposureBars.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/model.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/text.test.ts",
             "src/lib/features/tools/pac-allocator/planner/request.test.ts",
@@ -603,6 +614,30 @@ def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: boo
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_datatable_mobile(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the DataTable's pinned selection and actions columns at phone width: header and cells scroll with the table, the header row still sticks (Y7, D-Y17)."""
+    print_section("Frontend DataTable Mobile Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/datatable-mobile.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_datatable_resize(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the DataTable column resize: a mouse drag on an auto-layout column edge moves it by the drag, with a fixed-layout control, and a finger drag on a phone (Y7, C-62, D-Y18)."""
+    print_section("Frontend DataTable Resize Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/datatable-resize.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -881,6 +916,24 @@ def populate_registry(registry: dict) -> None:
         desc="The documentation draws its formulas without internet: on a nested page in English and its Italian twin a folder deeper, every origin but the lane's refused, lib-loader.js loads MathJax from the site's root (/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js, 200), every formula gets its mjx-container, every MathJax font is a 200 from the site's copy (vendor/mathjax/output/chtml/fonts/woff-v2/) with at least one MJX face loaded and none in error, MathJax is never asked of another origin (jsDelivr included), and mathjax.js raises no typesetPromise page error (M-19, batch 25)",
         prereq="Docs site built with the MathJax copy and its fonts (dev.py cache js, then dev.py mkdocs build)",
         tests="layout/docs-offline-math.spec.ts",
+    )
+    add_test(
+        cat,
+        "datatable-mobile",
+        front_datatable_mobile,
+        name="DataTable Mobile Pinned Columns",
+        desc="At 390 px, read-only on seeded data, on Transactions (stickyActions false) and the Files static list (sticky actions): scrolled half an actions cell short of the far right, the actions header sits over its row's actions cell and both end with the table; the selection header and cell have scrolled out past the scroll area's left edge; and, the scroll area bounded to the header and two rows and scrolled down, every header cell stays on its top while the body passes under (Y7, D-Y17; needs the dt-scroll / dt-select-* / dt-actions-* test ids)",
+        prereq="Populated DB + test users",
+        tests="layout/datatable-mobile.spec.ts",
+    )
+    add_test(
+        cat,
+        "datatable-resize",
+        front_datatable_resize,
+        name="DataTable Column Resize",
+        desc="Read-only on seeded data. The contract: a drag of a column's resize handle (found by cursor: col-resize under the title cell's right edge, pressed at its centre) by Δ px changes the column's drawn width by Δ ±4 px. Files static list (tableLayout auto), by mouse: at 1280 px the File name column +80 then -40 px; at 390 px, where the table is wider than its box and draws every column at its minimum, +60 px, and the table's scroll width grows by as much (a resized column keeps its width as min-width, so the other columns are not squeezed back). Control: the Transactions Date column (fixed layout, table wider than its dt-scroll area) by mouse, +80 then -40 px. The input path alone, independent of the layout: at 390 x 844 with isMobile and hasTouch, a finger (Chromium CDP Input.dispatchTouchEvent: touchStart on the handle's centre, touchMove in 6 steps, touchEnd) drags the Date handle +60 px on that fixed table (Y7, C-62, D-Y18)",
+        prereq="Populated DB + test users",
+        tests="layout/datatable-resize.spec.ts",
     )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
