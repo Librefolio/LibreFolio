@@ -301,6 +301,14 @@ def api_backup_panel(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Backup API panel token tests", verbose=verbose)
 
 
+def api_backup_restore(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the check of a backup archive before a restore (/backup/restore), in an app of the test (no server reached)."""
+    print_section("Backup API: the restore check")
+    print_info("Testing: PUT /backup/restore/upload (limit, space, links), POST/GET/DELETE /backup/restore/stage (report, refusals, one at a time, interrupted, prune) on real archives under tmp_path")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_restore.py", test_names)
+    return run_command(cmd, "Backup API restore check tests", verbose=verbose)
+
+
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Run Transactions API endpoint tests."""
     print_section("Transactions API Endpoint Tests")
@@ -877,6 +885,19 @@ Tests for REST API endpoints (server auto-started):
         # PURE: an app of the test holds backup_router under /api/v1 (require_admin overridden where called) and the four
         # functions of jobs replaced by a fake under tmp_path; the token variables are set with monkeypatch: no data
         # directory, DB, server or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-restore",
+        api_backup_restore,
+        name="Backup API Restore Check",
+        desc="The check of an archive before a restore (/backup/restore, lot B2b): PUT /upload as a raw body (201 with its id and size, 0600, written in 1 MiB pieces off the event loop; LIBREFOLIO_BACKUP_MAX_UPLOAD_MB → 413 backup_too_large with limit_mb on the Content-Length before anything is created or at the piece past it with no partial left, none self-hosted, 500 managed, 503 when unreadable; 507 without room; 400 empty or incomplete; a newer upload replaces the older but the one a running check reads; a link or a file for .restore → 500 restore_folder_unusable); POST /stage → 202, GET → done with the report mapped from staging (same, upgrade with its migrations and warnings, no administrator) or failed with its code, the upload removed; 404 unknown ids, 422 a malformed upload id; one check at a time (409 restore_busy, 409 restore_stage_running); the end written before the lock is let go, a poll as a check ends never interrupted; restore_interrupted when nobody holds the lock; prune (ended checks after 24 h, a check left running ended, unrecorded uploads and copies only while no check runs, never through a link; a start with a link in place of a folder → 500, nothing pruned); done_bytes/total_bytes follow the unpacking; 500 backup_upload_failed on any other write failure; administrators only (403); not allowed when blocked; OpenAPI octet-stream; backup_max_upload_mb()",
+        # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory
+        # of restore.py and restore_jobs.py is under tmp_path and the process's own one is a folder of the test that
+        # must stay absent; the checks run in fake threads, on real archives built under tmp_path (two alembic upgrades
+        # of new databases, in processes of their own, as test_backup_staging.py makes them): no lane data directory,
+        # DB, server or network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
     )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
