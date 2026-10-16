@@ -6,8 +6,10 @@
  * the `storage` event: two pages of one Playwright context are two tabs of one browser, which is exactly the flow the
  * Lab is built for. Nothing here touches the server: what the Lab writes dies with the test's context.
  *
- * The app tab publishes `window.__lfDesignerLab` (`active`, `picking`, `stats`, `chartColors`) from the client every
- * page of a debug build loads; every wait below reads that state, a computed style or a test id — never the clock.
+ * The app tab publishes `window.__lfDesignerLab` (`active`, `picking`, `stats`, `chartColors`, `categoryColor`) from the
+ * client every page of a debug build loads; every wait below reads that state, a computed style or a test id — never
+ * the clock. `categoryColor` is the hook every chart category asks when it draws (contract C3 with DV): the specs never
+ * call it, they read what the charts drew with it.
  *
  * Which code writes a colour is not the specs' business: workstreams move colours between rules, tokens and utilities.
  * The specs read it at run time — from the page, from the facts the picker reports, from the catalogue the Lab lists —
@@ -45,13 +47,15 @@ export const PICK_KEY = `${LAB_KEY_PREFIX}/pick`;
 /** The style and SVG nodes the engines inject while a state is active; an idle client injects none of them. */
 export const LAB_NODE_IDS = ['lf-designer-lab-vars', 'lf-designer-lab-elements', 'lf-designer-lab-layer-order', 'lf-designer-lab-cvd-style', 'lf-designer-lab-cvd-svg'];
 
-export const IDLE_STATS = {cssRules: 0, chartInstances: 0, varOverrides: 0, elementRules: 0};
+export const IDLE_STATS = {cssRules: 0, chartInstances: 0, varOverrides: 0, elementRules: 0, categoryOverrides: 0};
 
 interface LabStats {
     cssRules: number;
     chartInstances: number;
     varOverrides: number;
     elementRules: number;
+    /** The `category` changes the engine answers `categoryColor` with. */
+    categoryOverrides: number;
 }
 
 interface LabHook {
@@ -59,6 +63,7 @@ interface LabHook {
     picking: () => boolean;
     stats: () => LabStats;
     chartColors: (selector: string) => Promise<string[]>;
+    categoryColor: (kind: 'type' | 'sector', key: string, dark: boolean) => string | undefined;
 }
 
 type LabWindow = Window & {__lfDesignerLab?: LabHook};
@@ -76,6 +81,8 @@ interface LabExportChange {
     impact?: {uses: number; files: number; classes?: Record<string, number>};
     /** `css-var`: where the sources define the variable. */
     definitions?: {file: string; line: number; selector: string | null; theme: string | null; value: string}[];
+    /** `category`: the chart category the change colours, as its table writes it; the occurrences are its lines. */
+    category?: {kind: string; key: string};
     occurrences: {file: string; line: number; raw?: string; selector?: string | null; why?: string}[];
     anchor?: {
         route: string;
@@ -185,6 +192,35 @@ export async function openDashboardGrowthChart(page: Page): Promise<Locator> {
 }
 
 /**
+ * The pie of the dashboard's «Allocation» panel in its «now» view, as a selector `document.querySelector` takes: the
+ * panel keeps its history chart mounted (hidden) beside it, so the pie is the drawn chart that is not the history.
+ */
+export const ALLOCATION_PIE = '[data-testid="allocation-panel"] [data-chart-ready]:not([data-testid="allocation-history-chart"])';
+
+/** The dashboard, loaded: its busy flag is down. `/dashboard` opens on its overview, the tab of the «Allocation» panel. */
+export async function openDashboard(page: Page): Promise<void> {
+    await navigateTo(page, '/dashboard');
+    await waitForSettled(page.getByTestId('dashboard-page'), 30_000);
+}
+
+/**
+ * Show the «now» view of the «Allocation» panel on `tab` and return its pie once drawn. The view and the tab persist per
+ * user in this context's storage: each is clicked only when it is not already selected, and its end state asserted.
+ * Each tab mounts a pie of its own, so the pie that reports itself drawn after the switch is the tab's.
+ */
+export async function showAllocationNow(page: Page, tab: 'type' | 'sector'): Promise<Locator> {
+    const panel = page.getByTestId('allocation-panel');
+    await expect(panel, 'the dashboard overview shows the «Allocation» panel').toBeVisible({timeout: 20_000});
+    for (const button of [panel.getByTestId('allocation-view-now'), panel.getByTestId(`allocation-tab-${tab}`)]) {
+        if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+        await expect(button).toHaveAttribute('aria-pressed', 'true');
+    }
+    const pie = page.locator(ALLOCATION_PIE);
+    await expect(pie, `the ${tab} pie must draw: TEST_USER holds positions in populate_mock_data`).toHaveAttribute('data-chart-ready', 'true', {timeout: 20_000});
+    return pie;
+}
+
+/**
  * Open the Lab in a new page of `context`. Its root renders only in a debug build: a release build answers the URL
  * with the SPA shell, and the route's `load()` throws its 404 instead.
  */
@@ -213,8 +249,8 @@ export async function expectChanges(lab: Page, count: number): Promise<void> {
     await expect(lab.getByTestId('designer-lab')).toHaveAttribute('data-changes', String(count));
 }
 
-/** The tabs of the Lab that list catalogue items the editor opens on. */
-export type ItemTab = 'palette' | 'vars' | 'sheets' | 'charts';
+/** The tabs of the Lab that list catalogue items the editor opens on: `categories` lists the chart categories, by key. */
+export type ItemTab = 'palette' | 'vars' | 'sheets' | 'charts' | 'categories';
 
 /**
  * Open the editor on one catalogue item: open the tab, narrow the list with the search, click the item. Returns the
@@ -277,6 +313,42 @@ export async function listedKeys(lab: Page, tab: 'sheets' | 'charts'): Promise<s
     return items.evaluateAll((nodes, start) => nodes.map((node) => (node.getAttribute('data-testid') ?? '').slice(start.length)), prefix);
 }
 
+/** A chart category as the Lab's «Categories» tab lists it: its target, and the value its table writes in each theme. */
+export interface CategoryValue {
+    /** `type:ETF`, `sector:Health Care`, `bucket:Liquidity`: the target of a `category` change. */
+    target: string;
+    kind: string;
+    /** As the table writes it (`ETF`, `Health Care`). */
+    key: string;
+    /** The values as the table writes them (`#1D5BD8`), null where it writes none. */
+    light: string | null;
+    dark: string | null;
+}
+
+/**
+ * Every chart category the «Categories» tab lists (the search cleared), with its values read from the row's text, where
+ * the Lab shows them as `<light> · <dark>` (`—` for a missing one). Which values the tables hold is DV's business and
+ * T's, never the specs': they pick from this list at run time.
+ */
+export async function categoryValues(lab: Page): Promise<CategoryValue[]> {
+    const tab = lab.getByTestId('lab-tab-categories');
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-current', 'true');
+    const search = lab.getByTestId('lab-search');
+    await search.fill('');
+    await expect(search).toHaveValue('');
+    const prefix = 'lab-item-category-';
+    const rows = lab.locator(`[data-testid^="${prefix}"]`);
+    await expect(rows, 'the «Categories» tab lists the chart categories of the catalogue: the tables of lib/theme/chartCategories.ts').not.toHaveCount(0);
+    const read = await rows.evaluateAll((nodes, start) => nodes.map((node) => ({target: (node.getAttribute('data-testid') ?? '').slice(start.length), text: node.textContent ?? ''})), prefix);
+    return read.map(({target, text}) => {
+        const values = /(#[0-9a-f]{3,8}|—)\s*·\s*(#[0-9a-f]{3,8}|—)\s*$/i.exec(text.trim());
+        if (!values) throw new Error(`the row of ${target} must end with its light and dark values, «#… · #…»: it reads «${text.trim()}»`);
+        const colon = target.indexOf(':');
+        return {target, kind: target.slice(0, colon), key: target.slice(colon + 1), light: values[1] === '—' ? null : values[1], dark: values[2] === '—' ? null : values[2]};
+    });
+}
+
 /** The client of a debug build has started in this page: `start()` publishes its hook. */
 export async function waitForLabClient(page: Page): Promise<void> {
     await expect
@@ -321,6 +393,12 @@ export async function chartColourValues(page: Page, selector: string): Promise<s
         return [...new Set(colours.map(valueOf))].sort();
     }, selector);
 }
+
+/**
+ * The event that tells the charts their colours changed while the theme did not (contract C4 with DV, `onChartColorsChange`
+ * of `lib/theme/themeMode.ts`): a chart that hears it rebuilds its whole option, its roles and categories read again.
+ */
+export const CHART_COLORS_EVENT = 'lf:chart-colors-change';
 
 /** The computed value of a CSS property of the element `locator` resolves to. */
 export async function computedStyle(locator: Locator, property = 'color'): Promise<string> {
