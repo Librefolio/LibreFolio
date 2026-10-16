@@ -4676,3 +4676,23 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 >   - Una sola build, al primo spec.
 > - **C-66 ✅ pronto per l'handoff**. Le voci C-66 (sezione W/C del backlog) e O-20 (backlog 38) le chiude il
 >   coordinatore, perché non sono nella mia sezione.
+> - **C-66 committato**: `32c64bbd9` (feat) e `a335fa78d` (diario).
+
+### Diciottesimo aggiornamento di base: `dev_release2` (`27994759a`, con Y11 `pageBusy`) nel ramo X — merge aperto, combinato verde (2026-10-16, 20:50–21:01)
+
+> - **Conflitti** (HEAD `a335fa78d`, MERGE_HEAD `27994759a`):
+>   - `assets/+page.svelte`, sugli import: tenuti sia `pageBusy` di Y sia il mio `hasStoredPointInRange`.
+>     - I `pageBusy.track` di Y coprono il caricamento, i ricaricamenti, il periodo e gli aggiornamenti.
+>     - I miei gestori della creazione (`handleAssetCreated`, `handleCreatedAssetSynced`) restano fuori dal
+>       tracciamento, come vuole P3, e Y li ha già annotati.
+>     - Rispetto a dev, il file differisce solo per le aggiunte del C-66.
+>   - `CHANGELOG.md`: aggiuntivo. Prima le due righe ✨ di dev (`user set-email`, `LIBREFOLIO_BRIM_PREWARM`), poi la
+>     mia.
+>   - In stage solo quei due file.
+> - **Prove leggere sulla revisione combinata**, col cancello a 50:
+>   - `api sync`;
+>   - `front check` 0/0;
+>   - `core-unit` **190 file, 6866/6866**;
+>   - `component-unit` **158 file, 4123/4123**.
+> - **Prossimo**: lo slot 2 (~21:30, dopo E) con `front-asset asset-list` e `front-portfolio page-busy` sulla
+>   revisione combinata, poi l'ingresso in dev.
