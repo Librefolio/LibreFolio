@@ -76,7 +76,21 @@
     "uploader": "Uploaded by",
     "uploaderHint": "User who uploaded the file.",
     "noUploader": "Uploader not recorded",
-    "uploaderLookupFailed": "Uploader names could not be loaded. Files remain available with user IDs."
+    "uploaderLookupFailed": "Uploader names could not be loaded. Files remain available with user IDs.",
+    "scope": {
+      "column": "Visibility",
+      "columnHint": "Shared files are visible to every user; personal files only to their uploader and the administrators.",
+      "common": "Shared",
+      "personal": "Personal",
+      "share": "Share with everyone",
+      "makePersonal": "Make personal",
+      "makePersonalConfirm": "The other users will no longer see this file, not even where it is used as an icon or a photo.",
+      "nowShared": "{name} is now visible to every user",
+      "nowPersonal": "{name} is now visible only to its uploader and the administrators",
+      "changeFailed": "The file's visibility could not be changed",
+      "sharedOnPick": "{name} was personal: it is now visible to every user, so that everyone sees it here"
+    },
+    "deleteSkipped": "Files you are not allowed to delete were left in place"
   },
   "files": {
     "deleteFailed": "Failed to delete file"

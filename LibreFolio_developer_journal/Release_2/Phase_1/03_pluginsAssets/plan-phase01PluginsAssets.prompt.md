@@ -2778,3 +2778,129 @@ runner, verificato):
    > - Previsione dei conflitti contro `dev_release2` (`59ce8ba20`): nessun percorso in comune.
 
 ### Checkpoint CP11a — pronto, FROZEN (2026-10-16, 00:45)
+
+Committato dal coordinatore: `f7508ff84` (codice, 28 file) e `d592b5ef3` (journal).
+
+### Dodicesimo aggiornamento di base: `dev_release2` (`59ce8ba20`) nel ramo X ✅ (2026-10-16) — merge `91928edc5`, pulito
+
+Nessun file fuso da solo. Le prove d'ingresso del CP11a da solo, sulla revisione combinata, una alla volta con
+`nice -n 10` e il carico ≤ 70 (`/tmp/libreFolio_cp11a_entry_checks.sh`, log in `/tmp/libreFolio_cp11a_entry/`), tutte
+verdi:
+- `api sync`, senza file tracciati cambiati; `front check` 0/0;
+- `front-utility core-unit` 5661, cresciuto con la base;
+- `gate-i18n-catalog` 176, `gate-i18n-usage` 195, `gate-plugin-i18n-ownership` 64;
+- `test db --force populate`, poi `api plugin-settings` 13.
+
+Porta 6183 libera.
+
+### CP11b — frontend: scheda, modulo, «Configura», ricerca ⏳ (via del coordinatore 2026-10-16, 00:42, dopo le prove del CP11a)
+
+Colori: passo prima io. `ProviderAssignmentSection` e `AssetSearchAutocomplete` sono nell'ondata W4 dei colori, che
+stanotte non arriva; `settingsTabs.ts` non è in nessun lotto dei colori. Nel markup nuovo, solo ruoli (skill
+`theme-roles`). Il CHANGELOG si scrive con il CP11b, che rende visibile la funzione.
+
+**⏸️ Pausa delle prove 00:55–01:40** (coordinatore: la galleria dei colori ha avuto 6 rossi per il carico, e la mia
+`vite build` delle 00:52, dentro `api plugin-settings`, era fra le cause). Nessun processo mio era in esecuzione; nella
+pausa scrivo solo il codice e non lancio niente, nemmeno `dev.py i18n add`.
+
+1. ✅ (2026-10-16) Il codice, scritto senza lanciare niente.
+   > **Note implementazione** (nuova cartella `frontend/src/lib/features/plugin-settings/`):
+   > - `pluginSettingsApi.ts`:
+   >   - tipi ristretti dalle risposte generate (`fieldOf`, `entryOf`);
+   >   - `fetchPluginSettings`, `fetchPluginEntry`;
+   >   - `savePluginSettings`, che non lancia mai e dà `saved` / `refused` (422 con `detail.results`) /
+   >     `conflict` (409) / `keyUnavailable` (503) / `failed`.
+   > - `pluginSettingsForm.ts`, puro:
+   >   - lo stato del modulo: testi digitati, scelte, valori da cancellare; da lì `draftOf` deriva le modifiche,
+   >     così un campo riportato al valore in vigore non ha modifica e un campo mostra sempre ciò che si è digitato;
+   >   - i controlli prima del server: lunghezze in code point, come `len()`; numeri, interi, limiti, opzioni;
+   >   - `writeItems`; i rifiuti per campo;
+   >   - i testi con ripiego inglese (`translateOr`);
+   >   - le classi, letterali interi e solo ruoli.
+   > - `PluginSettingsForm.svelte`, un plugin:
+   >   - un controllo per tipo;
+   >   - il segreto a sola scrittura («impostato il …», «Sostituisci», «Cancella», il testo dimenticato dopo il
+   >     salvataggio, `autocomplete="new-password"`);
+   >   - in sola lettura, con il motivo: bloccato dal server (la variabile solo per l'admin) o riservato all'admin
+   >     (D-X15);
+   >   - «Usa il predefinito» per un valore salvato;
+   >   - errori locali e rifiuti del server per campo;
+   >   - salvataggio tutto o niente, poi rilettura del plugin; `data-busy` e `aria-busy`.
+   > - `PluginSettingsTab.svelte`: la scheda (gruppi Prezzi e Cambi, stato vuoto, errore di caricamento).
+   > - `PluginSettingsModal.svelte`: «Configura», su `ModalBase`, filtrato sul plugin.
+   > - Altrove:
+   >   - `settingsTabs.ts`: una riga e un import (`plugins`, `Puzzle`, ordine 25);
+   >   - `ProviderAssignmentSection.svelte`: badge «Da configurare» e pulsante «Configura» nella riga 1, più la modale;
+   >   - `AssetSearchAutocomplete.svelte`: la riga «<fornitore> va configurato» con «Configura», dallo stream
+   >     (`error_code`) e dal ripiego REST (`providers_not_configured`); la legenda della 👑; una ricerca nuova
+   >     dopo un salvataggio.
+   > - i18n:
+   >   - il sottosistema nuovo `frontend/src/lib/i18n/pluginSettings/` (`prefixes.txt`);
+   >   - 47 chiavi `pluginSettings.*` e 2 `assets.search.*`, pronte in `/tmp/libreFolio_cp11b_i18n_add.py` (`set_key`
+   >     come `i18n add`, in un processo solo), da lanciare alla ripresa.
+   > - Nel markup nuovo e aggiunto, solo ruoli: nessuna classe di palette e nessun `dark:`.
+
+**Decisioni notturne, da rivedere** (seguono N1–N8)
+- **N9.** Nel pannello del fornitore in sola lettura, «Configura» non compare; il badge «Da configurare» sì.
+- **N10.** `NOT_CONFIGURED` resta un fallimento vero della sonda (rosso), non un avviso: la configurazione è davvero
+  incompleta, e «Configura» è lì accanto.
+- **N11.** La modale «Configura» sta al livello 80, sopra la modale dell'asset (50) e le sue richieste (70): il pannello
+  non conosce il livello del genitore.
+- **N12.** Niente cache a livello di modulo dello stato dei plugin: una GET a ogni scelta di fornitore. Una cache
+  sopravvivrebbe al logout e mostrerebbe a un altro utente le preferenze personali di chi c'era prima.
+- **N13.** Un salvataggio riuscito non dà toast, solo l'evento `pluginSettings.saved`: l'esito si vede nel campo. Rifiuti
+  ed errori danno sempre il toast.
+- **N14.** La scheda non ha ancora il link alla documentazione: arriva con la pagina utente, nel CP11c, per non lasciare
+  un link senza pagina.
+
+**Alla ripresa, in ordine**:
+- le chiavi i18n, poi `i18n check`;
+- `front check`;
+- i Vitest con test-author: il modulo puro, l'API, i tre componenti, `settingsTabs.test.ts` (la riga di oggi),
+  autocomplete e pannello;
+- `front-utility core-unit`, con i gate dei colori.
+2. ✅ (2026-10-16, dopo la ripresa delle 01:33) Le chiavi, i controlli statici e i Vitest scritti da test-author.
+   > **Note implementazione**:
+   > - `/tmp/libreFolio_cp11b_i18n_add.py`: 49 chiavi in un processo solo (47 nel sottosistema `pluginSettings`, 2 in
+   >   `assets`). `i18n check` severo verde: 4714 chiavi, 22 sottosistemi.
+   > - `front check` 0/0.
+   > - Prettier sui file toccati: `ProviderAssignmentSection` a HEAD era pulito, e `--write` ha cambiato solo il mio
+   >   blocco aggiunto.
+   > - Gate dei colori standalone (`theme-roles.mjs --check`): pulito.
+   > - test-author ha scritto, senza lanciare niente fino al via:
+   >   - 5 file nuovi: `pluginSettingsForm.test.ts`, `pluginSettingsApi.test.ts`,
+   >     `PluginSettingsForm.component.test.ts` (su macOS un nome che differisce solo per le maiuscole è lo stesso
+   >     file), `PluginSettingsTab.test.ts`, `PluginSettingsModal.test.ts`;
+   >   - 4 file aggiornati: `ProviderAssignmentSection.test.ts`, `AssetSearchAutocomplete.test.ts`,
+   >     `settingsTabs.test.ts` (la riga di oggi), `page.tabs.test.ts` (il mock della scheda, senza il quale
+   >     l'import falliva);
+   >   - le registrazioni in `_frontend_utility.py` (2 in `core-unit`, 3 in `component-unit`).
+   >
+   > **⚠️ Fuori pista**: tre difetti trovati da test-author, corretti nel prodotto:
+   > - `fieldOf` accettava come `problem` un array di un elemento: ora vuole una stringa;
+   > - dopo un salvataggio in «Configura» dal pannello, la modale si ricaricava, perché leggeva `pluginCode`
+   >   attraverso l'oggetto sostituito: ora le passo due stringhe `$derived`;
+   > - una chiave di campo `constructor`, valida per il backend, trovava `Object.prototype` con `in` e `[]`: ora ogni
+   >   ricerca per chiave passa da `own()` (`Object.hasOwn`), nel modulo puro e nel componente.
+3. ✅ (2026-10-16) Prove.
+   > **Note implementazione**:
+   > - I Vitest di test-author, quattro lanci separati con il carico fra 40 e 57: 235, 48, 43 e 113, cioè 439 prove
+   >   verdi al primo colpo e senza traffico non previsto. Coprono:
+   >   - il modulo puro e l'API;
+   >   - modulo, scheda e modale;
+   >   - `settingsTabs` e `page.tabs`;
+   >   - pannello, ricerca e il ciclo di vita della sonda di `AssetModal`, il cui finto client ora risponde «nessuna
+   >     impostazione» alla lettura nuova invece di non averla.
+   > - Le prove di chiusura, una alla volta con `nice` e il carico ≤ 70 (`/tmp/libreFolio_cp11b_checks.sh`, log in
+   >   `/tmp/libreFolio_cp11b_checks/`): `front check` 0/0; `front-utility core-unit` 5898 (170 file, con i gate dei
+   >   colori); `front-utility component-unit` 3828 (145 file); `check-orphans` pulito; porta 6183 libera;
+   >   `git diff --check` pulito.
+   > - Previsione dei conflitti contro `dev_release2` (`db384eaf5`), due superfici in comune:
+   >   - `assets/*.json`: il bersaglio toglie le due chiavi morte `events.delete*` intorno alla riga 379, le mie stanno
+   >     alla 327;
+   >   - `_frontend_utility.py`: righe aggiunte in punti diversi, separate da righe invariate.
+   >
+   >   Fusione pulita probabile. Le registrazioni vanno tenute tutte: sono solo aggiunte.
+   > - Non lanciati: E2E, galleria, mkdocs (CP11c); `vite build` e `front build`, vietati stanotte dal coordinatore.
+
+### Checkpoint CP11b — pronto, FROZEN (2026-10-16, 02:30)

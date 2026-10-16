@@ -239,7 +239,9 @@ frontend/src/routes/
 - Upload interface with:
     - Image files → **ImageEditModal** (crop, rotate, flip)
     - Non-image files → **FileEditModal** (rename)
-- Copy link, download, delete actions
+- Copy link, download, delete actions; delete only on the files the user may delete (`can_delete`)
+- Static Resources: a **Visibility** column (common or personal) and the switch between the two, see
+  [Scope of uploaded files](../components/core-ui/file-upload.md#scope-flow)
 - File thumbnails via `?img_preview=` API
 
 ### ⚙️ Settings (`/settings`)

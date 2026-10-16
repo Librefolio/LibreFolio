@@ -8,7 +8,10 @@
  * (`searchSelection`; null keeps the harness's own TICKER), never the callback.
  * Comparison/confirmation modals and the session coordinator remain real.
  * Everything asynchronous below is an explicitly planned API call, apart from
- * ready reference caches and the incidental duplicate-name listing.
+ * ready reference caches, the incidental duplicate-name listing, and the
+ * incidental read of the provider's plugin settings (workstream X, CP11b): the
+ * panel reads them for every provider it shows, and is answered «no settings»,
+ * so it offers no «Configure» and these cases stay about the probe.
  *
  * Deferred responses, then Svelte tick/flushSync, are the completion boundaries.
  * No network, clock waits, mirrored controller, detached callbacks or UI events
@@ -68,6 +71,7 @@ const mocks = vi.hoisted(() => ({
         list_countries_api_v1_utilities_countries_get: vi.fn(),
         list_sectors_api_v1_utilities_sectors_get: vi.fn(),
         list_files_api_v1_uploads_get: vi.fn(),
+        get_plugin_settings_api_v1_settings_plugins_get: vi.fn(),
     },
     axios: {request: vi.fn(), get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn()},
     providers: {
@@ -294,6 +298,21 @@ function assertTraffic() {
     for (const args of mocks.api.list_assets_api_v1_assets_query_get.mock.calls) {
         expect(args).toStrictEqual([{queries: {}}]);
     }
+    // The provider's plugin settings read is incidental too, and checked the same way.
+    for (const args of mocks.api.get_plugin_settings_api_v1_settings_plugins_get.mock.calls) {
+        expect(args).toStrictEqual(expectedSettingsRead(args));
+    }
+}
+
+/**
+ * The provider's plugin settings read (workstream X, CP11b) as the panel must ask it: the asset family and a provider
+ * of the catalogue, nothing else. Built from what was asked, so that a provider of the catalogue matches exactly and
+ * any other name fails on one no provider carries.
+ */
+function expectedSettingsRead(args: unknown[]): unknown[] {
+    const code = (args[0] as {queries?: {plugin_code?: unknown}} | undefined)?.queries?.plugin_code;
+    const known = providerCatalog().some((provider) => provider.code === code);
+    return [{queries: {family: 'asset', plugin_code: known ? code : '(a provider of the catalogue)'}}];
 }
 
 function providerCatalog(): ProviderInfo[] {
@@ -533,6 +552,12 @@ beforeEach(() => {
     mocks.api.list_assets_api_v1_assets_query_get.mockImplementation((...args: unknown[]) => {
         checkArguments('incidental duplicate-name listing', args, [{queries: {}}]);
         return Promise.resolve([]);
+    });
+    // The provider's plugin settings (workstream X, CP11b): read for every provider the panel shows, answered «no
+    // settings». Routed here, so that the facade records the call instead of failing it as «not a function».
+    mocks.api.get_plugin_settings_api_v1_settings_plugins_get.mockImplementation((...args: unknown[]) => {
+        checkArguments('incidental provider settings read', args, expectedSettingsRead(args));
+        return Promise.resolve({plugins: []});
     });
 
     const currencies: CurrencyInfo[] = [

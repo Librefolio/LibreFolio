@@ -159,7 +159,8 @@ read the status and the log.
 </div>
 
 - Each entry is one run: job, time, duration and how many items succeeded. 🟢 **OK**: all of
-  them, or nothing to do; 🟡 **Partial**: some failed; 🔴 **Error**: none succeeded.
+  them, or nothing to do; 🟡 **Partial**: some failed, or were deferred because their provider paused after too
+  many requests; 🔴 **Error**: none succeeded and none was deferred.
 - Click an entry to see each asset or FX pair, its provider and the prices changed (**Delta**).
   Hover an error to read it in full; double-click it (long-press on a phone) to copy it.
 - Filter by job, status or period, from the last hour to the last 30 days. Only the most recent
