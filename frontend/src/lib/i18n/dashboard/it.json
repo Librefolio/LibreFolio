@@ -28,7 +28,7 @@
     "unrealizedDelta": "Variazione non realizzata",
     "unrealizedDeltaTooltip": "Variazione del guadagno/perdita latente sulle posizioni ancora aperte.",
     "realizedSales": "Vendite",
-    "realizedSalesTooltip": "Guadagno o perdita realizzata dalle vendite nel periodo, calcolata rispetto al costo medio di carico.",
+    "realizedSalesTooltip": "Guadagno o perdita realizzata dalle vendite nel periodo, e dai titoli ceduti a un costo (per esempio a un broker che LibreFolio non segue), calcolata rispetto al costo medio di carico.",
     "income": "Dividendi e interessi",
     "incomeTooltip": "Proventi incassati nel periodo da dividendi, interessi o cedole.",
     "feesAndTaxes": "Costi e imposte",

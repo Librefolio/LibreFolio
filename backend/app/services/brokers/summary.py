@@ -11,8 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
-    AssetEvent,
-    AssetEventType,
     Broker,
     BrokerUserAccess,
     PriceHistory,
@@ -26,6 +24,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.financial_math.returns import gain_loss_ratio
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.transactions.transaction_service import TransactionService
 
@@ -219,14 +218,11 @@ class BrokerSummaryMixin:
         if as_of is not None:
             stmt = stmt.where(Transaction.date <= as_of)
         rows = (await self.session.execute(stmt.order_by(Transaction.date, Transaction.id))).scalars().all()
-        split_candidate_ids = [row.id for row in rows if row.asset_event_id is not None]
-        split_linked_ids: set[int] = set()
-        if split_candidate_ids:
-            split_linked_ids = set((await self.session.execute(select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_candidate_ids)).where(AssetEvent.type == AssetEventType.SPLIT))).scalars().all())
+        split_linked = await split_linked_ids(self.session, rows)
 
         movements_by_asset: dict[int, list] = {}
         for row in rows:
-            movement = cost_movement_from_transaction(row, asset_currency=currency_by_asset[row.asset_id], split_linked=row.id in split_linked_ids)
+            movement = cost_movement_from_transaction(row, asset_currency=currency_by_asset[row.asset_id], split_linked=row.id in split_linked)
             if movement is not None:
                 movements_by_asset.setdefault(row.asset_id, []).append(movement)
 
