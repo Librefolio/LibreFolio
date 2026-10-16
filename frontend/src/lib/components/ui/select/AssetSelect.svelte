@@ -185,7 +185,7 @@
      both would render two nested elements with the same `data-testid`, and every
      exact resolution of it fails Playwright's strict mode. This wrapper stays for
      layout only. -->
-<div>
+<div class="text-lf-primary">
     <SearchSelect value={stringValue} {options} {disabled} {loading} placeholder={placeholder ?? $t('common.select')} {compact} inlineSearch={true} {dropdownPosition} {dropdownMinWidth} testId={testid} {createLabel} {onCreateNew} onchange={handleChange}>
         {#snippet selectedItem(option)}
             {@const a = asAsset(option.data)}
@@ -198,9 +198,9 @@
                     {#if option.icon}
                         <img src={option.icon} alt="" class="w-4 h-4 rounded-sm object-contain shrink-0" onerror={hideOnError} />
                     {/if}
-                    <span class="truncate text-sm text-gray-900 dark:text-gray-100">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
+                    <span class="truncate text-sm text-lf-primary">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
                     {#if a?.active === false}
-                        <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                        <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-lf-neutral text-lf-secondary">
                             {$t('assets.edit.status.inactive')}
                         </span>
                     {/if}
@@ -208,20 +208,20 @@
             {:else}
                 <div class="flex items-center gap-2 min-w-0">
                     {#if option.icon}
-                        <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-libre-green/10 dark:bg-libre-green/20 rounded overflow-hidden">
+                        <span class="shrink-0 w-7 h-7 flex items-center justify-center bg-lf-selected rounded overflow-hidden">
                             <img src={option.icon} alt="" class="w-5 h-5 object-contain" onerror={hideOnError} />
                         </span>
                     {/if}
                     <div class="min-w-0 flex-1">
-                        <div class="font-medium text-gray-900 dark:text-gray-100 truncate text-sm flex items-center gap-1.5">
+                        <div class="font-medium text-lf-primary truncate text-sm flex items-center gap-1.5">
                             <span class="truncate">{a?.identifier_ticker || option.label}</span>
                             {#if a?.active === false}
-                                <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                                <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-lf-neutral text-lf-secondary">
                                     {$t('assets.edit.status.inactive')}
                                 </span>
                             {/if}
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                        <div class="text-xs text-lf-muted truncate">
                             {option.label}{#if a?.currency}{@const ci = getCurrencyInfo(a.currency)} ·
                                 <span class="inline-flex items-center gap-0.5"
                                     >{#if ci.symbol && ci.symbol !== a.currency}<span>{ci.symbol}</span>{/if}{#if ci.flag_emoji}<span class="emoji-flag">{ci.flag_emoji}</span>{/if}<span>{a.currency}</span></span
@@ -239,19 +239,19 @@
                 {/if}
                 <span class="truncate text-sm {a?.active === false ? 'opacity-60' : ''}">{a?.identifier_ticker ? `${a.identifier_ticker} · ${option.label}` : option.label}</span>
                 {#if a?.active === false}
-                    <span data-testid="asset-select-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400">
+                    <span data-testid="asset-select-inactive-badge" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-lf-neutral text-lf-secondary">
                         {$t('assets.edit.status.inactive')}
                     </span>
                 {/if}
                 {#if option.badge}
                     {#if option.badgeTooltip}
                         <Tooltip text={option.badgeTooltip} position="left" maxWidth="220px">
-                            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium cursor-help {option.badgeClass || 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}">
+                            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium cursor-help {option.badgeClass || 'bg-lf-neutral text-lf-secondary'}">
                                 {option.badge}
                             </span>
                         </Tooltip>
                     {:else}
-                        <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium {option.badgeClass || 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300'}">
+                        <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium {option.badgeClass || 'bg-lf-neutral text-lf-secondary'}">
                             {option.badge}
                         </span>
                     {/if}
