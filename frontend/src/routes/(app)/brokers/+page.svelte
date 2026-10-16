@@ -6,11 +6,11 @@
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {Briefcase, Plus, RefreshCw} from 'lucide-svelte';
-    import BrokerCard from '$lib/components/brokers/BrokerCard.svelte';
-    import BrokerDiscoveryCard from '$lib/components/brokers/BrokerDiscoveryCard.svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
-    import BrokerSharingModal from '$lib/components/brokers/BrokerSharingModal.svelte';
-    import DeleteBrokerDialog from '$lib/components/brokers/DeleteBrokerDialog.svelte';
+    import BrokerCard from '$lib/features/brokers/BrokerCard.svelte';
+    import BrokerDiscoveryCard from '$lib/features/brokers/BrokerDiscoveryCard.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
+    import BrokerSharingModal from '$lib/features/brokers/BrokerSharingModal.svelte';
+    import DeleteBrokerDialog from '$lib/features/brokers/DeleteBrokerDialog.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {refreshAllBrokers, getAllBrokers, getAccessibleBrokers, invalidateBroker} from '$lib/stores/reference/brokerStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';

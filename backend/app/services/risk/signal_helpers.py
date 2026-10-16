@@ -172,44 +172,6 @@ def _require_dispersion_window(window: int) -> None:
         raise ValueError("sample variance requires at least two observations")
 
 
-def rolling_compounded_return_values(
-    returns: Sequence[float],
-    window: int,
-    *,
-    scale: float = 1.0,
-) -> tuple[list[Optional[float]], int]:
-    """Compound simple returns inside each rolling window, vectorised.
-
-    Uses ``expm1(log1p(r).rolling(w).sum())`` rather than a rolling product. A rolling
-    ``apply(prod)`` would stay interpreted and defeat the migration, and a cumulative
-    product divided by its own lag propagates ``nan`` forever once a window contains a
-    total loss. The log form degrades gracefully instead.
-
-    Never undefined: compounding is defined for every finite window, so the returned
-    count is always zero.
-
-    Rejects a return of exactly ``-1`` where the scalar metric tolerates it. A total loss
-    is ``log1p(-1) == -inf``, and a rolling accumulator that adds then removes ``-inf``
-    is left with ``NaN`` for every later window, so the damage would outlive the window
-    that caused it. ``AssetReturnPoint.value`` is already declared ``gt=-1``, so the
-    narrowing is unobservable on prepared series and only guards direct callers.
-    """
-    observations = len(returns)
-    if observations < window:
-        return [None] * (observations + 1), 0
-    series = pd.Series(returns, dtype="float64")
-    sample = series.to_numpy()
-    if not np.all(np.isfinite(sample)) or np.any(sample <= -1.0):
-        raise ValueError("simple returns must be finite and greater than -1")
-    compounded = np.expm1(np.log1p(series).rolling(window).sum()) * scale
-    return _assemble_rolling_values(
-        compounded.to_numpy(),
-        np.zeros(observations, dtype=bool),
-        window,
-        observations,
-    )
-
-
 def rolling_annualized_volatility_values(
     returns: Sequence[float],
     window: int,
@@ -350,7 +312,6 @@ __all__ = [
     "rolling_annualized_sharpe_values",
     "rolling_annualized_volatility_values",
     "rolling_beta_values",
-    "rolling_compounded_return_values",
     "rolling_pair_values",
     "rolling_single_values",
     "undefined_window_warnings",

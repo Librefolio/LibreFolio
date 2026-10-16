@@ -38,7 +38,7 @@ Static code analysis of the Docker production build conducted on 2026-06-25, ide
 | Role | Path |
 |------|------|
 | Bug report | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-final-subplan/bug_vari_report20260625.md` |
-| FilesTable | `frontend/src/lib/components/files/FilesTable.svelte` |
+| FilesTable | `frontend/src/lib/features/files/FilesTable.svelte` |
 | files page | `frontend/src/routes/(app)/files/+page.svelte` |
 | transactions page | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |

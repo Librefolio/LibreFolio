@@ -1,7 +1,7 @@
 <script lang="ts">
     import {onDestroy, onMount} from 'svelte';
     import {t} from '$lib/i18n';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {applyBrokerCopy, applyLiquidityCopy, domainBrokerKey, domainCashKey, newCopyRecord, type CopyOutcome} from '../copies';
     import {compareDecimal} from '../decimal';
     import type {PlannerDraft} from '../draft.svelte';
@@ -152,16 +152,12 @@
                     {@const checked = selected.includes(broker.id)}
                     <li data-testid="{testid}-broker" data-broker-id={broker.id} data-selectable={broker.selectable ? 'true' : 'false'} data-selected={checked ? 'true' : 'false'}>
                         {#if broker.selectable}
-                            <label
-                                class="flex items-start gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-200 dark:border-gray-700'} {snapshot
-                                    ? 'cursor-pointer hover:border-libre-green'
-                                    : 'cursor-not-allowed opacity-60'}"
-                            >
-                                <input type="checkbox" class="mt-2 rounded border-gray-300 text-libre-green focus:ring-libre-green" {checked} disabled={!snapshot} data-testid="{testid}-check" onchange={(event) => toggle(broker.id, event.currentTarget.checked)} />
+                            <label class="flex items-start gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle'} {snapshot ? 'cursor-pointer hover:border-lf-link' : 'cursor-not-allowed opacity-60'}">
+                                <input type="checkbox" class="mt-2 rounded border-lf-input text-lf-link focus:ring-lf-focus" {checked} disabled={!snapshot} data-testid="{testid}-check" onchange={(event) => toggle(broker.id, event.currentTarget.checked)} />
                                 <BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={32} />
                                 <span class="min-w-0 flex-1">
                                     <span class="flex flex-wrap items-center gap-2">
-                                        <span class="font-medium text-gray-900 dark:text-gray-100">{broker.name}</span>
+                                        <span class="font-medium text-lf-primary">{broker.name}</span>
                                         {#if partial(broker.share)}
                                             <span class={HINT}>· {$t('tools.pacAllocator.planner.scope.share', {default: 'share {share}', values: {share: formatPlannerPercent(broker.share)}})}</span>
                                         {/if}
@@ -197,8 +193,8 @@
                                 </span>
                             </label>
                         {:else}
-                            <div class="flex items-start gap-3 rounded-lg border border-dashed border-gray-200 p-3 text-gray-500 dark:border-gray-700 dark:text-gray-400">
-                                <input type="checkbox" class="mt-2 rounded border-gray-300" disabled aria-hidden="true" tabindex="-1" />
+                            <div class="flex items-start gap-3 rounded-lg border border-dashed border-lf-subtle p-3 text-lf-muted">
+                                <input type="checkbox" class="mt-2 rounded border-lf-input" disabled aria-hidden="true" tabindex="-1" />
                                 <span class="opacity-60 grayscale"><BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={32} /></span>
                                 <span class="min-w-0 flex-1">
                                     <span class="block">{broker.name}</span>

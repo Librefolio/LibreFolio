@@ -27,6 +27,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
 )
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
+from backend.app.services.financial_math.returns import price_return
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 
@@ -167,6 +168,14 @@ def mark_market_closed_carries(points: dict[date, FAPricePoint], market_holidays
         previous = stored
         marked[point_date] = point
     return marked
+
+
+def _price_return_value(previous_close: Decimal, current_close: Decimal) -> float:
+    """The price-only return between two valuation points, whose closes are validated positive."""
+    change = price_return(previous_close, current_close)
+    if change is None:
+        raise ValueError("a valuation point has no positive close")
+    return float(change)
 
 
 def _valuation_point(
@@ -355,7 +364,7 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
             AssetReturnPoint(
                 date=current.valuation_date,
                 previous_valuation_date=previous.valuation_date,
-                value=float(current.target_close / previous.target_close - Decimal("1")),
+                value=_price_return_value(previous.target_close, current.target_close),
             )
             for previous, current in zip(
                 valuation_points,
