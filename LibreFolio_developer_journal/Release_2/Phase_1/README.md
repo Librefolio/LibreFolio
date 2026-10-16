@@ -191,3 +191,4 @@ Sono tutti locali: la push la fa il developer.
 | 102 | 16/10 08:24 | W per cherry-pick: W-B45 (T13 di `transactions-modals` con il budget di 60 s dei vicini) | `72ac088fc` |
 | 103 | 16/10 08:29 | E: E5b (verifica email alla registrazione, limiti 3/h per casella e 10/h per rete, revisione di sicurezza, merge con A6c; E2E 5/5, mirate sulla revisione unita) | `dbe232723` |
 | 104 | 16/10 08:33 | Y: Y3 (FE6b dashboard in `features/`), Y9 (font delle bandiere e testo sicuro nei grafici), Y10 (decisione 49, liquidità negativa nell'allocazione), Y5 (broker e lotti in `features/brokers`), Y6 (file in `features/files`), C-34 (guardia), cura dell'attesa in `brokers-detail.spec.ts`; E2E unica 223/224 + 37/37, leggere sulla revisione unita | `4447814ed` |
+| 105 | 16/10 10:39 | Z: Z7c-1 (attesa crescente dei prezzi dal vivo dopo errori e pause dei fornitori; E2E `live-pause` 8/8, flash 4/4) + Z-9 (doc admin delle pause dei fornitori) | `dd4a97e01` |
