@@ -3592,3 +3592,18 @@ all-or-nothing tests red. The page gains the fix, a testing lesson (only a *rele
 early) and its source files.
 Updated: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | Days that only move an exchange rate, or a price's source or age, were skipped
+J CP-6 (release 1.3, decision 28) closes B11's securities half: a frame day is dirty when a rate the day reads to value
+it changes (securities, the unrealized split, cash in transit), on every market-quote day, and on the first day a
+carried price turns stale; `native_cash.change_days` is the one home for «the day a rate changes». The page moves to
+resolved, with the test lesson (buy in the report currency, or the cash leg hides the defect) and its source files.
+Updated: [[problems/dirty-days-ignore-fx-only-moves]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | Three pages that still said B11's securities half was open
+After J CP-6 the docs-writer found three statements left behind: the pre-frame/frame concept («still skipped»), the
+native-cash revaluation decision («stays open») and the native-cash entity (no `change_days` in its API). Brought in
+line with the resolved problem page.
+Updated: [[concepts/pre-frame-frame-separation]], [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]].
+Graph: not updated; graphify is not available in this worktree.
