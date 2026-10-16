@@ -45,12 +45,12 @@
         {@const severity = severityOf(notice)}
         <li class="flex items-start gap-2" data-testid="brim-notice" data-severity={severity}>
             {#if severity === 'info'}
-                <Info size={dense ? 12 : 14} class="mt-0.5 shrink-0 text-sky-600 dark:text-sky-400" />
+                <Info size={dense ? 12 : 14} class="mt-0.5 shrink-0 text-lf-info" />
             {:else}
-                <AlertTriangle size={dense ? 12 : 14} class="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle size={dense ? 12 : 14} class="mt-0.5 shrink-0 text-lf-warning" />
             {/if}
             <div class="min-w-0 flex-1 space-y-1.5">
-                <p class="{dense ? 'text-xs' : 'text-sm'} leading-relaxed whitespace-pre-line {severity === 'info' ? 'text-sky-800 dark:text-sky-300' : 'text-amber-700 dark:text-amber-400'}" data-testid="brim-notice-message">
+                <p class="{dense ? 'text-xs' : 'text-sm'} leading-relaxed whitespace-pre-line {severity === 'info' ? 'text-lf-info' : 'text-lf-warning'}" data-testid="brim-notice-message">
                     {resolveBrimNoticeMessage(notice, $t)}
                 </p>
                 {#each notice.evidence ?? [] as evidence}
