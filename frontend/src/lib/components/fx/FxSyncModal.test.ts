@@ -150,6 +150,31 @@ describe('FxSyncModal — the section it builds', () => {
 });
 
 // =========================================================================
+// What the page already holds in the range (C-66)
+// =========================================================================
+
+/**
+ * The FX page knows which pairs already have stored rates in the range it is about
+ * to sync, and hands them over as `withDataInRange`, as the dialog names pairs
+ * (`BASE-QUOTE`). This modal passes them on to its one section as `existingIds`,
+ * and SyncModalBase warns before Start. What the warning says and when it shows
+ * are SyncModalBase.test.ts's; the hand-over is this modal's own.
+ *
+ * Red today: the prop does not exist, and no warning is rendered.
+ */
+describe('FxSyncModal — the pairs that already hold rates in the range', () => {
+    it('hands the pairs to its section, counted among the pairs it will sync', async () => {
+        respondWith();
+        mount({pairs: ['EUR-USD', 'EUR-GBP', 'USD-JPY'], withDataInRange: ['EUR-GBP', 'USD-JPY']});
+
+        const warning = screen.getByTestId('fx-sync-modal-overwrite-warning');
+        expect(warning).toHaveAttribute('data-section', 'fx');
+        expect(warning).toHaveAttribute('data-existing', '2');
+        expect(warning).toHaveAttribute('data-total', '3');
+    });
+});
+
+// =========================================================================
 // The response that arrives
 // =========================================================================
 

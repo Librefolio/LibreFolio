@@ -492,11 +492,14 @@ the request is aborted. The server's half: [Address Probe](../../../architecture
 #### Link-Share Actions Registry {: #link-share-actions }
 
 `lib/features/settings/users/linkShareActions.ts` holds `LINK_SHARE_ACTIONS: LinkShareAction[]`,
-empty today. An entry is `{id, component, visible?}`: `component` receives
+with one entry since workstream E's lot E4,
+`{id: 'send-by-email', component: SendLinkByEmail, visible: () => sendByEmailVisible()}`: «Send by email», shown
+while `email.links` is true ([Send by Email](../../../backend/email.md#send-by-email)). An entry is
+`{id, component, visible?}`: `component` receives
 `{link, purpose, context}` (`LinkShareActionProps`), and `visible({purpose, context})` filters it;
 without `visible` the action is always shown. `visibleLinkShareActions(purpose, context)` returns
 the visible ones in registry order, and `LinkShare` draws each in `link-share-actions`. Adding an
-action — workstream E's «Send by email» — is one line in the list; the dialogs do not change:
+action is one line in the list, as «Send by email» shows; the dialogs do not change:
 
 ```ts
 // `MyAction` stands for your own component

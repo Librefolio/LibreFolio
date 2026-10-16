@@ -753,6 +753,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                         {date: '2024-03-18', drawdown: -0.032},
                     ],
                     maximum_drawdown: -0.087,
+                    // The rise from the trough back to the prior peak, which L1
+                    // reads as is: the backend's −MDD/(1+MDD), drawdown_summary 1.2.0.
+                    maximum_drawdown_trough_to_peak_ratio: 0.087 / 0.913,
                     maximum_drawdown_peak_date: '2023-11-14',
                     maximum_drawdown_trough_date: '2023-12-03',
                     maximum_drawdown_recovery_status: 'open',
@@ -1837,6 +1840,40 @@ async function dragColumnEdge(page: Page, header: Locator, dx: number): Promise<
     await page.mouse.move(edge.x + dx / 2, edge.y, {steps: 4});
     await page.mouse.move(edge.x + dx, edge.y, {steps: 4});
     await page.mouse.up();
+}
+
+/** One rest of the pointer on a trigger, in `hoverUntilHelpOpens`: four times the Tooltip's own delay (`showDelayMs`, 500 ms). */
+const HELP_REST_MS = 2_000;
+
+/** How long `hoverUntilHelpOpens` rests on a trigger again before a help that never opened is a red: a deadline, not a delay. */
+const HELP_OPEN_DEADLINE_MS = 10_000;
+
+/**
+ * Rest the pointer on `trigger` until the help it carries is open, and hand that help back.
+ *
+ * The project's Tooltip arms its delay on `mouseenter` and opens only if the pointer is still on the
+ * trigger when the delay ends: a `mouseleave` in between disarms it. A single hover is therefore a bet
+ * that nothing moves under the pointer for that long, and a parallel run takes the other side of it: L3's
+ * table may still be fitting its columns to their titles after the hover, or a busy main thread runs the
+ * delay late. Measured on `front-portfolio risk` at 2 workers (16/10/2026): no help in the snapshot taken
+ * when a single hover's assertion gave up, the right help open in the screenshot taken after it.
+ *
+ * So every attempt enters the trigger afresh and gives its help a few times that delay to open, and the
+ * attempts repeat until the deadline. Afresh means from the page's corner, where no Tooltip is drawn: a
+ * pointer already resting on the trigger fires no new `mouseenter`, and a hover alone would never arm
+ * the delay again. No sleep: every attempt ends on an assertion.
+ *
+ * The help is portalled to `<body>`, so it is found by its testid on the whole page: the caller starts
+ * from a pointer that left no other help open, and reads the help's text itself.
+ */
+async function hoverUntilHelpOpens(page: Page, trigger: Locator, why: string): Promise<Locator> {
+    const help = page.getByTestId('tooltip-content');
+    await expect(async () => {
+        await page.mouse.move(0, 0);
+        await trigger.hover();
+        await expect(help).toBeVisible({timeout: HELP_REST_MS});
+    }, why).toPass({timeout: HELP_OPEN_DEADLINE_MS});
+    return help;
 }
 
 /**
@@ -3641,10 +3678,10 @@ test.describe('Risk analysis functional integration', () => {
             // As written, before the header's style writes it in capitals: the text, not its rendering.
             await expect(title, "the return's title is not the short name (review 4: «va accorciato»)").toHaveText(await catalogueSentence(page, 'risk.levels.l3.table.expectedReturnShort'));
 
-            // The tooltip opens after its own hover delay, which the retrying assertions absorb.
-            await title.hover();
-            const help = page.getByTestId('tooltip-content');
-            await expect(help, "resting on the return's title must open its help").toBeVisible();
+            // The tooltip opens after its own hover delay, and only if the title is still under the pointer
+            // when the delay ends: `hoverUntilHelpOpens` rests on the title again until the help is open,
+            // within a deadline.
+            const help = await hoverUntilHelpOpens(page, title, "resting on the return's title must open its help");
             const fullName = await catalogueSentence(page, 'risk.assetSet.levels.l3.expectedReturn');
             await expect.poll(() => help.evaluate((element) => (element.textContent ?? '').split('\n')[0].trim()), {message: "the help does not open with the return's full name, on a line of its own"}).toBe(fullName);
         });
@@ -3688,12 +3725,13 @@ test.describe('Risk analysis functional integration', () => {
                 }
 
                 // A clean slate: the pointer rests on a figure, which has no help to open, so the help that
-                // opens next is the dash's. The Tooltip opens after its own hover delay, which the retrying
-                // assertion absorbs: nothing here waits on a clock.
+                // opens next is the dash's. The Tooltip opens after its own hover delay, and only if the dash
+                // is still under the pointer when the delay ends: `hoverUntilHelpOpens` rests on the dash again
+                // until the help is open, within a deadline — nothing here waits on a clock.
                 await listed.getByTestId('risk-l3-row-beta').hover();
                 const help = page.getByTestId('tooltip-content');
                 await expect(help, 'a help is still open with the pointer resting on a measured figure').toHaveCount(0);
-                await leftOut.getByTestId('risk-l3-row-beta').hover();
+                await hoverUntilHelpOpens(page, leftOut.getByTestId('risk-l3-row-beta'), 'resting on the dash of a holding the comparison could not measure must open its help');
                 await expect(help, 'resting on the dash of a holding the comparison could not measure must open its explanation').toHaveText(await catalogueSentence(page, 'risk.assetSet.levels.blankNote'));
             } finally {
                 await clearRiskBenchmark(page);

@@ -46,7 +46,8 @@
       "timeoutAfter": "Timeout dopo {seconds} s",
       "requestTimedOut": "La richiesta è scaduta dopo {seconds} s. Aumenta il timeout e riprova.",
       "failed": "Sincronizzazione non riuscita",
-      "retryFailed": "{n, plural, one {Riprova quello non riuscito} other {Riprova i # non riusciti}}"
+      "retryFailed": "{n, plural, one {Riprova quello non riuscito} other {Riprova i # non riusciti}}",
+      "overwriteWarning": "{existing, plural, one {# su {total} ha già} other {# su {total} hanno già}} dati salvati in questo intervallo: la sincronizzazione li sostituisce con i valori del provider, modifiche manuali comprese."
     },
     "route": {
       "title": "Percorsi di Conversione",

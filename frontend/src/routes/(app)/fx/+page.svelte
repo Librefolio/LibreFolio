@@ -29,6 +29,8 @@
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, displayFxDelta, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
+    import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -119,6 +121,18 @@
     let addModalOpen = $state(false);
     let fxTourPreview = $state(false);
     let syncModalOpen = $state(false);
+    /** The sync dialog's pairs whose shown rates hold a stored row in its range (C-66): the dialog warns that the sync
+     * replaces them. */
+    let syncModalWithData = $derived.by(() => {
+        if (!syncModalOpen) return [];
+        const targets = new Set(syncModalPairs);
+        const withData: string[] = [];
+        for (const p of pairs) {
+            const id = `${p.config.base}-${p.config.quote}`;
+            if (targets.has(id) && hasStoredPointInRange(getFxStore(p.config.slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) withData.push(id);
+        }
+        return withData;
+    });
     let settingsModalOpen = $state(false);
     /** Slug of the pair currently being configured via per-card ⚙️ (null = global) */
     let settingsTargetSlug = $state<string | null>(null);
@@ -201,7 +215,7 @@
             date: point.date,
             value: rate ?? 0,
             missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+            staleDays: extractDaysBack(point),
         };
     }
 
@@ -1217,7 +1231,7 @@
 <FxPairAddModal bind:open={addModalOpen} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
-<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />
+<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} withDataInRange={syncModalWithData} />
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal
