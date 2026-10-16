@@ -116,11 +116,13 @@ The scheduler keeps prices and exchange rates up to date on its own, even when n
 - 💰 **Current price refresh** — every few minutes, the latest price of each active asset that has
   a price provider.
 - 📊 **History sync** — on the days and times you choose, the daily prices of those assets and the
-  rates of every FX pair with a provider, over the **Lookback horizon**, to fill any gap. Pairs
-  with manual rates only are skipped.
+  rates of every FX pair with a provider, over at least the **Lookback horizon**, to fill any gap.
+  For an asset or a pair whose last saved price or rate is older, it goes back to that day, up to a
+  year; an asset with no saved price yet gets the horizon only, as the scheduler never downloads a
+  whole history. Pairs with manual rates only are skipped.
 
 If the server is off or asleep at a sync time, the history sync it missed runs as soon as the server
-is back, instead of waiting for the next sync time.
+is back, instead of waiting for the next sync time: a server off for weeks fills its whole gap.
 
 ### ⚙️ Configure the schedule
 
@@ -137,7 +139,7 @@ The dialog has its own **Save** button.
 | **Refresh every** | 10 minutes | How often current prices are refreshed, from 1 to 1440 minutes. |
 | **Sync times** | `06:00`, `23:00` | When the history sync runs; **Add time** adds a slot. |
 | **Sync days** | Mon to Sat | The days of the history sync. |
-| **Lookback horizon** | 14 days | How many past days each history sync checks, from 1 to 365. |
+| **Lookback horizon** | 14 days | How many past days each history sync checks at least, from 1 to 365. It goes further back, up to a year, when the last saved price or rate of an asset or a pair is older. |
 
 Keep at least one time and one day. Tip: a history sync after the markets close (for example
 `22:00`) gets the most complete data.
