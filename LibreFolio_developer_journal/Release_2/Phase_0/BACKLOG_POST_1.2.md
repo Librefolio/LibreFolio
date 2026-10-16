@@ -2936,9 +2936,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - l'accento viola della sezione misure;
   - le icone di sezione: segnali blu, metadati azzurro.
 
-  Li trovi in `routes/(app)/fx/[pair]` (54 classi) e in `routes/(app)/assets/[id]` o, dopo FE5c, `components/assets/detail/`
-  (55). La Q12 della designer («niente arcobaleno») va verso un colore unico: lo decidono la designer o T. Dettagli:
-  [piano AF](../Phase_1/10_colorSystem/AF-assetFxColors/plan-phase00AssetFxColors.prompt.md), sezione «7. Restano legacy».
+  Li trovi in `routes/(app)/fx/[pair]` (54 classi) e, dopo FE5c, in `routes/(app)/assets/[id]` (42: i tre interruttori)
+  e in `components/assets/detail/` (13: `AssetDetailMetadataPanel` 1, `AssetDetailMeasuresSection` 11,
+  `AssetDetailSignalsPanel` 1). La Q12 della designer («niente arcobaleno») va verso un colore unico: lo decidono la
+  designer o T. Dettagli: [piano AF](../Phase_1/10_colorSystem/AF-assetFxColors/plan-phase00AssetFxColors.prompt.md),
+  sezione «7. Restano legacy».
 - **AF-2 · Tipi distinti dalla tinta** — basso; AF, 16/10. Il badge `txScope` di `AssetTable` (proprio smeraldo, altri
   blu, analisi grigio; 12 classi) e l'origine dell'identificativo di `IdentifierPrimaryChooser` (fornitore blu, salvato
   verde; 7 classi) restano categoriali, come `KIND_TONES`. I test `AssetTable.test.ts:190–192, 209` e
@@ -2949,7 +2951,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 - **AF-4 · Bordo rosso di `AssetCurrencyChangeModal` attraverso `ModalBase.contentClass`** — medio-basso; AF, 16/10.
   Va portato con TC-10 e con la regola 9 dello skill `design-system`. Con un ruolo (`border-lf-danger-line`)
   perderebbe contro `border-lf-raised`: serve una variante di `ModalBase` (T). Intanto la catena resta legacy (2
-  classi). Dettagli: piano AF, sezione «2. Catene», C1.
+  classi). Dettagli: piano AF, sezione «2. Catene», C1. ✅ 16/10: T ha aggiunto `ModalBase tone="danger"`
+  (`4d8ae68c4`); `AssetCurrencyChangeModal` lo usa e non passa più colori in `contentClass` (checkpoint D, piano AF passo
+  13).
 - **AF-5 · Chip `<code>` sulle tinte dei banner** — minimo; AF, 16/10. In `PriceDataImportModal` (6 classi) ed
   `EventDataImportModal` (12) i chip sono `bg-white/30 dark:bg-slate-700/50` dentro `InfoBanner`. Nessun ruolo dà un
   chip su una tinta in tutti e due i temi, e `htmlSink.gate.test.ts:73` ne fissa uno alla lettera. Restano legacy fino a
@@ -2967,7 +2971,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   piano AF, sezione «6».
 - **AF-9 · Dettaglio asset in attesa di X FE5c** — medio; AF, 16/10. In `routes/(app)/assets/[id]/+page.svelte` (155
   classi dopo FE5c) e nei 6 componenti di `components/assets/detail/` (145) la migrazione parte dopo l'ingresso di FE5c
-  (lotto 9). Dettagli: piano AF, sezione «5. Lotti».
+  (lotto 9). Dettagli: piano AF, sezione «5. Lotti». ✅ 16/10: FE5c è entrato (`a44951cf5`) e il lotto 9 è migrato sui file
+  reali, da 300 a 55 classi (tutte AF-1; checkpoint D, piano AF passo 13).
 - **AF-10 · Un bottone secondario su una superficie `panel` non ha un ruolo** — minimo; AF, 16/10. Il piede `panel` di
   `AssetCurrencyChangeModal` ha un «Annulla» grigio che prima era due passi sopra il piede (slate-200 su slate-50). Con
   `bg-lf-panel` sparirebbe: ha preso `bg-lf-neutral hover:bg-lf-input/30`, il ruolo più vicino. È la domanda aperta 3
