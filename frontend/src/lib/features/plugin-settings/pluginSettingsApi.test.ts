@@ -9,7 +9,9 @@
  *     `system` as `user`; a flag that is not `true` as false; a key text that is empty or not text as null; a bound
  *     that is not a finite number as null; a label missing as the key (a name missing as the code); a problem that is not
  *     one of its three words, as text, as none (a list included, which the generated type admits); options and fields
- *     that are not a list as none. A secret never carries a `value` nor a `default`, whatever the answer held;
+ *     that are not a list as none. A secret never carries a `value` nor a `default`, whatever the answer held. A
+ *     plugin's icon (`icon_url`), a remote URL or a path of this instance, is kept as it is; missing, empty or not
+ *     text, it is null;
  *   - `fetchPluginSettings(filter)` asks `GET /settings/plugins` once, through its generated alias, with the filter
  *     as queries (`family`, `plugin_code`) and no query for what the filter leaves out, and answers each plugin
  *     narrowed; `fetchPluginEntry(family, code)` asks for that one plugin and answers its entry, or null when the
@@ -20,7 +22,8 @@
  *     anything else — a 422 without a list of results, any other status, a request that reached no server, anything
  *     thrown that is neither an `AxiosError` nor an `ApiError`. The status is read from both carriers;
  *   - through the real client, only the transport faked: what is sent (method, path, queries, body), what a 200 comes
- *     back as through the generated schema, and what each refusal comes back as.
+ *     back as through the generated schema (an icon included: the schema keeps only the keys it declares), and what
+ *     each refusal comes back as.
  *
  * Mocks: the two aliases are spied on the real generated client (`vi.spyOn`, restored after each test) — the `$lib/api`
  * boundary, as in `emailApi.test.ts` — which also proves they exist on it; `ApiError` is the real class
@@ -108,7 +111,11 @@ const API_KEY: SettingField = {...RAW_API_KEY, value: null, default: null};
 /** What a secret's value must never become: carried anywhere after the narrowing. */
 const LEAKED_SECRET = 'sk-live-5f3a9c0d1e2b';
 
-const JUSTETF: PluginSettingsEntry = {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', configured: true, fields: [CURRENCY]};
+const JUSTETF: PluginSettingsEntry = {family: 'asset', plugin_code: 'justetf', plugin_name: 'justETF', icon_url: null, configured: true, fields: [CURRENCY]};
+
+/** Icons a plugin may publish: a remote URL (a reserved domain, which never resolves) and a path of this instance. */
+const REMOTE_ICON = 'https://icons.example/justetf.png?v2';
+const INSTANCE_ICON = '/api/v1/uploads/plugin/asset/cssscraper.png';
 
 /** Every key of a field at its default: what anything that is not a field narrows to. */
 const DEFAULT_FIELD: SettingField = {
@@ -257,12 +264,12 @@ describe('entryOf — a plugin’s entry as the components trust it', () => {
     });
 
     it.each([null, undefined, 'justetf', 42, []])('narrows %j, which is no entry, to an empty entry of the price sources', (raw) => {
-        expect(entryOf(raw)).toStrictEqual({family: 'asset', plugin_code: '', plugin_name: '', configured: false, fields: []});
+        expect(entryOf(raw)).toStrictEqual({family: 'asset', plugin_code: '', plugin_name: '', icon_url: null, configured: false, fields: []});
     });
 
     it('keeps fx, reads a family it does not know as asset, a name missing as the code, configured only when true, fields that are not a list as none', () => {
-        expect(entryOf({family: 'fx', plugin_code: 'ecb'})).toStrictEqual({family: 'fx', plugin_code: 'ecb', plugin_name: 'ecb', configured: false, fields: []});
-        expect(entryOf({family: 'crypto', plugin_code: 'x', plugin_name: 'X', configured: 'true', fields: {api_key: {}}})).toStrictEqual({family: 'asset', plugin_code: 'x', plugin_name: 'X', configured: false, fields: []});
+        expect(entryOf({family: 'fx', plugin_code: 'ecb'})).toStrictEqual({family: 'fx', plugin_code: 'ecb', plugin_name: 'ecb', icon_url: null, configured: false, fields: []});
+        expect(entryOf({family: 'crypto', plugin_code: 'x', plugin_name: 'X', configured: 'true', fields: {api_key: {}}})).toStrictEqual({family: 'asset', plugin_code: 'x', plugin_name: 'X', icon_url: null, configured: false, fields: []});
     });
 
     it('narrows every field: a secret’s value does not survive the entry', () => {
@@ -270,6 +277,26 @@ describe('entryOf — a plugin’s entry as the components trust it', () => {
 
         expect(narrowed.fields).toStrictEqual([CURRENCY, API_KEY, DEFAULT_FIELD]);
         expect(JSON.stringify(narrowed)).not.toContain(LEAKED_SECRET);
+    });
+
+    it.each<[string, string]>([
+        ['a remote URL', REMOTE_ICON],
+        ['a path of this instance', INSTANCE_ICON],
+    ])('keeps an icon that is text as it is: %s', (_label, iconUrl) => {
+        const withIcon: PluginSettingsEntry = {...JUSTETF, icon_url: iconUrl};
+
+        expect(entryOf(structuredClone(withIcon))).toStrictEqual(withIcon);
+    });
+
+    it.each<[string, Record<string, unknown>]>([
+        ['missing', {plugin_code: 'justetf'}],
+        ['null', {plugin_code: 'justetf', icon_url: null}],
+        ['empty text', {plugin_code: 'justetf', icon_url: ''}],
+        ['a number', {plugin_code: 'justetf', icon_url: 42}],
+        ['an object', {plugin_code: 'justetf', icon_url: {href: REMOTE_ICON}}],
+        ['a list, which the generated type admits', {plugin_code: 'justetf', icon_url: [REMOTE_ICON]}],
+    ])('narrows an icon that is %s to null: no icon, never carried as it came', (_label, raw) => {
+        expect(entryOf(raw).icon_url).toBeNull();
     });
 });
 
@@ -296,7 +323,7 @@ describe('fetchPluginSettings and fetchPluginEntry — GET /settings/plugins', (
     });
 
     it('answers each plugin narrowed, in the order of the answer', async () => {
-        const fx = {family: 'fx', plugin_code: 'ecb', plugin_name: 'ECB', configured: false, fields: []};
+        const fx = {family: 'fx', plugin_code: 'ecb', plugin_name: 'ECB', icon_url: null, configured: false, fields: []};
         readAlias().mockResolvedValueOnce(answered({plugins: [{...JUSTETF, fields: [CURRENCY, {...RAW_API_KEY, value: LEAKED_SECRET}]}, fx]}));
 
         const entries = await fetchPluginSettings();
@@ -500,6 +527,15 @@ describe('through the real client, only the transport faked: what is sent, and w
 
         expect(entry?.fields).toStrictEqual([API_KEY]);
         expect(JSON.stringify(entry)).not.toContain(LEAKED_SECRET);
+    });
+
+    it('a plugin’s icon passes the generated schema and comes back as it was sent', async () => {
+        // The generated schema is a zod object, which drops every key it does not declare: a client generated without
+        // the field would answer every plugin iconless, and every form would show its neutral icon, silently.
+        const withIcon: PluginSettingsEntry = {...JUSTETF, icon_url: REMOTE_ICON};
+        serverAnswers(200, {plugins: [withIcon]});
+
+        await expect(fetchPluginEntry('asset', 'justetf')).resolves.toStrictEqual(withIcon);
     });
 
     it('PATCH /api/v1/settings/plugins/bulk carries {items} as given, and a 200 is saved', async () => {

@@ -35,7 +35,7 @@ Paths are relative to `backend/`.
 | `app/services/plugin_settings/resolver.py` | The value each field takes (variable, saved row, default), its problems, the fields that leave a plugin not configured (`missing_field_keys()`, one rule for a call and for the catalogue), and the fingerprint of the cache keys |
 | `app/services/plugin_settings/runtime.py` | `configure_instance()`: reads the plugin's rows and binds the values to a new instance |
 | `app/services/plugin_settings/crypto.py` | The encryption of the secret values, and `plugin_secrets_key_status()` |
-| `app/services/plugin_settings/service.py` | The catalogue (`configured` included) and the all-or-nothing writes behind the API |
+| `app/services/plugin_settings/service.py` | The catalogue (`configured` and the plugin's icon included) and the all-or-nothing writes behind the API |
 | `app/api/v1/plugin_settings.py`, `app/schemas/plugin_settings.py` | The two endpoints and their schemas |
 | `app/services/assets/core.py` | `configured_provider()`, `call_provider()` (the boundary of every asset provider call), `public_asset_url()` (an asset URL withheld when it shows a secret), `settings_cache_part()`, `settings_cache_part_for()` |
 | `app/services/assets/search.py` | Search for a user: `providers_not_configured`, and the stream's `provider_error` with its `error_code` ([NOT_CONFIGURED](#not-configured)) |
@@ -637,7 +637,7 @@ sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences)
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
 | `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope`, and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
@@ -667,8 +667,8 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
 | Source | Role |
 |--------|------|
 | `pluginSettingsApi.ts` | Thin wrappers over the generated client: `fetchPluginSettings(filter)`, `fetchPluginEntry(family, code)`, and `savePluginSettings(items)`, which never throws and answers `saved`, `refused` (422, each item with its `error_code`), `conflict` (409), `keyUnavailable` (503) or `failed`. `fieldOf()` and `entryOf()` narrow the answer to what the components trust: a secret never carries a `value` or a `default` |
-| `pluginSettingsForm.ts` | The rules, without the DOM: the groups by family, the texts with their English fallback, the read-only reasons, the state of a secret, the unsaved edits (`draftOf()`), the checks before the server's (`draftProblems()`, lengths counted in code points as `len()` counts them), the write items (`writeItems()`) and the refusals by field |
-| `PluginSettingsForm.svelte` | One plugin's form: a control per field type, saved all or nothing |
+| `pluginSettingsForm.ts` | The rules, without the DOM: the groups by family, with their titles and icons (`FAMILY_TITLE_KEYS`, `FAMILY_ICONS`), the texts with their English fallback, the read-only reasons, the state of a secret, the unsaved edits (`draftOf()`), the checks before the server's (`draftProblems()`, lengths counted in code points as `len()` counts them), the write items (`writeItems()`) and the refusals by field |
+| `PluginSettingsForm.svelte` | One plugin's form: its icon (`icon_url`, or a neutral `Puzzle` when it has none or the image does not load) and name, a control per field type, saved all or nothing |
 | `PluginSettingsTab.svelte` | The **Plugins** tab of Settings |
 | `PluginSettingsModal.svelte` | **Configure**: the same form for one plugin, in a dialog |
 
@@ -676,7 +676,9 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   `Puzzle`, order 25, visible to everyone; `?tab=plugins` opens it: see
   [Tab registry](../../frontend/components/features/settings.md#tab-registry)). It reads the whole
   catalogue once, unfiltered, so a test-only plugin is never listed, and groups it under **Prices**
-  (`asset`) then **Exchange rates** (`fx`), leaving out a family without entries. Each plugin is a
+  (`asset`) then **Exchange rates** (`fx`), leaving out a family without entries. Each title follows
+  its family's icon from `FAMILY_ICONS` (`ChartColumn`, `Coins`: the icons the families have on the
+  documentation's home), so a new family adds one row there. Each plugin is a
   `PluginSettingsForm`, saved on its own; an empty catalogue and a failed read have their own message.
   Its book icon (`DocsLink`) opens the user page.
 - **The form.** A control per type: a text or number input, a `SimpleSelect`, a checkbox, and a
@@ -785,7 +787,7 @@ All six run without a server or the lane's database (`isolation="pure"`):
 | `./dev.py test services plugin-settings-contract` | Declarations per family, refusal at registration, values per type, derived variable names, `BoundSettings` |
 | `./dev.py test services plugin-settings-crypto` | The encrypted blob, the associated data, `key_id`, re-encryption on a copy, the key status |
 | `./dev.py test services plugin-settings-runtime` | Resolution and locking, fingerprints, `configure_instance()`, `NOT_CONFIGURED` and masking at both boundaries; `missing_field_keys()`, the same for a call and for the catalogue; `PROVIDER_ERROR` and its `details["detail"]`; a secret the caller chose, the errors hidden whole so that a wrong guess and the right one raise the same error; `public_asset_url()`, in the probe too; the search's `providers_not_configured` and the stream's `provider_error` event |
-| `./dev.py test services plugin-settings-service` | The catalogue, `configured` included, and the all-or-nothing writes |
+| `./dev.py test services plugin-settings-service` | The catalogue, `configured` and each plugin's icon included (an icon that cannot be read, or an empty one, is null; a name that cannot be read falls back to the code), and the all-or-nothing writes |
 | `./dev.py test services secret-masking` | Masking in exceptions and log lines, across threads and tasks; overlapping or touching occurrences masked as one, against the overlap attack of the security review; `whole` |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
 
@@ -793,14 +795,14 @@ The other units that touch the plugin settings:
 
 | Selector | Covers |
 |----------|--------|
-| `./dev.py test api plugin-settings` | The two endpoints on the lane's server: roles, write-only secrets, the 422 with every item and no input echo, user isolation, delivery to `mockprov`, CASCADE and SET NULL; justETF and Borsa Italiana in the full catalogue. It runs alone: it writes `mockprov`'s instance-wide fields |
+| `./dev.py test api plugin-settings` | The two endpoints on the lane's server: roles, write-only secrets, the 422 with every item and no input echo, user isolation, delivery to `mockprov`, CASCADE and SET NULL; justETF and Borsa Italiana in the full catalogue, each entry with its plugin's icon. It runs alone: it writes `mockprov`'s instance-wide fields |
 | `./dev.py test db migration-007` | Migration `007_plugin_settings`, up and down, on temporary databases |
 | `./dev.py test utils gate-plugin-i18n-ownership` | The settings' keys in each plugin's fragment ([Labels and Translations](#translations)) |
 | `./dev.py test services provider-errors` | Among the provider error paths, justETF's `preferred_currency` declaration and the rows its search keeps |
 | `./dev.py test services borsa-italiana-search` | Borsa Italiana's `preferred_language` on a fund and on a share, the site searched in Italian whatever the preference |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
-| `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM) and `pluginSettingsApi.test.ts` (the narrowing of the answers, and every outcome of a save through the real client, only the transport faked) |
-| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…24), `PluginSettingsTab.test.ts` (PST-01…06) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…30, the plugin's icon and its fallback in PSF-26…30), `PluginSettingsTab.test.ts` (PST-01…09, the families' icons in PST-07…09) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---
