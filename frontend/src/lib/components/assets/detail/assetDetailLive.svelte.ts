@@ -95,6 +95,8 @@ export class AssetDetailLive {
                     clearTimeout(this.#flashTimeoutId);
                     this.#flashTimeoutId = null;
                 }
+                // The decay timer is gone: put the flash out with it, or it stays lit (coloured, with reduced motion).
+                this.direction = 'neutral';
             };
         });
     }
@@ -210,12 +212,14 @@ export class AssetDetailLive {
     //   the DB's last known value — nothing to merge).
     // • Not during a full chart reload (``loading === true``), to avoid
     //   interleaving writers of the same chartData array.
-    // • Point merge is idempotent: if close == last known close for the
-    //   same as_of_date, we skip the state update (no render, no network).
+    // • Point merge is idempotent: if the polled close equals the point's
+    //   native close (``original_close ?? close``) for the same as_of_date,
+    //   we skip the state update (no render, no network).
     // • Converted-currency chart (displayCurrency ≠ asset currency): the
     //   polled close is in the asset's native currency and would flash
-    //   wrong values inside the FX-converted series — in that case we do
-    //   a silent full reload (single loadChartData) as the fallback.
+    //   wrong values inside the FX-converted series — in that case, when the
+    //   native close changed, we do a silent full reload (single
+    //   loadChartData) as the fallback.
     // =========================================================================
 
     async #applyLiveChartHead(item: any, newClose: number) {
@@ -223,10 +227,12 @@ export class AssetDetailLive {
         if (this.#input.loading || (this.#input.primaryMode === 'calendar-return' && this.#input.calendarReturnView.state === 'loading')) return;
         if (item.error || !item.as_of_date) return;
 
-        // Idempotent guard: compare with the point for the same date.
+        // Idempotent guard: compare with the point for the same date, in the asset's own currency. The poll answers in
+        // that currency, while a converted chart's `close` is in the display one: its native close is `original_close`.
         const existingIdx = this.#input.chartData.findIndex((p: any) => p.date === item.as_of_date);
         if (existingIdx >= 0) {
-            const existingClose = Number((this.#input.chartData[existingIdx] as any).close);
+            const existing = this.#input.chartData[existingIdx] as any;
+            const existingClose = Number(existing.original_close ?? existing.close);
             if (Number.isFinite(existingClose) && Math.abs(existingClose - newClose) < 1e-9) return;
         }
 
