@@ -3749,13 +3749,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   portafoglio (`portfolioMutation.ts`). La testa del grafico invece salta senza fornitore. Cura possibile: non avviare il
   ciclo senza un fornitore assegnato. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
   sezione «Passi di Z1».
-- **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). Due pagine:
+- ✅ **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). **Chiusa il 16/10 col lotto Z-9** (sola doc,
+  dopo Z7c-1): la sezione `#provider-pauses` di `admin/sleep_wake.en.md` (durata, chi aspetta e cosa si vede, memoria
+  e sospensione, log) e le due righe in `admin/configuration.en.md`; la parte di sviluppo l'aveva già scritta X
+  (`developer/backend/assets/architecture.md#provider-pauses`), che ora rimanda alla pagina admin. Era: due pagine,
   - la pagina admin `admin/configuration.en.md`, con le due variabili, il default acceso e l'eccezione della decisione
     34;
   - la pagina d'architettura degli asset: il confine e le pause.
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
-  l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
+  l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-9».
 - **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
   codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
   `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
