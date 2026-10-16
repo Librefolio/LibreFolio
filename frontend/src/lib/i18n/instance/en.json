@@ -37,7 +37,8 @@
       "adminDescription": "The hosting provider has blocked this instance, for example because its subscription is not paid. Settle it with the provider to unblock the instance.",
       "userDescription": "The hosting provider has blocked this instance, for example because its subscription is not paid. Ask your administrator for a backup of your data.",
       "deletionDate": "The instance and its data will be deleted on {date}.",
-      "manageSubscription": "Manage subscription"
+      "manageSubscription": "Manage subscription",
+      "backupTitle": "Keep a copy of the data"
     }
   }
 }

@@ -37,7 +37,8 @@
       "adminDescription": "El proveedor de alojamiento ha bloqueado esta instancia, por ejemplo porque su suscripción no está pagada. Regulariza la situación con el proveedor para desbloquearla.",
       "userDescription": "El proveedor de alojamiento ha bloqueado esta instancia, por ejemplo porque su suscripción no está pagada. Pide a tu administrador una copia de seguridad de tus datos.",
       "deletionDate": "La instancia y sus datos se eliminarán el {date}.",
-      "manageSubscription": "Gestionar la suscripción"
+      "manageSubscription": "Gestionar la suscripción",
+      "backupTitle": "Guarda una copia de los datos"
     }
   }
 }
