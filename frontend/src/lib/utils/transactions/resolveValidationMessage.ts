@@ -88,6 +88,8 @@ export interface ResolvableIssue {
     loc?: string;
     /** Explicit field name from TXValidationIssue (e.g. "asset_id"). */
     field?: string | null;
+    /** The batch operation the issue sits on (create, update, delete, split, promote), when known. */
+    operation?: string | null;
 }
 
 /**
@@ -219,13 +221,13 @@ export function resolveIssueMessage(issue: ResolvableIssue, t: (key: string, opt
     const fieldName = extractFieldName(issue);
     const fieldLabel = fieldName ? translateFieldName(fieldName, t) : null;
 
-    // Try translating with our custom error code first
-    const key = `transactions.errors.${code}`;
-    const translated = t(key, {values: enriched});
-
-    // If our custom key exists, use it (already field-specific in wording)
-    if (translated !== key) {
-        return translated;
+    // Try translating with our custom error code first. A missing exchange rate on a split has its own text, then the
+    // generic one: the units that leave take their average cost, which needs that rate (decision 47, W-B39).
+    const keys = code === 'wacFxUnavailable' && issue.operation === 'split' ? ['transactions.errors.wacFxUnavailableSplit', `transactions.errors.${code}`] : [`transactions.errors.${code}`];
+    for (const key of keys) {
+        const translated = t(key, {values: enriched});
+        // If our custom key exists, use it (already field-specific in wording)
+        if (translated !== key) return translated;
     }
 
     // Try field-specific override (e.g. broker_id:greater_than → "Please select a broker")
