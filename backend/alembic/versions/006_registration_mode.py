@@ -14,8 +14,9 @@ values:
 Data only: the row is converted and the old one deleted. The stored text is read the way the settings service read the
 boolean until now — ``value.lower()`` among ``true``, ``1``, ``yes``, ``on`` — so ``open`` is what the server treated
 as open, and every other value, the odd ones included, is ``disabled``: closed, as it was. The date and the author of
-the last change are kept. A database without the row has nothing to convert: the settings service creates
-``registration_mode`` with its default, ``open``.
+the last change are kept. A database without the row has nothing to convert: if it already holds accounts,
+``008_registration_invite_default`` writes ``open``; otherwise the settings service seeds the default, ``invite`` since
+decision 36.
 
 The downgrade converts back: ``open`` is ``true``; ``invite`` and ``disabled`` are ``false``, since the old setting had
 no middle ground and closed is the safe reading of invitation-only.

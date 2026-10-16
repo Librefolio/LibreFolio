@@ -14,7 +14,7 @@ from backend.app.config import get_settings
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import InstanceConfigResponse
-from backend.app.services.accounts.registration_service import effective_registration_mode
+from backend.app.services.accounts.registration_service import effective_registration_mode, first_account_open
 from backend.app.services.email.links import email_instance_config
 
 instance_router = APIRouter()
@@ -26,7 +26,7 @@ async def get_instance_config(session: AsyncSession = Depends(get_session_genera
     registration = await effective_registration_mode(session)
     return InstanceConfigResponse(
         profile=get_settings().LIBREFOLIO_PROFILE,
-        accounts=AccountsInstanceConfig(registration_mode=registration.mode, registration_locked=registration.locked),
+        accounts=AccountsInstanceConfig(registration_mode=registration.mode, registration_locked=registration.locked, first_account_open=await first_account_open(session)),
         # The email configuration may come from a password file: read off the event loop.
         email=await asyncio.to_thread(email_instance_config),
     )

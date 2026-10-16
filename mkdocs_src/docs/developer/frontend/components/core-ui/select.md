@@ -416,7 +416,7 @@ It is built on three files beside it:
   `dropdownPlacement()`, and the types `PickerAsset`, `PickerVerdict`, `PickerSection` and
   `SelectionFilters`.
 
-No production file of `ui/select/` imports from `components/risk/`: the last block of
+No production file of `ui/select/` imports from `features/risk/`: the last block of
 `AssetPickerPanel.test.ts` reads every source of the folder, tests aside, and fails on such an
 import.
 

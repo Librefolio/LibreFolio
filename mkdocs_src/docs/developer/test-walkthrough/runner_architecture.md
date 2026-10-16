@@ -525,7 +525,8 @@ purpose.
 Even 16 invocations would each redo the same preparation, so the Python side signals that it is
 already done with `LF_SETUP_DONE=1`. `global-setup.ts` then skips populating the database and
 creating the E2E users, and jumps straight to initialising the global settings via the API — the one
-step nothing on the Python side performs, and one that `populate --force` wipes.
+step nothing on the Python side performs (populate writes a single row, `registration_mode`), and one
+that `populate --force` wipes.
 
 The variable is set only after *both* the populate and the users have succeeded, and cleared by any
 repopulate. Running `npx playwright test` by hand never has it, so that path is unchanged.
@@ -652,8 +653,11 @@ difference, as before.
     happened** — raising it unconditionally would hide the very slowness those timeouts exist to
     catch.
 
-    Also worth knowing: `populate_mock_data` recreates the E2E users itself, but not the global
-    settings. Those are the one piece of `globalSetup` that has to be replayed by hand.
+    Also worth knowing: `populate_mock_data` recreates the E2E users itself, but of the global
+    settings only one row: `registration_mode`, written `open` by `open_lane_registration()`, since
+    the API and E2E tests register accounts of their own and a new install's default, `invite`,
+    would refuse them. The other global settings are the one piece of `globalSetup` that has to be
+    replayed by hand; `initGlobalSettings()` creates only the missing rows, so it keeps that `open`.
 
 !!! tip "A wedged test server looks exactly like a hung test suite"
 

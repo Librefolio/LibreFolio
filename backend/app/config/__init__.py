@@ -396,6 +396,9 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         Path("scenario_catalog"),
         Path("secrets"),
         Path("secrets/instance.key"),
+        # Instance backup (workstream B): the archives, and the restore's copies and its pending marker (lots B2, B3).
+        Path("backups"),
+        Path(".restore"),
     )
     for relative in managed_paths:
         test_target = (candidate / relative).resolve()

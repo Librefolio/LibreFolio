@@ -31,7 +31,7 @@
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ 16/10 checkpoint FROZEN (sezione «Z4»; decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi) |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
 | Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
-| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | 📝 disegnato il 15/10 (sezione «Z7 — disegno»), decisioni D-Z7 prese dal coordinatore; **Z7a ✅ 15/10** (primitiva, configurazione, servizio, test verdi; sezione «Z7a»); poi X con il contratto `RATE_LIMITED` (X1–X8), poi Z7b scheduler e Z7c frontend |
+| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ 16/10 checkpoint FROZEN** (sezione «Z7b — codice»; decisioni notturne N-Z7b-1…7); poi Z7c frontend (con l'API dello stato e del registro) |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 
@@ -1745,3 +1745,84 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    > risveglio in corso allo spegnimento; lo tronca il budget di Z6b (il watchdog a 8 s), e lo stato si scrive con un
    > rinomino atomico, quindi niente si corrompe. Resta così.
 6. ✅ 16/10 ~01:50 — Checkpoint FROZEN inviato al coordinatore.
+
+### Z7b — lo scheduler rispetta le pause dei fornitori (codice)
+
+> **Via** (coordinatore, 16/10 ~02:00): «Poi, finché B2 non entra (verso le 02:30): Z7b, i job pianificati che
+> rispettano la pausa dei fornitori. X-RL è dentro. Rossi prima.» Base: `224b6e839` (Z4 più `dev_release2`, con
+> X1–X8). Il disegno approvato è la sezione «Z7b · Scheduler» (D-Z7-1…4), con le note di X.
+>
+> **Decisioni notturne, da rivedere** (tecniche, nel mio perimetro):
+> - **N-Z7b-1**: un elemento `RATE_LIMITED` è rimandato, né riuscito né fallito; lo stato del job è `ok` solo se non
+>   c'è niente di rimandato né di fallito, `error` se tutto ciò che non è rimandato è fallito e niente è rimandato,
+>   `partial` negli altri casi (anche tutto rimandato): niente valori nuovi per l'interfaccia di oggi.
+> - **N-Z7b-2**: dopo un'eccezione `last_error` è il solo nome della classe: lo stato si mostra nel pannello.
+> - **N-Z7b-3**: un job che solleva non tocca `last_run_at`, così uno slot perso resta dovuto; lo trattiene
+>   `next_attempt_at`.
+> - **N-Z7b-4**: il rinvio e l'attesa dopo un'eccezione stanno dentro le due funzioni del «dovuto», quindi valgono per
+>   il giro, il ritorno e il risveglio.
+> - **N-Z7b-5**: `JobOutcome` e `WakeSyncJob` aggiungono `items_deferred` e `retry_at`; un job non dovuto porta
+>   `retry_at` se un nuovo tentativo è in attesa: il pannello vede «rimandato fino a T».
+> - **N-Z7b-6**: `load_state` ignora le chiavi che non conosce, così un file più nuovo non azzera lo stato.
+> - **N-Z7b-7**: l'API `/settings/scheduler/state` e il frontend restano come sono; li tocca Z7c.
+
+**Contratto.**
+- `scheduler/state.py`: `JobState` aggiunge `last_items_deferred: int = 0`, `retry_at: str | None` (ISO, UTC),
+  `consecutive_failures: int = 0`, `next_attempt_at: str | None` (ISO, UTC); `load_state` legge i file vecchi senza
+  questi campi e ignora le chiavi sconosciute.
+- `scheduler/jobs.py`:
+  - un elemento è rimandato quando `error_code == "RATE_LIMITED"`, qualunque sia il suo stato o il suo valore (nota 1
+    di X); riusciti e falliti contano solo gli altri;
+  - `_classify_job_status(ok_count, total_count, deferred_count=0)`: con `deferred_count=0` come prima; altrimenti
+    N-Z7b-1;
+  - `retry_at` = adesso più il più breve `retry_after` dei rimandati che ne hanno uno; nessuno, nessun `retry_at`;
+  - il registro dei job: `deferred: true` e `retry_after` sugli elementi rimandati, i rimandati fuori da `err`, nel
+    riepilogo `deferred`, e `retry_at` in cima.
+- `scheduler/scheduler.py`:
+  - le due funzioni del «dovuto», prima della regola di sempre: con `next_attempt_at` futuro non è dovuto; con
+    `retry_at` raggiunto è dovuto; altrimenti la regola di sempre;
+  - un job che solleva (o il cui salvataggio solleva): `consecutive_failures + 1`, `next_attempt_at` = adesso più
+    1, 2, 4… minuti, con un tetto di 60 per lo storico e della frequenza per il prezzo corrente; `last_status`
+    `error`, `last_error` la classe; `last_run_at` invariato; lo stato salvato;
+  - `JobOutcome` aggiunge `items_deferred` e `retry_at` (N-Z7b-5).
+- `schemas/sleep_wake.py`: `WakeSyncJob` aggiunge `items_deferred` e `retry_at`.
+
+**Passi.**
+1. ✅ 16/10 ~02:45 — Rossi di test-author: `test_scheduler_backoff.py` (SBO-001…012, 79 casi, PURE, sulle funzioni
+   del «dovuto» vere), +23 casi in `test_scheduler_jobs.py`, +8 in `test_scheduler_state.py`, i campi nuovi in SCU-002 e
+   SCU-018 (Z3) e nel test del risveglio (Z4). Rossi: 79, 23, 4, 1, 10, tutti per i campi o i comportamenti mancanti.
+   > **Note implementazione**: 8 casi vecchi di `test_scheduler_jobs.py` confrontavano il riepilogo per intero, e i
+   > contatori nuovi li avrebbero rotti: ora confrontano il riepilogo senza i contatori dei rimandati, e due casi nuovi
+   > fissano gli zeri. Il chiarimento dato a metà lavoro: «`last_run_at` invariato» vale solo quando il job solleva; se
+   > solleva il salvataggio dopo un job finito, la base è lo stato fresco del job.
+2. ✅ 16/10 ~02:50 — Codice, applicato da uno script preparato mentre test-author scriveva:
+   `state.py` (quattro campi, chiavi sconosciute ignorate), `jobs.py` (rimandati, `_classify_job_status` con il terzo
+   argomento, `retry_at`), `joblog.py` (`deferred`, `retry_after`, i contatori, `retry_at`), `scheduler.py` (le regole
+   di nuovo tentativo dentro il «dovuto», `_record_failure`, i campi di `JobOutcome`), `schemas/sleep_wake.py` e
+   `wake.py` (i due campi nel risveglio).
+   > **⚠️ Fuori pista**: 4 rossi di SBO-003 e SBO-004 rimasti dopo il codice: il record del fallimento sovrascriveva
+   > `last_duration_s` con la durata del tentativo fallito; il test lo vuole invariato, ed è più coerente (la durata
+   > accompagna `last_run_at`, che resta quello dell'ultimo giro finito). Corretto il codice.
+3. Verdi, uno alla volta con `nice`:
+   - ✅ `scheduler-backoff` 79/79, `scheduler-jobs` 43/43, `scheduler-state` 14/14, `scheduler-due` 25/25,
+     `scheduler-catchup` 73/73, `scheduler-loop` 5/5, `scheduler-joblog-misc` 2/2, il file del risveglio 74/74;
+     ruff e black puliti.
+   - ✅ `scheduler-joblog-builders` 16/16: test-author ha fissato esattamente la forma nuova dei 5 riepiloghi (i
+     contatori dei rimandati a 0, `retry_at` null) e aggiunto un caso per costruttore con elementi rimandati.
+   - ✅ `api scheduler` 8/8 (l'API dello stato non cambia). Più lento del solito: il runner ha ricostruito il sito
+     della doc, che il docs-writer stava modificando.
+4. ✅ 16/10 ~03:05 — Doc:
+   - docs-writer: `developer/backend/scheduler.md` (sottosezione «⏸️ Provider Pauses and Failures»
+     `{: #pauses-and-failures }`, il rapporto del giro con i campi nuovi, la regola degli stati, il registro dei job,
+     un'ancora esplicita `#execution-logs`) e `admin/sleep_wake.en.md` (i due campi nel JSON d'esempio e nella
+     tabella, una frase su `retry_at` per chi pianifica i risvegli; `partial` comprende «o rimandato»);
+   - io: la legenda degli stati del registro in `admin/settings.{en,it,fr,es}.md` («Partial» comprende i rimandati,
+     «Error» vuol dire nessuno riuscito e nessuno rimandato), senza timbro (la pagina ha già un debito).
+   - Build rigoroso 0 warning, `check-links` 96 validi.
+   > **Note implementazione** per Z7c: i modelli di risposta di `/settings/scheduler/log` (`SchedulerLog*`) non
+   > dichiarano le chiavi nuove, quindi le scartano, e `/settings/scheduler/state` restituisce cinque campi fissi. Oggi
+   > il pannello vede un elemento rimandato come `ok: false`, con il messaggio della pausa, e dopo un'eccezione lo stato
+   > `error` accanto all'ora dell'ultimo giro finito. Z7c espone i campi nell'API e li mostra (N-Z7b-7).
+   > `developer/architecture/database/index.md:251` descrive `scheduler_state.json` come «ultimo giro dei job»:
+   > incompleto, non falso; lo aggiorna Z7c.
+5. ✅ 16/10 ~03:10 — Checkpoint FROZEN inviato al coordinatore.

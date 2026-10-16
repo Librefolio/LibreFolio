@@ -135,13 +135,15 @@ test.describe('Authentication', () => {
     });
 
     // «Register here» follows the instance's registration mode (K, step 22; accounts lot A5b). The login card reads
-    // `GET /api/v1/system/instance` and offers the link only when `accounts.registration_mode` is 'open'; until the
-    // instance answers, the defaults apply and the link stays. In 'invite' the backend refuses `POST /auth/register`
-    // without an invitation, in 'disabled' with one too (403), so a link offered anyway would end in a refusal after a
-    // filled-in form. Those two modes are served to this page only — the real response with that one field changed, never
-    // a hand-built body (Zodios validates the response) — and never written: the mode is a global setting shared by every
-    // user of the lane, open there, and changed by no E2E spec. The stub is fixtures/instance-config.ts, which
-    // auth-links.spec.ts shares.
+    // `GET /api/v1/system/instance` and offers the link only when `accounts.registration_mode` is 'open' — or, since
+    // accounts lot A6d, when `accounts.first_account_open` is true: the first account of an empty instance can always be
+    // created; until the instance answers, the defaults apply and the link stays. In 'invite' the backend refuses
+    // `POST /auth/register` without an invitation, in 'disabled' with one too (403), so a link offered anyway would end
+    // in a refusal after a filled-in form. Those two modes are served to this page only — the real response with that one
+    // field changed, never a hand-built body (Zodios validates the response) — and never written: the mode is a global
+    // setting shared by every user of the lane, open there, and changed by no E2E spec. The flag of A6d is served the
+    // same way, by the last test; the two that withdraw the link leave it as the lane answers it, false, since the lane
+    // has accounts. The stub is fixtures/instance-config.ts, which auth-links.spec.ts shares.
     test.describe('Register link and the registration setting', () => {
         for (const mode of ['disabled', 'invite'] as const) {
             test(`the login page withdraws «Register here» once the instance answers registration_mode '${mode}'`, async ({page}) => {
@@ -186,6 +188,57 @@ test.describe('Authentication', () => {
             } finally {
                 await stub.dispose();
             }
+        });
+
+        // A6d (decision 36): the first account of an empty instance can always be created — it becomes the administrator
+        // — so the link stays while `accounts.first_account_open` is true, whatever the mode; a new install defaults to
+        // invite. One load that keeps the link would prove nothing: the defaults offer it before the answer too, and the
+        // card publishes no state for «answer applied». Hence two loads of the same mode, invite, through the hold of the
+        // two tests above, whose answers differ only by the flag: with false the link goes once the held answer is
+        // delivered — on this very path an invite answer is applied — and with true it is still offered after delivery.
+        // The limit that remains: the true half is checked once the stub has delivered its answer, and the card cannot say
+        // it has applied it; the pairing with the false half, not a state, is what gives that half its teeth.
+        test('the login page keeps «Register here» on an instance by invitation while it has no account: first_account_open alone decides (A6d)', async ({page}) => {
+            /**
+             * One load of the login page whose GET /system/instance is answered with registration_mode 'invite' and
+             * `firstAccountOpen`, held until the defaults have been seen: the steps of the two tests above, for both
+             * halves alike. `outcome` asserts what the page offers once that answer has been delivered.
+             */
+            async function inviteAnswered(firstAccountOpen: boolean, outcome: () => Promise<void>): Promise<void> {
+                const answer = `registration_mode 'invite' with first_account_open ${firstAccountOpen}`;
+                const stub = await serveRegistrationMode(page, 'invite', {hold: true, firstAccountOpen});
+                try {
+                    await openLoginPage(page);
+                    await expect(page.getByTestId('login-form')).toBeVisible();
+                    // A sibling control of the link: the card is up, so a link missing below is the answer, not a slow page.
+                    await expect(page.getByTestId('goto-forgot')).toBeVisible();
+
+                    // The read has reached the stub and waits there: until it is delivered, a link on screen is the default.
+                    await expect.poll(() => stub.requested, {message: `The login page never asked GET ${INSTANCE_CONFIG_PATH}: it cannot know how this instance registers accounts`, timeout: 10_000}).toBeGreaterThan(0);
+                    await expect(page.getByTestId('goto-register'), 'Until the instance answers, the defaults apply: the link is offered').toBeVisible();
+
+                    stub.release();
+                    await expect.poll(() => stub.answered, {message: `The held answer of GET ${INSTANCE_CONFIG_PATH} was never delivered`, timeout: 10_000}).toBeGreaterThan(0);
+                    expect(stub.problems, `The stub could not answer ${answer}: the precondition is broken, not the page`).toEqual([]);
+                    expect([...new Set(stub.servedFirstAccountOpen)], `The answer delivered must carry ${answer}`).toEqual([firstAccountOpen]);
+
+                    await outcome();
+                } finally {
+                    await stub.dispose();
+                }
+            }
+
+            // The instance has an account: invitation only, so the link goes — the control of the half below.
+            await inviteAnswered(false, async () => {
+                await expect(page.getByTestId('goto-register'), "Registration is 'invite' and the instance has an account (first_account_open false): the login page must not offer «Register here»").toBeHidden({timeout: 5_000});
+                await expect(page.getByTestId('goto-forgot'), 'Only the register link goes: the rest of the card stays').toBeVisible();
+            });
+
+            // The same answer but for the flag: no account yet, so the first one can always be created.
+            await inviteAnswered(true, async () => {
+                await expect(page.getByTestId('goto-register'), "Registration is 'invite' but the instance has no account (first_account_open true): the login page keeps «Register here» for the first one").toBeVisible();
+                await expect(page.getByTestId('goto-forgot')).toBeVisible();
+            });
         });
     });
 

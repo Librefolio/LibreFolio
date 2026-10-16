@@ -7,14 +7,16 @@
  * 1. **The designer's values.** Every key of both tables and the two buckets, both themes, read through
  *    `categoryColor`, against her tables as transcribed below from `risposta-2-grafici-originale.txt` (tables 3.2 A and
  *    3.2 B of `LibreFolio_developer_journal/Release_2/Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/`;
- *    the original wins over the README). The lookup ignores case, spaces and underscores; a key outside the tables —
- *    an unresolved subtype included — reads as unclassified.
+ *    the original wins over the README). The lookup ignores case, spaces and underscores — `lookupKey`, exported so the
+ *    Designer Lab keys its edits the same way; a key outside the tables — an unresolved subtype included — reads as
+ *    unclassified.
  * 2. **C1, one read point.** The module exports exactly what its header documents, and no colour at any depth: the
  *    tables cannot be read past the hook.
  * 3. **C2, one literal per line.** Every colour of the file sits alone on a `light:`/`dark:` line, and those lines are
  *    the colours `categoryColor` returns: the Lab exports an edit by file and line.
  * 4. **The sequences (GR5).** A sequence in order, then one shade further at each round, 98 distinct colours for the 14
- *    sectors; the Growth chart's broker lines are the first eight types.
+ *    sectors; the Growth chart's broker lines are the first eight types, cycled, read at each draw so a Designer Lab
+ *    edit reaches them (`growthBrokerColor`, TD-1b).
  * 5. **C3, the hook.** In a debug build the Lab answers first; a null answer, a missing hook or the flag off leave the
  *    table's value. In a release build the hook is gone: the esbuild the release build minifies with, run on this
  *    source with the define a release build sets, leaves no trace of it.
@@ -43,8 +45,8 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 
 import {ciede2000, deltaE00, labOf, SHARMA_PAIRS, SRGB_LAB} from '$test/colorDistance';
 
-import {CATEGORY_BUCKETS, CATEGORY_KEYS, CATEGORY_SEQUENCE, categoryColor, type CategoryKind, isUnclassifiedCountry, KEYLESS_SEQUENCE, sequenceColor} from './chartCategories';
-import {GROWTH_BROKER_PALETTE} from './chartPalettes';
+import {CATEGORY_BUCKETS, CATEGORY_KEYS, CATEGORY_SEQUENCE, categoryColor, type CategoryKind, isUnclassifiedCountry, KEYLESS_SEQUENCE, lookupKey, sequenceColor} from './chartCategories';
+import {growthBrokerColor} from './chartPalettes';
 import {familyShade, shadePoles} from './chartShades';
 
 // =============================================================================
@@ -180,6 +182,14 @@ describe('categoryColor — the lookup', () => {
         for (const key of ['Unknown', 'unknown', 'UNKNOWN', 'Other', 'OTHER', ' other ']) expect(isUnclassifiedCountry(key), JSON.stringify(key)).toBe(true);
         for (const key of ['ITA', 'Others', 'Liquidity', 'european_union', '']) expect(isUnclassifiedCountry(key), JSON.stringify(key)).toBe(false);
     });
+
+    it('lookupKey, the key the lookup compares (exported for the Designer Lab): one key for every form a key arrives in, unchanged when applied again', () => {
+        const key = lookupKey('Health Care');
+        expect(key, 'barrier: another category keeps another key, so one key for all forms is no constant').not.toBe(lookupKey('Technology'));
+
+        for (const form of ['HEALTH_CARE', 'healthcare', ' health care ']) expect(lookupKey(form), JSON.stringify(form)).toBe(key);
+        for (const form of ['Health Care', 'HEALTH_CARE', 'healthcare', ' health care ', ...CATEGORY_KEYS.type, ...CATEGORY_KEYS.sector, ...CATEGORY_BUCKETS]) expect(lookupKey(lookupKey(form)), `idempotent: ${JSON.stringify(form)}`).toBe(lookupKey(form));
+    });
 });
 
 // =============================================================================
@@ -190,7 +200,7 @@ describe('categoryColor — the lookup', () => {
 const NAMESPACE: Record<string, unknown> = await vi.importActual('./chartCategories');
 
 /** What the module's header documents, the type aside (types are erased). */
-const DOCUMENTED_EXPORTS = ['CATEGORY_BUCKETS', 'CATEGORY_KEYS', 'CATEGORY_SEQUENCE', 'KEYLESS_SEQUENCE', 'categoryColor', 'isUnclassifiedCountry', 'sequenceColor'];
+const DOCUMENTED_EXPORTS = ['CATEGORY_BUCKETS', 'CATEGORY_KEYS', 'CATEGORY_SEQUENCE', 'KEYLESS_SEQUENCE', 'categoryColor', 'isUnclassifiedCountry', 'lookupKey', 'sequenceColor'];
 
 /** Every path under `value`, at any depth, that holds a colour or a `{light, dark}` pair. */
 function colourLeaks(value: unknown, at: string): string[] {
@@ -294,16 +304,30 @@ describe('sequenceColor — a sequence in order, then one shade further at each 
     });
 });
 
-describe('GROWTH_BROKER_PALETTE — the Growth chart’s broker lines (GR5)', () => {
-    it("is the pairs of CATEGORY_SEQUENCE, the designer's first eight types, in order", () => {
-        expect(GROWTH_BROKER_PALETTE.map(({light, dark}) => ({light: same(light), dark: same(dark)}))).toEqual(
-            CATEGORY_SEQUENCE.map((key) => {
-                const row = DESIGNER_TYPES.find(([type]) => type === key);
-                if (!row) throw new Error(`${key} is not a type of the designer's table`);
-                return {light: same(row[1]), dark: same(row[2])};
-            }),
-        );
-        expect(GROWTH_BROKER_PALETTE).toEqual(CATEGORY_SEQUENCE.map((key) => ({light: categoryColor('type', key, false), dark: categoryColor('type', key, true)})));
+describe('growthBrokerColor — the Growth chart’s broker lines (GR5, TD-1b)', () => {
+    it.each(THEME_CASES)("%s: lines 0–15 take the designer's first eight types in her order, then the same eight again", (_theme, dark) => {
+        const eight = CATEGORY_SEQUENCE.map((key) => {
+            const row = DESIGNER_TYPES.find(([type]) => type === key);
+            if (!row) throw new Error(`${key} is not a type of the designer's table`);
+            return same(dark ? row[2] : row[1]);
+        });
+        expect(eight, 'barrier: eight distinct colours, so a line out of place is seen').toHaveLength(8);
+        expect(new Set(eight).size).toBe(8);
+
+        expect(Array.from({length: 16}, (_, index) => same(growthBrokerColor(index, dark)))).toEqual([...eight, ...eight]);
+    });
+
+    it('follows a Designer Lab edit (C3): read through categoryColor at each call, never kept from an earlier one', () => {
+        // The hook harness of section 5: `publishHook` and `EDITED`. Line 1 is ETF.
+        expect(same(growthBrokerColor(1, false)), 'barrier: before the edit, the table value').toBe('#1D5BD8');
+
+        vi.stubGlobal('__LF_DESIGNER_LAB__', true);
+        const hook = publishHook((kind, key) => (kind === 'type' && key === 'ETF' ? EDITED : null));
+
+        expect(growthBrokerColor(1, false)).toBe(EDITED);
+        expect(hook).toHaveBeenLastCalledWith('type', 'ETF', false);
+        expect(growthBrokerColor(9, true), 'the same line in the next round, dark theme').toBe(EDITED);
+        expect(same(growthBrokerColor(0, false)), 'a line the edit leaves alone keeps its table value').toBe('#6D28D9');
     });
 });
 

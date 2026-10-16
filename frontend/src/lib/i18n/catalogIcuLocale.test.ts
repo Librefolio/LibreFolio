@@ -517,7 +517,7 @@ describe('$t and $_ calls — every ICU argument a message uses is passed, in ev
             expect(recorded.length, 'calls with a literal key and literal values').toBeGreaterThanOrEqual(250);
             expect([...new Set(recorded.map((call) => call.file.split('/').slice(0, 2).join('/')))], 'calls in the components and in the pages').toEqual(expect.arrayContaining(['src/lib', 'src/routes']));
             // Keyed by file and key, never by line. It passes `count`, the name its catalogues use: the gate is about names, not about `count`.
-            const known = recorded.filter((call) => call.file === 'src/lib/components/risk/levels/l4/L4Replay.svelte' && call.key === 'risk.levels.l4.replaySuggested');
+            const known = recorded.filter((call) => call.file === 'src/lib/features/risk/levels/l4/L4Replay.svelte' && call.key === 'risk.levels.l4.replaySuggested');
             expect(
                 known.map((call) => [...call.names].sort()),
                 'the known-good call is recorded with the names it passes',

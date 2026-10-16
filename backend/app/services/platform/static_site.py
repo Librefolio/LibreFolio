@@ -5,6 +5,9 @@ Owner: workstream H (platform). Moved out of ``main.py`` as it was (CP2b), path 
 when the app is not built; the build's chunks under ``/_app``, when the build exists; last, the SPA catch-all, which
 must stay the last route of the app. The handlers read ``FRONTEND_BUILD_DIR`` and ``SITE_DIR`` when a request comes, so
 a test can point them elsewhere.
+
+Caching: the chunks under ``_app/immutable/`` are cached for a year (their names change with their content); every
+other file of ``_app`` (``env.js``, ``version.json``) and every HTML document is revalidated (F28).
 """
 
 from pathlib import Path
@@ -14,6 +17,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.config import API_V1_PREFIX, PROJECT_NAME, PROJECT_ROOT, get_version
+from backend.app.services.platform.security_headers import register_served_types
 from backend.app.utils.runtime.paths import confined_path
 
 # Serve mkdocs site from FastAPI at /mkdocs if site directory exists, otherwise return placeholder HTML.
@@ -95,12 +99,19 @@ async def root():  # pragma: no cover
     }
 
 
-# Mount _app directory for SvelteKit immutable assets (JS/CSS chunks).
-# Content-hashed filenames → safe to cache hard for a year.
+#: The chunks under ``_app/immutable/``: content-hashed names, safe to cache hard for a year.
+IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+
+# Mount _app directory for SvelteKit assets: the immutable chunks (JS/CSS), and a few files whose names do not change
+# with their content (env.js, version.json), which must be revalidated like the HTML that names them.
 class ImmutableStaticFiles(StaticFiles):
-    def file_response(self, *args, **kwargs):
-        resp = super().file_response(*args, **kwargs)
-        resp.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        resp = super().file_response(full_path, stat_result, scope, status_code)
+        # Also on a 304: it tells the browser how long its copy may now be reused
+        parts = Path(self.get_path(scope)).parts
+        immutable = len(parts) > 1 and parts[0] == "immutable"
+        resp.headers["Cache-Control"] = IMMUTABLE_CACHE_CONTROL if immutable else REVALIDATE_HTML["Cache-Control"]
         return resp
 
 
@@ -149,6 +160,8 @@ def frontend_catchall(path: str):  # pragma: no cover
 
 def install_static_site(app: FastAPI) -> None:
     """Register the documentation, the web app, its chunks and the SPA catch-all on ``app``, in this order."""
+    # Process-wide: a type for every file the app serves, which nosniff requires (security_headers.py)
+    register_served_types()
     app.get("/mkdocs", response_class=HTMLResponse)(mkdocs_root)
     app.get("/mkdocs/{path:path}")(mkdocs_static)
     app.get("/")(root)

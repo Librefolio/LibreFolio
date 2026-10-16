@@ -76,7 +76,21 @@
     "uploader": "Subido por",
     "uploaderHint": "Usuario que subió el archivo.",
     "noUploader": "Usuario no indicado",
-    "uploaderLookupFailed": "No se pudieron cargar los nombres de usuario. Los archivos siguen disponibles con los ID de usuario."
+    "uploaderLookupFailed": "No se pudieron cargar los nombres de usuario. Los archivos siguen disponibles con los ID de usuario.",
+    "scope": {
+      "column": "Visibilidad",
+      "columnHint": "Los archivos compartidos los ve cualquier usuario; los personales, solo quien los subió y los administradores.",
+      "common": "Compartido",
+      "personal": "Personal",
+      "share": "Compartir con todos",
+      "makePersonal": "Hacer personal",
+      "makePersonalConfirm": "Los demás usuarios dejarán de ver este archivo, tampoco donde se usa como icono o foto.",
+      "nowShared": "{name} ahora es visible para todos los usuarios",
+      "nowPersonal": "{name} ahora solo lo ven quien lo subió y los administradores",
+      "changeFailed": "No se pudo cambiar la visibilidad del archivo",
+      "sharedOnPick": "{name} era personal: ahora es visible para todos los usuarios, para que todos lo vean aquí"
+    },
+    "deleteSkipped": "Los archivos que no puedes eliminar se han quedado en su sitio"
   },
   "files": {
     "deleteFailed": "Error al eliminar el archivo"

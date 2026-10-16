@@ -4,8 +4,9 @@ Test: GlobalSettingsService — _convert_value, get_setting_value, typed getters
 Tests the global settings service layer including type conversion,
 DB reads with defaults, the two convenience getters, and the registration
 mode row read through the registry key (release 1.3: ``registration_mode``,
-open / invite / disabled, replaces the ``enable_registration`` switch; the
-effective mode, with its environment override, is registration_service's).
+open / invite / disabled, replaces the ``enable_registration`` switch, and
+defaults to ``invite`` since lot A6d, decision 36; the effective mode, with
+its environment override, is registration_service's).
 """
 
 import asyncio
@@ -220,11 +221,11 @@ class TestTypedGetters:
             print_success(f"Custom upload MB = {result}")
 
     async def test_registration_mode_default(self, _clean_settings):
-        print_section("registration_mode: default (no DB row) is open")
+        print_section("registration_mode: default (no DB row) is invite")
         engine = get_async_engine()
         async with AsyncSession(engine) as session:
             result = await get_setting_value(session, SETTINGS_REGISTRY.global_.REGISTRATION_MODE.key)
-            assert result == "open", f"Without a row registration is open, as enable_registration defaulted to true: got {result!r}"
+            assert result == "invite", f"Without a row registration is by invitation: new installs register by invitation since lot A6d (decision 36), the first account being always creatable; got {result!r}"
             print_success(f"Default registration mode = {result}")
 
     async def test_registration_mode_disabled(self, _clean_settings):

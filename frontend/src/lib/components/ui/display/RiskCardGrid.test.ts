@@ -2,7 +2,7 @@
 /**
  * RiskCardGrid — component test (Vitest + jsdom).
  *
- * The grid exists to end a measured divergence: `components/risk/` holds 20 grid
+ * The grid exists to end a measured divergence: `features/risk/` holds 20 grid
  * declarations in 12 variants, and `RiskAnalysisPanel:632` still carries the
  * `1 → sm:2 → xl:5` jump that RiskMetricCard's own header argues against. So the
  * assertions here are not "does it render a grid" — they pin the two decisions

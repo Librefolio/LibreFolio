@@ -13,7 +13,7 @@
  *     on the right. One tab carries it.
  */
 import type {Component, ComponentType} from 'svelte';
-import {DatabaseBackup, Info, Mail, Shield, Sliders, User, Users} from 'lucide-svelte';
+import {DatabaseBackup, Info, Mail, Puzzle, Shield, Sliders, User, Users} from 'lucide-svelte';
 import ProfileTab from '$lib/features/settings/tabs/ProfileTab.svelte';
 import PreferencesTab from '$lib/features/settings/tabs/PreferencesTab.svelte';
 import AboutTab from '$lib/features/settings/tabs/AboutTab.svelte';
@@ -21,6 +21,7 @@ import GlobalSettingsTab from '$lib/features/settings/tabs/GlobalSettingsTab.sve
 import UsersTab from '$lib/features/settings/tabs/UsersTab.svelte';
 import BackupTab from '$lib/features/backup/BackupTab.svelte';
 import EmailSettingsTab from '$lib/features/email/EmailSettingsTab.svelte';
+import PluginSettingsTab from '$lib/features/plugin-settings/PluginSettingsTab.svelte';
 
 /** What a tab may depend on: who is signed in. */
 export interface SettingsTabContext {
@@ -42,6 +43,8 @@ export interface SettingsTab {
 export const SETTINGS_TABS: readonly SettingsTab[] = [
     {id: 'profile', labelKey: 'settings.profile', icon: User, order: 10, component: ProfileTab},
     {id: 'preferences', labelKey: 'settings.preferences', icon: Sliders, order: 20, component: PreferencesTab},
+    // Everyone: their own plugin settings, and the instance's read-only unless an administrator (workstream X, CP11, D-X15).
+    {id: 'plugins', labelKey: 'pluginSettings.tab.label', icon: Puzzle, order: 25, component: PluginSettingsTab},
     {id: 'about', labelKey: 'settings.about', icon: Info, order: 30, component: AboutTab},
     // Everyone reads the global settings; only an administrator changes them.
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, order: 100, component: GlobalSettingsTab, props: (ctx) => ({canEdit: ctx.isSuperuser}), alignEnd: true},
