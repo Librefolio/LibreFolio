@@ -32,7 +32,7 @@ one place. The details of each engine are on the pages listed under [Deep Pages]
 4. **Report copies.** Report any copy you meet, old or new. Before closing work that touched
    financial math, search the project for copies of what you changed.
 
-The technical indicators (`services/signal_plugins/`, `services/signal_runtime.py`), the
+The technical indicators (`services/signal_plugins/`, `services/signals/runtime.py`), the
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
