@@ -2489,3 +2489,29 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
    mkdocs arriva col prossimo aggiornamento della base.
 5. ✅ 16/10 15:10 — Checkpoint di Z-13b inviato, FROZEN: i sei file di Z-13b più questo piano e il backlog (Z-13 ✅,
    Z-15). I due `.svelte` sono di DV e BK: cambiano solo righe dentro lo `<script>`; lo SHA va ai colori.
+
+### Z-12 — il commento di `scheduler_state.json` in `admin/filesystem` (16/10, dopo Z-13b)
+
+> **Via** (coordinatore, 16/10 15:11): «Go with Z-12 (the `scheduler_state.json` comment in `admin/filesystem.*`,
+> 4 languages by hand, no stamp), then propose your next item from the backlog.» Z-13b è in dev: merge `26dda1a26`
+> (commit `f83ab0c5b` e `db2441cb0`). Base del lotto: HEAD `db2441cb0`.
+
+1. ✅ 16/10 15:15 — Verifica sul codice: `JobState` (`scheduler/state.py`) tiene per ogni job l'ultima esecuzione
+   (ora, durata, esito, riusciti, falliti, rimandati, errore), il nuovo tentativo dei rimandati (`retry_at`) e
+   l'attesa dopo i fallimenti (`consecutive_failures`, `next_attempt_at`). Il commento dell'albero diceva solo
+   «Last run of the scheduled syncs».
+2. ✅ 16/10 15:20 — Una riga per lingua, a mano, con il lessico delle pagine `admin/settings` (rispecchiate a mano in
+   Z7c-2): EN «Scheduled syncs: last run, pending retry»; IT «Sincronizzazioni: ultima esecuzione, nuovo tentativo»;
+   FR «Synchronisations : dernière exécution, nouvel essai»; ES «Sincronizaciones: última ejecución, reintento».
+   Larghezze dentro i massimi dei blocchi (EN 79, IT 91, FR 90 contro 89 di prima, ES 84). Nessuna data di pagina da
+   aggiornare. Niente stamp: la cache di Aphra è del 10/10 (`b027984d`), l'inglese a HEAD è già diverso (`475f90f4`).
+   > **⚠️ Fuori pista**: in `filesystem.es.md` sono in inglese tutti i commenti dell'albero, non solo questo; e gli
+   > alberi IT, FR ed ES non hanno le tre righe aggiunte dopo in inglese (`backups/`, `secrets/`, `instance.key`).
+   > Fuori dal lotto (debito di traduzione di altre pagine e altri flussi): nel backlog come Z-16.
+3. ✅ 16/10 15:26 — `mkdocs build` stretto (`files/logs/z_z12-mkdocs.log`): EN e IT senza avvisi miei; si ferma sul solo
+   avviso noto di dev (`wac.md` → `split_promote.md#transfer-giving-leg`, corretto in `ed500643f`, non ancora nella
+   mia base). FR ed ES non arrivano al build per quell'arresto: la modifica è un commento dentro un blocco di codice,
+   non può dare avvisi. `git diff --check` pulito; righe nuove del piano e del backlog ≤ 120 caratteri. Rispetto a dev
+   `26dda1a26` le quattro pagine e il piano sono invariati, il backlog cambia solo in altre sezioni.
+4. ✅ 16/10 15:28 — Checkpoint FROZEN inviato, con la proposta del prossimo lotto: Z-5 (il recupero storico riparte
+   dall'ultima data salvata invece dei 14 giorni fissi di `run_history_sync`, solo backend).
