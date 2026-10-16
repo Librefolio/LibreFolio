@@ -3509,6 +3509,56 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **20:39, handoff del merge** al coordinatore, 🧊 FROZEN: in staging i tre conflitti più, per N57, il pin
 >   (`test_backup_apply.py`) e la frase corretta di `security.md` (file già in conflitto); fuori staging solo questo
 >   piano.
+> - **Committato** dal coordinatore: `4e866cead` (il merge), `cd06f240b` (questo piano); poi un merge pulito di `dev`
+>   `27994759a` (J-24, MF C/I2, A-25, il giornale di Z): HEAD **`dbc2324d5`**, pulito. Il caso limite del link di setup va
+>   nel backlog di A, tramite il coordinatore.
+
+### `all-backend` su `dbc2324d5`, il CHANGELOG, H-17 e il checkpoint di doc (2026-10-16, 20:49-22:32) ✅ — 🧊 FROZEN
+
+> - **Slot 1** (il coordinatore, 20:49; fine prevista 21:40, poi «lascialo finire»: nessuno aspettava lo slot prima delle
+>   22): `all-backend --workers 2` su **`dbc2324d5`** con l'albero pulito, nella mia corsia (6187,
+>   `/tmp/librefolio-r13-b`), `files/scripts/b_allbackend.sh`. Dalle 20:50 alle 21:35, **45 minuti 09 secondi: 7 su 7**
+>   (External, DB, Services, Utils, Schema, API, E2E), uscita 0. Le tre passate parallele: 6386 + 6628, 94 + 3089,
+>   365 + 1468 superati, nessun fallimento; la costruzione dei prerequisiti 280 s col carico a ~80. Le 7 righe «❌» del log
+>   sono messaggi stampati dai test External sui percorsi d'errore (`MOCKFX_FAIL: simulated provider failure…`), non
+>   fallimenti. Istantanea del DB `00_archive/test-db_20261016_213506.tar.xz`. Porta libera.
+>   - Durante la corsa nessuna modifica all'albero (la corsa doveva provare esattamente `dbc2324d5`): le note di questo
+>     piano tenute in `files/next-checkpoint/journal-notes.md` della sessione e riportate qui dopo.
+> - **Checkpoint di doc** (21:36, `files/next-checkpoint/apply_b14_docs.py`, provato a secco prima su copie):
+>   - **B-14** in `admin/backup_restore.en.md`: «Make a Backup», la pagina di blocco ora ha la stessa scheda, **Keep a
+>     copy of the data** (rimando a «What Users See» di `hosting_providers`); «Bring Your LibreFolio Home», un
+>     amministratore scarica l'archivio da quella scheda, altrimenti il fornitore. B-14 ✅ nel backlog.
+>   - **La nota di H** nello stesso file («Saved secrets stay behind»): per le impostazioni dell'istanza ogni avvio logga
+>     l'errore «Stored plugin secrets that the instance key cannot read: …» col loro numero, finché non sono reinseriti
+>     o la chiave vecchia non torna.
+>   - **`developer/architecture/overview.md`**: i tre passi del ripristino nella lista numerata (`pending-restore` dopo
+>     `tool-catalog`, `serving-lock` dopo `data-directories`, `restore-commit` dopo `admin-bootstrap`, con la regola di
+>     N57), rinumerata: 21 passi, gli stessi del codice e nello stesso ordine (confrontati con `STARTUP_STEPS`).
+>   - Pagine solo in inglese: nessun debito di traduzione.
+> - **B è entrato in `dev`** (coordinatore, 21:45): merge **`0cd910a7e`** (treno 141: B3, P7, B5b, B5c, B-17, N53, N57;
+>   64 file), nessun conflitto. **CHANGELOG**: mandato il blocco finale in inglese (`files/next-checkpoint/
+>   changelog-block.md` della sessione): in `✨ Added` sostituisce il punto di B2 («Check a backup before restoring it»)
+>   con «Restore an instance backup» (la prova su copia, la conferma con la parola, il riavvio, l'esito, `--dry-run` e il
+>   limite di caricamento conservati), più `backup pending`, le regole (mai indietro, un amministratore attivo, la chiave
+>   che resta), i totali del registro, l'API del biglietto e B-17, la guida nuova; in `🔒 Security` tre punti (le
+>   sessioni e i link che un ripristino chiude, mai applicato da bloccata, il biglietto fuori da log e URL). Coerente con
+>   N53 (rileggibile fino alla scadenza) e N57 (un avvio che non finisce rimette i dati). Applicato dal coordinatore così
+>   com'era (6 ✨ + 3 🔒).
+> - **H-17** (approvato, in questo checkpoint): `backup_max_upload_mb()` legge il valore del profilo dalla tabella di H
+>   con `profile_default(MAX_UPLOAD_VARIABLE, 0)`; via la mia costante `MANAGED_MAX_UPLOAD_MB` (una sola fonte, che il
+>   test di H fissa a 500); docstring del modulo e della funzione aggiornati; nessun ciclo d'import (provato), ruff e
+>   black puliti. In `developer/architecture/settings.md` la frase sulla prima voce della tabella dice ora chi la legge.
+>   Il test che fissava la costante lo ripara un test-author (`7cce1bbb`, solo scrittura): il nome della variabile, la
+>   voce della tabella di H a 500 e nessun valore proprio in `config/backup.py`.
+> - **Prove** dopo il test-author (carico sotto 50): **tutto verde** (21:53-22:31): `api backup-restore` 121 (il test
+>   riscritto: il nome della variabile, la voce della tabella di H a 500, nessuna costante propria in `config/backup.py`;
+>   il test parametrico invariato), `services profile-defaults` 52 (la guardia di H), `api backup-restore-apply` 136;
+>   `mkdocs build` stretta 0 avvisi (168 s sotto carico), `check-links` 97, `utils gate-docs-links` 63; `git diff
+>   --check` pulito; porta libera. Nota del test-author, non fatta (fuori dal perimetro approvato): il controllo
+>   `hasattr` coglie solo il vecchio nome; mettere nella tabella un valore di prova e verificare che la funzione lo segua
+>   chiuderebbe anche un 500 scritto a mano.
+> - **22:32, handoff del checkpoint** al coordinatore, 🧊 FROZEN: 7 file tracciati, nessuno nuovo.
+> - Controlli della doc: fermati prima di partire (carico ~100) per farli una volta sola, dopo anche H-17 (sotto).
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
