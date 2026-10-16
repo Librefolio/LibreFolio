@@ -159,7 +159,8 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
 - **Applied at the next request**: the user CLI writes the database directly, with the server
   running or not, and `get_current_user()` reloads the user on every request. A deactivated
   account (`user deactivate`, `user_service.set_user_active()`, or the administrator API) gets `401`
-  *User account is disabled*; its login, with the right password, gets `403` `ACCOUNT_DISABLED`.
+  *User account is disabled*; its login, with the right password, gets `403` `ACCOUNT_DISABLED` — or
+  `403` `EMAIL_NOT_VERIFIED` while it waits for its email verification.
   Deactivation refuses the last active administrator, and ends every session of the account:
   `user activate` lets the user sign in again, but brings none of the old sessions back.
 - **Password reset** (`user reset`, `user_service.reset_password()`) sets the new hash, computed
@@ -172,9 +173,11 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   for the current password: see [Changing the Email](security.md#email-change)). The device that
   made the change gets a new cookie and stays signed in; a username change ends no session. Every
   change that ends sessions is in [Session Revocation](security.md#session-revocation).
-- **CLI password rules**: `create` and `reset` call `validate_password()` in
-  `scripts/user_cli.py`: at least 8 characters, with an upper-case letter, a lower-case letter, a
-  digit and a symbol from its `special_chars` set. The API schemas only ask for 8 characters.
+- **Password rules**: `create` and `reset` call `validate_password()` in `scripts/user_cli.py`,
+  a thin wrapper over `password_policy.failed_rules()`: the same rules as the API and the app
+  ([Password Rules](security.md#password-rules)), checked before anything is read from the
+  database. Each rule missed prints a line that starts with its code, such as
+  `digit: the password must contain a digit`, and the command exits with `1`.
 
 The admin commands are in [Command-Line Tools](../../admin/cli_tools.md).
 
@@ -215,29 +218,35 @@ and its value, and `consequence`, *registration stays closed until it is fixed*.
 `functools.cache`, so each problem is logged once per process. The startup
 [configuration checks](security.md#configuration-checks) do not cover these variables.
 
-`register_user()` holds the whole rule of `POST /api/v1/auth/register` (`AuthRegisterRequest`, with
-an optional `invite_token`) and owns its transaction:
+`register_user()` holds the rule of `POST /api/v1/auth/register` (`AuthRegisterRequest`, with
+an optional `invite_token`) and owns its transaction. The route checks the password before calling
+it, so `PASSWORD_TOO_WEAK` comes first:
 
 | Situation | Outcome |
 |-----------|---------|
+| A `password` that misses a [password rule](security.md#password-rules) | `400` `PASSWORD_TOO_WEAK`, with `rules`, the codes missed. Checked by the route before anything else — the mode, the invitation, the limit, a taken username or email — the first account included. Nothing is written, and an invitation given with it stays unspent |
 | No account at all (`first_account_open()`: `count_users()` is 0, an inactive account counts) | Created as an administrator, whatever the mode, the limit and the role of an invitation. Without an `invite_token`, nothing else is checked. With one, the invitation must be valid — otherwise `400` `INVITE_INVALID`, and the instance stays empty — and the registration spends it as any other does (row *A valid invitation*): its link then reads `consumed` |
 | Mode `disabled` | `403` `REGISTRATION_DISABLED` |
 | Mode `invite`, no `invite_token` | `403` `INVITE_REQUIRED` |
 | A token that is not a valid invitation: unknown, of another purpose, expired, used or revoked | `400` `INVITE_INVALID` |
 | A valid invitation | Created in the invitation's role (`grants_admin`; the first account is an administrator whatever it says). The account and the consumption of the invitation (`consumed_by_user_id`) are committed together. The limit is not checked: the invitation already holds its place |
 | Mode `open`, no `invite_token` | Created as a regular account, within the [user limit](#user-limit) |
+| `require_email_verification` on, any account but the first | Created inactive, with a verification token that holds its place; the answer says `verification_required: true`, and the email goes after it — unless the client address already had the emails of 10 registrations in the hour: the account then waits without it, and its owner asks for the link again from the sign-in. With no email with a link able to go out, `409` `EMAIL_VERIFICATION_UNAVAILABLE`, and nothing is created: an invitation stays unspent. See [Email Verification](../backend/email.md#verification) |
 | Username or email already taken | `400`, with the plain-string `detail` it always had |
 
-The refusals with a code answer `{"error_code": …, "message": …}` in `detail`. Two requests racing
-for one invitation cannot both spend it: `consume_token()` is one conditional `UPDATE`, and the loser
-rolls back with `INVITE_INVALID`.
+The refusals with a code answer `{"error_code": …, "message": …}` in `detail`, plus `rules` for
+`PASSWORD_TOO_WEAK`. Two requests racing for one invitation cannot both spend it: `consume_token()`
+is one conditional `UPDATE`, and the loser rolls back with `INVITE_INVALID`.
 
 `GET /api/v1/system/instance` publishes the effective state as `accounts: {registration_mode,
-registration_locked, first_account_open}` (`AccountsInstanceConfig`). About the users it says one
-thing only, whether there is one: `first_account_open`, from `first_account_open(session)`, is true
-while the `users` table is empty, and the login page then offers **Register here** whatever the
-mode. No count, no limit ([Public instance configuration](settings.md#public-instance-configuration);
-why the flag may be public: [The First-Account Flag](security.md#first-account-open)).
+registration_locked, first_account_open, password_rules}` (`AccountsInstanceConfig`). About the
+users it says one thing only, whether there is one: `first_account_open`, from
+`first_account_open(session)`, is true while the `users` table is empty, and the login page then
+offers **Register here** whatever the mode. No count, no limit
+([Public instance configuration](settings.md#public-instance-configuration); why the flag may be
+public: [The First-Account Flag](security.md#first-account-open)). `password_rules` is the list of
+the [password rules](security.md#password-rules), `[{code, value}]` (`PasswordRuleRead`), the same
+on every instance: the app checks a new password against it while the user types.
 
 ### ✉️ Invitations {: #invitations }
 
@@ -265,18 +274,20 @@ is public and writes nothing. It answers `{status, purpose}`, the status being `
 ### 📏 The User Limit {: #user-limit }
 
 `LIBREFOLIO_MAX_USERS` (unset or blank: no limit) bounds the places counted by `user_usage()`: the
-active accounts (`users.is_active`) plus the live invitations. A deactivated or deleted account frees
-its place; an invitation holds one from its creation until it is revoked or expires, and hands it to
-the account it opens. A value that is not a whole number of at least 1 is a limit of 0, logged like
-an invalid mode (`_max_users()`).
+active accounts (`users.is_active`), the live invitations, and the inactive accounts holding a live
+email-verification token, each once ([Email Verification](../backend/email.md#verification)). A
+deactivated or deleted account frees its place; an invitation holds one from its creation until it is
+revoked or expires, and hands it to the account it opens; an account waiting for its email
+verification holds one while its link is live. A value that is not a whole number of at least 1 is a
+limit of 0, logged like an invalid mode (`_max_users()`).
 
 | Request | When `used >= max_users` |
 |---------|--------------------------|
 | `POST /auth/register` without an invitation | The account is inserted, then counted in the same transaction: over the limit, rollback and `409` `USER_LIMIT_REACHED`, with no numbers and no link, as the caller is anonymous. The first writer holds SQLite's write lock until it commits, so two registrations racing for the last place cannot both take it |
 | `POST /auth/register` with a valid invitation, or for the first account | Not checked |
 | `POST /users/invites` | `409` `USER_LIMIT_REACHED` with `limit`, `used` and `billing_url` |
-| `PATCH /users/{user_id}` reactivating an account | The same `409`. Promotions, demotions and deactivations are not checked |
-| `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead |
+| `PATCH /users/{user_id}` reactivating an account | The same `409`, except for an account waiting for its email verification whose link is live: `holds_place()` says that its place is already counted. Once the link has expired, the account needs a free place like any other. Promotions, demotions and deactivations are not checked |
+| `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead. `user activate` prints none for an account waiting for its email verification whose link is live: it already holds its place (`holds_place()`) |
 
 `billing_link()` returns `LIBREFOLIO_BILLING_URL` to administrators only: in `usage.billing_url` of
 `GET /users` and `GET /users/invites`, in the `409` `USER_LIMIT_REACHED` of the administrator
@@ -294,8 +305,8 @@ or *links show the bare path until it is fixed*.
 
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
-| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, and `protected`: see [Protected Accounts](#account-protection)), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing. A deactivation or a demotion ends every session of the account | `200` with the account; `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit |
+| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), and `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification)), with `usage: {used, max_users, billing_url}` | `200` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with one exception: `is_active: false` on an account waiting for its email verification, inactive already, ends the wait as `user deactivate` does — its links revoked, its place free. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links | `200` with the account, `holds_place` included (`false` once a wait has ended); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
 | `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
 | `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST`; `500` when the deletion fails, nothing deleted |
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404` |
@@ -374,8 +385,10 @@ the administrator does not choose the new password: whoever spends the link does
   `POST /api/v1/users/{user_id}/password-reset-link` or `./dev.py user reset-link <username>`. It
   first revokes the account's live reset links, so only the newest one works. Issuing a link ends no
   session.
-- **Spent** by `POST /api/v1/auth/password-reset` `{token, new_password}`, which is public;
-  `new_password` follows the API rule, at least 8 characters. `complete_password_reset()` consumes the
+- **Spent** by `POST /api/v1/auth/password-reset` `{token, new_password}`, which is public.
+  `new_password` must meet the [password rules](security.md#password-rules), checked before the
+  token is read: a weak one is `400` `PASSWORD_TOO_WEAK`, and the link is neither spent nor
+  inspected, so a valid link stays valid. `complete_password_reset()` consumes the
   token, hashes the new password with bcrypt in a worker thread, ends every session of the account and
   revokes its other live reset links, in one commit; the answer is `200`. A link that is not valid
   (used, expired, revoked, unknown or of another purpose) changes nothing: `400` `TOKEN_INVALID`.
@@ -384,7 +397,8 @@ Tests: `./dev.py test services registration`
 (`backend/test_scripts/test_services/test_registration_service.py`: the variables, the effective
 mode, the usage, invitations, every branch of `register_user()`, the limit under a race),
 `./dev.py test api registration` (`backend/test_scripts/test_api/test_registration_api.py`:
-registration by mode, inspection, the password reset, the `accounts` block, the locked setting) and
+registration by mode, inspection, the password reset, the password rules on both, the `accounts`
+block, the locked setting) and
 `./dev.py test api users-admin` (`backend/test_scripts/test_api/test_users_admin_api.py`: the
 administrator API with its guards and its logs; the deletion and its preview on the lane's server, and
 in process the protection hook replaced, the log event and an injected failure). The address probe has

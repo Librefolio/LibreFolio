@@ -217,10 +217,15 @@ test.describe('Asset Detail Page', () => {
         await expect(toolbar).toBeVisible();
         await expect(toolbar.getByTestId('ai-export-button')).toBeVisible();
         await expect(page.getByTestId('risk-sync-button')).toHaveCount(0);
-        await expect(page.getByTestId('risk-refresh-button')).toHaveCount(0);
 
-        // The refresh *is* about the request: it must reach the server rather than
-        // be answered from the cache, so here the network is the subject.
+        // One Refresh per page (Y11, decision 48): the panel has none of its own,
+        // and the toolbar's reloads the risk through `refreshVersion`. That refresh
+        // *is* about the request: it must reach the server rather than be answered
+        // from the cache, so here the network is the subject. Pressed only once the
+        // panel's first base wave has landed: a forced question still joins one in
+        // flight for the same key instead of sending its own, and a first-wave
+        // request sent after the wait is armed would pass for the refresh's.
+        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('risk-analysis-panel'), "premise: the risk panel's first base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 60_000});
         const refreshedRiskRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/risk/query');
         await toolbar.getByTestId('asset-detail-refresh-btn').click();
         await refreshedRiskRequest;
@@ -282,7 +287,11 @@ test.describe('Asset Detail Page', () => {
         await page.getByTestId('signal-tree-group-risk').click();
         await expect(page.getByTestId('signal-tree-option-risk-drawdown')).toBeVisible();
         await expect(page.getByTestId('signal-tree-option-risk-rolling-volatility')).toBeVisible();
-        await expect(page.getByTestId('signal-tree-option-risk-rolling-return')).toBeVisible();
+        // Decision 29: ONE Rolling Return, in calendar days. The calendar one is offered and the
+        // observation-count one is gone from the catalog; its absence is read only once its risk
+        // siblings are on screen, so "not rendered yet" cannot pass for "removed".
+        await expect(page.getByTestId('signal-tree-option-asset-calendar-rolling-return')).toBeVisible();
+        await expect(page.getByTestId('signal-tree-option-risk-rolling-return')).toHaveCount(0);
         await expect(page.getByTestId('signal-tree-option-risk-rolling-sharpe')).toBeVisible();
         await page.getByTestId('signal-tree-option-risk-rolling-beta').click();
 
@@ -306,6 +315,71 @@ test.describe('Asset Detail Page', () => {
         }>;
         const betaSignal = requestBody.flatMap((item) => item.signals ?? []).find((signal) => signal.signal_code === 'RISK_ROLLING_BETA');
         expect(betaSignal?.params?.comparison_asset_id).toBeGreaterThan(0);
+    });
+
+    test('the calendar Rolling Return from the risk tree is queried with its 30-day window and shows no error', async ({page}) => {
+        // Navigation is budgeted up to ~40 s by goToSeededAssetDetail, then one signal round-trip.
+        test.setTimeout(60_000);
+        // Decision 29 published ASSET_CALENDAR_ROLLING_RETURN in the catalog. Until then it fed only the
+        // page's primary calendar mode (instance `asset-calendar-return`, driven by «calendar-return primary
+        // mode queries exact windows…»). Here it is the tree's overlay: another instance, on the seeded
+        // asset, against the real backend. Nothing is written server-side; the selection lives in this
+        // context's localStorage only.
+        const primaryCalendarInstanceId = 'asset-calendar-return';
+        await goToSeededAssetDetail(page);
+        const signalsToggle = page.getByTestId('asset-detail-signals-toggle');
+        const signalsPanel = page.getByTestId('asset-detail-signals-panel');
+        if ((await signalsToggle.getAttribute('aria-expanded')) !== 'true') await signalsToggle.click();
+        await expect(signalsToggle).toHaveAttribute('aria-expanded', 'true');
+        await expect(signalsPanel).toBeVisible({timeout: 5_000});
+
+        await signalsPanel.getByTestId('signals-indicator-select-button').click();
+        const riskGroup = page.getByTestId('signal-tree-group-risk');
+        await expect(riskGroup).toBeVisible();
+        if ((await riskGroup.getAttribute('aria-expanded')) !== 'true') await riskGroup.click();
+        await expect(riskGroup).toHaveAttribute('aria-expanded', 'true');
+        // The option belongs to the risk group: it sits in the item list that group opens.
+        const calendarOption = riskGroup.locator('xpath=following-sibling::*[@role="group"][1]').getByTestId('signal-tree-option-asset-calendar-rolling-return');
+        await expect(calendarOption).toBeVisible();
+
+        type QuerySignal = {instance_id?: string; signal_code?: string; params?: {window_days?: unknown}};
+        type QueryItem = {signals?: QuerySignal[]};
+        const overlaySignalsOf = (body: unknown): QuerySignal[] => (Array.isArray(body) ? (body as QueryItem[]).flatMap((item) => item.signals ?? []).filter((signal) => signal.signal_code === 'ASSET_CALENDAR_ROLLING_RETURN' && signal.instance_id !== primaryCalendarInstanceId) : []);
+        const overlayResponse = page.waitForResponse(
+            (response) => {
+                const request = response.request();
+                if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
+                try {
+                    return overlaySignalsOf(request.postDataJSON()).length > 0;
+                } catch {
+                    return false;
+                }
+            },
+            {timeout: 20_000},
+        );
+        await calendarOption.click();
+        const response = await overlayResponse;
+
+        const [overlaySignal, ...otherOverlays] = overlaySignalsOf(response.request().postDataJSON());
+        expect(otherOverlays, 'one calendar overlay instance in the request').toEqual([]);
+        expect(overlaySignal.params?.window_days).toBe(30);
+        expect(response.ok(), `POST /api/v1/assets/prices/query answered ${response.status()}`).toBe(true);
+
+        // The selected signal's card is the tree's instance: its id is the request's instance_id.
+        const calendarCard = signalsPanel.locator('[data-testid^="signal-card-"][data-signal-type="asset-calendar-rolling-return"]');
+        await expect(calendarCard).toHaveCount(1);
+        await expect(calendarCard).toHaveAttribute('data-testid', `signal-card-${overlaySignal.instance_id}`);
+
+        // The backend computed it rather than refused it: a result for this instance, neither failed nor unavailable.
+        const payload = (await response.json()) as {items?: Array<{signals?: Array<{instance_id?: string; status?: string}>}>};
+        const overlayResult = payload.items?.flatMap((item) => item.signals ?? []).find((result) => result.instance_id === overlaySignal.instance_id);
+        expect(overlayResult?.status, 'status of the calendar overlay result').toMatch(/^(ok|partial)$/);
+
+        // Presence barrier for the absence below: the answer has been applied to the card (its spinner is gone),
+        // so "no error problem" speaks about the result rather than about a card still loading. A partial result
+        // may carry a warning (UNDEFINED_METRIC_WINDOW, a short warm-up); an error is what must not appear.
+        await expect(calendarCard.getByTestId('signal-loading')).toHaveCount(0);
+        await expect(calendarCard.locator('[data-testid="signal-issue"][data-severity="error"]')).toHaveCount(0);
     });
 
     // ========================================================================

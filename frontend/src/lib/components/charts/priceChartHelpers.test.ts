@@ -41,6 +41,7 @@ import {
     computeGhostSeries,
     computeZoomWindow,
     countBuckets,
+    emptyCalendarReturnView,
     extractCalendarReturnView,
     extractCalendarReturnViewsByAsset,
     formatMonthLabel,
@@ -455,6 +456,40 @@ describe('calendarReturnWindow — the window presets are labelled from the cata
     });
 });
 
+describe('emptyCalendarReturnView: no points and no context, idle and without a problem unless told otherwise (exported for the asset page, FE5c)', () => {
+    it('defaults to an idle view with no points, an empty context map and no problem', () => {
+        const view = emptyCalendarReturnView();
+
+        expect(view).toEqual({state: 'idle', points: [], contextByDate: new Map(), problem: null});
+        expect(view.contextByDate).toBeInstanceOf(Map);
+    });
+
+    it.each(['idle', 'loading', 'ready', 'partial', 'unavailable', 'error'] as const)('keeps the given %s state, with no problem by default', (state) => {
+        expect(emptyCalendarReturnView(state)).toEqual({state, points: [], contextByDate: new Map(), problem: null});
+    });
+
+    it('keeps the given problem', () => {
+        const problem = extractCalendarReturnView([typedUnavailableCalendarResult('Every selected Calendar output is undefined.')], CALENDAR_INSTANCE_ID).problem;
+        expect(problem).toMatchObject({code: 'undefined_metric'});
+
+        const view = emptyCalendarReturnView('unavailable', problem);
+
+        expect(view.state).toBe('unavailable');
+        expect(view.problem).toBe(problem);
+        expect(view.points).toEqual([]);
+        expect(view.contextByDate.size).toBe(0);
+    });
+
+    it('returns fresh points and a fresh context map on every call', () => {
+        const first = emptyCalendarReturnView();
+        const second = emptyCalendarReturnView();
+
+        expect(second).not.toBe(first);
+        expect(second.points).not.toBe(first.points);
+        expect(second.contextByDate).not.toBe(first.contextByDate);
+    });
+});
+
 describe('extractCalendarReturnView', () => {
     it('maps a runtime-flat ready result without rebasing its percentage values', () => {
         const view = extractCalendarReturnView(
@@ -486,7 +521,7 @@ describe('extractCalendarReturnView', () => {
                 {key: 'another_series', points: [calendarPoint('2026-02-02', -999)]},
             ],
         });
-        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_RETURN'}], CALENDAR_INSTANCE_ID);
+        const view = extractCalendarReturnView([{...requested, instance_id: 'another-instance'}, requested, {...requested, signal_code: 'RISK_ROLLING_VOLATILITY'}], CALENDAR_INSTANCE_ID);
 
         expect(view.state).toBe('ready');
         expect(view.points.find((point) => point.date === '2026-02-02')).toMatchObject({

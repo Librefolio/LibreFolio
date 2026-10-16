@@ -1358,3 +1358,658 @@ Ordine del coordinatore (23:30): E4a adesso, solo file miei, come E5a; gli aggan
 > i18n `email.sendLink.*`, `email.forgot.*` × 4. Test (EMM-034…038, EMF-043…052, SLA, FPA, ETX-11…14, SLE, FPF);
 > doc `developer/backend/email.md`; runner (voci mie); backlog E-8; questo piano. Nessun file di A. I pacchetti E5b ed
 > E4b stanno fuori dal worktree (`/tmp/libreFolio_e5b/`, `/tmp/libreFolio_e4b/`, copie nella cartella della sessione).
+
+### E-5 — la guardia sui testi che `api sync` non sfugge (lotto senza A, 2026-10-16)
+
+Via del coordinatore (01:45): prima la diagnosi del caso esatto. Se un caso rompe oggi `generated.ts`, la cura
+nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest puro di guardia; se no, solo il pytest.
+
+#### E-5.0 — Diagnosi ✅ (2026-10-16)
+> Su `openapi-zod-client` 1.18.3 con i flag di `generate-api` (`--export-types --with-docs --with-description`).
+> Fonte: il codice del generatore (`getZodChain`, `default.hbs`, `generateJSDocArray`), poi tre matrici isolate in
+> `/tmp/libreFolio_e5_bt/` (`matrix.py`: 14 posizioni × 18 testi; `matrix2.py` e `matrix3.py`: 26 casi su JSDoc,
+> parametri `$ref`, ordine, risposte d'errore, corpo). Ogni caso è un OpenAPI con un solo testo in una sola posizione,
+> generato e letto dal parser di TypeScript (errori di sintassi, template taggati, sostituzioni).
+>
+> **Dove il generatore scrive un testo, e cosa lo rompe**
+>
+> | Dove | Forma | Cosa la rompe |
+> |---|---|---|
+> | `.describe()` di una proprietà, di `items` e `additionalProperties` in linea, di un parametro | testo con un a capo → template literal crudo | `` ` `` (sintassi; il doppio ``` `` ``` dà un template taggato, il `TypeError` all'import di E2b), `${` (sostituzione), `\` (sintassi con `\x`, `\u`, `\` finale; altrimenti testo alterato) |
+> | idem | testo di una riga → `"…"` crudo | `"`, `\` |
+> | descrizione dell'endpoint, delle risposte non 2xx (anche senza contenuto), del corpo | Handlebars `` `{{…}}` ``, che sfugge ``& < > " ' ` =`` | `${`, `\` |
+> | JSDoc dei campi in linea dei tipi esportati | `/** … */` | `*/` (anche in `pattern`, `enum`, `default`, `example(s)`) |
+>
+> - Una proprietà `$ref` porta il testo **del componente**, anche se il campo ha una descrizione sua (quella non esce).
+> - Mai scritti: membri `$ref` di `anyOf`, `items` `$ref`, corpo e risposte `$ref`, la definizione del componente, le
+>   descrizioni delle risposte 2xx e di `default`.
+> - La descrizione del parametro passa da `trim()`. Un parametro `$ref` sovrascrive la descrizione del componente
+>   condiviso (vuota se il parametro non ne ha): se il testo del componente arrivi a una proprietà dipende allora
+>   dall'ordine in cui il generatore visita gli endpoint (GET: no; POST con il corpo che lo contiene: sì).
+>
+> **Oggi** (HEAD `8915c1b85`, `openapi.json` e `generated.ts` di `api sync` delle 01:39): il client si legge con 0
+> errori di sintassi, 0 template taggati, 0 sostituzioni. Il modello delle regole sul documento conta 3 627 punti
+> (1 449 tra virgolette, 63 template, 310 Handlebars, 1 805 JSDoc), nessuno con un carattere vietato; copre ogni testo
+> distinto del client (0 mancanti; 6 in più, i parametri ripetuti che il generatore raccoglie in una `const`).
+> **Latenti**: 49 componenti con backtick in una descrizione su più righe (`AssetType`, i `BRIM*`, `Risk*`…), oggi mai
+> referenziati direttamente come proprietà. Basta un campo `x: QuelComponente` perché `api sync` rompa il client.
+>
+> **Esito**: nessun caso oggi → solo la guardia. `fix-openapi-discriminators.mjs` non si tocca (detto al coordinatore).
+>
+> **Decisioni notturne, da rivedere**:
+> - (d) la guardia fissa la versione del generatore letta da `frontend/package-lock.json` (1.18.3) e i suoi flag: a
+>   ogni aggiornamento le regole vanno riverificate prima di spostare la costante;
+> - (e) la guardia è prudente: ignora l'effetto d'ordine dei parametri `$ref` e controlla sempre il testo del
+>   componente; può segnalare un testo che il client di oggi non porterebbe, non ne perde nessuno;
+> - (f) sta in `test_schemas` (categoria `schemas`) e legge `backend.app.main.app.openapi()`, la stessa fonte di
+>   `api sync`;
+> - (g) il controllo di `*/` è globale: ogni nodo di schema del documento, per ogni chiave che il JSDoc scrive. Oggi
+>   `*/` non compare da nessuna parte, quindi costa zero e non perde i nodi dove il JSDoc arriva davvero.
+>
+> **⚠️ Fuori pista**: la quarta matrice (`matrix4.py`, 10 casi), fatta per verificare il «non ne perde nessuno» prima
+> di consegnare il modello, ha trovato due buchi nel primo modello (già passato al test-author, corretto con
+> `write_agent`):
+> - `items` e `additionalProperties` che sono un `$ref` **con** una `description` accanto scrivono quel testo in
+>   `.describe()` (sintassi rotta, verificato). È il contrario delle proprietà, dove il testo accanto al `$ref` si
+>   ignora ed esce quello del componente. Senza testo accanto, non esce niente;
+> - il JSDoc non sta solo sulle proprietà: il generatore dei tipi lo mette anche su `items` e sui membri di
+>   `anyOf`/`oneOf`/`allOf` dentro un tipo esportato (`*/` lì: sintassi rotta, verificato). Da qui la decisione (g).
+>
+> Confermato: la `.describe()` non scrive la descrizione dei membri in linea di `anyOf`/`oneOf`/`allOf`, ma solo quella
+> delle loro proprietà e dei loro `items`. I 49 latenti si referenziano solo come elementi di liste (23), membri di
+> `anyOf` (10), risposte (6), membri di `oneOf` (6) e corpi (4).
+
+#### E-5.1 — Il pytest di guardia ✅ (2026-10-16)
+> `test-author`: `backend/test_scripts/test_schemas/test_openapi_client_text.py`, 78 test in 15 funzioni.
+> - OCT-001: versione e opzioni del generatore. Il lock fissa la 1.18.3; `generate-api` lo lancia una volta sola, con
+>   esattamente `--export-types --with-description --with-docs` (il percorso di uscita a parte).
+> - OCT-010…018: il modello su documenti piccoli, un caso per ogni verdetto delle matrici. Coprono le forme, i campi,
+>   `items` e `additionalProperties` (anche con un `$ref` e un testo accanto), i membri di unione, i parametri e il
+>   `trim()` di JavaScript, Handlebars, `*/` su ogni nodo, le forme non verificate e il messaggio d'errore.
+> - OCT-020 e 021: FastAPI e Pydantic. `Inner` come campo è segnalato; in `list[Inner]` e in `Inner | None` no, ed è
+>   latente.
+> - OCT-030…032: il documento vero, `backend.app.main.app.openapi()`. Nessun punto segnalato; le quattro forme sono
+>   presenti (una barriera contro un walker che smette di leggere); ci sono solo forme verificate.
+>
+> Registrato in `scripts/test_runner/_backend_schemas.py`, con la voce additiva `openapi-client-text`, nella classe di
+> default della categoria (`write-scoped`): importare `backend.app.main` apre il log della corsia (`configure_logging`).
+>
+> **Decisioni del test-author, accolte (notturne, da rivedere)**:
+> - OCT-001 scatta anche per un'opzione in più o per una seconda esecuzione;
+> - OCT-017 e 032 fanno fallire le forme mai verificate invece di saltarle (FastAPI oggi non ne scrive);
+> - il `trim()` usa l'insieme di spazi di JavaScript (`str.strip()` ne toglie di più);
+> - l'estratto del messaggio è centrato sul primo carattere vietato.
+>
+> **⚠️ Fuori pista**: `utils static-route-confinement` importa la stessa app ma è dichiarato `pure`. L'incoerenza non
+> è nel mio perimetro: la segnalo al coordinatore.
+>
+> Osservazione fuori perimetro: anche i valori stringa di `enum` escono crudi, in `z.enum(["…"])` e `z.literal("…")`.
+> Oggi sono 884, nessuno con `"`, `\` o un a capo. La guardia non li copre. Il client degli strumenti
+> (`generate-tools-client.mjs`) genera con `withDescription: false` e `withDocs: false`, quindi le descrizioni non lo
+> toccano.
+
+#### E-5.2 — La regola nella documentazione ✅ (2026-10-16)
+> La regola 4 di «📜 Contract Rules» in `developer/api/overview.md` (pagina solo inglese) è scritta da `docs-writer`, poi
+> rivista da me su questi punti:
+> - il nome della colonna da «Breaks the client» a «Must not contain», perché un `\d` non rompe, cambia il testo;
+> - liste e dizionari al posto di `items`/`additionalProperties`, e la frase sul loro verso opposto;
+> - il JSDoc «dentro un tipo esportato (campi, elementi, membri di unioni)»;
+> - «unions» al posto di «optional unions», perché i latenti stanno anche nei `oneOf`;
+> - `*/` vietato in «any schema».
+>
+> L'introduzione della sezione ora dice «Four rules», e solo le prime tre rompono la build. Una tagged template passa
+> `vite build`, e `front build` ignora l'uscita di `svelte-check`.
+
+#### E-5.3 — Prove ✅ (2026-10-16)
+> Sulla base `a2f658097` (A6d e A6e), arrivata con un fast-forward che non ha toccato i file di E-5. Una prova alla
+> volta, con `nice -n 10` e il carico sotto 70.
+> - `schemas openapi-client-text`: 78 passati (`/tmp/libreFolio_e5_newbase.log`). Sul documento di oggi ci sono 4 447
+>   punti (2 606 JSDoc, 1 463 tra virgolette, 63 template, 315 Handlebars), 157 campi tipizzati con un componente e 49
+>   latenti.
+> - **Mutazione E2b**, temporanea e poi annullata (verificato con `git diff --quiet`): la docstring di
+>   `EmailInstanceConfig` riportata su più righe con ``` ``GET /system/instance`` ```.
+>   - Il risultato: rosso solo OCT-030 (1 fallito, 77 passati), sul punto
+>     `InstanceConfigResponse.email -> EmailInstanceConfig`, forma template, carattere `` ` ``, con la cura nel
+>     messaggio (`/tmp/libreFolio_e5_mutation.log`).
+> - `ruff check` e `black --check` (`--config pyproject.toml`) puliti sui due file Python; `git diff --check` pulito.
+> - `check-orphans`: tutti i file sono registrati e raggiungibili da `all` (342 file di backend).
+> - `mkdocs build` stretto: uscita 0, nessun WARNING o ERROR, 3 068 URL risolti. `check-links`: 96 link validi. La
+>   regola 4 esce con la tabella di 4 righe, lo span dei doppi backtick e il blockquote.
+
+### Checkpoint E-5 🧊 (2026-10-16) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `a2f658097`. I file:
+> - nuovo `backend/test_scripts/test_schemas/test_openapi_client_text.py`;
+> - `scripts/test_runner/_backend_schemas.py`, 19 righe aggiunte;
+> - `mkdocs_src/docs/developer/api/overview.md`, la regola 4;
+> - il backlog, con E-5 chiuso;
+> - questo piano.
+>
+> Nessun codice dell'applicazione, nessun file di A; `fix-openapi-discriminators.mjs` non è toccato. Le prove della
+> diagnosi stanno in `/tmp/libreFolio_e5_bt/`, con una copia nella cartella della sessione (`files/e5_bt/`).
+>
+> **Ingresso** (2026-10-16): E-5 è salvato in `43ad48952` e `fc418255b`, e la base è fusa in `c47d02a28` (con B2 e
+> Y4b).
+> - `schemas openapi-client-text`: 78 passati (`/tmp/libreFolio_e5_after_b2.log`). 4 478 punti, nessuno segnalato.
+> - I latenti passano da 49 a 52, con tre schemi nuovi di B2: `RestoreUpload`, `RestoreStageReport` e `RestoreStage`
+>   (`schemas/backup.py`). Hanno docstring su più righe con doppi backtick, la forma di E2b. Oggi si raggiungono solo
+>   come membri di unione e come risposte; un campo tipizzato direttamente con uno di loro romperebbe il client. Li ho
+>   segnalati al coordinatore, che decide se girarli a B.
+> - ✅ In `dev_release2` al treno 83 (merge `01598f9ad`). I tre latenti di B2 li gira a B il coordinatore.
+
+### E5b — gli agganci della verifica nei file di A (2026-10-16)
+
+Via del coordinatore (02:58): A6d e A6e sono in `dev_release2`; prima chiudere E-5, poi E5b sulla base nuova. Per le
+E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/libreFolio_e5b/README.md` (E5.3).
+
+#### E5b.0 — Base e patch ✅ (2026-10-16)
+> Base: HEAD `c47d02a28`, cioè E-5 più la fusione di `dev_release2` (`16cff5610`, con A6d, A6e, B2 e Y4b).
+>
+> Il controllo (`git apply --check`):
+> - le patch sui file di A (`e5b_hooks_A6d.patch`, poi `e5b_users_flag_optional.patch`) passano, con spostamenti di
+>   1–3 righe;
+> - `e5b_mine.patch` passa da sola. `e5b_mine_optional.patch` da sola no, perché il suo contesto è `holds_place`, che
+>   aggiunge la prima: `git apply --check` con due patch sullo stesso file non le concatena.
+>
+> Applicate in quattro invocazioni separate, solo nel worktree e mai nell'indice: le mie due, poi le due di A. Nessun
+> file `.rej` né `.orig`. Il risultato: 21 file di codice; `verification.py` riceve `holds_place` e `place_holders`.
+>
+> La revisione contro A6e: da `ce4acff6c`, dove le patch erano state preparate, A6e ha cambiato solo `update_profile`,
+> in tre file su 19 (`api/v1/auth.py`, `schemas/auth.py`, `user_service.py`). Lì aggiunge la password attuale per
+> cambiare l'email, `email_verified_at = None` e la fine delle altre sessioni. Nessun aggancio di E5b tocca
+> `update_profile`, e quelli che stanno negli stessi file (login, `register`, `update_user_status`, `set_user_active`)
+> convivono senza intrecci.
+> - Ogni funzione che gli agganci chiamano esiste in `verification.py`: `awaiting_verification`, `holds_place`,
+>   `place_holders`, `registration_email_work` (più quelle importate pigramente).
+> - `ruff check` e `black --check` (`--config pyproject.toml`) sono puliti sui 12 file Python; `prettier --check` è
+>   pulito sugli 8 file del frontend.
+
+#### E5b.1 — i18n e client ✅ (2026-10-16)
+> `e5b_i18n.py` aggiunge `email.verification.{registered, signUpUnavailable, settingNeedsEmail, settingUnavailable}`
+> nelle 4 lingue del mio catalogo. Prima di lanciarlo ho verificato due cose:
+> - la riscrittura con `indent=2` dà un file identico a quello di oggi, quindi il formato non cambia;
+> - «Settings › Email» corrisponde alle etichette vere nelle 4 lingue (Impostazioni/Paramètres/Configuración ›
+>   Email/E-mail/Correo).
+>
+> `dev.py i18n build`: 4 705 chiavi × 4 lingue. `i18n check` passa, in modalità stretta. `dev.py api sync` passa: il
+> client rigenerato contiene `verification_required` e `holds_place` e si legge con 0 errori di sintassi e 0 template
+> taggati (`ts_scan.cjs` di E-5).
+
+#### E5b.2 — I test al loro posto ✅ (2026-10-16)
+> Gli 8 file del pacchetto sono copiati nei loro percorsi (prima nessuno esisteva) e registrati come dice
+> `tests/REGISTRATION.md`, in modo additivo:
+> - `_backend_api.py`: `api email-verification-hooks`, pura;
+> - `_backend_services.py`: `services email-verification-hooks`, pura;
+> - `_frontend_utility.py`: 2 file in core-unit e 4 in component-unit.
+>
+> La prima esecuzione:
+> - `services email-verification-hooks`: 25 passati, 2 falliti;
+> - `--no-shared-server api email-verification-hooks`: 6 passati, 8 falliti;
+> - Vitest dei 6 file più `auth.test.ts`: 114 passati, 2 falliti (UVR-02).
+>
+> **⚠️ Fuori pista**:
+> - I 10 rossi del backend hanno una causa sola, `INVITE_REQUIRED`. Dal commit di A `683b4ff5b` («new instances
+>   register by invitation», già dentro A6d) un'istanza nuova parte con `registration_mode = invite`, mentre i test
+>   preparati di notte, mai eseguiti, contavano su `open`. La cura è nei test: impostare `open` nei loro DB privati,
+>   senza `LIBREFOLIO_REGISTRATION`, che bloccherebbe la modalità.
+> - UVR-02: in jsdom `fireEvent.click` arriva anche a un bottone disabilitato, e il gestore delegato di Svelte 5 parte;
+>   un browser non manda click a un controllo disabilitato. Lo stile di casa è `toBeDisabled()` senza click.
+>
+> Correzioni e il caso EVH in più (la risposta del `PATCH` dice `holds_place: true`): `test-author`.
+>
+> **Note implementazione**: correzioni del `test-author`, solo nei file di test.
+> - L'helper `_registration_open(engine)`, fatto come `_option`, aggiorna la riga `registration_mode` a `open` e
+>   verifica che una riga sia cambiata.
+>   - Nei servizi lo usano EVK-002, nel caso senza invito, ed EVK-003.
+>   - Nelle API: EVH-001, i due casi senza invito di EVH-004, EVH-005 e `_registered_and_waiting`, quindi
+>     EVH-006/007/008/011.
+>   - Restano sul default `invite` EVH-002 (il primo account entra con ogni modalità), EVH-003 (con l'invito) ed
+>     EVH-009/010 (nessuna registrazione).
+> - UVR-02 non clicca più il bottone disabilitato e tiene `toBeDisabled()`, `data-disabled-reason="limit"` e il testo.
+>   La convenzione di A, scritta in `SettingControls.test.ts`, è cliccare un bottone disabilitato solo quando il
+>   componente ha una guardia nel gestore; `UserRow` non ne ha su nessun bottone.
+> - Nuovo **EVH-012**: la risposta del `PATCH` no-op (`is_active: false`) e quella della promozione di un account in
+>   attesa dicono `holds_place: true` (`is_active` resta false, il link è ancora valido), e lo stesso dice
+>   `GET /users`. Con il link scaduto, la stessa risposta dice `false`: il flag è calcolato.
+> - La descrizione di `api email-verification-hooks` nel runner ora cita il flag nella risposta del `PATCH`.
+>
+> Le esecuzioni, una alla volta:
+> - `services email-verification-hooks`: 27 passati (`/tmp/libreFolio_e5b_svc_hooks_2.log`);
+> - `--no-shared-server api email-verification-hooks`: 15 passati (`/tmp/libreFolio_e5b_api_hooks_2.log`);
+> - Vitest dei 6 file più `auth.test.ts`: 7 file, 116 passati (`/tmp/libreFolio_e5b_vitest_2.log`);
+> - `ruff`, `black` e `prettier` puliti.
+>
+> Il commento rimasto indietro in `SettingControls.test.ts:239`, punto 3 del README del pacchetto, ora dice che
+> `require_email_verification` era un segnaposto fino a E5b.
+
+#### E5b.3 — Documentazione ✅ (2026-10-16; l'esito sotto, in «E5b.3, seguito»)
+> `docs-writer` applica le sue bozze E5b (`/tmp/libreFolio_e5b/docs/`):
+> - `admin/email.en.md`, la sezione «Email Verification»;
+> - `admin/users.en.md`, modifiche 1–3;
+> - le pagine developer, le modifiche E5b;
+> - la riga EN di `admin/settings.en.md` (IT/FR/ES li allineo io, poi `translate-stamp`);
+> - `user/getting-started.en.md`, modifiche 1–3, solo EN (debito di traduzione).
+>
+> `extra_pages.md` aspetta il via del coordinatore (pagine tradotte di altri).
+>
+> **Decisione notturna, da rivedere: la riga di `admin/settings`.** Le pagine IT, FR ed ES erano già indietro prima di
+> E5b: hanno ancora la riga «Abilita registrazione», che A ha cambiato in inglese. All'HEAD l'MD5 della pagina inglese
+> (`ba4a8f…`) non è quello della cache (`07bbf1…`, ultima traduzione il 10/10).
+> - Allineo a mano solo la mia riga (IT «Richiedi verifica email», FR «Vérification Email Requise», ES «Verificación
+>   Email Requerida»), così chi legge in quelle lingue non trova più «in arrivo».
+> - **Nessun `translate-stamp`**: segnerebbe come tradotto anche il debito di A. La pagina resta alla pipeline.
+> - Il link resta di pagina, `email.md`, perché `admin/email` è solo in inglese; il testo del link segue la `nav`
+>   (Email, E-mail, Correo).
+
+#### E5b.4 — CHANGELOG ✅ scritto (2026-10-16)
+> Il coordinatore aveva rimandato la riga di E5a a E5b. Ora c'è:
+> - in «✨ Added», «**Email verification at sign-up**», con il comportamento e le rotte;
+> - in «🔄 Changed», `LIBREFOLIO_MAX_USERS` che conta gli account in attesa con il link vivo, la riattivazione
+>   senza un posto nuovo e la revoca del link quando un account si attiva o con `user deactivate`.
+
+#### E5b.5 — Prove ✅ sulla base `c47d02a28` (2026-10-16, notte), E2E escluse
+> Una alla volta, `nice -n 10`, carico sotto 70; gli script sono `/tmp/libreFolio_e5b_gates.sh` e `gates2.sh`.
+>
+> Backend, primo giro:
+>
+> | Selettore | Esito |
+> |---|---|
+> | `services registration` | 147 ✅ |
+> | `services email-verification` | 115 ✅ |
+> | `services settings` | 23 ✅ |
+> | `services global-settings` | 19 ✅ |
+> | `services user-profile` | 42 ✅ |
+> | `services account-tokens` | 65 ✅ |
+> | `api auth` | 58 ✅, 2 ❌ |
+> | `api registration` | 77 ✅ (un avviso: `HTTP_422_UNPROCESSABLE_ENTITY`, già nel backlog come E-4) |
+> | `api users-admin` | 59 ✅, 5 ❌ |
+> | `api settings` | 98 ✅ |
+> | `api email-verification` | 48 ✅ |
+> | `utils dev-cli-image` | 75 ✅ (il dev.py dell'immagine carica `user_cli` con l'import nuovo) |
+>
+> **⚠️ Fuori pista**, due test di A da adattare alla firma e al contratto nuovi di E5b (`test-author`, solo modifica):
+> - `test_auth_api.py`: `test_register_disabled_allows_bootstrap_when_no_users` e LOOP-002 chiamano la rotta
+>   `register` direttamente, con argomenti posizionali `(request, session)`. L'aggancio aggiunge
+>   `background: BackgroundTasks` in seconda posizione, così `session` restava al `Depends` di default. Ora passano
+>   `background=BackgroundTasks()` e `session=session` per nome, come fa FastAPI. Con l'opzione spenta nessun lavoro
+>   viene accodato, quindi il senso dei test non cambia.
+> - `test_users_admin_api.py`: `USER_ITEM_KEYS` fissava i 7 campi esatti di un account. Con `holds_place` sono 8, e
+>   `_user_item_violations` ora pretende `holds_place: False` per ogni account del file, quindi il contratto resta
+>   stretto. Ho corretto anche la docstring di UADM-052, da «seven fields» a «eight».
+>
+> Rilanciati dopo le correzioni: `api auth` 60 ✅, `api users-admin` 64 ✅.
+>
+> Frontend e documentazione (`/tmp/libreFolio_e5b_gates2.sh`):
+>
+> | Prova | Esito |
+> |---|---|
+> | `dev.py front check` | 1 errore ❌, poi 0/0 ✅ |
+> | `front-utility core-unit` | 173 file, 5 926 ✅ |
+> | `front-utility component-unit` | 150 file, 3 882 ✅ |
+> | `theme-roles.mjs --check` | pulito ✅ |
+> | `check-orphans` | ✅ |
+> | `mkdocs build` stretto | uscita 0, nessun WARNING o ERROR ✅ |
+> | `check-links` | 96 ✅ |
+>
+> **⚠️ Fuori pista**, un terzo test di A (`test-author`, solo modifica): in `LoginCard.test.ts:459`
+> `EMITTED: Record<AuthErrorKey, true>` elenca ogni chiave che lo store emette e la disegna nel riquadro `login-error`.
+> - E5b aggiunge `email.verification.loginRequired` ad `AuthErrorKey`, ma per quella chiave `LoginCard` mostra
+>   `VerificationNotice` al posto del riquadro.
+> - Aggiungerla al record avrebbe spostato il rosso dal type check all'esecuzione. Il record è ora tipato
+>   `Record<Exclude<AuthErrorKey, 'email.verification.loginRequired'>, true>`, con il perché nel commento: la chiave è
+>   coperta da LVR in `LoginCard.verification.test.ts`.
+> - Il controllo resta esaustivo per le chiavi del riquadro.
+>
+> Rilanciati: `front check` 0 errori e 0 avvisi; Vitest di `LoginCard.test.ts` e `LoginCard.verification.test.ts`,
+> 2 file, 39 ✅.
+>
+> Lint finale sul delta intero: `git diff --check` pulito; `ruff` e `black` puliti sui 19 file Python; `prettier`
+> pulito sul frontend. La porta 6188 è libera.
+>
+> Non ancora fatti: le E2E (serve lo slot dal coordinatore) e la revisione di sicurezza mirata (in E6).
+
+#### E5b.3, seguito — Documentazione applicata ✅ (2026-10-16)
+> `docs-writer` ha applicato tutte le sue bozze E5b; le modifiche E4b ed `extra_pages.md` restano fuori.
+>
+> Le pagine:
+> - `admin/email.en.md`: la sezione «✅ Email Verification», con `#verification`, `#verification-switch`,
+>   `#verification-waiting` e `#verification-limits`;
+> - `admin/users.en.md`: `#waiting`;
+> - `admin/settings.en.md`, la riga;
+> - `user/getting-started.en.md`: `#verify-email`, solo EN;
+> - `developer/backend/email.md`;
+> - le pagine developer `architecture/settings`, `security`, `database/users_access` e `access_control`;
+> - `frontend/components/features/auth` e `settings`.
+>
+> Nessuna ancora tolta.
+>
+> Le verifiche fatte da me sul codice: le email in attesa partono nella lingua dell'istanza, perché la riga
+> `UserSettings` nasce solo al primo aggiornamento; `user create` passa da `create_user`, quindi non aspetta mai; i
+> limiti sono 10 ogni 15 minuti per indirizzo, con IPv6 per /64, più 5 minuti e 3 all'ora per account. Ho portato
+> EVH-001…012 nella tabella «Testing».
+>
+> Lasciato aperto da `docs-writer`: la bozza E4b di `admin/email` va rifatta sul testo di A6e (il riquadro «Held for
+> now» e il punto di sicurezza sono stati riscritti).
+
+### Checkpoint E5b, intermedio 🧊 (2026-10-16) — FROZEN, in attesa del commit del coordinatore
+> Avviso del coordinatore (03:45): A6c, con le regole della password, entra prima di E5b, verso le 04:30. Tocca
+> `api/v1/auth.py`, `schemas/auth.py` e `RegisterCard.svelte`, gli stessi file di tre agganci. Il checkpoint finale
+> arriva dopo il merge con A6c; questo intermedio serve perché il merge parta da un albero committato.
+>
+> **Base**: HEAD `c47d02a28`. Il delta: 48 file tracciati e 8 nuovi.
+> - Il codice degli agganci: 18 file di A (10 del backend, `user_cli.py` compreso, e 8 del frontend) più `verification.py`.
+> - I test: gli 8 file nuovi; tre test di A adattati (`test_auth_api.py`, `test_users_admin_api.py`,
+>   `LoginCard.test.ts`) più `test_settings_api.py` dalla patch; il commento di `SettingControls.test.ts`.
+> - La registrazione nei 3 file del runner.
+> - i18n × 4.
+> - Le docs: 11 pagine EN più la riga della pagina impostazioni in IT/FR/ES.
+> - Il CHANGELOG.
+> - Questo piano.
+>
+> Salvato dal coordinatore: `2d954624e` (feat, 54 percorsi) e `98812863f` (journal). `CHANGELOG.md` è rimasto fuori:
+> lo scrive il coordinatore all'ingresso, con le mie due righe (Added e Changed), quindi l'ho riportato a HEAD.
+
+#### E5b.6 — Il merge con A6c ✅ (2026-10-16, 04:40–05:07)
+> Il coordinatore ha aperto il merge di `dev_release2` `1704cfcf7` (treno 90, A6c: le regole della password) sopra
+> `98812863f`.
+>
+> Tre conflitti, risolti tenendo entrambi i lati e messi in stage:
+> - `registrationErrors.ts`: `REFUSAL_KEYS` ha sia `PASSWORD_TOO_WEAK` (A6c) sia `EMAIL_VERIFICATION_UNAVAILABLE`
+>   (E5b);
+> - `developer/architecture/security.md`: la frase di A6c (le regole della password pubblicate da `/system/instance`)
+>   più `/verify-email` nei punti sul token nel frammento e sulle pagine dei link («All three declare»);
+> - `developer/frontend/components/features/auth.md`: le due righe della tabella, prima quella di A6c.
+>
+> Ho rivisto a occhio i 18 file toccati da entrambi i lati e fusi da soli:
+> - `auth.py`, `register`: prima `_refuse_weak_password`, poi `register_user`, poi il mio aggancio; coerente;
+> - `schemas/auth.py`, `RegisterCard.svelte`, `test_auth_api.py` (le chiamate per nome; A6c non ne aggiunge di
+>   dirette), `test_users_admin_api.py`, `user_cli.py`, le pagine `admin/settings.*`, le pagine developer e i due file
+>   del runner: entrambi i lati presenti.
+>
+> Prove, una alla volta, `nice`:
+>
+> | Prova | Esito |
+> |---|---|
+> | `api sync` | ✅ |
+> | `i18n build` | 4 754 chiavi ✅ |
+> | Vitest del modulo auth | 15 file, 400 ✅ |
+> | `front check` | 0/0 ✅ |
+> | `api auth` | 88 ✅ |
+> | `api registration` | 96 ✅ |
+> | guardia E-5 | 78 ✅ |
+> | `mkdocs build` stretto | 0 WARNING o ERROR ✅ |
+>
+> Commit di merge del coordinatore: `f33836892`. Il ramo `dev` era già andato avanti (`72e66d1a6`): il coordinatore
+> aggiorna la base al prossimo checkpoint.
+
+#### E5b.7 — Revisione di sicurezza mirata ✅ scritta (2026-10-16), prove dopo le 06:45
+> Su richiesta del coordinatore, l'agente `security-review` ha letto, in sola lettura, `98812863f`: il nucleo di E5a
+> e gli agganci di E5b.
+>
+> Nessun modo di aggirare la verifica: login e ogni altra rotta controllano `is_active` (`get_current_user`); il link
+> di reset imposta la password ma non attiva e non dà un cookie; gli inviti aspettano anche loro; le sole scritture di
+> `is_active=True` sono `confirm_email` e le due dell'admin. Niente di nuovo dice a chi non è entrato se un account
+> esiste. Sani anche i token (scopo, uso singolo con UPDATE condizionale, hash), la guardia delle impostazioni (la
+> sola rotta che le scrive è la bulk), la pagina `/verify-email` (frammento, `replaceState`, `no-referrer`) e i log.
+>
+> | # | Gravità | File | Righe | Vulnerabilità | Confidenza |
+> |---|---|---|---|---|---|
+> | 1 | 🟡 MEDIUM | `services/email/verification.py`, `api/v1/auth.py` | 207–251, 314–347; 263–266 | Con la registrazione `open` e l'opzione accesa, una sola casella si può inondare di email di verifica: nessun limite per destinatario né per client, e il caso dell'indirizzo cambia la casella | 8/10 |
+> | 2 | ⚪ LOW | `services/email/verification.py` | 342–347, 207–230 | Corsa sul limite utenti: il `resend` con il link scaduto controlla `full` fuori dalla transazione | 8/10 |
+>
+> Le cure, nel mio file, applicate in E5b (decisione notturna, da rivedere):
+> - `VERIFICATION_BY_MAILBOX`, 3 email all'ora per casella, con l'indirizzo in casefold, come `FORGOT_BY_MAILBOX`:
+>   `peek` prima di creare qualcosa e `hit` solo dopo un invio riuscito, quindi un'email fallita non conta. Vale sia
+>   per l'email della registrazione (l'account aspetta senza email, si chiede di nuovo il link) sia per il `resend`
+>   (429 neutro con `Retry-After`).
+> - `needs_place`: con il link scaduto, `user_usage` si riconta dentro la transazione, come fa `register_user`.
+> - La prima scrittura è `revoke_tokens`, e se non revoca niente l'account non aspetta più: rollback con
+>   `EmailVerificationNotNeededError` o `VerificationAccountDisabledError`, e nessun link nuovo (nota 6 del
+>   revisore). Nella registrazione, questo caso dà la stessa riga `info` del controllo iniziale.
+> - Un `resend` con credenziali sbagliate ora logga `Verification resend refused: wrong credentials`, senza campi
+>   (nota 7).
+>
+> I test (`test-author`): fixture con un `VERIFICATION_BY_MAILBOX` privato in EMV, EVA ed EVH; nuovi EMV-043…048 ed
+> EVA-016; EMV-002 fissa il limite. Le docs (`docs-writer`, 11 blocchi): `admin/email.en.md` con la tabella dei
+> limiti, il paragrafo sotto e il log; `developer/backend/email.md` con i passi, i limiti e i log. Ho corretto due
+> righe del log per il caso «non aspetta più», che è `info`. Il runner e la tabella «Testing» sono aggiornati.
+>
+> **Da decidere, nella lista del mattino del coordinatore**:
+> - un limite per client sulle email di registrazione (10 all'ora per indirizzo). La mia proposta: oltre, l'account
+>   si crea ma l'email non parte; l'alternativa è un 429 sulla registrazione, contratto di A;
+> - il `PATCH is_active=false` no-op lascia l'attesa armata: propongo che revochi, come `user deactivate`. Rivede la
+>   mia decisione notturna;
+> - il link si spende al caricamento della pagina (scanner di posta con JavaScript): propongo un pulsante «Conferma».
+>
+> Fuori dalla cura, osservazioni del `test-author`:
+> - le email non sono uniche senza distinzione di maiuscole (codice e indice di A): il limitatore fa da paracadute, e
+>   la cura alla fonte è di A;
+> - con richieste in parallelo, tra `peek` e `hit` può passare qualche email in più, comunque limitata dagli altri
+>   limiti;
+> - i limitatori valgono per processo, come gli altri.
+
+#### E5b.8 — Pagine in più, autorizzate dal coordinatore ✅ (2026-10-16)
+> Solo EN:
+> - `admin/configuration.en.md`: la riga di `LIBREFOLIO_MAX_USERS` e `#user-limit` (la prima riga e il paragrafo
+>   finale);
+> - `admin/cli_tools.en.md`: il punto 📬 dopo il 📏 di `activate`;
+> - `admin/index.en.md`: la riga Email, nella forma per E5b.
+>
+> IT, FR ed ES non hanno quelle righe: sono aggiunte di A (e la mia riga Email) non tradotte dal 10/10. Il debito
+> c'era già, quindi **nessun timbro**, come dice la regola del coordinatore. Nell'handoff le dichiaro come file di A e
+> di H.
+
+#### E5b.9 — E2E al loro posto ✅ (2026-10-16), da eseguire nello slot
+> `frontend/e2e/auth-email-verification.spec.ts`, EVE-E-01…05, del `test-author`.
+> - 01–03: fuori sessione, su risposte simulate: la registrazione che aspetta, il 409 `EMAIL_VERIFICATION_UNAVAILABLE`,
+>   il 403 `EMAIL_NOT_VERIFIED` con il nuovo invio.
+> - 04–05: `e2e_test_admin` con `GET /system/instance` simulato: l'interruttore spento con `email.links` falso,
+>   usabile con vero; niente salvato.
+>
+> La modalità `open` si ottiene riscrivendo nel browser la risposta vera (`serveRegistrationMode`), quindi niente
+> scrive nel DB condiviso. `fixtures/instance-email.ts` è identico a quello del pacchetto E4b (verificato con `cmp`),
+> e l'ho annotato nel README di E4b.
+>
+> Registrato in `front-utility` come `email-verification`. Ho controllato i `data-testid` contro i componenti dopo
+> A6c: ci sono tutti; `info-banner-{variant}` e `settings-tab-${id}` sono dinamici.
+>
+> **Decisione notturna, da rivedere**: nessun aggancio di test nuovo nel prodotto (eventi `auth.register.*`, oppure
+> `data-disabled-reason` sull'interruttore). `RegisterCard` è appena cambiato con A6c, e le chiavi le fissano già i
+> Vitest RCV, RVR e GVR.
+
+#### E5b.10 — Regola dei colori ✅ (2026-10-16)
+> Uno scanner (`/tmp/libreFolio_mixed_roles.py`, provato su un caso positivo) cerca, in ogni attributo `class` e in
+> ogni stringa, un ruolo `-lf-` insieme a classi di tavolozza o a `dark:`. L'ho passato su `features/email/` (E2, E3p,
+> E5a, E4a), su `routes/verify-email/` e sui quattro file di A toccati da E5b: 0 elementi misti. Comunicato al
+> coordinatore.
+>
+> **Da fare dopo le 06:45**, una prova alla volta:
+> - `services email-verification` ed `email-verification-hooks`;
+> - `api email-verification` ed `email-verification-hooks`;
+> - `api users-admin`;
+> - `check-orphans`;
+> - `mkdocs build` e `check-links`;
+> - poi le E2E nello slot del coordinatore, e l'handoff finale.
+
+#### E5b.7, seguito — Le decisioni del coordinatore (05:15) e le due cure in più ✅ scritte, prove dopo le 06:45
+> Le risposte del coordinatore:
+> - il limite per casella, il riconteggio nella transazione e la riga di log: via, già applicati;
+> - **limite per client sulle email di registrazione**: via, come proposto (decisione notturna, da rivedere);
+> - **punto 1, il `PATCH is_active=false`**: via, revoca come `user deactivate`, per la regola «ogni cambio di stato
+>   dell'admin revoca»;
+> - **punto 2, il pulsante «Conferma»**: nella lista di domattina, perché cambia l'esperienza.
+>
+> **Cura A, il limite per client**:
+> - In `verification.py`: `REGISTRATION_EMAILS_BY_ADDRESS`, 10 all'ora per indirizzo del client (IPv6 per /64), e
+>   `registration_email_allowed()`, che conta solo i passaggi permessi; senza indirizzo non limita.
+> - In `auth.py`, `register` riceve `http_request: Request` dopo `background`. Oltre il limite l'account nasce in
+>   attesa (201, `verification_required: true`) ma l'email non parte; c'è una riga `info` «Verification email held»,
+>   e il titolare chiede di nuovo il link dalla pagina di accesso, con i limiti del `resend`.
+> - Niente 429 sulla registrazione: il contratto di A resta com'era.
+>
+> **Cura B, revisione della mia decisione notturna** (il `PATCH is_active=false` su un account in attesa, che era un
+> no-op). In `user_service.update_user_status`, con `is_active is False` su un account già inattivo, si revocano i
+> token `EMAIL_VERIFICATION`, e se qualcosa è stato revocato vale come cambio: commit e log. Per un account in attesa
+> l'attesa finisce, i link non valgono più, il posto si libera, la risposta dice `holds_place: false` e il login dice
+> `ACCOUNT_DISABLED`. Un account inattivo normale resta com'è. La scheda Utenti non mostra «Disattiva» per un account
+> inattivo: nell'interfaccia resta «Elimina», mentre API e CLI chiudono l'attesa.
+>
+> Il resto:
+> - `ruff` e `black` puliti sui tre file;
+> - le descrizioni del runner aggiornate (EVH, EVK);
+> - i test (EVK, EVH ed EVH-012 rivisti, e le due chiamate dirette in `test_auth_api.py` con `http_request=`) al
+>   `test-author`, le docs (`admin/email`, `admin/users`, `developer/backend/email.md`, `access_control.md`) al
+>   `docs-writer`, solo scrittura.
+>
+> **Note implementazione**, test e docs delle cure A e B, scritti senza eseguirli. Il `test-author` ha lanciato `ruff`
+> e `black` alle 05:23, puliti.
+> - EVK:
+>   - EVK-004 riscritto: disattivare un account già inattivo che aspetta revoca il link e fa il commit;
+>   - EVK-009 nuovo: un account inattivo normale resta com'è, senza commit né log;
+>   - EVK-010 nuovo: `registration_email_allowed`, 10 e poi rifiuto (un rifiuto non conta), il /64, `None`, la finestra.
+> - EVH:
+>   - un `REGISTRATION_EMAILS_BY_ADDRESS` privato;
+>   - EVH-011 riscritto: la disattivazione chiude l'attesa (`holds_place: false`, conferma 400 `revoked`, un posto
+>     libero in più, login `ACCOUNT_DISABLED`);
+>   - EVH-012 riordinato: prima la promozione (`true`), poi la disattivazione (`false`);
+>   - EVH-013 nuovo: con il limite a 1, due registrazioni, una sola email; la seconda aspetta con la tenuta, c'è la riga
+>     `info`, e il suo `resend` va.
+> - `test_auth_api.py` di A: le due chiamate dirette passano `http_request=_register_http_request()`.
+> - Le docs (`docs-writer`):
+>   - `admin/email.en.md`: la tabella dei limiti, rinominata «📏 Limits of the Verification Emails» con la stessa
+>     ancora, con la riga delle registrazioni; il punto «To turn it away»; la riga di log;
+>   - `admin/users.en.md`;
+>   - `developer/backend/email.md`: gli agganci, le funzioni, i limiti e i log;
+>   - `access_control.md`: la riga del `PATCH` e quella di `require_email_verification`.
+>
+>   Le righe EVK ed EVH della tabella «Testing» le ho aggiornate io.
+>
+> **Per la lista del mattino**, con la revisione della cura A:
+> - un'email trattenuta è silenziosa: la pagina dice «We sent you an email» e il titolare deve pensare da solo a
+>   chiedere di nuovo il link;
+> - dietro un proxy non fidato (`FORWARDED_ALLOW_IPS`) tutti i client hanno lo stesso indirizzo, quindi dopo 10
+>   registrazioni in un'ora ogni email di registrazione è trattenuta. Vale come per gli altri limiti per indirizzo, ma
+>   qui senza un rifiuto visibile.
+
+### Dopo E4b — analisi di E6 (2026-10-16, notte, sola lettura)
+
+Su invito del coordinatore (05:25), durante il fermo della macchina. Base `bf1586ddb`: E5b salvato in quattro commit
+(`207dfbafd`, `6d6965293`, `33da05e31`, `bf1586ddb`), prove dopo le 06:45. Il pacchetto di E4b resta in `/tmp` finché
+le prove di E5b non sono verdi.
+
+#### Prima, E4b (dal pacchetto `/tmp/libreFolio_e4b/`, README aggiornato)
+1. `git apply --check` di `e4b_hooks_A.patch`, `e4b_mine.patch` e delle patch dei test sulla base del momento.
+   - Dopo A6e e A6c vanno rivisti `ForgotPasswordCard` e `LINK_SHARE_ACTIONS`.
+   - `fixtures/instance-email.ts` c'è già, uguale byte per byte: non va ricreato.
+2. L'aggancio in `update_profile` (`a6e_hook/e4b_update_profile_hook.patch`, pronto):
+   - `background` dopo `http_request`;
+   - `old_email` letto prima di `user_service.update_profile`;
+   - `email_changed_work` accodato solo al cambio d'email.
+
+   I suoi test sono da scrivere (`test-author`): solo al cambio d'email, non per il solo username né per lo stesso
+   indirizzo in casefold, risposta e cookie invariati, nessun indirizzo nei log della rotta.
+3. Le E2E ESL-E (`email-send-link.spec.ts`) e FPE-E (`forgot-password-email.spec.ts`) nello slot.
+4. Le docs:
+   - da rifare sul testo di A6e: `admin_email_e4b.md` (il riquadro «Held for now» e il punto di sicurezza «Forgotten
+     passwords are held»);
+   - `user/getting-started.en.md`, modifiche 4–6, che sono debito per la pipeline;
+   - `user/settings/profile.en.md`, la modifica 5, file di A con la frase di A6e;
+   - la riga Email di `admin/index.en.md`, nella forma «entrambi i lotti».
+5. La riga del CHANGELOG di E4b, il testo per il coordinatore.
+6. Una revisione di sicurezza mirata (`security-review`): il «password dimenticata» aperto, cioè la tenuta tolta, e
+   l'avviso al vecchio indirizzo.
+
+#### E6, cosa resta (dal §7 e dal §8)
+
+| # | Voce | Stato oggi | Proposta |
+|---|---|---|---|
+| 1 | **Galleria**: lo scatto `settings/email` | preparato in E2b, mai eseguito: due giri con il diff vuoto, nello slot del coordinatore | slot della galleria; senza `links` lo scatto non cambia (E3p) |
+| 2 | **`all-backend`** con i conteggi della base più i nuovi | mai eseguito su E intero | slot pesante, dopo E4b |
+| 3 | **E2E del dominio**: `email-tab`, `email-verification`, le due di E4b, più `auth` e `auth-links` di A (le card toccate) | `email-tab` verde in E2b; le altre da eseguire | uno slot, `--workers 2` |
+| 4 | **`lint --dead-code --scope backend`** | in E1, 7 reperti di passaggio, poi chiamati da E2/E3/E5 | rifarlo: nessun reperto nuovo |
+| 5 | **`TODO_FUTURI.md`**, la sezione «📧 Server email… (da P2-1)» | ferma: dice «FUTURO» e il segnaposto | segnarla consegnata nella 1.3 con un rimando, e lasciare come futuro E-7 (il segno «in attesa»), E-8 (la lingua dell'invito), le notifiche (F19), il pulsante «Conferma» se rimandato, i limitatori per processo (più worker), il messaggio dell'email trattenuta |
+| 6 | **devWiki**: non c'è `wiki/domains/email.md` | il grafo nel worktree non c'è | pagina di dominio, decisioni D-E1…D-E14, problemi risolti (`MissingGreenlet` dopo il rollback, `address_key` IPv4, il blocco della verifica con i token senza indirizzo, i backtick di E-5), con `project-historian`; `index` e `log` sono condivisi, decide il coordinatore |
+| 7 | **CHANGELOG** | righe di E5 consegnate (handoff E5b) | il testo complessivo di E per il coordinatore, con E4b |
+| 8 | **Docs finali** | `admin/email.en.md` solo EN per scelta; `getting-started` e le pagine di A/H con debito | un giro di coerenza su `admin/email` (ordine delle sezioni, limiti, log); l'elenco del debito di traduzione per la pipeline; tradurre `admin/email` nella 1.3 lo decide il developer |
+| 9 | **Revisione di sicurezza finale** del dominio | E3s, E5b (questa notte) | E4b mirata, poi una lettura d'insieme |
+
+#### Il backlog E aperto, proposta per la 1.3
+- **E-4**, il nome deprecato del 422 in `api/v1/settings.py`: è un rinomina di 4 righe in un file di A. Si può fare in
+  E6, con l'ok di A.
+- **E-2**, i tipi del generatore, **E-3**, `ApiError` nel client condiviso, ed **E-6**, il registro delle schede: tutti
+  e tre toccano file condivisi (generatore, client, registro di A/B/X). Proposta: 1.4, salvo un via esplicito.
+- **E-7**, il segno «in attesa»: fuori dalla 1.3 per decisione. **E-8**, la lingua dell'invito: lista del mattino, poi
+  1.4.
+
+#### Decisioni del developer che toccano E6 (lista del mattino)
+- Il pulsante «Conferma» su `/verify-email`: se va nella 1.3 è un lotto piccolo (card, i18n, test, E2E).
+- Il messaggio dopo un'email trattenuta: serve un campo nella risposta, oppure una frase che nomini il nuovo invio.
+- **Il proxy, priorità del coordinatore per il cloud**: su Fly l'indirizzo del client arriva dal proxy, quindi senza
+  `FORWARDED_ALLOW_IPS` (o la sua forma per Fly) ogni limite per indirizzo vale per tutta l'istanza. Tocca anche il
+  limitatore del login di A. Va documentato nella pagina «Hosting for Others» (di H) e, forse, nel profilo `managed`.
+- Le email uniche senza distinzione di maiuscole: codice e indice di A, alla fonte del flood.
+
+#### Ordine proposto
+1. Le prove di E5b, alle 06:45.
+2. L'E2E di E5b nello slot.
+3. L'handoff finale di E5b.
+4. E4b, come sopra.
+5. E6: prima le scritture (docs, `TODO_FUTURI`, backlog, testo del CHANGELOG), poi gli slot (`all-backend`, E2E del
+   dominio, galleria), la revisione di sicurezza finale e la devWiki, se il coordinatore la apre.
+>
+> **Risposte del coordinatore (05:27)**:
+> - la devWiki `domains/email.md` sì, in E6; `index.md` e `log.md` li fonde lui all'ingresso;
+> - `TODO_FUTURI.md` sì, ma solo la sezione «📧 Server email»;
+> - E-4 in E6, dopo l'ok di A, che chiede lui;
+> - E-2, E-3 ed E-6 rimandate alla 1.4, annotato nel backlog;
+> - il proxy: il limitatore del login di A è stato aggiunto a P17; la pagina «Hosting for Others» e il profilo
+>   `managed` aspettano la decisione del developer;
+> - i tre slot di E6 (la galleria `settings/email`, `all-backend` e l'E2E del dominio) sono annotati, dopo E5b.
+>
+> **Da A, tramite il coordinatore (06:14), per E6 dopo l'ingresso di A7a (non prima)**: A7a dà un chiamante a
+> `build_admin_setup()`.
+> - In `developer/backend/email.md` diventano false: «`build_admin_setup()` has no caller», «three emails have a
+>   caller», la riga di «Coming Next» e «Never logged… the link». Il link di attivazione generato va nel log una volta,
+>   per scelta (P16, da rivedere).
+> - In `admin/email.en.md`, nelle sezioni «Emails with a Link» e nei `kind` di «Email sent» manca `admin_setup`.
+
+#### E5b.11 — Le prove leggere dopo il fermo ✅ (2026-10-16, 06:48–07:11)
+> Base `bf1586ddb`, con lo script `/tmp/libreFolio_e5b_final_checks.sh`: una prova alla volta, `nice -n 10`, carico
+> sotto 70. Tra `api registration` e `api users-admin` si è aspettato 5 minuti, con il carico tra 97 e 112.
+>
+> | Prova | Esito |
+> |---|---|
+> | `services email-verification` | 124 ✅ (con EMV-043…048) |
+> | `services email-verification-hooks` | 32 ✅ (con EVK-009 e 010) |
+> | `services user-profile` | 42 ✅ |
+> | `api email-verification` | 49 ✅ (con EVA-016) |
+> | `api email-verification-hooks` | 16 ✅ (con EVH-011…013) |
+> | `api auth` | 88 ✅ |
+> | `api registration` | 96 ✅ (un avviso: E-4) |
+> | `api users-admin` | 64 ✅ |
+> | `tsc -p tsconfig.e2e.json` | solo i 2 errori di base (`onboarding-tour.spec.ts:863`, `files.ts:9`, come in E2b): nessuno nuovo dalla spec né dalla fixture |
+> | `prettier --check` sui file E2E | ✅ |
+> | `check-orphans` | ✅ (353 file backend raggiungibili) |
+> | `mkdocs build` stretto | 0 WARNING o ERROR ✅ |
+> | `check-links` | 96 ✅ |
+>
+> Resta l'E2E `front-utility email-verification`: è la terza della coda degli slot pesanti del coordinatore.
+
+#### E5b.12 — E2E ✅ (2026-10-16, slot 2 del coordinatore, 07:59–08:01)
+> `dev.py test --test-port 6188 --data-dir /tmp/librefolio-r13-e --workers 2 front-utility email-verification` su
+> `bf1586ddb`: EVE-E-01…05, 5 passati in 56,6 s; il giro intero dalle 07:59:38 alle 08:01:29
+> (`/tmp/libreFolio_e5b_e2e.log`). La porta 6188 è libera dopo, e lo slot l'ho restituito alle 08:01. L'avviso SSL di
+> MathJax è esterno e innocuo.
+
+### Checkpoint E5b, finale 🧊 (2026-10-16) — FROZEN, pronto per l'ingresso
+> **Base**: HEAD `bf1586ddb`, sopra il merge con A6c (`f33836892`). Il lotto è in quattro commit del coordinatore:
+> `2d954624e` e `98812863f` (il checkpoint intermedio), poi `207dfbafd`, `6d6965293`, `33da05e31` e `bf1586ddb`. Da
+> salvare restano solo questo piano e il backlog (E-2, E-3 ed E-6 rimandate alla 1.4).
+>
+> **Prove sulla base**:
+> - leggere: E5b.11, tutte verdi;
+> - E2E: E5b.12, 5 su 5;
+> - prima del merge, sulla base `c47d02a28`: E5b.5;
+> - dopo il merge con A6c: E5b.6.
+>
+> Il CHANGELOG lo scrive il coordinatore all'ingresso. Il testo gli arriva con l'handoff: le due righe di E5a ed E5b,
+> più la frase sui limiti per casella e per rete e quella sull'attivazione o disattivazione che revoca il link.

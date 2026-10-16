@@ -37,20 +37,42 @@ LIBREFOLIO_PROFILE=managed
 
 Case and spaces around the value do not matter; any other value stops the server at startup.
 
-Today the profile changes four things:
+Today the profile changes seven things:
 
 | | `selfhosted` | `managed` |
 | --- | --- | --- |
 | `GET /api/v1/system/instance` answers | `{"profile": "selfhosted"}` | `{"profile": "managed"}` |
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
-| A plugin setting set by an environment variable | Listed read-only by `GET /api/v1/settings/plugins` | Not listed, and a save to it is refused as if it did not exist |
+| A plugin setting set by an environment variable | Shown read-only in **Settings › Plugins**, *Set by the server*, and listed by `GET /api/v1/settings/plugins` | Not shown in **Settings › Plugins** nor listed, and a save to it is refused as if it did not exist |
 | The largest archive uploaded for a restore, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not set | No limit | 500 MB: see [The Upload Limit of a Restore](#restore-upload-limit) |
+| Idle risk workers (simulations and optimizations) stop after | 600 seconds | 60 seconds |
+| Frame protection: only the app's own pages may show it in a frame | Off | On |
+| A report-only Content-Security-Policy on the pages of the web app | Off | On |
 
 - The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`,
   without signing in. The web app reads it when it starts.
-- The interface is the same in both profiles.
+- The interface is the same in both profiles: only what the server sends it differs, as in the
+  table.
 - Plugin settings and their variables: see «Plugin Settings» in
   [Environment Variables](configuration.md).
+- Like the upload limit, the last three rows are defaults, each set on its own by its variables, in
+  either profile: `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS`
+  for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
+  «Main Options» and «Risk engine workers» in [Environment Variables](configuration.md)). A value you
+  set always wins over the profile, even one equal to the `selfhosted` default:
+  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance.
+- **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
+  `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
+  LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
+  another address, shows the app in a frame, the browser refuses to display it there: set
+  `LIBREFOLIO_FRAME_PROTECTION=false` for those instances.
+- **The report-only Content-Security-Policy** blocks nothing. On the pages of the web app (not the
+  documentation, not the API), it tells the browser where a page may load its content from; the
+  browser lists what falls outside in its developer console and sends no report anywhere: LibreFolio
+  has no address to collect them. Today the console shows at least the web app's own inline scripts:
+  the one that applies the theme before the page appears, and the start script SvelteKit writes into
+  the page. These reports are expected: listing what an enforced policy would block is what this
+  report-only phase is for.
 
 ### 🔑 A Session Key of 32 Characters or More {: #managed-jwt-secret }
 
@@ -80,6 +102,10 @@ your users sign in again after each restart. See
   [Environment Variables](configuration.md).
 - HTTPS in front of it: see [Expose Securely](service_exposure.md) and
   [HTTPS and reverse proxies](configuration.md#session-cookie-secure).
+- On Fly.io, `LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP`, so that the limits per visitor's address
+  count each visitor apart, not everyone as Fly's proxy. The managed profile does not set it, since
+  the header depends on the proxy in front of the instance: see «The Visitor's Address» in
+  [Checking Connection Security](connection_checks.md#reverse-proxy).
 - A monitor on `GET /api/v1/system/ready`: see the monitoring tip in
   [Advanced Docker](docker_advanced.md).
 - If your hosting panel takes its backups: its own `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, never shared
@@ -87,6 +113,11 @@ your users sign in again after each restart. See
 - Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
   instance's prices and exchange rates up to date on its own schedule, for example right after it
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
+- If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
+  managed profile turns frame protection on.
+- Optionally, your own support page, `LIBREFOLIO_SUPPORT_URL`: where the users of the instance ask for
+  help, such as an asset the search does not find. Without it, the help links go to LibreFolio's
+  issues on GitHub. See «Main Options» in [Environment Variables](configuration.md).
 - A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
   in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
   systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop
@@ -100,7 +131,8 @@ your users sign in again after each restart. See
 
 A hosting provider can block an instance, for example when its subscription is not paid. Users can
 still sign in, follow a password-reset link already sent to them, read why the instance is blocked
-and sign out; the rest of the app is closed.
+and sign out, and administrators can still download a backup of the instance; the rest of the app is
+closed.
 LibreFolio deletes nothing: the data stays as it is. The block works in both profiles.
 
 ### ⚙️ The Variables {: #block-variables }
@@ -135,8 +167,8 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
   with the deletion date when there is one.
 - While the instance is blocked, the [market data scheduler](settings.md#market-data-scheduler)
   runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
-  catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
-  (14 days by default).
+  catches up the history sync missed in the meantime and fills the gap the block left, going back
+  to each asset's and FX pair's last saved day, up to a year.
 - A restore that an administrator confirmed before the block, and that still waits, is not applied
   while the instance is blocked: the first start after the unblock applies it. On the server,
   `backup pending` shows it waiting (`instance_blocked`), and `backup pending --cancel` drops it: see
@@ -160,7 +192,16 @@ After signing in, users get a full page instead of the app, **This instance is b
 - with `LIBREFOLIO_BILLING_URL` ([Environment Variables](configuration.md)),
   administrators also get a **Manage subscription** link to your subscription page, which opens in
   a new tab; the other users do not see it;
+- administrators also get a second card under the message, **Keep a copy of the data**: the backup
+  card of **Settings › Backup**, to back up the whole instance, follow the backup, download the
+  archive before the instance is gone, and delete it from the server. The other users do not see it:
+  their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
+
+The card makes the same archive as your [hosting panel](#panel-backups): it leaves out the logs and
+the instance key, and the card says so. Keep your copy of the instance's key, its
+`secrets/instance.key` or the key you configured, with the data: without it, what LibreFolio
+encrypted can no longer be read. See «The Instance Key» in [Environment Variables](configuration.md).
 
 A user still signed in after the restart gets the page as soon as the app asks the server for data.
 Once you lift the block and restart, users get the app back at their next page load.
@@ -174,7 +215,7 @@ On a blocked instance, only these API calls answer as usual:
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
-| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the block page has no button for it yet. For your panel, its [four routes](#panel-jobs), with its token |
+| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
 | The outcome of a restore, for the page that asked the restart, with the one-time ticket of that request: when the block took effect at that restart, it says that the restore waits for the unblock, and starts nothing | `GET /api/v1/backup/restore/outcome` |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
@@ -378,3 +419,5 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list
+- 🖼️ For developers: **[Frame Protection and the Report-Only Policy](../developer/architecture/security.md#managed-headers)** —
+  The headers of the managed profile, directive by directive

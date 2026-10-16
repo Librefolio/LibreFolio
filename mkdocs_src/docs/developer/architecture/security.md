@@ -111,8 +111,9 @@ not commit: the caller commits it with the change that asks for it. Six changes 
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
 | Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
 
-Activation, promotion, logout and every refused operation leave the version alone: a wrong current password, or a new
-password equal to it, on `change-password`; a missing or wrong current password, or an address or a username already
+Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
+[password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
+`change-password`; a missing or wrong current password, or an address or a username already
 taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; a
 reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, a `PATCH` whose values
 equal the current ones, and a profile change that changes no email (a new username, or the stored email sent again).
@@ -204,6 +205,64 @@ same-email guards), `./dev.py test services user-profile` (`backend/test_scripts
 `./dev.py test front-utility component-unit` (`tabs/ProfileTab.test.ts`) and `./dev.py test front-utility settings`
 (`frontend/e2e/settings.spec.ts`, its «A6e» block).
 
+### 🔏 Password Rules {: #password-rules }
+
+The rules a new password must meet are written once, in `backend/app/services/accounts/password_policy.py` (decision
+37, lot A6c, release 1.3), and every way of choosing a password applies them. Before, they were written twice and
+disagreed: `validate_password()` in `scripts/user_cli.py` used Python's `str.isupper()`, `str.islower()`,
+`str.isdigit()` and a fixed list of ASCII symbols, `PasswordStrength.svelte` ASCII regular expressions and another
+list, and the API asked only for 8 characters (`min_length=8` in the request schemas).
+
+- **The rules.** `PASSWORD_RULES`, in this order: `min_length` (value `MIN_LENGTH`, 8), `uppercase`, `lowercase`,
+  `digit`, `special`. `failed_rules(password)` returns the codes of the rules a password misses, in that order; an
+  empty list means it meets them all.
+- **Unicode classes.** Each class is a Unicode general category (`unicodedata.category()`): an uppercase letter is
+  `Lu`, a lowercase one `Ll`, a digit `Nd`; a symbol, for `special`, is any character that is neither a letter
+  (`L*`), nor a number (`N*`), nor whitespace. The length counts characters, that is code points. So `É` is an
+  uppercase letter and `é` a lowercase one, `٣` (Arabic-Indic three) a digit, `€` and `_` symbols; a space is not a
+  symbol, and `²` is a number (`No`) but not a digit, so it meets neither `digit` nor `special`.
+- **Stored passwords stay valid.** The login never checks the rules: they apply only when a new password is chosen,
+  so an account whose password predates them keeps signing in with it.
+
+Each entry point checks the new password first, as soon as the request body is valid (and, for `change-password`, the
+session):
+
+| Entry point | Checked before |
+|-------------|----------------|
+| `POST /api/v1/auth/register` | The registration mode, the invitation, the user limit, and whether the username or the email is taken; for the first account of an empty instance too. A refused registration spends no invitation |
+| `POST /api/v1/auth/change-password` | The current password, and the rule that the new one must differ from it |
+| `POST /api/v1/auth/password-reset` ([reset links](access_control.md#reset-links)) | The link's token: with a weak password the link is not even read, so a valid link stays valid |
+| `./dev.py user create`, `./dev.py user reset` | Anything in the database, the username included: `validate_password()` in `scripts/user_cli.py` is a thin wrapper over `failed_rules()` |
+
+- **The refusal.** The three routes call `_refuse_weak_password()` (`backend/app/api/v1/auth.py`), which answers `400`
+  with `{"error_code": "PASSWORD_TOO_WEAK", "message": "The password does not meet the password rules", "rules": […]}`
+  in `detail`, `rules` being the codes missed, in the rules' order. Nothing is written: a refused change or reset
+  leaves the password, the session version and the sessions as they were. The command line prints
+  `❌ Password does not meet security requirements:`, then one line per rule missed that starts with its code
+  (`_RULE_MESSAGES`), such as `min_length: the password must be at least 8 characters long`, and exits with `1`.
+- **The schemas.** `AuthRegisterRequest.password`, `ChangePasswordRequest.new_password` and
+  `PasswordResetRequest.new_password` (`backend/app/schemas/auth.py`) only require a non-empty string
+  (`min_length=1`): an empty password is still a `422` of the request validation, not `PASSWORD_TOO_WEAK`. The
+  length is the policy's rule.
+- **Published to the app.** `password_rules_public()` is the list `GET /api/v1/system/instance` publishes as
+  `accounts.password_rules`, `[{code, value}]` (`PasswordRuleRead`), `value` being `null` for every rule but
+  `min_length` ([Public instance configuration](settings.md#public-instance-configuration)). The app draws and checks
+  that list under every new-password field, with the same classes (`\p{Lu}`, `\p{Ll}`, `\p{Nd}`, a symbol
+  `[^\p{L}\p{N}\s]`, the length in code points) in `frontend/src/lib/features/auth/passwordRules.ts`
+  ([PasswordStrength](../frontend/components/features/auth.md#passwordstrength)), so a rule changed here reaches the
+  interface without a change of its own. A code the app does not know is not checked there: the server decides.
+
+Tests: `./dev.py test services password-policy` (`backend/test_scripts/test_services/test_password_policy.py`,
+POLICY-000 to POLICY-006: the published list, the order of `failed_rules()`, the Unicode classes, the length in code
+points); `./dev.py test api auth` (`test_api/test_auth_api.py`, REG-004, CHPWD-005 and PWD-001 to PWD-008: registration
+and password change, the new password checked before the current one, a login that never checks);
+`./dev.py test api registration` (`test_api/test_registration_api.py`, RESET-004, RESET-006, RESET-007 and RULES-001 to
+RULES-003: the reset link and the invitation left unspent, the order of the checks, the first account, the `accounts`
+block); `./dev.py test utils dev-cli-image` (`test_utilities/test_dev_cli_image.py`, IMG-031 to IMG-031d:
+`validate_password()`, then `user create` and `user reset` on a copy of the image's files). The app's half:
+`./dev.py test front-utility core-unit` (`passwordRules.test.ts`) and `./dev.py test front-utility component-unit`
+(`PasswordStrength.test.ts`).
+
 ### 💻 Using curl
 
 ```bash
@@ -228,9 +287,12 @@ curl -b cookies.txt -X POST \
 
 ### 📄 Secrets from Files {: #secrets-from-files }
 
-Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY`, `LIBREFOLIO_SMTP_PASSWORD` and `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`
-today, is read by `env_secret(name)` in `backend/app/config/__init__.py`:
+Every secret of LibreFolio is read by `env_secret(name)` in `backend/app/config/__init__.py`: today
+`JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`, `LIBREFOLIO_WEB_LINK_FINDER_API_KEY`,
+`LIBREFOLIO_SMTP_PASSWORD`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, `LIBREFOLIO_WAKE_TOKEN`, and every
+variable of the plugin settings, secret or not (`plugin_setting_env()` in
+`backend/app/config/plugins.py`: the derived `LIBREFOLIO_PLUGIN_*` names and the aliases of secret
+fields, see [Plugin Settings](patterns/plugin_settings.md#environment)). In this order:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
 2. otherwise `NAME_FILE`, when not blank, is the path of a file that holds it, as Docker and Kubernetes
@@ -270,6 +332,12 @@ either into `503` with the code `backup_panel_unavailable`, on every panel route
 per refused call, `The hosting panel's backup token cannot be used: its routes refuse every request`, whose
 `error` names the variable, and the path of a file, never the token
 ([Hosting for Others](../../admin/hosting_providers.md#panel-backups)).
+Nor does an unusable `LIBREFOLIO_WAKE_TOKEN`: `require_wake_token()` in
+`backend/app/api/v1/system/wake.py` reads it at each call of `POST /system/wake-sync`, which then
+answers `503` with the code `wake_unavailable`
+([Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync)). Nor does a `_FILE` of a plugin setting
+that cannot give its value: the field gets the problem `invalid_env`, and the plugin is not configured
+until the variable is fixed ([Plugin Settings](patterns/plugin_settings.md#environment)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -324,11 +392,24 @@ it is.
 | Function | Contract |
 |----------|----------|
 | `derive_key(purpose: str, length: int = 32) -> bytes` | HKDF-SHA256 (RFC 5869, `hkdf_sha256()` on the standard-library `hmac` and `hashlib`) over the key's UTF-8 bytes, with a fixed salt (`_DERIVATION_SALT`) and `info = purpose.encode("ascii") + b"\x00" + length.to_bytes(2, "big")`. The length is part of the derivation: the same purpose at two lengths gives two unrelated keys, never a key and its prefix. The same purpose and length get the same bytes while the instance key stays the same; two purposes never get the same key. `length` goes from 1 to 8160 bytes. `purpose` and `length` are validated first: an invalid one raises `ValueError` before the key is read or generated. Otherwise, without a configured key, the first call generates the key file. Raises `InstanceKeyError` when the key cannot be used. |
+| `derive_key_from(key: str, purpose: str, length: int = 32) -> bytes` | The key that `derive_key(purpose, length)` gives on an instance whose instance key is `key`: the same HKDF-SHA256, salt and `info`. It reads neither the environment nor the data directory and never creates the key file. Checked in this order: `purpose` and `length` (`ValueError`, the rules of `derive_key()`), then the type of `key` (`TypeError` for anything but a `str`), then its length (`InstanceKeyError` under `INSTANCE_KEY_MIN_LENGTH`, 32 characters). No message holds the key. |
 | `instance_key_status() -> InstanceKeyStatus` | The state, without creating the key file and without raising: `source` (`configured`; `generated` when something is at the key file's path, a link that leads nowhere included, or when its folder cannot be searched; `not_created`), `problem` (why the key cannot be used, `None` when it can), `path`, and `loose_modes`, the octal modes of the folder and the file when group or others have any access to the generated key (always empty on Windows). |
 | `instance_key_path() -> Path` | `get_data_dir() / "secrets" / "instance.key"`: the test data directory in test mode. |
 
 `purpose` names the use and its version, such as `plugins.settings.v1`: lowercase letters, digits and
 `. _ : -`, starting with a letter or a digit, at most 128 characters.
+
+`derive_key()` and `derive_key_from()` validate and derive through the same private helpers
+(`_check_purpose_and_length()`, then `_derive()`), so the two cannot drift. `derive_key_from()` is for
+a key that is not this instance's. Its intended caller is the restore of workstream B, which will
+re-encrypt the plugin secrets that a backup's instance encrypted with its own key. The archive leaves
+that key out, so it comes from where the administrator kept it: a copy of the old
+`secrets/instance.key`, read with `read_secret_file(path, label)` (`backend/app/config/__init__.py`:
+the file's text without a leading byte order mark and its trailing line breaks) as this module reads
+its own, or the old value of `LIBREFOLIO_INSTANCE_KEY`. The restore derives the old subkey with
+`derive_key_from(old_key, "plugins.settings.v1", 32)` and gives it, with this instance's subkey, to
+`rekey_plugin_secrets(conn, old_subkey, new_subkey)` in
+`backend/app/services/plugin_settings/crypto.py`. No code calls `derive_key_from()` yet.
 
 The generated file (`_create_key_file()`):
 
@@ -355,13 +436,25 @@ The generated file (`_create_key_file()`):
 - **Test isolation**: `validate_test_data_dir()` treats `secrets/` and `secrets/instance.key` as
   managed paths: a test lane may not alias the production ones.
 
-**Known limitation**: a key file lost after its first use looks like a first use, so a new key is
-generated; consumers that store ciphertexts must keep a key check to detect a changed key (planned
-with the first consumers).
+**A lost key file** still looks like a first use: a new key is generated, and nothing the old one
+encrypted can be read with it. The plugin settings, whose secrets are the only data stored encrypted
+under the instance key today, make the change visible: each row records the `key_id` of the key that
+encrypted it, and from the first start after the change the startup step `plugin-secrets-check` logs
+an error that counts the stored system secrets the current key cannot read, if there are any
+([Plugin Secrets Check](#plugin-secrets-check)). The administrator puts back `secrets/instance.key`
+from their copy of the data directory (the archive of the instance backup leaves the key out), or
+enters the secrets again. The order matters: saving a secret rewrites its row's `secret_ciphertext`
+and `key_id` under the current key (`_apply()` in `backend/app/services/plugin_settings/service.py`),
+so an old key brought back afterwards reads again the rows never entered again, but not the ones
+entered under the new key; the old key therefore goes back first (LibreFolio stopped, the copy in
+place of the generated file), before anyone enters a secret again, and the secrets are entered again
+only when no copy exists.
 
 Tests: `./dev.py test services config-secrets` (`env_secret()`) and
-`./dev.py test services config-instance-key`. What the administrator sees and does is in
-[Configuration](../../admin/configuration.md), section «The Instance Key».
+`./dev.py test services config-instance-key`, whose section (g) pins `derive_key_from()` to three
+known answers computed with `derive_key()` before the two shared their helpers. What the
+administrator sees and does is in [Configuration](../../admin/configuration.md), section «The
+Instance Key».
 
 ## 🩺 Configuration Checks {: #configuration-checks }
 
@@ -372,7 +465,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, `instance.checks.*`, written whole in `config_audit.py` so the i18n usage scan (`scripts/i18n_usage.py`) sees it. The 13 messages are in the `instance` i18n subsystem; no page shows them yet, as the checks only reach the log |
+| `i18n_key` | Key of its message, `instance.checks.*`, written whole in the module of the check (`config_audit.py`, `plugin_secrets_check.py`) so the i18n usage scan (`scripts/i18n_usage.py`) sees it. The 15 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; no page shows them yet, as the checks only reach the log |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -411,6 +504,47 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
 Tests: `./dev.py test services config-audit`. What the administrator sees and does is in
 [Configuration](../../admin/configuration.md), section «Startup Checks».
 
+### 🧩 Plugin Secrets Check {: #plugin-secrets-check }
+
+`backend/app/services/platform/plugin_secrets_check.py` finds the secrets of the
+[plugin settings](patterns/plugin_settings.md#secrets) that the instance key can no longer read: a
+lost `secrets/instance.key` generated again, data restored without its `secrets/`, another
+`LIBREFOLIO_INSTANCE_KEY`. It needs the database, and `CONFIG_CHECKS` run before the `database` step,
+so it cannot be one of them. `check_plugin_secrets(session) -> ConfigCheck` returns the `ConfigCheck`
+of `config_audit.py` all the same, so that the «Security» tab of the admin settings, which does not
+exist yet, can show it with the others. Unlike the functions of `CONFIG_CHECKS`, it can raise, on a
+database error for one: the startup step below catches it.
+
+It asks `plugin_secrets_key_status(session)` (`backend/app/services/plugin_settings/crypto.py`),
+which counts by `key_id`, without decrypting, the stored secrets of each scope that the current key
+did not encrypt, or all of them when the key cannot be used. While no secret is stored it reads no key
+at all, so a fresh install never generates the key file at this step. With secrets stored, it derives
+the subkey with `derive_key()`, which generates a missing key file as any first use does: after a lost
+key file, every stored secret counts against the new key.
+
+| `check_id` | Not `ok` when | Severity |
+|------------|---------------|----------|
+| `platform.plugin_secrets` | At least one stored `system` secret cannot be read: `i18n_key` `instance.checks.pluginSecrets.unreadable` (an ICU plural on `count`), `detail` `{"count": <system count>}`, summary `Stored plugin secrets that the instance key cannot read: <N>. Enter them again in the plugin settings, or restore the instance key they were saved with` | `error` |
+
+Otherwise the check is `ok` (`instance.checks.pluginSecrets.ok`, no `detail`). Only the `system`
+count reaches the result and the log, by the rule of the plugin settings: a user's secrets are that
+user's, who sees them `unreadable` in their own settings and enters them again. So when only user
+secrets are unreadable, the check is `ok`.
+
+The startup step `plugin-secrets-check` (`STARTUP_STEPS`, right after `global-settings`) runs
+`log_plugin_secrets_check()`: it opens an `AsyncSession` on `get_async_engine()`, logs a result that
+is not `ok` at its severity, as `log_configuration_audit()` does (the `summary` as the event, `check`
+and `detail` as fields), and logs nothing when it is `ok`. It never raises: when the check fails, it
+logs the warning `Plugin secrets check could not run`, whose `error` field holds the class name of the
+exception, never its message, and the start goes on. A row keeps its `key_id` until its secret is
+saved again (a clear deletes the row), so the error comes back at every start until the secrets are
+entered again or the old key is restored.
+
+Tests: `./dev.py test services plugin-secrets-check`
+(`backend/test_scripts/test_services/test_plugin_secrets_check.py`), and the step's place in
+`./dev.py test services app-lifecycle`. What the administrator sees and does is in
+[Configuration](../../admin/configuration.md), section «Startup Checks».
+
 ## 🛡️ Endpoint Protection
 
 All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI), except the hosting panel's backup routes (`/backup/panel/jobs…`), which authenticate with the panel token instead: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
@@ -421,9 +555,9 @@ All endpoints that access or modify user data require a valid session cookie (`D
 |----------|--------|---------|
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
-| `/auth/register` | POST | New user registration, under the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
+| `/auth/register` | POST | New user registration, under the [password rules](#password-rules), the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
 | `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
-| `/auth/password-reset` | POST | Spend a password-reset link: a new password, and every session of the account ended |
+| `/auth/password-reset` | POST | Spend a password-reset link: a new password, under the [password rules](#password-rules), and every session of the account ended |
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
@@ -490,7 +624,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -561,7 +695,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
-| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away; the block page has no button for it yet |
+| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below) |
 | `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
 | `GET /backup/restore/outcome` | `backup_restore.get_restore_outcome` | The outcome of a restore, for the page that asked its restart, with the one-time ticket of that request instead of a session ([The Outcome Ticket](#backup-restore-outcome)): a restart that came back blocked reads `pending`, `waiting: "instance_blocked"`. It starts nothing |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
@@ -602,14 +736,18 @@ caller of a refused route gets the `423` even with an invalid body, never a `422
 
 **`GET /system/block`** (`backend/app/api/v1/system/block.py`) is for signed-in users only, and allowed
 on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`;
-`deletion_date`, `null` without a date; and `billing_url`, where the subscription is managed
+`deletion_date`, `null` without a date; `billing_url`, where the subscription is managed
 (`LIBREFOLIO_BILLING_URL`, from `registration_service.billing_link()`), for administrators only: it is
 `null` for the other users, and when the variable is unset or not an `http(s)` address (`billing_link()`
-logs the latter once per process). The block page
-(`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again that it is an
-`http(s)` address, then shows an administrator a **Manage subscription** link to it, opened in a new tab
-(`rel="noopener noreferrer"`). A workstream that owns part of the block page adds one field there and
-fills it in `block.py` with one call to its service.
+logs the latter once per process); and `backup_available`, whether this user may still download a full
+backup of the instance: the user's `is_superuser`, so `true` for administrators only (decision 12). The
+block page (`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again
+that `billing_url` is an `http(s)` address, then shows an administrator a **Manage subscription** link
+to it, opened in a new tab (`rel="noopener noreferrer"`). When `backup_available` is `true`, and only
+then, it shows the backup card of **Settings › Backup** under the block message: the card's four
+`backup_instance` routes are on the list above, and nothing else on the server changes for it (see
+[Instance block](../frontend/state/app-state.md#instance-block)). A workstream that owns part of the
+block page adds one field there and fills it in `block.py` with one call to its service.
 
 **Changing the list.** The list is short on purpose. The two link endpoints joined it for someone who
 lost the password (see the table above): they read a link already sent or spend a reset link, and
@@ -645,8 +783,8 @@ job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 Invitations, password-reset links, email verification and the setup link of the initial administrator all hand
 someone a secret inside a URL. `backend/app/services/accounts/token_service.py` is the building block of these
 single-use links in the accounts domain: it issues, checks, spends and revokes their tokens, with the same
-guarantees for all four. Invitations and password-reset links use it today ([Links in use](#account-token-links));
-email verification and the setup link have no caller yet.
+guarantees for all four. Invitations, password-reset links and email verification use it today
+([Links in use](#account-token-links)); the setup link has no caller yet.
 
 ### 🎲 Generation and Storage
 
@@ -740,12 +878,12 @@ contract, including two sessions consuming one token at once and a search of the
 column for the plaintext. The table — columns, constraints, foreign-key actions — is described in
 [`ACCOUNT_TOKEN`](database/users_access.md#account-token).
 
-### 🔗 Links in Use: Invitations and Password Resets {: #account-token-links }
+### 🔗 Links in Use: Invitations, Password Resets, Email Verification {: #account-token-links }
 
-Two purposes have callers: invitations and password-reset links. Their rules — who may register, the
-user limit, what each endpoint answers — are in
-[Registration, Invitations and the Admin API](access_control.md#registration). What protects their
-tokens:
+Three purposes have callers: invitations, password-reset links and email verification. The rules of the first two —
+who may register, the user limit, what each endpoint answers — are in
+[Registration, Invitations and the Admin API](access_control.md#registration); those of email verification in
+[Email Verification](../backend/email.md#verification). What protects their tokens:
 
 - **Only an administrator, or a shell on the server, issues a link.** `POST /api/v1/users/invites` and
   `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
@@ -753,6 +891,12 @@ tokens:
   once. A lost link is replaced with a new one.
 - **Only the newest reset link of an account works.** Issuing one revokes the account's live reset links, and
   spending one revokes any other.
+- **A verification link is never shown, only emailed, and only to the account's own address.** Registration
+  issues a token without an address (the «hold»), whose text never leaves the server; the link itself goes by
+  email, built from `LIBREFOLIO_PUBLIC_URL`, and «send the link again» asks for the account's password first.
+  Each new link revokes the account's others, and spending one activates the account in the same commit.
+  `confirm_email()` refuses a token without an address, and revokes one emailed to an address the account no
+  longer has.
 - **Spending is atomic with its effect.** An invitation is consumed in the transaction that creates its account;
   a reset link in the commit that sets the new password, raises the session version and revokes the other links.
   If the account cannot be created, the invitation stays unspent.
@@ -762,18 +906,22 @@ tokens:
 - **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
   `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
   and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
-  locks it, and whether the instance has no account yet ([The First-Account Flag](#first-account-open)).
-- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
-  `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
-  for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
-  never puts the fragment in a `Referer` either. A token in the query string would be in all those logs. The page
-  reads it with JavaScript (`location.hash`); a `token` in the query string is not read at all.
-- **The link pages hide and keep the token.** `/invite` and `/reset-password` read the token when they mount,
-  then put the bare path in the address bar (`replaceState`), so the token stays out of the history and of a
-  bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
-  the page changes only the fragment and loads nothing, so the page reads the new token there. Both declare
+  locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
+  [password rules](#password-rules), the same on every instance.
+- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…`,
+  `/reset-password#token=…` and `/verify-email#token=…`. A browser never sends the fragment to the server, so the
+  token is not in the request for the page: it stays out of the server's access log and out of the logs of every
+  proxy on the way. A browser never puts the fragment in a `Referer` either. A token in the query string would be
+  in all those logs. The page reads it with JavaScript (`location.hash`); a `token` in the query string is not read
+  at all.
+- **The link pages hide and keep the token.** `/invite`, `/reset-password` and `/verify-email` read the token when
+  they mount, then put the bare path in the address bar (`replaceState`), so the token stays out of the history and
+  of a bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
+  the page changes only the fragment and loads nothing, so the page reads the new token there. All three declare
   `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
-  components are in [Authentication Components](../frontend/components/features/auth.md#link-pages).
+  components are in [Authentication Components](../frontend/components/features/auth.md#link-pages), except those
+  of `/verify-email`, which spends its token at once, without inspecting it first:
+  [In the Frontend](../backend/email.md#verification-frontend).
 
 ## 💾 Restoring a Backup {: #backup-restore }
 
@@ -1133,7 +1281,9 @@ a single- or double-quoted attribute. The `escapeHtml` exported by `$lib/utils/i
 deliberately leaves the apostrophe alone because its output feeds KaTeX, where `f'(x)` is prime
 notation: do not use it for attribute values.
 
-Two source gates keep the rule in force; both run in `./dev.py test front-utility core-unit`:
+Three source gates keep the rule in force; the first two run in
+`./dev.py test front-utility core-unit`, the third in
+`./dev.py test front-portfolio chart-safety-unit`:
 
 - `frontend/src/htmlInterpolation.gate.test.ts` parses every non-test `.svelte` and `.ts` file
   under `frontend/src` and fails when a user or provider text field reaches an HTML template
@@ -1142,8 +1292,13 @@ Two source gates keep the rule in force; both run in `./dev.py test front-utilit
 - `frontend/src/htmlSink.gate.test.ts` requires every `{@html X}` in a non-test `.svelte` file
   to be a `sanitizeHtml(…)` call or an entry of its reviewed list, which records a reason for
   each sink. An entry that no longer matches a sink fails the gate.
+- `frontend/src/lib/utils/core/escapeHtml.single.test.ts` fails when a non-test `.svelte` or `.ts`
+  file under `frontend/src` holds an HTML escaper of its own (`&` mapped to `&amp;`) outside
+  `escapeHtml.ts`. One file is exempt: `inlineMath.ts`, the KaTeX variant above. An exempt file
+  that no longer holds a copy fails the gate (see
+  [Tooltip HTML](../frontend/components/charts.md#chart-tooltip-escaping)).
 
-Neither gate sees a raw `innerHTML` assignment that involves no template: do not write one.
+No gate sees a raw `innerHTML` assignment that involves no template: do not write one.
 `./dev.py test front-asset asset-name-xss` (`frontend/e2e/assets/asset-name-xss.spec.ts`)
 creates an asset whose name and icon URL carry markup, through the API, and checks in a real
 browser that the table and card views of `/assets` show it as text and run nothing.
@@ -1156,7 +1311,7 @@ browser that the table and card views of `/assets` show it as text and run nothi
     of every user who opened the asset list — the administrator included. The same flaw sat in
     other `html` cells, chart tooltips, toasts, and validation messages. The 1.2 fix escapes
     user text where it enters an HTML string, sanitizes the sinks that receive mixed markup,
-    and adds the two gates above.
+    and adds the first two gates above.
 
 ## 🐳 Container Image Check
 
@@ -1206,6 +1361,112 @@ hand into a query string. `mask_query_credentials()` holds the rule. One mode is
 `--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
 a debugging mode, not meant for a server with real users.
 
+## 🏷️ Response Headers {: #response-headers }
+
+`SecurityHeadersMiddleware` (`backend/app/services/platform/security_headers.py`), the `security_headers` entry of
+`MIDDLEWARE_STACK` (see [Steps and Middleware: the Contract](overview.md#lifecycle-contract)), adds the security headers
+of decision D5. Two of them, `ALWAYS_HEADERS`, go on every HTTP response of the app: API answers, the web app, the
+documentation and the files, compressed or not, errors included. Two switches add more, off on a self-hosted install and
+on in the managed profile: see [Frame Protection and the Report-Only Policy](#managed-headers).
+
+| Header | Value | Effect |
+|--------|-------|--------|
+| `X-Content-Type-Options` | `nosniff` | The browser uses the type the server sends and never guesses another, so no file, an upload included, is sniffed into a script or a page |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Another site learns at most the origin of a page, never its path or query |
+
+- **A header the route set is kept.** The middleware adds a header only when the response has none of that name, in
+  any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the text preview of an upload
+  (`backend/app/api/v1/uploads.py`) and the download of a broker report (`backend/app/api/v1/brokers.py`) set
+  themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
+  `content-security-policy-report-only`, so a prefix check would let a route's report-only policy suppress the enforced
+  one, or the reverse. A route that sets its own `X-Frame-Options`, `Content-Security-Policy` or
+  `Content-Security-Policy-Report-Only` keeps it alone, and the middleware still adds the others. WebSocket and
+  lifespan scopes pass untouched.
+- **The 500 of an exception.** Starlette answers an unhandled exception from `ServerErrorMiddleware`, which it puts
+  outside every middleware of the stack, so its 500 would go out without the headers. When a request raises before
+  its response has started, the middleware sends the 500 itself (`Internal Server Error`, plain text) with the headers
+  of every response, then re-raises the exception: `ServerErrorMiddleware` finds the response started and sends
+  nothing, and the server still logs the error.
+- **A type for every file served.** With `nosniff`, a script or a style sheet sent with a type that is not its own is
+  refused, so every file the app serves must carry its right type. `FileResponse` (the `/_app` mount, the SPA
+  catch-all, `/mkdocs`) and the plugin-asset route (`/uploads/plugin/…`) take it from `mimetypes`, with
+  `application/octet-stream` for a name it does not know. `mimetypes` reads Python's own table, which has no type
+  for the fonts or `.map`, then the system's `mime.types` files, which a slim image such as the runtime
+  `python:3.13-slim` does not have. `register_served_types()`, which `install_static_site()` calls, adds
+  `SERVED_TYPES` (JavaScript, CSS, JSON and source maps, the web manifest, WebAssembly, SVG, the fonts) to
+  `mimetypes` for the whole process, so these extensions get the same type on every machine.
+
+### 🖼️ Frame Protection and the Report-Only Policy {: #managed-headers }
+
+The part of decision D5 meant for the [managed profile](../../admin/hosting_providers.md#managed-profile): two `bool`
+switches of `Settings`, `False` in the code and `True` in `PROFILE_DEFAULTS["managed"]` (see
+[Settings System](settings.md)). Each can be set on its own, in either profile, and a value set in the environment or in
+`.env` wins over the profile.
+
+| Switch | Header | Value | Sent on |
+|--------|--------|-------|---------|
+| `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response |
+| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every HTTP response |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app |
+
+- **Frame protection** (`FRAME_HEADERS`) is enforced: only the app's own pages may frame it, so a hosting panel or a
+  dashboard on another origin that shows the app in a frame is refused by the browser. Its two headers go where
+  `ALWAYS_HEADERS` go: API answers, the web app, the documentation, the files, the CORS preflights (the `cors` entry is
+  inside this one) and the middleware's own 500.
+- **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
+  report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
+  is sent.
+- **Where the report-only policy goes.** `_is_web_app_page()` decides at `http.response.start`, from the response's
+  `Content-Type` and `scope["path"]`: the type must start with `text/html`, and the path must be outside `/mkdocs`
+  (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`). The middleware is outside GZip, so a compressed page still says
+  `text/html`. The policy thus reaches `/`, the client-side routes the SPA catch-all answers and the HTML files of the
+  build (`200.html`, `offline.html`). Left out on purpose: the documentation, a separate site that this policy does not
+  describe; Swagger UI and ReDoc (`/api/v1/docs`, `/api/v1/redoc`), which load their scripts from a CDN, so a
+  `default-src 'self'` report there would be pure noise; the HTML 404 that the catch-all answers for an unknown API
+  path; and every response that is not HTML: JavaScript, JSON, text files, and the CORS preflights and the 500, which
+  are plain text.
+- **Read once.** `SecurityHeadersMiddleware.__init__` reads both switches from `get_settings()`, so they are read when
+  the middleware is built, never per request. Starlette builds the middleware stack lazily, at the app's first ASGI
+  call: for the real app, the lifespan startup. Changing a switch takes a restart, and the tests build a fresh app for
+  each configuration.
+
+`CSP_REPORT_ONLY_POLICY`, directive by directive:
+
+| Directive | Sources | Why |
+|-----------|---------|-----|
+| `default-src` | `'self'` | Every fetch directive the policy does not name falls back to the app's own origin |
+| `script-src` | `'self' 'wasm-unsafe-eval'` | Script files from the app's origin, no inline script; WebAssembly may compile, for the PDF viewer (its PDFium engine) |
+| `style-src` | `'self' 'unsafe-inline'` | The app's inline styles are allowed |
+| `img-src` | `'self' data: blob: https:` | Images from any HTTPS address: asset and broker icons are set by URL |
+| `font-src` | `'self' data:` | Fonts from the app's origin, or inlined as `data:` URLs |
+| `connect-src` | `'self'` | `fetch`, XHR and WebSockets reach the app's origin only |
+| `worker-src` | `'self' blob:` | Workers, the service worker included, from the app's origin or a `blob:` URL |
+| `frame-src` | `'self' blob:` | The app's frames show its own pages or a `blob:` URL |
+| `object-src` | `'none'` | No `<object>` or `<embed>` content |
+| `base-uri` | `'self'` | A `<base>` element cannot send the page's relative URLs to another origin |
+| `form-action` | `'self'` | Forms submit to the app's origin only |
+| `frame-ancestors` | `'self'` | Only the app's own pages may frame the page, as with frame protection |
+
+Today a page of the web app reports at least its inline scripts: the one of `frontend/src/app.html`, which applies the
+theme before the first paint and registers the service worker, and the start script SvelteKit writes into the page
+(`frontend/svelte.config.js` has no `csp` option, so SvelteKit adds no hash or nonce to it);
+`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached, has one too. These
+reports are expected until the scripts move to files or get hashes: the report-only phase is there to list what an
+enforced policy would block.
+
+Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
+`nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
+still re-raised), `./dev.py test services managed-headers` (`backend/test_scripts/test_services/test_managed_headers.py`,
+on fresh apps holding the stack's `security_headers`, `gzip` and `cors` and a fake static site: frame protection once
+on every response when on and on none when off, `false` over `managed` included; the report-only policy on the web
+app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript chunk, a text file, a
+CORS preflight or a 500; the policy read directive by directive, each directive once, with no report endpoint; a
+route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
+and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
+the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
+`mime.types` file). The switches' values per profile are tested with the profile defaults,
+`./dev.py test services profile-defaults` (see [Settings System](settings.md)).
+
 ## 🌐 HTTPS & Deployment Architecture
 
 **LibreFolio does not handle HTTPS directly.**
@@ -1238,8 +1499,52 @@ graph LR
 
 To ensure the application behaves correctly behind a proxy (e.g., generating correct redirect URLs), you must ensure the proxy sets the standard headers:
 
-- `X-Forwarded-For`
+- `X-Forwarded-For`: uvicorn takes the client's address from it for the proxies `FORWARDED_ALLOW_IPS` lists, and the
+  connection indicator reads its last value (see [The Client's Address](#client-address)).
 - `X-Forwarded-Proto` (the scheme the browser used: `$scheme` in Nginx). LibreFolio reads it to mark the session cookie `Secure`.
+
+### 🧭 The Client's Address {: #client-address }
+
+A limit per client, such as the per-address limits of the email feature, must count each visitor on its own. Behind a
+reverse proxy the TCP peer is the proxy, so `request.client.host` is the proxy's address for every visitor, unless
+uvicorn rewrote it: its `ProxyHeadersMiddleware` takes the client from `X-Forwarded-For` only when the peer is listed in
+`FORWARDED_ALLOW_IPS` (`127.0.0.1` when unset; the Docker image starts uvicorn with its defaults, see `Dockerfile`).
+Decision P17 adds the other way, for a proxy that passes the address in a header of its own:
+`LIBREFOLIO_CLIENT_IP_HEADER`, a `Settings` field in `backend/app/config/__init__.py`, empty by default and set by no
+profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
+`proxy_set_header X-Real-IP $remote_addr;`. `backend/app/services/platform/client_address.py` reads it:
+
+| Function | Returns |
+|----------|---------|
+| `client_address(request)` | The header's address when the request carries the header once, holding one IP address (an IPv4-mapped IPv6 one as IPv4); otherwise the connection's, `request.client.host`, and `None` without one (a test client) |
+| `client_rate_key(address)` | The key of a limit per client: an IPv4 address whole, an IPv6 one by its /64, which one subscriber usually holds whole; anything else as written, and `None` without an address |
+| `mask_client_address(address)` | The form an address may take in a log: an IPv4 address by its /24, an IPv6 one by its /48, since an IP address is personal data |
+
+- **Validated at startup.** The field's validator strips the value (empty: unset), then wants the name of one HTTP
+  header, an RFC 9110 `token`, and refuses `X-Forwarded-For` and `Forwarded` in any case: lists whose first value the
+  client chooses, which uvicorn handles with `FORWARDED_ALLOW_IPS`. A refused value fails `Settings()`, which
+  `backend/app/main.py` builds at import, so the server does not start.
+- **Read once per process.** `_configured_header()` (`functools.cache`) reads the field, lowercased, at the first call,
+  never per request: a change takes a restart. `reset_client_address_cache()` clears it and re-arms the warning, for
+  the tests.
+- **A malformed header** (repeated, a list, a port, a zone, any other text, empty) falls back to the connection's
+  address and logs one warning per process, `Client address header unusable: using the connection's address`, with
+  `header`, `lines` and `length`, never the value. A missing header falls back silently.
+- **Safety.** `client_address()` believes the header whoever sends it, so the variable is safe only when every request
+  crosses that proxy: a client that reaches the app directly (a published port, another path) can choose its address,
+  to get around a limit or to spend another client's.
+- **Callers.** A limit per client takes its address from `client_address(request)` and its key from
+  `client_rate_key()`, and a log holds only the `mask_client_address()` form. The three per-address email limits read
+  their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
+  the registration email in `backend/app/api/v1/auth.py`. Their key follows the rule of `client_rate_key()`.
+- **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
+  `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
+  the last `X-Forwarded-For` value: advisory only, it gates nothing.
+
+For administrators: «The Visitor's Address» in
+[Checking Connection Security](../../admin/connection_checks.md#reverse-proxy).
+
+Tests: `./dev.py test services client-address` (`backend/test_scripts/test_services/test_client_address.py`).
 
 ## 🐛 Reporting a Vulnerability
 

@@ -388,12 +388,12 @@
 
 {#snippet searchBox(placeholderText: string)}
     <div class="relative">
-        <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+        <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-lf-muted" size={14} />
         <input
             bind:this={searchInput}
             bind:value={query}
             type="text"
-            class="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-2 text-sm text-gray-700 placeholder-gray-400 focus:border-libre-green focus:ring-1 focus:ring-libre-green dark:border-slate-600 dark:bg-slate-700 dark:text-gray-200"
+            class="w-full rounded-md border border-lf-input bg-lf-field py-1.5 pl-8 pr-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
             placeholder={placeholderText}
             onkeydown={handleSearchKeydown}
             data-testid="{testId}-search"
@@ -415,7 +415,7 @@
             testId="{testId}-filter-currency"
         />
         {#if filtersActive}
-            <button type="button" class="ml-auto inline-flex items-center gap-0.5 text-[11px] text-libre-green hover:underline" onclick={clearFilters} data-testid="{testId}-filters-clear">
+            <button type="button" class="ml-auto inline-flex items-center gap-0.5 text-[11px] text-lf-link hover:underline" onclick={clearFilters} data-testid="{testId}-filters-clear">
                 <X size={11} />
                 {$t('assetPicker.filters.clear')}
             </button>
@@ -426,7 +426,7 @@
 {#snippet warningMark(asset: PickerAsset, verdict: PickerVerdict | undefined)}
     {#if verdict?.level === 'warning'}
         <Tooltip text={verdict.texts.join(' · ')} position="left" interactiveChild>
-            <span class="inline-flex text-amber-500" data-testid="{testId}-warning-{asset.id}"><AlertTriangle size={13} /></span>
+            <span class="inline-flex text-lf-warning" data-testid="{testId}-warning-{asset.id}"><AlertTriangle size={13} /></span>
         </Tooltip>
     {/if}
 {/snippet}
@@ -438,17 +438,17 @@
         {/snippet}
 
         {#snippet children({close})}
-            <div class="border-b border-gray-100 p-2 dark:border-slate-700">
+            <div class="border-b border-lf-subtle p-2">
                 {@render searchBox($t('assets.searchPlaceholder'))}
                 {@render filterMenus()}
             </div>
 
             <div class="max-h-80 overflow-y-auto">
                 {#if rows.length > 0}
-                    <div class="flex items-center justify-between px-3 pt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                    <div class="flex items-center justify-between px-3 pt-2 text-[11px] text-lf-muted">
                         <button
                             type="button"
-                            class="text-libre-green hover:underline disabled:opacity-40 disabled:hover:no-underline"
+                            class="text-lf-link hover:underline disabled:opacity-40 disabled:hover:no-underline"
                             disabled={allChecked && !visibleIds.some((id) => checked.includes(id))}
                             onclick={() => (checked = toggleVisibleRows(checked, visibleIds, room))}
                             data-testid="{testId}-toggle-visible"
@@ -465,44 +465,40 @@
                                 type="button"
                                 role="option"
                                 aria-selected={on}
-                                class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-200 dark:hover:bg-slate-700"
+                                class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-40"
                                 disabled={!on && full}
                                 onclick={() => toggleRow(asset.id)}
                                 data-testid="{testId}-option-{asset.id}"
                                 data-level={verdict?.level ?? 'unknown'}
                                 data-reasons={verdict?.codes.join(' ') ?? ''}
                             >
-                                <span
-                                    class="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors {on
-                                        ? 'border-libre-green bg-libre-green text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-slate-900'
-                                        : 'border-gray-300 bg-white dark:border-slate-500 dark:bg-slate-900'}"
-                                >
+                                <span class="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border transition-colors {on ? 'border-lf-checked bg-lf-checked text-lf-on-checked' : 'border-lf-input bg-lf-field'}">
                                     {#if on}<Check size={12} />{/if}
                                 </span>
                                 <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain" onerror={hideBrokenIcon} />
                                 <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1">{asset.display_name}</span>
                                 {@render warningMark(asset, verdict)}
-                                <span class="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">{typeLabel(asset.asset_type)}</span>
-                                <span class="w-8 shrink-0 text-right font-mono text-[10px] text-gray-500 dark:text-gray-400">{asset.currency}</span>
+                                <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
+                                <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency}</span>
                             </button>
                         {/each}
                     </div>
                 {/if}
 
                 {#if blockedRows.length > 0}
-                    <p class="flex items-center justify-between border-t border-gray-100 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:border-slate-700 dark:text-gray-500">
+                    <p class="flex items-center justify-between border-t border-lf-subtle px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-lf-muted">
                         <span>{blockedLabel}</span>
                         <span class="tabular-nums">{blockedRows.length}</span>
                     </p>
                     <ul class="p-1 pt-0" data-testid="{testId}-blocked">
                         {#each blockedRows as asset (asset.id)}
                             {@const verdict = verdictOf(asset.id)}
-                            <li class="flex items-start gap-2 rounded-md px-2 py-1.5 text-[13px] text-gray-400 dark:text-gray-500" data-testid="{testId}-option-{asset.id}" data-level="ineligible" data-reasons={verdict?.codes.join(' ') ?? ''}>
+                            <li class="flex items-start gap-2 rounded-md px-2 py-1.5 text-[13px] text-lf-muted" data-testid="{testId}-option-{asset.id}" data-level="ineligible" data-reasons={verdict?.codes.join(' ') ?? ''}>
                                 <Lock size={14} class="mt-0.5 shrink-0" />
                                 <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="mt-0.5 h-4 w-4 shrink-0 object-contain opacity-60" onerror={hideBrokenIcon} />
                                 <span class="min-w-0 flex-1">
                                     <span use:scrollOnOverflow class="{overflowScrollTextClass} block">{asset.display_name}</span>
-                                    <span class="block text-[11px] leading-snug text-amber-600 dark:text-amber-400">{verdict?.texts.join(' · ')}</span>
+                                    <span class="block text-[11px] leading-snug text-lf-warning">{verdict?.texts.join(' · ')}</span>
                                 </span>
                             </li>
                         {/each}
@@ -510,26 +506,26 @@
                 {/if}
 
                 {#if rows.length === 0 && blockedRows.length === 0}
-                    <p class="px-3 py-4 text-center text-xs text-gray-400 dark:text-gray-500" data-testid="{testId}-empty">
+                    <p class="px-3 py-4 text-center text-xs text-lf-muted" data-testid="{testId}-empty">
                         {query.trim() || filtersActive ? $t('common.noResults') : $t('assetPicker.allSelected')}
                     </p>
                 {/if}
             </div>
 
             {#if full && room > 0}
-                <p class="px-3 pb-1 pt-1 text-[11px] text-amber-600 dark:text-amber-400">{fullLabel}</p>
+                <p class="px-3 pb-1 pt-1 text-[11px] text-lf-warning">{fullLabel}</p>
             {/if}
 
-            <div class="flex items-center justify-end gap-2 border-t border-gray-100 p-2 dark:border-slate-700">
-                <button type="button" class="rounded-md px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-slate-700" onclick={close}>{$t('common.cancel')}</button>
-                <button type="button" class="rounded-md bg-libre-green px-2.5 py-1 text-xs font-medium text-white hover:bg-libre-green/90 disabled:opacity-40" disabled={checked.length === 0} onclick={confirm} data-testid="{testId}-confirm">
+            <div class="flex items-center justify-end gap-2 border-t border-lf-subtle p-2">
+                <button type="button" class="rounded-md px-2.5 py-1 text-xs text-lf-secondary hover:bg-lf-hover" onclick={close}>{$t('common.cancel')}</button>
+                <button type="button" class="rounded-md bg-lf-action px-2.5 py-1 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-40" disabled={checked.length === 0} onclick={confirm} data-testid="{testId}-confirm">
                     {$t('assetPicker.confirm', {values: {count: checked.length}})}
                 </button>
             </div>
         {/snippet}
     </SelectPopover>
 {:else}
-    <div class="relative w-full" data-testid={testId}>
+    <div class="relative w-full text-lf-primary" data-testid={testId}>
         <SelectPopover bind:open rootClass="relative block w-full" testId="{testId}-panel" placement={{position: dropdownPosition, minWidth: dropdownMinWidth}}>
             {#snippet trigger(popover)}
                 {#if customTrigger}
@@ -546,8 +542,8 @@
                         aria-disabled={disabled}
                         data-disabled={disabled ? 'true' : 'false'}
                         class="flex h-[38px] w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-all
-                               {disabled ? 'cursor-not-allowed bg-gray-100 text-gray-400 opacity-60 dark:bg-slate-800 dark:text-gray-500' : 'cursor-pointer bg-white hover:border-gray-400 dark:border-slate-600 dark:bg-slate-700 dark:hover:border-slate-500'}
-                               {open ? 'border-libre-green ring-2 ring-libre-green' : ''}"
+                               {disabled ? 'cursor-not-allowed bg-lf-panel text-lf-muted opacity-60' : 'cursor-pointer bg-lf-field hover:border-lf-input-hover'}
+                               {open ? 'border-lf-focus ring-2 ring-lf-focus' : 'border-lf-input'}"
                         onclick={toggleSingle}
                         onfocus={() => (triggerFocusedAt = Date.now())}
                         onkeydown={handleTriggerKeydown}
@@ -559,32 +555,32 @@
                                 {#if icon}
                                     <img src={icon} alt="" class="h-4 w-4 shrink-0 rounded-sm object-contain" onerror={hideBrokenIcon} />
                                 {/if}
-                                <span class="truncate text-sm text-gray-900 dark:text-gray-100">{rowText(current)}</span>
+                                <span class="truncate text-sm text-lf-primary">{rowText(current)}</span>
                                 {#if current.active === false}
-                                    <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-slate-700 dark:text-gray-400">{$t('assets.edit.status.inactive')}</span>
+                                    <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('assets.edit.status.inactive')}</span>
                                 {/if}
                             </div>
                         {:else}
-                            <span class="text-gray-400">{placeholder || $t('common.select')}</span>
+                            <span class="text-lf-placeholder">{placeholder || $t('common.select')}</span>
                         {/if}
-                        <ChevronDown class="shrink-0 text-gray-400 transition-transform {open ? 'rotate-180' : ''}" size={14} />
+                        <ChevronDown class="shrink-0 text-lf-muted transition-transform {open ? 'rotate-180' : ''}" size={14} />
                     </div>
                 {/if}
             {/snippet}
 
             {#snippet children()}
-                <div class="shrink-0 border-b border-gray-100 p-2 dark:border-slate-700">
+                <div class="shrink-0 border-b border-lf-subtle p-2">
                     {@render searchBox($t('common.search'))}
                     {@render filterMenus()}
                 </div>
 
                 <div bind:this={listRef} class="min-h-0 flex-1 overflow-y-auto p-1" id={listboxId} role="listbox" aria-busy={loading}>
                     {#if loading}
-                        <div class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">{$t('common.loading')}</div>
+                        <div class="px-4 py-8 text-center text-sm text-lf-muted">{$t('common.loading')}</div>
                     {:else}
                         {#each listed as option, index (option.value)}
                             {#if option.header}
-                                <div class="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400 select-none dark:text-gray-500" role="presentation" data-testid="search-select-header-{option.value}">
+                                <div class="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-lf-muted select-none" role="presentation" data-testid="search-select-header-{option.value}">
                                     {option.label}
                                 </div>
                             {:else}
@@ -595,9 +591,7 @@
                                     type="button"
                                     role="option"
                                     aria-selected={asset.id === value}
-                                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-gray-700 transition-colors dark:text-gray-200 {index === highlightedIndex
-                                        ? 'bg-libre-green/30 dark:bg-libre-green dark:text-white'
-                                        : 'hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-lf-secondary transition-colors {index === highlightedIndex ? 'bg-lf-selected' : 'hover:bg-lf-hover'}"
                                     onclick={() => choose(option)}
                                     onmouseenter={() => (highlightedIndex = index)}
                                     data-testid="search-select-option-{option.value}"
@@ -605,7 +599,7 @@
                                     data-level={verdict?.level ?? 'unknown'}
                                     data-reasons={verdict?.codes.join(' ') ?? ''}
                                 >
-                                    <span class="flex h-4 w-4 shrink-0 items-center justify-center text-libre-green">
+                                    <span class="flex h-4 w-4 shrink-0 items-center justify-center text-lf-link">
                                         {#if asset.id === value}<Check size={12} />{/if}
                                     </span>
                                     {#if icon}
@@ -613,18 +607,18 @@
                                     {/if}
                                     <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1 {asset.active === false ? 'opacity-60' : ''}">{rowText(asset)}</span>
                                     {#if asset.active === false}
-                                        <span data-testid="asset-select-inactive-badge" class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-slate-700 dark:text-gray-400">{$t('assets.edit.status.inactive')}</span>
+                                        <span data-testid="asset-select-inactive-badge" class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('assets.edit.status.inactive')}</span>
                                     {/if}
                                     {@render warningMark(asset, verdict)}
-                                    <span class="shrink-0 text-[10px] text-gray-400 dark:text-gray-500">{typeLabel(asset.asset_type)}</span>
-                                    <span class="w-8 shrink-0 text-right font-mono text-[10px] text-gray-500 dark:text-gray-400">{asset.currency}</span>
+                                    <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
+                                    <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency}</span>
                                 </button>
                             {/if}
                         {/each}
 
                         {#if listedBlocked.length > 0}
-                            <div class="mt-1 border-t border-gray-100 pt-1 dark:border-slate-700" role="group" aria-label={blockedLabel} data-testid="{testId}-blocked">
-                                <p class="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{blockedLabel}</p>
+                            <div class="mt-1 border-t border-lf-subtle pt-1" role="group" aria-label={blockedLabel} data-testid="{testId}-blocked">
+                                <p class="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-lf-muted">{blockedLabel}</p>
                                 {#each listedBlocked as option (option.value)}
                                     {@const asset = assetOf(option)}
                                     {@const verdict = verdictOf(asset.id)}
@@ -635,7 +629,7 @@
                                         disabled
                                         aria-disabled="true"
                                         aria-selected={asset.id === value}
-                                        class="flex w-full cursor-not-allowed items-start gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-gray-400 dark:text-gray-500"
+                                        class="flex w-full cursor-not-allowed items-start gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-lf-muted"
                                         data-testid="search-select-option-{option.value}"
                                         data-highlighted="false"
                                         data-level="ineligible"
@@ -647,7 +641,7 @@
                                         {/if}
                                         <span class="min-w-0 flex-1">
                                             <span use:scrollOnOverflow class="{overflowScrollTextClass} block">{rowText(asset)}</span>
-                                            <span class="block text-[11px] leading-snug text-amber-600 dark:text-amber-400">{verdict?.texts.join(' · ')}</span>
+                                            <span class="block text-[11px] leading-snug text-lf-warning">{verdict?.texts.join(' · ')}</span>
                                         </span>
                                     </button>
                                 {/each}
@@ -655,7 +649,7 @@
                         {/if}
 
                         {#if listed.length === 0 && listedBlocked.length === 0}
-                            <p class="px-3 py-4 text-center text-xs text-gray-400 dark:text-gray-500" data-testid="{testId}-empty">{$t('common.noResults')}</p>
+                            <p class="px-3 py-4 text-center text-xs text-lf-muted" data-testid="{testId}-empty">{$t('common.noResults')}</p>
                         {/if}
                     {/if}
                 </div>
@@ -663,3 +657,11 @@
         </SelectPopover>
     </div>
 {/if}
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the highlighted
+       option a muted caption, this component's own or a caller's snippet's, turns secondary. */
+    [data-highlighted='true'] :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>

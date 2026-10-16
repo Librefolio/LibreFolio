@@ -23,7 +23,7 @@ backend/data/
 │   │   └── ❌ failed/                # Report che non è stato possibile leggere
 │   ├── 📝 logs/                      # File di log dell'applicazione
 │   ├── 🎭 scenario_catalog/          # Opzionale: i tuoi scenari di stress
-│   └── 📋 scheduler_state.json       # Ultima esecuzione delle sincronizzazioni programmate
+│   └── 📋 scheduler_state.json       # Sincronizzazioni: ultima esecuzione, nuovo tentativo
 │
 └── 🧪 test/                          # Dati di test (completamente isolati)
     ├── 🗃️ sqlite/app.db
@@ -123,7 +123,7 @@ docker compose start librefolio
 
     Con Docker, il database è `./LibreFolio-data/sqlite/app.db`. Questo comando copia solo il database: copia le cartelle sottostanti come al solito.
 
-### ✅ Cosa includere nel backup
+### ✅ Cosa includere nel backup {: #what-to-back-up }
 
 Come minimo, esegui il backup di:
 

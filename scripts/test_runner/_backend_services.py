@@ -382,6 +382,14 @@ def services_provider_contracts(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Provider contract tests", verbose=verbose)
 
 
+def services_provider_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test where the asset providers stand in the asset search (F21): tier, priority and search order."""
+    print_section("Services: Asset Provider Policy")
+    print_info("Testing: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER, provider_policy (tier, priority, search order), AssetSourceProvider declarations, AssetSearchService.search order (offline, no DB)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_policy.py", test_names)
+    return run_command(cmd, "Asset provider policy tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -419,6 +427,16 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_cost_basis_rule.py", test_names)
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
+
+
+def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
+    """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
+    print_section("Services: Transaction Decimal Places")
+    print_info("Testing: transaction_batch_stages.py (check_decimal_limits) + transactions/balances.py + assets/crud.py (held) + BRIMProvider._create_transaction")
+    print_info("Tests: quantities read back to 10 decimals; over the limit refused at /validate and /commit on its row, never rounded; exact balances; held set; BRIM parse does not refuse (D2)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_decimal_places.py", test_names)
+    return run_command(cmd, "Transaction decimal places tests", verbose=verbose)
 
 
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
@@ -471,6 +489,16 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_registration_service.py", test_names)
     return run_command(cmd, "Registration service tests", verbose=verbose)
+
+
+def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
+    print_section("Services: Password Policy")
+    print_info("Testing: backend/app/services/accounts/password_policy.py")
+    print_info("Tests: the five rules published in order, failed_rules in the policy's order, Unicode classes (Lu, Ll, Nd, symbols), length in code points")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_password_policy.py", test_names)
+    return run_command(cmd, "Password policy tests", verbose=verbose)
 
 
 def services_email_config(verbose: bool = False, test_names: list = None) -> bool:
@@ -534,6 +562,15 @@ def services_email_verification(verbose: bool = False, test_names: list = None) 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_verification.py", test_names)
     return run_command(cmd, "E-mail verification tests", verbose=verbose)
+
+
+def services_email_verification_hooks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the email-verification hooks in A's services (lot E5b): user_usage, register_user, the changes of status, holds_place, the setting's guard."""
+    print_section("Services: E-mail Verification Hooks")
+    print_info("Testing: registration_service.user_usage/register_user, user_service.update_user_status/set_user_active, verification.holds_place/place_holders, settings_service._refuse_what_cannot_turn_on")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_verification_hooks.py", test_names)
+    return run_command(cmd, "E-mail verification hooks tests", verbose=verbose)
 
 
 def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
@@ -624,6 +661,16 @@ def services_sleep_wake_activity(verbose: bool = False, test_names: list = None)
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_activity.py", test_names)
     return run_command(cmd, "Sleep and wake activity tests", verbose=verbose)
+
+
+def services_sleep_wake_suspend(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the idle suspension of a Fly machine: its configuration, the suspender, the idle monitor and its hooks (lot Z2b)."""
+    print_section("Services: Sleep and Wake Suspend")
+    print_info("Testing: backend/app/config/sleep_wake.py, backend/app/services/platform/sleep_wake/suspend.py and idle_monitor.py, their hooks in backend/app/api/v1/system/wake.py and backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: IDLE_SUSPEND_MODE/MINUTES, FlySuspender on a MockTransport (request, 2xx, http_<status>, connection, not_on_fly, socket, timeout), IdleMonitor.check (outcomes, backoff, a warning per streak), the loop, requested checks, start/stop, busy checks, wake hook, lifespan steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_suspend.py", test_names)
+    return run_command(cmd, "Sleep and wake suspend tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -866,6 +913,15 @@ def services_asset_event_store(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Asset Event Store tests", verbose=verbose)
 
 
+def services_asset_digit_limits(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the C-97a digit limits: manual prices and events refused beyond them, provider prices truncated."""
+    print_section("Services: Asset Digit Limits")
+    print_info("Testing: backend/app/services/assets/price_store.py, event_store.py, backend/app/api/v1/assets/events.py")
+    print_info("Tests: manual prices (12 decimals) and events (6) beyond the limit or 15 significant digits refused with nothing written, provider prices truncated, what fits read back exactly")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_digit_limits.py", test_names)
+    return run_command(cmd, "Asset digit limit tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
@@ -939,6 +995,28 @@ def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
 
 
+def services_scheduler_backoff(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's retry of deferred items and its backoff after a job that raises (lot Z7b)."""
+    print_section("Services: Scheduler Retry and Backoff")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (due_current_price, due_history_sync, run_due_jobs, JobOutcome)")
+    print_info(
+        "Tests: SBO-001..012 — next_attempt_at holds a job back, retry_at makes it due before its regular round, unreadable timestamps absent; a job or its save that raises: failure recorded and saved, backoff 60 s doubling to its cap, each job its own, reset by a run that ends; outcomes: items_deferred, retry_at"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_backoff.py", test_names)
+    return run_command(cmd, "Scheduler retry and backoff tests", verbose=verbose)
+
+
+def services_scheduler_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «Aggiornamento prezzi…»: the catch-up tracker PRICE_REFRESH, its wiring in run_due_jobs and scheduler_loop (lot Z5)."""
+    print_section("Services: Scheduler Price Refresh")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (PriceRefreshTracker, PRICE_REFRESH, run_due_jobs, scheduler_loop), with sleep_wake/activity.py's response headers")
+    print_info(
+        "Tests: SPR-001..032 — names and types, idle/starting/running, announce and runs (first reason kept, overlap, no-op end, reset), jobs ran/refreshed, tick never shown; run_due_jobs: an unknown reason counts nothing, run_started before the settle, finished on raise and cancel, job_finished(None) on cancel; the loop: startup announced, header published then removed and reset, return announced on the request, the answers' header"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_price_refresh.py", test_names)
+    return run_command(cmd, "Scheduler price refresh tests", verbose=verbose)
+
+
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM provider versioning."""
     print_section("Services: BRIM Versioning")
@@ -988,12 +1066,36 @@ def services_config_audit(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Configuration checks tests", verbose=verbose)
 
 
+def services_plugin_secrets_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup check of the stored plugin secrets: its result, its log, never raising, no key generated (H-15)."""
+    print_section("Services: Plugin Secrets Check")
+    print_info("Testing: backend/app/services/platform/plugin_secrets_check.py (check_plugin_secrets, log_plugin_secrets_check)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_secrets_check.py", test_names)
+    return run_command(cmd, "Plugin secrets check tests", verbose=verbose)
+
+
 def services_config_env_example(verbose: bool = False, test_names: list = None) -> bool:
     """Test the .env.example guard: every variable read is documented, the uncommented lines unchanged."""
     print_section("Services: .env.example Guard")
     print_info("Testing: .env.example against backend/app/, Settings and the compose files")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_env_example.py", test_names)
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
+
+
+def services_profile_defaults(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the profile defaults of the settings: PROFILE_DEFAULTS, applied only to the fields nobody set (D5, F27)."""
+    print_section("Services: Profile Defaults")
+    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY; ENVIRONMENT_PROFILE_DEFAULTS and profile_default(), H-17)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_profile_defaults.py", test_names)
+    return run_command(cmd, "Profile defaults tests", verbose=verbose)
+
+
+def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address, client_rate_key and mask_client_address (P17)."""
+    print_section("Services: Client Address")
+    print_info("Testing: backend/app/config/__init__.py (LIBREFOLIO_CLIENT_IP_HEADER), backend/app/services/platform/client_address.py (client_address, reset_client_address_cache, client_rate_key, mask_client_address)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_client_address.py", test_names)
+    return run_command(cmd, "Client address tests", verbose=verbose)
 
 
 def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
@@ -1060,6 +1162,30 @@ def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "App lifecycle tests", verbose=verbose)
 
 
+def services_static_cache_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cache policy of the web app's files: hashed chunks immutable, the rest of /_app and the HTML revalidated (F28)."""
+    print_section("Services: Static Cache Policy")
+    print_info("Testing: backend/app/services/platform/static_site.py (the /_app mount, the HTML documents)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_cache_policy.py", test_names)
+    return run_command(cmd, "Static cache policy tests", verbose=verbose)
+
+
+def services_security_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the security headers every response carries: nosniff and Referrer-Policy, never overwritten (F15, D5)."""
+    print_section("Services: Security Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware), middleware.py (MIDDLEWARE_STACK), the app of backend/app/main.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_security_headers.py", test_names)
+    return run_command(cmd, "Security headers tests", verbose=verbose)
+
+
+def services_managed_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the headers of the managed profile: frame protection and the report-only CSP, read when the middleware is built (D5)."""
+    print_section("Services: Managed Profile Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware with LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY), on fresh apps with the stack's entries and the static site")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_managed_headers.py", test_names)
+    return run_command(cmd, "Managed profile headers tests", verbose=verbose)
+
+
 def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
     """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
     print_section("Services: Instance Backup Archive")
@@ -1109,7 +1235,7 @@ def services_backup_totals(verbose: bool = False, test_names: list = None) -> bo
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger."""
+    """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
     print_info("Testing: backend/app/logging_config.py (mask_query_credentials, _QueryCredentialFilter, configure_logging)")
     print_info("Tests: the rule (decoded names, nested URL, encoded-value limit), every string arg masked in place, the message without args, format strings never rewritten, uvicorn's h11/httptools access and WebSocket handshake lines with negative controls, one filter per logger after two calls")
@@ -1445,6 +1571,16 @@ Note: No backend server required.
     add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
+    add_test(
+        cat,
+        "provider-policy",
+        services_provider_policy,
+        name="Provider Policy",
+        desc="F21, where the asset providers stand in the search: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER read stripped, lowercased, in order, once each; effective tier and priority (declared, else the variables'; unknown codes dropped and warned once per process); search order premium first, then priority, ties and repeated codes as given (D-X3); search_rank; tier/search_priority checked at class definition; the non-streaming search answers provider by provider in that order",
+        # PURE: no lane DB, no server, no network. Both variables are set with monkeypatch in this process; the registry
+        # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
@@ -1454,6 +1590,13 @@ Note: No backend server required.
         services_transaction_cost_basis_rule,
         name="Transaction Cost Basis Rule",
         desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
+    add_test(
+        cat,
+        "transaction-decimal-places",
+        services_transaction_decimal_places,
+        name="Transaction Decimal Places",
+        desc="C-97a: quantities keep 10 decimals; over a limit (quantity 10, cash and cost basis 6, 15 significant digits) refused at /validate and /commit on its row, never rounded; balances summed exactly; held set; BRIM parse does not refuse (D2)",
     )
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
@@ -1477,6 +1620,15 @@ Note: No backend server required.
         # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
         # in this process too (the report cache cleared around each test); the race holds two connections to that
         # private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "password-policy",
+        services_password_policy,
+        name="Password Policy",
+        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points",
+        # PURE: a module of plain functions; no database, no server, no environment variable.
         isolation="pure",
     )
     add_test(
@@ -1531,10 +1683,20 @@ Note: No backend server required.
         "email-verification",
         services_email_verification,
         name="E-mail Verification",
-        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance, the budget, a link emailed meanwhile rolled back; no token, password, identifier or address in the logs",
+        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance (counted again inside the write), the budget, a link emailed meanwhile rolled back; per recipient mailbox (case-folded, across accounts) 3 an hour, a failed email not counted; an account that stopped waiting meanwhile gets no new link; a wrong password logged without what was typed; no token, password, identifier or address in the logs",
         # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
         # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
         # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-verification-hooks",
+        services_email_verification_hooks,
+        name="E-mail Verification Hooks",
+        desc="user_usage counts an inactive account with a live verification link once (not expired, revoked or consumed; an active account once); register_user holds the account and the limit counts it, or rolls everything back on EMAIL_VERIFICATION_UNAVAILABLE (the invitation live); update_user_status revokes the verification links on a change of is_active, and on a deactivation of an account already inactive that waits (a regular inactive account unchanged), set_user_active either way (deactivating ends the wait); registration_email_allowed: 10 an hour per client address; holds_place/place_holders: inactive with a live link, now deciding; _refuse_what_cannot_turn_on: only require_email_verification off → on without an email with a link",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server, no SMTP conversation; the email variables removed then set with monkeypatch; the loopback only resolves.
         isolation="pure",
     )
     add_test(
@@ -1632,6 +1794,19 @@ Note: No backend server required.
         # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
         # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
         # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "sleep-wake-suspend",
+        services_sleep_wake_suspend,
+        name="Sleep and Wake Suspend",
+        desc="config.sleep_wake: LIBREFOLIO_IDLE_SUSPEND_MODE (unset/blank none; none or fly in any case, spaces around; else IDLE_SUSPEND_MODE_INVALID) and LIBREFOLIO_IDLE_SUSPEND_MINUTES (unset/blank 5; ASCII digits 1-1440; else IDLE_SUSPEND_MINUTES_INVALID), read at every call; FlySuspender: transport_factory (the one given, else httpx.AsyncHTTPTransport(uds=/.fly/api)), FLY_APP_NAME/FLY_MACHINE_ID read at each call (environ or os.environ), one POST http://flaps/v1/apps/<app>/machines/<id>/suspend without body or Authorization, the timeout on every phase, 2xx None, else SuspendError http_<status>, an httpx.HTTPError connection, a variable missing or blank not_on_fly before any request; IdleMonitor.check: waiting while the backoff runs (nothing touched), busy_reasons off the loop thread and any reason busy, active under minutes*60, else suspend (INFO Idle suspend requested), a failure backoff 30 doubling to 600 (bounds read at the call), one WARNING Idle suspend failed per streak, a success starts a new streak, any other exception reason error, never raising; exactly N*60 s suspends, N*60-1 does not; run: a check at once, sleep(IDLE_CHECK_SECONDS) after busy/active/waiting, at least RESUME_GRACE_SECONDS after suspended/failed, the stop (during a wait, during a check, before the start), a check that raises logged and the loop goes on; request_check: ends a wait early, from any thread, requests during a check make one check; start_idle_monitor returns None (none mode, an invalid one logged once: nothing; fly: FlySuspender(), busy checks tools and backup on current_activity(), a task, Idle monitor started; invalid minutes logged once, 5 used), globals read at the call, stop_idle_monitor returns the task, request_idle_check forwards from any thread, a fresh interpreter has none; never suspended while busy; wake.py calls request_idle_check(2.0) in the run's task after Wake-up run finished; app_lifespan: idle-monitor right after scheduler at startup, first at shutdown, late-bound, the startup step completes while the monitor runs",
+        # PURE: no DB, no server, no lane port, no network. The Fly Machines API is an httpx.MockTransport, the socket's
+        # transport class replaced on httpx by a recorder; every Activity is the test's own on a fake clock, the process's
+        # ACTIVITY replaced through monkeypatch; the monitor runs on fake clocks with an injected sleep, its collaborators
+        # replaced on its module; the wake-up is served in this process by httpx.ASGITransport with run_due_jobs replaced.
+        # One fresh interpreter of its own, run to its end; checks held at a gate are released before each test ends.
         isolation="pure",
     )
     add_test(
@@ -1772,10 +1947,26 @@ Note: No backend server required.
         # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
     )
+    add_test(
+        cat,
+        "asset-digit-limits",
+        services_asset_digit_limits,
+        name="Asset Digit Limits",
+        desc="C-97a: a manual price whose open/high/low/close exceeds 12 decimals or 15 significant digits refused (ValueError naming the asset, the maximum and the dates) before anything of the call is written, for every asset and every chunk; the -1 sentinel, trailing zeros and values at the limits accepted; a provider price truncated (12 decimals, 15 significant digits, ROUND_DOWN) and stored; a manual event beyond 6 decimals or 15 significant digits refused with EVENT_TOO_MANY_DIGITS (HTTP 400), nothing written; what fits read back exactly and in today's form",
+        # WRITE-SCOPED, the category default, as asset-source: every row is this unit's own -- two assets
+        # created under a unique name, and only their prices and events, written, read and wiped by asset id.
+        # Nothing here counts or reads a row it did not write.
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
-    add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")
+    add_test(
+        cat,
+        "scheduler-state",
+        services_scheduler_state,
+        name="Scheduler State",
+        desc="Load/save/atomic write, corrupt/partial JSON recovery; the fields of lot Z7b (last_items_deferred, retry_at, consecutive_failures, next_attempt_at) saved, defaulted in an older file, a newer file's unknown keys ignored",
+    )
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
     add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
@@ -1794,10 +1985,35 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "scheduler-backoff",
+        services_scheduler_backoff,
+        name="Scheduler Retry and Backoff",
+        desc="Lot Z7b. Due rules first: next_attempt_at ahead holds a job back (even past its retry_at or an overdue round), else retry_at reached makes it due before its regular round (a history sync deferred at 23:00 retries at 23:0x), else today's rule; unreadable timestamps absent. run_due_jobs: a job that raises keeps its previous JobState (last_run_at too) with consecutive_failures+1, next_attempt_at now+backoff, error by class name, saved and logged; a save that raises after the job records it on the job's fresh JobState; backoff 60 s doubling, capped at 1 h for history and at the price frequency for the price; each job its own; a run that ends resets. JobOutcome items_deferred and retry_at: copied, next attempt of a failure, pending time of a job not due, whatever the reason",
+        # PURE: no DB, no server, no lane port, no network. The due functions are called as they are; for run_due_jobs every
+        # other collaborator (switches, leader, settings, state store, jobs, utc_now, settle_clock) is a fake set with
+        # monkeypatch, the state store in memory, and the process's ACTIVITY is replaced only through monkeypatch by an
+        # Activity on a fake clock. Nothing sleeps: every moment is a fake wall clock's.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "scheduler-price-refresh",
+        services_scheduler_price_refresh,
+        name="Scheduler Price Refresh",
+        desc="Lot Z5, «Aggiornamento prezzi…» (N-Z5-1…5). PriceRefreshTracker on an injected clock: idle (all None, not refreshed, no header); announce(reason) idle → starting with reason and since, first reason and since kept while pending; tick or unknown reasons refused for announce and run_started, nothing counted; run_started counts overlapping runs, run_finished ends the catch-up with the last one (no-op without a counted run): last_finished_at and last_refreshed (a job with items_ok > 0) only if a job finished while pending, else kept; a cancelled job (None) ran, not refreshed; a job while idle invisible; running with the current job (a tick's job at once on an announced return), starting without; header_value; reset forgets the count and the job. run_due_jobs: catch-up reasons run_started before the settle and run_finished in a finally (raise, cancel), a tick never; job_started/job_finished around each job. scheduler_loop: startup announced, X-LibreFolio-Price-Refresh registered on current_activity(), the return listener announces on the request's thread, removed and reset at the end; the answers through ActivityMiddleware say starting, running, then nothing",
+        # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs past PRICE_REFRESH (switches,
+        # leader, settings, state store, due functions, jobs, settle_clock) is a fake set with monkeypatch; the process's
+        # PRICE_REFRESH is reset before and after each test, and its ACTIVITY replaced only through monkeypatch by an
+        # Activity on a fake clock. The loop runs as a task of the test's own event loop and is stopped and awaited within
+        # a deadline; the FastAPI app of the header case is served in this process by httpx.ASGITransport (no socket).
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "scheduler-jobs",
         services_scheduler_jobs,
         name="Scheduler Job Bodies",
-        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled)",
+        desc="_classify_job_status, run_current_price_refresh, run_history_sync (bulk calls doubled); lot Z7b: RATE_LIMITED items deferred whatever their status or value, retry_at at the shortest pause, a run that ends resets the failure backoff, deferred marks and counters in the job log",
         # READ, not write-global: the three bulk entry points that rewrite prices for
         # every active asset and every FX route are replaced by doubles, so only the
         # two SELECTs reach the shared DB. The job log is redirected to a per-test
@@ -1810,7 +2026,39 @@ Note: No backend server required.
     add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
+    add_test(
+        cat,
+        "plugin-secrets-check",
+        services_plugin_secrets_check,
+        name="Plugin Secrets Check",
+        desc="H-15: platform.plugin_secrets ok without unreadable system secret, else error with detail {count: system} only, the user count nowhere; at startup ok logs nothing, not ok logged at its severity, an exception of the status one warning naming its class, never raising; on a private DB without stored secret nothing logged and no key file generated",
+        # The status is a stub on an engine never opened, or the real one on a private SQLite file under tmp_path put in
+        # place of get_async_engine; the data directory in tmp_path, the key variables removed by monkeypatch. No lane DB, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(
+        cat,
+        "profile-defaults",
+        services_profile_defaults,
+        name="Profile Defaults",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed; H-17: ENVIRONMENT_PROFILE_DEFAULTS has one entry per profile, selfhosted empty, managed equal to the decided table with exact types (LIBREFOLIO_BACKUP_MAX_UPLOAD_MB 500), no Settings field among its keys, every key read by a section module and documented in .env.example; profile_default() gives the fallback itself under selfhosted and the table's value under managed, the profile read at each call",
+        # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
+        # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "client-address",
+        services_client_address,
+        name="Client Address",
+        desc="P17: LIBREFOLIO_CLIENT_IP_HEADER a str, '' in the code, stripped, empty or blank unset, a header token kept as written (case kept), anything else (space, colon, slash, comma, tab or line break inside, quotes, '=', non-ASCII letter or digit) refused naming the variable, X-Forwarded-For and Forwarded in any case refused naming FORWARDED_ALLOW_IPS too, listed by no profile and '' under every one, managed included; client_address(connection), Request and WebSocket alike: unset the peer exactly as it is (None without a client) and no header read; set, the name matched whatever its case, one line of one IP address normalised (IPv4-mapped as its IPv4, IPv6 compressed, lower case), absent the peer without a warning, malformed (two lines even valid, a list, a port, brackets, a zone, a leading zero, empty or blank, text, a space inside, a network) the peer and one warning per process, word for word, with header (lower case), lines and length only, the value and the address inside it in no log record; the name read once per process until reset_client_address_cache(), which re-arms the warning; client_rate_key (IPv4 as is, IPv4-mapped as its IPv4, IPv6 by its /64, a zone ignored, a name as written, no key for None or '') and mask_client_address (IPv4 by its /24, IPv4-mapped as its IPv4, IPv6 by its /48, a name as written, nothing for None or '')",
+        # PURE: Settings built from the environment alone (_env_file=None), or read through get_settings() in test mode with
+        # a data directory under tmp_path, every variable set and removed by monkeypatch; connections are Starlette Request
+        # and WebSocket objects on raw scopes; the module's logger is replaced by a recorder, and its cache is reset before
+        # and after each test. No DB, no server, no network.
+        isolation="pure",
+    )
     # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
     # built with create_all, the call boundaries read their rows through a private engine put in place of
     # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
@@ -1823,6 +2071,39 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "static-cache-policy",
+        services_static_cache_policy,
+        name="Static Cache Policy",
+        desc="F28: a file under /_app/immutable/ (named after its content) is sent with Cache-Control: public, max-age=31536000, immutable, and so is the 304 of its revalidation; any other file under /_app (env.js, version.json, immutable.json named like the folder) has one Cache-Control with no-cache and neither immutable nor max-age=31536000, its 304 too; the HTML documents (/, /index.html, the SPA fallback) keep no-cache, must-revalidate; with the build folder itself and behind a symlink",
+        # A fresh FastAPI() holding the static site of a fake build under tmp_path (FRONTEND_BUILD_DIR swapped in by
+        # monkeypatch), called through httpx's in-process ASGI transport. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "security-headers",
+        services_security_headers,
+        name="Security Headers",
+        desc="F15 (D5, always): MIDDLEWARE_STACK holds one security_headers entry, SecurityHeadersMiddleware, outside gzip (relative order), and the app carries it outside GZip; every response has X-Content-Type-Options: nosniff and Referrer-Policy: strict-origin-when-cross-origin exactly once (JSON, HTML, streamed, the router's 404, a CORS preflight, a gzip-compressed body, a start without headers); a route's Referrer-Policy: no-referrer is kept and its nosniff not repeated; lifespan and websocket scopes pass untouched; on the app, the health route, the SPA catch-all and the 500 of an exception (still re-raised to the server) carry both",
+        # Raw ASGI calls on fresh apps holding the stack's own entries and on the global app (its lifespan never runs);
+        # the health route's session dependency, the catch-all's build and frontend_available swapped by monkeypatch.
+        # No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "managed-headers",
+        services_managed_headers,
+        name="Managed Profile Headers",
+        desc="F15 (D5, managed): with frame protection on (managed, or LIBREFOLIO_FRAME_PROTECTION=true) every response carries X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' once each, with it off (selfhosted, or false over managed) neither; with the report-only policy on (managed, or LIBREFOLIO_CSP_REPORT_ONLY=true) Content-Security-Policy-Report-Only is on the web app's HTML only (/, a client-side route, also gzipped, /200.html), never on /mkdocs, the API's JSON or HTML (Swagger UI, the HTML 404 of an unknown API path), /_app JavaScript, a text file, a CORS preflight or a 500; its default-src 'self', object-src 'none', base-uri 'self', frame-ancestors 'self', script-src with 'self', each directive once, no report-uri nor report-to; a route's own X-Frame-Options, CSP or report-only CSP kept alone and the others added; the settings read when the middleware is built, never per request; nosniff and Referrer-Policy still on every response",
+        # Fresh FastAPI() apps holding the stack's security_headers, gzip and cors, a few routes and the static site of a
+        # fake build and documentation under tmp_path (FRONTEND_BUILD_DIR and SITE_DIR swapped by monkeypatch); test mode,
+        # a data directory under tmp_path and the profile variables set by monkeypatch before an app is built; raw ASGI
+        # calls. No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "backup-archive",
@@ -1893,11 +2174,11 @@ Note: No backend server required.
         "logging-access-filter",
         services_logging_access_filter,
         name="Credentials in uvicorn's Request Lines",
-        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature/ticket, judged percent-decoded, masked in any case (a ticker kept); a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error",
+        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature/ticket, judged percent-decoded, masked in any case (a ticker kept); a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error; H-9: configure_logging closes every handler it takes off the root, a second call's log file included",
         # PURE: uvicorn's protocol objects get one request or handshake in memory through a fake transport, no socket
         # and no server; records go to private loggers or to the real uvicorn loggers inside a block that puts every
-        # logger and structlog's configuration back (configure_logging with file logging off). No DB, no network, no
-        # file written.
+        # logger and structlog's configuration back (configure_logging with file logging off, except section (e), whose
+        # log files go under tmp_path). No DB, no network, no file written outside tmp_path.
         isolation="pure",
     )
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")

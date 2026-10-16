@@ -194,7 +194,8 @@
     "units": {
       "days": "días",
       "sessions": "sesiones",
-      "percentPerYear": "%/año"
+      "percentPerYear": "%/año",
+      "observations": "observaciones"
     },
     "visual": {
       "components": "Componentes",
@@ -212,12 +213,6 @@
     "comparisonAsset": {
       "placeholder": "Seleccionar activo de comparación",
       "loadError": "No se pudieron cargar los activos."
-    },
-    "riskRollingReturn": {
-      "name": "Rendimiento móvil",
-      "description": "Rendimiento compuesto solo del precio sobre una ventana móvil.",
-      "output": "Rendimiento",
-      "outputDescription": "Rendimiento compuesto del periodo de tenencia, en puntos porcentuales."
     }
   }
 }

@@ -16,7 +16,7 @@ from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostStep,
 )
-from backend.app.services.financial_math.native_cash import NativeCash
+from backend.app.services.financial_math.native_cash import NativeCash, change_days
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
     AcquisitionFundingContribution,
@@ -52,6 +52,24 @@ def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, va
             ratio *= split.ratio
             adjusted = True
     return ratio, adjusted
+
+
+def _calendar(first: date_type, last: date_type) -> list[date_type]:
+    """Every day from ``first`` to ``last``, both included."""
+    return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
+
+
+def _valued_at_cost(cost_value: Decimal) -> ValuationResult:
+    """A holding with no price at all, counted at its book cost: a declared estimate, not a price (J-17)."""
+    return ValuationResult(
+        market_value=cost_value,
+        source=ValuationSource.ESTIMATED_AT_COST,
+        effective_unit_price=None,
+        effective_currency=None,
+        reference_date=None,
+        reference_unit_price=None,
+        reference_currency=None,
+    )
 
 
 # =============================================================================
@@ -322,7 +340,7 @@ class DailyStateBuilder:
                     cost_pool[key] = step
                     if tx.id in self.split_linked_tx_ids:
                         continue
-                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty)
+                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty, step)
                     if transfer_capital is not None:
                         cumulative_ecf += transfer_capital
                         cumulative_ecf_by_broker[tx.broker_id] += transfer_capital
@@ -356,6 +374,8 @@ class DailyStateBuilder:
         # A rate change of a held foreign currency revalues its cash
         frame_fx_days = set(self.native_cash.rate_change_days(self.frame_start, self.date_to))
         dirty_days.update(frame_fx_days)
+        # ...and a rate the day reads for its securities or its cash in transit changes their value
+        dirty_days.update(self._valuation_rate_change_days())
         for interval in self.in_transit_intervals:
             if interval.start_date >= self.frame_start:
                 dirty_days.add(interval.start_date)
@@ -363,17 +383,16 @@ class DailyStateBuilder:
                 dirty_days.add(interval.end_date)
             if interval.end_date < self.date_to and interval.end_date + timedelta(days=1) >= self.frame_start:
                 dirty_days.add(interval.end_date + timedelta(days=1))
+        # A market quote sets the day's mark even with the previous close: the mark may have come from a trade, and
+        # a new quote restarts the price's age
         for prices in self.price_map.values():
-            prev_price = None
-            for dt, close, _ in prices:
-                if dt < self.frame_start:
-                    prev_price = close
-                    continue
-                if prev_price is not None and close != prev_price:
-                    dirty_days.add(dt)
-                elif prev_price is None:
-                    dirty_days.add(dt)
-                prev_price = close
+            dirty_days.update(dt for dt, _close, _currency in prices if self.frame_start <= dt <= self.date_to)
+        # A carried price turns stale on the day its age passes the threshold, with nothing else happening
+        observed = {dt for prices in self.price_map.values() for dt, _close, _currency in prices} | set(position_txs_by_date)
+        for day in observed:
+            first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
+            if self.frame_start <= first_stale <= self.date_to:
+                dirty_days.add(first_stale)
         for history in self.split_history.values():
             dirty_days.update(split.date for split in history if self.frame_start <= split.date <= self.date_to)
         dirty_days.add(self.frame_start)
@@ -478,7 +497,7 @@ class DailyStateBuilder:
                     # Lot 41 (D2/D5): a TRANSFER leg with no internal partner is in-kind
                     # capital at market value. Not in ecf_today: the daily
                     # external_cash_flow stays cash-only, as for the in-kind ADJUSTMENT.
-                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty)
+                    transfer_capital = self._transfer_leg_capital(ctxn, tx_qty, step)
                     if transfer_capital is not None:
                         cumulative_ecf += transfer_capital
                         cumulative_ecf_by_broker[bid] += transfer_capital
@@ -594,7 +613,7 @@ class DailyStateBuilder:
             for (asset_id, position_broker_id), qty in cumulative_qty.items():
                 if qty <= 0:
                     continue
-                valuation = self._market_value_for(asset_id, qty, current, compute_ohlc=self.compute_candles)
+                valuation = self._value_held_position(asset_id, position_broker_id, qty, current, cost_pool, compute_ohlc=self.compute_candles)
                 if valuation.market_value is not None:
                     market_value += valuation.market_value
                     market_value_by_broker[position_broker_id] += valuation.market_value
@@ -618,7 +637,7 @@ class DailyStateBuilder:
                 position_cost = cost_pool.get((asset_id, position_broker_id))
                 position_cost_report = position_cost.cost_report_for(qty) if position_cost is not None else zero
                 open_cost_basis += position_cost_report
-                self._add_unrealized_part(unrealized_parts, asset_id, qty, valuation.market_value, position_cost_report, position_cost, current)
+                self._add_unrealized_part(unrealized_parts, asset_id, qty, valuation.market_value, position_cost_report, position_cost, current, at_cost=valuation.source == ValuationSource.ESTIMATED_AT_COST)
 
             # 4d. In-transit values. `it_by_broker` is attributed to each interval's
             # departure-broker (cash+asset market value only — additive NAV
@@ -816,7 +835,7 @@ class DailyStateBuilder:
             wac_val = position_cost.unit_cost_report if cost_complete else None
             wac_asset = position_cost.unit_cost_asset if position_cost.asset_complete else None
 
-        valuation = self._market_value_for(asset_id, qty, dt)
+        valuation = self._value_held_position(asset_id, broker_id, qty, dt, cost_pool)
         unrealized = (valuation.market_value - cost_basis) if valuation.market_value is not None and cost_complete else None
 
         return DailyPositionState(
@@ -888,11 +907,19 @@ class DailyStateBuilder:
         cost_report: Decimal,
         position_cost: CostStep | None,
         day: date_type,
+        *,
+        at_cost: bool = False,
     ) -> None:
-        """Add one position's MV − C_T to its asset currency's [asset, fx, unsplit] parts (see UnrealizedSplit)."""
+        """Add one position's MV − C_T to its asset currency's [asset, fx, unsplit] parts (see UnrealizedSplit).
+
+        A position valued at its book cost (``at_cost``) has no unrealized result, neither from a price nor
+        from a rate: it adds nothing, though its currency keeps its entry.
+        """
         zero = Decimal("0")
         asset_currency = self.asset_currencies.get(asset_id, self.target_currency)
         part = parts.setdefault(asset_currency, [zero, zero, zero])
+        if at_cost:
+            return
         value = market_value if market_value is not None else zero
         if asset_currency == self.target_currency:
             part[0] += value - cost_report
@@ -910,6 +937,31 @@ class DailyStateBuilder:
         cost_at_today_rate = cost_asset * rate
         part[0] += market_value - cost_at_today_rate
         part[1] += cost_at_today_rate - cost_report
+
+    def _read_rate(self, currency: str, day: date_type) -> Decimal | None:
+        """The rate the day reads from the pre-loaded map: the exact day's, or None."""
+        return self.fx_rate_map.get((currency, self.target_currency, day))
+
+    def _valuation_rate_change_days(self) -> set[date_type]:
+        """Frame days on which a rate the day reads to value it changes from the day before.
+
+        The currencies of prices and assets are read every day (securities held and in transit, the exchange part
+        of the unrealized result); the currency of cash in transit on the days of its transit. Same reading as the
+        valuation: the exact day's rate, so one that appears or disappears counts.
+        """
+        changed: set[date_type] = set()
+        currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
+        currencies.update(currency for currency in self.asset_currencies.values() if currency)
+        currencies.discard(self.target_currency)
+        if currencies:
+            changed.update(day for day in change_days(self._read_rate, currencies, _calendar(self.frame_start - timedelta(days=1), self.date_to)) if day >= self.frame_start)
+        for interval in self.in_transit_intervals:
+            currency = interval.departure_leg.currency
+            start, end = max(interval.start_date, self.frame_start), min(interval.end_date, self.date_to)
+            if interval.tx_type != "cash" or not currency or currency == self.target_currency or start > end:
+                continue
+            changed.update(day for day in change_days(self._read_rate, {currency}, _calendar(start - timedelta(days=1), end)) if day >= start)
+        return changed
 
     def _convert(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
         """Convert amount from from_ccy to target_currency using pre-loaded FX map."""
@@ -954,6 +1006,39 @@ class DailyStateBuilder:
             booked.append(exchange_result)
         return booked
 
+    def _value_held_position(
+        self,
+        asset_id: int,
+        broker_id: int,
+        qty: Decimal,
+        dt: date_type,
+        cost_pool: dict[tuple[int, int], CostStep],
+        *,
+        compute_ohlc: bool = False,
+    ) -> ValuationResult:
+        """Value one held position: by its price mark, or at its book cost when it has no price at all.
+
+        The resolver's answer (:meth:`_market_value_for`) when it has one. With no observation on or before
+        ``dt`` (MISSING) and the position's cost known in the report currency, the holding counts at that
+        cost — the acquisitions converted at their own dates — as a declared estimate, not a price: no
+        effective unit price, no unrealized result (developer's decision, J-17). With its cost unknown it stays
+        MISSING. A missing exchange rate is not this case: the mark exists, only its conversion fails.
+        """
+        valuation = self._market_value_for(asset_id, qty, dt, compute_ohlc=compute_ohlc)
+        if valuation.source != ValuationSource.MISSING:
+            return valuation
+        cost_value = self._book_cost_value(cost_pool.get((asset_id, broker_id)), qty)
+        if cost_value is None:
+            return valuation
+        return _valued_at_cost(cost_value)
+
+    @staticmethod
+    def _book_cost_value(position_cost: CostStep | None, qty: Decimal) -> Decimal | None:
+        """The report-currency book cost of ``qty`` units of a pool, or None when the pool's cost is not known."""
+        if position_cost is None or not position_cost.report_complete or position_cost.quantity <= 0:
+            return None
+        return position_cost.cost_report_for(qty)
+
     def _market_value_for(
         self,
         asset_id: int,
@@ -967,12 +1052,13 @@ class DailyStateBuilder:
         ``mark_series`` holds a per-asset :class:`AssetPriceSeries` fed with *both* asset-system
         quotes and observed trades in the asset's *native* currency, so a single ``resolve(dt)``
         answers the whole valuation at once: a real quote (exact or carried forward) →
-        ``MARKET_PRICE``; a trade-derived mark (BUY/SELL/priced ADJUSTMENT, same-day average, LOCF
-        with staleness) → ``LAST_TRADE_PRICE``. The mark is converted to the reporting currency
+        ``MARKET_PRICE``; a trade-derived mark (BUY/SELL, same-day average, LOCF with staleness) →
+        ``LAST_TRADE_PRICE``. The mark is converted to the reporting currency
         **here**, at the valuation date ``dt`` (never at the observation date), so a carried mark
         tracks the current FX rather than a frozen one. When the resolver has no observation on/before
         ``dt`` the holding is ``MISSING`` (no legacy price-map / last-buy / last-seed cascade — those
-        tiers are subsumed by the resolver's trade observations).
+        tiers are subsumed by the resolver's trade observations); :meth:`_value_held_position` then
+        counts a held position of known cost at that cost.
 
         ``compute_ohlc`` (G1b, default False — stays off the ordinary hot path per plan §4.1's
         "expensive OHLC work stays off ordinary reports") additionally resolves
@@ -1149,9 +1235,10 @@ class DailyStateBuilder:
 
         ``value`` is what the arrival brings into the receiver's NAV, valued on the arrival
         date as the NAV values it — the received amount converted at that date, or the market
-        value of the received quantity — at the sender's share, like the value in transit.
-        A value that cannot be computed (MISSING mark, missing FX rate) gives no flow, which is
-        what the arrival adds to the NAV.
+        value of the received quantity — at the sender's share, like the value in transit. A
+        security with no price at all moves at the book cost the arrival adds to the receiver's
+        pool, as the NAV values such a holding at its cost (J-17). A value that cannot be computed
+        (a missing FX rate, an unknown cost) gives no flow, which is what the arrival adds to the NAV.
 
         Pure: it records no missing data, so a build with this method returning ``[]`` differs
         only in the per-broker capital.
@@ -1183,25 +1270,62 @@ class DailyStateBuilder:
                 continue
             sender, receiver = senders[0], receivers[0]
             arrival = max(sender.tx.date, receiver.tx.date)
-            received = receiver.tx
-            if is_cash:
-                value = self._convert(abs(received.amount), received.currency, arrival) if received.currency else None
-            else:
-                value = self._market_value_for(received.asset_id, abs(received.quantity), arrival).market_value if received.asset_id is not None else None
-            if value is None:
+            flow_value = self._internal_pair_value(sender, receiver, arrival, is_cash=is_cash)
+            if flow_value is None:
                 continue
-            flow_value = value * sender.share
             if flow_value != zero:
-                flows.append((arrival, sender.tx.broker_id, received.broker_id, flow_value))
+                flows.append((arrival, sender.tx.broker_id, receiver.tx.broker_id, flow_value))
         return flows
 
-    def _transfer_leg_capital(self, ctxn: ClassifiedTransaction, tx_qty: Decimal) -> Decimal | None:
+    def _internal_pair_value(self, sender: ClassifiedTransaction, receiver: ClassifiedTransaction, arrival: date_type, *, is_cash: bool) -> Decimal | None:
+        """What one internal pair's arrival brings into the receiver's NAV, at the sender's share; None when unknown.
+
+        Cash: the received amount converted at the arrival date. Securities: the market value of the received
+        quantity that day; with no price at all, the book cost the arrival adds to the receiver's pool, as the NAV
+        values such a holding at its cost (J-17): an unknown cost adds nothing (the pool counts it at zero).
+        """
+        received = receiver.tx
+        if is_cash:
+            value = self._convert(abs(received.amount), received.currency, arrival) if received.currency else None
+            return value * sender.share if value is not None else None
+        if received.asset_id is None:
+            return None
+        valuation = self._market_value_for(received.asset_id, abs(received.quantity), arrival)
+        if valuation.market_value is not None:
+            return valuation.market_value * sender.share
+        if valuation.source != ValuationSource.MISSING:
+            return None
+        received_cost = self._movement_cost_step(received)
+        if received_cost is None or receiver.share == 0:
+            return None
+        # The step is at the receiver's share, the flow at the sender's, like the value in transit. A receiver pool
+        # of incomplete cost (a MISSING holding) still takes the leg's known cost: the capital follows the pool's book
+        # cost, so the gap stays with the broker whose cost is unknown.
+        if receiver.share == sender.share:
+            return received_cost.cost_report_change
+        return received_cost.cost_report_change / receiver.share * sender.share
+
+    def _movement_cost_step(self, tx: Transaction) -> CostStep | None:
+        """The average-cost step of one position movement (``tx``), found by its id; None when it has none."""
+        if tx.asset_id is None or tx.id is None:
+            return None
+        average_cost = self.average_costs.get((tx.asset_id, tx.broker_id))
+        if average_cost is None:
+            return None
+        return next((step for step in average_cost.steps if step.movement.movement_id == tx.id), None)
+
+    def _transfer_leg_capital(self, ctxn: ClassifiedTransaction, tx_qty: Decimal, step: CostStep | None = None) -> Decimal | None:
         """Lot 41 (D2/D5) — in-kind capital of a TRANSFER leg that forms no internal pair.
 
         A TRANSFER whose other leg is outside the scope (linked_external_*), missing, or never
         linked (an orphan) moves securities across the scope boundary without cash: capital,
         not profit. It counts at market value on its own date, for ``tx_qty`` (already at the
-        broker's share): positive for securities received, negative for securities sent.
+        broker's share): positive for securities received, negative for securities sent. A
+        security with no price at all counts at the cost the leg moves in its pool (``step``),
+        as the holding itself is valued at its book cost (J-17), so the transfer stays neutral.
+        With the pool's cost incomplete the holding is MISSING, and the leg still moves its known
+        cost (an unknown one counts as zero), like an in-kind ADJUSTMENT: the capital follows the
+        pool's book cost, so nothing is left behind once the units are gone.
         None for any other row, for an internal-pair leg (step 3b handles it), for a
         split-linked row, or when the security cannot be valued that day.
         """
@@ -1210,10 +1334,12 @@ class DailyStateBuilder:
             return None
         if ctxn.classification == "linked_internal" or (tx.id is not None and tx.id in self.split_linked_tx_ids):
             return None
-        market_value = self._market_value_for(tx.asset_id, abs(tx_qty), tx.date).market_value
-        if market_value is None:
-            return None
-        return market_value if tx_qty > 0 else -market_value
+        valuation = self._market_value_for(tx.asset_id, abs(tx_qty), tx.date)
+        if valuation.market_value is not None:
+            return valuation.market_value if tx_qty > 0 else -valuation.market_value
+        if valuation.source == ValuationSource.MISSING and step is not None:
+            return step.cost_report_change
+        return None
 
     def _distribute_allocation(
         self,

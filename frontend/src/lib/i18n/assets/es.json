@@ -325,7 +325,9 @@
       "placeholder": "Buscar por nombre, ticker, ISIN...",
       "searching": "Buscando...",
       "timeout": "La búsqueda expiró. Inténtalo de nuevo.",
-      "rankHint": "Posición en la búsqueda web (metabúsqueda en varios motores) — el primer resultado es la coincidencia más probable"
+      "rankHint": "Posición en la búsqueda web (metabúsqueda en varios motores) — el primer resultado es la coincidencia más probable",
+      "notConfigured": "{provider} debe configurarse antes de poder buscar",
+      "crownLegend": "👑 la moneda del fondo"
     },
     "comparison": {
       "title": "Comparación de datos del proveedor",

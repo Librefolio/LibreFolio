@@ -58,6 +58,7 @@ from backend.app.services.ai_export.components.resources import LotsResultsResou
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
+from backend.app.services.financial_math.returns import price_return
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -367,9 +368,8 @@ def build_performance_bucket_rows(
                 amount=(end_point.nav_value.amount - previous_close.nav_value.amount - net_external_flow.amount - period_pnl.amount),
             )
             if previous_close.twrr is not None and end_point.twrr is not None:
-                denominator = Decimal(1) + Decimal(previous_close.twrr)
-                if denominator != 0:
-                    return_percent = ((Decimal(1) + Decimal(end_point.twrr)) / denominator) - Decimal(1)
+                # The return between two cumulative TWRRs is the return between their wealth levels, 1 + TWRR.
+                return_percent = price_return(Decimal(1) + Decimal(previous_close.twrr), Decimal(1) + Decimal(end_point.twrr))
 
         rows.append(
             PerformanceBucketRow(
@@ -393,11 +393,7 @@ def build_performance_bucket_rows(
                     if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
                     else None
                 ),
-                return_from_first_ratio=(
-                    (Decimal(1) + Decimal(end_point.twrr)) / (Decimal(1) + Decimal(first_twrr_observation.twrr)) - Decimal("1")
-                    if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None and Decimal(1) + Decimal(first_twrr_observation.twrr) != 0
-                    else None
-                ),
+                return_from_first_ratio=(price_return(Decimal(1) + Decimal(first_twrr_observation.twrr), Decimal(1) + Decimal(end_point.twrr)) if first_twrr_observation is not None and first_twrr_observation.twrr is not None and end_point.twrr is not None else None),
                 reconciliation_diff=reconciliation_diff,
             )
         )
@@ -661,7 +657,8 @@ def map_position_row(
     *,
     currency_code: str,
 ) -> PositionRow:
-    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 else None
+    # A holding valued at cost has no price (J-17): its value per unit would be its unit cost, not a price.
+    unit_price = holding.current_value / holding.quantity if holding.current_value is not None and holding.quantity != 0 and holding.valuation_source != "ESTIMATED_AT_COST" else None
     return PositionRow(
         asset_id=holding.asset_id,
         asset_name=holding.asset_name,

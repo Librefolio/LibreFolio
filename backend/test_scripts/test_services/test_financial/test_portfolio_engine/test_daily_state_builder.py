@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
-from backend.app.services.financial_math.portfolio.models import ClassificationResult, ClassifiedTransaction, InTransitInterval, ValuationSource
+from backend.app.services.financial_math.portfolio.models import ClassificationResult, ClassifiedTransaction, InTransitInterval, UnrealizedSplit, ValuationSource
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
@@ -894,6 +894,443 @@ class TestPrivateInTransitHelper:
         assert it_asset_mv == Decimal("80")
         assert it_asset_cb == Decimal("80")
         assert missing_fx == set()
+
+
+_AT_COST = "ESTIMATED_AT_COST"
+
+
+def _at_cost_problems(position, value: str) -> list[str]:
+    """What keeps ``position`` from being valued at its book cost ``value``, as a declared estimate (J-17).
+
+    No price is reported for it: the effective and reference fields stay empty, it is never
+    stale, it needs no rate, and its unrealized result is 0.
+    """
+    expected = {
+        "valuation_source": _AT_COST,
+        "market_value": Decimal(value),
+        "cost_basis": Decimal(value),
+        "unrealized_pnl": Decimal("0"),
+        "valuation_effective_unit_price": None,
+        "valuation_effective_currency": None,
+        "valuation_reference_date": None,
+        "valuation_reference_unit_price": None,
+        "valuation_reference_currency": None,
+        "valuation_stale": False,
+        "missing_fx_pair": None,
+        "cost_complete": True,
+    }
+    return [f"{position.date}/asset {position.asset_id}: {name}={getattr(position, name)!r}, expected {want!r}" for name, want in expected.items() if getattr(position, name) != want]
+
+
+def _day_problems(states, day: date, **expected) -> list[str]:
+    """Mismatches between the DailyPortfolioState of ``day`` and ``expected`` (field -> value)."""
+    state = next((s for s in states if s.date == day), None)
+    if state is None:
+        return [f"{day}: no state emitted"]
+    return [f"{day}: {name}={getattr(state, name)!r}, expected {want!r}" for name, want in expected.items() if getattr(state, name) != want]
+
+
+class TestValuedAtCostWithoutObservation:
+    """J-17 (developer's P2 and option A, 16/10): an ADJUSTMENT is never a price observation, and a
+    held position with no observation on or before the day is valued at its book cost.
+
+    When the resolver has nothing on or before the day (it was MISSING) and the position's average-
+    cost pool is complete (``CostStep.report_complete``), the position is ``ESTIMATED_AT_COST``: its
+    value is the pool's historical cost in the report currency (each acquisition at its own date's
+    rate, never re-converted), no price, unrealized 0, not missing (``nav_complete`` holds), not
+    transaction-implied. An unknown or incomplete cost stays MISSING. An orphan TRANSFER leg of such
+    an asset is capital at the cost it moves in its pool, so it crosses the scope boundary without a
+    fake gain. The pool counts an unknown cost as zero, so a leg moves its known cost whether the pool
+    is complete or not, as an in-kind ADJUSTMENT does: nothing is left in the capital once the units
+    are gone.
+
+    Built like ``PortfolioCalculationEngine.calculate``: the mark series from the transactions and the
+    quotes (``_builder``), the average costs from the same rate map.
+    """
+
+    def test_estimated_at_cost_is_a_valuation_source(self):
+        """Before J-17: ValueError/AttributeError — ValuationSource had MARKET_PRICE, LAST_TRADE_PRICE, MISSING only."""
+        assert ValuationSource(_AT_COST) is ValuationSource.ESTIMATED_AT_COST
+        assert ValuationSource.ESTIMATED_AT_COST == "ESTIMATED_AT_COST"
+
+    def test_adjustment_only_asset_is_valued_at_its_historical_cost_through_an_fx_move(self):
+        """(a) USD asset received only by an ADJUSTMENT-in of 10 units at 20 USD on 01-01; no quote,
+        no BUY/SELL; USD→EUR 0.9, 0.8, 0.7 on 01-01..01-03. The cost is 200 USD × 0.9 = 180 EUR,
+        booked as in-kind capital. Every day: valued at 180 EUR at cost (flat through the rate move),
+        NAV 180, total P&L 0, unrealized 0 — none of it from the asset nor from the rate, so the USD
+        unrealized split is (0, 0, 0) —, not missing, not transaction-implied.
+
+        Before J-17: LAST_TRADE_PRICE at the adjustment's 20 USD converted at each day's rate —
+        market value 180, 160, 140 EUR, total P&L 0, -20, -40, the USD split's fx part 0, -20, -40,
+        the asset transaction-implied every day.
+        """
+        adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="10", asset_id=300, cost_basis_override="20", cost_basis_currency="USD")
+        builder = _builder(
+            classified_txs=[_ctxn(adj)],
+            asset_currencies={300: "USD"},
+            asset_types={300: "ETF"},
+            asset_classifications={300: None},
+            fx_rate_map={
+                ("USD", "EUR", date(2025, 1, 1)): Decimal("0.9"),
+                ("USD", "EUR", date(2025, 1, 2)): Decimal("0.8"),
+                ("USD", "EUR", date(2025, 1, 3)): Decimal("0.7"),
+            },
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 3),
+        )
+
+        result = builder.build()
+
+        (start,) = result.position_states_start
+        (end,) = result.position_states_end
+        problems = _at_cost_problems(start, "180") + _at_cost_problems(end, "180")
+        for day in (date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)):
+            problems += _day_problems(
+                result.daily_states,
+                day,
+                market_value=Decimal("180"),
+                nav_value=Decimal("180"),
+                open_cost_basis=Decimal("180"),
+                cumulative_external_cash_flow=Decimal("180"),
+                total_pnl=Decimal("0"),
+                unrealized_gain_loss=Decimal("0"),
+                unrealized_by_currency={"USD": UnrealizedSplit(asset=Decimal("0"), fx=Decimal("0"), unsplit=Decimal("0"))},
+                missing_price_asset_ids=set(),
+                transaction_implied_asset_ids=set(),
+                missing_fx_pairs=set(),
+                nav_complete=True,
+            )
+        assert not problems, "\n".join(problems)
+        assert result.missing_fx == {}
+
+    def test_adjustment_without_cost_stays_missing(self):
+        """(b) Guard: an ADJUSTMENT-in with no cost_basis_override leaves the cost unknown, so the
+        position stays MISSING — no value, flagged missing, NAV incomplete.
+
+        Before J-17: the same (guard, green before and after).
+        """
+        adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="10", asset_id=301)
+        result = _builder(classified_txs=[_ctxn(adj)], asset_currencies={301: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 2)).build()
+
+        (position,) = result.position_states_end
+        assert (position.valuation_source, position.market_value, position.unrealized_pnl, position.cost_complete) == ("MISSING", None, None, False)
+        problems = []
+        for day in (date(2025, 1, 1), date(2025, 1, 2)):
+            problems += _day_problems(result.daily_states, day, market_value=Decimal("0"), missing_price_asset_ids={301}, transaction_implied_asset_ids=set(), nav_complete=False)
+        assert not problems, "\n".join(problems)
+
+    def test_priced_adjustment_whose_cost_cannot_be_converted_stays_missing(self):
+        """(b) ADJUSTMENT-in of 10 units at 20 USD with no USD→EUR rate at all: the cost cannot reach
+        the report currency (pool incomplete, the pair reported as a movement failure), so the position
+        is MISSING, not at cost and not at the adjustment's price.
+
+        Before J-17: LAST_TRADE_PRICE at the adjustment's 20 USD, market value None for the missing
+        rate (missing_fx_pair USD/EUR), the asset transaction-implied and NOT missing (nav_complete True).
+        """
+        adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="10", asset_id=302, cost_basis_override="20", cost_basis_currency="USD")
+        result = _builder(classified_txs=[_ctxn(adj)], asset_currencies={302: "USD"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 2)).build()
+
+        assert result.missing_fx == {"USD/EUR": {date(2025, 1, 1)}}, "precondition: the adjustment's cost cannot be converted"
+        (position,) = result.position_states_end
+        assert position.valuation_source == "MISSING", f"valuation_source={position.valuation_source!r}"
+        assert (position.market_value, position.cost_complete, position.missing_fx_pair) == (None, False, None)
+        assert position.valuation_reference_date is None
+        problems = []
+        for day in (date(2025, 1, 1), date(2025, 1, 2)):
+            problems += _day_problems(result.daily_states, day, missing_price_asset_ids={302}, transaction_implied_asset_ids=set(), missing_fx_pairs=set(), nav_complete=False)
+        assert not problems, "\n".join(problems)
+
+    def test_priced_and_unpriced_adjustments_on_one_position_stay_missing(self):
+        """(b) Same day, same position: ADJUSTMENT-in 10 units at 20 EUR, then ADJUSTMENT-in 5 units
+        with no cost. Part of the pool has no known cost, so the position is MISSING (cost_basis keeps
+        the known 200).
+
+        Before J-17: LAST_TRADE_PRICE at the priced adjustment's 20 EUR on all 15 units (300), the asset
+        transaction-implied, not missing.
+        """
+        priced = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="10", asset_id=303, cost_basis_override="20", cost_basis_currency="EUR")
+        unpriced = _tx(id=2, type="ADJUSTMENT", dt="2025-01-01", quantity="5", asset_id=303)
+        result = _builder(classified_txs=[_ctxn(priced), _ctxn(unpriced)], asset_currencies={303: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 2)).build()
+
+        (position,) = result.position_states_end
+        assert position.valuation_source == "MISSING", f"valuation_source={position.valuation_source!r}"
+        assert (position.market_value, position.cost_complete, position.cost_basis) == (None, False, Decimal("200"))
+        problems = _day_problems(result.daily_states, date(2025, 1, 2), missing_price_asset_ids={303}, transaction_implied_asset_ids=set(), nav_complete=False)
+        assert not problems, "\n".join(problems)
+
+    def test_weekend_adjustment_does_not_replace_fridays_quote(self):
+        """(c) Quote 50 EUR on Friday 2025-01-03; ADJUSTMENT-in of 10 units at 40 EUR on Saturday
+        01-04; nothing on Sunday 01-05. Saturday and Sunday are valued at Friday's quote carried:
+        MARKET_PRICE 500, reference Friday, unrealized +100 over the 400 cost, total P&L +100.
+
+        Before J-17: LAST_TRADE_PRICE at the adjustment's 40 EUR — 400 on Saturday and Sunday,
+        reference Saturday, total P&L 0, the asset transaction-implied.
+        """
+        adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-04", quantity="10", asset_id=304, cost_basis_override="40", cost_basis_currency="EUR")
+        result = _builder(
+            classified_txs=[_ctxn(adj)],
+            asset_currencies={304: "EUR"},
+            price_map={304: [(date(2025, 1, 3), Decimal("50"), "EUR")]},
+            date_from=date(2025, 1, 3),
+            date_to=date(2025, 1, 5),
+        ).build()
+
+        (sunday,) = result.position_states_end
+        assert sunday.date == date(2025, 1, 5)
+        assert sunday.valuation_source == "MARKET_PRICE", f"valuation_source={sunday.valuation_source!r}"
+        assert (sunday.market_value, sunday.cost_basis, sunday.unrealized_pnl) == (Decimal("500"), Decimal("400"), Decimal("100"))
+        assert (sunday.valuation_reference_date, sunday.valuation_reference_unit_price, sunday.valuation_reference_currency) == (date(2025, 1, 3), Decimal("50"), "EUR")
+        assert (sunday.valuation_effective_unit_price, sunday.valuation_effective_currency, sunday.valuation_stale) == (Decimal("50"), "EUR", False)
+        problems = []
+        for day in (date(2025, 1, 4), date(2025, 1, 5)):
+            problems += _day_problems(
+                result.daily_states,
+                day,
+                market_value=Decimal("500"),
+                nav_value=Decimal("500"),
+                cumulative_external_cash_flow=Decimal("400"),
+                total_pnl=Decimal("100"),
+                transaction_implied_asset_ids=set(),
+                missing_price_asset_ids=set(),
+            )
+        assert not problems, "\n".join(problems)
+
+    def test_adjustment_before_the_first_quote_is_at_cost_then_market(self):
+        """(d) ADJUSTMENT-in of 10 units at 40 EUR on 01-01, first quotes 50 on 01-03 and 52 on 01-04.
+        01-01 and 01-02 are valued at cost (400, P&L 0, not implied, not missing); from 01-03 at the
+        market (500, then 520).
+
+        Before J-17: 01-01 and 01-02 were LAST_TRADE_PRICE at the adjustment's 40 EUR (same 400, but
+        the asset transaction-implied and the opening position's source LAST_TRADE_PRICE, reference 01-01).
+        """
+        adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="10", asset_id=305, cost_basis_override="40", cost_basis_currency="EUR")
+        result = _builder(
+            classified_txs=[_ctxn(adj)],
+            asset_currencies={305: "EUR"},
+            price_map={305: [(date(2025, 1, 3), Decimal("50"), "EUR"), (date(2025, 1, 4), Decimal("52"), "EUR")]},
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 4),
+        ).build()
+
+        (opening,) = result.position_states_start
+        (closing,) = result.position_states_end
+        problems = _at_cost_problems(opening, "400")
+        for day in (date(2025, 1, 1), date(2025, 1, 2)):
+            problems += _day_problems(result.daily_states, day, market_value=Decimal("400"), total_pnl=Decimal("0"), transaction_implied_asset_ids=set(), missing_price_asset_ids=set(), nav_complete=True)
+        problems += _day_problems(result.daily_states, date(2025, 1, 3), market_value=Decimal("500"), total_pnl=Decimal("100"))
+        problems += _day_problems(result.daily_states, date(2025, 1, 4), market_value=Decimal("520"), total_pnl=Decimal("120"))
+        assert not problems, "\n".join(problems)
+        assert (closing.valuation_source, closing.market_value, closing.valuation_reference_date) == ("MARKET_PRICE", Decimal("520"), date(2025, 1, 4))
+
+    def test_orphan_transfer_in_of_an_unpriced_asset_is_capital_at_cost(self):
+        """(e) An orphan TRANSFER-in (no partner) of 10 units with a 30 EUR cost basis, on 01-02, of an
+        asset never quoted nor traded: valued at its cost 300, and the same 300 is in-kind capital, so
+        NAV 300, capital 300, total P&L 0 — unchanged by the transfer. Not a cash flow of the day.
+
+        Before J-17: MISSING — no value (NAV 0), no capital (the leg could not be valued), the asset
+        missing and the NAV incomplete from 01-02.
+        """
+        transfer_in = _tx(id=1, type="TRANSFER", dt="2025-01-02", currency=None, quantity="10", asset_id=306, cost_basis_override="30", cost_basis_currency="EUR")
+        result = _builder(classified_txs=[_ctxn(transfer_in)], asset_currencies={306: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 3)).build()
+
+        problems = _day_problems(result.daily_states, date(2025, 1, 1), nav_value=Decimal("0"), cumulative_external_cash_flow=Decimal("0"), total_pnl=Decimal("0"))
+        for day in (date(2025, 1, 2), date(2025, 1, 3)):
+            problems += _day_problems(
+                result.daily_states,
+                day,
+                market_value=Decimal("300"),
+                nav_value=Decimal("300"),
+                cumulative_external_cash_flow=Decimal("300"),
+                total_pnl=Decimal("0"),
+                external_cash_flow=Decimal("0"),
+                missing_price_asset_ids=set(),
+                nav_complete=True,
+            )
+        (position,) = result.position_states_end
+        problems += _at_cost_problems(position, "300")
+        assert not problems, "\n".join(problems)
+        contribution = next(s for s in result.daily_states if s.date == date(2025, 1, 3)).broker_contributions[10]
+        assert (contribution.nav_contribution, contribution.capital_contribution, contribution.pnl_contribution) == (Decimal("300"), Decimal("300"), Decimal("0"))
+
+    def test_orphan_transfer_into_an_at_cost_position_brings_its_own_cost_as_capital(self):
+        """(e) ADJUSTMENT-in of 10 units at 20 EUR on 01-01 (at cost 200, capital 200), then an orphan
+        TRANSFER-in of 5 units with a 40 EUR cost basis on 01-02. The pool is 15 units costing 400, the
+        NAV rises by the 200 the transfer brings, so the capital must rise by that same 200 (not by
+        5/15 of the pool's 400): total P&L stays 0 on both days.
+
+        Before J-17: LAST_TRADE_PRICE at the adjustment's 20 EUR — 01-02 market value 300 (15 × 20),
+        transfer capital 100 (5 × 20), capital 300, unrealized -100, the asset transaction-implied.
+        """
+        adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="10", asset_id=307, cost_basis_override="20", cost_basis_currency="EUR")
+        transfer_in = _tx(id=2, type="TRANSFER", dt="2025-01-02", currency=None, quantity="5", asset_id=307, cost_basis_override="40", cost_basis_currency="EUR")
+        result = _builder(classified_txs=[_ctxn(adj), _ctxn(transfer_in)], asset_currencies={307: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 3)).build()
+
+        problems = _day_problems(result.daily_states, date(2025, 1, 1), market_value=Decimal("200"), cumulative_external_cash_flow=Decimal("200"), total_pnl=Decimal("0"), transaction_implied_asset_ids=set())
+        for day in (date(2025, 1, 2), date(2025, 1, 3)):
+            problems += _day_problems(
+                result.daily_states,
+                day,
+                market_value=Decimal("400"),
+                nav_value=Decimal("400"),
+                cumulative_external_cash_flow=Decimal("400"),
+                total_pnl=Decimal("0"),
+                unrealized_gain_loss=Decimal("0"),
+                transaction_implied_asset_ids=set(),
+            )
+        (position,) = result.position_states_end
+        problems += _at_cost_problems(position, "400")
+        assert not problems, "\n".join(problems)
+
+    def test_an_old_buy_price_beats_a_later_adjustment_carried_and_stale(self):
+        """No at-cost estimate once a price exists, however old (developer, 16/10): BUY of 10 at 100 EUR on
+        01-01, priced ADJUSTMENT-in of 10 at 150 EUR on 01-20, nothing else. From 01-20 the 20 units are
+        valued at the BUY's 100 carried from 01-01 — LAST_TRADE_PRICE, stale (19 days > 7) — never at the
+        adjustment's 150, nor at cost.
+
+        Before J-17: the adjustment's 150 became the mark on 01-20 — market value 3000, reference 01-20
+        at 150, fresh (not stale), unrealized +500.
+        """
+        buy = _tx(id=1, type="BUY", dt="2025-01-01", amount="-1000", quantity="10", asset_id=308)
+        adj = _tx(id=2, type="ADJUSTMENT", dt="2025-01-20", quantity="10", asset_id=308, cost_basis_override="150", cost_basis_currency="EUR")
+        result = _builder(classified_txs=[_ctxn(buy), _ctxn(adj)], asset_currencies={308: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 21)).build()
+
+        problems = []
+        for day in (date(2025, 1, 20), date(2025, 1, 21)):
+            problems += _day_problems(result.daily_states, day, market_value=Decimal("2000"), transaction_implied_asset_ids={308}, stale_price_asset_ids={308}, missing_price_asset_ids=set())
+        assert not problems, "\n".join(problems)
+        (position,) = result.position_states_end
+        observed = {
+            "valuation_source": position.valuation_source,
+            "market_value": position.market_value,
+            "valuation_reference_date": position.valuation_reference_date,
+            "valuation_reference_unit_price": position.valuation_reference_unit_price,
+            "valuation_effective_unit_price": position.valuation_effective_unit_price,
+            "valuation_stale": position.valuation_stale,
+            "cost_basis": position.cost_basis,
+            "unrealized_pnl": position.unrealized_pnl,
+        }
+        assert observed == {
+            "valuation_source": "LAST_TRADE_PRICE",
+            "market_value": Decimal("2000"),
+            "valuation_reference_date": date(2025, 1, 1),
+            "valuation_reference_unit_price": Decimal("100"),
+            "valuation_effective_unit_price": Decimal("100"),
+            "valuation_stale": True,
+            "cost_basis": Decimal("2500"),
+            "unrealized_pnl": Decimal("-500"),
+        }
+
+    def test_a_sell_is_the_first_price_after_an_adjustment(self):
+        """Day by day, no look-ahead; SELL stays a price observation (developer, 16/10). ADJUSTMENT-in of
+        10 at 40 EUR on 01-01, SELL of 4 for 220 EUR (55 a unit) on 01-03, nothing else. 01-01 and 01-02
+        are at cost (400, P&L 0, not transaction-implied); from 01-03 the SELL's 55 marks the 6 left —
+        LAST_TRADE_PRICE 330, NAV 330 + 220 of cash, P&L 150 on the 400 of in-kind capital.
+
+        Before J-17: 01-01 and 01-02 were LAST_TRADE_PRICE at the adjustment's 40 (same 400, but the asset
+        transaction-implied and the opening position's reference 01-01 at 40).
+        """
+        adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="10", asset_id=309, cost_basis_override="40", cost_basis_currency="EUR")
+        sell = _tx(id=2, type="SELL", dt="2025-01-03", amount="220", quantity="-4", asset_id=309)
+        result = _builder(classified_txs=[_ctxn(adj), _ctxn(sell)], asset_currencies={309: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 4)).build()
+
+        (opening,) = result.position_states_start
+        problems = _at_cost_problems(opening, "400")
+        for day in (date(2025, 1, 1), date(2025, 1, 2)):
+            problems += _day_problems(result.daily_states, day, market_value=Decimal("400"), nav_value=Decimal("400"), total_pnl=Decimal("0"), transaction_implied_asset_ids=set(), missing_price_asset_ids=set())
+        for day in (date(2025, 1, 3), date(2025, 1, 4)):
+            problems += _day_problems(result.daily_states, day, market_value=Decimal("330"), nav_value=Decimal("550"), total_pnl=Decimal("150"), transaction_implied_asset_ids={309}, missing_price_asset_ids=set())
+        assert not problems, "\n".join(problems)
+        (closing,) = result.position_states_end
+        assert (closing.valuation_source, closing.market_value, closing.valuation_reference_date, closing.valuation_effective_unit_price) == ("LAST_TRADE_PRICE", Decimal("330"), date(2025, 1, 3), Decimal("55"))
+
+    def test_orphan_transfer_out_of_an_at_cost_position_takes_its_cost_out_of_capital(self):
+        """(e), the other way: an orphan TRANSFER-in of 10 units with a 30 EUR cost basis on 01-01 (an
+        asset never quoted nor traded: at cost 300, capital 300), then an orphan TRANSFER-out of 4 on
+        01-02. The leg leaves at the 120 of cost it takes from the pool, so the capital falls to 180 with
+        the NAV (6 units at cost, 180): total P&L 0 on every day, and no cash flow of the day.
+
+        Before J-17: neither leg could be valued (no capital) and the units were MISSING: NAV 0,
+        capital 0, the asset missing and the NAV incomplete from 01-01.
+        """
+        transfer_in = _tx(id=1, type="TRANSFER", dt="2025-01-01", currency=None, quantity="10", asset_id=310, cost_basis_override="30", cost_basis_currency="EUR")
+        transfer_out = _tx(id=2, type="TRANSFER", dt="2025-01-02", currency=None, quantity="-4", asset_id=310)
+        result = _builder(classified_txs=[_ctxn(transfer_in), _ctxn(transfer_out)], asset_currencies={310: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 3)).build()
+
+        problems = _day_problems(result.daily_states, date(2025, 1, 1), market_value=Decimal("300"), nav_value=Decimal("300"), cumulative_external_cash_flow=Decimal("300"), total_pnl=Decimal("0"), missing_price_asset_ids=set(), nav_complete=True)
+        for day in (date(2025, 1, 2), date(2025, 1, 3)):
+            problems += _day_problems(
+                result.daily_states,
+                day,
+                market_value=Decimal("180"),
+                nav_value=Decimal("180"),
+                cumulative_external_cash_flow=Decimal("180"),
+                total_pnl=Decimal("0"),
+                external_cash_flow=Decimal("0"),
+                missing_price_asset_ids=set(),
+                nav_complete=True,
+            )
+        (position,) = result.position_states_end
+        problems += _at_cost_problems(position, "180")
+        assert not problems, "\n".join(problems)
+
+    def test_orphan_transfer_emptying_a_pool_of_unknown_cost_moves_its_known_cost(self):
+        """(e), a pool of unknown cost: on 01-01 an ADJUSTMENT-in of 5 units at 10 EUR and one of 5 units
+        with no cost, of an asset with no price at all — the pool's cost is incomplete, so the position is
+        MISSING: NAV 0 and incomplete, the 50 of the priced ADJUSTMENT in the capital, P&L -50. On 01-02 an
+        orphan TRANSFER-out of all 10 moves the pool's known cost, -50 (the unknown part counts as zero), as
+        the in-kind ADJUSTMENT brought it in: once the units are gone the capital is 0, the NAV 0, the P&L 0,
+        nothing held.
+
+        Before J-17: the adjustment's 10 a unit was the mark (LAST_TRADE_PRICE): NAV 100 and P&L +50 on
+        01-01; the leg moved -100 (10 x 10), so after the exit capital -50 and P&L +50. (The completeness
+        check tried and reverted on 16/10 moved nothing: capital 50 and P&L -50 left after the exit.)
+        """
+        priced = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="5", asset_id=311, cost_basis_override="10", cost_basis_currency="EUR")
+        unpriced = _tx(id=2, type="ADJUSTMENT", dt="2025-01-01", quantity="5", asset_id=311)
+        transfer_out = _tx(id=3, type="TRANSFER", dt="2025-01-02", currency=None, quantity="-10", asset_id=311)
+        result = _builder(classified_txs=[_ctxn(priced), _ctxn(unpriced), _ctxn(transfer_out)], asset_currencies={311: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 3)).build()
+
+        problems = _day_problems(result.daily_states, date(2025, 1, 1), market_value=Decimal("0"), nav_value=Decimal("0"), open_cost_basis=Decimal("50"), cumulative_external_cash_flow=Decimal("50"), total_pnl=Decimal("-50"), missing_price_asset_ids={311}, nav_complete=False)
+        for day in (date(2025, 1, 2), date(2025, 1, 3)):
+            problems += _day_problems(
+                result.daily_states,
+                day,
+                market_value=Decimal("0"),
+                nav_value=Decimal("0"),
+                open_cost_basis=Decimal("0"),
+                cumulative_external_cash_flow=Decimal("0"),
+                total_pnl=Decimal("0"),
+                external_cash_flow=Decimal("0"),
+                missing_price_asset_ids=set(),
+                nav_complete=True,
+            )
+        assert not problems, "\n".join(problems)
+        assert result.position_states_end == []
+
+    def test_orphan_transfer_out_of_part_of_a_pool_of_unknown_cost_moves_its_share_of_the_known_cost(self):
+        """(e), reductions of a pool of unknown cost: the same pool (5 units at 10 EUR and 5 of no cost, no
+        price at all; capital 50, P&L -50), then an orphan TRANSFER-out of 4 units on 01-02 and one of the 6
+        left on 01-04. Each leg moves its proportional share of the pool's known cost: -20 (50 x 4/10),
+        leaving 6 units MISSING at a cost of 30 against a capital of 30 (P&L -30); then -30, the rest, so
+        after the last exit the capital is 0 and the P&L 0, nothing held.
+
+        Before J-17: the adjustment's 10 a unit marked the asset (LAST_TRADE_PRICE): NAV 100; the first leg
+        moved -40 (NAV 60, capital 10), the second -60 (NAV 0, capital -50); P&L +50 on every day, nothing
+        missing. (J-17's earlier versions moved nothing on the first leg, the pool still incomplete after it.)
+        """
+        priced = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="5", asset_id=312, cost_basis_override="10", cost_basis_currency="EUR")
+        unpriced = _tx(id=2, type="ADJUSTMENT", dt="2025-01-01", quantity="5", asset_id=312)
+        first_out = _tx(id=3, type="TRANSFER", dt="2025-01-02", currency=None, quantity="-4", asset_id=312)
+        last_out = _tx(id=4, type="TRANSFER", dt="2025-01-04", currency=None, quantity="-6", asset_id=312)
+        result = _builder(classified_txs=[_ctxn(priced), _ctxn(unpriced), _ctxn(first_out), _ctxn(last_out)], asset_currencies={312: "EUR"}, date_from=date(2025, 1, 1), date_to=date(2025, 1, 5)).build()
+
+        problems = _day_problems(result.daily_states, date(2025, 1, 1), market_value=Decimal("0"), nav_value=Decimal("0"), open_cost_basis=Decimal("50"), cumulative_external_cash_flow=Decimal("50"), total_pnl=Decimal("-50"), missing_price_asset_ids={312}, nav_complete=False)
+        for day in (date(2025, 1, 2), date(2025, 1, 3)):
+            problems += _day_problems(result.daily_states, day, market_value=Decimal("0"), nav_value=Decimal("0"), open_cost_basis=Decimal("30"), cumulative_external_cash_flow=Decimal("30"), total_pnl=Decimal("-30"), missing_price_asset_ids={312}, nav_complete=False)
+        for day in (date(2025, 1, 4), date(2025, 1, 5)):
+            problems += _day_problems(result.daily_states, day, market_value=Decimal("0"), nav_value=Decimal("0"), open_cost_basis=Decimal("0"), cumulative_external_cash_flow=Decimal("0"), total_pnl=Decimal("0"), missing_price_asset_ids=set(), nav_complete=True)
+        assert not problems, "\n".join(problems)
+        assert result.position_states_end == []
 
 
 class TestClassificationResultHelper:

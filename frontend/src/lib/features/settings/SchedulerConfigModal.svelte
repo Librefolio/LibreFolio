@@ -167,16 +167,16 @@
 
 <ModalBase {open} maxWidth="lg" testId="scheduler-config-modal" onRequestClose={() => (open = false)}>
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
         <div class="flex items-center gap-2.5">
-            <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                <Clock class="text-emerald-600 dark:text-emerald-400" size={18} />
+            <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-lf-success-soft">
+                <Clock class="text-lf-success" size={18} />
             </div>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+            <h2 class="text-lg font-semibold text-lf-primary">
                 {$_('settings.global.scheduler.configTitle')}
             </h2>
         </div>
-        <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onclick={() => (open = false)}>
+        <button class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted hover:text-lf-secondary transition-colors" onclick={() => (open = false)}>
             <X size={18} />
         </button>
     </div>
@@ -184,13 +184,13 @@
     <!-- Body -->
     <div class="px-6 py-4 space-y-5">
         <!-- Server UTC time + Timezone selector -->
-        <div class="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+        <div class="flex items-center gap-3 text-xs text-lf-muted">
             <span>🕐 Server UTC: <strong>{serverNowUtc || '—'}</strong></span>
         </div>
 
         <!-- Timezone selector -->
         <section data-testid="scheduler-config-timezone">
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5 mb-2">
+            <h3 class="text-sm font-medium text-lf-secondary flex items-center gap-1.5 mb-2">
                 <Globe size={14} />
                 {$_('settings.global.scheduler.timezone') || 'Timezone'}
             </h3>
@@ -199,7 +199,7 @@
                     type="text"
                     bind:value={tzSearch}
                     placeholder={selectedTz}
-                    class="w-full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green"
+                    class="w-full px-3 py-1.5 rounded-lg border border-lf-input bg-lf-field text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus/40 focus:border-lf-focus"
                     onfocus={() => {
                         tzDropdownOpen = true;
                     }}
@@ -210,11 +210,11 @@
                     }}
                 />
                 {#if tzDropdownOpen}
-                    <div class="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg">
+                    <div class="absolute z-10 mt-1 w-full max-h-40 overflow-y-auto bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow">
                         {#each filteredTimezones as tz}
                             <button
                                 type="button"
-                                class="w-full text-left px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 {tz === selectedTz ? 'text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300'}"
+                                class="w-full text-left px-3 py-1.5 text-sm hover:bg-lf-hover {tz === selectedTz ? 'text-lf-link font-medium' : 'text-lf-secondary'}"
                                 onmousedown={(e) => e.preventDefault()}
                                 onclick={() => {
                                     changeTimezone(tz);
@@ -226,7 +226,7 @@
                     </div>
                 {/if}
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.timezoneHintLocal')}</p>
+            <p class="text-xs text-lf-muted mt-1">{$_('settings.global.scheduler.timezoneHintLocal')}</p>
             {#if timezoneChanged}
                 <div data-testid="scheduler-timezone-change-warning" class="mt-2">
                     <InfoBanner variant="warning" message={$_('settings.global.scheduler.timezoneChangeWarning')} />
@@ -241,35 +241,27 @@
 
         <!-- Current Price Refresh -->
         <section data-testid="scheduler-config-frequency">
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5 mb-2">
+            <h3 class="text-sm font-medium text-lf-secondary flex items-center gap-1.5 mb-2">
                 💰 {$_('settings.global.scheduler.currentPriceSection')}
             </h3>
             <div class="flex items-center gap-2">
-                <label for="scheduler-freq" class="text-sm text-gray-600 dark:text-gray-400">{$_('settings.global.scheduler.currentPriceFreqLabel')}</label>
-                <input
-                    id="scheduler-freq"
-                    type="number"
-                    use:numericArrows
-                    bind:value={frequency}
-                    min={1}
-                    max={1440}
-                    class="w-20 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green"
-                />
-                <span class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.global.scheduler.currentPriceFreqSuffix')}</span>
+                <label for="scheduler-freq" class="text-sm text-lf-secondary">{$_('settings.global.scheduler.currentPriceFreqLabel')}</label>
+                <input id="scheduler-freq" type="number" use:numericArrows bind:value={frequency} min={1} max={1440} class="w-20 px-2 py-1.5 rounded-lg border border-lf-input bg-lf-field text-sm text-lf-primary hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus/40 focus:border-lf-focus" />
+                <span class="text-sm text-lf-muted">{$_('settings.global.scheduler.currentPriceFreqSuffix')}</span>
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.currentPriceFreqHint')}</p>
+            <p class="text-xs text-lf-muted mt-1">{$_('settings.global.scheduler.currentPriceFreqHint')}</p>
         </section>
 
         <!-- History Sync Times -->
         <section data-testid="scheduler-config-times">
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5 mb-2">
+            <h3 class="text-sm font-medium text-lf-secondary flex items-center gap-1.5 mb-2">
                 📊 {$_('settings.global.scheduler.historyTimesLabel')}
             </h3>
             <div class="flex flex-wrap items-center gap-2">
                 {#each timeSlots as slot}
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-mono bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-mono bg-lf-success-soft text-lf-success-on-soft">
                         {slot}
-                        <button type="button" class="ml-0.5 hover:text-red-500 transition-colors" onclick={() => removeTimeSlot(slot)} aria-label="Remove {slot}">
+                        <button type="button" class="ml-0.5 hover:text-lf-danger transition-colors" onclick={() => removeTimeSlot(slot)} aria-label="Remove {slot}">
                             <X size={14} />
                         </button>
                     </span>
@@ -278,7 +270,7 @@
                     <input
                         type="time"
                         bind:value={newTime}
-                        class="px-2 py-1 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40"
+                        class="px-2 py-1 rounded-lg border border-lf-input bg-lf-field text-sm text-lf-primary hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus/40"
                         data-testid="scheduler-config-time-input"
                         onkeydown={(e) => {
                             if (e.key === 'Enter') {
@@ -287,18 +279,18 @@
                             }
                         }}
                     />
-                    <button type="button" data-testid="scheduler-config-time-add" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-sm text-libre-green hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors disabled:opacity-40" disabled={!newTime} onclick={addTimeSlot}>
+                    <button type="button" data-testid="scheduler-config-time-add" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-sm text-lf-link hover:bg-lf-selected transition-colors disabled:opacity-40" disabled={!newTime} onclick={addTimeSlot}>
                         <Plus size={14} />
                         {$_('settings.global.scheduler.historyTimesAdd')}
                     </button>
                 </div>
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.historyTimesHint')}</p>
+            <p class="text-xs text-lf-muted mt-1">{$_('settings.global.scheduler.historyTimesHint')}</p>
         </section>
 
         <!-- History Sync Days -->
         <section data-testid="scheduler-config-days">
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5 mb-2">
+            <h3 class="text-sm font-medium text-lf-secondary flex items-center gap-1.5 mb-2">
                 <Calendar size={16} />
                 {$_('settings.global.scheduler.historyDaysLabel')}
             </h3>
@@ -308,34 +300,27 @@
                         type="button"
                         aria-pressed={selectedDays[day]}
                         data-testid="scheduler-day-{day}"
-                        class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors {selectedDays[day] ? 'bg-libre-green text-white border-libre-green' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-slate-600 hover:border-libre-green'}"
+                        class="px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors {selectedDays[day] ? 'bg-lf-checked text-lf-on-checked border-lf-checked' : 'bg-lf-card text-lf-secondary border-lf-input hover:border-lf-focus'}"
                         onclick={() => toggleDay(day)}
                     >
                         {getDayLabel(day)}
                     </button>
                 {/each}
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.historyDaysHint')}</p>
+            <p class="text-xs text-lf-muted mt-1">{$_('settings.global.scheduler.historyDaysHint')}</p>
         </section>
 
         <!-- Lookback Horizon -->
         <section data-testid="scheduler-config-horizon">
-            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1.5 mb-2">
+            <h3 class="text-sm font-medium text-lf-secondary flex items-center gap-1.5 mb-2">
                 <Search size={16} />
                 {$_('settings.global.scheduler.horizonLabel')}
             </h3>
             <div class="flex items-center gap-2">
-                <input
-                    type="number"
-                    use:numericArrows
-                    bind:value={horizon}
-                    min={1}
-                    max={365}
-                    class="w-20 px-2 py-1.5 rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-libre-green/40 focus:border-libre-green"
-                />
-                <span class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.global.scheduler.horizonSuffix')}</span>
+                <input type="number" use:numericArrows bind:value={horizon} min={1} max={365} class="w-20 px-2 py-1.5 rounded-lg border border-lf-input bg-lf-field text-sm text-lf-primary hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus/40 focus:border-lf-focus" />
+                <span class="text-sm text-lf-muted">{$_('settings.global.scheduler.horizonSuffix')}</span>
             </div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{$_('settings.global.scheduler.horizonHint')}</p>
+            <p class="text-xs text-lf-muted mt-1">{$_('settings.global.scheduler.horizonHint')}</p>
         </section>
 
         <!-- Tip -->
@@ -346,14 +331,14 @@
     </div>
 
     <!-- Footer -->
-    <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-100 dark:border-slate-700">
-        <button type="button" data-testid="scheduler-config-cancel" class="px-4 py-2 text-sm font-medium bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors" onclick={() => (open = false)}>
+    <div class="flex justify-end gap-2 px-6 py-4 border-t border-lf-subtle">
+        <button type="button" data-testid="scheduler-config-cancel" class="px-4 py-2 text-sm font-medium bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" onclick={() => (open = false)}>
             {$_('common.cancel')}
         </button>
-        <button type="button" data-testid="scheduler-config-save" class="px-4 py-2 text-sm font-medium text-white bg-libre-green hover:bg-libre-green/90 rounded-lg transition-colors disabled:opacity-50" disabled={!canSave || saving} onclick={handleSave}>
+        <button type="button" data-testid="scheduler-config-save" class="px-4 py-2 text-sm font-medium text-lf-on-action bg-lf-action hover:bg-lf-action-hover rounded-lg transition-colors disabled:opacity-50" disabled={!canSave || saving} onclick={handleSave}>
             {#if saving}
                 <span class="inline-flex items-center gap-1">
-                    <span class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span class="w-3.5 h-3.5 border-2 border-lf-on-action/30 border-t-lf-on-action rounded-full animate-spin"></span>
                     {$_('common.save')}
                 </span>
             {:else}

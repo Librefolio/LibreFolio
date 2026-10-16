@@ -88,7 +88,11 @@ from backend.app.services.financial_math.valuation import compute_holding_value
 
 _VALUATION_SOURCE_SEMANTICS: tuple[AssetValuationSourceSemantic, ...] = (
     AssetValuationSourceSemantic(code="MARKET_PRICE", description="Valued at the latest observed market price, converted to the report's target currency."),
-    AssetValuationSourceSemantic(code="LAST_TRADE_PRICE", description="No market price was available; valued at the last observed transaction price (BUY, SELL or priced ADJUSTMENT) carried forward — a real trade, not an observed market return."),
+    AssetValuationSourceSemantic(code="LAST_TRADE_PRICE", description="No market price was available; valued at the last observed transaction price (BUY or SELL; an ADJUSTMENT is never a price) carried forward — a real trade, not an observed market return."),
+    AssetValuationSourceSemantic(
+        code="ESTIMATED_AT_COST",
+        description="No price at all (no market quote, no BUY or SELL): valued at the position's book cost in the report's target currency, the purchases converted at their own dates — an estimate, not a price; it carries no unit_price and no unrealized P&L.",
+    ),
     AssetValuationSourceSemantic(code="MISSING", description="No valuation could be determined by any hierarchy step; the position is excluded from valued totals."),
 )
 
@@ -345,7 +349,7 @@ async def _build_positions_by_broker(context: BuildContext, dependencies: Mappin
             quantity=h.quantity,
             valuation_source=h.valuation_source,
             wac_per_unit=h.wac_per_unit,
-            unit_price=(h.current_value / h.quantity if h.current_value is not None and h.quantity != 0 else None),
+            unit_price=(h.current_value / h.quantity if h.current_value is not None and h.quantity != 0 and h.valuation_source != "ESTIMATED_AT_COST" else None),
             current_value=h.current_value,
             unrealized_gain_loss=h.gain_loss,
             unrealized_gain_loss_percent=h.gain_loss_percent,
@@ -625,7 +629,7 @@ ASSET_POSITION_SCOPE_SPEC = ComponentSpec(
 
 ASSET_PROVENANCE_SPEC = ComponentSpec(
     component_id="asset.provenance",
-    version=1,
+    version=2,  # v2 (J-17): an ADJUSTMENT is never a price; ESTIMATED_AT_COST semantics
     domains=frozenset({Domain.ASSET}),
     output_model=AssetProvenancePayload,
     builder=_build_provenance,
@@ -635,7 +639,7 @@ ASSET_PROVENANCE_SPEC = ComponentSpec(
 
 ASSET_POSITIONS_BY_BROKER_SPEC = ComponentSpec(
     component_id="asset.positions_by_broker",
-    version=1,
+    version=2,  # v2 (J-17): valuation_source may be ESTIMATED_AT_COST
     domains=frozenset({Domain.ASSET}),
     output_model=AssetPositionsByBrokerPayload,
     builder=_build_positions_by_broker,

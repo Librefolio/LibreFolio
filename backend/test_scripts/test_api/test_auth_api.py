@@ -2,6 +2,10 @@
 Authentication API Tests
 
 Tests for login, logout, register, and session management endpoints.
+
+Since lot A6c (decision 37) the API applies the backend's password rules to every new password: REG-004, CHPWD-005
+and PWD-001..PWD-008 pin it on register and change-password (the reset link is in test_registration_api.py). Every
+other password this module registers meets the rules, which the API checks before anything else of the request.
 """
 
 import asyncio
@@ -21,7 +25,7 @@ from typing import Optional, Union
 import httpx
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException, Request, Response
+from fastapi import BackgroundTasks, HTTPException, Request, Response
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -42,6 +46,12 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 10.0
 #: The global setting that decides who may register (release 1.3: open, invite or disabled), and its row's key.
 REGISTRATION_MODE_KEY = "registration_mode"
+
+
+def _register_http_request() -> Request:
+    """The HTTP request ``auth_api.register`` reads the client address from, as FastAPI hands it over (E5b: the limit
+    of registration emails per client address)."""
+    return Request({"type": "http", "method": "POST", "path": "/api/v1/auth/register", "headers": [], "client": ("127.0.0.1", 50000)})
 
 
 def _error_code(response: httpx.Response) -> Optional[str]:
@@ -118,7 +128,7 @@ class TestRegister:
 
             response = await client.post(
                 f"{API_BASE}/auth/register",
-                json={"username": username, "email": email, "password": "testpassword123"},
+                json={"username": username, "email": email, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -154,7 +164,7 @@ class TestRegister:
                 json={
                     "username": username,
                     "email": f"{username}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
@@ -179,7 +189,7 @@ class TestRegister:
                 json={
                     "username": seed_username,
                     "email": f"{seed_username}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
@@ -194,7 +204,9 @@ class TestRegister:
                     json={
                         "username": username,
                         "email": f"{username}@example.com",
-                        "password": "password123",
+                        # Meets the password rules (decision 37): they are checked first, and a weak password would be
+                        # refused with PASSWORD_TOO_WEAK before the registration mode is read.
+                        "password": "TestPass123!",
                     },
                     timeout=TIMEOUT,
                 )
@@ -230,13 +242,16 @@ class TestRegister:
             async with AsyncSession(engine, expire_on_commit=False) as session:
                 assert await user_service.count_users(session) == 0, "Precondition: the private database must have no user"
                 assert (await effective_registration_mode(session)).mode == "disabled", "Precondition: registration must be disabled"
+                # Keyword arguments, as FastAPI calls the route: E5b added ``background`` before ``session``.
                 response = await auth_api.register(
                     AuthRegisterRequest(
                         username=username,
                         email=f"{username}@example.com",
-                        password="password123",
+                        password="TestPass123!",
                     ),
-                    session,
+                    background=BackgroundTasks(),
+                    http_request=_register_http_request(),
+                    session=session,
                 )
 
             assert response.user.username == username
@@ -260,7 +275,7 @@ class TestRegister:
                 json={
                     "username": username,
                     "email": f"first_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
@@ -271,7 +286,7 @@ class TestRegister:
                 json={
                     "username": username,
                     "email": f"second_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
@@ -292,14 +307,14 @@ class TestRegister:
             # First registration
             await client.post(
                 f"{API_BASE}/auth/register",
-                json={"username": f"user1_{timestamp}", "email": email, "password": "password123"},
+                json={"username": f"user1_{timestamp}", "email": email, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
             # Try duplicate email
             response = await client.post(
                 f"{API_BASE}/auth/register",
-                json={"username": f"user2_{timestamp}", "email": email, "password": "password123"},
+                json={"username": f"user2_{timestamp}", "email": email, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -308,25 +323,26 @@ class TestRegister:
             print_success("Duplicate email correctly rejected")
 
     @pytest.mark.asyncio
-    async def test_register_short_password(self, test_server):
-        """REG-004: Password must be at least 8 characters."""
+    async def test_register_short_password(self, test_server, lane_accounts):
+        """REG-004 — red until A6c (a 422 of the schema): a password of seven characters that meets every other rule → 400 PASSWORD_TOO_WEAK with rules exactly ["min_length"]; no account.
+
+        Decision 37: the length is one of the password rules the backend applies (PWD-001 covers the others); the
+        schema keeps only «not empty» (PWD-008).
+        """
         print_section("REG-004: Short password rejected")
+        username = lane_accounts.new_username("shortpw")
 
         async with httpx.AsyncClient() as client:
-            timestamp = int(datetime.now().timestamp() * 1000)
-
             response = await client.post(
                 f"{API_BASE}/auth/register",
-                json={
-                    "username": f"shortpw_{timestamp}",
-                    "email": f"shortpw_{timestamp}@example.com",
-                    "password": "short",  # Less than 8 chars
-                },
+                # Seven characters, with an uppercase and lowercase letters, a digit and a symbol: only the length is missing.
+                json={"username": username, "email": f"{username}@example.com", "password": "Short1!"},
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 422  # Validation error
-            print_success("Short password correctly rejected")
+        _assert_password_too_weak(response, ["min_length"], "POST /auth/register with seven characters")
+        assert not await _lane_user_exists(username), f"a refused password must create no account, yet {username} exists"
+        print_success("Short password correctly rejected: 400 PASSWORD_TOO_WEAK, rules [min_length]")
 
 
 class TestLogin:
@@ -339,7 +355,7 @@ class TestLogin:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"logintest_{timestamp}"
             email = f"login_{timestamp}@example.com"
-            password = "loginpassword123"
+            password = "LoginPass123!"
 
             response = await client.post(
                 f"{API_BASE}/auth/register",
@@ -436,7 +452,7 @@ class TestLogin:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"loginsettings_{timestamp}"
             email = f"loginsettings_{timestamp}@example.com"
-            password = "loginpassword123"
+            password = "LoginPass123!"
 
             register_resp = await client.post(
                 f"{API_BASE}/auth/register",
@@ -502,14 +518,14 @@ class TestLogout:
                 json={
                     "username": username,
                     "email": f"logout_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
             assert "session" in login_resp.cookies
@@ -543,14 +559,14 @@ class TestMe:
                 json={
                     "username": username,
                     "email": f"me_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -608,14 +624,14 @@ class TestSessionPersistence:
                 json={
                     "username": username,
                     "email": f"cookie_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             response = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -638,14 +654,14 @@ class TestSessionPersistence:
                 json={
                     "username": username,
                     "email": f"persist_{timestamp}@example.com",
-                    "password": "password123",
+                    "password": "TestPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "password123"},
+                json={"username": username, "password": "TestPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -671,8 +687,8 @@ class TestChangePassword:
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"chpwd_{timestamp}"
-            old_password = "oldpassword123"
-            new_password = "newpassword456"
+            old_password = "OldPass123!"
+            new_password = "NewPass456!"
 
             # Register user
             await client.post(
@@ -739,22 +755,22 @@ class TestChangePassword:
                 json={
                     "username": username,
                     "email": f"chpwd_wrong_{timestamp}@example.com",
-                    "password": "correctpassword123",
+                    "password": "CorrectPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "correctpassword123"},
+                json={"username": username, "password": "CorrectPass123!"},
                 timeout=TIMEOUT,
             )
             client.cookies.update(login_resp.cookies)
 
-            # Try to change with wrong current password
+            # Try to change with wrong current password; the new one meets the rules (decision 37), which are checked first
             response = await client.post(
                 f"{API_BASE}/auth/change-password",
-                json={"current_password": "wrongpassword", "new_password": "newpassword456"},
+                json={"current_password": "wrongpassword", "new_password": "NewPass456!"},
                 timeout=TIMEOUT,
             )
 
@@ -771,7 +787,7 @@ class TestChangePassword:
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
             username = f"chpwd_same_{timestamp}"
-            password = "samepassword123"
+            password = "SamePass123!"
 
             # Register and login
             await client.post(
@@ -811,7 +827,7 @@ class TestChangePassword:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{API_BASE}/auth/change-password",
-                json={"current_password": "oldpass", "new_password": "newpass123"},
+                json={"current_password": "oldpass", "new_password": "NewPass123!"},
                 timeout=TIMEOUT,
             )
 
@@ -821,7 +837,10 @@ class TestChangePassword:
 
     @pytest.mark.asyncio
     async def test_change_password_too_short(self, test_server):
-        """CHPWD-005: New password must be at least 8 characters."""
+        """CHPWD-005 — red until A6c (a 422 of the schema): a new password of seven characters that meets every other rule → 400 PASSWORD_TOO_WEAK with rules exactly ["min_length"]; the password stays the old one.
+
+        Decision 37: the length is one of the password rules the backend applies (PWD-003 covers the others).
+        """
         print_section("CHPWD-005: Short password rejected")
 
         async with httpx.AsyncClient() as client:
@@ -834,28 +853,32 @@ class TestChangePassword:
                 json={
                     "username": username,
                     "email": f"chpwd_short_{timestamp}@example.com",
-                    "password": "longpassword123",
+                    "password": "LongPass123!",
                 },
                 timeout=TIMEOUT,
             )
 
             login_resp = await client.post(
                 f"{API_BASE}/auth/login",
-                json={"username": username, "password": "longpassword123"},
+                json={"username": username, "password": "LongPass123!"},
                 timeout=TIMEOUT,
             )
+            assert login_resp.status_code == 200, f"Setup: login failed: {login_resp.status_code} {login_resp.text}"
             client.cookies.update(login_resp.cookies)
 
-            # Try short password
+            # Try short password: seven characters, with an uppercase and lowercase letters, a digit and a symbol
             response = await client.post(
                 f"{API_BASE}/auth/change-password",
-                json={"current_password": "longpassword123", "new_password": "short"},
+                json={"current_password": "LongPass123!", "new_password": "Short1!"},
                 timeout=TIMEOUT,
             )
 
-            assert response.status_code == 422, f"Expected 422, got {response.status_code}"
+            _assert_password_too_weak(response, ["min_length"], "POST /auth/change-password with a new password of seven characters")
+            client.cookies.clear()
+            old_login = await client.post(f"{API_BASE}/auth/login", json={"username": username, "password": "LongPass123!"}, timeout=TIMEOUT)
+            assert old_login.status_code == 200, f"A refused new password must leave the old one in place: login with it got {old_login.status_code} {old_login.text}"
 
-            print_success("Short password correctly rejected")
+            print_success("Short password correctly rejected: 400 PASSWORD_TOO_WEAK, rules [min_length], the old password kept")
 
 
 class TestDeleteOwnAccount:
@@ -1021,7 +1044,7 @@ class TestSessionCookieSecure:
         Teardown logs in over plain HTTP and sends the session explicitly, so the deletion works
         whatever the cookie's Secure says; a test that deleted the account itself marks it deleted.
         """
-        user = _DisposableUser(username=f"cookiesec_{uuid.uuid4().hex[:12]}", password="cookiepassword123")
+        user = _DisposableUser(username=f"cookiesec_{uuid.uuid4().hex[:12]}", password="CookiePass123!")
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{IPV4_API_BASE}/auth/register", json={**user.credentials, "email": f"{user.username}@example.com"}, timeout=TIMEOUT)
         assert response.status_code == 201, f"Setup failed: {response.status_code} {response.text}"
@@ -1315,8 +1338,9 @@ async def login_accounts(test_server) -> AsyncIterator[_LoginAccounts]:
     teardown deletes both through user_service.delete_user, the service DELETE /auth/users/me calls.
     """
     accounts = _LoginAccounts(
-        active=_DisposableUser(username=f"loginon_{uuid.uuid4().hex[:12]}", password=f"Active-{uuid.uuid4().hex[:12]}"),
-        disabled=_DisposableUser(username=f"loginoff_{uuid.uuid4().hex[:12]}", password=f"Disabled-{uuid.uuid4().hex[:12]}"),
+        # A digit at the end whatever the hex holds: both must meet the password rules (decision 37) to register.
+        active=_DisposableUser(username=f"loginon_{uuid.uuid4().hex[:12]}", password=f"Active-{uuid.uuid4().hex[:12]}-1"),
+        disabled=_DisposableUser(username=f"loginoff_{uuid.uuid4().hex[:12]}", password=f"Disabled-{uuid.uuid4().hex[:12]}-1"),
     )
     user_ids: list[int] = []
     try:
@@ -1838,7 +1862,7 @@ class TestPasswordWorkLeavesTheEventLoopFree:
         username, password = "loop_newcomer", "NewcomerPass123!"
 
         async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
-            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), session)
+            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), background=BackgroundTasks(), http_request=_register_http_request(), session=session)
 
         assert response.user.username == username, f"register must answer with the new user: got {response!r}"
         assert [call["password"] for call in hashing.calls] == [password.encode("utf-8")], f"register must hash the chosen password, once: {hashing.calls}"
@@ -1874,3 +1898,271 @@ class TestPasswordWorkLeavesTheEventLoopFree:
         measured = _assert_the_loop_kept_beating("change_password", ticks, check, hashing)
 
         print_success(f"✓ change-password: the new hash stored, the loop kept beating ({measured})")
+
+
+# ============================================================================
+# THE PASSWORD RULES ON EVERY NEW PASSWORD (decision 37, lot A6c)
+# ============================================================================
+#
+# The backend holds the password rules (services/accounts/password_policy.py: at least 8 characters, an uppercase and a
+# lowercase letter, a digit, a symbol, with Unicode's classes) and applies them to every new password: POST
+# /auth/register and POST /auth/change-password here, the reset link in test_registration_api.py, the command line in
+# test_dev_cli_image.py. A password that breaks them is refused with 400 {"detail": {"error_code": "PASSWORD_TOO_WEAK",
+# "message": ..., "rules": [the codes missed, in the policy's order]}}, before anything else of the request is looked
+# at — the current password included —; the schemas keep only «not empty» (422). A password stored before keeps
+# working: the login never checks the rules.
+#
+# On the lane's server, open while this module runs (registration_open_by_default). Every account a test registers or
+# writes is named in lane_accounts before the request, and deleted at teardown, after a red too: a refused
+# registration that a red lets through leaves nothing behind.
+
+#: The refusal's detail carries exactly these keys.
+PASSWORD_TOO_WEAK_KEYS = {"error_code", "message", "rules"}
+#: (password, the codes it misses, in the policy's order): every rule alone — with ASCII, and with Unicode classes —, and several.
+WEAK_PASSWORDS = [
+    pytest.param("Short1!", ["min_length"], id="seven-characters"),
+    pytest.param("lowercase-only-1", ["uppercase"], id="no-uppercase"),
+    pytest.param("UPPERCASE-ONLY-1", ["lowercase"], id="no-lowercase"),
+    pytest.param("No-Digits-Here", ["digit"], id="no-digit"),
+    pytest.param("NoSymbols123", ["special"], id="no-symbol"),
+    pytest.param("Ecrire12 ", ["special"], id="a-space-is-not-a-symbol"),
+    pytest.param("écrire-12", ["uppercase"], id="e-acute-is-lowercase"),
+    pytest.param("Écrire²²!", ["digit"], id="superscript-two-is-not-a-digit"),
+    pytest.param("testpassword123", ["uppercase", "special"], id="this-modules-old-password"),
+    pytest.param("short", ["min_length", "uppercase", "digit", "special"], id="four-rules"),
+]
+#: Passwords that meet every rule: ASCII, and Unicode classes (É uppercase, é lowercase, ٣ a digit, € a symbol).
+STRONG_PASSWORDS = [
+    pytest.param("Strong-Pass-2026", id="ascii"),
+    pytest.param("Écrire٣٣€", id="unicode-classes"),
+]
+#: The password of the accounts these tests register: it meets every rule.
+PWD_ACCOUNT_PASSWORD = "Before-Change-2026"
+#: A password stored before decision 37 that breaks four rules: seven lowercase letters. No route accepts it any more.
+LEGACY_PASSWORD = "oldpass"
+LEGACY_RULES = ["min_length", "uppercase", "digit", "special"]
+#: What the legacy account changes its weak password for: it meets every rule.
+UPGRADED_PASSWORD = "Upgraded-Pass-2026"
+
+
+def _detail(response: httpx.Response) -> object:
+    """``detail`` of a JSON body; None for a body without one, or that is not JSON (a 500's text)."""
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    return body.get("detail") if isinstance(body, dict) else None
+
+
+def _assert_password_too_weak(response: httpx.Response, rules: list[str], request: str) -> None:
+    """``response`` is decision 37's refusal: 400 PASSWORD_TOO_WEAK, a message, and ``rules`` exactly — the codes missed, in the policy's order."""
+    detail = _detail(response)
+    error_code = detail.get("error_code") if isinstance(detail, dict) else None
+    assert (response.status_code, error_code) == (400, "PASSWORD_TOO_WEAK"), f"{request}: expected 400 PASSWORD_TOO_WEAK, got {response.status_code} {response.text}"
+    assert isinstance(detail, dict) and set(detail) == PASSWORD_TOO_WEAK_KEYS, f"{request}: the refusal must carry exactly {sorted(PASSWORD_TOO_WEAK_KEYS)}: {detail}"
+    assert isinstance(detail["message"], str) and detail["message"].strip(), f"{request}: the refusal must carry a message: {detail}"
+    assert detail["rules"] == rules, f"{request}: rules must be exactly the codes missed, in the policy's order, {rules}: got {detail['rules']}"
+
+
+async def _lane_user_exists(username: str) -> bool:
+    """Whether the lane's database holds ``username``, read in a fresh session."""
+    async with AsyncSession(get_async_engine()) as session:
+        return await user_service.get_user_by_username(session, username) is not None
+
+
+@dataclass
+class _LaneAccounts:
+    """The accounts one test registers or writes on the lane, by username: named before the request — a red may let one through —, deleted at teardown."""
+
+    usernames: list[str] = field(default_factory=list)
+
+    def new_username(self, prefix: str) -> str:
+        username = f"{prefix}_{uuid.uuid4().hex[:12]}"
+        self.usernames.append(username)
+        return username
+
+
+async def _delete_lane_accounts(usernames: list[str]) -> list[str]:
+    """Delete those of these accounts the lane holds, through user_service.delete_user, each in a session of its own; what failed."""
+    errors: list[str] = []
+    for username in usernames:
+        async with AsyncSession(get_async_engine()) as session:
+            try:
+                user = await user_service.get_user_by_username(session, username)
+                if user is not None:
+                    await user_service.delete_user(session, user.id)
+            except Exception as exc:  # every account gets its attempt; the failures are reported together
+                errors.append(f"{username}: {exc!r}")
+    return errors
+
+
+@pytest_asyncio.fixture
+async def lane_accounts(test_server) -> AsyncIterator[_LaneAccounts]:
+    """The accounts this test registers or writes on the lane's server, deleted at teardown, after a red too."""
+    accounts = _LaneAccounts()
+    try:
+        yield accounts
+    finally:
+        errors = await _delete_lane_accounts(accounts.usernames)
+        assert not errors, f"Cleanup: could not delete what this test wrote on the lane: {errors}"
+
+
+@pytest_asyncio.fixture
+async def legacy_account(lane_accounts: _LaneAccounts) -> _DisposableUser:
+    """An account of this test whose stored password predates decision 37 and breaks four rules (LEGACY_PASSWORD).
+
+    Written as a row on the lane — no route accepts that password any more, and a row needs none —, with a real bcrypt
+    hash of it, so that it signs in; lane_accounts deletes it at teardown.
+    """
+    user = _DisposableUser(username=lane_accounts.new_username("pwd_legacy"), password=LEGACY_PASSWORD)
+    hashed = await asyncio.to_thread(auth_service.hash_password, user.password)
+    async with AsyncSession(get_async_engine()) as session:
+        session.add(User(username=user.username, email=f"{user.username}@example.com", hashed_password=hashed))
+        await session.commit()
+    assert await _lane_user_exists(user.username), f"Setup: {user.username} must be in the lane's database"
+    return user
+
+
+async def _register_on_lane(username: str, password: str) -> httpx.Response:
+    """POST /auth/register on the lane's server from a client of its own: ``username``, ``<username>@example.com``, ``password``."""
+    async with httpx.AsyncClient() as client:
+        return await client.post(f"{API_BASE}/auth/register", json={"username": username, "email": f"{username}@example.com", "password": password}, timeout=TIMEOUT)
+
+
+async def _change_password_on_lane(token: str, current_password: str, new_password: str) -> httpx.Response:
+    """POST /auth/change-password on the lane's server, the session token sent explicitly from a client of its own."""
+    async with httpx.AsyncClient() as client:
+        return await client.post(f"{API_BASE}/auth/change-password", json={"current_password": current_password, "new_password": new_password}, headers={"Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)
+
+
+async def _me_on_lane(token: str) -> int:
+    """GET /auth/me with one session token, sent explicitly from a client of its own: the status code."""
+    async with httpx.AsyncClient() as client:
+        return (await client.get(f"{API_BASE}/auth/me", headers={"Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)).status_code
+
+
+async def _registered_and_signed_in(lane_accounts: _LaneAccounts, prefix: str) -> tuple[str, str]:
+    """An account of this test registered on the lane with PWD_ACCOUNT_PASSWORD, then signed in: (username, session token)."""
+    username = lane_accounts.new_username(prefix)
+    registered = await _register_on_lane(username, PWD_ACCOUNT_PASSWORD)
+    assert registered.status_code == 201, f"Setup: registering {username} failed: {registered.status_code} {registered.text}"
+    signed_in = await _post_login(username, PWD_ACCOUNT_PASSWORD)
+    assert signed_in.status_code == 200, f"Setup: signing in as {username} failed: {signed_in.status_code} {signed_in.text}"
+    token, _ = _session_set_cookie(signed_in)
+    return username, token
+
+
+class TestPasswordRulesOnEveryNewPassword:
+    """Decision 37 on the lane's server: register and change-password refuse a password that breaks the rules, and say which; the login never checks them."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("password", "rules"), WEAK_PASSWORDS)
+    async def test_register_refuses_a_password_that_breaks_the_rules(self, lane_accounts, password, rules):
+        """PWD-001 — NEW, red today (201, or a 422 of the schema under eight characters): POST /auth/register with a password that breaks the rules → 400 PASSWORD_TOO_WEAK, a message, and ``rules`` exactly the codes missed, in the policy's order; no account."""
+        print_section(f"PWD-001: register refuses {password!r}")
+        username = lane_accounts.new_username("pwd_register")
+
+        response = await _register_on_lane(username, password)
+
+        _assert_password_too_weak(response, rules, f"POST /auth/register with {password!r}")
+        assert not await _lane_user_exists(username), f"a refused password must create no account, yet {username} exists"
+        print_success(f"✓ {password!r}: 400 PASSWORD_TOO_WEAK, rules {rules}, no account")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("password", STRONG_PASSWORDS)
+    async def test_register_accepts_a_password_that_meets_every_rule(self, lane_accounts, password):
+        """PWD-002 — GUARD, green today and after: a password that meets every rule, with ASCII or with Unicode classes, registers (201) and signs in: the API applies the policy's classes, not ASCII ones."""
+        print_section(f"PWD-002: register accepts {password!r}")
+        username = lane_accounts.new_username("pwd_strong")
+
+        registered = await _register_on_lane(username, password)
+        signed_in = await _post_login(username, password)
+
+        assert registered.status_code == 201, f"{password!r} meets every rule: POST /auth/register must answer 201, got {registered.status_code} {registered.text}"
+        assert signed_in.status_code == 200, f"the account must sign in with {password!r}: {signed_in.status_code} {signed_in.text}"
+        print_success(f"✓ {password!r}: registered and signed in")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("password", "rules"), WEAK_PASSWORDS)
+    async def test_change_password_refuses_a_new_password_that_breaks_the_rules(self, lane_accounts, password, rules):
+        """PWD-003 — NEW, red today (200, or a 422 of the schema under eight characters): POST /auth/change-password with a new password that breaks the rules → 400 PASSWORD_TOO_WEAK with exactly the codes missed; nothing changes: no session cookie set, the session still works, the old password still signs in and the refused one does not."""
+        print_section(f"PWD-003: change-password refuses {password!r}")
+        username, token = await _registered_and_signed_in(lane_accounts, "pwd_change")
+
+        response = await _change_password_on_lane(token, PWD_ACCOUNT_PASSWORD, password)
+
+        _assert_password_too_weak(response, rules, f"POST /auth/change-password with the new password {password!r}")
+        assert _session_set_cookies(response) == [], f"a refused change must set no session cookie: {response.headers.get_list('set-cookie')}"
+        assert await _me_on_lane(token) == 200, "a refused change must end no session: the session from before must still work"
+        old, refused = await _post_login(username, PWD_ACCOUNT_PASSWORD), await _post_login(username, password)
+        assert (old.status_code, refused.status_code) == (200, 401), f"the password must stay the old one: login with the old one {old.status_code}, with the refused one {refused.status_code}"
+        print_success(f"✓ {password!r}: 400 PASSWORD_TOO_WEAK, rules {rules}; the password and the session as they were")
+
+    @pytest.mark.asyncio
+    async def test_change_password_checks_the_new_password_before_the_current_one(self, lane_accounts):
+        """PWD-004 — NEW, red today (400 «Current password is incorrect»): a new password that breaks the rules with a wrong current password → 400 PASSWORD_TOO_WEAK: the new password is checked before anything else of the request; the password unchanged."""
+        print_section("PWD-004: change-password checks the new password first")
+        username, token = await _registered_and_signed_in(lane_accounts, "pwd_first")
+
+        response = await _change_password_on_lane(token, _wrong_password(), "weakpassword")
+
+        _assert_password_too_weak(response, ["uppercase", "digit", "special"], "POST /auth/change-password with a wrong current password and the new password 'weakpassword'")
+        signed_in = await _post_login(username, PWD_ACCOUNT_PASSWORD)
+        assert signed_in.status_code == 200, f"the password must stay the old one: {signed_in.status_code} {signed_in.text}"
+        print_success("✓ wrong current password and a weak new one: PASSWORD_TOO_WEAK, the new password first")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("password", STRONG_PASSWORDS)
+    async def test_change_password_accepts_a_new_password_that_meets_every_rule(self, lane_accounts, password):
+        """PWD-005 — GUARD, green today and after: a new password that meets every rule, with ASCII or with Unicode classes → 200; the new password signs in, the old one does not."""
+        print_section(f"PWD-005: change-password accepts {password!r}")
+        username, token = await _registered_and_signed_in(lane_accounts, "pwd_changed")
+
+        response = await _change_password_on_lane(token, PWD_ACCOUNT_PASSWORD, password)
+
+        assert response.status_code == 200, f"{password!r} meets every rule: POST /auth/change-password must answer 200, got {response.status_code} {response.text}"
+        new, old = await _post_login(username, password), await _post_login(username, PWD_ACCOUNT_PASSWORD)
+        assert (new.status_code, old.status_code) == (200, 401), f"the new password must sign in and the old one must not: {new.status_code}, {old.status_code}"
+        print_success(f"✓ {password!r}: changed, and signs in")
+
+    @pytest.mark.asyncio
+    async def test_a_stored_weak_password_still_signs_in(self, legacy_account):
+        """PWD-006 — GUARD, green today and after: the login never checks the rules. An account whose stored password breaks four of them signs in with it: 200 and one session cookie."""
+        print_section("PWD-006: a stored weak password still signs in")
+        response = await _post_login(legacy_account.username, legacy_account.password)
+
+        assert response.status_code == 200, f"a password stored before decision 37 must still sign in, the login never checks the rules: {response.status_code} {response.text}"
+        assert len(_session_set_cookies(response)) == 1, f"the login must set one session cookie: {response.headers.get_list('set-cookie')}"
+        print_success(f"✓ {LEGACY_PASSWORD!r}, stored before the rules: 200 and a session")
+
+    @pytest.mark.asyncio
+    async def test_a_stored_weak_password_is_changed_only_for_one_that_meets_the_rules(self, legacy_account):
+        """PWD-007 — NEW, red today (a 422 of the schema, seven characters): signed in with its weak password, the account «changes» it to itself → 400 PASSWORD_TOO_WEAK with the four codes — the rules before «must be different» —; then to one that meets the rules → 200, the weak current password never judged. The new one signs in, the weak one no more."""
+        print_section("PWD-007: a stored weak password is changed only for one that meets the rules")
+        signed_in = await _post_login(legacy_account.username, legacy_account.password)
+        assert signed_in.status_code == 200, f"Setup: the legacy account must sign in: {signed_in.status_code} {signed_in.text}"
+        token, _ = _session_set_cookie(signed_in)
+
+        same = await _change_password_on_lane(token, LEGACY_PASSWORD, LEGACY_PASSWORD)
+        upgraded = await _change_password_on_lane(token, LEGACY_PASSWORD, UPGRADED_PASSWORD)
+
+        _assert_password_too_weak(same, LEGACY_RULES, f"POST /auth/change-password from the stored weak password {LEGACY_PASSWORD!r} to itself")
+        assert upgraded.status_code == 200, f"a weak current password is still the current password: changing it for one that meets the rules must answer 200, got {upgraded.status_code} {upgraded.text}"
+        new, old = await _post_login(legacy_account.username, UPGRADED_PASSWORD), await _post_login(legacy_account.username, LEGACY_PASSWORD)
+        assert (new.status_code, old.status_code) == (200, 401), f"the new password must sign in and the weak one must not: {new.status_code}, {old.status_code}"
+        print_success("✓ to itself: PASSWORD_TOO_WEAK; to a password that meets the rules: 200")
+
+    @pytest.mark.asyncio
+    async def test_an_empty_password_is_still_a_schema_error(self, lane_accounts):
+        """PWD-008 — GUARD, green today and after: the schemas keep «not empty». POST /auth/register with an empty password and POST /auth/change-password with an empty new password → 422, a request validation error, not PASSWORD_TOO_WEAK; no account."""
+        print_section("PWD-008: an empty password is a 422 of the schema")
+        _, token = await _registered_and_signed_in(lane_accounts, "pwd_empty")
+        newcomer = lane_accounts.new_username("pwd_empty_new")
+
+        registered = await _register_on_lane(newcomer, "")
+        changed = await _change_password_on_lane(token, PWD_ACCOUNT_PASSWORD, "")
+
+        assert registered.status_code == 422, f"an empty password is a request validation error: POST /auth/register must answer 422, got {registered.status_code} {registered.text}"
+        assert changed.status_code == 422, f"an empty new password is a request validation error: POST /auth/change-password must answer 422, got {changed.status_code} {changed.text}"
+        assert not await _lane_user_exists(newcomer), f"a refused registration must create no account, yet {newcomer} exists"
+        print_success("✓ empty: 422 on both routes")

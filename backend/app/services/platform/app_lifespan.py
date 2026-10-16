@@ -33,8 +33,10 @@ from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
 from backend.app.services.platform.instance_backup.apply import apply_pending_restore, finish_pending_restore, hold_serving_lock
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
+from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
+from backend.app.services.platform.sleep_wake.idle_monitor import start_idle_monitor, stop_idle_monitor
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
@@ -209,16 +211,21 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
+    # The first start on restored data completed: commit the restore (B3), before any step reports on or serves the data
     Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
+    # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
+    Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
     Step("scheduler", lambda: _start_scheduler()),
+    Step("idle-monitor", lambda: start_idle_monitor()),
 )
 
 #: Run in the lifespan's ``finally``: also when serving ended with an error.
 FINALLY_STEPS: tuple[Step, ...] = (Step("tool-executor", lambda: shutdown_tool_executor()),)
 
 SHUTDOWN_STEPS: tuple[Step, ...] = (
+    Step("idle-monitor", lambda: stop_idle_monitor()),
     Step("scheduler", lambda: _stop_scheduler()),
     Step("providers", lambda: _shutdown_providers()),
     Step("brim-parse-pool", lambda: _shutdown_brim_parse_pool(), blocking=True),

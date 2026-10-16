@@ -23,6 +23,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
@@ -246,7 +247,7 @@
         if (!chartContainer || !mapRegistered) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'geography-map');
             needsInitialLayoutStabilityPass = true;
             chartInstance.on('georoam', () => {
@@ -344,7 +345,7 @@
 </script>
 
 {#if mapError}
-    <div class="flex items-center justify-center text-sm text-gray-400 dark:text-gray-500 italic" style="height: {height};">
+    <div class="flex items-center justify-center text-sm text-lf-muted italic" style="height: {height};">
         {mapError}
     </div>
 {:else}
@@ -353,7 +354,7 @@
     <div class="flex flex-col" style="height: {height};">
         <div bind:this={chartContainer} class="w-full flex-1 min-h-0"></div>
         {#if unknownPct > 0}
-            <p class="mt-1 text-[11px] text-gray-400 dark:text-gray-500 italic text-center leading-snug">
+            <p class="mt-1 text-[11px] text-lf-muted italic text-center leading-snug">
                 {$t('dashboard.geoUnclassified', {values: {pct: unknownPct}})}
             </p>
         {/if}

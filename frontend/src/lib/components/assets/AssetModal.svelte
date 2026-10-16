@@ -47,6 +47,7 @@
     import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, shouldSeedBondQuoteBase, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
+    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
     import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -154,7 +155,11 @@
         importNotices?: Array<{kind: string; reason: string}>;
         /** Asset-global only; contextual creation keeps its existing plain success toast. */
         linkCreatedAsset?: boolean;
-        oncreated?: (assetId: number) => void;
+        /** The asset exists. `detail.syncing`: its one price sync started, and `onsynced` will tell how it ended. */
+        oncreated?: (assetId: number, detail?: {syncing: boolean}) => void;
+        /** The one price sync after a creation ended (O-20): its result for the asset, or null when the request failed.
+         * Never called when no sync starts (no provider, or its assignment failed). */
+        onsynced?: (assetId: number, result: AssetCreateSyncResult | null) => void;
         onupdated?: () => void;
         onclose?: () => void;
     }
@@ -175,6 +180,7 @@
         importNotices = [],
         linkCreatedAsset = false,
         oncreated,
+        onsynced,
         onupdated,
         onclose,
     }: Props = $props();
@@ -1231,20 +1237,29 @@
         const createdLabel = linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: assetId}, displayName) : escapeHtml(displayName);
         toasts.success($t('assets.modal.createSuccess', {values: {name: createdLabel}}));
         open = false;
-        oncreated?.(assetId);
+        const syncing = hasProvider && !skipProviderAssignment;
+        oncreated?.(assetId, {syncing});
 
-        // Trigger a full-history sync for new assets with a real data provider — fire-and-forget.
-        // Parametric providers (e.g. scheduled_investment) generate their own data and don't
-        // need a historical fetch. Errors are non-blocking (chart just stays empty until the
-        // next scheduled sync); we intentionally do NOT await this.
+        // The one price sync of a new asset with a provider (O-20): fire-and-forget, so the modal
+        // closes at once, and reported through `onsynced`, so the caller can show it and reload —
+        // the Assets page used to start a second sync of its own. Parametric providers (e.g.
+        // scheduled_investment) need it too: assigning one stores no price, the sync generates
+        // the series. Errors are non-blocking (the chart stays empty until the next sync).
         //
         // `start: 'resume'` is the backend sentinel for "the day after the last price I already
         // have, or the provider's full history if I have none". A just-created asset has none,
         // so this is a full-history fetch — expressed as the same rule every other auto-sync
         // uses, instead of a hardcoded date that silently truncates whatever precedes it.
-        if (hasProvider && !skipProviderAssignment && !isParametricProvider(providerCode)) {
+        if (syncing) {
             const end = new Date().toISOString().slice(0, 10);
-            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).catch((syncErr) => console.warn('Post-create full-history sync failed (non-blocking):', syncErr));
+            void zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([{asset_id: assetId, date_range: {start: 'resume', end}}]).then(
+                (response) => onsynced?.(assetId, ((response as any)?.results?.[0] ?? null) as AssetCreateSyncResult | null),
+                // Only the request's failure: an error of the caller's handler must not report the sync a second time.
+                (syncErr) => {
+                    console.warn('Post-create full-history sync failed (non-blocking):', syncErr);
+                    onsynced?.(assetId, null);
+                },
+            );
         }
     }
 
@@ -1445,9 +1460,9 @@
 
 <ModalBase {open} maxWidth="4xl" allowOverflow={true} onRequestClose={handleClose} {zIndex} testId="asset-modal">
     <!-- Header -->
-    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-        <button type="button" onclick={handleClose} disabled={saving} class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-lf-subtle">
+        <h2 class="text-lg font-semibold text-lf-primary">{title}</h2>
+        <button type="button" onclick={handleClose} disabled={saving} class="text-lf-muted hover:text-lf-secondary transition-colors">
             <X size={20} />
         </button>
     </div>
@@ -1466,12 +1481,12 @@
                 {#if !editMode && initialSearchBadges.length > 0}
                     <!-- All three (title, badges, input) in one space-y-1.5 wrapper → uniform 6px gaps -->
                     <div class="space-y-1.5">
-                        <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        <div class="flex items-center gap-2 text-xs font-semibold text-lf-muted uppercase tracking-wider">
                             <Search size={12} />
                             <span>{$t('assets.modal.searchOnline')}</span>
                         </div>
                         <div class="flex flex-wrap items-center gap-1.5">
-                            <span class="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500 shrink-0">
+                            <span class="flex items-center gap-1 text-xs text-lf-muted shrink-0">
                                 <Search size={11} class="opacity-60" />
                                 {$t('assets.modal.searchSuggestions')}:
                             </span>
@@ -1522,10 +1537,10 @@
             />
 
             <!-- More Info (collapsible — Identifiers + Classification) -->
-            <div class="border border-gray-200 dark:border-slate-700 rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
+            <div class="border border-lf-subtle rounded-lg" use:guideAnchor={'asset.provider'} data-testid="asset-tour-provider">
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer select-none"
+                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-lf-secondary bg-lf-panel hover:bg-lf-neutral transition-colors cursor-pointer select-none"
                     role="button"
                     tabindex="0"
                     data-testid="asset-modal-more-info"
@@ -1551,12 +1566,12 @@
                 </div>
 
                 {#if moreInfoExpanded}
-                    <div class="px-4 py-3 space-y-4 border-t border-gray-200 dark:border-slate-700">
+                    <div class="px-4 py-3 space-y-4 border-t border-lf-subtle">
                         <AssetModalIdentifiers bind:rows={identifierRows} bind:selectedIds={identifierSelectedIds} {hasProvider} {askingProvider} onmanualedit={markManualField} onaskprovider={() => handleAskProviderSection('identifiers')} onbulkdelete={handleIdentifierBulkDelete} />
 
                         <!-- Sub-section: Classification -->
                         <div class="space-y-3">
-                            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                            <div class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider">
                                 {$t('common.classification')}
                             </div>
 
@@ -1593,7 +1608,7 @@
 
             <!-- Error -->
             {#if formError}
-                <div data-form-error data-testid="asset-modal-form-error" class="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg">
+                <div data-form-error data-testid="asset-modal-form-error" class="text-sm text-lf-danger-on-soft bg-lf-danger-soft px-4 py-2 rounded-lg">
                     {formError}
                 </div>
             {/if}

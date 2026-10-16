@@ -564,11 +564,13 @@ describe('AI Export compact Snapshot Data renderer', () => {
     /**
      * D12(a), issue #32: `portfolio.provenance` and `broker.provenance` move to component version 2
      * (their WAC semantics now name the single average cost) with an unchanged payload shape
-     * (schema version 1). The renderer knows that shape, so v2 renders compactly — through the same
-     * generic renderer as v1, hence the very same text — while every other version it does not know
-     * keeps falling back to YAML. No prompt wording is frozen: the texts below are placeholders.
+     * (schema version 1). J-17 moves them to version 3 (the valuation hierarchy names ESTIMATED_AT_COST,
+     * an ADJUSTMENT is never a price), with the same payload shape again. The renderer knows that shape,
+     * so v2 and v3 render compactly — through the same generic renderer as v1, hence the very same text —
+     * while every other version it does not know keeps falling back to YAML. No prompt wording is frozen:
+     * the texts below are placeholders.
      */
-    describe('provenance v2 (D12)', () => {
+    describe('provenance v2 (D12) and v3 (J-17)', () => {
         type ProvenanceId = 'portfolio.provenance' | 'broker.provenance';
         const directory = {
             assets: [],
@@ -602,27 +604,200 @@ describe('AI Export compact Snapshot Data renderer', () => {
 
         const targetOf = (componentId: ProvenanceId) => (componentId === 'portfolio.provenance' ? {kind: 'portfolio'} : {kind: 'broker', broker_id: 5});
 
-        it.each(['portfolio.provenance', 'broker.provenance'] as const)('renders %s v2 (schema 1) compactly, exactly as its v1', (componentId) => {
+        it.each([
+            ['portfolio.provenance', 2],
+            ['broker.provenance', 2],
+            // J-17. Before J-17: v3 fell back to YAML (the renderer knew v1 and v2 only).
+            ['portfolio.provenance', 3],
+            ['broker.provenance', 3],
+        ] as const)('renders %s v%i (schema 1) compactly, exactly as its v1', (componentId, version) => {
             const v1 = renderSnapshotDataText([provenanceSection(componentId, 1)], targetOf(componentId), directory).content;
-            const v2 = renderSnapshotDataText([provenanceSection(componentId, 2)], targetOf(componentId), directory).content;
+            const bumped = renderSnapshotDataText([provenanceSection(componentId, version)], targetOf(componentId), directory).content;
 
             // Control: v1 is today's compact generic rendering of this payload.
             expect(v1).toContain(`COMPONENT ${componentId}`);
             expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
-            // Subject: v2 is rendered by the same generic renderer — the same text, line for line.
-            expect(v2).not.toContain('PAYLOAD YAML FALLBACK');
-            expect(v2).toBe(v1);
+            // Subject: the bumped version is rendered by the same generic renderer — the same text, line for line.
+            expect(bumped).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(bumped).toBe(v1);
         });
 
         it.each([
-            ['portfolio.provenance v3', provenanceSection('portfolio.provenance', 3)],
-            ['broker.provenance v3', provenanceSection('broker.provenance', 3)],
+            // Before J-17 these two were v3, the first version the renderer did not know.
+            ['portfolio.provenance v4', provenanceSection('portfolio.provenance', 4)],
+            ['broker.provenance v4', provenanceSection('broker.provenance', 4)],
             ['portfolio.provenance v2 with schema 2', provenanceSection('portfolio.provenance', 2, 2)],
+            ['broker.provenance v3 with schema 2', provenanceSection('broker.provenance', 3, 2)],
             ['portfolio.summary v2 with schema 1', {component_id: 'portfolio.summary', component_version: 2, schema_id: 'portfolio.summary', schema_version: 1, payload: {total: 10, future_field: {must_survive: true}}}],
         ])('still falls back to YAML for %s', (_label, section) => {
             const rendered = renderSnapshotDataText([section], {kind: 'portfolio'}, directory).content;
 
             expect(rendered).toContain(`COMPONENT ${section.component_id}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+    });
+
+    /**
+     * J-17 (developer's P2 and option A, 16/10): an ADJUSTMENT is never a price, and a holding with no price at
+     * all is valued at its book cost, `valuation_source: "ESTIMATED_AT_COST"`. `asset.provenance` moves to
+     * component version 2 (its valuation-source semantics gain that code, LAST_TRADE_PRICE no longer counts a
+     * priced ADJUSTMENT) and `asset.positions_by_broker` to version 2 (its `valuation_source` may be the new
+     * code), both with the schema-1 payload shape the generic renderer knows. So each v2 renders compactly — the
+     * very same text as its v1 — and the at-cost row reaches the prompt with its code. Versions the renderer does
+     * not know keep falling back to YAML. No prompt wording is frozen: the texts are placeholders.
+     *
+     * Before J-17: the renderer knew v1 only for both, so each v2 fell back to YAML.
+     */
+    describe('asset provenance and positions by broker v2 (J-17)', () => {
+        type AssetComponentId = 'asset.provenance' | 'asset.positions_by_broker';
+        const target = {kind: 'asset', asset_id: 42};
+        const directory = {
+            assets: [{asset_id: 42, display_name: 'Unquoted Asset'}],
+            brokers: [
+                {broker_id: 5, display_name: 'First Broker'},
+                {broker_id: 7, display_name: 'Second Broker'},
+            ],
+            fx_pairs: [],
+        };
+
+        function payloadOf(componentId: AssetComponentId) {
+            if (componentId === 'asset.provenance') {
+                return {
+                    asset_id: 42,
+                    provider: null,
+                    valuation_source_semantics: [
+                        {code: 'MARKET_PRICE', description: 'market price semantics placeholder'},
+                        {code: 'LAST_TRADE_PRICE', description: 'last trade semantics placeholder'},
+                        {code: 'ESTIMATED_AT_COST', description: 'at cost semantics placeholder'},
+                        {code: 'MISSING', description: 'missing semantics placeholder'},
+                    ],
+                    price_provenance_note: 'price provenance placeholder',
+                };
+            }
+            return {
+                asset_id: 42,
+                as_of_date: '2026-03-31',
+                target_currency: 'EUR',
+                positions: [
+                    {broker_id: 5, broker_name: 'First Broker', quantity: '10', valuation_source: 'MARKET_PRICE', wac_per_unit: '40', unit_price: '50', current_value: '500', unrealized_gain_loss: '100', unrealized_gain_loss_percent: '25'},
+                    {broker_id: 7, broker_name: 'Second Broker', quantity: '10', valuation_source: 'ESTIMATED_AT_COST', wac_per_unit: '30', unit_price: null, current_value: '300', unrealized_gain_loss: '0', unrealized_gain_loss_percent: '0'},
+                ],
+            };
+        }
+
+        function assetSection(componentId: AssetComponentId, componentVersion: number, schemaVersion = 1) {
+            return {component_id: componentId, component_version: componentVersion, schema_id: componentId, schema_version: schemaVersion, payload: payloadOf(componentId)};
+        }
+
+        it.each(['asset.provenance', 'asset.positions_by_broker'] as const)('renders %s v2 (schema 1) compactly, exactly as its v1, with the ESTIMATED_AT_COST code', (componentId) => {
+            const v1 = renderSnapshotDataText([assetSection(componentId, 1)], target, directory).content;
+            const v2 = renderSnapshotDataText([assetSection(componentId, 2)], target, directory).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: v2 goes through the same generic renderer — the same text, line for line ...
+            expect(v2).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(v2).toBe(v1);
+            // ... and the new code is in it, as a value of the payload, not dropped.
+            expect(v2).toContain('ESTIMATED_AT_COST');
+        });
+
+        it.each([
+            ['asset.provenance v3', 'asset.provenance', 3, 1],
+            ['asset.positions_by_broker v3', 'asset.positions_by_broker', 3, 1],
+            ['asset.positions_by_broker v2 with schema 2', 'asset.positions_by_broker', 2, 2],
+        ] as const)('still falls back to YAML for %s', (_label, componentId, version, schemaVersion) => {
+            const rendered = renderSnapshotDataText([assetSection(componentId, version, schemaVersion)], target, directory).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+    });
+
+    /**
+     * J-17: a holding valued at its book cost (`valuation_source: "ESTIMATED_AT_COST"`) has no price, so its
+     * position row exports no `unit_price` (`null`), and `portfolio.positions` / `broker.positions` move to
+     * component version 2 with the schema-1 payload shape the generic renderer knows. So each v2 renders
+     * compactly — the very same text as its v1 — with the at-cost row and its code in it; versions the renderer
+     * does not know keep falling back to YAML. No prompt wording is frozen: the texts are placeholders.
+     *
+     * Before J-17: the renderer knew v1 only for both, so each v2 fell back to YAML.
+     */
+    describe('portfolio and broker positions v2 (J-17)', () => {
+        type PositionsId = 'portfolio.positions' | 'broker.positions';
+        const directory = {
+            assets: [
+                {asset_id: 42, display_name: 'Quoted Asset'},
+                {asset_id: 43, display_name: 'Unquoted Asset'},
+            ],
+            brokers: [{broker_id: 5, display_name: 'First Broker'}],
+            fx_pairs: [],
+        };
+
+        function positionsSection(componentId: PositionsId, componentVersion: number, schemaVersion = 1) {
+            const positions = [
+                {
+                    asset_id: 42,
+                    asset_name: 'Quoted Asset',
+                    asset_type: 'ETF',
+                    broker_id: 5,
+                    broker_name: 'First Broker',
+                    quantity: '10',
+                    wac_per_unit: {amount: '40', code: 'EUR'},
+                    unit_price: {amount: '50', code: 'EUR'},
+                    current_value: {amount: '500', code: 'EUR'},
+                    valuation_source: 'MARKET_PRICE',
+                    gain_loss: {amount: '100', code: 'EUR'},
+                    gain_loss_percent: '25',
+                    nav_weight_percent: '62.5',
+                },
+                {
+                    asset_id: 43,
+                    asset_name: 'Unquoted Asset',
+                    asset_type: 'BOND',
+                    broker_id: 5,
+                    broker_name: 'First Broker',
+                    quantity: '10',
+                    wac_per_unit: {amount: '30', code: 'EUR'},
+                    unit_price: null,
+                    current_value: {amount: '300', code: 'EUR'},
+                    valuation_source: 'ESTIMATED_AT_COST',
+                    gain_loss: {amount: '0', code: 'EUR'},
+                    gain_loss_percent: '0',
+                    nav_weight_percent: '37.5',
+                },
+            ];
+            const common = {as_of: '2026-03-31', target_currency: 'EUR', position_count: 2, positions};
+            const payload = componentId === 'broker.positions' ? {broker_id: 5, ...common} : common;
+            return {component_id: componentId, component_version: componentVersion, schema_id: componentId, schema_version: schemaVersion, payload};
+        }
+
+        const targetOf = (componentId: PositionsId) => (componentId === 'portfolio.positions' ? {kind: 'portfolio'} : {kind: 'broker', broker_id: 5});
+
+        it.each(['portfolio.positions', 'broker.positions'] as const)('renders %s v2 (schema 1) compactly, exactly as its v1, with the ESTIMATED_AT_COST row', (componentId) => {
+            const v1 = renderSnapshotDataText([positionsSection(componentId, 1)], targetOf(componentId), directory).content;
+            const v2 = renderSnapshotDataText([positionsSection(componentId, 2)], targetOf(componentId), directory).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: v2 goes through the same generic renderer — the same text, line for line ...
+            expect(v2).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(v2).toBe(v1);
+            // ... and the at-cost row is in its table, with its code.
+            expect(v2).toContain('TABLE positions');
+            expect(v2).toContain('ESTIMATED_AT_COST');
+        });
+
+        it.each([
+            ['portfolio.positions v3', 'portfolio.positions', 3, 1],
+            ['broker.positions v3', 'broker.positions', 3, 1],
+            ['portfolio.positions v2 with schema 2', 'portfolio.positions', 2, 2],
+        ] as const)('still falls back to YAML for %s', (_label, componentId, version, schemaVersion) => {
+            const rendered = renderSnapshotDataText([positionsSection(componentId, version, schemaVersion)], targetOf(componentId), directory).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
             expect(rendered).toContain('PAYLOAD YAML FALLBACK');
         });
     });

@@ -48,7 +48,7 @@ Only administrators (superusers) have the lock; everyone else gets a read-only v
 |---|---|---|---|
 | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value applies from each user's next login. |
 | 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** (see [Who Can Sign Up](#registration)). An instance upgraded from an earlier version keeps the mode it had. **Open** lets in anyone who reaches the login page: avoid it if the instance is reachable from the internet. |
-| 🛡️ Security | **Require Email Verification** | Off | Not active yet: sending emails is a planned feature, so the switch is read-only and marked **Coming soon**. |
+| 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before they can sign in; the first account never waits, and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is greyed out. See *Email Verification* in [Email](email.md). |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
 | 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. |
@@ -116,11 +116,13 @@ The scheduler keeps prices and exchange rates up to date on its own, even when n
 - 💰 **Current price refresh** — every few minutes, the latest price of each active asset that has
   a price provider.
 - 📊 **History sync** — on the days and times you choose, the daily prices of those assets and the
-  rates of every FX pair with a provider, over the **Lookback horizon**, to fill any gap. Pairs
-  with manual rates only are skipped.
+  rates of every FX pair with a provider, over at least the **Lookback horizon**, to fill any gap.
+  For an asset or a pair whose last saved price or rate is older, it goes back to that day, up to a
+  year; an asset with no saved price yet gets the horizon only, as the scheduler never downloads a
+  whole history. Pairs with manual rates only are skipped.
 
 If the server is off or asleep at a sync time, the history sync it missed runs as soon as the server
-is back, instead of waiting for the next sync time.
+is back, instead of waiting for the next sync time: a server off for weeks fills its whole gap.
 
 ### ⚙️ Configure the schedule
 
@@ -137,7 +139,7 @@ The dialog has its own **Save** button.
 | **Refresh every** | 10 minutes | How often current prices are refreshed, from 1 to 1440 minutes. |
 | **Sync times** | `06:00`, `23:00` | When the history sync runs; **Add time** adds a slot. |
 | **Sync days** | Mon to Sat | The days of the history sync. |
-| **Lookback horizon** | 14 days | How many past days each history sync checks, from 1 to 365. |
+| **Lookback horizon** | 14 days | How many past days each history sync checks at least, from 1 to 365. It goes further back, up to a year, when the last saved price or rate of an asset or a pair is older. |
 
 Keep at least one time and one day. Tip: a history sync after the markets close (for example
 `22:00`) gets the most complete data.
@@ -151,6 +153,9 @@ Keep at least one time and one day. Tip: a history sync after the markets close 
 ### 📜 Read the scheduler log
 
 The **Scheduler Status** row shows the last current price refresh, with a dot for its result.
+While a retry is pending, an extra line gives its time: **Failed: next attempt at …** after a
+refresh that could not finish, otherwise **Paused items retried at …** for the prices deferred
+because their provider paused.
 Click the row (or **Details…**) to open the **Scheduler Execution Log**. Only administrators can
 read the status and the log.
 
@@ -159,9 +164,13 @@ read the status and the log.
 </div>
 
 - Each entry is one run: job, time, duration and how many items succeeded. 🟢 **OK**: all of
-  them, or nothing to do; 🟡 **Partial**: some failed; 🔴 **Error**: none succeeded.
+  them, or nothing to do; 🟡 **Partial**: some failed, or were deferred because their provider paused after too
+  many requests; 🔴 **Error**: none succeeded and none was deferred.
 - Click an entry to see each asset or FX pair, its provider and the prices changed (**Delta**).
   Hover an error to read it in full; double-click it (long-press on a phone) to copy it.
+- A deferred item shows a pause icon and **Deferred: provider paused**: hover the label to read the
+  provider's message. The entry counts deferred items with ⏸, next to ✓ and ✗ (for example
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), and **Retry at** in its header gives the time set for retrying them.
 - Filter by job, status or period, from the last hour to the last 30 days. Only the most recent
   runs are kept.
 

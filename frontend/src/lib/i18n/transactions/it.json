@@ -239,7 +239,12 @@
       "costBasisRequired": "❌ <b>{type}</b> con quantità positiva richiede un costo base. Usa la modalità <b>Auto</b> (PMC) oppure inserisci un valore <b>manuale</b>.",
       "pairDeleteIncomplete": "Transazione collegata: per eliminare questa riga devi eliminare anche la sua controparte (transazione #{partnerId}). Se la controparte è in un broker che non puoi modificare, chiedi al proprietario di eliminarla.",
       "pairQuantityMismatch": "Un trasferimento deve far uscire da un broker ed entrare nell'altro la stessa quantità (trovate {qtyA} e {qtyB})",
-      "pairAssetMismatch": "I due lati di un trasferimento devono essere lo stesso asset"
+      "pairAssetMismatch": "I due lati di un trasferimento devono essere lo stesso asset",
+      "wacFxUnavailableSplit": "Le unità che escono sono valutate al loro costo medio, che richiede il cambio {pairs}: sincronizza i tassi FX, poi scollega di nuovo la coppia.",
+      "pairBrokerMismatch": "I due lati di un cambio valuta devono essere sullo stesso broker",
+      "cashNonzero": "{type} richiede un importo diverso da zero",
+      "decimalPlacesExceeded": "Al massimo {max} decimali",
+      "significantDigitsExceeded": "Al massimo {max} cifre significative"
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

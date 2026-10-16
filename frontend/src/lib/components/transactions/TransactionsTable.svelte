@@ -769,7 +769,7 @@
                 const iconHtml = iconSrc ? `<img src="${escapeHtml(iconSrc)}" alt="" width="20" height="20" loading="lazy" class="inline-block mr-1 align-middle" onerror="this.style.display='none'" />` : '';
                 return {
                     type: 'html',
-                    html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 min-w-0 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span class="min-w-0 ${overflowScrollTextClass}">${nameHtml}</span><span class="shrink-0 opacity-0 group-hover:opacity-60 transition-opacity text-gray-400 dark:text-gray-500 text-[10px] ml-0.5">↗</span></span>`,
+                    html: `<span role="link" tabindex="0" data-asset-navigate="${d.tx.asset_id}" class="inline-flex items-center gap-1 min-w-0 cursor-pointer group" data-testid="tx-asset-link-${d.tx.asset_id}">${iconHtml}<span class="min-w-0 ${overflowScrollTextClass}">${nameHtml}</span><span class="shrink-0 opacity-0 group-hover:opacity-60 transition-opacity text-lf-muted text-[10px] ml-0.5">↗</span></span>`,
                 };
             },
         },
@@ -847,7 +847,7 @@
             hiddenByDefault: false,
             getValue: (d) => d.tx.id,
             // TODO: filtro composito multi-range per ID (come currency-stack con range multipli)
-            cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-gray-400 dark:text-gray-500" data-testid="tx-id-${d.tx.id}">#${d.tx.id}</span>`}),
+            cell: (d) => ({type: 'html', html: `<span class="font-mono text-xs text-lf-muted" data-testid="tx-id-${d.tx.id}">#${d.tx.id}</span>`}),
         },
         {
             id: 'description',
@@ -865,7 +865,7 @@
                 const escaped = escapeHtml(desc);
                 const cell: CellContent = {
                     type: 'html',
-                    html: `<span class="block truncate w-full text-xs text-gray-600 dark:text-gray-300" data-testid="tx-desc-${d.tx.id}">${escaped}</span>`,
+                    html: `<span class="block truncate w-full text-xs text-lf-secondary" data-testid="tx-desc-${d.tx.id}">${escaped}</span>`,
                 };
                 // Show tooltip only if text is long enough to potentially truncate
                 if (desc.length > 20) {
@@ -990,7 +990,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="tx-table-wrap" data-testid="tx-table" use:captureClick bind:this={tableWrapperEl}>
+<div class="tx-table-wrap text-lf-primary" data-testid="tx-table" use:captureClick bind:this={tableWrapperEl}>
     <DataTable
         bind:this={tableRef}
         data={visibleRows}
@@ -1035,19 +1035,19 @@
     :global {
         /* Whole-row tint: broker color recognition.
            ── TUNE THESE VALUES to adjust row saturation ──
-           Light: --broker-vivid-light (hsl hue, 60%, 80%) mixed with white.
-           Dark: --broker-vivid (hsl hue, 75%, 50%) mixed with near-black. */
+           Light: --broker-vivid-light (hsl hue, 60%, 80%), dark: --broker-vivid (hsl hue, 75%, 50%), each mixed
+           with the card surface (--lf-surface-card): the broker colours are categorical, the base is a role. */
         .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 30%, white);
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 30%, var(--lf-surface-card));
         }
         .dark .tx-table-wrap tr.tx-row-tinted > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 15%, #0f0f18);
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 15%, var(--lf-surface-card));
         }
         .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 75%, white);
+            background: color-mix(in srgb, var(--broker-vivid-light, transparent) 75%, var(--lf-surface-card));
         }
         .dark .tx-table-wrap tr.tx-row-tinted:hover > td {
-            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, #0f0f18);
+            background: color-mix(in srgb, var(--broker-vivid, transparent) 22%, var(--lf-surface-card));
         }
         /* Type-icon column: clickable button (opens mkdocs doc page). */
         .tx-table-wrap .tx-type-icon-link {
@@ -1067,11 +1067,8 @@
                 background-color 0.12s ease;
         }
         .tx-table-wrap .tx-type-icon-link:hover {
-            background: rgb(0 0 0 / 0.05);
+            background: color-mix(in oklab, var(--lf-text-primary) 7%, transparent);
             transform: translateY(-1px);
-        }
-        .dark .tx-table-wrap .tx-type-icon-link:hover {
-            background: rgb(255 255 255 / 0.08);
         }
         .tx-table-wrap .tx-type-icon {
             width: 1.75rem;
@@ -1089,27 +1086,18 @@
         .tx-table-wrap .currency-amount {
             font-variant-numeric: tabular-nums;
             font-weight: 600;
-            color: #1e293b;
-        }
-        .dark .tx-table-wrap .currency-amount {
-            color: #e2e8f0;
+            color: var(--lf-text-primary);
         }
         .tx-table-wrap .currency-symbol {
             font-size: 0.75rem;
-            color: #475569;
-        }
-        .dark .tx-table-wrap .currency-symbol {
-            color: #cbd5e1;
+            color: var(--lf-text-secondary);
         }
         .tx-table-wrap .tx-cash-cell .emoji-flag {
             line-height: 1;
         }
         .tx-table-wrap .currency-code {
             font-weight: 500;
-            color: #475569;
-        }
-        .dark .tx-table-wrap .currency-code {
-            color: #e2e8f0;
+            color: var(--lf-text-secondary);
         }
         /* Links column: event dot + chain icon side by side. */
         .tx-table-wrap .tx-links-cell {
@@ -1124,18 +1112,14 @@
             width: 0.625rem;
             height: 0.625rem;
             border-radius: 9999px;
-            background: rgb(139 92 246);
+            background: var(--lf-info);
             border: 0;
             cursor: pointer;
-            box-shadow: 0 0 0 2px rgb(139 92 246 / 0.18);
+            box-shadow: 0 0 0 2px color-mix(in oklab, var(--lf-info) 20%, transparent);
             transition: transform 0.12s ease;
         }
         .tx-table-wrap .tx-event-dot:hover {
             transform: scale(1.25);
-        }
-        .dark .tx-table-wrap .tx-event-dot {
-            background: rgb(196 181 253);
-            box-shadow: 0 0 0 2px rgb(196 181 253 / 0.22);
         }
         /* Link chain icon: clickable button for linked pair navigation. */
         .tx-table-wrap .tx-link-icon {
@@ -1172,14 +1156,14 @@
             font-size: 0.6875rem;
             font-weight: 500;
             line-height: 1.4;
-            background: var(--badge-bg, #e2e8f0);
-            color: var(--badge-text, #334155);
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--badge-text, #334155) 18%, transparent);
+            background: var(--badge-bg, var(--lf-surface-neutral));
+            color: var(--badge-text, var(--lf-text-secondary));
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--badge-text, var(--lf-text-secondary)) 18%, transparent);
         }
         .dark .tx-table-wrap .tx-tag-badge {
-            background: var(--badge-dark-bg, #334155);
-            color: var(--badge-dark-text, #e2e8f0);
-            box-shadow: 0 0 0 1px color-mix(in srgb, var(--badge-dark-text, #e2e8f0) 22%, transparent);
+            background: var(--badge-dark-bg, var(--lf-surface-neutral));
+            color: var(--badge-dark-text, var(--lf-text-secondary));
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--badge-dark-text, var(--lf-text-secondary)) 22%, transparent);
         }
         /* Pair direction arrows: ⬇ (giver) / ⬆ (receiver) in Links column. */
         .tx-table-wrap .tx-pair-arrow {
@@ -1200,13 +1184,13 @@
         }
         @keyframes txPulse {
             0% {
-                box-shadow: inset 0 0 0 0 rgb(99 102 241 / 0);
+                box-shadow: inset 0 0 0 0 transparent;
             }
             40% {
-                box-shadow: inset 0 0 0 9999px rgb(99 102 241 / 0.25);
+                box-shadow: inset 0 0 0 9999px color-mix(in oklab, var(--lf-checked) 20%, transparent);
             }
             100% {
-                box-shadow: inset 0 0 0 0 rgb(99 102 241 / 0);
+                box-shadow: inset 0 0 0 0 transparent;
             }
         }
     }

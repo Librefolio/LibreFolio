@@ -1474,3 +1474,746 @@
   - **In avanti veloce su `a0915bef9`:** T, DV e L. Via a T (W3-a), DV (TD-1) e L (L-16). G sta scrivendo G-16; poi G-13.
 - **23:00, 1.3:** CHANGELOG di T+DV scritto (`2be2f067c`). Finestra lunga per G-13 accettata, da dopo le 23:15 (fine dell'`all-backend` di X); durante la finestra, solo l'`all-backend` di A sotto `nice` a 2 worker.
 - **23:00, registri:** D-T27 e la sezione «Review unica» nel piano generale, righe T/DV/anteprima della tabella delle corsie, registro copiato.
+- **23:05, G su G-13 e la mezzanotte:** il seed dipende da `date.today()`, quindi la coppia di riferimento va presa il 16/10, come la candidata di fine notte. **G-13 dalle 00:02** (lanciata da G se G-16 è verde), finestra della 1.3 **00:00–01:15**. Prima, build più la run di G-16 a 1 worker; poi il ramo di G resta fermo fino alla coppia.
+- **23:05, W3-a di T approvato:** `toneClasses.ts` (`SIGN_TEXT`, `SIGN_BAR` → gain/loss), `chartColorScales.ts` (`timingEffectColor` con `color-mix` sui ruoli), 2 test `ui/display`, baseline. Nessuna sovrapposizione con altri worktree; 1.3 informata. Prove pesanti di T fino alle 00:00, poi pausa durante G-13.
+- **23:08, DV, TD-1:** `--lf-text-secondary` in scuro (`#9BA8A2`) sta a ΔE00 9,0 da «Altro» (`#7F8C87`). Deciso (a): `text-secondary` con il controllo ΔE00 ≥ 10 e una sola eccezione registrata («Altro» scuro, 9,0); il test fallisce se scende. Per il giro 3.
+- **23:09, 1.3:** OK alla finestra di G-13 (00:00–01:15) e a W3-a: nessun loro worktree ha quei file aperti; alle 00:00, al massimo una run backend sotto `nice` a 2 worker.
+- **23:12, G-16 committato:** `73f7d32c6` (scatto `tools/pac-result-exposures`: mappe e barre per tipo; i settori restano piegati, perché il seed ha Services e Cloud non validi: per dopo). **Merge di base di G:** `a2c1c39f4` (con `0dbe45f52`), pulito. G fa build e run filtrata di G-16; se è verde, G-16 entra nel target e alle 00:02 parte la coppia G-13, su `a2c1c39f4`.
+- **23:15, L-16 approvato** (analisi in sola lettura su `a0915bef9`):
+  - Il Lab regge già i 92 ruoli di T-8b; ritocco 1a: l'engine emette `notifyChartColorsChange()` dopo le modifiche, così i grafici si ridisegnano.
+  - D-a sì: prefisso `shadow` nello scanner e una riga in `color_inventory.py` affidata a L, con la parità prima e dopo.
+  - D-b (a): DV esporta `lookupKey` in TD-1.
+  - D-c: TD-1b a DV (`GROWTH_BROKER_PALETTE` letta al disegno, `GrowthChart` ascolta C4; `GrowthChart.svelte` è nella zona di Y, da chiedere alla 1.3).
+  - Livello `category` (scanner, engine `LabHook.categoryColor`, scheda «Categorie», test). Selettore nel backlog. Slot pesante di L dopo le 01:15.
+- **23:01, 1.3: entra H CP-U1** (ambito degli upload, comune o personale: backend e 3 fixture di test del frontend); in comune con noi solo il backlog.
+- **23:02, CP-U1 entrato:** `6a3a2a1cc`, registri **`84a18fb4c`**.
+- **23:09, DV:** TD-1, il codice di produzione è fatto (ruolo in `ChartRole`, `exposureBarColours.ts`, `ExposureBars`, tooltip, via `PAC_EXPOSURE_BAR_COLORS`, `lookupKey` esportata); i test sono a test-author. Nota al punto 2.7 del pacchetto della designer, zip ricostruito (2,2 MB). **TD-1b:** file di Y (`growthChartSeries.ts`, `GrowthChart.svelte` e il suo test) chiesti alla 1.3; nessun worktree li tocca.
+- **23:11, 1.3 su TD-1b:** OK; ma Y3 (FE6b) sposta `GrowthChart` e i suoi file non prima delle 01:30. **TD-1b unito a TD-1** (un lotto solo, ingresso prima di Y3); se Y3 è pronto prima, si decide lì.
+- **23:16, L-16:** copia provvisoria di `lookupKey` (`categoryKey()` in `engine/categories.ts`, vincolata da un test) approvata **solo fino al merge di base con TD-1**, quando diventa l'import; non deve entrare nel target. D-a fatto: `lf` 611 → 619, uguale al conteggio di T. Codice di 1a e del livello `category` scritto; unit del Lab 548/548; test e doc in scrittura.
+- **23:18, G-16 verde** (run `g-g16-w1b` a 1 worker; le impronte dei 3 scatti PAC esistenti sono uguali a `g-final3`). Il primo giro, alle 23:05, era rosso per `worker_crashed` del PAC sotto carico (80–96, swap): fragilità del prodotto, girata alla 1.3 per J.
+- **23:20, G-16 nel target:** `dev_release2` = **`a8991e20b`**, merge di `a2c1c39f4` sopra `84a18fb4c`, pulito. La coppia G-13 parte alle 00:02 sul ramo fermo di G.
+- **23:24, 1.3: entra X-RL** (pausa del provider su «too many requests»: backend e chiavi i18n `assets`); nessun file di colore.
+- **23:25, X-RL entrato:** `da21c48c4`, registri **`4ef2fc199`**.
+- **23:26, W3-a:** OK per 5 righe di classi in `KpiSection.svelte` (copie a mano rimaste fluo in scuro, portate su `SIGN_BAR` e `SIGN_TEXT`); 1.3 informata; nessun worktree lo tocca. Il resto di W3-a è verde (gate, E2E 27/27). Checkpoint atteso prima delle 00:00.
+- **23:35, 1.3:** Y7 è al checkpoint ma entra dopo G-13 (dichiarati il runner con 2 voci E2E e `DataTable` con `--check` pulito e `~split` invariato). **Concordato:** galleria filtrata mobile di Y7 contro G-13 verso le 01:20 (10–15 min, 2 worker, senza nostre prove pesanti); poi la validazione di TD-1 con TD-1b; Y3 fermo fino all'ingresso di TD-1.
+- **23:37, X CP11b (fra ~2 ore):** `ProviderAssignmentSection.svelte`, `AssetSearchAutocomplete.svelte` e `settingsTabs.ts`, solo markup con i ruoli. **X passa prima:** i due componenti sono in W4, che stanotte non arriva; T convertirà dopo.
+- **23:38, DV:** TD-1 + TD-1b pronti (16 path; prove leggere 629 test su 18 file, controllo ΔE00 con l'eccezione «Altro» scura). **Slot pesante verso le 01:35**, dopo T (fino a mezzanotte), la finestra di G-13 (00:00–01:15) e la galleria di Y7 (~01:20–01:35). Galleria filtrata pre-ingresso saltata: la copre la galleria di fine notte. Y3 aspetta l'ingresso di TD-1.
+- **23:40, E5a entrato** (servizio di verifica dell'email, inerte fino a E5b): `e9a993e00`, registri **`7233b722c`**. Nel runner +4 voci; `--check` pulito.
+- **23:47, W-B20 della 1.3 entrato:** `23ff56b95`, registri `93bd1cb43`.
+- **23:50, W3-a nel target:** commit `e7d5b4576`, base `8148d9eb0` (con `93bd1cb43`), **`dev_release2` = `96a7c5bbb`**, uguale alla simulazione; `--check` pulito; T in avanti veloce. m1 11.026 → 10.980.
+- **23:52, 1.3:** CHANGELOG corretto per W3-a (rosso e verde morbidi anche per guadagni e perdite della dashboard): `de349d4c3`.
+- **23:55, TD-3 e W3-b approvati** (classi e stili): `AllocationPanel` (card sui ruoli, pulsanti su `--lf-action`, da rivedere rispetto a D-T16); W3-b su `toneClasses` market/brokerCard, `app.css` (flash live), `table.css`, `CompactCashCell`, `AssetTable`, `AssetCard`, `AssetPriceSummary`. **`LotCustodyModal` rimandato:** J ha modifiche aperte (righe 17/181). Se Y3 sposta `AllocationPanel`, lo segue il riconoscimento dei rinomini. 1.3 informata.
+- **23:56, 1.3:** OK a TD-3 e W3-b. `LotCustodyModal`: J è su CP-16 e cambia anche un'etichetta in quel file; entra fra qualche ora, la 1.3 ci avvisa.
+- **23:58, Y4b (1.3):** sposta il rischio in `lib/features/risk/` (103 file, `git mv` più import; ingresso verso le 02:30). Nessun nostro lotto tocca quei percorsi stanotte. **`CHART_PATH_RE` in `scan-colors.mjs` e il suo test li scrive L** in L-16 (vecchio e nuovo percorso insieme); la baseline la scrive Y con lo strumento (R4) e T risolve con `--resolve`; il runner lo scrive Y.
+- **23:59, 1.3:** J CP-16 entra verso l'01:00 (l'`all-backend` sotto `nice` è l'unica run nella finestra). Cambia il dato AAPL su IB «wac-test» (primo lotto da −450 a +30), quindi gli scatti `fifo-lots-*` di Apple differiranno da G-13 nella galleria di fine notte: **differenza attesa, non di colore**. Dopo l'ingresso `LotCustodyModal` torna libero per T.
+- **00:00, L:** `features/risk` aggiunto a `CHART_PATH_RE`, accanto a `components/risk` (regex provata). Corretto un buco di C4 dentro L: le modifiche L2 ai letterali dei ruoli ora scatenano il ridisegno (`variableRewrites()` nella firma). Unit del Lab 698/698. Test ed E2E in scrittura; prove pesanti nello slot.
+- **00:00, Y3 (1.3):** sposta `components/dashboard/**`, `dashboardViewStore` e `dateRangeController` in `lib/features/dashboard/` (35 file, radice piatta), dopo TD-1b. L aggiunge `features/dashboard` a `CHART_PATH_RE` subito; le costanti di `pickView.test.ts` e `scanColors.test.ts` le aggiorna all'ingresso di Y3.
+- **00:01, L:** `features/dashboard` aggiunto a `CHART_PATH_RE`. Le due costanti dei test sono fixture sintetiche: Y3 non rompe nulla, e l'aggiornamento è solo cosmetico, al primo giro dopo. Il catalogo resta invariato prima e dopo lo spostamento.
+- **00:02, W3-c + W3-d di T approvati:** `STATUS_TONES` e `POLARITY_TONES` sui ruoli; `ToastContainer` (figli `on-status`); `ReportSetCard:351`. Strada (a): checkpoint TD-3 + W3-b adesso, poi W3-c/d sopra, una validazione e un ingresso solo.
+  - **Da rivedere:** toast d'errore su `danger` + `on-status` (lo stile «pieno»); errore di `DataQualityBanner` ancora in ambra; il pulsante del banner su `warning-line`; barra PAC «bilanciata» su `success`, «sconosciuta» su `neutral`.
+  - `KIND_TONES` e `fileSet.combined` restano (categoriali).
+  - `DistributionEditor` in W1-d: prima G cambia l'asserzione `text-green-600` (`gallery.spec.ts:6067`) in un attributo `data-`, dopo G-13.
+  - 1.3 informata (`ReportSetCard` è zona di W).
+- **00:03, 1.3:** OK a W3-c/d; W stanotte fa un lotto di doc, poi la 47, sul backend delle conversioni.
+- **00:04, Y9 preannunciato** (dopo Y4b e Y3): K-15, C-34, K-13 (`CHART_FONT_FAMILY` in `chartTheme.ts` e 18 `echarts.init`). `chartTheme.ts` lo scrive Y, dopo l'ingresso di TD-1; i grafici sono in W5 (non stanotte), e T partirà dai file con Y9 dentro.
+- **00:07, TD-3 + W3-b committati** (solo prove leggere): `7df164689` su `96a7c5bbb`, 11 file, m1 10.980 → 10.916, `AllocationPanel` uscito dalla baseline. T scrive W3-c/d sopra; una sola validazione nello slot dopo Y7 e DV, poi un solo ingresso.
+- **00:03, G-13 partita** (lane 6153); nella finestra gira solo l'`all-backend` di J sotto `nice` (6185), come concordato. Carico 1 min ~90 alle 00:13.
+- **00:06, Y5 preannunciato (1.3):** `components/brokers/*` → `features/brokers/`, `brokers/lots/*` + `lotsAnalysisStore` → `features/brokers/lots/`, `BrokerIcon` → `ui/display/`; 52 import in 28 file.
+  - `theme-roles.mjs:70` (eccezione `lotComparisonChartHelpers.ts`, confronto `===`) lo sposta Y nello stesso commit; prova: totali m1/m2 identici. T non tocca il file fino a Y5.
+  - L aggiunge `features/brokers/lots` a `CHART_PATH_RE` in L-16; l'esempio a `designer-lab.md:1066` dopo Y5. Baseline: Y con lo strumento.
+  - Y5 entra dopo il lotto di T con `LotCustodyModal`; se Y5 è pronto prima delle 02:10, T toglie `LotCustodyModal` e lo rifà dopo.
+- **00:15, W3-c/d committato:** `078d4dcf8` su `7df164689` (6 file), m1 10.916 → 10.765, `--check` pulito.
+- **00:15, I1 di T approvato (W1-a + W1-b):** 14 file in `ui/select/` + `SimpleSelect.test.ts`; nessun worktree aperto lì; 1.3 avvisata (domanda su X CP11b per `AssetSelect`/`AssetPickerPanel`/`AssetTypeSelect`).
+- **Ordine dello slot pesante:** DV (~01:35) → T (W3 + `LotCustodyModal` + I1, ~60 min, ~02:10) → L-16 (~03:20).
+- **00:16, Y6 preannunciato (1.3, dopo H CP-U2):** `components/files/*` (6) → `features/files/`; 8 import in 4 file. Nessun nostro worktree coinvolto.
+  - `htmlSink.gate.test.ts:70` è il gate di K, non nostro: lo cambia Y con lo spostamento. Il baseline (1 riga, `FileGrid`) lo scrive Y con lo strumento.
+  - **Nota per W4:** l'eccezione di `PriceDataImportModal` in `htmlSink.gate.test.ts` contiene `bg-white/30 dark:bg-slate-700/50` nell'espressione. Quando T migra quel file, la riga del gate va cambiata nello stesso commit; avvisare la 1.3 (K).
+- **00:17, 1.3:** X CP11b non tocca `AssetSelect`, `AssetPickerPanel` né `AssetTypeSelect`. Y4b cambia solo percorsi in `ui/select/AssetPickerPanel.test.ts` e `assetPicker.ts`, file che I1 non tocca (~02:30). Via libero per I1.
+  - Y5 non sarà pronto prima delle 02:10 e entra dopo le 03:20, quindi `LotCustodyModal` resta nel lotto di T.
+- **00:18, L:** Y5 può entrare prima di L-16. Nessun gate fissa la classificazione del catalogo vero (l'albero reale si controlla solo per invarianti), e la classificazione non cambia: i file con colori di `brokers/lots`, `dashboard` e `risk` hanno «chart» nel nome o importano `echarts`.
+  - `features/brokers/lots` è in `CHART_PATH_RE` (scan-colors.mjs:196); `features/brokers/` senza `lots` resta fuori.
+  - La riga del test (positiva e negativa) la scrive test-author, la frase della doc docs-writer (righe 538–543 nel ramo di L).
+  - L'esempio JSON (riga 1215) si cambia dopo Y5. Le costanti estetiche e l'esempio si aggiornano alla base merge, se Y3 e Y5 sono già entrati.
+- **00:40, 1.3 chiede se G-13 legge il checkout principale:** no. Backend 6153 e i 31 processi Playwright hanno la cwd nel worktree di G (`a2c1c39f4`), quindi il merge di CP-16 è libero subito.
+  - Riferimento G-13 = `a2c1c39f4`. Non contiene: H CP-U1 (nel frontend solo test), X-RL, E5a, W-B20, W3-a (`96a7c5bbb`), e quello che entra dopo.
+  - Avvisata la 1.3 per il confronto di Y7.
+  - Carico alle 00:39: 37. X fa girare `front-utility core-unit` su 6183, una prova leggera.
+- **00:41, J CP-16 nel target:** merge `240675ad1`, record `59ce8ba20`. J ha toccato `LotCustodyModal` (righe 17 e 181), `lotCustodyModalHelpers.ts`, le i18n `brokers/*` e `_frontend_utility.py`.
+  - T ha il via su `LotCustodyModal` (righe ~103–114), in un commit separato da I1.
+  - Simulazione `078d4dcf8` + `59ce8ba20`: pulita (albero `a223b2f22`).
+- **00:53, G-13 r1 (`g-ref13-r1`):** 6 rossi su 258, durata 47,9 min. Sono timeout da carico: 4 screenshot fermi sull'attesa dei font, 2 `clickRowAction` e 1 clic su mobile.
+  - Il carico venne da una `vite build` di X in `cuddly-engine`, da `mds` e dai browser. La 1.3 si è scusata: aveva lasciato passare `core-unit` e `front check` come comandi leggeri. Fino alla fine di r2 ferma tutto in 9 corsie.
+  - r2 è partita subito.
+  - **Deciso con la 1.3:** r3 a fine notte, in un blocco unico con la candidata, verso le 05:30 (r3 fino alle 06:05 circa, candidata fino alle 06:45 circa); conferma alle 05:00. La coppia sono le due run verdi fra r2 e r3; r1 è il terzo campione. G resta fermo a `a2c1c39f4` fino a r3.
+  - Dopo r2: la galleria mobile di Y7 (~15 min), poi DV, T e L-16.
+- **00:55, X CP11a nel target:** merge `a6453571d`, record `03ec20ac8`. Solo backend e 2 chiavi i18n.
+- **00:58, checkpoint di T:**
+  - `6345f6950` (`LotCustodyModal`, W3-b) e `1c16151a1` (I1 = W1-a + W1-b: 14 select e `SimpleSelect.test.ts`, m1 10.765 → 10.223, 13 file usciti dalla baseline);
+  - base merge **`7d78607df`** (con `03ec20ac8`): albero uguale alla simulazione, `--check` pulito.
+- **Lezione da mettere nel wiki:** Tailwind 4 emette in ordine alfabetico le utility di ruolo della stessa proprietà, quindi `border-lf-input` batte `border-lf-focus`. I colori di stato alternativi vanno nei due rami di un ternario, mai affiancati. T ha scansionato i 44 file già migrati e non ha trovato altri casi.
+- **Q10 approvato a T** (tooltip su `--lf-surface-inverse` e avviso su `--lf-warning-on-inverse`; la designer l'ha approvato in `risposta-1-originale.txt`). Va in un commit a parte; da rivedere: in scuro tutti i tooltip diventano chiari. T può scrivere fino alle 02:20 e il suo slot parte verso le 02:30–02:40.
+- **W1-d:** chiesto a G se la riga `gallery.spec.ts:6067` può scriverla test-author di T sul ramo di T, mentre il worktree di G resta fermo.
+- **01:02, DV:** checkpoint `ada4742b7` (TD-1 + TD-1b, 16 path come da consegna delle 23:38); base merge **`cec865899`** con `03ec20ac8`. Albero uguale alla simulazione, `--check` pulito, `_frontend_utility.py` fuso da solo. DV aspetta il mio via (~01:50–02:00, dopo r2 e Y7).
+- **01:05, W1-d sbloccato:** G accetta che test-author di T scriva sul ramo di T.
+  - In `gallery.spec.ts` solo le righe 6064–6068; le `waitForTimeout` 6072/6076/6080 non si toccano.
+  - `DistributionEditor:527` riceve `data-state` (valid / excess / missing).
+  - Prova: run filtrata a 1 worker `-f "Asset distribution editors"`, impronte 🔎 uguali a `g-ref13-r1`/`r2`.
+  - Nessun worktree ha aperti quei due file; 1.3 avvisata.
+- **00:59, 1.3 (triage di r2):** all'inizio di r2 hanno girato una build debug di Y dalle 00:52:44 alle 00:57:38 (partita da sola al `meta.json` di r1), 33 s di pytest di B alle 00:54, e `vite build` + `core-unit` di X. Girato a G.
+  - Dalle 00:58 tutte e 9 le corsie della 1.3 sono ferme fino a «r2 finita». La galleria di Y7 parte solo al via esplicito della 1.3.
+- **00:59, 1.3:** OK a W1-d. Nessun loro lotto tocca `DistributionEditor`. Su `gallery.spec.ts` stanotte solo X CP11c (uno scatto delle impostazioni dei plugin), fra qualche ora e dichiarato prima.
+- **01:03, T:** verificato il merge di `LotCustodyModal` (le righe di J e le sue convivono, `--check` pulito).
+  - **W1-d si allarga:** `ExactDecimalInput` (bordo d'errore `border-lf-danger` nel ternario), `ExactQuantityInput`, `TagInput`. In più `TransactionFormModal.test.ts` (righe 791–792 e 834–838, asserzioni `border-red-400`): è zona di W, OK chiesto alla 1.3. Nessun worktree ha aperti quei file.
+  - **Q10 si allarga:** `Tooltip.svelte` rende in `{@html}` contenuti dei chiamanti con colori pensati per il fondo scuro (es. `WacPreviewSection:322`), e un `explore` li sta mappando. Se servono ruoli `-on-inverse` nuovi, seguono la regola di Q10 (il valore del tema opposto), vanno nel secondo slot e sono da rivedere.
+  - **Slot di T:** circa 350 E2E in 19 run, più i gate e la galleria filtrata di W1-d, 60–70 min, in ordine di priorità; stop a 70 min.
+- **01:02, 1.3:** OK per W a `TransactionFormModal.test.ts`, righe 791–792 e 834–838. Stanotte W lavora sul backend (W-B36, poi la 47) e su `BrokerImportFilesModal` (W-B37). OK girato a T.
+- **01:04, impronte per W1-d:** `compare_fingerprints.py` copiato in `/tmp/librefolio-g13-ref/` (dalla cartella di visual review, fuori dal repo). G ci copia i log di r1, e di r2 quando finisce; T salva con `tee` l'output completo della sua run filtrata e confronta.
+- **01:06, Q10 di T, la proposta:**
+  - **Ruoli nuovi:** `--lf-danger-on-inverse`, `--lf-info-on-inverse` (KaTeX) e `--lf-text-muted-on-inverse`, tutti ≥ 4,5:1 sul tooltip, con i valori del tema opposto e un test di parità in `themeTokens.gate.test.ts`.
+  - **Approvati:** `tokens.css`, `Tooltip.svelte`, `FxProviderSelect` e il test.
+  - **OK chiesto alla 1.3** per `fxConversionHelper.ts:118–131` e `WacPreviewSection:321–322` (W), e per `providerProbe.ts:111` (X), entro l'01:50. Nessun worktree li ha aperti e nessun test legge quei colori.
+  - **Da verificare:** che DOMPurify tenga `color-mix(… var(…))` nello stile inline di `providerProbe`.
+  - **Da rivedere:** in scuro tutti i tooltip diventano chiari.
+- **01:06, 1.3:** OK per Q10 a nome di W e di X (`fxConversionHelper`, `WacPreviewSection`, `providerProbe`); nessuno dei due li tocca stanotte. Il tooltip chiaro in scuro è segnato per la review della 1.3. Via a T su tutti e 7 i file.
+- **01:25, W1-c di T (per lo slot 2):** 10 file `ui/` (date ×4, `TabBar`, `PageToolbar`, `ViewModeToggle`, `DocsLink`, `TweenedValue`, `OrderableList`), m1 225, più `DateRangePicker.test.ts`. Approvati: nessun worktree aperto, nessun import dei file che Y sposta.
+  - E2E altrui: `fx/fx-list.spec.ts:155` e `assets/asset-data-editor.spec.ts:115,126`, OK chiesto alla 1.3.
+  - Il sotto-agente scrive durante lo slot su copie fuori dall'albero, che si applicano come patch (`git apply --3way`) dopo il commit, mai incollate.
+- **01:25, 1.3:** OK a W1-c e ai due spec, a nome dei proprietari. `TabBar` l'ha cambiato A con G-15, già entrato; A6e e A6c non lo toccano. Girato a T.
+- **01:32, G-13 r2 VERDE:** `g-ref13-r2`, 00:52:39–01:31:47 (38,4 min), carico da 28 a 20. 257 test passati, 0 rossi, 1 saltato per scelta; 2888 PNG; `live_price_check` 0, `dirty_files` 0, commit `a2c1c39f4`. I 6 rossi di r1 erano quindi da carico.
+  - I log di r2 sono in `/tmp/librefolio-g13-ref/`. Gli scatti degli editor di distribuzione hanno la stessa inquadratura in r1 e r2.
+  - G fa un diff r1↔r2 sotto `nice -n 19` (1 core, ~5 min). r3 alle 05:30 nel blocco con la candidata.
+  - 1.3 avvisata: parte la galleria mobile di Y7 (~15 min), poi DV.
+  - T può fare Vitest mirati sotto `nice` fino alla fine di Y7.
+- **01:37, 1.3:** sta entrando il lotto di doc di W (`32f8f659c`): doc sul controllo degli accessi e 2 chiavi i18n inutilizzate tolte in `assets/`. Nessun nostro path.
+- **01:37, W doc nel target:** merge `6fa3f8936`, record `68fd5c301`. Il target è `68fd5c301`.
+- **01:40, checkpoint di T:** `eebbd1da4` (W1-d: `DistributionEditor` con `data-state`, `TagInput`, `gallery.spec.ts` 6064/6067–6068) e `17e26bfce` (Q10: 3 ruoli `-on-inverse`, `Tooltip`, contenuti di FX/WAC/sonda/`FxProviderSelect`, gate di parità, prova di DOMPurify su `color-mix`). m1 10.223 → 10.166, m2 83 → 71.
+  - `ExactDecimalInput` ed `ExactQuantityInput` tolti da W1-d: i chiamanti (PAC `ui.ts:39`, `TxFormSingleSection`/`TxFormPairSection` con `!bg-white`) passano classi di palette, quindi vanno migrati insieme a loro.
+  - `TransactionFormModal.test.ts` libero stanotte; 1.3 avvisata.
+  - Lo script dello slot di T è `/tmp/libreFolio_T_r2/slot_w3_i1.sh` (priorità, stop a 70 min, E2E `tooltip`, galleria filtrata con le 32 impronte).
+- **01:40, G, diff r1↔r2 (provvisorio):** 2848 immagini comuni, 1923 identiche; scatti 22 stable, 137 low, 18 medium, 4 unstable (in `g-final3` erano 40/112/19/6).
+  - `media/asset-picker-modal` passa da unstable a low: la correzione G-10 funziona.
+  - Gli scatti nuovi sono stable o low.
+  - Inquadratura uguale, salvo G-11 (header mobile in spagnolo chiaro, `detail-measures` e `detail-editor`).
+  - Unstable: 2 per G-11, `brim-report-sets` (nome casuale `demo_xxxxxx`, coperto dalle maschere) e `import-nway-compare` (ordine dei file, già accettato).
+  - La classificazione ufficiale verrà dalla coppia r2+r3.
+- **01:41, G per r3:** nessuna partenza programmata, G aspetta il mio via (confermo con la 1.3 verso le 05:00). Ordine: r3 su `a2c1c39f4` → mia base merge del target in G → candidata; il diff r2+r3 con maschere gira sotto `nice -n 19` durante la candidata.
+- **01:42, Z3 nel target:** merge `c0dbc98a0`, record `f64753875` (catch-up e lock dello scheduler, backend e doc). Il target è `f64753875`.
+- **01:43, DV base aggiornata:** `dad643109` (con `f64753875`: W doc + Z3; nel frontend cambiano solo le i18n `assets`). Albero uguale alla simulazione, `--check` pulito. DV aspetta il via dopo la galleria di Y7.
+- **01:42, J CP-15 nel target** (solo backend): merge `fd41a0996`, record `6ead82895`. La base di DV la riallineo subito prima del suo via.
+- **01:44, E4a in ingresso (1.3):** l'azione «invia per email», il form «password dimenticata» e l'avviso di cambio email, non raggiungibili fino a E4b. Tocca `_frontend_utility.py` (+4 righe: 2 in `core-unit`, 2 in `component-unit`); `--check` pulito. Da simulare con DV, che tocca lo stesso file.
+- **01:44, E4a nel target:** merge `73a68d95f`, record `c7dea8be6`. Simulazione con DV (`dad643109`) e con T (`17e26bfce`): entrambe pulite, `_frontend_utility.py` senza conflitto. Il delta nel frontend sono solo file nuovi `features/email` e le i18n `email`.
+- **01:48, 1.3:** finita la galleria mobile di Y7 (01:34–01:44, 11/11 verdi). Il diff con `g-ref13-r1` ha 174 immagini cambiate, tutte di Y7 (l'«Azioni» non più fissata a destra sotto 768 px), al massimo 0,6%. Y7 entra fra pochi minuti.
+- **01:49, slot pesante di DV partito:** base merge **`d3ba25ae9`** (con `c7dea8be6`), albero uguale alla simulazione, `--check` pulito; corsia 6156, carico 21. Fine prevista verso le 02:25.
+- **01:49, Y7 nel target:** merge `a613a217c`, record `553d29572`; tocca solo `DataTable` e i suoi E2E. Il conflitto di accodamento sul `log.md` del devWiki (W-B20 contro Y7) è risolto tenendo entrambe le voci.
+- **01:56, Z4 in ingresso (1.3):** la rotta `POST /system/wake-sync` (backend), la doc admin e una riga di navigazione in `mkdocs.yml`. Nessun nostro path.
+- **01:56, Z4 nel target:** merge `2980e2a00`, record `bbfba9169`. Il target è `bbfba9169`.
+- **02:05, DV validato e verde** su `d3ba25ae9`: `front check` senza errori, `core-unit` 5900, `component-unit` 3806, E2E `pac-allocator-real` 1, `dashboard` 27; porta 6156 libera. Commit del diario `051f3a29c`. L'ingresso aspetta W-B31 + W-B36 (1.3), che sta entrando.
+- **02:05, DV nel target: `57802d827`** (merge di `20558ead5`, che conteneva già `d7aaab6d4` dopo la base merge con Y7, Z4 e W-B31/36). Albero uguale a quello di DV, checkout pulito. 1.3 avvisata prima e dopo.
+  - Nell'elenco del mattino è la voce 4.
+  - DV non ha altri lotti stanotte, per gli spostamenti di Y sui file dei grafici; può fare un inventario in sola lettura di m1/m2 rimasti nei grafici.
+- **02:06, slot di T partito:** base merge **`abc4c84de`** (con `57802d827`), albero uguale alla simulazione, `--check` pulito. Corsia 6155, carico 33; stop a 70 min, verso le 03:15.
+- **Y3 contro T:** il lotto di T modifica `components/dashboard/AllocationPanel.svelte` (TD-3), che Y3 sposta. Proposto alla 1.3: (a) Y3 dopo T (~03:20), oppure (b) Y3 prima, e all'ingresso di T risolvo la rinomina con modifica, poi `--resolve` e `front check`.
+- **L:** chiesto il checkpoint di L-16. Dopo commit e base merge, L sostituisce `categoryKey()` con l'import di `lookupKey`; il suo slot parte dopo T.
+- **02:07, 1.3 sceglie (a):** Y3 entra dopo T (~03:20). Intanto Y fa Y4b; all'ingresso di T la 1.3 aggiorna la base di Y.
+- **02:10, T:** slot partito alle 02:08 su `abc4c84de`, carico 38.
+  - W1-c è pronto come patch (`files/W1c-draft/w1c.patch`, 13 file, `git apply --check` pulito); si applica con `--3way` dopo il commit dello slot.
+  - **Nuove bozze su copie:** W1-e (`ModalBase`, approvato) e W2-a (onboarding, 7 componenti + `welcome/+page.svelte`): servono gli OK di A (A9, disclaimer in `WelcomePage`) e di H (`InstanceNotices` copia le classi del banner; suggerito di copiare i ruoli). Chiesti alla 1.3.
+  - T non tocca `theme-roles.mjs` (voce `ARBITRARY_ALLOWED` del coachmark) fino all'ingresso di Y5.
+  - Secondo slot di T verso le 04:00 (W1-c, W1-e, W2-a), sotto i 70 minuti per lasciare libero il blocco delle 05:30.
+- **02:14, L-16 committato:** checkpoint `4cc601e57` (27 path: 24 M + 3 nuovi; Vitest 708/708, prove leggere pulite). Base merge **`0b229ef95`** (con `57802d827`): albero uguale alla simulazione, `--check` pulito, backlog fuso da solo.
+  - L ora sostituisce la copia con `lookupKey`, aggiunge `--lf-text-secondary` all'E2E C4, aggiorna la doc, fa le prove leggere e un piccolo checkpoint. Slot pesante dopo l'ingresso di T (~03:20).
+- **02:14, 1.3:** OK a W1-e e a W2-a. A9 (disclaimer in `WelcomePage`) non è stanotte: A fa A6c, poi A7. H stanotte non tocca `InstanceNotices` (fa CP7b) e, quando ci arriverà, copierà i ruoli. `ModalBase` è segnato per la review della 1.3. Girato a T.
+- **02:14, T:** nello slot `front check` è rosso per l'infrastruttura: 12 errori in 4 file, tutti dal client API generato, rimasto a prima della base (endpoint `email_verification_*`, `scope` in `UploadFileInfo`); nessuno nei file di T. Il primo E2E rigenera il client, poi T rilancia `front check` e gli unitari caduti.
+  - **Lezione:** ogni script di slot comincia con `api sync`, dopo una base merge che ha portato API nuove. DV l'aveva fatto, T no.
+- **02:20, inventario di DV committato (`74e332076`):** 103 file dei grafici, m1 2628, m2 0; neutri 2081, marchio 154, colorati 393. 9 file dipendono dalla designer: 2.8 segni, 2.1/2.5 `BackendTimingBar` e `RiskReturnLevel`, badge dei lotti.
+- **W5-PAC proposto a DV:** le classi dei file frontend del PAC, esclusi `ExposureBars`/`ExposureMaps` (Y9) e la costante `INPUT` di `ui.ts` (va con `ExactDecimalInput`, per la regola dell'elemento misto). Baseline con lo strumento; slot dopo il blocco della galleria (~06:45).
+  - Chiesto alla 1.3 l'OK di J. I file di TD-1 in stage nel worktree di A sono la sua base merge in corso (`MERGE_HEAD` `57802d827`), non modifiche aperte.
+- **02:17, 1.3:** via libera per W5-PAC. Stanotte J fa CP-6, solo backend (decisione 28); la fragilità del worker del PAC (J-19) è nel runtime dei Tools, sempre backend, e non è in programma.
+- **02:21, W5-PAC di DV approvato:** 39 file in `pac-allocator/planner/` (`PacPlannerTool`, `ui.ts`, `result/`, `shared/`, `shell/`, `steps/`), più baseline e piano.
+  - Fuori: `ExposureMaps`/`ExposureBars` (Y9), `INPUT` e `TITLE_INPUT` di `ui.ts` (vanno con `ExactDecimalInput`), le 6 fasi di `BackendTimingBar` (designer 2.1/2.5).
+  - **Attenzione:** la traccia di `TargetsStep` deve restare distinta da `pacTargetBar.unknown` (`bg-lf-neutral`) e dai riempimenti di stato.
+  - Nessun test da cambiare; slot verso le 06:45; 1.3 informata.
+- **02:27, H CP-U2 in ingresso (1.3):** il selettore di ambito della pagina File, frontend e doc. Il markup nuovo usa solo ruoli e `--check` è pulito. `_frontend_utility.py` +1 riga. Cambiano gli scatti `files/static-tab` e `files/static-grid` (colonna Visibilità, pulsante di ambito): differenza attesa.
+- **02:27, H CP-U2 nel target:** merge `2d1eee33a`, record `db384eaf5`.
+- **02:30, seguito di L-16 committato:** `88ef51358` (6 file). `categoryKey = lookupKey` e la copia è tolta; test d'identità; `--lf-text-secondary` nell'E2E C4; doc TD-1/TD-1b. Vitest 712/712. L è FROZEN fino al via, che arriva dopo l'ingresso di T e una base merge. Lo slot comincia con `api sync`.
+- **02:36, DV W5-PAC:** il gate C4 chiede di togliere `html.dark .bg-white\/95` da `app.css` (righe 265–266), perché è sparito l'ultimo uso (barra fissa di `PacPlannerTool` → `bg-lf-card/95`). OK a DV nel suo lotto. Il lotto di T tocca `app.css` più in basso (~310–340), quindi niente sovrapposizione; T avvisato per W1-e.
+- **02:42, W5-PAC committato: `4743b1542`** (43 file; m1 10.980 → 10.441 sulla base di DV; PAC 581 → 42, il residuo è voluto, in DV-7).
+  - Prove leggere verdi (Vitest PAC 487, gate 201, C4 16/16 dopo la riga di `app.css`); nessun test da cambiare.
+  - Simulazioni con il target `db384eaf5` e con T `abc4c84de`: pulite, anche sul baseline.
+  - Slot verso le 06:45. Proposto a DV un lotto in più sui file di `components/charts/` che Y9 e K-15 non toccano, elenco prima.
+- **02:43, A6d + A6e in ingresso (1.3):** registrazione su invito per le istanze nuove, impostazioni globali lette con una sessione, cambio email con la password attuale. `LoginCard` e `ProfileTab` cambiano solo con ruoli; `--check` pulito.
+- **02:43, A6d + A6e nel target:** merge `19dd8a96d`, record `a2f658097`.
+- **02:48, Y4b in ingresso (1.3):** il frontend del rischio in `lib/features/risk/` (103 rinomine, import, percorsi del runner, doc, devWiki). Baseline: 30 righe rinominate, stessi conteggi, `--check` pulito, merge automatica. All'ingresso di T e alle basi di L e DV: `--check` o `--resolve`, più `front check` sulla revisione unita.
+- **02:49, Y4b nel target:** merge `08efa5ac3`, record `d8826bdea`, `--check` pulito sulla punta. Segue B2 (backend e doc admin).
+- **02:49, B2 nel target:** merge `5441b96ed`, record `16cff5610` (verifica del backup su una copia, backend e doc). Il target è `16cff5610`.
+- **02:52, W5-charts di DV:** 11 file in `components/charts/` (m1 387), nessuno di Y9 o K-15; nessun worktree aperto. Approvato da me.
+  - Restano: i 6 campi di testo e numerici (vanno con il lotto di T sull'input) e i 4 interruttori di `ChartAestheticsSection` (tutti gli interruttori vanno in un lotto unico di T, per coerenza in scuro).
+  - Annulla → `bg-lf-panel hover:bg-lf-neutral`, perché `panel` e `hover` coincidono nei due temi: domanda aperta per la designer.
+  - Chiesto alla 1.3: chi possiede i file (K o X?) e se Y4a·FE2a (8 file in `features/signals/`) parte stanotte; proposto Y4a dopo l'ingresso di DV.
+  - Per Y4a: spostare le eccezioni `theme-roles.mjs:72` e quella di `htmlSink.gate.test.ts` per `SignalOptionContent`.
+- **02:51, 1.3:** OK a W5-charts: stanotte nessuna loro sessione tocca quei file, e K non è attivo in questa release. Y4a non parte stanotte: aspetta FE4 e FE5a di X e verrà dopo l'ingresso di DV. Le due eccezioni di percorso sono girate a Y.
+- **03:01, X CP11b in ingresso (1.3):** la scheda Impostazioni › Plugin e «Configura» nel pannello dei provider e nella ricerca. Il markup nuovo usa solo ruoli, `--check` pulito; `_frontend_utility.py` +5 righe. Differenze attese nella galleria: scheda «Plugin» in tutte le Impostazioni, «Configura» nelle modali con justETF o Borsa Italiana, legenda 👑 nella ricerca con justETF.
+- **03:03, X CP11c (1.3):** uno scatto nuovo `settings/plugins` in `gallery.spec.ts` (blocco Settings, sul modello di `email`), run filtrata prima delle 05:15, entra nella candidata. Chiesto a G il parere (modale «Configura» sì o no, accortezze).
+- **03:04, Z7b in ingresso (1.3):** lo scheduler rimanda le voci sospese dal provider e rallenta dopo i fallimenti. Solo backend e doc. (Lo SHA di X CP11b non è ancora arrivato.)
+- **03:04, nel target:** X CP11b (merge `0241a87e8`, record `1911577c8`) e Z7b (merge `e5e2595e7`, record `8850ad002`). Il target è `8850ad002`.
+- **03:08, W5-charts committato: `7d3896011`** (14 file; m1 10.441 → 10.112 sulla base di DV). Resto voluto: 6 campi (lotto input di T) e 4 interruttori (lotto interruttori di T).
+  - Simulazioni con il target `8850ad002` e con T: pulite.
+  - **Domanda aperta per la designer** (pacchetto dei token di T): `--lf-surface-panel` e `--lf-hover` coincidono (`#e8ece9` / `#1b2421`), quindi un `hover:bg-lf-hover` sparisce su un panel (`SignalStyleEditor` dentro `SignalVisualLegend`/`MeasurePanel`).
+  - DV FROZEN fino allo slot delle 06:45 (W5-PAC + W5-charts).
+- **03:10, G su `settings/plugins` (X CP11c):** OK senza modale, con accortezze girate alla 1.3: attesa su `data-busy`, stato disegnato verificato, nessun segreto `set`/`env`, inquadratura come `email` (attenzione oltre ~2500 px), solo `data-testid`, nessuna maschera.
+  - Nella candidata cambia la barra delle schede di tutte le Impostazioni (scheda Plugin).
+  - G-15 peggiora per l'admin in spagnolo (8 schede): segnalato alla 1.3 per A.
+- **03:23, slot 1 di T VERDE** (02:08–03:21, 72 min, su `abc4c84de`).
+  - **Gate:** `--check` pulito; `component-unit` 3816, `risk-levels-component` 273.
+  - **`front check` e `core-unit`:** rossi al primo giro per il client API non rigenerato (infrastruttura), verdi dopo la rigenerazione (`front check` 0/0, `verificationApi` 104/104).
+  - **E2E:** dashboard 27, banners 20, risk 38, asset-list 28, flash 4, fx-list 12, tx-import-report-set 32, files 28, pac 1, select 17, asset-modal 17, transactions-modals 25, asset-classification 4, fx-add-pair 11, tx-import-upload 10, broker-sharing 17, fx-detail 17, risk-lab 44, tooltip 9.
+  - **Impronte di W1-d:** 32/32 uguali in `y`/`dh`/`vh`/`hdr`/`focus`; solo `charts` diverso in 12, dovuto ai tempi.
+- **03:24, base merge di T: `3b9c4ca1c`** (con `8850ad002`: Y4b, H CP-U2, A6d/e, X CP11b, Z7b, B2). Albero uguale alla simulazione, `--check` pulito, baseline fuso da solo.
+  - Prima dell'ingresso: `api sync` + `front check` sulla revisione unita, poi note del piano e checkpoint del journal.
+  - Dopo: le patch W1-c, W1-e e W2-a con `--3way`, prove leggere, 3 checkpoint; slot 2 dopo L-16 (~04:15).
+- **03:26, base merge di L: `e44383f13`** (con `8850ad002`), albero uguale alla simulazione, `--check` pulito, porta 6152 libera. Il via allo slot arriva dopo il `front check` di T.
+- **03:26, gate di T su `3b9c4ca1c` VERDE:** `api sync` rc 0, `front check` 0/0, `--check` pulito. **Via allo slot di L** su `e44383f13` (6152). T scrive le note e il checkpoint del journal, poi entra.
+- **03:26, L parte** su `e44383f13`. Nessuna merge nel worktree di L durante lo slot: la base merge con T la faccio dopo il suo handoff.
+- **03:28, T nel target: `503dce683`** (merge di `553a0a0a6`, che conteneva già `8850ad002`). Albero uguale a quello di T, checkout pulito, `--check` pulito. Sul target: **m1 10.166, m2 71** (prima di stanotte 11.026 e 83).
+  - Il ramo di T è portato a `503dce683` con fast-forward.
+  - 1.3 avvisata prima e dopo: Y3 può partire.
+  - T applica le patch W1-c, W1-e e W2-a; slot 2 dopo L-16.
+- **03:32, checkpoint del secondo lotto di T:** `a5c7714ca` (W1-c, 13 file; E2E su `aria-selected`/`data-active`), `d27fdef4a` (W1-e, `ModalBase`), `a0ced5980` (W2-a, onboarding; baseline m1 10.166 → 9.701, m2 71 → 64). `--check` pulito. Slot 2 dopo la consegna di L, con base merge prima (Y3).
+  - Proposta a T: bozza su copie del lotto «input» (`ExactDecimalInput`/`ExactQuantityInput`, `INPUT`/`TITLE_INPUT` del PAC, form delle transazioni con `!bg-white`, i 6 campi dei grafici di DV), con elenco prima (zone di W e J). Slot dopo la galleria.
+- **03:35, lotto «input» di T (bozza su copie, slot dopo DV, ~07:30):**
+  - **File:** `ExactDecimalInput`/`ExactQuantityInput`; `INPUT`/`TITLE_INPUT` di `ui.ts` (J); `TxFormSingleSection`/`TxFormPairSection` (W); i 6 campi dei grafici sulla versione di DV `7d3896011` (`ChartSignalsSection` 609/798, `ChartAestheticsSection` 221/237, `SignalParamControl` 79/93).
+  - **Test di W:** `TransactionFormModal.test.ts` e `transactions-modals.spec.ts` (bordo in linea).
+  - **Disegno:** errore come variante `aria-invalid:border-lf-danger`; da rivedere: il campo non valido resta rosso col fuoco.
+  - Le bozze di `ui.ts` e dei grafici partono dalla versione di DV (`git show 7d3896011:…`). Chiesto alla 1.3 l'OK di W e J.
+- **03:35, 1.3:** OK al lotto input a nome di W e di J. W è su `BrokerImportFilesModal` (W-B37) e su una riga di `TransactionBulkModal`, non su questi file. Il campo rosso col fuoco è segnato per la review. Girato a T.
+- **03:48, H CP7b-1 in ingresso (1.3):** `nosniff` e `Referrer-Policy` su ogni risposta; cache lunga solo per `_app/immutable/`. Backend e doc, niente di visibile (`env.js` e `version.json` rivalidati nella build della galleria).
+- **03:48, H CP7b-1 nel target:** merge `1f4c5aeca`, record `d86316805`.
+- **03:51, J CP-6 in ingresso (1.3, decisione 28):** ricalcolo dei giorni in cui si muove solo il cambio, dei giorni di quotazione e del primo giorno vecchio. Solo backend; rigenera `eur_only_golden.json` (solo la finestra W1). Differenza attesa nella candidata: valori della dashboard dei portafogli con titoli esteri in quei giorni.
+- **03:51, J CP-6 nel target:** merge `628e3e49e`, record `d0efca910`.
+- **03:53, L-16 VERDE** su `e44383f13` (03:26–03:50):
+  - Lab 712, gate 186, svelte-check 0/0 (dopo il cast di `scan-colors.mjs:775`, con hash del catalogo invariato), parità scanner/Python identica;
+  - MkDocs strict 0, `check-links` 96, E2E live 12/12, `all` 17 E2E + 624 unitari, E2E a 4 worker 17/17, `check-orphans` verde, build di release senza marcatori del Lab.
+  - Commit `fca2e06eb` (cast + journal; L-18 nuova: togliere i vecchi percorsi `components/` di `CHART_PATH_RE` dopo Y3 e Y5).
+  - Base merge **`995bb25bd`** (con `d0efca910`); controllo leggero chiesto a L sotto `nice`, poi l'ingresso.
+- **03:54, slot 2 di T partito:** base merge **`91bae7f2e`** (con `d0efca910`), albero uguale alla simulazione, `--check` pulito; corsia 6155, carico 35; stop entro le 05:05.
+- **03:55, T:** slot 2 partito alle 03:54 (carico 26). La bozza del lotto input è pronta su copie. Chiesto alla 1.3 l'OK di W per `TransactionFormModal.test.ts` 828/829/831 (versione pulita) e per i commenti 1168/1173 di `transactions-modals.spec.ts`.
+- **03:56, 1.3:** OK di W per `TransactionFormModal.test.ts` 828/829/831 e per i commenti 1168/1173 (girato a T).
+  - **Y3 chiede della riga `~split` di `GrowthChart`** (baseline 272, percorsi `lib/components/dashboard/`): la riga non va aggiornata.
+  - Le righe `~split` sono un registro storico. `theme-roles.mjs` non le legge nei controlli: parse e serializzazione, e nella merge solo `~accept`.
+  - Uno spostamento conta solo per una riga `~accept`; oggi c'è solo `themeStore.ts`, che non si muove.
+- **03:58, controllo leggero di L su `995bb25bd` VERDE:** Lab 712, `--check` pulito, parità identica (custom 1931, tw 9520 dopo il lotto di T), 27 categorie. Commit del journal `d8a69ab62`.
+- **03:58, L-16 nel target: `2c485d3d4`** (merge di `d8a69ab62`, che conteneva già `d0efca910`). Albero uguale a quello di L, checkout pulito, `--check` pulito. 1.3 avvisata prima e dopo. Nessun altro lotto di L stanotte; L-17 e L-18 restano nel backlog.
+- **03:59, 1.3:** voleva usare il nostro slot, credendolo fermo, per un `all-backend` di H (CP7b-2, `nice`, 2 worker, ~03:59–04:30), oltre ai loro A6c e B3. Risposto: lo slot 2 di T è in corso fino alle 05:05. H può girare a `nice -n 19` con 2 worker; se T ha rossi da carico, H si ferma.
+- **04:00, 1.3:** H gira sotto `nice -n 19` (o 10, se era già partito). Se T ha rossi da carico, H si ferma subito. T avvisato. Il piano (05:05 / 05:30 / 06:45 / 07:30) non cambia.
+- **04:02, slot 2 di T: un rosso vero**, in `core-unit` (1 test su 6146). `themeRoles.gate.test.ts › keeps LITERAL_EXCEPTIONS and ARBITRARY_ALLOWED current` vuole che si tolga la voce `ARBITRARY_ALLOWED` del coachmark, orfana dopo W2-a.
+  - Correzione: togliere la riga 84 di `theme-roles.mjs`, in un commit a parte prima dell'ingresso di T; poi gate test e `--check`. 1.3 avvisata per Y5 (riga 70: merge pulita).
+  - **Lezione:** `--check` da riga di comando non controlla le voci orfane, il file Vitest del gate sì. Le prove leggere di ogni lotto devono includere `themeRoles.gate.test.ts`.
+  - Correzione al registro delle 02:10: la voce orfana non era innocua.
+- **04:23, Z2b in ingresso (1.3):** sospensione per inattività su Fly, spenta di default. Backend e doc. Prima c'è una correzione di una riga al CHANGELOG (`e0e7d4ece`).
+- **04:23, Z2b nel target:** merge `812ca49cc`, record `3edfc4b9a`.
+- **04:25, Z7c-2 (1.3):** `SchedulerLogModal`, `GlobalSettingsTab` e le i18n `settings`; markup nuovo sui ruoli, classi vecchie lasciate. Via libero: nessun nostro lotto o bozza su quei file. Passata la regola dell'elemento misto: ruoli solo su elementi nuovi o tutti-ruoli, perché `app.css` toglie il rimappaggio scuro a ogni elemento con una classe `-lf-`.
+- **04:27, 1.3: la regola dell'elemento misto è girata a tutte le loro sessioni.** Domanda: c'è un gate che lo intercetta? Risposta: G3 di `theme-roles` (CLI e Vitest) intercetta i misti scritti nel sorgente (classi dello stesso elemento, stringhe negli script), non quelli composti a runtime (prop come `className`/`contentClass`, costanti importate, concatenazioni).
+  - **Proposta per domattina (T + G):** «G3 runtime», uno scan del DOM nella galleria o negli E2E che segnala gli elementi con una classe `-lf-` e una di tavolozza insieme.
+- **04:40, W cherry-pick nel target (1.3, avviso arrivato dopo):** 4 commit piccoli (`7bed1bdce`…`8129f8176`): `BrokerImportFilesModal` salta i file bloccati, `escapeHtml` in `TransactionBulkModal`, docstring, pulizia di un test. `_frontend_utility.py` +1. Nessuna classe cambiata.
+- **04:46, A6c in ingresso (1.3):** un solo insieme di regole per le password, applicato dal server. `PasswordStrength` e le card di registrazione e reset sono sui ruoli; `--check` pulito; `_frontend_utility.py` +1.
+- **04:46, A6c nel target:** merge `3b3f6a1f0`, record `1704cfcf7`.
+- **04:49, X CP11c in ingresso (1.3):** E2E, doc e galleria delle impostazioni dei plugin, più l'escape nella sonda. In `gallery.spec.ts` lo scatto `settings/plugins` e `TEST_USER` nell'import, concordati con G (16 immagini, run filtrata 2/2). `_frontend_utility.py`: `front-utility plugin-settings`.
+- **04:50, X CP11c nel target:** merge `2f1d77a23`, record `6c03c38b8`.
+- **04:51, H CP7b-2 in ingresso (1.3):** profilo gestito, protezione dai frame e CSP in sola segnalazione, tutto spento in self-hosted. Nessun nostro path e nessun markup.
+- **04:52, H CP7b-2 nel target:** merge `d8549c69a`, record `34405dfbb`.
+- **04:53, 1.3 chiede di `TabBar`** (A propone una sfumatura con maschera alfa e lo scroll con la rotella verticale, in attesa del developer): descritte le 3 righe di classi di W1-c. Ingresso subito dopo le 05:05. A parte dal file finale; un'eventuale maschera con colore di sfondo deve usare un ruolo `--lf-surface-…`.
+- **04:55, Z config-package nel target** (3 file backend, avviso arrivato dopo): merge `3648a6155`, record `2f637d7cb`. La 1.3 non fa entrare altro fino all'ingresso del secondo lotto di T.
+- **05:00, slot 2 di T VERDE** (03:54–04:50, 55 min, su `91bae7f2e`).
+  - **Gate e unitari:** `front check` 0/0; `component-unit` 3940; `onboarding-component-unit` 449; `core-unit` 6145/6146, con l'unico rosso nel gate della voce orfana, poi corretto.
+  - **E2E verdi:** transactions-modals 25, settings 51, onboarding-tour 10, onboarding-guides 24, fx-list 12, asset-data-editor 26, asset-modal 17, dashboard 27, toolbar-width-sweep 24, files 29, support-copy-and-go 16, asset-list 28.
+  - Nessun rosso da carico durante l'`all-backend` di H, nessun rosso di valore dovuto a CP-6.
+  - **Commit** `d3b04a867`: TC-12, cioè la voce del coachmark tolta da `theme-roles.mjs:84`, più il journal; gate test 47/47.
+  - **Base merge** `a6bb0eef4` (con `2f637d7cb`): albero uguale alla simulazione, `--check` pulito. Cancello leggero chiesto a T.
+- **05:01, blocco della galleria confermato alla 1.3:** le loro prove pesanti si fermano alle 05:20, r3 parte alle 05:30, la candidata verso le 06:05–06:45; nessun ingresso nel target durante il blocco.
+- **05:04, cancello di T su `a6bb0eef4` VERDE:** `api sync`, `front check` 0/0, gate 65/65, `--check` pulito; carico 57.
+- **05:05, secondo lotto di T nel target: `72e66d1a6`** (W1-c, W1-e, W2-a, TC-12). Albero uguale a quello di T, checkout pulito. **m1 9.701, m2 64.** Il ramo di T è portato a `72e66d1a6` con fast-forward.
+  - Target fermo fino alla fine del blocco della galleria.
+- **05:08, T:** il lotto input è verificato su `72e66d1a6`; le patch vanno liscie se DV non ritocca i suoi 4 file.
+  - **Bozze proposte, su copie fino alle 06:45:**
+    - W1-f1 (X): `SyncModalBase`, `PageSyncModal`;
+    - W2-b (H/Z): `ChangelogModal`, `ServerUnreachable`;
+    - W2-d (J): `AiExportMenu`, `AiExportOptionsPanel`; T legge prima le istruzioni dell'AI Export;
+    - W1-f2 (W/Y): i 4 file di `ui/data-editor`, più 3 righe di spec `.text-red-500`.
+  - Nessun worktree li ha aperti; OK chiesti alla 1.3.
+  - **Slot:** alle 07:30 il lotto input + W1-f1 + W2-b; W2-d e W1-f2 nello slot dopo.
+  - T scrive la nota wiki sull'ordine di Tailwind 4, solo testo.
+- **05:09, 1.3:** OK a tutte e quattro le bozze di T (W1-f1 X, W2-b H/Z, W2-d J, W1-f2 W/Y, comprese le 3 righe di spec). Nessun lotto loro su quei file; i proprietari non li toccano fino ai nostri ingressi. C-66 di X (avviso nella modale di sincronizzazione) viene dopo W1-f1. Girato a T.
+- **05:20, T:** per W1-f2 servono altre 2 righe di `asset-data-editor.spec.ts` (346 `.text-red-500` → `[data-state="invalid"]`; 384 contatore stale → `data-editor-stale-count`); OK di W chiesto alla 1.3. Le 4 bozze sono in scrittura su copie. Nota wiki scritta (`problems/tailwind4-same-property-utilities-sorted-by-name`, più regola 8 della skill `theme-roles`); entra con il prossimo checkpoint.
+- **05:28, via a r3 di G-13** (ramo fermo `a2c1c39f4`): carico 17 in calo, nessuna prova pesante, corsie libere salvo l'anteprima 6160. 1.3 e T avvisate: zero prove fino alla fine della candidata (~06:45).
+- **05:28, 1.3:** OK di W alle righe 346 e 384 di `asset-data-editor.spec.ts` (W1-f2), girato a T.
+- **05:28, 1.3 (per L, non urgente):** Y ha committato sul suo ramo Y5 `6f7ac70ce` (`components/brokers` → `features/brokers`, `BrokerIcon` → `ui/display`) e Y6 `aec49a9cb` (`components/files` → `features/files`); entrano dopo il blocco.
+  - Nelle righe di colore: l'eccezione `theme-roles.mjs:70`, la chiave `htmlSink.gate.test.ts:70`, il baseline con `--update` (stessi conteggi, 9701/64).
+  - **Per L dopo l'ingresso di Y5/Y6:** `designer-lab.md:550` (i percorsi `components/brokers/lots` vanno accorciati, verificando cosa accetta `CHART_PATH_RE`) e `:1220` (esempio JSON con `BrokerImportFilesModal`), insieme a L-18. Lo dico a L quando Y entra.
+- **05:44, T:** le bozze W1-f1 (68 → 0), W2-b (89 + 8 letterali → 0, più 11 → 0; `hitClass` con la regola 8), W2-d (86 → 0, prompt e logica intatti) e W1-f2 (205 → 0) sono pronte su copie.
+  - TC-13: 3 debolezze già presenti negli spec di W, girate a W tramite la 1.3.
+  - **W1-g proposto:** `InfoBanner` (32) + `SyncResultRow` (22), più `fx-csv-import.spec.ts:289` → testid. OK chiesto alla 1.3; nessun worktree li ha aperti.
+  - **Slot ~07:30:** input + W1-f1 + W1-g + W2-b. **Slot dopo:** W2-d + W1-f2.
+- **05:45, 1.3:** OK a W1-g (`InfoBanner`, `SyncResultRow`, `fx-csv-import.spec.ts:289`); `SyncResultRow` entra nella riserva di X; TC-13 passato a W. Girato a T.
+- **05:56, T doc committato: `0d5cebce7`** (pagina wiki `problems/tailwind4-same-property-utilities-sorted-by-name`, indice e log del devWiki, regola 8 della skill `theme-roles`, journal, TC-13 e TC-14). Entra con il prossimo lotto di codice. TC-14 (`image-crop.spec.ts:616,643`, rilevamento del tema scuro con `[class*="dark"]`) girata alla 1.3.
+- **06:10, r3 VERDE:** `g-ref13-r3`, 05:28:42–06:08:17 (38,9 min), 257 test passati, 0 rossi, 2888 PNG, `dirty_files` 0.
+  - **Scoperta:** in tutti gli scatti del risultato PAC le impronte di r3 differiscono da r1 e r2, con la pagina più alta di 24 px in r1/r2. È sistematico e dipende dalla data UTC: il backend lavora in UTC, e r1/r2 sono del 15/10 UTC.
+  - **La regola della mezzanotte vale in UTC**, cioè alle 02:00 locali.
+  - **Decisione:** il riferimento della candidata è r3; le maschere e la `stability` del rumore vengono da r1↔r2 (stessa data, stesso codice); r2↔r3 è un terzo confronto, che documenta la data.
+- **06:10, via alla candidata:** G portato con fast-forward a **`72e66d1a6`** (albero uguale al target). Carico 7, 1.3 ferma e avvisata della regola UTC.
+- **06:46, candidata VERDE:** `g-cand16a` su `72e66d1a6`, 06:13:40–06:45:25 (31,1 min), 259 passati, 0 rossi, 2904 PNG (+16 `settings/plugins`).
+  - r2↔r3 conferma l'effetto della data UTC: scenario del PAC datato 15/10 contro 16/10 (`defaultAsOf`, N26), cifre diverse e +24 px. Non è un difetto.
+  - G calcola il diff candidata ↔ r3 con le maschere r1↔r2, sotto `nice -n 19`.
+- **06:47, blocco finito** (1.3 avvisata).
+- **Slot di DV partito:** base merge **`35a55cf39`** (con `72e66d1a6`); `app.css`, baseline e backlog fusi da soli; m1 8.833 e m2 64 sulla revisione; corsia 6156; stop a 50 minuti, con le Vitest dei gate incluse.
+- **Base di T: `7646f39ee`.** È la merge del ramo di DV `35a55cf39` in `0d5cebce7`, così le patch su `ui.ts` e sui grafici partono dalla versione di DV. La nota non committata del piano di T è rimasta intatta.
+  - L'ingresso di T è possibile solo dopo quello di DV.
+  - T applica le patch del primo slot (input, W1-f1, W1-g, W2-b) con prove leggere.
+- **06:48, 1.3 in ingresso:** X-R12 + X-R13 (merge `62726a83f`: `refresh.py` e il suo test, 2 righe tolte in `assets/[id]/+page.svelte`, l'emoji morta del settore, nessuna classe). In più, con cherry-pick, W-B41, W-B29 e W-B38: test backend, 3 E2E in `e2e/assets/` e `schemas/transactions/transactions.py`. Da verificare che non tocchino `asset-data-editor.spec.ts` (W1-f2).
+- **06:48, nel target:** X-R12/R13 (merge `92a0d4daf`) e W in cherry-pick (`5eb8e4103`, `09e7d5a4e`, `b89ddbba9`), record `f5cb9cce8`. Le due corsie pesanti della 1.3 ripartono: Z poi Y, W poi J.
+- **06:53, checkpoint di T, terzo lotto** (sopra `7646f39ee`): `37972b529` input (11), `7bc586870` W1-f1 (2), `83cbb0855` W1-g (3), `eabf863f3` W2-b (4, con baseline e piano). Sulla revisione: m1 8.833 → 8.535, m2 64 → 54. Prove leggere verdi, gate Vitest compresi (368/368).
+  - Slot dopo l'ingresso di DV (~07:35), con base merge prima. W2-d e W1-f2 in preparazione su copie.
+- **06:55, 1.3 in ingresso:** X K-16 + O-9 in cherry-pick, solo backend (plugin Borsa Italiana, justETF e css_scraper con le loro i18n, più 2 test). Nessun nostro path.
+- **06:55, K-16 + O-9 nel target:** `bfc0db8aa`, record `19e9ba22b`.
+- **07:09, Z7c-2 in ingresso (1.3):** il pannello dello scheduler mostra le voci sospese (⏸) e i nuovi tentativi. Ruoli solo su elementi nuovi in `SchedulerLogModal` e `GlobalSettingsTab` (regola dell'elemento misto rispettata).
+- **07:10, Z7c-2 nel target:** merge `0dfc7cbbe`, record `ba7739e60`.
+- **07:10, slot di DV VERDE** su `35a55cf39` (06:47–07:09, 21,5 min; carico da 25 a 78):
+  - `api sync` 0 file tracciati; `front check` 0/0;
+  - `core-unit` 6220; `component-unit` 3980; gate 47 e 18;
+  - E2E `pac-allocator-real` 1, `fx-settings` 3.
+  - Journal `31d3885ab`. Base merge **`36f9613cc`** (con `ba7739e60`): `--check` pulito, gate 65/65 sulla revisione unita.
+- **07:11, DV nel target: `1d37087f8`.** Albero uguale a quello di DV, **m1 8.833, m2 64**. DV portato con fast-forward; nessun altro lotto per DV stanotte.
+- **07:11, terzo slot di T partito:** base merge **`f0d19e499`** (con `1d37087f8`), `--check` pulito; corsia 6155, carico 30.
+- **07:09, G:** diff candidata ↔ r3 con le maschere r1↔r2, in `LibreFolio_visual_review/diffs/g-ref13-r3__vs__g-cand16a/index.html`.
+  - 2904 immagini: 152 identiche, 2720 cambiate (quasi tutte per la migrazione), 16 di altezza diversa (`fx/add-pair-chain` e `transactions/form-modal-transfer` su mobile), 16 nuove.
+  - Il foglio di confronto per il developer (cambio visibile Δ > 12, circa 180 righe) arriva verso le 07:25.
+- **07:20, anteprima 6160 aggiornata:** fermata la shell `preview6160f` (era a `ec1ddba96`). Worktree `preview-colori` portato con fast-forward a **`1d37087f8`**, dati dalla candidata di G (`/tmp/librefolio-r2-g`, 16/10). Nuova shell `preview6160g`; risponde 200, schema aggiornato.
+- **07:20, foglio di confronto di G:** `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html`, con 182 scatti ordinati per cambio visibile (91 ≥10%, 53 fra 1 e 10%, 20 fra 0,1 e 1%, 18 sotto 0,1%).
+  - Due modali crescono di 2–3 px su desktop: probabilmente il bordo di `ModalBase` (W1-e); girato a T.
+  - G ora prepara solo il journal (prove di stabilità, README con la regola UTC, backlog) e l'handoff.
+- **07:27, T:** i 2–3 px sono il bordo di W1-e (`border border-lf-raised` su `.modal-content`, N3), voluto. Si vedono solo negli scatti con `fitScreenToDialog`; +2 o +3 per l'arrotondamento di `dialogTarget`. Aggiunto ai «da rivedere» di W1-e (alternativa: un'ombra interna).
+- **07:28, 1.3 in ingresso:** W-B39 (una divisione o promozione rifiutata mostra un toast d'errore) e W-B42 (spec degli eventi con i suoi dati), in cherry-pick. `_frontend_utility.py` +1; in `transactions/+page.svelte` solo logica.
+- **07:28, W-B39 + W-B42 nel target:** `c881237a9`, `9df17ef20`, record `f7ab73409`.
+- **07:30, G-13 chiusa:** commit `f31270a5f` (analisi della coppia, stabilità, README del toolkit con la regola UTC, backlog G-13 ✅, G-16 ✅, G-11 estesa, G-17 nuova). **Nel target: `7f58a6292`** (6 file, solo doc).
+  - G aggiunge `contact_sheet.py` a `scripts/visual_review/` (nessuna run).
+  - G-11 e G-17 dopo gli slot di T.
+- **07:36, slot 3 di T:** `transactions-modals` 24/25. T13 (`transactions-modals.spec.ts:1211`) va in timeout a 30 s in `openCreateFlow` (il modale non compare), prima di ogni controllo di colore, con carico 43–49. I vicini hanno `test.setTimeout(60_000)`; gli altri 24 aprono lo stesso modale e passano. Piano: rilancio singolo a fine slot; se verde, verdetto «assunzione» e riga `setTimeout` chiesta a W fuori dal lotto.
+- **07:43, W-B44 nel target** (cherry-pick, solo `data-testid` in `PromoteMergeModal` più un Vitest): `df6e2df10`, record `504f80d9f`.
+- **07:45, toolkit di G:** commit `66f291528` (`gallery_tool sheet`: cambio visibile oltre 4/12/32 con le maschere, mediana oltre 12, `contact_sheet.<lang>.html` e `visible.json`; `diff` registra le sue cartelle). **Nel target: `d7a74e5de`.** G portato con fast-forward; idle fino a dopo gli slot di T.
+  - Nota: `sheet --lang it` su quella diff sovrascriverebbe il foglio italiano della notte; la copia sta in `g-workstream/2026-10-16/`.
+- **08:00, slot 3 di T VERDE** (07:12–07:58, 45 min):
+  - `front check` 0/0, `core-unit` 6220, `component-unit` 4006, gate 65;
+  - E2E verdi (asset-detail 33, settings 56, fx-csv-import 21, fx-sync 3 + 5, changelog-locale 2, app-start-auth 3, theme-roles 24, pac 1, fx-settings 3);
+  - T13 rilanciato da solo: verde in 3,5 s a carico 30, verdetto «assunzione». La riga `setTimeout(60_000)` è chiesta a W, fuori dal lotto.
+  - Journal `0a30278c3`; base merge **`af0f441fd`** (con `d7a74e5de`): `--check` pulito, gate 65/65.
+- **08:02, terzo lotto di T nel target: `769921bb0`** (input, W1-f1, W1-g, W2-b). Albero uguale a quello di T. **m1 8.535, m2 54.** Il ramo di T è portato a `769921bb0` con fast-forward.
+- **08:05, CHANGELOG:** la sezione «🎨 A new colour palette» era rimasta a ieri sera. Mandato alla 1.3, proprietaria del file, il testo aggiornato per tutti i lotti della notte, da integrare nel loro commit dei registri o da far scrivere a me.
+- **08:08, CHANGELOG aggiornato dalla 1.3:** commit `e5ef4fe4d`, con il primo punto riscritto e 6 punti nuovi. Il campo che resta rosso col fuoco era anche nella loro lista per il developer (P14), segnato come già implementato.
+- **08:08, checkpoint di T (W2-d + W1-f2) su `769921bb0`:** 10 file; m1 8.535 → 8.244; prove leggere 311/311.
+  - **Ritocco chiesto:** l'interruttore «stale» di `DataEditor` torna com'era. Gli interruttori migrano tutti insieme, in un lotto di T, come ho detto a DV; in più l'acceso passerebbe dall'ambra al verde.
+- **08:13, checkpoint di T:** `b338a442d` (W2-d, AI Export) e `eb2adb37b` (W1-f2, editor dei dati, con l'interruttore «stale» rimasto com'era); m1 8.535 → 8.249.
+  - Inventario degli interruttori nel piano di T: 13 in 9 file; il colore dell'acceso va deciso con la designer.
+  - Base merge **`e1ae55a6c`** (con `e5ef4fe4d`, CHANGELOG): albero uguale alla simulazione, `--check` pulito. **Via allo slot 4** (6155, carico 51).
+- **08:13, anteprima 6160** ripartita sul target `769921bb0` (shell `preview6160h`, dati della candidata), risponde 200.
+- **08:17, J CP-10a in ingresso (1.3):** un solo Rolling Return a giorni di calendario, impostazioni del grafico v3, finestre con etichetta. Nessuna classe; `_frontend_utility.py` +1; il conflitto sul `log.md` del devWiki è risolto per unione.
+- **08:18, nel target:** J CP-10a (merge `82e9c5305`, record `7974255e1`) e W-B32 in cherry-pick (`84d24ed03`, record `c94254695`). Il target è `c94254695`.
+- **08:30, E5b in ingresso (1.3):** verifica dell'email alla registrazione. `/verify-email` e le card di accesso, con ruoli solo su elementi nuovi (E ha controllato: niente elementi misti). `_frontend_utility.py`: `front-utility email-verification`.
+- **08:30, E5b nel target:** merge `dbe232723`, record `44d4d7e8e`.
+- **08:33, Y in ingresso (1.3):** Y3 + Y9 + Y10 + Y5 + Y6 + C-34 + la correzione E2E.
+  - Nei nostri path: `theme-roles.mjs:70` (il percorso dell'eccezione spostato in `features/brokers/lots/`), `htmlSink.gate.test.ts:70` (la chiave di K), il baseline con le righe rinominate (stessi conteggi, solo `--resolve`, `--check` pulito sulla revisione unita) e i percorsi in `_frontend_utility.py`.
+  - Ruoli solo su elementi nuovi. E2E singoli 223/224 + broker 37/37; prove leggere verdi.
+- **08:34, Y nel target:** merge `4447814ed`, record `d5c3c3ae3`.
+- **08:34, dopo Y:** target `--check` pulito, m1 8.535, m2 54 (conteggi invariati); nessun file resta in `components/{dashboard,brokers,files}`.
+  - La merge simulata T (`e1ae55a6c`) + `d5c3c3ae3` è **in conflitto sul baseline**: all'ingresso di T, merge lasciata aperta e T risolve con `--resolve`.
+  - **L-18 avviato:** L portato con fast-forward a `d5c3c3ae3`; toglie i vecchi percorsi `components/` da `CHART_PATH_RE`, aggiorna `designer-lab.md:549–550` e `:1220`, e le costanti dei test. Solo prove leggere.
+- **08:45, il developer è sveglio e chiede di fermare i sotto-agenti.** STOP mandato a T, L, DV e G. La 1.3 ferma anche i suoi (H e J `all-backend` interrotti); il target resta `d5c3c3ae3`.
+  - **T:** FROZEN. La base merge con `d5c3c3ae3` è aperta, con il baseline risolto da `--resolve` e in stage. Sulla revisione unita `--check` è pulito, gate 65/65, `front check` 0/0. Mancano il commit della merge e l'ingresso, in attesa del via del developer.
+  - **L:** FROZEN, con L-18 a metà (6 file non committati).
+  - **DV e G:** FROZEN, worktree puliti.
+  - Briefing scritto in `review/notte-15-16/briefing-mattina.md`.
+
+## Mattina del 16/10: riavvio, D-T28 e D-T29, cinque workstream nuovi
+
+- **10:16, il developer ha riavviato la macchina:** `/tmp` è vuota, quindi i dati delle corsie e della galleria non ci sono più. Lo stato di git è intatto e la base merge di T è ancora aperta.
+- **10:20, il quarto lotto di T nel target: `eb4040cd1`.** Il commit di merge `6efadbc78` l'ho fatto io, come da protocollo. Il baseline era risolto da T con `--resolve`, e sulla revisione unita T aveva già controllato `--check`, gate 65/65 e `front check` 0/0. **m1 8.249, m2 54.**
+- **10:21, anteprima 6160 ripartita:** dati nuovi con `db populate --force --clean --with-static --with-reports` in `/tmp/librefolio-color-review`; worktree `preview-colori` a `eb4040cd1`; shell staccata `preview6160i`.
+- **10:30, L-18 nel target: `f96043473`.** Checkpoint `f5f1eeb06`, base merge `32801520a`. Le prove leggere erano verdi prima dello stop. L-19 è nel backlog.
+- **D-T28 (developer, 10:16), testuale:**
+  - «direi di si, come ti dissi ieri sera l'obiettivo intanto è fattorizzare e migrare al nuvo color design sistem, poi le rifiniture le facciamo nel tempo, anzi sono un pò deluso che abbiamo fatto solo il 22% in 1 gg, non riesci a mettere al lavoro più agenti?»
+  - «è importante migrare il prima possibile i componenti prima di metterci a sviluppare funzioni grandi, quindi vedi tu.»
+  - «hai il comando dei commit tu»
+  - Il push resta suo.
+- **D-T29 (developer, 10:25), testuale:** «nel migrare cerca di seguire i colori dei temi che la designer ci ha intanto dato, e anzi, crea un file skill comune in cui metti nero su bianco i 2 temi, i nomi, la palette principale e tutte le altre regole, così che in futuro i nuovi componenti vengono già fatti seguendo le regole, e cita questa skill dentro il file dell'agente frontend».
+  - Lo skill lo scrive T. In `.github/agents/` non c'è un agente frontend, quindi la citazione va in `frontend.instructions.md` e in `copilot-instructions.md`.
+- **Lo split, uno per area** (m1 restante 8.249):
+  - **IW**, import: ~1.300, corsia 6151;
+  - **TR**, transazioni: ~1.050, corsia 6154;
+  - **AF**, asset e cambi: ~1.950, corsia 6157. Il dettaglio asset aspetta X FE5c, che ha 19 file aperti in `components/assets/detail/`, e le 2 righe di Z sulle rotte degli asset;
+  - **BK**, broker e lotti: ~1.150, corsia 6158;
+  - **IM**, impostazioni, supporto e aggiornamenti: ~1.050, corsia 6159;
+  - **DV**: rischio, dashboard, strumenti e grafici, ~1.500;
+  - **T**: il resto (~250), il lotto degli interruttori quando la designer avrà deciso, l'unico che crea ruoli, e lo skill di D-T29.
+- **Le corsie pesanti:** la 1.3 riparte con le regole di prima, cioè 2 corsie pesanti sue e 1 nostra, con le prove leggere sotto carico 50. La nostra unica corsia diventa una coda gestita da me: i worker accumulano lotti e li validano insieme.
+- **6150:** la 1.3 ci ha messo un server di review per il developer (`/tmp/librefolio-r2-main`). Le mie prove leggere non usano porte.
+- **10:38, records nel target: `8f2824046`** (D-T28, D-T29, le sezioni IW/TR/AF/BK/IM del backlog, la tabella delle corsie, il registro). Questo è il baseline dei nuovi worker.
+- **10:40, cinque sessioni nuove** (agente `coordinated-workstream`, modalità piano, analisi prima), create da `origin/dev_release2` (`dae4de4fa`) e portate a `8f2824046` con fast-forward; il file dell'agente c'è in tutti:
+  - IW `8a900475` (worktree da mappare: uno fra `congenial-spoon`, `improved-funicular`, `solid-meme`, `sturdy-couscous`);
+  - TR `b5f3074a` (`sturdy-chainsaw`, ramo `e-alfy-tr-transaction-colors`);
+  - AF `c010d690`, BK `c19b0207`, IM `a1c72772`.
+- **10:41, T:** lo skill comune `design-system` (D-T29), con citazioni in `frontend.instructions.md` e `copilot-instructions.md`; poi il resto della UI (~250).
+- **10:41, DV:** riparte sulla sua area (rischio, dashboard, strumenti, grafici); i lotti dei broker passano a BK.
+- **10:41, G:** la guardia G3 a runtime nella galleria (`mixed_elements.json`, solo segnalazione), con le espressioni regolari di T.
+- **10:41, 1.3:** riparte con 2 corsie pesanti sue e 1 nostra. Z7c-1 + Z-9 nel target: `69c95454b` (le 2 righe di Z sulle rotte degli asset, senza classi). Inviate la direttiva del developer (testuale), le aree e tre richieste: prenotazione per area, OK generale sui test che asseriscono classi, prestito di una corsia pesante quando è libera.
+- **10:44, 1.3: OK alle tre richieste.**
+  1. Prenotazione per area: le loro 9 sessioni dichiarano prima di toccare file nelle nostre aree. Restano loro fino all'ingresso: X FE5c, E `linkShareActions.ts`, H `AboutTab.test.ts`, Y `ExposureTable.test.ts`. Avviso quando FE5c entra (X è al pezzo 9, poi aggiornamento di base ed E2E degli asset).
+  2. OK generale: le asserzioni dei loro spec sulle classi di colore passano ad attributo di stato o testid, scritte da test-author, con le righe nell'avviso di merge. Se uno spec è aperto, avvisano prima.
+  3. Se una loro corsia pesante resta libera più di 30 minuti, avvisano.
+  - La 6150 resta al server di review del developer finché non ha finito.
+- **10:47, il developer chiede** se lo skill parla della cartella condivisa dei temi (prendere i colori lì, al più aggiungerli lì). Nel brief c'era solo in parte: aggiunta a T una sezione esplicita su `frontend/src/lib/theme/` come casa unica dei colori, con la mappa dei 17 file, proprietari, regole R2/R3 e come si aggiunge.
+- **10:48, dichiarazioni della 1.3, tutte OK:**
+  - Y W7 su `features/dashboard/ExposureTable.svelte` e `PositionsPanel.svelte` (solo logica): DV non li tocca fino all'ingresso;
+  - Y su `features/brokers/lots/LotCustodyModal.svelte` (import, `lotOpeningValue`, testid): BK non lo tocca fino all'ingresso; la 1.3 avvisa;
+  - E E4b su `features/auth/ForgotPasswordCard.svelte`: già a 0 classi legacy, ruoli solo sugli elementi nuovi.
+- **10:49, W-B17 nel target** (cherry-pick: backend, i18n, doc): `4647c4af4`, record `b82e7765f`.
+- **10:52, J-17 (1.3)** su `DistributionDialog.svelte:166`, area DV (un ramo di logica, dopo le 11:20 circa): OK. DV avvisato di non toccarlo fino all'ingresso.
+- **10:54, G-18 approvato:** guardia G3 a runtime; `galleryMixed.ts` più un aggancio in `captureShot` dopo lo scatto; `gallery_tool mixed`. D1: solo negli snapshot (`LF_GALLERY_MIXED_DIR`). D2: raggruppamento per cartella del file candidato, `--by section` come opzione. Le espressioni di T sono già esportate; ~1,5 h, poi una run filtrata nella coda pesante.
+- **10:58, DV W6 approvato:** 57 file, m1 1.493, in 3 lotti (W6-c strumenti e grafici, W6-a rischio, W6-b dashboard; W6-d dopo Y W7).
+  - Punti: campi del rischio con la convenzione di T; `LOSS_CLASS` → `text-lf-loss`; barre → `bg-lf-loss/80`. **I badge di segno di `OtherPeriodEffectsTable` restano legacy:** gain e loss sono ruoli distinti dagli stati, quindi serve a T `gain-soft`/`loss-soft` (alias), da chiedere dopo lo skill. Preset di `L4Shock` con D-T16; filtro dei broker «da rivedere».
+  - La catena `KpiSection` → `KpiMetricBar` va a T.
+  - «Chi parte prima» mandato alla 1.3, con 3 domande: altri file di Y aperti, proprietario dei tool, OK per `ExposureMaps`.
+- **10:59, 1.3 su W6:** OK a tutti e tre i lotti. Y ha aperto solo W7 (`93c39a11c`, sul suo ramo); i 5 tool del frontend non hanno proprietario nella 1.3, quindi sono liberi; `ExposureMaps` OK. Girato a DV.
+- **11:03, skill `design-system` (D-T29) nel target: `6e569084a`.** Commit di T `c59e92dfb`: 522 righe e 46 KB, con i due temi, i 95 ruoli e i loro valori controllati da uno script contro `tokens.css`, la mappa di `lib/theme/`, 11 regole, le decisioni e le 4 domande aperte. È citato in `frontend.instructions.md` e `copilot-instructions.md`, e `theme-roles` rimanda indietro.
+  - **Fast-forward a `6e569084a`:** T, L, AF (`congenial-spoon`), IM (`improved-funicular`), IW (`solid-meme`), TR (`sturdy-chainsaw`), BK (`sturdy-couscous`).
+  - DV e G hanno modifiche aperte: li aggiorno al loro checkpoint.
+- **Seguito per T:** palette in `palette.md` accanto, per alleggerire lo skill; ruoli `gain-soft`/`loss-soft` (alias) per DV; DV rilegge la sezione «Charts».
+- **11:06, IM: analisi consegnata e piano approvato** (`interactive`; respond_to_session_plan_v2 con il permesso del developer). 22 file, m1 1.048 → 55 previsti, m2 6 → 0. Sei lotti (IM-1…IM-6); `DonationPopupModal` solo con l'OK di A.
+  - `SettingToggle`: IM migra la riga, mentre traccia e pomello restano legacy interi per T.
+  - Il test `GlobalSettingsTab.test.ts:937` passa a un testid, coperto dall'OK generale della 1.3.
+  - Il cuore decorativo **non** va su `danger`.
+  - Ruoli mancanti per T: testo sul fondale (fotocamera), famiglie di plugin (categoriali); i marchi di terzi restano.
+  - «Chi parte prima» mandato alla 1.3, con la richiesta dell'OK di A su `DonationPopupModal`.
+- **11:07, 1.3 su IM:** OK a IM-1…IM-6, compresa la riga del test a :937. Più avanti: A7b su `features/settings/users/**`, fuori lotto; A8 «Security» su `settings/+page.svelte` e forse `SettingsLayout`, non oggi (aspetta la decisione P13 del developer). L'OK di A su Donation arriva a parte. Girato a IM.
+- **11:10, IW: piano approvato** (dal developer direttamente nella sessione, «avvia», e da me con il feedback D1–D6). D1: tutti `warning`. D2: legacy, con la richiesta a T di `success-hover`/`info-hover`. D3: lo `<style>` cmp a T. D4: `pairCellHtml.ts` a IW-5. D5: lo spec T4 passa a testid. D6: legacy.
+- **11:12, TR: piano approvato.** TR-1…TR-4; `tx-wac-mode.spec.ts` → `aria-pressed`; il sottotitolo di `/transactions` resta legacy finché L non cambia il soggetto dello spec del picker (L-20); `success-hover` a T; la base della tinta del broker a T; slot A/B.
+- **11:12, BK: piano approvato.** L1–L3 con 3 sotto-agenti, L4 dopo Y. Il set VIEWER resta con le categorie; gli `<style>` cmp a T; l'icona sullo scrim è un ruolo da chiedere a T; il campione della legenda è una domanda per DV; il rischio di `brokers-detail.spec.ts` va al lotto `DataTable` di T.
+- **11:13, T, il lotto dei ruoli:**
+  - palette in `palette.md`;
+  - `gain-soft`/`gain-on-soft`/`loss-soft`/`loss-on-soft` con `SIGN_BADGE` e le coppie nel gate (anche gain e loss sulle 6 superfici);
+  - `success-hover`/`info-hover`; un ruolo per il testo sul fondale.
+  - Resto di T: `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`. `ui/display` con la catena di DV: T scrive, io unisco nel ramo di DV, DV cambia i chiamanti. Un lotto «component tokens» (gli `<style>` `--lf-cmp-*` di IW e BK, la tinta del broker di TR).
+- **11:13, 1.3: «chi parte prima»** di TR e BK, con lo spec `tx-wac-mode`. Domande: proprietario di `FileGrid`, OK di A su `routes/+page.svelte`, `ColumnVisibilityToggle`/`SelectionBar` (Y), FE8b dopo IW e TR.
+- **11:13, L-20 a L:** rendere `designer-lab-picker.spec.ts` indipendente dal sottotitolo di `/transactions`.
+- **11:11, 1.3:** FE8b di W parte solo dopo gli ultimi lotti di IW e TR (lo dico io). IW-1…IW-5 OK, compresa la riga dello spec `tx-brim-import.spec.ts:235`. W-B43 lavora su `asset-data-editor` e `fx-csv-import`.
+- **11:12, 1.3:** OK a TR-1…TR-4 e BK L1–L3, comprese le righe dello spec `tx-wac-mode`. `FileGrid` (H), `routes/+page.svelte` (A), `ColumnVisibilityToggle` e `SelectionBar` (Y), `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`: tutti liberi, a T.
+- **11:15, AF: piano approvato.** 36 file, m1 1.946 → circa 170, m2 6 → 0; 9 lotti (il 9, il dettaglio, dopo FE5c).
+  - I test di X passano a `data-lifecycle`, coperti dall'OK generale.
+  - Tinte ambigue: una sola tinta di stato va sul ruolo di stato, le tinte che distinguono tipi restano legacy.
+  - AF-8: `hover:bg-lf-action-hover`, da rivedere.
+  - **L'hover delle card è unificato** con la mappatura di BK (`hover:border-lf-link/30 hover:bg-lf-selected/50`) per `FxCard`, `AssetCard` e `BrokerCard`.
+  - C1 (il `contentClass` rosso di `AssetCurrencyChangeModal`) va a T per la variante di `ModalBase`; C5 (i `<code>` di `InfoBanner`) resta.
+  - «Chi parte prima» mandato alla 1.3, con la domanda sulle voci di X (O-20, C-90, O-8, C-66) e sul lotto 8. AF scrive subito i lotti 1, 2, 3 e 7.
+- **11:13, DV W6-c committato: `5d2c1ce62`** (9 file a 0; sulla base di DV m1 8.249 → 7.901). Base merge **`b5fafb1ad`** (con `6e569084a`). DV parte con W6-a (rischio); slot unico di W6 alla fine.
+  - La rilettura della sezione «Charts» dello skill (9 correzioni) è girata a T per il lotto della palette.
+  - DV-8 (`growthBrokerColor` con `index % 8`) è di DV dopo W6.
+  - Il controllo della regola 4 di DV è proposto a T come G5 del gate.
+- **11:14, T: lotto dei ruoli approvato.** `gain/loss-soft` e `-on-soft` (alias); `success-hover`/`info-hover` = `color-mix(in oklab, X 80%, text-primary)` e `on-overlay` #fff, provvisori e con domanda alla designer; estensione `over` del gate C3 per i fondi traslucidi; `SIGN_BADGE`. Nello stesso checkpoint la palette in `palette.md` e le 9 correzioni di DV. Dopo: la variante di `ModalBase` con `tone`.
+- **11:15, la 1.3: OK su tutti i lotti AF 1–8, AF passa per primo.** X aspetta questi ingressi:
+  - lotto 1 `FxSyncModal`, C-66;
+  - lotto 4 `AssetModal`, O-20;
+  - lotto 5 `AssetSearchAutocomplete` e `ProviderAssignmentSection`, F21 e C-90;
+  - lotto 6 `AssetDataEditorSection`, O-8;
+  - lotto 8 `assets/+page.svelte`, O-20.
+
+  **Obbligo:** a ogni ingresso di AF avviso la 1.3 con i lotti e le voci di X sbloccate.
+  - Checkpoint di AF: A = 1–3, B = 4–7, C = 8, D = 9 (dopo FE5c).
+  - La base di AF (`6e569084a`) contiene già `69c95454b`.
+  - I 2 test di X (`AssetTable.test.ts` e `asset-list.spec.ts`) passano a `data-lifecycle` solo dopo la conferma di X; se tarda, il lotto 3 passa in B.
+  - E: OK a `text-lf-primary` sulla radice di `VerificationNotice.svelte` (E4b; file nuovo, record 0).
+  - Ancora atteso: l'OK di A su `DonationPopupModal` (IM-6).
+- **11:17, L-20 approvato:** soggetto proprio su `/` del visitatore, regola `html.dark … !important var(--…)` cercata nel CSSOM, `<p>` iniettato, asserzione sulla variabile, salto esplicito dopo B6 (L-13). Helper locale nello spec. **Coda pesante:** L per primo, nella corsia 6152, appena il test è scritto (`api sync`, `front-designer-lab picker`, poi il blocco a 4 worker). Porte attive: 6150 (server di revisione della 1.3) e 6160 (anteprima).
+- **11:17, X conferma:** `AssetTable.test.ts`, `AssetTable.svelte` e `asset-list.spec.ts` non sono aperti, quindi via ad AF per i test del lotto 3, che resta nel checkpoint A. In ingresso nel target J CP-7a (backend e docs, nessun file nostro). La 1.3 ha girato a E l'OK su `VerificationNotice` con le due condizioni.
+- **11:18, J CP-7a nel target:** merge `4f9e94420`, record `b0688785f` (punta). Dal nostro `6e569084a` nessun file in frontend/; in .github/ solo 2 istruzioni (backend e financial-math), estranee ai colori.
+- **11:19, W P4 (docstring backend) nel target** per cherry-pick: `02f08057f`, record `3d5ee174d` (punta). File in frontend/ o .github/: 0.
+- **11:20, regola per i worktree nuovi:** `api sync` è una prova leggera, una volta per worktree e dopo ogni base merge, sotto `nice` e con carico < 50. Scrive solo file ignorati da git e non usa server, porta o DB. Le Vitest dei componenti tornano fra le prove leggere. Mandata a IM, che l'ha chiesta (IM-1 e IM-6 pronti, IM-2…5 in scrittura), e a IW, TR, AF e BK.
+- **11:23, G-18 committato: `07fe58276`.** Base merge **`5489d7a28`** (con `3d5ee174d`), albero uguale alla simulazione. **Corsia pesante a G** (run `g-mixed-probe`, `-f "Settings"`, 6153, ~10–15 min); L-20 dopo, al mio via. Poi l'ingresso di G-18. Carico 73.91 63.31 54.71.
+- **11:26, DV W6-a scritto** (30 file del rischio; m1 7.901 → 7.142, −759; resta `RiskReturnLevel` 4).
+  - Il carico è a 85–99, quindi checkpoint senza Vitest: le 55 girano sotto 50 insieme a W6-b, e lo slot unico copre tutto.
+  - Regola 7: chieste a T `SIGN_TEXT.riskTable` e `SIGN_BAR.histogram` (`/80`) nel lotto dei ruoli; DV le adotta dopo l'ingresso.
+  - **Rischio di conversione scoperto da DV:** un colore solo in `dark:`, senza il chiaro della stessa proprietà, si perde se la conversione toglie il `dark:` senza mettere un ruolo; un input torna bianco in scuro.
+  - Controllo generalizzato in `files/tools/dark_only_check.py <base>`: sola lettura, sui file cambiati. Mandato a tutti con i casi di ciascuno sulla base `6e569084a`: IW 3 (`FixFlaggedStep`), TR 6 (`TxFormBanners:76` e `WacPreviewSection:469`), BK 1 (`BrokerForm:307`), IM 2 (`SettingsLayout:103` e `GlobalSettingsTab:484`), AF 0, DV 4 (già sistemati).
+- **11:31, DV W6-a committato: `622683733`** (33 file; m1 sulla base di DV 7.901 → 7.142). DV passa a W6-b.
+  - `dark_only_check.py` adesso unisce le righe di una classe su più righe. IM ha segnalato 2 falsi positivi, e anche i 6 di TR lo erano.
+  - Casi veri da verificare: IW 3 (`FixFlaggedStep`), BK 1 (`BrokerForm:307`); DV 4, già sistemati; TR, AF e IM 0.
+- **11:34, il lotto dei ruoli di T è nel target: `f043c1b58`** (commit di T `643a0e7e7`; albero uguale alla simulazione, stato del checkout invariato, `--check` pulito). T portato con fast-forward a `f043c1b58`.
+  - Ruoli nuovi: `gain/loss-soft` e `-on-soft`, `success-hover` e `info-hover` (provvisori), `on-overlay` (provvisorio); 102 ruoli e 98 utility.
+  - Tabelle: `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`.
+  - Gate: 168 coppie, con l'estensione `over`. Skill: `palette.md` e le 9 correzioni di DV.
+  - Gli worker li ricevono alla base merge del prossimo checkpoint; chi li vuole prima si ferma e me lo chiede.
+- **11:34, Z-13 (1.3): OK con condizioni.** 8 righe nello `<script>` di `dashboard/+page.svelte` (DV W6-b, 14 hunk) e di `brokers/[id]/+page.svelte` (BK L2, 30 hunk).
+  - **Eccezione verificata alla regola «un file, un autore»:** nessun hunk dei nostri cade nello `<script>` (righe 15–823 e 1–464 della base), quindi le regioni sono disgiunte.
+  - Condizioni: niente formattazione fuori dallo `<script>`; mi mandano lo SHA all'ingresso; chi entra secondo fa la base merge.
+- **11:35, DV W6-b committato: `daea7b31c`** (13 file; m1 sulla base di DV 7.142 → 6.861). Base merge **`63e3a22d8`** con `f043c1b58`, cioè coi ruoli di T: DV fa subito DV-9 (`SIGN_*`), poi le 92 Vitest sotto carico 50, poi lo slot di W6 in coda dopo G e L. Avvisati DV e BK di Z-13 (non toccare lo `<script>` delle due pagine). Avvisati IW, TR, AF, BK e IM dei ruoli nuovi: li ricevono alla base merge del prossimo checkpoint; a IM proposto il checkpoint di IM-1 e IM-6 subito. T: via al lotto del resto della UI, G5 dallo script di DV, controllo del fondale uguale nei due temi.
+- **11:36, partita la run G-18** `g-mixed-probe`: su `5489d7a28`, 6153, `-f "Settings"`, 4 worker; carico sceso a 56. Fine attesa entro le 12:21.
+- **11:36, AF:** i lotti 1–8 sono tutti scritti e riletti; `dark_only_check` dà 0 casi su 35 file.
+  - **Bug di G3 trovato da AF** (`theme-roles.mjs`): `codeOf` non toglie i commenti dentro le `{…}` del markup. In `assets/+page.svelte:1643–1644`, un apostrofo e dei backtick in un commento fanno inghiottire a un attributo il markup delle righe 1641–1699: G3 falso, e un punto cieco sugli elementi in mezzo.
+  - Rimedi: AF riscrive il commento (autorizzato, dichiarato nel checkpoint C); T corregge lo scanner con un caso di test, ma prima misura l'impatto in sola lettura sul target e sui worktree.
+  - Coda pesante: dopo G, prima AF (X aspetta), poi L-20, poi lo slot di W6.
+- **11:36, L-20 pronto per la coda pesante:** diff solo in `designer-lab-picker.spec.ts` (+171/−13), prove leggere verdi. Il CSSOM sceglie `text-gray-800`, che legge `--theme-text-primary` (`app.css:208`). Alla fine di G: AF se ha già i checkpoint e le prove leggere, altrimenti L (`api sync`, populate di `/tmp/librefolio-r2-l`, `picker`, poi il blocco a 4 worker).
+- **11:38, la 1.3 nel target:** `baa1b6e7e` (skill `real-data-copy` e una sezione «One machine, many sessions» nei due file degli agenti: le prove pesanti solo negli slot, quelle leggere sotto carico 50; uno slot fermo da più di 30 minuti passa all'altro coordinatore; script e log nelle cartelle di sessione, non in `/tmp`). Poi `e36e45f0d` (journal, decisioni P1–P26 del developer); la punta è `e36e45f0d`. Copia dei dati demo autorizzata in `/tmp/librefolio-r2-realdata`, procedura nello skill. Il mio script d'ingresso è spostato in `files/tools/entry.sh`.
+- **11:40, DV-9 committato: `bf2afbba3`** (`SIGN_TEXT.riskTable`, `SIGN_BAR.histogram` e `SIGN_BADGE`; m1 sulla base di DV 6.861 → 6.853). `histogram.gain` resta senza lettore: nessun test controlla i lettori di `toneClasses.ts`. DV aspetta il carico sotto 50 per le 92 Vitest, poi lo slot di W6.
+- **11:43, IM 1 committato: `b5abcbdaa`** (IM-1…IM-6 tranne Donation; area IM m1 1.048 → 83, m2 6 → 1). Base merge **`d95d6236c`** con `e36e45f0d`. IM: `api sync` e `text-lf-on-overlay` sulla fotocamera; Donation aspetta A (sollecitato). Chiesto alla 1.3 che A8 aspetti l'ingresso di IM su `settings/**`. Coda pesante: G (fino alle 12:21), poi AF (X aspetta) o L-20, poi W6, poi IM.
+  - (Nota: gli orari delle voci dalle 11:13 alle 11:40 sono stati corretti alle 11:43; prima erano avanti di 10–45 minuti.)
+- **11:47, la 1.3:** A8 aspetta l'ingresso di IM (e intanto è fermo sulla decisione P13 del developer). **OK di A su `DonationPopupModal`**: A non ha lavoro su settings, support e update-check; IM lo migra nel prossimo checkpoint. Nuovo workstream della 1.3: **MF - Financial math** (6190, `/tmp/librefolio-r13-mf`), solo backend.
+- **11:50, coda pesante decisa:** G (fino alle 12:21 circa) → AF (H1+H2 se stanno in 45 minuti; X aspetta) → L-20 → W6 → IM → AF H3 → IW, TR, BK. Le Vitest dei lotti non bloccano più i checkpoint: le copre `front-utility component-unit` nello slot di ciascuno. Valutata e scartata per ora l'integrazione in un solo slot: risparmierebbe 30–45 minuti di build e `component-unit`, ma ritarderebbe l'ingresso di AF, che X aspetta, e complicherebbe l'attribuzione dei rossi.
+- **11:55, DV:** prende `ui/display` da T (`KpiMetricBar`, `KpiDivergingFlowBar`, `RiskMetricCard`: 52 classi; tutti i chiamanti sono di DV) e chiude le 6 catene di `KpiSection`. Poi DV-8 (`growthBrokerColor` via `sequenceColor` con `shadePoles`: dal nono broker una sfumatura, non una ripetizione). Chiesto alla 1.3 il «chi parte prima» per `GrowthChart.svelte` (solo lo `<script>`), `growthChartSeries.ts` e i tre `ui/display`. Intanto DV lavora su `chartPalettes.ts` e sui test. T: prima il bug dello scanner, poi il resto della UI. Sul target restano 8.249 classi m1, tutte in aree già assegnate (transazioni 2.319, broker 974, asset 972 + 546, impostazioni 883, rischio 763…).
+- **11:58, la 1.3: OK su DV-8 e sui tre `ui/display`.** Y8 (I-03, la vista ripristinata, su `GrowthChart.svelte`) aspetta l'ingresso di DV-8: a quell'ingresso mando lo SHA alla 1.3. Y12b tocca `levelHelpers.ts`, non le card. DV: prima DV-8, poi `ui/display`, in due checkpoint.
+- **11:56, AF A+B+C committati in quattro** (con i TSV intermedi di AF, controllati per lotto): A `25cd00a04`, B `28aa01f8e`, C `f92675b80`, docs `15f31f12e`. Albero di AF: m1 8.249 → 6.734, m2 54 → 48. Base merge **`5e759bc9b`** con la punta `f77743d47` (la 1.3 ha aperto MF, solo journal). Slot H1+H2 alla fine di G, con `live-pause` e `asset-name-xss` in coda: così A+B+C possono entrare dopo un solo slot. Alla fine di ogni ingresso: avvisare la 1.3 per le voci di X (C-66, O-20, F21/C-90, O-8).
+- **11:53–11:57, caduta di rete.** Le chiamate al modello sono andate in timeout (`api.business.githubcopilot.com … operation timed out`, 5 tentativi) e le sessioni hanno chiuso il turno con `sessionEnd reason: error`. Interrotti AF, DV, T, IW, TR, IM, G, BK e, della 1.3, MF, B, Z, W e A. L non era attivo.
+  - **La run G-18 `g-mixed-probe` è morta con la sessione di G:** le shell in background delle sessioni interrotte vengono chiuse.
+  - Nessuna merge, nessun lock e nessun rebase lasciati a metà nei 9 worktree; l'anteprima su 6160 risponde ancora.
+  - Memoria alle 11:58: 57 % libera, swap a 5,2 GB su 6.
+- **12:00, riprese tutte le sessioni** con il loro compito in corso.
+  - **La corsia pesante va subito ad AF** (H1+H2, taglio alle 12:45); poi la nuova run di G-18, L-20, W6, IM.
+  - La 1.3 è avvisata della causa e delle run uccise.
+- **12:01, slot AF H1+H2 partito** (base `5e759bc9b`, 6157 + `/tmp/librefolio-r2-af`, carico 51 quindi 1 worker; nessun passo nuovo dopo le 12:43). Script e log in `/tmp/libreFolio_af_slotH12*`: per i prossimi slot, script e log nelle cartelle di sessione (regola della 1.3).
+- **12:03, la 1.3 nel target:** W-B43 (`a59593570`, record `9ec853012`): `asset-data-editor.spec.ts`, `asset-events-owned.ts` e `fx-csv-import.spec.ts`, asserzioni più strette senza colori. Lo slot di AF gira sulle versioni vecchie: dopo lo slot, base merge di `9ec853012` in AF e rilancio di quelle due spec prima dell'ingresso. Della 1.3: `all-backend` di A sulla 6182 è sopravvissuto alla caduta di rete; Z ha il loro slot 2 fino alle 12:30.
+- **12:06, BK L1–L3 committati: `82f304f4a`** (19 file; area 1.153 → 345, di cui 205 in `LotCustodyModal` di Y). Base merge **`2eef01e59`** con `9ec853012`. BK: `api sync`, BK-4 con `on-overlay`, BK-2 su `SIGN_BADGE` se i badge hanno un segno. **Coda pesante rivista:** AF (fino alle 12:45) → IM → W6 (DV-8, che serve a Y8) → BK → L-20 → G → AF H3 → IW e TR. Chiesto alla 1.3 di prestare una corsia ferma per 30 minuti o più a L-20 e G.
+- **12:09, IM 2 committato: `8636a368f`** (fotocamera su `on-overlay`; `DonationPopupModal` con l'OK di A; `app.css` C4: tolte 2 regole morte, `.bg-libre-beige` e `.text-libre-dark`). Area IM: m1 1.048 → 54, m2 6 → 0. **La 1.3 presta il suo slot 1** dalla fine dell'`all-backend` di A (verso le 12:10–12:20) fino alle 13:15: L-20 (6152, ≤25 min), poi G-18 (6153). Nella nostra corsia: AF fino alle 12:45, poi IM, W6, BK.
+- **12:11, DV: decisione (a).** Le barre di `KpiSection` per «valore contabile» (blu) e «liquidità» (smeraldo) restano legacy come categorie, con una voce di backlog per la designer: dopo il punto 2.2, la barra della liquidità potrebbe leggere il colore della categoria Liquidità dei grafici. Il lotto `ui/display` è scritto (i tre componenti a 0, la catena `valueColor` chiusa); DV-8 è pronto in `chartPalettes.ts` e aspetta il test di test-author.
+- **12:12, G-18: la run non era morta.** È finita da sola alle 11:55:24 e la DoD è verde: 192 scatti, 0 errori di scansione, 0 elementi misti in Settings; i 13 rossi vengono dal carico e cadono tutti prima delle catture. Correggo la voce delle 11:53.
+  - Journal di G: `dc120d34c`. **G-18 è nel target: `005ebcbf9`**, albero uguale alla simulazione, `--check` pulito.
+- **12:12, IW checkpoint 1 committato: `48ecea1e2`** (21 file; area IW m1 1.310 → 28, m2 1 → 0). Base merge `b3162db80` con `b171c058e`; IW fa il passo 5 (i 4 pulsanti di D2 con gli hover nuovi). Per W, nella loro sezione, le note di IW-8.
+- **12:12, IM:** base merge `567b6cf3b` con `b171c058e`, in vista dello slot 1 prestato dalla 1.3 (6159, taglio alle 13:15).
+- **12:16, BK mini committato: `cb1fb5690`** (BK-4 su `on-overlay`; LONG/SHORT resta in BK-2).
+- **12:18, TR committato in due:** codice `1a01ae733` (21 file; m1 8.249 → 7.331, m2 54 → 34), docs `e0b180e12`. Base merge `d02b0c37c` con `005ebcbf9`. OK a TR-5 (ramo split su `warning` e `warning-hover`); test-author passa le righe 152, 205 e 230 di `tx-wac-mode.spec.ts` ad `aria-pressed`; slot A+B insieme.
+- **12:18, campi nativi (scoperta di TR):** `app.css` colora testo e segnaposto dei campi nativi in scuro solo se non hanno una classe `-lf-`. Un campo migrato passa al preflight: colore ereditato e segnaposto al 50 %.
+  - Il controllo `files/tools/native_field_check.py` trova 4 casi nel target (`TagInput:214` e `TreeSelect:357` di T; `ChartAestheticsSection:217` e `:233` di DV), IW 1 (`FixFlaggedStep:760`), AF 1 (`ScheduledInvestmentEditor:1287`, da correggere dopo il suo ingresso), gli altri 0.
+  - A T: una regola nello skill, ed eventualmente un controllo del gate.
+- **12:20, Y11 della 1.3 (il bottone «Aggiorna» che gira mentre la pagina carica):** gli `<script>` subito, perché non abbiamo nessun hunk nello `<script>`. I bottoni:
+  - subito in `(app)/+layout`, `files/+page`, `LotsAnalysisPanel` e nella dashboard, tranne la riga 825 della radice;
+  - dopo i nostri ingressi in `fx/+page`, `fx/[pair]` e `assets/+page` (AF); `RiskAnalysisPanel`, `RiskPanelHeader`, `ToolsHub` e `ToolHost` (DV); `brokers/+page` e `brokers/[id]` (BK); `transactions/+page` (TR).
+  - Per ogni ingresso mando alla 1.3 lo SHA e i file che si liberano.
+- **Coda pesante:**
+  - nostra corsia: AF (fino alle 12:45) → L-20 → W6 (DV-8 + `ui/display`) → BK → TR → IW;
+  - slot 1 prestato dalla 1.3: IM.
+- **12:20, BK:** OK a preparare prima dello slot `front build --debug`, `mkdocs build` e il populate di `/tmp/librefolio-r2-bk`, uno alla volta, sotto `nice` e con carico < 50. **Regola per gli slot:** uno slot gira sulla base del worker; all'ingresso faccio la base merge e si rilanciano solo le spec che il target ha toccato nel frattempo (come per AF con W-B43).
+- **12:22, DV-8 committato: `28f4bed75`** (solo `chartPalettes.ts` e il suo test: dal nono broker `sequenceColor` con le sfumature, poli della card di pagina per default). I file `ui/display` restano non committati nel worktree di DV, per il prossimo checkpoint. **Y8 libero subito:** `GrowthChart.svelte` e `growthChartSeries.ts` non sono cambiati; avvisata la 1.3.
+- **12:25, DV `ui/display` committato: `a694d8fb2`** (`KpiMetricBar`, `KpiDivergingFlowBar`, `RiskMetricCard` a 0; `KpiSection` 6 → 4, cioè le due barre per categoria; i segnaposto di `ChartAestheticsSection`; m1 sulla base di DV 6.853 → 6.799). Nel ramo di DV restano da far entrare W6-c, W6-a, W6-b, DV-9, DV-8 e `ui/display`: slot W6 verso le 13:15, con la base merge prima.
+- **12:28, il fix dello scanner di T e la regola dei campi nativi sono nel target: `be911db7e`** (commit di T: `18824449c` fix, `a317392d4` skill). Albero uguale alla simulazione, `--check` pulito; T portato con fast-forward a `be911db7e`, e applica il lotto del resto della UI. Il G6 dei campi nativi va in un lotto di T, insieme al G5 e al controllo del fondale. **DV:** le 92 Vitest tutte verdi (3.742 test); script dello slot di W6 pronto (6156; E2E dashboard, risk, risk-lab, pac-allocator-real, broker-filter-label, fx-settings; nessun passo nuovo dopo il minuto 38).
+- **12:31, IW checkpoint 2 committato: `9c79d5b35`** (i 4 pulsanti pieni con gli hover nuovi, il segnaposto in `FixFlaggedStep`; area IW m1 1.310 → 14). IW prepara lo slot (build, mkdocs, populate) sotto carico 50; slot verso le 15:30, o prima con un prestito della 1.3.
+- **12:34, TR lotto 5 committato in tre:** `70bae91b4` (le conferme piene su `success`/`warning` con gli hover), `a5e229084` (`tx-wac-mode.spec.ts` su `aria-pressed`, compresa la riga 180 che passava sempre), `505a28289` (diario). Sulla base di TR m1 7.331 → 7.323. TR prepara lo slot; A+B verso le 14:45.
+- **12:24, slot 1 della 1.3 a IM** (libero dalle 12:17, taglio alle 13:15): base merge **`53b6dd352`** con `be911db7e`, poi via (6159; nessun passo nuovo dopo le 13:08). Quando finisce, avvisare la 1.3 che lo slot 1 è di nuovo libero. Carico 32.
+- **12:25, slot IM partito** su `53b6dd352` (6159, carico 38): `api sync`, `server --test --build-only`, `front check`, `component-unit`, poi 11 gruppi di E2E (settings, scheduler, support, image-crop avatar, account-deletion, auth, changelog-locale, app-start-auth, onboarding-tour, email-verification, document-title). Script e log nella cartella di sessione di IM.
+- **12:27, BK pronto per lo slot** su `cb1fb5690`: build di debug (con svelte-check a 0 e 0, che vale come `front check`), mkdocs e populate fatti. Lo script: `api sync` e 9 E2E dei broker, poi le Vitest; nessun passo nuovo dopo 42 minuti. In coda dopo AF, L-20 e W6.
+- **12:38, T: il resto della UI committato, `e5e427f8e`** (`ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner` con m2 6 → 0, `FileGrid`, `routes/+page.svelte` di A, i campi nativi di `TagInput` e `TreeSelect`; conteggi della selezione con `hover:text-lf-primary`; m1 8.249 → 8.189 sulla base di T). Slot al massimo 45 minuti, verso le 17:00. Dopo: il lotto del gate (G5, G6, fondale, coppie di `selected`), poi i component tokens, con l'elenco dei file prima.
+- **12:40, la 1.3: X (FE5c-9b) corregge da sé un commento di `app.css` (righe 347–352, la riduzione del movimento; il timer è ora in `assetDetailLive.svelte.ts`).** OK: l'unico nostro hunk aperto su `app.css` è quello di IM, alle righe 250–259, lontano.
+- **12:43, slot AF H1+H2 VERDE** su `5e759bc9b`:
+  - `api sync`, build, mkdocs ok; `front check` 0 e 0; `component-unit` 154 file, 4.027/4.027;
+  - E2E a 1 worker (carico 36–165): 151/151 (asset-list 28, asset-modal 17, asset-data-editor 26, asset-merge 3, asset-mobile-layout 21, asset-classification 4, asset-browse 8, fx-list 12, fx-detail 17, fx-add-pair 11, fx-editor 4);
+  - saltati per il taglio: fx-csv-import, fx-bulk, fx-sync-mock, live-pause, asset-name-xss.
+- **12:46, AF:** base merge **`0ff61e8c0`** con `be911db7e` (del frontend solo spec, fixture e gate). Coda breve fino alle 13:10: i gate, poi asset-data-editor e fx-csv-import riscritte da W-B43, poi le 4 saltate. Se tutto è verde, A+B+C entrano e avviso la 1.3 per X. L-20 parte dopo, verso le 13:10.
+- **12:50, la 1.3 nel target:** train 110 di H (`0ecc5ed27`: `InstanceBlockedPage`, `BackupDownloadCardStub`, `AboutTab.test.ts` +31/−5 senza asserzioni di colore, i18n di instance) e train 111 W-B30 (`54880598b`, backend); record `0f3b9e3db` (punta). `--check` sul target pulito, baseline invariato. **All'ingresso di IM:** base merge e rilancio di `AboutTab.test.ts`, che H ha cambiato mentre IM-5 migrava `AboutTab.svelte`.
+- **12:55, T: misurato l'impatto del lotto del gate.**
+  - G1–G4 invariati; G5 0 casi ovunque (lo script di DV dà lo stesso).
+  - G6: 5 casi. `TagInput` e `TreeSelect` sono corretti in `e5e427f8e`; `ChartAestheticsSection:217` e `:233` sono corretti nel ramo di DV (`a694d8fb2`), non ancora nel target; `ScheduledInvestmentEditor:1287` è nel worktree di AF, che lo corregge prima dell'ingresso.
+  - **Ordine:** il lotto del gate entra dopo DV e insieme al resto della UI di T, dopo lo slot di T. T consegna con un solo rosso dichiarato (70/71), che sparisce con la base merge dopo l'ingresso di DV.
+  - TC-15 (di T): testo muted su `selected` sotto 4,5:1 in `ui/select/AssetPickerPanel`. Si corregge nel componente, passando da muted a secondary.
+- **12:58, TR e IW pronti per i loro slot** (build con svelte-check a 0 e 0, mkdocs, populate fatti fuori slot). Chiesto alla 1.3: un nuovo prestito dello slot 1 quando è fermo da 30 minuti o più, oppure una seconda corsia colori finché il carico resta sotto 50. In coda: L-20, W6, BK, TR, IW, T (~4 ore in una corsia sola).
+- **13:00, la 1.3 ci presta lo slot 2** da quando Z lo libera (verso le 13:15) fino alle 14:30, con 20 minuti di preavviso se gli serve prima, mai a run in corso. Lo slot 1 resta suo (FE5c di X 13:15–14:00, poi A e J); ce lo presta se resta fermo per 30 minuti o più. Tetto della macchina: 3 run pesanti insieme (alle 12:40 il carico era a 168).
+  - **Piano:** nostra corsia: AF (coda breve fino alle 13:10) → W6 (DV, ~13:10–13:55) → BK (~13:55–14:40) → IW (~14:40–15:25) → T (~15:25–16:10).
+  - **Slot 2 prestato:** L-20 (~13:15–13:40) → TR (~13:40–14:20, fine tassativa alle 14:30).
+- **13:02, TR:** slot con `front-transaction all` (47 spec, 374 test, un solo server e un solo populate: circa 25–30 minuti contro i 45–55 delle 25 azioni singole). Niente `front check`, perché lo svelte-check della build sullo stesso albero vale come quello. Nello slot 2 prestato dopo L-20, verso le 13:40; fine tassativa alle 14:30. Consiglio `<categoria> all` anche agli altri slot, quando le spec sono molte.
+- **13:04, coda breve di AF VERDE** (70/70: asset-data-editor 26 e fx-csv-import 22 sulle versioni di W-B43, fx-sync-mock 5, fx-bulk 7, live-pause 8, asset-name-xss 2; gate 71/71). Ritocco G6: `5cdf4c307`.
+- **13:06, AF A+B+C nel target: `bfd33a0f5`** (albero uguale alla simulazione, stato invariato). **Target m1 8.249 → 6.734, m2 54 → 48.**
+  - Avvisata la 1.3: X sbloccato su C-66, O-20, F21/C-90 e O-8; per Y11 liberi `fx/+page`, `fx/[pair]` e `assets/+page`.
+- **13:08, DV:** base merge **`9da2e5da9`** con `bfd33a0f5`; conflitto sul baseline risolto con `--resolve`, `--check` pulito, m1 combinato 5.284. **Via allo slot W6** nella nostra corsia, taglio alle 13:50.
+- **13:08, la 1.3 chiede un controllo in galleria di FE5c di X** (14 scatti di `Assets`, attesi identici). Proposta: G fa due snapshot filtrati, sulla base di X e sullo SHA di X, nel worktree di G (6153), che io porto a ogni SHA; circa 25 minuti. La corsia: un buco dello slot 1 della 1.3, oppure la nostra dopo le 16:10. Aspetto gli SHA e la risposta.
+- **13:09, lo slot 2 della 1.3 è nostro dalle 13:03 alle 14:30.** Via a L-20 (6152, taglio alle 13:35), poi TR (~13:40–14:20). In corso adesso: nostra corsia DV W6 (fino alle 13:50), slot 2 L-20, slot 1 della 1.3 IM (fino alle 13:15).
+- **13:10, verifica in galleria di FE5c:** nello slot 1 della 1.3, verso le 14:15–14:45, dopo gli E2E di X. Gli SHA (base di X senza FE5c e testa di X) arrivano quando X ha la base con AF. G prepara lo script; io porto il worktree di G a ciascuno SHA (HEAD staccato) e poi lo riporto sul suo ramo.
+- **13:05, L-20 partito** (6152; carico 83, quindi probabilmente 2 worker; nessun passo nuovo dopo le 13:30). Script e log in `files/L-20-2026-10-16/` della sessione di L.
+- **13:06, slot W6 partito** su `9da2e5da9` (6156, carico 96); E2E solo fino alle 13:40, passi leggeri fino alle 13:45. Con questo carico gli ultimi E2E potrebbero saltare: andranno recuperati prima dell'ingresso.
+- **13:12, AF-6 committato: `8dc5b864c`** (velo dell'icona su `bg-lf-overlay` e `text-lf-on-overlay`; −2) e i docs `830a805a3`. Entrano con il lotto 9 dopo FE5c; `asset-modal` va in quello slot.
+- **13:06, slot IM VERDE** su `53b6dd352`: `front check` 0 e 0, `component-unit` 4.027, E2E 172/172 a 1 worker (carico 44–150). Lo slot 1 torna alla 1.3.
+- **13:15, IM nel target: `1248b7908`** (docs `7d240e91d`; base merge `a7a359ace` con `bfd33a0f5` e baseline risolto con `--resolve`). Sull'albero unito, `AboutTab.test.ts` di H e i gate: 109/109.
+  - **Target m1 6.734 → 5.740, m2 48 → 42.**
+  - A8 della 1.3 sbloccato su settings, support e update-check.
+  - **IM chiuso** (area m1 1.048 → 54, m2 6 → 0; il residuo è nel backlog). Resta in idle; l'archiviazione si decide col developer.
+- **13:18, L-20 VERDE** (13 minuti nello slot 2): `picker` 4/4, con il test nuovo che passa davvero (833 ms); blocco a 4 worker 17/17. Il checkpoint arriva fra poco.
+- **13:21, TR:** note del diario committate (`9691e8936`), base merge **`814b93319`** con `1248b7908` (AF e IM), baseline risolto, m1 combinato 4.814. **Via allo slot A+B** nello slot 2: build rifatta, `component-unit`, `front-transaction all`; fine tassativa alle 14:30.
+- **13:21, slot TR partito** su `814b93319` (6154, carico 47); nessun passo nuovo dopo le 14:20, taglio alle 14:30.
+- **13:24, L-20 nel target: `460529690`** (commit `d2e4ae947`; solo la spec del selettore più il diario). L portato con fast-forward, in idle.
+  - TR-1 (il sottotitolo di `/transactions`) è sbloccato: TR lo fa come piccolo lotto dopo lo slot.
+- **13:25, PAUSA chiesta dal developer.** DV W6 e TR A+B finiscono i loro slot e poi si fermano; T e G finiscono il comando in corso e si fermano; gli altri erano già in attesa. Nessun ingresso fino al suo via; lo slot 1 della 1.3 non lo usiamo, e lo slot 2 torna alla 1.3 a fine TR. Anche la 1.3 è in pausa (punta `04dcf3a37`). Riepilogo in `files/review/pausa-16-10/riepilogo-pausa.md`.
+- **13:27, G: kit di FE5c pronto, niente lanciato, FROZEN** (`files/fe5c/` della sessione di G: preflight, snap a/b, compare, status; stessi dati, giorno e parametri garantiti e controllati). Filtro consigliato `-f "Asset (detail|chart settings|distribution)"`, cioè i 15 test della pagina divisa (`-f "Assets"` ne prende 23). Verdetto «dentro il rumore» rispetto alla coppia r1↔r2. Tempi 28–42 minuti a 6 worker: da dire alla 1.3 alla ripresa, perché la finestra di 30 minuti è stretta.
+- **13:28, T FROZEN:** lotto del gate ai passi 1–6 (gate 406/407, con il solo rosso dichiarato dei due G6 di DV). Alla ripresa: `api sync`, `front check`, il checkpoint, l'elenco dei file dei component tokens e il perimetro di TC-15. Nessun comando né sotto-agente attivo; porta 6155 libera.
+- **13:38, slot W6 di DV finito** su `9da2e5da9` (DV + AF), 32 minuti, porta 6156 libera.
+  - `front check` 0 e 0; `core-unit` 6.418; `component-unit` 4.040/4.041; gate 52 e 19.
+  - E2E 115/115 (dashboard 27, risk 38, risk-lab 44, pac-allocator-real 1, broker-filter-label 2, fx-settings 3).
+  - **Un rosso, di assunzione:** `KpiMetricBar.test.ts:47` asserisce `bg-slate-400`. Alla ripresa test-author lo riscrive senza classi colore (regola 10), poi si rilancia quel file e DV entra.
+  - Esito nel piano di DV, non committato; script e log in `files/w6-slot-2026-10-16/` della sessione di DV. FROZEN.
+- **13:42, DV: rimedio deciso per `KpiMetricBar.test.ts:47`:** asserire il comportamento (la larghezza, e il colore del chiamante che arriva sulla barra), senza toccare il prodotto. Si fa alla ripresa.
+- **14:20, ripresa (via del developer, 14:14).** **Decisione:** le domande per la designer si accumulano in un file solo, `files/designer/domande-per-la-designer.md`, per un unico grande riepilogo quando lei è disponibile; T continua a tenerle anche nello skill. Via a BK (nostra corsia, fino alle 15:00); DV ripara il test e poi entra; T chiude il lotto del gate; G alle 15:00 nello slot 1 della 1.3, per FE5c. La 1.3 riprende: slot 1 con FE5c di X fino alle 15:00, poi G, poi MF; slot 2 con Z, Y11 e J dopo TR.
+- **14:15, slot BK partito** su `cb1fb5690` (6158; nessun passo nuovo dopo le 14:55).
+- **14:22, FE5c, gli SHA dalla 1.3:** A `d69e14a6e` (commit sintetico; ref `refs/coordinator/fe5c-gallery-base`), B `668d27837` (la testa di X); differiscono solo in `frontend/src/`. Filtro a 15 test; slot 1 della 1.3 da verso le 15:00, MF alle 15:45. G fa adesso il preflight.
+- **14:24, G:** preflight di FE5c OK (27 path, tutti in `frontend/src`; i 15 test sono gli stessi in A e B; `priceChartHelpers.ts` cambia solo in modo additivo). **Worktree di G portato su A** (`d69e14a6e`, HEAD staccato; il ramo resta su `dc120d34c`). Via a `prebuild a` (build frontend e MkDocs, niente server); `snap a` al via, quando la 1.3 libera lo slot 1.
+- **14:30, T: il lotto del gate committato, `8fb80d3b8`.**
+  - Contiene G5 (una proprietà, un ternario, con le costanti), G6 (campi nativi), il fondale uguale nei due temi, 17 coppie di `selected` e le regole nello skill.
+  - Un rosso dichiarato, i due G6 di DV, che sparisce dopo l'ingresso di DV. Entra con il resto della UI dopo lo slot di T (nostra corsia, dopo IW).
+  - **Component tokens:** subito i file di T (`ModalBase` con `tone`, `ConfirmModal` con `dialogs.css`, `FileGrid` con `files.css`); gli altri dopo l'ingresso del proprietario (TR `TransactionsTable`, BK `BrokerImportFilesModal` e `UnifiedLotsTable`, IW `ImportBrokerMismatchModal`).
+  - Chiesto alla 1.3 l'OK su `brokers-detail.spec.ts` (righe 392, 395, 412, 419: `data-selected`).
+  - Nella raccolta per la designer, la domanda 6 dello skill: la tinta di `selected`.
+- **14:36, DV W6 nel target: `adbc2a4b7`.** Contiene W6-c, W6-a, W6-b, DV-9, DV-8, `ui/display` e la riparazione `b52575a3e`; base merge `f0bcf550e` con `ed500643f`, baseline risolto.
+  - **Target m1 5.740 → 4.290**, m2 42.
+  - Avvisata la 1.3: per Y11 liberi i bottoni di rischio, strumenti e dashboard. Correzione su Y8: `GrowthChart.svelte` aveva hunk di W6-b nel markup (righe 1350–1420), che entrano ora; lo `<script>` resta disgiunto.
+  - DV adesso fa TC-15 su `ChartSignalsSection` (righe 646–716). W6-d aspetta W7.
+- **14:36, la 1.3: OK per T su `brokers-detail.spec.ts`, righe 392–419** (chiude Y-13 di Y; gli hunk di Y partono dalla 569). La 1.3 ha corretto in dev `ed500643f` (`wac.md`, ancora per la build mkdocs strict).
+- **14:38, la 1.3 su Y11:** Dashboard e Files pubblicano `data-busy` dallo store `pageBusy` finché i caricamenti tracciati non finiscono, e la galleria aspetta `data-busy` falso prima di ogni scatto. A vista non cambia niente, gli scatti possono durare di più. Avviseranno quando Y11 entra (G lo sa già).
+- **14:21, slot TR finito** su `814b93319`, senza tagli; porta 6154 libera.
+  - svelte-check 0 e 0; `component-unit` 4.041; `front-transaction all` 376 passati, 32 saltati e **5 rossi**, tutti nelle spec dell'import (tx-import-flow R1/G2, tx-import-matching E4-01/E4-03, tx-import-resolution IWR-001).
+  - **Verdetto, ambiente:** il portatile era in stop col coperchio chiuso durante la pausa (`pmset`: Sleep alle 14:03:14 e 14:09:28, il coperchio riaperto alle 14:12:45; il backend muto 13:47–14:03 e 14:09–14:12). Le 25 spec di TR sono tutte verdi.
+  - TR adesso fa il lotto 6 (il sottotitolo, TR-1), poi uno slot breve nella nostra corsia alle 15:00, dopo BK: build, le 3 spec dei rossi e la spec del sottotitolo, al massimo 30 minuti.
+  - Alla 1.3: il log di `currency_change` (`'Asset' object has no attribute 'provider_code'`) e l'avviso sui run della finestra in cui la macchina dormiva.
+- **Coda della nostra corsia rivista:** BK (fino alle 15:00) → TR breve (15:00–15:30) → IW (15:30–16:15) → T (16:15–17:00). Lo slot 1 della 1.3, verso le 15:00: G per FE5c.
+- **14:30, G: `prebuild a` fatto** (488 s; il build debug di A in `frontend/build`, worktree pulito su `d69e14a6e`). Stima dal via: `snap a` 10–12 minuti, `snap b` 14–17, quindi 26–34 minuti in tutto, più 2 di `compare`. Aspetta che la 1.3 liberi lo slot 1, verso le 15:00.
+- **14:40, ⚠️ C4 rosso sul target** (`themeTokens.gate.test.ts` 18/19): dopo gli ingressi di IM e DV la regola `html.dark .bg-white\/90` di `app.css` (righe 254–257) non ha più usi. L'ha trovato DV. **Colpa del mio controllo d'ingresso**, che faceva solo `--check` (C4 vive solo nei gate Vitest). Rimedio: DV toglie il blocco in un commit a parte, che entra subito; TC-15 entra con il prossimo slot di DV. **Procedura nuova:** prima di ogni ingresso, `files/tools/pre_entry_gates.sh <worktree>` sull'albero unito (`--check` più i tre gate Vitest). Avvisata la 1.3.
+- **14:44, TR lotto 6 committato: `546204732`** (il sottotitolo di `/transactions` su `text-lf-muted`, m1 −2) e diario `063a78e34`. Prima dello slot: base merge con la punta, dopo il fix di C4 (porta L-20, quindi `picker` regge il sottotitolo migrato). Slot alle 15:00: build, le 3 spec dell'import, `picker`, `live`; al massimo 30 minuti.
+- **14:48, il fix di C4 è nel target: `1c7b9def2`** (DV `090539b5a`, solo `app.css`, −5 righe). Sul target `--check` è pulito e i tre gate Vitest danno 89/89. TC-15 di DV è committato, `a6c79a8f3`, ed entra con il prossimo slot di DV.
+- **14:49, TR:** base merge **`6c6d1979f`** con `1c7b9def2`; sull'albero unito i gate pre-ingresso (`pre_entry_gates.sh`) sono verdi, 89/89; m1 combinato 3.362. Pronto per lo slot delle 15:00.
+- **14:46, slot BK VERDE** (31 minuti su `cb1fb5690`): E2E 94/94, `component-unit` 4.027, `onboarding-component-unit` 449, `core-unit` 6.406.
+- **14:47, slot breve di TR partito** su `6c6d1979f` (build, le 3 spec dell'import, `picker`, `live`; taglio alle 15:20).
+- **14:52, BK nel target: `939e4998a`** (diario `fb34db0dd`, base merge `71322f9b3`, gate 89/89). **Target m1 → 3.481.** Avvisata la 1.3 (Y11 sui broker, `LotsAnalysisPanel`) e della TC-16 (flake di `FilePreviewModal.test.ts:598`, area file). BK in idle; L4 aspetta Y.
+- **14:54, T component tokens, parte 1, committata: `4a7ba1d7e`** (`ModalBase` con `tone`, `ConfirmModal`, `FileGrid`, `dialogs.css`/`files.css`, `brokers-detail.spec` su `data-selected`).
+  - Base merge `1427d5ea1` con `939e4998a`; gate 119/119.
+  - Parte 2: subito `BrokerImportFilesModal` e `UnifiedLotsTable`, poi `TransactionsTable` dopo TR e `ImportBrokerMismatchModal` dopo IW. Slot di T dopo IW.
+- **14:58, T parte 2a committata: `26b45f520`** (`BrokerImportFilesModal` e `UnifiedLotsTable`, solo `<style>` più le righe d'import dei CSS; tinta del broker su `surface-card`; l'evidenza del lotto passa da viola a `selected`). Nella raccolta per la designer, i punti 21 e 22.
+- **15:00, TC-15 centrale di T:** una regola nello `<style>` delle 4 select di `ui/select` (`[data-highlighted='true'] :global(.text-lf-muted)` → secondary; in `TreeSelect` `aria-selected`) copre gli snippet degli 11 chiamanti. Approvata, con due note: DV ha già committato il suo TC-15 (`a6c79a8f3`, file disgiunti) e la regola di `TreeSelect` deve coprire anche il passaggio del mouse. Dopo, si valuta se riportare a muted i sottotitoli di `SignalOptionContent`.
+- **14:56, slot breve di TR VERDE** (8 minuti): svelte-check 0 e 0; tx-import-flow 10/10, tx-import-matching 6/6, tx-import-resolution 15/15 (i rossi del sonno confermati «ambiente»); designer-lab `picker` 4/4 e `live` 12/12.
+- **15:02, TR nel target: `e402d3b87`** (diario `e2b831ef7`, base merge `5e6c4cd7c`, gate 89/89). **Target m1 → 2.553, m2 22.** Avvisata la 1.3 (Y11 su `transactions/+page`; FE8b aspetta IW). TR in idle.
+- **15:03, IW:** diario `1bcf00187`, base merge `b2466931d` con `e402d3b87`. **Il controllo pre-ingresso trova C4 rosso:** `text-gray-900` non ha più usi sull'albero unito.
+  - IW toglie `html.dark .text-gray-900` dal selettore doppio di `app.css:208–211` e lascia `.text-gray-800`, che L-20 usa. Poi mini checkpoint e via allo slot.
+- **15:04, T:** `TransactionsTable` sbloccato. Prima: commit delle note del piano e base merge con `e402d3b87`, appena T conferma FROZEN.
+- **15:06, T:** note del piano `fedcf5be4`, base merge **`1628863a0`** con `e402d3b87`, gate 119/119. Via alla parte 2b (`TransactionsTable`: `<style>`, base della tinta, letterali).
+- **15:08, via a G per `snap a`** (FE5c, A `d69e14a6e`, filtro a 15 test, 6 worker, 6153) nello slot 1 della 1.3, libero dalle 14:39 (gli E2E di X 117/117); taglio alle 15:30. La 1.3 ha girato a X il log di `currency_change` e ad H la TC-16.
+- **15:10, IW: C4 corretto, `ec9fec52a`** (`app.css`: tolto `html.dark .text-gray-900` dal selettore doppio; `.text-gray-800` resta). Gate sull'albero unito 89/89. **Via allo slot di IW** nella nostra corsia (6151, taglio alle 15:50) su `ec9fec52a`, che include TR, BK e DV.
+- **15:12, T parte 2b committata** (`TransactionsTable`, solo `<style>`: base della tinta su `surface-card`, velo del testo, punto dell'evento su `info`, impulso su `selected`; m2 16 → 3 sulla base di T). Raccolta per la designer: punti 23 e 24. Resta `ImportBrokerMismatchModal`, dopo IW.
+- **15:02, slot IW partito** su `ec9fec52a` (6151): `api sync`, build (il suo svelte-check vale come `front check`), `front-transaction all` a 4 worker con `--fresh-run`, `core-unit`, `component-unit`; nessun passo nuovo dopo le 15:45. Carico 62.45 36.11 37.07.
+- **15:14, G `snap a`: 3 rossi di carico** (segnali EMA, MACD e RSI desktop: attesa di `data-busy` oltre 20 s, screenshot oltre 60 s; carico da 31 a 80). G rilancia i 3 su A a 2 worker prima di B. IW non si ferma: è nel suo slot pesante. T senza prove leggere fino alle 15:45. Chiesto alla 1.3 di tenere fermi `user_cli.py --test` e le prove leggere, e di lasciare a G lo slot 1 fino alle 15:45.
+- **15:16, T:** TC-15 applicato nell'albero (prove precedenti 1179/1179); test-author fermato. Prove finali dopo le 15:45, con carico sotto 50. Carico alle 15:07: 125, con dentro un render Remotion della sessione «Librefolio video reels», fuori dai due coordinatori.
+- **15:17, la 1.3:** G tiene lo slot 1 fino alle 15:45, poi MF. Il carico in più era il loro gate su dev (lane 6180, con `user_cli … --test`), adesso fermo e da rifare dopo le 15:45. Il WebKit al 173 % è il pannello browser della sessione del developer. In corso: IW (nostra corsia), G (slot 1), Y (E2E nello slot 2, fino alle 15:45).
+- **15:18, la 1.3 nel target:** H P17 (`b1df87bd4`), Z5 + Z-13 (`12cd3c2e0`; gli `<script>` di `dashboard/+page` e `brokers/[id]/+page`, uniti da Git ai markup di DV e BK senza conflitti), Z-13b (`26dda1a26`), la fixture di E (`7d51c21af`). La punta è `26dda1a26`; `--check` pulito.
+- **15:19, G: `snap a` finita alle 15:11** (24/30 verdi, 249 PNG; 6 rossi di carico, con carico fra 80 e 148: desktop EMA, MACD, RSI, classification; mobile chart, RSI). G li rifà su A a 2 worker (~8 minuti), poi «A finita».
+- **15:22, TC-16:** H corregge `FilePreviewModal.test.ts:598` solo nel test (`beforeAll` che importa i moduli una volta, budget di 3 s sulle cinque attese). Nessun nostro ramo tocca `FilePreviewModal*`: via libera dato alla 1.3.
+- **15:29, G: «A finita»** (`fe5c-a-d69e14a6e-full`: 288 PNG; i 6 rossi di carico rifatti a 2 worker, tutti verdi; misti 0 su 288). **Worktree di G portato su B** (`668d27837`, staccato e pulito); via a `snap b` (circa 15 minuti), poi `compare` sotto `nice`. Dopo, il worktree torna sul ramo di G.
+- **15:40, G `snap b`:** build fatto alle 15:39; la prima ondata cade al login (4 rossi, carico 166). In cima alla CPU c'è un `svelte-check` nel worktree di X (`e-alfy-cuddly-engine`), una prova leggera lanciata con carico sopra 50: chiesto alla 1.3 di fermarlo fino alle 15:55. C'è anche `npm run fetch:sfx` del progetto dei video. G recupera i rossi su B.
+- **15:38, slot IW VERDE:** `front-transaction all` a 4 worker 381/381 in 22 minuti, `core-unit` 6.418, `component-unit` 4.042, svelte-check 0 e 0.
+- **15:45, IW nel target: `e9b4ac6b0`** (diario `f118a5677`, base merge `43732d61d` con `26dda1a26`, gate 89/89). **Target m1 → 1.257 (89 %), m2 21.** IW chiuso, in idle.
+  - FE8b della 1.3 aspetta l'ingresso di T, che ha ancora modifiche allo `<style>` di `TransactionsTable` e di `ImportBrokerMismatchModal`.
+- **15:45, T:** subito il checkpoint di TC-15, poi la base merge, la parte 2c (`ImportBrokerMismatchModal`) e lo slot di T nella nostra corsia, al massimo 45 minuti.
+- **15:49, T: TC-15 committato, `4b59cfe53`** (regola centrale nelle 4 select; `data-highlighted` su `SimpleSelect`; `TreeSelect` coperto anche al passaggio). Base merge **`4a3f5cf3f`** con `e9b4ac6b0`, gate 119/119. Via alla 2c (`ImportBrokerMismatchModal`), poi lo slot.
+- **15:52, T parte 2c committata: `d39728347`** (`ImportBrokerMismatchModal`, solo `<style>` più la riga d'import; tolti 49 token da `dialogs.css`). **Via allo slot di T** nella nostra corsia (6155, taglio alle 16:30) su tutto il ramo. L'anteprima su 6160 slitta a dopo lo slot di T, per non caricare la macchina (carico 86–110).
+- **15:45, slot T partito** su `d39728347` (6155, 1 worker; taglio alle 16:30). Log in `files/T-r2/slot5/` della sessione di T.
+- **15:53, G: `snap b` finita alle 15:45** (25/30 verdi, 251 PNG; 5 rossi di carico: 4 desktop al login, 1 mobile su un click). Li rifà su B a 2 worker (~8 minuti), poi «B finita» e `compare`. Lo slot 1 della 1.3 resta a G qualche minuto oltre le 15:45: da dire alla 1.3.
+- **16:00, G su B:** si ripete un rosso, «Asset detail rolling return» desktop en/dark: il bottone sparisce per 20 s mentre `GET /api/v1/assets?asset_ids=1` resta pendente. Su A era verde 8/8, su B mobile 8/8. `test-triage`: rilancio da solo a 1 worker e lettura del codice di B. Le ipotesi sono due, il carico oppure un difetto di FE5c (il selettore smonta e rimonta). Avvisata la 1.3; lo slot 1 sfora fino alle ~16:05.
+- **16:04, G: «B finita» alle 16:02** (`fe5c-b-668d27837-full`: 288 PNG). Il rosso ripetuto, rifatto da solo a 1 worker, è verde 8/8: **verdetto ambiente**. Il selettore si smonta a ogni ricarica, in A come in B; la debolezza è di `gallery.spec.ts:5361–5363` e va nel backlog di G. **Worktree di G riportato sul suo ramo** (`dc120d34c`, pulito). Lo slot 1 torna alla 1.3 (MF). `compare` in corso sotto `nice`.
+- **16:05, la 1.3:** ha fermato il server di revisione del developer sulla 6150 (il WebKit al 115 % era la sua pagina); FE8b aspetta T (W avvisato). Il mio «slot 1 libero» si è incrociato col loro messaggio.
+- **16:12, richiesta del developer, testuale:** «quando la gallery finisce, usa il suo output di screen per rifare tutto il lavoro comparativo che abbiamo fatto all'inizio e crea un pacchetto zip da mandare alla desiner con tutti gli screen del caso, i colori residui, e tutte le domande che sono rimaste aperte, oltre all'html fai anche il markdown così che le sia facile lavorare con la sua ia».
+  - **Assegnato a G.** Una galleria completa `designer-16b` sul target dopo l'ingresso di T (nostra corsia, 6153), poi il prima e dopo contro `baseline-r2` (v1.2 del 14/10).
+  - Il pacchetto `LibreFolio_review_colori_giro3_2026-10-16` contiene: schermate attuali, prima e dopo, colori residui (`color_inventory.py` più i motivi per file, che fornisco io), domande aperte (il mio file), palette dei ruoli (`palette.md`); tutto in HTML e in Markdown, con un `LEGGIMI.md`. Zip in `package/` e in `~/Downloads`.
+  - Le eventuali modifiche agli script di `scripts/visual_review/` passano da checkpoint.
+- **16:20, per il pacchetto della designer:** il file dei motivi per file dei colori residui è `files/designer/colori-residui-motivi.csv` (58 file; motivi `attesa-1.3`, `categoria`, `interruttore`, `ruolo-mancante`, `in-lavorazione`), mandato a G.
+- **16:22, verdetto di FE5c in galleria: identiche entro il rumore, nessuna differenza visibile.** 11 controlli di confrontabilità verdi; 288 contro 288 immagini, 0 strutturali. Pixel: 223 identiche, 40 nel rumore, 10 trascurabili, 13 su scatti instabili, 2 «oltre il rumore» (antialiasing dell'icona SVG, in 1 variante su 16). Misti G-18: 0 e 0. Rapporto in `diffs/fe5c-a-d69e14a6e__vs__fe5c-b-668d27837/`. Mandato alla 1.3: per noi FE5c può entrare; al suo ingresso parte il lotto 9 di AF.
+- **16:24, la 1.3:** FE5c entra verso le 16:45–17:00 (prima X chiude il lotto delle icone, poi base update con `--resolve` del baseline, poi fast-forward). Lo SHA arriva all'ingresso; poi il lotto 9 di AF.
+- **16:26, G, piano del pacchetto approvato:** `build_designer_round.py` nuovo (riusa `build_designer_package.py`), pagine HTML e `.md` (`LEGGIMI`, `APRI_QUI`, desktop e mobile, prima e dopo, colori residui, domande, palette). **D1:** WebP lossless (~140 MB). **D2:** commit dello script prima della galleria, poi base merge di G sul target dopo l'ingresso di T, poi via a `designer-16b` (~1 h 10 min).
+- **16:27, slot T VERDE** (15:45–16:26 su `d39728347`): `front check` 0 e 0, gate verdi, mutazione di TC-15 come previsto, `component-unit` 4.055, E2E 177/177. Saltate per il taglio 6 spec (asset-data-editor, broker-sharing, asset-list, fx-list, risk-lab, tx-bulk-row-order): **le recupera adesso**, taglio alle 16:50. Poi ingresso di T, FE8b della 1.3 e la galleria per la designer. Carico 77.60 61.82 64.61.
+- **16:33, la 1.3 nel target:** H TC-16 (`65fc63e7e`, solo `FilePreviewModal.test.ts`), Z-12 + Z-5 (`ebe9eb346`, backend e doc admin), record `17a531b45`. Punta `ebe9eb346`. X sta risolvendo la base merge, poi entra FE5c.
+- **16:52, G: builder del giro 3 committato, `390aa3b11`** (`build_designer_round.py` più README, piano e G-19). Prova a secco su `g-cand16a`: zip da 133 MB, 6.543 link verificati; i residui sono filtrati come li conta il gate (185 file, 8.243 classi contro 8.249 su HEAD). Aspetta l'ingresso di T, poi la base merge e il via a `designer-16b`.
+- **16:56, il recupero di T è verde:** 127 test (asset-data-editor 26, broker-sharing 17, asset-list 28, fx-list 12, risk-lab 44), in totale 304 E2E verdi su 15 spec. `tx-bulk-row-order` (~3 minuti) lo lancia adesso; poi l'ingresso.
+- **16:58, `tx-bulk-row-order` verde (8 test): in totale T ha 312 E2E verdi su 16 spec.**
+- **17:00, T nel target: `4d8ae68c4`** (diario `a3ff3830b`; base merge `d2125d34e` con `7344dda47`; gate 119/119). Contiene il resto della UI, il gate G5/G6, i component tokens 1, 2a, 2b e 2c, TC-15. **Target m1 → 1.197 (89,5 %), m2 → 2.**
+  - Avvisata la 1.3: FE8b può partire; `routes/+page.svelte` di A ha una classe cambiata.
+  - T in idle (interruttori e categorie aspettano la designer).
+- **17:01, G:** base merge **`fa374e41d`** con `4d8ae68c4`; differisce dal target solo per il builder e il README. **Via alla galleria `designer-16b`** nella nostra corsia, poi il pacchetto.
+- **17:05, FE5c nel target: `a44951cf5`** (X, sopra T; con F21, CP13, X-R21, le correzioni live, le icone di Settings › Plugins). Sul target `--check` è pulito e i gate danno 119/119, **m1 1.185**.
+  - **AF: via al lotto 9.** Base merge `10bcf4486`, gate 119/119. 300 classi m1: `[id]/+page.svelte` 123 più i 7 file di `components/assets/detail/`. Nello stesso lotto `AssetCurrencyChangeModal` passa a `tone="danger"` (AF-4). Slot verso le 18:00.
+  - La 1.3 chiede una run filtrata per `settings/plugins`, `settings/email` e il ripristino B5b: G la fa dopo il pacchetto, verso le 18:15, nella nostra corsia.
+- **17:07, la 1.3:** la run filtrata delle 18:15 con G copre `settings/plugins` ed `settings/email`; B5b (scheda, report e overlay del ripristino) solo se il ramo di B è entrato, altrimenti dopo.
+- **17:10, AF lotto 9:** analisi approvata (300 classi; 245 migrano, 55 restano AF-1: interruttori della barra del grafico e icone per categoria; nessun file aperto altrove; nessun test che legge colori). AF-4 (`tone="danger"`) nello stesso lotto. Il link «Transazioni (n)» passa su `text-lf-link`: punto 25 della raccolta per la designer. Slot verso le 18:00.
+- **17:15, AF lotto D committato:** codice `8aa3904a6` (lotto 9 da 300 a 55, AF-4 con `tone="danger"`, `app.css` C4: tolto `html.dark .text-gray-800`), docs `8347b7713`. Restano regole `html.dark .text-gray-700/500`, quindi il test di L-20 dovrebbe scegliere un altro soggetto: aggiunto `front-designer-lab picker` allo slot di AF. Slot alla fine della galleria di G (~17:45).
+- **17:16, la 1.3 nel target:** J-17 (`94321d7db`; `DistributionDialog.svelte` un ramo senza classi), record `ce5954329` (punta). `--check` pulito. `DistributionDialog` non è più riservato: il suo residuo (3, `attesa-1.3`) va a DV con W6-d.
+- **17:22, galleria `designer-16b` a metà** (1.026 PNG su ~2.900, 8 rossi di carico, carico 130–170). Insieme girano W (api, 6184, più `svelte-check`), Y (6189, 2 worker) e B (vitest). Chiesto alla 1.3: niente prove leggere né nuovi passi pesanti fino alle 17:45. **Errore mio:** non avevo annunciato la galleria completa come blocco di galleria, come chiede la regola della macchina condivisa.
+- **17:24, la 1.3:** tutti i suoi worker fermano prove leggere e nuovi passi pesanti fino al loro via. Finiscono solo W (api, slot 2, taglio alle 17:45), Y (E2E, slot 1, taglio alle 17:50) e il vitest di B se già partito. Da avvisare alla fine della galleria.
+- **17:52, decisione del developer:** il pacchetto per la designer è rimandato (oggi lei non ha tempo). G finisce `designer-16b` e i fill, senza `package`; lo zip si farà quando lei sarà disponibile, su una galleria nuova. Il builder `390aa3b11` resta pronto.
+- **17:55, galleria `designer-16b` finita:** 2.862 PNG, `meta.json`. Niente fill, perché il pacchetto è rimandato; resta come riferimento del 16/10 sera. La 1.3 toglie il suo fermo.
+- **17:56, AF:** base merge **`dc360b486`** con `ce5954329`, gate 119/119. **Via allo slot D** nella nostra corsia (6157, taglio alle 18:40), con anche `front-designer-lab picker`. Dopo: la run filtrata di G per la 1.3 (plugins, email), verso le 18:45.
+- **17:58, la 1.3:** fermo tolto. Run filtrata delle 18:45 solo su `settings/plugins`; `settings/email` dipende dall'ingresso di E, che non c'è ancora (avvisano loro), B5b più avanti.
+- **17:54, slot D di AF partito** su `dc360b486` (6157; 2 worker sotto carico 60). Script e log in `/tmp/libreFolio_af_slotD*`.
+- **18:00, G: galleria `designer-16b` chiusa senza fill** (`fa374e41d`, 16:53–17:52, 2.862 PNG; 249 verdi, 10 rossi di carico non recuperati, elencati in `stale_not_regenerated.txt`).
+  - **G-18 sulla prima galleria completa:** 0 errori, 72 misti, 2 distinti, tutti e due composti a runtime.
+    1. `BackendTimingBar` (PAC): `bg-lf-neutral` con `border-white dark:border-gray-800` sullo stesso elemento. Lo corregge DV, con TC-15.
+    2. `LotCustodyModal`: `ModalBase` riceve `bg-white dark:bg-slate-800` da una prop. Va in L4 di BK, dopo Y.
+  - Il riassunto è in `files/g16b/logs/mixed-designer-16b.txt` della sessione di G.
+- **18:01, la 1.3:** Y11 passo 4 (un solo Refresh per pagina) tocca `transactions/+page.svelte` e i bottoni della pagina broker (solo `pageBusy`/`sync-button`, nessuna classe di colore). Risposto OK: nessun nostro lotto aperto tocca quei file.
+- **18:02, DV: checkpoint G-18 di `BackendTimingBar`** (il segmento «non attribuito» `bg-lf-neutral` col separatore legacy `border-white dark:border-gray-800`). Il separatore passa al contenitore: `divide-x divide-lf-card`; il segmento porta solo il riempimento. Ratchet 16 → 14. Committato **`7f918f075`** (4 path). Base merge con `ce5954329`: **`1a1dadba2`**, pulita, albero = simulazione (`f44b7b64e`); rispetto al target 6 file (TC-15 + G-18).
+  - Gate pre-ingresso: li lancio io, carico sotto 50 (alle 18:04 era 102).
+  - Slot DV dopo lo slot D di AF (≤18:40): Vitest `ChartSignalsSection` e `SignalTreeSelect`, E2E `front-utility pac-allocator-real` (6156, 1 worker). Poi l'ingresso; dopo, la run filtrata di G per la 1.3.
+- **18:08, G nel target: `0ab2b6095`** (checkpoint diario `76cbf56a4`; base merge `633109f56` con `ce5954329`, albero = simulazione). Entrano `build_designer_round.py`, il README di `scripts/visual_review/`, il piano di G e la sua sezione del backlog; nessun file del frontend (gate = quelli della punta). Avvisata la 1.3, con i file del prossimo ingresso di DV.
+  - Run filtrata `settings/plugins` per la 1.3: G nella 6153 sul worktree `633109f56` (albero = punta), verso le 18:45, dopo lo slot D di AF (e forse dopo l'E2E breve di DV). `settings/email` all'ingresso di E; B5b più avanti.
+- **18:07, gate pre-ingresso di DV verdi** su `1a1dadba2` (carico 44): `--check` pulito, Vitest 119/119. Resta solo lo slot breve.
+- **18:09, G pronta per `settings/plugins`** (`-f "Settings plugins"`, 16 PNG, desktop e mobile; script in `files/runs/filtered.sh` della sessione di G). Decise **due run a e b** sullo stesso build, per la classe di stabilità: circa 12 minuti, contro i 9 di una sola.
+  - Ordine dopo lo slot D di AF: prima G (promessa alla 1.3 per le 18:45), poi l'E2E breve di DV, poi l'ingresso di DV.
+- **18:15, commit dei record** (fermi dalle 10:37). Nel piano generale l'esito del 16/10 sera, le regole nuove, le scelte provvisorie e gli stati della tabella dei workstream; la riga «Programma colori» nell'indice del backlog; questo registro copiato in `coordination/registro.md`.
+- **18:11, record nel target: `bf0f2f8ac`** (piano generale, registro, riga «Programma colori» dell'indice del backlog). La 1.3: nessuno dei suoi 10 worktree tocca i 3 file di DV, via libero all'ingresso; G `0ab2b6095` annotato; E non è ancora entrato. Comunicata la punta `bf0f2f8ac`.
+- **18:10, slot D di AF:** `api sync`, build, `front check` e `component-unit` verdi; dalle 18:06 l'E2E `asset-detail` a 1 worker (carico 84).
+- **18:15, la 1.3 nel target: X-R27 + X-R28, punta `ccfabfd6d`** (backend `services/assets/`, il test, 2 pagine della doc developer, una riga 🐛 del CHANGELOG, il diario di X). Nessun file del frontend; `bf0f2f8ac` è nella storia.
+  - G (`633109f56`) si porta alla punta con un fast-forward subito prima della run filtrata.
+  - AF e DV fanno la base merge subito prima del loro ingresso; poi i gate pre-ingresso. Il delta della punta non ha frontend, quindi le loro E2E restano valide.
+  - **Incrocio AF ↔ DV su `text-gray-800`:** il lotto 9 di AF toglie `html.dark .text-gray-800` da `app.css`. Nel ramo di DV resta un solo uso, in `AssetDetailHeader.svelte:51`, che è un file del lotto 9 e che AF migra. Con l'ingresso di AF spariscono insieme l'uso e la regola: nessun conflitto.
+- **18:15, slot D di AF:** verdi `asset-detail`, `designer-lab picker` (con la regola `text-gray-800` tolta) e `asset-browse`; in corso `live-pause`.
+- **18:25, slot D di AF tutto VERDE** (17:53–18:25 su `dc360b486`, nessun passo saltato): `api sync`, `front build --debug`, `front check` 0 e 0, `component-unit` 4.092/4.092; **E2E 102/102** su 11 spec (asset-detail 34, designer-lab picker 4, asset-browse 8, live-pause 8, asset-modal 17, asset-event-delete 4, asset-event-editor-save 4, risk-asset-detail 5, tx-import-asset-inspector 5, fx-settings 3, fx-destructive 10). Il test del picker di L-20, senza la regola `text-gray-800`, prende da solo un'altra classe ancora rimappata.
+- **18:27, AF nel target: `c179a5144`** (base merge `c403534c7` con `ccfabfd6d`, albero = simulazione, frontend identico a `dc360b486`, gate 119/119). Entrano AF-6 (`8dc5b864c`, `AssetModalDetails`), il lotto 9 (`8aa3904a6`) con AF-4 (`tone="danger"`) e `app.css` C4 (tolta `html.dark .text-gray-800`), più i docs `830a805a3` e `8347b7713`. **Target m1 936 (91,8 %), m2 2**; con DV si arriva a 934.
+  - Avvisata la 1.3 con i 12 file del frontend. AF scrive il checkpoint docs dello slot D, che entra da solo.
+- **18:27, G: fast-forward a `ccfabfd6d`** e via alla run `settings/plugins` (a e b, 6153; carico 21).
+- **18:27, DV: base merge `baac53f99`** con `c179a5144` (albero = simulazione; nessun uso di `text-gray-800` fuori da `app.css`; gate 119/119). L'E2E `pac-allocator-real` parte dopo G, sullo stesso albero.
+- **18:29, handoff finale di AF:**
+  - area m1 1.946 → 170 e m2 6 → 0, in 13 file; 323 E2E verdi in 3 slot;
+  - aperte AF-1 (designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 e AF-10 (ruolo di T);
+  - revisione del developer da fare: le schermate sono nella sezione 12 del piano di AF;
+  - dati della corsia in `/tmp/librefolio-r2-af`, cancellabili.
+  - Checkpoint docs committato `3b646bc3d`, entrato da solo: **`5eaf67ff1`**. Prima la punta era `bab52635d`, un commit diretto della 1.3 (`fix(db): keep quantity and price decimals`, 46 file, 6 del frontend: i18n delle transazioni e `resolveValidationMessage`), non annunciato e senza sovrapposizioni.
+  - AF è in idle, **tecnicamente completo** per la migrazione 1:1.
+- **18:29, DV: base merge `ec3d54ca3`** con `5eaf67ff1` (albero = simulazione, gate 119/119). L'E2E gira su questa revisione dopo G. Comunicata alla 1.3 la punta `5eaf67ff1`.
+- **18:30, la 1.3:** C-97a (W, issue #43, `bab52635d`) e i record `5609b16d7` (CHANGELOG, README), sopra `5eaf67ff1`. **Punta `5609b16d7`**, senza frontend: l'ingresso di DV la prende con la simulazione, senza un'altra base merge.
+- **18:34, G: `settings/plugins` verde e stabile** su `ccfabfd6d`: run a e b sullo stesso build (carico 23–28), 2/2 test per run, 16 PNG; a↔b 16 identiche su 16 (`stable`); `live_price_check` pulito; G-18 a 0 misti. A occhio: rese corrette, le card intere, badge e pulsanti neutri, nessun trabocco in spagnolo per `e2e_test_user` (G-15 era della vista admin). Snapshot `g-plugins-a`/`-b`, diff `diffs/g-plugins__a__vs__b/`. Inoltrato alla 1.3. G ha una riga del piano non committata, che va col prossimo checkpoint; FROZEN.
+- **18:36, via allo slot breve di DV** su `ec3d54ca3` (6156): Vitest di `ChartSignalsSection`, `SignalTreeSelect` e `SignalOptionContent`, poi `front-utility pac-allocator-real` a 1 worker. La sezione dei segnali sta anche in `assets/[id]` e `fx/[pair]`: TC-15 cambia solo classi e nessun test le legge, quindi lo slot resta breve.
+- **18:38, slot breve di DV partito** su `ec3d54ca3` (6156, carico 20). Vitest `ChartSignalsSection`, `SignalTreeSelect`, `TreeSelect` (che disegna `SignalOptionContent`, che non ha un test suo) e `htmlSink.gate`, che ha un'eccezione su `SignalOptionContent`; poi `pac-allocator-real` a 1 worker.
+- **18:40, raccolta per la designer:** aggiunti AF-10 al punto 12 (un neutro «sopra panel» con il suo hover) e il punto 26, AF-8 (l'hover `action-hover` dato a due pulsanti che prima avevano un hover morto). In tutto 26 punti.
+- **18:39, la 1.3:** H-12 (`7ac8b17de`: `_server.py` e `_backend_utils.py` del runner, doc developer) e J CP-13a (`0452e592c`: backend risk e financial_math, i18n `risk/*` nelle 4 lingue, docs). Nessun `.svelte`. **Punta `0452e592c`**.
+- **18:42, slot breve di DV VERDE** su `ec3d54ca3` (18:37–18:42): `api sync` (0 file cambiati), `ChartSignalsSection` 21/21, `SignalTreeSelect` 28/28, `TreeSelect` 28/28, `htmlSink.gate` 7/7, E2E `pac-allocator-real` 1/1 senza tentativi ripetuti (231 s, quasi tutti di build e popolamento).
+- **18:44, DV nel target: `81bc305b9`.** Piano committato in `e1124f488`; base merge `986c26a0b` con `0d20399cc` (la punta della 1.3 si era già spostata: J CP-13a più i record dei treni 124–125); albero = simulazione; il frontend, a parte i18n `risk/*`, è identico a `ec3d54ca3`; gate 119/119.
+  - Entrano TC-15 (`ChartSignalsSection`, `SignalOptionContent`) e G-18 (`BackendTimingBar`). **Target m1 934, m2 2: ogni ramo colore committato è nel target.**
+  - Avvisata la 1.3.
+  - Proposto a DV il micro-lotto W6-e: `DistributionDialog:102` e `TargetsStep:63`, 5 classi nelle stringhe HTML (binario `bg-gray-100 dark:bg-slate-700` e riempimento `bg-libre-green`). Chiesto alla 1.3 se qualche worktree li ha aperti.
+- **18:46, anteprima 6160 in aggiornamento:** fermata `preview6160i` (era a `eb4040cd1`); fast-forward di `preview-colori` a `81bc305b9`, build di debug sotto `nice`, poi DB nuovo (`test db populate --force --clean --with-static --with-reports` in `/tmp/librefolio-color-review`), perché C-97a ha cambiato `001_initial.py`. Poi si riavvia `designer_live.sh` staccato. Script `/tmp/libreFolio_preview_refresh.sh`.
+  - **⚠️ Fuori pista:** fermando `dev.py server` (6324) e la shell (6323), il processo uvicorn figlio (7456) è rimasto orfano e in ascolto sulla 6160. Lo script si è fermato a «6160 still busy». Ho fermato anche 7456, dopo aver verificato `LIBREFOLIO_TEST_DATA_DIR=/private/tmp/librefolio-color-review`, e rilanciato lo script senza lo stop (18:48). **Regola:** per fermare un server di test, ferma il PID che ascolta sulla porta (`lsof -t`) e verifica che la porta sia libera.
+- **18:48, analisi W6-e di DV: non è 1:1.**
+  - `TargetsStep`: un binario `neutral` ha ΔE00 0 dal riempimento `pacTargetBar.unknown` (`neutral`), quindi la barra sparisce. Il commento di T in `toneClasses.ts` lo prevedeva.
+  - `DistributionDialog`: il riempimento `bg-libre-green` è un dato (distribuzione attuale, fluo in scuro: TD-1). Binario sul ruolo e riempimento legacy nello stesso letterale farebbero rosso G3.
+  - **Scelta del coordinatore, (a):** DV porta `pacTargetBar.unknown` a `bg-lf-input`. È una modifica fuori area in un file di T, ammessa perché `pacTargetBar` lo usa solo `TargetsStep`, e va dichiarata nel checkpoint. I due binari vanno su `bg-lf-neutral`; il riempimento di `DistributionDialog` resta legacy, in due costanti interpolate, con la nota in DV-7.
+  - Punto 27 nella raccolta per la designer. DV aspetta la conferma della 1.3 prima di toccare i file.
+- **18:53, anteprima 6160 di nuovo attiva** sulla punta `81bc305b9` (m1 934): build di debug rc 0, DB nuovo (populate rc 0, 35 s), worktree `preview-colori` pulito, shell staccata `preview6160j` (listener PID 98616). `/` e `/designer-lab` rispondono 200.
+- **18:53, la 1.3:** nessun suo worktree ha aperto `DistributionDialog` o `TargetsStep`. Il mio controllo sui 31 rami locali: nessuna modifica a `toneClasses.ts` o ai due file fuori dal target. **Via a W6-e** (DV, opzione a).
+- **18:54, W6-e, correzione di DV:** `input` sul binario `neutral` fa 2,69/2,73:1, sotto il 3:1 non testuale. **Scelta: `unknown` su `bg-lf-secondary`** (5,77/5,84:1 sul binario, 7,5/7,1 sulla card), cioè il colore che l'obiettivo ha già nel risultato del PAC (`ResultCell`:78, legenda di `AssetTable`:148). Punto 27 della raccolta corretto.
+- **18:58, W6-e committato: `63880bc8b`** (6 file: i binari di `TargetsStep` e `DistributionDialog` su `bg-lf-neutral`; `FILL` legacy in una costante, uguale all'originale; `toneClasses.ts` `pacTargetBar.unknown` → `bg-lf-secondary`, fuori area e dichiarato; TSV m1 934 → 930; piano e DV-7). Prove leggere verdi; contrasto «riempimento sul binario» misurato a mano (secondary 5,77/5,84; gli stati da 4,0 a 7,9). Simulazione dell'ingresso pulita su `81bc305b9`. Via all'E2E `pac-allocator-real` (6156); lo scatto di galleria si rimanda alla prossima galleria completa.
+- **19:09, slot W6-e di DV VERDE** su `63880bc8b` (18:59–19:09, carico 62–91 per le altre sessioni): `api sync` 0 file, E2E `pac-allocator-real` 1/1 senza tentativi ripetuti (532 s, di cui 411 di build). Piano committato in `8601987ee`.
+- **19:10, W6-e nel target: `e3d85fdc8`.** La punta era ferma a `81bc305b9`; il frontend dell'unione è identico a `63880bc8b`, dove DV aveva passato i gate 119/119 alle 18:55. Carico 74, quindi non li ho rilanciati; `--check` pulito prima e dopo. **Target m1 930, m2 2.**
+  - Avvisata la 1.3: i due file del PAC tornano liberi.
+  - DV in idle: W6-d aspetta W7 di Y.
+  - `toneClasses.ts` (di T) ha una riga cambiata da DV (`pacTargetBar.unknown`): T lo vedrà alla prossima base merge.
+- **19:10, G:** la riga del piano sulla run `settings/plugins` è committata in `2c40b5b00` ed entrata da sola: **`b9679a7d8`**.
+- **19:15, residuo per motivo** (incrocio di TSV e `designer/colori-residui-motivi.csv`): m1 930, cioè 541 categorie, 253 file riservati alla 1.3, 109 interruttori e 27 ruoli mancanti.
+  - I 253 sono `LotCustodyModal` 205 (poi L4 di BK) e `PositionsPanel` più `ExposureTable` 48 (dopo W7 di Y).
+  - CSV aggiornato:
+    - `[id]/+page.svelte` → interruttore (AF-1);
+    - `DistributionDialog` → categoria (il dato);
+    - `TargetsStep` tolto (0);
+    - aggiunti i 3 file di `detail/` (accenti di sezione, AF-1).
+  - Commit dei record: piano generale (esito della sera, stati di G, anteprima, DV e AF), riga dell'indice del backlog, registro.

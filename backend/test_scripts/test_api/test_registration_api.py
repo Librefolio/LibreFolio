@@ -16,10 +16,12 @@ password-reset link, and the app learns the mode before anyone signs in. The pub
 3. ``POST /auth/password-reset`` ``{token, new_password}`` consumes the reset link and sets the password (bcrypt off the
    event loop), ends every session of the account — a cookie issued before is 401 —, and revokes the account's other
    live reset links, not another account's: 200. A link used, expired, revoked, unknown or of another purpose is 400
-   ``TOKEN_INVALID`` and changes nothing. The new password follows the API's rule for now (at least 8 characters: 422).
-4. ``GET /system/instance`` carries ``accounts: {registration_mode, registration_locked, first_account_open}`` — the
-   effective mode, whether the variable sets it, and (lot A6d) whether the instance has no account yet, so that its first
-   one may register in any mode —, public, and nothing else about users: no count, no limit, no billing link.
+   ``TOKEN_INVALID`` and changes nothing. The new password meets the backend's password rules (point 8), checked before
+   the link: one that breaks them is 400 ``PASSWORD_TOO_WEAK`` and the link stays valid; an empty one is still a 422.
+4. ``GET /system/instance`` carries ``accounts: {registration_mode, registration_locked, first_account_open,
+   password_rules}`` — the effective mode, whether the variable sets it, (lot A6d) whether the instance has no account
+   yet, so that its first one may register in any mode, and (lot A6c) the password rules —, public, and nothing else
+   about users: no count, no limit, no billing link.
 5. ``PATCH /settings/global/bulk`` writing ``registration_mode`` while ``LIBREFOLIO_REGISTRATION`` sets it: 409
    ``SETTING_LOCKED_BY_ENV``, nothing saved — the other items of the request included. Without the variable the write
    goes through, within the three choices.
@@ -33,6 +35,14 @@ password-reset link, and the app learns the mode before anyone signs in. The pub
    ``INVITE_REQUIRED``. ``accounts.first_account_open`` is true exactly while the ``users`` table is empty (an inactive
    account counts, as the backend's first-account rule counts it), whatever the mode and whoever sets it, and whatever
    cookie comes with the request.
+8. Lot A6c (decision 37): the backend's password rules apply to every new password, before anything else of the
+   request. ``POST /auth/register`` with a password that breaks them is 400 ``PASSWORD_TOO_WEAK`` —
+   ``detail: {error_code, message, rules}``, ``rules`` the codes missed in the policy's order — whatever else is wrong
+   (the mode, the invitation, the limit, the name), the first account included, and a valid invitation given with it
+   is not spent; ``POST /auth/password-reset`` likewise, before the link is read, and a valid link stays valid.
+   ``accounts.password_rules`` is ``[{code: min_length, value: 8}, {code: uppercase}, {code: lowercase}, {code: digit},
+   {code: special}]``, the same on every instance; it is compared as ``(code, value)`` pairs, since a rule without a
+   value may leave the key out or carry it null.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` already gives ``ACCOUNT_DISABLED``.
 
@@ -52,7 +62,8 @@ bcrypt runs at its lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4
 The private instance seeds the defaults as a new install does, hence ``invite`` since A6d: a case that registers an
 account after the first one, without an invitation, sets the mode it needs on the row. Red until A6d: SETTING-001 and the
 barrier of LOCK-001 (the seed says ``open``), INSTANCE-001, INSTANCE-002 and URL-001 (``accounts`` has no
-``first_account_open``), FIRST-001 to FIRST-005.
+``first_account_open``), FIRST-001 to FIRST-005. Red until A6c: RESET-004, RESET-006, RULES-001 to RULES-003, and every
+exact ``accounts`` — INSTANCE-001, INSTANCE-002, FIRST-001 to FIRST-005, URL-001: no ``password_rules`` yet.
 """
 
 from __future__ import annotations
@@ -114,6 +125,22 @@ DEAD_STATUSES = ("unknown", "expired", "consumed", "revoked")
 TOKEN_DETAILS = ("expires_at", "grants_admin", "email", "username")
 #: What an anonymous refusal must never carry: the counts and the billing link are for the administrator only.
 ADMIN_ONLY_KEYS = frozenset({"limit", "used", "max_users", "billing_url"})
+#: Lot A6c (decision 37): the password rules every instance publishes in accounts.password_rules, as (code, value) — a
+#: value left out and a null one read alike. The backend's, the same on every instance: compared exactly.
+PASSWORD_RULES = [("min_length", 8), ("uppercase", None), ("lowercase", None), ("digit", None), ("special", None)]
+#: The refusal of a password that breaks the rules carries exactly these keys in its detail.
+PASSWORD_TOO_WEAK_KEYS = {"error_code", "message", "rules"}
+#: Long enough for the schema of before A6c, so that there it reaches the rest of the request: it misses three rules.
+WEAK_PASSWORD = "weakpassword"
+WEAK_RULES = ["uppercase", "digit", "special"]
+#: One password per rule, each missing that rule alone: what POST /auth/password-reset refuses, with that code.
+ONE_RULE_MISSED = [
+    pytest.param("Short1!", ["min_length"], id="min_length"),
+    pytest.param("reset-pass-2026", ["uppercase"], id="uppercase"),
+    pytest.param("RESET-PASS-2026", ["lowercase"], id="lowercase"),
+    pytest.param("Reset-Pass-Now", ["digit"], id="digit"),
+    pytest.param("Reset Pass 2026", ["special"], id="special-a-space-is-not-a-symbol"),
+]
 
 # Paths of the in-process app, mounted as api/v1/router.py mounts the routers.
 REGISTER = f"{API_V1_PREFIX}/auth/register"
@@ -292,6 +319,23 @@ def _error_code(response: httpx.Response) -> Optional[str]:
         return None
     detail = body.get("detail") if isinstance(body, dict) else None
     return detail.get("error_code") if isinstance(detail, dict) else None
+
+
+def _assert_password_too_weak(response: httpx.Response, rules: list[str], request: str) -> None:
+    """``response`` is decision 37's refusal: 400 ``PASSWORD_TOO_WEAK``, a message, and ``rules`` exactly — the codes missed, in the policy's order."""
+    assert (response.status_code, _error_code(response)) == (400, "PASSWORD_TOO_WEAK"), f"{request}: expected 400 PASSWORD_TOO_WEAK, got {response.status_code} {response.text}"
+    detail = response.json()["detail"]
+    assert set(detail) == PASSWORD_TOO_WEAK_KEYS, f"{request}: the refusal must carry exactly {sorted(PASSWORD_TOO_WEAK_KEYS)}: {detail}"
+    assert isinstance(detail["message"], str) and detail["message"].strip(), f"{request}: the refusal must carry a message: {detail}"
+    assert detail["rules"] == rules, f"{request}: rules must be exactly the codes missed, in the policy's order, {rules}: got {detail['rules']}"
+
+
+def _comparable_accounts(accounts: Any) -> Any:
+    """``accounts`` with its ``password_rules`` as ``(code, value)`` pairs, a value left out reading as a null one; as it is when the rules are not a list of mappings of code and value alone, so that the comparison fails and shows them."""
+    rules = accounts.get("password_rules") if isinstance(accounts, dict) else None
+    if not isinstance(rules, list) or not all(isinstance(rule, dict) and set(rule) <= {"code", "value"} for rule in rules):
+        return accounts
+    return {**accounts, "password_rules": [(rule.get("code"), rule.get("value")) for rule in rules]}
 
 
 def _keys(value: Any) -> set[str]:
@@ -650,17 +694,31 @@ class TestPasswordReset:
         assert signed_in.status_code == 200, "the password must be the first reset's"
 
     @pytest.mark.asyncio
-    async def test_a_password_shorter_than_the_api_rule_is_refused_and_keeps_the_link(self, private: _Private) -> None:
-        """RESET-004: a 7-character password → 422 (the API's rule until decision 37); the link stays valid, the password unchanged."""
+    @pytest.mark.parametrize(("password", "rules"), ONE_RULE_MISSED)
+    async def test_a_password_that_breaks_the_rules_is_refused_and_keeps_the_link(self, private: _Private, password: str, rules: list[str]) -> None:
+        """RESET-004 — red until A6c (a 422 of the schema under eight characters, 200 above): a new password that misses a rule → 400 ``PASSWORD_TOO_WEAK``, ``rules`` exactly that rule; the link is not spent — inspected, it is still ``valid`` for alice —, alice's password, session version and session are as they were, and the same link then resets with a password that meets the rules (200).
+
+        Until A6c this case was «a 7-character password → 422, the API's rule until decision 37».
+        """
         scene = await _reset_scene(private)
         before = await _account(private.engine, scene.alice)
 
         async with _browser(private) as client:
-            response = await client.post(RESET, json={"token": scene.link.token, "new_password": "Short1!"})
+            refused = await client.post(RESET, json={"token": scene.link.token, "new_password": password})
+            inspected = await _inspect(client, scene.link.token, "password_reset")
 
-        assert response.status_code == 422, f"{response.status_code} {response.text}"
-        assert await _status(private.engine, scene.link.token, PASSWORD_RESET) == TokenStatus.VALID
-        assert await _account(private.engine, scene.alice) == before
+        _assert_password_too_weak(refused, rules, f"POST /auth/password-reset with {password!r}")
+        assert inspected.status_code == 200 and (inspected.json().get("status"), inspected.json().get("username")) == ("valid", "alice"), f"a refused password must not spend the link: inspected, it must still be valid for alice: {inspected.status_code} {inspected.text}"
+        assert await _status(private.engine, scene.link.token, PASSWORD_RESET) == TokenStatus.VALID, "the link must still be valid in the database"
+        assert await _account(private.engine, scene.alice) == before, "a refused password must change neither the password nor the session version"
+        assert await _me(private, scene.cookies["alice"]) == 200, "a refused password must end no session"
+
+        async with _browser(private) as client:
+            spent = await client.post(RESET, json={"token": scene.link.token, "new_password": NEW_PASSWORD})
+            signed_in = await _sign_in(client, "alice", NEW_PASSWORD)
+
+        assert spent.status_code == 200, f"the link a refused password left valid must still reset: {spent.status_code} {spent.text}"
+        assert signed_in.status_code == 200, f"the password must then be the one that met the rules: {signed_in.status_code} {signed_in.text}"
 
     @pytest.mark.asyncio
     async def test_the_new_password_is_hashed_off_the_event_loop(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -681,6 +739,111 @@ class TestPasswordReset:
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         assert threads, "barrier: bcrypt.hashpw was never called"
         assert loop_thread not in threads, "the reset hashed the password on the event loop: it belongs in await asyncio.to_thread(...)"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kind", [*DEAD_STATUSES, "invitation"])
+    async def test_a_password_that_breaks_the_rules_is_refused_before_the_link_is_read(self, private: _Private, kind: str) -> None:
+        """RESET-006 — NEW, red today (400 ``TOKEN_INVALID``): a link that is not valid — never issued, expired, consumed, revoked, or an invitation — with a new password that breaks the rules → 400 ``PASSWORD_TOO_WEAK``: the password is checked before the link; nothing changes."""
+        scene = await _reset_scene(private)
+        token = (await _issue(private.engine)).token if kind == "invitation" else await _dead_token(private.engine, PASSWORD_RESET, kind, scene.alice)
+        before = await _account(private.engine, scene.alice)
+
+        async with _browser(private) as client:
+            response = await client.post(RESET, json={"token": token, "new_password": WEAK_PASSWORD})
+
+        _assert_password_too_weak(response, WEAK_RULES, f"POST /auth/password-reset with a {kind} link and {WEAK_PASSWORD!r}")
+        assert await _account(private.engine, scene.alice) == before, "a refused reset must change neither the password nor the session version"
+        assert await _status(private.engine, scene.link.token, PASSWORD_RESET) == TokenStatus.VALID, "alice's live link must stay valid"
+
+    @pytest.mark.asyncio
+    async def test_an_empty_password_is_still_a_schema_error(self, private: _Private) -> None:
+        """RESET-007 — GUARD, green today and after: the schema keeps «not empty»: an empty new password → 422, not ``PASSWORD_TOO_WEAK``; the link stays valid."""
+        scene = await _reset_scene(private)
+
+        async with _browser(private) as client:
+            response = await client.post(RESET, json={"token": scene.link.token, "new_password": ""})
+
+        assert response.status_code == 422, f"an empty new password is a request validation error: expected 422, got {response.status_code} {response.text}"
+        assert await _status(private.engine, scene.link.token, PASSWORD_RESET) == TokenStatus.VALID, "a refused request must not spend the link"
+
+
+# ============================================================================
+# 3b. DECISION 37: A NEW PASSWORD MEETS THE RULES, CHECKED FIRST — IN-PROCESS
+# ============================================================================
+
+
+async def _with_something_else_wrong(private: _Private, monkeypatch: pytest.MonkeyPatch, wrong: str) -> tuple[str, dict[str, Any]]:
+    """alice holds the instance's first account, and the registration about to come has ``wrong`` besides its password: the username and the extra body to register with."""
+    await _add_user(private.engine, "alice")
+    await _set_mode_row(private.engine, {"disabled-by-the-row": "disabled", "invite-without-invitation": "invite"}.get(wrong, "open"))
+    if wrong == "disabled-by-the-variable":
+        monkeypatch.setenv(REGISTRATION_VARIABLE, "disabled")
+    elif wrong == "limit-reached":
+        monkeypatch.setenv(MAX_USERS_VARIABLE, "1")
+    elif wrong == "invalid-invitation":
+        return "newcomer", {"invite_token": NEVER_ISSUED}
+    elif wrong == "username-taken":
+        return "alice", {}
+    return "newcomer", {}
+
+
+class TestPasswordRulesOnRegistration:
+    """POST /auth/register under decision 37: the password is checked first, a refused password spends no invitation, and the first account meets the rules too."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", ["open", "invite"])
+    async def test_a_password_that_breaks_the_rules_does_not_spend_the_invitation(self, private: _Private, mode: str) -> None:
+        """RULES-001 — NEW, red today (201, the invitation consumed): a valid invitation with a password that breaks the rules → 400 ``PASSWORD_TOO_WEAK``, the codes missed; no account; inspected, the invitation is still ``valid`` and unconsumed; the same invitation then registers with a password that meets the rules (201), and is consumed by that account."""
+        print_section(f"RULES-001: a weak password spends no invitation ({mode} mode)")
+        await _add_user(private.engine, "alice")
+        await _set_mode_row(private.engine, mode)
+        issued = await _issue(private.engine)
+
+        async with _browser(private) as client:
+            refused = await _register(client, "invited", password=WEAK_PASSWORD, invite_token=issued.token)
+            inspected = await _inspect(client, issued.token, "invite")
+
+        _assert_password_too_weak(refused, WEAK_RULES, f"{mode} mode, POST /auth/register with a valid invitation and {WEAK_PASSWORD!r}")
+        assert await _usernames(private.engine) == {"alice"}, "a refused password must create no account"
+        assert inspected.status_code == 200 and inspected.json().get("status") == "valid", f"a refused password must not spend the invitation: inspected {inspected.status_code} {inspected.text}"
+        assert (await _token_row(private.engine, issued.record.id)).consumed_by_user_id is None, "the invitation must not be consumed by a refused registration"
+
+        async with _browser(private) as client:
+            registered = await _register(client, "invited", invite_token=issued.token)
+
+        assert registered.status_code == 201, f"the invitation a refused password left valid must still open its account: {registered.status_code} {registered.text}"
+        assert (await _token_row(private.engine, issued.record.id)).consumed_by_user_id == registered.json()["user"]["id"], "the invitation must then be consumed by the account it opened"
+        print_success("PASSWORD_TOO_WEAK, the invitation still valid; then 201 and consumed")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("wrong", ["disabled-by-the-row", "disabled-by-the-variable", "invite-without-invitation", "invalid-invitation", "limit-reached", "username-taken"])
+    async def test_a_password_that_breaks_the_rules_is_refused_whatever_else_is_wrong(self, private: _Private, monkeypatch: pytest.MonkeyPatch, wrong: str) -> None:
+        """RULES-002 — NEW, red today (403 ``REGISTRATION_DISABLED``, 403 ``INVITE_REQUIRED``, 400 ``INVITE_INVALID``, 409 ``USER_LIMIT_REACHED``, 400 «Username already taken»): a password that breaks the rules → 400 ``PASSWORD_TOO_WEAK``, whatever else is wrong with the registration: the password is checked before the mode, the invitation, the limit and the name; no account."""
+        username, body = await _with_something_else_wrong(private, monkeypatch, wrong)
+
+        async with _browser(private) as client:
+            response = await _register(client, username, password=WEAK_PASSWORD, **body)
+
+        _assert_password_too_weak(response, WEAK_RULES, f"{wrong}, POST /auth/register as {username!r} with {WEAK_PASSWORD!r}")
+        assert await _usernames(private.engine) == {"alice"}, "a refused registration must create no account"
+
+    @pytest.mark.asyncio
+    async def test_the_first_account_meets_the_rules_too(self, private: _Private) -> None:
+        """RULES-003 — NEW, red today (201, the administrator): on a new install, the first registration with a password that breaks the rules → 400 ``PASSWORD_TOO_WEAK``; still no account, and ``first_account_open`` still true; then a password that meets them → 201, the administrator."""
+        print_section("RULES-003: the first account meets the rules too")
+        assert await _usernames(private.engine) == set(), "setup: the new install has no account"
+
+        async with _browser(private) as founder_device:
+            refused = await _register(founder_device, "founder", password=WEAK_PASSWORD)
+        still_open = await _instance(private)
+        async with _browser(private) as founder_device:
+            founder = await _register(founder_device, "founder")
+
+        _assert_password_too_weak(refused, WEAK_RULES, f"the first POST /auth/register of a new install with {WEAK_PASSWORD!r}")
+        assert still_open.status_code == 200 and (still_open.json().get("accounts") or {}).get("first_account_open") is True, f"a refused first registration leaves the first account open: {still_open.status_code} {still_open.text}"
+        assert founder.status_code == 201 and founder.json()["user"]["is_superuser"] is True, f"with a password that meets the rules the first account registers, as the administrator: {founder.status_code} {founder.text}"
+        assert await _usernames(private.engine) == {"founder"}
+        print_success("PASSWORD_TOO_WEAK, the first account still open; then 201 administrator")
 
 
 # ============================================================================
@@ -703,7 +866,7 @@ class TestInstanceAccounts:
         ],
     )
     async def test_accounts_holds_the_effective_mode_and_whether_the_variable_locks_it(self, private: _Private, monkeypatch: pytest.MonkeyPatch, row: Optional[str], variable: Optional[str], mode: str, locked: bool) -> None:
-        """INSTANCE-001: ``accounts`` is exactly ``{registration_mode, registration_locked, first_account_open}``: the effective mode, whether the variable sets it, and — this instance having no account — its first account open; no session needed. A new install is ``invite`` (lot A6d, decision 36)."""
+        """INSTANCE-001: ``accounts`` is exactly ``{registration_mode, registration_locked, first_account_open, password_rules}``: the effective mode, whether the variable sets it, — this instance having no account — its first account open, and (lot A6c) the password rules; no session needed. A new install is ``invite`` (lot A6d, decision 36)."""
         if row is not None:
             await _set_mode_row(private.engine, row)
         if variable is not None:
@@ -713,12 +876,12 @@ class TestInstanceAccounts:
             response = await client.get(INSTANCE)
 
         assert response.status_code == 200, f"{response.status_code} {response.text}"
-        expected = {"registration_mode": mode, "registration_locked": locked, "first_account_open": True}
-        assert response.json().get("accounts") == expected, f"row {row!r}, {REGISTRATION_VARIABLE}={variable!r}, no account: expected {expected}, got {response.text}"
+        expected = {"registration_mode": mode, "registration_locked": locked, "first_account_open": True, "password_rules": PASSWORD_RULES}
+        assert _comparable_accounts(response.json().get("accounts")) == expected, f"row {row!r}, {REGISTRATION_VARIABLE}={variable!r}, no account: expected {expected}, the rules as (code, value), got {response.text}"
 
     @pytest.mark.asyncio
     async def test_the_public_configuration_says_nothing_about_users(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts`` and ``email``, ``accounts`` exactly its three fields — the mode, the lock, and whether the first account is still open: a yes or no, false here, never a count (lot A6d) —, and the link nowhere."""
+        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts``, ``email`` and ``support_url`` (CP13), ``accounts`` exactly its four fields — the mode, the lock, whether the first account is still open (a yes or no, false here, never a count: lot A6d), and the password rules, the same on every instance (lot A6c) —, and the link nowhere."""
         owner = await _add_user(private.engine, "alice", admin=True)
         await _issue(private.engine, created_by_user_id=owner)
         monkeypatch.setenv(MAX_USERS_VARIABLE, "5")
@@ -729,9 +892,10 @@ class TestInstanceAccounts:
 
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         body = response.json()
-        assert set(body) == {"profile", "accounts", "email"}, f"the public configuration holds nothing undeclared: {body}"
-        assert set(body["accounts"]) == {"registration_mode", "registration_locked", "first_account_open"}, f"accounts says nothing about users but whether the first account is still open: {body['accounts']}"
+        assert set(body) == {"profile", "accounts", "email", "support_url"}, f"the public configuration holds nothing undeclared: {body}"
+        assert set(body["accounts"]) == {"registration_mode", "registration_locked", "first_account_open", "password_rules"}, f"accounts says nothing about users but whether the first account is still open, beside the mode, its lock and the password rules: {body['accounts']}"
         assert body["accounts"]["first_account_open"] is False, f"first_account_open is a yes or no, false once an account exists — never a count: {body['accounts']}"
+        assert _comparable_accounts(body["accounts"])["password_rules"] == PASSWORD_RULES, f"the password rules are the backend's, the same on every instance: expected {PASSWORD_RULES} as (code, value), got {body['accounts']['password_rules']}"
         assert BILLING_LINK not in response.text
 
 
@@ -740,8 +904,9 @@ class TestInstanceAccounts:
 # ============================================================================
 
 
-#: ``accounts`` of a new install without any account: registration by invitation, not pinned, the first account open.
-NEW_INSTANCE_ACCOUNTS = {"registration_mode": "invite", "registration_locked": False, "first_account_open": True}
+#: ``accounts`` of a new install without any account: registration by invitation, not pinned, the first account open, and
+#: the password rules (lot A6c) as (code, value), as _comparable_accounts reads them.
+NEW_INSTANCE_ACCOUNTS = {"registration_mode": "invite", "registration_locked": False, "first_account_open": True, "password_rules": PASSWORD_RULES}
 #: A session cookie no server ever issued.
 FORGED_SESSION = "forged.session.token-not-issued-by-this-instance"
 
@@ -757,14 +922,14 @@ class TestFirstAccountOnANewInstance:
 
     @pytest.mark.asyncio
     async def test_a_new_install_answers_invite_with_its_first_account_open(self, private: _Private) -> None:
-        """FIRST-001: a new install — the defaults seeded, no account, no variable —: GET /system/instance without a session → 200, ``accounts`` exactly ``{registration_mode: invite, registration_locked: false, first_account_open: true}``."""
+        """FIRST-001: a new install — the defaults seeded, no account, no variable —: GET /system/instance without a session → 200, ``accounts`` exactly ``{registration_mode: invite, registration_locked: false, first_account_open: true, password_rules}``, the rules those of every instance (lot A6c)."""
         print_section("FIRST-001: a new install, by invitation, its first account open")
         assert await _usernames(private.engine) == set(), "setup: the new install has no account"
 
         response = await _instance(private)
 
         assert response.status_code == 200, f"the public configuration needs no session: {response.status_code} {response.text}"
-        assert response.json().get("accounts") == NEW_INSTANCE_ACCOUNTS, f"a new install registers by invitation, and its first account is open: expected {NEW_INSTANCE_ACCOUNTS}, got {response.text}"
+        assert _comparable_accounts(response.json().get("accounts")) == NEW_INSTANCE_ACCOUNTS, f"a new install registers by invitation, and its first account is open: expected {NEW_INSTANCE_ACCOUNTS}, the rules as (code, value), got {response.text}"
         print_success("invite, not locked, the first account open")
 
     @pytest.mark.asyncio
@@ -781,7 +946,7 @@ class TestFirstAccountOnANewInstance:
 
         assert founder.status_code == 201 and founder.json()["user"]["is_superuser"] is True, f"the first account must register without an invitation, as the administrator, whatever the mode: {founder.status_code} {founder.text}"
         closed = {**NEW_INSTANCE_ACCOUNTS, "first_account_open": False}
-        assert after.status_code == 200 and after.json().get("accounts") == closed, f"once the first account exists it is no longer open: expected {closed}, got {after.status_code} {after.text}"
+        assert after.status_code == 200 and _comparable_accounts(after.json().get("accounts")) == closed, f"once the first account exists it is no longer open: expected {closed}, the rules as (code, value), got {after.status_code} {after.text}"
         assert (walkin.status_code, _error_code(walkin)) == (403, "INVITE_REQUIRED"), f"after its first account a new install wants an invitation: {walkin.status_code} {walkin.text}"
         assert await _usernames(private.engine) == {"founder"}, "the refused registration must create no account"
         print_success("201 administrator; then first_account_open false and 403 INVITE_REQUIRED, no second account")
@@ -798,8 +963,8 @@ class TestFirstAccountOnANewInstance:
         async with _browser(private) as founder_device:
             founder = await _register(founder_device, "founder")
 
-        expected = {"registration_mode": mode, "registration_locked": source == "env", "first_account_open": True}
-        assert response.status_code == 200 and response.json().get("accounts") == expected, f"registration {mode} by the {source}, no account: expected {expected}, got {response.status_code} {response.text}"
+        expected = {"registration_mode": mode, "registration_locked": source == "env", "first_account_open": True, "password_rules": PASSWORD_RULES}
+        assert response.status_code == 200 and _comparable_accounts(response.json().get("accounts")) == expected, f"registration {mode} by the {source}, no account: expected {expected}, the rules as (code, value), got {response.status_code} {response.text}"
         assert founder.status_code == 201 and founder.json()["user"]["is_superuser"] is True, f"the flag promised the first account: registration {mode} by the {source} must let it in, as the administrator: {founder.status_code} {founder.text}"
 
     @pytest.mark.asyncio
@@ -814,8 +979,8 @@ class TestFirstAccountOnANewInstance:
         async with _browser(private) as stranger:
             walkin = await _register(stranger, "walkin")
 
-        expected = {"registration_mode": "invite", "registration_locked": False, "first_account_open": False}
-        assert response.status_code == 200 and response.json().get("accounts") == expected, f"an inactive account is an account, so the first one is taken: expected {expected}, got {response.status_code} {response.text}"
+        expected = {"registration_mode": "invite", "registration_locked": False, "first_account_open": False, "password_rules": PASSWORD_RULES}
+        assert response.status_code == 200 and _comparable_accounts(response.json().get("accounts")) == expected, f"an inactive account is an account, so the first one is taken: expected {expected}, the rules as (code, value), got {response.status_code} {response.text}"
         assert (walkin.status_code, _error_code(walkin)) == (403, "INVITE_REQUIRED"), f"the backend agrees with the flag: the next registration is not the first one: {walkin.status_code} {walkin.text}"
         assert await _usernames(private.engine) == {"dormant"}, "the refused registration must create no account"
         print_success("first_account_open false beside an inactive account; 403 INVITE_REQUIRED")
@@ -828,7 +993,7 @@ class TestFirstAccountOnANewInstance:
 
         assert (anonymous.status_code, forged.status_code) == (200, 200), f"a forged session cookie must not change the answer: without one {anonymous.status_code} {anonymous.text}; forged {forged.status_code} {forged.text}"
         assert forged.json() == anonymous.json(), f"the same body with a forged cookie as without one: forged {forged.text}, without {anonymous.text}"
-        assert forged.json().get("accounts") == NEW_INSTANCE_ACCOUNTS, f"a new install, its first account open, whatever cookie comes with the request: {forged.text}"
+        assert _comparable_accounts(forged.json().get("accounts")) == NEW_INSTANCE_ACCOUNTS, f"a new install, its first account open, whatever cookie comes with the request: expected {NEW_INSTANCE_ACCOUNTS}, the rules as (code, value), got {forged.text}"
 
 
 # ============================================================================
@@ -949,7 +1114,7 @@ class TestReviewOfTheSettingAndTheUrls:
         A guard: these endpoints do not read the URL variables today. It keeps a later "invalid account configuration →
         closed" from catching a mistyped link along with the settings that really close registration. The row is set
         ``open`` (a new install is ``invite`` since A6d); red until A6d only for the ``first_account_open`` the exact
-        ``accounts`` now carries.
+        ``accounts`` now carries, and until A6c for its ``password_rules``.
         """
         await _add_user(private.engine, "alice")
         await _set_mode_row(private.engine, "open")
@@ -959,8 +1124,8 @@ class TestReviewOfTheSettingAndTheUrls:
             instance = await client.get(INSTANCE)
             registered = await _register(client, "walkin")
 
-        expected = {"registration_mode": "open", "registration_locked": False, "first_account_open": False}
-        assert instance.status_code == 200 and instance.json().get("accounts") == expected, f"an invalid {variable} must leave the instance open: expected {expected}, got {instance.status_code} {instance.text}"
+        expected = {"registration_mode": "open", "registration_locked": False, "first_account_open": False, "password_rules": PASSWORD_RULES}
+        assert instance.status_code == 200 and _comparable_accounts(instance.json().get("accounts")) == expected, f"an invalid {variable} must leave the instance open: expected {expected}, the rules as (code, value), got {instance.status_code} {instance.text}"
         assert registered.status_code == 201, f"an invalid {variable} must not stop an open registration: {registered.status_code} {registered.text}"
         assert registered.json()["user"]["is_superuser"] is False
 

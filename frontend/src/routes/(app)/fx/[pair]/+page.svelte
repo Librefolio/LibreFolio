@@ -21,6 +21,7 @@
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -593,8 +594,10 @@
     }
 
     async function retryBackendSignals() {
-        await loadFxSignalDefinitions(true);
-        await loadChartData();
+        await pageBusy.track('fx-detail-signals-retry', async () => {
+            await loadFxSignalDefinitions(true);
+            await loadChartData();
+        });
     }
 
     function connectCreationCompletion() {
@@ -657,7 +660,8 @@
     onMount(() => {
         pageMounted = true;
         const initializeAndStartGuide = async () => {
-            await initializePage();
+            // The first load holds the page's Refresh button (Y11).
+            await pageBusy.track('fx-detail-first-load', () => initializePage());
             if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
         };
         let initialSession = true;
@@ -666,10 +670,14 @@
             if (!initialSession && getClientSessionUserId() !== null) {
                 invalidateComparisonState();
                 if (signalDefinitionsReady) {
-                    void loadChartData().then(async () => {
-                        await maybeLoadComparison();
-                        if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
-                    });
+                    void pageBusy
+                        .track('fx-detail-session', async () => {
+                            await loadChartData();
+                            await maybeLoadComparison();
+                        })
+                        .then(() => {
+                            if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
+                        });
                 } else void initializeAndStartGuide();
             }
             initialSession = false;
@@ -698,7 +706,10 @@
                 connectCreationCompletion();
                 invalidateComparisonState();
                 if (signalDefinitionsReady) {
-                    void loadChartData().then(() => maybeLoadComparison());
+                    void pageBusy.track('fx-detail-orientation', async () => {
+                        await loadChartData();
+                        await maybeLoadComparison();
+                    });
                 }
             }
         }
@@ -1039,8 +1050,10 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await loadChartData();
-        await maybeLoadComparison();
+        await pageBusy.track('fx-detail-period', async () => {
+            await loadChartData();
+            await maybeLoadComparison();
+        });
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -1083,9 +1096,9 @@
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
-        if (shouldReloadComparison) void maybeLoadComparison(newSignals);
+        if (shouldReloadComparison) void pageBusy.track('fx-detail-comparison', () => maybeLoadComparison(newSignals));
         if (shouldReloadBackend) {
-            void loadChartData(newSignals);
+            void pageBusy.track('fx-detail-signals', () => loadChartData(newSignals));
         }
     }
 
@@ -1221,21 +1234,21 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="fx-detail-page" data-busy={loading} data-chart-pair={data.canonicalSlug} data-chart-last-rate={chartData.at(-1)?.rate ?? ''} data-discarded-chart-loads={discardedChartLoads}>
+<div class="space-y-4 text-lf-primary" data-testid="fx-detail-page" data-busy={loading} data-chart-pair={data.canonicalSlug} data-chart-last-rate={chartData.at(-1)?.rate ?? ''} data-discarded-chart-loads={discardedChartLoads}>
     <!-- ======================================================================= -->
     <!-- Header: pair info + back button -->
     <!-- ======================================================================= -->
     <div class="flex items-center gap-3" data-testid="fx-detail-header" use:guideAnchor={'fx.detail.header'}>
-        <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors" data-testid="fx-detail-back-btn" onclick={() => goBack('/fx')} title={$t('fxDetail.backToList')}>
+        <button class="p-2 rounded-lg hover:bg-lf-hover text-lf-muted transition-colors" data-testid="fx-detail-back-btn" onclick={() => goBack('/fx')} title={$t('fxDetail.backToList')}>
             <ArrowLeft size={20} />
         </button>
         <div class="flex items-center gap-2" data-testid="fx-detail-pair-label">
             <span class="text-2xl">{baseFlag}</span>
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayBase}</h2>
-            <span class="text-gray-400 dark:text-gray-500 text-lg">→</span>
+            <h2 class="text-xl font-bold text-lf-primary">{displayBase}</h2>
+            <span class="text-lf-muted text-lg">→</span>
             <span class="text-2xl">{quoteFlag}</span>
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100">{displayQuote}</h2>
-            <button class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" data-testid="fx-detail-swap-btn" onclick={handleSwapDirection} title={$t('common.swapDirection')}>
+            <h2 class="text-xl font-bold text-lf-primary">{displayQuote}</h2>
+            <button class="p-1.5 rounded-lg hover:bg-lf-hover text-lf-muted hover:text-lf-secondary transition-colors" data-testid="fx-detail-swap-btn" onclick={handleSwapDirection} title={$t('common.swapDirection')}>
                 <ArrowLeftRight size={16} />
             </button>
         </div>
@@ -1243,9 +1256,9 @@
 
     <!-- Error banner (not data-quality — dismissible runtime error) -->
     {#if error}
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+        <div class="bg-lf-warning-soft border border-lf-warning-line rounded-xl p-4 text-sm text-lf-warning-on-soft flex items-center gap-2">
             <span>⚠️</span> <span>{errorMessage}</span>
-            <button class="ml-auto text-xs px-2 py-1 bg-amber-100 dark:bg-amber-900/40 rounded hover:bg-amber-200" onclick={() => (error = null)}>{$t('common.close')}</button>
+            <button class="ml-auto text-xs px-2 py-1 bg-lf-warning-line/50 rounded hover:bg-lf-warning-line" onclick={() => (error = null)}>{$t('common.close')}</button>
         </div>
     {/if}
 
@@ -1295,7 +1308,7 @@
                 onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
             />
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                 data-testid="fx-detail-provider-btn"
                 use:guideAnchor={'fx.detail.provider'}
                 onclick={() => (showProviderModal = true)}
@@ -1304,7 +1317,7 @@
                 {#if showActionLabels}<span>{$t('common.providers')}</span>{/if}
             </button>
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors
                            {isManualOnly ? 'opacity-50 cursor-not-allowed' : ''}"
                 data-testid="fx-detail-sync-btn"
                 disabled={isManualOnly}
@@ -1315,12 +1328,13 @@
                 {#if showActionLabels}<span>{$t('common.sync')}</span>{/if}
             </button>
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                 data-testid="fx-detail-refresh-btn"
-                disabled={loading}
-                onclick={handleRefresh}
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                disabled={pageBusy.busy}
+                onclick={() => void pageBusy.track('fx-detail-refresh', handleRefresh)}
             >
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         {/snippet}
@@ -1329,22 +1343,22 @@
     <!-- ======================================================================= -->
     <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
         <div class="relative">
-            <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="fx-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
+            <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-lf-hover" data-testid="fx-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
             <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="fx-detail-signals-header">
-                <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+                <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-lf-secondary">
                     <TrendingUp class="text-blue-500" size={15} />
                     {$t('common.signals')}
                 </span>
                 <div class="flex-1"></div>
-                <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="fx-detail-signals-chevron">
+                <span class="flex items-center px-1 py-1 text-lf-secondary" data-testid="fx-detail-signals-chevron">
                     <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
                 </span>
             </div>
         </div>
         {#if showSignals}
-            <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
+            <div data-testid="fx-detail-signals-panel" class="px-4 pb-4 border-t border-lf-subtle pt-3">
                 <ChartSignalsSection
                     signals={signalPanelConfigs}
                     definitions={signalDefinitions}
@@ -1370,19 +1384,19 @@
     <!-- ======================================================================= -->
     <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="fx-detail-chart" data-view-mode={viewMode} use:guideAnchor={'fx.detail.chart'}>
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="fx-detail-chart" data-view-mode={viewMode} use:guideAnchor={'fx.detail.chart'}>
         {#if loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
-                    <RefreshCw size={24} class="animate-spin text-libre-green mx-auto mb-2" />
-                    <p class="text-sm text-gray-500 dark:text-gray-400">{$t('fxDetail.loadingRates')}</p>
+                    <RefreshCw size={24} class="animate-spin text-lf-link mx-auto mb-2" />
+                    <p class="text-sm text-lf-muted">{$t('fxDetail.loadingRates')}</p>
                 </div>
             </div>
         {:else if lineData.length > 0}
             <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
             {#if showAesthetics}
-                <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-gray-100 dark:border-slate-700 relative">
-                    <button class="absolute top-0 right-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
+                <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-lf-subtle relative">
+                    <button class="absolute top-0 right-0 p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                         <X size={16} />
                     </button>
                     <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
@@ -1486,11 +1500,11 @@
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
                     {#if isManualOnly}
-                        <p class="text-gray-400 dark:text-gray-500 mb-3">
+                        <p class="text-lf-muted mb-3">
                             {$t('fxDetail.noDataManual')}
                         </p>
                         <button
-                            class="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
+                            class="px-4 py-2 text-sm bg-lf-warning text-lf-on-status rounded-lg hover:bg-lf-warning-hover transition-colors"
                             onclick={() => {
                                 showDataEditor = true;
                             }}
@@ -1498,13 +1512,13 @@
                             {$t('fxDetail.insertManually')}
                         </button>
                     {:else}
-                        <p class="text-gray-400 dark:text-gray-500 mb-3">{$t('fxDetail.noData')}</p>
+                        <p class="text-lf-muted mb-3">{$t('fxDetail.noData')}</p>
                         <div class="flex items-center gap-2 justify-center">
-                            <button class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" onclick={handleSync}>
+                            <button class="px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSync}>
                                 {$t('fxDetail.syncRates')}
                             </button>
                             <button
-                                class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors"
+                                class="px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors"
                                 data-testid="fx-detail-add-rates-manually"
                                 onclick={() => {
                                     showDataEditor = true;
@@ -1524,14 +1538,14 @@
     <!-- Data Editor (shown only when toggled via pencil button) -->
     <!-- ======================================================================= -->
     {#if showDataEditor}
-        <div data-testid="fx-detail-editor-panel" class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-yellow-900/30 rounded-t-xl">
-                <span class="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
+        <div data-testid="fx-detail-editor-panel" class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-warning-line">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-lf-warning-line bg-lf-warning-soft rounded-t-xl">
+                <span class="flex items-center gap-2 text-sm font-medium text-lf-warning-on-soft">
                     <Pencil size={15} />
                     {$t('fxDetail.editRates')}
                 </span>
                 <button
-                    class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    class="text-lf-muted hover:text-lf-secondary transition-colors"
                     onclick={() => {
                         showDataEditor = false;
                         pendingPreviewSignal = null;
@@ -1546,7 +1560,7 @@
                     >✕
                 </button>
             </div>
-            <p class="px-4 pt-2 text-xs text-amber-700/70 dark:text-amber-400/70">
+            <p class="px-4 pt-2 text-xs text-lf-warning-on-soft/70">
                 💡 {pageLayoutMode === 'oneColumn' ? $t('dataEditor.editorTipMobile') : $t('dataEditor.editorTipDesktop')}
             </p>
             <div class="px-4 pb-4 pt-3">
@@ -1592,9 +1606,9 @@
     <!-- ======================================================================= -->
     <!-- Foldable Panel: Measures (below DataEditor, above Signals) -->
     <!-- ======================================================================= -->
-    <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle">
         <div class="flex items-center justify-between px-4 py-2.5">
-            <button class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white transition-colors" data-testid="fx-detail-measures-toggle" onclick={() => (showMeasures = !showMeasures)}>
+            <button class="flex items-center gap-2 text-sm font-medium text-lf-secondary hover:text-lf-primary transition-colors" data-testid="fx-detail-measures-toggle" onclick={() => (showMeasures = !showMeasures)}>
                 <Ruler class="text-violet-500" size={15} />
                 {$t('common.measures')}
                 {#if measureMode}
@@ -1620,7 +1634,7 @@
             </button>
         </div>
         <!-- Single MeasurePanel instance — always mounted, hidden via CSS to preserve state -->
-        <div class={showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="fx-detail-measures-panel">
+        <div class={showMeasures ? 'px-4 pb-4 border-t border-lf-subtle pt-3' : 'hidden'} data-testid="fx-detail-measures-panel">
             <MeasurePanel bind:this={measurePanel} chartData={lineData} onmeasuremodechange={(active) => (measureMode = active)} onmeasureschange={(m) => (measureSignals = m)} {overlaySignals} {mainSignalInfo} {viewMode} />
         </div>
     </div>

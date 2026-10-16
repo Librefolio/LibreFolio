@@ -29,28 +29,34 @@ it draws the bar and the active body from that list. Each entry is a `SettingsTa
 | `alignEnd?` | On a wide screen, starts the right-hand group: this tab and every tab after it sit on the right (`sm:ml-auto` on its button) |
 
 `ctx` is a `SettingsTabContext`, `{isSuperuser}`, which the page derives from the auth store
-(`$auth.user?.is_superuser ?? false`). The registry holds seven tabs:
+(`$auth.user?.is_superuser ?? false`). The registry holds eight tabs:
 
 | `id` | `order` | Body | Visible to | Extras |
 |---|---|---|---|---|
 | `profile` | 10 | `ProfileTab` | everyone | — |
 | `preferences` | 20 | `PreferencesTab` | everyone | — |
+| `plugins` | 25 | `PluginSettingsTab` | everyone | — |
 | `about` | 30 | `AboutTab` | everyone | — |
 | `admin` | 100 | `GlobalSettingsTab` | everyone | `props: (ctx) => ({canEdit: ctx.isSuperuser})`, `alignEnd: true` |
 | `users` | 110 | [`UsersTab`](#userstab) | administrators | `visible: (ctx) => ctx.isSuperuser` |
 | `backup` | 120 | `BackupTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
 | `email` | 130 | `EmailSettingsTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
 
-The first five bodies are in `lib/features/settings/tabs/`. The Backup tab's body, `lib/features/backup/BackupTab.svelte`
-(label `backup.tab`), and the Email tab's, `lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live
-with their features: for the Email tab see [The Email Tab](../../../backend/email.md#email-tab).
+Five bodies are in `lib/features/settings/tabs/`. The Plugins tab's body,
+`lib/features/plugin-settings/PluginSettingsTab.svelte` (label `pluginSettings.tab.label`), the
+Backup tab's, `lib/features/backup/BackupTab.svelte` (label `backup.tab`), and the Email tab's,
+`lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live with their features:
+for the Plugins tab see [Plugin Settings › The Interface](../../../architecture/patterns/plugin_settings.md#interface),
+for the Email tab [The Email Tab](../../../backend/email.md#email-tab). The Plugins tab takes no
+props: every user sees it, and the catalogue the API returns already says which fields this user may
+change.
 
 The page is the runtime of the registry, written in Svelte 5 runes:
 
 - **Bar**: `visibleSettingsTabs(SETTINGS_TABS, ctx)`, the tabs whose `visible(ctx)` is not false,
   sorted by `order` into a new array (the registry itself is never reordered), handed to `TabBar`
   with the labels hidden on a phone (`hideLabelOnMobile`). The bar is also `scrollable`: tabs that
-  do not fit the card (an administrator sees seven) scroll sideways instead of being clipped by its
+  do not fit the card (an administrator sees eight) scroll sideways instead of being clipped by its
   `overflow-hidden`, and the active tab stays whole in view (see
   [Scrollable tab bar](../core-ui/toolbar.md#tabbar-scrollable)).
 - **Body**: the active tab's `component` alone, with `props(ctx)` spread on it. The spread is live:
@@ -71,7 +77,7 @@ import {Info, Shield, Sliders, User, Users} from 'lucide-svelte';
 import UsersTab from '$lib/features/settings/tabs/UsersTab.svelte';
 
 export const SETTINGS_TABS: readonly SettingsTab[] = [
-    // profile (10), preferences (20), about (30), admin (100, alignEnd)
+    // profile (10), preferences (20), plugins (25), about (30), admin (100, alignEnd)
     // Administrators only: the accounts and the open invitations (decision D-A10).
     {id: 'users', labelKey: 'settings.users', icon: Users, order: 110, component: UsersTab, visible: (ctx) => ctx.isSuperuser},
 ];
@@ -232,7 +238,17 @@ Manages user profile information:
   other refusal shows the server's `detail` when it is a sentence (*Email already registered*),
   `settings.updateFailed` for any other `detail` (another code, a `422` list), and puts the field
   back to the stored value. The banner clears after 5 seconds
-- **Password change**: Opens `PasswordChangeModal`
+- **Password change**: opens `PasswordChangeModal` (`features/settings/PasswordChangeModal.svelte`):
+  the current password, the new one with `PasswordStrength` under it, and the confirmation. The
+  modal binds `PasswordStrength`'s `valid` (`bind:valid={passwordMeetsRules}`) and keeps no copy of
+  the [password rules](../../../architecture/security.md#password-rules): `password-change-submit`
+  stays disabled until the three fields are filled, the rules hold and the confirmation matches.
+  A refusal whose `detail` is `{error_code: "PASSWORD_TOO_WEAK", …}` shows
+  `auth.validation.passwordTooWeak`; the plain-string `detail`s of a wrong current password
+  (*incorrect*) and of a new password equal to it (*different*) show
+  `settings.currentPasswordIncorrect` and `settings.passwordMustBeDifferent`; anything else, the
+  message `trySave` extracts, `settings.passwordChangeFailed` when it finds none. An object `detail`
+  is never lower-cased as a string: before A6c that threw
 - **Delete account**: `delete-account-button` opens the
   [`AccountDeletionDialog`](#accountdeletiondialog) in `self` mode, with
   `testIdPrefix="profile-delete"`; once the account is deleted, the tab calls `auth.logout()` and
@@ -242,7 +258,9 @@ Manages user profile information:
 Tests of the email's password: `tabs/ProfileTab.test.ts` (`./dev.py test front-utility component-unit`),
 and the «A6e» block of `frontend/e2e/settings.spec.ts` (`./dev.py test front-utility settings`) on the
 lane's real backend, with a throwaway account and a second browser context signed in before the change,
-and signed out by it.
+and signed out by it. The password change: `PasswordChangeModal.test.ts`, in the same
+`component-unit` action (what enables Save, what reaches the server, the refusals with
+`PASSWORD_TOO_WEAK` among them, the rules taken from `PasswordStrength`).
 
 ### 🌍 GlobalSettingsTab (read by everyone, edited by administrators) {: #globalsettingstab-admin-only }
 
@@ -369,7 +387,7 @@ toast, when there is one, is a field of the same call.
 #### UserRow {: #userrow }
 
 `lib/features/settings/users/UserRow.svelte`. Props: `account` (`AdminAccount`, the `GET /users`
-item), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
+item, with `holds_place` when it is sent), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
 
 - The `<li>` is `users-row`, with `data-user-id`, `data-username`, `data-active`, `data-admin`,
   `data-protected` and `data-self` (`"true"` or `"false"`).
@@ -388,7 +406,7 @@ condition that holds gives the reason:
 | Button | `data-disabled-reason` |
 |---|---|
 | `users-action-deactivate` | `protected` when `account.protected`; `last-admin` when the account is an administrator and `isOnlyActiveAdmin` |
-| `users-action-reactivate` | `limit` when `full` |
+| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)) |
 | `users-action-demote` | `protected` when `account.protected`; `last-admin` when the account is active and `isOnlyActiveAdmin` |
 | `users-action-delete` | `protected` when `account.protected`; `demote-first` when the account is an administrator, active or not |
 

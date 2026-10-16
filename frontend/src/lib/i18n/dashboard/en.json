@@ -128,7 +128,8 @@
       "missingFx": "The exchange rate required for a payment is unavailable.",
       "missingWac": "The average purchase price (WAC) is unavailable.",
       "nonPositiveWac": "The average purchase price (WAC) is zero or negative.",
-      "missingFxDetails": "The {pair} exchange rate required for the calculation is missing on {date}."
+      "missingFxDetails": "The {pair} exchange rate required for the calculation is missing on {date}.",
+      "negativeNetIncome": "Corrections exceed the income of the last year."
     },
     "yieldOnCostValue": "Yield on Cost",
     "yieldOnCostPeriod": "Period",
@@ -147,6 +148,7 @@
     "unrealizedAssetEffect": "Assets in {currency}",
     "unrealizedFxEffect": "{from} → {to} rate",
     "unrealizedUnsplit": "{currency}, not split",
-    "fxOnCash": "FX on cash"
+    "fxOnCash": "FX on cash",
+    "allocationNegativeCash": "Negative cash: {amount}"
   }
 }

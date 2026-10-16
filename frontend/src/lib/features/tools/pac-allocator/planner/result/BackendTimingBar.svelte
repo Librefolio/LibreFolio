@@ -66,7 +66,7 @@
                           id: 'unattributed',
                           label: $t(`${KEY}.unattributed`, {default: 'Not attributed'}),
                           ms: rest,
-                          colour: 'bg-gray-300 dark:bg-gray-600',
+                          colour: 'bg-lf-neutral',
                           help: $t(`${KEY}.unattributedHelp`, {default: 'Time inside the total that no phase measures: loading the tool, preparing it, handing over the result.'}),
                       },
                   ]
@@ -92,7 +92,7 @@
 </script>
 
 {#if total !== null && segments.length > 0}
-    <section class="min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" aria-labelledby="pac-planner-timing-title" data-testid="pac-planner-timing">
+    <section class="min-w-0 rounded-xl border border-lf-subtle bg-lf-card p-4 text-lf-primary" aria-labelledby="pac-planner-timing-title" data-testid="pac-planner-timing">
         <h4 id="pac-planner-timing-title" class="flex items-center gap-2 text-sm font-semibold">
             <ChartBarStacked size={16} aria-hidden="true" class="shrink-0" />
             {$t(`${KEY}.title`, {default: 'Where the time went'})}
@@ -103,10 +103,12 @@
                 values: {total: duration(total)},
             })}
         </p>
-        <div class="mt-3 flex h-4 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-900" aria-hidden="true" data-testid="pac-planner-timing-bar">
+        <!-- The separators are the bar's `divide-*`, in the card's colour: a segment carries only its fill, a legacy phase
+             colour or the unattributed role, so no segment mixes the two (G3). -->
+        <div class="mt-3 flex h-4 w-full divide-x divide-lf-card overflow-hidden rounded-full bg-lf-panel" aria-hidden="true" data-testid="pac-planner-timing-bar">
             {#each segments as segment (segment.id)}
                 <div
-                    class="h-full border-r border-white transition-opacity last:border-r-0 dark:border-gray-800 {segment.colour} {dimmed(segment.id) ? 'opacity-30' : ''}"
+                    class="h-full transition-opacity {segment.colour} {dimmed(segment.id) ? 'opacity-30' : ''}"
                     style="width: {segment.share * 100}%; min-width: 3px;"
                     data-testid="pac-planner-timing-segment"
                     data-phase={segment.id}
@@ -119,7 +121,7 @@
         <ul class="mt-3 grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2 lg:grid-cols-3" data-testid="pac-planner-timing-legend">
             {#each segments as segment (segment.id)}
                 <li
-                    class="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-[opacity,background-color] {active === segment.id ? 'bg-gray-100 dark:bg-gray-700' : ''} {dimmed(segment.id) ? 'opacity-50' : ''}"
+                    class="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-[opacity,background-color] {active === segment.id ? 'bg-lf-panel' : ''} {dimmed(segment.id) ? 'opacity-50' : ''}"
                     data-testid="pac-planner-timing-item"
                     data-phase={segment.id}
                     data-active={active === segment.id ? 'true' : 'false'}
@@ -129,11 +131,11 @@
                     onfocusout={() => (pointed = null)}
                 >
                     <span class="h-2.5 w-2.5 shrink-0 rounded-sm {segment.colour}" aria-hidden="true"></span>
-                    <span class="flex min-w-0 flex-1 items-center gap-1 text-gray-600 dark:text-gray-300">
+                    <span class="flex min-w-0 flex-1 items-center gap-1 text-lf-secondary">
                         <span class="min-w-0 break-words">{segment.label}</span>
                         {#if segment.help}<HelpTip label={segment.label} help={segment.help} testid="pac-planner-timing-help" />{/if}
                     </span>
-                    <span class="shrink-0 tabular-nums text-gray-900 dark:text-gray-100">{duration(segment.ms)} · {formats.share.format(segment.share)}</span>
+                    <span class="shrink-0 tabular-nums text-lf-primary">{duration(segment.ms)} · {formats.share.format(segment.share)}</span>
                 </li>
             {/each}
         </ul>

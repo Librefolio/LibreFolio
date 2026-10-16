@@ -74,10 +74,11 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | A period's boundary states, P&L and identity | `services/financial_math/portfolio/period.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
 | Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
-| Simple ROI, TWRR, MWRR, annualization, a period's start (rebasing), net holding return, G/L ratio | `services/financial_math/returns.py` |
+| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio, realized gain, price return, the gain that recovers a drawdown | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
+| Stock splits linked to the ledger: their rows and the usable ratio | `services/financial_math/splits.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
 | Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
 | Risk metrics and optimization | `services/risk/quant/` |

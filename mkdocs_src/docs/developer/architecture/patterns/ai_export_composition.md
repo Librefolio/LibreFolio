@@ -237,6 +237,17 @@ replaces — the retained aggregates (for example `portfolio.income_evidence` us
 the same `(start, end]` window as `portfolio.flows_income` so they cannot
 contradict each other).
 
+`portfolio.income_evidence` and `broker.cost_efficiency_evidence` read ledger rows
+and count each broker at the report's share (`native_cash.effective_share()`: an
+owner's `share_percentage`, the whole broker when none is recorded; the whole
+broker for an editor or a viewer).
+`portfolio.income_timeline` (version 2, behind `portfolio.income_evidence`) keeps
+every `DIVIDEND`/`INTEREST` amount with its sign, so an older negative correction
+lowers the income exactly as it lowers the report's `period_income`.
+`broker.cost_efficiency` (version 2, behind `broker.cost_efficiency_evidence`)
+still sums BUY/SELL turnover by magnitude, multiplied by that share, which it
+exposes as `ownership_share_ratio`.
+
 ## 🧭 Public Analysis Dataset Bindings
 
 Required datasets fail closed; optional components inside general snapshots

@@ -2787,3 +2787,1265 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > `files-uploader` 8, `files-destructive` 6, `files-pdf-offline` 1, `image-crop` 42. Porta 6181 libera.
 
 #### Checkpoint CP-U2 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: CP-U2 è in `dev_release2` (treno 79, merge `2d1eee33a`), con 4 righe nel CHANGELOG; la condizione di
+> rilascio sulla pagina utente dei File è chiusa. Prima, sulla revisione combinata `b3feddd2c`: `api sync`, `front
+> check` 0/0 (al primo giro 12 errori, solo per il client generato non aggiornato dopo il merge), Vitest 93, E2E `files`
+> 29. Le registrazioni di CP7b-1 le ho tolte durante il merge, salvate in patch con `git apply -R`, e poi rimesse.
+
+### CP7b-1 — header e cache (2026-10-16, notte) — in corso
+
+#### Passo 1 — la cura ✅
+
+> **Note implementazione** (script `/tmp/librefolio-r13-h-7b1/apply_cp7b1.py`, applicato su `b3feddd2c`):
+>
+> - `platform/security_headers.py`, nuovo: `SecurityHeadersMiddleware` mette `nosniff` e
+>   `Referrer-Policy: strict-origin-when-cross-origin` su ogni risposta HTTP, senza sovrascrivere quelli di una rotta.
+>   Se la richiesta fallisce prima che la risposta parta, manda da sé il 500 con gli header e poi rilancia.
+>   `register_served_types()` registra i tipi che servono a `nosniff` (font, `.map`, `.mjs`, `.wasm`…).
+> - `middleware.py`: la pila è `activity` (Z), `security_headers`, `gzip`, `cors`.
+> - `static_site.py`: `immutable` solo sotto `_app/immutable/`, il resto di `/_app` in `no-cache, must-revalidate`,
+>   anche sui 304; `install_static_site` chiama `register_served_types()`.
+> - `static_uploads.py` (nota di W): il TODO citava `EVENT_COMPATIBLE_TYPES`, che non c'è più. Fatto invece che
+>   ripuntato: le due liste di blocco sono `frozenset`.
+>
+> **Prove**, una alla volta, carico sotto 70; i rossi passano tutti al primo giro:
+>
+> - `services static-cache-policy` 26, `services security-headers` 15, `utils nosniff-content-types` 30;
+> - `utils served-content-types` 36, `services app-lifecycle` 42 (Z ha tolto il caso «nessuna scadenza», come
+>   concordato), `utils static-route-confinement` 26, `services static-uploads` 73;
+> - `db populate --force`; `api http-compression` 10, `api uploads-serve-file` 13, `api system` 117,
+>   `api instance-block` 60.
+
+#### Passo 2 — doc, ritocchi e prove pesanti ✅ (2026-10-16, notte)
+
+> **Note implementazione**:
+>
+> - doc (docs-writer): `developer/architecture/security.md`, sezione nuova `#response-headers`;
+>   `developer/architecture/overview.md`, la pila a quattro voci e un paragrafo sulla cache del browser (HTML e file di
+>   `/_app` senza hash revalidati, `/_app/immutable/` per un anno, miniature `private`); `developer/api/overview.md`,
+>   il posto di `gzip` nella pila; wiki `problems/stale-frontend-after-update-html-cached.md`. Nessun debito di
+>   traduzione;
+> - corretti, perché esageravano, i commenti di `security_headers.py`, la docstring di
+>   `test_nosniff_content_types.py` (test-author) e due frasi delle mie registrazioni nel runner. Per la specifica
+>   Fetch, `nosniff` rifiuta solo script e fogli di stile di un altro tipo, non font e mappe. Registrare i tipi resta
+>   giusto: niente esce come `application/octet-stream`. Aggiornata anche la docstring di `middleware.py`, che
+>   descriveva la pila di prima.
+>
+> **Prove** (slot pesante 2): E2E `app-start-auth` 3, `files-pdf-offline` 1, `docs-offline-math` 2; `all-backend`
+> 7/7, **17 084 passed, 4 skipped, 0 failed** (02:55–03:28); `utils nosniff-content-types` 30, rilanciato dopo la
+> docstring; `mkdocs build --strict` senza avvisi; `check-links`; `check_source_paths` della pagina wiki. Porta 6181
+> libera.
+
+#### Checkpoint CP7b-1 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: commit `04d82ca3a` (feat), `6561e3cce` (doc), `e785691ae` (diario); merge di `dev_release2`
+> `503dce683`, pulito, HEAD `dd89398dd` (dentro B2, Z7b, CP11a/b, A6d/e, E-5 e il lotto di T). Prove sulla revisione
+> combinata, una alla volta con `nice`, carico sotto 70: `services security-headers` 15, `services app-lifecycle` 42,
+> `api http-compression` 10, `api backup-restore` 114 (l'upload del ripristino passa dal middleware), `api system-wake`
+> 74 (la risposta in streaming del risveglio), `api system` 118, `mkdocs build --strict`, `check-links`. Entrato nel
+> treno 86 (merge `1f4c5aeca`) con le righe 🔒 (header) e 🐛 (cache) nel CHANGELOG.
+
+### CP7b-2 — i default del profilo e gli header del profilo gestito (2026-10-16, notte) — in corso
+
+Via del coordinatore alle 03:48 del 16/10. Il lotto più delicato: ogni campo ha il suo test «self-hosted invariato».
+
+#### Passo 1 — i rossi nel worktree ✅ (2026-10-16, notte)
+
+> **Note implementazione**: copiati da `/tmp/librefolio-r13-h-7b2/` `test_profile_defaults.py` (37 casi) e
+> `test_managed_headers.py` (169) in `backend/test_scripts/test_services/`; applicato `runner.diff` a
+> `scripts/test_runner/_backend_services.py` (selettori `services profile-defaults` e `services managed-headers`).
+> Sul codice di allora: `profile-defaults` 37 rossi (35 per la tabella che manca, 2 per i campi che mancano),
+> `managed-headers` 169 rossi (la barriera: i campi non esistono).
+
+#### Passo 2 — la cura ✅ (2026-10-16, notte)
+
+> **Note implementazione**:
+>
+> - `config/__init__.py`: `PROFILE_DEFAULTS` (`selfhosted` vuoto; `managed`: i due `RISK_*_IDLE_TIMEOUT_SECONDS` a
+>   60.0, `LIBREFOLIO_FRAME_PROTECTION` e `LIBREFOLIO_CSP_REPORT_ONLY` a `True`), i due campi booleani nuovi, default
+>   `False`, e il validatore `after` `_apply_profile_defaults`. Questo scrive con `object.__setattr__` solo i campi
+>   assenti da `model_fields_set`. La docstring del modulo elenca le due variabili e i valori del profilo gestito.
+> - `platform/security_headers.py`: `FRAME_HEADERS` (`X-Frame-Options: SAMEORIGIN`, CSP applicata
+>   `frame-ancestors 'self'` e nient'altro) su ogni risposta, il 500 e le preflight comprese;
+>   `CSP_REPORT_ONLY_POLICY` come `Content-Security-Policy-Report-Only` solo sull'HTML della web app
+>   (`_is_web_app_page`: tipo `text/html`, fuori da `/mkdocs` e da `/api`, nudi o con la barra). Le impostazioni si
+>   leggono una volta, in `__init__`; nomi degli header confrontati interi.
+> - `.env.example`: due righe commentate nella sezione «Instance Profile» e «managed: 60» sui due timeout di inattività.
+> - Il motore del rischio legge i timeout solo da `Settings` (`risk/quant/workers.py`), quindi il valore del profilo
+>   arriva senza altro codice. Fuori da `config/__init__.py`, nessuno fa `model_copy` o legge `model_fields_set` di
+>   `Settings`.
+>
+> **Prove**, una alla volta, `nice -n 10`, carico sotto 70; i rossi passano al primo giro: `services profile-defaults`
+> 37, `services managed-headers` 169, `services security-headers` 15, `services config-env-example` 36, `config-misc`
+> 12, `config-package` 691, `config-secrets` 58, `config-instance-key` 98, `config-audit` 90, `services
+> app-lifecycle` 42, `utils nosniff-content-types` 30; `db populate --force`; `api system` 118, `api instance-block` 62,
+> `api http-compression` 10. Black e ruff puliti. Porta 6181 libera.
+>
+> **⚠️ Fuori pista**: il default «managed» di B (`MANAGED_MAX_UPLOAD_MB`, 500, in `config/backup.py`) non passa da
+> `PROFILE_DEFAULTS`, che copre solo i campi di `Settings`: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` si legge da `os.environ`.
+> Oggi i meccanismi sono due, e la doc lo dice. Residuo leggero **H-17** nel backlog, da concordare con B.
+
+#### Passo 3 — doc e `all-backend` ✅ (2026-10-16, notte)
+
+> `all-backend` nello slot pesante, dalle 03:59, `--workers 2`. **⚠️ Fuori pista**: partito con `nice -n 10`; il
+> coordinatore ha chiesto poi `-n 19`, perché T ha E2E a un worker fino alle 05:05. Non l'ho riavviato: ho fatto
+> `renice -n 19` per PID su tutto l'albero del runner. Su macOS `-n` è un incremento, quindi i processi Python sono
+> scesi al minimo, 20, e i figli che nascono dopo lo ereditano. Doc con docs-writer, senza build mentre la suite gira.
+>
+> **Note implementazione** (doc, docs-writer, solo inglese):
+>
+> - `admin/hosting_providers.en.md`: il profilo cambia sette cose, con tre righe nuove nella tabella (inattività dei
+>   worker, protezione dei frame, CSP report-only) e tre punti. Un valore impostato vince sempre, anche se è uguale al
+>   default; un pannello che incornicia l'app vuole `LIBREFOLIO_FRAME_PROTECTION=false`; la CSP report-only non blocca
+>   nulla e non ha un indirizzo di report. Più una riga in «For Each Instance» e un collegamento alla doc developer.
+> - `admin/configuration.en.md`: la riga di `LIBREFOLIO_PROFILE`, due righe nuove (valori ammessi; un valore diverso
+>   ferma l'avvio, come per `LIBREFOLIO_BLOCKED`), il default di inattività «600 (60 in managed)».
+> - `developer/architecture/security.md`: sottosezione nuova `#managed-headers`, con una tabella degli interruttori e una
+>   delle direttive. Spiega dove va la CSP report-only e perché, la lettura una tantum, i nomi interi e i test.
+> - `developer/architecture/settings.md`: un punto su `PROFILE_DEFAULTS`: il meccanismo, `object.__setattr__`, la
+>   guardia sulla tabella, il limite ai campi di `Settings` con l'esempio di `config/backup.py`, come si aggiunge un
+>   default (anche in `MANAGED_DEFAULTS` del test).
+> - `developer/architecture/overview.md` (la voce `security_headers` della pila) e `developer/backend/risk/architecture.md`
+>   (il default di inattività).
+> - Codice: il commento della voce `security_headers` in `platform/middleware.py`, solo testo.
+>
+> Verificati sul codice: EmbedPDF (PDFium in WebAssembly) giustifica `'wasm-unsafe-eval'`; Zod 3.24 non usa `eval`;
+> `app.html` registra il service worker; `main.py` chiama `get_settings()` all'import.
+>
+> **Prove**: `all-backend` 7/7, **17 792 passed, 4 skipped, 0 failed** (03:59–04:36, `--workers 2`, nice 19–20);
+> `mkdocs build` strict, senza avvisi; `check-links` 96 validi. `translate-validate --file admin/configuration.en.md`:
+> 174 errori, ma il debito c'era già. Le tre traduzioni sono al 25–26% della sorgente; le due righe nuove e la cella
+> cambiata vi si aggiungono. Pagina non marcata. Porta 6181 libera.
+
+### Checkpoint CP7b-2 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore
+
+> **Prove d'ingresso**. Commit `c8113aee8` (feat), `59fa4b645` (doc), `cb1c852e8` (diario); merge di `dev_release2`
+> `3edfc4b9a` (Z2b e CP-6), pulito, HEAD `887c6dd12`. Riletti i file fusi da soli: `.env.example` (le mie righe e la
+> sospensione di Z2b), `configuration.en.md` (le righe di tutti e due), `overview.md` (la riga della pila col mio
+> testo, il passo `idle-monitor` di Z), `settings.md`, il runner (nessun doppione, ruff pulito).
+>
+> Una alla volta, `nice -n 19`, carico sotto 70 (04:40–04:50): `services profile-defaults` 37, `managed-headers` 169,
+> `config-env-example` 38, `app-lifecycle` 42; `db populate --force`; `api system` 118; `mkdocs build` strict senza
+> avvisi; `check-links` 96 validi. Porta 6181 libera.
+>
+> **⚠️ Fuori pista**: `services config-package` 692 passati, **1 rosso, non di CP7b-2**. Il caso
+> `test_a_module_outside_the_config_package_reads_no_environment_variable[services/platform/sleep_wake/suspend.py]`:
+> Z2b (`7080e9f38`) legge `FLY_APP_NAME` e `FLY_MACHINE_ID` con `os.environ` fuori da `backend/app/config/`
+> (`suspend.py:48`). È rosso anche su `dev_release2`, dove il test e il file sono identici. La cura è di Z: un accessore
+> in `config/sleep_wake.py`. L'ho segnalato al coordinatore, non tocco i file di Z.
+>
+> **Controllo dei colori** (richiesta del coordinatore: niente classi `-lf-` su un elemento con classi di tavolozza).
+> Nessun elemento misto nel mio markup:
+>
+> - CP-U2 aggiunge solo `action-btn` in `FileGrid`, CSS locale sui token `--lf-cmp-file-grid-*` con le sue regole
+>   scure. La colonna `scope` passa solo `variant` a DataTable, che disegna `cell-badge {variant}` da `table.css`;
+> - `InstanceNotices` e `InstanceBlockedPage` (15/10) hanno solo ruoli;
+> - CP-U1, CP2b, CP7b-1 e CP7b-2 non hanno markup.
+>
+> Ho guardato anche i punti ciechi di G3: classi composte in script, passate a componenti figli o alle props delle
+> colonne.
+
+> **Ingresso**: CP7b-2 è in `dev_release2` (treno 92, merge `d8549c69a`), con le righe 🔒 e 🔄 nel CHANGELOG. Il rosso
+> di `config-package` l'ha curato Z (treno 93). Il ramo è stato portato avanti con fast-forward a `34405dfbb`.
+
+### Le note di X: H-14, H-15, H-16 (2026-10-16, notte) — in corso
+
+Approvate con l'analisi di CP7b. Fino alle 05:25 solo prove leggere, poi pausa fino alle 06:45. A7 aggiunge una riga
+ciascuno in `app_lifespan.py` (il passo `admin-bootstrap` dopo `global-settings`), `config_audit.py` e `instance_block.py`:
+all'aggiornamento di base si tengono entrambe le parti. La cura sta in `/tmp/librefolio-r13-h-xnotes/` (`apply_xnotes.py`,
+provato a secco su copie; ruff e black puliti), da applicare dopo il giro dei rossi.
+
+**Disegno**:
+
+- **H-14**: `derive_key_from(key, purpose, length=32)` in `instance_key.py`, con lo stesso HKDF di `derive_key`, che ora
+  la usa tramite `_derive`. L'ordine dei controlli: scopo e lunghezza (`ValueError`), poi il tipo della chiave
+  (`TypeError`), poi la lunghezza della chiave (`InstanceKeyError`, senza la chiave nel messaggio). Non legge né
+  l'ambiente né la cartella dei dati, e non crea il file della chiave. B legge la chiave del backup con
+  `read_secret_file()`, come il modulo legge la sua. Tre vettori noti, calcolati col `derive_key` di oggi, fissano la
+  derivazione.
+- **H-15**: un modulo nuovo, `platform/plugin_secrets_check.py`:
+  - `check_plugin_secrets(session)` restituisce un `ConfigCheck` `platform.plugin_secrets`: `ok` senza segreti di
+    sistema illeggibili, `error` con `{"count": system}` quando ce ne sono;
+  - `log_plugin_secrets_check()` è il passo d'avvio `plugin-secrets-check`, dopo `global-settings`. Non solleva mai: un
+    errore del controllo diventa un avviso col solo nome della classe;
+  - le chiavi i18n `instance.checks.pluginSecrets.ok` e `.unreadable` (plurale ICU), in 4 lingue.
+- **H-16**: le due frasi di `security.md`, con la doc di H-14 e H-15 (docs-writer, dopo le prove).
+
+**Decisioni notturne, da rivedere**:
+
+- solo il conteggio `system`, anche nel log: è la regola del piano di X («mostra all'admin solo il conteggio di
+  sistema»). Resta un buco: se sono illeggibili solo segreti di utenti, il controllo dice `ok` e all'avvio l'operatore
+  non sa che la chiave è cambiata. Da rivedere con X;
+- nessuna voce nell'interfaccia: la scheda «Sicurezza» non esiste ancora (`config_audit.py` dice «will evaluate»). Il
+  controllo restituisce già un `ConfigCheck`, con le sue chiavi i18n, pronto per il registro di A.
+
+#### Passo 1 — i rossi ✅ (2026-10-16, notte)
+
+> **Note implementazione** (test-author, 66 casi nuovi, ruff e black puliti):
+>
+> - `test_instance_key.py`, sezione (g), da 98 a 151 casi. Tre risposte note, l'equivalenza con `derive_key` (chiave
+>   configurata e generata), la chiave data che vince su quella dell'istanza, nessun file della chiave creato,
+>   l'ambiente e la cartella dei dati mai letti, le sorgenti guaste ignorate, 32 richieste non valide, il `TypeError`, le
+>   chiavi corte, quelle da 32 caratteri;
+> - `test_plugin_secrets_check.py`, nuovo, 11 casi: `ok`, `error` col solo conteggio `system`, il log, le eccezioni
+>   ridotte a un avviso, due casi su un DB SQLite vero. Senza segreti il passo non crea il file della chiave;
+> - `test_app_lifecycle.py`, 2 casi: il passo dopo `global-settings` e prima di `scheduler`, in ordine relativo perché
+>   A7 aggiunge `admin-bootstrap` nello stesso punto; il suo `run()` restituisce un awaitable;
+> - il runner: `services plugin-secrets-check`, `isolation="pure"`.
+>
+> **Prova dei rossi** (05:10–05:12, uno alla volta, `nice`): `plugin-secrets-check` 11 rossi (`ModuleNotFoundError`),
+> `config-instance-key` 53 rossi («derive_key_from is missing»), 98 verdi, `app-lifecycle` 2 rossi (il passo che
+> manca), 42 verdi. Ognuno sulla sua barriera.
+
+#### Passo 2 — la cura ✅ (2026-10-16, notte)
+
+> **Note implementazione**: applicato `apply_xnotes.py`: `instance_key.py` (`derive_key_from`, `_check_purpose_and_length`,
+> `_derive`), `plugin_secrets_check.py` nuovo, il passo in `app_lifespan.py`, le chiavi i18n nelle sorgenti
+> `instance/{en,it,fr,es}.json`. Ruff e black puliti.
+>
+> **Prove** (05:12–05:13): `plugin-secrets-check` 11, `config-instance-key` 151, `app-lifecycle` 44; `i18n check`
+> rigoroso, verde. `config-package`: 694 verdi, compreso il caso del modulo nuovo, e 1 rosso, quello noto di Z2b
+> (`sleep_wake/suspend.py`). È curato nel treno 93, che il mio ramo `34405dfbb` non ha ancora. Porta 6181 libera.
+
+#### Passo 3 — la doc (2026-10-16, notte) — scritta, build dopo le 06:45
+
+> **Note implementazione** (docs-writer, solo inglese, nessun comando):
+>
+> - `developer/architecture/security.md`:
+>   - H-16, l'elenco di `env_secret()`: i sei segreti, `LIBREFOLIO_WAKE_TOKEN` compreso, poi «ogni variabile delle
+>     impostazioni dei plugin». Due frasi su cosa succede quando il token del risveglio o un `_FILE` di un plugin non
+>     si possono usare;
+>   - `derive_key_from()`: una riga nella tabella e un paragrafo sui due helper comuni e sull'uso previsto per B;
+>   - H-16, la «Known limitation» riscritta: ora un cambio di chiave si vede, grazie al `key_id` e al passo d'avvio;
+>   - la riga `i18n_key`, che diceva 13 messaggi, ora ne conta 15;
+>   - la sottosezione nuova `#plugin-secrets-check`.
+> - `developer/architecture/patterns/plugin_settings.md`: «No startup check calls it yet» sostituita, più una riga nella
+>   tabella dei test.
+> - `developer/architecture/overview.md`: il passo 12 `plugin-secrets-check`, i seguenti rinumerati fino a 16.
+> - `admin/configuration.en.md`: una riga ❌ nella tabella «Startup Checks» e una frase in «Saved Secrets and the
+>   Instance Key». È il debito di traduzione (it/fr/es), pagina non marcata.
+>
+> Verificati da me: `require_wake_token` e `wake_unavailable` (`api/v1/system/wake.py`), le ancore `#secrets`,
+> `#environment`, `#startup-checks`, `#plugin-secrets`.
+>
+> **⚠️ Fuori pista**:
+>
+> - il docs-writer ha lanciato `python3` due volte, una per leggere `instance/en.json` e una per spostare una riga della
+>   tabella. È roba leggera, ma la regola della pausa diceva nessun comando; `git diff --check` pulito;
+> - i messaggi i18n `unreadable` rimandavano a «Plugin settings», il titolo della scheda. Li ho corretti col percorso
+>   della scheda nello stile della UI: «Settings → Plugins», «Impostazioni → Plugin», «Paramètres → Plugins»,
+>   «Configuración → Plugins»;
+> - dalla doc: `check_plugin_secrets()` può sollevare su un errore del DB, e la cattura solo il passo d'avvio. Quando A
+>   la userà nella scheda «Sicurezza», dovrà gestirlo.
+>
+> **Da fare dopo le 06:45**: `i18n check` (dopo il ritocco dei messaggi), `mkdocs build --strict`, `check-links`,
+> `translate-validate --file admin/configuration.en.md`, poi lo slot pesante di `all-backend` (il passo nuovo gira a
+> ogni avvio del server di prova).
+
+> **Checkpoint intermedio**: commit `cb37c79cf` (feat), `3b95550e1` (doc), `dee4dc311` (diario); merge di
+> `dev_release2` `72e66d1a6` (il treno 93 con la cura di Z e il secondo lotto di T), pulito, HEAD `af24a61bb`. Restano
+> le prove leggere sulla revisione combinata e `all-backend`, dopo il «blocco finito» dei colori.
+
+### La card del backup nella pagina di blocco (2026-10-16, mattina) — preparazione fuori dal worktree
+
+Assegnato dal coordinatore dopo le note di X («then the backup card on the block page»). B ha già consegnato il campo
+`backup_available` di `GET /system/block` (vero per gli amministratori, decisione 12), e le rotte del backup completo
+sono in `ALLOWED_WHEN_BLOCKED`. Manca il bottone: la doc admin lo dice due volte, «the block page has no button for it
+yet».
+
+**Disegno**:
+
+- `InstanceBlockedPage.svelte` legge `backup_available` dalla risposta e, quando è `true`, mostra la
+  `BackupDownloadCard` di B, che è autonoma per scelta. La decisione è del server, non del ruolo letto nel client.
+- La card sta in un riquadro `bg-lf-card` (`instance-blocked-backup`) sotto l'avviso, **fuori** dalla sezione
+  `role="alert"`: un lettore di schermo annuncia il blocco, non tutta la card. Le due cose stanno in un contenitore
+  `max-w-lg`. Solo ruoli, nessuna classe di tavolozza.
+- Nessun testo nuovo: la card ha già titolo e avvertenze. Quello per gli utenti dice già «chiedi un backup
+  all'amministratore».
+
+**Superfici**: il componente; il suo Vitest con uno stub della card (`__tests__/harness/BackupDownloadCardStub.svelte`);
+la doc `admin/hosting_providers.en.md` («What Users See», «What Still Answers»), `developer/architecture/security.md`
+(la tabella delle rotte ammesse) e `developer/frontend/state/app-state.md` (la pagina di blocco e i suoi test id).
+Nessun E2E della pagina di blocco esiste: il Vitest e i test API di B coprono il resto.
+
+**Stato**: la patch `/tmp/librefolio-r13-h-blockcard/apply_blockcard.py` è provata a secco; il test-author scrive i rossi
+Vitest in `/tmp`. Si applica dopo `all-backend` delle note di X: un cambio delle sorgenti del frontend farebbe
+ricostruire il frontend al server di prova.
+
+> **⚠️ Fuori pista (note di X, dopo il checkpoint intermedio)**: la card di B dice «The logs and the instance key are not
+> included». L'archivio del backup dell'istanza non contiene `secrets/instance.key`, quindi tre frasi della mia doc
+> rimandavano a un posto dove la chiave non c'è. Corrette, non ancora committate:
+>
+> - la riga ❌ di «Startup Checks» in `admin/configuration.en.md`: ora parla della propria copia di
+>   `secrets/instance.key`, salvata con la cartella dei dati come dice «The Instance Key»;
+> - due paragrafi di `developer/architecture/security.md`: il file perso, e l'uso previsto di `derive_key_from()`. La
+>   vecchia chiave viene dalla copia dell'amministratore o dal vecchio `LIBREFOLIO_INSTANCE_KEY`;
+> - la docstring di `derive_key_from()`, solo il testo.
+>
+> **Rossi della card** (test-author, in `/tmp/librefolio-r13-h-blockcard/`, non applicati, niente lanciato):
+> `InstanceBlockedPage.test.ts` completo, con 7 casi nuovi (11 test con le righe di `it.each`), e lo stub
+> `harness/BackupDownloadCardStub.svelte`. I casi negativi montano prima la stessa pagina con `backup_available: true`
+> come controllo, così oggi sono rossi per la ragione giusta.
+>
+> **Rifiniture dalla sua revisione**, nella patch:
+>
+> - il riquadro è un `<section aria-labelledby>` con un `<h2>` (`instance.block.backupTitle`, 4 lingue), così i titoli
+>   vanno h1 → h2 → h3 della card di B e la regione ha un nome;
+> - un `ToastContainer` nella pagina di blocco: il layout lo monta solo attorno all'app, quindi i toast della card
+>   (errori, «backup parziale») non si vedevano. Sta nel mio componente, senza toccare il layout condiviso.
+>
+> **Accettati come sono**: la card dentro una card segue i ruoli (un `bg-lf-panel` dentro un `bg-lf-card`, come nella
+> scheda Backup); se `GET /system/block` fallisce, la card torna solo ricaricando la pagina; la descrizione segue il
+> ruolo nel client, la card il campo del server.
+
+#### Card del backup — passo 1, applicata (2026-10-16, mattina) — prove dopo il «blocco finito»
+
+> Il coordinatore (05:47) ha dato il via a scrivere durante la pausa. B3 (`887a24123`) non tocca il frontend: la
+> `BackupDownloadCard` resta quella di dev, e il coordinatore ricontrolla all'ingresso di B5b, il lotto UI di B.
+>
+> **Note implementazione**:
+>
+> - applicato `apply_blockcard.py`: `InstanceBlockedPage.svelte` (`backupAvailable`, la `<section>` con `<h2>`, il
+>   `ToastContainer`) e `instance.block.backupTitle` nelle 4 sorgenti i18n di `instance`;
+> - copiati il Vitest dei rossi e lo stub `__tests__/harness/BackupDownloadCardStub.svelte`;
+> - in corso, solo scrittura: il test-author aggiunge i casi per la regione con nome e per i toast; il docs-writer
+>   aggiorna `hosting_providers`, `security.md` e `app-state.md`.
+>
+> **Prove da fare**, una alla volta, dopo il «blocco finito»: `prettier` sul componente, `front check`, il Vitest del
+> file (rosso sul componente di HEAD per ragionamento, verde sul nuovo), `i18n check`, `mkdocs build`, `check-links`;
+> poi `all-backend` insieme alle note di X, che prende anche la ricostruzione del frontend.
+
+#### Card del backup — passo 2, rossi completati e doc (2026-10-16, mattina) — prove dopo il «blocco finito»
+
+> **Note implementazione**:
+>
+> - test-author: in `InstanceBlockedPage.test.ts` due casi in più, tre test con le righe di `it.each`. La sezione ha
+>   per nome il suo `<h2>`, l'unico della pagina, dopo l'`<h1>`. Un toast spinto dallo store mentre la pagina è montata
+>   si vede, per un amministratore con la card e per un utente senza. Ogni test toglie il suo toast con
+>   `onTestFinished`. Su HEAD falliscono sull'`<h2>` che manca e sul toast che non compare, per ragionamento: niente
+>   lanciato;
+> - docs-writer, senza debito di traduzione:
+>   - `admin/hosting_providers.en.md`: l'introduzione del blocco, «What Users See» (la card e la copia di
+>     `secrets/instance.key`), «What Still Answers»;
+>   - `developer/architecture/security.md`: la tabella delle rotte ammesse e `backup_available`;
+>   - `developer/frontend/state/app-state.md`: la card, il `ToastContainer`, il link «Manage subscription» che
+>     mancava, tutti e sei i test id;
+>   - `developer/api/index.md`: il riassunto di `/system/block`;
+> - corretto il commento troncato sopra `<ToastContainer />`.
+>
+> **⚠️ Fuori pista**:
+>
+> - due errori nel mio brief al docs-writer, corretti da lui. Il selettore del Vitest è `front-utility component-unit`,
+>   non `core-unit`. Un link a `configuration.md#instance-key` da una pagina solo inglese avrebbe rotto la build
+>   rigorosa delle lingue tradotte, perché `configuration.{it,fr,es}.md` non hanno quell'ancora (decisione
+>   `docs-anchors-from-the-render`): ha usato il nome della sezione;
+> - il test-author ha visto che `ToastContainer` non ha regione live: nessun toast dell'app arriva ai lettori di schermo.
+>   È fuori perimetro: **H-18** nel backlog.
+
+### H-17 — un solo posto per i default del profilo: analisi (2026-10-16, mattina) — sola lettura
+
+Richiesta del coordinatore (06:00). La porta lui a B.
+
+**Oggi**: `backup_max_upload_mb()` (`config/backup.py`, di B) legge `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` da `os.environ` a
+ogni chiamata.
+
+- Vuoto o solo spazi equivale a non impostato: `0` in self-hosted, `MANAGED_MAX_UPLOAD_MB` (500) in managed.
+- Solo cifre ASCII, con spazi attorno ammessi; tutto il resto solleva `BackupConfigError`
+  (`BACKUP_MAX_UPLOAD_MB_INVALID`).
+- Chi la usa: solo `_upload_limit()` di `api/v1/backup/restore.py`. Un valore illeggibile scrive un errore nel log e
+  fa rispondere 503 `backup_upload_unavailable` al solo upload del ripristino: il resto dell'istanza va avanti.
+- Test (`api backup-restore`, sezione (e)): 10 casi sui valori validi e sui due profili, 8 valori illeggibili (segno
+  meno, decimale, lettere, cifra araba, apice, segno più, esponente, esadecimale), più un caso che fissa
+  costante e variabile.
+- Doc: la tabella di `#restore-upload-limit` in `admin/hosting_providers.en.md` («Not set, or empty»), la riga di
+  `admin/configuration.en.md` (tradotta) e il mio punto in `developer/architecture/settings.md`, che la cita come
+  esempio del secondo meccanismo.
+
+**Opzione 1 — farne un campo di `Settings`** e mettere 500 in `PROFILE_DEFAULTS["managed"]`. Sconsigliata:
+
+- vuoto e solo spazi diventerebbero un errore di validazione, cioè il server non parte. Per tenere «vuoto = non
+  impostato» servirebbe un passo `mode="before"` che tolga i valori vuoti dall'input, perché il campo resti fuori da
+  `model_fields_set`: un meccanismo in più;
+- un valore illeggibile fermerebbe l'avvio dell'istanza, invece di un 503 sul solo upload. B ha scelto apposta il
+  contrario, e l'ha documentato;
+- il parsing degli interi di pydantic non è la regola «solo cifre ASCII» di B: gli 8 casi illeggibili andrebbero
+  rifissati, e qualcuno potrebbe passare;
+- tocca `restore.py`, dove B3 aggiunge 118 righe, la sezione (e) dei test di B, due pagine di doc e il debito di
+  traduzione di `configuration`.
+
+**Opzione 2 — consigliata: una seconda tabella accanto a `PROFILE_DEFAULTS`**, per le variabili che un modulo di
+sezione legge dall'ambiente. Per esempio `ENVIRONMENT_PROFILE_DEFAULTS = {"selfhosted": {}, "managed":
+{"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}}`, con `profile_default(name, fallback)` in `config/__init__.py`.
+
+- **Per B**: in `backup_max_upload_mb()`, `if not raw: return profile_default(MAX_UPLOAD_VARIABLE, 0)` e via
+  `MANAGED_MAX_UPLOAD_MB`. Oppure resta come alias del valore della tabella: decide B. Nella sezione (e) cambia solo il
+  caso che fissa la costante, che legge la tabella. Il comportamento è identico: vuoto = non impostato, 503 su un valore
+  illeggibile.
+- **Per H**: la tabella e `profile_default()`. In `test_profile_defaults.py` le stesse guardie della prima tabella:
+  una voce per profilo, ogni chiave una variabile letta sotto `backend/app/config/` e documentata in `.env.example`, il
+  valore un `int` diverso dal ripiego, un caso «self-hosted invariato» parametrizzato su ogni chiave. Poi il punto di
+  `settings.md`: un solo posto per i default del profilo, due tabelle.
+- **Doc admin**: nessun cambiamento e nessun debito di traduzione, perché il comportamento non cambia.
+- **Peso**: piccolo. Due righe nel file di B, una tabella, un helper e una decina di casi da me, un paragrafo di doc.
+
+**Quando**: B3 (`5f1543e81`, `2c2c8fc3e`) non tocca `config/backup.py`. Tocca però `restore.py` e
+`test_backup_restore.py`, che l'opzione 2 non tocca o tocca appena (il caso della costante). Quindi:
+
+- **dopo l'ingresso di B3** basta per l'opzione 2, se B5 non tocca `config/backup.py`; lo verifica il coordinatore sul
+  ramo di B;
+- non serve aspettare B5 per il meccanismo. Il mio lotto (tabella, helper, test, doc) si può fare prima, e le due righe
+  di B arrivano dopo, scritte da B o da me col suo OK.
+
+### H-17 — la seconda tabella dei default del profilo (2026-10-16, mattina) — in corso, solo scrittura
+
+**Via del coordinatore** (06:03): opzione 2 approvata, come lotto a parte. La mia parte: la tabella, `profile_default()`,
+le guardie in `test_profile_defaults.py`, `settings.md`. Le due righe di `backup_max_upload_mb()` le scrive B, dopo
+l'ingresso di B3.
+
+**Disegno** (cura in `/tmp/librefolio-r13-h-h17/apply_h17.py`, provata a secco su una copia):
+
+- in `config/__init__.py`, sotto `PROFILE_DEFAULTS`: `ENVIRONMENT_PROFILE_DEFAULTS = {"selfhosted": {}, "managed":
+  {"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}}`;
+- `profile_default[T](name, fallback) -> T`, subito dopo `get_settings()`. Legge il profilo a ogni chiamata e
+  restituisce il valore della tabella, oppure il ripiego del codice. Il modulo di sezione la chiama solo con la variabile
+  non impostata, e tiene le sue regole per il vuoto e l'illeggibile;
+- la docstring del modulo nomina le due tabelle;
+- in attesa delle righe di B, il valore 500 vive in due posti, uguali: la tabella e `MANAGED_MAX_UPLOAD_MB`. La doc non
+  dice che `backup_max_upload_mb()` legge la tabella finché non lo fa.
+
+**In corso, solo scrittura**: il test-author scrive i rossi nella sezione nuova di `test_profile_defaults.py`; il
+docs-writer aggiorna il punto «Profile defaults» di `settings.md`. Al «blocco finito»: il giro dei rossi, la cura, ruff e
+black, il giro dei verdi.
+
+#### H-17 — passo 1, rossi e doc scritti (2026-10-16, mattina) — niente lanciato
+
+> **Note implementazione**:
+>
+> - test-author: una sezione nuova, (f), in `test_profile_defaults.py`, che passa da 37 a 52 test. Undici funzioni,
+>   15 test:
+>   - la tabella: una voce per profilo, `selfhosted` vuoto, `managed` uguale a `ENVIRONMENT_MANAGED_DEFAULTS` con i
+>     tipi esatti (`exactly()`: `same()` accetterebbe `500.0`), nessun campo di `Settings` fra le chiavi;
+>   - ogni chiave letta come costante stringa (AST) da un modulo di sezione, e documentata in `.env.example` con il
+>     parser di `test_env_example.py`;
+>   - `profile_default()`: il ripiego stesso (`is`) in self-hosted, il valore della tabella in managed, `MANAGED` e
+>     ` Managed `, il profilo letto a ogni chiamata.
+>
+>   Le barriere: «ENVIRONMENT_PROFILE_DEFAULTS is missing» (6 test) e «profile_default is missing» (9), cercati con
+>   `getattr` mentre il test gira, così i 37 casi esistenti restano uguali;
+> - docs-writer: in `settings.md` il punto «Profile defaults» rimanda al punto nuovo «Profile defaults of the section
+>   modules' variables» (la tabella, l'helper, le guardie, come si aggiunge una voce). Non dice che
+>   `backup_max_upload_mb()` legge la tabella;
+> - runner: la descrizione di `services profile-defaults` nomina H-17.
+>
+> **Dopo il «blocco finito»**: `services profile-defaults` sul codice di oggi (attesi 15 rossi, 37 verdi), poi
+> `apply_h17.py`, ruff e black, `profile-defaults` verde (52), `config-package` e `config-env-example`.
+
+#### Prove leggere delle note di X e della card, sulla revisione combinata ✅ (2026-10-16, mattina)
+
+> Dopo il «blocco finito» (06:48), HEAD `31089e96f`, una alla volta, `nice`, carico sotto 70 (06:48–07:08):
+>
+> - card: `prettier --check` pulito, cancello dei colori pulito. Il Vitest di `InstanceBlockedPage.test.ts` dà 14 rossi
+>   sul componente di prima (`af24a61bb`, rimesso al suo posto e verificato identico a HEAD) e 36 verdi sul nuovo;
+> - `front check`: al primo giro 4 errori, tutti in `PasswordStrength.svelte` di A (`password_rules` assente da
+>   `AccountsInstanceConfig`). Era il client generato vecchio dopo il merge della base: `api sync`, poi `front check`
+>   0/0;
+> - `i18n check` rigoroso, verde (4753 chiavi);
+> - note di X: `plugin-secrets-check` 11, `config-instance-key` 151, `app-lifecycle` 44, `config-package` 695 (ora
+>   verde: dentro c'è la cura di Z del treno 93), `config-audit` 90;
+> - doc: `mkdocs build` rigoroso senza avvisi, `check-links` 97. `translate-validate --file admin/configuration.en.md`:
+>   192 errori e 501 avvisi, il debito noto (174 e 474 a CP7b-2), più le righe nuove di questa notte e di altri;
+> - porta 6181 libera.
+
+#### H-17 — passo 2, rossi, cura e verdi ✅ (2026-10-16, mattina)
+
+> **Prove**: `services profile-defaults` sul codice di prima: 15 rossi (6 «ENVIRONMENT_PROFILE_DEFAULTS is missing», 9
+> «profile_default is missing»), 37 verdi. Poi `apply_h17.py`, ruff e black puliti, e i verdi: `profile-defaults` 52,
+> `config-package` 695, `config-env-example` 38. La doc di `settings.md` era già nel `mkdocs build` delle 06:59.
+
+### TS1 — i test speculari: numeri aggiornati e proposta (2026-10-16, mattina) — sola lettura
+
+Voce 7 di H nel piano generale, decisione aperta n. 13: si decide a riordino del backend finito, con i numeri in mano.
+Richiesta del coordinatore (07:10): l'analisi del prossimo elemento, in sola lettura.
+
+**Numeri di oggi** (HEAD `7caa98c20`; tra parentesi quelli di §13, del 14/10):
+
+- 358 file di test (266): `test_api` 70 (58), `test_services` 200 (141), `test_utilities` 47 (34), `test_db` 16 (10),
+  `test_schemas` 12 (11), `test_external` 7, `test_e2e` 2;
+- il runner codifica 327 percorsi di test distinti (236);
+- l'app ha 322 moduli di servizio in 22 pacchetti, più qualche modulo sciolto in `services/`;
+- uno specchio esiste già, solo per la finanza: `test_services/test_financial/` (27 file, più `test_portfolio_engine/`
+  con 15) e `test_services/test_financial_math/` (7).
+
+**Cosa costerebbe lo specchio** (`test_services/<pacchetto>/` come `backend/app/services/<pacchetto>/`):
+
+- circa 150 spostamenti da `test_services/`, e la stessa cosa per `test_api/` (70) se lo specchio si estende alle rotte;
+- riscrivere le voci del runner, fino a 327 stringhe (una superficie condivisa), più la doc dei test,
+  `backend-testing.instructions.md`, la skill `testing-backend` e le istruzioni del `test-author`;
+- un conflitto per ogni sessione aperta. Oggi A7, B3/B5, X CP13 e FE5c, E5b, Z, W, J e Y aggiungono o cambiano test
+  in queste cartelle: uno spostamento in mezzo ai loro lotti vuol dire file ricreati al posto vecchio e voci del runner
+  da rifare a ogni treno;
+- nessun guadagno di comportamento: il runner elenca i percorsi uno per uno, pytest non cambia nulla. Si guadagna solo
+  nel trovare un test accanto al suo modulo.
+
+**Proposta**:
+
+- **nella 1.3, no**. Restano la struttura piatta e la regola `test_<modulo>.py`. Niente sottocartelle nuove: le due
+  della finanza restano dove sono, senza estendere lo schema, così non ci sono due posti in cui cercare;
+- **dopo il tag 1.3.0**, se il developer vuole la vicinanza: un lotto solo, scritto da uno script, in una finestra senza
+  sessioni parallele, con le regole P2. Prima la rinomina (`git mv` più le voci del runner riscritte dallo script), poi
+  il resto; grep dei vecchi percorsi a zero, `all-backend`. Stima: una sessione di poche ore;
+- **decisione del developer** (n. 13). Il mio default è il no nella 1.3.
+
+> **Esito**: il coordinatore porta TS1 al developer come **P23**, con la mia proposta.
+
+### Lotto «b-doc-notes»: B-4 e B-5 (2026-10-16, mattina) — in corso
+
+Via del coordinatore (07:13): due lotti di sola scrittura in commit separati. Questo e poi H-1, H-4, H-6, H-9; prove
+leggere come al solito. Le due voci erano di B (piano 07, §13 B6a) e il coordinatore le ha passate ad H il 15/10.
+
+> **Note implementazione**:
+>
+> - io: il commento in testa a `docker-compose.yml` mette `backup` fra i comandi che funzionano nell'immagine, con
+>   l'esempio `./dev.py docker exec backup create`. Nessun test ne fissa il testo. Il file è di B dopo CP7a, ma la voce
+>   l'ha assegnata il coordinatore;
+> - io: l'ancora `{: #what-to-back-up }` sul titolo «✅ What to Back Up» di `admin/filesystem` nelle 4 lingue
+>   (`en`, `it`, `fr`, `es`). I titoli tradotti avevano slug diversi;
+> - in corso, docs-writer, solo inglese:
+>   - `docker_advanced.en.md#docker-exec`: `backup`, più un rimando a `backup create` nella sezione del backup manuale;
+>   - `admin/index.en.md`: la riga della CLI;
+>   - `filesystem.en.md`: il rimando alla CLI, la nota su `backups/`, `backups/` nell'albero;
+>   - `cli_tools.en.md`: il link verso `filesystem.md#what-to-back-up`.
+
+> - docs-writer, fatto: le quattro pagine inglesi come sopra, più l'avviso sui permessi di `filesystem.en.md`, che ora
+>   nomina anche `backups/` e `.restore/`. `ensure_private_dir` li crea `0700`, gli archivi sono `0600`: con Docker e
+>   un altro utente sull'host, copiare o cancellare un archivio dà `Permission denied`, e si usa `sudo cp -a` o
+>   `sudo rm`. Ogni fatto è verificato sul codice.
+>
+> **Prove leggere** (07:28–07:31): `mkdocs build` rigoroso senza avvisi, `check-links` 97. `translate-validate`:
+> `filesystem` 27 errori, `docker_advanced` 42, `index` 15, debito già esistente compreso. Annotato in H-5, con l'ordine
+> di traduzione: insieme a B-7 o dopo.
+
+### Lotto H-1, H-4, H-6, H-9 (2026-10-16, mattina) — in corso
+
+> **Note implementazione**:
+>
+> - **H-1** ✅ (io): corrette 12 pagine vive della devWiki, con i percorsi di oggi:
+>   - `services/platform/scheduler/`;
+>   - `services/files/static_uploads.py`;
+>   - `config/__init__.py`;
+>   - `api/v1/system/connection.py` per l'indirizzo di F-102;
+>   - `api/v1/system/info.py` per i tre campi di `docker-system-info-missing-deps`;
+>   - la riga «(planned) … (not yet created)» di `domains/scheduler.md`, ora vera;
+>   - l'albero di `entities/market-data-scheduler.md`.
+>
+>   Restano come sono, perché raccontano lo stato di allora: le pagine `sources/` (`phase00-brim-danske-bank`,
+>   `r2-parallel-features-pwa-borsa-fx`), `features/F-078.md:34` e `decisions/port-6040-scheme.md:34` («were
+>   updated»).
+>
+>   `check_source_paths.py`: nessun percorso nuovo che manchi. I 5 segnalati sono cartelle generate (coverage, output
+>   delle sonde) assenti in un worktree nuovo, ed esistevano già prima;
+> - **H-4** (cura in `/tmp/librefolio-r13-h-hsmall/apply_h4_h9.py`, provata a secco, ruff e black puliti). In Python
+>   3.13 `Path.exists()` ignora solo ENOENT, ENOTDIR, EBADF ed ELOOP (`pathlib/_abc.py`), quindi un EACCES esce. Con
+>   `sqlite/` senza attraversamento, `rglob` lo salta in silenzio e poi `nearest_existing(sqlite/app.db)` solleva. La
+>   cura: un `OSError` diventa `ValueError("Cannot verify test data path: <relativo> (<strerror>)")` nel ciclo dei
+>   percorsi gestiti, e `ValueError("Cannot verify the test data directory: …")` nel controllo degli indicatori
+>   degli antenati. Resta fail-closed;
+> - **H-9** (stessa patch): `handler.close()` su ogni gestore tolto. `pytest.ini` non ha un `log_file`, quindi chiudere
+>   anche i gestori di pytest non perde niente: un `FileHandler` chiuso in modo `w` non si riapre, e uno `StreamHandler`
+>   non chiude il suo stream;
+> - **H-6**: in corso, test-author, insieme ai rossi di H-4 e H-9.
+
+> **Ingresso del primo lotto**: `b-doc-notes` committato (`d7eb9c5f3`, diario `881bd20c0`), HEAD `881bd20c0`.
+
+#### Lotto H-1, H-4, H-6, H-9 — rossi, cura, verdi ✅ (2026-10-16, mattina)
+
+> **Note implementazione** (test-author, niente lanciato da lui):
+>
+> - **H-4**, in `test_runtime_isolation.py`, 3 test. `sqlite/` e `secrets/` con modo 000 (dentro, `app.db` e
+>   `instance.key`), più la radice dei dati di test con modo 000, per il controllo degli indicatori. Si aspettano un
+>   `ValueError` con il prefisso e il percorso, e come causa un `PermissionError`. Saltati da root o su Windows; il modo
+>   viene ripristinato in un `finally`;
+> - **H-6**, in `AboutTab.test.ts`: i due casi d'assenza ora usano `/settings\.assetProviders/` e i loro gemelli per gli
+>   FX e gli import, cinque controlli in tutto, ciascuno con un controllo positivo prima. L'intestazione è
+>   «etichetta (n)», quindi il testo esatto non trovava mai nulla. Ora un `{#if assetProviders}` sbagliato li farebbe
+>   diventare rossi;
+> - **H-9**, sezione (e) di `test_logging_access_filter.py`, 2 test: dopo una seconda chiamata il file di log della
+>   prima è chiuso, e un `FileHandler` trovato sulla radice viene chiuso. I file stanno sotto `tmp_path`;
+> - io: la descrizione e il commento di `logging-access-filter` nel runner (i file di log della sezione (e) stanno sotto
+>   `tmp_path`; H-9).
+>
+> **Prove**, una alla volta, `nice`:
+>
+> - rossi (07:41–07:42): `utils runtime-isolation` 3 rossi su 200 («a raw PermissionError escape instead of refusing
+>   with a ValueError»); `services logging-access-filter` 2 rossi su 98 (il gestore resta aperto); Vitest `AboutTab` 38
+>   verdi, come deve essere per una riparazione;
+> - cura applicata (`apply_h4_h9.py`); ruff, black e prettier puliti;
+> - verdi (07:45–07:51): `runtime-isolation` 200, `logging-access-filter` 98, `AboutTab` 38, `config-instance-key` 151,
+>   `secret-masking` 68, `config-misc` 12, `config-package` 695, `utils dev-cli-db-path` 15. Porta 6181 libera.
+>
+> **⚠️ Fuori pista**:
+>
+> - durante i verdi il carico è salito fino a 137, per le corsie degli altri; i miei risultati sono comunque verdi. Dalle
+>   07:47 la soglia per le prove leggere è **sotto 50**, con attese di 60 s: aggiornati i miei script;
+> - effetto di H-9 notato dal test-author: le chiamate a `configure_logging()` in (d) e in `test_secret_masking.py`
+>   non svuotano prima la radice, quindi chiudono anche i gestori di pytest. Oggi non fa danno, perché `pytest.ini` non ha
+>   `log_file`; con `pytest --log-file` quel file smetterebbe di ricevere righe dopo il primo test così.
+
+> **Ingresso del lotto 2**: committato (`60f41e18e` fix, `c1ecdc389` test, `1235dd414` wiki, `811ccc4bf` diario), HEAD
+> `811ccc4bf`. `all-backend` per tutti i lotti nello slot 1 dopo A7a, verso le 09:30.
+
+### H-3, il resto: niente chiave nuova in silenzio quando il DB ha segreti — analisi (2026-10-16, mattina) — sola lettura
+
+**Oggi** (HEAD `811ccc4bf`):
+
+- chi chiama `derive_key()`:
+  - le impostazioni dei plugin (`settings_subkey()` e `fingerprint_subkey()` nel resolver, e `plugin_secrets_key_status`
+    di X), con le sole righe cifrate dell'istanza, ognuna col suo `key_id`;
+  - il probe dell'indirizzo di A, che non salva nulla. `verify_probe_nonce` tollera una chiave inutilizzabile e
+    risponde `False`; `issue_probe_nonce` no;
+- gli archivi di B non contengono la chiave (`ManifestInstanceKey.included`, falso). Solo un archivio protetto da password
+  potrà contenerla (B4);
+- lo scenario: dati ripristinati senza `secrets/`, oppure il file della chiave cancellato. Da H-15 la prima derivazione
+  la fa il passo `plugin-secrets-check`, perché la funzione di X deriva quando ci sono righe. La chiave nuova nasce
+  quindi all'avvio, e il log ha l'errore col conteggio;
+- il rischio che resta: se l'amministratore, prima di accorgersene, inserisce di nuovo dei segreti, questi vengono cifrati
+  con la chiave nuova. Rimettere poi la vecchia chiave rende illeggibili proprio quelli. Lo avvisa solo il log.
+
+**Opzione A, la cura vera: nessuna chiave nuova in silenzio se il DB ha segreti.**
+
+- In `plugin-secrets-check`: se `instance_key_status().source == "not_created"` e il DB ha righe con un segreto
+  (contate senza derivare), il passo non chiama la funzione di X. Scrive un errore: «il file della chiave manca, ma N
+  segreti salvati sono cifrati con una chiave: rimetti `secrets/instance.key`, oppure `./dev.py instance-key new` per
+  ripartire con una chiave nuova, e quei segreti vanno inseriti di nuovo». Poi chiama
+  `instance_key.forbid_generation(reason)`: per il resto del processo `_instance_key()` solleva `InstanceKeyError`
+  invece di creare il file.
+- Effetti: le impostazioni dei plugin si comportano come con una chiave inutilizzabile, come X ha già documentato
+  (`unreadable` nel catalogo, chiamate senza segreti, scritture con un segreto a 503, un errore nel log).
+  `POST /users/address-probe` di A darebbe 500: è un buco che c'è già (H-19). A dovrebbe rispondere 503.
+- Il self-hosted resta com'è: cambia solo uno stato già guasto. Un'installazione nuova genera la chiave al primo uso,
+  come oggi. Una chiave configurata non può sparire in silenzio: se è inutilizzabile, l'avvio si ferma.
+- Superfici: `instance_key.py` (il divieto), `plugin_secrets_check.py` (il ramo), un comando CLI `instance-key new`
+  (`dev.py`, superficie condivisa), la doc admin (`configuration`, «The Instance Key» e «Startup Checks», con debito di
+  traduzione) e `security.md`, i test (il divieto, la CLI, l'installazione nuova invariata). Peso: un lotto
+  piccolo-medio.
+
+**Opzione B, solo doc**: si tiene H-15 com'è e si scrive l'ordine giusto, cioè rimettere il file della chiave **prima**
+di inserire di nuovo i segreti, nella riga ❌ di «Startup Checks» e in «The Instance Key». Rischio zero.
+
+**Proposta**: la B adesso, la A come lotto se il developer la vuole nella 1.3, insieme alla piccola correzione di A
+(H-19). Per il cloud cambia poco: le istanze gestite hanno una chiave configurata, e un cambio di chiave lo segnala già
+H-15. È decisione del developer, perché cambia il comportamento di uno stato guasto e aggiunge un comando.
+
+> **Esito**: il coordinatore vuole **l'opzione B subito** (solo doc, commit separato). L'opzione A va nella lista del
+> developer come **P24**; H-19 passa ad A, per il suo backlog, prima di un'eventuale A.
+
+#### H-3, opzione B: l'ordine giusto nella doc ✅ (2026-10-16, mattina)
+
+> **Note implementazione**:
+>
+> - docs-writer, verificando sul codice: salvare un segreto riscrive `secret_ciphertext` e `key_id` della riga
+>   (`plugin_settings/service.py`). In `admin/configuration.en.md`:
+>   - il punto dell'avviso di «🗝️ The Instance Key»;
+>   - la riga ❌ `platform.plugin_secrets` di «Startup Checks», ora in ordine: prima la chiave vecchia, a LibreFolio
+>     fermo, e solo senza una copia i segreti inseriti di nuovo;
+>   - «Saved Secrets and the Instance Key», che diceva «enter them again» senza condizioni.
+>
+>   In `developer/architecture/security.md` una frase nel paragrafo «A lost key file»;
+> - io: il punto ⛔ di `admin/filesystem.en.md` («Never edit, replace or delete `instance.key`») contraddiceva
+>   l'ordine nuovo, cioè rimettere la copia al posto della chiave generata. Ora dice «the `instance.key` in use», e
+>   rimette la copia a LibreFolio fermo, prima di inserire di nuovo un segreto.
+>
+> **Prove** (08:03): `mkdocs build` rigoroso senza avvisi, `check-links` 97. Debito di traduzione: `configuration`
+> (tre punti) e `filesystem` (un punto), senza timbro.
+>
+> **Da girare a X**: dicono ancora «enter it again» senza l'ordine il suggerimento della UI
+> (`frontend/src/lib/i18n/pluginSettings/en.json:31`) e `user/settings/plugins.en.md:117`.
+
+> **Ingresso di H-3 B**: committato (`481a93f1c`, diario `498c5d623`).
+
+### `all-backend` di tutti i lotti aperti (2026-10-16, mattina) — in corso
+
+Lotti: note di X, card del backup, H-17, `b-doc-notes`, H-1/4/6/9, H-3 B. Il coordinatore ha aggiornato la base con il
+dev del mattino (`d5c3c3ae3`: E5b, Y, J CP-10a, W, i lotti di T), senza conflitti: HEAD `9ddecbde0`, slot 1.
+
+> **⚠️ Fuori pista — lo stop e il riavvio**:
+>
+> - il primo giro (dalle 08:34, `--workers 2`, `nice`) ha ricostruito il frontend in debug e il sito MkDocs, cambiati
+>   con la base. Alle 08:46:39 si è fermato per un SIGINT arrivato da fuori (uscita 130, `KeyboardInterrupt` nel
+>   runner), prima che partisse un solo test: nessun risultato. Porta 6181 libera, verificato dallo script;
+> - alle 08:49 lo stop chiesto dal developer: nessun comando, worktree lasciato com'era (pulito);
+> - alle 10:03 la macchina si è riavviata, e macOS svuota `/tmp` al riavvio. Sono spariti gli script, le patch già
+>   applicate, i log della notte e la cartella dati della corsia, `/tmp/librefolio-r13-h`. Non si perde niente: il
+>   lavoro è committato e le prove sono già in questo piano. Il runner ricrea la cartella da sé, come alla prima prova
+>   del 14/10;
+> - alle 10:32 il coordinatore riprende. Dopo il controllo (HEAD `9ddecbde0`, worktree pulito, porta libera, nessun
+>   processo rimasto della corsia), il secondo giro parte alle 10:33 con `--fresh-run`. Script e log ora sono in
+>   `/tmp/librefolio-r13-h-runs/`.
+
+> **Esito del secondo giro** (10:33–11:11, HEAD `9ddecbde0`, `--workers 2`, `nice`): **18 266 passati, 7 saltati, 5
+> falliti**; 5 categorie su 7 verdi. Log nella cartella della sessione (`files/runs/allbackend-1033/`). Porta 6181
+> libera.
+>
+> **Triage dei 5 rossi** (skill `test-triage`, prima le prove e poi i rilanci):
+>
+> - tutti e 5 sono `httpx.ReadTimeout` del client del test, che aspetta al massimo 30 s (`TIMEOUT` dei due file), su due
+>   rotte lente per natura:
+>   - `e2e search-to-prices`, 3 casi, `GET /assets/provider/search` («World», «Apple», «iShares Core MSCI World»);
+>   - `api brim`, 2 casi di `TestParseEndpoint`, `POST /brokers/import/files/{id}/parse`;
+> - §1, la forma della risposta: non si applica, perché non è arrivata nessuna risposta da confrontare;
+> - §2, il tempo: la ricerca dà a ogni fornitore fino a 30 s (`core.call_provider(..., timeout=30.0)` in
+>   `services/assets/search.py`), e dopo un risultato vuoto anche il link-finder. Il limite del test è uguale a quello del
+>   prodotto, senza margine. Alle 11:13 Yahoo rispondeva 429 a una prova con `curl`; JustETF e Borsa Italiana
+>   rispondevano in meno di 1 s. Il parse BRIM lavora nel pool di processi: era il primo giro dopo il riavvio, a cache
+>   fredda, e alle 10:45 il carico era a 78 per gli slot pesanti degli altri;
+> - rilanci da soli (11:13–11:18, `db populate --force` prima, carico intorno a 45): `api brim` **118 passati** (in
+>   158 s), `e2e search-to-prices` **3 passati** (in 20 s);
+> - nessuno dei due percorsi passa dal codice dei miei lotti. La ricerca è di X, il parse BRIM è di W.
+>
+> **Verdetti**:
+>
+> - ricerca: **assumption**. Il test fissa 30 s, quanto il limite di un solo fornitore nel prodotto, quindi una ricerca
+>   corretta con un fornitore lento o rallentato dal 429 lo supera. Cura per X: un limite del client sopra quello del
+>   prodotto (30 s più il link-finder, con margine). Da valutare anche se la ricerca vuole un limite complessivo, perché
+>   oggi un utente può aspettare più di 30 s quando un fornitore si blocca;
+> - parse BRIM: **slowness** sotto concorrenza, da confermare da W con i tempi del primo parse dopo l'avvio, a pool
+>   freddo. Voce sua, non da curare in un rosso.
+>
+> I 7 saltati (stanotte erano 4): i miei 3 casi di H-4 saltano solo da root, su Windows o se il permesso non si può
+> togliere, e alle 07:45, da soli, erano passati tutti (200 su 200). La conferma sulla revisione combinata è nelle prove
+> leggere che seguono.
+
+> **Esito accettato dal coordinatore** (11:2x): i 5 timeout non sono miei. La ricerca va a X e il parse BRIM a W, li gira
+> lui; nessun giro pulito in più. I lotti entrano appena le prove leggere sono verdi.
+>
+> **Prove leggere sulla revisione combinata** ✅ (HEAD `9ddecbde0`, una alla volta, `nice`, ciascuna partita col carico
+> sotto 50, 11:36–11:54; il carico era salito fino a 142 per gli slot degli altri):
+>
+> - `front check`: svelte-check 0 errori, 0 avvisi;
+> - Vitest `InstanceBlockedPage.test.ts`: 36 su 36;
+> - `utils runtime-isolation untraversable`: **3 passati**, 197 deselezionati. I casi di H-4 girano e non saltano;
+> - porta 6181 libera.
+>
+> **I 7 saltati di `all-backend`** (erano 4 a CP7b-2): i miei 3 casi di H-4 girano in questo ambiente (sopra). L'unico
+> altro punto di salto nuovo, nel delta della base `887c6dd12..9ddecbde0`, è il `pytest.skip` parametrizzato di
+> `test_provider_contracts.py` (X): uno per ogni fornitore che non traduce parametri. Molto probabilmente vengono da lì;
+> l'elenco esatto dei saltati non c'è, perché i log sono in `-q`.
+
+### I lotti pronti a entrare (2026-10-16, mattina)
+
+Diciassette commit fuori da `dev_release2`, più questo diario: note di X (H-14/15/16), card del backup sulla pagina di
+blocco, H-17 (la mia parte), `b-doc-notes` (B-4, B-5), H-1/4/6/9, H-3 opzione B. Nel backlog, all'ingresso il
+coordinatore chiude con ✅ H-1, H-4, H-6, H-9, H-14, H-15, H-16. H-17 resta aperta fino alle due righe di B. H-3 resta
+aperta per l'opzione A (P24). Restano aperte anche H-5 (traduzioni), H-18 (sezione C, la UI comune) e H-19 (ad A).
+
+> **Ultima validazione e ingresso**: il coordinatore ha committato il diario (`306554879`) e fuso `dev_release2` (merge
+> `0d7503098`, pulito: J CP-7a, W-B17, Z7c-1, i ruoli di T). Sulla revisione combinata, una alla volta, carico sotto 50
+> (12:03–12:43): `api sync`, `front check` 0/0, Vitest `InstanceBlockedPage` 36, `db populate --force`,
+> `api instance-block` 62, `api system` 118. **Entrati nel treno 110** (merge `0ecc5ed27`, registro `0f3b9e3db`),
+> con 🔒/✨ per H-15 e la card, e due righe 📚 (`34e1e8092`). Chiuse H-1, H-4, H-6, H-9, H-14, H-15, H-16. Base portata
+> avanti con fast-forward a `0f3b9e3db`, eseguito dal coordinatore: le mie regole mi vietano di muovere la storia.
+
+### P17 — l'indirizzo del client dietro un proxy fidato (2026-10-16, pomeriggio) — in corso
+
+Decisione del developer (P17): nel cloud l'indirizzo vero del visitatore si legge da `Fly-Client-IP`. Oggi i limiti per
+client (le email di registrazione di E5b, i login falliti di A) vedono solo il proxy di Fly e contano tutti i visitatori
+insieme. Il contratto l'ho mandato alle 12:4x e il coordinatore l'ha approvato, **compreso il punto 4**, come sua
+decisione da far rivedere al developer.
+
+**Il contratto approvato**:
+
+- `LIBREFOLIO_CLIENT_IP_HEADER`, un campo di `Settings`, vuoto di default e validato all'avvio. Deve essere il nome di
+  un header (token HTTP); `X-Forwarded-For` e `Forwarded` sono rifiutati;
+- **nessuna voce in `PROFILE_DEFAULTS["managed"]`**: il cloud la imposta nel suo ambiente, come
+  `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`;
+- `services/platform/client_address.py`:
+  - `client_address(request)`: con la variabile vuota, `request.client.host` com'è oggi. Con la variabile impostata e
+    l'header presente una volta con un solo IP, quell'IP normalizzato. Senza header, il peer. Con un header malformato,
+    il peer e un avviso una volta per processo, mai col valore;
+  - `client_rate_key(address)`: la regola di oggi di E (`flows.address_key`). E la toglie dal suo codice nel suo lotto,
+    senza shim; fino ad allora le copie sono due, ed è previsto;
+  - `mask_client_address(address)`, per il log: IPv4 per /24, IPv6 per /48;
+- doc secondo C-99. La spiegazione intera va in `admin/connection_checks.en.md`, «Behind a Reverse Proxy» (pagina con
+  traduzioni); una riga in `admin/configuration.en.md`, una riga del cloud in `hosting_providers.en.md`, poi
+  `.env.example` e `security.md`;
+- chi la chiama, nei propri lotti dopo il mio: E (`api/v1/email.py:157`, `:203`, `auth.py:274`, `address_key`) e A (il
+  limitatore dei login falliti).
+
+**Fatti verificati**:
+
+- uvicorn parte coi default (`Dockerfile`: `proxy_headers`, `FORWARDED_ALLOW_IPS=127.0.0.1`), quindi su Fly il peer è
+  il proxy;
+- la doc di Fly («Request headers») dice che il proxy imposta `Fly-Client-IP` e sovrascrive quello mandato dal client,
+  mentre `X-Forwarded-For` si può falsificare;
+- `api/v1/system/connection.py` e `utils/runtime/network.py` restano come sono: classificano l'indirizzo dall'ultimo
+  `X-Forwarded-For` solo per dare un consiglio, non per una decisione di sicurezza.
+
+**⚠️ Fuori pista**: la riga del docstring di `instance_block.py` per `POST /api/v1/auth/setup` (P16(d)) descriverebbe
+una rotta che a `0f3b9e3db` non esiste ancora: A7 non è entrato. La scrivo quando A7 è nella mia base.
+
+#### P17 — passo 1, rossi ✅ (2026-10-16, pomeriggio)
+
+> **Note implementazione** (test-author, niente lanciato da lui): `test_client_address.py`, nuovo, 21 funzioni e 131
+> casi, registrato come `services client-address` (`isolation="pure"`). Coprono il campo (vuoto, valori accettati e
+> rifiutati, le liste `X-Forwarded-For` e `Forwarded` con `FORWARDED_ALLOW_IPS` nel messaggio, nessun profilo che lo
+> imposta) e `client_address()`: variabile vuota, un solo IP normalizzato, header assente, i malformati con un solo
+> avviso che non contiene mai il valore, nome senza distinzione di maiuscole, WebSocket, lettura una sola volta e
+> `reset_client_address_cache()`. Più `client_rate_key()` e `mask_client_address()`, con valori espliciti.
+>
+> **Rossi** (13:09–13:11): 131 falliti, 34 sulla barriera del campo e 97 su quella del modulo. Ruff e black puliti.
+
+#### P17 — passo 2, la cura e i chiamanti (2026-10-16, pomeriggio) — verdi in corso
+
+> **⚠️ Fuori pista**: il docs-writer ha visto che la variabile, da sola, non avrebbe fatto niente. I tre punti che
+> contano per client leggevano `request.client.host`, quindi le pagine admin avrebbero detto una cosa falsa. Al
+> coordinatore ho proposto due strade, e ha scelto la (1) (13:07): cambio io solo le tre chiamate. Ha verificato che
+> E4b (`b22747e52`) e A (`946285a91`) hanno quelle righe uguali, solo spostate; E4b aggiunge `flows as email_flows`
+> agli import di `auth.py`, quindi al merge si risolvono righe vicine, non il significato. I test API di E e della
+> registrazione li lancio io. Il limitatore dei login falliti non esiste ancora: tolto dai testi.
+>
+> **Note implementazione** (`files/p17/apply_p17.py` della sessione, provato a secco, ruff e black puliti):
+>
+> - `config/__init__.py`: `import re`, `_HEADER_TOKEN` e `_LIST_HEADERS`, il campo `LIBREFOLIO_CLIENT_IP_HEADER` col
+>   validatore `after` (spazi tolti, vuoto ammesso, token HTTP, liste rifiutate, maiuscole conservate). La docstring
+>   del modulo lo elenca;
+> - `services/platform/client_address.py`, nuovo: il nome dell'header è letto una volta (`functools.cache`),
+>   l'avviso una sola volta per processo (una lista come flag, sul modello del resolver di X),
+>   `reset_client_address_cache()`, `client_rate_key()` (la regola di `flows.address_key`, nella sua casa nuova),
+>   `mask_client_address()`;
+> - `.env.example`: la sezione «The Visitor's Address Behind a Reverse Proxy», con la riga commentata e il rimando
+>   alla doc;
+> - le tre chiamate: `api/v1/email.py` (le due letture `address = request.client.host if request.client else None`)
+>   e `api/v1/auth.py` (`registration_email_allowed`), più un import ciascuno;
+> - doc (docs-writer, secondo C-99): la sottosezione `#client-address` in `admin/connection_checks.en.md`, con la
+>   regola di sicurezza in un riquadro e corretto l'ultimo paragrafo dei «Limits», che diceva che non c'erano proxy
+>   fidati da configurare; una riga in `admin/configuration.en.md`; un punto in `admin/hosting_providers.en.md`; la
+>   sottosezione `#client-address` in `developer/architecture/security.md`, che io ho corretto sui chiamanti dopo la
+>   strada (1). Le pagine solo inglesi puntano a `connection_checks.md#reverse-proxy`, perché `#client-address` non
+>   esiste ancora nelle traduzioni.
+> - Fly: la doc ufficiale «Request headers» dice che il proxy imposta `Fly-Client-IP`; che sovrascriva quello del
+>   client lo dicono fonti esterne. Resta la prova di accettazione del cloud già nel contratto.
+>
+> **Il ruff della prova a secco**: segnalava I001 sui due import solo perché il modulo nuovo non esisteva ancora nel
+> worktree, e quindi non lo riconosceva come modulo del progetto. Applicata la cura, è pulito senza `--fix`.
+
+> **Verdi parziali** (13:11–13:23, una alla volta, carico sotto 50): `services client-address` **131**,
+> `config-env-example` 38, `config-package` 694, nessun fallito.
+>
+> **⏸️ Pausa del developer** (13:22): ho fermato solo lo script che mette in fila le prove (PID 48197, con `kill`), e ho
+> lasciato finire il test in corso (`config-package`). Porta 6181 libera. **Restano da lanciare**: `services
+> profile-defaults` e `config-misc`; `db populate --force`; `api email`, `email-verification`,
+> `email-verification-hooks`, `registration` e `auth`; `mkdocs build` e `check-links`. Lo script è
+> `files/runs/p17.sh green` nella cartella della sessione: rilancia anche i tre già verdi. Poi l'handoff, FROZEN.
+> Worktree sporco col lotto P17, nessun merge aperto, HEAD `0f3b9e3db`.
+
+> **Ripresa** (14:14, via del developer). B conferma: `RestoreCard` è un componente a parte, montato solo in
+> `BackupTab`; la pagina di blocco tiene solo `BackupDownloadCard`, come vuole P7.
+>
+> **Verdi** (14:14–14:40, una alla volta, carico sotto 50, HEAD `0f3b9e3db`):
+>
+> - `services profile-defaults` 52 e `config-misc` 12;
+> - `db populate --force`, poi `api email` 160, `email-verification` 49, `email-verification-hooks` 16,
+>   `registration` 96 e `auth` 88. Sono le rotte con le tre chiamate cambiate: con la variabile vuota, il
+>   comportamento di prima;
+> - `check-links` 97;
+> - insieme ai verdi di prima della pausa: `client-address` 131, `config-env-example` 38, `config-package` 694.
+>
+> **⚠️ Fuori pista — `mkdocs build` rigoroso rosso, non per il lotto**: un solo avviso, in
+> `developer/backend/transactions/wac.md`, il link `split_promote.md#transfer-giving-leg` verso un'ancora che non
+> esiste. Il link l'ha messo `54880598b` («fix(transactions): emptied manual cost basis…», treno 111), che è già nella
+> base `0f3b9e3db`; io quelle pagine non le tocco. Visto che la build dà solo quell'avviso, le mie quattro pagine non
+> ne aggiungono. Va girato al proprietario delle pagine delle transazioni.
+>
+> **H-5**: aggiunto il debito di traduzione di P17, `connection_checks` e `configuration`, con l'ordine.
+
+#### Checkpoint P17 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: P17 committato (`22d6dc84e` feat, `551843bdc` doc, `55a6646ff` diario) e fuso in dev (merge
+> `b1df87bd4`, pulito). L'avviso di `mkdocs` in `wac.md` è stato corretto su dev (`ed500643f`). A B5c il coordinatore
+> ha chiesto chi scrive la voce `GET /backup/restore/outcome` in `instance_block.py`: la scrive B, nello stesso commit
+> della rotta, e io rivedo il diff (ticket confrontato a tempo costante, una volta sola, senza ticket la stessa risposta
+> di una rotta che non esiste, solo `{state, reason, waiting}`).
+
+### TC-16 — `FilePreviewModal.test.ts:598`, rosso sotto carico (2026-10-16, pomeriggio) — triage
+
+Viene dai colori: due rossi in un giro con carico fra 41 e 52, verde da solo (37 su 37). Me l'ha dato il coordinatore
+come voce H, con il triage prima di tutto.
+
+> **Prove** (skill `test-triage`):
+>
+> - la riga 598 è il primo `expect` del `waitFor` di `listening()`, nel `describe` «PDF stage state (fake EmbedPDF)».
+>   Aspetta che il visore finto abbia registrato i tre ascoltatori del componente, e 14 casi la usano. Il `waitFor` non
+>   ha un budget, quindi vale quello di default di testing-library, 1 s;
+> - la catena del componente (`FilePreviewModal.svelte`, ~206–232) non ha ritardi fissi: `Promise.all` di due
+>   `import()` dinamici (`@embedpdf/snippet` e `pdfViewerAssets`), `pdfViewerAssets(document.baseURI)`,
+>   `EmbedPDF.init`, `await viewer.registry`, poi le iscrizioni;
+> - il file da solo (15:11, carico 47, `--reporter=verbose`): 37 su 37. I casi del `describe` durano fra 66 e 276 ms; i
+>   primi tre (247, 186, 276 ms) sono i più lenti, perché pagano il riscaldamento dei primi `import()` dinamici del file.
+>   Il margine di 1 s è quindi circa 4 volte la durata da solo. Nel giro dei colori, con i worker paralleli di Vitest e
+>   la macchina carica, la catena lo supera.
+>
+> **Verdetto: assumption, il tempo** (§2). La condizione aspettata è quella giusta: il test deve sincronizzarsi col
+> visore finto prima di mandargli i suoi segnali. Il budget invece è una scommessa sulla velocità della macchina. Non
+> c'è uno stato del prodotto da rendere osservabile (§6): quello che vede l'utente, `data-state`, resta `loading` sia
+> prima sia dopo le iscrizioni.
+>
+> **Cura proposta**, solo nel test:
+>
+> 1. un `beforeAll` nel `describe` che importa una volta `@embedpdf/snippet` e `pdfViewerAssets`, così il riscaldamento
+>    si paga fuori da ogni attesa (l'hook ha il suo limite);
+> 2. un budget esplicito per le attese della catena del visore nello stesso `describe` (`listening()` e i `waitFor`
+>    delle righe ~781, ~795, ~825, ~856): una costante da 3 s, oltre 10 volte il caso più lento misurato da solo, e
+>    dentro i 5 s di un test.
+>
+> Il file sta in `features/files/**`, l'area T dei colori: prima di scriverci chiedo l'OK al coordinatore. La
+> riparazione la fa il test-author.
+
+> **Via del coordinatore** (15:19): sì, solo nel test, col test-author. Avvisa lui i colori.
+>
+> **Note implementazione** (test-author, niente lanciato da lui), solo `FilePreviewModal.test.ts`, nel `describe` «PDF
+> stage state»:
+>
+> - `const VIEWER_WAIT = {timeout: 3_000}`, con il perché nel commento (66–276 ms da solo, 1 s dava un margine di circa
+>   4 volte, 3 s più di 10 volte, dentro i 5 s di un test);
+> - un `beforeAll` che importa una volta `@embedpdf/snippet` e `pdfViewerAssets`. Sono mock, il secondo parziale con
+>   `importOriginal`, e caricarli prima non cambia quello che i test vedono: `pdfViewerAssets.ts` al caricamento
+>   definisce solo costanti;
+> - `VIEWER_WAIT` su `listening()`, sulle due attese di `registryAsks`, su quella di `tiles` di lunghezza 2 (il secondo
+>   visore dopo il `rerender`) e su `findByTestId('file-preview-pdf-fallback')`. Quest'ultima non era nella mia lista,
+>   ma aspetta il ramo d'errore della stessa catena: la accetto;
+> - lasciata col default l'attesa di `onRequestClose` (~838). Il suo ascoltatore si registra nello stesso passo
+>   sincrono dei tre, quindi passa al primo controllo e il tempo non c'entra;
+> - limite noto: 3 s valgono per un'attesa, non per un caso. «Stays open when it moves to another file» ha due attese
+>   della catena; la seconda trova però i moduli già caricati.
+>
+> **Prove**: `prettier --check` pulito. Il file da solo (15:33, carico 42): 37 su 37, e i casi del visore ora durano
+> 56–135 ms (prima 66–276). Il riscaldamento è uscito dalle attese. Resta la prova a carico crescente, in una finestra
+> leggera del coordinatore.
+
+> **Prova sotto carico** (slot 2, 16:03–16:13, chiusura alle 16:15, senza aspettare il carico apposta: nello slot 1
+> girava l'`all-backend` di MF):
+>
+> - `front-utility component-unit` n. 1: **4041 su 4041**, 359 s, carico salito da 46 a circa 106;
+> - `front-utility component-unit` n. 2: **4041 su 4041**, 194 s, carico intorno a 66;
+> - `FilePreviewModal.test.ts` è nel catalogo (`_frontend_utility.py:285`), quindi i suoi 37 casi sono girati due volte
+>   coi worker paralleli e un carico oltre il doppio di quello del giro dei colori (41–52);
+> - i tre giri del file da solo non sono partiti: alle 16:13:07 il controllo dello script ha visto troppo vicina la
+>   chiusura. Restano le due prove leggere di prima (15:11 e 15:33);
+> - slot liberato alle 16:13; porta 6181 libera.
+>
+> **Verdetto confermato**: assumption, il tempo; curato nel test.
+
+#### Checkpoint TC-16 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: TC-16 committato (`03e06e3bd`, `91cfe34b3`) e fuso in dev (merge `65fc63e7e`).
+
+### Cosa resta del piano H — analisi (2026-10-16, pomeriggio) — sola lettura
+
+Richiesta del coordinatore (16:14): proporre un lotto con quello che resta del piano, dire cosa serve dal developer per
+CP7a, e dire lo stato di C-96. HEAD `91cfe34b3`.
+
+- **C-96 è chiusa**: `901fa33f6` (15/10, «fix(cli): test lanes ignore the instance's configuration»), provata, poi
+  verificata anche con le variabili di A5. Nel backlog la riga è nella sezione C del coordinatore e non ha ancora la ✅.
+- **H-2 è chiusa da altri**: `1c67dd5d9` (15/10, «fix(test-runner): build test server before timeout»). Il runner fa
+  `dev.py server --build-only` prima del conto alla rovescia, e i log di `all-backend` di oggi lo mostrano («Server
+  prerequisites ready (--build-only)»). La chiudo con ✅ nella mia sezione.
+- **CP7a**: il codice è entrato. Manca solo la prova a runtime dell'immagine (avvio, healthcheck, `docker exec` come
+  uid:gid, versione nella barra laterale). Il 15/10 il build si è fermato a `pip install`, perché il proxy della rete
+  aziendale ri-firma il TLS (H-11). Cosa serve dal developer, una delle due:
+  - (a) un build fuori dalla VPN, il suo o quello di un'immagine fatta dalla CI, e lo smoke a runtime: lo script c'è
+    già nella cartella della sessione (`files/docker-test/run.sh` e `cleanup.sh`);
+  - (b) H-11 prima: un secret di build facoltativo con una CA in più per pip (`RUN --mount=type=secret,id=extra_ca,
+    required=false`), mai copiato nell'immagine, documentato in `admin/docker_advanced`. Poi la prova dentro la VPN,
+    con la CA aziendale esportata dal developer. Il `Dockerfile` è di B dopo CP7a, quindi serve il suo OK; per la prova
+    servono il daemon acceso e uno slot pesante.
+- **H-12, metà**: la porta del server conta già solo i listener (`dev.py:84`). Resta il motivo di un avvio fallito: in
+  `scripts/test_runner/_server.py:318-319` stdout e stderr del server condiviso vanno su `DEVNULL`, se non c'è
+  `--verbose`, quindi il runner stampa solo «Shared backend exited during startup (code N)» o «did not answer within
+  300s».
+- **H-7** (`tzdata` nel Pipfile): finestra delle dipendenze, la fa il developer. **H-8** (`ForgotPasswordCard`): il
+  file è di A, nell'area T. **TS1**: P23. **H-3 opzione A**: P24. **H-5**: traduzioni, solo su richiesta del developer.
+  **H-18**: sezione C. **H-19**: ad A. **La riga di `instance_block.py` per `/auth/setup`**: con A7. **La revisione
+  di B5c**: all'handoff di B.
+
+**Lotto proposto: «H-12, il resto»** (runner e un test, nessuna area dei colori, niente Docker):
+
+- `_server.py`: l'output del server condiviso va in un file di log della corsia, `<log dir>/shared-backend.log`,
+  troncato a ogni avvio, al posto di `DEVNULL`. Un file e non una pipe, così un server che scrive molto non si blocca.
+  Se l'avvio fallisce (il processo esce, oppure scadono i 300 s) il runner stampa le ultime 30 righe e il percorso del
+  file. Con `--verbose` resta tutto com'è oggi;
+- un test puro (test-author): un server finto che esce subito scrivendo un errore, e il messaggio del runner che ne
+  mostra la coda; un server che non risponde, con un limite di avvio piccolo iniettato; con `--verbose`, nessun file;
+- la doc developer del runner, una riga; la chiusura di H-2 e H-12 nel backlog;
+- superficie condivisa: `scripts/test_runner/_server.py`, quindi mi serve l'assegnazione di scrittore;
+- prove: il test nuovo, `utils runtime-isolation` e i test del runner già esistenti per `_server.py`, poi un
+  `all-backend` (il server condiviso lo usano tutte le corsie).
+
+### Lotto «H-12, il resto» e la prova Docker di CP7a (2026-10-16, pomeriggio) — H-12 ✅ provato; CP7a ⏳ (daemon spento)
+
+> **Via** del coordinatore (16:16): H è lo scrittore di `scripts/test_runner/_server.py` per questo lotto; prima i
+> rossi col test-author, poi l'`all-backend` in uno slot organizzato da lui. Il ✅ di C-96 e H-2 nel backlog lo mette
+> lui. Alle 16:30 due aggiunte: (1) **CP7a**, il developer è a casa senza VPN: build dell'immagine e smoke a runtime
+> **nello slot 1** quando MF lo libera (~16:55), prima che H-12 prosegua; (2) la nota di E: il commento di
+> `test_client_address.py` (righe 33 e 771) nomina ancora `address_key`, da correggere in H-12.
+
+1. ✅ **Contratto e rossi affidati** (16:20). Il test-author scrive i casi nuovi in
+   `backend/test_scripts/test_utilities/test_test_server_preparation.py` (selettore `utils test-server-preparation`,
+   già registrato), senza eseguire nulla.
+   > **Note implementazione**: il contratto. `SharedTestServer(log_path=None)`. `start()` risolve `self.log_path`:
+   > `log_path` se dato, altrimenti `shared_backend_log_path()`; `None` sotto verbose. Con un percorso: file aperto in
+   > scrittura (troncato, cartella creata), `stdout` sul file e `stderr=STDOUT`, handle del runner chiuso subito dopo
+   > lo spawn. Su un avvio fallito (il processo esce, oppure scade `STARTUP_TIMEOUT`) stampa il percorso e le ultime
+   > 30 righe, lette dagli ultimi 64 KiB con `errors="replace"`, oppure «(no output)»; poi `stop()` come oggi. La
+   > riga info nomina il file.
+   > **⚠️ Fuori pista** (16:25, contratto corretto prima che il test-author finisse): il primo contratto ripiegava
+   > su `PROJECT_ROOT/.testLog/shared-backend.log` quando il runner non ha una log dir. Ma `--log-dir` vale
+   > `.testLog` per default e `_activate_log_dir()` lo prepara prima di `shared_backend_for()`: il server vivo scrive
+   > proprio `<root>/.testLog/shared-backend.log`. Nel pytest dei test di utilità `_common._LOG_DIR` è `None`, quindi
+   > ogni `start()` finto già esistente (`test_runtime_isolation.py`, `test_test_server_preparation.py`) avrebbe
+   > troncato il log del server vivo a metà di un `all-backend`. Regola corretta: `shared_backend_log_path()` è
+   > `get_log_dir()/shared-backend.log`, oppure `None` senza log dir; con `None` lo spawn resta su `DEVNULL` come oggi.
+   > Così i test esistenti non cambiano e `_cli.py` non si tocca. L'unico test che tocca `_LOG_DIR` lo mette a `None`
+   > via monkeypatch (`test_runtime_isolation.py:1240`).
+2. ✅ **Cura provata a secco** (16:28, `files/h12/apply_cure.py`, 13 sostituzioni su ancore uniche, applicata a una
+   copia): ruff verde. Black segnala gli stessi 6 blocchi del file a HEAD, cioè codice già esistente, nessuno nuovo.
+   La complessità di `start()` resta 8, il cancello è 10.
+   > **Note implementazione**: `SHARED_BACKEND_LOG_NAME`, `STARTUP_LOG_TAIL_LINES = 30`,
+   > `STARTUP_LOG_TAIL_BYTES = 64 KiB`. Tre funzioni: `shared_backend_log_path()`; `log_tail()`, che scarta la prima
+   > riga se il seek l'ha tagliata; `_open_backend_log()`, che su un `OSError` avvisa e scarta l'output, perché il log
+   > non deve mai rompere un run. Il context manager `_spawn_output()` dà `stdout`, `stderr` ed `env`: con il file
+   > aggiunge `PYTHONUNBUFFERED=1`, così le righe di dev.py arrivano in ordine e sopravvivono al SIGTERM di
+   > `stop()`, come già `-u` per la build. Sta sulla stessa riga `with` di `_publish_spawn_ownership()`: il blocco
+   > dello spawn non si re-indenta. `_report_startup_log()` è chiamato sui due fallimenti. Docstring di
+   > `build_server_prerequisites` aggiornata.
+   > **⚠️ Fuori pista**: `shared_backend_for()` passa sempre `verbose=False`, quindi il runner non ha un percorso
+   > «verbose». La proposta diceva «con `--verbose` resta com'è»: vale solo per chi costruisce la classe a mano. La
+   > doc non lo nomina.
+3. ✅ **Commento di E e frase gemella** (16:33): in `test_client_address.py` (f) e `RATE_KEYS` non nominano più
+   `address_key`. La stessa frase stantia stava nel mio testo P17 di `developer/architecture/security.md` (~1290):
+   affidata al docs-writer, con una formula valida prima e dopo il passaggio di E. Ho segnalato al coordinatore che E
+   non deve toccarla.
+4. ⏳ **Doc** (docs-writer, senza eseguire nulla): la riga di `_server.py` in `runner_architecture.md`, quella di
+   `--log-dir` in `test-walkthrough/index.md`, la frase di `security.md`.
+   > **⚠️ Fuori pista** (16:38, segnalato dal docs-writer): `database_file_owned_exclusively()` ferma e riavvia **la
+   > stessa istanza** a metà run, attorno a `db create` in `all-backend`. «Troncato a ogni avvio» avrebbe cancellato
+   > l'output del primo server. **Cura v2**: il primo avvio dell'istanza svuota il file, un riavvio lo apre in append.
+   > `self._log_offset` registra dove comincia l'avvio corrente; la coda di un avvio fallito legge solo da lì, quindi
+   > con un avvio che non ha scritto nulla stampa «(no output)» e non le righe dei precedenti. `log_tail(path,
+   > offset)`: con il taglio dei 64 KiB legge dal byte prima del taglio e scarta la riga tagliata, tenendola solo se è
+   > l'unica. Provata a parte in `files/h12/check_log_tail.py`: 9 casi, tra cui la riga tagliata, il taglio esatto a
+   > inizio riga, nessun a capo, l'offset e i byte non UTF-8. Il primo tentativo leggeva un byte di troppo senza a
+   > capo: corretto con `partition`. Ruff verde, `start()` resta a complessità 8. Emendamento 2 al test-author: casi
+   > «il riavvio aggiunge» e «il riavvio senza output nuovo». Dimensione: il file tiene l'output del server per tutto
+   > il run; il log dell'app nella corsia è cresciuto di 3 MB in tutti i verdi di P17, e l'archivio usa xz preset 1,
+   > veloce sul testo.
+5. ✅ **CP7a, script pronti** (16:40): `files/docker-test/run.sh` e `cleanup.sh`, aggiornati rispetto al 15/10 (le
+   versioni vecchie sono in `.bak`). Log e snapshot vanno in `files/docker-test/run-1610/`, perché `cleanup.sh` ne ha
+   bisogno anche dopo un riavvio; in `/tmp` restano solo i dati usa e getta del container. In più: il controllo che
+   il daemon sia acceso e `docker compose version`; `instance`, `block` e la versione confrontata con VERSION; la
+   rimozione di `LibreFolio-data/`, se il run l'ha creata. Dal 15/10 `Dockerfile` e compose hanno cambiato solo
+   commenti. Si lancia solo al via del coordinatore.
+6. ✅ **Rossi** (16:49, carico 37). Il test-author ha consegnato 20 casi nuovi in 5 classi:
+   - `TestSharedBackendLog`, 8 casi;
+   - `TestSharedBackendLogTail`, 7;
+   - `TestSharedBackendLogRestart`, 3;
+   - `TestLogTail`, 1;
+   - `TestSharedBackendLogWithARealChild`, 1: un figlio Python di una riga, lanciato davvero tramite
+     `exec_unmasked.py`. Le guardie lasciano partire solo quell'argv e segnalare solo il suo gruppo.
+
+   I nomi nuovi si leggono al momento della chiamata, e `_LOG_DIR` è sempre ripristinato via monkeypatch. Ruff
+   verde; black lascia il file invariato.
+   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py test --test-port 6181 --data-dir
+   /tmp/librefolio-r13-h utils test-server-preparation` → **20 failed, 63 passed**: 19 su «H-12: SharedTestServer has
+   no log_path», 1 su «H-12: log_tail is missing». Log in `files/runs/h12-red.log`.
+7. ✅ **Cura applicata e verdi leggeri** (16:50). `files/h12/apply_cure.py` applicata in posto; il risultato coincide
+   byte per byte con la prova a secco e ruff è verde. Risultati, ciascuno col suo log in `files/runs/h12-*.log`:
+   - stesso selettore: **83/83**;
+   - poi, uno alla volta con `files/runs/h12-greens-related.sh`: `utils runtime-isolation` **200/200**, `utils
+     dev-port-check` **5/5**, `services shutdown-budget` **188/188**.
+
+   Il carico è salito a 60–96 durante il run, per lavoro di altre corsie; i miei comandi sono leggeri.
+   > **Note implementazione**: il test-author ha segnalato che `patch_clock` di `test_runtime_isolation.py`
+   > sostituisce `_server.time` con un oggetto che ha solo `time` e `sleep`. La cura non aggiunge chiamate a `time`:
+   > confermato dai 200 verdi.
+8. ✅ **Descrizione del selettore** (`scripts/test_runner/_backend_utils.py`, superficie condivisa). **OK del
+   coordinatore alle 16:54**, solo per il testo di `test-server-preparation`, attorno alle righe 343 e 737. Anche W ha
+   il file aperto (C-97a: una funzione dopo la riga 26 e un blocco di catalogo dopo la ~483); i suoi hunk sono
+   disgiunti dai miei. Patch applicata alle 16:54: coincide byte per byte con la prova a secco, ruff verde. La docstring, le due righe info e il `desc` del catalogo parlano solo di C-94. Il commento
+   d'isolamento dice «every real process and signal forbidden», non più vero per il caso con il figlio reale; la
+   classe resta `pure`. Patch pronta e provata a secco in `files/h12/apply_backend_utils.py`: 5 sostituzioni, ruff
+   verde.
+9. ⏳ **Prove leggere dopo l'OK** (16:54, `files/runs/h12-light-2.sh`, uno alla volta con carico < 50; log in
+   `files/runs/h12-light-2/`). Il daemon Docker è ancora spento, quindi il coordinatore ha anticipato queste prove.
+   - `dev.py mkdocs build`: exit 1, solo per l'avviso già noto. `wac.md` linka
+     `split_promote.md#transfer-giving-leg`, corretto su dev da `ed500643f`, che non è nella mia base. Le mie tre pagine
+     non ne aggiungono: lo strict interrompe dopo aver elaborato tutte le pagine. `check-links`: **97 link validi**.
+   - `utils test-server-preparation`: **83/83**, con le righe info nuove.
+   - **Prova reale del timeout, 1 s** (`LIBREFOLIO_TEST_STARTUP_TIMEOUT=1 … api system-wake`, 16:55–17:00; 4 min e
+     23 s, quasi tutti del passo build-only, che ha ricostruito frontend debug e sito). La riga info nomina
+     `.testLog/shared-backend.log`; poi «Shared backend did not answer within 1s», l'intestazione della coda con
+     «(no output)» e «shared test backend failed to start». File di 0 byte: in 1 s dev.py non stampa nulla e il
+     SIGTERM arriva prima. Porta 6181 libera dopo `stop()`.
+   - La prova a 6 s, per vedere righe vere nella coda, aspettava che il carico scendesse sotto 50: è salito a 165.
+     **Fermata alle 17:22** su richiesta del coordinatore, la galleria completa dei colori è in corso: niente prove
+     nuove fino al suo via, verso le 17:45. Lo script era solo nel `sleep` d'attesa, senza figli di test; porta
+     libera, verificato.
+10. ✅ **Prova reale a 6 s** (17:53, carico 15, dopo la fine della pausa alle 17:52; `files/runs/h12-timeout-6.sh`,
+    log in `files/runs/h12-light-2/api-timeout-6s.log`). Sequenza stampata: «Shared backend did not answer within
+    6s», «Shared backend output, last 30 line(s): …/.testLog/shared-backend.log», poi le righe vere di dev.py: la
+    cache JS, «Starting LibreFolio API server (TEST MODE)...», database, host, porta 6181, «Log Level: DEBUG»,
+    scheduler disabilitato, endpoint, «Frontend build found», infine «shared test backend failed to start». File di 35
+    righe e 1563 byte, porta libera dopo `stop()`.
+    > **Note implementazione**: il server di test gira a DEBUG, quindi in un `all-backend` il file conterrà tutto il
+    > log della console per l'intero run. Lo misuro dopo il run.
+11. ⏳ Dopo il via del coordinatore:
+   - l'`all-backend` nello slot 1 (~18:05, limite 18:45, poi A), con `files/runs/h12-allbackend.sh`. Prova il log
+     vero dall'inizio alla fine del run, compreso l'append al riavvio di `db create`, in
+     `.testLog/shared-backend.log`.
+     > **⚠️ Fuori pista** (17:58): il controllo dell'orario manda SIGINT al runner, ma una shell non interattiva
+     > avvia i comandi con `&` ignorando SIGINT: un Python nato così non installa `KeyboardInterrupt`, e il segnale
+     > si sarebbe perso. Verificato con un processo finto: senza `set -m`, sleep fino alla fine; con `set -m`,
+     > KeyboardInterrupt e rc 130. Lo script ora usa `set -m` e `kill -INT -- -$RUNNER`: tutto il gruppo del runner,
+     > figli pytest compresi, come un Ctrl-C. Il backend condiviso ha la sua sessione e lo ferma `stop()`.
+   - la prova Docker di CP7a, se il developer accende il daemon (slot 1), con `files/docker-test/run.sh` e poi
+     `cleanup.sh`. Dopo la build di produzione dell'immagine, il prossimo run di test ricostruisce il frontend debug;
+   - poi l'handoff FROZEN (bozza in `files/h12/handoff-draft.md`).
+12. ✅ **Revisione di B5c** (18:30, durante lo slot, senza interromperlo). Su richiesta esplicita del coordinatore
+    l'ho fatta **nel worktree di B**: un'eccezione alla regola d'isolamento concessa da lui. Sola lettura con `git
+    --no-optional-locks`, limitata alle due righe dei miei file, alla rotta che espongono, al servizio `outcome.py` e
+    allo schema `RestoreOutcome`. La decisione N53 l'ho letta dall'oggetto git `57564d321`, cioè dal journal di B già
+    committato. **OK, nessuna modifica**:
+    - in `instance_block.py`: l'import, la voce `backup_restore.get_restore_outcome` con il suo commento, la frase
+      del docstring. In `test_instance_block.py`: `("GET", "/api/v1/backup/restore/outcome")`;
+    - la rotta: biglietto solo nell'header, mai nell'URL; 256 bit, di cui si conserva solo l'SHA-256;
+      `hmac.compare_digest` dopo il controllo del formato; un 404 identico per ogni biglietto che non dà l'esito; un
+      biglietto sbagliato non cambia nulla; risposta con soli `{state, reason, waiting}` e `extra="forbid"`;
+      `no-store`; endpoint `def` sincrono, per I/O leggero;
+    - su un'istanza bloccata, chi non ha il biglietto riceve lo stesso 404 di un'istanza sbloccata, quindi la voce
+      non rivela il blocco. Solo chi ha il biglietto legge `waiting: "instance_blocked"`.
+    > **⚠️ Fuori pista**: la mia condizione «monouso», cioè una sola lettura, è superata da **N53** (decisione del
+    > coordinatore, 17:20, da rivedere col developer): «un ripristino, un biglietto», un esito finale rileggibile
+    > finché il biglietto non scade, entro un'ora. Accettata: con una lettura sola, se la risposta finale si perde la
+    > pagina resta senza esito. Il rischio resta limitato: tre enum, un'ora, solo per chi ha 256 bit.
+13. ✅ **`all-backend` nello slot 1** (18:01:29 → 18:33:33, carico 41 → 26; `files/runs/h12-allbackend.sh`, log in
+    `files/runs/h12-allbackend/`, copia di `.testLog` in `testlog/`). Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc
+    nice -n 10 pipenv run python dev.py test -q --fresh-run --workers 2 --log-file … --test-port 6181 --data-dir
+    /tmp/librefolio-r13-h all-backend`. **exit 0: 18 487 passed, 7 skipped, 0 failed.** Il limite delle 18:45 non è
+    scattato.
+    - Il runner: «Starting shared test backend … — log: …/.testLog/shared-backend.log», «ready». Poi, per `db
+      create`, «Pausing the shared backend — creating a clean test database…», un secondo «Starting …» con lo stesso
+      file, «ready», «Shared backend resumed».
+    - **`shared-backend.log`**: 2 433 490 byte, 15 793 righe. Due avvii: «Starting LibreFolio API server» alle righe
+      14 e 15717. Due volte «Application startup complete» e due volte «Finished server process», prima [41600] e
+      poi [69888]. **Il riavvio ha aggiunto in coda**: le righe del primo server restano intere, fino al suo
+      spegnimento pulito su SIGTERM («Shutting down», «Finished server process»), quindi l'output non bufferizzato
+      sopravvive allo `stop()`. Nel log d'accesso il token della sonda della corsia è mascherato (`token=***`). Le 4
+      righe «Traceback» vengono tutte da `MOCKFX_FAIL: simulated provider failure for testing`: due episodi indotti
+      dai test, ciascuno registrato due volte (campo JSON e traceback in chiaro).
+    - **Dimensione**: 2,4 MB per un `all-backend` intero, a livello DEBUG. Molto meno delle «decine di MB» stimate;
+      il run successivo lo archivia con i log per unità.
+    - Porta 6181 libera alla fine; `git diff --check` pulito.
+    > **⚠️ Fuori pista** (fuori perimetro, **H-20** nel backlog): lo stdout del runner rediretto su un file, sia con
+    > `>` sia con `--log-file`, è bufferizzato a blocchi. Alle 18:12 `allbackend.log` era fermo da 10 minuti alle
+    > righe della build, che escono da un sottoprocesso; le righe del runner sono arrivate solo all'uscita. Il
+    > comportamento c'era già prima di H-12, e il run non ne soffre.
+14. ✅ **Entrata e nuova voce** (18:39). H-12 è in `dev_release2` con il merge `7ac8b17de` (genitori `5609b16d7` e
+    `7f5a28f4f`, nessun conflitto); i miei commit sono `cca1c8b0a` (feat), `3934b4f8a` (docs) e `7f5a28f4f` (journal).
+    HEAD verificato, `7f5a28f4f`, albero pulito. Il coordinatore mi assegna **W-B54**, dalla sezione di W (commit
+    `d8c2a13c7`, letto dall'oggetto git), come **H-21** nel backlog, priorità bassa.
+    > **Note implementazione** (lettura del codice, nessuna modifica): `_api_setup()`
+    > (`scripts/test_runner/_backend_api.py:748`) rifà il seed con `db_populate(force=True)`. Lo chiama
+    > `run_category_setup("api")` (`_common.py:641`, una volta per invocazione) da `api_test()` (`:770`), cioè la
+    > categoria intera, e dal passaggio consolidato (`_cli.py:959-963`). `_run_exclusive_setups()` (`_cli.py:614`)
+    > riguarda solo i setup esclusivi. Un'azione singola passa da `dispatch_to_category()`, senza setup. Per la cura
+    > servono due cose: sapere se il DB della corsia ha gli utenti di fixture, con una lettura senza scritture, e
+    > decidere tra seed automatico e messaggio. Da fare in un lotto con l'assegnazione di scrittore del registro.
+
+### Lotto «H-21: un'azione `api` da sola rifà gli utenti di fixture» (W-B54, 2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (18:41), H scrittore: oggi il problema ha fatto perdere due run, a W e a J. Preferenza: un
+> seed con una riga di log visibile piuttosto che «stampa il comando», dentro la data-dir della corsia. Vincoli: A ha
+> aperti `_backend_api.py` e `_backend_services.py` (A-27, solo descrizioni), quindi i miei hunk vanno nella logica di
+> dispatch e setup, mai nelle righe `add_test`. MF ha in stage, dal merge di base, `_backend_services.py`,
+> `_backend_utils.py`, `_frontend_utility.py` e `_server.py`: non li tocco. Prima i rossi, poi prove leggere a carico
+> < 50, poi un checkpoint insieme ai due file del journal.
+
+1. ✅ **Contratto e rossi affidati** (18:50). Il test-author scrive in `test_test_runner_cli.py` (selettore `utils
+   test-runner-cli`, già registrato: nessuna riga nuova nel catalogo di `_backend_utils.py`), senza eseguire nulla.
+   > **Note implementazione**, il contratto:
+   > - `make_category(…, setup_needed=None, …)`: chiamabile che restituisce una ragione o `None`; sta in `_meta`
+   >   accanto a `setup`. Tutte le 16 chiamate passano argomenti per nome (verificato via AST), quindi aggiungerlo
+   >   prima di `default_isolation` è sicuro;
+   > - `_common.ensure_category_setup(category)`: niente se non c'è `setup` o `setup_needed`, o se il setup è già
+   >   girato in questa invocazione (il predicato non viene chiamato). Con una ragione: una riga `print_info` con
+   >   categoria e ragione, poi `run_category_setup()`. Un predicato che solleva vale come ragione;
+   > - `_cli.run_test_from_registry`: dopo il ritorno anticipato di `--list` (un elenco non fa seed), per
+   >   `action != "all"`; se il setup fallisce, l'azione non parte ed esce un errore con la categoria;
+   > - `_backend_api.API_FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")`, cioè gli utenti con cui entrano i test
+   >   API, creati da `populate_mock_data.py`. `_api_fixture_users_missing()` legge `get_test_db_path()`, il DB della
+   >   corsia, in `mode=ro` e senza mai crearlo: restituisce una ragione se il file manca, non si legge, o non ha uno
+   >   dei due utenti (una tabella `users` assente vale come entrambi mancanti);
+   > - `make_category` di `api`: `setup_needed=_api_fixture_users_missing`, accanto a `setup=_api_setup`.
+2. ✅ **Cura provata a secco** (18:58; `files/h21/apply_cure.py`, 8 sostituzioni su tre file, copie in
+   `files/h21/dry/`). Ruff: `_cli` e `_backend_api` puliti; `_common` ha gli stessi 5 `PLC0415` di HEAD, già
+   esistenti: il mio import interno ha `noqa` con il motivo (`_registry` importa il modulo). Black: 0 blocchi
+   cambiati su tutti e tre i file. Predicato provato a parte (`files/h21/check_predicate.py`): file mancante (e non
+   creato), nessuna tabella `users`, nessuno dei due, solo l'admin, entrambi → `None`, un file che non è un DB, un DB
+   WAL con entrambi.
+   > **⚠️ Fuori pista**: un DB in WAL aperto con `mode=ro` lascia accanto `-wal` e `-shm` vuoti; il file principale
+   > resta intatto. Verificato su file temporanei: rollback nessun file in più, WAL due. Il DB della corsia è in WAL
+   > (byte 18–19 dell'header `02 02`, `PRAGMA journal_mode=WAL` in `db/session.py`). Nel flusso normale il backend
+   > condiviso è già su quando parte il controllo, quindi `-wal` e `-shm` esistono già e la lettura non crea nulla.
+   > Con `--no-shared-server` restano due file vuoti, che il prossimo che apre il DB riusa. Scritto nel docstring.
+   > Il test-author verifica l'assenza di file accanto solo su un DB in modalità rollback.
+3. ✅ **Doc** (docs-writer, 19:00). In `runner_architecture.md`, sotto «Registry Entry Shape», le chiavi di `_meta`:
+   `setup`, `setup_exclusive`, `setup_needed`, `default_isolation`; poi la riga di `_common.py`, con
+   `run_category_setup` ed `ensure_category_setup`. In `test-walkthrough/api.md`, un paragrafo in fondo a
+   «Prerequisites».
+   > **Note implementazione**: il docs-writer ha sistemato anche gli spazi della lista: una riga vuota prima e
+   > rientri di 4 spazi. Senza, la lista finiva dentro il paragrafo e i sotto-punti non si annidavano; lo ha
+   > verificato sul sorgente di Python-Markdown. Scrive «several units» e non «tutte», perché la maggior parte dei
+   > test `api` registra il proprio utente. Ha aggiunto due link interni: `#declaring-a-class-and-earning-it` e
+   > `index.md#isolated-runtime-lanes`.
+   > **⚠️ Fuori pista** (osservazione del docs-writer, che spiega il caso di W): `_categories_in_scope()` restituisce
+   > la categoria qualunque sia l'azione, quindi anche **una singola azione `services`** ricrea il DB vuoto, tramite
+   > `_run_exclusive_setups()`. È così che W ha perso gli utenti.
+4. ✅ **Rossi** (19:03, carico 44). Il test-author ha consegnato 6 classi, 22 funzioni e 30 casi in
+   `test_test_runner_cli.py`: ruff verde; black lascia il file invariato. `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc
+   nice -n 10 pipenv run python dev.py test --test-port 6181 --data-dir /tmp/librefolio-r13-h utils test-runner-cli` →
+   **30 failed, 36 passed**, tutti sulle barriere `H-21:`. Per messaggio:
+   - `_api_fixture_users_missing is missing` ×11;
+   - `ensure_category_setup is missing` ×8;
+   - `run_test_from_registry ran a single action … without asking its setup_needed first` ×4;
+   - `make_category has no setup_needed` ×3;
+   - `API_FIXTURE_USERS is missing` ×2;
+   - `… did not ask _common.ensure_category_setup at call time` ×1;
+   - `the api category declares no setup_needed` ×1.
+
+   Log in `files/runs/h21-red.log`.
+   > **Note implementazione**, scelte del test-author dove il contratto lasciava spazio:
+   > - senza ragione, o senza una delle due metà, la categoria non va in `_SETUP_DONE`, così un `all` successivo
+   >   nella stessa invocazione rifà comunque il suo seed;
+   > - utenti simili come `e2e_test_user2` contano come mancanti, quindi niente `LIKE` o prefissi;
+   > - con il file mancante non si crea nulla, nemmeno le cartelle;
+   > - il caso `--list` passa dal ramo vero dell'elenco;
+   > - la costante è confrontata con `test_user_defs` letto con `ast` dal sorgente, senza importarlo.
+5. ✅ **Cura e verdi** (19:04–19:16, carico < 50 prima di ogni prova). La cura applicata coincide byte per byte con
+   la prova a secco. Prove (script `files/runs/h21-greens.sh`, log in `files/runs/h21-greens/`):
+   - `utils test-runner-cli` **66/66**;
+   - `utils runtime-isolation` **200/200**: l'altro file che tocca setup e dispatch;
+   - `check-orphans` verde.
+
+   **Prova reale dello scenario di W-B54** nella corsia:
+   - `db create` lascia 0 utenti di fixture;
+   - `api address-probe` stampa «⚙️  api: the test database /private/tmp/librefolio-r13-h/sqlite/app.db has no
+     fixture user e2e_test_admin, e2e_test_user — running the category setup before this action», poi «Populating
+     test database for API tests…» e «Test database populated»: **26/26**;
+   - la stessa azione una seconda volta: **26/26, senza riga di seed**, perché gli utenti ci sono.
+
+   Porta 6181 libera alla fine. `mkdocs build`: solo l'avviso noto di `wac.md`, quindi le due nuove ancore si
+   risolvono. `check-links`: 97 link validi.
+   > **Note implementazione**: la riga esce come «ℹ️  ⚙️  api: …», con due icone: `print_info` aggiunge la sua.
+   > Lasciata così: l'ingranaggio la lega al «⚙️ Populating…» di `_api_setup()` che segue. Nessuna modifica a
+   > `_backend_utils.py` (in stage da MF), quindi il `desc` del selettore `test-runner-cli` non nomina i casi nuovi:
+   > lo dice la docstring del file di test.

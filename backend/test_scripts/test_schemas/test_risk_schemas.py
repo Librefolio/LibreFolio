@@ -32,6 +32,7 @@ from backend.app.schemas.risk import (
     RiskAnalyticResult,
     RiskAssetSetComparisonItem,
     RiskAssetSetComparisonOutput,
+    RiskAssetSetDrawdownItem,
     RiskAssetSetDrawdownOutput,
     RiskAssetSetKpiOutput,
     RiskAssetSetReturnItem,
@@ -791,6 +792,160 @@ def test_risk_drawdown_output_recovered_requires_recovery_date():
         RiskDrawdownOutput(**_drawdown_output(maximum_drawdown_recovery_date=None))
 
 
+# =============================================================================
+# P19 (workstream J, CP-13a): the gain that recovers a drawdown, on both drawdown episode shapes
+#
+# `remaining_to_peak_ratio` stays required but becomes nullable: a total loss has no finite gain to climb back, and the
+# series statistics publish None for it instead of failing. `maximum_drawdown_trough_to_peak_ratio` is new and
+# optional, null by default: the gain from the worst trough back to the peak before it, finite and non-negative, for
+# an open or a recovered episode alike. A no-drawdown episode has no trough, so it never carries a positive one. The
+# singular output and the asset-set row carry the same episode, so every case runs on both.
+# =============================================================================
+
+
+def _asset_set_drawdown_item(**overrides):
+    """The episode of ``_drawdown_output`` as one row of an asset set: no window, coverage or basis of its own."""
+    base = {
+        "asset_id": 7,
+        "current_drawdown": -0.02,
+        "current_peak_date": date(2026, 1, 5),
+        "current_drawdown_duration_days": 3,
+        "maximum_drawdown": -0.25,
+        "maximum_drawdown_peak_date": date(2026, 1, 2),
+        "maximum_drawdown_trough_date": date(2026, 1, 4),
+        "maximum_drawdown_recovery_status": RiskDrawdownRecoveryStatus.RECOVERED,
+        "maximum_drawdown_recovery_date": date(2026, 1, 6),
+        "maximum_drawdown_duration_days": 4,
+        "maximum_drawdown_recovered_ratio": 1.0,
+        "remaining_to_peak_ratio": 0.02,
+    }
+    base.update(overrides)
+    return base
+
+
+DRAWDOWN_EPISODE_SHAPES = [
+    pytest.param(RiskDrawdownOutput, _drawdown_output, id="drawdown"),
+    pytest.param(RiskAssetSetDrawdownItem, _asset_set_drawdown_item, id="drawdown_set_item"),
+]
+
+_OPEN_EPISODE = {
+    "maximum_drawdown_recovery_status": RiskDrawdownRecoveryStatus.OPEN,
+    "maximum_drawdown_recovery_date": None,
+    "maximum_drawdown_recovered_ratio": 0.4,
+}
+# Everything lost and nothing climbed back yet: the episode the series statistics report for a total loss.
+_TOTAL_LOSS_EPISODE = {
+    **_OPEN_EPISODE,
+    "current_drawdown": -1.0,
+    "maximum_drawdown": -1.0,
+    "maximum_drawdown_recovered_ratio": 0.0,
+}
+_NO_DRAWDOWN_EPISODE = {
+    "current_drawdown": 0.0,
+    "current_drawdown_duration_days": 0,
+    "maximum_drawdown": 0.0,
+    "maximum_drawdown_peak_date": None,
+    "maximum_drawdown_trough_date": None,
+    "maximum_drawdown_recovery_status": RiskDrawdownRecoveryStatus.NO_DRAWDOWN,
+    "maximum_drawdown_recovery_date": None,
+    "maximum_drawdown_duration_days": 0,
+    "maximum_drawdown_recovered_ratio": None,
+    "remaining_to_peak_ratio": 0.0,
+}
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+def test_drawdown_episode_remaining_to_peak_ratio_is_null_for_a_total_loss(model, payload):
+    total_loss = model(**payload(**_TOTAL_LOSS_EPISODE, remaining_to_peak_ratio=None))
+
+    assert total_loss.remaining_to_peak_ratio is None
+    wire = total_loss.model_dump(mode="json")
+    assert wire["remaining_to_peak_ratio"] is None
+    assert model.model_validate(wire).remaining_to_peak_ratio is None
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+def test_drawdown_episode_remaining_to_peak_ratio_stays_required_and_non_negative(model, payload):
+    # Nullable is not optional: a payload that forgets the gain is still refused, and a negative gain is still no gain.
+    missing = {key: value for key, value in payload().items() if key != "remaining_to_peak_ratio"}
+    with pytest.raises(ValidationError) as absent:
+        model(**missing)
+    assert [(error["loc"], error["type"]) for error in absent.value.errors()] == [(("remaining_to_peak_ratio",), "missing")]
+
+    with pytest.raises(ValidationError) as negative:
+        model(**payload(remaining_to_peak_ratio=-0.01))
+    assert [(error["loc"], error["type"]) for error in negative.value.errors()] == [(("remaining_to_peak_ratio",), "greater_than_equal")]
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+def test_drawdown_episode_trough_to_peak_ratio_is_optional_and_null_by_default(model, payload):
+    assert "maximum_drawdown_trough_to_peak_ratio" in model.model_fields
+    assert not model.model_fields["maximum_drawdown_trough_to_peak_ratio"].is_required()
+
+    # A producer that does not set it still validates, and the wire states the null rather than dropping the key.
+    episode = model(**payload())
+    assert episode.maximum_drawdown_trough_to_peak_ratio is None
+    assert episode.model_dump(mode="json")["maximum_drawdown_trough_to_peak_ratio"] is None
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+@pytest.mark.parametrize("status", [pytest.param(_OPEN_EPISODE, id="open"), pytest.param({}, id="recovered")])
+def test_drawdown_episode_carries_its_trough_to_peak_gain_or_the_null_of_a_total_loss(model, payload, status):
+    # The climb from the worst trough describes the depth, not the recovery state: an open and a recovered episode
+    # both carry it, and both admit the null of a total loss.
+    climbed = model(**payload(**status, maximum_drawdown_trough_to_peak_ratio=0.25))
+    assert climbed.maximum_drawdown_trough_to_peak_ratio == 0.25
+    wire = climbed.model_dump(mode="json")
+    assert wire["maximum_drawdown_trough_to_peak_ratio"] == 0.25
+    assert model.model_validate(wire).maximum_drawdown_trough_to_peak_ratio == 0.25
+
+    assert model(**payload(**status, maximum_drawdown_trough_to_peak_ratio=None)).maximum_drawdown_trough_to_peak_ratio is None
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    [
+        pytest.param(-0.1, "greater_than_equal", id="negative"),
+        pytest.param(float("nan"), "finite_number", id="nan"),
+        pytest.param(float("inf"), "finite_number", id="inf"),
+    ],
+)
+def test_drawdown_episode_trough_to_peak_ratio_is_a_finite_non_negative_gain(model, payload, value, error_type):
+    with pytest.raises(ValidationError) as caught:
+        model(**payload(maximum_drawdown_trough_to_peak_ratio=value))
+
+    # By location and type, so that refusing the key as an undeclared field (extra_forbidden) does not count.
+    assert [(error["loc"], error["type"]) for error in caught.value.errors()] == [(("maximum_drawdown_trough_to_peak_ratio",), error_type)]
+
+
+@pytest.mark.parametrize(("model", "payload"), DRAWDOWN_EPISODE_SHAPES)
+def test_no_drawdown_episode_never_carries_a_positive_trough_to_peak_gain(model, payload):
+    # The payload is a valid no-drawdown episode and both ways of saying "nothing to climb" are accepted, so the one
+    # refusal below can only come from the episode invariant.
+    assert model(**payload(**_NO_DRAWDOWN_EPISODE)).maximum_drawdown_trough_to_peak_ratio is None
+    assert model(**payload(**_NO_DRAWDOWN_EPISODE, maximum_drawdown_trough_to_peak_ratio=0.0)).maximum_drawdown_trough_to_peak_ratio == 0.0
+    assert model(**payload(**_NO_DRAWDOWN_EPISODE, maximum_drawdown_trough_to_peak_ratio=None)).maximum_drawdown_trough_to_peak_ratio is None
+
+    with pytest.raises(ValidationError) as caught:
+        model(**payload(**_NO_DRAWDOWN_EPISODE, maximum_drawdown_trough_to_peak_ratio=0.25))
+    assert [error["type"] for error in caught.value.errors()] == ["value_error"]
+
+
+def test_drawdown_output_states_both_gains_side_by_side_through_the_output_union():
+    # The coherent chart episode: a -0.25 trough recovered on the 8th, then a fresh -0.03. Climbing back from that
+    # trough took 0.25 / 0.75; from the current value, 0.03 / 0.97 is still owed. Two gains in two fields, and both
+    # survive the discriminated union a result is read through.
+    output = RiskDrawdownOutput(**_chart_drawdown_payload(maximum_drawdown_trough_to_peak_ratio=0.25 / 0.75))
+    wire = output.model_dump(mode="json")
+
+    assert wire["maximum_drawdown_trough_to_peak_ratio"] == pytest.approx(1 / 3)
+    assert wire["remaining_to_peak_ratio"] == pytest.approx(0.03 / 0.97)
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(wire)
+    assert isinstance(restored, RiskDrawdownOutput)
+    assert restored.model_dump(mode="json") == wire
+
+
 def _risk_return_output(**overrides):
     base = {
         "portfolio_volatility": 0.06,
@@ -1472,9 +1627,9 @@ def _i18n_catalogue(language: str) -> dict:
 
 
 #: The controller that emits the frontend-owned on-demand error code (F9).
-_RISK_CONTROLLER_TS = "src/lib/stores/risk/riskPanelController.svelte.ts"
+_RISK_CONTROLLER_TS = "src/lib/features/risk/riskPanelController.svelte.ts"
 #: The helper that refines a size limit into the display code of its remedy (D379).
-_ERROR_DISPLAY_CODE_TS = "src/lib/components/risk/levels/errorDisplayCode.ts"
+_ERROR_DISPLAY_CODE_TS = "src/lib/features/risk/levels/errorDisplayCode.ts"
 #: One entry of a ``Map`` of snake_case strings, in the one form Prettier writes (``singleQuote``).
 _STRING_PAIR = re.compile(r"\[\s*'([a-z][a-z0-9_]*)'\s*,\s*'([a-z][a-z0-9_]*)'\s*,?\s*\]")
 

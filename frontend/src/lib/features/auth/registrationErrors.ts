@@ -16,6 +16,10 @@ const REFUSAL_KEYS: Record<string, string> = {
     INVITE_INVALID: 'auth.link.unknown',
     // Whoever registers is not signed in: the message says the server is full, and nothing about how full.
     USER_LIMIT_REACHED: 'auth.userLimitReached',
+    // The password misses a rule of the server (decision 37): the checklist under the field says which.
+    PASSWORD_TOO_WEAK: 'auth.validation.passwordTooWeak',
+    // Email verification is required and no email with a link can go out now (workstream E)
+    EMAIL_VERIFICATION_UNAVAILABLE: 'email.verification.signUpUnavailable',
 };
 
 function describeFieldErrors(errors: unknown[]): RegistrationErrorText {

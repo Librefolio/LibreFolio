@@ -8,7 +8,7 @@
     import {CheckCheck, Square} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {SelectOption} from '$lib/components/ui/select/types';
     import {applyOwnedAssets, domainAssetKey, domainBrokerKey, ownedAssets} from '../copies';
@@ -117,7 +117,7 @@
                     {#if !broker.active}<span class={BADGE.warning}>{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>{/if}
                 </span>
                 {#if !broker.selectable}
-                    <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('tools.pacAllocator.planner.scope.notSelectable', {default: 'Not selectable: {role} access, not read', values: {role: broker.role ?? '—'}})}</span>
+                    <span class="block text-xs text-lf-muted">{$t('tools.pacAllocator.planner.scope.notSelectable', {default: 'Not selectable: {role} access, not read', values: {role: broker.role ?? '—'}})}</span>
                 {/if}
             </span>
         </span>
@@ -195,16 +195,12 @@
                     {@const already = inPlan(assetId)}
                     {@const checked = !already && !excluded.includes(assetId)}
                     <li data-testid="{testid}-asset" data-asset-id={assetId} data-in-plan={already ? 'true' : 'false'} data-selected={checked ? 'true' : 'false'}>
-                        <label
-                            class="flex items-center gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-200 dark:border-gray-700'} {already
-                                ? 'cursor-not-allowed opacity-60'
-                                : 'cursor-pointer hover:border-libre-green'}"
-                        >
-                            <input type="checkbox" class="rounded border-gray-300 text-libre-green focus:ring-libre-green" {checked} disabled={already} data-testid="{testid}-check" onchange={(event) => toggle(assetId, event.currentTarget.checked)} />
+                        <label class="flex items-center gap-3 rounded-lg border p-3 transition-colors {checked ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle'} {already ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-lf-link'}">
+                            <input type="checkbox" class="rounded border-lf-input text-lf-link focus:ring-lf-focus" {checked} disabled={already} data-testid="{testid}-check" onchange={(event) => toggle(assetId, event.currentTarget.checked)} />
                             <AssetIcon iconUrl={row.asset.icon_url} assetType={row.asset.asset_class} altText="" size="sm" />
                             <span class="min-w-0 flex-1">
                                 <span class="flex flex-wrap items-center gap-2">
-                                    <span class="font-medium text-gray-900 dark:text-gray-100">{row.asset.name}</span>
+                                    <span class="font-medium text-lf-primary">{row.asset.name}</span>
                                     {#if row.asset.ticker}<span class={HINT}>{row.asset.ticker}</span>{/if}
                                     {#if !row.asset.active}<span class={BADGE.warning}>{$t('tools.pacAllocator.planner.scope.inactive', {default: 'Inactive'})}</span>{/if}
                                     {#if already}<span class={BADGE.info} data-testid="{testid}-in-plan">{$t('tools.pacAllocator.planner.ownedAssets.inPlan', {default: 'Already in the plan'})}</span>{/if}
@@ -213,7 +209,7 @@
                                     {#each row.brokerIds as brokerId (brokerId)}
                                         {@const broker = scopeById.get(brokerId)}
                                         {#if broker}
-                                            <span class="inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300">
+                                            <span class="inline-flex items-center gap-1 text-xs text-lf-secondary">
                                                 <BrokerIcon brokerId={broker.id} iconUrl={broker.iconUrl} portalUrl={broker.portalUrl} pluginCode={broker.pluginCode} altText="" size={16} />{broker.name}
                                             </span>
                                         {/if}

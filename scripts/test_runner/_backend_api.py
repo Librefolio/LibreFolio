@@ -2,6 +2,11 @@
 Backend API endpoint tests and E2E tests.
 """
 
+import sqlite3
+from contextlib import closing
+
+from backend.test_scripts.test_db_config import get_test_db_path
+
 from . import _common
 from ._backend_db import db_populate
 from ._common import (
@@ -255,6 +260,17 @@ def api_system_wake(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Testing: LIBREFOLIO_WAKE_TOKEN(_FILE) → 404 off, 503 unusable, 401 without it; with it, one run at a time (409), a streamed 200 (spaces, then the run's report), a run left to end when its client goes (in-process app, run_due_jobs replaced)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_wake.py", test_names)
     return run_command(cmd, "System API wake-up tests", verbose=verbose)
+
+
+def api_system_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «Aggiornamento prezzi…» (GET /system/price-refresh): 401 and a valid answer on the lane, the chosen states in-process (lot Z5)."""
+    print_section("System API: the price refresh status")
+    print_info(
+        "Testing: GET /system/price-refresh → 401 without a session; any signed-in user 200 with state, reason, job, since, last_finished_at, last_refreshed; idle, starting, running, idle after a refreshed catch-up (in-process app, PRICE_REFRESH driven by the test); PriceRefreshResponse; OpenAPI"
+    )
+    print_info("Tests: PRAPI-001..008")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_price_refresh.py", test_names)
+    return run_command(cmd, "System API price refresh tests", verbose=verbose)
 
 
 def api_instance_block(verbose: bool = False, test_names: list = None) -> bool:
@@ -616,7 +632,7 @@ def api_scheduler(verbose: bool = False, test_names: list[str] | None = None) ->
     print_section("Scheduler API Tests")
     print_info("Testing REST API endpoints for scheduler state and log")
     print_info("Tests: GET /settings/scheduler/state, GET /settings/scheduler/log")
-    print_info("Tests: SAPI-001..008 — admin-only access, structure, since filter")
+    print_info("Tests: SAPI-001..014 — admin-only access, structure, since filter, lot Z7b's deferred/retry/backoff fields")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_scheduler_api.py", test_names)
@@ -743,6 +759,16 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Email verification API tests", verbose=verbose)
 
 
+def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the email-verification hooks in A's routes (lot E5b): register, login, users, settings, in-process."""
+    print_section("Email Verification Hooks API Tests")
+    print_info("Testing POST /auth/register (verification_required, 409 EMAIL_VERIFICATION_UNAVAILABLE), POST /auth/login (403 EMAIL_NOT_VERIFIED), GET/PATCH /users (holds_place, the limit), PATCH /settings/global/bulk (off → on needs an email with a link)")
+    print_info("In-process: the real auth, users, settings and email routers on a private SQLite, SMTP and public URL variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_verification_hooks_api.py", test_names)
+    return run_command(cmd, "Email verification hooks API tests", verbose=verbose)
+
+
 def _api_setup() -> bool:
     """Reseed the fixture data the API units assert against.
 
@@ -759,6 +785,36 @@ def _api_setup() -> bool:
     print_error("Failed to populate test database")
     print_warning("API tests needing fixture data (risk analytics) will fail")
     return False
+
+
+#: The users the API units sign in as, seeded by ``db populate`` (``test_user_defs`` in
+#: ``backend/test_scripts/test_db/populate_mock_data.py``).
+API_FIXTURE_USERS = ("e2e_test_admin", "e2e_test_user")
+
+
+def _api_fixture_users_missing() -> str | None:
+    """Why one ``api`` action must reseed first: the lane's test database lacks a fixture user. None when it has them.
+
+    The category's ``setup_needed`` (H-21, W-B54). It never writes the database file: opened ``mode=ro``, never
+    created. On a WAL database SQLite may create the empty ``-wal``/``-shm`` companions, as any reader does; while
+    the shared backend runs they exist already. A database that cannot be read counts as one to reseed.
+    """
+    db = get_test_db_path()
+    if not db.is_file():
+        return f"no test database at {db}"
+    placeholders = ", ".join("?" * len(API_FIXTURE_USERS))
+    try:
+        with closing(sqlite3.connect(f"{db.as_uri()}?mode=ro", uri=True, timeout=5)) as conn:
+            rows = conn.execute(f"SELECT username FROM users WHERE username IN ({placeholders})", API_FIXTURE_USERS).fetchall()
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc):
+            return f"the test database {db} cannot be read ({exc})"
+        rows = []
+    except sqlite3.Error as exc:
+        return f"the test database {db} cannot be read ({exc})"
+    found = {username for (username,) in rows}
+    missing = [username for username in API_FIXTURE_USERS if username not in found]
+    return f"the test database {db} has no fixture user {', '.join(missing)}" if missing else None
 
 
 def api_test(verbose: bool = False) -> bool:
@@ -830,6 +886,8 @@ Tests for REST API endpoints (server auto-started):
   • FX, Assets, Transactions, Brokers, Auth, Settings, Uploads, System, Backup
 """,
         setup=_api_setup,
+        # One action alone reseeds only when the fixture users are missing (H-21).
+        setup_needed=_api_fixture_users_missing,
         # Earned, not assumed: 50 of the 51 units ran concurrently on one shared
         # backend across two full runs with 4 workers — 579 tests, zero reds —
         # before this line was written. They are scoped because each creates its
@@ -878,6 +936,17 @@ Tests for REST API endpoints (server auto-started):
         # past its switches trapped) and the token variables are set with monkeypatch: no data directory, DB, server or
         # network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
+    )
+    # Write-scoped (the category default), no exclusive_because: on the lane's server the module only reads the status, as
+    # e2e_test_user, whose login counters (which no unit asserts) are the one write; the chosen states (starting, running,
+    # idle after a refreshed catch-up) run in-process, an app of the test holding the system router, get_current_user
+    # overridden and this pytest process's own PRICE_REFRESH driven and reset by the test, never the lane server's.
+    add_test(
+        api,
+        "system-price-refresh",
+        api_system_price_refresh,
+        name="System API Price Refresh",
+        desc="Lot Z5, «Aggiornamento prezzi…»: GET /system/price-refresh → 401 without a session; any signed-in user (e2e_test_user) 200, exactly state/reason/job/since/last_finished_at/last_refreshed with a valid state, whatever the lane's scheduler does; in-process: idle (all null, not refreshed), starting for wake with since, running for return with its job, idle after a refreshed catch-up with last_finished_at, datetimes ISO 8601 UTC; PriceRefreshResponse six fields, literals enforced (tick refused); OpenAPI, tag System, the 200 schema",
     )
     # H CP6: the block is set in the test process only (ASGI app + monkeypatch); the lane's backend stays unblocked, and
     # each test registers and deletes its own user, so the category's write-scoped holds.
@@ -978,7 +1047,10 @@ Tests for REST API endpoints (server auto-started):
         desc="Cache status/clear endpoints",
         exclusive_because="clears the process-wide cache registry (clear-all and clear/{name}): entries other units populated and may assert on (fx_provider_responses, search_results, upload_metadata) would vanish mid-run",
     )
-    add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
+    # Write-scoped (the category default), no exclusive_because: on the lane's server the module only reads the scheduler's
+    # state and log, with the users it registers; the cases that need a chosen scheduler_state.json or scheduler log (lot
+    # Z7c-2, SAPI-010..014) run in-process on the test's own tmp_path, never on the lane's files.
+    add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth; lot Z7b's deferred items, retry_at and failure backoff passed through, files and entries written before it at the defaults")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
     add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")
@@ -1009,10 +1081,21 @@ Tests for REST API endpoints (server auto-started):
         "email-verification",
         api_email_verification,
         name="Email Verification API",
-        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
+        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, per recipient mailbox, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
         # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP, public URL,
         # block and user-limit variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "email-verification-hooks",
+        api_email_verification_hooks,
+        name="Email Verification Hooks API",
+        desc="With require_email_verification on: register 201 verification_required + inactive + the email from LIBREFOLIO_PUBLIC_URL, login 403 EMAIL_NOT_VERIFIED (wrong password the 401 of an unknown account), resend, click, login 200; the first account never waits; an invited one waits and spends its invitation; no email with a link → 409 EMAIL_VERIFICATION_UNAVAILABLE, nothing created, the invitation live; option off as before. A waiting account takes a place while its link is live (GET /users usage, holds_place, a registration refused when full), none once expired; PATCH /users reactivation on a full instance accepted while the link is live, refused once expired, the old link then revoked; PATCH is_active false on a waiting account ends the wait (its links revoked, its place freed, holds_place false); the PATCH answer and GET /users carry holds_place, true while the link is live and false once it expired; past 10 registration emails from one client address the account waits without its email. Settings bulk: off → on 409 without email (nothing saved), 200 with email; on again or off always saved",
+        # PURE: the real auth, users, settings and email routers run in-process on a private SQLite file under tmp_path, the
+        # option set in that file only, the SMTP, public URL and user-limit variables set with monkeypatch in this process,
+        # the limiters private on a fake clock, the fake SMTP server on 127.0.0.1: the lane's backend is never called.
         isolation="pure",
     )
     add_test(

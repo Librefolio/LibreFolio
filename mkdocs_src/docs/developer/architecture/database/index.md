@@ -52,6 +52,47 @@ The database is organized into four logical subsystems. Each has its own detaile
     - Foreign Keys are enforced (`PRAGMA foreign_keys=ON`).
 3. 📦 **JSON for Flexibility**: Used for `classification_params` and `provider_params` to allow schema-less extension.
 
+## 🔢 Decimal Columns {: #decimal-columns }
+
+SQLite keeps the value of a `NUMERIC` column as a double (`REAL`; `INTEGER` for a whole
+value) and ignores the declared precision: the model's column type decides how the value
+is read back (`backend/app/db/models.py`; C-97, issue #43).
+
+| Columns | Type | Decimal places |
+|---------|------|----------------|
+| `transactions.quantity` | `RealDecimal(22, 10)` | 10 |
+| `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 |
+| `transactions.amount`, `asset_events.value` | `Numeric(18, 6)` | 6 |
+| `fx_rates.rate` | `Numeric(24, 10)` | 10 |
+| `price_history.volume` | `Numeric(24, 0)` | 0 |
+
+- **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
+  `0.123457` (a quantity, before C-97), and a wider scale shows the double's noise
+  (`65000.123456` at scale 12 reads `65000.123456000001`). `RealDecimal`
+  (`backend/app/db/real_decimal.py`) writes the same double and reads back the shortest
+  decimal that represents it (its `repr`), at most 15 significant digits
+  (`REAL_SIGNIFICANT_DIGITS`), rounded to the scale when it has more decimals and padded to
+  6 decimals (`READ_MIN_SCALE`) when it has fewer: `10` reads `10.000000`, as with
+  `Numeric(18, 6)`.
+- **Input limits.** A value sent in — a transaction's quantity, cash amount or manual
+  per-unit cost basis, a manual price or event value — over its column's decimal places,
+  or over 15 significant digits, is refused, never rounded (`decimal_limit_issue()` in
+  `backend/app/db/precision.py`; trailing zeros do not count): see
+  [Decimal limits](../../backend/transactions/service.md#decimal-limits),
+  [Asset Architecture](../../backend/assets/architecture.md) for prices and
+  [Asset Events](../../backend/assets/events.md) (`EVENT_TOO_MANY_DIGITS`). A provider's
+  prices are truncated instead: `truncate_priceHistory()` keeps 12 decimal places, then 15
+  significant digits, both rounded down. A BRIM plugin rounds a value it computes, never
+  one it reads from the file, with `round_computed_value()` (see
+  [Decimal places](../patterns/brim_plugin_guide.md#decimal-places)).
+- **Never `SUM` in SQL.** A `SUM` adds the stored doubles, not the decimals. Sum the values
+  read back in Python, with `financial_math` (`position_quantities()`, `native_balances()`),
+  as the [balance queries](../../backend/transactions/service.md#balance-queries) do.
+- **Older databases.** `001_initial` declares `NUMERIC(22, 10)` and `NUMERIC(24, 12)`; a
+  database created before keeps `NUMERIC(18, 6)`, on purpose: SQLite ignores the
+  declaration, so both read the same. The release 1.3 migration's docstring gives the
+  reasoning.
+
 ## 🧬 Migrations {: #migrations }
 
 Schema changes ship as Alembic revisions in `backend/alembic/versions/` (workflow:
@@ -249,6 +290,6 @@ The admin view of the same layout is [Filesystem Structure](../../../admin/files
 | `custom-uploads/.avatars_seeded` | `seed_default_avatars()` in `services/files/static_uploads.py` | Marker: the PNGs of `backend/staticResources/Avatars/` were copied, uploader `0` (system); without it the next start copies them again |
 | `broker_reports/` | `services/brim/brim_provider.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
 | `logs/librefolio.log` | `logging_config.py` | structlog `JSONRenderer` lines; `TimedRotatingFileHandler` (`when="W0"`, `utc=True`, `backupCount=52`) whose rotator gzips each archive to `librefolio.log.<date>.gz` |
-| `scheduler_state.json` | `services/platform/scheduler/state.py` | Last run of the `current_price` and `history_sync` jobs, written then renamed; a missing or corrupt file means a fresh state |
+| `scheduler_state.json` | `services/platform/scheduler/state.py` | Last run of the `current_price` and `history_sync` jobs, with the count of items a provider's pause deferred (`last_items_deferred`) and their `retry_at`, and the failures in a row (`consecutive_failures`) and `next_attempt_at`, the end of the wait after them ([Provider Pauses and Failures](../../backend/scheduler.md#pauses-and-failures)); written then renamed; a missing or corrupt file means a fresh state |
 | `secrets/instance.key` | `services/platform/instance_key.py` | The [instance key](../security.md#instance-key), only when neither `LIBREFOLIO_INSTANCE_KEY` nor `LIBREFOLIO_INSTANCE_KEY_FILE` is set. Created by the first `derive_key()` call, not by `ensure_data_dirs()`: `secrets.token_urlsafe(32)` and a newline (43 characters, 44 bytes), folder `0700`, file `0600`. Published with a hard link so that the first key wins, then never rewritten; a file that goes missing is generated again, see the [known limitation](../security.md#instance-key). `validate_test_data_dir()` keeps a test root from aliasing it |
 | `scenario_catalog/{historical,hypothetical}/` | the administrator | Optional host scenarios ([Scenario Catalogue](../../backend/risk/architecture.md#scenario-catalog)) |

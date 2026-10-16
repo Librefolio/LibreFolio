@@ -318,8 +318,8 @@
         const date = qtx.fx_info.fx_rate_date ?? '?';
         const days = qtx.fx_info.fx_days_back ?? 0;
         const daysLabel = days === 0 ? $t('transactions.wac.fxTooltipSameDay') || 'same day' : `${days} ${$t('transactions.wac.fxTooltipDaysBefore') || 'days before'}`;
-        const dateColor = days > 0 ? 'text-amber-500' : '';
-        const staleNoteHtml = days > 5 ? `<br/><span class="text-red-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
+        const dateColor = days > 0 ? 'text-lf-warning-on-inverse' : '';
+        const staleNoteHtml = days > 5 ? `<br/><span class="text-lf-danger-on-inverse">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
         return `<b>FX:</b> 1 ${fromHtml} = ${rate} ${toHtml}<br/>📅 ${date} <span class="${dateColor}">(${daysLabel})</span>${staleNoteHtml}`;
     }
 
@@ -347,16 +347,16 @@
 <div class="flex flex-col gap-1.5" data-testid={testid}>
     <!-- Label row with toggle -->
     <div class="flex items-center gap-2">
-        <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex items-center gap-1">
+        <span class="text-xs text-lf-muted whitespace-nowrap flex items-center gap-1">
             {$t('transactions.form.costBasis')}
             <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top" testId="{testid}-help">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 dark:text-gray-500"
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-lf-muted"
                     ><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg
                 >
             </Tooltip>
             {#if hasAnyFxConversion}
                 <Tooltip html={buildBadgeTooltipHtml()} position="top">
-                    <span class="text-[9px] px-1 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium cursor-help">💱 FX</span>
+                    <span class="text-[9px] px-1 py-0.5 rounded bg-lf-info-soft text-lf-info-on-soft font-medium cursor-help">💱 FX</span>
                 </Tooltip>
             {/if}
         </span>
@@ -366,20 +366,15 @@
             <div class="flex items-center gap-1 text-[10px] ml-auto" data-testid="{testid}-toggle">
                 <button
                     type="button"
-                    class="px-1.5 py-0.5 rounded {isAuto && !forcedManual ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
+                    class="px-1.5 py-0.5 rounded {isAuto && !forcedManual ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-muted hover:text-lf-secondary'}"
                     onclick={setAutoMode}
                     disabled={disabled || forcedManual}
                     aria-pressed={isAuto && !forcedManual}
                     data-testid="{testid}-toggle-auto">{$t('transactions.wacPreview.toggleAuto')}{forcedManual ? ' ⚠️' : ''}</button
                 >
-                <span class="text-gray-300 dark:text-gray-600">|</span>
-                <button
-                    type="button"
-                    class="px-1.5 py-0.5 rounded {!isAuto || forcedManual ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                    onclick={switchToManual}
-                    {disabled}
-                    aria-pressed={!isAuto || forcedManual}
-                    data-testid="{testid}-toggle-manual">{$t('transactions.wacPreview.toggleManual')}</button
+                <span class="text-lf-muted">|</span>
+                <button type="button" class="px-1.5 py-0.5 rounded {!isAuto || forcedManual ? 'bg-lf-neutral text-lf-secondary font-medium' : 'text-lf-muted hover:text-lf-secondary'}" onclick={switchToManual} {disabled} aria-pressed={!isAuto || forcedManual} data-testid="{testid}-toggle-manual"
+                    >{$t('transactions.wacPreview.toggleManual')}</button
                 >
             </div>
         {/if}
@@ -390,21 +385,13 @@
          see unitToggleActive) so its state persists across quantity edits. -->
     {#if !disabled}
         <div class="flex items-center gap-1 text-[10px]" data-testid="{testid}-unit-toggle">
-            <span class="text-gray-400 dark:text-gray-500">{$t('transactions.wacPreview.unitModeLabel') ?? 'Show as:'}</span>
-            <button
-                type="button"
-                class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                onclick={() => setUnitMode('total')}
-                aria-pressed={unitMode === 'total'}
-                data-testid="{testid}-unit-toggle-total">{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
+            <span class="text-lf-muted">{$t('transactions.wacPreview.unitModeLabel') ?? 'Show as:'}</span>
+            <button type="button" class="px-1.5 py-0.5 rounded {unitMode === 'total' ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-muted hover:text-lf-secondary'}" onclick={() => setUnitMode('total')} aria-pressed={unitMode === 'total'} data-testid="{testid}-unit-toggle-total"
+                >{$t('transactions.wacPreview.unitModeTotal') ?? 'Total'}</button
             >
-            <span class="text-gray-300 dark:text-gray-600">|</span>
-            <button
-                type="button"
-                class="px-1.5 py-0.5 rounded {unitMode === 'unit' ? 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-200 font-medium' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}"
-                onclick={() => setUnitMode('unit')}
-                aria-pressed={unitMode === 'unit'}
-                data-testid="{testid}-unit-toggle-unit">{$t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit'}</button
+            <span class="text-lf-muted">|</span>
+            <button type="button" class="px-1.5 py-0.5 rounded {unitMode === 'unit' ? 'bg-lf-neutral text-lf-secondary font-medium' : 'text-lf-muted hover:text-lf-secondary'}" onclick={() => setUnitMode('unit')} aria-pressed={unitMode === 'unit'} data-testid="{testid}-unit-toggle-unit"
+                >{$t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit'}</button
             >
         </div>
     {/if}
@@ -414,7 +401,7 @@
         <CompactCashCell value={displayValue} onChange={handleValueChange} signHint="positive" amountPlaceholder={isAuto ? ($t('transactions.wacPreview.placeholderAuto') ?? 'auto (⚡ Validate)') : '0.00'} {defaultCode} currencyDisabled={disabled} {disabled} testid="{testid}-input" />
 
         {#if loading}
-            <span class="text-[10px] text-gray-400 animate-pulse" data-testid="{testid}-loading">
+            <span class="text-[10px] text-lf-muted animate-pulse" data-testid="{testid}-loading">
                 {$t('transactions.wacPreview.calculating') ?? 'Calculating...'}
             </span>
         {/if}
@@ -422,18 +409,18 @@
 
     <!-- Currency pending hint -->
     {#if currencyPending && !loading}
-        <p class="text-[10px] text-amber-600 dark:text-amber-400 italic" data-testid="{testid}-currency-pending">
+        <p class="text-[10px] text-lf-warning italic" data-testid="{testid}-currency-pending">
             ⏳ {$t('transactions.wacPreview.currencyChanged') ?? 'Currency changed — validating to update…'}
         </p>
     {/if}
 
     <!-- Auto mode: suggestion info + foldable qualifying panel -->
     {#if isAuto && previewResult && !hasMissingPairs && previewResult.wac}
-        <div class="flex items-center gap-1 text-[10px] text-gray-500 dark:text-gray-400" data-testid="{testid}-suggestion">
+        <div class="flex items-center gap-1 text-[10px] text-lf-muted" data-testid="{testid}-suggestion">
             <Tooltip text={$t('transactions.wacPreview.validateToRecalculate') ?? 'Validate to recalculate the table'} position="right">
-                <Lightbulb size={12} class="text-amber-500 shrink-0 cursor-help" />
+                <Lightbulb size={12} class="text-lf-warning shrink-0 cursor-help" />
             </Tooltip>
-            <button type="button" class="flex items-center gap-0.5 hover:text-gray-700 dark:hover:text-gray-200" onclick={() => (showQualifying = !showQualifying)} data-testid="{testid}-show-qualifying">
+            <button type="button" class="flex items-center gap-0.5 hover:text-lf-secondary" onclick={() => (showQualifying = !showQualifying)} data-testid="{testid}-show-qualifying">
                 {#if showQualifying}
                     <ChevronDown size={10} />
                 {:else}
@@ -449,15 +436,15 @@
         </div>
     {:else if isAuto && !previewResult && !loading && !error}
         <!-- Auto mode: no result yet — hint to validate -->
-        <div class="flex items-center gap-1 text-[10px] text-gray-400 dark:text-gray-500" data-testid="{testid}-validate-hint">
-            <Lightbulb size={12} class="text-amber-400/70 shrink-0" />
+        <div class="flex items-center gap-1 text-[10px] text-lf-muted" data-testid="{testid}-validate-hint">
+            <Lightbulb size={12} class="text-lf-warning/70 shrink-0" />
             <span>{$t('transactions.wacPreview.validateHint') ?? 'Complete the fields and validate to calculate WAC'}</span>
         </div>
     {/if}
 
     <!-- Missing FX pairs error -->
     {#if hasMissingPairs}
-        <div class="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded p-2" data-testid="{testid}-missing-pairs">
+        <div class="text-[10px] text-lf-warning-on-soft bg-lf-warning-soft rounded p-2" data-testid="{testid}-missing-pairs">
             <div class="flex items-center gap-1 font-medium mb-1">
                 <AlertTriangle size={12} class="shrink-0" />
                 <span>{$t('transactions.wacPreview.missingFx') ?? 'Cannot calculate WAC: missing FX rates'}</span>
@@ -465,8 +452,7 @@
                     <button
                         type="button"
                         class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded
-                            bg-libre-green/10 text-libre-green hover:bg-libre-green/20
-                            dark:bg-libre-green/20 dark:text-green-300 dark:hover:bg-libre-green/30
+                            bg-lf-selected text-lf-link hover:bg-lf-checked/20
                             transition-colors shrink-0"
                         onclick={() => onOpenFxSync?.()}
                         data-testid="{testid}-sync-fx-btn"
@@ -484,7 +470,7 @@
                     <li>
                         {@html formatCurrencyCodeHtml(parts[0])} / {@html formatCurrencyCodeHtml(parts[1])} — {$t('transactions.wac.noRateAvailable') || 'no rate available'}
                         {#if dates.length > 0}
-                            <span class="text-gray-500 dark:text-gray-400">: {dates.join(', ')}</span>
+                            <span class="text-lf-muted">: {dates.join(', ')}</span>
                         {/if}
                     </li>
                 {/each}
@@ -494,12 +480,12 @@
 
     <!-- Error -->
     {#if error}
-        <p class="text-[10px] text-red-500" data-testid="{testid}-error">{error}</p>
+        <p class="text-[10px] text-lf-danger" data-testid="{testid}-error">{error}</p>
     {/if}
 
     <!-- FX staleness warning banner (above table) -->
     {#if hasStaleFx && isAuto && showQualifying}
-        <div class="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 rounded p-2 mt-1" data-testid="{testid}-fx-stale-banner">
+        <div class="text-[10px] text-lf-warning-on-soft bg-lf-warning-soft rounded p-2 mt-1" data-testid="{testid}-fx-stale-banner">
             <div class="flex items-center gap-1 font-medium mb-1">
                 <AlertTriangle size={10} class="shrink-0" />
                 <span>{$t('transactions.wac.fxStaleBannerTitle') || 'FX conversions with stale rates'}</span>
@@ -509,15 +495,15 @@
                     <li>{@html formatCurrencyCodeHtml(sp.from)} / {@html formatCurrencyCodeHtml(sp.to)} — {sp.date} ({sp.days}{$t('transactions.wac.fxDaysAgo') || 'd ago'})</li>
                 {/each}
             </ul>
-            <p class="mt-1.5 text-[9px] text-amber-600/80 dark:text-amber-500/70 italic">{$t('transactions.wac.fxDisclaimer') || 'The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.'}</p>
+            <p class="mt-1.5 text-[9px] text-lf-warning/80 italic">{$t('transactions.wac.fxDisclaimer') || 'The FX rate used may differ from the one applied by your broker. Verify the average cost with your broker.'}</p>
         </div>
     {/if}
 
     <!-- Qualifying TXs table (expandable). Unit cost and running WAC are unit values: public (D5′-c). -->
     {#if !hideTable && showQualifying && previewResult?.qualifying_txs?.length}
-        <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-gray-200 dark:border-slate-700 rounded text-[10px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600" data-testid="{testid}-qualifying-table">
+        <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-lf-subtle rounded text-[10px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600" data-testid="{testid}-qualifying-table">
             <table class="w-max min-w-full">
-                <thead class="bg-gray-50 dark:bg-slate-800 sticky top-0">
+                <thead class="bg-lf-panel sticky top-0">
                     <tr>
                         <th class="px-2 py-1 text-left min-w-[28px]">#</th>
                         <th class="px-2 py-1 text-left min-w-[120px]">{$t('common.type')}</th>
@@ -560,7 +546,7 @@
                                                 ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2, sensitivity: 'public'})
                                                 : '?'}
                                             {#if qtx.fx_info && (qtx.fx_info.fx_days_back ?? 0) > 5}
-                                                <span class="text-amber-500 ml-0.5">⚠️</span>
+                                                <span class="text-lf-warning ml-0.5">⚠️</span>
                                             {/if}
                                         </span>
                                     </Tooltip>

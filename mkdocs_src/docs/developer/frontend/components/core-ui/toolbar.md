@@ -93,7 +93,7 @@ Used by both `TabBar.svelte` (own `shrinkLabelsToFit` prop) and `PageToolbar.sve
 
 ## ↔️ Scrollable tab bar {: #tabbar-scrollable }
 
-`scrollable` is an opt-in prop of `TabBar` (`lib/components/ui/tabs/TabBar.svelte`), default `false`: the other bars (`PageToolbar`, Files, the risk panel, the asset data editor) keep their markup. Only the [Settings page](../features/settings.md#tab-registry) passes it: an administrator sees seven tabs there, each button keeps its natural width above `sm`, and the card around the bar is `overflow-hidden`, so in a long language or a medium-width window the last tabs would be cut off at the card's edge.
+`scrollable` is an opt-in prop of `TabBar` (`lib/components/ui/tabs/TabBar.svelte`), default `false`: the other bars (`PageToolbar`, Files, the risk panel, the asset data editor) keep their markup. Only the [Settings page](../features/settings.md#tab-registry) passes it: an administrator sees eight tabs there, each button keeps its natural width above `sm`, and the card around the bar is `overflow-hidden`, so in a long language or a medium-width window the last tabs would be cut off at the card's edge.
 
 With it, the tab row (`role="tablist"`) sits inside a horizontal scroll container (`data-testid="tab-bar-scroller"`, `overflow-x-auto`, thin scrollbar):
 

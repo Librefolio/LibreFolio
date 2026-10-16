@@ -95,14 +95,14 @@
     }
 </script>
 
-<div>
-    <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{$t('common.aesthetics')}</h3>
+<div class="text-lf-primary">
+    <h3 class="text-sm font-semibold text-lf-secondary mb-3">{$t('common.aesthetics')}</h3>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <!-- Color by baseline -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('colorByBaseline') ? 'opacity-40 pointer-events-none' : ''}">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle {disabledFields.has('colorByBaseline') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.baselineColors')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.baselineColorsDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.baselineColors')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.baselineColorsDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.baselineColors')}
@@ -121,10 +121,10 @@
         </div>
 
         <!-- Area fill -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('areaFill') ? 'opacity-40 pointer-events-none' : ''}">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle {disabledFields.has('areaFill') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.areaFill')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.areaFillDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.areaFill')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.areaFillDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.areaFill')}
@@ -143,10 +143,10 @@
         </div>
 
         <!-- Grid lines -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.gridLines')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.gridLinesDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.gridLines')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.gridLinesDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.gridLines')}
@@ -164,10 +164,10 @@
         </div>
 
         <!-- Stale gradient -->
-        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 {disabledFields.has('staleGradient') ? 'opacity-40 pointer-events-none' : ''}">
+        <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle {disabledFields.has('staleGradient') ? 'opacity-40 pointer-events-none' : ''}">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.staleGradient')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.staleGradientDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.staleGradient')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.staleGradientDesc')}</span>
             </span>
             <button
                 aria-label={$t('chartSettings.staleGradient')}
@@ -186,22 +186,22 @@
         </div>
 
         <!-- Contextual Y-axis scale modes -->
-        <div class="p-2.5 rounded-lg border border-gray-200 dark:border-slate-600 sm:col-span-2 space-y-2">
+        <div class="p-2.5 rounded-lg border border-lf-subtle sm:col-span-2 space-y-2">
             <span>
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-200">{$t('chartSettings.yAxisScale')}</span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">{$t('chartSettings.yAxisScaleDesc')}</span>
+                <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.yAxisScale')}</span>
+                <span class="block text-xs text-lf-muted">{$t('chartSettings.yAxisScaleDesc')}</span>
             </span>
             <div class="space-y-2">
                 {#each effectiveAxisRows as row (row.key)}
                     <div class="flex items-center justify-between gap-3 flex-wrap" data-testid={`chart-axis-row-${axisTestId(row.key)}`}>
                         {#if row.label}
-                            <span class="text-xs font-medium text-gray-600 dark:text-gray-300">{row.label}</span>
+                            <span class="text-xs font-medium text-lf-secondary">{row.label}</span>
                         {/if}
                         <div class="flex items-center gap-2 flex-wrap {row.label ? '' : 'ml-auto'}">
-                            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                            <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
                                 {#each ['auto', 'include0', 'custom'] as mode}
                                     <button
-                                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {row.settings.mode === mode ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                                        class="px-2.5 py-1 text-[10px] font-medium transition-colors {row.settings.mode === mode ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                                         data-testid={`chart-axis-${axisTestId(row.key)}-${mode}`}
                                         aria-pressed={row.settings.mode === mode}
                                         onclick={() => updateAxis(row.key, row.settings, {mode: mode as AxisScaleMode})}
@@ -213,12 +213,12 @@
                             </div>
                             {#if row.settings.mode === 'custom'}
                                 <div class="flex items-center gap-1.5 text-sm sm:text-xs">
-                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">{$t('common.min')}</span>
+                                    <span class="text-xs sm:text-[10px] text-lf-muted">{$t('common.min')}</span>
                                     <input
                                         type="number"
                                         use:numericArrows
                                         data-testid={`chart-axis-${axisTestId(row.key)}-min`}
-                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-lf-input rounded bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                         step="any"
                                         value={row.settings.min ?? ''}
                                         oninput={(event) => {
@@ -229,12 +229,12 @@
                                         }}
                                         placeholder="—"
                                     />
-                                    <span class="text-xs sm:text-[10px] text-gray-500 dark:text-gray-400">{$t('common.max')}</span>
+                                    <span class="text-xs sm:text-[10px] text-lf-muted">{$t('common.max')}</span>
                                     <input
                                         type="number"
                                         use:numericArrows
                                         data-testid={`chart-axis-${axisTestId(row.key)}-max`}
-                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                                        class="lf-compact-number-input w-20 px-1.5 py-0.5 border border-lf-input rounded bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                                         step="any"
                                         value={row.settings.max ?? ''}
                                         oninput={(event) => {

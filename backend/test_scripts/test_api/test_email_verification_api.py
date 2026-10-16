@@ -16,10 +16,11 @@ not written yet: an account that waits is written as ``hold_for_verification`` l
    active account; 409 ``EMAIL_UNAVAILABLE`` and ``EMAIL_LINKS_UNAVAILABLE`` with ``{error_code, message}`` only — no
    ``problem``: whoever asks is not an administrator —; 409 ``USER_LIMIT_REACHED``; 429 ``EMAIL_RATE_LIMITED`` with
    ``retry_after`` and the same whole seconds, at least 1, in ``Retry-After`` — per client address (before the
-   password), per account, for the hourly budget —; 502 ``EMAIL_DELIVERY_FAILED`` with ``{error_code, message}`` only —
-   no ``smtp_code`` either —, after which «resend» works at once; 422 ``EMAIL_RECIPIENT_INVALID``; 422 for a body that
-   is not ``{username, password}``. Accounts and limits are asked before the configuration: an unknown account is 401
-   whatever email can do.
+   password), per account, for the hourly budget, per recipient mailbox (three verification emails an hour, whatever
+   accounts share it: the same answer as every other limit) —; 502 ``EMAIL_DELIVERY_FAILED`` with
+   ``{error_code, message}`` only — no ``smtp_code`` either —, after which «resend» works at once; 422
+   ``EMAIL_RECIPIENT_INVALID``; 422 for a body that is not ``{username, password}``. Accounts and limits are asked
+   before the configuration: an unknown account is 401 whatever email can do.
 4. The client address is ``request.client.host``, keyed by ``flows.address_key``: one IPv6 /64 is one client; a
    request without an address (a unix socket) is not counted per address.
 5. No log event holds a token, a password, an identifier or an address.
@@ -27,10 +28,10 @@ not written yet: an account that waits is written as ``hold_for_verification`` l
 Pure: the real auth and email routers run in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed
 at teardown); accounts are rows with a real bcrypt hash at cost 4; tokens are issued by A's token service. An autouse
 fixture removes every inherited ``LIBREFOLIO_SMTP_*``, ``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``,
-``LIBREFOLIO_MAX_USERS`` and ``LIBREFOLIO_REGISTRATION``; each test sets its own with ``monkeypatch``. The hourly budget
-and ``verification.RESEND_BY_ADDRESS`` are private limiters on a fake clock; ``socket.getaddrinfo`` resolves the
-loopback only; every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1. The lane's backend is never called.
-Nothing is timed.
+``LIBREFOLIO_MAX_USERS`` and ``LIBREFOLIO_REGISTRATION``; each test sets its own with ``monkeypatch``. The hourly budget,
+``verification.RESEND_BY_ADDRESS`` and ``verification.VERIFICATION_BY_MAILBOX`` are private limiters on a fake clock;
+``socket.getaddrinfo`` resolves the loopback only; every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1. The
+lane's backend is never called. Nothing is timed.
 """
 
 from __future__ import annotations
@@ -115,6 +116,11 @@ INVALID_TOKEN_MESSAGE = "This verification link is not valid"
 RATE_LIMITED_MESSAGE = "Too many requests: try again later"
 
 SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
+#: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
+SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
+#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX.
+MAILBOX_VARIANTS = ("Zq-Vic@Example.com", "zq-vic@example.com", "ZQ-VIC@EXAMPLE.COM", "zQ-vIc@eXaMpLe.CoM")
+MAILBOX = "zq-vic@example.com"
 START = 1_000.0
 
 
@@ -167,6 +173,14 @@ def resend_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWi
     """A private «resend» limiter with the shipped limit, on the fake clock: no test counts in, or is counted by, the process's."""
     limiter = SlidingWindowLimiter(SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds, clock=clock)
     monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", limiter)
+    return limiter
+
+
+@pytest.fixture(autouse=True)
+def mailbox_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """A private per-mailbox limiter with the shipped limit, on the fake clock: an email of one test never counts against another's mailbox."""
+    limiter = SlidingWindowLimiter(SHIPPED_MAILBOX.limit, SHIPPED_MAILBOX.window_seconds, clock=clock)
+    monkeypatch.setattr(verification, "VERIFICATION_BY_MAILBOX", limiter)
     return limiter
 
 
@@ -802,3 +816,38 @@ async def test_no_log_event_holds_a_token_a_password_an_identifier_or_an_address
     secrets = (hold.token, token, NEVER_ISSUED, ACCOUNT_PASSWORD, WRONG_PASSWORD, alice.email, ALICE, NOBODY, FIRST_CLIENT[0])
     assert _holding(events, *secrets) == [], f"a log event holds a secret: {_holding(events, *secrets)}"
     print_success(f"{len(events)} events, none holding a secret")
+
+
+# =============================================================================
+# 4. AFTER THE SECURITY REVIEW OF E5b
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_a_mailbox_with_three_verification_emails_this_hour_answers_429_as_any_limit(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, mailbox_limit: SlidingWindowLimiter) -> None:
+    """EVA-016 — contract 3: four waiting accounts whose addresses are one mailbox written four ways (``Zq-Vic@Example.com``, ``zq-vic@…``, ``ZQ-VIC@…``, ``zQ-vIc@…``), the last with a link emailed two hours ago, still live. The first three ask «resend», a minute apart: 200 each, one email each. The fourth, a minute later, is 429 ``{"error_code": "EMAIL_RATE_LIMITED", "retry_after": 3420, "message"}`` with ``Retry-After: 3420`` — when the oldest of the three leaves the hour —: the answer of every other limit (EVA-009), so nothing tells whoever asks that other accounts share the mailbox. Nothing is created for that account: its tokens as they were, its link of two hours ago still live; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
+    print_section("EVA-016: three verification emails per mailbox")
+    moment = utcnow()
+    monkeypatch.setattr(verification, "utcnow", lambda: moment)
+    accounts = [await _waiting(private.engine, f"zq_vic_{index}", created=moment - timedelta(hours=3), email=written) for index, written in enumerate(MAILBOX_VARIANTS)]
+    last = accounts[-1][0]
+    old_link = await _emailed(private.engine, last, created=moment - timedelta(hours=2))
+    before = [(row.id, row.email, row.consumed_at, row.revoked_at) for row in await _rows(private.engine, last.id)]
+
+    answers: list[httpx.Response] = []
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        for index, (user, _hold) in enumerate(accounts):
+            clock.now = START + 60 * index
+            answers.append(await _resend(private, user.username))
+
+    assert [answer.status_code for answer in answers[:3]] == [200, 200, 200], [answer.text for answer in answers[:3]]
+    refused = answers[3]
+    assert refused.status_code == 429, refused.text
+    assert _detail(refused) == {"error_code": "EMAIL_RATE_LIMITED", "retry_after": 3420, "message": RATE_LIMITED_MESSAGE}
+    assert refused.headers.get("retry-after") == "3420"
+    assert [message.rcpt_tos for message in fake.messages] == [[written] for written in MAILBOX_VARIANTS[:3]]
+    assert [(row.id, row.email, row.consumed_at, row.revoked_at) for row in await _rows(private.engine, last.id)] == before
+    assert await _status(private.engine, old_link.token) == TokenStatus.VALID
+    assert (budget.count(), mailbox_limit.count(MAILBOX)) == (3, 3)
+    print_success("200 three times; the fourth 429 for 3420 s, nothing made for it")

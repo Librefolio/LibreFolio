@@ -27,19 +27,27 @@ Environment Variables (see .env):
     SESSION_COOKIE_SECURE: Secure attribute of the session cookie: auto | always | never (default: auto)
     RISK_SIMULATION_WORKERS: Spawned simulation workers (default: 1)
     RISK_OPTIMIZATION_WORKERS: Spawned optimization workers (default: 1)
-    RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600)
-    RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600)
-    LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted)
+    RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600; managed: 60)
+    RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600; managed: 60)
+    LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted); a profile's defaults: PROFILE_DEFAULTS
+        for Settings fields, ENVIRONMENT_PROFILE_DEFAULTS (profile_default()) for the variables of the section modules
+    LIBREFOLIO_FRAME_PROTECTION: X-Frame-Options and frame-ancestors on every response (default: off; managed: on)
+    LIBREFOLIO_CSP_REPORT_ONLY: Report-only Content-Security-Policy on the web app's pages (default: off; managed: on)
+    LIBREFOLIO_CLIENT_IP_HEADER: The header a trusted reverse proxy passes the visitor's address in, such as Fly-Client-IP
+        (default: unset, the connection's address; no profile sets it)
 
 Secrets (JWT_SECRET, LIBREFOLIO_INSTANCE_KEY, ...) also accept NAME_FILE, the path of a file holding the value: see
-env_secret(). Every variable the code reads is listed in .env.example.
+env_secret(). Addresses (LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL, ...) follow one rule: see env_url(). Every
+variable the code reads is listed in .env.example.
 """
 
 import os
+import re
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
+from urllib.parse import urlsplit
 
-from pydantic import ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from backend.app.utils.runtime.version import get_git_version
@@ -58,6 +66,36 @@ DEFAULT_PROD_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "prod"
 DEFAULT_TEST_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "test"
 PRODUCTION_DATA_MARKER = ".librefolio-production-data"
 TEST_LANE_HEADER = "X-LibreFolio-Test-Lane"
+
+#: What a profile changes (decision D5, F27): ``Settings`` gives every listed field the environment and ``.env`` leave
+#: unset the active profile's value. A value the operator sets always wins, even one equal to the code default. A
+#: self-hosted install keeps every code default.
+PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
+    "selfhosted": {},
+    "managed": {
+        # A hosting provider runs many instances: idle risk workers give their memory back after a minute (F27)
+        "RISK_SIMULATION_IDLE_TIMEOUT_SECONDS": 60.0,
+        "RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS": 60.0,
+        "LIBREFOLIO_FRAME_PROTECTION": True,
+        "LIBREFOLIO_CSP_REPORT_ONLY": True,
+    },
+}
+
+#: The same for the variables a section module of this package reads from the environment, outside ``Settings`` (H-17):
+#: while such a variable is unset, ``profile_default(name, fallback)`` gives the active profile's value, or the code's
+#: own ``fallback`` when the profile lists none. A self-hosted install keeps every fallback.
+ENVIRONMENT_PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
+    "selfhosted": {},
+    "managed": {
+        # The largest archive a restore accepts, in megabytes (decision 43; workstream B, config/backup.py)
+        "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500,
+    },
+}
+
+#: The name of an HTTP header (RFC 9110 ``token``), for ``LIBREFOLIO_CLIENT_IP_HEADER``.
+_HEADER_TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+#: Headers holding a list of addresses, whose first value the client chooses: never ``LIBREFOLIO_CLIENT_IP_HEADER``.
+_LIST_HEADERS = frozenset({"x-forwarded-for", "forwarded"})
 
 #: The secrets that make an instance trust a session or decrypt its data, in every form. A test runtime never inherits
 #: them (``configure_test_runtime`` in ``scripts/cli_base.py``): a test lane signs and derives with secrets of its own.
@@ -137,6 +175,29 @@ def env_secret_origin(name: str) -> str | None:
     if file_name.strip():
         return f"{name}{SECRET_FILE_SUFFIX} ({_secret_file_path(file_name)})"
     return None
+
+
+def env_url(name: str) -> str | None:
+    """The http(s) address in the variable ``name``, from the process environment only, never from ``.env``.
+
+    - An empty or blank value counts as unset: ``None``.
+    - Otherwise the value, stripped, must be an ``http://`` or ``https://`` address (the scheme in any case) with a host
+      name, and no space, tab or line break inside. One trailing slash is removed, so a path can be appended to it;
+      nothing else changes, the case included.
+    - Any other value raises ``ValueError``, which names the variable and the value: the caller decides what an invalid
+      address costs, and logs it.
+    """
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    try:
+        # urlsplit drops tabs and line breaks before parsing: the whitespace check reads the raw value.
+        valid = not any(character.isspace() for character in value) and value.lower().startswith(("http://", "https://")) and bool(urlsplit(value).hostname)
+    except ValueError:  # a malformed address, such as an unclosed IPv6 bracket
+        valid = False
+    if not valid:
+        raise ValueError(f"{name}={value!r}: expected an http:// or https:// address with a host name")
+    return value[:-1] if value.endswith("/") else value
 
 
 def _secret_file_path(file_name: str) -> Path:
@@ -221,13 +282,36 @@ class Settings(BaseSettings):
         return value.strip().lower() if isinstance(value, str) else value
 
     # Instance profile: "selfhosted" (an install run by its owner) or "managed" (an instance a hosting provider runs for
-    # its customers), reported by GET /system/instance
+    # its customers), reported by GET /system/instance. Its defaults: PROFILE_DEFAULTS
     LIBREFOLIO_PROFILE: Literal["selfhosted", "managed"] = "selfhosted"
 
     @field_validator("LIBREFOLIO_PROFILE", mode="before")
     @classmethod
     def _instance_profile(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
+
+    # Frame protection (D5): X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' on every
+    # response. Off by default: a self-hosted install may be embedded by its owner's dashboards (Home Assistant panels)
+    LIBREFOLIO_FRAME_PROTECTION: bool = False
+    # Report-only Content-Security-Policy on the web app's pages (D5): violations show in the browser console, nothing
+    # is blocked. Off by default
+    LIBREFOLIO_CSP_REPORT_ONLY: bool = False
+
+    # The header in which a trusted reverse proxy passes the visitor's address (P17), such as Fly.io's Fly-Client-IP:
+    # services/platform/client_address.py. Empty by default: the connection's address. No profile sets it
+    LIBREFOLIO_CLIENT_IP_HEADER: str = ""
+
+    @field_validator("LIBREFOLIO_CLIENT_IP_HEADER", mode="after")
+    @classmethod
+    def _client_ip_header(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            return ""
+        if not _HEADER_TOKEN.fullmatch(value):
+            raise ValueError(f"LIBREFOLIO_CLIENT_IP_HEADER={value!r}: expected the name of one HTTP header, such as Fly-Client-IP")
+        if value.lower() in _LIST_HEADERS:
+            raise ValueError(f"LIBREFOLIO_CLIENT_IP_HEADER={value!r}: a list of addresses whose first value the client chooses; for X-Forwarded-For set FORWARDED_ALLOW_IPS, which uvicorn reads")
+        return value
 
     # Native quantitative engines
     RISK_SIMULATION_WORKERS: int = Field(1, ge=1, le=8)
@@ -238,6 +322,16 @@ class Settings(BaseSettings):
     RISK_OPTIMIZATION_TIMEOUT_SECONDS: float = Field(60.0, gt=0)
     RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: float = Field(600.0, ge=0)
     RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: float = Field(600.0, ge=0)
+
+    @model_validator(mode="after")
+    def _apply_profile_defaults(self) -> "Settings":
+        """Give every field the profile changes, and that neither the environment nor ``.env`` set, the profile's value."""
+        for name, value in PROFILE_DEFAULTS.get(self.LIBREFOLIO_PROFILE, {}).items():
+            if name not in self.model_fields_set:
+                # Not an assignment, which would count the field as set by the operator and skip its validation; the
+                # table's values are checked against the fields' types by services profile-defaults
+                object.__setattr__(self, name, value)
+        return self
 
     model_config = ConfigDict(
         env_file=str(PROJECT_ROOT / ".env"),
@@ -362,7 +456,12 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         production_dirs.append(_resolve_data_dir(configured_prod))
     if any(_paths_overlap(candidate, prod) for prod in production_dirs):
         raise ValueError("Test data directory must not overlap the production data directory")
-    if any((ancestor / PRODUCTION_DATA_MARKER).exists() for ancestor in (candidate, *candidate.parents)):
+    # Path.exists() re-raises EACCES: a folder that cannot be traversed is refused with a message, never let through
+    try:
+        marked = any((ancestor / PRODUCTION_DATA_MARKER).exists() for ancestor in (candidate, *candidate.parents))
+    except OSError as exc:
+        raise ValueError(f"Cannot verify the test data directory: {exc.strerror or type(exc).__name__}") from exc
+    if marked:
         raise ValueError("Test data directory is inside a marked production data directory")
 
     for relative in (
@@ -404,7 +503,11 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         test_target = (candidate / relative).resolve()
         if not test_target.is_relative_to(candidate):
             raise ValueError(f"Test data path escapes its configured root: {relative}")
-        if any(_same_filesystem_location(test_target, (prod / relative).resolve()) for prod in production_dirs):
+        try:
+            aliased = any(_same_filesystem_location(test_target, (prod / relative).resolve()) for prod in production_dirs)
+        except OSError as exc:
+            raise ValueError(f"Cannot verify test data path: {relative} ({exc.strerror or type(exc).__name__})") from exc
+        if aliased:
             raise ValueError(f"Test data path aliases production data: {relative}")
     return candidate
 
@@ -463,6 +566,17 @@ def get_settings() -> Settings:
         settings.LOG_LEVEL = log_level_override.upper()
 
     return settings
+
+
+def profile_default[T](name: str, fallback: T) -> T:
+    """What the active profile gives ``name``, a variable a section module reads from the environment, else ``fallback``.
+
+    ``ENVIRONMENT_PROFILE_DEFAULTS`` holds the profile's values; ``fallback`` is the code's own default, the one a
+    self-hosted install gets. The section module asks only while its variable is unset, and keeps its own rules for a
+    blank or an invalid value. The profile is read at each call, normalised by ``Settings``.
+    """
+    values = ENVIRONMENT_PROFILE_DEFAULTS.get(get_settings().LIBREFOLIO_PROFILE, {})
+    return cast(T, values[name]) if name in values else fallback
 
 
 def ensure_data_dirs() -> None:

@@ -69,6 +69,11 @@ html.light,
     --lf-warning-on-soft: #92400e;
     --lf-warning-hover: #92400e; /* Q3: a solid warning or donation button, hovered */
     --lf-warning-on-inverse: #f59e0b; /* Q10: a warning inside the dark tooltip of the light theme */
+    /* Q10 rule, extended (T, 16/10, D-T27: to review): inside the inverted tooltip, the other theme's colour. The parity
+       gate keeps each X-on-inverse equal to the other theme's X. */
+    --lf-danger-on-inverse: #ff7a86; /* the dark theme's danger: 6.34:1 on the dark tooltip */
+    --lf-info-on-inverse: #3f86fa; /* the dark theme's info (KaTeX, links): 4.54:1 */
+    --lf-text-muted-on-inverse: #7f8c87; /* the dark theme's muted text: 4.54:1 */
     --lf-danger: #c82838;
     --lf-danger-soft: #ffe5e5; /* designer #FEE2E2: the muted text on it at 4.42:1 (D-T6) */
     --lf-danger-line: #fecaca;
@@ -129,10 +134,17 @@ html.light,
     --lf-on-checked: var(--lf-surface-card); /* its mark, in the card colour: 6.1:1 and 5.3:1 (D-T16) */
     --lf-on-status: var(--lf-surface-card); /* text on a solid status colour */
     --lf-on-danger-solid: #ffffff; /* Q3: white text on a solid red button */
+    --lf-on-overlay: #ffffff; /* provisional: text and icons on the backdrop (a camera on an avatar, an icon on a scrim), white in both themes: 4.98:1 at worst, the backdrop over a white field */
+    --lf-success-hover: color-mix(in oklab, var(--lf-success) 80%, var(--lf-text-primary)); /* provisional: a solid success button, hovered. 20% toward the text, so the hover moves away from --lf-on-status in both themes; her Q3 hovers of warning and danger go darker in dark */
+    --lf-info-hover: color-mix(in oklab, var(--lf-info) 80%, var(--lf-text-primary)); /* provisional: a solid info button, hovered, as --lf-success-hover */
     --lf-tour-glow: color-mix(in oklab, var(--lf-focus) 40%, transparent); /* Q9: the guided tour's glow */
 
     --lf-gain: var(--lf-success);
     --lf-loss: var(--lf-danger);
+    --lf-gain-soft: var(--lf-success-soft); /* a gain on a tint, a badge or a chip (toneClasses SIGN_BADGE): its own role, so the designer can part it from the success tint */
+    --lf-gain-on-soft: var(--lf-success-on-soft);
+    --lf-loss-soft: var(--lf-danger-soft); /* a loss on a tint, as --lf-gain-soft */
+    --lf-loss-on-soft: var(--lf-danger-on-soft);
     --lf-donate: var(--lf-warning); /* designer: the warm amber suits «Offrimi un caffè» */
     --lf-donate-hover: var(--lf-warning-hover); /* Q3 */
 
@@ -201,6 +213,9 @@ html.dark,
     --lf-warning-on-soft: #fcd34d;
     --lf-warning-hover: #d97706;
     --lf-warning-on-inverse: #ae4e00; /* Q10: the light theme's warning, on the light tooltip. Designer #B45309: 4.44:1 (D-T6) */
+    --lf-danger-on-inverse: #c82838; /* Q10 rule: the light theme's danger, 4.86:1 on the light tooltip */
+    --lf-info-on-inverse: #155eef; /* Q10 rule: the light theme's info, 4.78:1 */
+    --lf-text-muted-on-inverse: #616d67; /* Q10 rule: the light theme's muted text, 4.77:1 */
     --lf-danger: #ff7a86; /* D-T25 (developer, 15/10): a softer red, 6.97:1 on the card. Was #F84361 (designer #F43F5E, D-T6, N5) */
     --lf-danger-soft: #2a1417;
     --lf-danger-line: #581c24;
@@ -260,6 +275,7 @@ html.dark,
     --color-lf-muted: var(--lf-text-muted);
     --color-lf-placeholder: var(--lf-text-placeholder);
     --color-lf-on-inverse: var(--lf-text-on-inverse);
+    --color-lf-on-overlay: var(--lf-on-overlay);
 
     /* Borders */
     --color-lf-subtle: var(--lf-border-subtle);
@@ -301,12 +317,16 @@ html.dark,
     --color-lf-success-soft: var(--lf-success-soft);
     --color-lf-success-line: var(--lf-success-line);
     --color-lf-success-on-soft: var(--lf-success-on-soft);
+    --color-lf-success-hover: var(--lf-success-hover);
     --color-lf-warning: var(--lf-warning);
     --color-lf-warning-soft: var(--lf-warning-soft);
     --color-lf-warning-line: var(--lf-warning-line);
     --color-lf-warning-on-soft: var(--lf-warning-on-soft);
     --color-lf-warning-hover: var(--lf-warning-hover);
     --color-lf-warning-on-inverse: var(--lf-warning-on-inverse);
+    --color-lf-danger-on-inverse: var(--lf-danger-on-inverse);
+    --color-lf-info-on-inverse: var(--lf-info-on-inverse);
+    --color-lf-muted-on-inverse: var(--lf-text-muted-on-inverse);
     --color-lf-danger: var(--lf-danger);
     --color-lf-danger-soft: var(--lf-danger-soft);
     --color-lf-danger-line: var(--lf-danger-line);
@@ -318,11 +338,16 @@ html.dark,
     --color-lf-info-soft: var(--lf-info-soft);
     --color-lf-info-line: var(--lf-info-line);
     --color-lf-info-on-soft: var(--lf-info-on-soft);
+    --color-lf-info-hover: var(--lf-info-hover);
     --color-lf-on-status: var(--lf-on-status);
 
     /* Meaning in the domain */
     --color-lf-gain: var(--lf-gain);
     --color-lf-loss: var(--lf-loss);
+    --color-lf-gain-soft: var(--lf-gain-soft);
+    --color-lf-gain-on-soft: var(--lf-gain-on-soft);
+    --color-lf-loss-soft: var(--lf-loss-soft);
+    --color-lf-loss-on-soft: var(--lf-loss-on-soft);
     --color-lf-donate: var(--lf-donate);
     --color-lf-donate-hover: var(--lf-donate-hover);
     --color-lf-ai: var(--lf-ai);

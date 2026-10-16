@@ -53,4 +53,10 @@ All provider calls go through `_run_provider_in_thread()` in `assets/core.py` �
 6. Add icon in `static/` directory
 7. Provider is auto-discovered — no manual registration needed. Import its names, and patch them, from
    `backend.app.services.asset_source_providers.my_provider.plugin`
+8. Settings (an API key, a user's preference): declare `settings_fields` and read them with `self.settings`; the core
+   delivers them, the interface draws the form (Settings › Plugins, «Configure»). Labels under
+   `pluginSettings.asset.my_provider.*` in the same fragment. A personal field cannot be `required`. **Never put a
+   secret in `get_asset_url()`, in `cooldown_scope()`, or in a request whose host comes from `identifier` or
+   `provider_params`**: any user can probe with any of them, and an asset URL is shown to users (the probe withholds
+   one that shows a secret). Details: `mkdocs_src/docs/developer/architecture/patterns/plugin_settings.md`
 

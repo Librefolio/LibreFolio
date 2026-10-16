@@ -37,7 +37,16 @@
  *       dark remap every element that carries a role utility, so a half-migrated element would keep half of its
  *       old colours;
  *   G4  no arbitrary colour value (`bg-[#…]`, `shadow-[…_rgba(…)]`) unless it reads roles only (`var(--lf-…)`) or
- *       its file is in `ARBITRARY_ALLOWED`, with its reason.
+ *       its file is in `ARBITRARY_ALLOWED`, with its reason;
+ *   G5  one property, one ternary: no element sets one colour utility twice with the same variants, one of the two
+ *       always on. Tailwind 4 emits two such utilities sorted by name, so the later name wins whatever the condition
+ *       says: the idle and the state colour are the two branches of one ternary. Read through the element's `class`,
+ *       its `{…}` and `${…}` (one that branches, `?`, `&&`, `||`, `??`, is a condition), its `class:` directives and
+ *       the UPPER_CASE string constants it names, its file's own and those it imports;
+ *   G6  a native field on roles names its text: an `<input>` with a text of its own, a `<textarea>` and a `<select>`
+ *       that carry a role utility write a base text role, and a placeholder role when they have a placeholder. app.css
+ *       colours the text and the placeholder of a native field only while it carries no role utility, so a migrated
+ *       field would fall back to the preflight: the inherited colour, the placeholder at half of it.
  *
  * ## How to pass it
  *
@@ -58,7 +67,14 @@
  *   - Tailwind v4's variable shorthand (`bg-(--x)`) and arbitrary properties (`[color:#fff]`): G4 reads the `-[…]`
  *     form only — m2 still counts the literal of the second;
  *   - meaning: a hex-looking fragment that is no colour (`href="#add"`) is counted. The ratchet needs the count to
- *     be stable, not to be right about intent.
+ *     be stable, not to be right about intent;
+ *   - for G5 and G6, a class that reaches an element through anything but its literals and the UPPER_CASE string
+ *     constants it names: a class prop, any other variable, an entry of a table of classes (`toneClasses.ts`). A call
+ *     or an array with a branch anywhere is read whole as one condition, and G5 never compares two conditions: they
+ *     may exclude each other;
+ *   - for G6, a ternary that gives a field its text role in one branch only: a role in any branch counts. On purpose:
+ *     requiring one always on would flag the right form, `{err ? 'text-lf-danger' : 'text-lf-primary'}`, and push
+ *     authors to an always-on role beside a conditional one, which G5 forbids.
  * When a rule grows, grow the forms in the same change, and add the new form to the controls below.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
@@ -70,19 +86,23 @@ import {join, relative} from 'node:path';
 import {
     ARBITRARY_ALLOWED,
     BASELINE,
+    FIELD_TYPES_WITHOUT_TEXT,
     FRONTEND_DIR,
     LEGACY_CLASS_RE,
     LITERAL_EXCEPTIONS,
     SRC_DIR,
     acceptFile,
     byText,
+    codeOf,
     compareWithBaseline,
     declareSplit,
     formatBaseline,
     grammarOf,
     grammarOfTree,
     isProductionSource,
+    lineAt,
     listSources,
+    markupOf,
     measureSource,
     mergeBaselines,
     parseBaseline,
@@ -90,6 +110,7 @@ import {
     readTokens,
     roleNames,
     scanTree,
+    startTags,
     tightenBaseline,
     totalsOf,
 } from '../scripts/theme/theme-roles.mjs';
@@ -114,6 +135,8 @@ const GRAMMAR_RULES = [
     'G2 a role utility must be in the @theme inline table of src/lib/theme/tokens.css: Tailwind drops an unknown class without a word.',
     'G3 an element migrates whole: never mix role utilities and legacy colour classes on one element or in one class string.',
     'G4 no arbitrary colour value: use a role, or read roles only (var(--lf-…)); a brand colour that is not ours to theme goes in ARBITRARY_ALLOWED with its reason.',
+    'G5 never set one colour utility twice on an element with the same variants, one of them always on: Tailwind 4 emits them by name, so the later name wins whatever the condition. Put the idle and the state colour in the two branches of one ternary.',
+    'G6 a native field (input, textarea, select) on roles writes its text role, and placeholder:text-lf-placeholder when it has a placeholder: app.css colours a field only while it has no role utility.',
 ];
 
 // ---------------------------------------------------------------------------
@@ -173,6 +196,7 @@ describe('the scanner, on synthetic sources', () => {
             ['a CSS variable', SVELTE, '<style>\n    .brand {\n        color: var(--color-libre-green);\n    }\n</style>'],
             ['script comments', SVELTE, '<script>\n    // bg-white\n    /* bg-white */\n</script>'],
             ['a markup comment', SVELTE, '<!-- <div class="bg-white"></div> -->'],
+            ['comments in a markup expression', SVELTE, '<Panel onpick={() => {\n    // was bg-white\n}} />\n<p>{/* text-gray-500 */ value}</p>'],
             ['comments in a .ts file', TS, '// bg-white\n/* text-gray-500 */\nexport const x = 1;'],
         ];
         expect(ignored.map(([what, rel, source]) => `${what}: ${m1Of(rel, source)}`)).toEqual(ignored.map(([what]) => `${what}: 0`));
@@ -212,10 +236,11 @@ describe('the scanner, on synthetic sources', () => {
     it('m2 ignores comments of every kind', () => {
         expect(m2Of(TS, "// '#ff0000'\n/* rgba(0, 0, 0, 0.5) 'white' */\nexport const x = 1;")).toEqual([]);
         expect(m2Of(SVELTE, "<!-- <div style='color: red'></div> -->\n<script>\n    // const c = 'white';\n    /* const d = '#000'; */\n</script>\n\n<style>\n    /* .x { color: #fff; } */\n</style>")).toEqual([]);
+        expect(m2Of(SVELTE, "<Panel onpick={() => {\n    // was '#ff0000'\n}} />\n<p>{/* rgba(0, 0, 0, 0.5) */ value}</p>"), 'in a markup expression: an attribute value, a text').toEqual([]);
     });
 
     it('m2 sees a colour inside a Tailwind arbitrary value, where `_` stands for a space', () => {
-        // OnboardingCoachmark's glow is written this way: `shadow-[0_0_0_5px_rgba(52,211,153,0.4),…]`. `\b` finds no
+        // Arbitrary shadows are written this way, as the coachmark's glow was before `--lf-tour-glow`. `\b` finds no
         // boundary between `_` and a letter, so a pattern anchored on it reads past the whole value.
         expect(m2Of(SVELTE, '<div class="ring-1 ring-[#ff0000] shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>\n<div class="shadow-[0_0_0_1px_#fff]"></div>')).toEqual(['#ff0000', '#ffffff', 'rgba(0,0,0,0.5)']);
     });
@@ -544,13 +569,345 @@ describe('the grammar of the roles, on synthetic sources', () => {
     });
 
     it('G4 sees a colour inside an arbitrary value written with `_` for spaces', () => {
-        // OnboardingCoachmark's glow is written this way. The second form hides a literal behind a role: `rolesOnly` must
-        // see the rgb() as well.
+        // Arbitrary shadows and color-mix() are written this way. The second form hides a literal behind a role:
+        // `rolesOnly` must see the rgb() as well.
         expect(caught(SVELTE, '<div class="shadow-[0_0_4px_rgba(0,0,0,0.5)]"></div>\n<div class="bg-[color-mix(in_oklab,var(--lf-card)_80%,_rgb(0,0,0))]"></div>')).toEqual(['G4 1  shadow-[0_0_4px_rgba(0,0,0,0.5)]', 'G4 2  bg-[color-mix(in_oklab,var(--lf-card)_80%,_rgb(0,0,0))]']);
     });
 
     it('accepts role utilities written right: opacity, variants, any colour utility, and a legacy child under a migrated parent', () => {
         expect(caught(SVELTE, '<div class="bg-lf-card/90 hover:bg-lf-subtle border border-lf-input focus-visible:ring-lf-primary text-lf-muted">\n    <span class="bg-white text-gray-500"></span>\n</div>')).toEqual([]);
+    });
+});
+
+/**
+ * G5, one property, one ternary (rule 4 of the skill design-system). Tailwind 4 emits two base utilities that set the
+ * same property sorted by name, and the later name wins whatever the condition says: `border-lf-input`, always on, beat
+ * `border-lf-focus`, set only while open, and an open select lost its focus border. So the idle and the state colour of
+ * one property are the two branches of one ternary.
+ *
+ * G5 fires on two different role utilities of one element with the same variant chain and the same colour utility
+ * (`bg`, `text`, `border`, `border-t`, `ring`…), one of them always on. Always on: the static text of `class="…"`, and an
+ * expression that does not branch, read literal by literal — its strings, and each `${…}` of its templates judged on its
+ * own, a method after the template included. On a condition: a `{…}` or a `${…}` that branches — `?`, `&&`, `||` or `??`
+ * outside its strings, never `?.` — and a `class:` directive. Two conditions are never compared: they may exclude each
+ * other. An UPPER_CASE string constant is read as its value: the file's own, or one it imports from a module of src,
+ * which `grammarOf` reads from the `modules` it is given. The text names the pair, `<a> always, <b> on a condition`, or
+ * two always on in byte order, on the line of the start tag's `<`.
+ */
+describe('G5, one property, one ternary, on synthetic sources', () => {
+    const SVELTE = 'lib/components/x/Sample.svelte';
+    const NAMES = new Set(['card', 'hover', 'panel', 'selected', 'input', 'input-hover', 'focus', 'danger', 'field', 'primary', 'muted', 'link', 'placeholder']);
+    const caught = (rel: string, text: string, modules: Record<string, string> = {}): string[] => grammarOf(rel, text, NAMES, modules).map((g) => `${g.rule} ${g.line}  ${g.text}`);
+
+    it('an always-on role and a conditional one on one colour utility fire; the same two as the branches of one ternary are silent', () => {
+        expect(caught(SVELTE, `<div class="border border-lf-input {open ? 'border-lf-focus' : ''}"></div>`), 'the select that lost its focus border').toEqual(['G5 1  border-lf-input always, border-lf-focus on a condition']);
+        expect(caught(SVELTE, `<div class="border {open ? 'border-lf-focus' : 'border-lf-input hover:border-lf-input-hover'}"></div>`), 'the remedy: one ternary, the idle hover in the idle branch').toEqual([]);
+    });
+
+    it('two always-on roles of one colour utility fire, named in byte order whatever their order in the class; one class written twice is one', () => {
+        expect(caught(SVELTE, '<p class="text-lf-primary text-lf-muted"></p>')).toEqual(['G5 1  text-lf-muted always, text-lf-primary always']);
+        expect(caught(SVELTE, '<p class="text-lf-muted text-lf-primary"></p>'), 'the other order').toEqual(['G5 1  text-lf-muted always, text-lf-primary always']);
+        expect(caught(SVELTE, '<p class="text-lf-primary text-lf-primary"></p>'), 'one class written twice').toEqual([]);
+    });
+
+    it('reads every form of a condition against an always-on role: a class: directive, a template, &&, ||, ??, a template nested in a branch', () => {
+        const forms: ReadonlyArray<readonly [string, string, string]> = [
+            ['a class: directive', '<div class="bg-lf-card" class:bg-lf-hover={active}></div>', 'bg-lf-card always, bg-lf-hover on a condition'],
+            ['a template literal', "<div class={`bg-lf-card ${active ? 'bg-lf-selected' : ''}`}></div>", 'bg-lf-card always, bg-lf-selected on a condition'],
+            ['&&', `<div class="bg-lf-card {active && 'bg-lf-selected'}"></div>`, 'bg-lf-card always, bg-lf-selected on a condition'],
+            ['||', `<div class="bg-lf-card {tone || 'bg-lf-panel'}"></div>`, 'bg-lf-card always, bg-lf-panel on a condition'],
+            ['??', `<div class="bg-lf-card {tone ?? 'bg-lf-panel'}"></div>`, 'bg-lf-card always, bg-lf-panel on a condition'],
+            ['a template nested in a branch, its text', '<div class="bg-lf-card {active ? `bg-lf-panel ${size}` : \'\'}"></div>', 'bg-lf-card always, bg-lf-panel on a condition'],
+            ['a template nested in a branch, its ${…}', "<div class=\"bg-lf-card {active ? `px-2 ${strong ? 'bg-lf-selected' : ''}` : ''}\"></div>", 'bg-lf-card always, bg-lf-selected on a condition'],
+        ];
+        expect(forms.map(([form, source]) => `${form}: ${caught(SVELTE, source).join(' | ')}`)).toEqual(forms.map(([form, , text]) => `${form}: G5 1  ${text}`));
+    });
+
+    it('the TabBar regression: a template followed by .trim() is read ${…} by ${…}, so the two branches of its ternary are one condition, not two always-on colours', () => {
+        // TabBar writes a tab's classes as a template followed by a method. Read whole, that expression does not branch
+        // — its `?` sit inside the template — and an earlier reading took every class in it as always on, both branches
+        // of the ternary included: `text-lf-link always, text-lf-muted always`, on a tab written right. Each `${…}` of a
+        // template is now judged on its own, whatever follows the template. The positive control is the next test.
+        const tab = "`px-3 ${fill ? 'flex-1' : ''} ${active ? 'text-lf-link bg-lf-selected' : 'text-lf-muted hover:bg-lf-hover'}`.trim()";
+        const source = `<button class={${tab}}></button>`;
+        const tags = [...startTags(markupOf(codeOf(SVELTE, source)))].map(({tag, attributes}) => [tag, ...attributes.map(({name, value}) => `${name}=${value}`)]);
+        expect(tags, 'the button is read whole, its class expression intact: the silence is not a tag the parser lost').toEqual([['button', `class=${tab}`]]);
+        expect(caught(SVELTE, source)).toEqual([]);
+    });
+
+    it('reads a template followed by a method as a lone template: an always-on role in its text and a conditional one in its ${…} fire', () => {
+        const fires = ['G5 1  text-lf-primary always, text-lf-link on a condition'];
+        expect(caught(SVELTE, "<button class={`text-lf-primary ${active ? 'text-lf-link' : ''}`.trim()}></button>")).toEqual(fires);
+        expect(caught(SVELTE, "<button class={`text-lf-primary ${active ? 'text-lf-link' : ''}`}></button>"), 'the lone template').toEqual(fires);
+    });
+
+    it('compares one variant chain on one colour utility: base, hover:, md: and focus: are four chains, border and border-t two utilities; hover: against hover: fires', () => {
+        expect(caught(SVELTE, `<div class="bg-lf-card hover:bg-lf-hover md:bg-lf-panel {open ? 'focus:bg-lf-selected' : ''}"></div>`), 'four variant chains').toEqual([]);
+        expect(caught(SVELTE, '<input class="border border-lf-input aria-invalid:border-lf-danger bg-lf-field text-lf-primary" />'), 'a state written as a variant, the way to beat a colour a caller passes in').toEqual([]);
+        expect(caught(SVELTE, `<div class="border border-lf-input {open ? 'border-t-lf-focus ring-lf-focus' : ''}"></div>`), 'other colour utilities').toEqual([]);
+        expect(caught(SVELTE, `<div class="hover:bg-lf-hover {open ? 'hover:bg-lf-panel' : ''}"></div>`), 'one variant chain').toEqual(['G5 1  hover:bg-lf-hover always, hover:bg-lf-panel on a condition']);
+    });
+
+    it('counts an opacity as another class: bg-lf-card always and bg-lf-card/50 on a condition fire', () => {
+        expect(caught(SVELTE, `<div class="bg-lf-card {dimmed ? 'bg-lf-card/50' : ''}"></div>`)).toEqual(['G5 1  bg-lf-card always, bg-lf-card/50 on a condition']);
+        expect(caught(SVELTE, `<div class="bg-lf-card {selected ? 'bg-lf-card' : ''}"></div>`), 'the same class on a condition is no second colour').toEqual([]);
+    });
+
+    it('never compares two conditions, which may exclude each other, and compares each with what is always on', () => {
+        expect(caught(SVELTE, `<div class="{a ? 'bg-lf-card' : ''} {b ? 'bg-lf-panel' : ''}" class:bg-lf-hover={c}></div>`)).toEqual([]);
+        expect(caught(SVELTE, `<div class="bg-lf-card {b ? 'bg-lf-panel' : ''}" class:bg-lf-hover={c}></div>`), 'the first condition always on').toEqual(['G5 1  bg-lf-card always, bg-lf-panel on a condition', 'G5 1  bg-lf-card always, bg-lf-hover on a condition']);
+    });
+
+    it("reads the file's UPPER_CASE string constant as its value, in a {…} of the class and in a template", () => {
+        const script = "<script>\n    const BASE = 'px-2 bg-lf-card';\n</script>\n\n";
+        const fires = ['G5 5  bg-lf-card always, bg-lf-panel on a condition'];
+        expect(caught(SVELTE, `${script}<div class="{BASE} {open ? 'bg-lf-panel' : ''}"></div>`)).toEqual(fires);
+        expect(caught(SVELTE, script + "<div class={`${BASE} ${open ? 'bg-lf-panel' : ''}`}></div>"), 'in a template').toEqual(fires);
+    });
+
+    it('reads an UPPER_CASE string constant imported from a module of src: through $lib/, ./ and ../, from a .ts, a .js or an index, under an alias', () => {
+        const MODULE = "export const BASE = 'rounded bg-lf-card';";
+        const imported = (specifier: string, names = 'BASE', used = 'BASE'): string => `<script>\n    import {${names}} from '${specifier}';\n</script>\n\n<div class="{${used}} {open ? 'bg-lf-panel' : ''}"></div>`;
+        const forms: ReadonlyArray<readonly [string, string, Record<string, string>]> = [
+            ['$lib/ui, a .ts module', imported('$lib/ui'), {'lib/ui.ts': MODULE}],
+            ['$lib/ui, a .js module', imported('$lib/ui'), {'lib/ui.js': MODULE}],
+            ['$lib/ui, its index.ts', imported('$lib/ui'), {'lib/ui/index.ts': MODULE}],
+            ['$lib/ui, its index.js', imported('$lib/ui'), {'lib/ui/index.js': MODULE}],
+            ['$lib/ui, under an alias', imported('$lib/ui', 'BASE as TILE', 'TILE'), {'lib/ui.ts': MODULE}],
+            ['./styles', imported('./styles'), {'lib/components/x/styles.ts': MODULE}],
+            ['./styles.js, a .ts module', imported('./styles.js'), {'lib/components/x/styles.ts': MODULE}],
+            ['../shared/styles', imported('../shared/styles'), {'lib/components/shared/styles.ts': MODULE}],
+            ['one name of several', imported('./styles', 'RADIUS, BASE'), {'lib/components/x/styles.ts': `export const RADIUS = 'rounded-md';\n${MODULE}`}],
+        ];
+        expect(forms.map(([form, source, modules]) => `${form}: ${caught(SVELTE, source, modules).join(' | ')}`)).toEqual(forms.map(([form]) => `${form}: G5 5  bg-lf-card always, bg-lf-panel on a condition`));
+
+        const field = `<script>\n    import {INPUT as FIELD} from '$lib/ui';\n</script>\n\n<input class="{FIELD} {invalid ? 'border-lf-danger' : ''}" placeholder="Name" />`;
+        const ui = {'lib/ui.ts': "export const INPUT = 'border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder';"};
+        expect(caught(SVELTE, field, ui), 'the error border of a field whose idle classes come from a shared constant').toEqual(['G5 5  border-lf-input always, border-lf-danger on a condition']);
+    });
+
+    it('reads no import whose module it is not given: a module absent from `modules`, one of another path, a bare specifier', () => {
+        const source = `<script>\n    import {BASE} from './styles';\n    import {TONE} from 'tones';\n</script>\n\n<div class="{BASE} {TONE} {open ? 'bg-lf-panel' : ''}"></div>`;
+        const MODULE = "export const BASE = 'rounded bg-lf-card';";
+        expect(caught(SVELTE, source), 'no module given').toEqual([]);
+        expect(caught(SVELTE, source, {'lib/components/x/other.ts': MODULE, 'tones.ts': "export const TONE = 'bg-lf-card';"}), 'a module of another path, and a bare specifier: a package, never a file of src').toEqual([]);
+        expect(caught(SVELTE, source, {'lib/components/x/styles.ts': MODULE}), 'its module given (positive control)').toEqual(['G5 6  bg-lf-card always, bg-lf-panel on a condition']);
+    });
+
+    it('the two-letter constant regression: TH, local or imported as the PAC planner imports it from its ui.ts, is read as its value', () => {
+        // The scanner recorded UPPER_CASE constants of any length but looked up only names of three letters or more:
+        // the PAC planner's TH and TD (planner/ui.ts) carry role classes, and an element naming one was read without
+        // them. A name is now looked up at any length.
+        const th = `<th scope="col" class="{TH} {sorted ? 'text-lf-link' : ''}"></th>`;
+        const fires = ['G5 5  text-lf-muted always, text-lf-link on a condition'];
+        expect(caught(SVELTE, `<script>\n    const TH = 'px-3 py-2 text-lf-muted';\n</script>\n\n${th}`), 'local').toEqual(fires);
+        const ui = {'lib/features/x/ui.ts': "export const TABLE = 'w-full text-sm';\nexport const TH = 'px-3 py-2 text-left text-xs text-lf-muted';\nexport const TD = 'px-3 py-2 align-top text-lf-primary';"};
+        expect(caught('lib/features/x/steps/Dialog.svelte', `<script>\n    import {TABLE, TH} from '../ui';\n</script>\n\n${th}`, ui), "imported from '../ui'").toEqual(fires);
+    });
+
+    it('takes optional chaining, `?.`, for no branch: an expression with it alone keeps its strings always on, and a `?` after it still branches', () => {
+        expect(caught(SVELTE, '<div class="bg-lf-card {item?.cls}"></div>'), 'no string to compare').toEqual([]);
+        expect(caught(SVELTE, `<div class="bg-lf-card {[item?.cls, 'bg-lf-panel'].join(' ')}"></div>`), 'its strings, always on').toEqual(['G5 1  bg-lf-card always, bg-lf-panel always']);
+        expect(caught(SVELTE, `<div class="bg-lf-card {item?.active ? 'bg-lf-panel' : ''}"></div>`), 'a ternary after it').toEqual(['G5 1  bg-lf-card always, bg-lf-panel on a condition']);
+    });
+
+    it("reports the line of the start tag's `<`, whatever line its classes sit on", () => {
+        const source = ['<p>intro</p>', '<div', '    id="panel"', '    class="border border-lf-input"', '    class:border-lf-focus={open}', '></div>'].join('\n');
+        expect(caught(SVELTE, source)).toEqual(['G5 2  border-lf-input always, border-lf-focus on a condition']);
+    });
+
+    it('reads elements only: the same classes in a .ts module are no element', () => {
+        expect(caught('lib/utils/sample.ts', "export const tile = 'bg-lf-card bg-lf-panel';\nexport const ring = `border-lf-input ${open ? 'border-lf-focus' : ''}`;")).toEqual([]);
+        expect(caught(SVELTE, '<div class="bg-lf-card bg-lf-panel"></div>'), 'the same classes on an element (positive control)').toEqual(['G5 1  bg-lf-card always, bg-lf-panel always']);
+    });
+});
+
+/**
+ * G6, a native field on roles names its text (the skill design-system: «A native field names its text and its
+ * placeholder»). app.css colours the text and the placeholder of a native field in dark only while it carries no role
+ * utility, `html.dark input:where(:not([class*='-lf-']))`: a migrated field falls back to the preflight, the inherited
+ * colour and a placeholder at half of it. So an `<input>`, a `<textarea>` or a `<select>` — lower case: `<Input>` is a
+ * component — that carries a `-lf-` class in any branch writes a base text role, `text-lf-…` under no variant, and a
+ * placeholder role, `placeholder:text-lf-…`, when it has a placeholder: the attribute or the `{placeholder}` shorthand.
+ * A select has no placeholder to colour. An input whose literal type has no text of its own, `FIELD_TYPES_WITHOUT_TEXT`,
+ * is exempt, `type={'checkbox'}` included; a dynamic type is checked. The text names what is missing, on the line of
+ * the field's `<`.
+ */
+describe('G6, a native field on roles names its text, on synthetic sources', () => {
+    const SVELTE = 'lib/components/x/Sample.svelte';
+    const NAMES = new Set(['field', 'input', 'primary', 'muted', 'placeholder', 'danger', 'checked']);
+    const caught = (rel: string, text: string, modules: Record<string, string> = {}): string[] => grammarOf(rel, text, NAMES, modules).map((g) => `${g.rule} ${g.line}  ${g.text}`);
+
+    it('an input on roles with no text role and a {placeholder} shorthand fires both; the attribute is a placeholder too', () => {
+        expect(caught(SVELTE, '<input type="text" class="bg-lf-field border border-lf-input" {placeholder} />')).toEqual(['G6 1  <input> no text role, no placeholder role']);
+        expect(caught(SVELTE, '<input class="bg-lf-field border border-lf-input text-lf-primary" placeholder="Search" />'), 'the attribute, the text role written').toEqual(['G6 1  <input> no placeholder role']);
+        expect(caught(SVELTE, '<input class="bg-lf-field border border-lf-input" />'), 'no placeholder: the text role alone is due').toEqual(['G6 1  <input> no text role']);
+        expect(caught(SVELTE, '<input class="bg-lf-field border border-lf-input text-lf-primary placeholder:text-lf-placeholder" placeholder={label} />'), 'both written').toEqual([]);
+    });
+
+    it('exempts every type of FIELD_TYPES_WITHOUT_TEXT, in any case, and checks every type with a text of its own', () => {
+        expect(FIELD_TYPES_WITHOUT_TEXT, 'the types with no text of their own: iterated below, an emptied list would let the exemption pass in silence').toEqual(expect.arrayContaining(['checkbox', 'radio', 'range', 'file', 'hidden', 'color', 'submit', 'button', 'reset', 'image']));
+        const field = (type: string): string => `<input type="${type}" class="bg-lf-field border border-lf-input" {placeholder} />`;
+        const exempt = FIELD_TYPES_WITHOUT_TEXT.flatMap((type) => [type, type.toUpperCase(), type.charAt(0).toUpperCase() + type.slice(1)]);
+        expect(
+            exempt.filter((type) => caught(SVELTE, field(type)).length > 0),
+            'exempt types that fire',
+        ).toEqual([]);
+        const withText = ['text', 'search', 'email', 'password', 'number', 'date', 'tel', 'url'];
+        expect(
+            withText.map((type) => `${type}: ${caught(SVELTE, field(type)).join(' | ')}`),
+            'the types with a text of their own (positive control)',
+        ).toEqual(withText.map((type) => `${type}: G6 1  <input> no text role, no placeholder role`));
+    });
+
+    it("reads a lone string literal as a literal type, type={'checkbox'}; a dynamic type is checked", () => {
+        expect(caught(SVELTE, `<input type={'checkbox'} class="accent-lf-checked" />\n<input type={"radio"} class="accent-lf-checked" />`)).toEqual([]);
+        expect(caught(SVELTE, `<input type={revealed ? 'text' : 'password'} class="bg-lf-field border border-lf-input" />`), 'a password field with its eye').toEqual(['G6 1  <input> no text role']);
+        expect(caught(SVELTE, '<input {type} class="bg-lf-field border border-lf-input" />'), 'the {type} shorthand').toEqual(['G6 1  <input> no text role']);
+    });
+
+    it('a textarea writes its text role, and its placeholder role when it has a placeholder', () => {
+        expect(caught(SVELTE, '<textarea class="bg-lf-field text-lf-primary placeholder:text-lf-placeholder" placeholder="Notes"></textarea>')).toEqual([]);
+        expect(caught(SVELTE, '<textarea class="bg-lf-field text-lf-primary"></textarea>'), 'no placeholder').toEqual([]);
+        expect(caught(SVELTE, '<textarea class="bg-lf-field text-lf-primary" placeholder="Notes"></textarea>')).toEqual(['G6 1  <textarea> no placeholder role']);
+        expect(caught(SVELTE, '<textarea class="bg-lf-field" {placeholder}></textarea>')).toEqual(['G6 1  <textarea> no text role, no placeholder role']);
+    });
+
+    it('a select writes its text role, and never needs a placeholder role', () => {
+        expect(caught(SVELTE, '<select class="bg-lf-field border border-lf-input"></select>')).toEqual(['G6 1  <select> no text role']);
+        expect(caught(SVELTE, '<select class="bg-lf-field border border-lf-input" {placeholder}></select>'), 'a placeholder adds nothing').toEqual(['G6 1  <select> no text role']);
+        expect(caught(SVELTE, '<select class="bg-lf-field border border-lf-input text-lf-primary" placeholder="Pick one"></select>')).toEqual([]);
+    });
+
+    it('leaves a field with no role utility to app.css: a legacy field, and a field with no class, are silent', () => {
+        expect(caught(SVELTE, '<input class="bg-white text-gray-900 border-gray-300" placeholder="Name" />\n<textarea class="bg-white"></textarea>\n<select class="bg-white"></select>')).toEqual([]);
+        expect(caught(SVELTE, '<input placeholder="Name" />\n<textarea {placeholder}></textarea>\n<select></select>'), 'no class at all').toEqual([]);
+        expect(caught(SVELTE, '<input class="bg-lf-field border border-lf-input" placeholder="Name" />'), 'the same field on roles (positive control)').toEqual(['G6 1  <input> no text role, no placeholder role']);
+    });
+
+    it('a role in any branch puts a field on roles: a class: directive, or a conditional {…}, alone', () => {
+        expect(caught(SVELTE, '<input class="px-2" class:border-lf-danger={invalid} />')).toEqual(['G6 1  <input> no text role']);
+        expect(caught(SVELTE, `<input class="px-2 {invalid ? 'border-lf-danger' : ''}" {placeholder} />`)).toEqual(['G6 1  <input> no text role, no placeholder role']);
+    });
+
+    it('a text role under a variant only is no text role, and neither is the placeholder role', () => {
+        expect(caught(SVELTE, '<input class="bg-lf-field hover:text-lf-primary focus:text-lf-primary" />')).toEqual(['G6 1  <input> no text role']);
+        expect(caught(SVELTE, '<input class="bg-lf-field placeholder:text-lf-placeholder" placeholder="Name" />'), 'the placeholder role').toEqual(['G6 1  <input> no text role']);
+    });
+
+    it('takes a placeholder role under any variants, focus:placeholder:text-lf-muted included; a focus: text role is none', () => {
+        expect(caught(SVELTE, '<input class="bg-lf-field text-lf-primary focus:placeholder:text-lf-muted" placeholder="Name" />')).toEqual([]);
+        expect(caught(SVELTE, '<input class="bg-lf-field text-lf-primary focus:text-lf-muted" placeholder="Name" />'), 'positive control').toEqual(['G6 1  <input> no placeholder role']);
+    });
+
+    it('reads the roles from an imported constant, as the PAC planner writes its fields (INPUT of its ui.ts)', () => {
+        const EDITOR = 'lib/features/x/steps/Editor.svelte';
+        const source = `<script>\n    import {BUTTON, INPUT} from '../ui';\n</script>\n\n<input class={INPUT} placeholder="Name" />\n<input class="{INPUT} text-right" placeholder="Ticker" />`;
+        const ui = (input: string): Record<string, string> => ({'lib/features/x/ui.ts': `export const BUTTON = 'rounded-lg px-3 py-2';\nexport const INPUT = '${input}';`});
+        expect(caught(EDITOR, source, ui('w-full border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder'))).toEqual([]);
+        expect(caught(EDITOR, source, ui('w-full border border-lf-input bg-lf-field')), 'the constant without its text roles (positive control)').toEqual(['G6 5  <input> no text role, no placeholder role', 'G6 6  <input> no text role, no placeholder role']);
+    });
+
+    it('the two-letter constant regression: a field whose text and placeholder roles come from IN alone is silent', () => {
+        // The aria-invalid border puts the field on roles whatever IN gives: with its class reduced to {IN}, a constant
+        // the scanner could not read would leave the field silent as well, for the wrong reason. Before names of two
+        // letters were looked up, this field was reported with no text role and no placeholder role.
+        const field = (roles: string): string => `<script>\n    const IN = '${roles}';\n</script>\n\n<input class="{IN} aria-invalid:border-lf-danger" placeholder="Name" />`;
+        expect(caught(SVELTE, field('bg-lf-field text-lf-primary placeholder:text-lf-placeholder'))).toEqual([]);
+        expect(caught(SVELTE, field('bg-lf-field')), 'IN without its text roles (positive control)').toEqual(['G6 5  <input> no text role, no placeholder role']);
+    });
+
+    it('takes a component for no native field: <Input>, <TextArea> and <Select> are silent', () => {
+        expect(caught(SVELTE, '<Input class="bg-lf-field" {placeholder} />\n<TextArea class="bg-lf-field" {placeholder} />\n<Select class="bg-lf-field" />')).toEqual([]);
+        expect(caught(SVELTE, '<input class="bg-lf-field" {placeholder} />\n<textarea class="bg-lf-field" {placeholder}></textarea>\n<select class="bg-lf-field"></select>'), 'the native fields (positive control)').toEqual([
+            'G6 1  <input> no text role, no placeholder role',
+            'G6 2  <textarea> no text role, no placeholder role',
+            'G6 3  <select> no text role',
+        ]);
+    });
+
+    it("reports on the line of the field's `<`, beside G5 on the same element", () => {
+        const source = ['<label>', '    <input', '        type="text"', '        class="border border-lf-input bg-lf-field"', '        class:border-lf-danger={invalid}', '        {placeholder}', '    />', '</label>'].join('\n');
+        expect(caught(SVELTE, source)).toEqual(['G5 2  border-lf-input always, border-lf-danger on a condition', 'G6 2  <input> no text role, no placeholder role']);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C'. Comments inside markup expressions: the AF lot 8 regression
+// ---------------------------------------------------------------------------
+
+/**
+ * The AF lot 8 regression. codeOf blanked the comments of the scripts, of the styles and of the markup, not those inside
+ * the markup's `{…}` expressions. In `routes/(app)/assets/+page.svelte` a line comment inside an attribute expression,
+ * `onfitperiod={(range) => { // the picker's … }}`, kept its apostrophe and its backticks, and the scanner read them as
+ * quotes: the attribute value swallowed the markup after it. G3 fired on the attribute line, which holds no class, and
+ * the swallowed elements were never checked one by one — in four files of the tree the scanner read only part of the
+ * markup, `AssetSetRiskPanel.svelte` 3 start tags of 56. m1 counted the classes such a comment names, too.
+ *
+ * codeOf now blanks the line and block comments of every markup expression as it does a script's, the closing `}` found
+ * past strings and comments; the script and style blocks keep their own handling. A comment becomes spaces and keeps
+ * its newlines: offsets and line numbers do not move.
+ */
+describe('codeOf, the AF lot 8 regression: a comment inside an attribute expression swallowed the markup after it', () => {
+    const SVELTE = 'lib/components/x/Sample.svelte';
+    const NAMES = new Set(['card', 'primary', 'link']);
+    const caught = (text: string): string[] => grammarOf(SVELTE, text, NAMES).map((g) => `${g.rule} ${g.line}  ${g.text}`);
+    /** The one element that mixes a role with a legacy class: line 9 of SOURCE, after the comment. */
+    const MIXED = '<div class="bg-lf-card text-gray-500">mixed</div>';
+    /** The AF shape: a comment with an apostrophe and backticks inside an attribute expression, then markup to check. */
+    const SOURCE = [
+        '<script>',
+        "    let x = 1; // a script comment's `tick`",
+        '</script>',
+        '',
+        '<Panel onfitperiod={(range) => {',
+        "    // the picker's `activePreset` decides, text-gray-500 here is a comment",
+        '    apply(range);',
+        '}} />',
+        MIXED,
+        '<div class="bg-lf-card text-lf-primary">roles</div>',
+        '<a href={\'https://example.com/x\'} class="text-lf-link">a URL with // inside a string</a>',
+        "<p>{/* a block comment's `b` */ value}</p>",
+        '<span class="text-red-500">legacy</span>',
+        '',
+    ].join('\n');
+    /** The lines codeOf changed, as `N: what is left of it`, its blanks collapsed. */
+    const changedLines = (text: string, code: string): string[] => {
+        const lines = text.split('\n');
+        return code.split('\n').flatMap((line, i) => (line === lines[i] ? [] : [`${i + 1}: ${line.replace(/\s+/g, ' ').trim() || '(blank)'}`]));
+    };
+
+    it('G3 fires once, on the mixed element after the comment, never on the attribute that holds the comment; m1 counts the markup, not a class the comment names', () => {
+        expect(caught(SOURCE), 'line 5, the attribute, holds no class: the old scanner reported it, with the markup it had swallowed').toEqual(['G3 9  bg-lf-card text-gray-500']);
+        expect(measureSource(SVELTE, SOURCE), 'text-gray-500 on line 9 and text-red-500 on line 13, not the text-gray-500 of the comment').toEqual({m1: 2, m2: []});
+    });
+
+    it('the blind spot closed: every element after the comment is read on its own, so the mixed one is reported as itself and the others pass', () => {
+        const tags = [...startTags(markupOf(codeOf(SVELTE, SOURCE)))].map(({tag, index}) => `${tag} ${lineAt(SOURCE, index)}`);
+        expect(tags, 'the old scanner read two, the script and the Panel, whose attribute held all the rest').toEqual(['script 1', 'Panel 5', 'div 9', 'div 10', 'a 11', 'p 12', 'span 13']);
+        expect(caught(SOURCE.replace(`${MIXED}\n`, '')), 'without the mixed element, no G3: each element after the comment is right on its own, where the old scanner reported line 5').toEqual([]);
+    });
+
+    it("codeOf blanks a markup expression's comments as it does a script's: the same length and line breaks, the strings and the markup text kept", () => {
+        const code = codeOf(SVELTE, SOURCE);
+        const lineLengths = (text: string): number[] => text.split('\n').map((line) => line.length);
+        expect(code.length, 'the same length').toBe(SOURCE.length);
+        expect(lineLengths(code), 'the same line breaks: offsets and line numbers do not move').toEqual(lineLengths(SOURCE));
+        expect(code, 'the comment of the attribute expression').not.toContain("picker's");
+        expect(code, 'a string of an expression, its // included').toContain("href={'https://example.com/x'}");
+        expect(changedLines(SOURCE, code), "line 2 the script's comment, as before; line 6 the attribute expression's; line 12 the text expression's; nothing else, not the // of the link's text").toEqual(['2: let x = 1;', '6: (blank)', '12: <p>{ value}</p>']);
+    });
+
+    it('codeOf leaves the script and style blocks to their own handling: a brace in a script string or in a CSS rule opens no expression', () => {
+        const blocks = ['<script>', "    const open = '{', home = 'https://example.com'; // it's home", '</script>', '', '<style>', "    .hero { background: url(https://example.com/x.png); } /* it's */", '</style>', ''].join('\n');
+        expect(changedLines(blocks, codeOf(SVELTE, blocks)), 'only the comments go: read as an expression, either block would lose the // of its URL').toEqual(["2: const open = '{', home = 'https://example.com';", '6: .hero { background: url(https://example.com/x.png); }']);
+    });
+
+    it('a block comment inside a text expression is blanked too, and measures nothing', () => {
+        const comment = '/* was text-gray-500 on #ff0000 */';
+        const text = `<p>{${comment} value}</p>`;
+        expect(codeOf(SVELTE, text)).toBe(`<p>{${' '.repeat(comment.length)} value}</p>`);
+        expect(measureSource(SVELTE, text)).toEqual({m1: 0, m2: []});
     });
 });
 
@@ -606,7 +963,7 @@ describe('the tree: the colour gates', () => {
         expect(offenders, ['', ...RATCHET_FIX, '', `${offenders.length} violation(s):`, '', ...offenders, ''].join('\n  ')).toEqual([]);
     });
 
-    it('G1–G4: every role utility of the tree is written right', () => {
+    it('G1–G6: every role utility of the tree is written right', () => {
         const offenders = grammar.map((g) => `${g.file}:${g.line}  ${g.rule}  ${g.text}`);
         expect(offenders, ['', ...GRAMMAR_RULES, '', `${offenders.length} violation(s):`, '', ...offenders, ''].join('\n  ')).toEqual([]);
     });

@@ -13,16 +13,16 @@ command line, through environment variables, or in the app's **Admin** and **Use
 - 🌐 **[Expose Securely](service_exposure.md)**: Securely expose your private LibreFolio instance over the internet.
 - 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely, and fix the session cookie or the reverse proxy when they do not.
 - 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, how to block an instance, backups for your hosting panel and the upload limit of a restore.
-- 💤 **[Sleep and Wake](sleep_wake.md)**: The scheduled wake-up: a hosting panel or a cron job brings prices and exchange rates up to date when the machine wakes up.
+- 💤 **[Sleep and Wake](sleep_wake.md)**: Let an unused Fly.io machine suspend itself, and wake it on a schedule: a hosting panel or a cron job brings prices and exchange rates up to date.
 
 ### ⚙️ System Configuration
 - 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.
-- 📧 **[Email](email.md)**: Optional SMTP email: the variables, the test email in Settings › Email, and what to check when it fails.
+- 📧 **[Email](email.md)**: Optional SMTP email: the variables, the test email in Settings › Email, email verification, and what to check when it fails.
 - ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals).
 - 👥 **[Users & Invitations](users.md)**: Manage the accounts of the instance from the app's **Users** tab: invitations, password-reset links, administrator rights, deactivation and deletion.
 
 ### 🧹 Maintenance & Operations
-- 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades).
+- 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades, instance backups).
 - 💾 **[Backup, Restore & Moving](backup_restore.md)**: One archive with the whole instance: make it from Settings › Backup or the command line, check it, restore it, and move LibreFolio between a hosted instance and your own server.
 - 📂 **[Filesystem Structure](filesystem.md)**: Details on where databases, logs, uploads, and temporary folders are stored, and how to perform backups.
 

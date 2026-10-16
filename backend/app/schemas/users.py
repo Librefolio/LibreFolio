@@ -51,6 +51,7 @@ class AdminUserRead(StrictModel):
     is_superuser: bool
     created_at: UTCDateTime
     protected: bool = Field(..., description="Nobody may delete, deactivate or demote this account (the paying administrator of a managed instance)")
+    holds_place: bool = Field(default=False, description="Inactive and waiting for its email verification with a live link: it already holds its place, so reactivating it needs none")
 
 
 class AdminUserListResponse(BaseListResponse[AdminUserRead]):

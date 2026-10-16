@@ -40,7 +40,7 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 | **YOC** | The last year's dividends and interest per unit, against its average price → [Yield on Cost](#yield-on-cost-yoc) |
 | **Value** / **Weight** | What the position is worth, and its share of your Net Worth, cash included |
 | **Qty** | Shares, units or coins held |
-| **Price** *(hidden)* | The unit price used: the market price, or the last trade price when there is no quote → [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
+| **Price** *(hidden)* | The unit price used: the market price, or the price of your last purchase or sale when there is no quote; `—` for an asset valued at what it cost you, which has no price at all → [Price Resolution](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/price-resolution.md) |
 | **Avg. Cost** *(hidden)* | Average purchase price per unit, each purchase at its own date's exchange rate → [Weighted Average Cost](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md) |
 | **Oldest open lot** *(hidden)* | Opening date of the oldest lot still open |
 | **Brokers** | The broker holding the position |
@@ -53,7 +53,8 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 
 ??? info "➖ Empty cells — when a value is missing"
 
-    - **`—` in Unrealized P&L, P&L % or Avg. Cost**: the asset has no price at all, or part of what you paid is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment without a cost basis. The [Data Quality banner](index.md#data-quality-banner) names what to fix.
+    - **`—` in Unrealized P&L, P&L % or Avg. Cost**: part of what you paid is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment without a cost basis —, or, for Unrealized P&L and P&L % only, the price cannot be converted because the end date's exchange rate is missing. The [Data Quality banner](index.md#data-quality-banner) names what to fix.
+    - **`—` in Price, with an Unrealized P&L of `0`**: the asset has no price at all — no market price and no purchase or sale, as when you received it through an adjustment or a transfer — so its Value is what it cost you.
     - **Δ1** and **Δ1%** need a market price; **Annualized** needs a position old enough for a yearly rate to mean anything.
 
 ### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
@@ -65,13 +66,13 @@ How much income does each unit pay you, compared with what it cost? **YOC** comp
 - **One value per asset and broker**, over the year that ends on the end date: moving the start date does not change it.
 - **Gross, not after tax**: separate tax and fee transactions are not subtracted.
 - **Hover a value** for the income per unit, the period and the exchange rates used — each payment at its own date's rate.
-- **`0.00%`** means income recorded at zero; a plain **`-`** means no income in the last year.
+- **`0.00%`** means income recorded at zero, or corrections that exactly cancel it; a plain **`-`** means no income in the last year.
 
 🔗 **Theory**: [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — the exact rules, and how YOC differs from dividend yield or CAGR
 
 ??? info "🚦 A dash with an ⓘ icon — when YOC is unavailable"
 
-    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again.
+    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again. A dash also appears when corrections recorded in the last year — older negative dividend or interest rows — add up to more than the income itself: the ⓘ then reads *Corrections exceed the income of the last year.*
 
 ---
 
@@ -179,7 +180,8 @@ What are the selected lots worth, and what have they earned since opening? With 
 **How to read it**
 
 - **Comprehensive value above Opening value**: the lots gained, sales and income included.
-- **A dashed line** in **Value** is a value estimated at cost, without a market price.
+- **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, and no purchase or sale up to the end date.
+- **A line that starts after its lot opened**: the asset had no price yet on those days — no market price, no purchase or sale — so they are not valued. An asset with no market price at all up to the end date is valued at cost on those days instead.
 
 ### 🧾 5. Lot Detail
 

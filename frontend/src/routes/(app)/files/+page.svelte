@@ -22,6 +22,7 @@
     import {t} from '$lib/i18n';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {generateUUID} from '$lib/utils/core/uuid';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {formatBytes, setUploadScope, uploadFile} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
@@ -35,14 +36,14 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import {File as FileIcon, FileSpreadsheet, FileText, LayoutGrid, List, Pencil, RefreshCw, Trash2, X} from 'lucide-svelte';
-    import FilesTable from '$lib/components/files/FilesTable.svelte';
-    import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
+    import FilesTable from '$lib/features/files/FilesTable.svelte';
+    import FilePreviewModal from '$lib/features/files/FilePreviewModal.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import {matchesColumnFilter} from '$lib/components/table/dataTableLogic';
-    import FileGrid from '$lib/components/files/FileGrid.svelte';
+    import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
@@ -188,10 +189,13 @@
             activeTab = loadActiveTab();
         }
 
-        await loadGlobalSettings();
-        await ensurePluginIconsLoaded();
-        await loadBrokers();
-        await loadFiles();
+        // The first load holds the page's Refresh button (Y11), the whole chain.
+        await pageBusy.track('files-first-load', async () => {
+            await loadGlobalSettings();
+            await ensurePluginIconsLoaded();
+            await loadBrokers();
+            await loadFiles();
+        });
 
         // Mark URL as initialized (allow updates now)
         urlInitialized = true;
@@ -280,7 +284,7 @@
         activeTab = tab;
         saveActiveTab(tab);
         closePreviewModal();
-        loadFiles();
+        void reloadFiles('files-tab');
 
         // Update URL with new tab (keep other filters - user can clear manually)
         if (browser && urlInitialized) {
@@ -322,6 +326,11 @@
     });
     onDestroy(() => _brokerStoreUnsub());
 
+    /** A reload the page decides on (Refresh, tab, after an upload or a delete): it holds the Refresh button (Y11). */
+    function reloadFiles(label: string): Promise<void> {
+        return pageBusy.track(label, loadFiles);
+    }
+
     async function loadFiles() {
         loading = true;
         error = null;
@@ -354,7 +363,7 @@
             // Close uploader and refresh
             showUploader = false;
             pendingStaticFiles = [];
-            await loadFiles();
+            await reloadFiles('files-reload');
             // No toast: the new rows appear in the list, which is the confirmation.
             notify({name: 'file.uploaded', detail: {count: files.length}});
         } catch (e) {
@@ -397,7 +406,7 @@
             // All images processed, close uploader and refresh
             showUploader = false;
             pendingStaticFiles = [];
-            await loadFiles();
+            await reloadFiles('files-reload');
         }
     }
 
@@ -530,7 +539,7 @@
 
             // Reset state
             closeBrimUploadModal();
-            await loadFiles();
+            await reloadFiles('files-reload');
         } catch (e) {
             error = e instanceof Error ? e.message : 'Upload failed';
         }
@@ -610,7 +619,7 @@
             } else {
                 await zodiosApi.delete_file_api_v1_uploads__file_id__delete(undefined, {params: {file_id: fileId}});
             }
-            await loadFiles();
+            await reloadFiles('files-reload');
             notify({name: 'file.deleted', detail: {fileId, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
@@ -644,7 +653,7 @@
             const deletedCount = deletable.length;
             selectedFileIds = [];
             activeTableRef?.getTableRef()?.clearSelection();
-            await loadFiles();
+            await reloadFiles('files-reload');
             notify({name: 'file.deleted.bulk', detail: {count: deletedCount, isBrim}});
         } catch (e) {
             error = e instanceof Error ? e.message : 'Delete failed';
@@ -772,8 +781,8 @@
                     {showBrimUploader ? $t('common.close') : $t('uploads.upload')}
                 </button>
             {/if}
-            <button class="btn btn-secondary" data-testid="files-refresh-button" title={$t('common.refresh')} disabled={loading} on:click={() => loadFiles()}>
-                <RefreshCw size={16} class={loading ? 'animate-spin' : ''} />
+            <button class="btn btn-secondary" data-testid="files-refresh-button" data-busy={pageBusy.busy ? 'true' : 'false'} title={$t('common.refresh')} disabled={pageBusy.busy} on:click={() => reloadFiles('files-refresh')}>
+                <RefreshCw size={16} class={pageBusy.busy ? 'animate-spin' : ''} />
             </button>
         </div>
     </header>

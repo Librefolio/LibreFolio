@@ -40,6 +40,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/security/connectionSecurity.test.ts",
             "src/lib/charts/__tests__/loadComparisonData.test.ts",
             "src/lib/charts/__tests__/signalLabel.test.ts",
+            "src/lib/charts/__tests__/chartPageSignals.test.ts",
             "src/lib/services/fxCreationSync.test.ts",
             "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
             "src/lib/utils/sync/__tests__/syncRange.test.ts",
@@ -65,6 +66,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/transactions/importMerge.test.ts",
             "src/lib/utils/transactions/importCompare.test.ts",
             "src/lib/utils/transactions/resolveValidationMessage.test.ts",
+            "src/lib/utils/transactions/resolveValidationMessage.decimals.test.ts",
+            "src/lib/utils/transactions/commitRefusal.test.ts",
             "src/lib/utils/transactions/resolveBrimNotice.test.ts",
             "src/lib/utils/transactions/eventTypes.test.ts",
             "src/lib/utils/transactions/signHintColor.test.ts",
@@ -81,16 +84,16 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/chartSignalsHelpers.test.ts",
             "src/lib/components/charts/lineChartHelpers.sessionGaps.test.ts",
             "src/lib/components/charts/scatterChartHelpers.test.ts",
-            "src/lib/components/risk/riskAnalysisHelpers.test.ts",
-            "src/lib/components/risk/correlationHelpers.test.ts",
-            "src/lib/components/risk/assetSetSelection.test.ts",
-            "src/lib/components/risk/eligibility.test.ts",
-            "src/lib/components/risk/matrixMetadata.test.ts",
-            "src/lib/components/risk/assetSetLevels.test.ts",
-            "src/lib/components/risk/assetSetI18n.test.ts",
-            "src/lib/components/risk/warningTranslatorSites.test.ts",
-            "src/lib/components/risk/syncTargets.test.ts",
-            "src/lib/components/risk/stressBucketLabel.test.ts",
+            "src/lib/features/risk/riskAnalysisHelpers.test.ts",
+            "src/lib/features/risk/correlationHelpers.test.ts",
+            "src/lib/features/risk/assetSetSelection.test.ts",
+            "src/lib/features/risk/eligibility.test.ts",
+            "src/lib/features/risk/matrixMetadata.test.ts",
+            "src/lib/features/risk/assetSetLevels.test.ts",
+            "src/lib/features/risk/assetSetI18n.test.ts",
+            "src/lib/features/risk/warningTranslatorSites.test.ts",
+            "src/lib/features/risk/syncTargets.test.ts",
+            "src/lib/features/risk/stressBucketLabel.test.ts",
             "src/lib/components/assets/providerProbe.test.ts",
             "src/lib/components/assets/resolveProviderError.test.ts",
             "src/lib/components/assets/assetIdentifiers.test.ts",
@@ -102,6 +105,11 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/assetFormState.test.ts",
             "src/lib/components/assets/scheduleSerialization.test.ts",
             "src/lib/components/assets/assetBrowse.test.ts",
+            "src/lib/components/assets/detail/assetDetailPriceQuery.test.ts",
+            "src/lib/components/assets/detail/assetDetailChartPoints.test.ts",
+            "src/lib/components/assets/detail/assetDetailFxPair.test.ts",
+            "src/lib/components/assets/detail/assetDetailFxRequirements.test.ts",
+            "src/lib/components/assets/detail/assetDetailLive.svelte.test.ts",
             "src/lib/components/table/dataTableLogic.test.ts",
             "src/lib/components/transactions/shared/resolveFormItems.test.ts",
             "src/lib/components/transactions/events/eventSaveError.test.ts",
@@ -130,18 +138,19 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/theme/contrast.test.ts",
             "src/lib/theme/roleColors.test.ts",
             "src/lib/theme/roleColors.dom.test.ts",
-            "src/lib/components/brokers/lots/lotChartShared.test.ts",
-            "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
-            "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
-            "src/lib/components/brokers/lots/lotGanttChartHelpers.test.ts",
-            "src/lib/components/brokers/lots/lotStateVisual.test.ts",
-            "src/lib/components/brokers/lots/unifiedLotsTableHelpers.test.ts",
-            "src/lib/components/brokers/lots/lotCustodyModalHelpers.test.ts",
-            "src/lib/components/brokers/lots/lotCustodyModalHelpers.closureValueLabel.test.ts",
-            "src/lib/components/brokers/lots/lotsAnalysisHelpers.test.ts",
-            "src/lib/components/brokers/lots/lotDataQualityHelpers.test.ts",
+            "src/lib/features/brokers/lots/lotChartShared.test.ts",
+            "src/lib/features/brokers/lots/lotWacPriceChartHelpers.test.ts",
+            "src/lib/features/brokers/lots/lotComparisonChartHelpers.test.ts",
+            "src/lib/features/brokers/lots/lotGanttChartHelpers.test.ts",
+            "src/lib/features/brokers/lots/lotStateVisual.test.ts",
+            "src/lib/features/brokers/lots/unifiedLotsTableHelpers.test.ts",
+            "src/lib/features/brokers/lots/lotCustodyModalHelpers.test.ts",
+            "src/lib/features/brokers/lots/lotCustodyModalHelpers.closureValueLabel.test.ts",
+            "src/lib/features/brokers/lots/lotsAnalysisHelpers.test.ts",
+            "src/lib/features/brokers/lots/lotDataQualityHelpers.test.ts",
             "src/lib/stores/chartSettingsStore.test.ts",
             "src/lib/stores/chartSettingsStoreSsr.test.ts",
+            "src/lib/stores/chartSettingsStore.migration.test.ts",
             "src/lib/stores/reference/brokerStore.test.ts",
             "src/lib/stores/reference/brokerStoreIconHydration.test.ts",
             "src/lib/stores/reference/sectorStore.test.ts",
@@ -158,11 +167,14 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/categoryLabels.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/exposureBarColours.test.ts",
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/source.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/riskGlossary.test.ts",
             "src/lib/i18n/importWizardAssetsCount.test.ts",
             "src/lib/features/support/supportLinks.test.ts",
             "src/lib/features/settings/settingsTabs.test.ts",
+            "src/lib/features/plugin-settings/pluginSettingsForm.test.ts",
+            "src/lib/features/plugin-settings/pluginSettingsApi.test.ts",
             "src/lib/features/settings/users/linkShare.test.ts",
             "src/lib/features/settings/users/addressProbe.test.ts",
             "src/lib/features/instance/instanceConfig.test.ts",
@@ -170,16 +182,21 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/auth/authFlash.test.ts",
             "src/lib/features/auth/linkToken.test.ts",
             "src/lib/features/auth/registrationErrors.test.ts",
+            "src/lib/features/auth/passwordRules.test.ts",
             "src/lib/features/instance/instanceBlock.test.ts",
             "src/lib/api/zodios-client.test.ts",
             "src/lib/features/live-updates/activityTracker.test.ts",
             "src/lib/features/live-updates/activePolling.test.ts",
+            "src/lib/services/livePriceService.test.ts",
+            "src/lib/features/price-refresh/priceRefresh.test.ts",
             "src/lib/features/email/emailText.test.ts",
             "src/lib/features/email/emailApi.test.ts",
             "src/lib/features/email/emailLinks.test.ts",
             "src/lib/features/email/verificationApi.test.ts",
             "src/lib/features/email/sendLinkApi.test.ts",
             "src/lib/features/email/forgotPasswordApi.test.ts",
+            "src/lib/stores/app/auth.verification.test.ts",
+            "src/lib/features/auth/registrationErrors.verification.test.ts",
             "src/lib/features/backup/backupApi.test.ts",
             "src/lib/features/backup/backupJob.test.ts",
             "src/lib/features/backup/restoreFlow.test.ts",
@@ -273,12 +290,16 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/assets/providerProbeState.test.ts",
             "src/lib/components/assets/AssetSyncModal.test.ts",
             "src/lib/components/assets/AssetBrowseNav.test.ts",
+            "src/lib/components/assets/detail/AssetDetailSignalsPanel.test.ts",
+            "src/lib/components/assets/detail/AssetDetailMeasuresSection.test.ts",
+            "src/lib/components/assets/detail/AssetChartModeToggle.test.ts",
+            "src/lib/components/assets/detail/AssetCalendarWindowControls.test.ts",
             "src/lib/components/fx/FxSyncModal.test.ts",
             "src/lib/components/fx/FxMissingRate.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
-            "src/lib/components/files/FilePreviewModal.test.ts",
-            "src/lib/components/files/FilesTable.test.ts",
-            "src/lib/components/files/FileGrid.test.ts",
+            "src/lib/features/files/FilePreviewModal.test.ts",
+            "src/lib/features/files/FilesTable.test.ts",
+            "src/lib/features/files/FileGrid.test.ts",
             "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
             "src/lib/components/transactions/modals/TransactionCompareModal.test.ts",
             "src/lib/components/transactions/modals/TransactionFormModal.test.ts",
@@ -298,14 +319,14 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/PriceChartFull.test.ts",
             "src/lib/components/charts/LineChart.test.ts",
             "src/lib/components/charts/SemiDonutChart.test.ts",
-            "src/lib/components/risk/AssetSetLossComparisonSection.test.ts",
-            "src/lib/components/risk/AssetSetRiskReturnSection.test.ts",
+            "src/lib/features/risk/AssetSetLossComparisonSection.test.ts",
+            "src/lib/features/risk/AssetSetRiskReturnSection.test.ts",
             "src/lib/components/charts/ScatterChart.test.ts",
-            "src/lib/components/risk/AssetSetReplaySection.test.ts",
-            "src/lib/components/risk/AssetSetComparisonLevels.test.ts",
-            "src/lib/components/risk/AssetSetCorrelationSection.test.ts",
-            "src/lib/components/risk/CorrelationHeatmap.test.ts",
-            "src/lib/components/risk/AssetChip.test.ts",
+            "src/lib/features/risk/AssetSetReplaySection.test.ts",
+            "src/lib/features/risk/AssetSetComparisonLevels.test.ts",
+            "src/lib/features/risk/AssetSetCorrelationSection.test.ts",
+            "src/lib/features/risk/CorrelationHeatmap.test.ts",
+            "src/lib/features/risk/AssetChip.test.ts",
             "src/lib/features/auth/RegisterCard.test.ts",
             "src/lib/features/auth/LoginCard.test.ts",
             "src/lib/features/auth/AuthCard.test.ts",
@@ -322,19 +343,20 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/support/shareNavigation.test.ts",
             "src/lib/utils/clipboard.test.ts",
             "src/lib/utils/core/sanitizeHtml.test.ts",
-            "src/lib/components/brokers/BrokerModal.test.ts",
-            "src/lib/components/brokers/BrokerSharingPanel.test.ts",
-            "src/lib/components/brokers/BrokerCard.test.ts",
+            "src/lib/features/brokers/BrokerModal.test.ts",
+            "src/lib/features/brokers/BrokerSharingPanel.test.ts",
+            "src/lib/features/brokers/BrokerCard.test.ts",
+            "src/lib/features/brokers/BrokerImportFilesModal.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
             "src/lib/components/assets/AssetTable.privacy.test.ts",
-            "src/lib/components/dashboard/KpiSection.test.ts",
-            "src/lib/components/dashboard/ExposureTable.test.ts",
-            "src/lib/components/dashboard/ExposureTreemap.test.ts",
-            "src/lib/components/dashboard/GrowthChart.tooltip.test.ts",
-            "src/lib/components/dashboard/ContributionTable.test.ts",
-            "src/lib/components/dashboard/PerformanceChart.test.ts",
-            "src/lib/components/dashboard/OtherPeriodEffectsTable.test.ts",
-            "src/lib/components/dashboard/AllocationPanel.test.ts",
+            "src/lib/features/dashboard/KpiSection.test.ts",
+            "src/lib/features/dashboard/ExposureTable.test.ts",
+            "src/lib/features/dashboard/ExposureTreemap.test.ts",
+            "src/lib/features/dashboard/GrowthChart.tooltip.test.ts",
+            "src/lib/features/dashboard/ContributionTable.test.ts",
+            "src/lib/features/dashboard/PerformanceChart.test.ts",
+            "src/lib/features/dashboard/OtherPeriodEffectsTable.test.ts",
+            "src/lib/features/dashboard/AllocationPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
             "src/lib/components/transactions/import/ReportSetCard.escape.test.ts",
@@ -357,10 +379,17 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/users/InviteDialog.test.ts",
             "src/lib/features/settings/users/ResetLinkDialog.test.ts",
             "src/lib/features/email/EmailSettingsTab.test.ts",
+            "src/lib/features/plugin-settings/PluginSettingsForm.component.test.ts",
+            "src/lib/features/plugin-settings/PluginSettingsTab.test.ts",
+            "src/lib/features/plugin-settings/PluginSettingsModal.test.ts",
             "src/lib/features/email/VerifyEmailCard.test.ts",
             "src/lib/features/email/VerificationNotice.test.ts",
             "src/lib/features/email/SendLinkByEmail.test.ts",
             "src/lib/features/email/ForgotPasswordEmailForm.test.ts",
+            "src/lib/features/auth/LoginCard.verification.test.ts",
+            "src/lib/features/auth/RegisterCard.verification.test.ts",
+            "src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts",
+            "src/lib/features/settings/users/UserRow.verification.test.ts",
             "src/routes/(app)/settings/page.tabs.test.ts",
             "src/lib/features/tools/ToolsHub.test.ts",
             "src/lib/features/tools/ToolHost.test.ts",
@@ -421,7 +450,7 @@ def front_onboarding_component_unit(
             "src/routes/(app)/layout.gate.test.ts",
             "src/routes/(app)/layout.authGate.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
-            "src/lib/components/brokers/BrokerModal.test.ts",
+            "src/lib/features/brokers/BrokerModal.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
@@ -736,6 +765,16 @@ def front_email_tab(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("settings/email-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_email_verification(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the email-verification E2E tests (sign-up and sign-in on simulated answers; the Settings › Admin switch with GET /system/instance simulated)."""
+    print_section("Frontend Email Verification Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("auth-email-verification.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the Settings › Backup tab E2E (workstream B, lot B5a) on desktop: the tab for administrators only, a backup created, downloaded, deleted, picked up after a reload."""
     print_section("Frontend Backup Settings Tests")
@@ -745,6 +784,19 @@ def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, 
         return False
     # Desktop only (the default project), like every other serial spec: the tab's mobile rendering is the gallery's to cover.
     return _run_playwright("settings/backup.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_plugin_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Settings › Plugins and «Configure» E2E (workstream X, lot CP11c) on desktop: the tab read only, mockprov's settings through the asset dialog, the search's «to configure» row."""
+    print_section("Frontend Plugin Settings Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    # Desktop only (the default project): the member and administrator tests write mockprov fields one account each, which a second project in the same invocation would share.
+    return _run_playwright("settings/plugin-settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
@@ -796,7 +848,7 @@ def populate_registry(registry: dict) -> None:
         front_utility_unit,
         test_names=True,
         name="Core Store Unit Tests",
-        desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument, and the colour gates of workstream T: the ratchet on the legacy colour classes and literals (no total and no file rises above src/themeRoles.baseline.tsv, a swapped colour is a rise, a move keeps its record and a split is declared), the grammar of the role utilities (no dark: on a role, no unknown role, no element mixing roles with legacy classes, no arbitrary colour value), and the contract of tokens.css (the same base roles in both themes, every utility a declared role, the WCAG contrast pairs in both themes) with the legacy dark remap of app.css exempting migrated elements and losing each rule with its class's last use, and the Settings tab registry (plan A3): today's tabs with unique URL-safe ids and unique orders, their labels in all four catalogues, their icons and tab modules, admin visible to everyone with canEdit for an administrator only and alignEnd, users (order 110), backup and email for administrators only, and visibleSettingsTabs keeping what visible(ctx) allows, sorted by order, without touching its input, and the Email tab's words, colours and API seam (workstream E, lot E2): problem, SMTP and API codes to whole i18n keys present in the four catalogues with exactly the placeholders they are filled with (own entries only: constructor or __proto__ fall back to the unknown key), the minutes of a rate limit rounded up, class maps of declared colour roles only (a positive control proves the detectors), GET /email/status normalized to its five keys (an empty string or an array where the schema allows none dropped to null), and readTestFailure on each refusal of POST /email/test, carried by an AxiosError or an ApiError, also as the generated client really raises it through the real Zodios and axios stack with only the transport faked; the Users tab's pure helpers (lot A6b): linkShare (the prefilled base from url/path or the origin, the link composed) and addressProbe (normalizeBase, probeUrl, checkAddress: one bare GET without credentials or headers, match/mismatch/unverifiable, the timeout, never throws)",
+        desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence, the storage-version-3 migration that turns a saved observation Rolling Return into the calendar one), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument, and the colour gates of workstream T: the ratchet on the legacy colour classes and literals (no total and no file rises above src/themeRoles.baseline.tsv, a swapped colour is a rise, a move keeps its record and a split is declared), the grammar of the role utilities (no dark: on a role, no unknown role, no element mixing roles with legacy classes, no arbitrary colour value), and the contract of tokens.css (the same base roles in both themes, every utility a declared role, the WCAG contrast pairs in both themes) with the legacy dark remap of app.css exempting migrated elements and losing each rule with its class's last use, and the Settings tab registry (plan A3): today's tabs with unique URL-safe ids and unique orders, their labels in all four catalogues, their icons and tab modules, admin visible to everyone with canEdit for an administrator only and alignEnd, users (order 110), backup and email for administrators only, and visibleSettingsTabs keeping what visible(ctx) allows, sorted by order, without touching its input, and the Email tab's words, colours and API seam (workstream E, lot E2): problem, SMTP and API codes to whole i18n keys present in the four catalogues with exactly the placeholders they are filled with (own entries only: constructor or __proto__ fall back to the unknown key), the minutes of a rate limit rounded up, class maps of declared colour roles only (a positive control proves the detectors), GET /email/status normalized to its five keys (an empty string or an array where the schema allows none dropped to null), and readTestFailure on each refusal of POST /email/test, carried by an AxiosError or an ApiError, also as the generated client really raises it through the real Zodios and axios stack with only the transport faked; the Users tab's pure helpers (lot A6b): linkShare (the prefilled base from url/path or the origin, the link composed) and addressProbe (normalizeBase, probeUrl, checkAddress: one bare GET without credentials or headers, match/mismatch/unverifiable, the timeout, never throws)",
         tests=("src/lib/stores/core/entityStore.test.ts", "src/lib/features/onboarding/onboardingTourSurfaces.test.ts"),
     )
     add_test(
@@ -824,7 +876,7 @@ def populate_registry(registry: dict) -> None:
             "src/lib/features/onboarding/components/DeferredAppPopups.test.ts",
             "src/lib/features/onboarding/onboardingRouteSettlement.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
-            "src/lib/components/brokers/BrokerModal.test.ts",
+            "src/lib/features/brokers/BrokerModal.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/components/layout/Header.test.ts",
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
@@ -968,12 +1020,30 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "email-verification",
+        front_email_verification,
+        name="Email Verification E2E",
+        desc="E5b (developer decision 44), signed out on simulated answers: a 201 with verification_required goes back to the sign-in with a success line of its own and signs nobody in; a 409 EMAIL_VERIFICATION_UNAVAILABLE stays on the register card with words of its own; a 403 EMAIL_NOT_VERIFIED draws the verification notice instead of the danger box, and «send the link again» goes with the typed credentials (email.verification.resent). As e2e_test_admin with GET /system/instance simulated: the require_email_verification switch of Settings › Admin disabled with email.links false (not the lock: the sibling switch usable; no placeholder badge), usable with true; nothing saved",
+        prereq="Admin user + test users; no SMTP server on the lane; require_email_verification saved off",
+        tests="auth-email-verification.spec.ts",
+    )
+    add_test(
+        cat,
         "backup",
         front_backup,
         name="Backup Settings E2E",
         desc="Settings › Backup (lot B5a), desktop: a regular user has no Backup tab and ?tab=backup opens the first tab, an administrator has it and it opens the card idle; from ?tab=backup a backup started and followed to done (backup.created with its 32-hex job id), the card naming the archive, a link to that job's file, the download a zip as large as the job reports under librefolio-backup-YYYYMMDD-HHMMSS.zip (backup.download.started); the delete back to idle (backup.deleted, GET of the job 404 backup_job_not_found); a reload picks the finished job up again without a second backup.created. Serial (one backup at a time per instance); every job deleted and the followed job id cleared after each test",
         prereq="Admin user + populated DB",
         tests="settings/backup.spec.ts",
+    )
+    add_test(
+        cat,
+        "plugin-settings",
+        front_plugin_settings,
+        name="Plugin Settings E2E",
+        desc="Settings › Plugins and «Configure» (workstream X, lot CP11c), desktop: as a member and as an administrator ?tab=plugins selects the tab and its read settles (data-busy); the asset family lists justETF and Borsa Italiana, configured, each personal select (preferred_currency all/EUR/USD/CHF/GBP, preferred_language all/it/en) on its default and editable, its list opened and closed with Escape, nothing chosen, and never the test-only mockprov; «Configure» on mockprov from the edit dialog of an asset of the test's own (mockprov assigned over the API under the identifier the mock refuses to quote: the provider select never offers mockprov), no «not configured» badge; the dialog over mockprov's seven fields scrolls its body between title and «Close» at 1280×720 (precondition: the body overflows; «Close» whole in the window, Save reached by scrolling the body): a member finds the four instance fields read only (data-editable false, note adminOnly) and the instance secret only set or unset with no control, saves results_limit 25 and a personal_token (the PATCH sends the number as a number and the secret only in secret_value; pluginSettings.saved names the fields, never a value), reads them back (data-source db, the secret «set» and its field gone, the API never returning it), then «Use the default» and Clear, saved, back to default and unset on screen and through the API; an administrator saves mockprov's instance api_key the same way, finds «Replace» opening an empty field and cancels it, clears it; search on a simulated stream (page.route; the REST fallback aborted and recorded): justETF reported NOT_CONFIGURED gets its «to configure» row (data-provider), a 👑 result brings asset-search-crown-legend, and the row's «Configure» opens justETF's settings over the asset dialog, closed without saving (the preference still the default through the API). Every mockprov field a test may write is recorded before its Save and cleared over the API by its owner after each test, whatever happened, and the asset deleted",
+        prereq="Populated DB + test users (e2e_test_user a member, e2e_test_admin an administrator); no environment variable sets a mockprov field on the lane (LIBREFOLIO_MOCKPROV_API_KEY, LIBREFOLIO_PLUGIN_ASSET_MOCKPROV_*); the justETF and Borsa Italiana search preferences of both users on their default",
+        tests="settings/plugin-settings.spec.ts",
     )
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")
     registry["front-utility"] = cat

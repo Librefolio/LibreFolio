@@ -102,11 +102,11 @@
 </script>
 
 <ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} testId="promote-merge-modal">
-    <div class="flex flex-col max-h-[80vh] rounded-lg" data-testid="promote-merge-modal">
+    <div class="flex flex-col max-h-[80vh] rounded-lg" data-testid="promote-merge-modal-content">
         <!-- Sticky Header -->
-        <div class="p-5 pb-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
-            <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
-                <Link2 size={20} class="text-green-600 dark:text-green-400" />
+        <div class="p-5 pb-3 border-b border-lf-subtle shrink-0">
+            <div class="flex items-center gap-2 text-lg font-semibold text-lf-primary">
+                <Link2 size={20} class="text-lf-success" />
                 <span>{$t('transactions.promote.mergeTitle', {values: {type: targetTypeLabel}})}</span>
             </div>
         </div>
@@ -114,16 +114,16 @@
         <!-- Scrollable Body -->
         <div class="p-5 py-4 space-y-4 overflow-y-auto flex-1 min-h-0">
             {#if hasDifferences && txA && txB}
-                <p class="text-sm text-gray-500 dark:text-gray-400">
+                <p class="text-sm text-lf-muted">
                     {$t('transactions.promote.mergeSubtitle')}
                 </p>
 
                 <div class="space-y-4">
                     <!-- Description (B10: textarea for newlines) -->
                     {#if diffDesc}
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3" data-testid="promote-merge-field-description">
+                        <div class="border border-lf-subtle rounded-lg p-3" data-testid="promote-merge-field-description">
                             <div class="flex items-center justify-between mb-2">
-                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('common.description')}</div>
+                                <div class="text-xs font-semibold text-lf-muted">{$t('common.description')}</div>
                                 <Tooltip text={$t('transactions.promote.concat')}>
                                     <button
                                         type="button"
@@ -146,7 +146,7 @@
                                     }}
                                     data-testid="promote-merge-desc-left"
                                 >
-                                    <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txA.label}</span>
+                                    <span class="text-[10px] text-lf-muted block mb-0.5">Transaction {txA.label}</span>
                                     {txA.description || '—'}
                                 </button>
                                 <button
@@ -158,13 +158,13 @@
                                     }}
                                     data-testid="promote-merge-desc-right"
                                 >
-                                    <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txB.label}</span>
+                                    <span class="text-[10px] text-lf-muted block mb-0.5">Transaction {txB.label}</span>
                                     {txB.description || '—'}
                                 </button>
                             </div>
                             <textarea
                                 rows={2}
-                                class="w-full text-xs px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 resize-none overflow-y-auto"
+                                class="w-full text-xs px-2 py-1.5 rounded border border-lf-input hover:border-lf-input-hover bg-lf-field text-lf-primary resize-none overflow-y-auto"
                                 style="field-sizing: content; max-height: 8rem; white-space: pre-wrap"
                                 bind:value={resDescription}
                                 data-testid="promote-merge-desc-input"
@@ -174,9 +174,9 @@
 
                     <!-- Tags (DD-BF5: use TagInput component) -->
                     {#if diffTags}
-                        <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-3" data-testid="promote-merge-field-tags">
+                        <div class="border border-lf-subtle rounded-lg p-3" data-testid="promote-merge-field-tags">
                             <div class="flex items-center justify-between mb-2">
-                                <div class="text-xs font-semibold text-gray-500 dark:text-gray-400">{$t('transactions.promote.fieldTags')}</div>
+                                <div class="text-xs font-semibold text-lf-muted">{$t('transactions.promote.fieldTags')}</div>
                                 <Tooltip text={$t('transactions.promote.union')}>
                                     <button
                                         type="button"
@@ -199,7 +199,7 @@
                                     }}
                                     data-testid="promote-merge-tags-left"
                                 >
-                                    <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txA.label}</span>
+                                    <span class="text-[10px] text-lf-muted block mb-0.5">Transaction {txA.label}</span>
                                     {#if (txA.tags ?? []).length > 0}
                                         <span class="flex flex-wrap gap-1"
                                             >{#each txA.tags as tag}<span class="merge-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span
@@ -217,7 +217,7 @@
                                     }}
                                     data-testid="promote-merge-tags-right"
                                 >
-                                    <span class="text-[10px] text-gray-400 block mb-0.5">Transaction {txB.label}</span>
+                                    <span class="text-[10px] text-lf-muted block mb-0.5">Transaction {txB.label}</span>
                                     {#if (txB.tags ?? []).length > 0}
                                         <span class="flex flex-wrap gap-1"
                                             >{#each txB.tags as tag}<span class="merge-tag-badge inline-block px-1.5 py-0.5 text-[10px] rounded" style={getStringBadgeStyle(tag)}>{tag}</span>{/each}</span
@@ -249,17 +249,17 @@
                     </Tooltip>
                 </div>
             {:else}
-                <p class="text-sm text-gray-500">{$t('transactions.promote.mergeConfirm')}</p>
+                <p class="text-sm text-lf-muted">{$t('transactions.promote.mergeConfirm')}</p>
             {/if}
         </div>
 
         <!-- Sticky Footer -->
-        <div class="p-5 pt-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
+        <div class="p-5 pt-3 border-t border-lf-subtle shrink-0">
             <div class="flex justify-between gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={handleCancel}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary bg-lf-panel hover:bg-lf-neutral" onclick={handleCancel} data-testid="promote-merge-cancel">
                     {$t('common.cancel')}
                 </button>
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-green-600 hover:bg-green-700 inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-on-status bg-lf-success hover:bg-lf-success-hover inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">
                     <Link2 size={14} />
                     {$t('transactions.promote.mergeConfirm')}
                 </button>
@@ -286,11 +286,11 @@
 
 <style>
     .merge-tag-badge {
-        background: var(--badge-bg, #e2e8f0);
-        color: var(--badge-text, #334155);
+        background: var(--badge-bg, var(--lf-surface-neutral));
+        color: var(--badge-text, var(--lf-text-secondary));
     }
     :global(html.dark) .merge-tag-badge {
-        background: var(--badge-dark-bg, #334155);
-        color: var(--badge-dark-text, #e2e8f0);
+        background: var(--badge-dark-bg, var(--lf-surface-neutral));
+        color: var(--badge-dark-text, var(--lf-text-secondary));
     }
 </style>

@@ -16,6 +16,59 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
     - `get_settings()` builds a fresh, validated instance on every call. `main.py` calls it at
       import, so a mistyped or out-of-range value stops the startup. It also computes
       `DATABASE_URL` and applies the `LIBREFOLIO_LOG_LEVEL` override.
+    - **Profile defaults** (`PROFILE_DEFAULTS` in `__init__.py`, decisions D5 and F27): for each
+      profile `LIBREFOLIO_PROFILE` accepts, the values it gives the `Settings` fields that the
+      environment and `.env` leave unset. `selfhosted` lists none: a self-hosted install keeps every
+      code default. `managed` sets `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS` and
+      `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` to `60.0` and turns on `LIBREFOLIO_FRAME_PROTECTION` and
+      `LIBREFOLIO_CSP_REPORT_ONLY`, two `bool` fields off in the code
+      ([Frame Protection and the Report-Only Policy](security.md#managed-headers)).
+      `Settings._apply_profile_defaults`, a `model_validator(mode="after")`, gives the active
+      profile's value (`LIBREFOLIO_PROFILE` already normalised by its field validator) to every listed
+      field that is not in `model_fields_set`. pydantic-settings passes every value a source found, so
+      a value the operator set wins even when it equals the code default:
+      `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` or `LIBREFOLIO_FRAME_PROTECTION=false` stay on a
+      managed instance. The value is written with `object.__setattr__`, not by assignment: an
+      assignment would add the field to `model_fields_set`, and later code could no longer tell an
+      operator's value from the profile's. Either way the value is not validated (`Settings` has no
+      `validate_assignment`), so `./dev.py test services profile-defaults`
+      (`backend/test_scripts/test_services/test_profile_defaults.py`) checks the table strictly: one
+      entry per profile `LIBREFOLIO_PROFILE` accepts; every key a `Settings` field with a code default;
+      every value valid for its field in strict mode and, for `managed`, different from the code
+      default; a set value kept; and, parametrised over every field any profile lists, the code
+      default kept by a self-hosted install. The table reaches `Settings` fields only; the variables
+      of the section modules have their own table, in the next point. To give a `Settings` field a
+      new managed default, a workstream adds one entry to `PROFILE_DEFAULTS["managed"]`: a field with
+      a code default, and a value of the field's own type, written as its code default is (`60.0`,
+      `True`; never `"60"`, nor `1` for a flag), that differs from the code default. It adds the same
+      entry to `MANAGED_DEFAULTS` in the test file, the decided table that
+      `PROFILE_DEFAULTS["managed"]` must equal; the parametrised cases (the managed value given to a
+      field nobody set, the guards on the table, the self-hosted code defaults) then cover the new
+      field.
+    - **Profile defaults of the section modules' variables** (`ENVIRONMENT_PROFILE_DEFAULTS` in
+      `__init__.py`): for each profile, the values it gives the variables that a section module of
+      `backend/app/config/` reads from `os.environ`, outside `Settings`. `selfhosted` lists none: a
+      self-hosted install keeps every code default. A section module calls
+      `profile_default(name, fallback)`, and only while its variable is unset: the function returns
+      the active profile's value for `name` or, when the profile lists none, `fallback` itself, the
+      code's own default (the self-hosted behaviour). The profile is
+      `get_settings().LIBREFOLIO_PROFILE`, read at each call. A blank or an invalid value stays under
+      the module's own rules: a module can, for example, treat a blank value as unset, and answer an
+      invalid one with a coded error when the value is used rather than stop the startup.
+      `profile_default()` converts nothing (a `cast`): an entry is written in the type of the
+      module's fallback (`500`, never `"500"`). The first entry is the upload limit of a restore:
+      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43).
+      `./dev.py test services profile-defaults` guards this table too: one entry per profile;
+      `selfhosted` empty; `managed` equal, value and type, to `ENVIRONMENT_MANAGED_DEFAULTS`, the
+      decided table of the test file; no key that is a `Settings` field or sits in both tables; every
+      key read, as a string constant, by a section module, and documented in `.env.example`; and, for
+      every listed name, `profile_default()` returning the fallback under `selfhosted` and the
+      table's value under `managed`. To give such a variable a managed default, a workstream adds one
+      entry to `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` and the same entry to
+      `ENVIRONMENT_MANAGED_DEFAULTS` in the test file, says the managed value in the variable's
+      commented line of `.env.example`, and calls `profile_default(NAME, fallback)` in its section
+      module while the variable is unset. Admin view of both tables:
+      [The Managed Profile](../../admin/hosting_providers.md#managed-profile).
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,
       otherwise `backend/data/prod`.
@@ -23,10 +76,12 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
-      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
+      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
       `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
-      settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`) — are
+      settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`), the order
+      of the asset providers in the search (`LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`,
+      `LIBREFOLIO_ASSET_PROVIDERS_ORDER`) — are
       read in `backend/app/config/` (base or section module), from
       `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
       launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
@@ -42,19 +97,27 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       both forms, the secrets that a test runtime never inherits (`configure_test_runtime()` in
       `scripts/cli_base.py`), like the rest of the instance's configuration: see
       [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
+    - Addresses go through `env_url(name)` in `__init__.py`, one rule for every `LIBREFOLIO_*_URL`:
+      an empty or blank value is `None`; otherwise the value, stripped, must be an `http://` or
+      `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not) and
+      no space, tab or line break inside, and one trailing slash is removed; anything else, `https://`
+      alone included, raises `ValueError`, which names the variable. The accessor's caller decides
+      what an invalid address costs, and logs it.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
-      `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
-      topic, owned by the workstream of that area. Six exist today: `platform.py` (H:
-      `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
+      `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
+      go into one section module per topic, owned by the workstream of that area. Six exist today:
+      `platform.py` (H: `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
-      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
+      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
       `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
       `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
-      `web_link_finder_max_results()`, and `plugin_setting_env()` and `plugin_setting_env_origin()`
-      for the [plugin settings](patterns/plugin_settings.md#environment)), `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
+      `web_link_finder_max_results()`, `plugin_setting_env()` and `plugin_setting_env_origin()`
+      for the [plugin settings](patterns/plugin_settings.md#environment), and
+      `asset_providers_premium()` and `asset_providers_order()` for the
+      [search order](patterns/asset_plugin_guide.md#search-order)), `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
       `smtp_port()`, `smtp_user()`, `smtp_password()`, `smtp_sender()`, `smtp_reply_to()`,
       `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)),
       `sleep_wake.py` (Z: the pauses a provider gets after answering HTTP 429,
@@ -63,14 +126,19 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       uvicorn's share of it, `shutdown_drain_seconds()` and `uvicorn_drain_env()`; see
       *Stopping the Server* in [Configuration](../../admin/configuration.md); the token of the
       scheduled wake-up, `wake_token()`, also as `_FILE`, with the rules of the panel's backup token;
-      see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync)) and `backup.py` (B:
+      see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync); the idle suspension,
+      `idle_suspend_mode()` and `idle_suspend_minutes()`; see
+      [Idle Suspension](../../admin/sleep_wake.md#idle-suspend)) and `backup.py` (B:
       `backup_download_token()`, the token a hosting panel presents to download the instance's
       backups, also as `_FILE`). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
       `registration_service.py` logs it and falls back safely — registration closed for the first
       two, the bare path or no billing link for the URLs
-      ([Registration Modes](access_control.md#registration-modes)).
+      ([Registration Modes](access_control.md#registration-modes)). An invalid
+      `LIBREFOLIO_SUPPORT_URL` does not either: `support_link()`
+      (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
+      `support_url: null`, so the app keeps its link to the project's GitHub issues.
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector
@@ -161,7 +229,7 @@ The global keys declared today, and where the **Admin** tab shows them
 |-----|------|---------|------------------|
 | `session_ttl_hours` | int | `24` | Session → **Session Duration** |
 | `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
-| `require_email_verification` | bool | `false` | Security → **Require Email Verification** — read-only placeholder (`PLACEHOLDER_KEYS`) |
+| `require_email_verification` | bool | `false` | Security → **Require Email Verification**: every account created by `POST /auth/register` but the first waits for an emailed link ([Email Verification](../backend/email.md#verification)). It turns on only while an email with a link can go out: the switch is disabled while its saved value is off and `email.links` of `GET /system/instance` is false, and `PATCH /settings/global/bulk` refuses an off-to-on change with 409 `EMAIL_VERIFICATION_UNAVAILABLE` (`GlobalSettingUnavailableError`). Turning it off always works |
 | `max_file_upload_mb` | int | `10` | Memory → **Max File Upload Size** |
 | `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label from `settings.globalSettingNames.scheduler_enabled`) |
 | `scheduler_current_price_frequency_minutes` | int | `10` | Schedule Configuration dialog → **Refresh every** |
@@ -228,7 +296,7 @@ Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and 
 | Field | Values | Source |
 |-------|--------|--------|
 | `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
-| `accounts` | `{registration_mode, registration_locked, first_account_open}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`; whether `LIBREFOLIO_REGISTRATION` pins it; and whether the instance has no account yet, so that the next registration creates the first account, an administrator, whatever the mode | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. `first_account_open()`, in the same module: true while the `users` table is empty, an inactive account counted; optional in the schema, default `false`. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes); why the flag may be public: [The First-Account Flag](security.md#first-account-open). |
+| `accounts` | `{registration_mode, registration_locked, first_account_open, password_rules}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`; whether `LIBREFOLIO_REGISTRATION` pins it; whether the instance has no account yet, so that the next registration creates the first account, an administrator, whatever the mode; and the rules every new password must meet, in order, `[{code, value}]` (`PasswordRuleRead`, `value` only for `min_length`) | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. `first_account_open()`, in the same module: true while the `users` table is empty, an inactive account counted; optional in the schema, default `false`. `password_rules_public()` (`password_policy.py`): the same list on every instance; optional in the schema, default empty, and the app then assumes the rules of release 1.3. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes); why the flag may be public: [The First-Account Flag](security.md#first-account-open); the rules: [Password Rules](security.md#password-rules). |
 | `email` | `{available, links}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): `available`, whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; `links`, whether emails with a link can go out too, `LIBREFOLIO_PUBLIC_URL` set to an http(s) address; never the configuration itself | `email_instance_config()` (workstream E, `services/email/links.py`), run in a worker thread since it may read the password file. Both booleans default to `false`, so the field is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
 
 The rule for a workstream that owns part of the public configuration:

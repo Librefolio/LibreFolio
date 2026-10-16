@@ -2,7 +2,13 @@
 CP-4d (workstream J): the rate the MWRR solvers return must be a root of their XIRR NPV.
 
 Module under test: ``backend/app/services/financial_math/returns.py``, ``calculate_mwrr`` (the
-summary's MWRR) and ``calculate_mwrr_series`` (the history's, with and without warm start).
+summary's MWRR) and ``calculate_mwrr_series`` (the history's).
+
+MF-K1 (workstream MF, one root policy): the series lost its warm start, and the keyword
+``use_warm_start`` with it. Every point starts from 0.1 on the flows ``calculate_mwrr`` builds (the
+flows of a date summed in Decimal), so each point is the single solve on the data up to its
+snapshot. The warm and cold series this file used to check side by side are now one series, and
+test 6 states the identity.
 
 The defect (investigation of 15/10, outside the worktree, ``/tmp/libreFolio_j/cp4d/``): both solve
 the NPV with scipy's secant method and quantize whatever it stops on. Over 20 000 random scenarios
@@ -17,22 +23,26 @@ the NPV changes sign within one quantum (1e-6) of r. The second clause is there 
 rounds the rate to 6 decimals: where the NPV is steep (short windows, rates near −100 %) the
 rounding alone moves |NPV| past the first bound. Measured before writing this file on the first 400
 scenarios of the same seed: the prototype verified solver (``proto.py``) had 5 warm and 5 cold
-series points past the first bound (up to 9.25e-6 × Σ|amounts|) and none past the second; today's
-code fails exactly the same rates under either.
+series points past the first bound (up to 9.25e-6 × Σ|amounts|) and none past the second; the code
+of the time failed exactly the same rates under either.
 
 Tests:
 
 1. Scenarios #1, #16 and #17 of the investigation, pinned as literal data. Their NPV has one real
-   root; the warm series ends on it today, the single solve and the cold series return 0.100110.
+   root; before CP-4d the warm series ended on it, the single solve and the cold series returned
+   0.100110. Now the single solve and the series both return it.
 2. Property, on a fixed-seed sample (the investigation's generator, copied; seed 20261015, its
    first ``SAMPLE_SIZE`` scenarios, #1, #16 and #17 among them): every rate the single solve and
-   both series return is a root.
-3. Parity, on the same sample: the single solve equals the last point of each series whenever both
+   the series return is a root.
+3. Parity, on the same sample: the single solve equals the last point of the series whenever both
    are not None.
 4. No root, no rate: where the NPV never changes sign, None from the single solve and for that point
-   of each series.
+   of the series.
 5. A zero rate has no sign: where the MWRR is exactly 0 (flat values, balanced flows), the single
    solve and every series point write "0.000000", never "-0.000000".
+6. Prefix identity (MF-K1), on the same sample and on every hand-written data set of this file: each
+   point of the series is ``calculate_mwrr`` on the data up to its snapshot — same date, same rate
+   or the same None — and ``use_warm_start`` is no longer accepted.
 
 The checks on the test's own data (one real root, no root, the sample holding the pinned
 scenarios) come first and pass today. Nothing is imported from ``/tmp``. Pure: no database, no
@@ -131,7 +141,8 @@ def _pinned(name: str) -> tuple[list[NAVSnapshot], list[CashFlowInput], Decimal]
 
 
 def _single_flows(cash_flows: list[CashFlowInput], initial_nav: Decimal, final_nav: Decimal, start_date: date, end_date: date) -> list[tuple[float, float]]:
-    """The flows ``calculate_mwrr`` solves, as it builds them: (days from the start, amount)."""
+    """The flows ``calculate_mwrr`` solves: (days from the start, amount). One per cash flow: every data
+    set of this file has at most one flow per date, where MF-K1's per-date sum changes nothing."""
     total_days = (end_date - start_date).days
     final_day_cf = sum(float(cf.amount) for cf in cash_flows if (cf.date - start_date).days == total_days)
     flows = [(0.0, -float(initial_nav)), (float(total_days), float(final_nav) + final_day_cf)]
@@ -229,17 +240,13 @@ def _scenario(rng: random.Random) -> tuple[list[NAVSnapshot], list[CashFlowInput
 
 @dataclass(frozen=True)
 class _Solved:
-    """One scenario of the sample with what the three solves return today."""
+    """One scenario of the sample with what the two solves return."""
 
     index: int
     navs: list[NAVSnapshot]
     flows: list[CashFlowInput]
     single: Decimal | None
-    warm: list[MWRRPoint]
-    cold: list[MWRRPoint]
-
-    def series(self, start: str) -> list[MWRRPoint]:
-        return self.warm if start == "warm" else self.cold
+    series: list[MWRRPoint]
 
 
 @pytest.fixture(scope="module")
@@ -249,9 +256,8 @@ def sample() -> list[_Solved]:
     solved = []
     for index in range(SAMPLE_SIZE):
         navs, flows = _scenario(rng)
-        warm = calculate_mwrr_series(navs, flows, use_warm_start=True)
-        cold = calculate_mwrr_series(navs, flows, use_warm_start=False)
-        solved.append(_Solved(index=index, navs=navs, flows=flows, single=_summary_mwrr(navs, flows), warm=warm, cold=cold))
+        series = calculate_mwrr_series(navs, flows)
+        solved.append(_Solved(index=index, navs=navs, flows=flows, single=_summary_mwrr(navs, flows), series=series))
     return solved
 
 
@@ -261,8 +267,8 @@ def sample() -> list[_Solved]:
 
 
 class TestPinnedScenarios:
-    """Scenarios #1, #16 and #17 of the investigation. Their NPV has one real root; today the warm
-    series ends on it, while the single solve and the cold series stop on 0.100110."""
+    """Scenarios #1, #16 and #17 of the investigation. Their NPV has one real root; before CP-4d the
+    warm series ended on it, while the single solve and the cold series stopped on 0.100110."""
 
     @pytest.mark.parametrize("name", PINNED)
     def test_the_npv_has_one_real_root(self, name):
@@ -288,16 +294,10 @@ class TestPinnedScenarios:
         assert _summary_mwrr(navs, flows) == root
 
     @pytest.mark.parametrize("name", PINNED)
-    def test_the_warm_series_ends_on_the_root(self, name):
+    def test_the_series_ends_on_the_root(self, name):
         navs, flows, root = _pinned(name)
 
-        assert calculate_mwrr_series(navs, flows, use_warm_start=True)[-1].mwrr == root
-
-    @pytest.mark.parametrize("name", PINNED)
-    def test_the_cold_series_ends_on_the_root(self, name):
-        navs, flows, root = _pinned(name)
-
-        assert calculate_mwrr_series(navs, flows, use_warm_start=False)[-1].mwrr == root
+        assert calculate_mwrr_series(navs, flows)[-1].mwrr == root
 
 
 # =============================================================================
@@ -306,9 +306,9 @@ class TestPinnedScenarios:
 
 
 class TestEveryRateIsARoot:
-    """On the sample, every rate the single solve and both series return is a root of its NPV.
+    """On the sample, every rate the single solve and the series return is a root of its NPV.
 
-    Red today: the secant method stops on rates that are not roots, 0.100110 above all."""
+    Red before CP-4d: the secant method stopped on rates that are not roots, 0.100110 above all."""
 
     def test_every_single_solve(self, sample):
         returned = [case for case in sample if case.single is not None]
@@ -317,11 +317,10 @@ class TestEveryRateIsARoot:
         assert returned, "the sample must have rates to check"
         assert not failures, f"{len(failures)} of {len(returned)} single solves return a rate that is not a root: {failures[:10]}"
 
-    @pytest.mark.parametrize("start", ["warm", "cold"])
-    def test_every_series_point(self, sample, start):
+    def test_every_series_point(self, sample):
         checked, failures = 0, []
         for case in sample:
-            series = case.series(start)
+            series = case.series
             points = _series_point_flows(case.navs, case.flows)
             assert [point.date for point in series] == [day for day, _flows in points], f"#{case.index}: one point per snapshot after the first"
             for point, (_day, flows) in zip(series, points, strict=True):
@@ -332,7 +331,7 @@ class TestEveryRateIsARoot:
                     failures.append(f"#{case.index} {point.date}: {point.mwrr}")
 
         assert checked, "the sample must have rates to check"
-        assert not failures, f"{len(failures)} of {checked} {start} series points are not roots: {failures[:10]}"
+        assert not failures, f"{len(failures)} of {checked} series points are not roots: {failures[:10]}"
 
 
 # =============================================================================
@@ -341,20 +340,19 @@ class TestEveryRateIsARoot:
 
 
 class TestSingleSolveAndSeriesAgree:
-    """On the sample, the single solve (the summary) equals the last point of each series (the
+    """On the sample, the single solve (the summary) equals the last point of the series (the
     history) whenever both are not None."""
 
-    @pytest.mark.parametrize("start", ["warm", "cold"])
-    def test_the_last_point_equals_the_single_solve(self, sample, start):
+    def test_the_last_point_equals_the_single_solve(self, sample):
         compared, mismatches = 0, []
         for case in sample:
-            series = case.series(start)
+            series = case.series
             last = series[-1].mwrr if series else None
             if case.single is None or last is None:
                 continue
             compared += 1
             if case.single != last:
-                mismatches.append(f"#{case.index}: single {case.single}, {start} {last}")
+                mismatches.append(f"#{case.index}: single {case.single}, series {last}")
 
         assert compared, "the sample must have pairs to compare"
         assert not mismatches, f"{len(mismatches)} of {compared} scenarios: {mismatches[:10]}"
@@ -380,7 +378,7 @@ def _no_root(name: str) -> tuple[list[NAVSnapshot], list[CashFlowInput]]:
 
 class TestNoRootNoRate:
     """Where the NPV never changes sign there is no rate: None from the single solve, None for that
-    point of each series. The earlier points of these series do have a root.
+    point of the series. The earlier points of these series do have a root.
 
     Green today (the secant gives up on these): they keep the verified solver from inventing a rate."""
 
@@ -399,12 +397,11 @@ class TestNoRootNoRate:
 
         assert _summary_mwrr(navs, flows) is None
 
-    @pytest.mark.parametrize("use_warm_start", [True, False], ids=["warm", "cold"])
     @pytest.mark.parametrize("name", NO_ROOT)
-    def test_no_rate_for_that_point_of_the_series(self, name, use_warm_start):
+    def test_no_rate_for_that_point_of_the_series(self, name):
         navs, flows = _no_root(name)
 
-        assert calculate_mwrr_series(navs, flows, use_warm_start=use_warm_start)[-1].mwrr is None
+        assert calculate_mwrr_series(navs, flows)[-1].mwrr is None
 
 
 # =============================================================================
@@ -416,7 +413,7 @@ class TestNoRootNoRate:
 ZERO_RATE = {
     # 1000 → 1000 over a year, nothing in between.
     "flat-one-year": ("2025-01-01 1000  2026-01-01 1000", ""),
-    # The same year with a snapshot every month, all at 1000: the warm start runs through 12 points.
+    # The same year with a snapshot every month, all at 1000: the series solves 12 points.
     "flat-monthly": (
         "2025-01-01 1000  2025-02-01 1000  2025-03-01 1000  2025-04-01 1000  2025-05-01 1000  2025-06-01 1000  2025-07-01 1000  2025-08-01 1000  2025-09-01 1000  2025-10-01 1000  2025-11-01 1000  2025-12-01 1000  2026-01-01 1000",
         "",
@@ -460,13 +457,68 @@ class TestAZeroRateHasNoSign:
         assert str(value) == "0.000000", repr(value)
         assert not value.is_signed()
 
-    @pytest.mark.parametrize("use_warm_start", [True, False], ids=["warm", "cold"])
     @pytest.mark.parametrize("name", ZERO_RATE)
-    def test_the_series_writes_zero_without_a_sign(self, name, use_warm_start):
+    def test_the_series_writes_zero_without_a_sign(self, name):
         """The last point, as the history ends; then every point, whose rate is 0 as well."""
         navs, flows = _zero_rate(name)
 
-        series = calculate_mwrr_series(navs, flows, use_warm_start=use_warm_start)
+        series = calculate_mwrr_series(navs, flows)
 
         assert _unsigned_zero(series[-1].mwrr), f"last point: {series[-1].mwrr!r}"
         assert [f"{point.date}: {point.mwrr!r}" for point in series if not _unsigned_zero(point.mwrr)] == []
+
+
+# =============================================================================
+# 6. Prefix identity: each point of the series is the single solve up to its snapshot (MF-K1)
+# =============================================================================
+
+
+def _single_solves_on_prefixes(navs: list[NAVSnapshot], cash_flows: list[CashFlowInput]) -> list[MWRRPoint]:
+    """``calculate_mwrr`` from the first snapshot to each later one, by date: what MF-K1 says the series is."""
+    ordered = sorted(navs, key=lambda snapshot: snapshot.date)
+    return [calculate_mwrr(cash_flows, ordered[0].nav, snapshot.nav, ordered[0].date, snapshot.date) for snapshot in ordered[1:]]
+
+
+# Every hand-written data set of this file: name -> (snapshots, flows).
+HAND_WRITTEN = {
+    **{f"pinned/{name}": _pinned(name)[:2] for name in PINNED},
+    **{f"no-root/{name}": _no_root(name) for name in NO_ROOT},
+    **{f"zero-rate/{name}": _zero_rate(name) for name in ZERO_RATE},
+}
+
+
+class TestEverySeriesPointIsTheSingleSolveOnItsPrefix:
+    """MF-K1, one root policy: every point of ``calculate_mwrr_series`` starts from 0.1 on the flows
+    ``calculate_mwrr`` builds, so it equals ``calculate_mwrr`` on the same data up to its snapshot —
+    same date, and the same rate or the same None.
+
+    Before MF-K1, red on the sample only where the warm start (the previous point's rate as the
+    starting guess, the adaptive cap, the retry from 0.1 that prefers the smaller |r|) landed on
+    another root, or another quantum of the same one, than a start from 0.1: the sample has one flow
+    per date, so a start from 0.1 saw exactly the single solve's flows."""
+
+    def test_every_point_equals_the_single_solve_on_its_prefix(self, sample):
+        compared, mismatches = 0, []
+        for case in sample:
+            expected = _single_solves_on_prefixes(case.navs, case.flows)
+            assert [point.date for point in case.series] == [point.date for point in expected], f"#{case.index}: one point per snapshot after the first"
+            for point, single in zip(case.series, expected, strict=True):
+                compared += 1
+                if point.mwrr != single.mwrr:
+                    mismatches.append(f"#{case.index} {point.date}: series {point.mwrr}, single {single.mwrr}")
+
+        assert compared, "the sample must have points to compare"
+        assert not mismatches, f"{len(mismatches)} of {compared} series points differ from the single solve on their prefix: {mismatches[:10]}"
+
+    @pytest.mark.parametrize("name", HAND_WRITTEN)
+    def test_every_point_of_the_hand_written_data(self, name):
+        navs, flows = HAND_WRITTEN[name]
+
+        assert calculate_mwrr_series(navs, flows) == _single_solves_on_prefixes(navs, flows)
+
+    def test_the_warm_start_keyword_is_gone(self):
+        """One root policy, no switch back to the warm start."""
+        navs, flows = _zero_rate("flat-one-year")
+
+        with pytest.raises(TypeError):
+            calculate_mwrr_series(navs, flows, use_warm_start=True)

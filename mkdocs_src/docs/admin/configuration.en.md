@@ -37,13 +37,21 @@ the same sample as `.env`.
 | `LOG_LEVEL` | `INFO` | How much the server logs: `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. |
 | `JWT_SECRET` | _not set_ | Key that signs login sessions. Not set, empty or only spaces: a new key at every start, so everyone logs in again after a restart. `JWT_SECRET_FILE` reads it from a file instead: see [Secrets](#secrets). See [Keep users signed in](index.md#session-persistence). |
 | `SESSION_COOKIE_SECURE` | `auto` | When the login session cookie is sent over HTTPS only: `auto` (if the browser uses HTTPS), `always` or `never`. See [HTTPS and reverse proxies](#session-cookie-secure). |
+| `LIBREFOLIO_CLIENT_IP_HEADER` | _not set_ | Behind a reverse proxy, the header in which it passes the visitor's address, such as `Fly-Client-IP` on Fly.io: set it only if every request crosses that proxy. See [The Visitor's Address](connection_checks.md#client-address). |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memory, in MB, of the image-preview cache in each server process. |
-| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup, and the archives uploaded for a restore are limited to 500 MB unless `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` says otherwise. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup, and some defaults change unless you set their variables: the archives uploaded for a restore are limited to 500 MB (`LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`), idle risk workers stop after 60 seconds (the risk settings below), and `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` are on. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_FRAME_PROTECTION` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own: dashboards at another address, such as Home Assistant panels, can then show LibreFolio in a frame. `true` lets only LibreFolio's own pages show it in a frame: every response carries `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`, and the browser refuses to show the app in a page at another address. `true` or `false`; `1`/`0`, `yes`/`no` and `on`/`off` work too, in any case; any other value stops the server at startup. A value you set wins over the profile. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own. `true` adds a report-only Content-Security-Policy to the pages of the web app, not to the documentation or the API: it blocks nothing, and the browser lists in its developer console what the policy would block, without sending a report anywhere. Same values as `LIBREFOLIO_FRAME_PROTECTION`; a value you set wins over the profile. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_SUPPORT_URL` | _not set_ | Where the users of the instance ask for help, such as an asset the search does not find, with `http://` or `https://`: a hosting provider sets its own support page. Not set: LibreFolio's issues on GitHub. Any other value is ignored, as if it were not set, and the server logs it once. The address is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
 | `LIBREFOLIO_BLOCKED` | _not set_ | Leave it unset. A hosting provider sets it to block the instance: users can still sign in and out, and see a block page instead of the app. `1`, `true`, `yes` or `on` block; `0`, `false`, `no` or `off` do not, in any case; any other value stops the server at startup. Read from the environment only, in every profile. See [Hosting for Others](hosting_providers.md#instance-block). |
 | `LIBREFOLIO_DELETION_DATE` | _not set_ | Leave it unset. The day the hosting provider will delete a blocked instance and its data, as an ISO date such as `2026-11-14`, shown on the block page. Any other value stops the server at startup. Read from the environment only. See [Hosting for Others](hosting_providers.md#deletion-date). |
 | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | _not set_ | Leave it unset. A hosting provider sets it so that its hosting panel can back up the instance through `/api/v1/backup/panel/jobs`: at least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`. Not set: those routes answer `404`. A token LibreFolio cannot use does not stop the server: the routes answer `503` and the log has an error. `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` reads it from a file instead: see [Secrets](#secrets). Read from the environment only. See [Hosting for Others](hosting_providers.md#panel-backups). |
 | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` | _not set_ | Leave it unset. The largest archive an administrator may upload to check it for a restore, in megabytes; `0` is no limit. Not set: no limit, or `500` in the `managed` profile. A hosting provider sets it, since there the administrator is its customer. A value that is not a whole number does not stop the server: the uploads answer `503` and the log has an error. Read from the environment only. See [Hosting for Others](hosting_providers.md#restore-upload-limit). |
 | `LIBREFOLIO_WAKE_TOKEN` | _not set_ | Optional. The token of the [scheduled wake-up](sleep_wake.md#wake-sync), which a hosting panel or a cron job of yours calls to bring prices and exchange rates up to date without a user. Not set: the route answers `404`, as if it did not exist. At least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`: a token of its own, not another secret. `LIBREFOLIO_WAKE_TOKEN_FILE` reads it from a file instead: see [Secrets in Files](#secret-files). A token that cannot be used does not stop the server: the route answers `503`, and the log says why. |
+| `LIBREFOLIO_IDLE_SUSPEND_MODE` | `none` | Optional, for Fly.io. `fly`: the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` without a user's request and with no work in progress, and Fly resumes it at the next request. `none` never suspends: on any other host, leave it unset. Case and spaces around the value do not matter. Any other value does not stop the server, unlike the main options: the log has an error at startup, and the machine is never suspended. See [Idle Suspension](sleep_wake.md#idle-suspend). |
+| `LIBREFOLIO_IDLE_SUSPEND_MINUTES` | `5` | Read only with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`: the minutes without a user's request before the machine is suspended, a whole number from `1` to `1440`. A value that cannot be used does not stop the server either: the log has an error at startup, and 5 minutes apply. See [Idle Suspension](sleep_wake.md#idle-suspend). |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | The first pause of a price provider that answers «too many requests» (HTTP 429): no request reaches it until the pause ends, and each refusal in a row doubles the next one. A whole number of seconds from `0` to `86400`; `0` turns the pauses off, as before release 1.3. On by default, by developer decision 34: an exception to the rule that a new option leaves an install as it was. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | The longest pause the doubling reaches: a whole number of seconds from `1` to `86400`, not below the first pause while the pauses are on. A provider's `Retry-After` may still ask for more, up to one day. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
 users start from the **Default Currency** in [Global Settings](settings.md).
@@ -94,7 +102,7 @@ users start from the **Default Currency** in [Global Settings](settings.md).
     | `RISK_SIMULATION_WORKERS`, `RISK_OPTIMIZATION_WORKERS` | `1` (1–8) | Worker processes per kind of job: more run more jobs at once. |
     | `RISK_SIMULATION_QUEUE_CAPACITY`, `RISK_OPTIMIZATION_QUEUE_CAPACITY` | `2` (0–64) | Jobs that can wait for a worker; beyond that, new requests are turned away. |
     | `RISK_SIMULATION_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_TIMEOUT_SECONDS` | `120` / `60` | Time limit of one job, in seconds. |
-    | `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | `600` | Idle workers stop after this many seconds and restart with the next job; `0` keeps them running. |
+    | `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | `600` (`60` in the `managed` profile) | Idle workers stop after this many seconds and restart with the next job; `0` keeps them running. |
 
 ---
 
@@ -210,7 +218,10 @@ the data directory. Give every instance its own key: never share one key between
     - Once the key exists, LibreFolio cannot tell a lost `instance.key` from a first use: it creates a
       new key, and what the old one encrypted can no longer be read. When you restore the data, put
       `secrets/` back with it before you start LibreFolio again. Never start LibreFolio on restored
-      data without its `secrets/`.
+      data without its `secrets/`. If LibreFolio has already created a new key, stop it, put your
+      copy of `instance.key` in place of the new one and start it again, before anyone enters a
+      [plugin secret](#plugin-secrets) again: a secret entered under the new key would become
+      unreadable once the old key is back.
     - If `instance.key` is there but damaged or out of reach, LibreFolio logs an error and never
       replaces it: see what to do in [Startup Checks](#startup-checks).
     - Setting `LIBREFOLIO_INSTANCE_KEY` where `secrets/instance.key` already exists changes the key. To
@@ -222,13 +233,20 @@ the data directory. Give every instance its own key: never share one key between
 ## 🧩 Plugin Settings {: #plugin-settings }
 
 A plugin can ask for settings of its own: the API key of a paid data source, a region, a
-preference. No plugin shipped with LibreFolio asks for one today; a plugin you add may. A setting is
-one of two kinds:
+preference. Of the plugins shipped with LibreFolio, two ask for one, a personal search preference
+each: justETF and Borsa Italiana. None asks for an instance-wide setting; a plugin you add may. A
+setting is one of two kinds:
 
 - **Instance-wide**: one value for the whole instance, which only an administrator can save. Every
   user can read a plain value, and of a secret one, such as an API key, only whether it is set.
 - **Personal**: each user's own value, which only that user can save and read. Administrators never
   see it.
+
+Personal and instance-wide settings are changed in **Settings › Plugins**, a tab every user has:
+each user changes their personal ones there, and administrators the instance-wide ones too, which
+the other users see read-only. In the asset dialog, **Configure**, next to the chosen price
+provider, opens the same form for that provider alone. What the tab shows, setting by setting:
+[Plugin Settings](../user/settings/plugins.md) in the user manual.
 
 An instance-wide setting can also be given by an environment variable, in `.env` or in the
 container's environment like the other options; a personal one cannot. The plugins that have
@@ -258,27 +276,36 @@ LIBREFOLIO_PLUGIN_<KIND>_<PLUGIN CODE>_<SETTING KEY>
 
 While its variable is set, a setting takes its value from there, and nobody can change it from
 inside LibreFolio: a save is refused (`LOCKED_BY_ENV`), and a value saved earlier is ignored until
-you remove the variable and restart.
+you remove the variable and restart. **Settings › Plugins** shows the setting read-only, a secret
+only as *Set*: *Set by the server variable* and the variable's name for administrators, *Set by the
+server* for the other users.
 
 - A wrong value, one the setting does not accept or a `_FILE` that cannot be read, still locks the
   setting, and the plugin is then not configured: LibreFolio refuses every request to it, even when
   the setting is optional, until you fix the variable. It never falls back to the saved value or to
   the plugin's default. The log says why, with a warning once per server process:
   `Plugin setting variable invalid: the plugin is not configured until it is fixed`, with the
-  variable and the reason, never the value. Fix the value, then restart.
+  variable and the reason, never the value. In **Settings › Plugins** the plugin's badge reads
+  **To configure**, and the setting says that its variable is invalid. Fix the value, then restart.
 - In the [managed profile](hosting_providers.md#managed-profile), a setting locked by a variable is
-  not shown at all, and a save to it is refused as if it did not exist: the hosting provider sets it,
-  and the instance's administrators and users never see it.
+  not shown at all, not even in **Settings › Plugins**, and a save to it is refused as if it did not
+  exist: the hosting provider sets it, and the instance's administrators and users never see it.
 
 ### 🔐 Saved Secrets and the Instance Key {: #plugin-secrets }
 
 A setting saved inside LibreFolio is kept in the database. A secret one is first encrypted
 (AES-256-GCM) with a key derived from the [instance key](#instance-key), and is never shown again,
-not even to whoever saved it: LibreFolio only says whether it is set. A value given by a variable,
-secret or not, is never saved in the database.
+not even to whoever saved it: LibreFolio only says whether it is set (in **Settings › Plugins**,
+*Set on* and the date it was saved). A value given by a variable, secret or not, is never saved in
+the database.
 
 If the instance key changes, the saved secrets can no longer be read. LibreFolio keeps them and
-reports them as unreadable, and never uses a wrong value: enter them again.
+reports them as unreadable, and never uses a wrong value. The tab says so under each
+one: *Saved, but this instance's key cannot read it: enter it again.* If you still have the old
+key, put it back before anyone enters them again: a secret entered under the new key would become
+unreadable once the old one is back. From the first start after the change, and at every start
+until they are entered again or the old key is back, the log has an error that counts the
+instance-wide ones, if there are any: see [Startup Checks](#startup-checks).
 
 If `secrets/instance.key` is damaged or out of reach, LibreFolio starts anyway, with an error from
 the [startup checks](#startup-checks); a key you set yourself that cannot be used stops the start
@@ -287,7 +314,8 @@ instead. Until you fix it:
 - every saved secret is reported as unreadable, and the plugins run without them: a plugin that needs
   one answers that it is not configured;
 - secrets given by variables keep working;
-- a new secret cannot be saved;
+- a new secret cannot be saved: the tab answers *Secrets cannot be saved: this instance's key cannot
+  be used (see the configuration checks).*, and nothing of that save is written;
 - the log has one more error, the first time each server process needs a saved secret:
   `Plugin secrets unreadable: the instance key cannot be used (see the configuration checks)`.
 
@@ -329,6 +357,7 @@ each finding is one line of the log, at its level, with the name of the check in
 | ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
 | ℹ️ `info` | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Nothing, if no link has to go out by email. Otherwise set `LIBREFOLIO_PUBLIC_URL` to the address your users open LibreFolio at ([Accounts and Sign-ups](#accounts)), then restart: see [Email](email.md). |
 | ⚠️ `warning` | `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Write the address with `http://` or `https://` and a host name, without user name, password, `?` or `#`, such as `https://librefolio.example.com`, then restart: see [Email](email.md). |
+| ❌ `error` | `Stored plugin secrets that the instance key cannot read: <N>. Enter them again in the plugin settings, or restore the instance key they were saved with` (`check` is `platform.plugin_secrets`; this one comes later in the start, once the database is ready) | The instance key changed after these instance-wide [plugin secrets](#plugin-secrets) were saved: a lost `secrets/instance.key` that LibreFolio replaced with a new one, data restored without its `secrets/`, or another `LIBREFOLIO_INSTANCE_KEY`. If you still have the old key (your copy of `secrets/instance.key`, backed up with the data directory as [The Instance Key](#instance-key) says, since the archives of **Back up the instance** leave the key out; or the old value of the variable), stop LibreFolio, put it in place of the new one and start again. Do it before anyone enters a secret again: a secret entered again is saved under the new key, and becomes unreadable once the old one is back. Only if the old key is lost, enter the secrets again in **Settings › Plugins**: from then on, the new key is the one to back up. If the log also says `The instance key cannot be used: …`, fix that first: see above. Personal secrets are not counted: each user sees theirs in their own tab. The server starts anyway. |
 
 Some secrets you configured stop the start instead when they cannot be used: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
@@ -410,7 +439,7 @@ decides who may sign up, and there is no limit. All four are optional: uncomment
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **By invitation** on a new instance unless an administrator changed it (an instance upgraded from an earlier version keeps the mode it had). Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. Whatever the value, the first account of a new instance can be created from the login page, with **Register here**, and becomes the administrator: see [Who Can Sign Up](settings.md#registration). |
-| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
+| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires, and each account waiting for its email verification while its link is live; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
 | `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link or forgotten-password email goes out ([Email](email.md)). |
 | `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. |
 
@@ -428,7 +457,8 @@ process needs the value: `Invalid account configuration`, with the variable and 
 
 ### 📏 When the Instance Is Full {: #user-limit }
 
-When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS`:
+When the active accounts, the pending invitations and the accounts waiting for their email
+verification reach `LIBREFOLIO_MAX_USERS`:
 
 - nobody can sign up without an invitation, whatever the [Registration](settings.md#registration)
   mode;
@@ -437,8 +467,31 @@ When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS
   [command line](cli_tools.md): `user create`, `user invite` and `user activate` print a warning,
   then go ahead.
 
-A place frees up when an account is deactivated or deleted, or when an invitation is revoked or
-expires. The first account of a new instance can always be created.
+A place frees up when an account is deactivated or deleted, when an invitation is revoked or
+expires, or when the link of an account waiting for its email verification expires (see
+*Email Verification* in [Email](email.md)). The first account of a new instance can always be
+created.
+
+---
+
+## 🥇 The Order of the Price Providers in the Search {: #provider-order }
+
+When you create an asset, the search asks every price provider at once and lists the results
+provider by provider. Each provider declares where it stands: its tier, **premium** for a source an
+instance vouches for, such as licensed data, or **community**, the default; and its priority inside
+the tier. When at least one premium provider is available, its results come first. None of the
+providers shipped with LibreFolio is premium, so without one the search keeps its order.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM` | _not set_ | The providers to count as premium, by code, separated by commas, such as `yfinance,justetf`: exactly these, whatever they declare. Not set: what each provider declares. |
+| `LIBREFOLIO_ASSET_PROVIDERS_ORDER` | _not set_ | The providers to list first, in this order, by code, separated by commas; the others follow in their declared order. Premium providers still come before the others. Not set: what each provider declares. |
+
+- The codes of the providers shipped with LibreFolio are `yfinance`, `justetf`, `borsa_italiana`,
+  `css_scraper` and `scheduled_investment`; a provider you add has its own. Case and spaces around
+  them do not matter.
+- A code that no provider has is ignored, and the server logs it once.
+- The settings apply at the next search, with no restart: LibreFolio reads them at every search.
 
 ---
 

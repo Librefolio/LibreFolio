@@ -9,6 +9,7 @@ Tests for role-based permissions on broker operations:
 Tests verify that operations are correctly allowed/denied based on role.
 """
 
+import contextlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -19,7 +20,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.test_scripts.test_server_helper import _TestingServerManager
-from backend.test_scripts.test_utils import print_section, print_success
+from backend.test_scripts.test_utils import print_error, print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
@@ -115,9 +116,9 @@ class TestMultiUserRoles:
         """MULTI-001: Creating broker creates BrokerUserAccess with OWNER role."""
         print_section("MULTI-001: Creation creates OWNER access")
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient() as client, _owning("MULTI-001") as owned:
             user_id, _ = await create_user_and_login(client)
-            broker_id = await create_broker(client)
+            broker_id = await _new_broker(client, owned, "MULTI001")
 
             # Check access
             resp = await client.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
@@ -135,10 +136,10 @@ class TestMultiUserRoles:
         """MULTI-002: EDITOR can modify broker."""
         print_section("MULTI-002: Editor can modify broker")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client, _owning("MULTI-002") as owned:
             # Owner creates broker
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI002")
 
             # Add editor
             editor_id, _ = await create_user_and_login(editor_client)
@@ -161,9 +162,9 @@ class TestMultiUserRoles:
         """MULTI-003: EDITOR cannot delete broker (403)."""
         print_section("MULTI-003: Editor cannot delete broker")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client, _owning("MULTI-003") as owned:
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI003")
 
             editor_id, _ = await create_user_and_login(editor_client)
             await add_access(owner_client, broker_id, editor_id, "EDITOR")
@@ -183,9 +184,9 @@ class TestMultiUserRoles:
         """MULTI-004: VIEWER cannot modify broker (403)."""
         print_section("MULTI-004: Viewer cannot modify broker")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client, _owning("MULTI-004") as owned:
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI004")
 
             viewer_id, _ = await create_user_and_login(viewer_client)
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")
@@ -208,9 +209,9 @@ class TestMultiUserRoles:
         """MULTI-005: VIEWER can read broker."""
         print_section("MULTI-005: Viewer can read broker")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client, _owning("MULTI-005") as owned:
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI005")
 
             viewer_id, _ = await create_user_and_login(viewer_client)
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")
@@ -249,10 +250,10 @@ class TestMultiUserRoles:
         """MULTI-007: EDITOR can create transactions."""
         print_section("MULTI-007: Editor can create transactions")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client, _owning("MULTI-007") as owned:
 
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI007")
 
             editor_id, _ = await create_user_and_login(editor_client)
             await add_access(owner_client, broker_id, editor_id, "EDITOR")
@@ -280,10 +281,10 @@ class TestMultiUserRoles:
         """MULTI-008: VIEWER cannot create transactions (requires EDITOR role)."""
         print_section("MULTI-008: Viewer cannot create transactions")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client, _owning("MULTI-008") as owned:
 
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI008")
 
             viewer_id, _ = await create_user_and_login(viewer_client)
             await add_access(owner_client, broker_id, viewer_id, "VIEWER")
@@ -312,9 +313,9 @@ class TestMultiUserRoles:
         """MULTI-008b (G.2 gap-fill): VIEWER cannot PATCH transactions (EDITOR required)."""
         print_section("MULTI-008b: Viewer cannot patch transactions")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client, _owning("MULTI-008b") as owned:
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI008b")
 
             # Owner seeds a transaction.
             tx_payload = [
@@ -350,9 +351,9 @@ class TestMultiUserRoles:
         """MULTI-008c (G.2 gap-fill): VIEWER cannot DELETE transactions (EDITOR required)."""
         print_section("MULTI-008c: Viewer cannot delete transactions")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as viewer_client, _owning("MULTI-008c") as owned:
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI008c")
 
             tx_payload = [
                 {
@@ -403,81 +404,94 @@ class TestMultiUserRoles:
         it is always (create, 0, None), the row of the broker the user may write.
         """
         print_section("MULTI-008d: Cross-broker access failure is atomic")
+        # W-B12: the test owns its two brokers and cleans them up as the V-23 tests below do, after a red too.
+        # ``_new_broker`` records each broker the moment it exists; ``_Owned.drop`` has the owner delete them with
+        # force, which takes their accesses (ON DELETE CASCADE) and any transaction a regression wrote with them.
+        # Users stay, as in the rest of this module.
+        owned = _Owned()
 
         async with (
             httpx.AsyncClient() as owner_client,
             httpx.AsyncClient() as editor_client,
         ):
-            await create_user_and_login(owner_client)
-            editable_broker_id = await create_broker(owner_client)
-            restricted_broker_id = await create_broker(owner_client)
+            try:
+                await create_user_and_login(owner_client)
+                editable_broker_id = await _new_broker(owner_client, owned, "M008dEditable")
+                restricted_broker_id = await _new_broker(owner_client, owned, "M008dRestricted")
 
-            editor_id, _ = await create_user_and_login(editor_client)
-            await add_access(
-                owner_client,
-                editable_broker_id,
-                editor_id,
-                "EDITOR",
-            )
-            if restricted_role is not None:
+                editor_id, _ = await create_user_and_login(editor_client)
                 await add_access(
                     owner_client,
-                    restricted_broker_id,
+                    editable_broker_id,
                     editor_id,
-                    restricted_role,
+                    "EDITOR",
                 )
+                if restricted_role is not None:
+                    await add_access(
+                        owner_client,
+                        restricted_broker_id,
+                        editor_id,
+                        restricted_role,
+                    )
 
-            editable_marker = unique_name("editable-create")
-            restricted_marker = unique_name("restricted-create")
-            response = await editor_client.post(
-                f"{API_BASE}/transactions/commit",
-                json={
-                    "creates": [
-                        {
-                            "broker_id": editable_broker_id,
-                            "type": "DEPOSIT",
-                            "date": date.today().isoformat(),
-                            "cash": {"code": "EUR", "amount": "100"},
-                            "description": editable_marker,
-                        },
-                        {
-                            "broker_id": restricted_broker_id,
-                            "type": "DEPOSIT",
-                            "date": date.today().isoformat(),
-                            "cash": {"code": "EUR", "amount": "200"},
-                            "description": restricted_marker,
-                        },
-                    ]
-                },
-                timeout=TIMEOUT,
-            )
-
-            assert response.status_code == 200, response.text
-            body = response.json()
-            assert body["committed"] is False
-            assert body["results"] == []
-            assert body["success_count"] == 0
-            access_issues = [issue for issue in body["issues"] if issue["code"] == "accessDenied"]
-            assert len(access_issues) == 1
-            assert access_issues[0]["params"] == {"brokerId": restricted_broker_id}
-
-            for broker_id, marker in (
-                (editable_broker_id, editable_marker),
-                (restricted_broker_id, restricted_marker),
-            ):
-                check = await owner_client.get(
-                    f"{API_BASE}/transactions",
-                    params={"broker_id": broker_id},
+                editable_marker = unique_name("editable-create")
+                restricted_marker = unique_name("restricted-create")
+                response = await editor_client.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={
+                        "creates": [
+                            {
+                                "broker_id": editable_broker_id,
+                                "type": "DEPOSIT",
+                                "date": date.today().isoformat(),
+                                "cash": {"code": "EUR", "amount": "100"},
+                                "description": editable_marker,
+                            },
+                            {
+                                "broker_id": restricted_broker_id,
+                                "type": "DEPOSIT",
+                                "date": date.today().isoformat(),
+                                "cash": {"code": "EUR", "amount": "200"},
+                                "description": restricted_marker,
+                            },
+                        ]
+                    },
                     timeout=TIMEOUT,
                 )
-                assert check.status_code == 200, check.text
-                assert not any(tx.get("description") == marker for tx in check.json())
 
-            # V-23: last, so every check above has run when this one is red.
-            denial = access_issues[0]
-            assert (denial["operation"], denial["index"], denial["ref_id"]) == ("create", 1, None), f"the refusal must sit on create #1, the only row on broker {restricted_broker_id}; got {denial}"
+                assert response.status_code == 200, response.text
+                body = response.json()
+                assert body["committed"] is False
+                assert body["results"] == []
+                assert body["success_count"] == 0
+                access_issues = [issue for issue in body["issues"] if issue["code"] == "accessDenied"]
+                assert len(access_issues) == 1
+                assert access_issues[0]["params"] == {"brokerId": restricted_broker_id}
 
-            print_success("✓ Access denial returned no results or partial writes")
+                for broker_id, marker in (
+                    (editable_broker_id, editable_marker),
+                    (restricted_broker_id, restricted_marker),
+                ):
+                    check = await owner_client.get(
+                        f"{API_BASE}/transactions",
+                        params={"broker_id": broker_id},
+                        timeout=TIMEOUT,
+                    )
+                    assert check.status_code == 200, check.text
+                    assert not any(tx.get("description") == marker for tx in check.json())
+
+                # V-23: last, so every check above has run when this one is red.
+                denial = access_issues[0]
+                assert (denial["operation"], denial["index"], denial["ref_id"]) == ("create", 1, None), f"the refusal must sit on create #1, the only row on broker {restricted_broker_id}; got {denial}"
+
+                print_success("✓ Access denial returned no results or partial writes")
+            finally:
+                # drop() never raises, so a red body propagates untouched. What it could not delete is printed here,
+                # where it shows beside a red body too, and fails the test below when the body was green.
+                leftovers = await owned.drop()
+                if leftovers:
+                    print_error(f"MULTI-008d cleanup left behind: {leftovers}")
+        assert not leftovers, leftovers
 
 
 class TestEditorRestrictions:
@@ -488,9 +502,9 @@ class TestEditorRestrictions:
         """MULTI-009: EDITOR cannot delete broker (requires OWNER)."""
         print_section("MULTI-009: Editor cannot delete broker")
 
-        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client:
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as editor_client, _owning("MULTI-009") as owned:
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI009")
 
             editor_id, _ = await create_user_and_login(editor_client)
             await add_access(owner_client, broker_id, editor_id, "EDITOR")
@@ -516,9 +530,10 @@ class TestEditorRestrictions:
             httpx.AsyncClient() as owner_client,
             httpx.AsyncClient() as editor_client,
             httpx.AsyncClient() as third_client,
+            _owning("MULTI-010") as owned,
         ):
             await create_user_and_login(owner_client)
-            broker_id = await create_broker(owner_client)
+            broker_id = await _new_broker(owner_client, owned, "MULTI010")
 
             editor_id, _ = await create_user_and_login(editor_client)
             await add_access(owner_client, broker_id, editor_id, "EDITOR")
@@ -587,6 +602,25 @@ class _Owned:
             except Exception as exc:
                 problems.append(f"asset {asset_id}: {exc!r}")
         return problems
+
+
+@contextlib.asynccontextmanager
+async def _owning(label: str):
+    """The brokers a test creates with ``_new_broker``, dropped when the test ends.
+
+    The contract of MULTI-008d's explicit ``try/finally`` (the V-23 tests' cleanup, plus the print): dropped after a
+    red too, a red body propagates untouched (``drop`` never raises), what could not be deleted is printed, and a
+    green body with leftovers fails. Use it as the LAST context of the ``async with``, so it exits while the clients
+    are open.
+    """
+    owned = _Owned()
+    try:
+        yield owned
+    finally:
+        leftovers = await owned.drop()
+        if leftovers:
+            print_error(f"{label} cleanup left behind: {leftovers}")
+    assert not leftovers, leftovers
 
 
 async def _new_broker(client: httpx.AsyncClient, owned: _Owned, prefix: str, **flags) -> int:
