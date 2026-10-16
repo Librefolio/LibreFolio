@@ -419,6 +419,12 @@ Until she answers, follow what is written here and do not decide them in a compo
 
    Until then: rule 5, «On a selected row» — the captions turn secondary while the row is selected (TC-15), `link`
    never over a `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
+7. **The accent of an empty page.** The empty states of the asset and the FX lists draw an icon in a tinted circle: the
+   assets' now takes the app's accent (`bg-lf-selected`, `text-lf-link`), the FX's is still amber, a page colour no role
+   covers (`warning` would read as a warning). Under review: one accent per page, or the app's green for every empty
+   state.
+
+   Until then: a new empty state takes the app's accent; the FX one stays as it is (`routes/(app)/fx/+page.svelte`).
 
 **Values waiting for her confirmation** (backlog TC-8):
 - the seven minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in
