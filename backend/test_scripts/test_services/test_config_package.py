@@ -5,7 +5,7 @@ Package under guard: ``backend/app/config/`` — the base (constants, data direc
 ``__init__.py``, and one section module per owner (``platform.py``, ``accounts.py``, ...) holding that owner's variables.
 
 The project rule, in one line: every environment variable of the application is read inside ``backend/app/config/``; a
-module elsewhere calls an accessor of the package instead of reading ``os.environ``. Seven checks:
+module elsewhere calls an accessor of the package instead of reading ``os.environ``. Eight checks:
 
 (a) The detector. A source READS the environment wherever it evaluates ``os.environ`` (or ``os.environb``) for anything
     but an item assignment or deletion — a subscript, ``.get``, ``.copy``, ``.items``, ``.keys``, ``.values``, ``in``,
@@ -40,16 +40,17 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
 (e) One rule for the address variables (CP13-1): ``env_url(name)`` reads ``name`` from the process environment, stripped;
     unset, empty or blank is ``None``; otherwise the value must start with ``http://`` or ``https://``, in any case, and
     loses one trailing slash, one only (``https://a.example//`` keeps one), nothing else changed; any other value raises
-    ``ValueError`` naming the variable and quoting the value. The scheme is not enough (N48): a host must follow it — a
-    name, an IPv4 or an IPv6 address, with a port or not —, and no whitespace may stand inside the address, in the host
-    or the path. ``support_url()`` (``config/platform.py``) reads an http(s) ``LIBREFOLIO_SUPPORT_URL`` by that rule,
-    and takes a ``mailto:`` address besides (g); ``public_url()`` and ``billing_url()`` (``config/accounts.py``) are
-    pinned in ``test_registration_service.py``, ``mailto:`` refused.
+    ``ValueError`` naming the variable and quoting the value — unless it holds an ``@`` (h). The scheme is not enough (N48):
+    a host must follow it — a name, an IPv4 or an IPv6 address, with a port or not —, and no whitespace may stand inside
+    the address, in the host or the path. ``support_url()`` (``config/platform.py``) reads an http(s)
+    ``LIBREFOLIO_SUPPORT_URL`` by that rule, and takes a ``mailto:`` address besides (g); ``public_url()`` and
+    ``billing_url()`` (``config/accounts.py``) are pinned in ``test_registration_service.py``, ``mailto:`` refused.
 (f) ``support_link()`` (``services/platform/instance_links.py``), what ``GET /system/instance`` publishes as
-    ``support_url``, never raises: the address, or ``None`` when it is unset or invalid, and the app then links to the
-    project's issues on GitHub. An invalid address is logged once per process (``_report_invalid``, ``functools.cache``):
-    one error event, ``Invalid instance link``, whose ``problem`` names the variable and quotes the value and whose
-    ``consequence`` says what it costs. A missing or a valid address logs nothing.
+    ``support_url``, never raises: the address, or ``None`` when it is unset or invalid, and the asset search then offers
+    a new GitHub issue on a self-hosted instance, no report link on a managed one (N61). An invalid address is logged
+    once per process (``_report_invalid``, ``functools.cache``): one error event, ``Invalid instance link``, whose
+    ``problem`` names the variable and quotes the value — never its user info (h) — and whose ``consequence`` says what
+    it costs. A missing or a valid address logs nothing.
 (g) One more form, for the support address alone (CP13/P20, the rule of workstream H): ``LIBREFOLIO_SUPPORT_URL`` may
     also be ``mailto:`` and one email address, so an instance can send its users to a mailbox. The value is stripped
     first, as ``env_url`` does; the scheme, in any case, comes back as ``mailto:``; the address must be one pydantic's
@@ -66,6 +67,21 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
     the address and unwraps the pretty forms —, so each has a case of its own. ``env_url`` is not widened: it is the
     rule of ``LIBREFOLIO_PUBLIC_URL`` and ``LIBREFOLIO_BILLING_URL`` too, and still refuses a ``mailto:`` value, even
     read from ``LIBREFOLIO_SUPPORT_URL``.
+(h) No user info in an address (X-R35, from workstream E's security review «R13-SEC2»). An ``@`` in the authority of
+    the value, ``urlsplit(value).netloc``, is user info: a user name and a password, a user name alone, a password
+    alone, or nothing at all before the ``@``. ``env_url`` refuses it — the scheme in any case, with a port or a path
+    too — as a ``ValueError`` naming the variable, whose message holds neither the user name nor the password: the
+    address would otherwise be published as it is, the support address on the anonymous ``GET /system/instance``, and
+    its error would write the credentials into the operator's log. Nor does ``env_url`` quote any invalid value holding
+    an ``@`` anywhere, whichever rule refuses it — another scheme or none, no ``//`` after it, whitespace inside, no
+    host, a bracket ``urlsplit`` cannot read, the ``mailto:`` form —: without an authority to read, an ``@`` may still
+    stand for user info. A value without ``@`` keeps the message of (e). ``support_url()`` refuses user info in its
+    http(s) branch; a ``mailto:`` address holds an ``@`` but no authority, so it is no user info and keeps (g), quoted
+    in its errors as there: public, and plain. ``support_link()`` publishes no link and logs the one error of (f), and
+    no captured record holds the user name or the password. An ``@`` outside the authority — in the path, the query or
+    the fragment — is no user info: the address is taken unchanged. ``public_url()``, ``billing_url()`` and the links
+    built on them are pinned in ``test_registration_service.py``. Red until X-R35 lands, for the user-info cases; the
+    ``@`` outside the authority and the ``mailto:`` address are controls, green before and after.
 
 What the detector does not see: a read made on the module's behalf (``os.path.expanduser``, a library honouring
 ``HTTPS_PROXY``) and ``os`` reached dynamically (``importlib``, ``sys.modules``). The rule is about the variables the
@@ -92,6 +108,7 @@ from collections.abc import Callable, Iterator
 from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
+from urllib.parse import urlsplit
 
 import pytest
 from structlog.testing import capture_logs
@@ -726,6 +743,10 @@ def test_project_root_is_the_repository_root():
 URL_PROBE = "LIBREFOLIO_PROBE_URL"
 #: Where the users of the instance ask for help (CP13): read by ``support_url()``, published by ``support_link()``.
 SUPPORT_URL_VARIABLE = "LIBREFOLIO_SUPPORT_URL"
+#: The user name and the password of the user-info cases (h), distinctive enough that either one found in a message or
+#: a log record can only be the value leaking.
+USER_INFO_NAME = "alice"
+USER_INFO_PASSWORD = "s3cr3t-pw"
 
 
 @pytest.mark.parametrize(
@@ -771,12 +792,11 @@ def test_env_url_is_the_address_stripped_and_without_one_trailing_slash(monkeypa
         pytest.param(" FTP://a.example/ ", id="ftp-any-case-stripped"),
         pytest.param("//a.example", id="scheme-relative"),
         pytest.param("https:/a.example", id="one-slash-after-the-scheme"),
-        pytest.param("mailto:help@a.example", id="mailto"),
         pytest.param("javascript:alert(1)", id="javascript"),
     ],
 )
 def test_env_url_raises_on_anything_but_an_http_or_https_address(monkeypatch, value):
-    """(e) Any other value is an error naming the variable and quoting the value: it would become a link the instance hands out, so it is never guessed."""
+    """(e) Any other value is an error naming the variable and quoting the value, when it holds no ``@`` — one that does is never quoted (h), its ``mailto:`` row there —: it would become a link the instance hands out, so it is never guessed."""
     monkeypatch.setenv(URL_PROBE, value)
     with pytest.raises(ValueError, match=URL_PROBE) as raised:
         env_url(URL_PROBE)
@@ -809,6 +829,92 @@ def test_env_url_raises_on_an_address_without_a_host_or_with_whitespace_inside(m
     print_success(f"{URL_PROBE}={value!r}: {raised.value}")
 
 
+def _user_info_in(text: str) -> list[str]:
+    """The parts of the user info of the cases (h) that ``text`` holds, in any case: anything but ``[]`` is the value leaking."""
+    return [part for part in (USER_INFO_NAME, USER_INFO_PASSWORD) if part.casefold() in text.casefold()]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("https://alice:s3cr3t-pw@help.example.org", id="user-name-and-password"),
+        pytest.param("https://alice@help.example.org", id="user-name-alone"),
+        pytest.param("https://:s3cr3t-pw@help.example.org", id="password-alone"),
+        pytest.param("https://@help.example.org", id="nothing-before-the-at-sign"),
+        pytest.param("https://:@help.example.org", id="empty-user-name-and-password"),
+        pytest.param("HTTPS://alice:s3cr3t-pw@help.example.org", id="upper-case-scheme"),
+        pytest.param("Http://alice:s3cr3t-pw@help.example.org", id="mixed-case-scheme"),
+        pytest.param("https://alice:s3cr3t-pw@help.example.org:8443", id="with-a-port"),
+        pytest.param("https://alice:s3cr3t-pw@help.example.org/support/", id="with-a-path"),
+        pytest.param("http://alice:s3cr3t-pw@192.168.1.20:6040", id="ipv4-with-a-port"),
+        pytest.param("https://alice:s3cr3t-pw@[::1]:6040", id="ipv6-with-a-port"),
+        pytest.param("  https://alice:s3cr3t-pw@help.example.org/ \n", id="stripped"),
+        pytest.param("https://alice:s3cr3t-pw@help.example.org@evil.example", id="two-at-signs-the-host-after-the-last"),
+    ],
+)
+def test_env_url_refuses_user_info_in_the_authority_and_never_quotes_it(monkeypatch, value):
+    """(h) X-R35: an ``@`` in the authority is user info — even with nothing before it —, refused as an error naming the variable whatever the case of the scheme, with a port or a path too; the message holds neither the user name nor the password.
+
+    Accepted, the address would be published as it is — the support address on the anonymous ``GET /system/instance``,
+    ``LIBREFOLIO_PUBLIC_URL`` in every link built on it —; quoted, its error would write the credentials into the
+    operator's log. Red today: ``env_url`` takes every one of them.
+    """
+    assert "@" in urlsplit(value.strip()).netloc, f"precondition: {value!r} must hold user info by the rule's own definition, an @ in urlsplit(value).netloc"
+    monkeypatch.setenv(URL_PROBE, value)
+    with pytest.raises(ValueError, match=URL_PROBE) as raised:
+        env_url(URL_PROBE)
+    assert _user_info_in(str(raised.value)) == [], f"the error must name {URL_PROBE} without quoting its user info, neither {USER_INFO_NAME!r} nor {USER_INFO_PASSWORD!r}: {raised.value}"
+    print_success(f"{URL_PROBE}: refused without its user info — {raised.value}")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("ftp://alice:s3cr3t-pw@help.example.org", id="ftp"),
+        pytest.param("//alice:s3cr3t-pw@help.example.org", id="scheme-relative"),
+        pytest.param("https://alice:s3cr3t-pw@help.example.org/my help", id="space-in-the-path"),
+        pytest.param("https://alice:s3cr3t-pw@", id="no-host"),
+        pytest.param("alice:s3cr3t-pw@help.example.org", id="no-double-slash-the-user-name-read-as-the-scheme"),
+        pytest.param("https:alice:s3cr3t-pw@help.example.org", id="no-double-slash-after-the-scheme"),
+        pytest.param("https://alice:s3cr3t-pw@[::1", id="unclosed-ipv6-bracket-urlsplit-raises"),
+        pytest.param("mailto:alice:s3cr3t-pw@help.example.org", id="mailto-read-by-env-url"),
+    ],
+)
+def test_env_url_never_quotes_user_info_even_when_another_rule_refuses_the_address(monkeypatch, value):
+    """(h) X-R35: an invalid value holding an ``@`` anywhere is an error naming the variable, never quoting the value, whichever rule refuses it: the message holds neither the user name nor the password.
+
+    The rule that speaks first may be another one of (e) — a scheme other than http(s), or none, no ``//`` after it,
+    whitespace inside, no host, a bracket ``urlsplit`` cannot read —: without an authority to read, an ``@`` may still
+    stand for user info, so the value stays out of what reaches the operator's log. ``env_url`` refuses a ``mailto:``
+    value too, unquoted: only ``support_url()`` takes that form, and quotes its address there (g), public and plain.
+    Red today: these are refused already, the message quoting the whole value.
+    """
+    assert "@" in value and _user_info_in(value) == [USER_INFO_NAME, USER_INFO_PASSWORD], f"precondition: {value!r} must hold an @, and both parts of the user info whose absence from the message is checked"
+    monkeypatch.setenv(URL_PROBE, value)
+    with pytest.raises(ValueError, match=URL_PROBE) as raised:
+        env_url(URL_PROBE)
+    assert _user_info_in(str(raised.value)) == [], f"the error must name {URL_PROBE} without quoting its user info, neither {USER_INFO_NAME!r} nor {USER_INFO_PASSWORD!r}: {raised.value}"
+    print_success(f"{URL_PROBE}: refused without its user info — {raised.value}")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("https://help.example.org/team@x", id="in-the-path"),
+        pytest.param("https://help.example.org/?to=a@b.org", id="in-the-query"),
+        pytest.param("https://help.example.org?to=a@b.org", id="in-a-query-right-after-the-host"),
+        pytest.param("https://help.example.org/faq#ask@desk", id="in-the-fragment"),
+    ],
+)
+def test_env_url_takes_an_at_sign_outside_the_authority_unchanged_it_is_no_user_info(monkeypatch, value):
+    """(h) X-R35, control: the authority ends at the first ``/``, ``?`` or ``#``, so an ``@`` in the path, the query or the fragment is no user info, and the address is taken unchanged, as (e) takes any other. Green before X-R35 and after: a fix refusing every ``@`` would turn it red."""
+    assert "@" not in urlsplit(value).netloc, f"precondition: the @ of {value!r} must stand outside the authority, urlsplit(value).netloc"
+    monkeypatch.setenv(URL_PROBE, value)
+    address = env_url(URL_PROBE)
+    assert address == value, f"{URL_PROBE}={value!r}: an @ outside the authority is no user info, env_url must give the address unchanged, gave {address!r}"
+    print_success(f"{URL_PROBE}={value!r}: env_url() == {address!r}")
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -834,6 +940,26 @@ def test_support_url_raises_naming_librefolio_support_url(monkeypatch, value):
     with pytest.raises(ValueError, match=SUPPORT_URL_VARIABLE) as raised:
         support_url()
     print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: {raised.value}")
+
+
+@pytest.mark.parametrize("value", [pytest.param("https://alice:s3cr3t-pw@help.example.org/support", id="user-name-and-password")])
+def test_support_url_refuses_user_info_in_an_http_address_and_never_quotes_it(monkeypatch, value):
+    """(h) X-R35: an http(s) ``LIBREFOLIO_SUPPORT_URL`` follows the rule of ``env_url``, so user info in its authority is an error naming the variable, whose message holds neither the user name nor the password. Red today: ``support_url()`` gives the address back, credentials included."""
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    with pytest.raises(ValueError, match=SUPPORT_URL_VARIABLE) as raised:
+        support_url()
+    assert _user_info_in(str(raised.value)) == [], f"the error must name {SUPPORT_URL_VARIABLE} without quoting its user info, neither {USER_INFO_NAME!r} nor {USER_INFO_PASSWORD!r}: {raised.value}"
+    print_success(f"{SUPPORT_URL_VARIABLE}: refused without its user info — {raised.value}")
+
+
+@pytest.mark.parametrize(("value", "expected"), [pytest.param("mailto:alice@help.example.org", "mailto:alice@help.example.org", id="mailto")])
+def test_support_url_still_takes_a_mailto_address_its_at_sign_is_no_user_info(monkeypatch, value, expected):
+    """(h) X-R35, control: a ``mailto:`` address holds an ``@`` but no authority, so it is no user info and keeps the rule of (g). Green before X-R35 and after."""
+    assert "@" not in urlsplit(value).netloc, f"precondition: {value!r} must have no authority to hold user info in, urlsplit(value).netloc"
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    address = support_url()
+    assert address == expected, f"{SUPPORT_URL_VARIABLE}={value!r}: a mailto: address is no user info, support_url must give {expected!r}, gave {address!r}"
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: support_url() == {address!r}")
 
 
 # =============================================================================
@@ -985,7 +1111,7 @@ def _error_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ],
 )
 def test_support_link_is_the_support_address_and_logs_nothing(monkeypatch, value, expected):
-    """(f) ``support_link()``: the address of ``LIBREFOLIO_SUPPORT_URL``, ``None`` without one — the app then links to the project's issues —; neither is a problem: nothing is logged."""
+    """(f) ``support_link()``: the address of ``LIBREFOLIO_SUPPORT_URL``, ``None`` without one — the asset search then offers a new GitHub issue on a self-hosted instance, no report link on a managed one (N61) —; neither is a problem: nothing is logged."""
     _set_variable(monkeypatch, SUPPORT_URL_VARIABLE, value)
     with _captured_link_log() as events:
         link = instance_links.support_link()
@@ -997,7 +1123,7 @@ def test_support_link_is_the_support_address_and_logs_nothing(monkeypatch, value
 @pytest.mark.usefixtures("fresh_link_reports")
 @pytest.mark.parametrize("value", [pytest.param("help.example.com", id="no-scheme"), pytest.param("ftp://help.example.com", id="ftp")])
 def test_an_invalid_support_address_is_no_link_and_one_error_however_often_it_is_read(monkeypatch, value):
-    """(f) An invalid ``LIBREFOLIO_SUPPORT_URL`` never raises out of ``support_link()``: no link at every reading, so the app keeps its default one.
+    """(f) An invalid ``LIBREFOLIO_SUPPORT_URL`` never raises out of ``support_link()``: no link at every reading, so the asset search behaves as without a support address (N61).
 
     And one error for the whole process, ``Invalid instance link``, whose ``problem`` names the variable and quotes the
     value and whose ``consequence`` says what it costs.
@@ -1012,6 +1138,29 @@ def test_an_invalid_support_address_is_no_link_and_one_error_however_often_it_is
     problem = str(errors[0].get("problem"))
     assert SUPPORT_URL_VARIABLE in problem and value in problem, f"the problem must name {SUPPORT_URL_VARIABLE} and quote the value it refused, {value!r}: {problem!r}"
     print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: no link twice, one error — {problem}")
+
+
+@pytest.mark.usefixtures("fresh_link_reports")
+@pytest.mark.parametrize("value", [pytest.param("https://alice:s3cr3t-pw@help.example.org/support", id="user-name-and-password")])
+def test_a_support_address_with_user_info_is_no_link_and_no_log_record_holds_it(monkeypatch, value):
+    """(h) X-R35: ``LIBREFOLIO_SUPPORT_URL`` with user info is invalid like any other (f): ``support_link()`` gives no link at every reading, so the anonymous ``GET /system/instance`` never carries the credentials, and logs one error for the whole process, naming the variable.
+
+    No captured record holds the user name or the password; the one error, and the canary of the capture, are the
+    presence barriers that give that absence its meaning. Red today: ``support_link()`` publishes the address,
+    credentials included, and logs nothing.
+    """
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    with _captured_link_log() as events:
+        links = [instance_links.support_link(), instance_links.support_link()]
+    errors = _error_events(events)
+    assert links == [None, None], f"{SUPPORT_URL_VARIABLE} with user info: every reading must publish no link, got {links}"
+    reported = [(error.get("event"), error.get("consequence")) for error in errors]
+    assert reported == [(INVALID_INSTANCE_LINK, instance_links._DEFAULT_SUPPORT)], f"two readings of {SUPPORT_URL_VARIABLE} with user info must log exactly one error, {INVALID_INSTANCE_LINK!r}, saying what it costs: {errors}"
+    problem = str(errors[0].get("problem"))
+    assert SUPPORT_URL_VARIABLE in problem, f"the problem must name {SUPPORT_URL_VARIABLE}: {problem!r}"
+    leaking = [event for event in events if _user_info_in(repr(event))]
+    assert leaking == [], f"no log record may hold the user name {USER_INFO_NAME!r} or the password {USER_INFO_PASSWORD!r}: {leaking}"
+    print_success(f"{SUPPORT_URL_VARIABLE} with user info: no link twice, one error without the credentials — {problem}")
 
 
 @pytest.mark.usefixtures("fresh_link_reports")
@@ -1045,7 +1194,7 @@ def test_support_link_publishes_a_mailto_address_and_logs_nothing(monkeypatch, v
     ],
 )
 def test_an_invalid_mailto_support_address_is_no_link_and_one_error_however_often_it_is_read(monkeypatch, value):
-    """(g) A ``mailto:`` value the rule refuses, or a foreign scheme, never reaches the published link: ``support_link()`` gives no link at every reading, so the app keeps its default one.
+    """(g) A ``mailto:`` value the rule refuses, or a foreign scheme, never reaches the published link: ``support_link()`` gives no link at every reading, so the asset search behaves as without a support address (N61).
 
     And, as for any invalid address (f), one error for the whole process, ``Invalid instance link``, whose ``problem``
     names the variable and quotes the value and whose ``consequence`` says what it costs.

@@ -91,7 +91,7 @@ correct OpenAPI, but `openapi-zod-client` exports each member as
 `const Member: z.ZodType<Member> = …` — the exported `z.ZodType<T>` annotation **hides the
 `ZodObject` methods** that `z.discriminatedUnion` needs, and the generated client fails to
 compile. The post-processor `frontend/scripts/fix-openapi-discriminators.mjs` strips that
-annotation for a hardcoded list of schemas (**40 today**), letting TypeScript infer the
+annotation for a hardcoded list of schemas (**56 today**), letting TypeScript infer the
 concrete type while keeping the exported alias. It runs as part of `npm run generate-api`
 (which `./dev.py api sync` / `./dev.py api client` wrap) and **throws** if a registered schema
 is not found exactly once — a stale entry fails loud, never silently.
@@ -113,7 +113,7 @@ class SchedulerLogCurrentPriceEntry(BaseModel):
 Without the extra, the discriminator is emitted without an enum constraint and the generated
 TypeScript client fails to compile (real incident, 03/09 — the scheduler log union). This
 pattern is used across `schemas/signals.py`, `schemas/ai_export_runtime.py`, `schemas/risk.py`,
-`schemas/risk_scenarios.py`, and `schemas/settings.py`.
+`schemas/risk_scenarios.py`, `schemas/settings.py`, `schemas/portfolio.py`, and `schemas/tools.py`.
 
 ### 4. Descriptions must survive the client generator
 

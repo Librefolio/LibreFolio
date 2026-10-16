@@ -11,8 +11,8 @@ helper private to it sits beside it as ``_*.py``, one shared by the family at th
 Discovery still loads a single ``<name>.py`` module, for test fixtures and test registries: this gate is what keeps the
 first-party families off it. Three rules:
 
-(a) Convention, per family: no top-level ``*.py`` besides ``__init__.py``, the ``_*.py`` helpers and
-    ``signal_plugins/base.py``; every folder discovery loads — not ``_``-prefixed, holding ``__init__.py`` or
+(a) Convention, per family: no top-level ``*.py`` besides ``__init__.py`` and the ``_*.py`` helpers (a contract lives
+    in its family's runtime package, as ``services/signals/base.py`` does); every folder discovery loads — not ``_``-prefixed, holding ``__init__.py`` or
     ``plugin.py`` — holds both; every plugin ``__init__.py`` is its docstring and nothing else; and the family has at
     least one plugin folder. A folder holding neither file is data (``static/``, ``sample_reports/``).
 (b) Imports, over ``backend/app``, ``backend/test_scripts``, ``scripts`` and ``dev.py``: nothing imports a plugin's
@@ -55,9 +55,9 @@ PLUGIN_FAMILIES = ("brim_providers", "asset_source_providers", "fx_providers", "
 PLUGIN_MODULE = "plugin"
 PLUGIN_FILE = f"{PLUGIN_MODULE}.py"
 PACKAGE_FILE = "__init__.py"
-# Top-level modules a family keeps besides __init__.py and its _*.py helpers: the signal plugins' base class, a stem
-# discovery ignores.
-ROOT_MODULES = {"signal_plugins": frozenset({"base.py"})}
+# Top-level modules a family keeps besides __init__.py and its _*.py helpers: none. The signal plugins' contract left
+# their folder for services/signals/base.py (CP-10b), so a base.py back in a plugin folder is a stray module.
+ROOT_MODULES: dict[str, frozenset[str]] = {}
 # The classmethods through which a registry names the family folder it discovers.
 FAMILY_DECLARATIONS = frozenset({"_get_plugin_folder", "_get_provider_folder"})
 

@@ -798,7 +798,7 @@ class TestOrphanTransferWithCostBasis:
         """(b) RED: B's owner does not own A, which goes with its owner's broker or account deletion — 100 invested before, the control's 80 after.
 
         The first reading also fills the Dashboard cache, keyed on the scope's transaction ids and their
-        updated_at (financial_math/portfolio/engine.py, _compute_tx_fingerprint): the scope of B's owner
+        updated_at (financial_math/portfolio/engine.py, compute_tx_fingerprint): the scope of B's owner
         does not change, so a conversion that leaves updated_at as it was is served the figures of before.
         """
         print_section("V-3 (b) — Dashboard of B's owner when A belongs to someone else")

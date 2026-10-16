@@ -1113,8 +1113,8 @@ test.describe('Asset type select (R14–R16)', () => {
 //
 // Search Online in the create dialog, in a real browser and offline. Three reads of the page are answered here, each
 // on its exact path and for GET only; anything else goes through:
-// - `GET /system/instance`: the backend's own answer with `support_url` set per test, so the report's channel is the
-//   test's, not the lane's;
+// - `GET /system/instance`: the backend's own answer with `support_url` set per test — and `profile`, when a test asks —
+//   so the report's channel is the test's, not the lane's;
 // - `GET /assets/provider`: the backend's own list, one searchable provider made premium (the first in code order,
 //   mockprov aside — the dropdown never shows it), every other one community at the default priority;
 // - `GET /assets/provider/search/stream`: a canned stream, as services/assets/search.py sends it — one event per
@@ -1171,8 +1171,9 @@ function searchHit(provider: string, identifier: string) {
 /**
  * Install the three routes on this page, before it loads. With `found`, the premium provider answers two results and
  * the community one one result; every other provider the search asks answers none — all of them, without `found`.
+ * With `profile`, the instance answers that profile; without it, the backend's own passes through.
  */
-async function routeSearchBoundary(page: Page, {supportUrl, found}: {supportUrl: string | null; found: boolean}): Promise<SearchBoundary> {
+async function routeSearchBoundary(page: Page, {supportUrl, found, profile}: {supportUrl: string | null; found: boolean; profile?: 'selfhosted' | 'managed'}): Promise<SearchBoundary> {
     // The real list, through `page.request`, which no page route reaches.
     const listed = await page.request.get(PROVIDER_LIST_PATH);
     expect(listed.ok(), `GET ${PROVIDER_LIST_PATH} answered ${listed.status()}`).toBe(true);
@@ -1186,7 +1187,7 @@ async function routeSearchBoundary(page: Page, {supportUrl, found}: {supportUrl:
     const hits: Record<string, unknown[]> = found ? {[premium]: [searchHit(premium, 'E2E-F21-P1'), searchHit(premium, 'E2E-F21-P2')], [community]: [searchHit(community, 'E2E-F21-C1')]} : {};
 
     await serveRewritten(page, INSTANCE_CONFIG_PATH, (body) => {
-        const answer = {...(body as Record<string, unknown>), support_url: supportUrl};
+        const answer = {...(body as Record<string, unknown>), support_url: supportUrl, ...(profile === undefined ? {} : {profile})};
         boundary.instance.push(answer);
         return answer;
     });
@@ -1218,7 +1219,7 @@ test.describe('Asset search — premium first, «Can’t find it? Let us know» 
     });
 
     test('premium results lead in a section of their own, the report row follows it, the community section stays closed until opened; the report is a prefilled GitHub issue', async ({page}) => {
-        const boundary = await routeSearchBoundary(page, {supportUrl: null, found: true});
+        const boundary = await routeSearchBoundary(page, {supportUrl: null, found: true, profile: 'selfhosted'});
         const {premium, community} = boundary;
         const query = 'E2E F21 world equity';
 
@@ -1326,6 +1327,44 @@ test.describe('Asset search — premium first, «Can’t find it? Let us know» 
         await expect(results).toHaveAttribute('data-state', 'empty');
         await expect(results.getByTestId('asset-search-report-row')).toBeVisible();
         expect(boundary.searches, 'the focus shows the last search: it does not search again').toHaveLength(1);
+
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('asset-modal-form')).toBeHidden();
+    });
+
+    test('a managed instance with no support address shows no report row: a public GitHub issue would publish the instance and its search (N61)', async ({page}) => {
+        const boundary = await routeSearchBoundary(page, {supportUrl: null, found: true, profile: 'managed'});
+        const {premium, community} = boundary;
+        const query = 'E2E N61 managed world equity';
+
+        await goToAssetsPage(page);
+        // Precondition, verified: the page read the instance through the route, and its client takes that answer — the
+        // generated schema is the one it validates with (fixtures/instance-config.ts). A refused answer would leave the
+        // page on its defaults, never loaded: no row either, for the wrong reason.
+        await expect.poll(() => boundary.instance.length, {message: 'the page read the instance configuration through the route'}).toBeGreaterThan(0);
+        const served = schemas.InstanceConfigResponse.parse(boundary.instance.at(-1));
+        expect(served.profile).toBe('managed');
+        expect(served.support_url ?? null).toBeNull();
+
+        await openCreateAssetModal(page);
+        const dialog = page.getByTestId('asset-modal');
+        await expect(dialog.getByTestId(`asset-search-provider-${premium}`), 'precondition: Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 10_000});
+        await dialog.locator('[data-search-autocomplete] input[type="text"]').fill(query);
+        const results = dialog.getByTestId('asset-search-results');
+        await expect(results, 'the search ends with results').toHaveAttribute('data-state', 'results', {timeout: 15_000});
+        expect(boundary.searches, 'one search, which asked the premium provider and the community one').toEqual([expect.arrayContaining([premium, community])]);
+
+        // The search is over and drawn — its premium results, the community section's button: on a self-hosted instance
+        // the report row stands between them by now (the first test of this block). Here there is none.
+        await expect(results.getByTestId('asset-search-premium-section').getByTestId('asset-search-result-0')).toHaveAttribute('data-provider', premium);
+        const toggle = results.getByTestId('asset-search-community-toggle');
+        await expect(toggle).toBeVisible();
+        await expect(results.getByTestId('asset-search-report-row')).toHaveCount(0);
+        // Nor once the community section is open; and no address of GitHub anywhere in the search block.
+        await toggle.click();
+        await expect(results.getByTestId('asset-search-community-warning')).toBeVisible();
+        await expect(results.getByTestId('asset-search-report-row')).toHaveCount(0);
+        await expect(dialog.locator('[data-search-autocomplete] [href*="github.com"]')).toHaveCount(0);
 
         await page.getByTestId('asset-modal-cancel').click();
         await expect(page.getByTestId('asset-modal-form')).toBeHidden();

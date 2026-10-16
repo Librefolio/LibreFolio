@@ -8,7 +8,7 @@ import type * as echarts from 'echarts';
 import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
 import {withHexAlpha} from '$lib/theme/colorAlpha';
 import {themed} from '$lib/theme/themePair';
-import {CHART_GAIN_LOSS, GROWTH_CHART_COLORS, GROWTH_SERIES} from '$lib/theme/chartTheme';
+import {CHART_GAIN_LOSS, chartNeutrals, GROWTH_SERIES} from '$lib/theme/chartTheme';
 import {growthBrokerColor} from '$lib/theme/chartPalettes';
 import type {AggregatedResolutionData, AggregationInputs, CandleSeriesPoint, PctSeriesKey, SeriesPoint} from './growthChartData';
 
@@ -399,7 +399,7 @@ export function buildGrowthFullSeries(context: GrowthSeriesContext, isDark: bool
             data: seriesData[2].data,
             symbol: 'none',
             showSymbol: false,
-            lineStyle: {color: themed(GROWTH_CHART_COLORS.pnlReference, isDark), type: 'dashed', width: 1},
+            lineStyle: {color: chartNeutrals(isDark).growth.pnlReference, type: 'dashed', width: 1},
             itemStyle: {color: 'transparent'},
             emphasis: {disabled: true},
             tooltip: {show: false},

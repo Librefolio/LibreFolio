@@ -74,8 +74,7 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {themed} from '$lib/theme/themePair';
-    import {CORRELATION_COLORS} from '$lib/theme/chartTheme';
+    import {chartNeutrals} from '$lib/theme/chartTheme';
     import {scaleColor} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
@@ -200,6 +199,11 @@
     let roles = $derived.by(() => {
         void colorsVersion;
         return chartRoles(dark, container);
+    });
+    /** The neutrals of the matrix and of its tooltip (B4), read with the same triggers as `roles`. */
+    let neutrals = $derived.by(() => {
+        void colorsVersion;
+        return chartNeutrals(dark, container);
     });
     /**
      * From −1 to +1: the danger role, the secondary surface, the info role (GR5.3 of the designer's round 2). The
@@ -386,7 +390,7 @@
     }
 
     function badgeHtml(parts: BadgeParts, value: string): string {
-        return `<span style="display:inline-block;margin-right:4px;padding:0 6px;border-radius:9999px;background:${CORRELATION_COLORS.tooltipBadge.background};color:${CORRELATION_COLORS.tooltipBadge.text};font-size:11px;line-height:18px">${escapeHtml(`${parts.icon} ${parts.name}`)} <b>${escapeHtml(value)}</b></span>`;
+        return `<span style="display:inline-block;margin-right:4px;padding:0 6px;border-radius:9999px;background:${neutrals.correlation.tooltipBadge.background};color:${neutrals.correlation.tooltipBadge.text};font-size:11px;line-height:18px">${escapeHtml(`${parts.icon} ${parts.name}`)} <b>${escapeHtml(value)}</b></span>`;
     }
 
     /**
@@ -471,7 +475,7 @@
             label: {color: valueColor(point.value[2])},
         }));
         drawn = data;
-        const axisColor = themed(CORRELATION_COLORS.axisLabel, dark);
+        const axisColor = neutrals.correlation.axisLabel;
         const axisLabel = {color: axisColor, fontSize: AXIS_FONT_SIZE, fontFamily: AXIS_FONT_FAMILY, interval: 0};
 
         chart.setOption(
@@ -501,6 +505,10 @@
                 tooltip: {
                     position: tooltipBesideCell,
                     appendTo: 'body',
+                    // The shared box: without it ECharts drew its own, white in both themes (B4).
+                    backgroundColor: neutrals.tooltip.box.background,
+                    borderColor: neutrals.tooltip.box.border,
+                    textStyle: {color: neutrals.tooltip.box.text},
                     extraCssText: 'max-width: 440px; white-space: normal;',
                     formatter: (params: {data?: (typeof data)[number]}) => {
                         const item = params.data;
@@ -513,7 +521,7 @@
                                 ? `<div style="font-weight:600">ρ = ${formatFixed(value, 3)} · ${$t(`risk.assetSet.band.${band}`)}${value >= NEAR_IDENTICAL ? ` · ${$t('risk.assetSet.nearIdentical')}` : ''}</div>`
                                 : `<div style="font-weight:600">${$t(`risk.valueStatus.${item.status}`)}</div>`;
                         const metadata = `<div style="opacity:0.75;margin-top:2px">${$t('risk.metadata.observations')}: ${formatFixed(item.observations, 0)} · ${$t('risk.metadata.coverage')}: ${formatPercent(item.coverage, {scale: 100, digits: 1, signed: false})}</div>`;
-                        const assets = `<div style="margin-top:6px;padding-top:4px;border-top:1px solid ${CORRELATION_COLORS.tooltipDivider}">${assetBlock(item.rowAssetId)}${assetBlock(item.columnAssetId)}</div>`;
+                        const assets = `<div style="margin-top:6px;padding-top:4px;border-top:1px solid ${neutrals.correlation.tooltipDivider}">${assetBlock(item.rowAssetId)}${assetBlock(item.columnAssetId)}</div>`;
                         return `${reading}${metadata}${assets}`;
                     },
                 },
@@ -523,7 +531,7 @@
                         type: 'heatmap',
                         data,
                         // A gap the colour of the card between cells: the triangle reads as tiles, not as a smear.
-                        itemStyle: {borderColor: themed(CORRELATION_COLORS.cellGap, dark), borderWidth: 2, borderRadius: 3},
+                        itemStyle: {borderColor: neutrals.correlation.cellGap, borderWidth: 2, borderRadius: 3},
                         label: {
                             show: true,
                             fontSize: AXIS_FONT_SIZE,
@@ -539,7 +547,7 @@
                         // the opposite shade, stands out on the pale cells and on the saturated ones alike.
                         // ECharts lifts an emphasised cell above its neighbours (`Z2_EMPHASIS_LIFT`), so the
                         // neighbours' tile gaps cannot cover its border.
-                        emphasis: {itemStyle: {borderColor: themed(CORRELATION_COLORS.emphasisBorder, dark), borderWidth: 3, shadowBlur: 10, shadowColor: themed(CORRELATION_COLORS.emphasisHalo, dark)}},
+                        emphasis: {itemStyle: {borderColor: neutrals.correlation.emphasisBorder, borderWidth: 3, shadowBlur: 10, shadowColor: neutrals.correlation.emphasisHalo}},
                     },
                 ],
             },

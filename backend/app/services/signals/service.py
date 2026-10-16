@@ -54,12 +54,13 @@ from backend.app.schemas.signals import (
     SignalWarningCode,
 )
 from backend.app.services.series_preparation import date_is_within_range
-from backend.app.services.signal_annotations import SignalAnnotationService
-from backend.app.services.signal_plugins.base import (
+from backend.app.services.signals.annotations import SignalAnnotationService
+from backend.app.services.signals.base import (
     SignalPlugin,
     SignalUnavailableError,
 )
-from backend.app.services.signal_series_preparation import (
+from backend.app.services.signals.registry import SignalPluginRegistry
+from backend.app.services.signals.series import (
     SESSION_WARMUP_DAY_MULTIPLIER,
     build_signal_availability_warnings,
     build_signal_coverage,
@@ -70,7 +71,6 @@ from backend.app.services.signal_series_preparation import (
     slice_signal_series,
     visible_signal_output_state,
 )
-from backend.app.services.signals.registry import SignalPluginRegistry
 
 logger = get_logger(__name__)
 _ANNOTATION_REQUEST_ADAPTER = TypeAdapter(SignalAnnotationRequest)

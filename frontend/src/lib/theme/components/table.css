@@ -1,10 +1,9 @@
 /*
  * Tables: what is left of the component colour tokens of R-3 (plan 55), at parity with the legacy look.
  *
- * The data tables (DataTable and its cells, header, filter, pagination, toolbar) and the period effects table
- * moved to the colour roles of tokens.css (T, 16/10). Left here:
- * - the categorical row tints of RiskReturnLevel, the portfolio and the benchmark (the designer's point 2.5);
- * - CompactCashCell, which moves to features/transactions/form/ (FE8b) and migrates there.
+ * The data tables (DataTable and its cells, header, filter, pagination, toolbar), the period effects table and
+ * CompactCashCell moved to the colour roles of tokens.css (T, 16/10). Left here: the categorical row tints of
+ * RiskReturnLevel, the portfolio and the benchmark (the designer's point 2.5).
  * `-dark` twins feed the components' `.dark` rules; the original spelling follows a value in a comment.
  */
 :root {
@@ -13,18 +12,4 @@
     --lf-cmp-risk-return-row-portfolio-bg-dark: #38bdf824; /* rgb(56 189 248 / 0.14) */
     --lf-cmp-risk-return-row-benchmark-bg: #d977061a; /* rgb(217 119 6 / 0.1) */
     --lf-cmp-risk-return-row-benchmark-bg-dark: #fbbf2424; /* rgb(251 191 36 / 0.14) */
-
-    /* CompactCashCell.svelte */
-    --lf-cmp-compact-cash-cell-input-bg: #fff; /* white */
-    --lf-cmp-compact-cash-cell-input-bg-dark: #1e293b; /* rgb(30 41 59) */
-    --lf-cmp-compact-cash-cell-input-border: rgb(229 231 235);
-    --lf-cmp-compact-cash-cell-input-border-dark: #475569; /* rgb(71 85 105) */
-    --lf-cmp-compact-cash-cell-input-text-dark: #f1f5f9; /* rgb(241 245 249) */
-    --lf-cmp-compact-cash-cell-input-hover-border: #9ca3af; /* rgb(156 163 175) */
-    --lf-cmp-compact-cash-cell-input-hover-border-dark: #64748b; /* rgb(100 116 139) */
-    --lf-cmp-compact-cash-cell-input-focus-border: #10b981; /* rgb(16 185 129) */
-    --lf-cmp-compact-cash-cell-input-focus-shadow: #10b98140; /* rgb(16 185 129 / 0.25) */
-    --lf-cmp-compact-cash-cell-input-disabled-text: #9ca3af; /* rgb(156 163 175) */
-    --lf-cmp-compact-cash-cell-input-disabled-bg: #f3f4f6; /* rgb(243 244 246) */
-    --lf-cmp-compact-cash-cell-input-disabled-bg-dark: #0f172a; /* rgb(15 23 42) */
 }

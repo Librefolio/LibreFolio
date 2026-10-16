@@ -44,11 +44,18 @@
  * (the report is copied for it) or a GitHub issue — and carries a report proven by
  * decoding the link; the row stays reachable: a click outside closes the dropdown,
  * a focus brings the finished search back, until the input is cleared. For them
- * more boundaries are mocked: the instance's configuration (`support_url`, switched
- * per case), the clipboard writer, and `notify()` — the outcome of the copy is
- * asserted on its structured half (name, detail, toast variant); the toast store
- * only to prove that no toast is shown besides notify()'s. Their UI texts are read
- * from the shipped catalogue, and each case first proves its key is there.
+ * more boundaries are mocked: the instance's configuration (`support_url`,
+ * `profile`, and whether it has `loaded`: switched per case), the clipboard writer,
+ * and `notify()` — the outcome of the copy is asserted on its structured half
+ * (name, detail, toast variant); the toast store only to prove that no toast is
+ * shown besides notify()'s. Their UI texts are read from the shipped catalogue, and
+ * each case first proves its key is there.
+ *
+ * The last block pins where a report may go (X-R37, N61): only a self-hosted
+ * instance whose configuration has loaded falls back to a public GitHub issue; on a
+ * managed one, or before the configuration has loaded, a search with no valid
+ * support address — an address with a user or a password is none — shows no
+ * report row at all, in every state, between the sections too.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -66,19 +73,20 @@ vi.mock('$lib/utils/providerHelpers', () => ({
     ensureAssetProvidersCached: vi.fn(() => Promise.resolve()),
     getAssetProviderIconUrl: vi.fn(() => null),
 }));
-// P20: the instance's support address, set per case before the mount (null: not set, the default).
-const instance = vi.hoisted(() => ({supportUrl: null as string | null | undefined}));
+// P20: the instance as the component reads it, set per case before the mount. By default a self-hosted instance whose
+// configuration has loaded, with no support address: the one that falls back to a public GitHub issue (N61).
+const instance = vi.hoisted(() => ({supportUrl: null as string | null | undefined, profile: 'selfhosted' as 'selfhosted' | 'managed', loaded: true, failed: false}));
 vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
     DEFAULT_INSTANCE_CONFIG: {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}},
     instanceConfig: {
         get config() {
-            return {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}, support_url: instance.supportUrl};
+            return {profile: instance.profile, accounts: {registration_mode: 'open', registration_locked: false}, support_url: instance.supportUrl};
         },
         get loaded() {
-            return true;
+            return instance.loaded;
         },
         get failed() {
-            return false;
+            return instance.failed;
         },
         load: vi.fn(() => Promise.resolve()),
     },
@@ -100,7 +108,7 @@ import {notify} from '$lib/stores/app/notify.svelte';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {writeTextToClipboard} from '$lib/utils/clipboard';
 import {APP_VERSION} from '$lib/version';
-import {GITHUB_NEW_ISSUE_URL, buildSearchReport, reportHref, supportChannel, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
+import {GITHUB_NEW_ISSUE_URL, buildSearchReport, reportHref, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
 
 const listProviders = vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get);
 const restSearch = vi.mocked(zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get);
@@ -894,7 +902,7 @@ describe('AssetSearchAutocomplete — «Can’t find it? Let us know» (P20)', (
             {code: 'alpha', status: 'results', count: 1},
             {code: 'beta', status: 'results', count: 1},
         ]);
-        expect(link.getAttribute('href')).toBe(reportHref(supportChannel(null), report));
+        expect(link.getAttribute('href')).toBe(reportHref({kind: 'github', url: GITHUB_NEW_ISSUE_URL}, report));
     });
 
     it('ASA-R3: the outcome of each provider the search queried, in the order of the toggles: results counted, errors by their code — never their message', async () => {
@@ -1011,7 +1019,7 @@ describe('AssetSearchAutocomplete — «Can’t find it? Let us know» (P20)', (
             {code: 'alpha', status: 'results', count: 1},
             {code: 'beta', status: 'results', count: 0},
         ]);
-        expect(href).toBe(reportHref(supportChannel('mailto:support@example.org'), report));
+        expect(href).toBe(reportHref({kind: 'mailto', address: 'support@example.org'}, report));
     });
 
     it('ASA-R9: an http(s) support page opens in a new tab; the click copies the report for it and, once the copy is done, notify() says so; the dropdown stays open', async () => {
@@ -1214,5 +1222,148 @@ describe('AssetSearchAutocomplete — «Can’t find it? Let us know» (P20)', (
         expect(screen.queryByTestId('asset-search-results'), 'no search to show: no dropdown').toBeNull();
         expect(screen.queryByTestId('asset-search-report-row'), 'no report of a search that is gone').toBeNull();
         expect(fetchUrls()).toHaveLength(searches);
+    });
+});
+
+// --- X-R37 / N61: where a report may go ---
+describe('AssetSearchAutocomplete — a report needs a channel (X-R37, N61)', () => {
+    afterEach(() => {
+        Object.assign(instance, {supportUrl: null, profile: 'selfhosted', loaded: true, failed: false});
+    });
+
+    /** Every address anywhere in the component, hidden or not. */
+    const hrefs = (): string[] => [...document.querySelectorAll('[data-search-autocomplete] [href]')].map((element) => element.getAttribute('href') ?? '');
+
+    it.each([
+        {label: 'results', finished: 'results', rows: ['A1'], search: async () => sseResponse([answered('alpha', [hit('alpha', 'A1')]), answered('beta', []), DONE])},
+        {label: 'no result', finished: 'empty', rows: [], search: async () => sseResponse([answered('alpha', []), answered('beta', []), DONE])},
+        {
+            label: 'an error (the time cap)',
+            finished: 'error',
+            rows: [],
+            search: async () => {
+                throw new DOMException('The operation was aborted.', 'AbortError');
+            },
+        },
+    ])('ASA-S1: a managed instance with no support address: a search over with $label shows no report row — a public issue would publish it', async ({finished, rows, search}) => {
+        instance.profile = 'managed';
+        global.fetch = vi.fn(search) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe(finished));
+
+        // The search is over and drawn: on a self-hosted instance its report row is there by now (ASA-R2, R5, R7).
+        expect(shown()).toEqual(rows);
+        expect(screen.queryByTestId('asset-search-report-row')).toBeNull();
+        expect(screen.queryByTestId('asset-search-report')).toBeNull();
+        const github = hrefs().filter((href) => href.includes('github.com'));
+        expect(github, 'no way to a GitHub issue anywhere').toEqual([]);
+    });
+
+    it('ASA-S2: a managed instance with a mailto: support address: the row is there, a mail to that address, and its report says managed', async () => {
+        instance.profile = 'managed';
+        instance.supportUrl = 'mailto:support@example.org';
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', []), answered('beta', []), DONE])) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('empty'));
+
+        const link = await reportLink();
+        expect(link).toHaveAttribute('data-channel', 'mailto');
+        const href = link.getAttribute('href') ?? '';
+        const parts = /^mailto:support@example\.org\?subject=([^&]*)&body=([^&]*)$/.exec(href);
+        expect(parts, `not mailto:support@example.org?subject=…&body=…: ${href}`).not.toBeNull();
+        const lines = decodeURIComponent(parts![2]).split('\r\n');
+        expect(lines).toContain('Search: apple');
+        expect(lines).toContain(`LibreFolio ${APP_VERSION}, managed, language ${get(currentLanguage)}`);
+    });
+
+    it('ASA-S3: a managed instance with a valid support page: the row is there, a link to that page', async () => {
+        instance.profile = 'managed';
+        instance.supportUrl = 'https://help.example.org/assets';
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', [hit('alpha', 'A1')]), answered('beta', []), DONE])) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        const link = await reportLink();
+        expect(link).toHaveAttribute('data-channel', 'page');
+        expect(link).toHaveAttribute('href', 'https://help.example.org/assets');
+    });
+
+    it('ASA-S4: a managed instance whose support page carries a user and a password: that address counts as none — no row, and it is never linked', async () => {
+        instance.profile = 'managed';
+        instance.supportUrl = 'https://user:pass@help.example.org';
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', [hit('alpha', 'A1')]), answered('beta', []), DONE])) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        expect(shown()).toEqual(['A1']);
+        expect(screen.queryByTestId('asset-search-report-row')).toBeNull();
+        expect(hrefs().filter((href) => href.includes('help.example.org') || href.includes('github.com'))).toEqual([]);
+    });
+
+    it.each([
+        {label: 'its request failed', failed: true},
+        {label: 'it has not answered yet', failed: false},
+    ])('ASA-S5: the instance configuration not loaded — $label — and no support address: no row, though its defaults say selfhosted', async ({failed}) => {
+        // What the real store holds before an answer: the defaults, a self-hosted instance. Only `loaded` tells.
+        instance.loaded = false;
+        instance.failed = failed;
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', []), answered('beta', []), DONE])) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('empty'));
+
+        expect(screen.queryByTestId('asset-search-report-row')).toBeNull();
+        expect(hrefs().filter((href) => href.includes('github.com'))).toEqual([]);
+    });
+
+    it('ASA-S6: a self-hosted instance whose support page carries a user and a password: refused as no address, so the GitHub issue — never that page', async () => {
+        instance.supportUrl = 'https://user:pass@help.example.org';
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', [hit('alpha', 'A1')]), answered('beta', []), DONE])) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        const link = await reportLink();
+        expect(link).toHaveAttribute('data-channel', 'github');
+        expect(githubReport(link).lines).toContain('Search: apple');
+        expect(hrefs().filter((href) => href.includes('help.example.org'))).toEqual([]);
+    });
+
+    it('ASA-S7: grouped, with no channel: the community section’s button follows the Premium section directly — no row between, nor anywhere', async () => {
+        instance.profile = 'managed';
+        listProviders.mockResolvedValue(RANKED as never);
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', [hit('alpha', 'A1')]), answered('prime', [hit('prime', 'P1')]), answered('beta', []), answered('vault', []), DONE])) as never;
+        await mountReady();
+        await type('world');
+        await waitFor(() => expect(state()).toBe('results'));
+
+        const premium = screen.getByTestId('asset-search-premium-section');
+        const toggle = screen.getByTestId('asset-search-community-toggle');
+        expect(shown()).toEqual(['P1']);
+        expect(premium.nextElementSibling, 'the button comes right after the Premium section').toBe(toggle);
+        expect(screen.queryByTestId('asset-search-report-row')).toBeNull();
+
+        await fireEvent.click(toggle);
+
+        await waitFor(() => expect(screen.getByTestId('asset-search-community-toggle')).toHaveAttribute('aria-expanded', 'true'));
+        expect(shown()).toEqual(['P1', 'A1']);
+        expect(screen.queryByTestId('asset-search-report-row'), 'nor under the community results').toBeNull();
+        expect(hrefs().filter((href) => href.includes('github.com'))).toEqual([]);
+    });
+
+    it('ASA-S8: a support page written without its slashes (https:help.example.org/assets) is linked by its absolute address, never as a path of the instance', async () => {
+        instance.supportUrl = 'https:help.example.org/assets';
+        global.fetch = vi.fn(async () => sseResponse([answered('alpha', []), answered('beta', []), DONE])) as never;
+        await mountReady();
+        await type('apple');
+        await waitFor(() => expect(state()).toBe('empty'));
+
+        const link = await reportLink();
+        expect(link).toHaveAttribute('data-channel', 'page');
+        expect(link).toHaveAttribute('href', 'https://help.example.org/assets');
     });
 });

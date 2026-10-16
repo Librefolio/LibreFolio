@@ -10,6 +10,9 @@ processes the budget is N times as large. ``smtplib`` blocks, so the SMTP exchan
 the event loop. Every outcome is logged with the kind of email, the account and the domain of the recipient; never the
 body, the link it carries, the recipient's full address nor the password of the SMTP server — not even inside the
 server's own words, which often quote the address they refuse.
+
+``mailbox_budget_key()`` is the key the per-mailbox limits of ``flows`` and ``verification`` count by: the aliases of
+one mailbox share it (backlog E-9).
 """
 
 from __future__ import annotations
@@ -147,6 +150,29 @@ def budget_status(max_per_hour: int | None = None) -> RateDecision:
     """What the hourly budget of the instance allows now, without spending it: against ``max_per_hour`` when given (a
     state already read), else against the configured limit."""
     return INSTANCE_BUDGET.peek(limit=max_per_hour if max_per_hour is not None else email_config_state().max_per_hour)
+
+
+#: The two domains of one Gmail mailbox, which ignores the dots of its local part.
+_GMAIL_DOMAINS = frozenset({"gmail.com", "googlemail.com"})
+
+
+def mailbox_budget_key(address: str) -> str:
+    """The key of the per-mailbox limits: the aliases of one mailbox give one key.
+
+    Case-folded; the sub-address (``+tag``) cut on every domain, unless nothing would be left before it; for Gmail
+    (``googlemail.com`` is ``gmail.com``) the dots of the local part removed. A key to count by, nothing more: the email
+    still goes to the address as stored, and the key is never stored, logged nor shown. A value without ``@`` is only
+    case-folded.
+    """
+    value = address.strip().casefold()
+    local, at, domain = value.rpartition("@")
+    if not at:
+        return value
+    local = local.split("+", 1)[0] or local
+    if domain in _GMAIL_DOMAINS:
+        domain = "gmail.com"
+        local = local.replace(".", "")
+    return f"{local}@{domain}"
 
 
 def _redacted(detail: str, *, password: str | None, recipient: str) -> str:
