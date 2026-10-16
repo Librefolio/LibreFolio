@@ -201,7 +201,8 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   of a row becomes `text-lf-secondary` while the row is selected or highlighted (TC-15). The selects of `ui/select` do
   it for every option, a caller's snippet included, with one rule in their `<style>`:
   `[data-highlighted='true'] :global(.text-lf-muted) { color: var(--lf-text-secondary) }` (`TreeSelect`: its active and
-  hovered options). A new list that tints its rows does the same, and publishes the state it keys on. A selected chip
+  hovered options); so does `DataTable` for its selected, highlighted and analyzed rows, HtmlCell cells included. A new
+  list that tints its rows does the same, and publishes the state it keys on. A selected chip
   under the pointer: `hover:bg-lf-checked/20 hover:text-lf-primary` — the link green on that deeper tint falls to
   3.99:1.
 - **A translucent background** is measured composited over the opaque surfaces it lies on (the `over` field of a pair,
