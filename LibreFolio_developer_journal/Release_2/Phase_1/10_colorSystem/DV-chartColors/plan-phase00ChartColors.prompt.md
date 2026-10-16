@@ -1523,6 +1523,19 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >     26/26, `htmlSink` 7/7, `text` 95/95.
   > - Restano, al via del coordinatore: l'E2E `front-utility pac-allocator-real` e lo scatto di galleria
   >   `tools/pac-step-targets`, se G ha la corsia libera.
+  > - Commit `63880bc8b` del coordinatore (18:58); la punta è ferma a `81bc305b9` e la simulazione dell'ingresso è
+  >   pulita. Lo scatto `tools/pac-step-targets` si salta: entra nella prossima galleria completa, quella del giro
+  >   della designer.
+  > - **Slot breve** (via del coordinatore alle 18:58), su `63880bc8b`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
+  >   18:59:35 alle 19:08:56, carico da 62 a 91 per le altre sessioni. Script e log in `files/w6e-slot/` della
+  >   sessione.
+  >
+  >   | Passo | Esito | Tempo |
+  >   |---|---|---|
+  >   | `api sync` | verde, 0 file tracciati cambiati | 29 s |
+  >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 532 s: build di frontend e documentazione 411 s (la base aveva i docs di AF), il popolamento, il test in 11,5 s |
+  >
+  >   - A fine slot la porta 6156 è libera, l'HEAD è `63880bc8b` e il worktree non ha file tracciati cambiati.
 - [ ] W6-d, dopo l'ingresso di Y.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
