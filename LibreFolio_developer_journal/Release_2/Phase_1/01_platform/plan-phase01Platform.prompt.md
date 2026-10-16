@@ -3355,3 +3355,39 @@ leggere come al solito. Le due voci erano di B (piano 07, §13 B6a) e il coordin
 >   anche i gestori di pytest non perde niente: un `FileHandler` chiuso in modo `w` non si riapre, e uno `StreamHandler`
 >   non chiude il suo stream;
 > - **H-6**: in corso, test-author, insieme ai rossi di H-4 e H-9.
+
+> **Ingresso del primo lotto**: `b-doc-notes` committato (`d7eb9c5f3`, diario `881bd20c0`), HEAD `881bd20c0`.
+
+#### Lotto H-1, H-4, H-6, H-9 — rossi, cura, verdi ✅ (2026-10-16, mattina)
+
+> **Note implementazione** (test-author, niente lanciato da lui):
+>
+> - **H-4**, in `test_runtime_isolation.py`, 3 test. `sqlite/` e `secrets/` con modo 000 (dentro, `app.db` e
+>   `instance.key`), più la radice dei dati di test con modo 000, per il controllo degli indicatori. Si aspettano un
+>   `ValueError` con il prefisso e il percorso, e come causa un `PermissionError`. Saltati da root o su Windows; il modo
+>   viene ripristinato in un `finally`;
+> - **H-6**, in `AboutTab.test.ts`: i due casi d'assenza ora usano `/settings\.assetProviders/` e i loro gemelli per gli
+>   FX e gli import, cinque controlli in tutto, ciascuno con un controllo positivo prima. L'intestazione è
+>   «etichetta (n)», quindi il testo esatto non trovava mai nulla. Ora un `{#if assetProviders}` sbagliato li farebbe
+>   diventare rossi;
+> - **H-9**, sezione (e) di `test_logging_access_filter.py`, 2 test: dopo una seconda chiamata il file di log della
+>   prima è chiuso, e un `FileHandler` trovato sulla radice viene chiuso. I file stanno sotto `tmp_path`;
+> - io: la descrizione e il commento di `logging-access-filter` nel runner (i file di log della sezione (e) stanno sotto
+>   `tmp_path`; H-9).
+>
+> **Prove**, una alla volta, `nice`:
+>
+> - rossi (07:41–07:42): `utils runtime-isolation` 3 rossi su 200 («a raw PermissionError escape instead of refusing
+>   with a ValueError»); `services logging-access-filter` 2 rossi su 98 (il gestore resta aperto); Vitest `AboutTab` 38
+>   verdi, come deve essere per una riparazione;
+> - cura applicata (`apply_h4_h9.py`); ruff, black e prettier puliti;
+> - verdi (07:45–07:51): `runtime-isolation` 200, `logging-access-filter` 98, `AboutTab` 38, `config-instance-key` 151,
+>   `secret-masking` 68, `config-misc` 12, `config-package` 695, `utils dev-cli-db-path` 15. Porta 6181 libera.
+>
+> **⚠️ Fuori pista**:
+>
+> - durante i verdi il carico è salito fino a 137, per le corsie degli altri; i miei risultati sono comunque verdi. Dalle
+>   07:47 la soglia per le prove leggere è **sotto 50**, con attese di 60 s: aggiornati i miei script;
+> - effetto di H-9 notato dal test-author: le chiamate a `configure_logging()` in (d) e in `test_secret_masking.py`
+>   non svuotano prima la radice, quindi chiudono anche i gestori di pytest. Oggi non fa danno, perché `pytest.ini` non ha
+>   `log_file`; con `pytest --log-file` quel file smetterebbe di ricevere righe dopo il primo test così.
