@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 91,9 % delle classi sui ruoli (m1 930 nel target), il resto aspetta la designer o la 1.3 |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto; 16/10 sera: il 93,9 % delle classi sui ruoli (m1 697 nel target), il resto aspetta la designer |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -4578,6 +4578,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   paragrafo dopo la formula, quello nuovo sulla perdita totale con l'avviso, la prima frase dell'avviso, in
   `#what-it-takes-to-get-back`). `translate-validate` (16/10): 3 errori strutturali nuovi, il link da `max-drawdown`
   a `current-drawdown.md#what-it-takes-to-get-back`. Tradurle nello stesso giro. Dettagli: piano J, §10 «CP-13a».
+- **J-32 · Debito di traduzione di J-24 (la rettifica in uscita consegna al cambio del suo giorno)** — basso,
+  documentazione; J, 16/10. Pagine EN cambiate di senso, senza stamp, sotto
+  `financial-theory/technical-analysis/performance-metrics/`:
+  - `portfolio-engine/deposited-capital`: sezione nuova `#outgoing-adjustments` con esempio, più punti riscritti;
+    36 errori strutturali.
+  - `portfolio-engine/index`: §8, con l'ancora nuova `#8-realized-gain-loss`, che i titoli tradotti devono portare.
+  - `portfolio-engine/period-pnl`, `twrr`, `mwrr`, `weighted-average-cost`.
+  - `fifo-engine/index`, `fifo-engine/fifo-lot-analysis`.
+
+  Fuori da quella cartella: `financial-theory/instruments/transaction-types/adjustment` e
+  `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
+  `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
+  J, §10 «J-24».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -4698,6 +4711,26 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
   rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
+- **Z-18 · Il Dashboard si dichiara «occupato» durante la ricarica dopo un recupero dei prezzi** — basso, accessibilità;
+  Y tramite il coordinatore, 16/10 (Z-13, P3 di Y11). La ricarica in background dopo un recupero
+  (`reloadAfterPriceCatchUp()` → `loadAll()`) mette `reportLoading = true` mentre chiede di nuovo il report stale, e la
+  radice della pagina (`data-testid="dashboard-page"`, `routes/(app)/dashboard/+page.svelte:841`) passa a
+  `aria-busy="true"` e `data-busy="true"`: un lettore di schermo annuncia «occupato» per un semplice aggiornamento dei
+  prezzi. P3 di Y11 copre solo il pulsante. Cura possibile, da decidere dopo l'ingresso di Y11: una variante in
+  background di `loadAll()` che non tocca il `reportLoading` della radice (la logica è di Z, il markup della radice è
+  nell'area di DV). La pagina del broker non ha `aria-busy` sulla radice, ma la sua icona «Aggiorna» segue
+  `reportLoading` e gira durante la stessa ricarica (scritto in `live-ticker.md`): da guardare con la stessa cura.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Chiusura del piano».
+- **Z-19 · N58: due funzioni di produzione che servono solo ai test** — basso; coordinatore (da H-22), 16/10. La
+  convenzione N58 vuole che nessuna funzione di produzione esista solo per i test: un test azzera da sé la sua cache
+  (`cache_clear()`, una fixture), e solo quando non si può una voce `ignore_names` del dead-code con la ragione.
+  `--dead-code` segnala due funzioni di Z: `reset_provider_cooldowns()` (`services/platform/provider_cooldown.py`,
+  Z7a), che chiama solo `PROVIDER_COOLDOWNS.clear()`, e `reset_shutdown_budget_state()`
+  (`services/platform/shutdown_budget.py`, Z6b), che azzera solo `_watchdog`. Cura: toglierle; i test azzerano lo
+  stato da sé (`PROVIDER_COOLDOWNS.clear()` o un `Cooldowns` nuovo con `monkeypatch`, il modulo lo prevede; una fixture
+  che rimette `_watchdog` a `None`), e PCD-018 e SDB-032, che provano le due funzioni, si riscrivono sul comportamento.
+  Nel prossimo lotto di codice di Z (Z-14 o il primo che arriva). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Chiusura del piano».
 
 ## B · Backup e Docker (fase 01)
 
@@ -5096,3 +5129,12 @@ punto di partenza, l'audit dello stesso giorno:
   l'intervallo comincia prima del primo giorno del portafoglio, quindi ROI 0. Proposta: le stesse regole (D-MF5, N54)
   anche per TWRR e ROI, nella casa, con i rossi prima; serve l'ok del developer (cambia card e grafico). Dettagli: piano
   MF, sezione «Ondata 1b», K2.
+- **MF-C2 · Le fette d'allocazione su una somma che si annulla o va sotto zero** — basso, numeri (proposta, da decidere);
+  test-author di MF, 16/10 (lotto C). Le fette dei grafici d'allocazione (`derived_views.py`, `_alloc` e
+  `build_allocation_history`, ora `weights.slice_percents`) dividono per la somma con segno, e per 1 quando la somma è 0:
+  con la liquidità negativa che annulla le posizioni (`{Azioni: 500, Liquidità: −500}`) escono 50000 % / −50000 %, e
+  con una somma negativa (NAV < 0) ogni fetta cambia segno. È lo stesso difetto che D-MF7 toglie ai pesi delle
+  posizioni; il lotto C l'ha lasciato identico apposta, fissato nei test (`test_weights.py`, «net-zero» e
+  «negative-sum»). Proposta: con una somma ≤ 0 le fette restano `value` null («—») e gli importi restano; serve l'ok
+  del developer (cambia il grafico, lo schema — `AllocationItem.value` oggi obbligatorio — e il dataset AI Export
+  che lo copia, `portfolio_financial.py:251-253`). Dettagli: piano MF, sezione «Lotto C».

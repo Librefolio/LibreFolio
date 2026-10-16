@@ -52,7 +52,8 @@ backend/app/services/financial_math/
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
-├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the usable-ratio rule
+├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
 │   ├── models.py            input transactions, events, lots, fragments, closures, result
@@ -279,8 +280,8 @@ flowchart LR
    `load_configured_fx_pair_sets()` in `portfolio/data_quality.py` for the configured FX
    routes), the Yield on Cost loaders (`yield_on_cost.py`), the
    [ledger control totals](#ledger-totals) (`compute_control_totals()`, through the session it
-   is given) and the split links (`splits.load_split_links()`, the rows of the transactions it
-   is given).
+   is given) and the split links (`splits.load_split_links()` and `splits.split_linked_ids()`,
+   the rows of the transactions it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports the
    orchestration services (`portfolio_service`, `broker_service`, `transaction_service`,
    `lots_analysis_service`), the API, AI Export, risk, PAC or signals: they call it.

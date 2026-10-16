@@ -962,6 +962,39 @@ Quattro commit, uno per lotto che cambia numeri:
   dalla casa uguali a oggi su un corpus; i pesi del rischio identici (float).
 - **CHANGELOG** (🐛 Fixed): «Holdings: when the net worth is zero or negative, the weight on net worth shows "—" instead
   of a meaningless percentage.»
+- ✅ **Codice** (16/10, ~19:40, via del coordinatore 19:36, sul ramo così com'è): `financial_math/weights.py` nuovo
+  (`share_of`, `percent_of`, `slice_percents`, `gross_weights`, `concentration`); chiamanti `portfolio_service.py` (i due
+  pesi delle posizioni, None su un totale ≤ 0: D-MF7), `portfolio/derived_views.py` (`_alloc`,
+  `build_allocation_history`: stessa regola di oggi), `risk/service.py` (`share_of` dentro la stessa guardia, stessi
+  float), `technical_shared.py` (`gross_weights`), `broker_financial.py` e `broker_concentration_context.py`
+  (`concentration`: una copia sola, stessi ingressi; il docstring «Mirrors exactly» ora dice la funzione comune).
+  Descrizioni dei due campi in `schemas/portfolio.py` (già `Optional`). Mappe: docstring, `financial-math.instructions.md`,
+  `backend.instructions.md`, albero di `financial_math.md`. Ruff pulito, import verde. Test al test-author
+  (`test_weights.py` puro con la parità delle vecchie formule, `test_holding_weights.py` di servizio per D-MF7).
+  - **AI Export**: `portfolio.positions`/`broker.positions` copiano i due pesi (`payloads/portfolio_broker.py:676-677`,
+    già `| None`); con NAV ≤ 0 il peso diventa null e l'HHI e il peso massimo, che saltano i null, diventano null invece
+    d'un numero enorme. Valori nuovi attraverso builder invariati (le chiamate a `concentration` sono identiche): nessun
+    aumento di versione.
+  - ✅ **Rossi** (16/10 19:52, `files/lotc.sh red`: prodotto rovesciato + `weights.py` messo da parte, test tenuti;
+    patch `cc45d3a6…`, ripristino con hash identico): `services financial-math test_weights` **92/92 rossi**
+    (`ModuleNotFoundError`); `services roi-fifo-utils holding_weights` **6 rossi, 3 verdi** (i casi ordinari): NAV −70
+    → 63000.00 / 30000.00, NAV 0 → 70000.00 / 30000.00, HHI 4,869·10⁹ e 5,8·10⁹, allocazione −166.67 / 266.67 e
+    5000.00 / −5000.00.
+  - ✅ **Verdi** (19:53–20:01, `files/lotc.sh green`): `api sync` exit 0 (client generato ignorato, nessun file
+    tracciato cambia); `services financial-math` 581; `services roi-fifo-utils` 840; `services ai-export` 1056;
+    `services risk-all test_risk_service` 84; `api portfolio` 51 (20:04).
+  - ✅ **Statici** (`files/lotc.sh lint`): ruff e black puliti (11 file); `mkdocs build` strict exit 0 (3076 URL
+    relativi risolti); `git diff --check` pulito; porta 6190 libera.
+  - ✅ **Doc** (docs-writer `mf-c-docs`): `user/dashboard/positions.en.md:51` (il Peso mostra «—» con un patrimonio
+    netto ≤ 0) e `risk-metrics/concentration.en.md:82` (con un NAV ≤ 0 né peso massimo né indice, null). Nessun link
+    nuovo. Debito di traduzione: +1 riga per pagina (it/fr/es).
+  - **⚠️ Fuori pista — MF-C2**: il test-author nota che `slice_percents` (le fette dei grafici d'allocazione) divide
+    ancora per 1 su una somma 0 e cambia segno su una somma negativa: `{Azioni: 500, Liquidità: −500}` → 50000 / −50000.
+    È la regola d'oggi, tenuta identica apposta (la carta diceva «stessa regola di oggi»; D-MF7 riguarda i pesi delle
+    posizioni) e fissata nei test di parità. Docstring di `slice_percents` reso esplicito; proposta al developer come
+    **MF-C2** nel backlog (cambierebbe grafico, schema `AllocationItem.value` obbligatorio e dataset AI Export).
+- ✅ **Ondata 1b in dev** (coordinatore, treno 128): merge `8d244d1c6`; il mio ramo è già allo stesso albero
+  (`f5c6e8bba`), niente aggiornamento per C. L'`all-backend` di J su J-24 + la mia 1b coprirà anche me su dev.
 - **J-24 (J, 18:33)** tocca anche `portfolio/engine.py` (un pezzo nella raccolta dei cambi, ~:480-540) e una frase di
   `valuation_semantics` in `ai_export/components/portfolio_financial.py` e `broker_financial.py` (senza versione).
   `portfolio_service.py` no: i commenti «Realized G/L of the SELLs» (~:658, ~:1605) diventano «SELLs and priced
@@ -988,6 +1021,25 @@ Quattro commit, uno per lotto che cambia numeri:
   `services financial-math` **488 passed** (473 + i test di CP-13a), `services roi-fifo-utils` **831 passed**,
   `utils roi-utils` **9 passed**; ruff e black puliti sulla casa (27 file); `mkdocs build` stretto verde (46 s, nessun
   avviso), `check-links` verde (97). Verificato con le mappe nuove nel worktree (non ancora nella fusione).
+- ✅ Committati dal coordinatore: merge `4e880a93d` (genitori `2b9adb538` + `0452e592c`), mappe `a0480977e`, piano
+  `f5c6e8bba`. HEAD verificata, pulita. Build di debug del frontend rifatta prima dello slot (18:45, verde: il merge
+  aveva cambiato `YieldOnCostCell`, il renderer e i colori).
+
+#### `all-backend` nello slot 2 (16/10, dalle 18:55; chiusura 19:45)
+
+- `--workers 2 all-backend` su `f5c6e8bba`, `files/slot.sh all`, log `files/logs/slot2/all_backend.log`.
+- **Esito** (18:55–19:34, 39 min 37 s): **6/7 categorie verdi** — DB 19/19, Services, Utils, Schema, **API** (stavolta
+  verde, nessun J-30) ed E2E; passate parallele 5 902 + 6 184 + 85 + 2 963 + 1 048 + 785 + 1 082 + 769 passed,
+  7 skipped, 0 failed. **External rossa per 2 test**:
+  `test_external/test_brim_providers.py::TestCreditAgricoleCanonicalCharacterization::test_csv_freezes_entire_output[securities]`
+  e `::test_xlsx_matches_entire_literal_csv_output[securities]` («complete … parse output drifted»: le transazioni
+  analizzate differiscono dal fissato). Porta 6190 libera; slot liberato alle 19:34.
+- **Triage**: (1) non è forma né orologio: è un confronto con un'uscita fissata; (2) **il codice di MF non è sul
+  percorso**: il mio diff rispetto a `dev_release2` `0452e592c` non tocca `brim*`, `db/` né moduli che il plugin del
+  Crédit Agricole o `services/brim` importano (grep vuoto); (3) in `0452e592c` è appena entrato `bab52635d` (C-97a, W:
+  «keep quantity and price decimals», `RealDecimal`, «a value a BRIM plugin computes is rounded with
+  round_computed_value»), che cambia proprio le cifre che il parser produce. **Verdetto**: non di MF; lo stesso rosso è
+  atteso su `dev_release2` → al coordinatore per W (C-97a), senza rilanci nella mia corsia.
 - **MF-O2** non ancora: tocca anche `features/dashboard/YieldOnCostCell.svelte` (il tipo dei motivi e l'etichetta) e i
   cataloghi `dashboard/*`: serve l'OK del coordinatore per il `.svelte`.
 - **J sulle versioni** (17:17): ok le due voci (v1 nella 1.2.1, quindi v2 nella regola). Il segnaposto del catalogo è
@@ -1004,3 +1056,49 @@ Quattro commit, uno per lotto che cambia numeri:
   `dev.py i18n add` (EN «Corrections exceed the income of the last year.», IT/FR/ES). Test al test-author
   (`test_yield_on_cost.py`, `ExposureTable.test.ts`). Da fare: `api sync` (enum nuovo nell'OpenAPI), pagina di teoria
   di Yield on Cost (dice i negativi «non supportati»).
+
+#### Lotto C committato (16/10, ~20:15)
+
+- ✅ Committato dal coordinatore: `3fcce359d` (fix) + `1ade8056f` (giornale); HEAD verificata `1ade8056f`, pulita. Entra
+  dopo J-24 (i conflitti attesi in `broker_financial.py`/`portfolio_service.py` sono in altri pezzi). MF-C2 va nelle
+  domande al developer. I tre `.svelte` del cruscotto (`PositionsPanel`, `ExposureTable`, `LotCustodyModal`) sono
+  della squadra colori finché entrano: il lotto C non li tocca.
+
+#### MF-I2 — il resto dei caricatori degli split (16/10, dalle 20:16)
+
+- **Via**: coordinatore (20:16) — `portfolio_service.py:161` e `brokers/summary.py` liberi; `transactions/auto_cost.py`
+  di W: chiesto a W, che risponde **(a)** (20:2x): i 4 righi li faccio io, il suo ramo aggiunge solo `_handover_cost`
+  (~:140) e non tocca 70–95 né gli import; nessun suo commit aggiunge `AssetEventType.SPLIT`.
+- **Disegno** (correzione della carta §3): i tre caricatori rimasti sono **repliche di WAC** (anteprima del WAC,
+  costo medio del sommario del broker, costo automatico) e la ripartizione per split della casa
+  (`average_cost.cost_movement_from_transaction(split_linked=True)` → `SPLIT_RESCALE`) legge la **quantità della riga**,
+  mai il rapporto. Quindi «tutti i chiamanti rifiutano un rapporto ≤ 0 come il motore» non vale qui: rifiutarlo
+  sarebbe un cambio di comportamento senza un numero da proteggere. I2 è una sostituzione a uscita identica.
+- ✅ **Codice** (solo scrittura): `financial_math/splits.py` — `split_linked_ids(db, transactions) -> set[int]` sopra
+  `load_split_links` (nessun giudizio del rapporto), docstring del modulo coi lettori nuovi; `portfolio_service.py`
+  (~:157, fascia del WAC: l'impronta della cache resta `tuple(sorted(split_linked_row_ids))`), `brokers/summary.py`
+  (`_holding_average_costs`) e `transactions/auto_cost.py` (`is_split_linked = db_tx.id in await
+  split_linked_ids(self.session, [db_tx])`): niente più query in linea, import di `AssetEvent`/`AssetEventType` tolti
+  dove non servono più. Autoflush mai spento in `backend/app` (grep vuoto): l'`asset_event_id` letto dal DB è quello
+  in memoria. Mappe: docstring del pacchetto, `financial-math.instructions.md` (riga di `splits.py` e regola 1),
+  albero e regola 1 di `financial_math.md`. Ruff/black puliti, import verdi. Dopo: `AssetEventType.SPLIT` resta solo in
+  `splits.py` e `event_suggestions.py` (la mappa tipo d'evento → tipo di transazione dell'interfaccia).
+- **Prova** (test-author `mf-i2-tests`): `TestSplitLinkedIds` in `test_splits.py` (rosso: nome assente); guardia in
+  `test_layer_boundaries.py` (`AssetEventType.SPLIT` solo in quei due file; rosso: i tre caricatori); parità nuova del
+  sommario del broker con uno split (`test_financial/test_broker_summary_splits.py`, verde prima e dopo). Parità
+  esistente: `api portfolio-wac` (`test_portfolio_wac.py:430-600`, anteprima e costo automatico con split) e
+  `services transaction-cost-basis-rule` (~:292).
+- **Numeri**: nessuno. **CHANGELOG**: nessuna riga (rifattorizzazione interna).
+- ✅ **Rossi** (20:29, `files/i2.sh red`: prodotto rovesciato, test tenuti; patch `c1bd623f…`, ripristino con hash
+  identico): `services financial-math "TestSplitLinkedIds or test_layer_boundaries"` **8 rossi, 43 verdi** — i 7 casi
+  di `split_linked_ids` (nome assente) e la guardia, che elenca `brokers/summary.py:225`, `portfolio_service.py:162`,
+  `transactions/auto_cost.py:79`; `services roi-fifo-utils broker_summary_splits` **9/9 verdi** (parità, come atteso).
+- ✅ **Verdi** (20:29–20:32, `files/i2.sh green`): `services financial-math` 591; `services roi-fifo-utils` 849;
+  `api portfolio-wac` 12; `services transaction-cost-basis-rule` 73; `services broker` 73; `api brokers` 34.
+- ✅ **Statici** (`files/i2.sh lint`): ruff/black puliti (8 file); `mkdocs build` strict exit 0; `git diff --check`
+  pulito; porta 6190 libera.
+- **Lotto C in dev** (coordinatore, 20:3x): merge `0eb85aa9b` (treno 135), subito dopo J-24 (`31a59bdb1`); CHANGELOG
+  `6319a7dbf`. Per A/B/H/J1/J2 serve J-24 nella base: chiesto l'aggiornamento dopo il commit di I2.
+- Guardia, lacuna nota (test-author): un confronto con la stringa `"SPLIT"` (`AssetEvent.type == "SPLIT"`) sfuggirebbe;
+  oggi le uniche `== "SPLIT"` sono `event.kind` degli eventi già classificati in memoria (`fifo/engine.py:137`,
+  `lots_analysis_service.py:930`, `yield_on_cost.py:623`), non caricatori del DB: non aggiunta.
