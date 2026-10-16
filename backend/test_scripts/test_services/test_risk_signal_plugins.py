@@ -33,7 +33,6 @@ from backend.app.schemas.signals import (
     SignalWarningCode,
 )
 from backend.app.services import signal_plugins as signal_plugins_package
-from backend.app.services.risk import signal_helpers
 from backend.app.services.risk.metrics import (
     annualized_sharpe,
     annualized_volatility,
@@ -44,7 +43,6 @@ from backend.app.services.risk.metrics import (
     sample_variance,
     underwater_drawdown,
 )
-from backend.app.services.signal_plugins.base import SignalUnavailableError
 from backend.app.services.signal_plugins.calendar_rolling_return.plugin import (
     CalendarRollingReturnParams,
     CalendarRollingReturnPlugin,
@@ -53,7 +51,9 @@ from backend.app.services.signal_plugins.drawdown.plugin import (
     DrawdownParams,
     DrawdownPlugin,
 )
-from backend.app.services.signal_service import (
+from backend.app.services.signals import risk_adapters as signal_helpers
+from backend.app.services.signals.base import SignalUnavailableError
+from backend.app.services.signals.service import (
     SignalPreparedSeriesBundle,
     SignalService,
 )
