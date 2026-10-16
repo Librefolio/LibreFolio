@@ -25,7 +25,6 @@
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
     import {compareRowsByColumn, matchesColumnFilter} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
-    import '$lib/theme/components/table.css';
 
     interface Props {
         data: T[];
@@ -1286,38 +1285,25 @@
     .table-wrapper {
         overflow-x: auto;
         overflow-y: visible;
-        border: 1px solid var(--lf-cmp-datatable-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 8px;
-        background: var(--lf-cmp-datatable-surface-bg);
-    }
-
-    :global(.dark) .table-wrapper {
-        border-color: var(--lf-cmp-datatable-border-dark);
-        background: var(--lf-cmp-datatable-surface-bg-dark);
+        background: var(--lf-surface-card);
     }
 
     .datatable {
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
-        background: var(--lf-cmp-datatable-surface-bg);
+        background: var(--lf-surface-card);
     }
 
     .datatable.layout-auto {
         table-layout: auto;
     }
 
-    :global(.dark) .datatable {
-        background: var(--lf-cmp-datatable-surface-bg-dark);
-    }
-
     /* Header */
     thead {
-        background: var(--lf-cmp-datatable-header-bg);
-    }
-
-    :global(.dark) thead {
-        background: var(--lf-cmp-datatable-header-bg-dark);
+        background: var(--lf-surface-panel);
     }
 
     th {
@@ -1325,17 +1311,12 @@
         text-align: left;
         font-size: 0.75rem;
         font-weight: 600;
-        color: var(--lf-cmp-datatable-header-text);
-        border-bottom: 1px solid var(--lf-cmp-datatable-border);
+        color: var(--lf-text-muted);
+        border-bottom: 1px solid var(--lf-border-subtle);
         white-space: nowrap;
         position: relative;
         text-transform: uppercase;
         letter-spacing: 0.025em;
-    }
-
-    :global(.dark) th {
-        color: var(--lf-cmp-datatable-header-text-dark);
-        border-bottom-color: var(--lf-cmp-datatable-border-dark);
     }
 
     thead.sticky-header th {
@@ -1347,21 +1328,13 @@
 
     thead.sticky-header .th-fixed {
         z-index: 25;
-        background: var(--lf-cmp-datatable-header-bg);
-    }
-
-    :global(.dark) thead.sticky-header .th-fixed {
-        background: var(--lf-cmp-datatable-header-bg-dark);
+        background: var(--lf-surface-panel);
     }
 
     .th-fixed {
         position: sticky;
         z-index: 10;
-        background: var(--lf-cmp-datatable-header-bg);
-    }
-
-    :global(.dark) .th-fixed {
-        background: var(--lf-cmp-datatable-header-bg-dark);
+        background: var(--lf-surface-panel);
     }
 
     .th-pinned-right {
@@ -1391,11 +1364,8 @@
     }
 
     .th-data.sortable:hover {
-        background: var(--lf-cmp-datatable-sortable-hover-bg);
-    }
-
-    :global(.dark) .th-data.sortable:hover {
-        background: var(--lf-cmp-datatable-sortable-hover-bg-dark);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-secondary);
     }
 
     /* The "show selected only" button of the selection header; the column headers carry their own copy (DataTableColumnHeader.svelte). */
@@ -1408,75 +1378,44 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: var(--lf-cmp-datatable-faint-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .filter-btn:hover {
-        background: var(--lf-cmp-datatable-filter-btn-hover-bg);
-        color: var(--lf-cmp-datatable-filter-btn-hover-text);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
 
     .filter-btn.active {
-        background: var(--lf-cmp-datatable-accent-bg);
-        color: var(--lf-cmp-datatable-on-accent-text);
-    }
-
-    :global(.dark) .filter-btn:hover {
-        background: var(--lf-cmp-datatable-filter-btn-hover-bg-dark);
-        color: var(--lf-cmp-datatable-filter-btn-hover-text-dark);
-    }
-
-    :global(.dark) .filter-btn.active {
-        background: var(--lf-cmp-datatable-accent-bg-dark);
-        color: var(--lf-cmp-datatable-on-accent-text-dark);
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     /* Body */
     tbody tr {
-        background: var(--lf-cmp-datatable-surface-bg);
+        background: var(--lf-surface-card);
         transition: background 0.15s;
     }
 
-    :global(.dark) tbody tr {
-        background: var(--lf-cmp-datatable-surface-bg-dark);
-    }
-
     tfoot tr {
-        background: var(--lf-cmp-datatable-footer-bg);
-    }
-
-    :global(.dark) tfoot tr {
-        background: var(--lf-cmp-datatable-footer-bg-dark);
+        background: var(--lf-surface-panel);
     }
 
     .td-footer {
-        border-top: 1px solid var(--lf-cmp-datatable-border);
+        border-top: 1px solid var(--lf-border-subtle);
         border-bottom: 0;
         font-weight: 700;
-        color: var(--lf-cmp-datatable-footer-text);
-    }
-
-    :global(.dark) .td-footer {
-        border-top-color: var(--lf-cmp-datatable-border-dark);
-        color: var(--lf-cmp-datatable-footer-text-dark);
+        color: var(--lf-text-primary);
     }
 
     tbody tr:hover {
-        background: var(--lf-cmp-datatable-row-hover-bg);
-    }
-
-    :global(.dark) tbody tr:hover {
-        background: var(--lf-cmp-datatable-row-hover-bg-dark);
+        background: var(--lf-surface-hover);
     }
 
     tbody :global(tr.selected) {
-        background: var(--lf-cmp-datatable-row-selected-bg);
-    }
-
-    :global(.dark) tbody :global(tr.selected) {
-        background: var(--lf-cmp-datatable-row-selected-bg-dark);
+        background: var(--lf-selected);
     }
 
     tbody :global(tr.clickable) {
@@ -1484,19 +1423,11 @@
     }
 
     tbody :global(tr.clickable):hover {
-        background: var(--lf-cmp-datatable-row-clickable-hover-bg);
-    }
-
-    :global(.dark) tbody :global(tr.clickable):hover {
-        background: var(--lf-cmp-datatable-row-clickable-hover-bg-dark);
+        background: color-mix(in oklab, var(--lf-selected) 50%, transparent);
     }
 
     tbody :global(tr.clickable.selected) {
-        background: var(--lf-cmp-datatable-row-clickable-selected-bg);
-    }
-
-    :global(.dark) tbody :global(tr.clickable.selected) {
-        background: var(--lf-cmp-datatable-row-clickable-selected-bg-dark);
+        background: var(--lf-selected);
     }
 
     @keyframes pulse-highlight {
@@ -1509,57 +1440,42 @@
         }
     }
 
-    /* Highlighted row (navigateToRowId) — purple, highest priority */
+    /* Highlighted row (navigateToRowId): the selection tint, pulsing on a deeper one; highest priority */
     tbody :global(tr.highlighted) {
-        --highlight-base: var(--lf-cmp-datatable-highlight-base);
-        --highlight-peak: var(--lf-cmp-datatable-highlight-peak);
-        background: var(--lf-cmp-datatable-row-highlighted-bg) !important;
+        --highlight-base: var(--lf-selected);
+        --highlight-peak: color-mix(in oklab, var(--lf-checked) 20%, transparent);
+        background: var(--lf-selected) !important;
         animation: pulse-highlight 0.6s ease-in-out 3;
     }
 
     tbody :global(tr.highlighted):hover {
-        background: var(--lf-cmp-datatable-row-highlighted-bg) !important;
-    }
-
-    :global(.dark) tbody :global(tr.highlighted) {
-        --highlight-base: var(--lf-cmp-datatable-highlight-base-dark);
-        --highlight-peak: var(--lf-cmp-datatable-highlight-peak-dark);
-        background: var(--lf-cmp-datatable-row-highlighted-bg-dark) !important;
-    }
-
-    :global(.dark) tbody :global(tr.highlighted):hover {
-        background: var(--lf-cmp-datatable-row-highlighted-bg-dark) !important;
+        background: var(--lf-selected) !important;
     }
 
     :global(tr.highlighted) td {
-        border-bottom-color: var(--lf-cmp-datatable-row-highlighted-border);
+        border-bottom-color: color-mix(in oklab, var(--lf-checked) 20%, transparent);
     }
 
-    /* Row whose lot-analysis panel is currently open (F9) — steady emerald
-       tint, no pulse (persistent state, not a navigation flash) */
+    /* Row whose lot-analysis panel is currently open (F9): the steady selection tint, no pulse (persistent
+       state, not a navigation flash) */
     tbody :global(tr.row-analyzed) {
-        background: var(--lf-cmp-datatable-row-analyzed-bg);
+        background: var(--lf-selected);
     }
 
     tbody :global(tr.row-analyzed):hover {
-        background: var(--lf-cmp-datatable-row-analyzed-hover-bg);
+        background: color-mix(in oklab, var(--lf-checked) 20%, transparent);
     }
 
-    :global(.dark) tbody :global(tr.row-analyzed) {
-        background: var(--lf-cmp-datatable-row-analyzed-bg-dark);
-    }
-
-    :global(.dark) tbody :global(tr.row-analyzed):hover {
-        background: var(--lf-cmp-datatable-row-analyzed-hover-bg-dark);
-    }
-
-    :global(.dark) :global(tr.highlighted) td {
-        border-bottom-color: var(--lf-cmp-datatable-row-highlighted-border-dark);
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside a selected,
+       highlighted or analyzed row, a muted caption, a cell's own or one an HtmlCell writes, turns secondary. */
+    tbody :global(tr.selected) :global(.text-lf-muted),
+    tbody :global(tr.highlighted) :global(.text-lf-muted),
+    tbody :global(tr.row-analyzed) :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
     }
 
     @media (prefers-reduced-motion: reduce) {
-        tbody :global(tr.highlighted),
-        :global(.dark) tbody :global(tr.highlighted) {
+        tbody :global(tr.highlighted) {
             animation: none;
         }
     }
@@ -1567,17 +1483,12 @@
     td {
         padding: 0.625rem 0.5rem;
         font-size: 0.875rem;
-        color: var(--lf-cmp-datatable-cell-text);
-        border-bottom: 1px solid var(--lf-cmp-datatable-cell-border);
+        color: var(--lf-text-primary);
+        border-bottom: 1px solid var(--lf-border-subtle);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         max-width: 0;
-    }
-
-    :global(.dark) td {
-        color: var(--lf-cmp-datatable-cell-text-dark);
-        border-bottom-color: var(--lf-cmp-datatable-cell-border-dark);
     }
 
     .td-data {
@@ -1622,23 +1533,18 @@
     .td-loading {
         text-align: center;
         padding: 3rem 2rem;
-        color: var(--lf-cmp-datatable-faint-text);
-        background: var(--lf-cmp-datatable-surface-bg);
+        color: var(--lf-text-muted);
+        background: var(--lf-surface-card);
         height: 230px;
         vertical-align: middle;
-    }
-
-    :global(.dark) .td-empty,
-    :global(.dark) .td-loading {
-        background: var(--lf-cmp-datatable-surface-bg-dark);
     }
 
     .loading-spinner {
         display: inline-block;
         width: 1.5rem;
         height: 1.5rem;
-        border: 2px solid var(--lf-cmp-datatable-spinner-border);
-        border-top-color: var(--lf-cmp-datatable-spinner-arc-border);
+        border: 2px solid var(--lf-surface-neutral);
+        border-top-color: var(--lf-link);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin-bottom: 0.5rem;
@@ -1658,13 +1564,8 @@
         width: 24px;
         height: 24px;
         margin: 0 auto;
-        color: var(--lf-cmp-datatable-disabled-select-icon-text);
+        color: var(--lf-danger);
         opacity: 0.7;
-    }
-
-    :global(.dark) .disabled-select-icon {
-        color: var(--lf-cmp-datatable-disabled-select-icon-text-dark);
-        opacity: 0.6;
     }
 
     .checkbox-btn {
@@ -1684,30 +1585,21 @@
         display: block;
         width: 16px;
         height: 16px;
-        border: 1px solid var(--lf-cmp-datatable-checkbox-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 3px;
-        background: var(--lf-cmp-datatable-surface-bg);
-    }
-
-    :global(.dark) .check-box {
-        background: var(--lf-cmp-datatable-surface-bg-dark);
-        border-color: var(--lf-cmp-datatable-checkbox-border-dark);
+        background: var(--lf-surface-field);
     }
 
     :global(.check-icon) {
-        color: var(--lf-cmp-datatable-check-icon-text);
+        color: var(--lf-checked);
     }
 
     :global(.check-icon.checked) {
-        color: var(--lf-cmp-datatable-accent-text);
+        color: var(--lf-checked);
     }
 
     :global(.check-icon.partial) {
-        color: var(--lf-cmp-datatable-faint-text);
-    }
-
-    :global(.dark) :global(.check-icon.checked) {
-        color: var(--lf-cmp-datatable-accent-text-dark);
+        color: var(--lf-text-muted);
     }
 
     /* Actions */
@@ -1725,7 +1617,7 @@
         border: 0;
         border-radius: 9999px;
         background: transparent;
-        color: var(--lf-cmp-datatable-row-action-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         font-size: 1.25rem;
         line-height: 1;
@@ -1736,19 +1628,9 @@
 
     .row-actions-btn:hover,
     .row-actions-btn:focus-visible {
-        background: var(--lf-cmp-datatable-row-action-hover-bg);
-        color: var(--lf-cmp-datatable-accent-text);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
         outline: none;
-    }
-
-    :global(.dark) .row-actions-btn {
-        color: var(--lf-cmp-datatable-row-action-text-dark);
-    }
-
-    :global(.dark) .row-actions-btn:hover,
-    :global(.dark) .row-actions-btn:focus-visible {
-        background: var(--lf-cmp-datatable-row-action-hover-bg-dark);
-        color: var(--lf-cmp-datatable-accent-text-dark);
     }
 
     /* Phones: the pinned selection and actions columns scroll with the table, header and cells alike (D-Y17, C-38).
@@ -1768,52 +1650,25 @@
 
     /* Row status classes (used via getRowClass prop) */
     :global(tr.row-deleted) td {
-        background: var(--lf-cmp-datatable-row-deleted-bg) !important;
-        opacity: 0.55;
-    }
-
-    :global(.dark) :global(tr.row-deleted) td {
-        background: var(--lf-cmp-datatable-row-deleted-bg-dark) !important;
+        background: var(--lf-danger-soft) !important;
         opacity: 0.55;
     }
 
     :global(tr.row-edited) td {
-        background: var(--lf-cmp-datatable-row-edited-bg) !important;
-    }
-
-    :global(.dark) :global(tr.row-edited) td {
-        background: var(--lf-cmp-datatable-row-edited-bg-dark) !important;
+        background: var(--lf-info-soft) !important;
     }
 
     :global(tr.row-appended) td {
-        background: var(--lf-cmp-datatable-row-appended-bg) !important;
-    }
-
-    :global(.dark) :global(tr.row-appended) td {
-        background: var(--lf-cmp-datatable-row-appended-bg-dark) !important;
+        background: var(--lf-success-soft) !important;
     }
 
     :global(tr.row-todo-blocker) td {
-        background: var(--lf-cmp-datatable-row-todo-blocker-bg) !important;
-    }
-
-    :global(.dark) :global(tr.row-todo-blocker) td {
-        background: var(--lf-cmp-datatable-row-todo-blocker-bg-dark) !important;
+        background: var(--lf-danger-soft) !important;
     }
 
     :global(tr.row-stale) td {
-        background: rgba(var(--lf-cmp-datatable-row-stale-rgb), var(--stale-opacity, 0.04)) !important;
-    }
-
-    :global(.dark) :global(tr.row-stale) td {
-        background: rgba(var(--lf-cmp-datatable-row-stale-rgb-dark), var(--stale-opacity, 0.08)) !important;
-    }
-
-    :global(tr.row-paired) td {
-        background: var(--lf-cmp-datatable-row-paired-bg) !important;
-    }
-
-    :global(.dark) :global(tr.row-paired) td {
-        background: var(--lf-cmp-datatable-row-paired-bg-dark) !important;
+        /* The warning tint, deeper with the stale days: --stale-opacity runs 0.04–0.4 (DataEditor), so the row
+           reaches the whole tint at 0.4. */
+        background: color-mix(in oklab, var(--lf-warning-soft) calc(var(--stale-opacity, 0.04) * 250%), transparent) !important;
     }
 </style>
