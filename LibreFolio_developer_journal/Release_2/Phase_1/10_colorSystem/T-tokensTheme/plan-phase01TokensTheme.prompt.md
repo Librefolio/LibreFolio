@@ -606,6 +606,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
 | 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
 | 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d `b338a442d` e W1-f2 `eb2adb37b` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `e1ae55a6c`; la nota wiki committata (`0d5cebce7`) |
+| 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | 🔄 scritto e controllato contro `tokens.css` (95/95); checkpoint |
 
 ## Avanzamento
 
@@ -2223,3 +2224,53 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > 65/65; `front check` 0 e 0; `core-unit` 6.233/6.233; `component-unit` 4.006/4.006; `front-ai-export unit` 547/547;
 > E2E a 1 worker: `asset-data-editor` 26 (le righe 287, 346 e 384 sugli agganci), `fx-editor` 4, `fx-csv-import` 21 (53
 > e 56), `front-ai-export panel` 6 e `catalog` 4. Nessun rosso. Porta libera.
+
+> ✅ **Base merge col target `d5c3c3ae3`, poi lo STOP** (08:43–08:50; Y3, Y5, Y6, Y9, Y10, C-34, J CP-10a, E5b). Il
+> coordinatore ha aperto la merge nel worktree; conflitto atteso solo sulla baseline (le righe rinominate da Y contro le
+> mie). Risolta con `node frontend/scripts/theme/theme-roles.mjs --resolve` e messa in stage da sola (nessun altro file
+> toccato); sulla revisione unita `--check` pulito (m1 8.249), `api sync` rc 0, Vitest dei due gate 65/65, `front check`
+> 0 e 0. Alle 08:50 lo STOP del developer: niente altro, nessun processo, porta libera. Il commit di merge l'ha fatto il
+> coordinatore (`6efadbc78`), poi l'ingresso `eb4040cd1` (10:20).
+
+### Skill del design system (D-T29) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 10:38, «prima di tutto»). Testuale, il developer: «nel migrare cerca di seguire i colori dei
+> temi che la designer ci ha intanto dato, e anzi, crea un file skill comune in cui metti nero su bianco i 2 temi, i
+> nomi, la palette principale e tutte le altre regole, così che in futuro i nuovi componenti vengono già fatti seguendo
+> le regole, e cita questa skill dentro il file dell'agente frontend». Base `8f2824046` (fast-forward: il quarto lotto,
+> L-18, i registri del mattino). In `.github/agents/` non c'è un agente frontend: la citazione va in
+> `.github/instructions/frontend.instructions.md` e nella riga dei colori di `.github/copilot-instructions.md`.
+> Aggiunta del developer (10:5x, dal coordinatore): una sezione esplicita sulla cartella condivisa
+> `frontend/src/lib/theme/` come casa unica dei colori, con la mappa dei file letta dal codice.
+
+> ✅ **1 · Lo skill** `.github/skills/design-tools/design-system/SKILL.md` (nuovo, in inglese, 522 righe):
+> - i due temi, «Stone and Sage» e «Slate and Sage» (i nomi del CHANGELOG; «Pietra e Salvia» e «Ardesia e Salvia» della
+>   designer), da dove vengono (giro 2, D-T17) e come si applicano;
+> - la cartella condivisa `lib/theme/`: la regola (i componenti prendono, al massimo si aggiunge lì), il gate che la fa
+>   rispettare (m2 fuori da `lib/theme/**`, R2 e R3) e i 14 file uno per uno, letti dal codice: cosa contengono, quando
+>   li usa un componente, chi li possiede (T i ruoli, i token di componente e i toni; DV i grafici e `drawnColors.ts`;
+>   gli strumenti condivisi) e come si aggiunge una voce;
+> - la palette: tutti i 95 ruoli di `tokens.css`, con utility, valore chiaro, valore scuro e «quando si usa», in 11
+>   gruppi;
+> - 11 regole (solo ruoli; niente `dark:`; G3 e le catene di classi via prop; la regola 8; i minimi WCAG con le coppie
+>   del gate; i tooltip col tema opposto, Q10; guadagno e perdita distinti da successo ed errore; focus visibile; il
+>   bordo delle superfici che galleggiano, N3; lo stato per i test; le categorie fuori dai grafici); i grafici
+>   (GR1–GR5, `chartCategories.ts`, `chartRoles`); come si chiede un ruolo nuovo (solo T, D-T28);
+> - le decisioni (D-T, N, Q, GR) coi rimandi ai documenti, e le quattro domande aperte alla designer segnate come tali
+>   (grafici giro 3, toast e banner, `panel` = `hover`, l'acceso degli interruttori), più i valori che aspettano la sua
+>   conferma (TC-8: le sette correzioni di contrasto, i ruoli provvisori, D-T25 e D-T26).
+> - **⚠️ Fuori pista:** nella prima stesura i valori da confermare erano «tre correzioni in chiaro»; TC-8 e i commenti
+>   di `tokens.css` dicono sette (quattro in chiaro, tre in scuro). Corretto prima della consegna.
+
+> ✅ **2 · Le citazioni:** in `frontend.instructions.md`, blocco «Design System», un punto nuovo in testa e il rimando
+> della palette completa allo skill nuovo; in `copilot-instructions.md`, solo la riga «Colours and dark mode»; in
+> `theme-roles` un rimando inverso in testa (la tabella classe → ruolo resta lì, non duplicata).
+
+> ✅ **3 · Prove leggere** (`/tmp` era vuota dopo il riavvio della macchina: cartella ricreata):
+> - `/tmp/libreFolio_T_r2/design_system_tokens.py`: legge `tokens.css` (i blocchi chiaro, derivato, scuro e
+>   `@theme inline`), risolve ogni ruolo nei due temi. Il modo `fill` ha scritto i 190 valori della tabella dai
+>   segnaposto; il modo `check` confronta ogni riga con `tokens.css` (valore chiaro, valore scuro, utility del ruolo) e
+>   vuole ogni ruolo una volta sola: **95 righe su 95 ruoli, OK**. Controllo positivo: una copia con un valore sbagliato,
+>   un'utility di un altro ruolo e una riga tolta dà 4 errori e rc 1.
+> - Link relativi: i 12 dello skill risolvono tutti; i percorsi tra apici esistono. Forma delle 15 tabelle: ogni riga
+>   con le celle dell'intestazione. `git diff --check` pulito.
