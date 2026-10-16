@@ -91,7 +91,7 @@ For detailed architectural documentation of specific subsystems, see:
 
 ## 🚀 Server Startup {: #server-startup }
 
-`backend/app/main.py` sets up the test mode and the logging, then builds the app: `FastAPI(..., lifespan=lifespan)`, `install_middleware(app)`, the API v1 router under `API_V1_PREFIX`, and `install_static_site(app)` (`backend/app/services/platform/static_site.py`). The latter registers the documentation (`/mkdocs`), `/`, the `/_app` chunks when the frontend build has them and, last, the SPA catch-all `GET /{path:path}`: a GET route added after it would never be reached. `backend.app.main:app` stays uvicorn's entry point.
+`backend/app/main.py` sets up the test mode and the logging, then builds the app: `FastAPI(..., lifespan=lifespan)`, `install_middleware(app)`, `install_validation_error_handler(app)` (`backend/app/api/validation_errors.py`: a `422` that never sends the request's input back, see [Validation Errors Without the Input](security.md#validation-errors)), the API v1 router under `API_V1_PREFIX`, and `install_static_site(app)` (`backend/app/services/platform/static_site.py`). The latter registers the documentation (`/mkdocs`), `/`, the `/_app` chunks when the frontend build has them and, last, the SPA catch-all `GET /{path:path}`: a GET route added after it would never be reached. `backend.app.main:app` stays uvicorn's entry point.
 
 **Browser caching.** The static site gives each kind of file its own `Cache-Control` (`static_site.py`; tests: `./dev.py test services static-cache-policy`):
 
