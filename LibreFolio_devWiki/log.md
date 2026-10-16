@@ -3641,3 +3641,10 @@ quantity × cost basis converted at the adjustment's date, and the difference fr
 as the lots do since CP-7a. Two pages that stated the historical-cost rule got a dated note.
 Updated: [[entities/portfolio-engine]], [[concepts/inline-wac-computation]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | CP-7b: the lots follow the Dashboard's at-cost rule day by day
+The lots now value an open LONG lot at cost on every day with no observation on or before it, as the Dashboard does,
+and the lots warning names exactly those days, which closes J-28. A lot opened by an ADJUSTMENT takes the home's mark on
+its opening day as its reference, trades included, converted at that day's rate.
+Updated: [[decisions/adjustment-is-never-a-price]].
+Graph: not updated; graphify is not available in this worktree.
