@@ -41,6 +41,7 @@ import {
     computeGhostSeries,
     computeZoomWindow,
     countBuckets,
+    emptyCalendarReturnView,
     extractCalendarReturnView,
     extractCalendarReturnViewsByAsset,
     formatMonthLabel,
@@ -452,6 +453,40 @@ describe('calendarReturnWindow — the window presets are labelled from the cata
 
         expect(unitKeys, 'CALENDAR_RETURN_UNIT_LABEL_KEYS: unit → catalogue key').toEqual({weeks: 'datePicker.presets.weeks', months: 'datePicker.presets.months', years: 'datePicker.presets.years'});
         expect(catalogueGaps(Object.values(unitKeys as Record<string, string>)), 'key → the catalogues with no string for it').toEqual({});
+    });
+});
+
+describe('emptyCalendarReturnView: no points and no context, idle and without a problem unless told otherwise (exported for the asset page, FE5c)', () => {
+    it('defaults to an idle view with no points, an empty context map and no problem', () => {
+        const view = emptyCalendarReturnView();
+
+        expect(view).toEqual({state: 'idle', points: [], contextByDate: new Map(), problem: null});
+        expect(view.contextByDate).toBeInstanceOf(Map);
+    });
+
+    it.each(['idle', 'loading', 'ready', 'partial', 'unavailable', 'error'] as const)('keeps the given %s state, with no problem by default', (state) => {
+        expect(emptyCalendarReturnView(state)).toEqual({state, points: [], contextByDate: new Map(), problem: null});
+    });
+
+    it('keeps the given problem', () => {
+        const problem = extractCalendarReturnView([typedUnavailableCalendarResult('Every selected Calendar output is undefined.')], CALENDAR_INSTANCE_ID).problem;
+        expect(problem).toMatchObject({code: 'undefined_metric'});
+
+        const view = emptyCalendarReturnView('unavailable', problem);
+
+        expect(view.state).toBe('unavailable');
+        expect(view.problem).toBe(problem);
+        expect(view.points).toEqual([]);
+        expect(view.contextByDate.size).toBe(0);
+    });
+
+    it('returns fresh points and a fresh context map on every call', () => {
+        const first = emptyCalendarReturnView();
+        const second = emptyCalendarReturnView();
+
+        expect(second).not.toBe(first);
+        expect(second.points).not.toBe(first.points);
+        expect(second.contextByDate).not.toBe(first.contextByDate);
     });
 });
 
