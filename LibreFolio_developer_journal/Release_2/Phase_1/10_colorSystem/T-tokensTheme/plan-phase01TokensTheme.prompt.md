@@ -612,7 +612,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | ✅ commit `e5e427f8e`; lo slot (`slot5.sh`, 45 minuti al massimo) verso le 17:00 |
 | 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | ✅ commit `8fb80d3b8`; entra col resto della UI dopo lo slot |
 | 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | ✅ commit `4a7ba1d7e`; base merge `1427d5ea1` (DV e BK), gate 119/119 |
-| 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | 🔄 prove leggere verdi (312/312, `--check` pulito) |
+| 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | ✅ commit `26b45f520` |
+| 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | 🔄 prove leggere verdi (310/310, m2 16 → 3) |
 
 ## Avanzamento
 
@@ -2739,3 +2740,31 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   muted regge (4,52).
 > - Prove sulle copie: Prettier verde; compilate col compilatore di Svelte (`files/T-r2/tc15_compile.mjs`): nessun
 >   avviso CSS, la regola sopravvive nell'output in tutti e quattro. Si applicano dopo la parte 2 dei component tokens.
+
+> ✅ **TC-15, la passata sul passaggio del mouse** (coordinatore, 14:5x, segnalazione di DV): `TreeSelect` dipinge
+> `selected` anche al passaggio. Fatto nella bozza (`[aria-selected]:hover`), ricompilata senza avvisi.
+
+### I component tokens, parte 2b: `TransactionsTable` (TR) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 14:58): TR è entrato (`e402d3b87`); solo lo `<style>`, la base della tinta e i 13 letterali
+> che TR ha lasciato a me (TR-3). Prima il coordinatore ha committato le note del piano (`fedcf5be4`) e fatto la base
+> merge con la punta: **`1628863a0`**, baseline risolto, gate sull'albero unito 119/119.
+
+> ✅ **1 · I 13 letterali sui ruoli** (`files/T-r2/ct_transform3.py`, che verifica il testo di partenza):
+> - la base della tinta del broker (`white`, `#0f0f18`, quattro volte) → `var(--lf-surface-card)`; i colori dei broker
+>   restano categoriali, uno per tema, e il commento lo dice;
+> - l'icona del tipo al passaggio (`rgb(0 0 0 / 0.05)`, in scuro `rgb(255 255 255 / 0.08)`) → un velo del colore del
+>   testo, `color-mix(in oklab, var(--lf-text-primary) 7%, transparent)`, che scurisce in chiaro e schiarisce in scuro
+>   su qualunque tinta: una regola sola, quella `.dark` tolta;
+> - **il punto dell'evento** (una transazione legata a un evento dell'asset; era viola, `rgb(139 92 246)` e in scuro
+>   `rgb(196 181 253)`, con l'alone) → `var(--lf-info)`, l'alone `color-mix` di `info` al 20 %; la regola `.dark` tolta.
+>   «Da rivedere»: nessun precedente per gli eventi; `info` è informativo e distinto dal verde dei link e dall'icona
+>   della catena accanto;
+> - **l'impulso della riga raggiunta navigando** (indaco, `rgb(99 102 241 / 0.25)` al picco) → la tinta della selezione,
+>   `color-mix` di `checked` al 20 %, come l'evidenza dei lotti; agli estremi `transparent`. «Da rivedere» insieme
+>   all'evidenza dei lotti.
+> - Gli E2E usano la classe `tx-row-highlight` (struttura), non i suoi colori; nessuno asserisce il punto dell'evento.
+
+> ✅ **2 · Prove leggere** (sotto `nice`): Prettier verde; `--check` con 1 file sotto il record, poi `--update`:
+> **m2 16 → 3** (la riga di `TransactionsTable` tolta dal baseline); `--check` pulito; i quattro gate dei colori e i 5
+> file di unità che nominano la tabella **310/310**. `front check` non lanciato: solo `<style>`.
