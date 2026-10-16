@@ -4,7 +4,6 @@
 # Merge conflict: `--resolve` merges the three sides — a line one side left as it was takes the other side's; changed on both, an accepted file keeps its accepting side, otherwise the tighter side wins (the lower m1, the m2 values both sides have) — then the gate must pass on the merged tree. Never widen a line to pass.
 # Lines starting with ~ declare a split file (old, new files, its record then) or a file taken as it is (file, reason).
 lib/components/assets/AssetCurrencyChangeModal.svelte	2
-lib/components/assets/AssetModalDetails.svelte	2
 lib/components/assets/AssetModalFooter.svelte	8
 lib/components/assets/AssetTable.svelte	12
 lib/components/assets/EventDataImportModal.svelte	12
