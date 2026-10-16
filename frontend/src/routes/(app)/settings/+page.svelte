@@ -29,14 +29,14 @@
     const active = $derived(tabs.find((tab) => tab.id === activeTab));
 </script>
 
-<div class="space-y-6" data-testid="settings-page">
+<div class="space-y-6 text-lf-primary" data-testid="settings-page">
     <!-- Page Title - shows active tab name on mobile -->
-    <h1 class="text-2xl font-bold text-gray-900 sm:hidden">
+    <h1 class="text-2xl font-bold text-lf-primary sm:hidden">
         {active ? $_(active.labelKey) : ''}
     </h1>
 
     <!-- Tabs Navigation -->
-    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden">
         <TabBar
             tabs={tabs.map((tab) => ({
                 id: tab.id,

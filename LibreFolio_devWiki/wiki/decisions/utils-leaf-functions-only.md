@@ -80,7 +80,7 @@ ordered layers that use one another.")
   `utils/asset/geo.py` and `utils/fx/currency.py` no longer load the database models when they are imported. Imports
   rewritten in 7 files.
 - **The lazy imports went, because none of them broke a cycle**: the three of `clear_cache` in `fx.py` joined the
-  top-level `from …runtime.cache import clear_cache, get_ttl_cache`, and `config.py` imports `get_git_version` at the
+  top-level `from …runtime.cache import clear_cache, get_ttl_cache`, and `config/__init__.py` imports `get_git_version` at the
   top. No test patches `clear_cache`, so no patch went mute; importing `backend.app.config` and `backend.app.main`
   shows no cycle.
 - `all-backend` 12 411 passed, 28 skipped, 0 failed: BU1's count plus the two tests of the `version.py` root.

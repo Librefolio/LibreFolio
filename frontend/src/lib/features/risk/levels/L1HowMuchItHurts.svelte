@@ -120,12 +120,12 @@
 {#snippet measure(label: string, value: string, testId: string, docsPath?: string)}
     <div class="flex items-baseline justify-between gap-2 text-xs" data-testid={testId}>
         <span class="flex min-w-0 items-center gap-1">
-            <span class="truncate text-gray-500 dark:text-gray-400">{label}</span>
+            <span class="truncate text-lf-muted">{label}</span>
             {#if docsPath}
-                <a class="shrink-0 text-gray-400 hover:text-blue-500 dark:text-gray-500" href="/mkdocs/{docsPath}" target="_blank" rel="noopener noreferrer" aria-label={label} data-testid="{testId}-docs">&#9432;</a>
+                <a class="shrink-0 text-lf-muted hover:text-lf-link" href="/mkdocs/{docsPath}" target="_blank" rel="noopener noreferrer" aria-label={label} data-testid="{testId}-docs">&#9432;</a>
             {/if}
         </span>
-        <span class="shrink-0 font-medium text-gray-700 tabular-nums dark:text-gray-300">{value}</span>
+        <span class="shrink-0 font-medium text-lf-secondary tabular-nums">{value}</span>
     </div>
 {/snippet}
 
@@ -139,7 +139,7 @@
             </RiskCardGrid>
         </div>
     {:else if rows.length === 0}
-        <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="risk-l1-empty">{$t('risk.states.unavailable')}</p>
+        <p class="text-sm text-lf-muted" data-testid="risk-l1-empty">{$t('risk.states.unavailable')}</p>
     {:else}
         <div data-testid="risk-l1-cards">
             <RiskCardGrid>
@@ -160,7 +160,7 @@
                             {#if row.id === 'day' && tails.worstRealization !== null}
                                 {@render measure($t('risk.levels.l1.tails.worstRealization'), lossPercent(tails.worstRealization), 'risk-l1-worst-realization', TAIL_DOCS.worstRealization.docsPath)}
                                 {#if tails.worstRealizationDate}
-                                    <p class="text-right text-[10px] text-gray-400 dark:text-gray-500" data-testid="risk-l1-worst-realization-date">{$t('risk.levels.l1.tails.worstRealizationOn', {values: {date: tails.worstRealizationDate}})}</p>
+                                    <p class="text-right text-[10px] text-lf-muted" data-testid="risk-l1-worst-realization-date">{$t('risk.levels.l1.tails.worstRealizationOn', {values: {date: tails.worstRealizationDate}})}</p>
                                 {/if}
                             {/if}
                             {#if row.id === 'worst' && tails.drawdownAtRisk !== null}

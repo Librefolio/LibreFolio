@@ -55,6 +55,6 @@
 
 <span class="inline-flex h-7 items-center gap-1.5 rounded-full py-1 pl-1.5 pr-1 text-xs {help ? 'cursor-help' : ''} {VARIANT_CLASSES[variant]}" data-testid={testId} {...rest} data-variant={variant}>
     <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain {excluded ? 'opacity-50' : ''}" onerror={hideBrokenIcon} />
-    <span class={excluded ? 'line-through decoration-gray-300 dark:decoration-slate-600' : ''}>{asset.display_name}</span>
+    <span class={excluded ? 'line-through decoration-lf-input' : ''}>{asset.display_name}</span>
     {@render trailing?.()}
 </span>
