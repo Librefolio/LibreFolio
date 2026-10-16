@@ -1157,3 +1157,11 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
       - `lot-custody-modal > div` (`LotCustodyModal.svelte`): `border-lf-raised text-lf-primary` del modale insieme
         a `bg-white dark:bg-slate-800`, probabilmente da una prop del chiamante. 2 scatti, 32 varianti; motivo
         «attesa-1.3». In scuro lo sfondo resta il vecchio slate.
+- **`settings/plugins` per la 1.3 ✅, 16/10 18:27–18:34.** Commit `ccfabfd6d`: la punta, con X-R27 e X-R28. Due run
+  identiche, `g-plugins-a` e `g-plugins-b`, sullo stesso build, filtro `-f "Settings plugins"`, 2 worker, carico 23–28.
+  - Esito: 2 test su 2 verdi per run, 16 PNG ciascuna, `live_price_check` pulito.
+  - **a↔b: 16 immagini identiche su 16**: lo scatto è `stable`.
+  - Misti a runtime (G-18): 0.
+  - Le impronte sono uguali in tutte le varianti: desktop `dh` 761, schermo allungato a 745 per un blocco di 656 px;
+    mobile `dh` 887.
+  - Guardate a occhio es/light desktop e it/dark mobile: rese corrette, nessun trabocco della barra delle schede.
