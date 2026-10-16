@@ -8,6 +8,7 @@
 <script lang="ts">
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {t} from '$lib/i18n';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
@@ -73,7 +74,7 @@
             if (generation !== renderGeneration) return;
             const fresh = chart === null;
             if (!chart) {
-                chart = echarts.init(element, undefined, {renderer: 'canvas'});
+                chart = echarts.init(element, CHART_INIT_THEME, {renderer: 'canvas'});
                 attachChartReady(chart, element, `pac-planner-exposure-bars-${dimension}`);
             }
             chart.setOption(next, CHART_SET_OPTION_OPTS);

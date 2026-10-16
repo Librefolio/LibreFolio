@@ -76,7 +76,7 @@
                 min={descriptor.min}
                 max={descriptor.max}
                 step={descriptor.step}
-                class="w-16 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green"
+                class="w-16 px-1.5 py-0.5 text-xs border border-lf-input rounded bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus"
                 oninput={(event) => handleNumberInput(event.currentTarget.value)}
             />
             {#if descriptor.suffix}
@@ -90,6 +90,6 @@
             <SimpleSelect value={stringValue()} options={descriptor.options ?? []} dropdownPosition="auto" onchange={(selected) => onchange(selected)} />
         </div>
     {:else}
-        <input type="text" value={stringValue()} class="w-24 px-1.5 py-0.5 text-xs border border-gray-200 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-libre-green" oninput={(event) => onchange(event.currentTarget.value)} />
+        <input type="text" value={stringValue()} class="w-24 px-1.5 py-0.5 text-xs border border-lf-input rounded bg-lf-field text-lf-primary hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus" oninput={(event) => onchange(event.currentTarget.value)} />
     {/if}
 </div>
