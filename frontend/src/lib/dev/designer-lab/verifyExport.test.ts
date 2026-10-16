@@ -5,6 +5,8 @@
  * nearest line) or reported `missing`. A specialisation's candidates are checked the same way and counted apart: a
  * candidate that moved or disappeared is a hint, and only a specialisation left with none is `lost` — the one case,
  * with a missing occurrence, where the CLI exits 1. The test ids of an anchor must still be written in the code.
+ * A chart category is the exception to the search by value (`locateCategory`): categories share values, so its line is
+ * the one its key and theme are written at in the tables, and a line holding another value is `missing`.
  * An export is input: a path leaving the frontend is never read.
  *
  * The frontend is a synthetic tree in a temporary directory, and the catalogue hash and test-id index are passed as
@@ -17,7 +19,11 @@ import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {locate, testidKnown, verifyExport, VERIFY_SCHEMA} from '../../../../scripts/designer-lab/verify-export.mjs';
+import {CATEGORY_FILE, scanColors} from '../../../../scripts/designer-lab/scan-colors.mjs';
+import {locate, locateCategory, testidKnown, verifyExport, VERIFY_SCHEMA} from '../../../../scripts/designer-lab/verify-export.mjs';
+import {buildExport} from './export';
+import {changeId, emptyState} from './store';
+import type {ColorCatalog, LabChange} from './types';
 
 const FRONTEND = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const SCRIPT = join(FRONTEND, 'scripts/designer-lab/verify-export.mjs');
@@ -267,6 +273,207 @@ describe('verifyExport — occurrences', () => {
         expect(() => verify({schema: 'lf-designer-lab/0', changes: []})).toThrow('not a lf-designer-lab/1 export');
         expect(() => verify({schema: 'lf-designer-lab/1'})).toThrow('not a lf-designer-lab/1 export');
         expect(() => verify(null)).toThrow('not a lf-designer-lab/1 export');
+    });
+});
+
+/**
+ * The tables of a synthetic `chartCategories.ts`, made-up keys and values, one entry per line as in the real file. As
+ * there (`ETF` and `Technology`), a type and a sector share a value — `type:AAA` and `sector:Zed` both write `SHARED` in
+ * the light theme — so a category is found by key and theme, never by value. `bucket:Unknown` writes one value in both
+ * themes. Line numbers in the comments are 1-based.
+ */
+const SHARED = '#2B4C7E';
+const CATEGORY_TABLES = [
+    'const ASSET_TYPE_COLORS: Readonly<Record<string, ThemePair>> = {', // 1
+    '    // first family',
+    '    AAA: {',
+    `        light: '${SHARED}',`, // 4
+    "        dark: '#7EA6E0',", // 5
+    '    },',
+    '};',
+    '',
+    'const SECTOR_COLORS: Readonly<Record<string, ThemePair>> = {', // 9
+    '    Zed: {',
+    `        light: '${SHARED}',`, // 11
+    "        dark: '#334455',", // 12
+    '    },',
+    '};',
+    '',
+    'const UNCLASSIFIED_COLOR: ThemePair = {', // 16
+    "    light: '#5A6B7C',", // 17
+    "    dark: '#5A6B7C',", // 18
+    '};',
+];
+
+/** The tables with line `n` (1-based) written as `text`. */
+const withLine = (n: number, text: string) => CATEGORY_TABLES.map((l, i) => (i === n - 1 ? text : l));
+
+describe('locateCategory', () => {
+    const light = (line: number, raw?: string) => ({line, raw, theme_context: 'light'});
+    const dark = (line: number, raw?: string) => ({line, raw, theme_context: 'dark'});
+
+    it('is ok at the line its key and theme are written at, the value compared without its case', () => {
+        expect(locateCategory(CATEGORY_TABLES, light(4, SHARED), 'type:AAA')).toEqual({status: 'ok', line: 4});
+        expect(locateCategory(CATEGORY_TABLES, dark(5, '#7ea6e0'), 'type:AAA')).toEqual({status: 'ok', line: 5});
+        expect(locateCategory(CATEGORY_TABLES, light(11, SHARED), 'sector:Zed')).toEqual({status: 'ok', line: 11});
+        expect(locateCategory(CATEGORY_TABLES, dark(18, '#5A6B7C'), 'bucket:Unknown')).toEqual({status: 'ok', line: 18});
+    });
+
+    it('moves to the line of its own key and theme, never to another category or theme writing the value', () => {
+        // Line 4 writes the value of the sector's light line, line 18 the value of the bucket's dark line: neither is theirs.
+        expect(locateCategory(CATEGORY_TABLES, light(4, SHARED), 'sector:Zed')).toEqual({status: 'moved', line: 11});
+        expect(locateCategory(CATEGORY_TABLES, light(11, SHARED), 'type:AAA')).toEqual({status: 'moved', line: 4});
+        expect(locateCategory(CATEGORY_TABLES, light(18, '#5A6B7C'), 'bucket:Unknown')).toEqual({status: 'moved', line: 17});
+        expect(locateCategory(CATEGORY_TABLES, dark(17, '#5A6B7C'), 'bucket:Unknown')).toEqual({status: 'moved', line: 18});
+    });
+
+    it('is missing when its line holds another value, even where another category still writes it', () => {
+        expect(locateCategory(withLine(4, "        light: '#111111',"), light(4, SHARED), 'type:AAA')).toEqual({status: 'missing'});
+        expect(locateCategory(withLine(17, "    light: '#111111',"), light(17, '#5A6B7C'), 'bucket:Unknown')).toEqual({status: 'missing'});
+    });
+
+    it('is missing when the tables do not write its key, its kind or its theme', () => {
+        expect(locateCategory(CATEGORY_TABLES, light(4, SHARED), 'type:Gone')).toEqual({status: 'missing'});
+        expect(locateCategory(CATEGORY_TABLES, light(4, SHARED), 'sector:AAA')).toEqual({status: 'missing'});
+        // The key is compared as the table writes it: a renamed key is another key.
+        expect(locateCategory(withLine(3, '    AAB: {'), light(4, SHARED), 'type:AAA')).toEqual({status: 'missing'});
+        // The bucket without a dark line: its light line, which writes the same value, is not the dark one.
+        expect(locateCategory(withLine(18, ''), dark(18, '#5A6B7C'), 'bucket:Unknown')).toEqual({status: 'missing'});
+        // An occurrence whose theme is not one the tables write cannot be placed.
+        expect(locateCategory(CATEGORY_TABLES, {line: 4, raw: SHARED, theme_context: null}, 'type:AAA')).toEqual({status: 'missing'});
+        expect(locateCategory(CATEGORY_TABLES, {line: 4, raw: SHARED, theme_context: 'both'}, 'type:AAA')).toEqual({status: 'missing'});
+    });
+
+    it('tells the two kinds apart when both tables write the same key', () => {
+        const twoKinds = ['const ASSET_TYPE_COLORS = {', '    Same: {', "        light: '#0D0D0D',", '    },', '};', 'const SECTOR_COLORS = {', '    Same: {', "        light: '#0D0D0D',", '    },', '};'];
+        expect(locateCategory(twoKinds, light(3, '#0D0D0D'), 'type:Same')).toEqual({status: 'ok', line: 3});
+        expect(locateCategory(twoKinds, light(3, '#0D0D0D'), 'sector:Same')).toEqual({status: 'moved', line: 8});
+    });
+
+    it('places an occurrence that carries no value by its key and theme alone', () => {
+        expect(locateCategory(CATEGORY_TABLES, light(4), 'type:AAA')).toEqual({status: 'ok', line: 4});
+        expect(locateCategory(withLine(5, "        dark: '#111111',"), dark(1), 'type:AAA')).toEqual({status: 'moved', line: 5});
+    });
+});
+
+describe('verifyExport — a chart category, found by key and theme on its line', () => {
+    let trees = 0;
+
+    /**
+     * A tree holding the tables, and the export the Lab writes there for `targets` (both themes each), from the catalogue
+     * of the tree as it was. `after` rewrites the tables, then checks the export against them.
+     */
+    function exported(...targets: string[]) {
+        const root = join(base, `frontend-categories-${++trees}`);
+        const file = join(root, CATEGORY_FILE);
+        mkdirSync(dirname(file), {recursive: true});
+        writeFileSync(file, CATEGORY_TABLES.join('\n'));
+        const catalog = scanColors({root}) as unknown as ColorCatalog;
+        const changes = targets.map((target): LabChange => {
+            const fields = {layer: 'category' as const, target, scope: 'both' as const, from: '', to: '#123456'};
+            return {...fields, id: changeId(fields)};
+        });
+        const doc = buildExport({...emptyState(), changes}, catalog, 'test');
+        const after = (lines: string[]): Report => {
+            writeFileSync(file, lines.join('\n'));
+            return verifyExport(doc, {root, catalogHash: catalog.meta.hash, testids: INDEX}) as unknown as Report;
+        };
+        return {doc, after};
+    }
+
+    const at = (line: number, raw: string) => ({file: CATEGORY_FILE, line, raw});
+
+    it('exports each theme of a category at its own line, with that theme, and finds them all in place', () => {
+        const {doc, after} = exported('type:AAA', 'sector:Zed', 'bucket:Unknown');
+        // The premise of every case below: the export carries the line and the theme of each occurrence.
+        expect(doc.changes.map((c) => c.occurrences.map((o) => [o.file, o.line, o.raw, o.theme_context]))).toEqual([
+            [
+                [CATEGORY_FILE, 4, SHARED, 'light'],
+                [CATEGORY_FILE, 5, '#7EA6E0', 'dark'],
+            ],
+            [
+                [CATEGORY_FILE, 11, SHARED, 'light'],
+                [CATEGORY_FILE, 12, '#334455', 'dark'],
+            ],
+            [
+                [CATEGORY_FILE, 17, '#5A6B7C', 'light'],
+                [CATEGORY_FILE, 18, '#5A6B7C', 'dark'],
+            ],
+        ]);
+        const report = after(CATEGORY_TABLES);
+        expect(report.changes.map((c) => [c.id, c.layer, c.target, c.ok, c.moved.length, c.missing.length])).toEqual([
+            ['category:type:AAA@both', 'category', 'type:AAA', 2, 0, 0],
+            ['category:sector:Zed@both', 'category', 'sector:Zed', 2, 0, 0],
+            ['category:bucket:Unknown@both', 'category', 'bucket:Unknown', 2, 0, 0],
+        ]);
+        expect(report.totals).toMatchObject({changes: 3, ok: 6, moved: 0, missing: 0});
+    });
+
+    it('reports a value changed at its line as missing, though another category still writes the old value', () => {
+        // The type's light value changed; the sector's light line, 11, still writes the old one.
+        const {after} = exported('type:AAA');
+        const changed = withLine(4, "        light: '#111111',");
+        expect(locate(changed, 4, SHARED), 'the control: a search by value takes the sector’s line for it').toEqual({status: 'moved', line: 11});
+        const c = only(after(changed));
+        expect(c).toMatchObject({ok: 1, moved: [], missing: [at(4, SHARED)]});
+    });
+
+    it('follows lines moved down to where their key and theme are written now, never to a nearer line writing the value', () => {
+        // Twenty lines between the tables: the sector's lines move from 11–12 to 31–32, while line 4 — the type's, which
+        // writes the sector's light value — is nearer to 11 than 31 is.
+        const {after} = exported('sector:Zed');
+        const grown = [...CATEGORY_TABLES.slice(0, 8), ...Array.from({length: 20}, (_, i) => `// added ${i + 1}`), ...CATEGORY_TABLES.slice(8)];
+        expect(locate(grown, 11, SHARED), 'the control: a search by value lands on the type’s line').toEqual({status: 'moved', line: 4});
+        const c = only(after(grown));
+        expect(c).toMatchObject({ok: 0, missing: []});
+        expect(c.moved).toEqual([
+            {...at(11, SHARED), to_line: 31},
+            {...at(12, '#334455'), to_line: 32},
+        ]);
+    });
+
+    it('follows a family added above, and reports a dark value changed since the export as missing', () => {
+        const {after} = exported('type:AAA');
+        const added = only(after([...CATEGORY_TABLES.slice(0, 2), '    NEW: {', "        light: '#0E0E0E',", '    },', ...CATEGORY_TABLES.slice(2)]));
+        expect(added).toMatchObject({ok: 0, missing: []});
+        expect(added.moved).toEqual([
+            {...at(4, SHARED), to_line: 7},
+            {...at(5, '#7EA6E0'), to_line: 8},
+        ]);
+        expect(only(after(withLine(5, "        dark: '#0F0F0F',")))).toMatchObject({ok: 1, moved: [], missing: [at(5, '#7EA6E0')]});
+    });
+
+    it('never takes the other theme’s line of the same key, though it writes the same value', () => {
+        const {after} = exported('bucket:Unknown');
+        // The two themes written in the other order: each occurrence moves to its own theme's line.
+        const swappedLines = withLine(17, "    dark: '#5A6B7C',").map((l, i) => (i === 17 ? "    light: '#5A6B7C'," : l));
+        expect(locate(swappedLines, 17, '#5A6B7C'), 'the control: a search by value finds the dark line in place').toEqual({status: 'ok', line: 17});
+        const swapped = only(after(swappedLines));
+        expect(swapped).toMatchObject({ok: 0, missing: []});
+        expect(swapped.moved).toEqual([
+            {...at(17, '#5A6B7C'), to_line: 18},
+            {...at(18, '#5A6B7C'), to_line: 17},
+        ]);
+        // No light line any more: the light occurrence is missing, though the dark line, now 17, writes its value.
+        const darkOnly = only(after(CATEGORY_TABLES.filter((_, i) => i !== 16)));
+        expect(darkOnly).toMatchObject({ok: 0, missing: [at(17, '#5A6B7C')]});
+        expect(darkOnly.moved).toEqual([{...at(18, '#5A6B7C'), to_line: 17}]);
+    });
+
+    it('reports a category whose key was renamed or removed as missing in both themes', () => {
+        const {after} = exported('sector:Zed');
+        // Renamed: its values are still written on its old lines, under another key.
+        const renamedLines = withLine(10, '    Zeta: {');
+        expect([locate(renamedLines, 11, SHARED), locate(renamedLines, 12, '#334455')], 'the control: a search by value finds both in place').toEqual([
+            {status: 'ok', line: 11},
+            {status: 'ok', line: 12},
+        ]);
+        const renamed = only(after(renamedLines));
+        expect(renamed).toMatchObject({ok: 0, moved: [], missing: [at(11, SHARED), at(12, '#334455')]});
+        // Removed: the entry's four lines are gone.
+        const removed = only(after([...CATEGORY_TABLES.slice(0, 9), ...CATEGORY_TABLES.slice(13)]));
+        expect(removed).toMatchObject({ok: 0, moved: [], missing: [at(11, SHARED), at(12, '#334455')]});
+        expect(after(CATEGORY_TABLES).totals).toMatchObject({ok: 2, moved: 0, missing: 0});
     });
 });
 

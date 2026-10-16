@@ -42,44 +42,26 @@ from backend.app.config import set_test_mode
 from backend.app.config.accounts import public_url
 from backend.app.db.models import AccountTokenPurpose, OnboardingFlow
 from backend.app.db.session import get_async_engine
-from backend.app.services.accounts import registration_service, token_service, user_service
+from backend.app.services.accounts import password_policy, registration_service, token_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import verification as email_verification
 
+#: The sentence the command line prints for each rule of ``password_policy`` a new password misses.
+_RULE_MESSAGES = {
+    "min_length": f"min_length: the password must be at least {password_policy.MIN_LENGTH} characters long",
+    "uppercase": "uppercase: the password must contain an uppercase letter",
+    "lowercase": "lowercase: the password must contain a lowercase letter",
+    "digit": "digit: the password must contain a digit",
+    "special": "special: the password must contain a symbol (neither a letter, a number nor a space)",
+}
+
 
 def validate_password(password: str) -> tuple[bool, list[str]]:
-    """
-    Validate password against security requirements.
-    Returns (is_valid, list of errors).
-
-    Requirements:
-    - At least 8 characters
-    - At least one uppercase letter
-    - At least one lowercase letter
-    - At least one number
-    - At least one special character
-    """
-    errors = []
-
-    if len(password) < 8:
-        errors.append("Password must be at least 8 characters")
-
-    if not any(c.isupper() for c in password):
-        errors.append("Password must contain at least one uppercase letter")
-
-    if not any(c.islower() for c in password):
-        errors.append("Password must contain at least one lowercase letter")
-
-    if not any(c.isdigit() for c in password):
-        errors.append("Password must contain at least one number")
-
-    special_chars = set("!@#$%^&*()_+-=[]{}|;':\",./<>?`~")
-    if not any(c in special_chars for c in password):
-        errors.append("Password must contain at least one special character")
-
-    return len(errors) == 0, errors
+    """The app's password rules (``password_policy``, decision 37): whether ``password`` meets them, and a sentence per rule it misses."""
+    failed = password_policy.failed_rules(password)
+    return not failed, [_RULE_MESSAGES.get(code, f"{code}: the password does not meet this rule") for code in failed]
 
 
 async def cmd_reset_password(username: str, new_password: str):
