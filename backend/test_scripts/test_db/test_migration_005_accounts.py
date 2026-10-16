@@ -49,6 +49,7 @@ Red until the migration and the models exist: every test first checks that the d
 from __future__ import annotations
 
 import argparse
+import re
 import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import closing, contextmanager
@@ -312,10 +313,47 @@ def _table_info(db: Path, table: str) -> dict[str, Declared]:
 
 
 def _index_list(db: Path, table: str) -> dict[str, tuple[bool, str, tuple[str, ...]]]:
-    """Every index of ``table``, SQLite's own included: ``{name: (unique, origin, columns)}``."""
+    """Every index of ``table``, SQLite's own included: ``{name: (unique, origin, columns)}``.
+
+    A key is its column's name. ``PRAGMA index_info`` names no column for a key that is an expression —
+    ``ux_users_email_lower`` is on ``lower(email)`` —, and ``None`` would neither sort nor say which expression: such a
+    key is named by its text in the index's SQL instead, as ``_written_keys`` reads it.
+    """
     with _connect(db) as conn:
-        indexes = conn.execute(f'PRAGMA index_list("{table}")').fetchall()
-        return {name: (bool(unique), origin, tuple(column for _seqno, _cid, column in conn.execute(f'PRAGMA index_info("{name}")'))) for _seq, name, unique, origin, _partial in indexes}
+        found: dict[str, tuple[bool, str, tuple[str, ...]]] = {}
+        for _seq, name, unique, origin, _partial in conn.execute(f'PRAGMA index_list("{table}")').fetchall():
+            keys = conn.execute(f'PRAGMA index_info("{name}")').fetchall()
+            if any(column is None for _seqno, _cid, column in keys):
+                (sql,) = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?", (name,)).fetchone()
+                written = _written_keys(sql)
+                assert len(written) == len(keys), f"{name}: PRAGMA index_info gives {len(keys)} key(s), its SQL {written}: {sql!r}"
+                keys = [(seqno, cid, written[seqno] if column is None else column) for seqno, cid, column in keys]
+            found[name] = (bool(unique), origin, tuple(column for _seqno, _cid, column in keys))
+        return found
+
+
+def _written_keys(sql: str) -> list[str]:
+    """The keys of ``CREATE [UNIQUE] INDEX name ON table (key, …) [WHERE …]`` as its SQL writes them: the first list in
+    brackets, cut at its own commas. Each key is read as ``test_migration_009_email_case`` reads the index — lower case,
+    no spaces, names without their quotes or brackets (a string keeps its ``'…'``) —: ``LOWER( "email" )`` is the key
+    ``lower(email)``, a spelling and not another index. Quoted text is not syntax: a comma or a bracket inside a string
+    or a quoted name cuts nothing.
+    """
+    plain = re.sub(r"'[^']*'|\"[^\"]*\"|`[^`]*`|\[[^\]]*\]", lambda quoted: "_" * len(quoted.group()), sql)  # same length: positions still point into sql
+    keys: list[str] = []
+    depth, start = 0, plain.index("(") + 1
+    for position in range(start, len(plain)):
+        char = plain[position]
+        if char == "(":
+            depth += 1
+        elif char == ")" and depth:
+            depth -= 1
+        elif char in ",)" and not depth:
+            keys.append(re.sub(r"[\s\"`\[\]]", "", sql[start:position]).lower())
+            start = position + 1
+            if char == ")":
+                return keys
+    raise AssertionError(f"no closed list of keys in {sql!r}")
 
 
 def _foreign_keys(db: Path, table: str) -> dict[str, tuple[str, str, str]]:
@@ -419,7 +457,10 @@ def _shape(db: Path, table: str) -> Optional[dict[str, Any]]:
 
     A primary-key column counts as NOT NULL whatever its declaration says: SQLite gives a NULL ``INTEGER PRIMARY KEY``
     a rowid, and ``001_initial`` declares ``users.id`` without NOT NULL where ``create_all`` writes it. Uniqueness is the
-    set of column tuples that are unique, whether by a constraint or by an index, read from ``PRAGMA index_list``.
+    set of column tuples that are unique, whether by a constraint or by an index, read from ``PRAGMA index_list``; a key
+    that is an expression counts by its text (``_index_list``). That is where a unique expression index such as
+    ``ux_users_email_lower`` is compared: SQLAlchemy's inspector leaves it out of ``indexes``, on both sides alike, with
+    the warning "Skipped unsupported reflection of expression-based index".
     """
     engine = create_engine(f"sqlite:///{db}", poolclass=NullPool)
     try:
