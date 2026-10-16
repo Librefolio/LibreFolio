@@ -725,14 +725,14 @@
     });
 </script>
 
-<div class="space-y-6" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
+<div class="space-y-6 text-lf-primary" aria-busy={loading} data-busy={loading ? 'true' : 'false'} data-testid="transactions-page">
     <!-- Header -->
     <div class="flex items-center justify-between flex-wrap gap-4">
         <div use:guideAnchor={'transactions.page.overview'} data-testid="transactions-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
                 {$_('transactions.title')}
                 {#if mainRows.length > 0}
-                    <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{mainRows.length}</span>
+                    <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{mainRows.length}</span>
                 {/if}
             </h2>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('transactions.subtitle')}</p>
@@ -754,7 +754,7 @@
                 <ColumnVisibilityToggle tableRef={transactionsTableComponent?.getTableRef()} />
             </div>
             <button
-                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all disabled:opacity-50"
+                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all disabled:opacity-50"
                 data-testid="tx-refresh-button"
                 title={$_('transactions.refresh') || 'Refresh from server'}
                 aria-label={$_('transactions.refresh') || 'Refresh from server'}
@@ -769,16 +769,11 @@
             >
                 <RefreshCw size={15} class={loading ? 'animate-spin' : ''} />
             </button>
-            <button
-                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                data-testid="tx-import-button"
-                use:guideAnchor={'transactions.page.import'}
-                onclick={onImportFromBroker}
-            >
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" data-testid="tx-import-button" use:guideAnchor={'transactions.page.import'} onclick={onImportFromBroker}>
                 <Upload size={15} />
                 <span class="hidden sm:inline">{$_('common.import')}</span>
             </button>
-            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" data-testid="tx-add-button" use:guideAnchor={'transactions.page.add'} onclick={onAddTransaction}>
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" data-testid="tx-add-button" use:guideAnchor={'transactions.page.add'} onclick={onAddTransaction}>
                 <Plus size={15} />
                 <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
             </button>
@@ -786,15 +781,15 @@
     </div>
 
     {#if loading}
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-gray-700" data-testid="tx-loading">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle" data-testid="tx-loading">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4" data-testid="tx-error">
-            <p class="text-red-700 dark:text-red-400 text-sm">{error}</p>
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-4" data-testid="tx-error">
+            <p class="text-lf-danger-on-soft text-sm">{error}</p>
         </div>
     {:else}
         <TransactionsTable
