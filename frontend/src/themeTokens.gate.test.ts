@@ -31,7 +31,8 @@
  *       and the marks the green sidebar draws (WCAG 1.4.11). The header is a neutral surface (D-T23), one of
  *       `SURFACES`; the green sidebar (D-T17) is none, and has pairs of its own, in the --lf-bar-* family, its alone. A
  *       pair under its minimum is red unless `KNOWN_EXCEPTIONS` holds it, and an entry there is the designer's
- *       decision, not ours;
+ *       decision, not ours. And the backdrop, --lf-surface-overlay, is one colour in both themes: the pairs of the
+ *       text on it hold for every theme only then;
  *   C4  every class the legacy remap rewrites (`html.dark .bg-white` …) is still written by a production source: a
  *       rule whose class lost its last use is dead, and leaves app.css in the change that removed that use.
  * And app.css imports tokens.css, and every rule of the remap that targets a field (`input`, `select`, `textarea`),
@@ -48,13 +49,13 @@
  * loudly before it could fail C3 in silence. Contrast is computed on the declared values, not on the page: an
  * opacity utility (`text-lf-muted/70`), a gradient or an image behind the text are invisible here. So is a
  * translucent layer, unless it is a role whose pair names the opaque role it lies on, `over`: then the ratio is
- * taken on the two composited as the browser draws them (the backdrop, over each surface); with no `over`, a
- * translucent background is refused. A pair missing from `CONTRAST_PAIRS` is not checked at all — a new role that
- * carries text or draws a control adds its pairs in the same change. Nor is a control told apart by two colours at
- * once, a fill and an edge: that is no pair (the knob of a switch turned off, see `CONTRAST_PAIRS`). The pairs are
- * the floor; the gallery and the designer's review do the rest. C4 counts the class written whole in a production
- * source (`classUses`): a class assembled at run time (`` `bg-gray-${n}` ``) is no use, and a string that merely
- * spells the class is one.
+ * taken on the two composited as the browser draws them (the backdrop and the selected tint, over each surface they
+ * lie on); with no `over`, a translucent background is refused. A pair missing from `CONTRAST_PAIRS` is not checked
+ * at all — a new role that carries text or draws a control adds its pairs in the same change. Nor is a control told
+ * apart by two colours at once, a fill and an edge: that is no pair (the knob of a switch turned off, see
+ * `CONTRAST_PAIRS`). The pairs are the floor; the gallery and the designer's review do the rest. C4 counts the class
+ * written whole in a production source (`classUses`): a class assembled at run time (`` `bg-gray-${n}` ``) is no use,
+ * and a string that merely spells the class is one.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
  */
@@ -288,9 +289,17 @@ const pairsOver = (foregrounds: string[], background: string, unders: string[], 
  * And the text on the backdrop, --lf-on-overlay (provisional: a camera on an avatar, an icon on a scrim). The
  * backdrop, --lf-surface-overlay, is translucent, so each of its pairs names the surface it lies on, `over`, and the
  * ratio is taken on the two composited: once over each of `SURFACES`. That is sound because the backdrop is the same
- * in both themes: its composite over the brightest surface, the light theme's white field (--lf-surface-field,
- * #ffffff), is the worst case of every theme, a white image under a dark-theme backdrop included. Measured on 16/10:
- * 4.98:1 over the field, 5.10–5.60:1 over the other light surfaces, 17.88:1 and more in dark.
+ * in both themes — `backdropFindings` holds it — so its composite over the brightest surface, the light theme's white
+ * field (--lf-surface-field, #ffffff), is the worst case of every theme, a white image under a dark-theme backdrop
+ * included. Measured on 16/10: 4.98:1 over the field, 5.10–5.60:1 over the other light surfaces, 17.88:1 and more in
+ * dark.
+ *
+ * And a selected row, option or chip, --lf-selected: a translucent tint of the focus green, so its pairs name the
+ * surface under it, `over`, as the backdrop's do. The link green is held on it over the app, the page, the header, the
+ * card and the field, never over a panel: 4.09:1 in dark. The primary and the secondary text are held over all six.
+ * The muted text, the statuses and the signs reach only 3.84–4.48:1 on it over most surfaces, so they are not promised
+ * there; a lighter tint would not cure it — at 6% the muted text still gives 4.17:1 — and it is an open item, TC-15.
+ * Measured on 16/10: the link 4.53:1 at worst, over the dark card; the secondary text 5.45:1, over the dark panel.
  *
  * What C3 cannot express: a control told apart by two colours at once. The knob of a switch turned off,
  * --lf-switch-knob-off, is white on the light track of --lf-switch-off in light, and the control is recognised by the
@@ -298,7 +307,9 @@ const pairsOver = (foregrounds: string[], background: string, unders: string[], 
  * designer's round 3. Nor a colour that is no role: the «insecure» tint behind the connection-security toggle is
  * `bg-lf-bar-danger/20`, composited over the bar — an opacity on a role, so no role of its own, and no background a
  * pair could name (`over` composites a role, never an opacity utility): the icon on it measures 3.41:1 and the focus
- * ring 3.94:1, checked by hand (15/10, after D-T25).
+ * ring 3.94:1, checked by hand (15/10, after D-T25). Nor the hovered selection chip, `hover:bg-lf-checked/20`, an
+ * opacity utility as well: by hand, the link on it measured 3.99–4.43:1, so the two chips (SelectionBar, DataEditor)
+ * switch to `hover:text-lf-primary`, 10.09–12.86:1 (16/10).
  */
 const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['text-primary', 'text-secondary', 'text-muted', 'text-placeholder'], SURFACES, TEXT),
@@ -319,6 +330,8 @@ const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['ai'], ['ai-soft', 'surface-card', 'surface-panel'], TEXT),
     ...pairs(['on-ai'], ['ai'], TEXT),
     ...pairsOver(['on-overlay'], 'surface-overlay', SURFACES, TEXT),
+    ...pairsOver(['link'], 'selected', ['surface-app', 'surface-page', 'surface-header', 'surface-card', 'surface-field'], TEXT),
+    ...pairsOver(['text-primary', 'text-secondary'], 'selected', SURFACES, TEXT),
     ...pairs(['border-input', 'border-input-hover'], SURFACES, NON_TEXT),
     ...pairs(['focus'], ['surface-app', 'surface-header', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
     ...pairs(['checked'], ['surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
@@ -448,6 +461,73 @@ describe('tokens.css: contrast in both themes (C3)', () => {
             KNOWN_EXCEPTIONS.filter((entry) => entry.reason.trim().length < 20).map((entry) => pairName(entry.theme, entry)),
             'an exception carries the reason of the designer and its date',
         ).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C3: the backdrop, one colour in both themes
+// ---------------------------------------------------------------------------
+
+/** The backdrop of the modals: the translucent role the text on it, --lf-on-overlay, is measured over. */
+const BACKDROP = '--lf-surface-overlay';
+
+/**
+ * C3: what keeps the backdrop from being one colour in both themes — a theme that cannot read it, or two themes that
+ * read two colours. The on-overlay pairs are sound only while it is one: a dark-theme backdrop may lie on a white
+ * image, and the light theme's composite over its white field stands for that case only if the two backdrops are the
+ * same. C1 lets the dark block override a derived role, and a derived role may read one that follows the theme: either
+ * would part the two in silence. Colours are compared as this file shows them, `#rrggbb` and the alpha, after `var()`
+ * and `color-mix()` are resolved: the same colour written two ways is one colour.
+ */
+function backdropFindings(tokens: Tokens): string[] {
+    const out: string[] = [];
+    const read: Partial<Record<Theme, Rgba>> = {};
+    for (const theme of THEMES) {
+        const colour = colourOf(tokens, `var(${BACKDROP})`, theme);
+        if (typeof colour === 'string') out.push(`${theme}  ${BACKDROP}: ${colour}`);
+        else read[theme] = colour;
+    }
+    const {light, dark} = read;
+    if (light && dark && shown(light) !== shown(dark)) out.push(`${BACKDROP} is ${shown(light)} in light, ${shown(dark)} in dark`);
+    return out;
+}
+
+/** Three blocks with a backdrop derived once for both themes, as tokens.css writes it, and what the dark block may add to it. */
+const backdropTable = (derived: string, darkOverride?: string): string => `
+:root,
+html.light,
+.light {
+    --lf-surface-page: #f3f5f3;
+}
+
+:root,
+.light,
+.dark {
+    --lf-surface-overlay: ${derived};
+}
+
+html.dark,
+.dark {
+    --lf-surface-page: #0d1110;${darkOverride === undefined ? '' : `\n    --lf-surface-overlay: ${darkOverride};`}
+}
+`;
+
+describe('tokens.css: the backdrop is one colour in both themes (C3)', () => {
+    it('finds a backdrop that parts the two themes, overridden by the dark block or derived from a role that follows the theme, and passes one colour written twice (positive control)', () => {
+        const DERIVED = 'color-mix(in oklab, #0d1110 60%, transparent)';
+        const findings = (derived: string, darkOverride?: string): string[] => backdropFindings(parseTokens(backdropTable(derived, darkOverride)));
+        expect(findings(DERIVED), 'derived once for both themes').toEqual([]);
+        expect(findings(DERIVED, 'color-mix(in oklab, #0D1110 60%, transparent)'), 'the dark block overrides it with the same colour, in upper case').toEqual([]);
+        expect(findings(DERIVED, 'color-mix(in oklab, #000000 50%, transparent)'), 'the dark block overrides it with another colour, the likeliest slip').toEqual(['--lf-surface-overlay is #0d1110 at 60% in light, #000000 at 50% in dark']);
+        expect(findings('color-mix(in oklab, var(--lf-surface-page) 60%, transparent)'), 'derived from a role that follows the theme').toEqual(['--lf-surface-overlay is #f3f5f3 at 60% in light, #0d1110 at 60% in dark']);
+        expect(findings(DERIVED, 'rgb(0 0 0 / 60%)'), 'a form the resolver cannot read').toEqual(['dark  --lf-surface-overlay: tokens.css: cannot resolve «rgb(0 0 0 / 60%)»']);
+    });
+
+    it('C3: the backdrop, --lf-surface-overlay, is one colour in both themes: the pairs of the text on it rest on that', () => {
+        expect(CONTRAST_PAIRS.filter((pair) => pair.background === BACKDROP).map(pairText), 'positive control: the pairs this premise holds up are in CONTRAST_PAIRS').toContain('--lf-on-overlay on --lf-surface-overlay over --lf-surface-field');
+        const findings = backdropFindings(readTokens());
+        const rule = 'The backdrop is one colour in both themes: a dark-theme backdrop may lie on a white image, and the light composite over the white field stands for that case only then. Change it in the derived block, for both themes at once; never in the dark block.';
+        expect(findings, ['', rule, '', ...findings, ''].join('\n  ')).toEqual([]);
     });
 });
 

@@ -2646,7 +2646,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
     della modale, non un `contentClass`. **Approvata** (coordinatore, 16/10): `ModalBase` prende un prop di tono,
     `tone="danger"` → `border-2 border-lf-danger-line` al posto di `border-lf-raised`, in un ternario solo (regola 8), nel
-    lotto «component tokens» di T; fino ad allora AF lascia legacy il file (segnalato da AF, catena C1).
+    lotto «component tokens» di T; fino ad allora AF lascia legacy il file (segnalato da AF, catena C1). **Fatta** (T,
+    16/10, lotto «component tokens», parte 1): `tone` con `data-tone`; AF passa a `tone="danger"` dopo l'ingresso.
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
 - **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
@@ -2675,6 +2676,23 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   ai ruoli toglie le classi `dark:` e rende il controllo via via giusto, ma la cura è leggere solo `html` con
   `toHaveClass(/\bdark\b/)`. Da proporre al proprietario degli spec dei file. Dettagli: piano di T, «W1-f1, W2-b, W2-d e
   W1-f2», passo 10.
+- ✅ **TC-15 · Testo muted su una riga selezionata (`bg-lf-selected`)** — basso; T, 16/10, lotto del gate; chiusa il
+  16/10 nel lotto TC-15 di T: una regola centrale nello `<style>` delle 4 select di `ui/select` (`SearchSelect`,
+  `SimpleSelect`, `TreeSelect` col passaggio, `AssetPickerPanel`), che copre anche gli snippet dei chiamanti; più
+  `FileGrid` (scheda selezionata) e `UnifiedLotsTable` (riga evidenziata) nei component tokens. Misurato col
+  risolutore del gate: sul ruolo traslucido `selected` reggono 4,5:1 solo `primary`, `secondary` e `link` (mai su un
+  `panel`, 4,09:1 in scuro). Il muted, i quattro stati e i segni scendono a 3,84–4,48:1 quasi ovunque, e schiarire la
+  tinta non basta (al 6 % il peggiore resta 4,17). Caso reale: le righe evidenziate di `ui/select/AssetPickerPanel`
+  (tipo e valuta in muted); da ripassare le altre opzioni evidenziate di `ui/select`. Cura, decisa col coordinatore: nei
+  componenti, muted → secondary mentre la riga è selezionata o evidenziata; la regola è nello skill `design-system`,
+  regola 5. Da fare in un lotto di T. Dettagli: piano di T, «Il lotto del gate», passo 4.
+- **TC-16 · `FilePreviewModal.test.ts` aspetta il visore col budget di 1 s di `waitFor`** — minimo; T, 16/10, lotto
+  «component tokens». `listening()` (riga ~597) aspetta `viewer.opened`, `failed` e `tiles` con il timeout predefinito di
+  `waitFor` (1 s) su una catena asincrona (il finto EmbedPDF). Sotto carico (41–52) due test sono caduti una volta alla
+  riga 598 (`viewer.opened` vuoto); con lo stesso codice verdi da soli (37/37, due volte) e nell'insieme dei 30 file
+  (978/979). Verdetto della triage: l'orologio (un'assunzione del test), nessun difetto del prodotto né dei miei file. Cura
+  per il proprietario dell'area dei file: un budget esplicito su quel `waitFor`. Dettagli: piano di T, «I component
+  tokens, parte 1», passo 5.
 
 ---
 
