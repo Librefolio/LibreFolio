@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 
+import structlog
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +18,7 @@ from backend.app.db.models import (
     Transaction,
     User,
 )
-from backend.app.db.precision import decimal_limit_issue, get_model_column_precision
+from backend.app.db.precision import decimal_limit_issue, get_model_column_precision, integer_digits_issue, max_integer_digits
 from backend.app.db.real_decimal import REAL_SIGNIFICANT_DIGITS
 from backend.app.schemas.assets.events import FAAssetEventPoint, FAAssetEventPointOut, FAEventBulkDeleteResponse, FAEventDeleteItemResult, FAEventQueryResult, FAEventUpsertPoint
 from backend.app.schemas.common import (
@@ -28,6 +29,8 @@ from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
+
+logger = structlog.get_logger(__name__)
 
 # The natural key of an asset event within one source: (date, type value).
 _EventKey = tuple[date, str]
@@ -78,10 +81,30 @@ class EventStoreOperations:
             default_currency: Fallback currency
             commit: Commit each slice (the provider refresh) or leave it to the caller
 
+        An event whose value ``AssetEvent.value`` cannot keep (not finite, past 12 digits before the decimal point) is
+        dropped before anything is written, with a warning (W-B58): stored as a REAL inf, it broke every response of
+        the asset's events, for every user. The manual events never get here with one (``_reject_too_many_digits``).
+
         Returns:
             Number of events upserted
         """
-        return len(await EventStoreOperations._write_asset_events(session, asset_id, events, provider_assignment_id, default_currency, commit=commit))
+        storable = EventStoreOperations._storable_events(asset_id, events)
+        return len(await EventStoreOperations._write_asset_events(session, asset_id, storable, provider_assignment_id, default_currency, commit=commit))
+
+    @staticmethod
+    def _storable_events(asset_id: int, events: list[dict | FAAssetEventPoint]) -> list[FAAssetEventPoint]:
+        """The events of ``events`` whose value ``AssetEvent.value`` can keep, parsed; the others are logged (W-B58)."""
+        storable: list[FAAssetEventPoint] = []
+        dropped: list[str] = []
+        for raw in events or []:
+            evt = raw if isinstance(raw, FAAssetEventPoint) else FAAssetEventPoint(**raw)
+            if integer_digits_issue(evt.value.amount, AssetEvent, "value") is None:
+                storable.append(evt)
+            else:
+                dropped.append(f"{evt.date.isoformat()} {evt.type!s}={evt.value.amount}")
+        if dropped:
+            logger.warning("Events skipped: no event value can keep them", asset_id=asset_id, events=dropped[:5], count=len(dropped))
+        return storable
 
     @staticmethod
     async def _write_asset_events(
@@ -331,11 +354,12 @@ class EventStoreOperations:
     def _reject_too_many_digits(events: Optional[list]) -> None:
         """C-97: refuse an event whose value has more digits than its column keeps, naming each one, never rounding it.
 
-        An event value keeps 6 decimal places and 15 significant digits (``db/precision.decimal_limit_issue``).
+        An event value keeps 12 digits before the decimal point (W-B58), 6 decimal places and 15 significant digits
+        (``db/precision.decimal_limit_issue``).
 
         Raises:
-            AssetSourceError(code="EVENT_TOO_MANY_DIGITS"): ``details`` holds the maxima and, per event, its index,
-                date and type.
+            AssetSourceError(code="EVENT_TOO_MANY_DIGITS"): ``details`` holds the maxima (``max_decimal_places``,
+                ``max_significant_digits``, ``max_integer_digits``) and, per event, its index, date and type.
         """
 
         def field(raw: object, name: str) -> object:
@@ -349,11 +373,12 @@ class EventStoreOperations:
                 offending.append({"event_index": index, "date": str(field(raw_evt, "date")), "type": str(field(raw_evt, "type"))})
         if offending:
             _precision, scale = get_model_column_precision(AssetEvent, "value")
+            integer = max_integer_digits(AssetEvent, "value")
             shown = ", ".join(f"#{e['event_index']}={e['date']}" for e in offending[:5]) + (f" (+{len(offending) - 5} more)" if len(offending) > 5 else "")
             raise AssetSourceError(
-                f"EVENT_TOO_MANY_DIGITS: event values keep at most {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits, got [{shown}]",
+                f"EVENT_TOO_MANY_DIGITS: event values keep at most {integer} digits before the decimal point, {scale} decimal places and {REAL_SIGNIFICANT_DIGITS} significant digits, got [{shown}]",
                 "EVENT_TOO_MANY_DIGITS",
-                {"max_decimal_places": scale, "max_significant_digits": REAL_SIGNIFICANT_DIGITS, "events": offending},
+                {"max_decimal_places": scale, "max_significant_digits": REAL_SIGNIFICANT_DIGITS, "max_integer_digits": integer, "events": offending},
             )
 
     @staticmethod
