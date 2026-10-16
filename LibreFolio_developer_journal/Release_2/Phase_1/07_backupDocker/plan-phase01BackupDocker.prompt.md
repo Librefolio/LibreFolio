@@ -3391,6 +3391,61 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (FBKP-001, 001b, 002, 003, 004 di B5a; FBKP-101…107 del ripristino, FBKP-102 con l'incolla vero compreso), la build
 >   del frontend fatta prima (`--build-only`). La cartella dati della corsia pulita dopo: in `.restore/` nessuno stato,
 >   nessun biglietto, nessuna copia, nessun caricamento, solo i file di lock vuoti. Porta libera.
+> - **Committato** dal coordinatore: `465c27939` feat (le righe di H), `78023380c` test (l'E2E del ripristino),
+>   `283466abb` journal.
+
+### Aggiornamento di base — merge di `dev_release2` `0c79932a7` (2026-10-16, 19:57-20:30) ✅ — 🧊 FROZEN, in attesa del commit
+
+> - Merge aperto dal coordinatore nel mio worktree (HEAD `283466abb`, MERGE_HEAD `0c79932a7`, base comune `62004e530`;
+>   oltre 446 commit: C-97a, H-12/21, MF, Y, X, i colori; non ancora P18 di A). Sei conflitti, risolti per somma; in
+>   staging solo quei sei (`git add` dei sei percorsi); nessun file fuori conflitto toccato.
+>   - `backend/app/services/platform/app_lifespan.py`: da me `restore-commit`, da H `plugin-secrets-check` (H-15),
+>     tutti e due subito dopo `global-settings`. Ordine scelto: `global-settings`, **`restore-commit`**,
+>     `plugin-secrets-check`, `provider-prewarm`. Perché: il passo di H non solleva mai (prende ogni eccezione e logga
+>     il nome della classe), quindi non cambia cosa fa tornare indietro un ripristino; i due pin sono d'ordine relativo
+>     (il mio `global-settings < restore-commit < provider-prewarm`, quello di H `global-settings <
+>     plugin-secrets-check < scheduler`) e reggono tutti e due; l'e2e `backup-roundtrip` esegue i passi da
+>     `pending-restore` a `restore-commit` compresi, e così la sua fetta resta quella provata; e il controllo di H legge
+>     i dati già confermati. Un commento sul passo del commit. Da dire a H.
+>   - `scripts/test_runner/_backend_services.py`: la descrizione di `logging-access-filter` scritta dai due lati (da me
+>     `ticket` e «a ticker kept», da H H-9: `configure_logging` chiude i gestori che toglie): unite. Nessuna unità doppia
+>     (controllo per file: le due `all` di `_backend_api.py` sono di due categorie, `api` ed `e2e`).
+>   - `admin/filesystem.en.md` (di H): da me il rimando alla guida, da H (il mio B-5) `./dev.py backup create`, i link a
+>     `cli_tools.md#backup` e `#backup-docker` e «It leaves out `secrets/`», vero anche per la mia guida: un paragrafo
+>     solo, prima la guida, poi il comando, poi la copia a mano.
+>   - `admin/index.en.md`: la riga di CLI Admin Tools di H («instance backups») e la mia voce della guida.
+>   - `admin/hosting_providers.en.md` (di H), tre: nell'elenco di ciò che serve a un'istanza ospitata i due punti di H
+>     (protezione dei frame, pagina di supporto) e il mio (la politica di riavvio); fra i punti del blocco la frase
+>     nuova del recupero (Z/Y: colma il buco fino a un anno) e il mio punto del ripristino che aspetta lo sblocco; nella
+>     tabella di «What Still Answers» la riga del backup di H (la scheda della pagina di blocco) e la mia dell'esito.
+>   - `developer/architecture/database/users_access.md`: la mia frase su `session_version` dopo un ripristino e il
+>     punto di `email_verified_at` riscritto da E.
+> - **Rivisti anche i nove file cambiati dai due lati e uniti da git**: `logging_config.py` (il mio `ticket` e H-9 tutti e
+>   due presenti), `test_logging_access_filter.py` (24 test, nessun nome doppio), `mkdocs.yml` (la pagina Plugins e la
+>   mia voce, separate), i tre file del runner (le mie voci di backup intatte, le otto righe Vitest di `features/backup`
+>   e l'azione `front-utility backup`), `cli_tools.en.md`, `security.md` (nessuna ancora doppia), il backlog. Nessun
+>   manifest di dipendenze cambiato.
+> - **Debito che il merge rende vero**: H-12/21 ha messo la scheda del backup nella pagina di blocco, quindi in
+>   `backup_restore.en.md` (riga 60) «that page has no backup button yet» non è più vero (B-14). Lo correggo dopo il
+>   commit del merge, nel prossimo checkpoint, con le altre frasi della guida sull'istanza bloccata. Le due frasi «no
+>   button for it yet» rimaste (`hosting_providers.en.md`, `security.md`) parlano della cancellazione del proprio
+>   account, e restano vere.
+> - **Prove leggere sulla revisione combinata** (`files/scripts/b_green.sh`, poi `b_docs.sh`, carico sotto 50): i 16
+>   selettori dei globi del coordinatore più `e2e backup-roundtrip` (prova direttamente l'ordine dei passi risolto), poi
+>   la doc. **Tutto verde** (20:04-20:24): `services app-lifecycle` 44, `backup-archive` 155 (più 1 saltato apposta: il
+>   file system di macOS rifiuta un nome non UTF-8), `backup-jobs` 69, `backup-staging` 145, `backup-apply` 228,
+>   `backup-outcome` 97, `backup-totals` 84; `api instance-block` 62 (svelte-check 0/0 sul client rigenerato),
+>   `backup` 23, `backup-instance-errors` 6, `backup-panel` 59, `backup-restore` 121, `backup-restore-apply` 136,
+>   `backup-export-extras` 8; `utils backup-cli` 102, `backup-cli-restore` 77; `e2e backup-roundtrip` 3; `mkdocs build`
+>   stretta 0 avvisi, `check-links` 97, `utils gate-docs-links` 63. Porta libera. Diff in staging pulito (`--check`).
+> - **⚠️ Fuori pista** (20:24): un `sed -i ''` per segnare chiusa questa sezione ha svuotato il piano (0 byte, uscita 1;
+>   probabilmente il `sed` di macOS su un carattere multibyte del modello, che lascia il file vuoto). Toccava solo questo
+>   piano, fuori staging; l'indice ne aveva la versione committata (`283466abb`, identica a HEAD). Ripreso senza
+>   scritture di git: `git show :<piano>` copiato nella cartella della sessione e sul file (3477 righe, uguale
+>   all'indice), poi questa sezione riscritta con lo strumento di modifica. Da ora niente `sed -i` su testo con caratteri
+>   non ASCII: lo strumento di modifica o Python.
+> - **20:30, handoff del merge** al coordinatore, 🧊 FROZEN: lui crea il commit del merge; fuori staging solo questo
+>   piano; poi lo slot di `all-backend` prima dell'ingresso.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
