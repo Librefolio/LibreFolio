@@ -5,6 +5,11 @@ description: "Use this skill when migrating a frontend component to the colour r
 
 # Colour roles — migrating the interface
 
+> **Building or changing UI?** Start from the skill [`design-system`](../design-system/SKILL.md): the two themes
+> («Stone and Sage», «Slate and Sage»), every role with its light and dark value and when to use it, the shared colour
+> folder `lib/theme/`, the contrast pairs and all the rules. This skill is about migrating what still writes palette
+> classes, and about the ratchet's baseline.
+
 ## The one idea
 
 A colour in the interface says **what it is for**: a card, the muted text, the border of a field, an error. Each of

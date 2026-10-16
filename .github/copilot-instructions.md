@@ -97,7 +97,7 @@ In `async def` handlers, **every sync library doing I/O** MUST be wrapped in `aw
 
 - **Svelte 5 Runes**: use `$state()`, `$derived()`, `$effect()` — never old `$:` reactive
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` — no `tailwind.config.ts`
-- **Colours and dark mode**: the colour roles of `lib/theme/tokens.css` through their utilities (`bg-lf-card`, `text-lf-muted`, `border-lf-input`…), which change value under `html.dark` — never `dark:` on a role, no new palette class or hand-written colour (ratchet gate). Details: `frontend.instructions.md` «Design System», skill `theme-roles`
+- **Colours and dark mode**: the colour roles of `lib/theme/tokens.css` through their utilities (`bg-lf-card`, `text-lf-muted`, `border-lf-input`…), which change value under `html.dark` — never `dark:` on a role, no new palette class or hand-written colour (ratchet gate). For any new or changed UI: skill `design-system` (the two themes, the palette, the rules); details in `frontend.instructions.md` «Design System»; migrating legacy classes: skill `theme-roles`
 - **Icons**: lucide-svelte
 - **Selectors**: always use `data-testid` — never CSS classes or text (fragile with i18n)
 - **Flag emoji**: the `'LF Flags'` face (`static/lf-flags.css`, flags-only `unicode-range`) leads every font stack — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere, Windows included. Never name an emoji font in a `font-family`; a component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`
