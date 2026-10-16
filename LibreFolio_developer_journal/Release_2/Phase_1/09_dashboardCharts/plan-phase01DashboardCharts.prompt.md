@@ -3454,3 +3454,147 @@ In ogni pagina cambiano lo script (i gettoni) e, sul pulsante, l'espressione di 
 >     ricarica la scheda Rischio. Basta, al più, un collegamento alla sezione della Dashboard;
 >   - lato sviluppatori manca una pagina sullo schema `pageBusy`: dove va `track`, mai dentro le funzioni di
 >     caricamento, e niente gettoni sui ricaricamenti di sfondo.
+- **Checkpoint del passo 4**: il coordinatore ha committato `fba7b036d` (feat) ed `e24ef7a2f` (journal); HEAD
+  `e24ef7a2f`, con l'albero pulito. Un'unica E2E per il passo 4 e il 4b nello slot 1, verso le 20:00, per 60 minuti. Se
+  le prove leggere del 4b non sono verdi per quell'ora, la corsa copre solo il passo 4.
+
+### Passo 4b · `pageBusy.join` (N55, dalle 18:32, su `e24ef7a2f`) — ✅ codice, test e prove leggere 18:54; E2E verso le 20:00
+
+> **Note implementazione**.
+> - **Decisione N55 del coordinatore**, da rivedere con il developer: l'opzione 1. Le richieste che un pannello fa da
+>   sé quando gli mancano i dati (candele e contributo) tengono fermo il pulsante solo se si aggiungono a un
+>   caricamento già in corso.
+> - **Store**: `join(label, work, options?)`, asincrona.
+>   - Se nella lista letta con `untrack` non c'è nessun gettone, esegue `work()` senza gettone; altrimenti fa `track`.
+>   - Decide nel momento della chiamata.
+>   - È esportata in `pageBusy`, e l'intestazione del file ha una voce che spiega dove va.
+> - **Le quattro callback** passano da `track` a `join`, con le stesse etichette: `dashboard-pnl-candles`,
+>   `dashboard-contribution`, `broker-pnl-candles` e `broker-contribution`.
+> - **Perché regge nel tempo**:
+>   - quando l'utente cambia periodo, `applyReport` o `applyOverview` scrivono lo stato prima che finisca il caricamento
+>     tracciato. Svelte svuota gli effetti in un microtask, messo in coda prima della continuazione di `track`, quindi
+>     il `$effect` di `GrowthChart` o di `PositionsPanel` trova ancora il gettone del periodo;
+>   - lo verifica in un browser vero il controllo dei nuovi test E2E.
+> - **Sfumatura da riportare**: il contributo ha un indicatore proprio (`contributionLoading`, presente in entrambe le
+>   pagine), le candele no.
+>   - `GrowthChart` ha solo lo scheletro della storia (`loading`).
+>   - Quindi, se l'utente passa direttamente alle Candele a pagina ferma, nessun indicatore lo segnala finché le
+>     candele non arrivano. Era così anche prima di Y11.
+>   - Ho tolto dall'intestazione dello store la frase «il pannello mostra il suo caricamento».
+> - **Prettier**: pulito sui tre file.
+> - **`test-author`** (in corso, dalle 18:33):
+>   - Vitest di `join` in `pageBusy.test.ts`, con tre test pensati per distinguere le varianti: sempre tracciata, mai
+>     tracciata, senza `untrack`;
+>   - due test E2E in `page-busy.spec.ts`: la Dashboard con la vista Candele salvata, e la pagina del broker con la
+>     vista Performance. Ciascuno ha un controllo: il cambio di periodo tiene il pulsante occupato finché la richiesta
+>     a cascata è trattenuta.
+> - **Consegna di `test-author`** (alle 18:47; non ha eseguito nulla tranne Prettier):
+>   - `pageBusy.test.ts` (+222/−5): da 24 a 35 casi; i 24 vecchi restano intatti.
+>     - Nove casi per `join`: pagina ferma, pagina occupata, decisione presa alla chiamata, rifiuto con e senza
+>       gettone, eccezione sincrona che diventa una promessa rifiutata, `timeoutMs`;
+>     - due casi di `join` chiamata dentro un effetto, con gli stessi aiutanti dei test di `track`.
+>   - `page-busy.spec.ts` (+291/−6): due test nuovi.
+>     - Il primo è la Dashboard con la vista Candele salvata. Il secondo è la pagina del broker con la vista Performance
+>       salvata in `?tab=posizioni`.
+>     - Ogni test tiene fermi il ricaricamento di sfondo e la richiesta a cascata (candele o contributo). Intanto il
+>       pulsante resta fermo e il registratore non vede mai `true`.
+>     - Il controllo è il cambio di periodo a 6M: la richiesta a cascata, trattenuta, tiene occupato il pulsante. Nel
+>       broker si controlla anche che il pannello mostri il proprio caricamento (`positions-panel` con
+>       `data-busy="true"`).
+>     - Le viste salvate si impostano con una prima visita, prima di installare la finta notifica di aggiornamento dei
+>       prezzi; poi la pagina viene ricaricata da zero.
+>     - Timeout di 180 s per test (`CASCADE_TEST_MS`). `openBrokerDetail` accetta ora una scheda, `panoramica` se non
+>       indicata.
+>   - Il `desc=` di `page-busy` in `_frontend_portfolio.py`.
+> - **Prova per mutazione** (`files/scripts/y11s4b_mutations.sh`, dalle 18:48 alle 18:51):
+>   - punto di partenza: `store-unit` **93/93**;
+>   - M1, `join` sempre tracciata: **3 rossi**;
+>   - M2, `join` mai tracciata: **5 rossi**;
+>   - M3, la lista letta senza `untrack`: **2 rossi**, i due test degli effetti;
+>   - file ripristinato con lo stesso SHA-256 (`f883cb88…`).
+> - **Prove leggere** (`files/scripts/y11s4b_light.sh`, dalle 18:49 alle 18:54, carico 33–39):
+>   - Prettier pulito sui cinque file; `py_compile` superato;
+>   - svelte-check 0 errori e 0 avvisi; `theme-roles` pulito;
+>   - `store-unit` 93/93; `core-unit` 6 472/6 472;
+>   - `git diff --check` pulito; la porta 6189 è libera.
+> - **Osservazioni di `test-author`**, verificate:
+>   - nel broker, `loadOverview` applica subito l'overview in cache, che non contiene il contributo, quindi la
+>     richiesta a cascata parte prima ancora dell'overview. È innocuo, ed è il motivo per cui i due blocchi delle
+>     richieste vengono installati prima che la finta notifica cambi stato;
+>   - il lato positivo del controllo dipende dalla tempistica di Svelte, verificata su 5.48. Se un giorno cambiasse,
+>     il controllo diventerebbe rosso: è il segnale che N55 si è rotta;
+>   - **Y-16**: una vista Candele salvata si carica su una pagina nuova solo per una dipendenza involontaria
+>     dell'effetto. Era così anche prima;
+>   - **Y-17**: i pulsanti di `PositionsPanel` non pubblicano `aria-pressed`.
+>   - Più la mia **Y-18**: le candele non hanno un indicatore di caricamento.
+>   - Tutte e tre sono nel BACKLOG.
+
+### Y-15 · proposta della parola per i pulsanti «Aggiorna» (per il developer; 16/10 18:38)
+
+Il coordinatore chiede di proporre la parola, «Refresh» o «Reload», nelle quattro lingue, per tutti i pulsanti
+«Aggiorna» delle pagine; la scelta spetta al developer. Inventario fatto in sola lettura su `e24ef7a2f`; i valori
+vengono dal catalogo generato alle 18:27.
+
+| Pagina | Pulsante (`data-testid`) | Chiave di oggi | EN | IT | FR | ES |
+|---|---|---|---|---|---|---|
+| Dashboard | `sync-button` | `dashboard.syncData` | Refresh | Aggiorna | Actualiser | Actualizar |
+| Pagina del broker | `broker-refresh` | `dashboard.syncData` | Refresh | Aggiorna | Actualiser | Actualizar |
+| Lista dei broker | `brokers-refresh` | nessuna: `title="Refresh"` scritto nel codice | Refresh | Refresh | Refresh | Refresh |
+| Transazioni | `tx-refresh-button` | `transactions.refresh` | Refresh from server | Ricarica dal server | Actualiser depuis le serveur | Recargar desde el servidor |
+| File | `files-refresh-button` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Dettaglio cambio | `fx-detail-refresh-btn` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Dettaglio asset | `asset-detail-refresh-btn` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Strumenti (hub e strumento) | `tools-hub-refresh`, `tool-host-refresh` | `common.refresh` | Reload | Ricarica | Recharger | Recargar |
+| Lista dei cambi, lista degli asset | `fx-refresh-all-button`, `assets-refresh-button` | `sharedResource.refreshAll` | Reload All | Ricarica Tutto | Recharger Tout | Recargar Todo |
+
+- **Oggi ci sono tre parole per la stessa azione.** La documentazione utente dice «**Refresh**» (`dashboard/index.en.md`,
+  `brokers/index.en.md`).
+- `common.refresh` non serve solo a questi pulsanti: lo usano anche il ricaricamento di una singola scheda o riga
+  (`AssetCard`, `AssetTable`, `FxCard`, `FxTable`), il modale dei file del broker, i pannelli degli strumenti, il
+  prefisso di due avvisi di errore e un'etichetta delle azioni di gruppo. Se ne cambio il valore, cambiano anche tutti
+  questi.
+- **Proposta A (consigliata): «Refresh»**, con una chiave dedicata al pulsante della barra della pagina, per esempio
+  `common.refreshPage` in `i18n/base/`.
+  - Valori: EN «Refresh», IT «Aggiorna», FR «Actualiser», ES «Actualizar», cioè i valori di oggi di
+    `dashboard.syncData`.
+  - Varianti «tutto» per le liste dei cambi e degli asset: «Refresh all», «Aggiorna tutto», «Tout actualiser»,
+    «Actualizar todo».
+  - `common.refresh` («Reload») resta ai ricaricamenti di una singola scheda o riga e dei pannelli, oppure si allinea
+    anche quello: lo decide il developer.
+  - Perché:
+    - è la parola della documentazione e delle due pagine più viste;
+    - l'icona è quella di «refresh»;
+    - «Reload» fa pensare al ricaricamento della pagina nel browser, che il pulsante non fa: richiede i dati senza
+      ricaricare la pagina.
+- **Proposta B: «Reload» ovunque**, cioè EN «Reload», IT «Ricarica», FR «Recharger», ES «Recargar». Cambiano le
+  etichette della Dashboard e della pagina del broker, e la documentazione passa da «Refresh» a «Reload».
+- Dopo la scelta: un `$_()` sulla chiave scelta per gli undici pulsanti, Y-15 compreso, con le chiavi nelle quattro
+  lingue (skill `devpy-i18n`). Le spec E2E usano i `data-testid`, quindi i testi non le toccano.
+
+### Y12b · sbloccato: CP-13a di J è in dev (`0452e592c`; messaggio di J delle 18:39)
+
+- **Campo nuovo** `maximum_drawdown_trough_to_peak_ratio` (`number | null`, ≥ 0) in `RiskDrawdownOutput`
+  (`drawdown_summary`) e in `RiskAssetSetDrawdownItem` (`asset_set_drawdown`).
+  - È il guadagno che serve per tornare dal punto più basso al massimo precedente, `−MDD/(1+MDD)`.
+  - Vale 0 senza drawdown e null in caso di perdita totale.
+  - Lo calcola `financial_math/returns.py::required_recovery_return`.
+- **`remaining_to_peak_ratio`** ora è `number | null`; è null solo in caso di perdita totale e viene dalla stessa
+  funzione.
+- **Perdita totale**: il risultato porta l'avviso `total_loss_no_recovery`, con `degrades_result=false`, quindi lo stato
+  resta `ok`.
+  - Chiavi: `risk.warnings.total_loss_no_recovery`, e `risk.warnings.total_loss_no_recovery_assets` con
+    `{count}`/`{names}`, già in `i18n/risk/*`.
+  - Con i prezzi salvati in pratica non succede: serve un valore che arrotondi esattamente a −100 %.
+- **Versioni**: `drawdown_summary` 1.2.0, `asset_set_drawdown` 1.1.0.
+- **Da fare in Y12b, dopo l'aggiornamento della base**:
+  - `levelHelpers.ts` legge i due campi (la riga peggiore intorno alla 411, quella corrente intorno alla 444), senza
+    ripiego sui KPI;
+  - `requiredRecovery` (360 circa) sparisce;
+  - `api sync` per i tipi nuovi.
+- **Riferimenti scaduti, da sistemare in Y12b**:
+  - `developer/frontend/components/features/risk-lab.md:285-287` descrive `requiredRecovery()`, con righe di
+    `L1HowMuchItHurts.svelte` già sbagliate: ora sono 152-155 e 182-183;
+  - il commento in `levelHelpers.ts:137-141` dice che il ripiego per settore è «l'unico avviso» con
+    `degrades_result=false`, e non è più vero.
+- **Conflitti previsti all'aggiornamento della base**: la fusione `0452e592c` tocca solo il BACKLOG fra i miei file,
+  nella sezione di J.
