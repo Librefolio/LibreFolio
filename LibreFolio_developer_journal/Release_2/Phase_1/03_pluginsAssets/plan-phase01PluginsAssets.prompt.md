@@ -3110,3 +3110,35 @@ Previsione dei conflitti contro `dev_release2` (`3edfc4b9a`): sette file in comu
 
 Resta aperto, da fare subito dopo l'aggiornamento della base: l'escape in `providerProbe.ts` (righe 109 e 138), con la
 sua prova.
+
+Committato dal coordinatore: `c8d23c544` (fix, 39 file) e `3d122d28a` (journal).
+
+### Quattordicesimo aggiornamento di base: `dev_release2` (`3edfc4b9a`, con Q10 dei colori) nel ramo X ✅ (2026-10-16) — merge `024a6a067`
+
+- Un conflitto, previsto, in `admin/hosting_providers.en.md`. Risolto tenendo la mia riga dei campi bloccati
+  dall'ambiente e subito sotto la riga nuova del limite di caricamento del ripristino; il «four things» del bersaglio
+  torna. In stage solo quel file; il commit del merge l'ha fatto il coordinatore.
+- Fusioni automatiche controllate: `gallery.spec.ts` (lo scatto e `TEST_USER`), `_frontend_utility.py`,
+  `frontend/i18n.md`, `admin/configuration.en.md`, `api/overview.md`, `features/settings.md`.
+
+### Sicurezza, il punto aperto: l'escape del tooltip della sonda ✅ (2026-10-16, 04:45) — commit a parte
+
+- `providerProbe.ts::buildProbeTooltipHtml`: `escapeHtml(result.detail ?? 'Error')` per un fallimento, e
+  `escapeHtml(result.detail ?? '—')` nel ramo di ripiego. Le tabelle non cambiano, e nemmeno la riga 111 di Q10 (il
+  bordo). La prova (`providerProbe.test.ts`) la sistema test-author.
+- La prova (test-author): `providerProbe.test.ts` 38/38. Il caso del fallimento ora vuole il testo escapato; 8 casi
+  nuovi (markup ostile su fallimento e ripiego, testo semplice invariato, le tabelle intatte). Il revisore lo chiude:
+  le celle delle tabelle non possono portare testo del fornitore.
+- Prove d'ingresso su `024a6a067` più l'escape, una alla volta con `nice` e il carico ≤ 70
+  (`/tmp/libreFolio_cp11c_entry_checks.sh`, log in `/tmp/libreFolio_cp11c_entry/`):
+  - `front check` 0/0, dopo `api sync`;
+  - `core-unit` 6154;
+  - services `secret-masking` 68, `plugin-settings-runtime` 120, `plugin-settings-contract` 194;
+  - `mkdocs build` severo (74 s), `check-links` 97, `i18n check` severo (4750 chiavi). Porta 6183 libera.
+- Niente E2E: lo slot 2 era di A fino alle 05:25. Le E2E `plugin-settings` verdi erano sulla base precedente; si
+  possono rifare dopo le 06:45.
+
+> **⚠️ Fuori pista**: il primo `front check` dava 1 errore in `LoginCard.svelte:112`: `first_account_open`, il flag
+> di A6d entrato con la base. Il client generato (ignorato da git) era ancora quello di prima dell'aggiornamento:
+> `api sync`, nessun file tracciato cambiato, poi `front check` 0/0. Dopo ogni aggiornamento di base che cambia l'API,
+> `api sync` va prima di `front check`.
