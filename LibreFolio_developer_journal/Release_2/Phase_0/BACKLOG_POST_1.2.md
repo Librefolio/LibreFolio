@@ -4450,11 +4450,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   (la cache di Aphra è del 10/10, l'inglese è cambiato dopo), quindi niente stamp: da chiudere col prossimo giro di
   traduzione, verificando che i commenti dell'albero spagnolo vengano tradotti, oppure a mano in un lotto di doc.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-12».
-- **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc; docs-writer
-  di Z, 16/10 (Z-5). In «Configuration Integration» la pagina dice che il backend non valida gli intervalli delle regole
-  dello scheduler e che li fa rispettare solo il dialogo: falso da `84d9e3360` (9/10), che li controlla a ogni
-  salvataggio (`SettingConstraint` in `schemas/settings.py`, ~391–403). Fuori dal lotto Z-5: una frase da correggere.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-5».
+- ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
+  docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
+  ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
+  `GLOBAL_SETTINGS_CONSTRAINTS` e risponde 422 senza scrivere nulla, e che i ripieghi del caricamento restano per i
+  valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
+  rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
 
 ## B · Backup e Docker (fase 01)
 
