@@ -54,7 +54,11 @@ Instance backup, the command line (workstream B, lot B1): ``scripts/backup_cli.p
     LibreFolio, an altered or added entry), with the blocker for a backup without active administrator, while another
     check runs, and when ``.restore`` is a link (named, nothing written through it). ``_print_stage_report`` of an
     upgrade lists the migrations, the tables the upgrade changed and the warnings. The script runs
-    ``restore --dry-run`` end to end; ``restore --help`` says what a dry run does.
+    ``restore --dry-run`` end to end; ``restore --help`` says what a dry run does. Lot B-13: right after «Files: …»
+    the report says what became of the ledger's totals, one line per status (verbatim, contract §5 and §7.5: totals
+    that ``differ from the backup's``), ``changed`` with its count and each difference (``—`` for a line absent on a
+    side), the first 20 then ``… and <n> more``, a currency through ``_safe``; the two warnings at the end; a dry run of
+    a backup as recorded says ``same``.
 
 Pure: data directories in ``tmp_path``. In this process a command sees a production data directory of the test through
 its environment (``LIBREFOLIO_TEST_MODE`` removed, ``LIBREFOLIO_DATA_DIR`` in ``tmp_path``, set with ``monkeypatch``
@@ -1175,6 +1179,16 @@ ACCOUNT_LINK_LINES = (
     "   The backup's invitation, password-reset and email-verification links stop working: send new ones after the restore.",
     "   An account still waiting for its email verification loses its link, and the sign-in page cannot send it another: an administrator activates it, or deletes it so that its owner signs up again.",
 )
+#: What the report says of the ledger's totals, right after «Files: …» (lot B-13, contract §5 and §7.5): verbatim.
+LEDGER_SAME = "   Ledger totals: the same as when the backup was made"
+LEDGER_ABSENT = "   Ledger totals: not recorded in this archive"
+LEDGER_OTHER_VERSION = "   Ledger totals: recorded by another version of the method, not compared"
+LEDGER_UNREADABLE = "⚠️  Ledger totals: could not be read on the copy"
+#: And among the warnings, at the end of the report.
+LEDGER_WARNINGS = {
+    "control_totals_changed": "⚠️  The ledger's totals differ from those the backup recorded (listed above)",
+    "control_totals_unreadable": "⚠️  The ledger's totals could not be read on the copy",
+}
 
 
 @pytest.fixture(scope="module")
@@ -1271,6 +1285,7 @@ def test_a_dry_run_reports_what_a_restore_would_do_and_removes_its_copy(tmp_path
         f"📦 Made by LibreFolio {APP_VERSION} (cli)",
         f"   Database: revision {revision_in(archive)}, this LibreFolio's own: restored as it is",
         f"   Files: {len(FILES)}",
+        LEDGER_SAME,
         "   Instance key: not included",
         "   Administrators: ada_admin, zoe_admin",
         *ACCOUNT_LINK_LINES,
@@ -1370,6 +1385,10 @@ def upgrade_report(**changes) -> StagingReport:
         administrators=["ada_admin"],
         warnings=["rows_changed", "foreign_key_violations_added"],
         blockers=[],
+        # Lot B-13 (§7.6: the three have defaults, absent, [] and 0): a report of an upgrade whose totals are the same.
+        control_totals="same",
+        control_totals_differences=[],
+        control_totals_differences_count=0,
     )
     return report.model_copy(update=changes)
 
@@ -1446,6 +1465,97 @@ def test_the_report_prints_no_control_character_from_the_archive(capsys, action)
     assert missing == [], f"{action}: each control character shown as ?: {missing} not in {out!r}"
     assert "zoe_admin" in out and "brokers" not in out, f"{action}: the other values as they are: {out!r}"
     print_success(f"{action}: control characters shown as ?")
+
+
+def ledger_report(status: str, differences=(), count: int | None = None, **changes) -> StagingReport:
+    """``upgrade_report`` with the ledger's totals of lot B-13: ``status``, ``differences`` (as JSON) and their count
+    (``len(differences)`` unless given). Validated as staging reads a report back, so each difference is the model the
+    report declares; a report without the fields (before lot B-13) ignores them, and prints none of their lines."""
+    data = upgrade_report(**changes).model_dump(mode="json")
+    data.update(control_totals=status, control_totals_differences=list(differences), control_totals_differences_count=len(differences) if count is None else count)
+    return StagingReport.model_validate(data)
+
+
+def cash_line(broker_id: int, currency: str, before: str | None, after: str | None) -> dict:
+    return {"kind": "cash", "broker_id": broker_id, "currency": currency, "asset_id": None, "before": before, "after": after}
+
+
+def quantity_line(broker_id: int, asset_id: int, before: str | None, after: str | None) -> dict:
+    return {"kind": "quantity", "broker_id": broker_id, "currency": None, "asset_id": asset_id, "before": before, "after": after}
+
+
+def after_files(out: str, size: int) -> list[str]:
+    """The ``size`` lines right after «Files: …», where the report says what became of the ledger's totals."""
+    lines = out.splitlines()
+    files = [index for index, line in enumerate(lines) if line.startswith("   Files: ")]
+    assert len(files) == 1, f"precondition: one «Files» line: {out}"
+    return lines[files[0] + 1 : files[0] + 1 + size]
+
+
+#: (status, differences, the lines right after «Files», the warnings of the report): contract §5 as §7.5 words
+#: ``changed``, verbatim.
+LEDGER_LINES = [
+    pytest.param("same", [], [LEDGER_SAME], [], id="same"),
+    pytest.param("absent", [], [LEDGER_ABSENT], [], id="absent"),
+    pytest.param("other_version", [], [LEDGER_OTHER_VERSION], [], id="other-version"),
+    pytest.param("unreadable", [], [LEDGER_UNREADABLE], ["control_totals_unreadable"], id="unreadable"),
+    pytest.param("changed", [cash_line(1, "EUR", "10", None)], ["⚠️  Ledger totals differ from the backup's (1 line):", "     broker 1, EUR cash: 10 → —"], ["control_totals_changed"], id="changed-one-line"),
+    pytest.param(
+        "changed",
+        [cash_line(1, "EUR", "100", "100.5"), cash_line(12, "USD", None, "-0.000001"), quantity_line(2, 7, None, "3.5"), quantity_line(2, 9, "4", "0.25")],
+        [
+            "⚠️  Ledger totals differ from the backup's (4 lines):",
+            "     broker 1, EUR cash: 100 → 100.5",
+            "     broker 12, USD cash: — → -0.000001",
+            "     broker 2, asset 7 quantity: — → 3.5",
+            "     broker 2, asset 9 quantity: 4 → 0.25",
+        ],
+        ["control_totals_changed"],
+        id="changed-cash-and-positions",
+    ),
+]
+
+
+@pytest.mark.parametrize(("status", "differences", "said", "warnings"), LEDGER_LINES)
+def test_the_report_says_what_became_of_the_ledger_s_totals_right_after_the_files(capsys, status, differences, said, warnings):
+    """(k) Lot B-13: one line per status, right after «Files: …»; ``changed`` lists each difference as the report gives
+    it (``—`` for a line absent on that side), and its count; the two warnings at the end, with the others."""
+    backup_cli._print_stage_report(ledger_report(status, differences, warnings=warnings))
+    out = capsys.readouterr().out
+    assert after_files(out, len(said)) == said, f"{status}: the lines right after «Files»: {out}"
+    others = [line for line in out.splitlines() if "Ledger totals" in line and line not in said]
+    assert others == [], f"{status}: no other line about the ledger's totals: {others}"
+    missing = [LEDGER_WARNINGS[code] for code in warnings if LEDGER_WARNINGS[code] not in out.splitlines()]
+    assert missing == [], f"{status}: the warning, verbatim: {missing}"
+    unexpected = [text for code, text in LEDGER_WARNINGS.items() if code not in warnings and text in out]
+    assert unexpected == [], f"{status}: no warning of the totals but its own: {unexpected}"
+    print_success(f"{status}: {said[0].strip()}")
+
+
+@pytest.mark.parametrize(("count", "more"), [(20, None), (21, 1), (25, 5)], ids=["20", "21", "25"])
+def test_past_20_differences_the_report_shows_20_and_says_how_many_more(capsys, count, more):
+    """(k) A report holds the first 20 differences and counts them all: the header says the count, then the 20 lines,
+    then ``… and <n> more`` for the rest; nothing more for exactly 20."""
+    differences = [cash_line(1, f"C{index:02d}", str(index + 1), None) for index in range(20)]
+    backup_cli._print_stage_report(ledger_report("changed", differences, count=count, warnings=["control_totals_changed"]))
+    out = capsys.readouterr().out
+    expected = [f"⚠️  Ledger totals differ from the backup's ({count} lines):", *(f"     broker 1, C{index:02d} cash: {index + 1} → —" for index in range(20))]
+    if more is not None:
+        expected.append(f"     … and {more} more")
+    assert after_files(out, len(expected)) == expected, f"{count} differences: the header, 20 lines, then the rest counted: {out}"
+    assert ("… and" in out) == (more is not None), f"{count} differences: «… and n more» only past 20: {out}"
+    print_success(f"{count}: 20 shown" + (f", … and {more} more" if more else ""))
+
+
+def test_a_currency_from_the_archive_reaches_the_terminal_through_safe(capsys):
+    """(k) Lot B-13: a currency of the totals comes from the archive's manifest (J reads any text as a currency): an
+    escape sequence and a bell in it are shown as ``?``."""
+    backup_cli._print_stage_report(ledger_report("changed", [cash_line(1, "EU\x1b[2J\x07R", "1", "2")], warnings=["control_totals_changed"]))
+    out = capsys.readouterr().out
+    unprintable = sorted({repr(char) for line in out.split("\n") for char in line if not char.isprintable()})
+    assert unprintable == [], f"no control character reaches the terminal: {unprintable} in {out!r}"
+    assert "     broker 1, EU?[2J?R cash: 1 → 2" in out.splitlines(), f"each control character shown as ?: {out!r}"
+    print_success("EU\\x1b[2J\\x07R → EU?[2J?R")
 
 
 def test_the_script_checks_an_archive_for_a_restore(tmp_path, head_database):

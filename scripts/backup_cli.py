@@ -323,10 +323,33 @@ _STAGE_WARNINGS = {
     "rows_changed": "The upgrade changed the rows of some tables (listed above)",
     "foreign_key_violations": "The backup's database has broken references: they are kept as they are",
     "foreign_key_violations_added": "The upgrade added broken references to the copy",
+    "control_totals_changed": "The ledger's totals differ from those the backup recorded (listed above)",
+    "control_totals_unreadable": "The ledger's totals could not be read on the copy",
 }
 _STAGE_BLOCKERS = {
     "no_administrator": "The backup has no active administrator: after a restore nobody could manage the instance",
 }
+
+
+def _print_totals(report) -> None:
+    """How the ledger's control totals the backup recorded compare with the copy's (lot B-13)."""
+    status = report.control_totals
+    if status == "same":
+        print("   Ledger totals: the same as when the backup was made")
+    elif status == "changed":
+        count = report.control_totals_differences_count
+        print(f"⚠️  Ledger totals differ from the backup's ({count} line{'' if count == 1 else 's'}):")
+        for line in report.control_totals_differences:
+            what = f"{_safe(line.currency)} cash" if line.kind == "cash" else f"asset {line.asset_id} quantity"
+            print(f"     broker {line.broker_id}, {what}: {_safe(line.before or '—')} → {_safe(line.after or '—')}")
+        if count > len(report.control_totals_differences):
+            print(f"     … and {count - len(report.control_totals_differences)} more")
+    elif status == "absent":
+        print("   Ledger totals: not recorded in this archive")
+    elif status == "other_version":
+        print("   Ledger totals: recorded by another version of the method, not compared")
+    else:
+        print("⚠️  Ledger totals: could not be read on the copy")
 
 
 def _print_stage_report(report) -> None:
@@ -346,6 +369,7 @@ def _print_stage_report(report) -> None:
     if changed:
         print(f"   Changed by the upgrade: {', '.join(changed[:10])}{' …' if len(changed) > 10 else ''}")
     print(f"   Files: {report.files}, {_human(report.files_size)}")
+    _print_totals(report)
     print(f"   Instance key: {'included' if report.instance_key_included else 'not included'}")
     if report.administrators:
         print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")

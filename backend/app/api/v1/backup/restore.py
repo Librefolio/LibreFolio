@@ -30,7 +30,7 @@ from backend.app.config import get_data_dir
 from backend.app.config.backup import BackupConfigError, backup_max_upload_mb
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
-from backend.app.schemas.backup import RestoreMigration, RestoreStage, RestoreStageReport, RestoreStageRequest, RestoreStatus, RestoreTableRows, RestoreUpload
+from backend.app.schemas.backup import RestoreMigration, RestoreStage, RestoreStageReport, RestoreStageRequest, RestoreStatus, RestoreTableRows, RestoreTotalsDifference, RestoreUpload
 from backend.app.services.platform.instance_backup import restart, restore_jobs
 from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, cancel_restore, read_restore
 from backend.app.services.platform.instance_backup.paths import BackupPathError
@@ -151,6 +151,9 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
         instance_key_included=report.instance_key_included,
         administrators=report.administrators,
         warnings=report.warnings,
+        control_totals=report.control_totals,
+        control_totals_differences=[RestoreTotalsDifference(**line.model_dump()) for line in report.control_totals_differences],
+        control_totals_differences_count=report.control_totals_differences_count,
         blockers=report.blockers,
         restorable=report.restorable,
         expires_at=report.expires_at,

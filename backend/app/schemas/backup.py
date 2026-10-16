@@ -52,6 +52,21 @@ class RestoreStageRequest(BaseModel):
     upload_id: str = Field(pattern=r"^[0-9a-f]{32}$")
 
 
+# kind cash: the balance of a broker in a currency; kind quantity: the quantity of an asset at a broker. before is
+# the backup's, after the copy's, in J's canonical decimal text; null where the line is absent, that is zero.
+class RestoreTotalsDifference(BaseModel):
+    """One line of the ledger's control totals that differs between the backup and its upgraded copy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["cash", "quantity"]
+    broker_id: int
+    currency: str | None
+    asset_id: int | None
+    before: str | None
+    after: str | None
+
+
 class RestoreTableRows(BaseModel):
     """The rows of one table of the backup's database, before and after its upgrade; null where the table is absent."""
 
@@ -129,8 +144,11 @@ class RestoreStageReport(BaseModel):
     database_size: int = Field(ge=0)
     instance_key_included: bool
     administrators: list[str]
-    warnings: list[Literal["rows_changed", "foreign_key_violations", "foreign_key_violations_added"]]
+    warnings: list[Literal["rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable"]]
     blockers: list[Literal["no_administrator"]]
+    control_totals: Literal["same", "changed", "absent", "other_version", "unreadable"]
+    control_totals_differences: list[RestoreTotalsDifference]
+    control_totals_differences_count: int = Field(ge=0)
     restorable: bool
     expires_at: datetime
 
