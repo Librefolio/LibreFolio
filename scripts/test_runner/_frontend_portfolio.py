@@ -244,7 +244,7 @@ def front_portfolio_allocation_unit(verbose: bool = False, ui: bool = False, hea
 
 
 def front_portfolio_chart_safety_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run chart tooltip escaping and chart flag-font unit tests (Vitest)."""
+    """Run chart tooltip escaping and chart flag-font unit tests, and the gate on the frontend's declared financial-math exceptions (Vitest)."""
     print(f"\n{Colors.BLUE}Running: Chart safety Vitest unit tests{Colors.NC}")
     result = subprocess.run(
         [
@@ -258,6 +258,7 @@ def front_portfolio_chart_safety_unit(verbose: bool = False, ui: bool = False, h
             "src/lib/utils/core/escapeHtml.single.test.ts",
             "src/lib/components/charts/chartFlagFont.test.ts",
             "src/lib/components/charts/chartFont.load.test.ts",
+            "src/financialMathExceptions.gate.test.ts",
         ],
         cwd="frontend",
         capture_output=not verbose,
@@ -507,8 +508,8 @@ def populate_registry(registry: dict) -> None:
         front_portfolio_chart_safety_unit,
         test_names=False,
         name="Chart Safety Unit Tests",
-        desc="Chart tooltips and chart text (Y9). K-15: every value a tooltip formatter takes from data or currency metadata is escaped — the allocation pie's caption and parent label, the candlestick header's currency and flag, the price chart rows' currencies and flags. C-34: the correlation heatmap writes asset names through the one shared escapeHtml, and the source tree holds no other HTML escaper (inlineMath's KaTeX variant aside). K-13: every echarts.init passes CHART_INIT_THEME, whose global font puts 'LF Flags' first, and real ECharts draws its text with that font, also after a notMerge setOption; the flag face is requested before the first paint, and a chart that painted before it arrived paints again once it is in",
-        tests="src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts, src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts, src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts, src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts, src/lib/utils/core/escapeHtml.single.test.ts, src/lib/components/charts/chartFlagFont.test.ts, src/lib/components/charts/chartFont.load.test.ts",
+        desc="Chart tooltips and chart text (Y9). K-15: every value a tooltip formatter takes from data or currency metadata is escaped — the allocation pie's caption and parent label, the candlestick header's currency and flag, the price chart rows' currencies and flags. C-34: the correlation heatmap writes asset names through the one shared escapeHtml, and the source tree holds no other HTML escaper (inlineMath's KaTeX variant aside). K-13: every echarts.init passes CHART_INIT_THEME, whose global font puts 'LF Flags' first, and real ECharts draws its text with that font, also after a notMerge setOption; the flag face is requested before the first paint, and a chart that painted before it arrived paints again once it is in. Y12a: the declared financial-math exceptions of the frontend: the four interactive measures (MeasureSignal, CompoundSignal, LinearSignal, SineSignal) carry @financial-math-exception in their leading JSDoc block, no other source does, and a power whose exponent holds 365 appears only in them",
+        tests="src/lib/components/charts/AllocationPieChart.tooltipEscape.test.ts, src/lib/components/charts/CandlestickChart.tooltipEscape.test.ts, src/lib/components/charts/PriceChartFull.tooltipEscape.test.ts, src/lib/features/risk/CorrelationHeatmap.tooltipEscape.test.ts, src/lib/utils/core/escapeHtml.single.test.ts, src/lib/components/charts/chartFlagFont.test.ts, src/lib/components/charts/chartFont.load.test.ts, src/financialMathExceptions.gate.test.ts",
     )
     add_test(cat, "risk", front_portfolio_risk, name="Risk Analysis Tests", desc="Portfolio-level risk on Dashboard and Broker Detail", tests="portfolio/risk-analysis.spec.ts")
     add_test(
