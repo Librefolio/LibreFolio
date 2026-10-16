@@ -3736,3 +3736,31 @@ FE5c-5 committed: `ca0cf62b8` + journal `636c1559b`.
 >   - `git diff --check` pulito.
 > - **La reattività vera della pagina la provano solo le E2E**: `asset-detail.spec.ts` (≈2769–3301) fa apparire e
 >   sparire `data-quality-issue-FX_PAIR_NO_DATA`. Sono nello slot finale.
+
+FE5c-6 committed: `260dbc321` + journal `d1bd1a508`.
+
+**I due difetti della doc segnalati dal docs-writer di B** (07:18) **sono già corretti** in `dev_release2` dal CP11c
+(`c8d23c544`, treno 91): «eight tabs; everyone has the first five…» e «two ask for one… justETF and Borsa Italiana».
+Il docs-writer leggeva una base precedente. Restano indietro le **traduzioni**: `user/settings/index.{it,fr,es}` dice
+ancora «quattro schede», e `admin/configuration.{it,fr,es}` non ha la sezione dei plugin. È un debito di traduzione
+vero, che va ad Aphra su richiesta del developer; nessun commit della doc.
+
+#### FE5c-7 · le cornici dei segnali e delle misure ✅ (2026-10-16, 07:19–07:25)
+
+> **Note implementazione**:
+> - Rientrati da `/tmp/libreFolio_x_fe5c_hold/`:
+>   - `AssetDetailSignalsPanel.svelte` e `AssetDetailMeasuresSection.svelte`;
+>   - i loro due test di componente;
+>   - l'imbracatura `src/__tests__/harness/AssetDetailSignalsPanelHarness.svelte`.
+> - `splice.py 7 --apply`: `ChartSignalsSection` e i due `MeasurePanel`, con i loro `bind:this`, restano nella
+>   pagina come snippet `children` (N20). La pagina passa da 3117 a 3070 righe.
+> - Registrati i due test in `component-unit`, dopo `AssetBrowseNav.test.ts`.
+> - Prettier: nessuna modifica.
+> - **`--split`**: la pagina scende da 230 a 198, le cornici ne prendono 13 e 19. La somma resta 230. L'imbracatura
+>   sta sotto `__tests__`, che il cancello non misura.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - Vitest dei due test di componente → **13/13**;
+>   - `core-unit` → 179 file, 6445/6445;
+>   - `git diff --check` pulito.
+>   - Il `component-unit` intero gira dopo il pezzo 8, con le registrazioni di tutti e due i pezzi.
