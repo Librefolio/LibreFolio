@@ -69,6 +69,7 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
     import {replaceHistoryDateRange} from '$lib/utils/url/dateRangeUrl';
@@ -1683,6 +1684,11 @@
 
     let syncAllFxPairs = $derived(requiredFxPairs.filter((p) => p.status !== 'missing').map((p) => p.slug));
 
+    /** The sync dialog's targets whose shown data holds a stored row in its range (C-66), for its warning: this asset
+     * from its chart, a pair from its rate store; a comparison asset is not counted. */
+    let syncAssetsWithData = $derived(showPageSyncModal && hasStoredPointInRange(chartData, syncDateStart, dateEnd) ? [data.assetId] : []);
+    let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
+
     function handleSync() {
         showPageSyncModal = true;
     }
@@ -2747,6 +2753,16 @@
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
     {#if assetInfo}
-        <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
+        <PageSyncModal
+            bind:open={showPageSyncModal}
+            dateStart={syncDateStart}
+            {dateEnd}
+            assets={syncAllAssets}
+            fxPairs={syncAllFxPairs}
+            assetsWithDataInRange={syncAssetsWithData}
+            fxPairsWithDataInRange={syncFxPairsWithData}
+            onsynced={handlePageSyncComplete}
+            onclose={() => (showPageSyncModal = false)}
+        />
     {/if}
 </div>

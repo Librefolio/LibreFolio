@@ -10,7 +10,6 @@ hourly budget, sends, and logs. Every link an email carries comes from ``links.e
 from __future__ import annotations
 
 import asyncio
-import ipaddress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -28,6 +27,7 @@ from backend.app.services.email import delivery
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError, send_email
 from backend.app.services.email.links import email_link, links_state, require_links
 from backend.app.services.email.messages import build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
+from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
@@ -37,15 +37,10 @@ LinkPurpose = Literal["invite", "password_reset"]
 
 _PURPOSES: dict[str, AccountTokenPurpose] = {"invite": AccountTokenPurpose.INVITE, "password_reset": AccountTokenPurpose.PASSWORD_RESET}
 
-#: «Forgot password» is held: ``POST /email/password-reset`` answers 409 ``FORGOT_PASSWORD_DISABLED`` until workstream A
-#: asks for the current password to change an account's email (security review of E3, coordinator's decision, 15/10).
-#: Without that, a moment inside someone's session (a stolen cookie, an unlocked machine) would be enough to put an
-#: address of one's own on the account and then reset its password from it: a lasting takeover. Lifted with lot E4.
-FORGOT_PASSWORD_HELD = True
-
-#: «Forgot password», per client address: 10 requests every 15 minutes; an IPv6 client counts by its /64, which one
-#: subscriber usually holds whole. The address is the one uvicorn gives the request (``request.client.host``): it follows
-#: ``X-Forwarded-For`` only from the proxies it trusts (``FORWARDED_ALLOW_IPS``), so a forged header does not move it.
+#: «Forgot password», per client address: 10 requests every 15 minutes, keyed by workstream H's ``client_rate_key()``:
+#: an IPv6 client counts by its /64, which one subscriber usually holds whole. The address is H's ``client_address()``:
+#: the header a trusted proxy sets when ``LIBREFOLIO_CLIENT_IP_HEADER`` names it, otherwise the connection's, which
+#: follows ``X-Forwarded-For`` only from the proxies uvicorn trusts (``FORWARDED_ALLOW_IPS``).
 FORGOT_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
 #: «Forgot password», per identifier as written (case-insensitive): 3 requests an hour, whether an account matches or not.
 FORGOT_BY_IDENTIFIER = SlidingWindowLimiter(3, 60 * 60)
@@ -55,13 +50,11 @@ FORGOT_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
 #: Per account, counted on its reset links: at most one email every 5 minutes, and 3 an hour; past them, in silence.
 RESET_EMAIL_MIN_INTERVAL = timedelta(minutes=5)
 RESET_EMAILS_PER_HOUR = 3
-
-
-class ForgottenPasswordHeldError(EmailError):
-    """«Forgot password» is held (``FORGOT_PASSWORD_HELD``)."""
-
-    def __init__(self) -> None:
-        super().__init__("FORGOT_PASSWORD_DISABLED")
+#: Email-change notices: 3 an hour per account, and 3 an hour per recipient mailbox (case-insensitive). Without them, an
+#: account could point its email at any address, change it again, and so have the instance write to that address, with
+#: its username and a domain of its choice, as often as the hourly budget allows. Counted on the notices that went out.
+EMAIL_CHANGE_NOTICES_BY_ACCOUNT = SlidingWindowLimiter(3, 60 * 60)
+EMAIL_CHANGE_NOTICES_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
 
 
 class EmailAccountInactiveError(EmailError):
@@ -69,23 +62,6 @@ class EmailAccountInactiveError(EmailError):
 
     def __init__(self) -> None:
         super().__init__("EMAIL_ACCOUNT_INACTIVE")
-
-
-def address_key(address: str | None) -> str | None:
-    """The key of ``address`` for the per-address limit: an IPv4 address as is, an IPv6 one by its /64, anything else
-    (a name, a unix socket) as written; ``None`` without an address, an empty one included."""
-    if not address:
-        return None
-    try:
-        ip = ipaddress.ip_address(address)
-    except ValueError:
-        return address
-    if not isinstance(ip, ipaddress.IPv6Address):
-        return str(ip)
-    if ip.ipv4_mapped is not None:
-        return str(ip.ipv4_mapped)
-    # From the integer, so a zone (``fe80::1%eth0``) does not get in the way.
-    return str(ipaddress.IPv6Network((int(ip) >> 64 << 64, 64)))
 
 
 class EmailLinkInvalidError(EmailError):
@@ -212,18 +188,15 @@ async def send_link_email(
 async def admit_forgotten_password(address: str | None, identifier: str) -> None:
     """Whether a «forgot password» request may go on, before anything about the accounts is read.
 
-    Raises ``ForgottenPasswordHeldError`` while the feature is held (``FORGOT_PASSWORD_HELD``),
-    ``EmailUnavailableError`` or ``EmailLinksUnavailableError`` (the configuration, the same for everyone) and
+    Raises ``EmailUnavailableError`` or ``EmailLinksUnavailableError`` (the configuration, the same for everyone) and
     ``EmailRateLimitedError``: too many requests from this address or for this identifier, or the hourly budget of the
     instance spent. None of them depends on whether an account matches.
     """
-    if FORGOT_PASSWORD_HELD:
-        raise ForgottenPasswordHeldError()
     state = await require_email()
     require_links()
     # Without an address (a unix socket), one shared count would let a single client block the feature for everyone:
     # the limits per identifier and per account, and the hourly budget, still apply.
-    checks = ((FORGOT_BY_ADDRESS, address_key(address)), (FORGOT_BY_IDENTIFIER, identifier.strip().casefold()))
+    checks = ((FORGOT_BY_ADDRESS, client_rate_key(address)), (FORGOT_BY_IDENTIFIER, identifier.strip().casefold()))
     for limiter, key in checks:
         if key is None:
             continue
@@ -342,10 +315,12 @@ async def email_changed_work(user_id: int, old_address: str, new_address: str, *
 
     It goes only to the old address, in the account's language, and shows the new one masked (``***@domain``). It carries
     no link, so ``LIBREFOLIO_PUBLIC_URL`` is not needed: the instance is named by it when set, else «LibreFolio». Nothing
-    goes when the addresses are the same, email is off (an ``info`` line, not a warning: the self-hosted default), the
-    account is gone or email cannot be used now; a refusal or a failure is logged without either address. Never raises.
+    goes when the addresses are the same (``user_service.same_email()``, the one rule of decision P18: A–Z in any case),
+    email is off (an ``info`` line, not a warning: the self-hosted default), the account is gone, email cannot be used
+    now, or the account or the old mailbox had 3 notices in the hour (``EMAIL_CHANGE_NOTICES_BY_ACCOUNT``,
+    ``EMAIL_CHANGE_NOTICES_BY_MAILBOX``); a refusal or a failure is logged without either address. Never raises.
     """
-    if old_address.strip().casefold() == new_address.strip().casefold():
+    if user_service.same_email(old_address, new_address):
         return
     try:
         # Email off is the default of a self-hosted instance, not a fault: no warning for it.
@@ -358,11 +333,17 @@ async def email_changed_work(user_id: int, old_address: str, new_address: str, *
                 logger.info("Email change notice: the account no longer exists, nothing sent", user_id=user_id)
                 return
             await require_email()
+            mailbox = old_address.strip().casefold()
+            if not (EMAIL_CHANGE_NOTICES_BY_ACCOUNT.peek(user_id).allowed and EMAIL_CHANGE_NOTICES_BY_MAILBOX.peek(mailbox).allowed):
+                logger.info("Email change notice: past its limits, nothing sent", user_id=user_id)
+                return
             language = await account_language(session, user_id)
             links = links_state()
             instance = links.instance if links.ready else INSTANCE_FALLBACK
             content = build_email_changed(language=language, username=user.username, new_address=new_address, instance=instance)
             await send_email(content, to=old_address, user_id=user_id)
+            EMAIL_CHANGE_NOTICES_BY_ACCOUNT.hit(user_id)
+            EMAIL_CHANGE_NOTICES_BY_MAILBOX.hit(mailbox)
             logger.info("Email change notice sent to the previous address", user_id=user_id, language=language)
     except (EmailError, ValueError) as exc:
         logger.warning("Email change notice: not sent", user_id=user_id, reason=type(exc).__name__, code=getattr(exc, "code", None))

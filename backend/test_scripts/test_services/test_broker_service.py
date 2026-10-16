@@ -10,7 +10,7 @@ Reference: backend/app/services/brokers/broker_service.py
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -56,6 +56,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.brokers.broker_service import BrokerService
+from backend.app.services.portfolio_service import compute_wac_iterative
 from backend.app.services.transactions import auto_cost, transaction_service
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
@@ -1381,8 +1382,8 @@ class TestDeleteBulkForceBehavior:
 # CASH_TRANSFER a DEPOSIT when its amount is positive, a WITHDRAWAL when it is negative, same
 # amount and currency. Its related_transaction_id ends up NULL — the reciprocal column is the
 # whole durable pair, link_uuid is request-scoped and never stored. Date, broker, asset,
-# description and tags stay. Today the half keeps its type and only loses its link: a TRANSFER
-# without its pair, which the lots and the Dashboard misread
+# description and tags stay. Before N1b-1 the half kept its type and only lost its link: a
+# TRANSFER without its pair, which the lots and the Dashboard misread
 # (test_financial/test_orphan_transfer_after_broker_delete.py).
 #
 # Where the deletion departs from a split — J, 15/10, and the coordinator's point 47:
@@ -1394,10 +1395,19 @@ class TestDeleteBulkForceBehavior:
 #   compute_wac_iterative returns Currency(asset currency, 0) for no rows (portfolio_service.py:
 #   185-190), and `if wac_result.wac:` is true for it (_write_auto_cost, auto_cost.py:141). A split
 #   writes no cost.
-# - The outgoing half of a TRANSFER is not converted until the coordinator decides: it stays a
-#   TRANSFER, unlinked, nothing else changed. Converted it would be an ADJUSTMENT −4, which cannot
-#   carry a cost basis (type_metadata.py:286, TRANSFER cost_basis_pair ["forbidden", …]), and the
-#   sender's lots and P&L would read the moved units as destroyed. A split converts it.
+#
+# Decision 47 (W's part; J's CP-16, financial_math/fifo/engine.py, already reads it): the outgoing half
+# of a TRANSFER becomes an ADJUSTMENT with the same signed quantity HANDED OVER AT COST — its
+# cost_basis_override and cost_basis_currency, written together, are the Auto cost of ITS OWN broker:
+# TransactionService._handover_cost = _auto_cost(row, (row's broker, [row], row's date)), so
+# compute_wac_iterative over the sender up to the transfer date, the half itself left out. Not
+# _auto_cost_source, which for a TRANSFER still linked names the partner's broker. Computed before
+# any row changes, like the incoming half's. When that cost needs a conversion no rate gives (wac
+# None), the half stays as it was before decision 47: a TRANSFER, unlinked, nothing else changed —
+# never an ADJUSTMENT −4 without a cost, which would read the moved units as destroyed. A split of
+# the pair writes the same cost on its outgoing half (decision 47, point 2:
+# test_transaction_cost_basis_rule.py), so BR-U-076's parity covers all four sides. BR-U-073, 076,
+# 078 and 086–088 pin it.
 #
 # Every case goes through BrokerService.delete_bulk(force=True), the path of DELETE /brokers and
 # of the last owner leaving (BrokerAccessMixin.leave_broker). Rows are written straight into the
@@ -1412,18 +1422,19 @@ _CROSS_PAIR_SIDES = [
     pytest.param(TransactionType.CASH_TRANSFER, "sender", id="cash-transfer-sender-deleted"),
     pytest.param(TransactionType.CASH_TRANSFER, "receiver", id="cash-transfer-receiver-deleted"),
 ]
-# What the surviving half becomes (BR-U-073).
+# The sender's Auto cost with _seed_cross_pair's defaults: its 10 X bought for 200 EUR, 20 EUR a unit — the
+# cost decision 47 hands the outgoing half over at.
+_SENDERS_AUTO_COST = {"cost_basis_override": Decimal("20"), "cost_basis_currency": "EUR"}
+# What the surviving half becomes (BR-U-073): its type, and the cost basis the deletion writes on it.
 _CROSS_PAIR_CASES = [
-    pytest.param(TransactionType.TRANSFER, "sender", TransactionType.ADJUSTMENT, id="transfer-sender-deleted"),
-    # The sender's outgoing half stays a TRANSFER, unlinked, pending the coordinator's decision (J 15/10).
-    pytest.param(TransactionType.TRANSFER, "receiver", TransactionType.TRANSFER, id="transfer-receiver-deleted-outgoing-half-kept-pending-decision"),
-    pytest.param(TransactionType.CASH_TRANSFER, "sender", TransactionType.DEPOSIT, id="cash-transfer-sender-deleted"),
-    pytest.param(TransactionType.CASH_TRANSFER, "receiver", TransactionType.WITHDRAWAL, id="cash-transfer-receiver-deleted"),
+    pytest.param(TransactionType.TRANSFER, "sender", TransactionType.ADJUSTMENT, {}, id="transfer-sender-deleted"),  # keeps its 20 EUR
+    # Decision 47: the sender's outgoing half handed over at the sender's Auto cost.
+    pytest.param(TransactionType.TRANSFER, "receiver", TransactionType.ADJUSTMENT, _SENDERS_AUTO_COST, id="transfer-receiver-deleted"),
+    pytest.param(TransactionType.CASH_TRANSFER, "sender", TransactionType.DEPOSIT, {}, id="cash-transfer-sender-deleted"),
+    pytest.param(TransactionType.CASH_TRANSFER, "receiver", TransactionType.WITHDRAWAL, {}, id="cash-transfer-receiver-deleted"),
 ]
-# BR-U-076 compares a deletion with a split. Left out: the receiver deleted from a TRANSFER pair — a
-# split converts the outgoing half, the deletion leaves it a TRANSFER until the coordinator decides
-# (J 15/10); BR-U-073 and BR-U-078 pin it.
-_SPLIT_PARITY_SIDES = [side for side in _CROSS_PAIR_SIDES if side.id != "transfer-receiver-deleted"]
+# A stamp of the past for a row's updated_at: a conversion that stamps the row moves it forward, whatever the clock.
+_STAMPED_BEFORE = datetime(2019, 9, 4, 10, 0)
 
 # The surviving broker's summary, the same before and after the deletion: its cash per currency
 # and its holding of X as (quantity, total cost, average cost) — X is quoted in EUR, bought in EUR.
@@ -1586,12 +1597,13 @@ class TestDeleteBulkCrossBrokerPair:
     """Deleting a broker leaves the other half of each cross-broker pair as a standalone row, as a split would."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("kind", "deleted", "survivor_type"), _CROSS_PAIR_CASES)
-    async def test_delete_bulk_turns_the_surviving_half_into_a_standalone_row(self, session, test_user, kind, deleted, survivor_type):
-        """BR-U-073 (RED but for the outgoing TRANSFER half): the surviving half takes its standalone type and loses its link; quantity, amount, cost basis, date, broker, asset, description and tags stay.
+    @pytest.mark.parametrize(("kind", "deleted", "survivor_type", "cost_written"), _CROSS_PAIR_CASES)
+    async def test_delete_bulk_turns_the_surviving_half_into_a_standalone_row(self, session, test_user, kind, deleted, survivor_type, cost_written):
+        """BR-U-073 (guard on three sides; RED today on transfer-receiver-deleted until decision 47): the surviving half takes its standalone type and loses its link; quantity, amount, date, broker, asset, description and tags stay, and so does the cost basis — but the outgoing TRANSFER half's.
 
-        The sender's outgoing TRANSFER half — the receiver deleted — keeps its type and only loses its
-        link, as today: pending the coordinator's decision (J 15/10), that case is green today and after.
+        The sender's outgoing TRANSFER half — the receiver deleted — becomes an ADJUSTMENT −4 handed over at the
+        sender's Auto cost, 20 EUR (decision 47: _seed_cross_pair's 10 X for 200 EUR, the half itself left out).
+        Today it stays a TRANSFER without a cost basis and only loses its link.
         """
         pair = await _seed_cross_pair(session, test_user, kind)
         survivor = pair.legs[CrossPair.survivor_of(deleted)]
@@ -1600,7 +1612,7 @@ class TestDeleteBulkCrossBrokerPair:
         await _delete_broker(session, test_user, pair.brokers[deleted])
 
         after = await _rows_now(session, Transaction.id == survivor.id)
-        assert {tx_id: _fields(tx) for tx_id, tx in after.items()} == {survivor.id: {**before, "type": survivor_type, "related_transaction_id": None}}
+        assert {tx_id: _fields(tx) for tx_id, tx in after.items()} == {survivor.id: {**before, "type": survivor_type, "related_transaction_id": None, **cost_written}}
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("kind", "deleted"), _CROSS_PAIR_SIDES)
@@ -1643,14 +1655,15 @@ class TestDeleteBulkCrossBrokerPair:
         assert {"before": before, "after": after} == {"before": expected, "after": expected}
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("kind", "deleted"), _SPLIT_PARITY_SIDES)
+    @pytest.mark.parametrize(("kind", "deleted"), _CROSS_PAIR_SIDES)
     async def test_delete_bulk_leaves_the_surviving_half_as_a_split_of_the_same_pair_does(self, session, test_user, kind, deleted):
-        """BR-U-076 (RED today; once fixed, the guard against drift): deleting a broker and splitting the same kind of pair leave the surviving half alike.
+        """BR-U-076 (guard on three sides; RED today on transfer-receiver-deleted until decision 47): deleting a broker and splitting the same kind of pair leave the surviving half alike.
 
         The parity holds for an incoming TRANSFER half that carries a cost basis, as here, and for the
         cash halves. Without a cost basis the deletion also writes the sender's Auto cost and a split
-        does not (by design, J 15/10: BR-U-077). The outgoing TRANSFER half is not compared: a split
-        converts it, the deletion leaves it a TRANSFER until the coordinator decides (BR-U-073, BR-U-078).
+        does not (by design, J 15/10: BR-U-077). The outgoing TRANSFER half: with decision 47 both hand
+        it over at its own broker's Auto cost, 20 EUR — the deletion through _handover_cost, the split in
+        its WAC stage. Today the deletion leaves it a TRANSFER, the split an ADJUSTMENT −4 without a cost.
         """
         by_deletion = await _seed_cross_pair(session, test_user, kind)
         by_split = await _seed_cross_pair(session, test_user, kind, asset=by_deletion.asset)
@@ -1695,9 +1708,16 @@ class TestDeleteBulkCrossBrokerPair:
         }
 
     @pytest.mark.asyncio
-    async def test_delete_bulk_leaves_the_outgoing_half_a_transfer_without_cost_basis(self, session, test_user):
-        """BR-U-078 (guard, green today and after N1b-1): neither half has a cost basis; deleting the receiver leaves the sender's outgoing half a TRANSFER, unlinked, with no cost basis written — pending the coordinator's decision (J 15/10)."""
-        pair = await _seed_cross_pair(session, test_user, TransactionType.TRANSFER, receiver_cost_basis=None)
+    @pytest.mark.parametrize("receiver_cost_basis", [pytest.param(None, id="receiving-half-without-cost-basis"), pytest.param("35", id="receiving-half-at-35-eur")])
+    async def test_delete_bulk_hands_the_outgoing_half_over_at_its_own_brokers_auto_cost(self, session, test_user, receiver_cost_basis):
+        """BR-U-078 (RED until decision 47): deleting the receiver turns the sender's outgoing half into an ADJUSTMENT −4 handed over at the sender's Auto cost, 20 EUR, whatever the receiving half carried — no cost basis, or 35 EUR a unit.
+
+        The cost is the outgoing half's own broker's (TransactionService._handover_cost): never copied from the
+        receiving half, and never _auto_cost_source's, which for the half still linked averages the partner's
+        broker — the receiver holds no X but the half being deleted, so that pool would give 0 EUR (decision P-1).
+        Today the half stays a TRANSFER, unlinked, without a cost basis.
+        """
+        pair = await _seed_cross_pair(session, test_user, TransactionType.TRANSFER, receiver_cost_basis=receiver_cost_basis)
         survivor = pair.legs["sender"]
         before = _fields(survivor)
 
@@ -1706,10 +1726,9 @@ class TestDeleteBulkCrossBrokerPair:
         after = await _rows_now(session, Transaction.id == survivor.id)
         assert _fields(after.get(survivor.id)) == {
             **before,
-            "type": TransactionType.TRANSFER,
-            "related_transaction_id": None,  # the only change
-            "cost_basis_override": None,  # no Auto cost on the way out: an outgoing half carries none
-            "cost_basis_currency": None,
+            "type": TransactionType.ADJUSTMENT,
+            "related_transaction_id": None,
+            **_SENDERS_AUTO_COST,  # 200 / 10, with its currency: the model wants both or neither
         }
 
     @pytest.mark.asyncio
@@ -1739,6 +1758,91 @@ class TestDeleteBulkCrossBrokerPair:
             "cost_basis_override": Decimal("0"),
             "cost_basis_currency": "EUR",  # X's currency
         }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("before_transfer", "after_transfer"), _AUTO_COST_HISTORIES)
+    async def test_delete_bulk_hands_the_outgoing_half_over_at_the_senders_average_up_to_its_date_without_itself(self, session, test_user, before_transfer, after_transfer):
+        """BR-U-086 (RED until decision 47): BR-U-077's histories read from the other side — deleting the receiver hands the sender's outgoing half over at the sender's average up to the transfer date without the half itself, 25 EUR, the purchase of the day after left out. Quantity, date, asset, description and tags stay; the link goes; updated_at moves.
+
+        The two histories tell the pool apart: with the half in it, the whole position sent leaves an emptied pool,
+        which averages 0 (average_cost.py); with the purchase of the day after in it, 30 or 35.71… EUR. The half's
+        updated_at is first set in the past, so "moved" never hangs on two clock readings of the same instant.
+        """
+        pair = await _seed_cross_pair(session, test_user, TransactionType.TRANSFER, sender_purchases=(*before_transfer, *after_transfer))
+        survivor = pair.legs["sender"]
+        survivor.updated_at = _STAMPED_BEFORE
+        await session.flush()
+        before = _fields(survivor)
+        # The oracle, by hand: what the sender paid for the X it held when the 4 left, over their number.
+        paid = sum(-Decimal(amount) for _day, _quantity, amount in before_transfer)
+        held = sum(Decimal(quantity) for _day, quantity, _amount in before_transfer)
+        expected_cost = paid / held
+        assert expected_cost == Decimal("25"), "the oracle: 500 / 20, or 100 / 4"
+
+        await _delete_broker(session, test_user, pair.brokers["receiver"])
+
+        after = (await _rows_now(session, Transaction.id == survivor.id)).get(survivor.id)
+        assert _fields(after) == {
+            **before,
+            "type": TransactionType.ADJUSTMENT,
+            "related_transaction_id": None,
+            "cost_basis_override": expected_cost,
+            "cost_basis_currency": "EUR",
+        }
+        assert after.updated_at > _STAMPED_BEFORE, f"the conversion must stamp the row it changes (what is cached on updated_at is computed again): updated_at {after.updated_at}"
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_leaves_the_outgoing_half_a_transfer_when_its_auto_cost_needs_a_missing_conversion(self, session, test_user):
+        """BR-U-087 (guard, green today and after decision 47): part of the sender's X was paid in PYG, which no rate converts — there is no Auto cost to hand the outgoing half over at, and deleting the receiver leaves the half as before decision 47: a TRANSFER, unlinked, without a cost basis, nothing else changed.
+
+        A real missing conversion, no patch: PYG is first proven absent from every rate and route (_assert_no_fx_data,
+        as BR-U-038), then the oracle — compute_wac_iterative on the sender up to the transfer date without the half,
+        the call _handover_cost makes — confirms there is no average and names the pair. The PYG purchase comes
+        first, so the EUR one, the last acquisition, sets the target currency: PYG/EUR is the conversion missing.
+        """
+        await _assert_no_fx_data(session, "PYG")
+        pair = await _seed_cross_pair(session, test_user, TransactionType.TRANSFER)
+        sender, survivor = pair.brokers["sender"], pair.legs["sender"]
+        pyg_day = PAIR_FUNDING_DAY - timedelta(days=1)
+        await _add(session, _row(sender, pair.asset, TransactionType.BUY, pyg_day, "10", "-50000", "PYG"))
+        oracle = await compute_wac_iterative(session, broker_id=sender, asset_id=pair.asset.id, as_of_date=survivor.date, asset_currency="EUR", excluded_tx_ids=[survivor.id], use_cache=False)
+        assert (oracle.wac, oracle.wac_missing_pairs) == (None, [WACMissingPairInfo(pair="PYG/EUR", dates=[pyg_day])]), f"precondition broken: the sender's Auto cost must need PYG/EUR on {pyg_day}: {oracle}"
+        before = _fields(survivor)
+
+        await _delete_broker(session, test_user, pair.brokers["receiver"])
+
+        after = await _rows_now(session, Transaction.id == survivor.id)
+        assert _fields(after.get(survivor.id)) == {**before, "related_transaction_id": None}  # still a TRANSFER, still no cost basis: only the link goes
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_that_fails_on_the_handover_cost_leaves_the_receiver_and_the_pair_as_they_were(self, session, test_user, monkeypatch):
+        """BR-U-088 (RED until decision 47): a failure while computing the outgoing half's Auto cost fails the receiver's deletion and leaves every row as it was — the receiver and its rows, the pair linked both ways, the outgoing half a TRANSFER without a cost basis.
+
+        compute_wac_iterative, patched where auto_cost calls it (as BR-U-080), raises. delete_bulk deletes each broker
+        in a savepoint of its own (W-B20), so the failure takes back that broker's writes and its result carries the
+        error. The one computation is on the sender, the outgoing half's own broker. Today a deletion computes no
+        cost for an outgoing half: the patch is never reached, and the receiver goes.
+        """
+        pair = await _seed_cross_pair(session, test_user, TransactionType.TRANSFER)
+        # Plain values from here on: the savepoint's rollback expires what it touched, and async cannot reload it.
+        user_id, sender, receiver = test_user.id, pair.brokers["sender"], pair.brokers["receiver"]
+        before = {tx.id: _fields(tx) for tx in (*pair.own_rows["sender"], *pair.own_rows["receiver"], *pair.legs.values())}
+        calls: list[int | None] = []
+
+        async def fails(*args, **kwargs):
+            calls.append(kwargs.get("broker_id"))
+            raise RuntimeError("handover cost boom")
+
+        monkeypatch.setattr(auto_cost, "compute_wac_iterative", fails)
+
+        response = await BrokerService(session).delete_bulk([BRDeleteItem(id=receiver, force=True)], user_id=user_id)
+
+        assert calls == [sender], f"the outgoing half's Auto cost was to be computed once, on its own broker {sender}; calls: {calls}"
+        assert [(result.id, result.success) for result in response.results] == [(receiver, False)]
+        assert "handover cost boom" in (response.results[0].message or ""), f"the error belongs in the receiver's result: {response.results[0].message!r}"
+        brokers_now = (await session.execute(select(Broker.id).where(Broker.id.in_([sender, receiver])))).scalars().all()
+        after = await _rows_now(session, Transaction.id.in_(list(before)))
+        assert {"brokers": sorted(brokers_now), "rows": {tx_id: _fields(tx) for tx_id, tx in after.items()}} == {"brokers": sorted([sender, receiver]), "rows": before}
 
     @pytest.mark.asyncio
     async def test_delete_bulk_that_fails_on_an_auto_cost_leaves_every_row_as_it_was(self, session, engine, monkeypatch):
