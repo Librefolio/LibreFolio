@@ -28,8 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
-    AssetEvent,
-    AssetEventType,
     Broker,
     BrokerUserAccess,
     PriceHistory,
@@ -83,8 +81,6 @@ from backend.app.services.financial_math.native_cash import CONVERSION_DUST, Nat
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
-    calculate_mwrr,
-    calculate_mwrr_series,
     calculate_simple_roi,
     calculate_simple_roi_series,
     calculate_twrr,
@@ -92,10 +88,14 @@ from backend.app.services.financial_math.returns import (
     cumulative_to_annualized,
     gain_loss_ratio,
     net_holding_return,
+    period_mwrr,
+    period_mwrr_series,
     realized_gain,
     rebase_to_period,
 )
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
     calculate_yield_on_cost_for_positions,
@@ -155,11 +155,7 @@ async def compute_wac_iterative(
 
     # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — a split
     # rescales the pool (same cost, new quantity) instead of adding or reducing.
-    split_event_row_ids = {row.id for row in db_rows if row.asset_event_id is not None}
-    split_linked_row_ids: set[int] = set()
-    if split_event_row_ids:
-        split_stmt = select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_row_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        split_linked_row_ids = set((await session.execute(split_stmt)).scalars().all())
+    split_linked_row_ids = await split_linked_ids(session, db_rows)
 
     # WAC cache check: fingerprint from transaction IDs + updated_at
     import hashlib  # noqa: PLC0415
@@ -849,13 +845,15 @@ class PortfolioService:
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
 
-        total_market = sum(h.current_value for h in all_holdings if h.current_value) or Decimal("1")
-        nav_denominator = engine_nav if engine_nav > 0 else Decimal("1")
+        # Weights from the house (D-MF7): no share of a total at or below zero — the field stays None («—»).
+        total_market = sum((h.current_value for h in all_holdings if h.current_value), Decimal("0"))
         for h in all_holdings:
-            if h.current_value and total_market:
-                object.__setattr__(h, "allocation_percent", (h.current_value / total_market * 100).quantize(Decimal("0.01")))
-            if h.current_value:
-                object.__setattr__(h, "nav_weight_percent", (h.current_value / nav_denominator * 100).quantize(Decimal("0.01")))
+            if not h.current_value:
+                continue
+            allocation = percent_of(h.current_value, total_market)
+            nav_weight = percent_of(h.current_value, engine_nav)
+            object.__setattr__(h, "allocation_percent", allocation.quantize(Decimal("0.01")) if allocation is not None else None)
+            object.__setattr__(h, "nav_weight_percent", nav_weight.quantize(Decimal("0.01")) if nav_weight is not None else None)
 
         # ── 5. Performance from engine (correct daily NAV) ──
         nav_snapshots, cash_flows_perf = views.build_performance_inputs()
@@ -864,7 +862,6 @@ class PortfolioService:
         period = rebase_to_period(nav_snapshots, cash_flows_perf, date_from)
         period_cfs = list(period.cash_flows)
         period_navs = list(period.nav_snapshots)
-        period_start_nav_perf = period.start_nav
         period_start_date_perf = period.start_date if period.start_date is not None else today
 
         # Net invested for the period (sum of deposits minus withdrawals)
@@ -879,19 +876,9 @@ class PortfolioService:
                 twrr_result = twrr_point.twrr
             except (ValueError, ZeroDivisionError):
                 twrr_result = None
-            if period_net_invested > 0:
-                # Use first actual NAV when period_start is 0 (portfolio starts from nothing)
-                # This matches calculate_mwrr_series which uses sorted_navs[0].nav
-                initial_nav_for_mwrr = period_start_nav_perf if period_start_nav_perf > 0 else (period_navs[0].nav if period_navs else Decimal("0"))
-                mwrr_point = await asyncio.to_thread(
-                    calculate_mwrr,
-                    period_cfs,
-                    initial_nav_for_mwrr,
-                    engine_nav,
-                    period_start_date_perf,
-                    date_to or today,
-                )
-                mwrr_result = mwrr_point.mwrr
+        # The Dashboard's MWRR rule lives in the house: the card is the last point of the line by construction
+        # (D-MF5): no rate without net invested capital or with a value at or below zero.
+        mwrr_result = (await asyncio.to_thread(period_mwrr, period_navs, period_cfs, date_to or today, engine_nav)).mwrr
 
         # ── MWRR cumulative derivation ──
         mwrr_period_days: int | None = None
@@ -1163,7 +1150,8 @@ class PortfolioService:
         if period_nav_snapshots and period_cash_flows:
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
             roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
-            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, period_nav_snapshots, period_cash_flows)
+            # The same rule as the card, at every point (D-MF5): no rate where the card would have none.
+            mwrr_series = await asyncio.to_thread(period_mwrr_series, period_nav_snapshots, period_cash_flows)
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
             roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
@@ -1891,7 +1879,7 @@ class PortfolioService:
             gross_losses=gross_losses,
         )
 
-    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration + nested MWRR divergence retry
+    async def get_report(  # noqa: C901 — TODO(P2-refactor): include-flag orchestration
         self,
         user_id: int,
         query: PortfolioReportQuery,

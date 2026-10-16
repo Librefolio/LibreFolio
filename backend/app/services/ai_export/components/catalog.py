@@ -121,7 +121,7 @@ _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "fifo_summary", "FIFO summary", version=2, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "fifo_lots", "FIFO open/partial/closed lots", version=2, dependencies=("portfolio.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "drawdown_summary", "Portfolio drawdown context", period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.PORTFOLIO, "income_timeline", "Realized income timeline evidence", period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.PORTFOLIO, "income_timeline", "Realized income timeline evidence", version=2, period_behavior=PeriodBehavior.WINDOWED),
 )
 
 # -- Broker ---------------------------------------------------------------------
@@ -146,7 +146,7 @@ _BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.BROKER, "drawdown_summary", "Broker drawdown context", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "concentration_context", "Broker concentration context", dependencies=("broker.allocation_concentration",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.BROKER, "concentration_comparison", "Broker vs portfolio concentration comparison", period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.BROKER, "cost_efficiency", "Broker cost efficiency evidence", dependencies=("broker.flows_income_costs",), period_behavior=PeriodBehavior.WINDOWED),
+    _component(Domain.BROKER, "cost_efficiency", "Broker cost efficiency evidence", version=2, dependencies=("broker.flows_income_costs",), period_behavior=PeriodBehavior.WINDOWED),
 )
 
 # -- Asset ------------------------------------------------------------------------

@@ -33,6 +33,7 @@
     import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
@@ -297,15 +298,20 @@
     }
 
     async function retryBackendSignals() {
-        await loadFxSignalDefinitions(true);
-        await fetchAllPairData();
+        await pageBusy.track('fx-signals-retry', async () => {
+            await loadFxSignalDefinitions(true);
+            await fetchAllPairData();
+        });
     }
 
     onMount(async () => {
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
-        await loadFxSignalDefinitions();
-        await loadPairSources();
+        // The first load holds the page's Refresh button (Y11): the catalog, the pairs, their rates.
+        await pageBusy.track('fx-first-load', async () => {
+            await loadFxSignalDefinitions();
+            await loadPairSources();
+        });
         // Load asset list for cross-domain signal selection
         loadAssetList();
         onboardingGuide.maybeStartContextual('fx_page_guide');
@@ -588,7 +594,7 @@
             setGlobalSettings(s, 'fx');
         }
         if (shouldReloadBackend) {
-            void fetchAllPairData();
+            void pageBusy.track('fx-settings', () => fetchAllPairData());
         }
     }
 
@@ -719,7 +725,7 @@
             invalidateAllFxStores();
             rearmMaxPendingBeforeReload();
             pairs = pairs.map((p) => ({...p, data: [], loading: true}));
-            await fetchAllPairData();
+            await pageBusy.track('fx-refresh', () => fetchAllPairData());
         } finally {
             refreshing = false;
         }
@@ -793,7 +799,7 @@
         // resolved date) so the URL stays meaningful across reloads/shares and
         // the "All" badge doesn't look stuck on a specific historical date.
         gotoDateRange(newStart, newEnd);
-        fetchAllPairData();
+        void pageBusy.track('fx-period', () => fetchAllPairData());
     }
 
     function handleAddPair() {
@@ -938,7 +944,7 @@
     async function handlePairCreated() {
         if (!pageAlive) return;
         addModalOpen = false;
-        await loadPairSources();
+        await pageBusy.track('fx-reload', () => loadPairSources());
     }
 
     async function handlePairCreationSynced(detail: FxPairSyncCompleteDetail) {
@@ -1102,8 +1108,14 @@
                 {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
-            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-refresh-all-button" onclick={handleRefreshAll}>
-                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                data-testid="fx-refresh-all-button"
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                disabled={pageBusy.busy}
+                onclick={handleRefreshAll}
+            >
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
         {/snippet}

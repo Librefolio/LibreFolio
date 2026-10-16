@@ -219,10 +219,15 @@ test.describe('Asset Detail Page', () => {
         await expect(toolbar).toBeVisible();
         await expect(toolbar.getByTestId('ai-export-button')).toBeVisible();
         await expect(page.getByTestId('risk-sync-button')).toHaveCount(0);
-        await expect(page.getByTestId('risk-refresh-button')).toHaveCount(0);
 
-        // The refresh *is* about the request: it must reach the server rather than
-        // be answered from the cache, so here the network is the subject.
+        // One Refresh per page (Y11, decision 48): the panel has none of its own,
+        // and the toolbar's reloads the risk through `refreshVersion`. That refresh
+        // *is* about the request: it must reach the server rather than be answered
+        // from the cache, so here the network is the subject. Pressed only once the
+        // panel's first base wave has landed: a forced question still joins one in
+        // flight for the same key instead of sending its own, and a first-wave
+        // request sent after the wait is armed would pass for the refresh's.
+        await expect(page.getByTestId('asset-detail-risk-panel').getByTestId('risk-analysis-panel'), "premise: the risk panel's first base wave never landed").toHaveAttribute('data-busy', 'false', {timeout: 60_000});
         const refreshedRiskRequest = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/risk/query');
         await toolbar.getByTestId('asset-detail-refresh-btn').click();
         await refreshedRiskRequest;

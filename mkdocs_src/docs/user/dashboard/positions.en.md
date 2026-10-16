@@ -48,6 +48,7 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 **How to read it**
 
 - **Weight counts cash**, so the rows add up to less than 100% when you hold cash.
+- **Weight shows `—` when your Net Worth is zero or below**, for example when you have borrowed more cash than your holdings are worth: a share of it would mean nothing.
 - **Avg. Cost keeps each purchase's exchange rate**, while Value uses the end date's: the Unrealized P&L includes what the rate did since.
 - **In the Map**, tiles are grouped by broker and asset type; size is the value, colour the P&L %. Scroll to zoom, drag to move, and **Reset zoom** (↺) shows everything again.
 
@@ -66,13 +67,13 @@ How much income does each unit pay you, compared with what it cost? **YOC** comp
 - **One value per asset and broker**, over the year that ends on the end date: moving the start date does not change it.
 - **Gross, not after tax**: separate tax and fee transactions are not subtracted.
 - **Hover a value** for the income per unit, the period and the exchange rates used — each payment at its own date's rate.
-- **`0.00%`** means income recorded at zero; a plain **`-`** means no income in the last year.
+- **`0.00%`** means income recorded at zero, or corrections that exactly cancel it; a plain **`-`** means no income in the last year.
 
 🔗 **Theory**: [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) — the exact rules, and how YOC differs from dividend yield or CAGR
 
 ??? info "🚦 A dash with an ⓘ icon — when YOC is unavailable"
 
-    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again.
+    LibreFolio shows no partial YOC. When an input fails, hover the amber ⓘ for the reason: less than a year of history at this broker and no income yet, a payment with no units held the day before, a purchase, sale, transfer or split history that does not add up, a missing exchange rate, or an unknown average price. Once that is fixed, YOC is computed again. A dash also appears when corrections recorded in the last year — older negative dividend or interest rows — add up to more than the income itself: the ⓘ then reads *Corrections exceed the income of the last year.*
 
 ---
 
