@@ -760,8 +760,9 @@ class PriceQueryOperations:
                     params = core._parse_provider_params(assignment.provider_params)
                     mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
 
-                    # Check core cache first (TTL 2min); the provider's settings are part of the key
-                    cache_key = (assignment.provider_code, assignment.identifier, str(assignment.identifier_type), core.settings_cache_part(provider))
+                    # Check core cache first (TTL 2min), under the key a refresh uses too: with the provider's parameters
+                    # and settings (core.asset_cache_key), so that assets with other parameters never share a value (X-R28)
+                    cache_key = core.asset_cache_key(assignment.provider_code, assignment.identifier, assignment.identifier_type, params, core.settings_cache_part(provider))
                     cached_cv, cache_ok = core._asset_current_cache.get(cache_key)
                     if cache_ok:
                         logger.debug(f"Current-price cache HIT for asset {asset_id}")
