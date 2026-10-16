@@ -221,8 +221,8 @@ class BrokerDailyContribution:
     nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
     capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
     pnl_contribution: Decimal  # nav_contribution - capital_contribution
-    # The in-transit part of nav_contribution. Internal, never exported: the broker card
-    # (PortfolioService.get_summary) adds it to market value and cash valued at its own date.
+    # The in-transit part of nav_contribution, on the departure broker for the whole transit
+    # window. Internal, never exported: the engine's own checks read it.
     in_transit_contribution: Decimal
 
 
