@@ -262,7 +262,7 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 `front-broker list|detail|broker-recovery|broker-create-feedback`, `front-user broker-sharing|multi-user`,
 `front-portfolio data-quality-legacy|data-quality-real|privacy-masking`. Server spento, porta 6158 libera.
 
-### S7 — L4 · modale di custodia ⏳ (dopo l'ingresso di Y, su avviso del coordinatore)
+### S7 — L4 · modale di custodia ✅ (16/10/2026 sera; checkpoint inviato, FROZEN)
 > **Nota del coordinatore (17:54, da G-18):** `lot-custody-modal > div` è un elemento misto composto a runtime:
 > `ModalBase` mette `border border-lf-raised text-lf-primary {contentClass}`, `LotCustodyModal` gli passa
 > `contentClass="bg-white dark:bg-slate-800"`. In scuro vince la regola legacy `html.dark .bg-white { … !important }`
@@ -272,6 +272,30 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 `LotCustodyModal` dalla versione di Y — 205 → 20: `contentClass` di `ModalBase` senza colore (o `bg-lf-card`);
 commissioni e tasse `text-lf-loss`; riga selezionata dello storico `border-lf-checked bg-lf-selected`; restano i
 marcatori degli eventi e le icone «in transito».
+> **Note implementazione** (16/10, sera): via del coordinatore alle 19:58. Y è entrato (`0c79932a7`); HEAD `855227a26`
+> (nota G-18 committata in `2db15d1c5`, poi base merge), pulito. Analisi breve mandata al coordinatore, poi lavoro diretto
+> (1:1, nessuna scelta di design).
+> - 37 sostituzioni di stringhe esatte, ognuna col suo conteggio atteso (`bk_l4_apply.mjs` della sessione: scrive solo
+>   se tutti i conteggi tornano). **m1 205 → 20**, m2 0, G1–G4 0, scan «stessa proprietà» 0.
+> - Il misto di G-18: via `contentClass="bg-white dark:bg-slate-800"` dalla chiamata a `ModalBase`.
+> - Card delle metriche e righe di custodia `bg-lf-panel`; etichette `text-lf-muted`; valori `text-lf-primary`; bordi,
+>   divisori e vuoti tratteggiati `border-lf-subtle`; chiudi `text-lf-muted hover:bg-lf-hover hover:text-lf-secondary`;
+>   «Chiudi» del piede `bg-lf-panel text-lf-secondary hover:bg-lf-neutral`; azione primaria sui ruoli d'azione; info
+>   `hover:text-lf-link`; riga dello storico `{attiva ? 'border-lf-checked bg-lf-selected' : 'border-lf-subtle bg-lf-card
+>   hover:bg-lf-hover'}`; nota «stimato al costo» `text-lf-warning`; chip degli stati `bg-lf-success-soft
+>   text-lf-success-on-soft`; commissioni e tasse `{SIGN_TEXT.portfolio.loss}`.
+> - Restano (BK-2): i 4 marcatori degli eventi (16) e le 2 icone «in transito» (4).
+> - Nessun test legge i colori: `LotCustodyModal.test.ts` (Y), `brokers-detail.spec.ts`, `privacy-masking.spec.ts`
+>   leggono test id e testi. `moneyRenderSites` non registra righe di questo file, e le righe cambiate non hanno template
+>   né `style: 'currency'`.
+> - Da rivedere: chip degli stati tutte in verde successo (anche CLOSED e DEGRADED: l'aspetto di oggi); vuoti tratteggiati
+>   da `slate-300` a `subtle`, più chiari.
+> - **Prove** (20:03–20:09, `bk_l4_gates.sh` della sessione, nice, carico < 50 all'avvio): `api sync` exit 0 (la base
+>   porta Y12a e il nuovo `original_cost`); `dark_only_check` 0; `native_field_check` 0; `--check` pulito; Prettier: la
+>   base era pulita, `--write` ha solo rimesso su una riga il ternario dello storico; `--update` **m1 930 → 745**, m2 2 → 2;
+>   `--check` pulito; Vitest dei gate `themeRoles`, `themeTokens`, `themeComponentTokens`, `moneyRenderSites` 125/125;
+>   `vitest run src/lib/features/brokers/lots/` 12 file, 554/554 (con `LotCustodyModal.test.ts` di Y); `front check`
+>   (svelte-check) 0 errori, 0 avvisi; `git diff --check` pulito.
 
 ### S8 — Consegna finale ⏳
 
