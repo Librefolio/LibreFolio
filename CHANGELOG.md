@@ -79,6 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: `GET /system/instance` carries `accounts.password_rules`, the rules every new password must meet.
 - **The managed profile changes three defaults**: idle risk workers stop after 60 seconds instead of 600, and frame protection and the report-only policy are on. A self-hosted install keeps every default, and a value you set always wins.
 - Settings → scheduler panel: prices deferred by a provider's pause are marked ⏸ "Deferred: provider paused" instead of counting as failures, and the panel shows when they will be retried.
+- Charts: one Rolling Return, measured in calendar days. A saved Rolling Return of N observations becomes N days: on exchanges a 30-observation window (about 42 days) becomes 30 days.
+- Charts: Rolling Volatility, Sharpe and Beta now say their window counts observations (quote days with a return), not days.
 
 #### 🎨 A new colour palette
 
