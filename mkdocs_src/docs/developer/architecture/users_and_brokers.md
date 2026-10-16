@@ -6,7 +6,9 @@ This section explains the authentication model, user roles, and how data is segr
 
 LibreFolio authenticates with a **signed JWT** kept in an HTTP-only cookie. The server keeps no
 record of sessions, neither in memory nor in the database: its one piece of session state is a
-counter per account, `users.session_version`, that ends all of the account's sessions at once
+version per account, `users.session_version`, raised by one to end all of the account's sessions at
+once. A restore sets every account's version to the restore time in milliseconds instead: a time,
+not a counter, which the next change still raises by one
 ([Session Revocation](security.md#session-revocation)).
 
 ### 🔄 How it Works
