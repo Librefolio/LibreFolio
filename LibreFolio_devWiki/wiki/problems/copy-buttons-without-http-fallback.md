@@ -29,7 +29,7 @@ Browsers expose the Clipboard API only to secure contexts. The app has a shared 
 | Component | What it copies |
 |-----------|----------------|
 | `components/settings/tabs/AboutTab.svelte` | the system information |
-| `components/brokers/lots/UnifiedLotsTable.svelte` | a lot id |
+| `features/brokers/lots/UnifiedLotsTable.svelte` | a lot id |
 | `components/auth/AskAdminModal.svelte` | an administrator's e-mail (an error toast on failure) |
 | `components/files/FilePreviewModal.svelte` | the text of the file in preview |
 | `components/assets/ProviderAssignmentSection.svelte` | a provider's error detail |
@@ -58,7 +58,7 @@ knows about secure contexts. A test over plain HTTP from a non-localhost origin 
 |------|------|
 | Shared helper with the fallback | `frontend/src/lib/utils/clipboard.ts` |
 | A direct call until train 72 (system info) | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
-| A direct call until train 72 (lot id) | `frontend/src/lib/components/brokers/lots/UnifiedLotsTable.svelte` |
+| A direct call until train 72 (lot id) | `frontend/src/lib/features/brokers/lots/UnifiedLotsTable.svelte` |
 | A direct call until train 72 (administrator e-mail) | `frontend/src/lib/features/update-check/AskAdminModal.svelte` |
 | A direct call until train 72 (previewed text) | `frontend/src/lib/components/files/FilePreviewModal.svelte` |
 | A direct call until train 72 (provider error detail) | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |

@@ -43,8 +43,8 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import {BrokerSearchSelect} from '$lib/components/ui/select';
     import ImportPluginSelect, {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import FileUploader from '$lib/components/ui/media/FileUploader.svelte';
     import FilePreviewModal from '$lib/components/files/FilePreviewModal.svelte';
     import ParseDetailModal from '$lib/components/transactions/modals/ParseDetailModal.svelte';

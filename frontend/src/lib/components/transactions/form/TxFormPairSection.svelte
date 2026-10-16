@@ -11,7 +11,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import AssetSelect from '$lib/components/ui/select/AssetSelect.svelte';
     import BrokerSearchSelect from '$lib/components/ui/select/BrokerSearchSelect.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
     import CompactCashCell from '$lib/components/ui/display/CompactCashCell.svelte';

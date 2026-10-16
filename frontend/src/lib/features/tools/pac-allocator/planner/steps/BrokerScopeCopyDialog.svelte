@@ -1,7 +1,7 @@
 <script lang="ts">
     import {onDestroy, onMount} from 'svelte';
     import {t} from '$lib/i18n';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {applyBrokerCopy, applyLiquidityCopy, domainBrokerKey, domainCashKey, newCopyRecord, type CopyOutcome} from '../copies';
     import {compareDecimal} from '../decimal';
     import type {PlannerDraft} from '../draft.svelte';

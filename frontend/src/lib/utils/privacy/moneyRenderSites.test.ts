@@ -178,7 +178,7 @@ const REGISTRY: Site[] = [
         why: 'The fifth currency formatter. Masked in the same expression by maskCurrencyParts, which hides the digits and keeps the currency and the sign; the two em-dash absence checks run before it.',
     },
     {
-        file: 'lib/components/brokers/lots/lotComparisonChartHelpers.ts',
+        file: 'lib/features/brokers/lots/lotComparisonChartHelpers.ts',
         snippet: "style: 'currency',",
         status: 'masked',
         why: 'formatAxisCurrency, the absolute-return axis of the lot comparison chart, extracted from the component. Its Intl exit goes through maskCurrencyParts; its fallback exit masks with maskFormattedNumber( and so is not a hit at all.',

@@ -152,7 +152,7 @@ def front_portfolio_store_unit(verbose: bool = False, ui: bool = False, headed: 
     """Run Portfolio store unit tests (Vitest)."""
     print(f"\n{Colors.BLUE}Running: Portfolio store Vitest unit tests{Colors.NC}")
     result = subprocess.run(
-        ["npx", "vitest", "run", "src/lib/stores/portfolio/portfolioStore.test.ts", "src/lib/stores/portfolio/portfolioMutation.test.ts", "src/lib/stores/portfolio/lotsAnalysisStore.test.ts", "src/lib/features/dashboard/dashboardViewStore.test.ts"],
+        ["npx", "vitest", "run", "src/lib/stores/portfolio/portfolioStore.test.ts", "src/lib/stores/portfolio/portfolioMutation.test.ts", "src/lib/features/brokers/lots/lotsAnalysisStore.test.ts", "src/lib/features/dashboard/dashboardViewStore.test.ts"],
         cwd="frontend",
         capture_output=not verbose,
     )

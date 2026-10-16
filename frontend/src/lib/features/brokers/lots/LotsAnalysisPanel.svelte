@@ -38,7 +38,7 @@
     import {_} from '$lib/i18n';
     import {ExternalLink, X} from 'lucide-svelte';
     import {schemas} from '$lib/api';
-    import {fetchLotsAnalysis, peekLotsAnalysis, type LotsAnalysisResponse} from '$lib/stores/portfolio/lotsAnalysisStore.svelte';
+    import {fetchLotsAnalysis, peekLotsAnalysis, type LotsAnalysisResponse} from '$lib/features/brokers/lots/lotsAnalysisStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import type {z} from 'zod';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';

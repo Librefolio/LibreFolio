@@ -67,7 +67,7 @@
     import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
-    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
+    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
@@ -77,7 +77,7 @@
     import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {currentLanguage} from '$lib/stores/app/language';

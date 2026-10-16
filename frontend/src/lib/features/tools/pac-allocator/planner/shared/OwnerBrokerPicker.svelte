@@ -1,6 +1,6 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {compareDecimal} from '../decimal';
     import {formatPlannerPercent} from '../format';
     import type {ScopeBroker} from '../scope';
