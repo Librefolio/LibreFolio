@@ -170,28 +170,55 @@
   - La revisione si fa con `review/notte-15-16/cosa-guardare.md` (cartella di sessione del coordinatore), con l'anteprima
     6160 aggiornata e con la galleria di fine notte confrontata con G-13.
 
+- **Esito della notte (16/10).**
+  - 10 ingressi; m1 11.026 → 8.249 (col quarto lotto di T, `eb4040cd1`, alle 10:20), m2 83 → 54.
+  - Galleria candidata `g-cand16a` verde contro il riferimento `g-ref13-r3`.
+  - Il briefing è in `review/notte-15-16/briefing-mattina.md` (cartella di sessione del coordinatore).
+- **D-T28, mattina del 16/10.** Testuale: «l'obiettivo intanto è fattorizzare e migrare al nuvo color design sistem, poi
+  le rifiniture le facciamo nel tempo, anzi sono un pò deluso che abbiamo fatto solo il 22% in 1 gg, non riesci a mettere
+  al lavoro più agenti?» e «è importante migrare il prima possibile i componenti prima di metterci a sviluppare funzioni
+  grandi, quindi vedi tu.» Più: «hai il comando dei commit tu» (il push resta suo).
+  - Cinque workstream nuovi, uno per area (IW, TR, AF, BK, IM, nella tabella sotto); DV prende rischio, dashboard,
+    strumenti e grafici; T il resto, ed è l'unico che crea ruoli.
+  - D-T27 resta valida: i lotti validati entrano senza l'OK per lotto. I piani di analisi dei nuovi workstream li
+    approva il coordinatore, nel perimetro «solo migrazione 1:1 ai ruoli, senza decisioni di design»; vale salvo
+    diversa indicazione del developer.
+- **D-T29, mattina del 16/10.** Testuale: «nel migrare cerca di seguire i colori dei temi che la designer ci ha intanto
+  dato, e anzi, crea un file skill comune in cui metti nero su bianco i 2 temi, i nomi, la palette principale e tutte le
+  altre regole, così che in futuro i nuovi componenti vengono già fatti seguendo le regole, e cita questa skill dentro il
+  file dell'agente frontend».
+  - Lo skill comune lo scrive T, in `.github/skills/design-tools/design-system/`.
+  - È citato in `.github/instructions/frontend.instructions.md`: non c'è un agente frontend in `.github/agents/`, e
+    quelle istruzioni sono il file che il lavoro sul frontend segue. È citato anche nella riga dei colori di
+    `.github/copilot-instructions.md`.
+
 ## 🛤️ Workstream e corsie
 
 | Codice | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
-| — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato** in `dev_release2`: fino a L-9 con `9d57aa4c0`, L-10 (il Lab modifica i ruoli di T) con `87755fe2a`, il banner del Lab in `dev.py` con `a4d1884b4`, il cursore dell'opacità con `c96a62268` (validato sul fuso `47e33997b`). Prossimo, L-16: nel Lab i ruoli di T-8 dopo l'ingresso di T, poi il livello `category` dopo DV |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **piano della 56 chiuso il 15/10** (DoD con `g-final3`): integrato fino a G-9 (`1470bd693`) e alla chiusura (`243c8c9ff`); G-10 risolta da H (`b4533a949`); G-11 aperta, peso basso. Rivede in sola lettura gli scatti nuovi della 1.3 (`settings/email` di E2b: OK; `settings/users` di A6b; `settings/backup-ready` di B). G-13: la nuova coppia di riferimento dopo T e le tre schede |
+| — | coordinatore | questo file | nessuna porta fissa (prove leggere); 6150 è usata dalla 1.3 per il server di review del developer (16/10) | — |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato fino a L-18** (`f96043473`, 16/10): livello delle categorie e segnale C4 (L-16, `2c485d3d4`), percorsi dei grafici dopo gli spostamenti di Y (L-18). Aperte L-17 e L-19 (esempi scaduti della doc), peso basso; sessione ferma |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **G-13 chiusa** (`7f58a6292`): coppia di riferimento e regola della data UTC, catture vietate fra le 00:00 e le 02:00 locali; `gallery_tool sheet` nel toolkit (`d7a74e5de`). Aperte G-11 e G-17; fa le gallerie di fine giornata con il foglio di confronto |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`); sessione archiviata il 15/10 su richiesta del developer |
-| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori`, ramo `preview-colori-t8c-dv` = `ec1ddba96`; a fine notte va sull'ultimo `dev_release2` |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato con DV** in `dev_release2` (`a0915bef9`, 15/10): T-1…T-8c, validazione combinata, baseline stretta (m1 11.026, m2 83). Ora le ondate: W3-a (TD-2), TD-3, W3-b, W3-c+d, poi W1 e W2 nei gruppi I1–I6 (D-T27) |
-| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato** con T (`a0915bef9`): GR1–GR5, DV-2, DV-6. Ora TD-1 (le barre del PAC); dopo, S9 (gli indicatori). I colori aspettano la lista definitiva della designer (pacchetto `grafici-giro3`) |
+| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori` a `eb4040cd1`; dati nuovi dopo il riavvio del 16/10 (`db populate`); si aggiorna dopo gli ingressi |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato fino al quarto lotto** (`eb4040cd1`, 16/10): W1, W2, W3, Q10, input, sync, banner, changelog, AI Export, editor dei dati. Ora lo skill comune di D-T29; poi il resto della UI (~250); il lotto unico degli interruttori (13 in 9 file) dopo la designer. **Unico che crea ruoli** (`tokens.css`, `toneClasses.ts`) |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W5** (`1d37087f8`): TD-1/TD-1b, PAC, impostazioni dei grafici. Ora l'area: `features/risk`, `features/dashboard`, `routes/(app)/dashboard`, `features/tools`, `components/charts` (~1.500). Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
+| IW | `IW - colori dell'import` | `IW-importColors/` | 6151 + `/tmp/librefolio-r2-iw` | nuovo (16/10, D-T28): `components/transactions/import/**`, `wizard/**`, `modals/ImportWizardModal`, `ParseDetailModal`, `ImportBrokerMismatchModal` (~1.300) |
+| TR | `TR - colori delle transazioni` | `TR-transactionColors/` | 6154 + `/tmp/librefolio-r2-tr` | nuovo (16/10): il resto di `components/transactions/**` e `routes/(app)/transactions/**` (~1.050) |
+| AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | nuovo (16/10): `components/assets/**`, `routes/(app)/assets/**`, `components/fx/**`, `routes/(app)/fx/**` (~1.950); il dettaglio asset dopo X FE5c |
+| BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | nuovo (16/10): `features/brokers/**` (lotti compresi) e `routes/(app)/brokers/**` (~1.150) |
+| IM | `IM - colori delle impostazioni` | `IM-settingsColors/` | 6159 + `/tmp/librefolio-r2-im` | nuovo (16/10): `features/settings/**`, `routes/(app)/settings/**`, `features/support/**`, `features/update-check/**` (~1.050) |
 
 Superfici condivise e relativi proprietari:
 
 | Superficie | Proprietario |
 |---|---|
 | `vite.config.ts`, `src/routes/+layout.svelte` | L |
-| Moduli centrali dei colori (`lib/theme/**`, nuovi) | R |
+| Moduli centrali dei colori (`lib/theme/**`) | T (`tokens.css`, `toneClasses.ts`); DV (`chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts`); R è chiuso |
 | Meta `theme-color` in `app.html`, `static/offline.html`, `themeStore.ts` (D3) | R |
 | `frontend/e2e/gallery.spec.ts` e fixture della gallery | G |
 | `routes/(app)/assets/[id]/+page.svelte`, solo il nome del provider (G-4) | G |
-| `app.css` | T (workstream token e tema), quando sarà aperto. Finora nessuno: aspettava il report della designer |
+| `app.css` | T. Un altro workstream toglie un selettore del rimappaggio scuro solo quando il gate C4 lo chiede, perché ha tolto l'ultimo uso, e lo dichiara nel checkpoint |
 | `lib/theme/tokens.css` (nuovo) | T, unica eccezione alla proprietà di R su `lib/theme/**` |
 | Catalogo del test runner | `test-author` |
 | Questo piano, l'indice del backlog post-1.2 e la riconciliazione delle sezioni L, G, R | coordinatore |

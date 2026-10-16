@@ -1,5 +1,5 @@
 <script lang="ts">
-    import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
+    import KpiCard from '$lib/features/dashboard/KpiCard.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {_ as t} from '$lib/i18n';
