@@ -2273,6 +2273,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       dello scatto.
 
     Se la causa è nel prodotto, va segnalata e non corretta qui.
+  - *16/10, coppia di G-13 (r1↔r2):* ancora una variante su 16, sempre su mobile in `es/light`, e ora anche in
+    `assets/detail-editor`: l'header è visibile in una run e nascosto nell'altra, 7,7 % dei pixel. Dettagli:
+    [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md).
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
 - **G-12 · Due commenti nel codice descrivono ancora il vecchio helper della gallery** — minimo; G, 15/10, handoff di
@@ -2298,7 +2301,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     usa il contratto, non il contratto. Decide comunque il proprietario.
 
   Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passo 8.
-- **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
+- ✅ **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
   assegnata a G.
   - Quando: T entra in `dev_release2` (D-T20, dopo la revisione di T-8 da parte del developer). Via e slot li dà il
     coordinatore; fino ad allora nessuna run.
@@ -2312,8 +2315,26 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - 0 instabili di inquadratura, salvo l'eventuale variante di G-11;
     - `media/asset-picker-modal` stabile;
     - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
+  - ✅ **16/10, fatto.** Tre gallery complete di `a2c1c39f4`, a 6 worker, con un populate nuovo per run e
+    `live_price_check` 0:
+    - `g-ref13-r1`, 00:02: 6 rossi di carico (build di altre corsie);
+    - `g-ref13-r2`, 00:52: verde;
+    - `g-ref13-r3`, 05:28: verde.
+  - **La coppia del rumore è r1↔r2**: 22 `stable`, 137 `low`, 18 `medium`, 4 `unstable` (il 15/10: 40/112/19/6).
+    - Inquadrature uguali salvo G-11.
+    - `media/asset-picker-modal` è `low`: G-10 funziona.
+    - Restano `unstable` di contenuto `files/brim-report-sets` (G-17) e `brokers/import-nway-compare`.
+  - **r2↔r3 non è una coppia del rumore: attraversa la data UTC.** Il planner del PAC data lo scenario con la minore
+    fra la data locale e quella UTC (N26), quindi gli scatti PAC di r1 e r2, presi fra le 00:02 e le 01:31, mostrano il
+    15/10. Regola nel README del toolkit: niente catture fra mezzanotte locale e mezzanotte UTC.
+  - **Riferimento delle candidate del 16/10: `g-ref13-r3`**, con le maschere e la stabilità di `g-ref13__r1__vs__r2`.
+  - **Candidata della notte `g-cand16a`** (`72e66d1a6`): verde, 2904 PNG.
+    - Diff contro r3: 2720 immagini cambiate, quasi tutte per la migrazione ai ruoli di colore.
+    - Foglio per il developer, ordinato per cambio visibile: `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html`.
+      Dal 16/10 il comando è nel toolkit, su richiesta del coordinatore: `gallery_tool sheet <diff> --lang it`.
 
-  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
+  Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md) e
+  [stabilità](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/stability-2026-10-16.md).
 - **G-14 · Gli orari della gallery dipendono dal fuso della macchina** — basso; G, 15/10, su domanda del coordinatore
   (revisione di `settings/backup-ready`, B). **Proposta: valore e momento li decide il developer.**
   - Ogni istante si disegna nel fuso del browser, e la gallery lo lascia alla macchina: non c'è `timezoneId`.
@@ -2354,7 +2375,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
 
   Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
-- **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
+- ✅ **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
   developer approva dagli scatti le barre «ideale vs reale» sui colori delle categorie, D-T21).
   - Fatto da test-author, nel perimetro di G. Lo scatto è nel test `PAC allocator result`, fra il piano e la prova: 8
     scatti per progetto.
@@ -2375,6 +2396,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     serve.
   - Verifica: statica pulita (`tsc` con i soli 2 errori di base, prettier). La run filtrata a 1 worker parte dopo il
     merge della punta; poi la coppia di G-13 lo include.
+  - ✅ **15/10–16/10, verificata.** Codice `73f7d32c6`, in `dev_release2` con `a8991e20b`.
+    - Run filtrata a 1 worker su `a2c1c39f4` (`g-g16-w1b`): verde, 16 PNG per scatto. Le impronte dei tre scatti PAC
+      esistenti sono uguali a `g-final3`: richiudere la sezione funziona.
+    - Nella coppia di G-13 lo scatto è `stable`, 0/16.
+    - La prima run (`g-g16-w1`, 23:05, carico 80–96) era rossa per un `worker_crashed` dello strumento PAC, non per lo
+      scatto. Il coordinatore l'ha instradato a J (1.3).
+    - Resta per dopo: le barre dei settori, con un seed dai settori validi.
+- **G-17 · Il nome casuale dell'account usa e getta è rumore di contenuto** — basso; G, 16/10, coppia di G-13.
+  - `files/brim-report-sets` è `unstable` (16/16, fino al 3,2 %): il nome `demo_xxxxxx` dell'account del test compare
+    nella tabella e nel filtro «Caricato da» aperto, che si allarga con lui. Lo stesso nome è fra le cause di diversi
+    `medium`.
+  - Proposta (perimetro G, test-author): in `registerGalleryAccount` (`galleryReportSets.ts`), un nome deterministico
+    per test e progetto, con il ripiego casuale se la registrazione risponde che esiste già. Così lo scatto diventa
+    uguale fra due run.
+  - Da valutare con la pulizia degli account (`cleanupGalleryAccount`): un nome fisso non deve scontrarsi con quello di
+    una run interrotta che non l'ha cancellato.
+
+  Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md), «La coppia del rumore».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 

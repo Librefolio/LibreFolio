@@ -8,9 +8,11 @@
 
     import {zodiosApi} from '$lib/api';
     import {commitTransactions} from '$lib/utils/transactions/txCommitApi';
-    import {ensureAssetsLoaded} from '$lib/stores/reference/assetStore';
+    import {commitRefusalMessage} from '$lib/utils/transactions/commitRefusal';
+    import type {ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {ensureAssetsLoaded, getAllAssets} from '$lib/stores/reference/assetStore';
     import {ensureBrokersLoaded, getAccessibleBrokers, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
-    import {ensurePluginIconsLoaded} from '$lib/utils/broker/brokerHelpers';
+    import {ensurePluginIconsLoaded, getBrokerIconHtmlById} from '$lib/utils/broker/brokerHelpers';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -399,6 +401,20 @@
         }
     }
 
+    /** What a refusal's reasons name (brokers, assets), resolved as the bulk editor resolves them (W-B39). */
+    function issueContext(): ResolverContext {
+        return {
+            brokers: brokers as unknown as Array<{id: number; name: string}>,
+            assets: getAllAssets() as unknown as Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>,
+            getBrokerIconHtml: (brokerId: number) =>
+                getBrokerIconHtmlById(brokerId, brokers as any[], {
+                    width: 16,
+                    height: 16,
+                    style: 'display:inline-block;vertical-align:middle;margin-right:2px;border-radius:2px',
+                }),
+        };
+    }
+
     async function confirmPromote() {
         if (!promoteTarget) return;
         // Direct commit (no merge needed — fields identical)
@@ -421,7 +437,8 @@
                 clearSelection();
                 await reload({soft: true});
             } else {
-                console.error('[promote] commit failed:', result.issues);
+                // W-B39: a refusal says why; the confirmation stays open.
+                toasts.error(commitRefusalMessage(result, $_('transactions.promote.failed') || 'Promote failed', $_, issueContext()));
             }
         } finally {
             promoting = false;
@@ -451,7 +468,8 @@
                 clearSelection();
                 await reload({soft: true});
             } else {
-                console.error('[split] commit failed:', result.issues);
+                // W-B39: a refusal says why; the confirmation stays open.
+                toasts.error(commitRefusalMessage(result, $_('transactions.split.failed') || 'Split failed', $_, issueContext()));
             }
         } finally {
             splitting = false;
