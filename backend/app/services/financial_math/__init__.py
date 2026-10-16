@@ -49,7 +49,7 @@ Modules:
   income and costs to lots (``models``, ``eligibility``, ``engine``).
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
   and the views derived from it (``models``, ``classifier``, ``daily_state``,
-  ``derived_views``, ``data_quality``, ``period``, ``engine``).
+  ``derived_views``, ``data_quality``, ``period``, ``contributions``, ``engine``).
 * ``lots`` — the math of the lots analysis: price lookups, conversions (a closure's legs,
   each at its own date), economic events, lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
   ``histories``, ``average_cost_lines``).

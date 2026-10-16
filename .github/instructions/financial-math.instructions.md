@@ -23,7 +23,7 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 | `splits.py` | the ADJUSTMENT rows linked to a SPLIT asset event (`load_split_links`, one query for every reader; `split_linked_ids`, the ids an average-cost replay rescales — WAC preview, broker summary, auto cost) and the rule for a usable ratio (`is_valid_split_ratio`) |
 | `holding_window.py` | how long a position has been held at its broker, from its quantity stream: the oldest lot still open (`oldest_open_lot_date`), a closed position's flight time (`closed_position_window`); a split rescales the open lots, never opens or consumes one |
 | `fifo/` | FIFO lots: `models`, `eligibility`, `engine` (`run_fifo_lot_engine`) |
-| `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `period` (a period's boundary states, P&L and identity; the day's change of the total P&L, `day_change`), `engine` |
+| `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `period` (a period's boundary states, P&L and identity; the day's change of the total P&L, `day_change`), `contributions` (a position's figures in the Performance table: P22 transfer split, return on the start value, annualized window, closed positions), `engine` |
 | `lots/` | lots analysis math: `prices`, `conversions` (`convert_closure`: a closure's legs, each in its currency at its date), `economic_events`, `histories`, `average_cost_lines` |
 
 ## Rules
