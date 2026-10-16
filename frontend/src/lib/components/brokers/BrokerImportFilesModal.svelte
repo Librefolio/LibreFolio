@@ -14,6 +14,7 @@
     import {trySave} from '$lib/utils/trySave';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
     import {ExternalLink, FileUp, RefreshCw, Trash2, X} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
@@ -166,13 +167,21 @@
     }
 
     async function handleDeleteMultiple(fileIds: string[]) {
+        // W-B37: the files the user may not delete stay, with the Files page's notice (can_delete, decision 36).
+        const blocked = new Set(files.filter((file) => (file as {can_delete?: boolean}).can_delete === false).map((file) => file.file_id));
+        const deletable = fileIds.filter((fileId) => !blocked.has(fileId));
+        const kept = fileIds.length - deletable.length;
+        if (kept > 0) {
+            notify({name: 'file.delete.skipped', detail: {count: kept, isBrim: true}, toast: {variant: 'warning', message: $_('uploads.deleteSkipped')}});
+        }
+        if (deletable.length === 0) return;
         // I-bis #22 (Batch 4.d-part2) — collect-all error policy: continue
         // the loop even after a failure, reload the list on completion, and
         // report a summary count. More informative than break-at-first when
         // the user selected multiple files.
         let failedCount = 0;
         let lastMessage = '';
-        for (const fileId of fileIds) {
+        for (const fileId of deletable) {
             const result = await trySave(
                 () =>
                     zodiosApi.delete_file_api_v1_brokers_import_files__file_id__delete(undefined, {
@@ -192,7 +201,7 @@
             error = failedCount === 1 ? lastMessage : $_('uploads.deleteFailedSome', {values: {n: failedCount}});
         } else {
             // #R6-6 (Batch 4.d-part3) — success toast for bulk delete.
-            toasts.success($_('uploads.deleteBatchSucceeded', {values: {n: fileIds.length}}));
+            toasts.success($_('uploads.deleteBatchSucceeded', {values: {n: deletable.length}}));
         }
     }
 

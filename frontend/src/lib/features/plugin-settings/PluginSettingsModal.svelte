@@ -3,7 +3,8 @@
   plan 03 §4.4). Opened from the provider panel of the asset dialog and from the search's «to configure» row; the
   same form as Settings › Plugins, filtered on the plugin (the API names it, so a test-only plugin is listed too).
 
-  Layer 80 by default: above the asset dialog (50) and its prompts (70). Colours are roles only (theme-roles skill).
+  Layer 80 by default: above the asset dialog (50) and its prompts (70). The body scrolls between the title and «Close»:
+  a plugin with many fields fits any window. Colours are roles only (theme-roles skill).
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
@@ -65,21 +66,25 @@
     const title = $derived(entry?.plugin_name || pluginName || pluginCode);
 </script>
 
-<ModalBase labelledBy="{uid}-title" maxWidth="xl" onRequestClose={onClose} {open} allowOverflow testId="plugin-settings-modal" trapFocus {zIndex}>
-    <div aria-busy={loading} class="space-y-4 p-5 text-lf-primary" data-busy={loading ? 'true' : 'false'} data-plugin={pluginCode}>
-        <h2 class="text-lg font-semibold" id="{uid}-title">{$_('pluginSettings.modal.title', {values: {plugin: title}})}</h2>
+<ModalBase labelledBy="{uid}-title" maxWidth="xl" onRequestClose={onClose} {open} testId="plugin-settings-modal" trapFocus {zIndex}>
+    <!-- The box is a column capped at 90vh (ModalBase): the title and «Close» stay, the form scrolls between them. Selects
+         draw their list with position:fixed, so the scrolling body does not clip it. -->
+    <div aria-busy={loading} class="flex min-h-0 flex-1 flex-col text-lf-primary" data-busy={loading ? 'true' : 'false'} data-plugin={pluginCode}>
+        <h2 class="shrink-0 px-5 pt-5 text-lg font-semibold" id="{uid}-title">{$_('pluginSettings.modal.title', {values: {plugin: title}})}</h2>
 
-        {#if loadFailed}
-            <p class={NOTE_CLASSES.error} data-testid="plugin-settings-load-error" role="alert">{$_('pluginSettings.loadError')}</p>
-        {:else if loading}
-            <p class="text-sm text-lf-muted">{$_('common.loading')}</p>
-        {:else if entry}
-            <PluginSettingsForm {entry} onsaved={saved} />
-        {:else}
-            <p class="text-sm text-lf-muted" data-testid="plugin-settings-none">{$_('pluginSettings.modal.none')}</p>
-        {/if}
+        <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-testid="plugin-settings-modal-body">
+            {#if loadFailed}
+                <p class={NOTE_CLASSES.error} data-testid="plugin-settings-load-error" role="alert">{$_('pluginSettings.loadError')}</p>
+            {:else if loading}
+                <p class="text-sm text-lf-muted">{$_('common.loading')}</p>
+            {:else if entry}
+                <PluginSettingsForm {entry} onsaved={saved} />
+            {:else}
+                <p class="text-sm text-lf-muted" data-testid="plugin-settings-none">{$_('pluginSettings.modal.none')}</p>
+            {/if}
+        </div>
 
-        <div class="flex justify-end">
+        <div class="flex shrink-0 justify-end px-5 pb-5">
             <button class={SECONDARY_BUTTON_CLASS} data-testid="plugin-settings-modal-close" onclick={onClose} type="button">{$_('common.close')}</button>
         </div>
     </div>
