@@ -93,8 +93,12 @@ async def issue_token(
     created_by_user_id: Optional[int] = None,
     ttl: Optional[timedelta] = None,
     now: Optional[datetime] = None,
+    token: Optional[str] = None,
 ) -> IssuedToken:
     """Create a token for ``purpose`` and return its plaintext with its row (flushed, not committed).
+
+    ``token``, when given, is stored instead of a generated one: the setup link a hosting panel hands over with
+    ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`` (F02). Its format is the configuration's to check.
 
     An invitation opens an account that does not exist yet, so it takes no ``user_id`` and may grant
     the administrator role; every other purpose acts on an existing account (``user_id`` required) and
@@ -112,11 +116,13 @@ async def issue_token(
     if lifetime <= timedelta(0):
         raise ValueError("a token must live for a positive time")
 
+    if token is not None and not token:
+        raise ValueError("a given token cannot be empty")
     issued_at = now or utcnow()
-    token = secrets.token_urlsafe(32)
+    plaintext = token if token is not None else secrets.token_urlsafe(32)
     record = AccountToken(
         purpose=purpose,
-        token_hash=hash_token(token),
+        token_hash=hash_token(plaintext),
         user_id=user_id,
         email=email,
         grants_admin=grants_admin,
@@ -127,7 +133,7 @@ async def issue_token(
     session.add(record)
     await session.flush()
     logger.info("Account token issued", token_id=record.id, purpose=purpose.value, user_id=user_id, created_by_user_id=created_by_user_id, expires_at=record.expires_at.isoformat())
-    return IssuedToken(token=token, record=record)
+    return IssuedToken(token=plaintext, record=record)
 
 
 async def _find(session: AsyncSession, token: str, purpose: AccountTokenPurpose) -> Optional[AccountToken]:

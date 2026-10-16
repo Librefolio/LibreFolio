@@ -42,7 +42,7 @@ from backend.app.config import set_test_mode
 from backend.app.config.accounts import public_url
 from backend.app.db.models import AccountTokenPurpose, OnboardingFlow
 from backend.app.db.session import get_async_engine
-from backend.app.services.accounts import password_policy, registration_service, token_service, user_service
+from backend.app.services.accounts import bootstrap_admin_service, password_policy, registration_service, token_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.settings_service import initialize_global_settings
@@ -166,6 +166,22 @@ async def cmd_reset_link(username: str):
         expires_at = issued.record.expires_at
         await session.commit()
         _print_link(f"Password reset for '{username}'", token_service.token_path(AccountTokenPurpose.PASSWORD_RESET, issued.token), expires_at)
+        return True
+
+
+async def cmd_setup_link():
+    """Create a new setup link for the initial administrator waiting for it (F02); the links issued before stop working."""
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        waiting = await bootstrap_admin_service.pending_admin(session)
+        issued = await bootstrap_admin_service.issue_setup_link(session) if waiting is not None else None
+        if waiting is None or issued is None:
+            print("❌ No administrator account is waiting for its setup link")
+            return False
+        username, expires_at = waiting.username, issued.record.expires_at
+        await session.commit()
+        _print_link(f"Administrator setup for '{username}'", token_service.token_path(AccountTokenPurpose.ADMIN_SETUP, issued.token), expires_at)
         return True
 
 
@@ -343,6 +359,8 @@ def _add_link_commands(subparsers) -> None:
     p = subparsers.add_parser("reset-link", help="Create a password-reset link for a user")
     p.add_argument("username", help="Username")
 
+    subparsers.add_parser("setup-link", help="Create a new setup link for the initial administrator (LIBREFOLIO_ADMIN_EMAIL)")
+
     p = subparsers.add_parser("reset-onboarding", help="Restart the onboarding of a user")
     p.add_argument("username", help="Username")
     p.add_argument("--flow", choices=[flow.value for flow in OnboardingFlow], default=None, help="Only this flow (default: every flow)")
@@ -367,6 +385,7 @@ def _dispatch_user_command(args):
         "init-settings": cmd_init_settings,
         "invite": lambda: cmd_invite(args.admin, args.email),
         "reset-link": lambda: cmd_reset_link(args.username),
+        "setup-link": cmd_setup_link,
         "reset-onboarding": lambda: cmd_reset_onboarding(args.username, args.flow),
     }
     command = commands.get(args.command)
