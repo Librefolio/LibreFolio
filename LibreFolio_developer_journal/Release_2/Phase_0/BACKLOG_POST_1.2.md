@@ -3787,6 +3787,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
          - con stesso identificativo e parametri diversi: `css_scraper`, `borsa_italiana`, `justetf`.
          - Non lo è `yahoo_finance`, che ignora i parametri.
     - Decisione: vedi sopra (developer, 17:33).
+- **X-R29 · Sync: l'avviso di C-66 con il conteggio preciso, e quanti dati manuali** — basso; X, 16/10 (opzione B di
+  C-66, decisione del coordinatore).
+  - C-66 è stato fatto con l'opzione A: il conteggio viene dai dati che la pagina mostra.
+  - La B è un endpoint che conta le righe salvate nell'intervallo e quante sono manuali (`source_plugin_key`), per
+    asset e cambi. Così l'avviso può nominare i prezzi manuali.
+- **X-R30 · La sincronizzazione degli asset deve tenere i prezzi manuali?** — ✅ chiusa il 16/10 con la risposta del
+  developer: **vince il fornitore**, i prezzi manuali non si tengono. Basta l'avviso di C-66 (opzione A), che lo dice
+  («modifiche manuali comprese»). Domanda posta dal coordinatore il 16/10 (opzione C di C-66).
+  - Oggi la sync scrive ogni data che il fornitore restituisce, e sovrascrive anche un prezzo `MANUAL`
+    (`bulk_upsert_prices`). I cambi invece saltano le coppie solo `MANUAL`.
+  - Il rischio vero di C-66 è questo.
   - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
     punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
 
