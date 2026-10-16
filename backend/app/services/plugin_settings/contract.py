@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from backend.app.services.plugin_settings.fields import PluginSettingField
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope
 
 
 class BoundSettings:
@@ -86,6 +86,16 @@ class BoundSettings:
     def secret_values(self) -> frozenset[str]:
         """The secret values bound here: the core masks them in the errors and the logs of a call."""
         return frozenset(value for value in self._secrets.values() if value)
+
+    @property
+    def carries_user_secrets(self) -> bool:
+        """Whether a secret of the caller's own (a ``user`` field) is bound here: a value the caller chose.
+
+        The core then hides whole every error text that shows a secret, instead of masking it in place: masking a value
+        the caller chose would tell whether it occurs in the text, and so, a character at a time, the instance secret
+        beside it (``call_provider``).
+        """
+        return any(value and self._fields[key].scope is SettingScope.USER for key, value in self._secrets.items() if key in self._fields)
 
     def plain_values(self) -> dict[str, Any]:
         """A copy of the plain values, by key."""

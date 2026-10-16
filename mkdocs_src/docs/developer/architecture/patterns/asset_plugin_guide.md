@@ -33,9 +33,11 @@ Paste this entire page into an LLM with the data source's API documentation and 
     synchronous provider clients (never an internal asyncio.to_thread), test_cases, and
     test_search_query if applicable. An API key or any other secret is a plugin setting
     (settings_fields, read with self.settings in the operations, never in __init__), never a
-    provider_params field. LibreFolio's service layer supplies thread isolation. On "too many
-    requests" (HTTP 429), raise AssetRateLimitedError (raise_if_rate_limited as the first line
-    of the except) and never retry or sleep: the core pauses the provider.
+    provider_params field, and never in get_asset_url(), in cooldown_scope() or in a request
+    whose host comes from the identifier or the provider_params. LibreFolio's service layer
+    supplies thread isolation. On "too many requests" (HTTP 429), raise AssetRateLimitedError
+    (raise_if_rate_limited as the first line of the except) and never retry or sleep: the core
+    pauses the provider.
     ```
 
     After scaffolding, implement `get_current_value()` and `get_history_value()`, add test
@@ -98,7 +100,8 @@ thread, creates a new event loop in that thread, runs the provider coroutine to 
 enforces the caller's timeout. Service code reaches it through `assets.core.call_provider()`, the
 one boundary of every provider call, on an instance from `configured_provider()`: the boundary first
 checks the provider's [settings](#settings) and whether it is paused after «too many requests»
-([Too Many Requests](#too-many-requests)), then keeps its secrets masked while the call runs.
+([Too Many Requests](#too-many-requests)), then keeps its secrets masked while the call runs, and
+hides an error's texts whole when the call carries a personal secret ([Secrets](#secrets)).
 
 Consequently, a provider that wraps a synchronous SDK or HTTP client should call that client
 **directly** inside its `async def` method:
@@ -151,12 +154,12 @@ perform blocking I/O directly on the application's main event loop.
 | `get_icon` | `None` | Provider icon URL for the UI |
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
 | `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. Each field has a `key`, a `type` (`string`, `number`, `currency`, `select` with `options` / `option_labels`, or `ui_component` for a custom editor), `required` (shown with a red `*`), and optionally `default`, `placeholder`, a short `label` (the caption) and a `description` (the tooltip). The caption is the translation `assets.providerParams.<code>.label.<key>`, else `label`, else the raw `key` — declare a `label` so users do not see internal names; the tooltip is `assets.providerParams.<code>.description.<key>`, else `description`. Both translations live in the provider's own fragment: see [Plugin Folder and Translations](#plugin-folder). The parameters belong to one asset and are stored in clear with it: never a secret there, see [Settings](#settings). |
-| `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
+| `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page). Shown to the user: never a secret in it, see [Secrets](#secrets) |
 | `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
 | `resolve_url(url)` | `None` | Inverse of `get_asset_url`: open a provider page URL → return one search-item dict, a list of dicts, or `None`. Enables the last-resort external search stack. |
 | `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown) |
 | `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, sector, identifiers) from the provider |
-| `cooldown_scope(identifier, type, params)` | `None` | The part of the provider a pause after «too many requests» covers, such as a site's host; `None` pauses the whole provider. Called before every call, so no I/O: see [Too Many Requests](#too-many-requests) |
+| `cooldown_scope(identifier, type, params)` | `None` | The part of the provider a pause after «too many requests» covers, such as a site's host; `None` pauses the whole provider. Called before every call, so no I/O, and never a secret in the result: see [Too Many Requests](#too-many-requests) |
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
 | `settings_fields` | `()` | The values the provider needs from the instance or from each user: an API key, a region, a preference. Read with `self.settings` in the operations, never in `__init__`: see [Settings](#settings) |
 | `test_only` | `False` | `True` for a provider that exists for the tests: hidden from the provider list and from the settings catalogue |
@@ -182,10 +185,10 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 | Provider | `search()` | `test_search_query` | `get_asset_url` | Notes |
 |----------|-----------|---------------------|:---:|-------|
 | **Yahoo Finance** | ✅ | `"Apple"` | ✅ | Full ticker search with the core query cache (15 min TTL) |
-| **JustETF** | ✅ | `"iShares Core S&P 500"` | ✅ | ISIN-based search across cached ETF list |
+| **JustETF** | ✅ | `"iShares Core S&P 500"` | ✅ | ISIN-based search across cached ETF list; a row per currency, or only the user's `preferred_currency` ([Shipped Plugins](plugin_settings.md#shipped-plugins)) |
 | **CSS Scraper** | ❌ | `None` | ✅ | No search — URL must be provided manually |
 | **Scheduled Investment** | ❌ | `None` | — | Synthetic provider, no external search |
-| **Borsa Italiana** | ✅ | `"ENEL"` | ✅ | Full search on borsaitaliana.it; funds price by `provider_params.codice_fondo`; `resolve_url` emits IT + EN canonical rows |
+| **Borsa Italiana** | ✅ | `"ENEL"` | ✅ | Full search on borsaitaliana.it; funds price by `provider_params.codice_fondo`; search and `resolve_url` emit IT + EN rows, or only the user's `preferred_language` |
 
 !!! info "`supports_search` detection"
 
@@ -209,7 +212,8 @@ return:
 - `None` when the URL is not recognised.
 
 The search layer flattens lists and de-duplicates by `(identifier, language)`. Borsa Italiana uses
-this to return the full **IT + EN** canonical set for a fund or scheda page.
+this to return the **IT + EN** canonical set for a fund or scheda page, or only the row of the user's
+preferred language.
 
 This whole stack — the `web_link_finder` module, the two-stage "stringone", and the identifier
 post-filter — is documented on its own page:
@@ -268,16 +272,23 @@ GET /api/v1/assets/provider/search/stream?q=Apple&providers=yfinance,justetf
     }
   ],
   "providers_queried": ["yfinance", "justetf"],
-  "providers_with_errors": []
+  "providers_with_errors": [],
+  "providers_not_configured": []
 }
 ```
 
 - Searches are executed **in parallel** — one slow provider won't block others
 - Provider-specific errors are logged but don't fail the entire request
 - Errors are reported in `providers_with_errors` for debugging
+- A provider that is not configured, a required setting without a value, is not called: the
+  standard search lists it in `providers_with_errors` and in `providers_not_configured`, and the
+  stream's `provider_error` event carries `error_code: "NOT_CONFIGURED"`; the search box then offers
+  **Configure** for it ([NOT_CONFIGURED](plugin_settings.md#not-configured))
 - A provider paused after «too many requests» is not called: the standard search lists it in
   `providers_with_errors`, and the stream's `provider_error` event adds `error_code: "RATE_LIMITED"`
   and `retry_after` (see [Too Many Requests](#too-many-requests))
+- The stream's `provider_error` carries an `error_code` for every `AssetSourceError`, the
+  provider's own codes included (`SEARCH_ERROR`, for example); an error of any other type has none
 - `provider_url` is generated by the provider's `get_asset_url()` method (if implemented)
 
 ### 🧪 Probe Endpoint
@@ -389,11 +400,17 @@ names from that module: the package re-exports nothing. A helper only this provi
 beside `plugin.py` as `_*.py`. Discovery, the layout and the gate that keeps it
 (`./dev.py test utils gate-plugin-layout`) are in [Plugin Folder Layout](registry_pattern.md#plugin-layout).
 
-**Translations.** A provider's space is `assets.providerParams.<provider_code>`: the code
-`provider_code` returns, which need not be the folder's name — the `yahoo_finance/` folder
-registers `yfinance`. Its fragment holds the captions and tooltips of its `params_schema` fields,
-`label.<key>` and `description.<key>`; Borsa Italiana's (`borsa_italiana/i18n/`) is the only one
-today. Add the keys in the four languages, naming the folder with `--into`:
+**Translations.** A provider has two spaces, both keyed by the code `provider_code` returns, which
+need not be the folder's name — the `yahoo_finance/` folder registers `yfinance`:
+
+- `assets.providerParams.<provider_code>`: the captions and tooltips of its `params_schema` fields,
+  `label.<key>` and `description.<key>`;
+- `pluginSettings.asset.<provider_code>`: the texts of its [settings](#settings), `label.<field>`,
+  `description.<field>` and `option.<field>.<value>`, the keys its `settings_fields` declare
+  ([Labels and Translations](plugin_settings.md#translations)).
+
+Borsa Italiana's fragment (`borsa_italiana/i18n/`) holds both; justETF's (`justetf/i18n/`) holds its
+setting's texts only. Add the keys in the four languages, naming the folder with `--into`:
 
 ```bash
 ./dev.py i18n add "assets.providerParams.my_provider.label.exchange" --en "Exchange" --it "Borsa" --fr "Place de cotation" --es "Bolsa" --into asset_source_providers/my_provider
@@ -402,9 +419,10 @@ today. Add the keys in the four languages, naming the folder with `--into`:
 ```
 
 Without `--into`, `add` refuses a new provider's first key, because the keys under
-`assets.providerParams` belong to plugins only. `./dev.py test utils gate-plugin-i18n-ownership`
-then keeps every key under the provider's space in its fragment
-([A Plugin's Translations](registry_pattern.md#plugin-translations)).
+`assets.providerParams` and `pluginSettings.asset` belong to plugins only; it also refuses every new
+key of a provider whose keys lie under both branches, as Borsa Italiana's do.
+`./dev.py test utils gate-plugin-i18n-ownership` then keeps every key under the provider's spaces in
+its fragment ([A Plugin's Translations](registry_pattern.md#plugin-translations)).
 
 ---
 
@@ -443,6 +461,39 @@ class MyProvider(AssetSourceProvider):
 - **A required field without a value** makes `call_provider()` answer `NOT_CONFIGURED` before any
   I/O. Never return a secret, log it, or put it in a URL you log or in an exception message: masking
   is only a safety net.
+- **Texts.** Declare `label_key` and `description_key` on each field, and `label_key` on the options
+  that need a translation, under `pluginSettings.asset.<provider_code>`; the texts go in your
+  fragment ([Translations](#plugin-folder)). The English `label` stays the fallback.
+- **Where users set them.** **Settings › Plugins** lists every provider that declares a field the
+  user may see, and the asset dialog shows **Configure** next to the provider; while the provider is
+  not configured, the asset dialog shows **To configure** and a search offers **Configure** on a row
+  of its own ([The Interface](plugin_settings.md#interface)).
+
+### 🔐 Secrets Stay Out of the Caller's Reach {: #secrets }
+
+Any signed-in user can probe a provider with an identifier and parameters of their choosing
+(`POST /api/v1/assets/provider/probe`, **Test Configuration**), on an instance that carries the
+instance's secrets. So:
+
+- **Never put a secret in `get_asset_url()`**: the URL is shown to the user, as the **Provider URL**
+  of the asset dialog. As a last line of defence, the probe withholds a URL that shows one of the
+  provider's secrets (`core.public_asset_url()`): it answers `provider_url: null`, and the log has a
+  warning naming the provider, `Provider asset URL withheld: it shows a secret`.
+- **Never put a secret in `cooldown_scope()`**: the core asks it before the call, outside the
+  masking, and the scope keys the pause registry and appears in its log lines.
+- **Never send a secret in a request whose host comes from the `identifier` or the
+  `provider_params`**: the caller would choose the host, and receive the secret. No masking reaches a
+  request that has left. Send it only to the hosts your provider knows.
+
+**A caller's own secret hides the call's errors whole.** When a call carries a `user` secret, a
+value its caller chose (`self.settings.carries_user_secrets`), `call_provider()` turns every text of
+the error that shows a secret, the caller's or the instance's, into `***` entirely, instead of
+masking each occurrence in place: masked in place, the text would tell whether a chosen value occurs
+next to an instance secret, and so read it a guess at a time. The error's type and `error_code` stay,
+and so does every `details` item that shows no secret: put what explains a failure there. The log
+lines keep the precise masking, and so does a call that carries only instance secrets. In both
+cases, every occurrence of a secret is found at once, and occurrences that overlap or touch become a
+single `***` ([Secrets](plugin_settings.md#secrets)).
 
 The full contract (types, environment variables, secrets, caching, the API and the security model)
 is in [Plugin Settings](plugin_settings.md).
@@ -498,6 +549,8 @@ site that refuses pauses itself and not the other sites.
 - The callers that have an identifier (live price, refresh, metadata refresh, probe) ask the hook
   before every call: it must do no I/O. A hook that raises is logged, and the pause then covers the
   whole provider.
+- The scope never holds a secret: it is computed outside the masking, keys the pause registry and
+  appears in its log lines ([Secrets](#secrets)).
 - Search and `resolve_url` have no identifier, so no scope: they check and record the provider-wide
   pause. That is a key of its own: a site's pause does not hold up a search, nor does a refused
   search pause the sites.

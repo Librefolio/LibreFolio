@@ -224,13 +224,20 @@ the data directory. Give every instance its own key: never share one key between
 ## 🧩 Plugin Settings {: #plugin-settings }
 
 A plugin can ask for settings of its own: the API key of a paid data source, a region, a
-preference. No plugin shipped with LibreFolio asks for one today; a plugin you add may. A setting is
-one of two kinds:
+preference. Of the plugins shipped with LibreFolio, two ask for one, a personal search preference
+each: justETF and Borsa Italiana. None asks for an instance-wide setting; a plugin you add may. A
+setting is one of two kinds:
 
 - **Instance-wide**: one value for the whole instance, which only an administrator can save. Every
   user can read a plain value, and of a secret one, such as an API key, only whether it is set.
 - **Personal**: each user's own value, which only that user can save and read. Administrators never
   see it.
+
+Personal and instance-wide settings are changed in **Settings › Plugins**, a tab every user has:
+each user changes their personal ones there, and administrators the instance-wide ones too, which
+the other users see read-only. In the asset dialog, **Configure**, next to the chosen price
+provider, opens the same form for that provider alone. What the tab shows, setting by setting:
+[Plugin Settings](../user/settings/plugins.md) in the user manual.
 
 An instance-wide setting can also be given by an environment variable, in `.env` or in the
 container's environment like the other options; a personal one cannot. The plugins that have
@@ -260,27 +267,32 @@ LIBREFOLIO_PLUGIN_<KIND>_<PLUGIN CODE>_<SETTING KEY>
 
 While its variable is set, a setting takes its value from there, and nobody can change it from
 inside LibreFolio: a save is refused (`LOCKED_BY_ENV`), and a value saved earlier is ignored until
-you remove the variable and restart.
+you remove the variable and restart. **Settings › Plugins** shows the setting read-only, a secret
+only as *Set*: *Set by the server variable* and the variable's name for administrators, *Set by the
+server* for the other users.
 
 - A wrong value, one the setting does not accept or a `_FILE` that cannot be read, still locks the
   setting, and the plugin is then not configured: LibreFolio refuses every request to it, even when
   the setting is optional, until you fix the variable. It never falls back to the saved value or to
   the plugin's default. The log says why, with a warning once per server process:
   `Plugin setting variable invalid: the plugin is not configured until it is fixed`, with the
-  variable and the reason, never the value. Fix the value, then restart.
+  variable and the reason, never the value. In **Settings › Plugins** the plugin's badge reads
+  **To configure**, and the setting says that its variable is invalid. Fix the value, then restart.
 - In the [managed profile](hosting_providers.md#managed-profile), a setting locked by a variable is
-  not shown at all, and a save to it is refused as if it did not exist: the hosting provider sets it,
-  and the instance's administrators and users never see it.
+  not shown at all, not even in **Settings › Plugins**, and a save to it is refused as if it did not
+  exist: the hosting provider sets it, and the instance's administrators and users never see it.
 
 ### 🔐 Saved Secrets and the Instance Key {: #plugin-secrets }
 
 A setting saved inside LibreFolio is kept in the database. A secret one is first encrypted
 (AES-256-GCM) with a key derived from the [instance key](#instance-key), and is never shown again,
-not even to whoever saved it: LibreFolio only says whether it is set. A value given by a variable,
-secret or not, is never saved in the database.
+not even to whoever saved it: LibreFolio only says whether it is set (in **Settings › Plugins**,
+*Set on* and the date it was saved). A value given by a variable, secret or not, is never saved in
+the database.
 
 If the instance key changes, the saved secrets can no longer be read. LibreFolio keeps them and
-reports them as unreadable, and never uses a wrong value: enter them again.
+reports them as unreadable, and never uses a wrong value: enter them again. The tab says so under
+each one: *Saved, but this instance's key cannot read it: enter it again.*
 
 If `secrets/instance.key` is damaged or out of reach, LibreFolio starts anyway, with an error from
 the [startup checks](#startup-checks); a key you set yourself that cannot be used stops the start
@@ -289,7 +301,8 @@ instead. Until you fix it:
 - every saved secret is reported as unreadable, and the plugins run without them: a plugin that needs
   one answers that it is not configured;
 - secrets given by variables keep working;
-- a new secret cannot be saved;
+- a new secret cannot be saved: the tab answers *Secrets cannot be saved: this instance's key cannot
+  be used (see the configuration checks).*, and nothing of that save is written;
 - the log has one more error, the first time each server process needs a saved secret:
   `Plugin secrets unreadable: the instance key cannot be used (see the configuration checks)`.
 
