@@ -538,7 +538,7 @@ application lifespan.
 | `RISK_SIMULATION_WORKERS`, `RISK_OPTIMIZATION_WORKERS` | 1 (1–8) | Spawned processes per pool. |
 | `RISK_SIMULATION_QUEUE_CAPACITY`, `RISK_OPTIMIZATION_QUEUE_CAPACITY` | 2 (0–64) | Jobs that may wait; beyond workers + queue the answer is `worker_busy`. |
 | `RISK_SIMULATION_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_TIMEOUT_SECONDS` | 120 / 60 | Hard per-job timeout; beyond it the answer is `execution_timeout`. |
-| `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | 600 | Idle workers are stopped after this many seconds. |
+| `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | 600 (60 in the managed profile, see [`PROFILE_DEFAULTS`](../../architecture/settings.md)) | Idle workers are stopped after this many seconds. |
 
 ---
 

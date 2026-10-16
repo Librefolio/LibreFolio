@@ -464,7 +464,7 @@ async def _live(method: str, path: str, *, cookie: Optional[str] = None, json: A
 async def _live_register(lane: _LaneRows, prefix: str) -> _Account:
     """A regular account of this case, registered over HTTP in the lane's own mode, which must be open."""
     username = lane.new_username(prefix)
-    email, password = f"{username}@example.com", f"Initial-{uuid.uuid4().hex[:12]}"
+    email, password = f"{username}@example.com", f"Initial-{uuid.uuid4().hex[:12]}1"
     response = await _live("POST", "/auth/register", json={"username": username, "email": email, "password": password})
     assert response.status_code == 201, f"Setup: registering {username} on the lane failed; its mode must be open, as every unit registering its own users needs it: {response.status_code} {response.text}"
     user = response.json()["user"]
@@ -533,7 +533,7 @@ async def _listed(cookie: str, path: str, item_id: int) -> Optional[dict[str, An
 async def _live_register_with(lane: _LaneRows, prefix: str, invite_token: str) -> tuple[str, httpx.Response]:
     """POST /auth/register with ``invite_token``, for a new username of this case."""
     username = lane.new_username(prefix)
-    body = {"username": username, "email": f"{username}@example.com", "password": f"Invited-{uuid.uuid4().hex[:12]}", "invite_token": invite_token}
+    body = {"username": username, "email": f"{username}@example.com", "password": f"Invited-{uuid.uuid4().hex[:12]}1", "invite_token": invite_token}
     return username, await _live("POST", "/auth/register", json=body)
 
 

@@ -26,9 +26,9 @@
 | A2 | Riverifica dell'analisi sul codice di `1e9e567f7`, questo piano, la mia sezione del backlog | ✅ 15/10 |
 | Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ✅ chiuso: le prove hanno portato alla cura di Z6b, che chiude C-49 |
 | Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `74d028ec6` (journal `a6199d0e7`), entrato in `9d2074b2b`; lotto del flash (solo test) entrato in `93292909d` |
-| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, merge `8b2d4782d`): attività e richieste in volo; **Z2b** ⏳ (monitor d'inattività e sospensione su Fly) dopo Z4 |
+| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, `8b2d4782d`); **Z2b ✅ 16/10 checkpoint FROZEN** (sezione «Z2b»; decisioni notturne N-Z2b-1…6 «da rivedere») |
 | Z3 | Scheduler: recupero immediato al ritorno e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ✅ 16/10: commit `a4da204b4` e `70ccbeadc` (diagramma), prove d'ingresso verdi; decisioni D-Z3-1…4 «da rivedere» |
-| Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ 16/10 checkpoint FROZEN (sezione «Z4»; decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi) |
+| Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ entrato (treno 77, `2980e2a00`); decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
 | Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
 | Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ 16/10 checkpoint FROZEN** (sezione «Z7b — codice»; decisioni notturne N-Z7b-1…7); poi Z7c frontend (con l'API dello stato e del registro) |
@@ -1826,3 +1826,78 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    > `developer/architecture/database/index.md:251` descrive `scheduler_state.json` come «ultimo giro dei job»:
    > incompleto, non falso; lo aggiorna Z7c.
 5. ✅ 16/10 ~03:10 — Checkpoint FROZEN inviato al coordinatore.
+
+### Z2b — la sospensione dopo l'inattività (Fly)
+
+> **Via** (coordinatore, 16/10 ~03:30): «Poi Z2b», dopo l'ingresso di B2 (`5441b96ed`, con `backup_in_progress()`).
+> Base: `554e5013e`. Testo della richiesta: «solo se abilitato (`LIBREFOLIO_IDLE_SUSPEND_MINUTES`,
+> `LIBREFOLIO_IDLE_SUSPEND_MODE=none|fly`, default none): dopo N minuti senza richieste dell'utente (esclusi health
+> check e polling) e subito dopo i job di un risveglio programmato, l'istanza chiede di sospendersi (Fly: API locale
+> /.fly/api, non serve un token). Accettazione: scheda nascosta o utente inattivo da più di 10 min → nessuna
+> richiesta; con MODE=fly la macchina risulta sospesa entro N+1 minuti.» Decisioni del 15/10: D-S1 (presenza),
+> D-S2 (il backup in corso è lavoro in corso), D-S3 (WARNING e nuovo tentativo con attesa crescente fino a 10 min);
+> punto 32 (5 minuti di default per il cloud).
+>
+> **Decisioni notturne, da rivedere**:
+> - **N-Z2b-1**: un `MODE` sconosciuto è registrato una volta come ERROR e vale `none` (mai sospendere per un errore di
+>   battitura); i valori non distinguono maiuscole; `MINUTES` illeggibile o fuori da 1–1440 vale 5, registrato.
+> - **N-Z2b-2**: un controllo ogni 30 s; in più uno 2 s dopo la fine di un risveglio, quando la sua richiesta è finita.
+> - **N-Z2b-3**: dopo la chiamata di sospensione, riuscita o no, 60 s prima del controllo dopo: al risveglio la
+>   richiesta che ha svegliato la macchina fa in tempo a contare come presenza.
+> - **N-Z2b-4**: un fallimento (risposta non 2xx, errore di connessione, `FLY_APP_NAME` o `FLY_MACHINE_ID` mancanti) è
+>   un WARNING al primo di una serie; il tentativo dopo aspetta 30 s, poi il doppio, fino a 10 min; un successo azzera.
+> - **N-Z2b-5**: i controlli di occupazione si registrano all'avvio del monitor: `tools` (lavori dei tool in attesa) e
+>   `backup` (`backup_in_progress()` di B); `busy_reasons()` gira in un thread, perché il backup legge file.
+> - **N-Z2b-6**: in `app_lifespan.py` di H, l'import e due passi dichiarati: `idle-monitor` subito dopo `scheduler`
+>   all'avvio, primo fra i passi dello spegnimento.
+
+**Contratto.**
+- `config/sleep_wake.py`: `idle_suspend_mode()` → `"none"` o `"fly"`; `idle_suspend_minutes()` → 1–1440, default 5;
+  `SleepWakeConfigError` per un valore inutilizzabile (`IDLE_SUSPEND_MODE_INVALID`, `IDLE_SUSPEND_MINUTES_INVALID`).
+- `services/platform/sleep_wake/suspend.py`: `FlySuspender` — `POST http://flaps/v1/apps/{FLY_APP_NAME}/machines/
+  {FLY_MACHINE_ID}/suspend` sul socket Unix `/.fly/api` (httpx, trasporto iniettabile per i test), senza token;
+  ritorna se la richiesta è stata accettata (2xx) o solleva `SuspendError` col motivo.
+- `services/platform/sleep_wake/idle_monitor.py`: `IdleMonitor(activity, suspender, settings, clock, sleep)`;
+  `check()` decide: occupato → niente; inattivo da meno di N minuti → niente; altrimenti sospende; il ciclo, il
+  controllo dopo un risveglio (`request_idle_check(delay)`), l'attesa dopo la sospensione, l'attesa crescente dopo un
+  fallimento; `start_idle_monitor()` (con `MODE=none` non parte niente) e `stop_idle_monitor()` (ritorna il task da
+  attendere); i controlli `tools` e `backup`.
+- `api/v1/system/wake.py`: a fine giro, `request_idle_check(2.0)`; senza monitor non fa niente.
+- `.env.example` e la sezione della pagina «Sleep and Wake».
+
+**Passi.**
+1. ✅ 16/10 ~04:00 — Rossi di test-author: `test_services/test_sleep_wake_suspend.py` (SWS-001…045, 139 casi,
+   PURE), registrato come `services sleep-wake-suspend`. Rosso: `ImportError` di `idle_monitor` alla raccolta;
+   `app-lifecycle` 42/42 e `sleep-wake-activity` 94/94 intatti.
+   > **⚠️ Fuori pista** (mio, corretto a metà lavoro): il contratto diceva che `start_idle_monitor()` restituisce il
+   > task del monitor; ma il runner dei passi di H attende ciò che un passo d'avvio restituisce quando è un Task, e il
+   > monitor non finisce mai: l'avvio del server si sarebbe fermato lì. Ora restituisce None (come `_start_scheduler`),
+   > e `idle_monitor_task()` dà il task ai test; SWS-045 prova che il passo d'avvio vero finisce con il monitor vivo.
+   > **Decisione notturna, da rivedere** (domanda di test-author): un controllo richiesto chiude anche l'attesa di 60
+   > s dopo una sospensione, così dopo un risveglio senza nessuno la macchina torna a dormire subito.
+2. ✅ 16/10 ~04:10 — Codice: `sleep_wake/suspend.py`, `sleep_wake/idle_monitor.py`, `idle_suspend_mode()` e
+   `idle_suspend_minutes()` in `config/sleep_wake.py`, il gancio in `wake.py`, `.env.example`; in `app_lifespan.py` di
+   H l'import e i due passi `idle-monitor`, dichiarati (l'import nel posto che vuole ruff).
+3. Verdi:
+   - ✅ `sleep-wake-suspend` 139/139 al primo colpo; `app-lifecycle` 42/42; `sleep-wake-activity` 94/94; il file del
+     risveglio 74/74; ruff e black puliti.
+   - ✅ La guardia di `.env.example` era rossa, come previsto: il codice legge `FLY_APP_NAME` e `FLY_MACHINE_ID`,
+     che imposta Fly e non sono opzioni. Test-author li ha aggiunti a `UNDOCUMENTED_ON_PURPOSE` nel test di H (due
+     righe dichiarate) e ha fissato con SWS-046 che un controllo richiesto chiude l'attesa dopo una sospensione:
+     `sleep-wake-suspend` 141/141, `config-env-example` 38/38.
+   - ✅ I quattro file che eseguono il lifespan vero, con i due passi nuovi: `services signal-runtime` 6/6,
+     `test_market_calendar.py` 37/37, `test_risk_scenario_catalog.py` 11/11, `db post-migration` 41/41; un ciclo vero
+     di `api system` 118/118, porta libera, nel log nessun «Idle monitor started» (modo `none`) e nessun problema di
+     spegnimento.
+4. ✅ 16/10 ~04:50 — Doc:
+   - docs-writer: in `admin/sleep_wake.en.md` la sezione «😴 Idle Suspension» `{: #idle-suspend }` prima del
+     risveglio (presenza e lavoro in corso, tempi, cosa succede alla ripresa, `fly.toml` con `auto_stop_machines =
+     "off"`, `internal_port = 6040`, `kill_signal`/`kill_timeout`, i requisiti di Fly per la sospensione, il registro e
+     i motivi dei fallimenti; avvisi su un monitor di uptime esterno, che sveglia la macchina, e sui più worker, ognuno
+     col suo monitor); due righe in `admin/configuration.en.md`; `overview.md` (i passi `idle-monitor`);
+     `scheduler.md` (il collegamento, e «last of STARTUP_STEPS» corretto);
+   - io: la docstring di `activity.py` («dieci minuti» → due, come Z1), la riga della guida in
+     `admin/index.{en,it,fr,es}.md` (ora presenta le due funzioni; non timbrata, la pagina ha già un debito),
+     `settings.md` (`idle_suspend_mode()` e `idle_suspend_minutes()`).
+   - Build rigoroso 0 warning, `check-links` 96 validi.
+5. ✅ 16/10 ~04:55 — Checkpoint FROZEN inviato al coordinatore.
