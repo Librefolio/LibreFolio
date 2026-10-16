@@ -4493,3 +4493,85 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - Non eseguiti: `all-backend` (da fare in uno slot dopo l'ingresso, P18 cambia lo schema), E2E e `front check` (nessun
 >   cambio del frontend), `api sync` (nessun cambio dello schema dell'API).
 > - Dopo l'aggiornamento di base con IM: A-25 (ProfileTab), commit a sé.
+
+#### P18.7 — P18 committato, aggiornamento di base, A-24 (2026-10-16, 15:02–)
+> - **Commit del coordinatore**: `1fdeabaa4` (feat, 15 percorsi), `eb419cbcb` (docs, 10), `3376b9203` (journal).
+> - **Merge aperto dal coordinatore**: `git merge 12cd3c2e0` (dev con i lotti di H e P17, Z5/Z-13, W-B30/36b, i colori
+>   AF/IM/DV/BK/TR, e il finto `SMTPUTF8` di E, `7d51c21af`). Tre conflitti risolti tenendo le due parti:
+>   - `services/platform/app_lifespan.py`: dopo `global-settings` sia `admin-bootstrap` (F02) sia
+>     `plugin-secrets-check` (H-15), **in quest'ordine**: STEP-001 vuole `admin-bootstrap` subito dopo
+>     `global-settings`, e il test di H vuole solo `plugin-secrets-check` fra `global-settings` e `scheduler`. Import di
+>     entrambe presenti; `ruff`/`black` puliti.
+>   - `developer/architecture/overview.md`: i due passi 12 e 13, numeri seguenti spostati di uno (fino a 17).
+>   - `developer/architecture/security.md`: la frase dei segreti di H (con `LIBREFOLIO_WAKE_TOKEN` e le variabili dei
+>     plugin) più `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` (letto con `env_secret`, verificato in `config/accounts.py`).
+> - **File cambiati dalle due parti, fusi da soli, controllati**: `auth.py` (la riga di H `client_address(http_request)`
+>   a 277 e il suo import, il mio `same_email` a 383), i registri del runner (nessuna unità né funzione doppia; il doppio
+>   `all` di `_backend_api.py` c'è già in entrambi i genitori), le pagine admin e di architettura (nessuna ancora o titolo
+>   doppio, recinti pari, nessun marcatore), `.env.example` (nessuna variabile doppia, le tre di F02 presenti). Alembic:
+>   una sola testa, `009_email_unique_ignoring_case`.
+> - Messe in stage **solo** le tre risoluzioni; nessun file non fuso.
+> - **A-24** (i tre test di E) affidato a un `test-author`, delta a sé non in stage: varianti NFC con le maiuscole
+>   diverse solo nelle lettere non ASCII, la costante della casella dal `casefold`, le asserzioni su `rcpt_tos` intatte,
+>   EMF-056 non toccato (note di E in `work/p18/a24_adaptation_notes.md`).
+> - **Controlli sulla revisione combinata** (`work/p18/greens_combined_c1.sh`, log in `work/p18/logs/combined/`), in
+>   corso.
+> - **A-24 fatto dal `test-author`** (delta a sé, non in stage, 3 file +24/−12; `ruff`/`black` puliti):
+>   - `test_email_flows.py` EMF-038: `ONE_MAILBOX` = quattro grafie di `zq-shäröd@example.com` diverse solo nel
+>     maiuscolo di `ä`/`ö` (`\u` escape, come `INTERNATIONAL_RECIPIENT` di E in EMD-046); precondizioni: una chiave
+>     `casefold`, quattro chiavi di `user_service.email_fold`.
+>   - `test_email_verification.py` EMV-043 e `test_email_verification_api.py` EVA-016: `MAILBOX_VARIANTS` = quattro
+>     grafie di `zq-vïç@example.com` (`MAILBOX` è il loro `casefold`), con la precondizione di E
+>     `{w.casefold() for w in MAILBOX_VARIANTS} == {MAILBOX}` e quella A–Z; nel file API aggiunto `user_service`
+>     all'import esistente.
+>   - Asserzioni su `rcpt_tos` intatte. EMV-044 usa `MAILBOX_VARIANTS[0]` e `MAILBOX`: il senso resta (il limite conta
+>     la chiave `casefold`). EMF-056 non è in questo albero (è solo nel ramo di E).
+>   - Provato in privato: tutte NFC; sullo schema vero quattro righe accettate, le vecchie grafie rifiutate da
+>     `ux_users_email_lower`; `EmailStr` le lascia intatte; `smtplib` con `SMTPUTF8` le porta esatte.
+> - **Nota di W per la 009** (C-97, issue #43, 16:20, chiesta dal coordinatore): il docstring della 009 diventa due punti
+>   numerati come la 004: «1.» P18 (il testo di prima) e «2.» «Quantities keep 10 decimal places and prices 12 (C-97,
+>   issue #43): no DDL, no data step», testo di W alla lettera. Prima riga (`script.doc`): «Release 1.3: email addresses
+>   unique regardless of case (P18); the decimals of C-97 need no DDL». Nessun test fissa il docstring; `ruff`/`black`
+>   puliti, Alembic una testa. Detto a W (senso invariato).
+> - **Combinata, parte 1** (`greens_combined_c1.sh`): `services` `email-case` 67, `user-profile` 47, `registration`
+>   147, `admin-bootstrap` 156 (l'ordine dei passi), `app-lifecycle` 44; `db` `create`, `validate` 17,
+>   `autoincrement-schema` 4, `post-migration` 41, `migration-005…009` 25/37/29/23/11, `populate`; `api`
+>   `registration` 102, `profile` 28, `auth` 95, `users-admin` 64, `admin-setup` 42, `email` 160: tutto ✅.
+>   **⚠️ Fuori pista**: `utils dev-cli-image` fermato dal runner al tetto di 600 s con il carico a ~65 (80 su 94 passati,
+>   nessun rosso; i 14 restanti comprendono la classe P18). Verdetto (test-triage): lentezza dell'ambiente, non un
+>   difetto; a carico 48 la stessa unità fa 226 s. Rifatta in coda alla parte 2 con avvio sotto carico 40.
+> - **Combinata, parte 2** (`greens_combined_c2.sh`, con A-24 e il docstring nuovo della 009): `db migration-009` 11,
+>   `services email-flows` **155/155** e `services email-verification` **124/124** (prima un rosso ciascuna), `db
+>   populate`, `api email-verification` **49/49** (EVA-016 verde), `mkdocs build --strict` ✅ (101 s, 3 076 URL),
+>   `check-links` ✅ 97, `utils dev-cli-image` **94/94** in 413 s (avvio a carico 37). Porta libera alle 16:55.
+>   **Combinata verde.**
+> - **A-27** (dalla revisione di sicurezza di E, E6.9, via il coordinatore, 16:50): un cambio dell'indirizzo o della
+>   password chiude le sessioni ma non revoca i link di reset vivi. Proposto lotto a sé subito dopo questo giro, prima
+>   dello slot `all-backend`; tre punti (`update_profile` su un cambio vero, la rotta `change-password`, e
+>   `reset_password` della CLI, che ha lo stesso buco), con `token_service.revoke_tokens(…, purpose=PASSWORD_RESET)`
+>   come già fanno `create_password_reset` e `complete_password_reset`.
+
+### A-25 — La scheda Profilo e il cambio di sole maiuscole — contratto (2026-10-16, 15:30)
+> Approvato nell'impostazione dal coordinatore (13:20): solo logica, nessuna classe, rossi prima in `ProfileTab.test.ts`,
+> dopo l'aggiornamento di base con IM, commit a sé. Area colori IM: il file è libero (IM è entrato).
+
+- **C1 · La regola, una volta sola nel frontend**: `frontend/src/lib/features/auth/emailCase.ts`, accanto a
+  `passwordRules.ts` (decisione 37), con `emailFold(address)` (A–Z → a–z e nient'altro, come `lower()` di SQLite e
+  `user_service.email_fold`) e `sameEmail(a, b)`. Pura, sincrona, niente `trim`. Test unitari in `emailCase.test.ts`.
+- **C2 · Che cosa resta «modificato»**: `emailModified` resta il confronto esatto. Un cambio di sole maiuscole si salva
+  (il server conserva la nuova forma), quindi la riga resta evidenziata e «Salva»/«Annulla» restano offerti.
+- **C3 · Quando serve la password**: `emailChangesAddress = emailModified && !sameEmail(editedEmail, originalEmail)`.
+  - `emailNeedsPassword = emailChangesAddress && emailPassword === ''`.
+  - Il blocco della password attuale e il suo avviso («gli altri dispositivi verranno disconnessi», riga ~459) solo con
+    `emailChangesAddress`.
+  - La password digitata si svuota quando il cambio smette di cambiare l'indirizzo (oggi: quando smette di essere
+    modificato).
+- **C4 · Che cosa si manda**: per un cambio di sole maiuscole `{email}` senza `current_password`, nel salvataggio della
+  riga e in «salva tutto»; per un cambio vero, come oggi `{email, current_password}`.
+- **C5 · Il limite ASCII anche qui**: `Émile@` → `émile@` è un indirizzo diverso: la password si chiede.
+- **Rossi** (`test-author`, `ProfileTab.test.ts` più `emailCase.test.ts` nuovo): sole maiuscole → nessun campo
+  password, «Salva» acceso, payload senza `current_password`; da un cambio vero a uno di sole maiuscole la password si
+  svuota e non parte; non ASCII → password chiesta; guardie: un cambio vero chiede ancora la password (i test esistenti).
+- **Doc**: una frase in `user/settings/profile.en.md` («Only the capitals changed»: nessuna password). Debito di
+  traduzione, nessun timbro.
+- **Prove**: `vitest` dei due file, `front check`; E2E `settings` se il cambio dell'indirizzo vi è coperto.
