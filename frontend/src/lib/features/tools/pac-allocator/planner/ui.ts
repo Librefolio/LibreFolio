@@ -37,11 +37,11 @@ export const STEP_NUMBER = 'inline-flex h-6 min-w-6 shrink-0 items-center justif
 
 export const SECTION_TITLE = 'text-sm font-semibold uppercase tracking-wide text-lf-secondary';
 
-export const INPUT = 'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-libre-green focus:outline-none focus:ring-1 focus:ring-libre-green disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100';
+export const INPUT = 'w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 text-sm text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus disabled:opacity-60';
 
 /** A card title the user renames in place: reads as a heading, shows its border on hover and focus. */
 export const TITLE_INPUT =
-    'w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-semibold text-gray-900 placeholder:font-normal placeholder:text-gray-400 hover:border-gray-300 focus:border-libre-green focus:outline-none focus:ring-1 focus:ring-libre-green dark:text-gray-100 dark:hover:border-gray-600';
+    'w-full min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 py-0.5 font-semibold text-lf-primary placeholder:font-normal placeholder:text-lf-placeholder hover:border-lf-input focus:border-lf-focus focus:outline-none focus:ring-1 focus:ring-lf-focus';
 
 export const LABEL = 'block text-xs font-medium text-lf-secondary';
 

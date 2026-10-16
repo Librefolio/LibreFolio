@@ -17,8 +17,9 @@ Tests for Broker Report Import Manager API endpoints:
 - GET /brokers/import/files/{id}/preview of a damaged Excel workbook answers 400, not 500
   (step 6, F2: Category 15)
 - who may see a broker's report files: a file with no broker only its uploader and the administrator,
-  ``can_delete`` on every list item, a file id that is not a UUID answers 404 on every per-file route,
-  a parse imports only into a broker its caller edits (F36, decision 36: W-B3, W-B4: Category 18)
+  and in no broker's list, ``can_delete`` on every list item, a file id that is not a UUID answers 404
+  on every per-file route, a parse imports only into a broker its caller edits (F36, decision 36:
+  W-B3, W-B4, W-B32: Category 18)
 
 See checklist: 01_test_brim_plan.md - Categories 5, 6
 Note: E2E tests are in test_e2e/test_brim_e2e.py (Category 7)
@@ -1167,7 +1168,7 @@ async def _upload_csv(client: httpx.AsyncClient, broker_id: int, content: bytes,
 
 
 async def _files_on(client: httpx.AsyncClient, broker_id: int) -> list:
-    """The BRIM files stored on one broker; the list also returns legacy files with no broker, so the target is filtered."""
+    """The BRIM files stored on one broker, from the list filtered on it; the target is filtered."""
     response = await client.get(f"{API_BASE}/brokers/import/files", params={"broker_ids": broker_id}, timeout=TIMEOUT)
     assert response.status_code == 200, response.text
     return [info for info in response.json() if info.get("target_broker_id") == broker_id]
@@ -2767,7 +2768,7 @@ class TestPluginCheckEndpoint:
 
 
 # ============================================================================
-# CATEGORY 18: A BROKER'S REPORTS ONLY TO WHO MAY SEE THAT BROKER (F36, decision 36; W-B3, W-B4)
+# CATEGORY 18: A BROKER'S REPORTS ONLY TO WHO MAY SEE THAT BROKER (F36, decision 36; W-B3, W-B4, W-B32)
 # ============================================================================
 #
 # Decision 36 (developer, 15/10): a broker's files — list, preview, download — only to users with at least VIEWER on that
@@ -2795,6 +2796,11 @@ class TestPluginCheckEndpoint:
 #    ``/duplicates`` and the report-set routes check theirs (EDITOR or OWNER of that broker; the administrator passes),
 #    otherwise 403, before anything is parsed. Today the route checks only the file's broker: an EDITOR of the file's
 #    broker parses it into any broker id, and reads the duplicate report computed against that broker's transactions.
+# 7. W-B32 (approved by the coordinator on 16/10, within decision 36): a list the request filters by broker (``broker_ids``, as
+#    a broker's «Uploaded Reports» asks) holds that broker's files only: a file with no broker is left out, for its uploader and
+#    the administrator too. Unfiltered (the Files page), the list is that of 2. The cure is the route's: for a regular user the
+#    route hands ``list_files`` the brokers they may see even when the request names none, so ``list_files``, which keeps the
+#    files with no broker under any broker filter, cannot tell the Files page from a broker's list.
 #
 # A file with no broker is written by the test as an old version wrote it: content and sidecar in the root of ``uploaded/``
 # in this lane's ``broker_reports`` (``get_test_data_dir``: the runner exports ``--data-dir`` to the backend under test and
@@ -3209,6 +3215,42 @@ class TestReportsWithoutBroker:
             gone = await _ask(client, ROUTE["info"], legacy.file_id)
             assert gone.status_code == 404, _answer(gone)
             print_success(f"✓ the {deleter} deletes a file with no broker")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reader", ["uploader", "administrator"])
+    async def test_the_list_of_a_broker_leaves_out_a_file_with_no_broker(self, test_server, planter, reader):
+        """F36-16 (W-B32): U owns broker B, with a report uploaded to it, and has a file with no broker. ``reader`` (U, or the
+        administrator, who holds no role on B: no role narrows an administrator's list) asks for B's list, ``broker_ids`` = B, as
+        B's «Uploaded Reports» does: B's report is there, the file with no broker is not, and every item is a file of B. Barriers:
+        the reader reads the file with no broker and lists it unfiltered (F36-04's contract, which the cure keeps: the Files page
+        asks with no filter); B's report is in B's list. Red today: the route hands the filter to ``list_files``, which keeps every
+        file with no broker under any broker filter, and then drops only those another user uploaded (decision 36): the file shows
+        in the list of every broker, U's own to U, all of them to the administrator."""
+        print_section(f"F36-16: a broker's list, as the {reader} reads it, leaves out a file with no broker")
+        async with httpx.AsyncClient() as uploader, httpx.AsyncClient() as admin:
+            uploader_id = await _regular_user(uploader)
+            client = uploader
+            if reader == "administrator":
+                await _lane_admin(admin)
+                client = admin
+            broker_id = await create_test_broker(uploader)
+            file_ids: List[str] = []
+            try:
+                broker_report = await _upload_for_check(uploader, broker_id, PLANTED_CSV, f"f36_{uuid.uuid4().hex[:8]}.csv", file_ids)
+                legacy = _without_broker(planter, uploader_id)
+                await _assert_reads_without_broker(client, legacy, uploader_id)
+                assert legacy.file_id in await _listed(client), f"presence barrier: the {reader} lists the file with no broker when the list is not filtered (F36-04)"
+
+                listed = await _listed(client, broker_ids=broker_id)
+
+                assert broker_report in listed, f"presence barrier: the {reader} finds broker {broker_id}'s report in the list of broker {broker_id}"
+                assert legacy.file_id not in listed, f"a report with no broker shows in the list of broker {broker_id} (its «Uploaded Reports») as the {reader} reads it: file {legacy.file_id}, uploaded by user {uploader_id} with no broker, is listed under every broker"
+                strays = {file_id: item["target_broker_id"] for file_id, item in listed.items() if item["target_broker_id"] != broker_id}
+                assert strays == {}, f"the list of broker {broker_id}, as the {reader} reads it, shows reports of another broker or of none ({{file_id: target_broker_id}}): {strays}"
+                print_success(f"✓ a broker's list, as the {reader} reads it, leaves out a file with no broker")
+            finally:
+                await _delete_files(uploader, file_ids)
+                await _delete_created(uploader, broker_ids=[broker_id])
 
 
 class TestReportsOfABroker:

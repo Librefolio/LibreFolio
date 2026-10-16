@@ -11,7 +11,7 @@
     import {t} from '$lib/i18n';
     import {AlertTriangle, CheckCircle2, MessageSquareText, XCircle} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import '$lib/theme/components/dialogs.css';
 
     /** A broker as the modal shows it: the icon fields follow BrokerIcon's chain. */

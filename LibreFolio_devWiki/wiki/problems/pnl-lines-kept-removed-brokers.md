@@ -54,6 +54,6 @@ rebuild — [[concepts/echarts-chart-gotchas]].
 
 | Role | Path |
 |------|------|
-| `seriesKey`, `needsFullInit`, the partial update | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
-| Replay test | `frontend/src/lib/components/dashboard/GrowthChart.test.ts` |
+| `seriesKey`, `needsFullInit`, the partial update | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
+| Replay test | `frontend/src/lib/features/dashboard/GrowthChart.test.ts` |
 | Journal (§1.3) | `LibreFolio_developer_journal/Release_2/Phase_0/47_chartAxisDayLabels/plan-phase00ChartAxisDayLabels.prompt.md` |

@@ -40,6 +40,6 @@ call sites misses the ones that do not look like money.
 
 | Role | Path |
 |------|------|
-| Masked formatters | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| Masked formatters | `frontend/src/lib/features/dashboard/GrowthChart.svelte` |
 | The gate | `frontend/src/lib/utils/privacy/moneyRenderSites.test.ts` |
 | Journal (P4-11) | `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/00_backlog_strutturale_P4.md` |

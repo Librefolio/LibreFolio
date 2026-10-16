@@ -67,8 +67,8 @@ const {brokerModalProbe} = vi.hoisted(() => ({
  * directly, while the real BrokerModal still renders — the same delegation as the
  * ImportWizardModal wrapper above.
  */
-vi.mock('$lib/components/brokers/BrokerModal.svelte', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('$lib/components/brokers/BrokerModal.svelte')>();
+vi.mock('$lib/features/brokers/BrokerModal.svelte', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('$lib/features/brokers/BrokerModal.svelte')>();
     const renderActual = actual.default as unknown as (...args: unknown[]) => unknown;
     return {
         ...actual,

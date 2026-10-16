@@ -11,7 +11,7 @@ applyTo: "backend/app/services/signal_plugins/**,backend/app/services/signal_*.p
   which discovery skips) and registered with `@register_plugin(SignalPluginRegistry)` (`services/signals/registry.py`; the decorator is in
   `services/provider_registry.py`).
   Import and patch from `….signal_plugins.<code>.plugin`. Keys several indicators share (`signals.reference.*`,
-  `signals.riskRollingReturn.*`) stay in the `charts` subsystem of the catalogue.
+  `signals.tooltips.riskWindow`) stay in the `charts` subsystem of the catalogue.
 - **Runtime**: `signal_service.py` (planning, execution, annotations, validation), `signal_runtime.py`,
   `signal_annotations.py`, `signal_series_preparation.py` (quote days, prepared series). `series_preparation.py` is
   shared with the risk engine.

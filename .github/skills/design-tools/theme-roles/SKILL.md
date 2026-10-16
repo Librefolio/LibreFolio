@@ -110,6 +110,20 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
 6. **Class names stay whole literals.** Never build them from pieces (`'bg-lf-' + x`): Tailwind would not generate
    them, and the gate cannot see them.
 7. **Shared files** (shell, header, files other workstreams also edit): change classes only, never reorder the markup.
+8. **One property, one ternary** (Tailwind 4 order).
+   - Two base utilities that set the same property on one element come out **sorted by name**, and the later one wins;
+     their order in the `class` string does not count. `border-lf-input` (always on) beat `border-lf-focus` (only when
+     open), and an open select lost its focus border. The legacy pair had worked by luck: `border-gray-300` sorts
+     before `border-libre-green`.
+   - So the idle and the state colour of one property are the branches of one ternary, and the idle `hover:` sits in
+     the idle branch: `{open ? 'border-lf-focus' : 'border-lf-input hover:border-lf-input-hover'}`.
+   - Variants (`hover:`, `focus:`, `aria-*:`) come after base utilities and add specificity. A state that must beat a
+     colour the caller passes in can be a variant (`aria-invalid:border-lf-danger`).
+   - A class prop (`className`, `contentClass`, `triggerClass`, `fieldClass`, `tab.className`) meets the component's
+     own classes under the same name order: check the caller's colours before migrating either side.
+   - A colour in a component's `<style>` beats every utility, a caller's class included: keep colours a caller may
+     override in the markup.
+   - Details: devWiki `problems/tailwind4-same-property-utilities-sorted-by-name`.
 
 ## Gates and the baseline
 

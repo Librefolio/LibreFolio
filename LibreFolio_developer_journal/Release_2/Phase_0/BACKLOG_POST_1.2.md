@@ -75,7 +75,7 @@
 | [Piano della 52](52_timeAxisLastLabel/plan-phase00TimeAxisLastLabel.prompt.md) | L'ultima etichetta degli assi del tempo sui telefoni, le date dei tooltip, il periodo in corso di Growth, Alloc e lotti | chiuso nel treno 97 |
 | [Piano della 53](53_pacTests/plan-phase00PacTests.prompt.md) | I test del PAC (T-PAC): mappa, coperture, test che mentono, difetti D1–D4, lotti A–C | aperto: tutto dopo la 1.2 (C-69, C-73…C-78) |
 | [Piano della 54](54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md) | La fixture della galleria: quote, YoC e variazione di un giorno non più scalate (I-M30) | chiuso nel treno 99; la privacy resta una domanda del developer |
-| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R e G, materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto |
+| [Programma colori](../Phase_1/10_colorSystem/README.md) | Analisi colori v1.2 (P1–P11), piano generale (token, Designer Lab), workstream L, R, G, T, DV e, dal 16/10, IW, TR, AF, BK, IM (D-T28); materiale della designer | aperto il 14/10; spostato in `Phase_1/10_colorSystem` il 14/10 sera (era la 55); giro 1 della designer ricevuto |
 | [Gallery deterministica](../Phase_1/10_colorSystem/G-galleryDeterminism/README.md) | Gallery deterministica: 27 schermate instabili su 177, fallimenti sotto carico; workstream G | aperto il 14/10; ora in `10_colorSystem/G-galleryDeterminism` (era la 56) |
 | [Rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md) | La run completa con coverage sull'albero candidato al tag (`10e646f79`): 0 rossi | C-79 |
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
@@ -225,7 +225,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     `gate-plugin-i18n-ownership`), e il rifiuto nomina il plugin col suo nome. Resta la parte b, il 400 del parse
     tradotto nel wizard e il codice dell'anteprima illeggibile (K2b, dopo un commit del coordinatore su `brokers.py`
     e `uploads.py`).
-- **C-71 · Due «Rolling Return» con lo stesso nome** — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
+- ✅ **C-71 · Due «Rolling Return» con lo stesso nome** (chiusa 16/10 dal coordinatore: CP-10a di J, decisione 29, treno 100 — resta un solo Rolling Return in giorni di calendario, l'indicatore della 1.1 è ritirato) — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
   della 1.1 (`rolling_return`, finestra in osservazioni) resta nel catalogo dei segnali e usa la stessa chiave di nome,
   `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
   calendario, nascosto dal catalogo). Chi viene dalla 1.1 può leggerli come un doppione. Da fare: un nome che dica la
@@ -1970,13 +1970,25 @@ plugin.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab».
 
-- **L-18 · Togliere i vecchi percorsi `components/` dei grafici dopo Y3 e Y5** — minimo; L, 16/10 (L-16).
+- **L-18 · Togliere i vecchi percorsi `components/` dei grafici dopo Y3 e Y5** — minimo; L, 16/10 (L-16). ✅ 16/10, nel checkpoint L-18 (il commit è del coordinatore).
   - `CHART_PATH_RE` (`scan-colors.mjs`) accetta i due percorsi finché gli spostamenti della 1.3 non sono finiti. Y4b è già entrato e `components/risk` non esiste più.
   - Dopo Y3 (`features/dashboard/`) e Y5 (`features/brokers/lots/`):
     - togliere i rami `components/(dashboard|risk|brokers/lots)` della regex, le righe sintetiche corrispondenti di `scanColors.test.ts` e la parentesi sui due percorsi in `designer-lab.md`;
     - aggiornare la costante `GROWTH` di `pickView.test.ts` e l'esempio JSON con `components/brokers/BrokerImportFilesModal.svelte`.
+  - **Fatto (16/10, dopo l'ingresso di Y in `d5c3c3ae3`):**
+    - `CHART_PATH_RE` senza `components/(dashboard|risk|brokers/lots)`;
+    - test e doc aggiornati;
+    - l'esempio JSON è su `LoadingSpinner.svelte:60`, perché il modale dei broker non ha più `#374151`;
+    - il catalogo ha l'hash identico.
 
-  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab», passo 7.
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab», passo 7, e «L-18».
+
+- **L-19 · Due esempi della pagina developer del Lab non corrispondono più al codice** — basso; L, 16/10 (`docs-writer` in L-18).
+  - **Esempio di export, la modifica `--color-emerald-600@light`:** cita `src/lib/components/assets/AssetCard.svelte:133`, che oggi è `case 'up':`. L'unico `emerald-600` del file è alla riga 134, ed è `dark:border-emerald-600`, una variante scura, mentre la modifica è `@light`. Anche le cifre di `impact` (46/3/27) sembrano vecchie.
+  - **Esempi del selettore e del suo export:** citano `src/lib/components/table/DataTable.svelte:1607` con `#64748b` come «rule-literal». Oggi la riga 1607 è `}`, e `#64748b` non c'è più nel file: la regola `th` legge `var(--lf-cmp-datatable-header-text)`, e il valore sta in `src/lib/theme/components/table.css`.
+  - **Cosa serve:** una cattura nuova dal Lab, con export e selettore, non solo un numero di riga. La storia dell'esempio («una regola con un colore scritto») va scelta su un caso che esiste ancora. `TransactionsTable.svelte:993` (`tx-table`) è ancora giusto.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-18», fuori pista dell'esempio JSON.
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2331,6 +2343,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - **Candidata della notte `g-cand16a`** (`72e66d1a6`): verde, 2904 PNG.
     - Diff contro r3: 2720 immagini cambiate, quasi tutte per la migrazione ai ruoli di colore.
     - Foglio per il developer, ordinato per cambio visibile: `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html`.
+      Dal 16/10 il comando è nel toolkit, su richiesta del coordinatore: `gallery_tool sheet <diff> --lang it`.
 
   Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md) e
   [stabilità](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/stability-2026-10-16.md).
@@ -2558,12 +2571,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     attenuato) col valore del tema opposto, la regola di Q10 estesa; info e attenuato a 4,54:1 in chiaro; l'ombra dei
     tooltip è quella dei menu.
   - W1-d: il suggerimento evidenziato di `TagInput` passa dal blu a `bg-lf-selected`.
-  - Rimandati da W1-d: `ui/input/ExactDecimalInput.svelte` ed `ExactQuantityInput.svelte`, insieme ai chiamanti che gli
-    passano classi di palette (`INPUT` del pianificatore PAC, `ui.ts:39`; `!bg-white` in `TxFormSingleSection` e
-    `TxFormPairSection`) e ai test che leggono i loro colori, con l'OK dei proprietari.
+  - Rimandati da W1-d, consegnati col lotto input (`37972b529`, 16/10): `ExactDecimalInput` ed `ExactQuantityInput` con i
+    chiamanti (`INPUT` del PAC, i form delle transazioni, i 6 campi dei grafici di DV). Da rivedere: un campo non valido
+    resta rosso anche col fuoco (`aria-invalid:border-lf-danger` vince su `focus:`).
   - W1-c, W1-e, W2-a (bozze dello slot, in ingresso col secondo slot): preset inattivi che si scuriscono al passaggio come
     oggi; badge della durata personalizzata ancora ambra; tooltip, modali e onboarding sui ruoli (fondale delle modali e
     del coachmark al 60 %, tessere del logo bianche anche in scuro, contorno di «Riprova» tenue sul banner).
+  - W1-e, dalla galleria candidata di G: il bordo N3 di `ModalBase` (1 px sopra e sotto) rende ogni modale 2 px più alta;
+    le scene adattate al dialogo crescono di 2–3 px (`transactions/form-modal-transfer` 884 → 886). Voluto; senza
+    ingombro sarebbe un'ombra interna.
+  - W1-f1, W1-g, W2-b (16/10): la barra della sync su `bg-lf-warning` (l'ambra era un accento, non un avviso); i banner in
+    scuro più accesi (prima il testo era al 60 % di proposito, commit `7b4090d74`); le tinte `-soft`/`-line` in scuro
+    opache; nel changelog il filo del `mark` come ombra interna e la testata dei capitoli al passaggio su `bg-lf-neutral`.
   - Da sapere per W5/W6: quando `AssetCurrencyChangeModal` porterà il suo bordo rosso sui ruoli (per esempio
     `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
     della modale, non un `contentClass`.
@@ -2574,13 +2593,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
   `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
   va tolto. Dettagli: piano di T, I1, passo 4.
-- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10 (commit del checkpoint di T dopo
-  il secondo slot). Con W2-a il bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
+- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10, commit `d3b04a867`. Con W2-a il
+  bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
   `ARBITRARY_ALLOWED` di `frontend/scripts/theme/theme-roles.mjs` (riga 84). Non si poteva aspettare Y5: il gate
   (`themeRoles.gate.test.ts`, «keeps … ARBITRARY_ALLOWED current») vuole che una voce che non lascia passare niente si
   tolga, e nel secondo slot è caduto. Tolta la riga 84 con l'OK del coordinatore (Y5 cambia la riga 70: il merge a tre vie
   è pulito); riscritti i due commenti di `src/themeRoles.gate.test.ts` (~218, ~547). Dettagli: piano di T, «Secondo
   slot».
+- **TC-13 · Tre controlli deboli negli E2E dell'editor dei dati (spec di W)** — minimo; T, 16/10, lotto W1-f2. Fuori
+  dalle righe approvate, già presenti: in `asset-data-editor.spec.ts` il test 21 sta dentro un `if (await
+  staleToggle.isVisible(...))` che non aspetta, quindi il suo verde non prova il contatore; nessun controllo positivo
+  tocca il ✗ di `CsvEditor`; `fx-csv-import.spec.ts:56` dipende dalla parola inglese «error». Lotto W1-g, stesso file: il
+  test 14 («info banner reflects current direction», riga 289 e seguenti) tiene la guardia `if (count() > 0)`, che ora
+  non serve più (il banner c'è sempre) e può nascondere un'assenza, e non verifica l'ordine dei codici dopo lo scambio
+  (`toContainText(/EUR.*USD/)`, poi `/USD.*EUR/`, varrebbe in tutte e quattro le lingue). Da proporre a W. Dettagli:
+  piano di T, «W1-f1, W2-b, W2-d e W1-f2», passi 7 e 9.
+- **TC-14 · I test «in scuro» di `image-crop.spec.ts` non sanno se il tema è scuro** — minimo; T, 16/10, lotto W1-g. Il
+  `beforeEach` (riga 616) e F1 (riga 643) riconoscono lo scuro da `[class*="dark"]`, che prende qualsiasi elemento con
+  un'utility `dark:`: in chiaro il `beforeEach` può non cliccare il selettore del tema, e F1 passa comunque. La migrazione
+  ai ruoli toglie le classi `dark:` e rende il controllo via via giusto, ma la cura è leggere solo `html` con
+  `toHaveClass(/\bdark\b/)`. Da proporre al proprietario degli spec dei file. Dettagli: piano di T, «W1-f1, W2-b, W2-d e
+  W1-f2», passo 10.
 
 ---
 
@@ -2684,6 +2717,57 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - `ExposureMaps` (4) aspetta Y9.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
     «W5-PAC» e «W5-charts».
+
+---
+
+## IW · Colori dell'import (Phase_1/10_colorSystem)
+
+> Workstream IW del programma colori, aperto il 16/10 (D-T28): migrazione 1:1 ai ruoli di colore della propria area,
+> senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/transactions/import/**`, `wizard/**`, `modals/ImportWizardModal`, `ParseDetailModal`, `ImportBrokerMismatchModal`.
+> Il piano: `../Phase_1/10_colorSystem/IW-importColors/`. Gli ID di questa sezione sono `IW-n`.
+
+- (nessuna voce ancora)
+
+---
+
+## TR · Colori delle transazioni (Phase_1/10_colorSystem)
+
+> Workstream TR del programma colori, aperto il 16/10 (D-T28): migrazione 1:1 ai ruoli di colore della propria area,
+> senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: il resto di `components/transactions/**` e `routes/(app)/transactions/**`.
+> Il piano: `../Phase_1/10_colorSystem/TR-transactionColors/`. Gli ID di questa sezione sono `TR-n`.
+
+- (nessuna voce ancora)
+
+---
+
+## AF · Colori di asset e cambi (Phase_1/10_colorSystem)
+
+> Workstream AF del programma colori, aperto il 16/10 (D-T28): migrazione 1:1 ai ruoli di colore della propria area,
+> senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `components/assets/**`, `routes/(app)/assets/**`, `components/fx/**`, `routes/(app)/fx/**`.
+> Il dettaglio asset (`routes/(app)/assets/[id]`, `components/assets/detail/`) aspetta l'ingresso di X FE5c.
+> Il piano: `../Phase_1/10_colorSystem/AF-assetFxColors/`. Gli ID di questa sezione sono `AF-n`.
+
+- (nessuna voce ancora)
+
+---
+
+## BK · Colori dei broker (Phase_1/10_colorSystem)
+
+> Workstream BK del programma colori, aperto il 16/10 (D-T28): migrazione 1:1 ai ruoli di colore della propria area,
+> senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `features/brokers/**`, lotti compresi, e `routes/(app)/brokers/**`.
+> Il piano: `../Phase_1/10_colorSystem/BK-brokerColors/`. Gli ID di questa sezione sono `BK-n`.
+
+- (nessuna voce ancora)
+
+---
+
+## IM · Colori delle impostazioni (Phase_1/10_colorSystem)
+
+> Workstream IM del programma colori, aperto il 16/10 (D-T28): migrazione 1:1 ai ruoli di colore della propria area,
+> senza decisioni di design, con la skill `theme-roles` e lo skill comune del design system (D-T29). Area: `features/settings/**`, `routes/(app)/settings/**`, `features/support/**`, `features/update-check/**`.
+> Il piano: `../Phase_1/10_colorSystem/IM-settingsColors/`. Gli ID di questa sezione sono `IM-n`.
+
+- (nessuna voce ancora)
 
 ---
 
@@ -3769,7 +3853,7 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
     - oppure il pannello le nasconde.
 
   Prima un rosso sul caso speculare di W. Dettagli: piano J, §10 «Domande di W N1».
-- **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
+- ✅ **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
   non esperti); J, 15/10, nella nota sul punto 29 per il coordinatore.
   - `rolling_volatility`, `rolling_sharpe` e `rolling_beta` dichiarano `"x-suffix": "days"` sulla finestra (come oggi
     `rolling_return`), mentre il tooltip condiviso `signals.tooltips.riskWindow` dice «Number of prepared daily return
@@ -3777,6 +3861,9 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   - Per questi stimatori le osservazioni sono la misura giusta (annualizzazione per periodi): si cambia **solo
     l'etichetta**, in «osservazioni», nei 4 cataloghi. Deciso dal coordinatore il 15/10: nessun cambio di calcolo.
   -   Va con CP-10a, insieme al punto 29 (un solo Rolling Return a giorni di calendario, approvato dal developer il 15/10).
+  ✅ Chiusa da J il 16/10 in CP-10a: le tre finestre dichiarano `"x-suffix": "observations"`, con la chiave nuova
+  `signals.units.observations` nei 4 cataloghi; il tooltip `signals.tooltips.riskWindow` resta. Nessun calcolo cambia.
+  La matrice dei plugin lo fissa (`test_period_params_declare_their_unit_and_tooltip`). Commit: il checkpoint di CP-10a.
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati».
 - **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
@@ -3843,6 +3930,34 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
   0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
   senza file tracciati cambiati. Commit: il checkpoint di CP-6.
+- **J-21 · La linea di un segnale del backend scavalca i punti che non hanno un valore** — basso, chiarezza; trovata dal
+  test-author di J (CP-10a), 16/10. Il renderer toglie i punti senza numero (`charts/signals/backendRenderer.ts:215`),
+  giustamente: mai uno zero finto. Ma `components/charts/chartCoreHelpers.ts:334` mette `connectNulls` a `true` quando
+  il segnale non lo dice, e il renderer non lo dice mai: la linea unisce i due lati del buco come se ci fossero valori.
+  Vale per ogni segnale del backend; il Rolling Return a calendario, ora nel pannello, ne ha quando manca il prezzo di
+  riferimento a metà serie. Proposta: per i segnali del backend la linea si interrompe dove il punto non ha valore
+  (`connectNulls: false` nel renderer), con un Vitest. File dei grafici: Y (FE2), o J d'accordo con Y. Dettagli: piano J,
+  §10 «CP-10a».
+- **J-22 · Debito di traduzione di CP-10a (un solo Rolling Return, J-13)** — basso, documentazione; J, 16/10. Pagine EN
+  cambiate di senso, senza stamp: `financial-theory/fundamentals/returns` (tutta la sezione Rolling Return; esce l'ancora
+  `#rolling-return-sessions`), `financial-theory/technical-analysis/indicators/index` (introduzione, righe Rolling Return e
+  Rolling Beta), `financial-theory/technical-analysis/risk-metrics/volatility` (prima frase della volatilità mobile),
+  `user/assets/detail/signals` (la voce Rolling Return e il paragrafo sulle finestre). ⚠️ `returns` e `signals` vanno
+  tradotte **nello stesso giro**: le pagine IT/FR/ES dei segnali puntano a `#rolling-return-sessions`, che oggi esiste
+  solo nelle `returns` IT/FR/ES; tradotta `returns` da sola, quei tre link si rompono. Dettagli: piano J, §10 «CP-10a».
+- **J-23 · Due incoerenze nelle pagine dell'analisi tecnica** — minimo, documentazione; trovate dal docs-writer di J
+  (CP-10a), 16/10, già prima del lotto. `financial-theory/technical-analysis/index.en.md:17` dice i concetti del gruppo
+  Rischio «sotto Risk Metrics», ma quello del Rolling Return sta sotto Returns; la riga Underwater Drawdown di
+  `indicators/index.en.md` porta a `max-drawdown`, mentre il `docs_path` del plugin e la pagina dei segnali portano a
+  `current-drawdown`. Da allineare in un lotto di documentazione, con il loro debito di traduzione.
+- **J-24 · Consegna al costo d'un titolo estero: i lotti e la Dashboard danno totali diversi** — basso, numeri (caso
+  raro); trovata dal docs-writer di J (CP-7a), 16/10, già da CP-16. Una rettifica in uscita col costo, su un titolo in
+  un'altra valuta: i lotti valutano la consegna al cambio del giorno (da CP-7a la differenza di cambio dal giorno
+  d'acquisto è realizzata; prima stava nel «di mercato»), la Dashboard toglie il costo dal capitale al valore storico e
+  la lascia cadere. Scarto dei totali: `q × costo × (cambio alla consegna − cambio all'acquisto)`. Decisione del
+  developer: (A, proposta) «al costo» anche nella valuta del report: i lotti valutano la consegna al costo medio storico
+  del pool nella valuta del report, come la Dashboard; (B) tenerla così e scriverlo nella pagina. Dettagli: piano J, §10
+  «CP-7».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -3894,13 +4009,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   portafoglio (`portfolioMutation.ts`). La testa del grafico invece salta senza fornitore. Cura possibile: non avviare il
   ciclo senza un fornitore assegnato. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
   sezione «Passi di Z1».
-- **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). Due pagine:
+- ✅ **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). **Chiusa il 16/10 col lotto Z-9** (sola doc,
+  dopo Z7c-1): la sezione `#provider-pauses` di `admin/sleep_wake.en.md` (durata, chi aspetta e cosa si vede, memoria
+  e sospensione, log) e le due righe in `admin/configuration.en.md`; la parte di sviluppo l'aveva già scritta X
+  (`developer/backend/assets/architecture.md#provider-pauses`), che ora rimanda alla pagina admin. Era: due pagine,
   - la pagina admin `admin/configuration.en.md`, con le due variabili, il default acceso e l'eccezione della decisione
     34;
   - la pagina d'architettura degli asset: il confine e le pause.
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
-  l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
+  l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-9».
 - **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
   codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
   `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
@@ -3919,6 +4037,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
   nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
+- **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10 (Z5).
+  A fine recupero il frontend chiama `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio
+  (`portfolioStore.invalidate()` alza solo un contatore non reattivo): la pagina già sullo schermo mostra le cifre nuove
+  al prossimo caricamento o con «Aggiorna». Cura possibile: le pagine del portafoglio ascoltano il segnale e ricaricano
+  in background se visibili. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
+  «Z5 — codice».
 
 ## B · Backup e Docker (fase 01)
 
@@ -4021,11 +4145,13 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   (`ProfileTab`: `typeof === 'string'`; `emailApi.fetchEmailStatus()`: normalizza una volta). Da correggere alla
   fonte (opzione del generatore o un passo come `fix-openapi-discriminators.mjs`), con `svelte-check` su tutto il
   frontend. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E2.5».
+  - 16/10, coordinatore: rimandata alla 1.4, perché tocca file condivisi (i passi del generatore di `api sync`).
 - **E-3 · `ApiError` non lo costruisce nessuno: le rotte rifiutano con `AxiosError`** — piccolo; E, 15/10 (E2a).
   L'intercettore di `zodios-client.ts` dice «wrap in ApiError» ma lascia passare l'`AxiosError`; chi legge solo
   `error instanceof ApiError` vede ogni rifiuto come errore generico (la scheda Email ci era caduta: corretta, legge
   `isAxiosError`). Da decidere: convertire nell'intercettore, oppure togliere `ApiError` e il commento.
   Dettagli: piano 08, «E2.6».
+  - 16/10, coordinatore: rimandata alla 1.4, perché tocca file condivisi (il client condiviso `zodios-client.ts`).
 - **E-4 · `status.HTTP_422_UNPROCESSABLE_ENTITY` è deprecato in Starlette** — minimo; E, 15/10 (E2a). Dà un
   `StarletteDeprecationWarning` a ogni 422 delle quattro risposte di `api/v1/settings.py` che lo usano; il nome nuovo
   è `HTTP_422_UNPROCESSABLE_CONTENT` (lo usa `api/v1/email.py`); gli altri router scrivono `422`.
@@ -4046,10 +4172,12 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     (`test_openapi_client_text.py`, OCT-001…032). Legge `app.openapi()`, fallisce nominando campo, forma e
     carattere, e scatta se cambiano la versione o le opzioni del generatore. La regola 4 di «Contract Rules» è in
     `developer/api/overview.md`. Dettagli: piano 08, «E-5.0»…«E-5.3».
+    Commit `43ad48952` (test) e `fc418255b` (journal), in `dev_release2` al treno 83 (merge `01598f9ad`).
 - **E-6 · Il registro delle schede di Impostazioni importa ogni corpo di scheda** — minimo; E, 15/10 (E2b). Ogni
   scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
   (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un
   aiuto di mock comune. Dettagli: piano 08, «E2b.4».
+  - 16/10, coordinatore: rimandata alla 1.4, perché tocca file condivisi (il registro delle schede, di A, B e X).
 - **E-7 · Un segno «in attesa di verifica» nella scheda Users** — piccolo; coordinatore, 15/10 (E5, domanda 7).
   Con la verifica dell'email accesa, chi si è registrato e non ha ancora cliccato il link compare nella scheda Users
   come un account disattivo qualunque: l'admin lo può attivare a mano, ma non vede che aspetta la verifica. Serve un
@@ -4097,8 +4225,9 @@ da Y il 15/10.
   di Y, 15/10 (Y2). Dice «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
   l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
   il commento, quando Y o altri toccano `types.ts`. Dettagli: piano di Y, §7 «Y2 — passi 5–6».
-- **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
-  15/10. `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
+- ✅ **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
+  15/10. Chiuso il 16/10 da Y10 (`1bb8dc990`): campo e tipo tolti; la torta prende le emoji dallo store dei settori.
+  `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
   (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
   dopo DV. Dettagli: piano di Y, §2.
 - **Y-7 · Dopo Y4a le primitive dei grafici importeranno dalla feature dei segnali** — medio-basso; Y (analisi di Y3 e
@@ -4133,3 +4262,23 @@ da Y il 15/10.
   - Da decidere se mostrarla su `@media (hover: none)`. Cambierebbe gli scatti mobile, e il colore
     `--lf-cmp-datatable-resize-handle-bg` c'è già.
   - Dettagli: piano di Y, §7 «Y7».
+- ✅ **Y-11 · Il corpus golden di `timeSeriesAggregation` è rosso dall'ingresso di Y8** — medio, test rosso sul target;
+  Y, 16/10 (trovato nelle prove di Y3). Chiuso il 16/10: corpus ricatturato dopo I-01 (checkpoint Y-11, `4c1f2fee6`).
+  - I-01 (Y8, `a25d09a69`) ha cambiato di proposito `aggregateSumSeries`: i punti mancanti non entrano nella somma, e un
+    secchio senza valori diventa un vuoto. Il corpus di `components/charts/__tests__/timeSeriesAggregationGolden.test.ts`
+    registra invece il comportamento di prima (caso `all-missing-values|weekly`, e il digest).
+  - Nelle prove di Y8 mancava `front-asset asset-unit`, e così 2 test sono rossi dal treno di Y8.
+  - Rimedio proposto: `test-author` ricattura il corpus con la procedura del file, annotando che la differenza viene da
+    I-01.
+  - Dettagli: piano di Y, §7 «Y3».
+- **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
+  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
+  developer sulla funzione**, che porta il coordinatore.
+  - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
+    delle attese) esce in anticipo a ogni corsa: `if (!(await presentationFilter.isVisible({timeout: 5_000})…)) return`.
+  - I testid che cerca, `lots-value-presentation-filter` e i tre `lots-value-*-toggle`, sono entrati in `6b28d60df`
+    (16/07) e usciti da `src` in `59c160325` (18/07, «chart cleanup»). Un verde prova quindi solo la navigazione, il
+    pannello e un clic.
+  - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
+  - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
+  - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.

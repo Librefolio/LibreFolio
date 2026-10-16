@@ -102,7 +102,7 @@
 </script>
 
 <ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} testId="promote-merge-modal">
-    <div class="flex flex-col max-h-[80vh] rounded-lg" data-testid="promote-merge-modal">
+    <div class="flex flex-col max-h-[80vh] rounded-lg" data-testid="promote-merge-modal-content">
         <!-- Sticky Header -->
         <div class="p-5 pb-3 border-b border-gray-200 dark:border-gray-700 shrink-0">
             <div class="flex items-center gap-2 text-lg font-semibold text-gray-800 dark:text-gray-100">
@@ -256,7 +256,7 @@
         <!-- Sticky Footer -->
         <div class="p-5 pt-3 border-t border-gray-200 dark:border-gray-700 shrink-0">
             <div class="flex justify-between gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={handleCancel}>
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600" onclick={handleCancel} data-testid="promote-merge-cancel">
                     {$t('common.cancel')}
                 </button>
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-green-600 hover:bg-green-700 inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">

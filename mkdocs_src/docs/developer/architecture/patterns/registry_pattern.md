@@ -108,7 +108,7 @@ Each plugin has a **space**, read from the metadata its registry publishes:
 | Tool | exactly its `name_i18n_key` and `description_i18n_key` | those two keys (`tools.pacAllocator.name`, `.description`) |
 | FX | `pluginSettings.fx.<code>`, the code as the registry has it (`pluginSettings.fx.ECB`) | the texts of its settings, as for an asset plugin; no shipped FX provider has any |
 
-A key several plugins share belongs to none of them: `signals.reference.zero` (eight signal plugins) and `signals.riskRollingReturn.*` (the `rolling_return` and `calendar_rolling_return` signals) stay in the `charts` subsystem, and the `risk.warnings.*` vocabulary in the `risk` subsystem.
+A key several plugins share belongs to none of them: `signals.reference.zero` (seven signal plugins) and `signals.tooltips.riskWindow` (the window tooltip of the `rolling_volatility`, `rolling_sharpe` and `rolling_beta` signals) stay in the `charts` subsystem, and the `risk.warnings.*` vocabulary in the `risk` subsystem.
 
 ### ➕ Adding a Plugin's Keys {: #adding-plugin-keys }
 

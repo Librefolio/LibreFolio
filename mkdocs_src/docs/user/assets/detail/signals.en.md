@@ -59,12 +59,12 @@ Each line of a card, and each zone of indicators such as RSI, has its own colour
 ### ⚠️ Risk
 
 - [Underwater Drawdown](../../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md) — how far the price is below its running peak ([full history](#drawdown-full-history))
-- [Rolling Return](../../../financial-theory/fundamentals/returns.md#rolling-return-sessions) — price-only return over a sliding window
+- [Rolling Return](../../../financial-theory/fundamentals/returns.md#rolling-return-calendar) — price-only return against the close a chosen number of calendar days earlier, the same measure as the chart's [Rolling Return](chart.md#rolling-return) mode
 - [Rolling Volatility](../../../financial-theory/technical-analysis/risk-metrics/volatility.md) — annualized volatility over a sliding window
 - [Rolling Sharpe Ratio](../../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md) — excess return per unit of volatility over a sliding window
 - [Rolling Beta](../../../financial-theory/technical-analysis/risk-metrics/beta-active-return.md) — how strongly the asset follows a comparison asset you pick
 
-Periods count **sessions**, the days the asset was quoted: an SMA 200 covers 200 sessions, about 290 calendar days ([why](../../../financial-theory/technical-analysis/indicators/index.md)). The **Window** of the four rolling risk signals counts days with a quote too; for Rolling Beta, days on which both assets were quoted.
+Periods count **sessions**, the days the asset was quoted: an SMA 200 covers 200 sessions, about 290 calendar days ([why](../../../financial-theory/technical-analysis/indicators/index.md)). The **Window** of Rolling Volatility, Rolling Sharpe Ratio and Rolling Beta counts **observations**: one return for each day the asset was quoted — for Rolling Beta, for each day either of the two assets was quoted, the other counting at its last price. The **Window** of Rolling Return counts **calendar days**, as in the chart's [Rolling Return](chart.md#rolling-return) mode.
 
 !!! info "Not every indicator can run on every asset"
 
