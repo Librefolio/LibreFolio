@@ -430,3 +430,56 @@ describe('resolveIssueMessage — user and backend text reaches {@html} escaped'
         expect(msg).not.toContain('<img');
     });
 });
+
+/**
+ * W-B39 — on a split, a missing exchange rate has words of its own.
+ *
+ * Splitting a TRANSFER pair values the units that leave at their average cost (decision 47). When that average
+ * needs a rate the database lacks, the commit refuses the split with `wacFxUnavailable` on `operation: 'split'`;
+ * the generic text of the code only says that the calculation failed — no rate, no way out — and the Transactions
+ * page now shows the refusal in a toast. A split's issue therefore reads `transactions.errors.wacFxUnavailableSplit`
+ * first, its `{pairs}` filled in, and the generic key when the catalogue has no split text; the same code on any
+ * other operation keeps the generic text.
+ *
+ * The issues are variables, never literals handed to the call: the file compiles whether or not `ResolvableIssue`
+ * declares `operation` yet. The markup of a pair belongs to `formatCurrencyCodeHtml`, so only its codes are asserted.
+ */
+describe('resolveIssueMessage — a missing exchange rate on a split (W-B39)', () => {
+    const SPLIT_KEY = 'transactions.errors.wacFxUnavailableSplit';
+    const GENERIC_KEY = 'transactions.errors.wacFxUnavailable';
+    /** A distinctive opening, then the pairs: the opening tells the split text apart, the pairs prove it was filled. */
+    const SPLIT_TEXT = 'Average cost of the units that leave needs the {pairs} rate';
+    const GENERIC_TEXT = 'WAC calculation failed.';
+    /** The issue `batch_costs._wac_fx_unavailable` writes, without its operation. */
+    const missingRate = {
+        index: 0,
+        ref_id: 41,
+        error: 'WAC calculation failed: missing FX pairs USD/EUR',
+        code: 'wacFxUnavailable',
+        params: {pairs: ['USD/EUR'], pair_details: [{pair: 'USD/EUR', dates: ['2026-10-01']}]},
+        field: 'cost_basis_override',
+    };
+
+    it('a split reads its own text, the missing pairs filled in', () => {
+        const t = makeT({[SPLIT_KEY]: SPLIT_TEXT, [GENERIC_KEY]: GENERIC_TEXT});
+        const issue = {...missingRate, operation: 'split'};
+        const msg = resolveIssueMessage(issue, t);
+        expect(msg).toContain('Average cost of the units that leave needs the');
+        expect(msg).toContain('USD');
+        expect(msg).toContain('EUR');
+        expect(msg).not.toContain('{pairs}');
+        expect(msg).not.toContain(GENERIC_TEXT);
+    });
+
+    it('control: the same code on another operation keeps the generic text', () => {
+        const t = makeT({[SPLIT_KEY]: SPLIT_TEXT, [GENERIC_KEY]: GENERIC_TEXT});
+        const issue = {...missingRate, operation: 'create', ref_id: null};
+        expect(resolveIssueMessage(issue, t)).toBe(GENERIC_TEXT);
+    });
+
+    it('control: a split falls back to the generic text when the catalogue has no split text', () => {
+        const t = makeT({[GENERIC_KEY]: GENERIC_TEXT});
+        const issue = {...missingRate, operation: 'split'};
+        expect(resolveIssueMessage(issue, t)).toBe(GENERIC_TEXT);
+    });
+});
