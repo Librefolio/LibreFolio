@@ -17,7 +17,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
-    import {SIGN_TEXT} from '$lib/theme/toneClasses';
+    import {SIGN_BADGE, SIGN_TEXT} from '$lib/theme/toneClasses';
     import '$lib/theme/components/table.css';
 
     type OtherPeriodEffect = NonNullable<PositionsContribution['other_effects']>[number];
@@ -54,9 +54,9 @@
     function categoryBadgeClass(category: string): string {
         switch (category) {
             case 'Income':
-                return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+                return SIGN_BADGE.gain;
             case 'Cost':
-                return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+                return SIGN_BADGE.loss;
             default:
                 return 'bg-lf-panel text-lf-secondary';
         }

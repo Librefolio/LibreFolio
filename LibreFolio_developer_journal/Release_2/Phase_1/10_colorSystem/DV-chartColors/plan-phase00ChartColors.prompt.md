@@ -1199,6 +1199,19 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   `OtherPeriodEffectsTable` a 8; poi `--check` pulito.
   > - **Vitest:** le 92 collegate a W6-a e W6-b (55 + 38, una in comune) girano appena il carico scende sotto 50, prima
   >   dello slot. Alle 11:33 era 73.
+- [x] ✅ (16/10/2026) DV-9, piccolo lotto prima dello slot (coordinatore, 11:36), sulla base `63e3a22d8` (W6-b
+  `daea7b31c` più il lotto dei ruoli di T `f043c1b58`, che porta `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram` e
+  `SIGN_BADGE`).
+  > **Note implementazione** (16/10, 11:37–11:40):
+  > - `AssetSetLossComparisonSection`: `LOSS_CLASS` = `` `tabular-nums ${SIGN_TEXT.riskTable.loss}` ``.
+  > - `ReturnHistogram`: le barre sotto il taglio prendono `SIGN_BAR.histogram.loss`. Le altre restano `bg-lf-neutral`
+  >   e quella del taglio `bg-lf-warning`, quindi `histogram.gain` non serve.
+  > - `OtherPeriodEffectsTable`: «Income» → `SIGN_BADGE.gain`, «Cost» → `SIGN_BADGE.loss`, cioè le tinte di guadagno e
+  >   perdita, non quelle di successo e pericolo.
+  > - Le altre tabelle del rischio usavano già `POLARITY_TONES` (correlazione, divergenza) o `SIGN_BAR.tornado`.
+  > - Prettier pulito, compilatore 3 file 0 avvisi, `git diff --check` pulito.
+  > - `--update`: m1 6.861 → 6.853 (−8); `OtherPeriodEffectsTable` esce dal baseline. `--check` pulito.
+  > - Le Vitest di questi 3 file sono già fra le 92 di W6-a e W6-b.
 - [ ] Slot pesante unico, sotto i 45 minuti: `api sync`, `front check`, `core-unit`, `component-unit`, i gate Vitest
   `themeRoles` e `themeTokens`, E2E `front-portfolio dashboard`, `risk`, `risk-lab` e `front-utility
   pac-allocator-real`; se c'è tempo, `front-portfolio broker-filter-label` e `front-fx fx-settings`.

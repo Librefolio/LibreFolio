@@ -2735,15 +2735,20 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     `chartPalettes.ts`, `features/dashboard/growthChartSeries.ts` e i loro test; è logica, non classi, quindi dopo W6.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «W6», passo W6-c.
-- **DV-9 · Adottare `SIGN_TEXT.riskTable` e `SIGN_BAR.histogram` quando T li aggiunge** — minimo; DV, 16/10 (W6-a,
-  regola 7 dello skill `design-system`).
-  - Oggi `LOSS_CLASS` di `features/risk/AssetSetLossComparisonSection.svelte` scrive `text-lf-loss`, e le barre sotto
-    il taglio di `features/risk/levels/l1/ReturnHistogram.svelte` scrivono `bg-lf-loss/80`: i ruoli giusti, ma non
+- ✅ **DV-9 · Adottare `SIGN_TEXT.riskTable` e `SIGN_BAR.histogram` quando T li aggiunge** — minimo; DV, 16/10 (W6-a,
+  regola 7 dello skill `design-system`). **Chiusa il 16/10** (lotto DV-9 sulla base `63e3a22d8`, in attesa del commit
+  del coordinatore).
+  - Era: `LOSS_CLASS` di `features/risk/AssetSetLossComparisonSection.svelte` scriveva `text-lf-loss`, e le barre sotto
+    il taglio di `features/risk/levels/l1/ReturnHistogram.svelte` scrivevano `bg-lf-loss/80`: i ruoli giusti, ma non
     presi dalle tabelle per significato, come vuole la regola 7.
-  - Il coordinatore (11:3x) ha chiesto le due voci a T, nel suo lotto dei ruoli insieme a `SIGN_BADGE`. Dopo il suo
-    ingresso le adotto; con `SIGN_BADGE` migrano anche i badge di segno di `OtherPeriodEffectsTable` (W6-b).
+  - T ha aggiunto le voci nel suo lotto dei ruoli (`f043c1b58`), con `SIGN_BADGE`.
+  - **Fatto:**
+    - `LOSS_CLASS` → `SIGN_TEXT.riskTable.loss`;
+    - le barre → `SIGN_BAR.histogram.loss`;
+    - i badge «Income» e «Cost» di `features/dashboard/OtherPeriodEffectsTable.svelte` → `SIGN_BADGE.gain` e
+      `SIGN_BADGE.loss`, che escono dal baseline.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
-    «W6», passo W6-a.
+    «W6», passi W6-a e DV-9.
 
 ---
 
