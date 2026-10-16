@@ -3207,6 +3207,24 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Cura**: leggere i segnali dopo la cache e la risoluzione, o catturare l'errore solo attorno ai segnali. Con un
     test di componente o E2E che instrada un segnale non valido.
   - Fuori dal FE5c, che sposta il codice senza cambiarlo. Dettagli: piano 03, sezione «FE5c-2».
+- **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** — basso, UX; dal test-author di
+  W-B42 (lettura), girata a X dal coordinatore il 16/10. La descrizione della conferma singola
+  (`routes/(app)/assets/+page.svelte:1808`, `assets.delete.confirmWarning`) dice «Provider assignments and price history
+  will be removed», ma anche gli eventi (dividendi, split) se ne vanno in cascata. Cura: una frase nella chiave in 4
+  lingue, e lo stesso nella conferma multipla. Dopo il FE5c.
+- **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** — basso, UX; stessa origine.
+  `confirmDeleteAsset` (`:925`) chiama il DELETE e solo allora riceve `HAS_TRANSACTIONS`, con il conteggio e il link
+  alle transazioni; la multipla fa lo stesso (`:995`). L'utente conferma una cosa che non può succedere. Cura: usare il
+  `tx_count` della riga della lista (`:554`) per aprire la conferma già bloccata, con il link. È solo un'indicazione,
+  perché può contare solo le transazioni visibili all'utente, e il controllo del backend resta quello che decide. Dopo
+  il FE5c.
+- **X-R19 · «N assets» in inglese fisso nella conferma multipla** — minimo, i18n; stessa origine.
+  `itemsLabel={\`${deletingAssets.length} assets\`}` (`:1826`). Cura: una chiave con il plurale in `assets.delete`, 4
+  lingue. Dopo il FE5c.
+- **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** — minimo, test; stessa origine.
+  Il bottone del cestino di `AssetCard.svelte:318` non ha `data-testid`, e la `ConfirmModal` singola (`:1805`) non
+  passa `testId` (la multipla nemmeno). Cura: `asset-card-delete-btn` e `testId` sulle due conferme, poi le E2E che
+  oggi passano dal testo o dalla posizione. Dopo il FE5c.
 
 ## W · Import e transazioni (fase 01)
 
