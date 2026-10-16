@@ -53,8 +53,8 @@
     } from './lotWacPriceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
-    import {LOT_CHART_COLORS, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {chartNeutrals, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -270,6 +270,13 @@
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let dataZoomSyncHandle: DataZoomSyncHandle | null = null;
     let isDark = $state(false);
+    /** Bumped by the Designer Lab's colour edits (C4): the chart's roles are read again at the next draw. */
+    let chartColorsRevision = $state(0);
+    /** The neutrals of the chart (B4), read on its own element: again when the theme or a Lab colour changes. */
+    let neutrals = $derived.by(() => {
+        void chartColorsRevision;
+        return chartNeutrals(isDark, chartContainer);
+    });
     let needsInitialLayoutStabilityPass = false;
     let currentResolution: ChartResolution = $state('daily');
     let shouldPickInitialResolution = true;
@@ -1192,12 +1199,12 @@
                 symbolOffset: [entry.offsetX, 0],
                 itemStyle: {
                     color: entry.point.fillColor,
-                    borderColor: themed(LOT_CHART_COLORS.markerRing, isDark),
+                    borderColor: neutrals.lots.markerRing,
                     borderWidth: entry.point.estimatedAtCost ? 2.5 : 1.5,
                     borderType: entry.point.estimatedAtCost ? 'dashed' : 'solid',
                     opacity: entry.point.active ? 0.9 : 0.22,
                 },
-                emphasis: {scale: true, itemStyle: {opacity: 1, borderColor: themed(LOT_CHART_COLORS.markerEmphasisRing, isDark), borderWidth: 2}},
+                emphasis: {scale: true, itemStyle: {opacity: 1, borderColor: neutrals.lots.markerEmphasisRing, borderWidth: 2}},
             })),
             symbolSize: (_value: unknown, params: any) => params?.data?.symbolSize ?? 18,
             cursor: onSelectionChange ? 'pointer' : 'default',
@@ -1222,7 +1229,7 @@
                 symbolOffset: [entry.offsetX, 0],
                 itemStyle: {
                     color: lotStateColor(entry.point.state, isDark),
-                    borderColor: themed(LOT_CHART_COLORS.markerRing, isDark),
+                    borderColor: neutrals.lots.markerRing,
                     borderWidth: 1,
                     opacity: entry.point.active ? 1 : 0.28,
                 },
@@ -1333,13 +1340,13 @@
                 itemStyle: {
                     color: definition.color,
                     opacity: 0.96,
-                    borderColor: themed(LOT_CHART_COLORS.markerRing, isDark),
+                    borderColor: neutrals.lots.markerRing,
                     borderWidth: 1.5,
                 },
                 emphasis: {
                     scale: 1.15,
                     itemStyle: {
-                        borderColor: themed(LOT_CHART_COLORS.markerEmphasisRing, isDark),
+                        borderColor: neutrals.lots.markerEmphasisRing,
                         borderWidth: 2,
                     },
                 },
@@ -1525,7 +1532,7 @@
                     symbol: 'none',
                     animation: false,
                     label: {show: false},
-                    lineStyle: {color: themed(LOT_WAC_COLORS.zeroLine, isDark), width: 1.5, type: 'solid'},
+                    lineStyle: {color: neutrals.lots.wacZeroLine, width: 1.5, type: 'solid'},
                     data: [{yAxis: 0}],
                 },
                 z: 0,
@@ -1719,6 +1726,10 @@
             syncTheme();
             renderChart();
         });
+        const chartColors = onChartColorsChange(() => {
+            chartColorsRevision += 1;
+            renderChart();
+        });
 
         return () => {
             if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
@@ -1726,6 +1737,7 @@
             pulseTimers = [];
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;

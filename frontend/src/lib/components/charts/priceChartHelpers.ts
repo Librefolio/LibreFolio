@@ -23,7 +23,7 @@ import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartReso
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {uiLocale} from '$lib/stores/app/uiLocale';
-import {CHART_GAIN_LOSS, CHART_TOOLTIP_COLORS, PRICE_SERIES} from '$lib/theme/chartTheme';
+import {CHART_GAIN_LOSS, PRICE_SERIES} from '$lib/theme/chartTheme';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {
@@ -607,15 +607,17 @@ export function buildDeltaHtml(value: number, firstValue: number, isPercentage: 
 }
 
 /**
- * The amber stale-data warning line(s) for a tooltip. Nothing is emitted when
- * the point is not stale (`priceStaleDays` undefined). A live FX staleness
- * (`fxStaleDays > 0`) adds a second line. The `{days}` templates are supplied
- * by the caller (translated at the component boundary); the built-in English
- * fallbacks are code constants used only when no template is given.
+ * The stale-data warning line(s) for a tooltip, in `warningColor` — the warning
+ * role, `chartNeutrals().tooltip.staleWarning`, read by the caller for its theme.
+ * Nothing is emitted when the point is not stale (`priceStaleDays` undefined).
+ * A live FX staleness (`fxStaleDays > 0`) adds a second line. The `{days}`
+ * templates are supplied by the caller (translated at the component boundary);
+ * the built-in English fallbacks are code constants used only when no template
+ * is given.
  */
-export function buildStaleTooltipHtml(priceStaleDays: number | undefined, fxStaleDays: number | undefined, staleLabel?: string, fxStaleLabel?: string): string {
+export function buildStaleTooltipHtml(priceStaleDays: number | undefined, fxStaleDays: number | undefined, warningColor: string, staleLabel?: string, fxStaleLabel?: string): string {
     if (priceStaleDays === undefined) return '';
-    const warn = (text: string) => `<br/><span style="color:${CHART_TOOLTIP_COLORS.staleWarning};font-size:11px">⚠ ${text}</span>`;
+    const warn = (text: string) => `<br/><span style="color:${warningColor};font-size:11px">⚠ ${text}</span>`;
     const priceText = staleLabel ? staleLabel.replace('{days}', String(priceStaleDays)) : `Stale: ${priceStaleDays}d`;
 
     if (fxStaleDays !== undefined && fxStaleDays > 0) {
