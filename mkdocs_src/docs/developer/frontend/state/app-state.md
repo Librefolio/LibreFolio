@@ -71,7 +71,7 @@ graph TD
 ### 🔐 Authentication Flow
 
 1. **Mount**: On app load, `auth.checkAuth()` verifies the existing cookie with the backend.
-2. **Bootstrap**: If authenticated, the `(app)` layout runs `appBootstrap.load()`, which loads the user settings (`userSettings.load()`), the onboarding progress (`onboarding.load(onboardingApi)`) and the global settings (`globalSettings.load()`) in parallel. The auth store loads nothing: at login it copies the login response's `user_settings` into the store with `setDirect()`, and applies their language and theme (item 3).
+2. **Bootstrap**: If authenticated, the `(app)` layout runs `appBootstrap.load()`, which loads the user settings (`userSettings.load()`), the onboarding progress (`onboarding.load(onboardingApi)`) and the global settings (`globalSettings.load()`) in parallel. Before them, as soon as it knows the user, it starts the [open-registration warning](../components/features/auth.md#open-registration-notice) (its dependency `startOpenRegistrationNotice`, see [Onboarding Guides](../onboarding.md#layout-gate)). The auth store loads nothing: at login it copies the login response's `user_settings` into the store with `setDirect()`, and applies their language and theme (item 3).
 3. **Language and theme**: nothing listens to the settings store; they are set explicitly — by the auth store at login, from the same response (`currentLanguage.set()`, `applyTheme()`); by the Preferences tab after its write; by the Welcome page after **Continue** (the language only: Welcome leaves the theme alone); and, for this browser only, by the header buttons (item 4).
 4. **Write first**: no settings screen updates the store before the server answers. The Preferences tab sends `PUT /api/v1/settings/user` (one field per request) and, only once it succeeds, applies the language or theme and calls `userSettings.setDirect()`; a failed write leaves the store as it was and shows an error toast. The Profile tab (avatar) and the Welcome page also write first; Welcome only previews a new language (the svelte-i18n `locale`) until **Continue** saves it. `setDirect()` itself never calls the API: it sets the store and its per-user `localStorage` cache (`lf_{userId}_user_settings`). The header's theme and language buttons change only this browser (`librefolio-theme`, `librefolio-locale`) and save nothing to the account.
 5. **After a reload**: language and theme come from this browser's `librefolio-locale` and `librefolio-theme`, so a change made on another device shows here only at the next login.
@@ -110,12 +110,14 @@ and readable without a session (backend side:
   `first_account_open` is true), the `/invite` page (`closed` while it is `disabled`),
   `GlobalSettingsTab` (the select locked, showing the mode in force, while `registration_locked`),
   `UsersTab` (no invitation while `registration_mode` is `disabled`, and a reason that names the
-  variable while `registration_locked`), and [`PasswordStrength`](../components/features/auth.md#passwordstrength)
+  variable while `registration_locked`), the [open-registration warning](../components/features/auth.md#open-registration-notice)
+  (`registration_mode` and `registration_locked`, read only once `loaded` is true: the default is
+  `open`, and an invite-only instance would show the warning until the answer), and [`PasswordStrength`](../components/features/auth.md#passwordstrength)
   under every new-password field (the checklist and its `valid` from `password_rules`,
   `DEFAULT_PASSWORD_RULES` while the list is absent or empty). `PasswordStrength` does not load the
-  configuration itself: the page around it does. The `/reset-password` page asks for it on mount
-  without waiting for it, so the checklist switches to the server's rules when they arrive and a slow
-  request never delays the form.
+  configuration itself: the page around it does. The `/reset-password` and `/setup` pages ask for it
+  on mount without waiting for it, so the checklist switches to the server's rules when they arrive
+  and a slow request never delays the form.
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -154,7 +156,10 @@ onboarding banner and before the page. The Welcome page, which has no shell, sho
   `info`, and within a severity in the order they were first shown.
 
 The feature that registers a notice decides who sees it, since it knows the user and their role, and
-hides it when the condition is gone. For example (the `assets` keys are illustrative):
+hides it when the condition is gone. Two features register one today: the catch-up of the prices
+(**Updating prices…**, [Updating prices…](../components/features/live-ticker.md#price-refresh)) and
+the [open-registration warning](../components/features/auth.md#open-registration-notice)
+(`accounts.openRegistration`, for administrators). For example (the `assets` keys are illustrative):
 
 ```ts
 import {instanceNotices} from '$lib/features/instance/instanceNotices.svelte';
@@ -199,7 +204,9 @@ the hosting provider blocked this instance (backend side: [Instance Block](../..
 - **Getter**: `blocked`.
 
 The backend answers `423` only to a signed-in user; anyone else gets the `401` of `get_current_user()`,
-which the interceptor turns into the login as usual.
+which the interceptor turns into the login as usual — except on `/`, where the login already is, and
+on the anonymous pages of a link, which handle the `401` themselves
+([A 401 on a Link Page](../components/features/auth.md#link-page-401)).
 
 `InstanceBlockedPage.svelte` (`lib/features/instance/components/`) is the full-page block page:
 

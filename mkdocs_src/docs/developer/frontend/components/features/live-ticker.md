@@ -370,8 +370,8 @@ goes to the error interceptor and is not read.
 
 Every successful answer means the public ones too: the pages without a session hear the header like
 the others. They are the sign-in page, whose `LoginCard` loads the instance configuration, and the
-invitation, password-reset and email-verification pages, which send the token of their link through
-the API client; opening one on a quiet instance starts a catch-up by itself. Such a page starts a
+invitation, password-reset, email-verification and setup pages, which send the token of their link
+through the API client; opening one on a quiet instance starts a catch-up by itself. Such a page starts a
 tracking like any other, and its first question settles it ([After a 4xx](#price-refresh-4xx)).
 
 The header reaches the web app on the answers it gets anyway, at load or later, from the moment the
@@ -384,9 +384,10 @@ instance with nothing to catch up can still sleep.
 `check()` asks `GET /api/v1/system/price-refresh` every 3 s (`PRICE_REFRESH_POLL_MS`) with
 `fetch(PRICE_REFRESH_STATUS_PATH, {credentials: 'same-origin', headers: {Accept: 'application/json'}})`,
 not through the API client, because of the pages without a session. There the question gets a `401`,
-and through the client that `401` would reach its error interceptor, which takes any page but `/` to
-the sign-in page: the invitation, password-reset and email-verification pages have already taken the
-token of their link out of the address, so the user would arrive there without their link. A `fetch`
+and through the client that `401` would reach its error interceptor, whose way to the sign-in page
+would leave the invitation, password-reset, email-verification and setup pages without the token of
+their link, already out of the address. The interceptor now spares those pages
+([A 401 on a Link Page](auth.md#link-page-401)), but the poll does not depend on that list: a `fetch`
 answer goes through none of the client's interceptors, nor through its Zod validation; one that is
 not ok throws `PriceRefreshStatusError`, which carries its `status`.
 

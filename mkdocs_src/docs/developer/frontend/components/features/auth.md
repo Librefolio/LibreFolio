@@ -1,7 +1,8 @@
 # 🔐 Authentication Components
 
 This section documents the authentication UI components: login, registration, the pages of the
-account links (invitation and password reset), and password management.
+account links (invitation, password reset and the setup link of the initial administrator), password
+management, and the open-registration warning.
 
 !!! note "Card Components (Not Modals)"
 
@@ -132,24 +133,28 @@ The `RegisterCard` handles new user registration with client-side validation.
 
 ## 🔗 Account Link Pages {: #link-pages }
 
-Two routes open the single-use links of the accounts, which an administrator issues from the API or
-the command line ([Registration, Invitations and the Admin API](../../../architecture/access_control.md#registration)):
+Three routes open the single-use links of the accounts: the invitation and the password reset, which
+an administrator issues from the API or the command line
+([Registration, Invitations and the Admin API](../../../architecture/access_control.md#registration)),
+and the setup link of the [initial administrator](../../../architecture/access_control.md#initial-admin),
+which the startup issues and `./dev.py user setup-link` replaces:
 
-| | `/invite#token=…` | `/reset-password#token=…` |
-|---|---|---|
-| Route | `routes/invite/+page.svelte` | `routes/reset-password/+page.svelte` |
-| Page `data-testid` | `invite-page` | `reset-password-page` |
-| Token inspected as | `invite` | `password_reset` |
-| Valid link | `RegisterCard` in [invitation mode](#registercard): `inviteToken`, then `initialEmail` and `grantsAdmin` from the inspection. While the mode in force is `disabled`, the page shows `closed` instead: the server would refuse the invitation | `ResetPasswordCard` for the `username` of the inspection |
-| Success | `RegisterCard` dispatches `gotoLogin` with `auth.accountCreated`, or `email.verification.registered` when the answer says `verification_required`; the page passes the message to `setAuthFlash()` | `ondone`: `setAuthFlash()` with `auth.resetPassword.done` |
-| Then | `goto('/')`: the login page shows the message in `login-success` | The same |
+| | `/invite#token=…` | `/reset-password#token=…` | `/setup#token=…` |
+|---|---|---|---|
+| Route | `routes/invite/+page.svelte` | `routes/reset-password/+page.svelte` | `routes/setup/+page.svelte` |
+| Page `data-testid` | `invite-page` | `reset-password-page` | `setup-page` |
+| Token inspected as | `invite` | `password_reset` | `admin_setup` |
+| Valid link | `RegisterCard` in [invitation mode](#registercard): `inviteToken`, then `initialEmail` and `grantsAdmin` from the inspection. While the mode in force is `disabled`, the page shows `closed` instead: the server would refuse the invitation | `ResetPasswordCard` for the `username` of the inspection | [`SetupCard`](#setupcard) for the `username` of the inspection. The registration mode plays no part: setting up the administrator is not a registration |
+| Success | `RegisterCard` dispatches `gotoLogin` with `auth.accountCreated`, or `email.verification.registered` when the answer says `verification_required`; the page passes the message to `setAuthFlash()` | `ondone`: `setAuthFlash()` with `auth.resetPassword.done` | `ondone`: the setup answered like a login, its session cookie included; the page awaits `auth.checkAuth()`, so that the auth store holds the administrator, and leaves no flash |
+| Then | `goto('/')`: the login page shows the message in `login-success` | The same | `goto('/dashboard')`: the `(app)` layout's bootstrap and gate take over, Welcome first for a new account ([From login to the first guide](../../onboarding.md#layout-gate)) |
 
-Both are outside the `(app)` group: they need no session and run no auth check. They are not
-prerendered, so the backend serves them through the SPA fallback (`200.html`). A valid invitation
+All three are outside the `(app)` group: they need no session, and none runs an auth check on mount
+(`/setup` runs one once its setup has signed the administrator in). They are not prerendered, so the
+backend serves them through the SPA fallback (`200.html`). A valid invitation
 also opens the form in mode `invite`: an invitation is exactly what that mode asks for. The
 `/invite` page loads the instance configuration in parallel with the inspection
-(`instanceConfig.load()`), to know whether the mode is `disabled`. The `/reset-password` page asks
-for it on mount without waiting for it: only the password rules of
+(`instanceConfig.load()`), to know whether the mode is `disabled`. The `/reset-password` and `/setup`
+pages ask for it on mount without waiting for it: only the password rules of
 [`PasswordStrength`](#passwordstrength) depend on it, and they follow the answer when it arrives.
 
 ```mermaid
@@ -160,11 +165,12 @@ flowchart TD
     Inspect -->|"request failed"| Error["LinkStatusCard: error, with Retry"]
     Inspect -->|"not valid"| Status["LinkStatusCard: expired, consumed, revoked or unknown"]
     Inspect -->|"valid invitation, registration disabled"| Closed["LinkStatusCard: closed"]
-    Inspect -->|"valid"| Form["RegisterCard or ResetPasswordCard"]
-    Form -->|"success"| Flash["setAuthFlash(), then goto to the login page"]
+    Inspect -->|"valid"| Form["RegisterCard, ResetPasswordCard or SetupCard"]
+    Form -->|"success: /invite, /reset-password"| Flash["setAuthFlash(), then goto to the login page"]
+    Form -->|"success: /setup, signed in"| Enter["auth.checkAuth(), then goto /dashboard"]
 ```
 
-What the two pages share:
+What the three pages share:
 
 - **The token.** `onMount` calls `takeLinkToken(new URL(window.location.href), replaceAddress)`:
   the token comes from the fragment, and the address bar gets the bare path at once. The page keeps
@@ -179,39 +185,69 @@ What the two pages share:
   page's test id, around either the form or a [`LinkStatusCard`](#linkstatuscard). The card's
   **Retry** runs the page's check again.
 - **A reset link that stops working before the form is sent** (used meanwhile, or replaced by a
-  newer link) makes `ResetPasswordCard` call `oninvalid`, and the page shows `unknown`.
+  newer link) makes `ResetPasswordCard` call `oninvalid`, and the page shows `unknown`. A setup link
+  does the same through `SetupCard`.
+- **Where a new link comes from.** Under the message of a dead link, `/invite` and
+  `/reset-password` keep `LinkStatusCard`'s default line, `auth.link.askAdmin`. `/setup` passes
+  `auth.setup.newLinkHint` as `hintKey` (*Ask your hosting provider for a new link. On your own
+  server, run `dev.py user setup-link`.*): no administrator exists yet to ask.
+- **A `401` stays on the page**: the API client does not send it to the sign-in page, which would
+  lose the token. See [A 401 on a Link Page](#link-page-401).
+
+### 🚧 A 401 on a Link Page {: #link-page-401 }
+
+The response interceptor of `lib/api/zodios-client.ts` sends a `401` to the sign-in page, carrying
+the page to come back to (`goto(loginUrl(pathname + search))`), except on two kinds of page:
+
+- `/`, where the sign-in already is, and where a failed sign-in answers `401` too;
+- the anonymous pages of a link: `isLinkPage()` is true when `window.location.pathname` is exactly
+  `/setup`, `/invite`, `/reset-password` or `/verify-email` (`LINK_PAGES`), with or without a
+  trailing slash. The query plays no part: `/setup?lang=it` stays. A path that only begins like one
+  of them, such as `/setup/extra`, `/invites` or `/setup-something`, still goes to the sign-in.
+
+The calls of those pages are public and need no session, so a `401` there is the
+[instance block](../../../architecture/security.md#instance-block) refusing an anonymous caller,
+and the sign-in would lose the token, already out of the address bar. The page handles the answer
+itself: `SetupCard` shows `setup-blocked`, `RegisterCard` on `/invite` shows `auth.instanceBlocked`
+([Registration errors](#registration-errors)), and `/verify-email` shows its own failure, with
+**Retry**. The `423` `instance_blocked` handling is unchanged, on those pages too: it still turns
+[`instanceBlock`](../../state/app-state.md#instance-block) on. This closes backlog A-13.
 
 ### 🧱 AuthPageFrame and AuthCard {: #authpageframe-and-authcard }
 
 - **`AuthPageFrame.svelte`** is the page around an access card: the bar at the top right (the
   Buy Me a Coffee link, `ThemeToggle`, `LanguageSelector`, `HelpMenu`) and the container that
   centres the card. Props: `testId`, put on the container, and the `children` snippet. The login
-  page (`login-page`), `/invite` (`invite-page`) and `/reset-password` (`reset-password-page`) use
-  it. The page itself renders `AnimatedBackground`, outside the frame, so the background does not
+  page (`login-page`), `/invite` (`invite-page`), `/reset-password` (`reset-password-page`) and
+  `/setup` (`setup-page`) use it. The page itself renders `AnimatedBackground`, outside the frame, so the background does not
   restart when the page swaps its loading state for the card.
 - **`AuthCard.svelte`** is the card: the brand header (logo and name), then the body. Props:
   `testId` and `children`; any other attribute lands on the card, such as the `data-status` of
-  `LinkStatusCard`. `LinkStatusCard` and `ResetPasswordCard` are built on it; `LoginCard`,
+  `LinkStatusCard`. `LinkStatusCard`, `ResetPasswordCard` and `SetupCard` are built on it; `LoginCard`,
   `RegisterCard` and `ForgotPasswordCard` still write the same frame by hand, with small spacing
   differences.
 
 ### 🚦 LinkStatusCard {: #linkstatuscard }
 
-What a link page shows instead of its form. Props: `status` (`LinkPageStatus`) and an optional
-`onretry`. The card is `link-status`, with the status in `data-status`; the message is
+What a link page shows instead of its form. Props: `status` (`LinkPageStatus`), an optional
+`onretry`, and an optional `hintKey`, the line under the message of a dead link (default
+`auth.link.askAdmin`). The card is `link-status`, with the status in `data-status`; the message is
 `link-status-message`.
 
-| `status` | When | Message | + `auth.link.askAdmin` |
+| `status` | When | Message | + hint |
 |---|---|---|---|
 | `checking` | The inspection is running | `common.loading` | — |
 | `expired` | The link has expired | `auth.link.expired` | ✅ |
 | `consumed` | The link was used | `auth.link.consumed` | ✅ |
-| `revoked` | The link was withdrawn: an invitation revoked by an administrator, or a reset link replaced by a newer one | `auth.link.revoked` | ✅ |
-| `unknown` | An unknown token, a token of the other purpose, or a reset refused with `TOKEN_INVALID` | `auth.link.unknown` | ✅ |
+| `revoked` | The link was withdrawn: an invitation revoked by an administrator, or a reset or setup link replaced by a newer one | `auth.link.revoked` | ✅ |
+| `unknown` | An unknown token, a token of another purpose, or a reset or setup refused with `TOKEN_INVALID` | `auth.link.unknown` | ✅ |
 | `missing` | No `token` in the fragment, or a blank one | `auth.link.missing` | ✅ |
 | `closed` | A valid invitation while registration is `disabled` | `auth.registrationDisabled` | — |
 | `error` | The inspection request failed | `auth.link.checkFailed` | — |
 
+The hint is `link-status-hint`, `$_(hintKey)`, drawn for the five statuses marked ✅ and for no
+other, whatever the page passed. `/invite` and `/reset-password` pass no `hintKey`; `/setup` passes
+`auth.setup.newLinkHint`, since no administrator exists yet to send a new setup link.
 `link-status-retry` (`common.retry`) appears only with `error` and an `onretry`.
 `link-status-goto-login` (`auth.backToLogin`) is always there and goes to `/`.
 
@@ -234,16 +270,45 @@ The form of a reset link: the new password, twice, for one account.
   `PASSWORD_TOO_WEAK`, or a `422`, shows `auth.validation.passwordTooWeak`; any other failure
   `auth.resetPassword.failed`.
 
+### 👑 SetupCard {: #setupcard }
+
+The form of the setup link of the [initial administrator](../../../architecture/access_control.md#initial-admin):
+the password of the account the link sets up, twice. Built like
+[`ResetPasswordCard`](#resetpasswordcard), on `AuthCard`.
+
+- **Props**: `token`, `username` (shown in `setup-account` and carried by a hidden username field
+  for password managers, see the [contract](#password-manager-contract); `null` draws neither),
+  `ondone`, `oninvalid`.
+- **Test ids**: `setup-card` (the card), `setup-form`, `setup-account`, `setup-new`,
+  `setup-confirm`, `setup-submit`, `setup-error`, `setup-blocked`.
+- **The rules are the app's own** (decision 37): the card binds `PasswordStrength`'s `valid`
+  (`bind:valid={rulesMet}`) and keeps no copy of them. While the rules are not met, or the two
+  fields differ, the submit shows `auth.validation.passwordTooWeak` or
+  `auth.validation.passwordsNoMatch` and sends nothing.
+- **The request**: `POST /api/v1/auth/setup` (`setup_admin_api_v1_auth_setup_post`) with
+  `{token, new_password}`, the password exactly as typed; the submit is disabled while it runs. A
+  success answers like a login, session cookie included: the administrator is signed in.
+
+| The answer | The card |
+|---|---|
+| Success | Calls `ondone` |
+| `400` `TOKEN_INVALID`: the link was used, expired or was revoked meanwhile, or its account is already active | Calls `oninvalid`; the page shows `unknown` |
+| `400` `PASSWORD_TOO_WEAK`, or `422` | `auth.validation.passwordTooWeak` in `setup-error`, never the server's English |
+| `401`, or `423` with `detail.code` `instance_blocked` (`isInstanceBlockedError()`): the [instance is blocked](../../../architecture/security.md#instance-block), the `401` for a browser without a session, the `423` for one that holds another account's session | `auth.setup.blocked` in `setup-blocked`, and `setup-submit` disappears: every setup is refused until the hosting provider lifts the block. Neither callback runs |
+| Anything else, a request that never reached the server and a `423` with another code included | `auth.setup.failed` in `setup-error`; the form stays, for another try |
+
 ### 🧩 Helper Modules {: #auth-modules }
 
 In `lib/features/auth/`:
 
 | Module | Exports | Role |
 |---|---|---|
-| `linkToken.ts` | `takeLinkToken(url, replace)`, `inspectLinkToken(token, purpose)`; types `LinkPurpose`, `LinkInspection`, `LinkPageStatus` | `takeLinkToken` returns the `token` parameter of the fragment, `null` when there is none or it is blank, and calls `replace(url.pathname)` once whenever the fragment has a `token` parameter. A `token` in the query string is not read. `inspectLinkToken` calls `POST /auth/tokens/inspect`. |
+| `linkToken.ts` | `takeLinkToken(url, replace)`, `inspectLinkToken(token, purpose)`; types `LinkPurpose`, `InspectedLinkPurpose`, `LinkInspection`, `LinkPageStatus` | `takeLinkToken` returns the `token` parameter of the fragment, `null` when there is none or it is blank, and calls `replace(url.pathname)` once whenever the fragment has a `token` parameter. A `token` in the query string is not read. `inspectLinkToken` calls `POST /auth/tokens/inspect`. `LinkPurpose` is `invite` or `password_reset`, the links an administrator shares (`LinkShare`, the email sender); `inspectLinkToken` takes an `InspectedLinkPurpose`, which adds `admin_setup`, the setup link of the initial administrator. |
 | `addressBar.ts` | `replaceAddress(path)` | Puts `path` in the address bar with SvelteKit's `replaceState`, which keeps the router in step; before the router has started, it falls back to `history.replaceState`. |
 | `authFlash.ts` | `setAuthFlash(message)`, `takeAuthFlash()` | A message for the login page. `takeAuthFlash()` returns it once, then `''`. Kept in memory only: a reload of the login page shows nothing. |
 | `registrationErrors.ts` | `describeRegistrationError(error)` | See [Registration errors](#registration-errors) below. |
+| `localHost.ts` | `isLocalHost(hostname)` | Whether the host the browser reached the instance through is local, for the [open-registration warning](#open-registration-notice). Pure. |
+| `openRegistrationNotice.svelte.ts` | `OPEN_REGISTRATION_NOTICE_ID`, `openRegistrationNoticeFor(state)`, `startOpenRegistrationNotice(dependencies?)`; types `OpenRegistrationNoticeState`, `OpenRegistrationNoticeDependencies` | The [open-registration warning](#open-registration-notice): the pure decision, and the watcher the app bootstrap starts. |
 | `passwordRules.ts` | `PasswordRule` (`{code, value?}`), `DEFAULT_PASSWORD_RULES`, `RULE_UI_KEYS`, `ruleMet(rule, password)`, `unmetRules(password, rules)` | The app's half of the [password rules](../../../architecture/security.md#password-rules), pure: no store, no request. `DEFAULT_PASSWORD_RULES` are the five of release 1.3 (`min_length` 8, `uppercase`, `lowercase`, `digit`, `special`), assumed until the server answers. `RULE_UI_KEYS` maps each code the app knows to its key (`min_length` → `minLength`, `uppercase` → `hasUppercase`, `lowercase` → `hasLowercase`, `digit` → `hasNumber`, `special` → `hasSpecial`). `ruleMet()` checks with the server's classes — `\p{Lu}`, `\p{Ll}`, `\p{Nd}`, a symbol `[^\p{L}\p{N}\s]`, the length in code points — and returns `null` for a code it does not know; `unmetRules()` gives the known codes a password misses, in the order of `rules`. |
 
 #### Registration errors {: #registration-errors }
@@ -251,6 +316,14 @@ In `lib/features/auth/`:
 `describeRegistrationError(error)` reads the `detail` of the failed `POST /api/v1/auth/register` and
 returns a catalogue key (`{key}`), or the server's own words (`{raw}`) when nothing better is known.
 `RegisterCard` draws `$_(key)` or the raw text.
+
+The status comes first, before the body is read: a `401`, whatever its body, or a `423` whose
+`detail.code` is `instance_blocked` (`isInstanceBlockedError()`), is the
+[instance block](../../../architecture/security.md#instance-block) refusing the registration — the
+`401` for a browser without a session, the `423` for one that holds a session — and gives
+`auth.instanceBlocked` (*This instance is blocked by its hosting provider: try again once it is
+unblocked.*), never the server's *Not authenticated* (backlog A-13). A `423` with another code reads
+its `detail` as below. Otherwise:
 
 | `detail` | Message |
 |---|---|
@@ -270,14 +343,18 @@ returns a catalogue key (`{key}`), or the server's own words (`{raw}`) when noth
 ### 🧪 Tests
 
 - `./dev.py test front-utility core-unit`: `authFlash.test.ts`, `linkToken.test.ts`,
-  `registrationErrors.test.ts` and `passwordRules.test.ts`.
+  `registrationErrors.test.ts` (with the blocked instance of A-13), `passwordRules.test.ts`,
+  `localHost.test.ts` and `openRegistrationNotice.test.ts` (see
+  [Open-Registration Warning](#open-registration-notice)), and, in `lib/api/zodios-client.test.ts`,
+  the describe of the [401 on a link page](#link-page-401).
 - `./dev.py test front-utility component-unit`: `AuthCard.test.ts`, `AuthPageFrame.test.ts`,
-  `LinkStatusCard.test.ts`, `ResetPasswordCard.test.ts`, `LoginCard.test.ts`, `RegisterCard.test.ts`,
-  and the pages: `routes/page.authFlash.test.ts`, `routes/invite/page.test.ts`,
-  `routes/reset-password/page.test.ts`.
-- `./dev.py test front-utility auth-links` (`frontend/e2e/auth-links.spec.ts`): both pages in a
-  browser, on links an administrator issues over the API — the token leaving the address bar, an
-  invitation used then read again as consumed, a reset after which only the new password signs in.
+  `LinkStatusCard.test.ts` (with `hintKey`), `ResetPasswordCard.test.ts`, `SetupCard.test.ts`,
+  `LoginCard.test.ts`, `RegisterCard.test.ts`, and the pages: `routes/page.authFlash.test.ts`,
+  `routes/invite/page.test.ts`, `routes/reset-password/page.test.ts`, `routes/setup/page.test.ts`.
+- `./dev.py test front-utility auth-links` (`frontend/e2e/auth-links.spec.ts`): the invitation and
+  reset pages in a browser, on links an administrator issues over the API — the token leaving the
+  address bar, an invitation used then read again as consumed, a reset after which only the new
+  password signs in.
 
 ## 🔐 Password-manager contract {: #password-manager-contract }
 
@@ -302,14 +379,17 @@ offers to save or update the password:
 | `ResetPasswordCard` | Hidden username, when the server named the account | — | `username` | `username` |
 | | New password | `reset-password-new` | `new-password` | `new-password` |
 | | Confirm new password | `reset-password-confirm` | `confirm-password` | `new-password` |
+| `SetupCard` | Hidden username, when the server named the account | — | `username` | `username` |
+| | New password | `setup-new` | `new-password` | `new-password` |
+| | Confirm new password | `setup-confirm` | `confirm-password` | `new-password` |
 
 - Every visible field has a `<label for>` reading the same translation key as its placeholder —
   visually hidden in the cards, visible in the modal — which also gives screen readers a name that
   does not vanish with the first keystroke.
 - The visible username fields set `autocapitalize="none"` and `spellcheck="false"`.
-- `PasswordChangeModal` and `ResetPasswordCard` carry a hidden username field, in the form of the
-  new passwords: `<input type="text" name="username" autocomplete="username" hidden readonly>`, with
-  the signed-in username in the modal, and in the card the account the link resets, drawn only
+- `PasswordChangeModal`, `ResetPasswordCard` and `SetupCard` carry a hidden username field, in the
+  form of the new passwords: `<input type="text" name="username" autocomplete="username" hidden readonly>`, with
+  the signed-in username in the modal, and in the cards the account the link resets or sets up, drawn only
   when the server named one. `type="text"` rather than `type="hidden"`, because a password manager
   reads text-like inputs; `hidden` keeps it off screen and out of the tab order, `readonly` out of
   the user's hands. The password manager then knows which saved account the new password belongs
@@ -317,10 +397,11 @@ offers to save or update the password:
 - No element carries an empty `id`: `PasswordInput` omits `id` and `name` when they are not given.
 - The `data-testid`s are unchanged; E2E logins go through them.
 
-`LoginCard.test.ts`, `RegisterCard.test.ts`, `PasswordChangeModal.test.ts` and
-`ResetPasswordCard.test.ts` pin the attributes; for the reset card, the hidden username field (or its
-absence without an account) and the `type` and `autocomplete` of its two password fields. The
-autofill itself belongs to the browser and is checked by hand.
+`LoginCard.test.ts`, `RegisterCard.test.ts`, `PasswordChangeModal.test.ts`,
+`ResetPasswordCard.test.ts` and `SetupCard.test.ts` pin the attributes; for the reset and setup
+cards, the hidden username field (or its absence without an account) and the `type` and
+`autocomplete` of their two password fields. The autofill itself belongs to the browser and is
+checked by hand.
 
 ## 🔒 PasswordStrength {: #passwordstrength }
 
@@ -345,8 +426,8 @@ A visual indicator of password strength using `zxcvbn-ts`, with the checklist of
   checked: the server decides it.
 - **`valid`** (`$bindable`): true while every rule drawn holds, each checked by `ruleMet()`. A form
   that needs a valid password binds to it (`bind:valid`) instead of keeping its own copy of the
-  rules: `RegisterCard`, [`ResetPasswordCard`](#resetpasswordcard) and `PasswordChangeModal` all
-  do.
+  rules: `RegisterCard`, [`ResetPasswordCard`](#resetpasswordcard), [`SetupCard`](#setupcard) and
+  `PasswordChangeModal` all do.
 - Nothing is drawn while the password is empty.
 
 Tests: `PasswordStrength.test.ts` (`./dev.py test front-utility component-unit`): the checklist from
@@ -381,8 +462,8 @@ A reusable input component for passwords.
 - **Attributes**: `autocomplete` (`current-password` by default, `new-password`, `off`, `on`),
   `id`, `name`, `testId`, `placeholder`, `disabled`; `id` and `name` are omitted when empty.
 - **Icon**: `icon` (a component, `null` by default) draws a decorative icon inside the field on the
-  left (`aria-hidden`, test id `<testId>-icon`) and makes room for it. The three cards — login,
-  registration, password reset — pass `Lock` from `lucide-svelte`; `PasswordChangeModal` passes
+  left (`aria-hidden`, test id `<testId>-icon`) and makes room for it. The four cards — login,
+  registration, password reset, setup — pass `Lock` from `lucide-svelte`; `PasswordChangeModal` passes
   none.
 - **Events**: Forwards `input`, `blur` and `keydown` events.
 
@@ -426,7 +507,78 @@ bootstrap states, Welcome, the intro tour and the contextual guides — is docum
   block. A `degraded` bootstrap renders the app with `OnboardingBootstrapBanner`, whose only
   action is **Retry**.
 - **Registration does not sign in**: `RegisterCard` dispatches `gotoLogin` with a success message,
-  which the login view shows above the form. A [link page](#link-pages) does not sign in either: it
-  leaves its message with `setAuthFlash()` and goes to `/`.
+  which the login view shows above the form. The invitation and reset [link pages](#link-pages) do
+  not sign in either: they leave their message with `setAuthFlash()` and go to `/`. The setup link
+  does: `/setup` reads the new session with `auth.checkAuth()`, then goes to `/dashboard`, where the
+  `(app)` layout runs the bootstrap and its gate, so Welcome comes first, as after a first login.
 - **Signed-out visitors** of an app route are sent back to `/` by `routes/(app)/+layout.svelte` —
   also when its auth check does not answer within 5 s — without a `redirect` parameter.
+
+## 📣 Open-Registration Warning {: #open-registration-notice }
+
+An administrator, signed in, on an instance whose [registration mode](../../../architecture/access_control.md#registration-modes)
+is `open`, who reached it through a host that is not local, gets an
+[instance notice](../../state/app-state.md#instance-notices). It is decided in the browser, from
+`location.hostname`: nothing is sent to the server. Administrator side: «The Open-Registration
+Warning» in [Global Settings](../../../../admin/settings.md); why it is only advice:
+[The Open-Registration Warning](../../../architecture/security.md#open-registration-warning).
+
+**The notice.** `openRegistrationNoticeFor({isAdmin, registrationMode, registrationLocked, hostname})`
+(`lib/features/auth/openRegistrationNotice.svelte.ts`) is pure: `null` unless `isAdmin`, the mode is
+`open` and `isLocalHost(hostname)` is false. Then:
+
+| | Mode set in the app | Mode pinned by `LIBREFOLIO_REGISTRATION` (`registrationLocked`) |
+|---|---|---|
+| `id` | `accounts.openRegistration` (`OPEN_REGISTRATION_NOTICE_ID`) | The same |
+| `severity`, `dismissible` | `warning`, `true`: closed until the next page load | The same |
+| `messageKey` | `auth.notices.openRegistration`: *Registration is open and this instance is reachable from outside your local network: anyone who finds it can create an account.* | `auth.notices.openRegistrationLocked`, which names `LIBREFOLIO_REGISTRATION` |
+| `action` | `{labelKey: 'auth.notices.openRegistrationAction', href: '/settings?tab=admin'}`: *Change who can sign up*, the Admin tab of Settings | None: nothing in the app can change a pinned mode |
+
+**The local hosts.** `isLocalHost(hostname)` (`lib/features/auth/localHost.ts`, pure) is true for:
+
+- `localhost` and every name under `.localhost`;
+- IPv4 `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` and `100.64.0.0/10`
+  (carrier-grade NAT, where Tailscale numbers its nodes);
+- IPv6 `::1`, `fc00::/7` and `fe80::/10`, and an IPv4-mapped address by the IPv4 it carries, in the
+  dotted form (`::ffff:192.168.1.10`) or in the hexadecimal one a browser writes
+  (`[::ffff:c0a8:10a]`);
+- a single-label name (`nas`), and the names under `.local`, `.lan`, `.home.arpa` and `.internal`.
+
+Everything else is external, `*.ts.net` included: Tailscale Funnel can publish those names to the
+internet. Case, the brackets of an IPv6 literal and a trailing dot do not count; a suffix counts as
+whole labels (`nas.mylan` is not under `.lan`), and a name that starts like an address is a name
+(`10.0.0.1.example.com`).
+
+!!! note "Not `classifyHost()`"
+
+    `classifyHost()` in `lib/utils/security/connectionSecurity.ts`, the host classes of the
+    connection-security indicator, is another rule: there a `*.ts.net` name counts as VPN and
+    `169.254.0.0/16` as LAN. `isLocalHost()` lists neither as local.
+
+**The watcher.** `startOpenRegistrationNotice(dependencies?)` runs one `$effect` (in an
+`$effect.root`) that evaluates the notice and calls `notices.show(notice)`, or
+`notices.hide(OPEN_REGISTRATION_NOTICE_ID)` when it is `null`, outside the tracking (`untrack`):
+`show()` and `hide()` read the registry's own state, so a tracked call would re-run on its own
+write. While the warning holds it only calls `show()`, so a dismissal survives every evaluation;
+`hide()`, which would forget the dismissal, comes only when the condition ends. It returns its stop
+function. The dependencies, each replaceable in tests:
+
+| Dependency | Default |
+|---|---|
+| `user()` | The auth store's `currentUser`, through `fromStore()`: `is_superuser` decides |
+| `config()` | `instanceConfig.config`, only once `instanceConfig.loaded`, `null` before: until `/system/instance` answers, the configuration in force is `DEFAULT_INSTANCE_CONFIG`, whose mode is `open`, and an invite-only instance would flash the warning |
+| `hostname()` | `window.location.hostname`, read at each evaluation |
+| `notices` | `instanceNotices` |
+
+Only the first start watches: a second call returns a function that does nothing, and its
+dependencies are ignored. `appBootstrap.load()` starts it as soon as a user is known
+([From login to the first guide](../../onboarding.md#layout-gate)), and the watcher then follows
+the account through sign-outs and sign-ins. Saving `registration_mode` in the Admin tab forces
+`instanceConfig.load({force: true})` ([GlobalSettingsTab](settings.md#globalsettingstab-admin-only)),
+so the warning follows the new mode on the same page load.
+
+Tests (`./dev.py test front-utility core-unit`): `localHost.test.ts` (every range on both sides of
+both its boundaries, the bracketed and the hexadecimal forms, the spellings) and
+`openRegistrationNotice.test.ts` (the truth table of `openRegistrationNoticeFor()`, the watcher on
+injected dependencies and on the app's stores, a second start, the stop function, and the three
+keys as sentences in the four catalogues).

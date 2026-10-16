@@ -317,8 +317,8 @@ or *links show the bare path until it is fixed*.
 
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
-| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), and `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification)), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with one exception: `is_active: false` on an account waiting for its email verification, inactive already, ends the wait as `user deactivate` does — its links revoked, its place free. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links | `200` with the account, `holds_place` included (`false` once a wait has ended); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
+| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, `protected`: see [Protected Accounts](#account-protection), `holds_place`: inactive and waiting for its email verification with a live link, so its place is already counted, from `place_holders()` in one query — see [Email Verification](../backend/email.md#verification) —, and `pending_setup`: the [initial administrator](#initial-admin) waiting for its setup, from `registration_service.pending_admin_ids()` in one query), with `usage: {used, max_users, billing_url}` | `200` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing, with one exception: `is_active: false` on an account waiting for its email verification, inactive already, ends the wait as `user deactivate` does — its links revoked, its place free. A deactivation or a demotion ends every session of the account. A change of `is_active` revokes the account's email-verification links | `200` with the account, `holds_place` and `pending_setup` included (`holds_place` `false` once a wait has ended); `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `PENDING_SETUP` for `is_active: true` on the initial administrator waiting for its setup (`is_pending_admin()`), checked before the user limit, nothing changed; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit, unless the account `holds_place` |
 | `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
 | `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST`; `500` when the deletion fails, nothing deleted |
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404` |
@@ -534,6 +534,27 @@ exits with `1`.
 beside the active accounts and the live invitations, its link live or not: it holds a place from
 its creation, and keeps it once active.
 
+**The administrator API and the Users tab** (lot A7b). The account waiting for its setup is marked:
+
+- `GET /users` and the answer of `PATCH /users/{user_id}` carry `pending_setup` (`AdminUserRead`,
+  default `false`), true for an account of `pending_admin_filter()`: inactive, with at least one
+  `admin_setup` token and none of them consumed — live, expired or revoked alike, an administrator or
+  not. `registration_service.pending_admin_ids()` reads it for the list, `is_pending_admin()` for one
+  account. An expired link keeps the account waiting: `./dev.py user setup-link` gives it a new one.
+- `PATCH /users/{user_id}` with `is_active: true` on that account, alone or with `is_superuser`,
+  answers `409` with `detail: {error_code: "PENDING_SETUP", message}` and changes nothing: nobody
+  knows its password, and once it is active its setup link would be refused. The check comes before
+  the user limit. Any other change is accepted: a demotion, for one, leaves the account waiting.
+- The Users tab draws the account with the badge *Waiting for setup*, without **Reactivate**, and
+  with a hint that names `dev.py user setup-link` ([UserRow](../frontend/components/features/settings.md#userrow));
+  administrator side: [Waiting for Its Setup Link](../../admin/users.md#pending-setup).
+- No route issues a new setup link: in release 1.3 the command line does (backlog).
+
+**The web page.** The link opens `/setup`, an anonymous page that reads the token from the fragment,
+inspects it with the purpose `admin_setup`, then spends it with `POST /auth/setup` from
+[`SetupCard`](../frontend/components/features/auth.md#setupcard), and enters the app signed in:
+[Account Link Pages](../frontend/components/features/auth.md#link-pages).
+
 How the setup link is protected (stored by its hash, single use, logged once by design) is in
 [Links in Use](security.md#account-token-links).
 
@@ -544,4 +565,8 @@ creation, the expiry to the microsecond, the delivery and the logs, `complete_ad
 usage, `user setup-link`, the startup step) and `./dev.py test api admin-setup`
 (`backend/test_scripts/test_api/test_admin_setup_api.py`: `POST /auth/setup` and `tokens/inspect`
 with `admin_setup`; in process on private databases for every case that needs a waiting
-administrator, and on the lane's server only refusals that write nothing).
+administrator, and on the lane's server only refusals that write nothing). The administrator API's
+side is UADM-060 to UADM-067 of `./dev.py test api users-admin`
+(`backend/test_scripts/test_api/test_users_admin_api.py`), in process, on a private database where
+the bootstrap itself creates the waiting administrator: `pending_setup` on each state of a setup
+link, the `409` `PENDING_SETUP`, and what that refusal must not reach.
