@@ -668,7 +668,7 @@
                         <GrowthChart
                             history={portfolioHistory}
                             {pnlCandles}
-                            onRequestPnlCandles={() => void pageBusy.track('broker-pnl-candles', loadPnlCandles)}
+                            onRequestPnlCandles={() => void pageBusy.join('broker-pnl-candles', loadPnlCandles)}
                             {incomeHistory}
                             {costHistory}
                             {depositHistory}
@@ -697,7 +697,7 @@
                     {contributionLoading}
                     assetsHref="/assets"
                     brokers={panelBrokers}
-                    onRequestContribution={() => void pageBusy.track('broker-contribution', loadContribution)}
+                    onRequestContribution={() => void pageBusy.join('broker-contribution', loadContribution)}
                     onAnalyze={openAssetPanel}
                     analyzedAssetId={activeAssetId}
                 />
