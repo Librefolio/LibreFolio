@@ -106,7 +106,7 @@
                     label: item.label,
                     searchText: item.detail,
                     badge: typeof item.archiveId === 'number' ? $t('importWizard.assetUnify.fromDb') : undefined,
-                    badgeClass: 'bg-gray-200 text-gray-700 dark:bg-slate-600 dark:text-gray-200',
+                    badgeClass: 'bg-lf-neutral text-lf-secondary',
                     data: {source: 'import', item},
                 });
             }
@@ -194,12 +194,12 @@
                 {#if option.icon}
                     <img src={option.icon} alt="" class="h-5 w-5 shrink-0 rounded-sm object-contain" onerror={hideOnError} />
                 {/if}
-                <span class="truncate text-sm text-gray-900 dark:text-gray-100">{option.label}</span>
+                <span class="truncate text-sm text-lf-primary">{option.label}</span>
                 {#if d.source === 'import' && typeof d.item?.archiveId === 'number'}
-                    <span class="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-700 dark:bg-slate-600 dark:text-gray-200">{$t('importWizard.assetUnify.fromDb')}</span>
+                    <span class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('importWizard.assetUnify.fromDb')}</span>
                 {/if}
                 {#if d.asset?.active === false}
-                    <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-slate-700 dark:text-gray-400">{$t('assets.edit.status.inactive')}</span>
+                    <span class="shrink-0 rounded bg-lf-panel px-1.5 py-0.5 text-[10px] font-medium text-lf-muted">{$t('assets.edit.status.inactive')}</span>
                 {/if}
             </div>
         {/snippet}
@@ -212,14 +212,14 @@
                 <span class="min-w-0 flex-1">
                     <span class="block truncate text-sm {d.asset?.active === false ? 'opacity-60' : ''}">{option.label}</span>
                     {#if option.searchText}
-                        <span class="block truncate font-mono text-[10px] text-gray-500 dark:text-gray-400">{option.searchText}</span>
+                        <span class="block truncate font-mono text-[10px] text-lf-muted">{option.searchText}</span>
                     {/if}
                 </span>
                 {#if option.badge}
                     <span class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium {option.badgeClass}">{option.badge}</span>
                 {/if}
                 {#if d.asset?.active === false}
-                    <span class="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-slate-700 dark:text-gray-400">{$t('assets.edit.status.inactive')}</span>
+                    <span class="shrink-0 rounded bg-lf-panel px-1.5 py-0.5 text-[10px] font-medium text-lf-muted">{$t('assets.edit.status.inactive')}</span>
                 {/if}
                 {#if d.asset?.currency}
                     {@const ci = getCurrencyInfo(d.asset.currency)}
