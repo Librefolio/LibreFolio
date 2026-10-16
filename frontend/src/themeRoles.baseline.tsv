@@ -29,7 +29,9 @@ lib/components/assets/ProviderAssignmentSection.svelte	95
 lib/components/assets/ProviderComparisonModal.svelte	60
 lib/components/assets/ScheduledInvestmentEditor.svelte	107	rgb(209 213 219)	rgb(71 85 105)
 lib/components/assets/detail/AssetDetailHeader.svelte	28
+lib/components/assets/detail/AssetDetailMeasuresSection.svelte	19
 lib/components/assets/detail/AssetDetailMetadataPanel.svelte	54
+lib/components/assets/detail/AssetDetailSignalsPanel.svelte	13
 lib/components/brokers/BrokerCard.svelte	64
 lib/components/brokers/BrokerDiscoveryCard.svelte	9
 lib/components/brokers/BrokerForm.svelte	72
@@ -258,7 +260,7 @@ lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/providerHelpers.ts	20
 lib/utils/transactions/pairCellHtml.ts	6
 routes/(app)/assets/+page.svelte	234
-routes/(app)/assets/[id]/+page.svelte	230
+routes/(app)/assets/[id]/+page.svelte	198
 routes/(app)/brokers/+page.svelte	38
 routes/(app)/brokers/[id]/+page.svelte	141
 routes/(app)/dashboard/+page.svelte	77
@@ -278,3 +280,4 @@ routes/+page.svelte	1
 ~split	lib/components/transactions/modals/TransactionFormModal.svelte	lib/components/transactions/form/TxFormBanners.svelte,lib/components/transactions/form/TxFormPairSection.svelte,lib/components/transactions/form/TxFormSingleSection.svelte,lib/components/transactions/form/TxFormOptionalSection.svelte	218
 ~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailHeader.svelte	258
 ~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailMetadataPanel.svelte	312
+~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailSignalsPanel.svelte,lib/components/assets/detail/AssetDetailMeasuresSection.svelte	230
