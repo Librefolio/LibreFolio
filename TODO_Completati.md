@@ -4,6 +4,57 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 📧 Email del server — prova, link per email, password dimenticata, verifica, avviso ✅
+
+**Data completamento:** 16 Ottobre 2026
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/Phase_1/08_email/plan-phase01Email.prompt.md`
+(workstream E della 1.3, lotti da E1 a E6)
+
+### Risultato
+- **Email facoltativa, configurata solo dall'ambiente**:
+  - le variabili `LIBREFOLIO_SMTP_*`, con la password anche da file (`LIBREFOLIO_SMTP_PASSWORD_FILE`);
+  - mai nel database, nella UI o nei backup;
+  - senza `LIBREFOLIO_SMTP_HOST` non cambia niente;
+  - l'invio usa lo `smtplib` della libreria standard in `asyncio.to_thread`, senza dipendenze nuove.
+- **Impostazioni › Email**, per l'admin: lo stato, la variabile da correggere e l'email di prova al proprio
+  indirizzo. I controlli d'avvio segnalano una configurazione inutilizzabile e un server raggiunto in chiaro.
+- **I link per email** si costruiscono solo da `LIBREFOLIO_PUBLIC_URL`, mai dall'header `Host`. Sono i link:
+  - d'invito e di reset;
+  - della password dimenticata;
+  - della verifica;
+  - dell'attivazione dell'admin iniziale, con A7a di A.
+- **Spedisci per email**, nelle finestre d'invito e di reset della scheda Utenti.
+- **Password dimenticata per email**:
+  - la risposta è sempre la stessa, 202;
+  - ci sono limiti per client, per nome scritto e per casella;
+  - i comandi del server restano, in un pannello chiuso.
+- **Verifica dell'email**: `require_email_verification` non è più un segnaposto. Il nuovo account aspetta il link,
+  valido 24 ore e rispedibile, e poi entra.
+- **Avviso al vecchio indirizzo** quando cambia l'email di un account: al più 3 all'ora per account e per casella.
+- **Il resto**:
+  - il limite d'invio dell'istanza, `LIBREFOLIO_SMTP_MAX_PER_HOUR` (50 all'ora);
+  - i testi nelle 4 lingue;
+  - i token monouso di A, salvati come hash.
+- Doc: `admin/email` e `developer/backend/email`.
+
+### Origine
+- La voce di `TODO_FUTURI.md` del 3 Settembre 2026 (audit P2-1). Poi la specifica F04 del fondatore («Feature SaaS
+  Readiness») e le decisioni del developer del 14/10: 1–3, 10 e 44.
+- Due punti della voce sono stati contraddetti dalla specifica:
+  - l'SMTP non si configura dalle impostazioni dell'admin, solo da variabili d'ambiente o da file segreti;
+  - niente `aiosmtplib`.
+
+### Cosa resta
+- Nella sezione E del backlog post-1.2:
+  - E-2, E-3 ed E-6, rimandate alla 1.4;
+  - E-4;
+  - E-7, il segno «in attesa di verifica» nella scheda Utenti;
+  - E-8, la lingua dell'invito.
+- Le notifiche (F19), fuori dalla 1.3.
+- I limiti valgono per processo: con più worker si moltiplicano. È scritto nella doc.
+
+---
+
 ## 🔑 Il cambio della password chiude le altre sessioni ✅
 
 **Data completamento:** 15 Ottobre 2026
