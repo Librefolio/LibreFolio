@@ -5,6 +5,7 @@ import {dirname, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {createServer} from 'vite';
+import {svelte} from '@sveltejs/vite-plugin-svelte';
 
 const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 process.env.LIBREFOLIO_FRONTEND_ROOT = frontendRoot;
@@ -25,7 +26,8 @@ const vite = await createServer({
     configFile: false,
     appType: 'custom',
     logLevel: 'silent',
-    plugins: [svelteKitRuntimeStubs],
+    // The renderer's import graph reaches `.svelte.ts` modules (runes): compile them as the app does.
+    plugins: [svelteKitRuntimeStubs, svelte({configFile: false})],
     server: {middlewareMode: true},
     resolve: {
         alias: {

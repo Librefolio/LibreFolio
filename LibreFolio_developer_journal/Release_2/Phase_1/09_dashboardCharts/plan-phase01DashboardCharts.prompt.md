@@ -3943,3 +3943,403 @@ vengono dal catalogo generato alle 18:27.
 >   - `git diff --check` pulito; la porta 6189 è libera.
 > - **BACKLOG**: Y-14 ✅ nel checkpoint di Y-14. Nello stesso checkpoint vanno anche Y-17 ✅ (`3805bf2ca`), Y-21 e la nota
 >   sul W6-d.
+- **22:06, Y-14 entrato** (corsa 144, con una riga 🐛 nel CHANGELOG): `daa2001ea` (fix) e `7c36f2129` (journal).
+  `assets/[id]` aspetta il lotto A di Z.
+
+### MF-P · contratti dei campi per il resto di Y12b (22:06–22:12, sola lettura)
+
+> **Note implementazione**.
+> - Il coordinatore (22:06): R17, W8 e V11 arrivano con MF-P (ondata 3 di MF); P4 dopo MF-A (ondata 2, che parte
+>   ora); P5 dopo MF-E, che aspetta CP-7b di J. I contratti e le date li concordo con MF direttamente.
+> - Fonti:
+>   - il piano MF in dev, letto con `git show dev_release2:…` e copiato in `files/mf_plan_dev.md`: MF-P è alla riga
+>     328, D-MF6 alla 381;
+>   - le righe di oggi del frontend.
+> - **Mandato a MF** (session `dfb94070…`), voce per voce: cosa calcola oggi il frontend e la mia proposta.
+>   - **R17**: `pnl_change_1d`, `…_vs_total_pnl_percent`, `…_vs_nav_percent` e `timing_effect_percent` in
+>     `PortfolioSummary`. Il giorno prima è il punto precedente della serie, con il segno della variazione e null su
+>     base 0.
+>   - **W8**: un valore di G/L % per ogni nodo broker e (broker, tipo) della treemap.
+>   - **P4**: `net_percent_of_start` negli item di `positions_contribution`, dopo MF-A.
+>   - **V11**: `opening_value` negli eventi BUY.
+>   - **P5**: con D-MF6(b) il piè della tabella somma le righe visibili, quindi è un aggregato interattivo da
+>     dichiarare. Un campo serve solo per un totale fisso di tutti i lotti. Anche il ribasamento in % di
+>     `lotWacPriceChartHelpers.ts:142` è una scala da dichiarare.
+>   - Ho chiesto le date.
+
+### Y-18 · indicatore proprio per le candele (analisi per le domande del developer, 22:12)
+
+> **Note implementazione** (sola lettura).
+> - **Oggi**:
+>   - `GrowthChart` ha uno scheletro solo per la storia: `{#if loading}` disegna
+>     `absolute inset-0 z-10 bg-lf-panel rounded animate-pulse` e nasconde il contenitore del grafico (righe
+>     1467–1474);
+>   - nella vista Candele, finché `pnlCandles` è null, il grafico mostra gli assi senza candele, e nessun indicatore
+>     lo segnala;
+>   - entrambe le pagine hanno già `pnlCandlesLoading` (Dashboard alla riga 100, broker alla 92), ma non lo passano al
+>     grafico;
+>   - dopo N55, con un passaggio diretto alle Candele a pagina ferma, il pulsante della pagina non gira più.
+> - **Proposta A (consigliata)**:
+>   - una prop `candlesLoading?: boolean`, passata dalle due pagine (`{pnlCandlesLoading}`);
+>   - con vista P&L → Candele, `candlesLoading` vero e `pnlCandles == null`, lo stesso scheletro della storia
+>     (`bg-lf-panel animate-pulse`): nessun colore nuovo;
+>   - `aria-busy` sul contenitore (riga 1377) e un `data-testid="growth-candles-loading"`;
+>   - il testo per i lettori di schermo è `common.loading`, una chiave che esiste già.
+>   - Costo: circa 1–1,5 ore. Un test Vitest in `GrowthChart.test.ts` e un controllo E2E nel test N55 della Dashboard,
+>     mentre la richiesta delle candele è trattenuta: `page-busy.spec.ts` si può toccare dopo l'ingresso di Z.
+>   - `GrowthChart` è nell'area DV: prima lo annuncio al coordinatore.
+> - **Proposta B**: un piccolo `LoadingSpinner` accanto al pulsante «Candele». È meno visibile, e il grafico vuoto
+>   resta.
+> - **Domanda collegata (P3)**: durante un ricaricamento di sfondo, `applyReport` e `applyOverview` azzerano
+>   `pnlCandles`, quindi oggi le candele spariscono fino alla nuova richiesta. Con A al loro posto comparirebbe lo
+>   scheletro. Invece la documentazione utente dice che durante un ricalcolo di sfondo «le cifre restano». In
+>   alternativa si possono tenere le candele vecchie finché arrivano le nuove, ma questo tocca il ricaricamento di Z-13
+>   e le due pagine: è una decisione a parte.
+- **22:12, la risposta di MF sui contratti di MF-P**:
+  - **Unità**: frazione ovunque (0.05 = 5 %), come oggi `twrr_percent`, `gain_loss_percent` e `period_pnl_percent`;
+    SafeDecimal come stringa; null si legge «—».
+  - **R17**, in `PortfolioSummary`: `pnl_change_1d: Currency|null`, `pnl_change_1d_vs_total_pnl_percent`,
+    `pnl_change_1d_vs_nav_percent` e `timing_effect_percent`.
+    - «Il giorno prima» è **D−1 di calendario** (`state_as_of(D−1)`), non il punto precedente della serie: se il
+      report campiona, oggi il frontend confronta due punti lontani.
+    - Le percentuali sono Δ/|base|; null con base 0 o senza un D−1.
+    - Il timing è null se manca l'MWRR, che dopo D-MF5/N54 può mancare.
+  - **W8**: `summary.holding_groups: list[{broker_id, asset_type: str|null, gain_loss: Currency|null,
+    gain_loss_percent: str|null}]`, dove `asset_type` null è il livello del broker.
+    - Si contano solo i titoli con valore e G/L entrambi noti.
+    - Oggi un titolo con G/L nullo mette il suo valore nella base come se fosse costo: è un 🐛 per il CHANGELOG.
+  - **P4**: nessun campo nuovo. Si usa `period_pnl_percent` (= `period_pnl/|start_value|`) così com'è; con MF-A i
+    valori migliorano.
+  - **V11**: `opening_value: Currency|null` sui BUY, nella valuta di `unit_price`. Arriva con MF-E, dopo CP-7b di J.
+  - **P5**:
+    - il piè della tabella sulle righe visibili e il ribasamento di `lotWacPriceChartHelpers.ts:142` si dichiarano nel
+      codice;
+    - il totale fisso c'è già (`LotSummarySchema`).
+  - **Date**: R17 e W8 il 17/10 mattina; P4 subito; V11 ed eventuali totali di P5 verso il 18/10. MF mi manda lo schema
+    dopo `api sync`, per i rossi.
+  - **La sua domanda sui periodi fissi dell'asset (1G, 1S…)**: non sono in Y12b. Stanno in
+    `lib/utils/assetPriceDerived.ts:193-196` (`computePeriodDelta`, lista degli asset) e in
+    `routes/(app)/fx/+page.svelte:236-240`, area di X. Gliel'ho risposto.
+
+### Y-19 · la durata della caduta peggiore segue la fonte della profondità (via del coordinatore 22:11, su `7c36f2129`) — ✅ 22:31
+
+> **Note implementazione**.
+> - **Analisi**: nello schema le due durate sono `int` obbligatori e ≥ 0, e il riepilogo controlla la coerenza fra
+>   durata e stato del recupero.
+>   - Con dati validi la profondità e la durata vengono dalla stessa fonte.
+>   - Si mescolano solo quando c'è il riepilogo ma la sua profondità ha il segno contrario, che `lossMagnitude` legge
+>     come assente.
+> - **Correzione**, una riga (`files/patches/y19_levelHelpers.py`):
+>   `durationDays: summaryDepth !== null ? finite(summary…) : finite(kpi…)`. Lo stesso schema vale per il recupero da
+>   Y12b. Non sposta i numeri di riga citati da `risk-lab.md`.
+> - **Rosso**: `test-author` scrive un caso con la profondità del riepilogo di segno contrario e un caso di guardia in
+>   cui vince un riepilogo valido.
+> - **Ciclo**: `files/scripts/y19_cycle.sh`, cioè rosso, patch, verde, Prettier, svelte-check e core, ogni passo solo
+>   con il carico sotto 50. Niente E2E.
+> - **`test-author`** (dalle 22:13 alle 22:15, `levelHelpers.test.ts`), due casi subito dopo quello Y12b del segno
+>   contrario:
+>   - il rosso: la profondità del riepilogo ha il segno sbagliato (`0.3`, durata 99), e il KPI ha `−0.4` con durata 30.
+>     Ci si aspettano una perdita di 0.4 e una durata di 30;
+>   - la guardia: un riepilogo valido (`−0.25`, durata 12) accanto a un KPI più profondo. Profondità e durata del
+>     riepilogo vincono insieme, cioè 0.25 e 12. Copre il verso opposto del test che già c'era, dove il KPI era meno
+>     profondo.
+> - **Ciclo** (`files/scripts/y19_cycle.sh`, dalle 22:19 alle 22:31, ogni passo solo con il carico sotto 50):
+>   - **rosso**: risk-levels-unit 1 fallito su 513, cioè proprio il caso atteso («expected 99 to be 30»);
+>   - la patch di una riga;
+>   - **verde**: 513/513;
+>   - Prettier pulito; svelte-check 0 errori e 0 avvisi; core 6 830/6 830; `git diff --check` pulito; la porta 6189 è
+>     libera.
+> - Nel BACKLOG Y-19 è ✅. Nessuna E2E, perché le stub sono valide e il comportamento resta quello.
+- **22:2x, revisione del lotto B di Z** (sola lettura, con `git show 1b46178bd`), sui due casi «reload in background»
+  di `page-busy.spec.ts`:
+  - durante la richiesta trattenuta la radice della Dashboard deve essere `data-busy="false"` (Z-18);
+  - l'arrivo del ricaricamento si legge con `countReports` e `landedAllBut`, gli strumenti della spec;
+  - `holds` esiste nel test.
+  - Ho risposto **OK**, senza modifiche. Il lotto B di Z è entrato. `assets/[id]` diventa mio quando entra il lotto A.
+- **22:32**: Y-19 committato (`9fd2dcdc0` fix e `54cce7263` journal) ed entrato in dev. Il via per Y-20 è arrivato
+  mentre Z lavora al lotto A.
+
+### Y-20 · `risk-lab.md`: numeri di riga scaduti (dalle 22:33, su `54cce7263`) — ✅ 22:47
+
+> **Note implementazione**.
+> - **`docs-writer`** (dalle 22:33) aggiorna i sei riferimenti della tabella in «Y12b» (righe 119 e 302–310 della
+>   pagina), ognuno ricontrollato sul codice di oggi.
+>   - Controlla anche gli altri riferimenti `file:riga` della sezione «How Much Can It Hurt?» e del punto «Bad month».
+>   - Il resto della pagina non lo tocca: segnala soltanto.
+>   - Verifica con `dev.py mkdocs check-links`.
+> - **Primo giro di `docs-writer`** (dalle 22:33 alle 22:40): 9 riferimenti aggiornati, ognuno controllato sul codice,
+>   e `check-links` verde (97 validi).
+>   - **Requests**: `riskAnalysisHelpers.ts:334` → 336 e l.368-371 → 370-373; `:280` → 282, con l'uso alle righe
+>     321 e 342 invece della 340.
+>   - **Istogramma**: `l1Helpers.ts:136` → 138, e `holdsCut`/`belowCut` alle righe 94 e 103 invece di 92 e 101. Per
+>     la regola del bin a cavallo, al posto di `ReturnHistogram.svelte:51` ora ci sono il commento alla riga 18 e
+>     `barClass()` alle righe 40–43; `title` passa da 79 a 68.
+>   - **Cifre in denaro**: `lossMoney()` da 86 a 72.
+>   - **Etichette**: `RiskMetricCard.svelte` da 107 a 108; `DOC_PATHS`/`TAIL_DOCS` da 117/127 a 103/113.
+> - **Secondo giro**, le quattro osservazioni del primo giro, applicate:
+>   - **Worst fall**: ora la pagina dice che la durata segue la fonte della profondità (Y-19, riga 405).
+>   - **Money**: si aggiunge Broker Detail, che usa il patrimonio netto di quel broker (riga 718). La tabella degli host
+>     lo diceva già.
+>   - **Istogramma**: «neither», che era ambiguo, diventa: il bin a cavallo è quello ambra `holdsCut` e non conta mai
+>     come coda (`belowCut` falso, `l1Helpers.ts:175-176`).
+>   - **UnderwaterChart**: il riferimento va alla didascalia, righe 65–70 con il valore alla 67, invece che al suo
+>     link alla riga 69.
+> - **⚠️ Fuori pista**: con il primo giro la pagina citava due righe diverse per lo stesso fatto (718 nel punto, 686
+>   nella tabella degli host). Ho chiesto a `docs-writer` di aggiornare anche gli 11 numeri della tabella degli host e
+>   del punto «No owned broker», già verificati. Non si va oltre.
+> - **Terzo giro** (fino alle 22:47): gli 11 numeri della tabella degli host e del punto «No owned broker».
+>   - Ciascuno è stato confrontato con la stessa riga di `eee56b42a`, quando la pagina fu scritta: punta allo stesso
+>     codice, solo spostato (di 1, 31 o 32 righe).
+>   - Ora la pagina dà una riga sola per ogni fatto (`:718` sia nel punto sia nella tabella).
+>   - `check-links` verde, 97 link validi; `brokerStore.ts:262` era già giusto.
+> - **In tutto**: 20 riferimenti aggiornati e 4 precisazioni di testo, solo in `risk-lab.md`. Pagina solo in inglese,
+>   quindi niente traduzioni né marcatura. Y-20 ✅ nel BACKLOG.
+- **22:45, Y-20 committato** ed entrato in dev.
+
+### Notte del 16→17/10 · regole e coda
+
+- **Regola del coordinatore** (22:45): il developer dorme fino al mattino. Una domanda che solo lui può sciogliere la
+  scrivo qui, la mando al coordinatore e passo alla voce successiva; se il lavoro finisce, chiedo al coordinatore.
+  - Già nella sua lista del mattino: Y4a, Y-15, Y-18 e il null di L1 («la riga non compare» contro «—»).
+- **Domande per il developer**, aggiunte alle 22:50:
+  - **Y-10**: mostrare sul telefono la maniglia di ridimensionamento (`@media (hover: none)`) cambia gli scatti mobile;
+  - **Y-3**: aggiungere `\bt\(` alla forma del gate della privacy, dopo averne misurato il rumore.
+- **Situazione del piano**: tutto il mandato è entrato (Y1–Y10, Y-11, Y12a, Y-12, Y-14, Y-17, Y-19, Y-20), tranne:
+  - `assets/[id]`, la chiusura di Y11, dopo il lotto A di Z;
+  - il resto di Y12b, che aspetta MF-P (R17 e W8 il 17 mattina);
+  - Y4a, fermo per il developer;
+  - Y13 (FE9–FE11), che è l'ultimo.
+  - Y-16 non si può fare stanotte: tocca `GrowthChart` e la Dashboard.
+- **Proposta al coordinatore** (22:49), in quest'ordine:
+  1. Y-21, cioè la scadenza dei `poll` del test L4, con il commento di Y-5;
+  2. la pagina per sviluppatori su `pageBusy`;
+  3. l'analisi di Y13.
+
+### Y-21 e Y-5 · scadenze del test L4 e commento di `headerTooltip` (via del coordinatore 22:50, su `bf1b802d7`)
+
+> **Note implementazione** (in corso).
+> - **Y-21** (`test-author`, dalle 22:50 alle 22:55, `risk-analysis.spec.ts`, +9/−4):
+>   - una costante `L4_OFFER_DEADLINE_MS = 10_000`, una scadenza e non un'attesa, nei quattro
+>     `expect.poll(offered, …)` del test D377 (righe 2827, 2833, 2846 e 2864);
+>   - `test.setTimeout(90_000)` come prima istruzione del test, cioè un budget che lascia arrivare prima le sue scadenze.
+>     Prima nulla gli dava più dei 30 s della configurazione.
+>   - `test-author` fa notare che la somma di tutte le scadenze del test arriva a circa 277 s. I 90 s coprono una corsa
+>     lenta sotto carico, non quella in cui ogni passo arriva al limite.
+> - **Y-5** (io): il commento di `headerTooltip` in `table/types.ts:291` ora dice che il tooltip sta sull'etichetta e
+>   che l'icona compare solo con `headerTooltipUrl`.
+> - **Prove leggere**: Prettier e `git diff --check` puliti; svelte-check 0 errori e 0 avvisi (22:55–22:59).
+> - **Slot**: il coordinatore ha dato lo slot 1 verso le 23:25, dopo W (FE8b) e X, con sua conferma.
+> - **Voce 2 avviata intanto** (22:58): `docs-writer` scrive la sezione su `pageBusy` in
+>   `developer/frontend/state/app-state.md`.
+>   - È una pagina che esiste già, quindi la navigazione condivisa non si tocca.
+>   - Al più aggiunge una riga di collegamento in `domain-state.md`.
+> - **E2E**: `files/scripts/y21_e2e.sh` (`front-portfolio risk`, con la ricostruzione del frontend), nello slot che ho
+>   chiesto al coordinatore.
+> - **Voce 2 ✅** (`docs-writer`, dalle 22:58 alle 23:08):
+>   - in `developer/frontend/state/app-state.md` (+145) una riga nella tabella degli store e la sezione
+>     `## ⏳ Page busy: the Refresh button {: #page-busy }`. Contiene:
+>     - l'API, con le righe di `pageBusy.svelte.ts`;
+>     - dove vanno `track` e `join`, e dove mai, con i siti della Dashboard, del broker, di `LotsAnalysisPanel` e
+>       di `riskPanelController`;
+>     - l'ambito della pagina, il reset e il timeout;
+>     - il contratto del pulsante, con i 10 test id e la differenza dal `data-busy` della radice;
+>     - le prove: il Vitest, e nell'E2E la richiesta trattenuta, il registratore, il controllo e i casi di N55;
+>   - in `domain-state.md` (+1) una riga che rimanda a `#page-busy` dalla sezione sul bus;
+>   - `check-links` verde (97); la build strict verde, 106 s, senza WARNING.
+> - **⚠️ Fuori pista**: in `domain-state.md` («How a page uses the cache», passo 5) una frase è falsa da Y11. Dice che il
+>   ricaricamento dopo l'aggiornamento dei prezzi «lascia stare `syncLoading`, lo spinner del pulsante Refresh»; da Y11
+>   il pulsante gira su `pageBusy.busy`. Il file l'ha toccato per ultimo Z: ho chiesto al coordinatore se la correggo io
+>   nello stesso checkpoint.
+> - **La frase di `domain-state.md`**: il coordinatore ha detto «correggila tu». Ma il lotto B di Z (`1b46178bd`, già in
+>   dev) aveva riscritto proprio quel passo 5 (riga 121 in dev): «Nor is it tracked by `pageBusy` … so the button
+>   neither waits nor spins for it», più Z-18.
+>   - La mia copia è quella precedente, quindi non la tocco: avrei solo un conflitto. Il testo giusto arriva con il
+>     prossimo aggiornamento della base.
+>   - La riga aggiunta da `docs-writer` è nella sezione del bus, lontana dal passo 5, e dice la stessa cosa.
+>   - L'ho detto al coordinatore.
+
+### Y13 · FE9–FE11, analisi (16/10 23:10–23:20, sola lettura; HEAD `bf1b802d7`)
+
+> **Note implementazione**. Script `files/y13_inventory.py`: per ogni file di `lib/utils` e `lib/stores`, chi lo importa
+> e da quali domini; le inversioni di livello; il censimento dei suffissi. Log in `files/logs/y13_inventory.log`,
+> dati in `files/y13_inventory.json`.
+> - **FE9 · `utils/` generici e inversioni**:
+>   - `lib/utils` ha 18 file in radice e 11 sottocartelle (brim 4, broker 5, core 20, currency 3, files 5, layout 4,
+>     privacy 1, security 1, sync 3, transactions 27, url 3). Quasi tutto è condiviso fra più domini.
+>   - **Usati da un solo dominio**, da portare nella loro feature:
+>     - `utils/urlFilters.ts`, usato solo dalla pagina dei file. Il §3 lo dava a FE3, ma Y6 l'ha lasciato;
+>     - `utils/files/pdfPreviewState.ts` e `pdfViewerAssets.ts`, usati solo da `features/files`. Y6 aveva tenuto
+>       fermo tutto `utils/files/` come condiviso (D-Y5), ma condivisi davvero sono solo `upload` e `imageCrop`;
+>     - `utils/core/positionKey.ts`, usato solo dalla dashboard;
+>     - `utils/transactions/commitRefusal.ts` e `utils/url/queryParams.ts`, usati solo dalla pagina delle transazioni:
+>       sono di W.
+>   - **Inversioni utils/stores → componenti** (7):
+>     - `chartSettingsStore` → `components/charts/calendarReturnWindow.ts`;
+>     - `txStore`, `importCompare` e `txFormFields` → `components/transactions/types.ts`;
+>     - `assetTypes` → `components/ui/select/treeSelect.ts`;
+>     - `urlFilters` → `components/table/types.ts`;
+>     - `chartUtils` → `components/charts/LineChart.svelte`, che è un `.svelte` importato da un modulo `utils`.
+>     - Rimedio: i tipi comuni vanno in moduli neutri, e la dipendenza di `chartUtils` va sciolta.
+>   - **Componenti generici → feature** (42 archi):
+>     - per feature: onboarding (`guideAnchors`) 20, ai-export 5, live-updates 4, plugin-settings 3, update-check 3,
+>       brokers 2, files 2, changelog 1, auth 1, instance 1;
+>     - quasi tutti partono da `components/assets`, `fx` o `transactions`: diventano import fra feature quando FE4, FE5
+>       e FE8 li spostano. Quindi li risolvono quei lotti, non FE9;
+>     - restano tre casi veri. `components/layout` (`Header`, `Sidebar`, `ChangelogModal`) importa onboarding,
+>       changelog e update-check; è il guscio dell'app, accettabile. `components/ui/input/PasswordStrength` importa
+>       auth e instance: è UI generica, da sistemare passando le regole come props oppure spostandola in
+>       `features/auth`. Poi c'è `guideAnchors`, che è infrastruttura usata ovunque.
+>   - **Import fra feature**: 23 coppie (settings→molte, auth↔email, onboarding→settings/support/update-check,
+>     price-refresh→instance/live-updates, risk→dashboard, tools→onboarding, brokers→files/onboarding,
+>     instance→backup). D-P4 era rinviato a FE9: si importa dal file che definisce, senza barili, come dice D-Y5.
+>   - In FE9 si chiude anche **Y-7**: le primitive dei grafici importano dai segnali (D-Y15).
+> - **FE10 · `stores/` solo globali**: oggi nessuno store è usato da un dominio solo (radice 6, app 15, core 3,
+>   files 1, fx 1, portfolio 2, reference 6, transactions 2).
+>   - `stores/core` (`EditBuffer`, `entityStore`) è infrastruttura usata dentro `lib/stores`.
+>   - `stores/transactions` e `stores/fx` possono seguire FE8 e FE4, se dopo quegli spostamenti diventano di un solo
+>     dominio.
+>   - Quindi FE10 si fa rifacendo l'inventario dopo FE4, FE5 e FE8: circa un'ora.
+> - **FE11 · suffissi**: Modal 44, Dialog 10, Panel 23, Section 19, Popover 1. Serve prima una convenzione, che decide
+>   il developer. I rinomi toccano tutte le aree, i test, la documentazione e la devWiki; i test id non cambiano.
+> - **Dipendenze e tempi**:
+>   - FE9 dopo FE2–FE8. Oggi mancano Y4a, fermo, FE4 e FE5a di X, e FE8 di W, congelato.
+>   - FE10 insieme o dopo le feature; FE11 per ultimo, ed è facoltativo.
+>   - Realisticamente dopo il tag della 1.3.
+> - **Conflitti**: larghi, perché toccano gli importatori di tutte le aree (X, W, J, colori). Serve una finestra
+>   notturna con congelamento, come per Y4a.
+> - **Costo**:
+>   - FE9 3–4 ore: 7 inversioni, 6 file da spostare, `PasswordStrength`, la verifica di D-P4, documentazione e
+>     devWiki;
+>   - FE10 circa un'ora, dopo FE4, FE5 e FE8;
+>   - FE11 2–3 ore, dopo la convenzione.
+> - **Domande per il developer** (alla lista del mattino del coordinatore):
+>   - **Y13-1**: FE9–FE11 dopo il tag della 1.3?
+>   - **Y13-2**: per FE11, quale convenzione fra Modal e Dialog e fra Panel e Section? Oppure si lascia perdere FE11?
+>   - **Y13-3**: `guideAnchors` di onboarding, usato da 20 componenti generici, va in un modulo neutro come
+>     infrastruttura, o resta il file pubblico della feature, come vuole D-P4?
+
+### Notte 16→17/10 · FE8b, allineamento a Z-18, kit di chiusura di Y11, contratto MF (23:11–23:30)
+
+> **Note implementazione**.
+> - **Congelamento FE8b** (W, 23:11). Nessun file congelato è aperto da me.
+>   - `app-state.md:326` è una riga di prima, non mia, che cita `lib/components/transactions/shared/txDisplayHelpers.ts`.
+>     Se W riscrive i percorsi nelle pagine, la cambia in dev; le mie aggiunte nello stesso file sono alla riga 20 e
+>     dalla 454, quindi la fusione va da sola.
+>   - Detto al coordinatore.
+> - **⚠️ Fuori pista: la mia sezione `#page-busy` contraddiceva Z-18** (lotto B di Z, `1b46178bd`, già in dev). Il
+>   ricaricamento dopo un recupero dei prezzi ora gira con `loadAll(false, false, {background: true})`, e la radice
+>   `dashboard-page` resta `false`. Corrette due frasi della mia sezione, che non è committata:
+>   - la radice segue i flag di caricamento della pagina, non i gettoni. Dopo un recupero dei prezzi restano entrambi
+>     `false` (Z-18, passo 5 di `domain-state.md#how-a-page-uses-the-cache`);
+>   - `reloadAfterPriceCatchUp()` chiama `loadAll()` o `loadOverview()` «senza gettone», non più «bare»: con gli
+>     argomenti di Z-18 la parola non era più esatta.
+>   - Il codice di Z-18 entra nel mio ramo con il prossimo aggiornamento della base.
+> - **Kit di chiusura di Y11**, fuori dal repo (richiesta del coordinatore, 23:11), in `files/y11_closing/`:
+>   - `CHANGELOG-lines.md`: due righe 🔄, cioè «una ⟦REFRESH⟧ per pagina» e «il Rischio senza un suo pulsante».
+>     Il segnaposto di Y-15 ha la tabella A/B. Ci sono anche i controlli da fare alla chiusura: le righe Z-13 e Y-14
+>     già nel CHANGELOG dicono «Refresh»; l'elenco delle 11 pagine; il Rischio sulla pagina dell'asset dopo il lotto
+>     `assets/[id]`; una riga in più per Y-15;
+>   - `user-docs-draft.md`: la scrive `docs-writer` (in sfondo). Contiene il paragrafo «una ⟦REFRESH⟧ per pagina» in
+>     `user/dashboard/index.en.md#coming-back-and-refreshing`, i ritocchi di `brokers/index.en.md:86` e la tabella
+>     delle occorrenze per Y-15;
+>   - `files/scripts/y11_docrefs.py` (`capture`/`check`) e `docrefs_anchor.json`. Sono i 48 riferimenti a righe della
+>     mia sezione, tutti giusti su `bf1b802d7`. Dopo l'aggiornamento della base, `check` dice quali si sono spostati e
+>     dove; servirà perché Z-B e FE8b toccano Dashboard, broker e transazioni.
+> - **Contratto MF per R17 e W8** (23:18): controllato sul codice.
+>   - W8 coincide con le chiavi della treemap (`ExposureTreemap.svelte:371-374`): prima il broker, poi
+>     `h.asset_type || 'Unknown'`. Nel riassunto `broker_id` non è mai null (`portfolio_service.py:779+`).
+>   - Accettata una differenza: la treemap disegna solo i valori > 0 (`:368`), mentre il gruppo di MF conta anche un
+>     asset a valore zero, che porta la sua perdita.
+>   - Il frontend prenderà da MF sia `gain_loss` sia `gain_loss_percent` del gruppo, e smetterà di sommare.
+>   - I rossi si scrivono dopo lo SHA di MF e lo slot del coordinatore, perché stanotte la Dashboard è ferma. Risposta
+>     mandata a MF.
+
+### Y-21 · E2E `front-portfolio risk` (slot 2, 23:25–23:37; HEAD `bf1b802d7` più Y-21, Y-5 e la documentazione) — 36/38
+
+> **Note implementazione**. Comando: `bash files/scripts/y21_e2e.sh`, cioè
+> `nice -n 10 … dev.py test --test-port 6189 --data-dir /tmp/librefolio-r13-y --workers 2 front-portfolio risk`. Il
+> carico era 57 alla partenza. Log in `files/logs/y21_e2e_risk.log`; gli artefatti dei rossi sono stati copiati subito
+> in `files/logs/y21_reds/`.
+> - **Il bersaglio di Y-21 è verde**: L4 D377 (`:2815`) in 11,7 s, dentro il budget nuovo di 90 s.
+> - **⚠️ Fuori pista: due rossi in test che non ho toccato**, del benchmark di L3 (commit `2f54c9c0b` dell'01/10 e
+>   `28f201737` del 07/10). Tutti e due «Test timeout of 30000ms exceeded»:
+>   - D378, `:3993`, «a move of the period asks the engine again…» (37,6 s). Si ferma in `moveToOneYear`: il
+>     `data-active` di `date-preset-1y` non arriva a `true` prima della fine del budget. La fotografia della pagina
+>     mostra però il clic avvenuto: l'intervallo è 2025-10-16 → 2026-10-16, e Refresh è disabilitato mentre arriva il
+>     report di 1Y;
+>   - benchmark condiviso, `:4456`, il caso della Dashboard «the picker offers an asset the scope holds» (40,1 s):
+>     `openBenchmarkPicker` non vede opzioni entro 10 s. Manca la fotografia, perché la pagina si è chiusa al timeout.
+> - **Triage** (skill `test-triage`):
+>   - §1, la forma della risposta: non c'entra (nessuna posizione, nessun conteggio);
+>   - §2, l'orologio: in questa corsa tutta la parte centrale del blocco è andata 2–3× più lenta delle due corse di
+>     Y12b. Per esempio `:3073` 10,3 s contro 3,6, `:3309` 12,6 contro 4,5, `:3948` 14,1 contro 4,4. I primi test
+>     (`:1921`–`:2766`) invece sono andati come allora, e i due rossi allora facevano 6–10 s;
+>   - i test concatenano attese che insieme superano i 30 s del budget predefinito: la barriera di 20 s a `:1696`, il
+>     selettore 10 + 10 s, i `poll` 10 + 15 s. Solo D377 ha 90 s (`:2817`);
+>   - §3, stato condiviso: il DB della corsia pesa 1,3 MB e non è cresciuto; nessuna scrittura dei vicini c'entra. Il
+>     log del backend non registra la durata delle richieste, quindi non si può misurare il backend da lì;
+>   - nessuna regressione di Y: dalle corse verdi Y ha toccato solo la pagina dei broker (Y-14), una riga di
+>     `levelHelpers` (Y-19) e la documentazione.
+> - **Verdetto: un'assunzione sull'orologio**, cioè il budget del test, sotto contesa della macchina. È lo stesso schema
+>   di Y-21.
+> - **Al coordinatore** (23:40, `needs_input`):
+>   - A (consigliata): un budget di 90 s per tutto il blocco, scritto da `test-author`, e una nuova corsa nello slot;
+>   - B: Y-22 nel backlog.
+>   - Ho segnalato anche il pulsante «Reload All» della scheda Correlation per il lotto `assets`.
+
+### Kit di chiusura di Y11 · la bozza di `docs-writer` (23:40)
+
+> **Note implementazione**. `files/y11_closing/user-docs-draft.md`, 285 righe. Nessun file del repo è stato toccato; le
+> 8 stringhe OLD sono verificate esatte.
+> - §1: alla riga 81 di `user/dashboard/index.en.md` c'è un H3 nuovo, `### 🔘 The ⟦REFRESH⟧ button {: #refresh-button }`.
+>   Contiene le pagine con il pulsante e quattro punti: quando gira, quando no, i due minuti, il Rischio. L'ancora della
+>   sezione resta.
+> - §2–§4: `brokers/index.en.md:86` e `dashboard/index.en.md:62` puntano a `#refresh-button`. Ci sono cinque
+>   collegamenti facoltativi.
+> - §5: le tabelle di Y-15, cioè 16 occorrenze dell'etichetta del pulsante di pagina e 8 «Reload» che non cambiano.
+>   Nota: le chiavi di traduzione sono condivise, quindi B ha bisogno di una chiave propria per il pulsante di pagina.
+> - §7, i punti trovati nel codice:
+>   - **la scheda Correlation**: `risk-reload-button` (`assets/+page.svelte:1581-1593`) sostituisce il pulsante della
+>     lista ed è l'unico pulsante di ricarica della scheda, ma non legge `pageBusy`. **Decisione notturna, da
+>     rivedere**: lo metto nel lotto `assets`, con `onmerged`;
+>   - **la pagina dell'asset**: il pulsante è ancora `disabled={loading}` (`AssetDetailToolbarActions.svelte:90`), ed è
+>     nel lotto `assets/[id]`;
+>   - il caricamento di massa non è un'incoerenza. Sulla lista degli asset ricarica i prezzi di tutti gli asset
+>     (`fetchAllPriceData`, `assets/+page.svelte:1015`), quindi conta come ricarica di pagina; nei cambi va riga per
+>     riga (`fx/+page.svelte:822-828`);
+>   - **le transazioni**: il pulsante azzera anche filtri e selezione, e nessuna pagina utente lo dice. Non è di Y;
+>   - tornare su una pagina scaduta fa girare il pulsante (`*-first-load`). Il testo è scritto di conseguenza.
+
+### Y-21 · opzione A: un budget di 90 s per tutto il blocco (decisione del coordinatore, 23:45)
+
+> **Note implementazione**.
+> - Il coordinatore sceglie A: `test-author` dà 90 s a tutto il blocco «Risk analysis functional integration» di
+>   `risk-analysis.spec.ts`, in un solo punto.
+> - Il `test.setTimeout(90_000)` di D377 diventa ridondante e si toglie; restano i `L4_OFFER_DEADLINE_MS`.
+> - Poi si rifà la corsa di `front-portfolio risk` nello slot 2, dopo X (verso le 00:05, al suo via). Tutto entra nel
+>   checkpoint di Y-21, con Y-5 e la pagina di `pageBusy`.
+> - **Approvata dal coordinatore**, come decisione notturna: il «Reload All» della scheda Correlation va nel lotto
+>   `assets`, con `onmerged`.
+> - **23:47, il budget del blocco è fatto** (`test-author`). In `risk-analysis.spec.ts`:
+>   - `test.describe.configure({timeout: 90_000})` in cima al blocco, con un commento: è un budget, non un'attesa;
+>   - tolto il `test.setTimeout(90_000)` di D377, che era ridondante;
+>   - `L4_OFFER_DEADLINE_MS` e i suoi quattro `poll` sono rimasti come erano;
+>   - verificato su Playwright 1.61: il `timeout` del describe arriva a tutti i 38 test, e non va in conflitto con il
+>     `mode: 'parallel'` del file.
+>   - Contropartita accettata: senza `actionTimeout` un `click()` su un controllo che non diventa mai cliccabile cade a
+>     90 s invece che a 30.
+> - **Prove leggere**: svelte-check 0/0 (`files/logs/y21_front-check2.log`); Prettier pulito sulla spec e su
+>   `types.ts`; `git diff --check` pulito.
+>   - La documentazione: la build del sito fatta dentro la corsa E2E delle 23:31 comprende le due frasi corrette. Ha 0
+>     WARNING ed è finita in 92,8 s, quindi la build stretta passa. L'ancora `domain-state.md#how-a-page-uses-the-cache`
+>     esiste.
+> - **Ordine nuovo del coordinatore** (23:50; T è entrato in dev con `9016f47c3`, che tocca la stessa spec):
+>   1. checkpoint FROZEN;
+>   2. il coordinatore committa e fonde dev nel mio ramo;
+>   3. la nuova corsa nello slot 2, sulla revisione combinata, che prova anche i colori di T.
+> - **Previsione della fusione**: nessun conflitto testuale.
+>   - Nella spec, i pezzi di T sono a 3509–3648 (l'aiuto `roleBackground()` e le righe di L3), i miei a 1917 e
+>     2801–2867.
+>   - `app-state.md`: dev cambia solo la riga 326 (il percorso di FE8b); le mie aggiunte sono alla 20 e dalla 454.
+>   - `domain-state.md`: dev cambia la 121 (Z-B), io la 84.
+>   - Nella sostanza, i test di T nel blocco ricevono anche loro i 90 s.

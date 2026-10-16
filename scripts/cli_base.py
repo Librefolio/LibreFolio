@@ -558,6 +558,25 @@ _BUILD_GENERATED_SOURCES = {
 }
 
 
+#: Folders below ``frontend/src`` that only the tests use: Vitest's harnesses (the ``$test`` alias) and module mocks.
+_TEST_ONLY_FOLDERS = frozenset({"__tests__", "__mocks__"})
+
+
+def _counts_for_the_build(path: Path, src_dir: Path) -> bool:
+    """Whether a file under ``frontend/src`` is an input of the bundle, for ``check_frontend_needs_build()`` (H-24).
+
+    Not a generated file (``_BUILD_GENERATED_SOURCES``), nothing hidden — a name starting with ``.`` anywhere below
+    ``src``: the Finder's ``.DS_Store``, ``.gitignore``, the i18n catalogue's ``.generated`` stamp —, no Vitest file
+    (``.test.`` or ``.spec.`` in the name) and nothing in a ``__tests__`` or ``__mocks__`` folder: the build never
+    bundles them, no app code imports them. Anything else counts: a build believed fresh by mistake costs more than
+    one rebuild too many.
+    """
+    if path.name in _BUILD_GENERATED_SOURCES or ".test." in path.name or ".spec." in path.name:
+        return False
+    parts = path.relative_to(src_dir).parts
+    return not any(part.startswith(".") for part in parts) and not any(part in _TEST_ONLY_FOLDERS for part in parts[:-1])
+
+
 def _tool_contract_sources(project_root: Path) -> list[Path]:
     """Enumerate Tool codegen inputs, including newly bundled plugins."""
     sources = [
@@ -605,9 +624,9 @@ def check_frontend_needs_build() -> bool:
         if any(not path.exists() for path in generated_catalogs(project_root)):
             return True
 
-        # Check all source files
+        # Check all source files: the ones the bundle can include (_counts_for_the_build)
         for src_file in src_dir.rglob("*"):
-            if src_file.is_file() and src_file.name not in _BUILD_GENERATED_SOURCES and src_file.stat().st_mtime > build_time:
+            if src_file.is_file() and _counts_for_the_build(src_file, src_dir) and src_file.stat().st_mtime > build_time:
                 return True
 
         # Also check config files

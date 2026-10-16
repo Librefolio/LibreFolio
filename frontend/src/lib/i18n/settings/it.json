@@ -246,7 +246,8 @@
         "you": "Tu",
         "admin": "Admin",
         "inactive": "Disattivato",
-        "protected": "Protetto"
+        "protected": "Protetto",
+        "pendingSetup": "In attesa del setup"
       },
       "actions": {
         "deactivate": "Disattiva",
@@ -307,7 +308,8 @@
         "DELETION_FAILED": "L'eliminazione non è riuscita: non è stato eliminato niente.",
         "INVALID_INPUT": "Controlla i dati inseriti: l'indirizzo email potrebbe non essere valido.",
         "generic": "L'azione non è riuscita. Riprova.",
-        "load": "Non è stato possibile caricare gli account."
+        "load": "Non è stato possibile caricare gli account.",
+        "PENDING_SETUP": "Questo amministratore attiva l'account con il suo link di setup: non si può riattivare da qui."
       },
       "invite": {
         "button": "Invita",
@@ -338,7 +340,8 @@
         "signedOut": "{username} è stato disconnesso ovunque.",
         "guidesRestarted": "Le guide di {username} ripartono da capo.",
         "resetLinkCreated": "Link di reimpostazione creato per {username}."
-      }
+      },
+      "pendingSetupHint": "Questo account amministratore si attiva con il suo link di setup. Se il link è perso, esegui «dev.py user setup-link» sul server, o chiedi al tuo fornitore."
     },
     "linkShare": {
       "addressLabel": "Indirizzo del server",

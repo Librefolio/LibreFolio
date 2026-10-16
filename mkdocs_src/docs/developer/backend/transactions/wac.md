@@ -563,7 +563,7 @@ Rule 12 of `validate_transaction_business_rules()`
 `_cost_basis_rule()`, shared with `cost_basis_required()` — is `forbidden`, or
 `required_qty_pos` without a positive quantity. It is the test the frontend makes
 before sending a cost basis (`cbAllowed` in
-`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`), and with today's
+`frontend/src/lib/features/transactions/txPayloadHelpers.ts`), and with today's
 table it admits exactly the rows that need an override: a `TRANSFER` or
 `ADJUSTMENT` adding quantity.
 
@@ -604,7 +604,7 @@ stored cost stays. Elsewhere the `null` is ignored, so the giving leg of a split
 the update names `cost_basis_mode` `auto` or `auto-detail`, which compute their
 own (see [Inline Batch Auto Modes](#inline-batch-auto-modes)): the frontend sends a
 `null` with an Auto row that has no currency hint yet (`buildUpdateDiff()` in
-`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`). Tests:
+`frontend/src/lib/features/transactions/txPayloadHelpers.ts`). Tests:
 `./dev.py test services transaction-cost-basis-rule`
 (`TestDecisionP5AnExplicitNullEmptiesTheCost`).
 

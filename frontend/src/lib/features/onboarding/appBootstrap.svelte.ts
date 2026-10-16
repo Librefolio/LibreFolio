@@ -1,3 +1,4 @@
+import {startOpenRegistrationNotice as startOpenRegistrationNoticeWatcher} from '$lib/features/auth/openRegistrationNotice.svelte';
 import {globalSettings} from '$lib/stores/app/globalSettings';
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
 import {onboarding} from '$lib/stores/app/onboarding.svelte';
@@ -17,6 +18,8 @@ interface AppBootstrapDependencies {
     loadGlobalSettings?: () => Promise<unknown>;
     findWelcome?: () => ReturnType<typeof onboarding.findFlow>;
     checkWelcomeReplay?: (version: number) => boolean;
+    /** Starts the open-registration warning (accounts A7b): a second start changes nothing, so every load may call it. */
+    startOpenRegistrationNotice?: () => void;
 }
 
 function errorMessage(error: unknown): string {
@@ -41,6 +44,11 @@ export function createAppBootstrap(dependencies: AppBootstrapDependencies = {}) 
     const loadGlobalSettings = dependencies.loadGlobalSettings ?? (() => globalSettings.load());
     const findWelcome = dependencies.findWelcome ?? (() => onboarding.findFlow('welcome'));
     const checkWelcomeReplay = dependencies.checkWelcomeReplay ?? ((version: number) => onboarding.hasReplay('welcome', version));
+    const startOpenRegistrationNotice =
+        dependencies.startOpenRegistrationNotice ??
+        (() => {
+            startOpenRegistrationNoticeWatcher();
+        });
 
     let state = $state<AppBootstrapState>('idle');
     let error = $state<string | null>(null);
@@ -53,6 +61,8 @@ export function createAppBootstrap(dependencies: AppBootstrapDependencies = {}) 
             reset();
             return state;
         }
+        // As soon as a user is known, whatever the loaders do: the warning watches the account on its own
+        startOpenRegistrationNotice();
         if (!force && loadedUserId === userId && (state === 'ready' || state === 'degraded')) {
             return state;
         }

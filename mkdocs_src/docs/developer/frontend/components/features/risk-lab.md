@@ -114,10 +114,10 @@ API. Which analytics each section asks for is the table in
 
 - **Rates.** Every lab controller sends `appliedRiskFreePercent: 0` (`AssetSetCorrelationSection.svelte:72`,
   `AssetSetComparisonLevels.svelte:120`, l.136, `AssetSetReplaySection.svelte:84`), and the KPI and the
-  comparison send `target_annual_return: 0` (`riskAnalysisHelpers.ts:334`, l.368-371). The lab has no
+  comparison send `target_annual_return: 0` (`riskAnalysisHelpers.ts:336`, l.370-373). The lab has no
   control for either.
-- **Bad month.** `MONTHLY_VAR_HORIZON_DAYS = 30` calendar days (`riskAnalysisHelpers.ts:280`, used at
-  l.340). The engine turns them into observations at the observed frequency — about 21 on a
+- **Bad month.** `MONTHLY_VAR_HORIZON_DAYS = 30` calendar days (`riskAnalysisHelpers.ts:282`, used at
+  l.321 and l.342). The engine turns them into observations at the observed frequency — about 21 on a
   trading-day calendar, 30 on an every-day one — as explained in
   [Value at Risk](../../../../financial-theory/technical-analysis/risk-metrics/value-at-risk.md#the-observation-count-is-not-the-history-length).
 - **One calendar per request.** The engine prepares one joint calendar per request from the scope, the
@@ -261,11 +261,11 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
 
 | Host | Scope | What differs |
 |---|---|---|
-| `frontend/src/routes/(app)/dashboard/+page.svelte:1040-1054` | `broker_ids: ownedBrokerIds` (l.222): the brokers the user owns with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts:262`) | The broker filter is not applied: `subtitle` becomes `risk.dashboardFullPortfolio` while it is on (l.1048), and `scopeValue` is `null` then (l.1046), because the summary follows the filter. `assetIds` are the summary's holdings (l.1045). |
-| `frontend/src/routes/(app)/brokers/[id]/+page.svelte:680-694` | `broker_ids: [broker.id]` | `scopeValue` is that broker's net worth (l.686); `internalSubset` prints `risk.internalSubset` (l.688). |
+| `frontend/src/routes/(app)/dashboard/+page.svelte:1071-1085` | `broker_ids: ownedBrokerIds` (l.223): the brokers the user owns with a share above 0 (`getOwnedBrokers()`, `frontend/src/lib/stores/reference/brokerStore.ts:262`) | The broker filter is not applied: `subtitle` becomes `risk.dashboardFullPortfolio` while it is on (l.1079), and `scopeValue` is `null` then (l.1077), because the summary follows the filter. `assetIds` are the summary's holdings (l.1076). |
+| `frontend/src/routes/(app)/brokers/[id]/+page.svelte:712-726` | `broker_ids: [broker.id]` | `scopeValue` is that broker's net worth (l.718); `internalSubset` prints `risk.internalSubset` (l.720). |
 
-- **No owned broker, no request.** The Dashboard host mounts the panel only when `canAsk` (l.226);
-  otherwise it shows `common.noData` (l.1056), or a spinner while the brokers load (l.1059).
+- **No owned broker, no request.** The Dashboard host mounts the panel only when `canAsk` (l.227);
+  otherwise it shows `common.noData` (l.1087), or a spinner while the brokers load (l.1090).
 - **Waves.** The controller opts into `includeDrawdownSummary`, `includeMonthlyVar` and
   `includeCurrentCompositionRiskReturn` (`levels/RiskLevelsPanel.svelte:85-103`; the options are in
   [The Panel Controller](../../../backend/risk/architecture.md#panel-controller)). The historical wave
@@ -282,8 +282,9 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
   month cards lead with the CVaR at 95 % (l.378); the VaR is computed as `secondaryLoss` but never drawn,
   and appears only as the histogram's cut. The 30-day horizon is the lab's: see [Requests](#requests),
   *Bad month*. A rung whose analytic failed is omitted, never zero-filled (l.363).
-- **Worst fall.** Depth and duration come from `drawdown_summary`, falling back to `historical_kpi`
-  (`levelHelpers.ts:396-397`, l.405). The *recovery needed* line is computed by the backend, not here:
+- **Worst fall.** The depth comes from `drawdown_summary`, falling back to `historical_kpi`
+  (`levelHelpers.ts:396-397`); the duration follows the depth's source (l.405), so the two never come
+  from different analytics. The *recovery needed* line is computed by the backend, not here:
   `drawdown_summary`'s `maximum_drawdown_trough_to_peak_ratio` (`required_recovery_return()`,
   `backend/app/services/financial_math/returns.py:239`: −50 % needs +100 %), read as it comes (l.408)
   and only on the summary's own depth (`summaryDepth`, l.396) for a fall above 0. No fallback: a depth
@@ -298,16 +299,18 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
 - **Tail measures as second rows.** The worst realization sits under the day card; drawdown at risk and
   conditional drawdown at risk under the worst fall (`L1HowMuchItHurts.svelte:161`, l.167, l.170;
   `buildTailMeasures()`, `levels/l1/l1Helpers.ts:281`). The ulcer index is the caption of the underwater
-  chart (`levels/l1/UnderwaterChart.svelte:69`).
-- **Histogram.** `buildReturnHistogram()` (`l1Helpers.ts:136`) flags the bin holding the VaR cut
-  (`holdsCut`, l.92), drawn amber, and the bins wholly beyond it (`belowCut`, l.101), drawn red; the
-  straddling bin is neither (`levels/l1/ReturnHistogram.svelte:51`). A bar's `title` gives its range
-  (l.79).
-- **Money.** `lossMoney()` is `scopeValue` × loss (`L1HowMuchItHurts.svelte:86`), shown only for a
-  positive `scopeValue` (l.65): on the Dashboard, never while a broker filter is on.
+  chart (`levels/l1/UnderwaterChart.svelte:65-70`, value at l.67).
+- **Histogram.** `buildReturnHistogram()` (`l1Helpers.ts:138`) flags the bin holding the VaR cut
+  (`holdsCut`, l.94), drawn amber, and the bins wholly beyond it (`belowCut`, l.103), drawn red. The
+  straddling bin is the amber `holdsCut` one and is never counted as tail: its `belowCut` is false
+  (l.175-176), as stated at `levels/l1/ReturnHistogram.svelte:18` and applied by `barClass()` (l.40-43).
+  A bar's `title` gives its range (l.68).
+- **Money.** `lossMoney()` is `scopeValue` × loss (`L1HowMuchItHurts.svelte:72`), shown only for a
+  positive `scopeValue` (l.65): on the Dashboard, never while a broker filter is on; on Broker Detail,
+  over that broker's own net worth (`frontend/src/routes/(app)/brokers/[id]/+page.svelte:718`).
 - **Labels and links.** Each card prints a `technicalName` line
-  (`frontend/src/lib/components/ui/display/RiskMetricCard.svelte:107`, keys `risk.levels.l1.technical.*`)
-  and links its own metric page (`DOC_PATHS` and `TAIL_DOCS`, `L1HowMuchItHurts.svelte:117`, l.127).
+  (`frontend/src/lib/components/ui/display/RiskMetricCard.svelte:108`, keys `risk.levels.l1.technical.*`)
+  and links its own metric page (`DOC_PATHS` and `TAIL_DOCS`, `L1HowMuchItHurts.svelte:103`, l.113).
 
 ### 🧩 Diversification {: #dashboard-diversification }
 

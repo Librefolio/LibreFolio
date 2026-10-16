@@ -6,6 +6,7 @@
  */
 
 import {isAxiosError} from 'axios';
+import {isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
 
 /** A catalogue key, or the server's own words when nothing better is known. */
 export type RegistrationErrorText = {key: string} | {raw: string};
@@ -35,6 +36,9 @@ function describeFieldErrors(errors: unknown[]): RegistrationErrorText {
 }
 
 export function describeRegistrationError(error: unknown): RegistrationErrorText {
+    // The hosting provider blocked the instance (A-13): an anonymous caller gets a 401, one with a session a 423 (H)
+    const status = isAxiosError(error) ? error.response?.status : undefined;
+    if (status === 401 || (isAxiosError(error) && isInstanceBlockedError(status, error.response?.data))) return {key: 'auth.instanceBlocked'};
     const detail: unknown = isAxiosError(error) ? error.response?.data?.detail : undefined;
     if (Array.isArray(detail)) return describeFieldErrors(detail);
     if (typeof detail === 'object' && detail !== null) {

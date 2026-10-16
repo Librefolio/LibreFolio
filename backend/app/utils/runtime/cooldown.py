@@ -235,11 +235,6 @@ class Cooldowns:
             return tuple(CooldownState(key=key, refusals=pause.refusals, remaining=max(0.0, self._left(pause, now)), trial_in_flight=self._trial_left(pause, now) > 0) for key, pause in self._pauses.items())
 
     def reset(self, key: Hashable) -> None:
-        """Forget one key."""
+        """Forget one key. Used by the tests only (N58 exception): the one public way to leave the process's instance clean after a refusal — ``succeeded`` keeps a running pause, ``released`` only frees the trial."""
         with self._lock:
             self._pauses.pop(key, None)
-
-    def clear(self) -> None:
-        """Forget every key."""
-        with self._lock:
-            self._pauses.clear()

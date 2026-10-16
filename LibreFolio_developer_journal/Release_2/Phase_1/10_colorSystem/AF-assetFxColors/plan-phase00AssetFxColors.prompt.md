@@ -688,6 +688,181 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
     > | AF-3 | 8 | `assets/+page` 4; `fx/+page` 4 |
     > | AF-5 | 18 | `PriceDataImportModal` 6; `EventDataImportModal` 12 |
     > | AF-7 | 12 | `AssetModalFooter` 8; `ScheduledInvestmentEditor` 4 |
+16. 🔄 (16/10, dalle 21:09) **I component tokens di file, media e menu contestuale** (richiesta del developer: sull'app
+    questi componenti mostravano ancora i colori vecchi, dai letterali di R-3 in `lib/theme/components/*.css`). Base
+    `fa16ce787`; fino all'ingresso sono il solo writer di `media.css`, `files.css`, `dialogs.css`. Il metodo è quello di
+    T (piano T, «I component tokens, parte 1–2c»), con gli skill `design-system` e `theme-roles`.
+    1. ✅ (21:09–21:2x) **Analisi**, approvata dal coordinatore (21:2x).
+       > **Note implementazione:** 336 token in **8** componenti: `ImageEditModal` 69, `FileUploader` 54,
+       > `FileEditModal` 47, `AssetPickerModal` 45, `ImageCropper` 24 (`media.css`); `FilePreviewModal` 36 e la pagina dei
+       > file 45 (`files.css`); `ContextMenu` 16 (`dialogs.css`). Nessuno di questi file ha righe nel baseline dei ruoli:
+       > il lavoro è tutto negli `<style>`. Nessun test legge i loro colori (`FilePreviewModal.test` legge `fontFamily`,
+       > `files-uploader.spec` overflow, raggio e misure).
+       >
+       > **⚠️ Fuori pista — il perimetro:** la tabella del coordinatore dava a `FilePreviewModal` tutti gli 81 token di
+       > `files.css`; 45 sono della pagina dei file (`routes/(app)/files/+page.svelte`). Il coordinatore ha verificato che
+       > nessun ramo la tocca e l'ha aggiunta.
+    2. ✅ (21:2x–21:33) **Gli 8 componenti sui ruoli**, con uno script che verifica il testo di partenza
+       (`files/ct/ct_transform.py` della sessione: ogni file uguale a HEAD; una mappa per token, con eccezioni per
+       selettore; una regola `.dark` si toglie solo se ogni sua dichiarazione legge un token `-dark`).
+       > **Note implementazione:** 296 letture sui ruoli (294 nelle regole chiare, più lo spinner della guardia e lo
+       > `style` del bottone che svuota l'URL), 129 regole `.dark` tolte, 7 import tolti; 334 token cancellati,
+       > `dialogs.css` e `files.css` cancellati, `media.css` ridotto a 2 token. La mappa, sui precedenti di T
+       > (`ConfirmModal`, `FileGrid`, `BrokerImportFilesModal`) e del sistema (`DataImportModal`, `SchedulerConfigModal`,
+       > `TabBar`):
+       > - **neutri:** divisori e cornici `border-subtle`; il menu contestuale `border-raised` con le due ombre su
+       >   `shadow-raised` (regola 9); titoli `text-primary`, testi 600–700 `secondary`, muted e faint `muted`; campi
+       >   `border-input` su `surface-field` col testo `primary` e il bordo `focus`; i pozzetti dei contenuti
+       >   dell'anteprima (pdf, griglia, tabella, testo, markdown) `surface-field`; lo stage dell'immagine, i piedi, il
+       >   pannello in basso dell'editor, le aree di caricamento, le testate di tabella e il blockquote `surface-panel`;
+       >   le righe al passaggio `surface-hover`; il bottone «svuota» della ricerca `surface-neutral`;
+       > - **controlli:** i primari `action`/`action-hover` con `on-action`; segmenti, preset e vista attivi `checked` con
+       >   `on-checked` (D-T16); i preset a riposo `surface-card` con `border-input` e testo `secondary`, al passaggio bordo
+       >   `focus` e testo `link`; la tab attiva `link` con la sottolineatura `focus`; lo spinner `link` (prima
+       >   `--color-libre-green`, una variabile della palette); la matita BRIM al passaggio `link` su `selected`;
+       > - **secondari:** quelli dei media e di `FileUploader`, su piedi e aree a `panel`, nello stile 2a di T
+       >   (`surface-card`, testo `secondary`, il bordo `subtle` disegnato dentro con `box-shadow: inset`; al passaggio
+       >   `surface-hover` e `primary`); quelli della modale della pagina dei file, su `card` e col bordo vero,
+       >   `surface-panel` con `border-subtle`, al passaggio `surface-neutral` (domanda aperta 3);
+       > - **stati:** i riquadri d'errore `danger-soft`/`-line`/`-on-soft`; lo stato d'errore `danger`; l'errore inline
+       >   ambra dell'anteprima `warning`; reset e ripristino `warning-soft` con `warning`, al passaggio `warning-line` con
+       >   `warning-on-soft` (domanda aperta 2); la conferma: titolo `warning`, bottone `warning`/`warning-hover` con
+       >   `on-status`; il bottone di pericolo `danger-solid`/`danger-hover` con `on-danger-solid`; il disabilitato
+       >   `surface-neutral` col testo `muted`; «rimuovi» e la voce di pericolo del menu `danger`, al passaggio
+       >   `danger-soft`;
+       > - **sull'immagine:** veli, barre e ombra fuori dal ritaglio `surface-overlay`; i bianchi (testo, bordi, maniglie,
+       >   contorno della selezione) `on-overlay`, con `color-mix` per l'alfa; i bottoni chiari `surface-card` al 90 % col
+       >   testo `secondary`, al passaggio `card` pieno e `link`; gli attivi `checked` al 90 % (l'occhio all'80 %) con
+       >   `on-checked`, al passaggio `checked` pieno; l'occhio dell'ellisse `surface-overlay` all'80 %, al passaggio pieno;
+       >   la guardia del cropper un velo `surface-card` al 55 %;
+       > - **markdown:** `pre` su `terminal-bg`/`terminal-text` (Q6), il codice inline su `surface-panel`.
+       >
+       > **Regole del sistema applicate** (approvate dal coordinatore, 21:2x): `::placeholder` su `text-placeholder` per i
+       > 4 campi col segnaposto (nome del file nei due editor, URL e ricerca del picker); la ricerca del picker come campo,
+       > come quella di `FileGrid` (`border-input-hover` al passaggio, `focus` su `:focus-within`: prima `outline: none`
+       > senza alcun segno del fuoco, regola 8); `color: var(--lf-text-primary)` sulla radice della pagina dei file
+       > (regola 3: il `main` della shell non dà un ruolo di testo); la select della barra della tabella nomina il suo
+       > testo `primary` (regola 1, campo nativo).
+       >
+       > **Due applicazioni in più delle stesse regole**, trovate rileggendo il diff (21:4x, dichiarate nel checkpoint):
+       > - la select del formato di `ImageEditModal` aveva `outline: none` senza alcun segno del fuoco: ora
+       >   `.format-select:focus` mette il bordo `focus`, come il campo del nome accanto (regola 8);
+       > - nella zona di rilascio di `FileUploader`, durante il trascinamento (`selected`), il suggerimento passa da `muted`
+       >   a `secondary` (regola 5, TC-15: il muted sulla tinta scende sotto 4,5:1).
+       >
+       > **Una correzione della mappa:** la select del formato era andata su `surface-field`; la tabella dà al suo
+       > grigio-100 `surface-panel`, come all'estensione di `FileEditModal` (lo stesso tassello attaccato al nome del
+       > file): ora è `surface-panel`, col bordo `input` e il testo `primary`.
+       >
+       > **Lasciato legacy:** l'icona immagine blu di `FileUploader`, una categoria (un colore per tipo di file):
+       > restano i suoi 2 token in `media.css`, con la regola `.dark` e l'import di `FileUploader`. Tiene anche verde il
+       > punto (e) del gate dei token quando T svuoterà `table.css`.
+       >
+       > **Tolti senza sostituto:** il bordo solo scuro della conferma di `ImageEditModal`, una seconda cornice dentro
+       > `ModalBase` (regola 9); il testo solo scuro del pdf, che eredita già `primary` da `ModalBase`; lo sfondo scuro
+       > del contenitore dei bottoni della vista, coperto dai bottoni.
+       >
+       > **Da rivedere** (nella raccolta per la designer, dal coordinatore): il file «modificato» di `FileUploader` su
+       > `info`, con la matita al passaggio `info-soft`/`info` (su un file modificato il passaggio resta `info-soft`: il
+       > segno è il colore dell'icona); il fondo del cropper su `terminal-bg` (scuro nei due temi, coperto dalla
+       > scacchiera del canvas; T può dare un ruolo «stage»); i bordi forti (cornice del pdf, barra del blockquote) su
+       > `border-input`, perché `subtle` sparirebbe in scuro; le voci di `ContextMenu` su `primary`, come gli altri menu;
+       > i trascinamenti sulla zona di caricamento su `selected` (col suggerimento a `secondary`, sopra); la zona di
+       > rilascio al passaggio su `surface-hover`, che oggi è uguale a `panel` (domanda aperta 3): il segno del passaggio
+       > resta il bordo `focus`; gli hover sull'immagine fatti con gradini d'alfa dello stesso ruolo.
+    3. ✅ (21:52–21:53) **Prove leggere**, una alla volta sotto `nice -n 19` (via del coordinatore alle 21:46: il carico,
+       fra 52 e 247, era soprattutto attesa di I/O).
+       > | Prova | Esito |
+       > |---|---|
+       > | Prettier `--check` sui 9 file | verde |
+       > | `theme-roles.mjs --check` | pulito (0 file sotto il record) |
+       > | Compilatore di Svelte 5.48, HEAD e albero a confronto (`/tmp/libreFolio_af_ct_compile.mjs`) | 0 avvisi prima e dopo negli 8 file; le 8 regole aggiunte arrivano nel CSS; `.dark` e `--lf-cmp-` restano solo nella regola dell'icona di `FileUploader` |
+       > | Vitest `themeComponentTokens.gate` | 18/18 |
+       > | Vitest `themeRoles.gate` | 80/80 |
+       > | Vitest `themeTokens.gate` | 21/21 |
+       > | `dark_only_check` e `native_field_check` | 0 e 0 sugli 8 file |
+       > | `git diff --check` | pulito |
+       >
+       > Porta 6157 libera: nessun server avviato.
+    4. 🔄 (16/10, 22:04–22:47) **Slot pesante E**, nella 6157 su `943d46378` (codice `4b1b74ab2`, docs `03324bac3`, base
+       merge con la punta `bf2c22791`): la 1.3 ha prestato il suo slot 2; nessun passo nuovo dopo le 22:45. Script
+       `/tmp/libreFolio_af_slotE.sh` (controlla HEAD, albero pulito e porta libera prima di partire), log in
+       `/tmp/libreFolio_af_slotE/`. Tutte le E2E con 1 worker: il carico a 1 minuto era fra 65 e 151 a ogni partenza.
+       > | Passo | Esito |
+       > |---|---|
+       > | `api sync` (la merge cambia 5 file dell'API) | rc 0 |
+       > | `front build --debug` | rc 0 |
+       > | `front check` | 0 errori, 0 avvisi |
+       > | `front-utility component-unit` | 163 file, 4.246/4.246 |
+       > | E2E `front-utility` files | 29/29 |
+       > | image-crop | **41/42**: F1 rosso, sotto |
+       > | files-uploader | 8/8 |
+       > | files-destructive | 6/6 |
+       > | files-pdf-offline | 1/1 |
+       > | `front-broker detail`, `front-asset asset-list`, `front-transaction tx-import-upload` | non partite (taglio) |
+       >
+       > Porta libera alla fine; HEAD `943d46378`, albero pulito.
+       >
+       > **⚠️ Fuori pista — `image-crop` F1 («ImageEditModal renders in dark mode»), triage con lo skill `test-triage`:**
+       > - l'asserzione (`expect(hasDark).toBeTruthy()`, riga 647) fallisce subito, dopo 8,7 s di corpo: non è un timeout;
+       > - lo screenshot mostra la pagina **in chiaro**, con la modale giusta sui ruoli: il `beforeEach` non ha prodotto il
+       >   tema scuro. Decide se cliccare il toggle con due `isVisible()` istantanei: sul toggle, senza attenderlo (carico
+       >   97), e sul primo elemento `[class*="dark"]` della pagina (`.first()` su un locatore non filtrato). F1 accetta come
+       >   prova lo stesso ripiego sulle classi, che la migrazione svuota: le classi `dark:` spariscono;
+       > - il lotto non c'entra: non cambia nessuna classe del DOM (0 righe con «dark» tolte; gli hash di scoping degli 8
+       >   componenti sono uguali prima e dopo), né il toggle, né `themeStore`, né il login;
+       > - **verdetto: assunzione** (§1 e §2 dello skill). La correzione: aspettare il toggle, leggere e asserire
+       >   `html.dark` con `toHaveClass`, togliere il ripiego sulle classi. La spec non è dell'area AF: la scrive test-author
+       >   con l'OK del coordinatore, poi F1 si rilancia da solo (AF-12).
+       >
+       > **⚠️ Fuori pista — una build in più:** `files-uploader` ha rifatto la build del frontend («Frontend sources changed,
+       > rebuilding...», circa 7 minuti col carico a 160), perché macOS ha toccato `frontend/src/.DS_Store` alle 22:29:54.
+       > Il controllo di freschezza del runner (`check_frontend_needs_build` in `scripts/cli_base.py`) confronta l'mtime di
+       > ogni file sotto `src/`, file nascosti compresi. Senza, `front-broker detail` sarebbe probabilmente partita prima
+       > del taglio (AF-13).
+       >
+       > **Restano per uno slot di recupero:** `front-broker detail`, `front-asset asset-list`,
+       > `front-transaction tx-import-upload`, e F1 da solo.
+    5. ✅ (16/10, 22:49–23:00) **La correzione di `image-crop` F1** (AF-12; OK del coordinatore alle 22:49, «nel tuo lotto,
+       con un commit solo test»): test-author, sulla sola spec `frontend/e2e/image-crop.spec.ts`, blocco «Dark Mode - Image
+       Crop Components».
+       > **Note implementazione:** prima ho verificato che nessun ramo locale ha commit sulla spec oltre il mio HEAD
+       > (`332b9e268`, letti solo i ref). Il `beforeEach` aspetta il toggle del tema (`toBeVisible`), legge la classe di
+       > `<html>`, clicca solo se non è scuro e asserisce `html.dark` con `toHaveClass`; F1 asserisce lo stesso con la
+       > modale aperta, dopo la navigazione a `/files` e il caricamento. Niente più ripiego sulle classi `dark:`, nessun
+       > `isVisible()` istantaneo usato come attesa. Il tema regge alla navigazione: `app.html` lo riapplica da
+       > `localStorage` prima del primo disegno, e lo cambiano solo il login, il toggle e il salvataggio delle preferenze.
+       > Prove leggere: Prettier verde; `tsc` sul solo file con le opzioni di `tsconfig.e2e.json` verde; `git diff --check`
+       > pulito. L'E2E va nello slot di recupero: il runner non filtra per titolo, quindi gira tutta `image-crop` (42
+       > test), che copre F1–F3 (lo stesso `beforeEach`).
+       >
+       > **Resta debole** (fuori dall'OK): F2 e F3 decidono con `isVisible()` istantanei se aprire le modali, e possono
+       > passare senza aprirne nessuna; nessuno dei due verifica il tema. Seguito possibile, annotato in AF-12.
+    6. ✅ (16–17/10, 23:37–00:09) **Slot di recupero**, nella 6157 su `285a1cb39` (base merge del coordinatore con la
+       punta `db506eb21`: FE8b, B, E e J della 1.3; i commit `f2f13184b` e `391087b35` dentro). Nessun passo nuovo dopo
+       le 00:30. Script `/tmp/libreFolio_af_slotR.sh`, con la scadenza assoluta (il taglio passava la mezzanotte); log in
+       `/tmp/libreFolio_af_slotR/`.
+       > | Passo | Esito |
+       > |---|---|
+       > | `api sync` | rc 0 |
+       > | `front build --debug` | rc 0 |
+       > | E2E `front-utility` image-crop (1 worker) | **42/42**, F1–F3 compresi, col nuovo `beforeEach` |
+       > | `front-broker detail` (1 worker) | 37/38; **rilanciata da sola: 38/38** |
+       > | `front-asset asset-list` (1 worker) | 30/30 |
+       > | `front-transaction tx-import-upload` (2 worker) | 10/10 |
+       >
+       > Porta libera alla fine; HEAD `285a1cb39`, albero pulito. Con lo slot E, tutte le spec dell'elenco del lotto sono
+       > verdi.
+       >
+       > **⚠️ Fuori pista — `brokers-detail`, «clicking the "Analyze Lots" row action opens the FIFO lots panel»:** un
+       > timeout nell'helper `goToBrokerWithHoldings`. Dopo il clic sulla card di Interactive Brokers la pagina del
+       > dettaglio non era montata entro 10 s: l'istantanea mostra ancora la lista dei broker, col carico fra 80 e 113.
+       > Rilanciata da sola (carico 59, 1 worker): 38/38 in 2,8 minuti, contro i 5,2 della prima corsa. Verdetto del
+       > triage: lentezza sotto il carico della macchina, non il lotto. Il lotto non tocca la lista dei broker né la
+       > navigazione, e gli altri 37 test passano con lo stesso helper.
+       >
+       > **⚠️ Fuori pista — AF-13 di nuovo:** macOS ha toccato `frontend/src/.DS_Store` alle 23:52:26, e `asset-list` ha
+       > rifatto la build all'avvio.
 
 ## 12. Dove guardarlo (per il developer)
 
@@ -716,4 +891,14 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
   - il banner d'errore, la cornice «Modifica dati», i pannelli segnali, misure e metadati;
   - nessun dato: i bottoni sincronizza e inserisci a mano;
   - la modale del cambio valuta, ora con la cornice `tone="danger"`.
-- I «da rivedere», lotto per lotto, sono nei passi 2–8, 12 e 13.
+- **E, i component tokens (passo 16)**, in chiaro e in scuro:
+  - `/files`: l'intestazione coi bottoni della vista, l'area di caricamento con `FileUploader` (zona di rilascio al
+    passaggio e trascinando un file, elenco dei file, un file modificato, errori, bottoni), la modale BRIM (riga
+    «assegna a tutti», righe dei file, matita al passaggio, conferma disabilitata), la conferma di chiusura;
+  - l'anteprima di un file: barra, interruttore della vista, immagine, pdf, tabella, testo, markdown (citazione,
+    tabella, codice e blocco di codice);
+  - l'editor dell'immagine (dall'avatar o da un'icona): guardia di caricamento, occhio dell'ellisse, preset, campi, piede,
+    conferma di chiusura; il cropper coi bottoni sopra l'immagine; l'editor del file e il picker degli asset (URL con
+    l'anteprima circolare, ricerca, griglia e lista);
+  - il menu contestuale di una tabella (clic destro su una riga), con la voce di pericolo.
+- I «da rivedere», lotto per lotto, sono nei passi 2–8, 12, 13 e 16.

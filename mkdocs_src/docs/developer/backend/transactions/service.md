@@ -140,7 +140,10 @@ parsed create and update. A `quantity` keeps 10 decimal places, a `cash.amount` 
 manual `cost_basis_override` — a per-unit price — 12, the scales of their `transactions`
 columns; any of them at most 15 significant digits: `decimal_limit_issue()`
 (`backend/app/db/precision.py`) takes the scale from the model and does not count
-trailing zeros. A value over a limit
+trailing zeros. An Auto cost basis (`cost_basis_mode` `auto` or `auto-detail`) is not
+checked: the batch recomputes its amount and reads only its currency (`auto_cost.py`),
+so the preview's average the Form sends back, 100 / 3 in full, is no value of the user's.
+A value over a limit
 is refused, never rounded: one issue per field, with code `decimalPlacesExceeded` or
 `significantDigitsExceeded` (both in `TXValidationCode`, listed by
 `GET /transactions/types` → `validation_codes`), params `{"max": N}` and `field`

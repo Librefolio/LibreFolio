@@ -6,7 +6,7 @@
 -->
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
-    import {formatIsoDay, type FileSetBadge} from '$lib/utils/transactions/importReportSets';
+    import {formatIsoDay, type FileSetBadge} from '$lib/features/transactions/import/importReportSets';
     import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
