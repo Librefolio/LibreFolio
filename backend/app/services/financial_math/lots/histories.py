@@ -19,7 +19,8 @@ from backend.app.schemas.portfolio import (
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.conversions import ConvertedClosure, FxRateResolver, convert_closure
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics
-from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.financial_math.lots.prices import opening_reference_price
+from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
 from backend.app.services.financial_math.valuation import compute_holding_value
 
@@ -217,7 +218,7 @@ def build_value_history(
     income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
     fees_prefix_by_lot: dict[int, dict[date_type, Decimal]],
     taxes_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-    estimated_mode: bool,
+    at_cost_until: date_type | None,
     quote_base_quantity: int,
     withheld: WithheldEconomics = NOTHING_WITHHELD,
 ) -> list[LotValueHistoryPoint]:
@@ -240,7 +241,7 @@ def build_value_history(
                 basis=basis,
                 market_price=market_prices.get(current_date),
                 current_date=current_date,
-                estimated_mode=estimated_mode,
+                at_cost=at_cost_until is not None and current_date <= at_cost_until,
                 quote_base_quantity=quote_base_quantity,
             )
             if snapshot is None:
@@ -271,21 +272,21 @@ def build_return_history(
     lots_by_id: dict[int, FifoLot],
     fragments_by_lot: dict[int, list[FragmentInterval]],
     market_prices: dict[date_type, Decimal | None],
-    price_lookup: PriceHistoryLookup,
+    price_series: AssetPriceSeries,
     fx_resolver: FxRateResolver,
     history_dates: Sequence[date_type],
     closures_by_lot: dict[int, list[LotClosure]],
     income_prefix_by_lot: dict[int, dict[date_type, Decimal]],
     fees_prefix_by_lot: dict[int, dict[date_type, Decimal]],
     taxes_prefix_by_lot: dict[int, dict[date_type, Decimal]],
-    estimated_mode: bool,
+    at_cost_until: date_type | None,
     quote_base_quantity: int,
     withheld: WithheldEconomics = NOTHING_WITHHELD,
 ) -> list[LotReturnHistoryPoint]:
     points: list[LotReturnHistoryPoint] = []
     for lot_id in selected_ids:
         lot = lots_by_id[lot_id]
-        raw_reference_price, raw_reference_currency, reference_date, reference_price_source = opening_reference_price(lot, price_lookup, quote_base_quantity)
+        raw_reference_price, raw_reference_currency, reference_date, reference_price_source = opening_reference_price(lot, price_series, quote_base_quantity)
         converted_reference = fx_resolver.convert(raw_reference_price, raw_reference_currency, reference_date)
         basis = _lot_value_basis(lot, closures_by_lot.get(lot_id, []), history_dates[-1], fx_resolver)
         if basis is None:
@@ -304,7 +305,7 @@ def build_return_history(
                 basis=basis,
                 market_price=market_price,
                 current_date=current_date,
-                estimated_mode=estimated_mode,
+                at_cost=at_cost_until is not None and current_date <= at_cost_until,
                 quote_base_quantity=quote_base_quantity,
             )
             if snapshot is None:
@@ -439,13 +440,14 @@ def _lot_snapshot_on_date(
     basis: _LotValueBasis,
     market_price: Decimal | None,
     current_date: date_type,
-    estimated_mode: bool,
+    at_cost: bool,
     quote_base_quantity: int,
 ) -> tuple[Decimal, Decimal, Decimal, Decimal] | None:
     """(open value, proceeds, total value, P&L) of a lot on a day; None when that day cannot be valued.
 
     With a market price, the open quantity at that price. Without one, a fully closed lot is worth its
-    proceeds and an asset with no price at all is estimated at cost; any other day is not valued.
+    proceeds and a LONG lot on a day with no observation on or before it (``at_cost``) is estimated at cost,
+    as the Dashboard values a holding (J-17); any other day — a price without a rate — is not valued.
     """
     if market_price is not None:
         return _value_snapshot_on_date(
@@ -468,7 +470,7 @@ def _lot_snapshot_on_date(
             return open_value, proceeds, total_value, total_value - basis.original_cost
         total_value = basis.short_proceeds - _prefix_value_on_date(basis.buybacks_by_day, current_date) - open_value
         return open_value, basis.short_proceeds, total_value, total_value
-    if estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
+    if at_cost and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
         open_value = open_quantity * (basis.original_cost / lot.original_quantity)
         proceeds = _prefix_value_on_date(basis.proceeds_by_day, current_date)
         total_value = open_value + proceeds

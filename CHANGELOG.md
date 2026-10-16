@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `./dev.py user set-email <username> <address>` changes an account's email address from the command line (sessions ended and verification reset on a real change, as from the Profile).
 - **Faster first broker import, optional**: `LIBREFOLIO_BRIM_PREWARM=true` prepares the broker-import processes at startup, with their plugins loaded, so the first import after a start is about 4 s faster, at the cost of about 80 MB of memory and 1.4 s of CPU at every server start. Off by default.
 - **The sync window warns before you start** when the period already holds stored prices or rates: it says how many of the assets or pairs have data there, which the sync replaces with the provider's values, manual edits included. On the Assets and FX pages, and on the detail pages of an asset or a pair.
+- **Test configuration says what it read**: only the last few days of prices, while a new asset gets its whole price history when it is created.
 
 ### 🔄 Changed
 
@@ -204,6 +205,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Yield on Cost: when corrections exceed the income of the last year, the holding shows "—" with the reason instead of an error.
 - Dashboard: holdings handed over at a cost (an adjustment that removes units, such as a transfer to a broker LibreFolio does not track) now leave at their declared value at that day's exchange rate, and the difference from their average cost counts as realized, as in the lots; that day no longer shows a return in TWRR and MWRR.
 - Holdings: when the net worth is zero or negative, the weight on net worth shows "—" instead of a meaningless percentage.
+- **Refresh on the broker list recalculates the cards**, as on the Dashboard and the broker page: before, it re-read the list but kept the cards' figures cached.
+- **Lots: a lot opened by an adjustment is measured against the asset's price on its opening day**: the market quote of that day, or else the last known price, including a buy or sale more recent than the last quote, converted at that day's rate. The lots also value a holding at its cost on the same days as the Dashboard, the days before the asset's first quote, buy or sale. The «No market price available» warning names exactly those days, and no longer appears for an asset priced by its buys and sells.
+- Accessibility: after prices catch up, the Dashboard updates its figures in the background without announcing itself as busy to screen readers.
+- Performance: a stock split no longer resets the holding period used for annualized returns.
 - **Live prices no longer get mixed up between assets.** With two or more scheduled investments, or two assets with the same URL or ISIN on one data provider but different provider parameters (a CSS scraper's selector, a Borsa Italiana market, a justETF currency), the live price of one could be shown for another for up to two minutes, and saved as its price for the day, by the pages or by the scheduler's price refresh. The nightly history sync rewrites the closing prices of the last two weeks, so the wrong ones correct themselves; on the days hit, the day's high and low can stay wider. Changing an asset's currency now also clears the prices fetched for it just before, so the next update asks the data provider again.
 - **Creating an asset from the Assets page syncs its prices once, not twice.** The asset form's full-history sync is now the only one, and the page shows its result. A scheduled investment created from the transaction form or the import wizard now gets its price history right away, instead of at the next sync.
 

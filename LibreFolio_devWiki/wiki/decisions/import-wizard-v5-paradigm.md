@@ -75,5 +75,5 @@ Key changes from v4:
 | Role | Path |
 |------|------|
 | v5 plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/plan-phase07Part5-v5-ImportWizard.prompt.md` |
-| Component | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| Component | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
 | BRIM API | `backend/app/api/v1/brokers.py` |

@@ -3664,3 +3664,10 @@ pending A7a. `check_source_paths.py`: 5 missing (8 occurrences) before and after
 50 paths, all present.
 Filed: [[domains/email]].
 Graph not rebuilt: not available in the worktree.
+
+## [2026-10-16] update | CP-7b: the lots follow the Dashboard's at-cost rule day by day
+The lots now value an open LONG lot at cost on every day with no observation on or before it, as the Dashboard does,
+and the lots warning names exactly those days, which closes J-28. A lot opened by an ADJUSTMENT takes the home's mark on
+its opening day as its reference, trades included, converted at that day's rate.
+Updated: [[decisions/adjustment-is-never-a-price]].
+Graph: not updated; graphify is not available in this worktree.

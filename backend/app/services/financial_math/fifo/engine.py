@@ -418,11 +418,11 @@ class FifoLotEngine:
     def _handover_currency(self, tx: FifoInputTransaction, fragment: FragmentInterval) -> str | None:
         """The currency in which an ADJUSTMENT-out hands ``fragment`` over.
 
-        With a cost basis, every fragment leaves at the row's per-unit cost — the average cost the units leave
-        with, not the fragment's own FIFO cost — so the lots realize what the average cost does. That cost is in
-        ``cost_basis_currency``, or in the lot's when it has none. Without a cost the units leave at 0, in the
-        lot's currency. Another currency than the lot's leaves the native realized P&L unknown; the lots analysis
-        converts each leg at its own date (decision 26).
+        With a cost basis, every fragment leaves at the row's per-unit cost basis — the value the row hands over, as
+        the Dashboard reads it (J-24) — not at the fragment's own FIFO cost. That cost is in ``cost_basis_currency``,
+        or in the lot's when it has none. Without a cost the units leave at 0, in the lot's currency. Another currency
+        than the lot's leaves the native realized P&L unknown; the lots analysis converts each leg at its own date
+        (decision 26).
         """
         lot_currency = self._lots[fragment.lot_id].currency
         if tx.cost_basis_override is None:

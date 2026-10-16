@@ -441,6 +441,10 @@ that LibreFolio emails to the address of the account. The switch is in **Setting
 - **Once the link is opened**, the account is active, and its owner is back on the login page with a
   confirmation. What the person sees, step by step: *If LibreFolio Asks You to Confirm Your Email*
   in [Getting Started](../user/getting-started.md).
+- **While a hosting provider blocks the instance**, the page of the link says so and offers no
+  retry: the link is not used up, and works again once the instance is unblocked, as long as it has
+  not expired; otherwise signing in offers a new one
+  ([Hosting for Others](hosting_providers.md#instance-block)).
 
 ### 🔀 Turning It On and Off {: #verification-switch }
 

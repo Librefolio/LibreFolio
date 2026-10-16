@@ -18,7 +18,8 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoLot, FragmentInterval, LotClosure
-from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.financial_math.lots.prices import opening_reference_price
+from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
 from backend.app.services.fx.conversion import convert_bulk
 
@@ -123,7 +124,7 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
     lots_by_id: dict[int, FifoLot],
     selected_ids: Sequence[int],
     transactions: Sequence[Transaction],
-    price_lookup: PriceHistoryLookup,
+    price_series: AssetPriceSeries,
     prices: Sequence[PriceHistory],
     fragments: Sequence[FragmentInterval],
     events: Sequence[FifoEvent],
@@ -138,7 +139,7 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
         for lot_id in selected_ids:
             lot = lots_by_id[lot_id]
             fx_resolver.need(lot.currency, lot.opening_date)
-            raw_reference_price, raw_reference_currency, reference_date, _reference_source = opening_reference_price(lot, price_lookup)
+            raw_reference_price, raw_reference_currency, reference_date, _reference_source = opening_reference_price(lot, price_series)
             if raw_reference_price is not None and raw_reference_currency is not None:
                 fx_resolver.need(raw_reference_currency, reference_date)
             for closure in [c for c in closures if c.lot_id == lot_id]:

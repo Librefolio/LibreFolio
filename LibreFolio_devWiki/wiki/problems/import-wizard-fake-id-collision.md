@@ -45,6 +45,6 @@ a nonsensical portfolio value (e.g. `BTP PIU 25-2-33 CUM` at `-917.687,72 € / 
 ## Source files
 | Role | Path |
 |------|------|
-| Fix (merge + remap) | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Fake-id range util | `frontend/src/lib/utils/brim/isFakeAssetId.ts` |
+| Fix (merge + remap) | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |
+| Fake-id range util | `frontend/src/lib/features/transactions/import/isFakeAssetId.ts` |
 | Decimal-input fix | `frontend/src/lib/utils/core/parseDecimalInput.ts` |
