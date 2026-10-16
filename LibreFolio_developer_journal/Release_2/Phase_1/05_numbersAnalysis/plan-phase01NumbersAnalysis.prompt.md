@@ -2812,6 +2812,8 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
 - **Ingresso** (16/10 03:35–03:50, `nice -n 10`, carico 29–59): golden 1/1, `services financial-math` 392,
   `test_portfolio_service` 98, `api portfolio` 51, `mkdocs build` stretto verde, `check-links` 96. B11 nella sezione I la
   chiude il coordinatore.
+- ✅ **Integrato** in `dev_release2` (treno 87, merge `628e3e49e`), con la riga 🐛 nel CHANGELOG; B11 chiusa dal
+  coordinatore nella sezione I (messaggio arrivato alle 06:19).
 
 #### CP-10a — un solo Rolling Return (via del coordinatore, 16/10 03:35: «mandami le due righe e parti»)
 
@@ -2974,3 +2976,283 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
 - **Rinviato dopo il fermo** (via del coordinatore, verso le 06:45): `mkdocs build` stretto (90–100 s, non stava prima
   delle 05:20), `check-links`, `translate-validate`; poi gli slot pesanti: E2E della pagina asset con `--workers 2` e
   `all-backend --workers 2`.
+
+#### Checkpoint intermedio CP-10a ✅ (2026-10-16) — committato dal coordinatore (`af919560c`, journal `dff209a86`)
+
+- Chiesto dal coordinatore durante il fermo dei colori (05:19): lista FROZEN di 51 percorsi, codice (47) separato dal
+  giornale (4). HEAD `dff209a86` verificato (genitori `af919560c` ← `079e23b9c`), worktree pulito.
+- **Non è un ingresso**: dopo il fermo restano `mkdocs build`, `check-links`, `translate-validate`, la E2E della pagina
+  asset con `--workers 2` e `all-backend`, poi l'handoff finale con la riga del CHANGELOG. C-71 la chiude il coordinatore
+  all'ingresso.
+
+#### CP-7 — decisione 26: ogni gamba del lotto nella sua valuta e alla sua data (analisi, 16/10 05:20, sola lettura)
+
+- Via del coordinatore (05:19) per la sola analisi, scritta solo nel piano; niente codice né rossi fino al via.
+- **Stato reale** (letto su `dff209a86`, 05:20–05:30, nessun file toccato):
+  1. **Motore** (`fifo/engine.py:633-666`, `_close_position_piece`): `realized_pnl = q × (prezzo di chiusura − costo del
+     frammento)` e `proceeds = q × prezzo di chiusura`, numeri nudi. Il prezzo di chiusura è nella valuta della riga che
+     chiude (SELL e BUY: `amount / quantity` in `tx.currency`, `:222-224`; rettifiche: `cost_basis_override` nella sua
+     valuta), il costo del frammento in quella del lotto (`FifoLot.currency`, che un trasferimento non cambia).
+     `LotClosure` (`fifo/models.py:172-183`) non porta la valuta della chiusura. Ripiego di CP-16
+     (`_handover_unit_price`, `:413-425`): col costo in un'altra valuta il pezzo esce al suo costo FIFO.
+  2. **Conversione dei lotti**: `lots/histories.py` converte proventi e realizzato con la valuta **del lotto** alla data
+     di chiusura in quattro punti (`known_realized_pnl` :163-171, `known_cumulative_proceeds` :174-184,
+     `_closure_proceeds_prefix` :447-464, lo storico di performance :104 con `lot.currency or asset_currency`); le righe
+     di chiusura dello storico eventi idem, prezzo di chiusura compreso (`lots_analysis_service.py:1040-1042`). La gamba
+     del costo è già giusta: valuta del lotto alla data d'apertura (`_lot_value_basis` :386-401, sintesi :730).
+  3. **Fabbisogno dei cambi** (`lots/conversions.py`): `lot.currency` alla data di chiusura, in tre raccolte (:90-91,
+     :102-104, :176-180).
+  4. **Sintesi** (`lots_analysis_service.py:729-756`): `market_pnl = pnl − realized`; con 1 e 2 un lotto estero chiuso
+     ha «di mercato» ≠ 0 (esempio D-J1).
+  5. **T-B6**: `reference_price_source` passa senza condizione (`:814`); la regola giusta è in `histories.py:303` (None
+     se il rendimento relativo manca). Vocabolario: `exact | fallback | unavailable` (`schemas/portfolio.py:736`).
+  6. **V1**: `PriceHistoryLookup` (`lots/prices.py:26-50`: ultima chiusura salvata, senza scambi né staleness, flag
+     exact/fallback) decide il modo stimato (`:128`), il riferimento che il motore dà ai lotti aperti da una rettifica
+     (`:132-138`) e `opening_reference_price` (sintesi `:732`, storico `histories.py:267`). I prezzi di mercato vengono
+     già dalla casa (`build_asset_price_series`, `:299`). Un lotto aperto da un BUY ha come riferimento il proprio
+     prezzo; solo quelli aperti da una rettifica usano il mercato.
+  7. **AI Export**: `asset_core.py:561-562` e `payloads/portfolio_broker.py:773-776` leggono la sintesi già convertita:
+     builder invariati. Regola delle versioni («never for new values through an unchanged builder»): **nessun aumento**;
+     una sonda mirata come prova. La riga 4 dell'inventario del punto 26 si corregge così.
+  8. **Dashboard** (riferimento): `RealizedSale` (`portfolio/daily_state.py:870-886`) converte i proventi alla data
+     della vendita, il costo è quello storico del pool WAC; `proceeds − cost` sta due volte nel servizio
+     (`portfolio_service.py:660`, `:1574`), dopo `_period_realized_sales` (`:276-282`), che lascia fuori le vendite con
+     proventi o costo ignoti (la qualità dei dati le segnala). Nessun difetto lì.
+  9. **J-14**: la G/L % delle posizioni è già nella casa (`gain_loss_ratio`, CP-4: `portfolio_service.py:717`, `:831`,
+     `:913`). Resta la copia di W, `brokers/summary.py:136-141` (`gain / costo × 100`, senza guardia di segno):
+     `gain_loss_ratio(..., positive_base=False)` dà lo stesso valore. La condizione del coordinatore (N1 di W in
+     `dev_release2`) è soddisfatta.
+- **Proposta: due lotti.**
+  - **CP-7a** (decisione 26, approvata): T-B5 secondo D-J1 B, la fine del ripiego di CP-16, T-B6, J-14 (la sottrazione
+    nella casa e la copia di W, col diff a W).
+  - **CP-7b** (V1) **dopo J-17**. La casa prende come osservazione TRADE ogni rettifica con un costo
+    (`price_marks.py:307-309`), che è proprio la domanda di J-17. Letto dalla casa, il riferimento di un lotto aperto da
+    una rettifica diventa la media degli scambi del giorno (rettifica compresa) o l'ultima osservazione, scambio o
+    quotazione; oggi è l'ultima chiusura di mercato. Fatto prima di J-17, quei valori cambierebbero due volte.
+- **Disegno di CP-7a** (decisioni notturne, da rivedere):
+  1. **Il motore resta senza cambi.** `LotClosure.close_currency` = la valuta del prezzo di chiusura (SELL e BUY: quella
+     della riga; rettifica in entrata che chiude uno short: quella del costo; rettifica in uscita: `cost_basis_currency`
+     o quella del lotto). Il realizzato nativo della chiusura, e i nativi del lotto lungo (realizzato e proventi
+     cumulati), diventano `None` quando le valute differiscono: il motore non sa sottrarle. Nell'app nessuno legge i
+     nativi di `FifoLot` di un lotto lungo; quelli della chiusura li leggono solo le conversioni, che passano alle gambe.
+  2. **Un solo punto di conversione di una chiusura**, nella casa (`financial_math/lots/conversions.py`): proventi e
+     prezzo di chiusura dalla valuta della chiusura alla data di chiusura; costo dalla valuta del lotto alla data
+     d'apertura; realizzato = proventi − costo (lungo), o proventi d'apertura − costo di chiusura (corto); ignoto se
+     manca un cambio, mai calcolato dal nativo. Lo usano i quattro lettori di `histories.py`, le righe di chiusura e le
+     tre raccolte dei cambi.
+  3. **In comune con la Dashboard** («fattorizzare e ottenere il meglio dalle 2»): la regola delle date dei cambi è la
+     stessa, e il pool WAC la applica già all'acquisto. In comune va la sottrazione con la sua politica sull'ignoto,
+     `realized_gain(proceeds, cost)` in `returns.py` (None se una gamba manca), usata da `portfolio_service.py:660`,
+     `:1574` e dalla conversione dei lotti. Resta diversa, di proposito, la somma: la Dashboard somma le vendite note e
+     segnala le altre; un lotto con una chiusura ignota ha il realizzato ignoto (classe (c) del 43, col perché scritto
+     nella casa).
+  4. **Ripiego di CP-16 tolto**: la rettifica in uscita col costo esce sempre al costo della riga, nella sua valuta.
+- **Valori che cambiano** (dichiarati prima):
+  - lotti in una sola valuta estera, chiusi in tutto o in parte: cambia il realizzato, di
+    `costo chiuso × (cambio alla chiusura − cambio all'apertura)`; «di mercato» compensa e il totale non cambia; un lotto
+    chiuso ha «di mercato» 0. Vale per sintesi, righe di chiusura e AI Export (lotti dell'asset e del broker);
+  - lotti chiusi in un'altra valuta (trasferiti fra broker di valute diverse): cambiano proventi, realizzato e totale,
+    oggi sbagliati;
+  - rettifiche in uscita col costo in un'altra valuta (ripiego di CP-16): proventi = costo della riga al cambio della
+    data; realizzato = proventi − costo del lotto al cambio dell'apertura (oggi 0);
+  - T-B6: `reference_price_source` diventa null quando il riferimento convertito manca (API e AI Export);
+  - nessun cambio sulla Dashboard (`realized_gain` dà lo stesso numero) né sulla pagina del broker (la G/L % di W).
+- **Rossi** (test-author, prima della cura): R1 lotto USD chiuso (esempio D-J1: realizzato −1 €, di mercato 0, proventi
+  99 €); R2 chiusura parziale (realizzato a gambe, «di mercato» = il non realizzato della parte aperta, identità del
+  totale); R3 valute miste dopo un trasferimento (proventi 99 €, realizzato −1 €, `close_currency` «USD», realizzato
+  nativo None, prezzo della riga convertito dall'USD); R4 rettifica in uscita col costo in un'altra valuta (fine del
+  ripiego); R5 lotto corto; R6 cambio mancante alla chiusura → ignoto, coppia nella qualità dei dati, mai il nativo; R7
+  parità con la Dashboard (un lotto solo, venduto tutto: stesso realizzato); R8 T-B6; R9 la G/L % di `brokers/summary.py`
+  uguale con `gain_loss_ratio`, base negativa compresa; `realized_gain` coi casi limite.
+- **Superfici**: `fifo/models.py`, `fifo/engine.py`, `lots/conversions.py`, `lots/histories.py`,
+  `lots_analysis_service.py`, `returns.py`, `portfolio_service.py` (2 righe); **di W** `brokers/summary.py` (1 riga, diff
+  da approvare). Test: i sei file che leggono i nativi (~35 letture) più i rossi. Doc EN: dev `lots_analysis_service.md`
+  (conversioni :143-144; il «Known limit» :163-170 si toglie), `fifo_lot_engine.md:259` (la regola della consegna),
+  `financial_math.md` (mappa); teoria `fifo-lot-analysis.en.md` (la regola dei cambi, con debito di traduzione);
+  `financial-math.instructions.md`. devWiki: nessuna pagina su T-B5; una «problems» nuova, già risolta, e i rimandi in
+  F-054 e F-056 se parlano del realizzato.
+- **AI Export**: nessuna versione; sonda mirata (skill delle sonde) su un DB della corsia con un lotto USD chiuso: righe
+  dei lotti di asset e broker col realizzato nuovo e il non realizzato 0.
+- **Cancelli**: `services roi-fifo-utils`, `services lots-analysis-pure`, `services financial-math`, `services broker`,
+  `api portfolio`, `api brokers`, `test_portfolio_service`; `all-backend` su slot; `mkdocs build` e `check-links`.
+- **Conflitti**: W (`brokers/summary.py`, una riga); X, Y e colori nessuno (il frontend dei lotti non cambia: cambiano
+  solo i numeri).
+- **CHANGELOG** (🐛 Fixed): «Lots in a foreign currency: realized P&L now converts the cost at the purchase rate and the
+  proceeds at the sale rate, as the Dashboard does. A closed lot keeps no market P&L, and a lot sold in a currency other
+  than the one it was bought in shows the right proceeds.»
+- **Peso**: CP-7a medio; CP-7b basso-medio.
+- **Via del coordinatore** (16/10 ~05:31): **CP-7a**, rossi e codice durante il fermo, solo scrittura. Divisione
+  approvata: CP-7b (V1) dopo J-17, che è del developer (lista P2). `brokers/summary.py:141` lo scrivo io in CP-7a; W lo
+  avvisa il coordinatore. AI Export senza aumento: ok, con la sonda mirata dopo le 06:45. Le 4 scelte tecniche vanno
+  nella lista del developer.
+- **Procedura per le prove di CP-10a dopo le 06:45** (coordinatore): le prove di CP-10a girano su CP-10a da solo
+  (`dff209a86`). Prima salvo CP-7a come patch fuori dal repo e lo tolgo con `git apply -R` (solo i miei cambi), poi
+  prove e slot di CP-10a, poi riapplico. Scelta mia: **due patch**, i test e il codice, così dopo CP-10a posso mostrare i
+  rossi rossi (solo la patch dei test) prima di riapplicare la cura. I file nuovi non tracciati li salvo a parte.
+- **Rossi** (test-author, in corso dalle ~05:36, senza lanciare nulla): R1–R9 nei file di test del motore, di CP-16, dei
+  lotti puri, della casa (`realized_gain`), più la parità con la Dashboard e il perno della G/L % del broker.
+- ✅ **Codice scritto** (16/10 05:36–05:40, solo scrittura, nessuna prova; da provare dopo CP-10a):
+  - `fifo/models.py`: `LotClosure` con docstring e `close_currency: str | None = None` (ultimo campo, i costruttori
+    esistenti restano validi); `realized_pnl: Decimal | None`; in `FifoLot` `realized_pnl` e `cumulative_proceeds`
+    `Decimal | None`.
+  - `fifo/engine.py`: SELL e BUY passano la valuta della riga; la rettifica in entrata che chiude uno short la valuta
+    del suo prezzo (`price_currency`, la stessa del lotto che apre: una riga sola invece di due); la rettifica in uscita
+    chiude al prezzo dell'evento (il costo, o 0) con `close_currency_of` → `_handover_currency` (al posto di
+    `_handover_unit_price`: **fine del ripiego di CP-16**); `_consume_broker_fragments` perde `close_unit_price_of`;
+    `_close_position_piece` confronta le valute (None = valuta del report) e lascia `None` il realizzato nativo di una
+    chiusura in un'altra valuta, e i nativi del lotto lungo da lì in poi.
+  - `lots/conversions.py`: `ConvertedClosure`, `convert_closure`, `need_closure_rates`; le tre raccolte dei cambi la
+    usano.
+  - `lots/histories.py`: `known_realized_pnl`, `known_cumulative_proceeds`, `_closure_proceeds_prefix` e il flusso
+    della SELL nello storico di performance passano da `convert_closure`.
+  - `lots_analysis_service.py`: `_build_closure_rows` da `convert_closure`; T-B6 alla riga della sorgente del
+    riferimento.
+  - `returns.py`: `realized_gain`; `portfolio_service.py:660`, `:1574` la usano (stesso numero: le vendite ignote le
+    toglie già `_period_realized_sales`).
+  - `brokers/summary.py:141` (W): `gain_loss_ratio(..., positive_base=False)`, stesso valore.
+  - Mappe (regola 5): docstring di `financial_math/__init__.py`, `financial-math.instructions.md` (righe di `returns.py`
+    e `lots/`), `backend.instructions.md`, albero di `developer/backend/financial_math.md`.
+- **Decisione notturna, da rivedere** (seguito, CP-7a):
+  5. **Valuta assente**: una riga senza valuta conta nella valuta del report, come la legge il resolver dei lotti. Lo
+     storico di performance usava la valuta dell'asset per un lotto senza valuta; ora usa la valuta della SELL, che
+     c'è sempre (`cash` porta insieme codice e importo, `schemas/transactions/transactions.py:210`).
+- **Docs** (docs-writer, in corso, senza build né stamp): dev `lots_analysis_service.md` e `fifo_lot_engine.md`, teoria
+  `fifo-lot-analysis.en.md` (con debito di traduzione), più ogni altra frase della regola vecchia.
+- ✅ **Docs** (docs-writer, finito 05:53; niente build né stamp): dev `transactions/lots_analysis_service.md` (sezione
+  nuova `#closure-conversion`; via il «Known limit» e il paragrafo del ripiego; T-B6), dev
+  `transactions/fifo_lot_engine.md` (`close_currency`, nativi `None`, sezione `#closure-currency`, consegna al costo
+  riscritta su `_handover_currency`); teoria `fifo-engine/fifo-lot-analysis.en.md` (sezione `#lots-in-another-currency`
+  con l'esempio D-J1), e, trovate col grep, `fifo-engine/index.en.md` e
+  `instruments/transaction-types/adjustment.en.md` (la nota del ripiego diceva il contrario). Debito di traduzione: le
+  tre pagine di teoria.
+- **Trovati dal docs-writer** (verificati sul codice):
+  1. **Lotti corti: il P&L ignora i riacquisti** (`lots_analysis_service.py` sintesi, `histories.py`
+     `_value_snapshot_on_date`, `_lot_snapshot_on_date`): `P&L = proventi d'apertura − valore aperto`, senza togliere
+     quanto sono costati i BUY che chiudono. Vendi 10 @ 100, ricompri 5 @ 90, prezzo 90: P&L 550 invece di 100; chiuso
+     del tutto: «di mercato» = il costo dei riacquisti invece di 0. Già prima di D-J1. → **dentro CP-7a** (decisione 6).
+  2. Il costo d'una rettifica in uscita senza valuta: i lotti usano quella del lotto, lo storico di performance quella
+     dell'asset. Dall'API il costo arriva come `Currency` (codice e importo insieme,
+     `schemas/transactions/transactions.py:226`; `auto_cost.py:147-148` scrive i due insieme): non succede. Nessuna voce.
+  3. **Consegna al costo d'un titolo estero: lotti ≠ Dashboard** → J-24 (decisione del developer).
+- **Decisione notturna, da rivedere** (seguito, CP-7a):
+  6. **Lotti corti, curati in CP-7a**: stesse funzioni e stessa conversione del lotto (il costo del riacquisto è il
+     `cost` di `ConvertedClosure`). Il P&L d'un corto = proventi d'apertura − riacquisti fino a quel giorno − valore
+     aperto: `known_buyback_cost` in `histories.py` per la sintesi; nella serie dei valori i riacquisti hanno la loro
+     somma progressiva (`buybacks_by_day`, `_closure_prefix` generico al posto di `_closure_proceeds_prefix`), e la
+     serie si ferma il giorno prima d'un riacquisto senza cambio, come i proventi d'un lungo. Rosso R10 al test-author.
+     **Valori che cambiano**: solo i lotti corti con riacquisti (broker con lo short attivo): P&L, valore totale e «di
+     mercato» nella sintesi e nelle serie di valore e rendimento; un corto chiuso ha «di mercato» 0.
+- ✅ **Rossi scritti** (test-author, finito ~06:05; nessun file nuovo, niente da registrare nel runner):
+  - `test_fifo_lot_engine.py` — `TestCloseCurrency` (valuta della SELL; lotto EUR venduto in USD dopo un trasferimento:
+    realizzato nativo None; nativi del lotto None dopo una chiusura mista; BUY e rettifica in entrata che chiudono uno
+    short); i builder prendono `currency` (default «EUR», i test esistenti non cambiano).
+  - `test_fifo_adjustment_out_with_cost.py` — regola 3 e `TestCurrencyOfTheHandover` riscritte (fine del ripiego).
+  - `test_lots_analysis_pure.py` — `TestConvertClosure` (R1, R2, R3, short, R6), `TestTheLotsRealizedPnlAndProceeds`,
+    `TestTheLotSummaryOfASoldLot`, `TestTheClosureRowsOfTheLotHistory`, `TestTheRatesAClosureNeeds`,
+    `TestTheCashFlowOfASale`, R8 (T-B6) in `TestBuildLotSummaries`, R10 `TestShortLotsSubtractTheirBuyBacks`; sei test
+    esistenti con chiusure USD a mano ora dichiarano `close_currency="USD"`, due test dei corti allineati a R10.
+  - `test_returns_rebase_and_ratios.py` — `TestRealizedGain` (10 casi).
+  - `test_lots_analysis_service.py` — R7 parità con la Dashboard (cambi 1,25 e 1,28 USD per euro, esatti: oggi 78,125
+    contro 59,375); `test_buy_sell_summary_converts_to_target_currency` realizzato 156 → 196.
+  - `test_broker_service.py` — BR-U-094, perno R9 (verde prima e dopo: 20,00; costo 0 → None; costo negativo −1300,00).
+  - Prima della cura i test che usano funzioni nuove falliscono con AttributeError (modulo letto al momento del test,
+    come in `test_returns_rebase_and_ratios.py`), così i file si raccolgono.
+- **Decisione notturna, da rivedere** (seguito, CP-7a):
+  7. **Rendimento dei corti**: lo storico dei rendimenti leggeva `(valore totale + entrate) / costo − 1` anche per un
+     corto, il cui valore totale è il P&L: un corto in pareggio dava −100 % (`test_short_lot_return_history_computes_total_return`
+     lo fissava a −1). Ora un corto si legge sul nozionale venduto, come la sintesi (`total_pnl / opening_value`): in
+     pareggio 0. Il ramo dei lunghi resta identico (nessun Decimal esatto si sposta). **Valori che cambiano**: lo storico
+     dei rendimenti dei lotti corti (rendimento totale e netto), oggi spostato di −100 punti.
+  - Fabbisogno di cambi dello storico di performance: `need_closure_rates` chiede anche il cambio d'apertura, che
+    `convert_closure` legge; non registrato non si caricherebbe e risulterebbe mancante. Tenuto.
+- ✅ **Rendimento dei corti nei test** (test-author, ~06:20): `test_short_lot_return_history_computes_total_return`
+  fissa i tre giorni (0, 50/600, 100/600, a 12 decimali: `(600 + 100) / 600 − 1` e `100 / 600` differiscono
+  all'ultima cifra di 28; prima −1, −0,92, −0,83); il test puro del corto chiuso usa un doppio coerente (nozionale 1500,
+  tutto ricomprato a 12): 0,2 esatto (prima 0: il riacquisto mai tolto).
+
+#### CP-3 — U5a: contributi e variazione a 1 giorno dai prezzi del motore (analisi, 16/10 06:20, sola lettura)
+
+- Via del coordinatore (~06:19) per la sola analisi, nel piano. Base `dff209a86`; CP-7a in backup
+  (`/tmp/libreFolio_j/cp7a/backup-0620/`, i tre `git apply --check -R` verdi).
+- **Stato reale** (`portfolio_service.py`):
+  1. **B8, contributi** (`get_positions_contribution`, :1467): il motore gira da t=0 (`date_from=None`, :1500-1507),
+     quindi `position_states_start` è al primo giorno, non all'inizio del periodo; solo `position_states_end` (a
+     `date_to`) coincide col confine. Per ogni posizione i contributi rifanno per conto loro:
+     - la quantità ai confini, sommando `quantity × quota` delle righe (:1590-1600);
+     - il prezzo ai confini con `_get_price_at_date` (:489, l'ultima chiusura salvata: niente segni di scambio, niente
+       staleness, niente ripresa attraverso gli split dei segni di scambio), a :1617 e :1634;
+     - la conversione una a una con `_convert_to_base` (:507, una chiamata al DB per importo), all'inizio alla data del
+       periodo ma alla fine **alla data dell'osservazione** (`price_date_e`, :1641): un prezzo vecchio porta il cambio
+       vecchio, mentre il motore converte al giorno della valutazione.
+     La regola della casa c'è già: `DailyStateBuilder._market_value_for(asset, qty, dt)` (`portfolio/daily_state.py`), il
+     «single valuation brain» (segno di mercato o di scambio, staleness, split dei segni di scambio, cambio al giorno
+     `dt`), usato da `_build_position_state` per le istantanee.
+  2. **TRANSFER nei contributi**: la quota di costo passa al broker che riceve, e l'unrealized si sposta al costo: il
+     broker che manda perde tutto l'unrealized d'inizio periodo, quello che riceve parte dal costo storico e prende anche
+     il guadagno maturato prima del trasferimento. Il totale torna, la ripartizione per broker no.
+  3. **V2/P2, variazione a 1 giorno** (:721-747): oggi il segno del motore (`ps.valuation_effective_unit_price`, al
+     cambio di oggi), ieri `_get_price_at_date(d − 1)` (chiusura grezza, convertita alla data dell'osservazione). Un
+     prezzo di ieri vecchio di settimane porta il cambio di allora; un titolo senza quotazioni ma con scambi non ha
+     variazione; uno split di oggi legge −50 % (la quantità di oggi per il prezzo di ieri).
+  4. **R4** (:1658-1700): % del P&L di periodo su `|valore d'inizio|`, annualizzato su una base di ripiego (`cb_end`
+     se l'inizio è 0) e su una finestra (lotto aperto più vecchio, chiusi: capitale impiegato e tempo di volo): regole
+     che la casa non ha (classe (b) del 43). Nessun valore cambia spostandole; cambiano solo con B8 (il valore d'inizio).
+  5. **B19** (:1766): `set(unalloc_income) | set(unalloc_fees)` perde l'ordine d'accesso fissato a :1530-1531.
+  6. **B12**: contraddetta di nuovo, i tre chiamanti di `_get_transactions` passano `date_to` (:647, :1314, :1546); con
+     la cura di B8 la ripresa delle quantità dei contributi sparisce del tutto. Da chiudere nella sezione I.
+  7. Lettori: solo l'API del portafoglio (`schemas/portfolio.py`) e la Dashboard; **l'AI Export non li legge**.
+- **Disegno proposto** (scelte tecniche, da fissare coi rossi):
+  1. **Istantanee del motore ai confini**: `PortfolioCalculationEngine.calculate(..., period_start=)` aggiunge
+     `position_states_at_period_start`, costruite con `_build_position_state` alla fine del giorno `date_from` (stessa
+     quota, stesso costo del pool). `get_report` passa l'inizio del suo periodo al motore condiviso. I contributi leggono
+     quantità, valore e costo ai due confini dalle istantanee: via `_get_price_at_date`, `_convert_to_base` e la ripresa
+     delle quantità (anche il rischio di B12).
+  2. **Variazione a 1 giorno**: due valutazioni del motore della stessa posizione, a `d` e a `d − 1`, ognuna al suo
+     cambio; lo split del giorno `d` ripreso come fa il motore. Il dettaglio (istantanea a `d − 1` con la quantità di ieri
+     più la ripresa dello split, oppure la quantità di oggi al segno di ieri riportato in unità d'oggi) si fissa col rosso
+     dello split.
+  3. **TRANSFER**: ogni broker il P&L del suo tratto. Il trasferimento vale il valore di mercato del giorno: chi manda
+     chiude lì, chi riceve parte da lì; il totale non cambia. **Questa è di comportamento** (la colonna per broker):
+     se il coordinatore la vede di prodotto, va nella lista del developer; senza, B8 si fa senza questo punto.
+  4. **R4 nella casa**: le regole del rendimento di periodo d'una posizione (base, ripiego, finestra, chiusi) in
+     `financial_math/` con i loro test, poi la migrazione; nessun valore cambia.
+  5. **B19**: unione in ordine d'accesso (`dict.fromkeys`); cambia l'ordine delle righe, non le cifre.
+- **Valori che cambiano** (da dichiarare col rosso): contributi della Dashboard e del report per i titoli senza
+  quotazione a un confine (ora il segno di scambio, prima il valore mancava), con un prezzo di fine vecchio (ora il cambio
+  del giorno), con uno split dopo l'ultimo segno di scambio; la ripartizione per broker dei trasferimenti nel periodo (se
+  approvata); la variazione a 1 giorno nei giorni di split, coi prezzi di ieri vecchi e per i titoli con soli scambi.
+- **Rossi** (test-author): titolo senza quotazioni con scambi (valori ai confini); prezzo di fine vecchio in USD (cambio
+  del giorno); split nel periodo; trasferimento a metà periodo (totale e, se approvato, per broker); variazione a 1
+  giorno con split oggi, con prezzo di ieri vecchio, con soli scambi; R4 nella casa (base, ripiego, finestra, chiusi);
+  B19 ordine.
+- **Superfici**: `portfolio_service.py`, `financial_math/portfolio/{engine,daily_state,models}.py`,
+  `financial_math/returns.py` (o un modulo dei contributi); test del portafoglio. Nessun file d'altri.
+- **Cancelli**: `services financial-math`, `test_portfolio_service`, `api portfolio`, `services roi-fifo-utils` (golden
+  compreso: le istantanee in più non devono cambiare gli stati giornalieri), `all-backend` su slot.
+- **Peso**: medio (B8 e V2/P2 il grosso); il TRANSFER aspetta l'ok sul comportamento.
+- **Coordinatore** (06:23): il punto TRANSFER dei contributi cambia cifre per broker che l'utente vede → **al developer**
+  (lista, P22), con la proposta. CP-3 parte dopo CP-10a e CP-7a; se ci arrivo prima della risposta, B8 senza quel punto.
+
+#### CP-10a — prove dopo il fermo, su CP-10a da solo (via del coordinatore 06:48)
+
+- ✅ **CP-7a tolto** (06:48, `/tmp/libreFolio_j/cp7a/stash_out.sh`): le due patch rigenerate hanno lo stesso sha256 del
+  backup delle 06:20 (test `a355bb4ac046fd54`, codice `3d8ee217f95ba361`); `git apply -R` pulito; restano modificati solo
+  piano e backlog. HEAD `dff209a86`.
+- ✅ **Doc** (06:48–06:51, `nice -n 10`, carico 35–53, `/tmp/libreFolio_j/cp10a/docs.sh`): `mkdocs build` stretto verde
+  (112,5 s; i 3 068 URL relativi degli asset si risolvono); `check-links` verde; `translate-validate` esce 1 con 516
+  errori in tutto il sito, quasi tutti di pagine d'altri; le quattro pagine di CP-10a portano proprio il debito dichiarato
+  (J-22): `signals` IT/FR/ES puntano ancora a `#rolling-return-sessions` (ancora presente nelle `returns` IT/FR/ES, quindi
+  i link reggono), `indicators/index` (i tre link nuovi; un quarto, `data-quality.md#alignment-…`, è vecchio),
+  `returns` (titoli ed emoji spostati), `volatility` (formule in linea 18 contro 16).
+- **Slot 2** (dopo W, ~07:10, da confermare): prima `front build --debug` (la build del 04:43 viene dal server di test
+  di `api signal-catalogs` e ha già la migrazione dello store, ma non la rinomina delle 05:09 né il testo delle 05:14),
+  poi `--workers 2 front-asset asset-detail` (attesi 34 test: se il numero sale, `--workers` ha allargato la corsa alla
+  categoria), poi `--workers 2 all-backend`.
+- ✅ **Slot 2** (16/10 07:07–07:58, `nice -n 10`, `/tmp/libreFolio_j/cp10a/slot2.sh`, su CP-10a da solo):
+  - `front build --debug` verde (07:07–07:11; svelte-check 0 errori e 0 avvisi);
+  - `--workers 2 front-asset asset-detail`: **34/34** in 3,4 min. Il conteggio è quello della spec, quindi `--workers`
+    con un'azione non allarga la corsa alla categoria; il test nuovo dell'overlay del Rolling Return compreso;
+  - `--workers 2 all-backend` (07:16–07:58, carico all'avvio 68): 7/7 categorie verdi; passate parallele **17 204
+    passed, 4 skipped**, 0 failed, più la consolidata verde. Il «❌ Provider metadata test failed» nel log è l'uscita
+    rumorosa di `test_provider_metadata[MANUAL]`, che passa (già prima).
+  - Porta 6185 libera. Slot liberato.
