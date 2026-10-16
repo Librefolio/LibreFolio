@@ -24,6 +24,15 @@ def utils_decimal_precision(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Decimal precision tests", verbose=verbose)
 
 
+def utils_real_decimal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the RealDecimal column type and the digit limits of db/precision.py (C-97a)."""
+    print_section("Utils: RealDecimal and Digit Limits")
+    print_info("Testing: backend/app/db/real_decimal.py (through the model columns), backend/app/db/precision.py")
+    print_info("Tests: quantities and prices read back on a private in-memory SQLite, column declarations, truncation, decimal_limit_issue")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_real_decimal.py", test_names)
+    return run_command(cmd, "RealDecimal and digit limit tests", verbose=verbose)
+
+
 def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
     """Test datetime utilities."""
     print_section("Utils: Datetime")
@@ -481,6 +490,16 @@ Tests for utility modules and helper functions:
         default_isolation="write-scoped",
     )
     add_test(cat, "decimal-precision", utils_decimal_precision, name="Decimal Precision", desc="Model precision, truncation, edge cases")
+    add_test(
+        cat,
+        "real-decimal",
+        utils_real_decimal,
+        name="RealDecimal and Digit Limits",
+        desc="C-97a: Transaction.quantity RealDecimal(22, 10), Transaction.cost_basis_override (per-unit, D5) and the five price columns RealDecimal(24, 12), a TypeDecorator over Numeric; what fits reads back exactly (a REAL as its shortest decimal, at most 15 significant digits, rounded to the scale, padded to 6 decimals as today), written as today (REAL, INTEGER when whole), no double noise; amount, AssetEvent.value, volume and FxRate.rate unchanged; truncation to the scale then 15 significant digits on a RealDecimal column (ROUND_DOWN), FX untouched; decimal_limit_issue (decimalPlacesExceeded before significantDigitsExceeded, trailing zeros not counted); round_computed_value (D6: scale then 15 significant digits, ROUND_HALF_EVEN, always within decimal_limit_issue)",
+        # PURE: each round trip opens a private in-memory SQLite engine of its own test and disposes it; the lane
+        # database is never opened. Everything else is a function over values. No server, no network.
+        isolation="pure",
+    )
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")

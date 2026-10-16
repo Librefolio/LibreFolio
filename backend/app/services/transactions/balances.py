@@ -8,11 +8,12 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Collection, Dict, List, Optional, Tuple
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Broker, Transaction
 from backend.app.schemas.transactions.batch import TXValidationCode
+from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, native_balances
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 
@@ -127,20 +128,18 @@ class TransactionBalancesMixin:
 
         ``exclude_tx_ids`` leaves those transactions out of both sums (e.g. rows the bulk
         editor is about to delete, when the report-set gap-fix compares with the bank).
+
+        Summed by the layer, exactly (C-97): ``native_balances`` for the cash, ``position_quantities`` for the
+        quantities, over the columns they read. Never an SQL ``SUM``: it adds the stored doubles, not the decimals.
         """
+        stmt = select(Transaction.id, Transaction.type, Transaction.date, Transaction.broker_id, Transaction.asset_id, Transaction.currency, Transaction.amount, Transaction.quantity).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date)
         excluded = list(exclude_tx_ids)
-        cash_stmt = select(Transaction.currency, func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.currency.isnot(None))
-        asset_stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.date < before_date).where(Transaction.asset_id.isnot(None))
         if excluded:
-            cash_stmt = cash_stmt.where(Transaction.id.notin_(excluded))
-            asset_stmt = asset_stmt.where(Transaction.id.notin_(excluded))
-
-        result = await self.session.execute(cash_stmt.group_by(Transaction.currency))
-        cash_balances: Dict[str, Decimal] = {currency: amount for currency, amount in result.all() if currency}
-
-        result = await self.session.execute(asset_stmt.group_by(Transaction.asset_id))
-        asset_balances: Dict[int, Decimal] = {asset_id: qty for asset_id, qty in result.all() if asset_id}
-
+            stmt = stmt.where(Transaction.id.notin_(excluded))
+        rows = (await self.session.execute(stmt)).all()
+        movements = [movement for movement in (cash_movement_from_transaction(row) for row in rows) if movement is not None]
+        cash_balances: Dict[str, Decimal] = dict(native_balances(movements).get(broker_id, {}))
+        asset_balances: Dict[int, Decimal] = dict(position_quantities(rows).get(broker_id, {}))
         return cash_balances, asset_balances
 
     async def get_balances_at_end_of(self, broker_id: int, as_of: date_type, exclude_tx_ids: Collection[int] = ()) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
@@ -165,9 +164,12 @@ class TransactionBalancesMixin:
         return native_balances(movements, as_of).get(broker_id, {})
 
     async def get_asset_holdings(self, broker_id: int, as_of: Optional[date_type] = None) -> Dict[int, Decimal]:
-        """A broker's holdings on ``as_of`` (every transaction when None): asset_id → quantity."""
-        stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.asset_id.isnot(None))
+        """A broker's holdings on ``as_of`` (every transaction when None): asset_id → quantity.
+
+        Summed by the layer, exactly (``position_quantities``, C-97); an asset whose rows all have quantity 0 has no line.
+        """
+        stmt = select(Transaction.broker_id, Transaction.asset_id, Transaction.quantity, Transaction.date).where(Transaction.broker_id == broker_id).where(Transaction.asset_id.isnot(None))
         if as_of is not None:
             stmt = stmt.where(Transaction.date <= as_of)
-        result = await self.session.execute(stmt.group_by(Transaction.asset_id))
-        return {asset_id: qty for asset_id, qty in result.all() if asset_id}
+        rows = (await self.session.execute(stmt)).all()
+        return dict(position_quantities(rows).get(broker_id, {}))
