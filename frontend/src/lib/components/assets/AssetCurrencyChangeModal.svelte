@@ -171,7 +171,7 @@
 </script>
 
 {#if open && blocker}
-    <ModalBase {open} {zIndex} maxWidth="lg" closeOnBackdropClick={false} closeOnEscape={false} testId="currency-change-modal" labelledBy="currency-change-title" contentClass="border-2 border-red-300 dark:border-red-700">
+    <ModalBase {open} {zIndex} maxWidth="lg" closeOnBackdropClick={false} closeOnEscape={false} testId="currency-change-modal" labelledBy="currency-change-title" tone="danger">
         <!-- Header -->
         <div class="flex items-center gap-3 px-5 py-4 bg-lf-danger-soft border-b border-lf-danger-line">
             <AlertTriangle class="text-lf-danger flex-shrink-0" size={22} />

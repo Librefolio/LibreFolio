@@ -4415,8 +4415,37 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 > - **Backend del lotto**: le prove delle 13:1x restano valide (`plugin-settings-service` 96, `plugin-settings-runtime`
 >   120, `api plugin-settings` 14), perché il merge 16 non ha toccato `backend/`.
 > - **Galleria**: lo scatto `settings/plugins` cambia, con le icone. Il coordinatore lo dice a colori e a G.
+> - **Committato**: `aaff7df04` (feat, 16 percorsi) e `5579d1a19` (diario).
 
-#### X-R27 e X-R28 — le chiavi delle cache degli asset ⏳ (aperti il 16/10, 15:03; dopo il lotto icone)
+### Diciassettesimo aggiornamento di base: `dev_release2` (`17a531b45`) nel ramo X — merge aperto, combinato verde (2026-10-16, 16:27–16:48)
+
+> - **Perché adesso**: G ha dato il verdetto sulla galleria del FE5c, immagini identiche entro il rumore e 0 classi
+>   miste. Il FE5c può entrare, insieme a F21, CP13 e alle icone, per avanzamento rapido dopo questo merge. AF dei
+>   colori aspetta il FE5c in dev per il suo lotto 9.
+> - **Conflitti** (HEAD `5579d1a19`, MERGE_HEAD `17a531b45`, base comune `1248b7908`):
+>   - `CHANGELOG.md`: due aggiunte in fondo alla stessa lista 🐛 Fixed. Tenute entrambe: prima quella di dev (W-B36b,
+>     le modifiche ai trasferimenti), poi le mie due righe del dal vivo.
+>   - `themeRoles.baseline.tsv`: solo `theme-roles.mjs --resolve`; `--check` pulito.
+>   - In stage solo quei due file.
+> - **Fusi da soli e controllati a occhio**, tutti toccati da entrambe le parti:
+>   - `config/__init__.py`: P17 `LIBREFOLIO_CLIENT_IP_HEADER`, indipendente da `env_url`;
+>   - `.env.example`, `configuration.en.md` e `hosting_providers.en.md`: una riga ciascuno per
+>     `LIBREFOLIO_SUPPORT_URL` e per `LIBREFOLIO_CLIENT_IP_HEADER`;
+>   - `app.css`: il blocco di IM e il mio commento, lontani;
+>   - `live-ticker.md`: le aggiunte di Z, cioè «Updating prices…» e tre righe nella tabella dei test; i miei
+>     paragrafi e la mia riga sono intatti, e la tabella è integra;
+>   - i due file del runner si leggono senza errori; il backlog ha la sezione X intatta (X-R26…28) e nessun
+>     marcatore.
+> - **Prove sulla revisione combinata**, col cancello a ≤ 50:
+>   - `api sync`;
+>   - `front check` 0/0;
+>   - `core-unit` **186 file, 6783/6783**;
+>   - `component-unit` **158 file, 4079/4079**;
+>   - `mkdocs build` stretto **verde, senza avvisi**: l'avviso di `wac.md` non c'è più su questa base;
+>   - `config-package` 741, `config-env-example` 38;
+>   - cancello dei colori pulito.
+
+#### X-R27 e X-R28 — le chiavi delle cache degli asset ✅ scritti e provati (aperti il 16/10 alle 15:03, chiusi alle 18:13)
 
 > - **X-R27**, dai colori: `currency_change.py` legge i campi del fornitore da `Asset`, dove non ci sono. Così
 >   l'invalidazione delle cache, dopo un cambio di valuta, non avviene mai: l'`AttributeError` è preso e registrato.
@@ -4424,3 +4453,64 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 >   parametri, mentre `refresh.py` e le invalidazioni lo usano.
 > - **Cura proposta**: una funzione unica della chiave in `services/assets/core.py`, usata nei quattro punti, con un
 >   rosso per ciascun difetto prima della correzione. Le righe sono nel backlog, sezione X.
+> - **Via del coordinatore (16:51)**, dopo l'ingresso del ramo in dev (`a44951cf5`). HEAD `89d276d1e`.
+>   - Test-author lanciato per i rossi (16:53), in `utils provider-core-cache` o nei file vicini, col cancello a 50.
+>   - Misurando ho trovato una terza divergenza: `refresh.py` tiene `identifier` così com'è (può essere `None`),
+>     mentre `provider_management.py` lo scrive `identifier or ""`. La funzione unica sistema anche questa.
+>   - Verificato prima di disegnare la cura:
+>     - le due vie mettono nella cache del prezzo corrente lo stesso oggetto, il `FACurrentValue` del fornitore, quindi
+>       condividere la chiave è sicuro e utile;
+>     - c'è un'assegnazione per asset (`uq_asset_provider_asset_id`).
+> - **⏸️ HOLD del coordinatore (17:22–~17:45)**: c'è la galleria completa dei colori, con carico 130–170.
+>   - Niente prove nuove, solo scrittura e lettura. Ho detto al test-author di non lanciare altri giri.
+>   - La cura è pronta in bozza, nella cartella di sessione (`files/xr27-xr28-fix-draft.md`), e si applica solo dopo
+>     i rossi.
+>   - La documentazione è già aggiornata:
+>     - `backend/assets/architecture.md`: la riga di `core.py`, e il punto su `_asset_current_cache`, che
+>       descriveva la divergenza come voluta;
+>     - `plugin_settings.md`: le cancellazioni passano da `drop_asset_cache_entries()`.
+> - **X-R28 è più grave** (17:35): tutti gli investimenti programmati condividono la stessa voce, perché hanno
+>   l'identificativo `NULL`. `/current` salva anche i risultati presi dalla cache come prezzo di oggi, e lo scheduler
+>   passa dalla stessa via. Sul backlog il peso è salito a «medio».
+>   - **Decisione del developer**: correzione del codice più una riga 🐛 nel CHANGELOG, senza riparazione. La
+>     sincronizzazione notturna riscrive gli ultimi 14 giorni.
+>   - **Chiave**: il developer temeva una collisione fra due piani con parametri identici. Ho verificato che non
+>     c'è:
+>     - il plugin riceve solo `identifier`, il tipo, `provider_params` e le impostazioni;
+>     - la liquidazione e gli eventi del piano stanno nei parametri.
+>     - **Approvato** (17:40): la chiave è esattamente l'insieme degli ingressi della chiamata, costruita da un solo
+>       `asset_cache_key()` nei quattro punti, senza `asset_id`.
+>   - Riga 🐛 scritta nel CHANGELOG: chi è colpito, che cosa ha visto, e che le chiusure si correggono entro 2
+>     settimane.
+> - **Test-author**: 17 casi nuovi in `test_provider_core_cache.py`, 13 rossi attesi e 4 guardie, non ancora fatti
+>   girare (hold). Il conteggio atteso del file è 33 verdi e 13 rossi.
+> - **Rossi (17:52–17:55)**, un solo giro di `utils provider-core-cache`, a carico 20: **33 verdi e 13 rossi**, ogni
+>   rosso sulla sua asserzione principale.
+>   - X-R27:
+>     - dopo la pulizia, le chiamate al fornitore restano (1, 1) invece di (2, 2);
+>     - l'avviso «cache invalidation skipped» compare, con e senza assegnazione.
+>   - X-R28:
+>     - il secondo asset riceve 11 invece di 22;
+>     - la sua chiusura di oggi è salvata a 11;
+>     - le cancellazioni non raggiungono la voce del prezzo corrente;
+>     - il refresh e il prezzo corrente chiedono due volte.
+> - **Correzione**, quella approvata:
+>   - `core.asset_cache_key()`: la chiave è l'insieme degli ingressi della chiamata, cioè codice, identificativo (con
+>     `None` come ""), tipo, hash dei parametri e impostazioni;
+>   - `core.drop_asset_cache_entries()`;
+>   - usate in `refresh.py`, `price_query.py`, `provider_management.py` e `currency_change.py`.
+>   - `currency_change.py` legge l'assegnazione prima del commit, come valori semplici, e toglie `json` e
+>     `Optional`.
+>   - Presa una nota del test-author: i due log della stessa funzione ora usano i campi di structlog invece di
+>     `extra={…}`, che li annidava.
+> - **Prove**, col cancello a 50:
+>   - `utils provider-core-cache` **46/46**;
+>   - `services asset-source` 61, `rate-limit-results` 23, `current-price-bootstrap` 8, `plugin-settings-runtime`
+>     120;
+>   - `db populate`, poi `api asset-currency-change` 4 e `api market-data-wipe` 5;
+>   - ruff, black e `git diff --check` puliti.
+>   - La documentazione si è costruita senza avvisi, nei prerequisiti del server.
+> - **⚠️ Fuori pista (carico)**: la prima unità API ha avviato il server della corsia, e i suoi prerequisiti hanno
+>   rifatto il frontend (svelte-check e build di debug) e la documentazione.
+>   - Le build erano vecchie dopo il merge 17 e le mie pagine. Sono 5 minuti pesanti, partiti a carico 46.
+>   - Regola per la prossima volta: prima di un'unità API su build vecchie, chiedere uno slot.
