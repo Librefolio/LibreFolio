@@ -428,6 +428,7 @@ After the restore:
 
 Good to know:
 
+- 🔒 On an instance its hosting provider blocked (`LIBREFOLIO_BLOCKED`), the command confirms all the same, and adds `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the first start after the unblock applies it.
 - 🚦 One restore at a time: while one waits or is being applied, `backup restore` stops before the check with `❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)` and exits with `1`. `--dry-run` still works.
 - ❌ If the confirmation itself is refused, the command prints one line that ends with a code, removes the copy and exits with `1`: `restore_stage_outdated` when LibreFolio was updated between the check and the confirmation, `restore_stage_expired` when the question waited more than 24 hours, `restore_already_pending` when another restore was confirmed meanwhile. Run the command again.
 - 📍 Run it where the server runs, in the container with Docker: the restore is recorded for the path of the data directory, and a server that finds its data directory under another path does not apply it.
@@ -460,6 +461,7 @@ When a start found a restore waiting and did not apply it, one more line says wh
 - `⚠️ At the last start a backup was running: the next start applies it (backup_running)`: a backup was running when the server started, a `backup create` from the command line for instance.
 - `⚠️ It was confirmed for another data directory (<path>): this one does not apply it (other_data_directory)`: the server found its data directory under another path than the one where the restore was confirmed, such as a copy of the data directory. Drop it with `--cancel`, then run `backup restore` where the server runs.
 - `⚠️ At the last start another server process was serving the data directory: restart the whole server to apply it (server_running)`: a worker was started again while the others kept serving (`--workers`), or another server uses the same data directory. Restart the whole server.
+- `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the last start found the instance blocked (`LIBREFOLIO_BLOCKED`), or it is blocked now, and a restore is never applied on a blocked instance. The first start after the unblock applies it, and migrates it first if LibreFolio was updated meanwhile. Until then its checked copy keeps its disk space: `--cancel` drops the restore and frees it.
 
 | Code | `<reason>` | What to do |
 | --- | --- | --- |
