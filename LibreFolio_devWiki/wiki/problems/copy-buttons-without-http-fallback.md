@@ -31,7 +31,7 @@ Browsers expose the Clipboard API only to secure contexts. The app has a shared 
 | `components/settings/tabs/AboutTab.svelte` | the system information |
 | `features/brokers/lots/UnifiedLotsTable.svelte` | a lot id |
 | `components/auth/AskAdminModal.svelte` | an administrator's e-mail (an error toast on failure) |
-| `components/files/FilePreviewModal.svelte` | the text of the file in preview |
+| `features/files/FilePreviewModal.svelte` | the text of the file in preview |
 | `components/assets/ProviderAssignmentSection.svelte` | a provider's error detail |
 
 Still the case at `35c4242f3`.
@@ -60,7 +60,7 @@ knows about secure contexts. A test over plain HTTP from a non-localhost origin 
 | A direct call until train 72 (system info) | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
 | A direct call until train 72 (lot id) | `frontend/src/lib/features/brokers/lots/UnifiedLotsTable.svelte` |
 | A direct call until train 72 (administrator e-mail) | `frontend/src/lib/features/update-check/AskAdminModal.svelte` |
-| A direct call until train 72 (previewed text) | `frontend/src/lib/components/files/FilePreviewModal.svelte` |
+| A direct call until train 72 (previewed text) | `frontend/src/lib/features/files/FilePreviewModal.svelte` |
 | A direct call until train 72 (provider error detail) | `frontend/src/lib/components/assets/ProviderAssignmentSection.svelte` |
 | The guide's warning | `mkdocs_src/docs/user/connection-security.en.md` |
 | Backlog (M-20) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

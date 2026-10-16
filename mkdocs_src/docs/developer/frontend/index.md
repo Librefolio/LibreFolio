@@ -31,8 +31,6 @@ frontend/
 │   └── lib/
 │       ├── api/          # API client (Zodios, generated from OpenAPI)
 │       ├── components/   # Reusable components
-│       │   ├── brokers/  # Broker cards, forms, icon, import
-│       │   ├── files/    # FilesTable with DataTable
 │       │   ├── layout/   # Sidebar, Header, LanguageSelector
 │       │   ├── table/    # DataTable suite (DataTable, toolbar, pagination, column filter, SelectionBar)
 │       │   └── ui/       # Generic UI atoms
@@ -46,9 +44,11 @@ frontend/
 │       │   ├── ai-export/       # AI Export menu, options, snapshot client and prompt templates
 │       │   ├── auth/            # LoginCard, RegisterCard, ForgotPasswordCard
 │       │   ├── backup/          # Instance backup (admins): Backup tab, job and download card
+│       │   ├── brokers/         # Broker cards, forms, import, sharing and the FIFO lots views (lots/) with their store
 │       │   ├── changelog/       # Bundled CHANGELOG.md and its translations, split into chapters
 │       │   ├── dashboard/       # Dashboard panels and charts, view store and date-range controller
 │       │   ├── email/           # Email tab, address verification, password-reset and shared-link emails
+│       │   ├── files/           # Files table and grid, preview modal and file-set badges
 │       │   ├── instance/        # Instance config, notices and blocked-instance page
 │       │   ├── live-updates/    # Activity-aware polling of live prices and its "Updates paused" pill
 │       │   ├── onboarding/      # Welcome setup, intro tour and contextual guides
@@ -63,7 +63,7 @@ frontend/
 │       │   ├── app/          # auth, clientSession, settings, globalSettings, themeStore, language, privacyStore, toastStore, …
 │       │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
 │       │   ├── reference/    # brokerStore, assetStore, currencyStore, countryStore, sectorStore, fxRoutesStore
-│       │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation, lotsAnalysisStore
+│       │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation
 │       │   ├── transactions/ # txStore, transactionTypeStore
 │       │   ├── fx/           # fxCardInversionStore
 │       │   ├── files/        # imagePreviewCache
