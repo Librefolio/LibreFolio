@@ -52,7 +52,7 @@
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
-    import AssetSetRiskPanel from '$lib/components/risk/AssetSetRiskPanel.svelte';
+    import AssetSetRiskPanel from '$lib/features/risk/AssetSetRiskPanel.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import {gotoDateRange} from '$lib/utils/url/dateRangeUrl';
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
