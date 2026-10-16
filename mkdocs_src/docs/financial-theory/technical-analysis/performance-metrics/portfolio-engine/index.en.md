@@ -236,19 +236,21 @@ Unallocated fees/income without `asset_id` are grouped per broker as other perio
 
 ---
 
-## 📐 8. Realized Gain/Loss
+## 📐 8. Realized Gain/Loss {: #8-realized-gain-loss }
 
-On SELL of $|q_s|$ units from position $(a,b)$ on date $t$:
+On a disposal of $|q_s|$ units from position $(a,b)$ on date $t$ — a SELL, or an outgoing ADJUSTMENT with a cost basis:
 
 $$
 C = |q_s| \cdot w_{\text{pre}}(a,b)
 $$
 
 $$
-\mathrm{Realized} = P_{\text{sell}} \cdot \mathrm{fx}(\mathrm{ccy}_{\text{sell}}, C^*, t) - C
+\mathrm{Realized} = P \cdot \mathrm{fx}(c_P, C^*, t) - C
 $$
 
-Where $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units sold leave at their historical cost, with no conversion at the sale date. A sale whose proceeds cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
+$P$ is what the units leave for, in its currency $c_P$: a SELL's proceeds, in the currency of its cash; an outgoing ADJUSTMENT's value handed over, $|q_s| \cdot k$ for its per-unit cost basis $k$, in the cost basis's currency, or the asset's when the row has none. $w_{\text{pre}}$ is the WAC in $C^*$ **before** the pool reduction (same value used by 3-pool SELL rule above): the units leave at their historical cost, with no conversion at $t$, while $P$ converts at $t$. A disposal whose $P$ cannot be converted, or drawn from a position whose cost is incomplete, is left out of Realized.
+
+An outgoing ADJUSTMENT moves no cash, so no pool of §6 changes: its value $P \cdot \mathrm{fx}(c_P, C^*, t)$ leaves the capital baseline instead, or $C$ when that value cannot be converted ([Deposited Capital — Outgoing Adjustments](deposited-capital.md#outgoing-adjustments)).
 
 ---
 
