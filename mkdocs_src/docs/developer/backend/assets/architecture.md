@@ -14,7 +14,7 @@ responsibility:
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
-| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price refused, a provider's truncated), and bounded write chunks. |
+| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
@@ -168,10 +168,31 @@ scoped by `provider_assignment_id`, so manual events are not replaced.
 `truncate_priceHistory()` (`backend/app/db/precision.py`): 12 decimal places, then 15
 significant digits, both rounded down — what a `RealDecimal(24, 12)` column reads back (see
 [Decimal Columns](../../architecture/database/index.md#decimal-columns)). That truncation is
-for a provider's long floats. A manual call (`source_plugin_key="MANUAL"`, the default, used by
-`POST /assets/prices`) is checked first instead: `_reject_prices_over_the_limit()` refuses the
-whole call when a price exceeds either limit, before anything of it is written — a
-`ValueError`, which the route answers with HTTP 400 naming the asset, the maxima and the dates.
+for a provider's long floats. A value that is not finite, or has more digits before the
+decimal point than its column (12 for a price, 24 for the volume), fits no truncation: a
+provider's call drops every date holding one before any slice is written (W-B58: a value
+that raised in the truncation of a later slice left the earlier ones committed). That is a
+price `storable_price()` cannot keep (not finite, past 12 digits before the point, or a
+non-zero close truncated to 0), or a volume past 24 digits (`_unstorable_provider_point()`;
+the `-1` sentinel is no value). The call logs a warning, writes the other dates, and reports
+the dropped ones in the asset's result message (*rejected N date(s) with a value no price
+column can keep*, the first five dates with the field and value), which the sync adds to
+the asset's errors as it does the OHLC rejections. The sync's change count, which runs
+before this (`_count_actual_price_changes()` in `refresh.py`), has no size check: it
+truncates the fetched close of each date already stored, so a close from `1E+48` up, or not
+finite, makes it raise, and its fallback then counts every fetched point as new while the
+upsert goes on; either way a skipped date is still counted, in `inserted_count` /
+`updated_count` and `changed_points`, as if it had been written. An open, high, low or
+volume the F.4 merge keeps from the stored row, written by an older release past its
+column's digits, is written as NULL (`_kept_price()`, `_kept_volume()`) instead of raising
+mid-slices. A manual
+call (`source_plugin_key="MANUAL"`, the default, used by `POST /assets/prices`) is checked
+first instead: `_reject_prices_over_the_limit()` refuses the whole call when a price
+exceeds any of its limits — 12 digits before the decimal point, 12 decimal places, 15
+significant digits — or is not finite, or when a volume has more than 24 digits before the
+point (only its size is limited: a fractional volume is accepted), before anything of it is
+written — a `ValueError`, which the route answers with HTTP 400 naming the asset, the
+maxima (the volume's included) and the dates.
 
 ---
 
@@ -221,6 +242,11 @@ A successful provider quote dated today is written back to today's OHLC row:
 - a missing row is created with `open = high = low = close = value` and `volume = None`;
 - an existing row keeps its volume, widens `low`/`high`, fills `open` only when it is missing,
   and overwrites `close` with the latest quote;
+- the value written is the quote as `storable_price()` keeps it (W-B58), truncated like the
+  history: 12 decimal places, then 15 significant digits, rounded down (a quote of
+  `65432.1234567890999` is stored `65432.123456789`); a quote no price column can keep (not
+  finite, past 12 digits before the decimal point, or non-zero but truncated to 0) is not
+  written, with a warning. The response carries the quote as the provider gave it;
 - a `db:last_known` fallback is never written as if it were a fresh quote.
 
 The write-back is best-effort: a commit failure is rolled back and logged without discarding the
@@ -423,13 +449,13 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 decimal places or 15 significant digits refuses the whole call (400) |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
-| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
+| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 12 digits before the decimal point, 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
 | `DELETE /api/v1/assets/events` | DELETE | Bulk delete the events of one asset (`asset_id` required, with `ids`): an id of another asset comes back `not_found`, an event a transaction uses `in_use` |
 | `POST /api/v1/assets/events/query` | POST | Bulk event query, each event with its `id` and `is_auto` flag |
 | `GET /api/v1/assets/events` | GET | Events by id |

@@ -22,11 +22,14 @@ interpreters, real cores.
 - Workers: ``min(cpu_count, MAX_WORKERS)``. More would be pointless — the number of parses
   in flight is bounded by the browser's own concurrency, which is smaller still.
 - The pool is created **lazily**, on the first parse: an import should never fork.
-- Its ``forkserver`` can start earlier, at application startup (``prewarm``, W-B53; opt-in, ``LIBREFOLIO_BRIM_PREWARM``,
-  ``config/brim.py``: off by default, on in test mode), and is in any case preloaded with the BRIM module and every
-  plugin **preloaded** (``brim_parse_preload``): every worker is forked from it with them already imported and
-  discovered. Without it the first parse after a start paid a fresh interpreter importing them, ~4 s idle and
-  31-49 s under load. The workers share the preloaded pages, so a pool of several workers also takes less memory.
+- With the warm-up on (``LIBREFOLIO_BRIM_PREWARM``, ``config/brim.py``: off by default, on in test mode; W-B53), its
+  ``forkserver`` starts at application startup (``prewarm``), **preloaded** with the BRIM module and every plugin
+  (``brim_parse_preload``): every worker is forked from it with them already imported and discovered, instead of a
+  fresh interpreter importing them at the first parse after a start (~4 s idle, 31-49 s under load), and the workers
+  share the preloaded pages. With it off nothing is preloaded (W-B59): the first parse starts the forkserver, and each
+  worker imports the BRIM module itself at its first parse. A preload on that lazy path stalls the event loop for the
+  whole import: on Python 3.13 the first ``run_in_executor`` waits, on the loop's thread, for the new worker's pid,
+  which a preloading forkserver sends only once the preload is done.
 - Start method: ``forkserver`` when the platform has it, otherwise ``spawn``. Never plain
   ``fork`` — this process runs a thread pool and an event loop, and forking that is how
   you get deadlocks that only appear in production.
@@ -51,6 +54,7 @@ from typing import Optional
 
 import structlog
 
+from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
 from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.services.brim import brim_provider
 
@@ -72,6 +76,14 @@ def _worker_count() -> int:
     return max(1, min(os.cpu_count() or 1, MAX_WORKERS))
 
 
+def _prewarm_enabled() -> bool:
+    """``brim_prewarm_enabled()``, an invalid value counting as off: the startup step has already logged it."""
+    try:
+        return brim_prewarm_enabled()
+    except BrimConfigError:
+        return False
+
+
 def _get_pool() -> Optional[ProcessPoolExecutor]:
     """Build the pool on first use, once; return ``None`` when it is unavailable."""
     global _pool, _pool_disabled
@@ -83,8 +95,9 @@ def _get_pool() -> Optional[ProcessPoolExecutor]:
         methods = multiprocessing.get_all_start_methods()
         method = "forkserver" if "forkserver" in methods else "spawn"
         ctx = multiprocessing.get_context(method)
-        if method == "forkserver":
-            # Only taken into account if the forkserver is not running yet (``prewarm`` already set it).
+        if method == "forkserver" and _prewarm_enabled():
+            # Only with the warm-up on (W-B59: on the lazy path the first parse would hold the event loop for the whole
+            # preload), and only taken into account if the forkserver is not running yet (``prewarm`` already set it).
             ctx.set_forkserver_preload(_PRELOAD)
         _pool = ProcessPoolExecutor(max_workers=_worker_count(), mp_context=ctx)
         logger.info("BRIM parse pool started", workers=_worker_count(), start_method=method)
