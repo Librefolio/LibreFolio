@@ -172,7 +172,7 @@ A failure raises `SmtpDeliveryError` with a code from `SmtpErrorCode`, a `StrEnu
 | `SENDER_REFUSED` | `MAIL FROM` refused |
 | `RECIPIENT_REFUSED` | `RCPT TO` refused |
 | `TIMEOUT` | A `TimeoutError` anywhere in the exception chain: `smtplib` turns a read that timed out into `SMTPServerDisconnected` |
-| `SEND_FAILED` | `DATA` refused, or another protocol error while sending |
+| `SEND_FAILED` | `DATA` refused, or another protocol error while sending; also an address with letters outside ASCII towards a server that does not advertise `SMTPUTF8`, which `smtplib` refuses on the client side (`SMTPNotSupportedError`, before `MAIL`). With `SMTPUTF8` advertised, `smtplib` sends `MAIL FROM:<…> SMTPUTF8 BODY=8BITMIME` and the message in UTF-8; for ASCII addresses it adds neither |
 
 `str()` of the error is the code alone, for the interface. `detail` holds what the server said (such as
 `550 5.1.1 <alice@example.com>: Recipient address rejected`), or the exception's text, **raw**: the transport adds no
@@ -1253,7 +1253,7 @@ counter of its own.
 |----------|------------|--------------|
 | `./dev.py test services email-config` | `test_services/test_email_config.py` (EMC-001…019) | The accessors: blank as unset, the three modes and their ports, the port and the hourly limit in ASCII digits, one mailbox for From and Reply-To (no CR or LF, no second address), the password exactly as `env_secret()` gives it, `EmailConfigError` naming the variable and never the password, nothing cached |
 | `./dev.py test services email-messages` | `test_services/test_email_messages.py` (EMM-001…038) | Languages and kinds, keyword-only builders, `http(s)` links only, escaping, no user value in a subject, Babel durations, the administrator invitation's extra sentence, the catalogue guard, the headers and parts of `compose_message()`, exactly one recipient; every shown value on one line in both parts (control characters and line or paragraph separators to spaces, the nine bidirectional controls removed), markup split across lines still escaped; the sixth kind `email_changed` in the four languages, without a link, the new address only as `***@domain` (`masked_address()`) |
-| `./dev.py test services email-delivery` | `test_services/test_email_delivery.py` (EMD-001…045) | The fake server itself and `closed_port()`; `deliver()` and its error codes (TLS never falls back to plain text, a bad `QUIT` is a success, the certificate is verified); `email_config_state()` and its one-time log; the budget; `send_email()` off the event loop; a blocked instance (or an unreadable `LIBREFOLIO_BLOCKED`) refused before anything else, `sending_blocked()`; no secret and no full recipient address in the logs |
+| `./dev.py test services email-delivery` | `test_services/test_email_delivery.py` (EMD-001…049) | The fake server itself and `closed_port()`; `deliver()` and its error codes (TLS never falls back to plain text, a bad `QUIT` is a success, the certificate is verified, an address outside ASCII goes with `SMTPUTF8` and is `SEND_FAILED` without it); `email_config_state()` and its one-time log; the budget; `send_email()` off the event loop; a blocked instance (or an unreadable `LIBREFOLIO_BLOCKED`) refused before anything else, `sending_blocked()`; no secret and no full recipient address in the logs |
 | `./dev.py test services email-checks` | `test_services/test_email_checks.py` (EMK-001…017) | The three checks in every state (`email.smtp`, `email.smtp_encryption` with local and public hosts, `email.links` off/ready/missing/invalid, invalid including an empty `?`, credentials and a bad port), `EMAIL_CONFIG_CHECKS`, no password in any field and no host, user or sender in a `detail`; the three checks closing the platform's `CONFIG_CHECKS` and `run_config_checks()`; the import orders, each in a fresh interpreter; the startup audit: one `email.smtp` error and no exception for an unusable configuration, one `email.smtp_encryption` warning for plain text to a public host, the `email.links` `info` and `warning`, nothing when email is off, never the password |
 | `./dev.py test utils rate-window` | `test_utilities/test_rate_window.py` (RWL-001…017) | The window edge, `peek` never counting, refused hits not recorded, `retry_after`, the per-call limit, independent keys, LRU eviction, exactly N allowed under concurrent threads |
 | `./dev.py test services email-links` | `test_services/test_email_links.py` (EML-001…012) | `links_state()` (ready, missing, invalid: no host, whitespace, a `?` or `#` even empty, an invalid port, an unclosed IPv6 bracket, credentials; an IPv6 literal and a capitalised scheme ready), `require_links()`, `email_link()` (the base plus the page path, the token in the fragment), `LinksState.instance`, `email_instance_config()` in every combination, a blocked instance included |
@@ -1290,9 +1290,13 @@ users, settings and email routers, on a private SQLite file. The Settings tab re
   same rule and never reads the lane's environment.
 - **Never a real network.** `FakeSmtpServer` (`backend/test_scripts/fixtures/email/fake_smtp.py`) is written with
   the standard library and listens on 127.0.0.1, on a port the OS picks. It speaks the part of SMTP that `smtplib`
-  uses (`EHLO` with `AUTH PLAIN LOGIN`, `STARTTLS` only when given a `tls_context`, `MAIL`, `RCPT`, `DATA`, `QUIT`),
-  can refuse at each step (`credentials`, `refuse_sender`, `refuse_recipients`, `refuse_data`, `quit_code`,
-  `greet=False`), and records `messages`, `auth_attempts` and `connections`. A refused recipient is named in the
+  uses (`EHLO` with `AUTH PLAIN LOGIN`, then `8BITMIME` and `SMTPUTF8` unless `smtputf8=False`, `STARTTLS` only when
+  given a `tls_context`, `MAIL`, `RCPT`, `DATA`, `QUIT`), can refuse at each step (`credentials`, `refuse_sender`,
+  `refuse_recipients`, `refuse_data`, `quit_code`, `greet=False`), and records `messages`, `auth_attempts` and
+  `connections`; each message keeps its `mail_options`, the parameters after `MAIL FROM:<…>`. `SMTPUTF8` lets an
+  address with letters outside ASCII through, as real servers do: without it, `smtplib` refuses such an address on
+  the client side, `SEND_FAILED` (EMD-047). Read such an address from `rcpt_tos` or `data`, never from the parsed
+  `message`, whose parser turns those bytes into escapes. A refused recipient is named in the
   `550` reply, as Postfix does, so the masking of the log meets a real server's habit. As a context manager it
   closes every socket, joins every thread and fails the test on a defect of its own. `closed_port()`, also a context
   manager, yields a port of 127.0.0.1 that refuses connections and holds it for the whole block, so no listener
