@@ -4146,6 +4146,24 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** — basso; X, 17/10
   (trovato dal docs-writer).
   - In realtà il frontend usa prima lo streaming (`…/search/stream`), e il REST solo come ripiego.
+- **X-R35 · `env_url` accetta `user:pass@` e lo pubblica** — piccolo, **prima del rilascio**; da E (piano 08,
+  revisione di sicurezza «R13-SEC2»), assegnata a X dal coordinatore il 17/10.
+  - Un indirizzo con utente e password passa il validatore e finisce sull'anonimo `GET /system/instance`.
+  - Cura: il validatore della configurazione rifiuta utente e password. Copre anche `LIBREFOLIO_PUBLIC_URL` e
+    `LIBREFOLIO_BILLING_URL`, che passano dallo stesso helper.
+- **X-R36 · Chiave di cache: l'impronta dei parametri è un MD5 tagliato a 32 bit** — nota; da E («R13-SEC3»), 17/10.
+  - `services/assets/core.py:81`. Oggi è innocuo: i prezzi sono condivisi e una collisione mescola solo due asset con
+    parametri diversi.
+  - Diventa **MEDIO** il giorno in cui gli asset avranno un proprietario: allora serve un'impronta piena.
+- **X-R37 · P20 nell'interfaccia: le 4 note di E** — piccolo, **prima di O-8**; da E («R13-SEC2/SEC3»), 17/10.
+  1. `assetSearchReport.ts:70-74`: il controllo legge il valore senza base, così `https:host` passa e, come `href`, si
+     risolve sull'istanza. Usare `url.href`.
+  2. **N61** (decisione notturna del coordinatore): su `managed`, senza un `support_url` valido, o con
+     `/system/instance` fallito, niente ripiego sulla issue pubblica di GitHub: pubblicherebbe `managed`, i codici dei
+     provider e gli identificativi. La riga si nasconde, oppure resta senza azione: la soluzione più pulita.
+  3. Un `support_url` con `user:pass@` (`url.username` o `url.password`) conta come mancante.
+  4. `create-edit.en.md`: in modifica il rapporto porta anche gli identificativi dell'asset (ISIN, ticker…). Dirlo.
+  - Se il punto 2 cambia quello che vede un utente `managed`, va ritoccata la riga del CHANGELOG.
 
 ## W · Import e transazioni (fase 01)
 
