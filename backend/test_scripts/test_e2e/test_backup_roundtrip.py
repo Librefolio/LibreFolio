@@ -1,10 +1,11 @@
 """
-Restoring a backup, end to end: the founder's acceptance (workstream B, lot B3, contract §9). Future selector:
-``e2e backup-roundtrip``.
+Restoring a backup, end to end: the founder's acceptance (workstream B: lot B3, contract §9; lot B-13, contract §6, the
+ledger's control totals). Selector: ``e2e backup-roundtrip``.
 
-1. A backup of a populated instance, restored on an empty instance, gives the same totals.
+1. A backup of a populated instance, restored on an empty instance, gives the same totals — among them the ledger's
+   control totals, which its archive recorded when it was made.
 2. A LibreFolio backup at an older revision (``OLDER``) is restored through the check and the confirmation: committed,
-   at the head, its rows as the check's report said.
+   at the head, its rows as the check's report said, its ledger's totals the same through the upgrade.
 3. A backup of a newer LibreFolio is refused (B2's ``revision_unknown``) through the same flow, the target untouched.
 
 The flow is the user's. ``python scripts/backup_cli.py --test-db restore ARCHIVE --yes`` checks the archive on a copy
@@ -21,15 +22,27 @@ db populate`` writes it, on a data directory of the test), then files of this mo
 ``alembic upgrade`` in a process of its own (``test_backup_staging.py``'s module fixture, imported) and the same first
 start; each test restores into its own copy of it.
 
+The archive at ``OLDER`` is made by this LibreFolio's backup (``archive.build_archive``, as ``test_backup_staging.py``
+makes its own) from a database made at ``OLDER`` by ``alembic`` (that module's fixture, imported) with that module's
+accounts and files, and a small ledger written in the schema of ``OLDER`` (``LEDGER_AT_OLDER``: a broker, an asset,
+cash in two currencies, a buy, a sell, a dividend). Not that module's ``older_archive``: it has no ledger, and the totals
+of an empty ledger are the same whatever an upgrade does to the rows.
+
 The totals are computed in a fresh process, in test mode, on a data directory: the rows of every table; the SHA-256 of
-every file of the archived folders; and, for every account that sees a broker, the report of the official engine
-(``PortfolioService(session).get_report``, as ``POST /portfolio/report`` computes it) over one past date range, the same
-for both instances, without its ``generated_at`` (the day the report is made, not a figure). The source's and the
-target's are computed back to back, once the target is restored: the backup changes nothing they read, and a midnight
-between the two shrinks to the seconds between two runs. The source's totals are checked against its archive's manifest
-(rows and files): the archive holds exactly what was measured. Both runs hash with the same ``PYTHONHASHSEED``, so a
-list the engine builds from a set comes out in the same order for the same data.
-TODO(CP-15): compare J's control totals too, once they are in the base.
+every file of the archived folders; the ledger's control totals, by J's ``compute_control_totals`` on the app's own
+session (``get_session_generator``, on the database of that data directory) — the cash of every broker in each currency
+and the quantity of every position, read from the rows alone, as J's canonical JSON (``ControlTotals.to_json``); and,
+for every account that sees a broker, the report of the official engine (``PortfolioService(session).get_report``, as
+``POST /portfolio/report`` computes it) over one past date range, the same for both instances, without its
+``generated_at`` (the day the report is made, not a figure). The source's and the target's are computed back to back,
+once the target is restored: the backup changes nothing they read, and a midnight between the two shrinks to the seconds
+between two runs. The source's totals are checked against its archive's manifest — rows, files, and the control totals
+the backup read on its snapshot (``database.control_totals``): the archive holds exactly what was measured. Restored,
+the target's totals are the source's, and the check had reported the ledger's totals ``same``. At ``OLDER``, the
+manifest records the totals of ``LEDGER_AT_OLDER`` (worked by hand: the sum of the amounts per broker and currency, of
+the quantities per broker and asset), the check reports them ``same`` after its upgrade, and the restored database at
+the head has them. Both runs hash with the same ``PYTHONHASHSEED``, so a list the engine builds from a set comes out in
+the same order for the same data.
 
 Pure: every data directory, database and archive under ``tmp_path``; the lane's data directory is never read or written,
 its server never called, its backup lock never taken. Every child runs in test mode on a data directory of the test, with
@@ -38,9 +51,9 @@ or the instance's secrets, the interpreter's own folder first on its ``PATH`` (t
 ``alembic`` by name); ``LF_APP_VERSION`` is set, so no git process runs. No network: the mock data assign providers but
 fetch nothing. Every wait is a child process with a timeout. POSIX-only.
 
-RED until B3 lands: ``restore ARCHIVE --yes`` is not an option of the command yet (argparse exits 2), and the steps
-``pending-restore`` and ``restore-commit`` do not exist. The fixtures (the source, its archive, the empty instance) are
-built with what exists today.
+RED until B-13 lands: the manifest has no ``database.control_totals`` and the check's report no ``control_totals``. Both
+are read with ``getattr`` and asserted last ("[new] …"): each test runs everything B3 already does, and the ledger's
+totals the children measure, before it fails on the first of them. The refusal of a newer backup is unchanged.
 """
 
 from __future__ import annotations
@@ -62,7 +75,9 @@ import pytest
 
 from backend.app.config import INSTANCE_TRUST_SECRETS
 from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
+from backend.app.services.financial_math.ledger_totals import CONTROL_TOTALS_VERSION
 from backend.app.services.platform.instance_backup import jobs
+from backend.app.services.platform.instance_backup.archive import BuiltArchive
 from backend.app.services.platform.instance_backup.manifest import BackupManifest
 from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, STAGE_DATA_FOLDER, STAGE_LOCK_FILE, restore_dir, stage_dir, stages_dir
 from backend.app.services.platform.instance_backup.staging import read_report
@@ -70,10 +85,9 @@ from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_services import test_backup_staging as cases
 from backend.test_scripts.test_utils import print_section, print_success
 
-# The module fixtures of test_backup_staging.py (lot B2a), re-exported: a database made at the head by alembic in a
-# process of its own, and the archive of a backup at OLDER.
+# The module fixture of test_backup_staging.py (lot B2a), re-exported: two databases made by alembic in a process of
+# their own, at the head and at OLDER.
 databases = cases.databases
-older_archive = cases.older_archive
 # Autouse: this process's production data directory is a folder of the test that must stay absent, LF_APP_VERSION set.
 configured_data_dir = cases.configured_data_dir
 
@@ -107,6 +121,37 @@ OWN_FILES = {
     "broker_reports/parsed/b3-roundtrip-2026-08.csv": b"date,amount,currency\n2026-08-31,980.40,EUR\n",
 }
 
+#: The transactions of the ledger at ``OLDER``, all at broker 1: (asset id, type, date, quantity, amount, currency).
+#: Binary fractions only: SQLite stores these columns as reals, and they read back exactly.
+LEDGER_TRANSACTIONS = (
+    (None, "DEPOSIT", "2026-01-02", "0", "10000", "EUR"),
+    (None, "DEPOSIT", "2026-01-03", "0", "2500.5", "USD"),
+    (1, "BUY", "2026-01-05", "12", "-1500.75", "EUR"),
+    (1, "SELL", "2026-03-10", "-2", "260.5", "EUR"),
+    (1, "DIVIDEND", "2026-06-30", "0", "12.25", "EUR"),
+)
+#: That ledger, written into a database at ``OLDER`` in that revision's schema: ``brokers``, ``assets`` and
+#: ``transactions`` as ``001_initial`` made them (``004`` added ``assets.is_benchmark``, with a default); no migration
+#: after ``OLDER`` touches them. A fixed revision: these statements stay right.
+LEDGER_AT_OLDER = (
+    f"INSERT INTO brokers (id, name, created_at, updated_at) VALUES (1, 'B-13 ledger broker', '{cases.CREATED}', '{cases.CREATED}')",
+    f"INSERT INTO assets (id, display_name, currency, asset_type, active, created_at, updated_at) VALUES (1, 'B-13 ledger asset', 'EUR', 'STOCK', 1, '{cases.CREATED}', '{cases.CREATED}')",
+    *(
+        f"INSERT INTO transactions (broker_id, asset_id, type, date, quantity, amount, currency, created_at, updated_at) VALUES (1, {'NULL' if asset_id is None else asset_id}, '{kind}', '{day}', {quantity}, {amount}, '{currency}', '{cases.CREATED}', '{cases.CREATED}')"
+        for asset_id, kind, day, quantity, amount, currency in LEDGER_TRANSACTIONS
+    ),
+)
+#: The control totals of that ledger, worked by hand by J's rule: the sum of the amounts per broker and currency
+#: (10000 - 1500.75 + 260.5 + 12.25 = 8772 EUR; 2500.5 USD), of the quantities per broker and asset (12 - 2 = 10), as
+#: J's canonical JSON.
+LEDGER_AT_OLDER_TOTALS = {
+    "version": CONTROL_TOTALS_VERSION,
+    "cash": [{"broker_id": 1, "currency": "EUR", "balance": "8772"}, {"broker_id": 1, "currency": "USD", "balance": "2500.5"}],
+    "quantities": [{"broker_id": 1, "asset_id": 1, "quantity": "10"}],
+}
+#: The check's warnings about the ledger's totals (B-13 §3): neither for a ledger the restore keeps.
+TOTALS_WARNINGS = {"control_totals_changed", "control_totals_unreadable"}
+
 #: «A start»: the steps of ``app_lifespan.STARTUP_STEPS`` from ``argv[1]`` to ``argv[2]``, both included, run by
 #: ``lifecycle.run_startup_steps``.
 START_PROGRAM = """
@@ -123,22 +168,25 @@ if missing:
 asyncio.run(lifecycle.run_startup_steps(app_lifespan.STARTUP_STEPS[names.index(first) : names.index(last) + 1]))
 """
 
-#: The totals of the configured data directory, written as JSON to ``argv[3]``: the reports over ``argv[1]``–``argv[2]``.
+#: The totals of the configured data directory, written as JSON to ``argv[3]``: the reports over ``argv[1]``–``argv[2]``;
+#: the ledger's control totals on the app's own session; the database file the app's engine opened.
 TOTALS_PROGRAM = """
 import asyncio
 import hashlib
 import json
 import sqlite3
 import sys
-from contextlib import closing
+from contextlib import aclosing, closing
 from datetime import date
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_data_dir
-from backend.app.db.session import get_async_engine
+from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
+from backend.app.services.financial_math.ledger_totals import compute_control_totals
 from backend.app.services.portfolio_service import PortfolioService
 
 start, end, output = date.fromisoformat(sys.argv[1]), date.fromisoformat(sys.argv[2]), sys.argv[3]
@@ -154,23 +202,26 @@ for folder in ("custom-uploads", "broker_reports", "scenario_catalog"):
             files[path.relative_to(data).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-async def reports():
+async def measured():
     engine = get_async_engine()
-    found = {}
     try:
+        # The ledger's control totals as the app reads them: J's read point, on a session of the app's own factory.
+        async with aclosing(get_session_generator()) as sessions:
+            ledger = (await compute_control_totals(await anext(sessions))).to_json()
+        reports = {}
         for user_id, username in owners:
             async with AsyncSession(engine) as session:
                 report = await PortfolioService(session).get_report(user_id=user_id, query=PortfolioReportQuery(date_range=OpenDateRangeModel(start=start, end=end)))
             dumped = report.model_dump(mode="json")
             dumped["metadata"].pop("generated_at", None)
-            found[username] = dumped
+            reports[username] = dumped
+        return {"database": str(Path(engine.url.database).resolve()), "control_totals": ledger, "reports": reports}
     finally:
         await engine.dispose()
-    return found
 
 
 with open(output, "w", encoding="utf-8") as handle:
-    json.dump({"data_dir": str(data), "rows": rows, "files": files, "reports": asyncio.run(reports())}, handle, sort_keys=True)
+    json.dump({"data_dir": str(data), "rows": rows, "files": files, **asyncio.run(measured())}, handle, sort_keys=True)
 """
 
 
@@ -242,6 +293,7 @@ def totals(data_dir: Path) -> dict[str, Any]:
     assert done.returncode == 0, f"the totals of {data_dir.name} could not be computed: {shown(done)}"
     found = json.loads(output.read_text(encoding="utf-8"))
     assert found["data_dir"] == str(data_dir.resolve()), f"the totals were computed on {found['data_dir']}, not on {data_dir}"
+    assert found["database"] == str((data_dir / DATABASE_ENTRY).resolve()), f"the app's session read {found['database']}, not the database of {data_dir}"
     return found
 
 
@@ -271,6 +323,17 @@ def table_rows(database: Path) -> dict[str, int]:
 def differences(expected: dict[str, Any], found: dict[str, Any]) -> list[str]:
     """The keys whose values differ, or that one side lacks."""
     return sorted(key for key in expected.keys() | found.keys() if expected.get(key) != found.get(key))
+
+
+def ledger_lines(found: Any) -> dict[str, Any]:
+    """J's control totals as one entry per line, for a difference that reads: ``version``, ``cash <broker>/<currency>``,
+    ``quantity <broker>/<asset>``. Nothing for what is not totals (``None`` before B-13)."""
+    if not isinstance(found, dict):
+        return {}
+    lines: dict[str, Any] = {"version": found.get("version")}
+    lines |= {f"cash {line['broker_id']}/{line['currency']}": line["balance"] for line in found.get("cash", [])}
+    lines |= {f"quantity {line['broker_id']}/{line['asset_id']}": line["quantity"] for line in found.get("quantities", [])}
+    return lines
 
 
 def assert_populated(database: Path) -> None:
@@ -335,6 +398,25 @@ def empty_instance(databases, tmp_path_factory) -> Path:
     return root
 
 
+@pytest.fixture(scope="module")
+def older_ledger_archive(databases, tmp_path_factory) -> BuiltArchive:
+    """A backup at ``OLDER`` with a ledger, made by this LibreFolio's backup (``archive.build_archive``) as
+    ``test_backup_staging.py`` makes its ``older_archive``: that module's accounts and files, and ``LEDGER_AT_OLDER``."""
+    root = tmp_path_factory.mktemp("older-ledger-archive")
+    with pytest.MonkeyPatch.context() as patch:
+        configured = cases.configure(patch, root / "configured-data-dir")
+        try:
+            data = cases.make_data_dir(root / "data", databases.older)
+            cases.execute(data / DATABASE_ENTRY, *LEDGER_AT_OLDER)
+            built = cases.build_into(data, root / "work")
+        finally:
+            get_git_version.cache_clear()
+    assert not configured.exists(), f"the backup wrote in the configured data directory: {cases.listing(configured)}"
+    assert (built.manifest.alembic_revision, built.warnings) == (cases.OLDER, ()), f"precondition: a clean archive at {cases.OLDER}: {built.manifest.alembic_revision}, {built.warnings}"
+    assert built.manifest.database.tables.get("transactions") == len(LEDGER_TRANSACTIONS), f"precondition: the archive holds the ledger: {built.manifest.database.tables.get('transactions')} transactions"
+    return built
+
+
 @pytest.fixture
 def target(empty_instance, tmp_path) -> Iterator[Path]:
     """A copy of the empty instance, for one test. At its end, its children wrote nothing in their production data
@@ -354,18 +436,22 @@ def test_a_backup_of_a_populated_instance_restored_on_an_empty_instance_gives_th
     """§9.1 Checked and confirmed by the command line (the copy kept, nothing written outside ``.restore``), applied and
     committed by the next start; then the totals of the source and of the target, back to back. The source's are what
     its archive holds (rows and files); the target's are the same: every table holds the rows it held, every file is
-    back byte for byte, every account's portfolio report is the same. ``committed``, nothing of the restore left; every
-    account at the restore's session value, above every version the source held: no session of the source survives."""
+    back byte for byte, every account's portfolio report is the same, and so is the ledger's control totals. ``committed``,
+    nothing of the restore left; every account at the restore's session value, above every version the source held: no
+    session of the source survives. B-13 §6: the source's ledger totals are those its archive's manifest recorded at the
+    backup, and the check reported them ``same``."""
     print_section("§9.1 A populated instance, restored on an empty one")
     before = cases.fingerprint(target)
     confirmed = restore_yes(source.archive, target)
-    assert confirmed.returncode == 0, f"[new] restore --yes checks the archive on a copy and confirms it: {shown(confirmed)}"
+    assert confirmed.returncode == 0, f"restore --yes checks the archive on a copy and confirms it: {shown(confirmed)}"
     pending = restore_state(target)
     assert pending is not None and pending["status"] == "pending", f"the restore waits for the next start: {pending}"
     assert (stage_dir(target, pending["stage_id"]) / STAGE_DATA_FOLDER / DATABASE_ENTRY).is_file(), "the checked copy is kept for the start"
     assert cases.changed(before, cases.fingerprint(target)) == [], f"a confirmation writes nothing outside .restore: {cases.changed(before, cases.fingerprint(target))}"
+    # Read now: the commit removes the copy and its report.
+    checked = read_report(target, pending["stage_id"])
     started = start(target, RESTORE_START)
-    assert started.returncode == 0, f"[new] the start applies and commits the restore: {shown(started)}"
+    assert started.returncode == 0, f"the start applies and commits the restore: {shown(started)}"
     state = restore_state(target)
     assert state is not None and state["status"] == "committed", f"committed by the start: {state}"
     left = [name for name in ("previous", "failed") if (restore_dir(target) / name).exists()] + stages_left(target)
@@ -382,17 +468,30 @@ def test_a_backup_of_a_populated_instance_restored_on_an_empty_instance_gives_th
     assert differences(original["rows"], restored["rows"]) == [], f"the rows of every table: {differences(original['rows'], restored['rows'])}"
     assert differences(original["files"], restored["files"]) == [], f"every file: {differences(original['files'], restored['files'])}"
     assert differences(original["reports"], restored["reports"]) == [], f"every account's portfolio report: {differences(original['reports'], restored['reports'])}"
-    print_success(f"{len(restored['rows'])} tables, {len(restored['files'])} files, {len(restored['reports'])} reports: the same (populate {source.populate_seconds:.1f}s)")
+    ledger = original["control_totals"]
+    assert ledger["cash"] and ledger["quantities"], f"precondition: the populated ledger has cash and positions to total: {ledger}"
+    assert restored["control_totals"] == ledger, f"the ledger's control totals: {differences(ledger_lines(ledger), ledger_lines(restored['control_totals']))}"
+
+    # B-13: what the backup recorded, and what the check said.
+    recorded = getattr(source.manifest.database, "control_totals", None)
+    assert recorded == ledger, f"[new] the archive's manifest records the source's ledger totals, read on the backup's snapshot (B-13 §2): {differences(ledger_lines(ledger), ledger_lines(recorded))}"
+    status = getattr(checked, "control_totals", None)
+    assert status == "same", f"[new] the check compares the archive's ledger totals with its copy's: the same (B-13 §3), not {status!r}"
+    assert (list(checked.control_totals_differences), checked.control_totals_differences_count) == ([], 0), f"no difference: {checked.control_totals_differences}, {checked.control_totals_differences_count}"
+    assert not TOTALS_WARNINGS & set(checked.warnings), f"no warning about the ledger's totals: {checked.warnings}"
+    print_success(f"{len(restored['rows'])} tables, {len(restored['files'])} files, {len(restored['reports'])} reports, {len(ledger['cash'])} cash lines and {len(ledger['quantities'])} positions: the same (populate {source.populate_seconds:.1f}s)")
 
 
-def test_an_older_backup_is_restored_through_the_check_and_the_confirmation(older_archive, target):
+def test_an_older_backup_is_restored_through_the_check_and_the_confirmation(older_ledger_archive, target):
     """§9.2 A backup at ``OLDER``: the check upgrades its copy (a real ``alembic upgrade``), the start puts it in place.
     Committed, the live database at the head, its rows as the check's report said — but ``global_settings``, to which
     the start's ``global-settings`` step adds the defaults the backup lacked, and only those: every setting the check
-    left is there, unchanged. The backup's administrators are the instance's."""
+    left is there, unchanged. The backup's administrators are the instance's. Its ledger (B-13 §6): the restored database
+    at the head has the totals of ``LEDGER_AT_OLDER``; the manifest made at ``OLDER`` by this LibreFolio's backup records
+    them, and the check reports them ``same`` after its upgrade."""
     print_section("§9.2 A backup at an older revision")
-    confirmed = restore_yes(older_archive.path, target)
-    assert confirmed.returncode == 0, f"[new] restore --yes checks the archive on a copy and confirms it: {shown(confirmed)}"
+    confirmed = restore_yes(older_ledger_archive.path, target)
+    assert confirmed.returncode == 0, f"restore --yes checks the archive on a copy and confirms it: {shown(confirmed)}"
     pending = restore_state(target)
     assert pending is not None and (pending["status"], pending["action"]) == ("pending", "upgrade"), f"an upgrade waits for the next start: {pending}"
     report = read_report(target, pending["stage_id"])
@@ -400,7 +499,7 @@ def test_an_older_backup_is_restored_through_the_check_and_the_confirmation(olde
     copy = stage_dir(target, pending["stage_id"]) / STAGE_DATA_FOLDER / DATABASE_ENTRY
     checked_settings = set(cases.rows_of(copy, "SELECT key, value FROM global_settings"))
     started = start(target, RESTORE_START)
-    assert started.returncode == 0, f"[new] the start applies and commits the restore: {shown(started)}"
+    assert started.returncode == 0, f"the start applies and commits the restore: {shown(started)}"
     state = restore_state(target)
     assert state is not None and state["status"] == "committed", f"committed by the start: {state}"
     database = target / DATABASE_ENTRY
@@ -416,7 +515,17 @@ def test_an_older_backup_is_restored_through_the_check_and_the_confirmation(olde
     assert found["global_settings"] == expected["global_settings"] + len(added), f"global_settings: {expected['global_settings']} restored + {len(added)} defaults, not {found['global_settings']}"
     administrators = [row[0] for row in cases.rows_of(database, "SELECT username FROM users WHERE is_superuser = 1 AND is_active = 1 ORDER BY username")]
     assert administrators == report.administrators, f"the backup's administrators sign in after it: {administrators}"
-    print_success(f"{cases.OLDER} → {cases.HEAD}: committed, {len(expected)} tables as the report said")
+    measured = totals(target)
+    assert measured["control_totals"] == LEDGER_AT_OLDER_TOTALS, f"the restored database at the head holds the ledger written at {cases.OLDER}: {differences(ledger_lines(LEDGER_AT_OLDER_TOTALS), ledger_lines(measured['control_totals']))}"
+
+    # B-13: what the backup at OLDER recorded, and what the check said after its upgrade.
+    recorded = getattr(older_ledger_archive.manifest.database, "control_totals", None)
+    assert recorded == LEDGER_AT_OLDER_TOTALS, f"[new] the manifest made at {cases.OLDER} by this LibreFolio's backup records the totals of its ledger (B-13 §2): {differences(ledger_lines(LEDGER_AT_OLDER_TOTALS), ledger_lines(recorded))}"
+    status = getattr(report, "control_totals", None)
+    assert status == "same", f"[new] the check compares the archive's ledger totals with its copy's after the upgrade: the same (B-13 §3), not {status!r}"
+    assert (list(report.control_totals_differences), report.control_totals_differences_count) == ([], 0), f"no difference: {report.control_totals_differences}, {report.control_totals_differences_count}"
+    assert not TOTALS_WARNINGS & set(report.warnings), f"no warning about the ledger's totals: {report.warnings}"
+    print_success(f"{cases.OLDER} → {cases.HEAD}: committed, {len(expected)} tables as the report said, the ledger's totals the same")
 
 
 def test_a_backup_of_a_newer_librefolio_is_refused_and_the_target_is_left_as_it_was(databases, target, tmp_path):
@@ -427,7 +536,7 @@ def test_a_backup_of_a_newer_librefolio_is_refused_and_the_target_is_left_as_it_
     archive = cases.newer_revision(tmp_path / "newer", None, databases)
     before = cases.fingerprint(target)
     refused = restore_yes(archive, target)
-    assert refused.returncode == 1 and "(revision_unknown)" in refused.stdout, f"[new] refused by the check, exit 1, its code in parentheses: {shown(refused)}"
+    assert refused.returncode == 1 and "(revision_unknown)" in refused.stdout, f"refused by the check, exit 1, its code in parentheses: {shown(refused)}"
     assert (restore_state(target), stages_left(target)) == (None, []), "nothing confirmed, no copy left"
     assert cases.changed(before, cases.fingerprint(target)) == [], f"the target untouched: {cases.changed(before, cases.fingerprint(target))}"
     print_success("revision_unknown, exit 1, nothing changed")
