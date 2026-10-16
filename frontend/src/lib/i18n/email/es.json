@@ -129,6 +129,7 @@
         "EMAIL_RECIPIENT_NOT_ALLOWED": "Un enlace de restablecimiento solo va a la dirección de su cuenta.",
         "EMAIL_RECIPIENT_INVALID": "No es una sola dirección de correo válida.",
         "EMAIL_RATE_LIMITED": "Se alcanzó el límite de correos por hora: inténtalo de nuevo en {minutes} min.",
+        "RECIPIENT_REFUSED": "El servidor SMTP ha rechazado la dirección del destinatario.",
         "generic": "No se pudo enviar el correo."
       }
     },
