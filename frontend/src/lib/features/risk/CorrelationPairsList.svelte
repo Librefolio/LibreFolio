@@ -83,13 +83,13 @@
             <li>
                 <button
                     type="button"
-                    class="w-full rounded-lg border px-2 py-1.5 text-left transition-colors {selectedKey === key ? 'border-slate-300 bg-slate-100 dark:border-slate-500 dark:bg-slate-700' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'}"
+                    class="w-full rounded-lg border px-2 py-1.5 text-left transition-colors {selectedKey === key ? 'border-lf-input bg-lf-panel' : 'border-transparent hover:bg-lf-hover'}"
                     aria-pressed={selectedKey === key}
                     onclick={() => onselect?.(pair)}
                     data-testid="risk-correlation-pair-{pair.rowAssetId}-{pair.columnAssetId}"
                 >
                     <span class="flex items-center gap-2">
-                        <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">{index + 1}</span>
+                        <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-lf-panel text-[11px] font-semibold text-lf-secondary">{index + 1}</span>
                         <span class="w-11 shrink-0 font-mono text-sm font-semibold tabular-nums {toneClass(pair)}">{formatFixed(pair.value, 2)}</span>
                         <span class="rounded px-1.5 py-0.5 text-[11px] font-medium {tagClass(pair)}" data-testid={pair.nearIdentical ? `risk-correlation-pair-near-identical-${pair.rowAssetId}-${pair.columnAssetId}` : undefined}>
                             {tag(pair)}
@@ -98,9 +98,9 @@
                     <!-- The names scroll when they do not fit, as they do across the app's tables
                          (`scrollOnOverflow`). No `title`: a native box that pops up when the mouse
                          rests covered the next entries, and the full pair is in the matrix tooltip. -->
-                    <span class="mt-0.5 flex min-w-0 items-baseline gap-1 pl-7 text-xs text-slate-500 dark:text-slate-400">
+                    <span class="mt-0.5 flex min-w-0 items-baseline gap-1 pl-7 text-xs text-lf-muted">
                         <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1">{nameOf(pair.rowAssetId)}</span>
-                        <span class="shrink-0 text-slate-400">↔</span>
+                        <span class="shrink-0 text-lf-muted">↔</span>
                         <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1">{nameOf(pair.columnAssetId)}</span>
                     </span>
                 </button>
@@ -111,20 +111,20 @@
 
 <div class="space-y-4" data-testid="risk-correlation-pairs">
     <section data-testid="risk-correlation-pairs-correlated">
-        <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{$t('risk.assetSet.pairs.correlatedTitle')}</h4>
-        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{$t('risk.assetSet.pairs.correlatedHint')}</p>
+        <h4 class="text-sm font-semibold text-lf-primary">{$t('risk.assetSet.pairs.correlatedTitle')}</h4>
+        <p class="mt-0.5 text-xs text-lf-muted">{$t('risk.assetSet.pairs.correlatedHint')}</p>
         {#if pairs.correlated.length === 0}
-            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400" data-testid="risk-correlation-pairs-correlated-empty">{$t('risk.assetSet.pairs.noneCorrelated')}</p>
+            <p class="mt-2 text-xs text-lf-muted" data-testid="risk-correlation-pairs-correlated-empty">{$t('risk.assetSet.pairs.noneCorrelated')}</p>
         {:else}
             {@render ranking(pairs.correlated)}
         {/if}
     </section>
 
     <section data-testid="risk-correlation-pairs-offsetting">
-        <h4 class="text-sm font-semibold text-slate-800 dark:text-slate-100">{$t('risk.assetSet.pairs.offsettingTitle')}</h4>
-        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{$t('risk.assetSet.pairs.offsettingHint')}</p>
+        <h4 class="text-sm font-semibold text-lf-primary">{$t('risk.assetSet.pairs.offsettingTitle')}</h4>
+        <p class="mt-0.5 text-xs text-lf-muted">{$t('risk.assetSet.pairs.offsettingHint')}</p>
         {#if pairs.offsetting.length === 0}
-            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400" data-testid="risk-correlation-pairs-offsetting-empty">{$t('risk.assetSet.pairs.noneOffsetting')}</p>
+            <p class="mt-2 text-xs text-lf-muted" data-testid="risk-correlation-pairs-offsetting-empty">{$t('risk.assetSet.pairs.noneOffsetting')}</p>
         {:else}
             {@render ranking(pairs.offsetting)}
         {/if}
