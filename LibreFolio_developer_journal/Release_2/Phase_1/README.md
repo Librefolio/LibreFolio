@@ -170,3 +170,7 @@ Sono tutti locali: la push la fa il developer.
 | 81 | 16/10 02:52 | Y: Y4b (FE2b, il frontend del rischio in `lib/features/risk/`: 103 rinomine, import, runner, doc, devWiki, baseline dei colori; E2E `risk` 38 e `risk-lab` 44) | `08efa5ac3` |
 | 82 | 16/10 02:55 | B: B2 (controllo di un archivio su una copia: `staging.py`, `restore_jobs.py`, `/backup/restore/*`, CLI `restore --dry-run`, `backup_in_progress()`, limite di caricamento; decisioni 40, 42, 43; all-backend 18 359/0) | `5441b96ed` |
 | 83 | 16/10 03:00 | E: E-5 (guardia dei testi OpenAPI che il generatore incolla grezzi; regola 4 dei contratti API; 52 componenti latenti, nessuno rotto) | `01598f9ad` |
+| 84 | 16/10 03:05 | X: CP11b (scheda Impostazioni › Plugin, «Configura» dal pannello del fornitore e dalla ricerca, legenda 👑, sottosistema i18n `pluginSettings`; E2E 104) | `0241a87e8` |
+| 85 | 16/10 03:07 | Z: Z7b (lo scheduler rimanda gli elementi `RATE_LIMITED` fino a `retry_at` e aspetta 1, 2, 4… minuti dopo un errore; campi nuovi nello stato e nella risposta del risveglio) | `e5e2595e7` |
+| 86 | 16/10 03:52 | H: CP7b-1 (F15 sempre attivo: `nosniff` e `Referrer-Policy` su ogni risposta; F28: solo `_app/immutable/` immutabile; tipi MIME registrati dall'app; all-backend 17 084/0) | `1f4c5aeca` |
+| 87 | 16/10 03:55 | J: CP-6 (decisione 28: giorni «dirty» anche per i soli cambi dei titoli, per le quotazioni e per il primo giorno di un prezzo vecchio; `native_cash.change_days` unica; golden W1 rigenerato; J-20; B11 chiusa) | `628e3e49e` |

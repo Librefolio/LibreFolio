@@ -2787,3 +2787,54 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > `files-uploader` 8, `files-destructive` 6, `files-pdf-offline` 1, `image-crop` 42. Porta 6181 libera.
 
 #### Checkpoint CP-U2 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: CP-U2 è in `dev_release2` (treno 79, merge `2d1eee33a`), con 4 righe nel CHANGELOG; la condizione di
+> rilascio sulla pagina utente dei File è chiusa. Prima, sulla revisione combinata `b3feddd2c`: `api sync`, `front
+> check` 0/0 (al primo giro 12 errori, solo per il client generato non aggiornato dopo il merge), Vitest 93, E2E `files`
+> 29. Le registrazioni di CP7b-1 le ho tolte durante il merge, salvate in patch con `git apply -R`, e poi rimesse.
+
+### CP7b-1 — header e cache (2026-10-16, notte) — in corso
+
+#### Passo 1 — la cura ✅
+
+> **Note implementazione** (script `/tmp/librefolio-r13-h-7b1/apply_cp7b1.py`, applicato su `b3feddd2c`):
+>
+> - `platform/security_headers.py`, nuovo: `SecurityHeadersMiddleware` mette `nosniff` e
+>   `Referrer-Policy: strict-origin-when-cross-origin` su ogni risposta HTTP, senza sovrascrivere quelli di una rotta.
+>   Se la richiesta fallisce prima che la risposta parta, manda da sé il 500 con gli header e poi rilancia.
+>   `register_served_types()` registra i tipi che servono a `nosniff` (font, `.map`, `.mjs`, `.wasm`…).
+> - `middleware.py`: la pila è `activity` (Z), `security_headers`, `gzip`, `cors`.
+> - `static_site.py`: `immutable` solo sotto `_app/immutable/`, il resto di `/_app` in `no-cache, must-revalidate`,
+>   anche sui 304; `install_static_site` chiama `register_served_types()`.
+> - `static_uploads.py` (nota di W): il TODO citava `EVENT_COMPATIBLE_TYPES`, che non c'è più. Fatto invece che
+>   ripuntato: le due liste di blocco sono `frozenset`.
+>
+> **Prove**, una alla volta, carico sotto 70; i rossi passano tutti al primo giro:
+>
+> - `services static-cache-policy` 26, `services security-headers` 15, `utils nosniff-content-types` 30;
+> - `utils served-content-types` 36, `services app-lifecycle` 42 (Z ha tolto il caso «nessuna scadenza», come
+>   concordato), `utils static-route-confinement` 26, `services static-uploads` 73;
+> - `db populate --force`; `api http-compression` 10, `api uploads-serve-file` 13, `api system` 117,
+>   `api instance-block` 60.
+
+#### Passo 2 — doc, ritocchi e prove pesanti ✅ (2026-10-16, notte)
+
+> **Note implementazione**:
+>
+> - doc (docs-writer): `developer/architecture/security.md`, sezione nuova `#response-headers`;
+>   `developer/architecture/overview.md`, la pila a quattro voci e un paragrafo sulla cache del browser (HTML e file di
+>   `/_app` senza hash revalidati, `/_app/immutable/` per un anno, miniature `private`); `developer/api/overview.md`,
+>   il posto di `gzip` nella pila; wiki `problems/stale-frontend-after-update-html-cached.md`. Nessun debito di
+>   traduzione;
+> - corretti, perché esageravano, i commenti di `security_headers.py`, la docstring di
+>   `test_nosniff_content_types.py` (test-author) e due frasi delle mie registrazioni nel runner. Per la specifica
+>   Fetch, `nosniff` rifiuta solo script e fogli di stile di un altro tipo, non font e mappe. Registrare i tipi resta
+>   giusto: niente esce come `application/octet-stream`. Aggiornata anche la docstring di `middleware.py`, che
+>   descriveva la pila di prima.
+>
+> **Prove** (slot pesante 2): E2E `app-start-auth` 3, `files-pdf-offline` 1, `docs-offline-math` 2; `all-backend`
+> 7/7, **17 084 passed, 4 skipped, 0 failed** (02:55–03:28); `utils nosniff-content-types` 30, rilanciato dopo la
+> docstring; `mkdocs build --strict` senza avvisi; `check-links`; `check_source_paths` della pagina wiki. Porta 6181
+> libera.
+
+#### Checkpoint CP7b-1 🧊 (2026-10-16, notte) — FROZEN, in attesa del coordinatore

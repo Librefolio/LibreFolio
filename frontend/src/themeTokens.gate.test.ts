@@ -37,6 +37,9 @@
  * And app.css imports tokens.css, and every rule of the remap that targets a field (`input`, `select`, `textarea`),
  * its placeholder, an `option` or a rounded container (`.rounded-xl`, `.rounded-2xl`) carries the `:where(…)` that
  * exempts the elements with a role utility (`-lf-` in their classes).
+ * And inside the inverted tooltip a role reads the other theme's colour (Q10, its rule extended by D-T27): every
+ * `--lf-<X>-on-inverse` but the tooltip's own text, `--lf-text-on-inverse`, is in each theme the colour the other theme
+ * gives `--lf-<X>`. The roles are found by their name, so a new one is checked the day it is declared.
  *
  * ## How it reads, and what it cannot see
  *
@@ -263,9 +266,11 @@ const pairs = (foregrounds: string[], backgrounds: string[], min: number): Contr
  * the page's --lf-focus would give 1.73:1 in light; and the connection-security icons, on the bar and on their toggle
  * hovered.
  *
- * And the rest of round 2: a warning inside the tooltip, --lf-warning-on-inverse on --lf-surface-inverse; a highlighted
- * search result; the terminal box, its text, its prompt and its comments; the AI accent as text on its tint, on the
- * card and on the panel, and --lf-on-ai on its solid fill.
+ * And the rest of round 2: a warning inside the tooltip, --lf-warning-on-inverse on --lf-surface-inverse, and beside it
+ * — the Q10 rule extended by D-T27, each the other theme's colour — a danger, an info and the muted text,
+ * --lf-danger-on-inverse, --lf-info-on-inverse and --lf-text-muted-on-inverse; a highlighted search result; the
+ * terminal box, its text, its prompt and its comments; the AI accent as text on its tint, on the card and on the panel,
+ * and --lf-on-ai on its solid fill.
  *
  * What C3 cannot express: a control told apart by two colours at once. The knob of a switch turned off,
  * --lf-switch-knob-off, is white on the light track of --lf-switch-off in light, and the control is recognised by the
@@ -285,7 +290,7 @@ const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['on-status'], [...STATUSES, 'warning-hover'], TEXT),
     ...pairs(['on-danger-solid'], ['danger-solid', 'danger-hover'], TEXT),
     ...pairs(['on-checked'], ['checked'], TEXT),
-    ...pairs(['text-on-inverse', 'warning-on-inverse'], ['surface-inverse'], TEXT),
+    ...pairs(['text-on-inverse', 'warning-on-inverse', 'danger-on-inverse', 'info-on-inverse', 'text-muted-on-inverse'], ['surface-inverse'], TEXT),
     ...pairs(['mark-text'], ['mark-bg'], TEXT),
     ...pairs(['terminal-text', 'terminal-prompt', 'terminal-comment'], ['terminal-bg'], TEXT),
     ...pairs(['ai'], ['ai-soft', 'surface-card', 'surface-panel'], TEXT),
@@ -386,6 +391,112 @@ describe('tokens.css: contrast in both themes (C3)', () => {
             KNOWN_EXCEPTIONS.filter((entry) => entry.reason.trim().length < 20).map((entry) => pairName(entry.theme, entry)),
             'an exception carries the reason of the designer and its date',
         ).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Q10: inside the inverted tooltip, the other theme's colour
+// ---------------------------------------------------------------------------
+
+/** A role of the inverted tooltip: `--lf-danger-on-inverse` names `danger`, and the rule pairs it with `--lf-danger`. */
+const ON_INVERSE = /^--lf-([a-z0-9]+(?:-[a-z0-9]+)*)-on-inverse$/;
+
+/** The tooltip's own text, the card colour on the inverted surface (`var(--lf-surface-card)`): no other theme's role, the one role of the family the rule leaves out. */
+const INVERSE_TEXT = '--lf-text-on-inverse';
+
+/** The base roles of the rule — `<X>` for every `--lf-<X>-on-inverse` the light, the derived or the dark block declares — once each, in the order of the file. */
+function inverseBases(tokens: Tokens): string[] {
+    const out: string[] = [];
+    for (const name of declaredRoles(tokens)) {
+        const base = ON_INVERSE.exec(name)?.[1];
+        if (base !== undefined && name !== INVERSE_TEXT) out.push(base);
+    }
+    return out;
+}
+
+/**
+ * Q10: what keeps a role of the inverted tooltip from being, in each theme, the colour the other theme gives its base
+ * role. Colours are compared as this file shows them — `#rrggbb` in lower case, so `#F59E0B` is `#f59e0b`, and the alpha
+ * when there is one — after `var()` and `color-mix()` are resolved, never as they are written.
+ */
+function inverseFindings(tokens: Tokens): string[] {
+    const out: string[] = [];
+    for (const theme of THEMES) {
+        const other: Theme = theme === 'light' ? 'dark' : 'light';
+        for (const base of inverseBases(tokens)) {
+            const role = `--lf-${base}-on-inverse`;
+            const inverse = colourOf(tokens, `var(${role})`, theme);
+            const twin = colourOf(tokens, `var(--lf-${base})`, other);
+            if (typeof inverse === 'string') out.push(`${theme}  ${role}: ${inverse}`);
+            else if (typeof twin === 'string') out.push(`${theme}  ${role}: ${twin}`);
+            else if (shown(inverse) !== shown(twin)) out.push(`${theme}  ${role} is ${shown(inverse)}, the ${other} --lf-${base} ${shown(twin)}`);
+        }
+    }
+    return out;
+}
+
+/**
+ * Three blocks with a role of the rule in every state the check tells apart: the warning right in both themes, once in
+ * upper case; the danger left at its own theme's colour in light, the likeliest slip; the info wrong in dark alone; the
+ * muted text derived from its own theme's base, wrong in both; a role whose base no block declares; and the tooltip
+ * text, which the rule leaves out.
+ */
+const INVERSE_SAMPLE = `
+:root,
+html.light,
+.light {
+    --lf-surface-card: #fafbfa;
+    --lf-text-muted: #616d67;
+    --lf-warning: #ae4e00;
+    --lf-warning-on-inverse: #F59E0B;
+    --lf-danger: #c82838;
+    --lf-danger-on-inverse: #c82838;
+    --lf-info: #155eef;
+    --lf-info-on-inverse: #3f86fa;
+    --lf-ghost-on-inverse: #ffffff;
+}
+
+:root,
+.light,
+.dark {
+    --lf-text-on-inverse: var(--lf-surface-card);
+    --lf-text-muted-on-inverse: var(--lf-text-muted);
+}
+
+html.dark,
+.dark {
+    --lf-surface-card: #151b19;
+    --lf-text-muted: #7f8c87;
+    --lf-warning: #f59e0b;
+    --lf-warning-on-inverse: #ae4e00;
+    --lf-danger: #ff7a86;
+    --lf-danger-on-inverse: #c82838;
+    --lf-info: #3f86fa;
+    --lf-info-on-inverse: #3f86fa;
+    --lf-ghost-on-inverse: #000000;
+}
+`;
+
+describe("tokens.css: inside the inverted tooltip, the other theme's colour (Q10)", () => {
+    it("finds every -on-inverse role that is not the other theme's colour, and leaves the tooltip text out (positive control)", () => {
+        const sample = parseTokens(INVERSE_SAMPLE);
+        expect(inverseBases(sample), 'found by name in every block, the derived one included; --lf-text-on-inverse left out').toEqual(['warning', 'danger', 'info', 'ghost', 'text-muted']);
+        expect(inverseFindings(sample), 'the warning, the dark danger and the light info are right: #F59E0B is #f59e0b').toEqual([
+            'light  --lf-danger-on-inverse is #c82838, the dark --lf-danger #ff7a86',
+            'light  --lf-ghost-on-inverse: tokens.css: --lf-ghost is not declared for the dark theme',
+            'light  --lf-text-muted-on-inverse is #616d67, the dark --lf-text-muted #7f8c87',
+            'dark  --lf-info-on-inverse is #3f86fa, the light --lf-info #155eef',
+            'dark  --lf-ghost-on-inverse: tokens.css: --lf-ghost is not declared for the light theme',
+            'dark  --lf-text-muted-on-inverse is #7f8c87, the light --lf-text-muted #616d67',
+        ]);
+    });
+
+    it("Q10: every -on-inverse role but the tooltip text is, in each theme, the other theme's base role", () => {
+        const tokens = readTokens();
+        expect(inverseBases(tokens), 'positive control: the rule reaches the roles of the tooltip, found by their name').toEqual(expect.arrayContaining(['warning', 'danger', 'info', 'text-muted']));
+        const findings = inverseFindings(tokens);
+        const rule = "Inside the inverted tooltip a role reads the other theme's colour (Q10, D-T27): --lf-<X>-on-inverse is, in each theme, the other theme's --lf-<X>. Change a base role and the -on-inverse role of the other theme together.";
+        expect(findings, ['', rule, '', ...findings, ''].join('\n  ')).toEqual([]);
     });
 });
 
