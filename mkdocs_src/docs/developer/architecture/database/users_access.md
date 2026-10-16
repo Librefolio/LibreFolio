@@ -116,7 +116,10 @@ Migration `005_accounts_invites` added three columns:
   request, a cookie whose version is not the account's. `user_service.end_sessions()` raises it by one on a password
   change or reset (a reset link included), an email change, a deactivation or a demotion (from the CLI or the
   administrator API), and when an administrator signs the account out everywhere, ending every older session of the
-  account. See [Session Revocation](../security.md#session-revocation).
+  account. See [Session Revocation](../security.md#session-revocation). The first start after a
+  [restore](../security.md#backup-restore) gives every account the restore time in milliseconds instead (or one more
+  than the largest version either database held, when the clock is behind it): a time, not a counter, which a later
+  `end_sessions()` still raises by one.
 - ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified. The accounts that
   existed before the migration stay `NULL` — not verified, which is true — with no backfill: how they are
   treated once email verification is required is decided in the logic, not in the data (coordinator decision,

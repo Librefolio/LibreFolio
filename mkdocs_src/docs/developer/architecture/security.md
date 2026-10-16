@@ -117,6 +117,19 @@ taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *
 reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, a `PATCH` whose values
 equal the current ones, and a profile change that changes no email (a new username, or the stored email sent again).
 
+**A restore** sets the version of every account at once, without `end_sessions()`. The first start on a restored backup
+([Restoring a Backup](#backup-restore)), in its step `restore-commit`, gives every account of the restored database the
+same version, through `sqlite3`: `max(R, A + 1, B + 1)`, where `R` is the restore time in milliseconds, `A` the largest
+version of the restored database and `B` the largest of the database of before (`.restore/previous/sqlite/app.db`,
+opened read-only; `0` when it cannot be read or holds no account, as on a new installation). With a clock that is
+right the value is `R`: a time, not a counter, which a later `end_sessions()` still raises by one. Why a time
+(decision 40): `JWT_SECRET` is not in the backup and a restore does not change it, so where it is configured a cookie
+issued before the restore keeps a valid signature. The restored database is another history, where an account's id
+and version can be those of such a cookie, issued by the database of before or by one an earlier restore replaced;
+the time is above every version a counter reaches in any of them. The `max` only matters when the clock is behind a
+stored value. The value is recorded in the restore's state (`session_version`). Code: `_close_the_way_in()` in
+`backend/app/services/platform/instance_backup/apply.py`.
+
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
   `decode_jwt_token()` returns `SessionClaims(user_id, session_version)`, or `None` for a token that is expired or
@@ -143,7 +156,9 @@ Tests: `./dev.py test services session-version` (`backend/test_scripts/test_serv
 token, the check, the command-line callers and the refusals, in-process), `./dev.py test api session-revocation`
 (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
 second account), and, for the administrator API and the reset links, `./dev.py test api users-admin` and
-`./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change).
+`./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change). The
+restore's version: `./dev.py test services backup-apply` (the clock behind, a restore on top of another, then a
+password change that adds one).
 
 ### ✉️ Changing the Email {: #email-change }
 
@@ -601,7 +616,11 @@ that answer `401` on a blocked instance, so an invitation link can be read there
 full backup is on the list too, for the administrator (`backup_instance`: start, poll, download and
 delete; decision 12) and for the hosting panel (`backup_panel`: the same four, with the panel's token
 instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with its own token instead
-of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). Any other
+of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). The routes of a
+restore stay out, all of them (`/backup/restore/…`: the upload, the check, the confirmation, the status, the
+cancellation and the restart): the block lets the data leave, never come in, and nobody stops the server through
+the API. A restore confirmed before the block is applied at the next start all the same: the startup step does not
+read the block ([Restoring a Backup](#backup-restore)). Any other
 addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
@@ -675,13 +694,29 @@ otherwise it returns `None` and nothing changed — `inspect_token()` tells why.
 statement, with no gap between them: of two requests racing for the same link, only the one whose `UPDATE`
 changes the row gets it.
 
-### 🚫 Revocation
+### 🚫 Revocation {: #account-token-revocation }
 
 `revoke_tokens(session, token_id=…)` revokes one token, `revoke_tokens(session, user_id=…)` the tokens of one
 account, optionally of one `purpose`. It sets `revoked_at` on the matching tokens that are neither consumed nor
 revoked — expired ones included — and returns how many; consumed and revoked tokens keep their timestamps.
 Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke every token. An invitation has no
 `user_id`: it is revoked by its id.
+
+A restore revokes the live tokens of the whole restored database at once, at its first start
+([Restoring a Backup](#backup-restore)): in the transaction that sets the session versions
+([Session Revocation](#session-revocation)), every row of `account_tokens` that is neither consumed nor revoked,
+whatever its purpose and expired or not, gets `revoked_at` = the restore time, written as SQLAlchemy writes it (UTC,
+without offset). A link spent or revoked on the instance after the backup was taken is live again in the backup's
+database: without this it would work a second time. The links issued after the backup are not in the restored
+database at all. The count is logged, as `links_revoked` of *Restore committed: every session ended, the backup's
+one-time links revoked*.
+
+An account the backup held waiting for its email verification (inactive, with an unspent verification token:
+`verification.awaiting_verification()`) loses its token with the others, the hold included, and so stops waiting. The
+sign-in page's resend then answers `403` `ACCOUNT_DISABLED`, and nothing sends it a new link: an administrator activates
+it (`PATCH /users/{user_id}`, `email_verified_at` stays `NULL`), or deletes it so that its owner signs up again. Such an
+account never signed in, so it holds no data. The report of the check says so (`scripts/backup_cli.py`), whether or not
+the backup holds one.
 
 ### 🧾 Transactions and Logs
 
@@ -731,6 +766,155 @@ tokens:
   the page changes only the fragment and loads nothing, so the page reads the new token there. Both declare
   `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
   components are in [Authentication Components](../frontend/components/features/auth.md#link-pages).
+
+## 💾 Restoring a Backup {: #backup-restore }
+
+A restore of the whole instance comes in two moves, and neither touches the live data. The check (lot B2) unpacks an
+archive into `.restore/stage/<stage id>/`, brings the copy to this LibreFolio's revision and checks it. The
+confirmation (lot B3) records the restore; the next start of the server applies it, before any startup step reads the
+data. The code is in `backend/app/services/platform/instance_backup/`: `apply.py` (the state, the swap, the rollback,
+the commit), `restart.py`, `restore_jobs.py` (the checks of the API) and `paths.py`; the routes are in
+`backend/app/api/v1/backup/restore.py`, the command line in `scripts/backup_cli.py`. The administrator's side is
+«Restore an Archive» in [Command-Line Tools](../../admin/cli_tools.md).
+
+### 🔐 The Routes {: #backup-restore-routes }
+
+Every route under `/backup/restore` requires an administrator (`require_admin`), and none is in
+`ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error answers `{"detail": {"code": …, "message": …}}`
+(`backup_error`), never with a path of the server in it.
+
+| Route | What it does |
+|-------|--------------|
+| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2) |
+| `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
+| `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
+| `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory` or `server_running`) on a restore a start left waiting |
+| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`); its copy stays until the check expires, and can be confirmed again. `404` `restore_not_pending` |
+| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `409` `restore_not_pending` |
+
+Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backup/restore/upload` accepts at the time of
+the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
+`backup_upload_unavailable`, and an error naming the variable is logged).
+
+On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
+with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints
+what it reads from an archive or from the restore's state (versions, revision, table and administrator names, who
+confirmed, the data directory's path) through `_safe()` in `scripts/backup_cli.py`: every character that is not
+printable, control characters and escape sequences included, becomes `?`, so an archive cannot drive the operator's
+terminal.
+
+### 📄 The Restore State {: #backup-restore-state }
+
+One file holds the restore of a data directory, `.restore/restore.json` (`RestoreState`): `pending`, then `applying`,
+`applied` and `committed`, or `rolling_back` and `rolled_back`; with the stage, who confirmed it and when, the date and
+version of the backup, the journal of the swap, the boot that applied it, the reason of a rollback, why a start left it
+waiting (`waiting`), and the session version given at the commit.
+
+- **Written atomically.** A `.part` beside it, fsynced, then `os.replace` and an fsync of the folder: a reader, or the
+  next start, finds the old state or the new one, never half of one. Mode `0600`.
+- **Never through a link.** The file is opened with `O_NOFOLLOW`, and `.restore` must be a plain folder: a
+  confirmation that finds a link or a file there is refused (`BackupPathError`, `500` `restore_folder_unusable`), and
+  a startup step logs an error and ignores the restore. `.restore/` and the folders the restore makes in it are created
+  `0700` (`paths.ensure_private_dir`).
+- **Checked strictly.** A state is used only in the shape this LibreFolio writes: the journal may name only the four
+  swapped folders, and the stage id must be 32 lowercase hexadecimal digits, so nothing read from a file of the data
+  directory becomes a path outside the swap. Any other state is ignored, with an error logged.
+- **One at a time.** While a restore is not finished (`pending`, `applying`, `applied`, `rolling_back`), another one is
+  refused (`restore_already_pending`), and its checked copy is never dropped nor pruned, however old
+  (`restore_jobs.remove_check`, `prune`).
+- **The steps take turns** on an exclusive `flock` of `.restore/apply.lock`: the workers of one server run them one
+  after the other. An ordinary start, with no restore, only finds that the state file does not exist: it creates no
+  folder and no lock file.
+
+### 🔄 The Swap, the Journal and the Rollback {: #backup-restore-swap }
+
+The startup step `pending-restore` (`app_lifespan.STARTUP_STEPS`, after `tool-catalog`, before `data-directories` and
+`database`) applies a `pending` restore:
+
+1. It leaves it waiting, with `waiting` recorded, when the data directory's real path is not the one the restore was
+   confirmed for (`other_data_directory`: a copy of the data directory), when another server process serves the data
+   directory (`server_running`, see below), or when a backup holds its lock (`backup_running`).
+2. It records it `rolled_back` without moving anything when the checked copy is gone or changed (`stage_missing`), or
+   when one of the four folders of the data directory is a link or a file (`swap_failed`).
+3. It writes the journal, fsynced, before the first move: `applying`, the boot, and for each folder of
+   `SWAPPED_FOLDERS` (`sqlite`, `custom-uploads`, `broker_reports`, `scenario_catalog`) whether the live one and the
+   copy's existed.
+4. It moves, by renames inside the data directory: each live folder to `.restore/previous/`, then the copy's in its
+   place, with the mode the live one had. Then `applied`.
+
+`secrets/`, `logs/`, `scheduler_state.json`, `backups/` and anything else in the data directory are never touched.
+
+The step `restore-commit` (after `global-settings`) completes a restore `applied` by this boot. In one transaction of
+the restored database it ends every session ([Session Revocation](#session-revocation)) and revokes the live one-time
+links ([Revocation](#account-token-revocation)); then it records `committed`, and removes `.restore/previous/`
+(decision 41: the data of before only served to go back), the copy and its check state. What a finished restore,
+`committed` or `rolled_back`, leaves behind, a later start removes too.
+
+**The boot.** A start is known by the server's root process — `restart.server_pid()`: the parent that started this
+process through `multiprocessing` while it is alive, uvicorn's master with `--workers N` or its reloader, otherwise
+this process — and by that process's creation time, read with psutil once per process, so that a reused pid is never
+taken for it and a clock step during a start does not make it another boot (`apply.current_boot()`, `boot_alive()`).
+The workers of one server share the boot: the first swaps, the others find the restore applied by their own boot.
+
+**Never under a running server.** The step `serving-lock`, right after `data-directories` and before any step reads
+the data, gives every server process a shared `flock` on the data directory itself (`hold_serving_lock()`; no file is
+created), which the system releases when the process exits, however it ends. `pending-restore` runs before it, and
+before it moves anything it takes the same lock exclusively, without waiting, until its last move
+(`_exclusive_serving_lock()`). It cannot get it while another process serves, and a process reaching `serving-lock`
+meanwhile waits until the folders have moved, so nobody reads them half moved. The processes it finds serving are
+others: a worker that uvicorn starts again beside its running siblings (after a crash, or with `SIGHUP` or `SIGTTIN`),
+or a second server on the same data directory. A pending restore then waits (`server_running`), and a restore that a
+dead start applied is not undone under such a process. Where `flock` cannot be used (no `fcntl`, a file system without
+it), the lock finds nobody and a warning says so: the restore works as if there were no lock.
+
+**The rollback** is driven by what the files say, in the reverse order of the journal, and can be cut and run again:
+whatever stands in the data directory goes to `.restore/failed/`, and the folder in `.restore/previous/` comes back. A
+start runs it when it finds:
+
+- `applying` or `rolling_back`: a start died during the swap, or during a rollback (`swap_interrupted`, or the reason
+  already recorded); only the rollback makes such a data directory whole again, so it runs whoever serves, with the
+  lock held exclusively when it can be;
+- `applied` by a boot that no longer runs, while no server process serves the data directory: the first start on the
+  restored data died before `restore-commit`, on a migration that fails or a damaged file (`first_start_failed`);
+- an `OSError` during its own moves: at once (`swap_failed`), and the start goes on with the data as it was.
+
+**Fail closed.** `RestoreInUseError` (`restore_in_use`) stops the start rather than serve data whose restore is not
+committed: in `pending-restore`, when the restore was `applied` by another boot that still runs, or by a dead one
+while a server process serves the data directory; in `restore-commit`, when it was `applied` by another boot. A
+rollback that fails raises `RestoreApplyError` (`restore_apply_failed`): the data directory is half restored, so the
+start stops, the state stays `rolling_back`, and every later start tries again.
+
+### 🔌 The Restart {: #backup-restore-restart }
+
+A restore is applied at a start, never while the server serves. `POST /backup/restore/restart` answers `202` with the
+restore waiting; once the answer is sent, a `BackgroundTask` calls `restart.request_restart()`, which logs a warning
+and sends SIGTERM to the server's root process (`restart.server_pid()`, as for the boot): uvicorn's master stops its
+workers, and the shutdown budget bounds the stop («Stopping the Server» in
+[Configuration](../../admin/configuration.md)). The route answers `409` `restore_not_pending` unless a restore waits,
+so an administrator stops the server only to apply one; on a blocked instance it is refused like the others. The
+signal goes through `restart.send_signal`, `os.kill` by default, read at each call: the tests replace it and never
+stop a real server. Since the signal goes to the root process, the next start is one of the whole server, which finds
+no sibling holding the serving lock. uvicorn's `SIGHUP` is not one: it replaces the workers one at a time, each new one
+started before the old one ends, so the restore keeps waiting (`server_running`).
+
+Nothing in LibreFolio starts the server again: whatever supervises it does, after a stop that is not a failure.
+
+| Supervisor | Starts it again | Does not |
+|------------|-----------------|----------|
+| Docker | `restart: unless-stopped` (both compose files of the repository) or `always` | `on-failure`, `no` |
+| systemd | `Restart=always` | `Restart=on-failure` |
+| Fly.io Machine | The `always` restart policy | `on-fail`, the default of `fly launch` and `fly deploy` |
+
+In the Docker image, uvicorn is the container's first process and ends with status `0`, or `1` when the shutdown
+budget runs out. A Fly.io Machine stopped under `on-fail` waits for the Fly Proxy to wake it on a request, when its
+service lets it. Without a supervisor the server stays stopped until someone starts it, and the restore is applied
+then.
+
+Tests: `./dev.py test services backup-apply` (`backend/test_scripts/test_services/test_backup_apply.py`: the state,
+the swap, every rollback, the commit, the sessions and the links), `./dev.py test api backup-restore-apply` (the four
+routes, the signal recorded and never sent), `./dev.py test utils backup-cli-restore` (the command line) and
+`./dev.py test e2e backup-roundtrip` (a populated instance backed up, restored on an empty one, then started in a
+fresh process).
 
 ## 📡 Address Probe {: #address-probe }
 
