@@ -4177,3 +4177,99 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Fuori perimetro, trovato dal `test-author`** → backlog **A-22**: i tre «Login failed…» di `auth.py` (~160–167)
 >   scrivono `username=request.username`, che può essere un indirizzo (il login accetta l'email). Lo scan AST non lo
 >   vedeva (la chiave è `username=`). Proposta al coordinatore: un lotto piccolo subito dopo, o dentro A8.
+
+#### Ripresa dopo lo STOP e il riavvio (2026-10-16, 10:32)
+> - STOP del developer alle 08:46: lo script dei controlli era nell'attesa del carico (nessun runner, porta libera); fermato
+>   con `kill -TERM` sullo script e sul suo `sleep`. Al via (10:32) HEAD `356a01d4d`, aperto solo il file dei rossi di
+>   A-22.
+> - **Fuori pista — la macchina è stata riavviata** (uptime 31 minuti alle 10:34): `/tmp` è stata svuotata. Persi gli
+>   script e i log di prova (`/tmp/libreFolio_*`, già riassunti in questo piano) e la cartella della corsia
+>   `/tmp/librefolio-r13-a`, che `db populate --force` ricrea. Ricreati lo script dei controlli e quello di A-22.
+
+### P18 — Indirizzi email unici senza distinzione di maiuscole — contratto proposto (2026-10-16, 10:45)
+> **Decisione del developer** (P18, 10:32): gli indirizzi sono unici indipendentemente dal maiuscolo/minuscolo. Lotto dopo
+> A-22, contratto prima del codice.
+>
+> **Stato verificato** (`356a01d4d`):
+> - Database: `users.email` `UNIQUE` più `ix_users_email` (001), tutti e due esatti: `Alice@example.com` e
+>   `alice@example.com` oggi sono due account. `EmailStr` toglie gli spazi e mette in minuscolo il dominio, non la parte
+>   locale; la CLI `user create` non valida l'indirizzo.
+> - Confronti esatti: `user_service.get_user_by_email` (unicità in `create_user`: registrazione, invito, primo account,
+>   F02, CLI `create-user`/`create-superuser`; unicità in `update_profile`; F02 `_follow_variables`);
+>   `get_user_by_username_or_email` (login, e i flussi di E «password dimenticata» `flows.py:278` e «manda di nuovo il
+>   link» `verification.py:371`); il «cambio d'email» deciso con `!=` nella rotta (A6e, la password) e nel servizio
+>   (`email_changed`, la verifica, le sessioni); F02 `_follow_variables`.
+> - Inviti: nessun confronto (l'indirizzo dell'invito è un suggerimento; la registrazione che lo usa controlla l'unicità).
+> - E usa già `strip().casefold()` come chiave della casella in 5 punti (limiti, avviso del cambio, verifica), e non
+>   manda l'avviso per un cambio di sole maiuscole (`flows.py:348`).
+> - Alembic: tutte le migrazioni di un avvio in una transazione (`env.py`, nessun `transaction_per_migration`); testa 008.
+> - Prova a mano (SQLite 3.54, in memoria): un indice unico su `lower(email)` rifiuta `Alice@`/`ALICE@` dopo `alice@`, e
+>   la ricerca `lower(email) = lower(?)` lo usa; non vede `Émile@` contro `émile@` (`lower()` di SQLite piega solo A–Z).
+>
+> **Contratto proposto**:
+> - **C1 · La regola, in un posto**: due indirizzi sono lo stesso se coincidono a parte le maiuscole di A–Z, come le piega
+>   `lower()` di SQLite; `same_email(a, b)` e `email_fold(address)` in `user_service`. Le lettere fuori da ASCII si
+>   confrontano come scritte: limite documentato (Gmail e Outlook non accettano parti locali non ASCII).
+> - **C2 · Il database**: un indice unico `ux_users_email_lower` su `lower(email)`, dichiarato sul modello (così
+>   `create_all` dei test e il validatore dello schema lo vedono) e creato dalla migrazione 009. Nessuna colonna nuova:
+>   ogni scrittura, SQL a mano compreso, è coperta; l'indice esatto di oggi resta.
+> - **C3 · Le ricerche**: `get_user_by_email` e la metà email di `get_user_by_username_or_email` confrontano
+>   `lower(email) = lower(:valore)`: login, «password dimenticata», «manda di nuovo il link», unicità in registrazione,
+>   invito, profilo, F02 e CLI seguono senza toccare i file di E. Lo username resta com'è (esatto).
+> - **C4 · Le scritture**: l'indirizzo si salva come scritto. Uno che differisce da quello di un altro account solo per le
+>   maiuscole è rifiutato come oggi un duplicato esatto («Email already registered», `ACCOUNT_EXISTS`).
+> - **C5 · Un cambio di sole maiuscole del proprio indirizzo** è lo stesso indirizzo, come per l'avviso di E: si salva la
+>   forma nuova; niente password, nessuna sessione chiusa, la verifica resta, `email_changed` falso. Alternativa più
+>   stretta: trattarlo come un cambio (password, sessioni, verifica). La scheda Profilo chiede la password a ogni
+>   modifica del testo: resta così (più stretta, innocua).
+> - **C6 · Migrazione `009_users_email_unique_ignoring_case`** (giù 008): prima legge `id`, `username`, `email` di ogni
+>   account e li raggruppa con la stessa piega; se un gruppo ha più di un account si ferma e non scrive niente,
+>   nominando ogni gruppo per id e username, **mai gli indirizzi** (regola di E), con il rimedio. Altrimenti crea
+>   l'indice. Il downgrade lo toglie. Il controllo di B sul ripristino di un backup la esegue anche lui.
+> - **C7 · Il rimedio, `./dev.py user set-email <username> <indirizzo>`**: valida l'indirizzo (`EmailStr`), rifiuta uno
+>   già di un altro account (C1), lo cambia come un cambio d'email (verifica azzerata, sessioni chiuse: `update_profile`).
+>   Funziona anche sul database che la 009 ha rifiutato: il modello non ha colonne nuove.
+> - **Rossi** (prima del codice): servizi (`user-profile`, `registration`, `admin-bootstrap`: varianti di maiuscole
+>   rifiutate o riconosciute, il cambio di sole maiuscole), API (`registration`, `auth`: login per email in un'altra
+>   forma; `profile`; il «password dimenticata» di E in un'altra forma), CLI (`dev-cli-image`: `create-user` e
+>   `set-email`), `db migration-009` (DB nuovo con l'indice; DB con duplicati: si ferma, nomina id e username, nessun
+>   indirizzo, niente scritto; dopo `set-email` passa), `db schema-validation`.
+> - **Doc e CHANGELOG**: `access_control`, `security` (C5), `admin/cli_tools` (`set-email`), la nota d'aggiornamento;
+>   ⚠️ «Gli indirizzi email sono unici senza distinzione di maiuscole: un aggiornamento si ferma se due account hanno lo
+>   stesso indirizzo a parte le maiuscole, e li nomina; `user set-email` li separa».
+> - **Alternativa** (B): una colonna `email_key` = `strip().casefold()` (la chiave di E) con indice unico, tenuta da eventi
+>   del modello: unicità completa anche fuori da ASCII, ma una colonna su `users`, il riempimento nella migrazione, e un
+>   rimedio che non può usare il modello su un database non migrato.
+> - **Domande per il developer** (proposta per prima): C5 (il cambio di sole maiuscole è lo stesso indirizzo);
+>   C1 (il limite ASCII, oppure l'alternativa B); lo username resta con le maiuscole che distinguono (Alice ≠ alice),
+>   oppure la stessa regola, nel lotto di A-21.
+> **Approvato** dal coordinatore (10:49), con i dettagli decisi da lui, «da rivedere» (il developer considera ovvia la
+> regola): C5 sì (un cambio di sole maiuscole del proprio indirizzo è lo stesso indirizzo); C1 sì (indice unico su
+> `lower(email)`, senza colonna nuova, il limite ASCII accettato e documentato). La **migrazione 009** è riservata ad A
+> (nessun altro ramo ha migrazioni dopo la 008). Ordine: A-22, poi P18, poi A-21.
+> **A-21 si allarga** (dopo P18): gli username senza distinzione di maiuscole, con la stessa regola; e la nota di E: uno
+> username può contenere `@`, quindi il login e la «password dimenticata» per email possono finire sull'account
+> sbagliato (`get_user_by_username_or_email` con `.first()` e nessun ordine). Proposta: username nuovi senza `@`, e un
+> identificativo con `@` cerca solo l'email; per gli username esistenti con `@` prima un'analisi, nessun cambio
+> silenzioso.
+
+#### A-22 — Nessun identificativo digitato nei log dei login falliti ✅ (2026-10-16, 08:25–11:15)
+> - **Approvato** (08:24): `user_id` quando l'account esiste, niente quando non esiste; rosso prima.
+> - **Rossi** (`test-author`, solo scrittura, avvisato del merge di E5b aperto a metà): `test_auth_api.py`, classe
+>   `TestSignInLogsNoTypedIdentifier` in fondo al file (solo aggiunte, +326/−0, le righe di E5b intatte): LOGIN-027
+>   (indirizzo sconosciuto), 028 (username sconosciuto), 029 (password sbagliata, per indirizzo), 030 (per username: i
+>   campi dell'evento sono esattamente `{user_id}`), 031 (account disattivato, per indirizzo, 403 `ACCOUNT_DISABLED`);
+>   guardie LOGIN-032 (login riuscito) e 033 (account in attesa della verifica di E5b, 403 `EMAIL_NOT_VERIFIED`, che
+>   logga solo `user_id`). In-process su un DB privato, catture `capture_logs` e `caplog` con canarino; la cache del
+>   «dummy hash» di bcrypt isolata, così LOGIN-024 (costo vero) resta valido.
+> - **Controlli sulla revisione fusa con E5b** (`356a01d4d`, prima dello STOP e dopo la ripresa, `nice`, carico sotto
+>   50): `api sync` ✅; `services registration` ✅ 147, `admin-bootstrap` ✅ 156, `email-verification` ✅ 124;
+>   `db populate --force`; `api admin-setup` ✅ 42, `registration` ✅ 96, `email-verification` ✅ 49, `users-admin` ✅
+>   64; `front check` ✅ 0 errori; `api auth` 90 ✅ / 5 ❌, i cinque rossi di A-22 e solo loro (l'evento portava
+>   `username=`).
+> - **Cura**: in `login()` i tre «Login failed…» non portano più `username=request.username`: niente per «user not
+>   found», `user_id` per «wrong password» e «user inactive». `ruff` e `black` puliti.
+> - **Verde**: `api auth` ✅ 95 (11:10–11:11). Porta 6182 libera.
+> - **Doc**: `security.md`, «How Login Works»: un paragrafo sui log dei login rifiutati.
+> - **Backlog**: A-22 ✅; A-21 allargata (username senza distinzione di maiuscole, `@`, ricerca per email); A-23 nuova
+>   (da H-19, l'«address probe» che risponde 500).
