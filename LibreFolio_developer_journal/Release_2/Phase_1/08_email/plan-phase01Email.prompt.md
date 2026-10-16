@@ -1494,6 +1494,7 @@ nell'escape di `frontend/scripts/fix-openapi-discriminators.mjs` più un pytest 
 >   (`schemas/backup.py`). Hanno docstring su più righe con doppi backtick, la forma di E2b. Oggi si raggiungono solo
 >   come membri di unione e come risposte; un campo tipizzato direttamente con uno di loro romperebbe il client. Li ho
 >   segnalati al coordinatore, che decide se girarli a B.
+> - ✅ In `dev_release2` al treno 83 (merge `01598f9ad`). I tre latenti di B2 li gira a B il coordinatore.
 
 ### E5b — gli agganci della verifica nei file di A (2026-10-16)
 
@@ -1703,3 +1704,188 @@ E2E di E5b ed E4b si chiede lo slot. La procedura è quella del pacchetto `/tmp/
 > - Le docs: 11 pagine EN più la riga della pagina impostazioni in IT/FR/ES.
 > - Il CHANGELOG.
 > - Questo piano.
+>
+> Salvato dal coordinatore: `2d954624e` (feat, 54 percorsi) e `98812863f` (journal). `CHANGELOG.md` è rimasto fuori:
+> lo scrive il coordinatore all'ingresso, con le mie due righe (Added e Changed), quindi l'ho riportato a HEAD.
+
+#### E5b.6 — Il merge con A6c ✅ (2026-10-16, 04:40–05:07)
+> Il coordinatore ha aperto il merge di `dev_release2` `1704cfcf7` (treno 90, A6c: le regole della password) sopra
+> `98812863f`.
+>
+> Tre conflitti, risolti tenendo entrambi i lati e messi in stage:
+> - `registrationErrors.ts`: `REFUSAL_KEYS` ha sia `PASSWORD_TOO_WEAK` (A6c) sia `EMAIL_VERIFICATION_UNAVAILABLE`
+>   (E5b);
+> - `developer/architecture/security.md`: la frase di A6c (le regole della password pubblicate da `/system/instance`)
+>   più `/verify-email` nei punti sul token nel frammento e sulle pagine dei link («All three declare»);
+> - `developer/frontend/components/features/auth.md`: le due righe della tabella, prima quella di A6c.
+>
+> Ho rivisto a occhio i 18 file toccati da entrambi i lati e fusi da soli:
+> - `auth.py`, `register`: prima `_refuse_weak_password`, poi `register_user`, poi il mio aggancio; coerente;
+> - `schemas/auth.py`, `RegisterCard.svelte`, `test_auth_api.py` (le chiamate per nome; A6c non ne aggiunge di
+>   dirette), `test_users_admin_api.py`, `user_cli.py`, le pagine `admin/settings.*`, le pagine developer e i due file
+>   del runner: entrambi i lati presenti.
+>
+> Prove, una alla volta, `nice`:
+>
+> | Prova | Esito |
+> |---|---|
+> | `api sync` | ✅ |
+> | `i18n build` | 4 754 chiavi ✅ |
+> | Vitest del modulo auth | 15 file, 400 ✅ |
+> | `front check` | 0/0 ✅ |
+> | `api auth` | 88 ✅ |
+> | `api registration` | 96 ✅ |
+> | guardia E-5 | 78 ✅ |
+> | `mkdocs build` stretto | 0 WARNING o ERROR ✅ |
+>
+> Commit di merge del coordinatore: `f33836892`. Il ramo `dev` era già andato avanti (`72e66d1a6`): il coordinatore
+> aggiorna la base al prossimo checkpoint.
+
+#### E5b.7 — Revisione di sicurezza mirata ✅ scritta (2026-10-16), prove dopo le 06:45
+> Su richiesta del coordinatore, l'agente `security-review` ha letto, in sola lettura, `98812863f`: il nucleo di E5a
+> e gli agganci di E5b.
+>
+> Nessun modo di aggirare la verifica: login e ogni altra rotta controllano `is_active` (`get_current_user`); il link
+> di reset imposta la password ma non attiva e non dà un cookie; gli inviti aspettano anche loro; le sole scritture di
+> `is_active=True` sono `confirm_email` e le due dell'admin. Niente di nuovo dice a chi non è entrato se un account
+> esiste. Sani anche i token (scopo, uso singolo con UPDATE condizionale, hash), la guardia delle impostazioni (la
+> sola rotta che le scrive è la bulk), la pagina `/verify-email` (frammento, `replaceState`, `no-referrer`) e i log.
+>
+> | # | Gravità | File | Righe | Vulnerabilità | Confidenza |
+> |---|---|---|---|---|---|
+> | 1 | 🟡 MEDIUM | `services/email/verification.py`, `api/v1/auth.py` | 207–251, 314–347; 263–266 | Con la registrazione `open` e l'opzione accesa, una sola casella si può inondare di email di verifica: nessun limite per destinatario né per client, e il caso dell'indirizzo cambia la casella | 8/10 |
+> | 2 | ⚪ LOW | `services/email/verification.py` | 342–347, 207–230 | Corsa sul limite utenti: il `resend` con il link scaduto controlla `full` fuori dalla transazione | 8/10 |
+>
+> Le cure, nel mio file, applicate in E5b (decisione notturna, da rivedere):
+> - `VERIFICATION_BY_MAILBOX`, 3 email all'ora per casella, con l'indirizzo in casefold, come `FORGOT_BY_MAILBOX`:
+>   `peek` prima di creare qualcosa e `hit` solo dopo un invio riuscito, quindi un'email fallita non conta. Vale sia
+>   per l'email della registrazione (l'account aspetta senza email, si chiede di nuovo il link) sia per il `resend`
+>   (429 neutro con `Retry-After`).
+> - `needs_place`: con il link scaduto, `user_usage` si riconta dentro la transazione, come fa `register_user`.
+> - La prima scrittura è `revoke_tokens`, e se non revoca niente l'account non aspetta più: rollback con
+>   `EmailVerificationNotNeededError` o `VerificationAccountDisabledError`, e nessun link nuovo (nota 6 del
+>   revisore). Nella registrazione, questo caso dà la stessa riga `info` del controllo iniziale.
+> - Un `resend` con credenziali sbagliate ora logga `Verification resend refused: wrong credentials`, senza campi
+>   (nota 7).
+>
+> I test (`test-author`): fixture con un `VERIFICATION_BY_MAILBOX` privato in EMV, EVA ed EVH; nuovi EMV-043…048 ed
+> EVA-016; EMV-002 fissa il limite. Le docs (`docs-writer`, 11 blocchi): `admin/email.en.md` con la tabella dei
+> limiti, il paragrafo sotto e il log; `developer/backend/email.md` con i passi, i limiti e i log. Ho corretto due
+> righe del log per il caso «non aspetta più», che è `info`. Il runner e la tabella «Testing» sono aggiornati.
+>
+> **Da decidere, nella lista del mattino del coordinatore**:
+> - un limite per client sulle email di registrazione (10 all'ora per indirizzo). La mia proposta: oltre, l'account
+>   si crea ma l'email non parte; l'alternativa è un 429 sulla registrazione, contratto di A;
+> - il `PATCH is_active=false` no-op lascia l'attesa armata: propongo che revochi, come `user deactivate`. Rivede la
+>   mia decisione notturna;
+> - il link si spende al caricamento della pagina (scanner di posta con JavaScript): propongo un pulsante «Conferma».
+>
+> Fuori dalla cura, osservazioni del `test-author`:
+> - le email non sono uniche senza distinzione di maiuscole (codice e indice di A): il limitatore fa da paracadute, e
+>   la cura alla fonte è di A;
+> - con richieste in parallelo, tra `peek` e `hit` può passare qualche email in più, comunque limitata dagli altri
+>   limiti;
+> - i limitatori valgono per processo, come gli altri.
+
+#### E5b.8 — Pagine in più, autorizzate dal coordinatore ✅ (2026-10-16)
+> Solo EN:
+> - `admin/configuration.en.md`: la riga di `LIBREFOLIO_MAX_USERS` e `#user-limit` (la prima riga e il paragrafo
+>   finale);
+> - `admin/cli_tools.en.md`: il punto 📬 dopo il 📏 di `activate`;
+> - `admin/index.en.md`: la riga Email, nella forma per E5b.
+>
+> IT, FR ed ES non hanno quelle righe: sono aggiunte di A (e la mia riga Email) non tradotte dal 10/10. Il debito
+> c'era già, quindi **nessun timbro**, come dice la regola del coordinatore. Nell'handoff le dichiaro come file di A e
+> di H.
+
+#### E5b.9 — E2E al loro posto ✅ (2026-10-16), da eseguire nello slot
+> `frontend/e2e/auth-email-verification.spec.ts`, EVE-E-01…05, del `test-author`.
+> - 01–03: fuori sessione, su risposte simulate: la registrazione che aspetta, il 409 `EMAIL_VERIFICATION_UNAVAILABLE`,
+>   il 403 `EMAIL_NOT_VERIFIED` con il nuovo invio.
+> - 04–05: `e2e_test_admin` con `GET /system/instance` simulato: l'interruttore spento con `email.links` falso,
+>   usabile con vero; niente salvato.
+>
+> La modalità `open` si ottiene riscrivendo nel browser la risposta vera (`serveRegistrationMode`), quindi niente
+> scrive nel DB condiviso. `fixtures/instance-email.ts` è identico a quello del pacchetto E4b (verificato con `cmp`),
+> e l'ho annotato nel README di E4b.
+>
+> Registrato in `front-utility` come `email-verification`. Ho controllato i `data-testid` contro i componenti dopo
+> A6c: ci sono tutti; `info-banner-{variant}` e `settings-tab-${id}` sono dinamici.
+>
+> **Decisione notturna, da rivedere**: nessun aggancio di test nuovo nel prodotto (eventi `auth.register.*`, oppure
+> `data-disabled-reason` sull'interruttore). `RegisterCard` è appena cambiato con A6c, e le chiavi le fissano già i
+> Vitest RCV, RVR e GVR.
+
+#### E5b.10 — Regola dei colori ✅ (2026-10-16)
+> Uno scanner (`/tmp/libreFolio_mixed_roles.py`, provato su un caso positivo) cerca, in ogni attributo `class` e in
+> ogni stringa, un ruolo `-lf-` insieme a classi di tavolozza o a `dark:`. L'ho passato su `features/email/` (E2, E3p,
+> E5a, E4a), su `routes/verify-email/` e sui quattro file di A toccati da E5b: 0 elementi misti. Comunicato al
+> coordinatore.
+>
+> **Da fare dopo le 06:45**, una prova alla volta:
+> - `services email-verification` ed `email-verification-hooks`;
+> - `api email-verification` ed `email-verification-hooks`;
+> - `api users-admin`;
+> - `check-orphans`;
+> - `mkdocs build` e `check-links`;
+> - poi le E2E nello slot del coordinatore, e l'handoff finale.
+
+#### E5b.7, seguito — Le decisioni del coordinatore (05:15) e le due cure in più ✅ scritte, prove dopo le 06:45
+> Le risposte del coordinatore:
+> - il limite per casella, il riconteggio nella transazione e la riga di log: via, già applicati;
+> - **limite per client sulle email di registrazione**: via, come proposto (decisione notturna, da rivedere);
+> - **punto 1, il `PATCH is_active=false`**: via, revoca come `user deactivate`, per la regola «ogni cambio di stato
+>   dell'admin revoca»;
+> - **punto 2, il pulsante «Conferma»**: nella lista di domattina, perché cambia l'esperienza.
+>
+> **Cura A, il limite per client**:
+> - In `verification.py`: `REGISTRATION_EMAILS_BY_ADDRESS`, 10 all'ora per indirizzo del client (IPv6 per /64), e
+>   `registration_email_allowed()`, che conta solo i passaggi permessi; senza indirizzo non limita.
+> - In `auth.py`, `register` riceve `http_request: Request` dopo `background`. Oltre il limite l'account nasce in
+>   attesa (201, `verification_required: true`) ma l'email non parte; c'è una riga `info` «Verification email held»,
+>   e il titolare chiede di nuovo il link dalla pagina di accesso, con i limiti del `resend`.
+> - Niente 429 sulla registrazione: il contratto di A resta com'era.
+>
+> **Cura B, revisione della mia decisione notturna** (il `PATCH is_active=false` su un account in attesa, che era un
+> no-op). In `user_service.update_user_status`, con `is_active is False` su un account già inattivo, si revocano i
+> token `EMAIL_VERIFICATION`, e se qualcosa è stato revocato vale come cambio: commit e log. Per un account in attesa
+> l'attesa finisce, i link non valgono più, il posto si libera, la risposta dice `holds_place: false` e il login dice
+> `ACCOUNT_DISABLED`. Un account inattivo normale resta com'è. La scheda Utenti non mostra «Disattiva» per un account
+> inattivo: nell'interfaccia resta «Elimina», mentre API e CLI chiudono l'attesa.
+>
+> Il resto:
+> - `ruff` e `black` puliti sui tre file;
+> - le descrizioni del runner aggiornate (EVH, EVK);
+> - i test (EVK, EVH ed EVH-012 rivisti, e le due chiamate dirette in `test_auth_api.py` con `http_request=`) al
+>   `test-author`, le docs (`admin/email`, `admin/users`, `developer/backend/email.md`, `access_control.md`) al
+>   `docs-writer`, solo scrittura.
+>
+> **Note implementazione**, test e docs delle cure A e B, scritti senza eseguirli. Il `test-author` ha lanciato `ruff`
+> e `black` alle 05:23, puliti.
+> - EVK:
+>   - EVK-004 riscritto: disattivare un account già inattivo che aspetta revoca il link e fa il commit;
+>   - EVK-009 nuovo: un account inattivo normale resta com'è, senza commit né log;
+>   - EVK-010 nuovo: `registration_email_allowed`, 10 e poi rifiuto (un rifiuto non conta), il /64, `None`, la finestra.
+> - EVH:
+>   - un `REGISTRATION_EMAILS_BY_ADDRESS` privato;
+>   - EVH-011 riscritto: la disattivazione chiude l'attesa (`holds_place: false`, conferma 400 `revoked`, un posto
+>     libero in più, login `ACCOUNT_DISABLED`);
+>   - EVH-012 riordinato: prima la promozione (`true`), poi la disattivazione (`false`);
+>   - EVH-013 nuovo: con il limite a 1, due registrazioni, una sola email; la seconda aspetta con la tenuta, c'è la riga
+>     `info`, e il suo `resend` va.
+> - `test_auth_api.py` di A: le due chiamate dirette passano `http_request=_register_http_request()`.
+> - Le docs (`docs-writer`):
+>   - `admin/email.en.md`: la tabella dei limiti, rinominata «📏 Limits of the Verification Emails» con la stessa
+>     ancora, con la riga delle registrazioni; il punto «To turn it away»; la riga di log;
+>   - `admin/users.en.md`;
+>   - `developer/backend/email.md`: gli agganci, le funzioni, i limiti e i log;
+>   - `access_control.md`: la riga del `PATCH` e quella di `require_email_verification`.
+>
+>   Le righe EVK ed EVH della tabella «Testing» le ho aggiornate io.
+>
+> **Per la lista del mattino**, con la revisione della cura A:
+> - un'email trattenuta è silenziosa: la pagina dice «We sent you an email» e il titolare deve pensare da solo a
+>   chiedere di nuovo il link;
+> - dietro un proxy non fidato (`FORWARDED_ALLOW_IPS`) tutti i client hanno lo stesso indirizzo, quindi dopo 10
+>   registrazioni in un'ora ogni email di registrazione è trattenuta. Vale come per gli altri limiti per indirizzo, ma
+>   qui senza un rifiuto visibile.
