@@ -194,3 +194,4 @@ Sono tutti locali: la push la fa il developer.
 | 105 | 16/10 10:39 | Z: Z7c-1 (attesa crescente dei prezzi dal vivo dopo errori e pause dei fornitori; E2E `live-pause` 8/8, flash 4/4) + Z-9 (doc admin delle pause dei fornitori) | `dd4a97e01` |
 | 106 | 16/10 10:49 | W per cherry-pick: W-B17 (una FX_CONVERSION su due broker è rifiutata, `pairBrokerMismatch`) | `4647c4af4` |
 | 107 | 16/10 11:17 | J: CP-7a (decisione 26: ogni gamba del lotto convertita alla sua data, via il ripiego di CP-16, lotti short corretti, T-B6, J-14; all-backend 17 898/1 rosso estraneo — timeout del fornitore in `search-to-prices`, ripassato 3/3) — T-B5, T-B6 chiuse | `4f9e94420` |
+| 108 | 16/10 11:18 | W per cherry-pick: docstring di `list_accesses` (P4 del developer: la lista degli accessi resta aperta) | `02f08057f` |
