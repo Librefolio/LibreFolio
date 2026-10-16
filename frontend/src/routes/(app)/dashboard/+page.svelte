@@ -708,13 +708,13 @@
     }
 
     /**
-     * The server caught up on prices and updated something (Z5, Z-13): what «Aggiorna» does, in background. The
-     * stale report is asked again without force and the risk and lots panels reload; the figures stay until the new
-     * ones land. Run after the dispatch, so every store has marked its answers stale first.
+     * The server caught up on prices and updated something (Z5, Z-13): the stale report is asked again in background,
+     * without force, and the figures stay until the new ones land. `refreshVersion` and `requestPortfolioRefresh()` are
+     * the user's Refresh (Y11): the risk and lots panels keep their stale answers until they next load. Run after the
+     * dispatch, so every store has marked its answers stale first.
      */
     function reloadAfterPriceCatchUp() {
         if (!pageAlive) return;
-        refreshVersion += 1;
         void loadAll();
     }
     onMount(() =>

@@ -203,8 +203,8 @@ describe('lotsAnalysisStore (page cache, phase 1)', () => {
 
     it('marks the answers stale on notifyPricesCaughtUp() as well (Z-13), and asks nothing by itself', async () => {
         // The store needs no change for Z-13: its listener marks stale on any signal. Pinned for the new kind
-        // because the pages rely on it: on `{kind: 'prices'}` they bump `refreshVersion`, and the lots panel
-        // asks again, with force as for «Aggiorna»; any other reader of a stale answer asks again too.
+        // because the pages rely on it: on `{kind: 'prices'}` they leave `refreshVersion` alone (the user's
+        // Refresh, Y11), so the lots panel keeps its stale answer and asks again the next time it loads.
         const store = await loadStore();
         const notifyPricesCaughtUp = (portfolioMutation as unknown as {notifyPricesCaughtUp?: () => void}).notifyPricesCaughtUp;
         expect(typeof notifyPricesCaughtUp, 'portfolioMutation exports no notifyPricesCaughtUp(): the end of a price catch-up has no signal of its own').toBe('function');
