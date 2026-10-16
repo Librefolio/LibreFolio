@@ -95,12 +95,12 @@
     }
 </script>
 
-<div class="relative flex items-center group pl-5" data-testid="erasable-number-cell">
+<div class="relative flex items-center group pl-5 text-lf-primary" data-testid="erasable-number-cell">
     <!-- Eraser at LEFT (absolute) - hidden until hover/focus to avoid covering
          the number input up/down spinner arrows which live at the RIGHT side. -->
     <button
         type="button"
-        class="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 rounded text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
+        class="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-0.5 rounded text-lf-muted hover:text-lf-danger"
         onclick={handleEraseClick}
         onmousedown={(e) => e.preventDefault()}
         title={$t('dataEditor.cell.clearField')}
@@ -114,7 +114,7 @@
         <!-- Cleared state: italic red. Click re-enters edit mode with empty draft. -->
         <button
             type="button"
-            class="w-full text-left text-xs italic text-red-400 dark:text-red-500 cursor-text px-1.5 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+            class="w-full text-left text-xs italic text-lf-danger cursor-text px-1.5 py-1 rounded hover:bg-lf-danger-soft"
             onclick={() => {
                 draft = '';
                 editing = true;
@@ -128,8 +128,8 @@
             type="text"
             inputmode="decimal"
             autocomplete="off"
-            class="w-full text-xs font-mono px-1.5 py-1 bg-transparent border border-transparent focus:border-gray-300 dark:focus:border-slate-500 rounded focus:outline-none
-                   {isNotSet && !editing ? 'italic text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-200'}"
+            class="w-full text-xs font-mono px-1.5 py-1 bg-transparent border border-transparent focus:border-lf-focus rounded focus:outline-none placeholder:text-lf-placeholder
+                   {isNotSet && !editing ? 'italic text-lf-muted' : 'text-lf-primary'}"
             bind:value={draft}
             placeholder={isNotSet && !editing ? $t('dataEditor.cell.notSet') : placeholder}
             onfocus={() => (editing = true)}

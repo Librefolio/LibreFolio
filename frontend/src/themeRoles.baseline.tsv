@@ -106,17 +106,12 @@ lib/components/transactions/wizard/ReviewStep.svelte	86
 lib/components/transactions/wizard/SelectFilesStep.svelte	22
 lib/components/transactions/wizard/UploadStep.svelte	20
 lib/components/transactions/wizard/WizardFooter.svelte	101
-lib/components/ui/data-editor/CsvEditor.svelte	72
-lib/components/ui/data-editor/DataEditor.svelte	67
-lib/components/ui/data-editor/DataImportModal.svelte	52
-lib/components/ui/data-editor/ErasableNumberCell.svelte	14
+lib/components/ui/data-editor/DataEditor.svelte	5
 lib/components/ui/display/KpiDivergingFlowBar.svelte	18
 lib/components/ui/display/KpiMetricBar.svelte	18
 lib/components/ui/display/RiskMetricCard.svelte	16
 lib/components/ui/feedback/LoadingSpinner.svelte	0	#10b981	#1a4031	#374151	#6b7280	#9ca3af	#e5e7eb
 lib/components/ui/modals/ConfirmModal.svelte	4
-lib/features/ai-export/AiExportMenu.svelte	12
-lib/features/ai-export/AiExportOptionsPanel.svelte	74
 lib/features/risk/AssetChip.svelte	2
 lib/features/risk/AssetRiskScenariosView.svelte	13
 lib/features/risk/AssetSetCorrelationSection.svelte	20

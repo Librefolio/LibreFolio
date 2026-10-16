@@ -341,6 +341,27 @@ ramo; il merge lo fa il coordinatore e la 1.3 rifà la sua galleria di riferimen
   - Seguono b e d (H, Z e J toccano poco quei file), poi le cartelle di A, a partire da quelle che A tocca più tardi.
   - I lotti di A si possono anche anticipare tutti, prima di A3, se il coordinatore preferisce convertire prima che
     A riprenda le impostazioni: vale la regola «chi parte prima».
+- **Il lotto degli interruttori (Q2)** (coordinatore, 16/10, 08:08). Gli interruttori dell'app migrano **tutti insieme**,
+  in un lotto di T, così in scuro non ce n'è uno diverso dagli altri. Anche il colore dell'«acceso» si decide una volta
+  sola: oggi è verde Libre, smeraldo o ambra. Lo schema della skill (Q2): traccia accesa `bg-lf-checked` (D-T16), spenta
+  `bg-lf-switch-off`; manopola `bg-lf-switch-knob-on` da accesa, `bg-lf-switch-knob-off border border-lf-input` da
+  spenta, nello stesso ternario della traslazione (regola 8). Finché il lotto non c'è, gli altri lotti li lasciano legacy
+  per intero (G3). Inventario del 16/10 (13 interruttori in 9 file; righe della manopola o di `role="switch"`):
+
+  | File | Interruttori | Acceso oggi | Di chi |
+  |---|---:|---|---|
+  | `features/settings/SettingToggle.svelte` (70) | 1 | `bg-libre-green` | A (W2-e1; A4/A5, «bloccato da variabile») |
+  | `components/ui/data-editor/DataEditor.svelte` (648, «stale») | 1 | `bg-amber-500 dark:bg-amber-600` | W; tolto da W1-f2 il 16/10 |
+  | `components/brokers/BrokerForm.svelte` (298) | 1 | `bg-libre-green` | da chiedere |
+  | `components/transactions/modals/TransactionCompareModal.svelte` (183) | 1 | `bg-emerald-500` | W |
+  | `components/assets/AssetModalFooter.svelte` (40, 63) | 2 | `bg-libre-green` | da chiedere |
+  | `components/charts/ChartAestheticsSection.svelte` (111–184) | 4 | (DV-7, 16 classi) | DV |
+  | `components/transactions/import/GapFixToggle.svelte` (39, `aria-pressed`) | 1 | `bg-emerald-500` | W |
+  | `components/table/DataTableCellContent.svelte` (166, `aria-pressed`) | 1 | `bg-emerald-500` | DataTable (W6) |
+  | `components/assets/ScheduledInvestmentEditor.svelte` (1223, `aria-pressed`) | 1 | `bg-libre-green` | da chiedere |
+
+  Prima del lotto: rifare l'inventario (`role="switch"` e manopole `translate-x-`), chiedere gli OK, far decidere alla
+  designer il colore dell'acceso (in particolare per «stale», oggi ambra come il suo ⚠).
 
 **File per file** (m1 e m2 = baseline del target)
 
@@ -584,7 +605,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
 | 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | ✅ commit `a5c7714ca`, `d27fdef4a`, `a0ced5980`; secondo slot verde su `91bae7f2e` (03:54–04:50); il gate dell'eccezione orfana corretto a parte (TC-12) |
 | 17 | Lotto input (`ExactDecimalInput`, `ExactQuantityInput`, `INPUT` del PAC, form delle transazioni, 6 campi dei grafici) | ✅ commit `37972b529`; terzo slot verde su `f0d19e499` (07:12–07:58; T13 rosso per il timeout di 30 s, verde al rilancio: assunzione) |
-| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d e W1-f2 pronti su copie (base `eabf863f3`) per lo slot dopo; la nota wiki committata (`0d5cebce7`) |
+| 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | 🔄 W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d e W1-f2 applicati su `769921bb0`, prove leggere verdi, checkpoint; slot 4 al via; la nota wiki committata (`0d5cebce7`) |
 
 ## Avanzamento
 
@@ -2160,3 +2181,34 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   funzione. Rilanciato da solo a fine slot (07:58, carico 30): verde in 3,5 s. **Verdetto: assunzione** (un budget di
 >   30 s per un percorso a cui i vicini ne danno 60). La riga `test.setTimeout(60_000)` in T13 la chiede il coordinatore a
 >   W, come rafforzamento del suo spec; non entra nel lotto.
+
+> ✅ **14 · Applicati W2-d e W1-f2** (08:0x, base `769921bb0`: il terzo lotto integrato nel target, il mio ramo portato
+> avanti con fast-forward). Gli 8 file erano identici alla base delle bozze (`eabf863f3`): `git apply -p2 --check`, poi
+> `git apply -p2`, senza toccare l'indice.
+> - **Prove leggere** (sotto `nice`, carico 43): Prettier `--check` verde sugli 8 file; `--check` pulito, 6 file sotto il
+>   record; Vitest dei due gate, `DataEditor.test.ts` e gli 11 file di `features/ai-export/__tests__` (client, appunti,
+>   memoria, opzioni, UI, compatibilità del catalogo, renderer del prompt, contratto pubblico, serializzazione sicura, dati
+>   dello snapshot): 15 file, 311/311. `git diff --check` pulito.
+> - **`--update`:** m1 8.535 → 8.244, m2 54; escono le righe dei 4 file di `ui/data-editor` e dei 2 di
+>   `features/ai-export`.
+> - Le prove pesanti nello slot 4 (`slot4.sh`), al via del coordinatore.
+
+> **Dove guardarlo** (per il developer):
+> - **W2-d:** il bottone «AI Export» nelle barre della dashboard e delle pagine di asset, cambi e broker; nel pannello
+>   aperto i tre gruppi segmentati (l'opzione scelta in viola), le icone della selezione, il periodo personalizzato, le
+>   note (sotto «Richiedi un'analisi»), la pastiglia di gravità e «Copia comunque» (con un carico grande). L'AI Export non
+>   è nella galleria.
+> - **W1-f2:** la scheda dell'editor dei dati nelle pagine di asset e cambi: la barra (i due bottoni, l'interruttore
+>   «stale» ora verde quando è acceso, i contatori, la pastiglia della selezione e la cancellazione multipla); il modale
+>   d'importazione CSV: la zona di rilascio (a riposo, al passaggio, mentre si trascina), il riquadro d'aiuto, le righe con
+>   errori, duplicati e intestazione, i tasti `<kbd>`, i bottoni in fondo; nell'editor dei prezzi una cella cancellabile
+>   (la gomma, lo stato cancellato, «Not set», il bordo di fuoco).
+
+> ✅ **15 · L'interruttore «stale» torna legacy** (coordinatore, 08:08, prima del commit): gli interruttori migrano tutti
+> insieme in un lotto di T (come i 4 di DV in DV-7), così in scuro non ce n'è uno diverso dagli altri, e il passaggio
+> dell'acceso dall'ambra al verde si decide una volta sola. In `DataEditor` traccia e manopola sono tornate identiche a
+> HEAD (G3: tutte e due legacy per intero); il contatore `data-editor-stale-count` e il resto di W1-f2 restano. Baseline
+> rifatta da HEAD con `--update`: m1 8.535 → 8.249 (non 8.244), `DataEditor` resta con 5 classi, quelle
+> dell'interruttore. Prettier verde; Vitest dei due gate e `DataEditor.test.ts` 153/153; `--check` pulito. L'interruttore
+> entra nell'inventario del lotto degli interruttori (sopra, dopo la tabella dei lotti), con gli altri 12 trovati nel
+> codice. Le note di W1-f2 al passo 6 sull'interruttore sono superate.
