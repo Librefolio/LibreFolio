@@ -367,7 +367,7 @@
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div class="absolute inset-0 rounded-full bg-lf-overlay opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity" on:click={() => (showAvatarPicker = true)} data-testid="profile-avatar-trigger">
-                    <Camera size={20} class="text-white" />
+                    <Camera size={20} class="text-lf-on-overlay" />
                 </div>
             {/if}
         </div>
