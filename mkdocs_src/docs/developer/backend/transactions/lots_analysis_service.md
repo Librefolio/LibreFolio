@@ -266,7 +266,7 @@ Resolution tiers are owned by `AssetPriceSeries.resolve()`:
 | Tier | `MarkSource` | Meaning |
 |------|--------------|---------|
 | 1 | `MARKET` | Same-day asset-system `price_history.close`. |
-| 2 | `TRADE_AVG` | Same-day BUY/SELL or priced ADJUSTMENT-derived average. |
+| 2 | `TRADE_AVG` | Same-day `BUY`/`SELL` average. An `ADJUSTMENT` is never an observation, with or without a cost basis. |
 | 3 | `CARRIED` | Last observation carried forward (LOCF), market- or trade-origin. |
 | 4 | `MISSING` | No observation on/before the day. |
 
@@ -353,15 +353,17 @@ its own currency (see [Economic events and degraded pools](#degraded-economic-po
 
 ## 🧮 Estimated-at-Cost Fallback {: #estimated-at-cost-fallback }
 
-When no asset-system quote exists (`price_lookup.latest() is None`), service enters `estimated_mode` and emits a `CURRENT_PRICE_ASSUMED_AT_COST` data-quality warning for the analysis window.
+When the asset has no market quote on or before the end date (`price_lookup.latest() is None`: `_load_prices()` reads the window and the last quote before it), the service enters `estimated_mode` and, for an analysis that reads prices (`needs_market_series()`), emits a `CURRENT_PRICE_ASSUMED_AT_COST` warning (`dataQuality.currentPriceAssumedAtCostRange`, from the first transaction to the end date). Nothing else gates it: the warning is emitted even when `BUY` or `SELL` marks value every lot at a trade price, and its message ("open value estimated at cost") then describes days that are not valued at cost.
 
-If the latest mark is `None` for an open LONG lot — the unified resolver returns `MISSING`, or the mark's rate is missing — the service values the remaining quantity at residual cost, provided the cost itself converts (`opening_value`, the original cost converted at the opening date, is not `None`; otherwise the lot is not valued):
+In `estimated_mode`, if the latest mark is `None` for an open LONG lot — the unified resolver returns `MISSING`, or the mark's rate is missing — the service values the remaining quantity at residual cost, provided the cost itself converts (`opening_value`, the original cost converted at the opening date, is not `None`; otherwise the lot is not valued):
 
 ```python
 open_value = opening_value * lot.open_quantity / lot.original_quantity
 value_source = "ESTIMATED_AT_COST"
 market_pnl = Decimal("0")
 ```
+
+Outside `estimated_mode`, a lot whose latest mark is `None` has no value and no `value_source`.
 
 Implications:
 
@@ -371,7 +373,9 @@ Implications:
 - `relative_return` stays `None` because no true market/reference comparison exists
 - data quality report adds `CURRENT_PRICE_ASSUMED_AT_COST`
 
-If the resolver can derive a TRADE-origin mark from transactions, `market_prices[date]` is not `None`: valuation uses that mark, while the price-history point carries `estimated=True`. For history builders, the cost fallback lives in `_lot_snapshot_on_date()` (`financial_math/lots/histories.py`), shared by `build_value_history()` and `build_return_history()`: in `estimated_mode`, a day whose `market_price is None` values a still-open LONG lot at cost; outside `estimated_mode`, that day has no point.
+If the resolver can derive a TRADE-origin mark from transactions, `market_prices[date]` is not `None`: valuation uses that mark — the lot summary's `value_source` is then `MARKET_PRICE`, the label of any mark — while the price-history point carries `estimated=True`. For history builders, the cost fallback lives in `_lot_snapshot_on_date()` (`financial_math/lots/histories.py`), shared by `build_value_history()` and `build_return_history()`: in `estimated_mode`, a day whose `market_price is None` values a still-open LONG lot at cost; outside `estimated_mode`, that day has no point.
+
+Only a `BUY` or a `SELL` gives a TRADE-origin mark: an `ADJUSTMENT` never does, with or without a cost basis (see [Price Resolver](price_resolver.md#the-daily-model)). An asset held only through adjustments or transfers, with no quote up to the end date, therefore has no mark on any day: its open LONG lots are valued at cost in the summary (`value_source = "ESTIMATED_AT_COST"`: the open quantity's share of the original cost, converted at the opening date) and on every day of the value and return histories; it has no price-history point, and its performance history has no ROI or TWRR, since `build_performance_history()` reads a NAV only on a day with a mark. For an asset first quoted after a lot opened by an adjustment — not `estimated_mode` — that lot, while open, has no value or return point before the first quote, `BUY` or `SELL`.
 
 ---
 
@@ -446,7 +450,7 @@ and in `financial_math/lots/`:
 - `build_return_history()` — same continuity rule, plus `relative_return`
 - `build_price_history()` — truncates at closure date, no post-close points
 - `build_broker_wac_history()` / `build_cumulative_wac_history()` — WAC points read from the average-cost lines via `average_cost_points()` (see [WAC Lines](#wac-lines))
-- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value. An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.
+- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. The NAV is read only on a day with a mark: no at-cost fallback reaches it (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)). Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value. An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.
 
 Important nuance: `date_from` trims emitted rows only. Engine still starts from earliest in-scope asset transaction so FIFO state stays correct.
 

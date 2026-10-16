@@ -1359,9 +1359,7 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
 - **Callers.** A limit per client takes its address from `client_address(request)` and its key from
   `client_rate_key()`, and a log holds only the `mask_client_address()` form. The three per-address email limits read
   their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
-  the registration email in `backend/app/api/v1/auth.py`. Their key is still `address_key()` of
-  `backend/app/services/email/flows.py`, the same rule as `client_rate_key()`, until the email feature switches to the
-  platform's in its own lot.
+  the registration email in `backend/app/api/v1/auth.py`. Their key follows the rule of `client_rate_key()`.
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
   `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
   the last `X-Forwarded-For` value: advisory only, it gates nothing.

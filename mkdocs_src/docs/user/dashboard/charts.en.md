@@ -80,8 +80,8 @@ A second toggle, at the top-left of the plot, picks how to draw it (icons only o
 
 - **In transit** — until the transfer arrives, the value and its price or exchange-rate moves stay with the broker it left.
 - **Different ownership shares** — when the two brokers have different [ownership shares](../brokers/sharing.md), the receiving line keeps a step on the arrival day: the same step the total shows.
-- **No value on the arrival day** — if the security has no price yet, or an exchange rate is missing, the jump stays: nothing is guessed.
-- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day, not as a gain or a loss; money counts as a deposit or a withdrawal. The same goes for the half left behind when the other broker of a transfer is deleted.
+- **No value on the arrival day** — if an exchange rate is missing, or the security has no price yet and no cost was recorded on its arrival, the jump stays: nothing is guessed. A security with no price at all moves at the cost the receiving broker records for it, the value LibreFolio gives it there; if part of what that broker paid for the asset was already unknown, its own line takes the gap.
+- **Brokers outside the view** — on a broker's page, or with the broker filter on, securities sent to or received from a broker outside the view count as capital at their market value on that day — at their cost if they have no price at all — not as a gain or a loss; money counts as a deposit or a withdrawal. The same goes for the half left behind when the other broker of a transfer is deleted.
 
 With one broker, or on a broker's page, only the total is drawn.
 

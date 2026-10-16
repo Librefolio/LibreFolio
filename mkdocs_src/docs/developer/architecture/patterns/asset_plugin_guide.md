@@ -163,6 +163,8 @@ perform blocking I/O directly on the application's main event loop.
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
 | `settings_fields` | `()` | The values the provider needs from the instance or from each user: an API key, a region, a preference. Read with `self.settings` in the operations, never in `__init__`: see [Settings](#settings) |
 | `test_only` | `False` | `True` for a provider that exists for the tests: hidden from the provider list and from the settings catalogue |
+| `tier` | `FAProviderTier.COMMUNITY` | Where the provider stands in the asset search: `PREMIUM` for a source the instance vouches for, such as licensed data; when at least one premium provider is available, its results come first. A class attribute; a valid string (`"premium"`) is accepted. See [Search Order](#search-order) |
+| `search_priority` | `100` | The provider's place in the search inside its tier, lower first: a whole number of at least 0. A class attribute; a wrong value stops the import |
 | `shutdown()` | no-op | Called at app teardown to clean up resources (close sessions, stop threads). Override if your provider holds persistent connections. |
 | `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/asset/{path}` |
 
@@ -178,7 +180,23 @@ The `search(query)` method allows users to **discover assets** by name, ticker, 
 2. Frontend calls `GET /api/v1/assets/provider/search?q=Apple`
 3. Backend queries **all providers in parallel** via `AssetSearchService.search()` (`asyncio.gather`)
 4. Providers that don't implement search (default raises `NOT_SUPPORTED`) are silently skipped
-5. Results are aggregated and returned to the user
+5. Results are aggregated and returned to the user, provider by provider, in the [search order](#search-order)
+
+### 🥇 Search Order {: #search-order }
+
+`services/assets/provider_policy.py` decides the order, from what each provider declares and what the instance
+overrides:
+
+- **The tier** (`tier`): premium providers come first, but only when at least one is available. No shipped provider is
+  premium today, so without one the order stays what it was.
+- **The priority** (`search_priority`): inside a tier, lower first; ties keep the registry's order.
+- **The instance's overrides**, read at every call (`config/plugins.py`): `LIBREFOLIO_ASSET_PROVIDERS_PREMIUM` makes
+  exactly the listed providers premium; `LIBREFOLIO_ASSET_PROVIDERS_ORDER` puts the listed providers first, in its
+  order. A code that no provider has is ignored and logged once.
+
+`GET /assets/provider` shows each provider's effective `tier` and `priority`. The non-streaming search
+(`GET /assets/provider/search`) returns the results in this order; the streaming one sends them as they arrive, and
+the frontend groups them by tier.
 
 ### 🔌 Provider Support
 

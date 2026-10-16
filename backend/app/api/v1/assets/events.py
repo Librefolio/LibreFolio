@@ -29,6 +29,7 @@ event_router = APIRouter(prefix="/events", tags=["FA Events"])
 _REFUSAL_STATUS = {
     "EVENT_ASSET_NOT_FOUND": 400,
     "EVENT_CURRENCY_MISMATCH": 400,
+    "EVENT_TOO_MANY_DIGITS": 400,
     "EVENT_NOT_EDITABLE": 400,
     "EVENT_KEY_CONFLICT": 400,
     "EVENT_EXISTS": 409,

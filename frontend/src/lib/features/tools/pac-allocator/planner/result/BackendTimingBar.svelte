@@ -103,10 +103,12 @@
                 values: {total: duration(total)},
             })}
         </p>
-        <div class="mt-3 flex h-4 w-full overflow-hidden rounded-full bg-lf-panel" aria-hidden="true" data-testid="pac-planner-timing-bar">
+        <!-- The separators are the bar's `divide-*`, in the card's colour: a segment carries only its fill, a legacy phase
+             colour or the unattributed role, so no segment mixes the two (G3). -->
+        <div class="mt-3 flex h-4 w-full divide-x divide-lf-card overflow-hidden rounded-full bg-lf-panel" aria-hidden="true" data-testid="pac-planner-timing-bar">
             {#each segments as segment (segment.id)}
                 <div
-                    class="h-full border-r border-white transition-opacity last:border-r-0 dark:border-gray-800 {segment.colour} {dimmed(segment.id) ? 'opacity-30' : ''}"
+                    class="h-full transition-opacity {segment.colour} {dimmed(segment.id) ? 'opacity-30' : ''}"
                     style="width: {segment.share * 100}%; min-width: 3px;"
                     data-testid="pac-planner-timing-segment"
                     data-phase={segment.id}

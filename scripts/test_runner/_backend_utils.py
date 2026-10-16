@@ -24,6 +24,15 @@ def utils_decimal_precision(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Decimal precision tests", verbose=verbose)
 
 
+def utils_real_decimal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the RealDecimal column type and the digit limits of db/precision.py (C-97a)."""
+    print_section("Utils: RealDecimal and Digit Limits")
+    print_info("Testing: backend/app/db/real_decimal.py (through the model columns), backend/app/db/precision.py")
+    print_info("Tests: quantities and prices read back on a private in-memory SQLite, column declarations, truncation, decimal_limit_issue")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_real_decimal.py", test_names)
+    return run_command(cmd, "RealDecimal and digit limit tests", verbose=verbose)
+
+
 def utils_datetime(verbose: bool = False, test_names: list = None) -> bool:
     """Test datetime utilities."""
     print_section("Utils: Datetime")
@@ -341,10 +350,10 @@ def utils_jwt_secret_blank(verbose: bool = False, test_names: list = None) -> bo
 
 
 def utils_test_server_preparation(verbose: bool = False, test_names: list = None) -> bool:
-    """Test that the test server's builds run before its startup timeout, and that a tree without node_modules stops before npx (C-94)."""
+    """Test that the test server's builds run before its startup timeout, that a tree without node_modules stops before npx (C-94), and that the shared backend's output reaches a log whose tail a failed start prints (H-12)."""
     print_section("Utils: Test Server Preparation")
-    print_info("Testing: dev.py server --build-only, cmd_fe_build/cmd_api_client (frontend/node_modules/.bin check), cmd_mkdocs_gallery; scripts/test_runner/_server.py (build_server_prerequisites, SharedTestServer.start())")
-    print_info("Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env")
+    print_info("Testing: dev.py server --build-only, cmd_fe_build/cmd_api_client (frontend/node_modules/.bin check), cmd_mkdocs_gallery; scripts/test_runner/_server.py (build_server_prerequisites, SharedTestServer.start(), shared_backend_log_path, log_tail)")
+    print_info("Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env, the backend's output in shared-backend.log (emptied, appended to on a restart) and its tail on a failed start")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_server_preparation.py", test_names)
     return run_command(cmd, "Test server preparation tests", verbose=verbose)
 
@@ -481,6 +490,16 @@ Tests for utility modules and helper functions:
         default_isolation="write-scoped",
     )
     add_test(cat, "decimal-precision", utils_decimal_precision, name="Decimal Precision", desc="Model precision, truncation, edge cases")
+    add_test(
+        cat,
+        "real-decimal",
+        utils_real_decimal,
+        name="RealDecimal and Digit Limits",
+        desc="C-97a: Transaction.quantity RealDecimal(22, 10), Transaction.cost_basis_override (per-unit, D5) and the five price columns RealDecimal(24, 12), a TypeDecorator over Numeric; what fits reads back exactly (a REAL as its shortest decimal, at most 15 significant digits, rounded to the scale, padded to 6 decimals as today), written as today (REAL, INTEGER when whole), no double noise; amount, AssetEvent.value, volume and FxRate.rate unchanged; truncation to the scale then 15 significant digits on a RealDecimal column (ROUND_DOWN), FX untouched; decimal_limit_issue (decimalPlacesExceeded before significantDigitsExceeded, trailing zeros not counted); round_computed_value (D6: scale then 15 significant digits, ROUND_HALF_EVEN, always within decimal_limit_issue)",
+        # PURE: each round trip opens a private in-memory SQLite engine of its own test and disposes it; the lane
+        # database is never opened. Everything else is a function over values. No server, no network.
+        isolation="pure",
+    )
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
@@ -737,10 +756,11 @@ Tests for utility modules and helper functions:
         "test-server-preparation",
         utils_test_server_preparation,
         name="Test Server Preparation",
-        desc="dev.py server --build-only runs exactly the server's pre-bind steps in today's order and mode (the frontend in debug under --test, through cmd_fe_build with --rebuild, then MkDocs, then the non-strict JS cache) and returns their exit code without checking the port, running a command or exec'ing uvicorn, and the runner's prerequisites command is such a run; front build and api client check frontend/node_modules/.bin first (openapi-zod-client, svelte-check, vite; the API client only its generator, symlinks or shim files) and exit 1 naming the missing tools and npm ci before any npm or npx call; SharedTestServer.start() checks the port, then runs python -u dev.py server --test --build-only in the foreground with its output visible and in order on a pipe (its own stdout and stderr flushed right after its info line) and the runner's environment, never the coverage wiring the server gets, and only then spawns the backend and starts STARTUP_TIMEOUT: a build longer than the timeout still starts, a failed build (False, or an exit code it names) spawns nothing, an occupied port builds nothing; mkdocs gallery runs the same step after its database step and port check and before Playwright, with Playwright's environment (LF_APP_VERSION and --test-port included), exits 1 when it fails, and --list builds nothing; without --workers the gallery runs 60% of the CPUs (rounded, the count read at each call) as browser workers, at least one (an explicit --workers wins), and sizes its server from them",
-        # Fakes only: the seams of dev.py and _server.py monkeypatched, every real process and signal forbidden,
-        # node_modules/.bin layouts under tmp_path; --list reads frontend/e2e/gallery.spec.ts. No DB, no server,
-        # no network, no writes outside tmp_path.
+        desc="dev.py server --build-only runs exactly the server's pre-bind steps in today's order and mode (the frontend in debug under --test, through cmd_fe_build with --rebuild, then MkDocs, then the non-strict JS cache) and returns their exit code without checking the port, running a command or exec'ing uvicorn, and the runner's prerequisites command is such a run; front build and api client check frontend/node_modules/.bin first (openapi-zod-client, svelte-check, vite; the API client only its generator, symlinks or shim files) and exit 1 naming the missing tools and npm ci before any npm or npx call; SharedTestServer.start() checks the port, then runs python -u dev.py server --test --build-only in the foreground with its output visible and in order on a pipe (its own stdout and stderr flushed right after its info line) and the runner's environment, never the coverage wiring the server gets, and only then spawns the backend and starts STARTUP_TIMEOUT: a build longer than the timeout still starts, a failed build (False, or an exit code it names) spawns nothing, an occupied port builds nothing; mkdocs gallery runs the same step after its database step and port check and before Playwright, with Playwright's environment (LF_APP_VERSION and --test-port included), exits 1 when it fails, and --list builds nothing; without --workers the gallery runs 60% of the CPUs (rounded, the count read at each call) as browser workers, at least one (an explicit --workers wins), and sizes its server from them; the shared backend's stdout and stderr go to one file, shared-backend.log in the run's --log-dir (DEVNULL as before without one, the terminal under verbose), stderr merged, PYTHONUNBUFFERED=1, the runner's handle closed after the spawn, emptied by the instance's first start and appended to by a restart; a start that fails (an exit during startup, or STARTUP_TIMEOUT) prints the path and the last 30 lines that start wrote, read from at most the last 64 KiB, or (no output); log_tail() returns whole lines after an offset; a real one-line child started through exec_unmasked.py proves its stderr lands in the file",
+        # Fakes only, but for one case: the seams of dev.py and _server.py monkeypatched, every real process and
+        # signal forbidden, node_modules/.bin layouts under tmp_path; --list reads frontend/e2e/gallery.spec.ts.
+        # The case (H-12) starts one one-line Python child through the real exec_unmasked.py: only that argv may
+        # start, only its group may be signalled. No DB, no server, no network, no port, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

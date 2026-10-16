@@ -23,7 +23,7 @@ backend/data/
 │   │   └── ❌ failed/                # Report che non è stato possibile leggere
 │   ├── 📝 logs/                      # File di log dell'applicazione
 │   ├── 🎭 scenario_catalog/          # Opzionale: i tuoi scenari di stress
-│   └── 📋 scheduler_state.json       # Ultima esecuzione delle sincronizzazioni programmate
+│   └── 📋 scheduler_state.json       # Sincronizzazioni: ultima esecuzione, nuovo tentativo
 │
 └── 🧪 test/                          # Dati di test (completamente isolati)
     ├── 🗃️ sqlite/app.db

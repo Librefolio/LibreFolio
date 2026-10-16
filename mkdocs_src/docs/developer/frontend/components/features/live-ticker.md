@@ -88,54 +88,64 @@ poll, so an error of the page's own code counts as a failure too.
 
 ### 🔎 Asset detail: one poll for the summary and the chart {: #asset-detail }
 
-The detail page runs one poll: every 30 s, a single `POST /assets/prices/current` for the asset
-(`pollLivePriceOnce`), whose answer feeds the price summary (`applyLiveSummary`) and then the
-chart's last point (`applyLiveChartHead`). It replaced two loops on the same endpoint — the
+The detail page runs one poll, in `AssetDetailLive` (`lib/components/assets/detail/assetDetailLive.svelte.ts`),
+which the page creates while it initialises and which reads the page's state through getters: every
+30 s, a single `POST /assets/prices/current` for the asset (`#pollLivePriceOnce`), whose answer feeds
+the price summary (`#applyLiveSummary`) and then the chart's last point (`#applyLiveChartHead`). It
+replaced two loops on the same endpoint — the
 summary every 30 s, the chart head every minute after a 5 s warm-up, so three requests a minute
 for an asset with a provider — and the chart-head loop kept asking even on a range that ends in
 the past.
 
-The effect re-runs when `assetInfo`, `displayCurrency`, `fxConversionMissing` or `isHeadToday`
-change, and each run starts a new poller, so one poll at once. An answer that lands after the
+The instance's effect re-runs when `assetInfo`, `displayCurrency`, `fxConversionMissing` or
+`isHeadToday` change, and each run starts a new poller, so one poll at once. An answer that lands after the
 effect re-ran — another asset, another currency — changes nothing on the page: each run hands the
 poll its own `isCurrent()` check, read after the price request, after the conversion and before
 the chart head, and the poll also checks that the asset is still the page's.
 
-`pollLivePriceOnce` returns the poll's [outcome](#backoff): `livePollFailure(error)` when the
+`#pollLivePriceOnce` returns the poll's [outcome](#backoff): `livePollFailure(error)` when the
 request fails; otherwise `livePollOutcome([toLivePriceResult(item)])` (of an empty list when the
 answer has no item), worked out before the `isCurrent()` checks and returned on every path after
-them. An error of `applyLiveSummary` or `applyLiveChartHead` is not caught: the poller counts the
+them. An error of `#applyLiveSummary` or `#applyLiveChartHead` is not caught: the poller counts the
 throw as a failure.
 
-`applyLiveSummary` replaces the last chart close with the live price in `AssetPriceSummary`. When
+`#applyLiveSummary` sets `currentPrice`, which the page shows in `AssetPriceSummary` instead of the
+last chart close. When
 the display currency differs from the asset's, the price is converted for today through
 `POST /api/v1/fx/currencies/convert`; if that fails, the native price is shown with the asset's
-currency and a ⚠ tooltip (`livePriceConversionFailed`).
+currency and a ⚠ tooltip (`conversionFailed`, passed as `livePriceConversionFailed`).
 
 The direction compares the **native** values of two consecutive polls, so switching the display
 currency never fakes a tick, and the first poll after a (re)mount is neutral.
 
 #### ✨ Price flash {: #price-flash }
 
-On an up or down tick the page sets `livePriceDirection` and increments `livePriceFlashToken`.
+On an up or down tick the instance sets `direction` and increments `flashToken`, which the page
+passes to `AssetPriceSummary` as `livePriceDirection` and `livePriceFlashToken`.
 `AssetPriceSummary` re-keys the price element on the token (`{#key}`), so the animation restarts
 even on two ticks in the same direction, and applies `.lf-price-flash-up` or
 `.lf-price-flash-down` (`src/app.css`): the number jumps to emerald or red and eases back to its
-resting colour in 1.3 s. `LIVE_PRICE_FLASH_DECAY_MS` (1300 ms) then resets the direction to
+resting colour in 1.3 s. `LIVE_PRICE_FLASH_DECAY_MS` (1300 ms, exported by the module) then resets
+the direction to
 neutral. Under `prefers-reduced-motion` the colour swaps without the animation and the same timer
-clears it. Test hooks: `data-testid="asset-detail-live-price"` and `data-live-price-direction`.
+clears it. When the effect re-runs (another asset, display currency or FX gap) or the page goes
+away, its cleanup stops that timer and puts the direction back to neutral too, so a flash cut short
+never stays lit. Test hooks: `data-testid="asset-detail-live-price"` and `data-live-price-direction`.
 
 #### 📈 Chart head {: #chart-head }
 
-`applyLiveChartHead` merges the polled close into today's point of the chart
-(`mergeChartPointsIncremental`) when it changed — no reload, no flicker. The fields the answer does
+`#applyLiveChartHead` merges the polled close into today's point of the page's `chartData`, through
+the input's setter (`mergeChartPointsIncremental`), when it changed — no reload, no flicker. The fields the answer does
 not carry (`original_close`, `backward_fill_info`…) stay on the point, and the signals, derived
 from `chartData`, recompute. It acts only when the asset has a provider — without one the endpoint
 echoes the last stored close, so there is nothing to merge — and not while the chart, or the
 calendar of returns, is reloading, nor when the answer has an `error` or no `as_of_date`; a close
-equal to the one already charted for that date changes nothing. In a chart converted to another
-currency (the polled close is in the asset's own currency) or in calendar-return mode, it reloads
-the chart silently (`loadChartData(true)`) instead of merging.
+equal to the one already charted for that date changes nothing. The comparison is made in the
+asset's own currency, the poll's: the point's native close, `original_close ?? close`, since in a
+converted chart `close` is in the display currency and `original_close` holds the native one. In a
+chart converted to another currency (the polled close is in the asset's own currency) or in
+calendar-return mode, a close that changed reloads the chart silently (`loadChartData(true)`)
+instead of merging.
 
 ## ⏸️ Pause and resume {: #pause-and-resume }
 
@@ -418,16 +428,14 @@ broker detail page (`routes/(app)/brokers/[id]/+page.svelte`). Each registers a 
 `onMount`, `dashboard:prices` or `broker-page:<id>:prices`, and removes it on destroy. On
 `{kind: 'prices'}`, and on no other kind, the listener queues `reloadAfterPriceCatchUp()` with
 `queueMicrotask()`: the reload runs once the dispatch is over, when every cache has marked its
-answers stale, whatever the order of the listeners. The reload does what **Refresh** does, in
-background:
+answers stale, whatever the order of the listeners. The reload calls the page's report loader
+without `force`, in background: `loadAll()` on the Dashboard, `loadOverview()` on the broker page.
+The mark has made the report on screen stale, so the loader asks that question again; the figures
+stay until the new ones land.
 
-- it bumps `refreshVersion`, so the risk and lots panels on screen ask again, with `force` as on
-  **Refresh**;
-- it calls the page's report loader without `force`: `loadAll()` on the Dashboard, `loadOverview()`
-  on the broker page. The mark has made the report on screen stale, so the loader asks that question
-  again; the figures stay until the new ones land.
-
-It does not call `requestPortfolioRefresh()`: the caches are already marked. On the Dashboard it
+It touches neither `refreshVersion` nor `requestPortfolioRefresh()`, the signals of the user's
+**Refresh**: the caches are already marked, and the risk and lots panels on screen keep their
+answers, marked stale, until they next load. On the Dashboard it
 leaves `syncLoading` alone, so the **Refresh** button does not spin, and it does nothing once the
 page is destroyed (`pageAlive`). On the broker page the **Refresh** icon follows `reportLoading`, so
 it spins while the overview is asked again; the broker summary (`loadBroker()`) and the
@@ -486,6 +494,7 @@ of them only in part, such as the client's own tests, must still load it.
 | `lib/stores/portfolio/portfolioMutation.test.ts`, `lib/stores/portfolio/portfolioStore.test.ts`, `lib/features/brokers/lots/lotsAnalysisStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio store-unit` | The cases of [Updating prices…](#price-refresh): `notifyPricesCaughtUp()` gives every listener exactly `{kind: 'prices'}`, once, kept apart from `refresh` and `mutation`; a listener that throws keeps none of the others from hearing it and is logged; a removed listener hears nothing. The report and lots caches mark their answers stale on it, keep them and ask nothing; the next report fetch without `force` asks the stale one again |
 | `lib/features/risk/riskStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio risk-unit` | The case of [Updating prices…](#price-refresh): the risk answers marked stale on `{kind: 'prices'}`, kept, and nothing asked |
 | `lib/features/live-updates/LiveUpdatesStatus.test.ts` (Vitest, jsdom) | `./dev.py test front-utility component-unit` | The pill only in `paused-idle`, with a label and a hint, and no button |
+| `lib/components/assets/detail/assetDetailLive.svelte.test.ts` (Vitest, jsdom, fake clock around the flash) | `./dev.py test front-utility core-unit` | The [asset detail poll](#asset-detail): what its effect reads, when it starts and stops the poller, the outcome it hands back, the answers it drops, the price summary with its conversion and fallback, the [flash](#price-flash) and its decay, put out by the effect's cleanup too, and the [chart head](#chart-head): the merge, the same-close guard on the native close, and the silent reload |
 | `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden |
 | `frontend/e2e/portfolio/price-refresh-reload.spec.ts` (Playwright) | `./dev.py test front-portfolio price-refresh` | [Updating prices…](#price-refresh) on a stubbed catch-up: the notice while a job runs, gone at `idle`. (a) Once a catch-up that updated something is over, the Dashboard asks for its main report again, once, the very question on screen, with no navigation; (b) a broker's page, the same on its overview report; (c) on the Dashboard, no reload after a catch-up whose job the page never saw run (`starting` → `idle`, no notice at any moment, even with `last_refreshed` true), nor after one that updated nothing (the notice comes and goes); then the control in the same page, a catch-up that updated something, reloads it once |
 
