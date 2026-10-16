@@ -661,6 +661,134 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
 >   Prettier e `theme-roles --check` puliti. I test di TD-1b li scrivono TA-1 (`chartCategories`, `chartTheme`) e TA-2
 >   (un caso C4 in `GrowthChart.test.ts`).
 
+### W5-PAC — Ruoli di colore nel PAC ⏳ (dal 16/10/2026)
+
+**Mandato.** Proposta del coordinatore, alle 02:16, approvata alle 02:20, con l'OK di J (stanotte lavora solo sul
+backend). Rientra nel mandato del developer delle 22:20: «mergia il lavoro fatto, correggi gli aspetti tecnici e
+avanza sulle altre wave».
+
+**Perimetro: 39 file di `features/tools/pac-allocator/`,** più `frontend/src/themeRoles.baseline.tsv` (`--update` sul
+ramo di DV; i conflitti con T li risolve il coordinatore con `--resolve`) e il piano. Si migrano i neutri, il marchio
+e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore (02:36), anche 2 righe di
+`frontend/src/app.css`, che è di T: il selettore morto `html.dark .bg-white\/95`, chiesto dal gate C4.
+
+**Esclusi:**
+- `ExposureMaps.svelte` ed `ExposureBars.svelte`, perché Y9 tocca i loro `echarts.init`.
+- Le costanti `INPUT` e `TITLE_INPUT` di `ui.ts`, e ogni elemento che le usa.
+  - `INPUT` va come `className` a `ExactDecimalInput`, ancora legacy, in `TargetInputCell`, `AssetsStep`,
+    `AssetEditor`, `BrokerEditor` (×7), `RoutingStep` (×2), `FxStep` e `ManualAccountDialog` (×2). Va anche su
+    `<input>` semplici, in `AssetEditor` (182, 193) e in `BrokerEditor` (397).
+  - `TITLE_INPUT` sta su `<input>` semplici (`BrokerEditor`:149, `LiquidityStep`:207).
+  - Restano col lotto di T sull'input: due stili di campo diversi fino ad allora sarebbero peggio (coordinatore).
+- Le 6 fasi colorate di `BackendTimingBar`: categorie, in attesa dei punti 2.1 e 2.5. Ogni segmento ha solo quella
+  classe, quindi non resta un elemento misto.
+- **La traccia della barra di `TargetsStep`** (`bg-gray-100 dark:bg-slate-700`). La barra «sconosciuta» che ci corre
+  sopra diventa `bg-lf-neutral` nel lotto di T delle 03:25. Misure sui ruoli di T-8b:
+
+  | Traccia | Sulla card | Contro `bg-lf-neutral` | Contro gli stati |
+  |---|---|---|---|
+  | `bg-lf-neutral` o `border-lf-subtle` | 1.30 / 1.21 | ΔE00 0, la barra sparisce | — |
+  | `bg-lf-panel` o `bg-lf-hover` | 1.15 / 1.10 | ΔE00 3.4 / 2.5, quasi invisibile | ≥ 4.5:1 |
+  | **palette, invariata** | 1.06 / 1.69 | **ΔE00 6.9 / 15.3** (1.22:1 / 1.39:1) | — |
+
+  Nessun ruolo distingue la traccia dalla barra «sconosciuta», quindi la traccia resta in palette, come dice il
+  commento di T in `toneClasses.ts`.
+
+**Regole:**
+- Si converte per significato e per gradino, non per famiglia di colore.
+- Un elemento migra intero.
+- Niente `dark:` sui ruoli.
+- Ogni `border` nomina il suo ruolo.
+- La radice del componente prende `text-lf-primary`.
+- Convenzioni già usate da T:
+  - un bottone secondario è `bg-lf-card` + `border-lf-input` + `hover:bg-lf-hover`;
+  - uno pieno è `bg-lf-action text-lf-on-action`, o `bg-lf-<stato> text-lf-on-status`;
+  - un segmento attivo o un preset scelto prendono `bg-lf-checked text-lf-on-checked` (D-T16).
+
+**Passi:**
+- [x] ✅ (16/10/2026) Costanti di `ui.ts`, tranne `INPUT` e `TITLE_INPUT`.
+  > **Note implementazione**: 26 costanti convertite a mano; m1 di `ui.ts` da 118 a 15, che sono `INPUT` e
+  > `TITLE_INPUT`. `BADGE` e `NOTICE` usano già `STATUS_TONES` di T e non li ho toccati.
+- [x] ✅ (16/10/2026) I file, uno per volta. Gli elementi che non si possono convertire sono annotati.
+  > **Note implementazione**: i 38 file li converte uno script riga per riga, `/tmp/libreFolio_dv_w5pac_convert.py`,
+  > fuori dal repo. 204 pezzi convertiti. Lo script:
+  > - divide la riga in pezzi a virgolette, graffe, backtick e `$`;
+  > - converte un pezzo solo se ogni sua classe di colore ha un ruolo, quindi nessun elemento resta misto;
+  > - toglie i `dark:`;
+  > - salta le righe con `INPUT`, `TITLE_INPUT` o `className=`, e i frammenti esclusi.
+  >
+  > Gradini usati:
+  >
+  > | Cosa | Gradino | Ruolo |
+  > |---|---|---|
+  > | Testo neutro | 800+ / 600–700 / 300–500 | `text-lf-primary` / `-secondary` / `-muted` |
+  > | Fondo neutro | 50–100 / 200–300 | `bg-lf-panel` / `bg-lf-neutral` |
+  > | `hover:bg` neutro | ≤ 200 | `hover:bg-lf-hover` |
+  > | Bordo neutro | ≤ 200 / ≤ 400 | `-subtle` / `-input` |
+  > | Stati | testo ≥ 800 / fondo ≤ 100 / fondo ≥ 400 / bordo ≤ 400 | `-on-soft` / `-soft` / pieno / `-line` |
+  > | `bg-white` | con anello o bordo di fuoco / altrimenti | `bg-lf-field` / `bg-lf-card` |
+  > | `text-white` | solo accanto a `bg-libre-green` / a uno stato pieno | `text-lf-on-action` / `text-lf-on-status` |
+  >
+  > **Ritocchi a mano:**
+  > - `AssetTable`:148, il quadratino della legenda «quota obiettivo», e `ResultCell`:78, la barra dell'obiettivo,
+  >   prendono `bg-lf-secondary` (`--lf-text-secondary`): lo stesso neutro di «ideale» in TD-1.
+  > - `StepNav`:100, il riempimento dell'avanzamento, prende `bg-lf-checked`: `bg-lf-action` in scuro è spento sulla
+  >   traccia.
+  > - `StepNav`:69, il passo corrente, prende `bg-lf-selected`.
+  > - Regola 3: `text-lf-primary` sulla radice di `PacPlannerTool` (299) e sul pannello di `PlannerDialog` (26).
+  >
+  > **Residuo m1 del PAC: 42 (prima 581).**
+  > - `ui.ts`, 15: `INPUT` e `TITLE_INPUT`.
+  > - `BackendTimingBar`, 16: le 6 fasi, l'attesa in coda e il `border-white` dei segmenti (punti 2.1 e 2.5).
+  > - `ExposureMaps`, 4: escluso (Y9).
+  > - `TargetsStep`, 2: la traccia (tabella sopra).
+  > - `DistributionDialog`, 3: la stessa traccia e la barra del peso.
+  > - `AssetTable`, 1, e `ResultCell`, 1: la barra e il quadratino «quota dopo il piano», `bg-libre-green`.
+  >
+  > **⚠️ Fuori pista:** le barre «dopo il piano» restano `bg-libre-green`. Lì il verde è un colore di dato accanto
+  > al neutro dell'obiettivo, non il marchio. `bg-lf-action` in scuro è spento sulla traccia, e la scelta tocca alla
+  > designer (punto 2.7) o ai colori di tipo di GR1. Backlog DV-7.
+  >
+  > **⚠️ Fuori pista:** la traccia di `DistributionDialog`:102 è la stessa di `TargetsStep`, sotto la barra verde del
+  > peso. Resta in palette anche lei, così le due tracce non divergono finché non c'è un ruolo per la traccia.
+- [x] ✅ (16/10/2026) `theme-roles.mjs --update`, poi `--check`; il gate `themeRoles.gate.test.ts`, cioè G1–G4,
+  compreso «nessun elemento misto».
+  > **Note implementazione:**
+  > - `--update`: m1 10980 → 10441 (−539, cioè il PAC da 581 a 42), m2 83 → 83.
+  > - Il diff del baseline tocca solo righe del PAC: 33 file escono a zero e 6 restano col residuo.
+  > - `--check` pulito; `themeRoles.gate.test.ts` 47/47, prima e dopo `--update`.
+  >
+  > **⚠️ Fuori pista: `app.css`.** Il gate C4 di `themeTokens.gate.test.ts` era rosso, 15/16. La barra fissa in
+  > fondo a `PacPlannerTool` era l'ultimo uso di `bg-white/95` (ora `bg-lf-card/95`), e il gate vuole la regola
+  > tolta da `app.css` nella stessa modifica.
+  > - Con l'OK del coordinatore (16/10, 02:36), dal gruppo «Dark mode: Cards and modals» ho tolto solo il selettore
+  >   `html.dark .bg-white\/95`.
+  > - Resta `bg-white\/90`, che ha ancora degli usi.
+  > - Poi 16/16. Il lotto di T delle 03:25 tocca `app.css` più in basso (righe ~310–340).
+- [x] ✅ (16/10/2026) Prove leggere: Prettier, compilatore Svelte, i test del PAC uno per volta.
+  > **Note implementazione:**
+  > - Prettier ha riscritto 4 file (`ui.ts`, `PlannerDialog`, `BrokerScopeCopyDialog`, `OwnedAssetsDialog`); poi tutti
+  >   puliti, `app.css` compreso.
+  > - Compilatore Svelte: 37 file, 0 avvisi. `git diff --check` pulito.
+  > - Vitest, un file per volta:
+  >   - 12 test del PAC, 487 in tutto: `categoryLabels` 9, `decimal` 150, `format` 107, `modeText` 13,
+  >     `pluralCountSites` 19, `request` 34, `ExposureBars` 12, `ResultCell` 7, `StateNotice` 6,
+  >     `exposureBarColours` 24, `model` 11, `text` 95;
+  >   - 7 gate, 201 in tutto: `themeRoles` 47, `themeTokens` 16, `themeComponentTokens` 18, `themeColorMeta` 15,
+  >     `themeModeReads` 24, `designerLabImports` 27, `scanColors` 54;
+  >   - 4 test che importano il PAC da fuori, 21 in tutto: `ToolsHub` 3, `ToolHost` 4, `registry` 8,
+  >     `moneyRenderSites` 6.
+  > - Nessun test asserisce classi del PAC, E2E compreso: test-author non serve.
+- [ ] Checkpoint (16/10, 02:4x). Le prove pesanti nello slot delle 06:45 circa: `front check`, `core-unit`,
+  `component-unit`, E2E `pac-allocator-real`.
+
+**Dove guardarlo, per il developer:**
+- Strumenti › PAC, in chiaro e in scuro: tutti i passi, cioè scenario, strategia, asset, obiettivi, broker, liquidità,
+  cambi, instradamento e revisione, con i loro dialoghi, poi il risultato (testata, KPI, tabella degli asset,
+  piano operativo, prova, barra dei tempi).
+- I campi di testo restano com'erano fino al lotto di T sull'input. Le barre verdi «dopo il piano» e la traccia
+  degli obiettivi restano anche loro come prima.
+
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 
 **Richiesta del coordinatore** (16/10 alle 02:06): per ciascun file dei grafici, cosa resta in m1 (classi colore

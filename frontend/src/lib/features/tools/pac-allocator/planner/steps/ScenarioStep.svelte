@@ -16,7 +16,7 @@
 </script>
 
 <div class="space-y-4" data-testid="pac-planner-scenario">
-    <p class="max-w-3xl text-sm text-gray-700 dark:text-gray-300">
+    <p class="max-w-3xl text-sm text-lf-secondary">
         {$t('tools.pacAllocator.planner.scenario.intro', {
             default: 'You plan a new investment (pure PAC): the calculation starts from an empty portfolio, so what you already hold is not counted, and splits the cash you choose among the Assets, as close as possible to the target weights. It is a simulation: no order is sent.',
         })}

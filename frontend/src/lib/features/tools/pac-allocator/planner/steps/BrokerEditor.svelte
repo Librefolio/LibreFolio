@@ -143,7 +143,7 @@
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
             <PlannerBrokerIcon broker={working} size={32} />
             {#if working.origin === 'copied'}
-                <span class="min-w-0 truncate text-base font-semibold text-gray-900 dark:text-gray-100">{working.name}</span>
+                <span class="min-w-0 truncate text-base font-semibold text-lf-primary">{working.name}</span>
             {:else}
                 <div class="min-w-0 flex-1 sm:max-w-sm">
                     <input class={TITLE_INPUT} bind:value={working.name} maxlength="120" aria-label={$t('common.name', {default: 'Name'})} placeholder={$t('common.name', {default: 'Name'})} data-testid="pac-planner-broker-editor-name" />
@@ -171,7 +171,7 @@
             </div>
 
             {#if adding}
-                <div class="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-libre-green/60 bg-libre-green/5 p-3 dark:bg-libre-green/10" data-testid="pac-planner-mode-pending">
+                <div class="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-lf-checked bg-lf-selected/50 p-3" data-testid="pac-planner-mode-pending">
                     <div class="w-full sm:w-72">
                         <p class={LABEL_ROW}>{$t('tools.pacAllocator.planner.brokerEditor.pickCurrency', {default: 'Currency of the new block'})}</p>
                         <CurrencySearchSelect bind:value={pendingCurrency} excludedCurrencies={usedCurrencies} testId="pac-planner-mode-add-currency" onchange={(currency) => addMode(currency)} />
@@ -185,7 +185,7 @@
                     {#snippet children({item: mode})}
                         <div class="space-y-3 p-1 sm:p-2" data-testid="pac-planner-mode" data-currency={mode.currency} data-kind={mode.kind} data-added={mode.key === addedKey ? 'true' : undefined}>
                             {#if mode.key === addedKey && mode.currency === addCurrency}
-                                <p class="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100" data-testid="pac-planner-mode-added-for">
+                                <p class="rounded-md border border-lf-warning-line bg-lf-warning-soft px-2.5 py-1.5 text-xs text-lf-warning-on-soft" data-testid="pac-planner-mode-added-for">
                                     {$t('tools.pacAllocator.planner.brokerEditor.addedFor', {
                                         default: '{currency} mode added to buy {asset}, with starting values: check order type, increment and fees, then apply.',
                                         values: {currency: mode.currency, asset: addFor || '—'},
@@ -233,9 +233,9 @@
                                 </div>
                             </div>
 
-                            <div role="group" aria-labelledby="{ids}-{mode.key}-fee" class="border-t border-gray-100 pt-3 dark:border-gray-700/60">
+                            <div role="group" aria-labelledby="{ids}-{mode.key}-fee" class="border-t border-lf-subtle pt-3">
                                 <div class={LABEL_ROW}>
-                                    <span id="{ids}-{mode.key}-fee" class="font-semibold text-gray-700 dark:text-gray-200">{$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}</span>
+                                    <span id="{ids}-{mode.key}-fee" class="font-semibold text-lf-secondary">{$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}</span>
                                     <HelpTip
                                         label={$t('tools.pacAllocator.planner.brokerEditor.fee', {default: 'Purchase fee'})}
                                         help={$t('tools.pacAllocator.planner.brokers.feeHelp', {
@@ -305,7 +305,7 @@
                     {/snippet}
                 </OrderableList>
             {:else}
-                <p class="text-sm text-amber-700 dark:text-amber-300" data-testid="pac-planner-mode-empty">{$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}</p>
+                <p class="text-sm text-lf-warning" data-testid="pac-planner-mode-empty">{$t('tools.pacAllocator.planner.problems.brokerNoMode', {default: 'The Broker has no order mode.'})}</p>
             {/if}
         </section>
 
@@ -325,8 +325,8 @@
                 {#each conversionOptions as option (option.mode)}
                     {@const on = working.conversionMode === option.mode}
                     <label class="flex cursor-pointer items-center gap-2 p-3 {TOGGLE_CARD} {on ? TOGGLE_ON : TOGGLE_OFF}" data-testid="pac-planner-conversion-mode" data-mode={option.mode} data-selected={on ? 'true' : 'false'}>
-                        <input type="radio" name="{ids}-conversion" value={option.mode} bind:group={working.conversionMode} class="shrink-0 accent-libre-green" data-testid="pac-planner-conversion-mode-radio" />
-                        <span class="font-medium text-gray-900 dark:text-gray-100">{option.label}</span>
+                        <input type="radio" name="{ids}-conversion" value={option.mode} bind:group={working.conversionMode} class="shrink-0 accent-lf-checked" data-testid="pac-planner-conversion-mode-radio" />
+                        <span class="font-medium text-lf-primary">{option.label}</span>
                     </label>
                 {/each}
             </fieldset>
@@ -344,7 +344,7 @@
                 {#each localCash as cash (cash.key)}
                     <li class="flex flex-wrap items-center gap-2 p-2 {TOGGLE_CARD} {TOGGLE_ON}" data-testid="pac-planner-funding-local" data-currency={cash.currency}>
                         <PlannerBrokerIcon broker={working} size={20} />
-                        <span class="font-medium text-gray-900 dark:text-gray-100">{working.name || '—'}</span>
+                        <span class="font-medium text-lf-primary">{working.name || '—'}</span>
                         <CurrencyCode code={cash.currency} />
                         <HelpTip label={working.name || '—'} help={fundingSourceHelp($t, 'local', working.name, cash.currency)} />
                     </li>
@@ -360,7 +360,7 @@
                             {:else}
                                 <PlannerBrokerIcon broker={info.broker} size={20} />
                             {/if}
-                            {#if info.label}<span class="font-medium text-gray-900 dark:text-gray-100">{info.label}</span>{/if}
+                            {#if info.label}<span class="font-medium text-lf-primary">{info.label}</span>{/if}
                             {#if info.currency}<CurrencyCode code={info.currency} />{/if}
                             {#if source.kind === 'contribution'}<span class={BADGE.neutral}>{$t('tools.pacAllocator.planner.contribution.kind', {default: 'contribution'})}</span>{/if}
                             {#if info.currency && info.amount && info.amount.trim() !== ''}

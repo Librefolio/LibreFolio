@@ -39,7 +39,7 @@
 <section class="{CARD} space-y-3" aria-labelledby="pac-planner-result-title" data-testid="pac-planner-outcome" data-state={result.result_state}>
     <div class="flex flex-wrap items-start justify-between gap-2">
         <div>
-            <h2 id="pac-planner-result-title" tabindex="-1" class="text-lg font-semibold text-gray-900 focus:outline-none dark:text-gray-100">
+            <h2 id="pac-planner-result-title" tabindex="-1" class="text-lg font-semibold text-lf-primary focus:outline-none">
                 {$t(`${KEY}.title`, {default: 'Calculated plan'})}
             </h2>
             <p class={HINT} data-testid="pac-planner-outcome-basis">

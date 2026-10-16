@@ -2555,6 +2555,22 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - test nuovi `stressBucketLabel.test.ts` e `categoryLabels.test.ts`, 9 e 9, registrati in `core-unit`;
     - il mirror di `L4Shock.test.ts` è allineato, 22.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
+- **DV-7 · W5-PAC: tre colori del PAC restano in palette in attesa di una scelta** — minimo; DV, 16/10 (W5-PAC).
+  - **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100 dark:bg-slate-700`).
+    - Nessun ruolo la distingue dalla barra «sconosciuta», che nel lotto di T è `bg-lf-neutral`: `bg-lf-neutral` dà
+      ΔE00 0, `bg-lf-panel` e `bg-lf-hover` danno 3,4 e 2,5; la palette di oggi dà 6,9 in chiaro e 15,3 in scuro.
+    - Serve un ruolo per la traccia (T) o una scelta della designer.
+  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149, `ResultCell`:79 e
+    `DistributionDialog`:102.
+    - Sono un colore di dato accanto al neutro dell'obiettivo (`bg-lf-secondary`), non il marchio: `bg-lf-action` in
+      scuro è spento sulla traccia.
+    - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
+  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **Non di DV**, annotati per non perderli:
+    - `INPUT` e `TITLE_INPUT` di `planner/ui.ts` vanno col lotto di T sull'input;
+    - `ExposureMaps` (4) aspetta Y9.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «W5-PAC».
 
 ---
 

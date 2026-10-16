@@ -201,7 +201,7 @@
 
 <div class="space-y-4" data-testid="pac-planner-review">
     <div class="flex flex-wrap items-center gap-1">
-        <p class="text-sm text-gray-700 dark:text-gray-300">{$t(`${KEY}.lead`, {default: 'Last check before the calculation.'})}</p>
+        <p class="text-sm text-lf-secondary">{$t(`${KEY}.lead`, {default: 'Last check before the calculation.'})}</p>
         <HelpTip
             label={$t(`${KEY}.lead`, {default: 'Last check before the calculation.'})}
             help={$t(`${KEY}.help`, {
@@ -246,7 +246,7 @@
         <section class="space-y-2">
             <button
                 type="button"
-                class="flex items-center gap-1 rounded text-left {SECTION_TITLE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green"
+                class="flex items-center gap-1 rounded text-left {SECTION_TITLE} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                 aria-expanded={factsOpen}
                 aria-controls="pac-planner-review-facts-body"
                 data-testid="pac-planner-review-facts-toggle"

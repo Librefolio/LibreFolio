@@ -33,7 +33,7 @@
 </script>
 
 <div class="space-y-4" data-testid="pac-planner-strategy">
-    <p class="max-w-3xl text-sm text-gray-700 dark:text-gray-300">
+    <p class="max-w-3xl text-sm text-lf-secondary">
         {$t('tools.pacAllocator.planner.strategy.intro', {default: 'Among all the purchase plans that respect what you set in the previous steps, the strategy picks the best one.'})}
     </p>
 
@@ -47,23 +47,23 @@
             {@const objectives = POLICY_OBJECTIVES[policy] ?? []}
             <div class={CARD} data-testid="pac-planner-policy" data-policy={policy}>
                 <label for="{ids}-{policy}" class="flex cursor-pointer items-start gap-2">
-                    <input id="{ids}-{policy}" type="radio" name="{ids}-policy" value={policy} bind:group={draft.data.policy} class="mt-1 shrink-0 accent-libre-green" data-testid="pac-planner-policy-radio" />
+                    <input id="{ids}-{policy}" type="radio" name="{ids}-policy" value={policy} bind:group={draft.data.policy} class="mt-1 shrink-0 accent-lf-checked" data-testid="pac-planner-policy-radio" />
                     <span class="min-w-0">
-                        <span class="block font-medium text-gray-900 dark:text-gray-100">{$t(`${PLANNER_KEY}.policies.${policy}`, {default: POLICY_FALLBACKS[policy] ?? policy})}</span>
+                        <span class="block font-medium text-lf-primary">{$t(`${PLANNER_KEY}.policies.${policy}`, {default: POLICY_FALLBACKS[policy] ?? policy})}</span>
                         {#if POLICY_HELP_FALLBACKS[policy]}
-                            <span class="mt-0.5 block text-sm text-gray-600 dark:text-gray-400" data-testid="pac-planner-policy-help">
+                            <span class="mt-0.5 block text-sm text-lf-secondary" data-testid="pac-planner-policy-help">
                                 {$t(`${PLANNER_KEY}.policyHelp.${policy}`, {default: POLICY_HELP_FALLBACKS[policy]})}
                             </span>
                         {/if}
                         {#if POLICY_SCOPE_FALLBACKS[policy]}
-                            <span class="mt-0.5 block text-sm text-gray-600 dark:text-gray-400" data-testid="pac-planner-policy-scope">
+                            <span class="mt-0.5 block text-sm text-lf-secondary" data-testid="pac-planner-policy-scope">
                                 {$t(`${PLANNER_KEY}.policyScope.${policy}`, {default: POLICY_SCOPE_FALLBACKS[policy]})}
                             </span>
                         {/if}
                     </span>
                 </label>
                 {#if objectives.length > 0}
-                    <div class="mt-4 border-t border-gray-100 pt-3 dark:border-gray-700">
+                    <div class="mt-4 border-t border-lf-subtle pt-3">
                         <p class={SECTION_TITLE}>{$t('tools.pacAllocator.planner.strategy.cascade', {default: 'How it picks the plan, in order'})}</p>
                         <p class="mt-1 {HINT}" data-testid="pac-planner-policy-rule">
                             {$t('tools.pacAllocator.planner.strategy.cascadeRule', {default: 'Each criterion decides only among the plans still tied on the ones above it.'})}
@@ -74,7 +74,7 @@
                                 <li class="flex items-start gap-3" data-objective={objective}>
                                     <span class="{ICON_BUBBLE} text-xs font-semibold" aria-hidden="true">{index + 1}</span>
                                     <div class="min-w-0">
-                                        <div class="flex flex-wrap items-center gap-0.5 text-sm font-medium text-gray-900 dark:text-gray-100">
+                                        <div class="flex flex-wrap items-center gap-0.5 text-sm font-medium text-lf-primary">
                                             <span>{objectiveName(objective)}</span>
                                             {#if tip}
                                                 <HelpTip label={objectiveName(objective)} help={$t(tip.key, {default: tip.fallback})} math={tip.math} spoken={tip.spoken ? $t(tip.spoken.key, {default: tip.spoken.fallback}) : undefined} testid="pac-planner-objective-help" />
@@ -88,9 +88,9 @@
                             {/each}
                         </ol>
                         <div class="mt-2.5 flex items-start gap-3" data-testid="pac-planner-policy-tie-break">
-                            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400" aria-hidden="true"><Equal size={14} /></span>
+                            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lf-panel text-lf-muted" aria-hidden="true"><Equal size={14} /></span>
                             <div class="min-w-0">
-                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{$t('tools.pacAllocator.planner.strategy.tieBreakTitle', {default: 'Final tie-break'})}</p>
+                                <p class="text-sm font-medium text-lf-primary">{$t('tools.pacAllocator.planner.strategy.tieBreakTitle', {default: 'Final tie-break'})}</p>
                                 <p class={HINT}>
                                     {$t('tools.pacAllocator.planner.strategy.tieBreak', {
                                         default: 'If a tie is still left, a fixed order of Assets and Brokers decides. A search that ends by itself always gives the same plan for the same data; one stopped by a time or node limit may give a different plan.',
