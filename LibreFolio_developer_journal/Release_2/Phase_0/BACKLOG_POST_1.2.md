@@ -2899,6 +2899,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
     delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
     (15/10, 16:56) conferma che è debito di A.
+  - Da A6d, A6e e A6c (16/10), nessun timbro: `admin/settings` (introduzione, «Who Can Sign Up», che in IT/FR/ES manca
+    del tutto), `admin/configuration`, `admin/service_exposure`, `admin/hosting_providers`, `admin/cli_tools` (anche
+    «➕ Create and List Users», le regole della password), `user/installation`, `user/settings/profile` («Changing
+    Your Email», «🔑 Change Password»), `admin/email`.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
