@@ -1472,9 +1472,9 @@ def _i18n_catalogue(language: str) -> dict:
 
 
 #: The controller that emits the frontend-owned on-demand error code (F9).
-_RISK_CONTROLLER_TS = "src/lib/stores/risk/riskPanelController.svelte.ts"
+_RISK_CONTROLLER_TS = "src/lib/features/risk/riskPanelController.svelte.ts"
 #: The helper that refines a size limit into the display code of its remedy (D379).
-_ERROR_DISPLAY_CODE_TS = "src/lib/components/risk/levels/errorDisplayCode.ts"
+_ERROR_DISPLAY_CODE_TS = "src/lib/features/risk/levels/errorDisplayCode.ts"
 #: One entry of a ``Map`` of snake_case strings, in the one form Prettier writes (``singleQuote``).
 _STRING_PAIR = re.compile(r"\[\s*'([a-z][a-z0-9_]*)'\s*,\s*'([a-z][a-z0-9_]*)'\s*,?\s*\]")
 

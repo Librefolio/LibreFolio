@@ -250,7 +250,7 @@ Senza benchmark persistente e dichiarato, riesporli riproduce il problema attual
 ### Riferimenti
 
 - `backend/app/services/risk_plugins/comparison/plugin.py`
-- `frontend/src/lib/components/risk/RiskAnalysisPanel.svelte` (sezione comparison)
+- `frontend/src/lib/features/risk/RiskAnalysisPanel.svelte` (sezione comparison)
 
 ---
 
@@ -1492,7 +1492,7 @@ cambio è osservabile ovunque**, perché il formattatore del denaro è usato in 
 Il pacchetto `T4` del round 2 non è mai partito. Prima di aprirlo ho contato i siti:
 
 ```
-frontend/src/lib/components/risk/     26  toFixed
+frontend/src/lib/features/risk/     26  toFixed
 tutto il resto dell'app              139  toFixed
                                     ─────
                                      165
