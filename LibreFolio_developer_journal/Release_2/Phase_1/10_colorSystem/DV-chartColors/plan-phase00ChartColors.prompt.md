@@ -1420,6 +1420,36 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >     `git diff --check` puliti.
   >   - Il coordinatore lo committa da solo e lo fa entrare subito, prima di TC-15.
   >   - Da allora agli ingressi lancia anche il file Vitest del gate, non solo `--check`.
+- [x] ✅ (16/10/2026) G-18: un elemento misto in `BackendTimingBar`, visto a runtime dalla prima galleria completa
+  (`designer-16b`, 2.862 scatti; coordinatore, 17:54). Entra insieme a TC-15 (`a6c79a8f3`) dopo una prova breve.
+  > **Note implementazione** (16/10, 17:55–18:00), sulla base `a6c79a8f3`.
+  > - **Il caso:** il segmento del timing (`pac-planner-timing-segment`) aveva il separatore legacy (`border-r
+  >   border-white … dark:border-gray-800`) e, solo per il tratto «non attribuito», il ruolo `bg-lf-neutral`. La
+  >   classe si compone a runtime (`{segment.colour}`), quindi il gate statico non la vede. Si vedeva in 4 scatti del
+  >   PAC, 40 varianti.
+  > - **⚠️ Fuori pista, errore mio di W5-PAC:** il convertitore aveva portato il colore «non attribuito» (`bg-gray-300
+  >   dark:bg-gray-600`, una stringa a sé) su `bg-lf-neutral`, e aveva lasciato legacy il separatore («i segmenti
+  >   hanno un colore di fase»). Non avevo guardato i valori che entrano nell'elemento a runtime.
+  > - **Perché non `border-lf-card` sul segmento,** come proponeva il coordinatore: i 7 segmenti delle fasi, ancora
+  >   legacy perché categorie (punti 2.1 e 2.5), sarebbero diventati misti al contrario.
+  > - **Fatto:** il separatore passa al contenitore della barra, `divide-x divide-lf-card`, cioè una riga di 1 px fra
+  >   un segmento e l'altro nel colore della card su cui sta la sezione. Il segmento porta solo `h-full
+  >   transition-opacity {segment.colour}`.
+  >   - La geometria non cambia: `divide-x` mette il bordo destro dentro ogni figlio tranne l'ultimo, come faceva
+  >     `border-r … last:border-r-0`.
+  >   - In scuro il separatore passa da `#1f2937` al colore della card (`#151b19`).
+  >   - Un commento nel markup spiega perché il separatore sta sul contenitore.
+  > - **Controllo G3 sulle stringhe composte,** con le regex del gate: contenitore, 8 segmenti e 8 quadratini della
+  >   legenda, 17 stringhe, 0 miste. Nel resto della mia area ho riguardato gli elementi rimasti legacy (le barre
+  >   «dopo il piano», le tracce, la legenda del rischio, le barre dei KPI): la parte fissa della classe non ha colori,
+  >   quindi nessuno si mescola a runtime.
+  > - **`app.css`:** nessuna regola del rimappaggio scuro su `border-white` o `border-gray-800`, quindi C4 non cambia.
+  > - Nessun test legge i segmenti, né unit né E2E.
+  > - Prettier, compilatore (0 avvisi), regola 4 a 0, `git diff --check` puliti.
+  > - `--update`: m1 4.290 → 4.288; `BackendTimingBar` da 16 a 14, restano solo le categorie delle fasi.
+  > - **Vitest** (carico 49,7): `themeRoles` 52/52, `themeTokens` 19/19 (C4 compreso), `ChartSignalsSection` 21/21,
+  >   `SignalTreeSelect` 28/28 (le righe di `SignalOptionContent`, TC-15), `scanColors` 67/67.
+  > - **E2E `front-utility pac-allocator-real`:** da girare al via del coordinatore, nella coda pesante.
 - [ ] W6-d, dopo l'ingresso di Y.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
