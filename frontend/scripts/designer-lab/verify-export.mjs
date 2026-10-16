@@ -21,7 +21,7 @@
 import {existsSync, readFileSync} from 'node:fs';
 import {join, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {FRONTEND_DIR, scanColors} from './scan-colors.mjs';
+import {categoryLines, FRONTEND_DIR, scanColors} from './scan-colors.mjs';
 
 export const VERIFY_SCHEMA = 'lf-designer-lab-verify/1';
 
@@ -80,6 +80,29 @@ export function locate(lines, line, needle) {
 }
 
 /**
+ * Where a chart category's value stands now (`category` changes): its line found by key and theme in the tables of
+ * `chartCategories.ts` (`categoryLines`), never by value — categories share values (`ETF` and `Technology`), and a
+ * value search would land on another category's line. `ok` at the same line, `moved` to the line its key and theme are
+ * written at now, `missing` when the key is gone or its line holds another value (the export's starting value is stale).
+ * @param {string[]} lines
+ * @param {{line: number, raw?: string, theme_context?: string | null}} occ
+ * @param {string} target  `type:ETF`, `sector:Health Care`, `bucket:Liquidity`
+ * @returns {{status: 'ok' | 'moved' | 'missing', line?: number}}
+ */
+export function locateCategory(lines, occ, target) {
+    let line = -1;
+    for (const [n, c] of categoryLines(lines.join('\n'))) {
+        if (c.target === target && c.theme === occ.theme_context) {
+            line = n;
+            break;
+        }
+    }
+    if (line === -1) return {status: 'missing'};
+    if (occ.raw && !(lines[line - 1] ?? '').toLowerCase().includes(occ.raw.toLowerCase())) return {status: 'missing'};
+    return line === occ.line ? {status: 'ok', line} : {status: 'moved', line};
+}
+
+/**
  * The text to look for at an occurrence: its literal, or for a Tailwind class use the `family-shade` of the variable.
  * @param {{raw?: string}} occ
  * @param {{layer: string, target: string}} change
@@ -114,7 +137,7 @@ export function verifyExport(doc, opts = {}) {
         let ok = 0;
         for (const occ of change.occurrences ?? []) {
             const lines = read(occ.file);
-            const where = lines ? locate(lines, occ.line, needleOf(occ, change)) : /** @type {ReturnType<typeof locate>} */ ({status: 'missing'});
+            const where = !lines ? /** @type {ReturnType<typeof locate>} */ ({status: 'missing'}) : change.layer === 'category' ? locateCategory(lines, occ, change.target) : locate(lines, occ.line, needleOf(occ, change));
             if (where.status === 'ok') ok++;
             else if (where.status === 'moved') moved.push({file: occ.file, line: occ.line, raw: occ.raw, to_line: where.line});
             else missing.push({file: occ.file, line: occ.line, raw: occ.raw});
