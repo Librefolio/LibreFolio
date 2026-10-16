@@ -310,8 +310,9 @@ it from the [instance configuration](../../state/app-state.md#instance-config),
   `409` `SETTING_LOCKED_BY_ENV`; the tab shows `settings.lockedByEnv` with the `variable` of the
   answer.
 - **After a save that includes `registration_mode`**, alone or with **Save All**, the tab calls
-  `instanceConfig.load({force: true})`, so the login page's **Register here** and the `/invite` page
-  follow the new mode on this page load.
+  `instanceConfig.load({force: true})`, so the login page's **Register here**, the `/invite` page and
+  the [open-registration warning](auth.md#open-registration-notice) follow the new mode on this page
+  load.
 
 ### 🧹 CachePanel
 
@@ -393,10 +394,12 @@ toast, when there is one, is a field of the same call.
 #### UserRow {: #userrow }
 
 `lib/features/settings/users/UserRow.svelte`. Props: `account` (`AdminAccount`, the `GET /users`
-item, with `holds_place` when it is sent), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
+item, with `holds_place` and `pending_setup` when they are sent: both optional in
+`users/types.ts`), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
 
 - The `<li>` is `users-row`, with `data-user-id`, `data-username`, `data-active`, `data-admin`,
-  `data-protected` and `data-self` (`"true"` or `"false"`).
+  `data-pending-setup`, `data-protected` and `data-self` (`"true"` or `"false"`; `data-pending-setup`
+  is `"false"` when the field is absent, the answer of an older server).
 - `users-row-toggle`, a button with `aria-expanded` and `aria-controls`, shows the username, the
   badges (`settings.usersTab.badges.you`, `admin`, `inactive`, `protected`), the email and
   `settings.usersTab.createdOn`, and opens or closes the panel of actions under the row.
@@ -405,6 +408,15 @@ item, with `holds_place` when it is sent), `isSelf`, `isOnlyActiveAdmin`, `full`
   inactive one; `users-action-demote` for an administrator or `users-action-promote` for a regular
   account; then `users-action-reset-link`, `users-action-sign-out`, `users-action-restart-guides`
   and `users-action-delete`.
+- **An account waiting for its setup** (`pending_setup`, the
+  [initial administrator](../../../architecture/access_control.md#initial-admin) whose setup link was
+  never used): the badge `users-badge-pending-setup` (`settings.usersTab.badges.pendingSetup`,
+  *Waiting for setup*, in the tab's neutral style) in place of `inactive`; no
+  `users-action-reactivate`, and so no `limit` reason on a full instance; under the buttons,
+  `users-pending-setup-hint` (`settings.usersTab.pendingSetupHint`): the account activates through
+  its setup link, and a lost link is replaced with `dev.py user setup-link` or by the hosting
+  provider. Its other buttons are those of any inactive account. The backend refuses its
+  reactivation anyway, with `409` `PENDING_SETUP` ([Account Errors](#account-errors)).
 
 A button the backend would certainly refuse is `disabled`, with `data-disabled-reason`; the first
 condition that holds gives the reason:
@@ -412,7 +424,7 @@ condition that holds gives the reason:
 | Button | `data-disabled-reason` |
 |---|---|
 | `users-action-deactivate` | `protected` when `account.protected`; `last-admin` when the account is an administrator and `isOnlyActiveAdmin` |
-| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)) |
+| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)). Never drawn for an account with `pending_setup` |
 | `users-action-demote` | `protected` when `account.protected`; `last-admin` when the account is active and `isOnlyActiveAdmin` |
 | `users-action-delete` | `protected` when `account.protected`; `demote-first` when the account is an administrator, active or not |
 
@@ -445,7 +457,7 @@ the row cannot see.
 #### LinkShare {: #linkshare }
 
 `lib/features/settings/users/LinkShare.svelte`: the panel both dialogs share a link through. Props:
-`purpose` (`LinkPurpose`, `invite` or `password_reset`), `path` (the page with the token in the
+`purpose` (`LinkPurpose`; the dialogs pass `invite` or `password_reset`), `path` (the page with the token in the
 fragment, as the backend's `token_path()` builds it), `url` (`LIBREFOLIO_PUBLIC_URL` followed by
 `path`, or `null`), `expiresAt`, `context?` (`{username?, email?, userId?}`). The root is
 `link-share`, with `data-purpose`.
@@ -514,7 +526,7 @@ the translated `key` otherwise.
 
 | Answer | `code` | Shown |
 |---|---|---|
-| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST` | that code | `settings.usersTab.errors.<code>`; a `detail.billing_url` is passed as `params.billingUrl` |
+| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`, `PENDING_SETUP` (`ACCOUNT_ERROR_CODES`) | that code | `settings.usersTab.errors.<code>`; a `detail.billing_url` is passed as `params.billingUrl`. `PENDING_SETUP` is the `409` of a reactivation of the initial administrator waiting for its setup: a list loaded earlier may still offer it |
 | `404` | `NOT_FOUND` | `settings.usersTab.errors.NOT_FOUND` |
 | `422` | `INVALID_INPUT` | `settings.usersTab.errors.INVALID_INPUT` |
 | `500` of a deletion (`action` is `'delete'`) | `DELETION_FAILED` | `settings.usersTab.errors.DELETION_FAILED`: nothing was deleted |
@@ -570,12 +582,16 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
 - `./dev.py test front-utility core-unit`: `users/linkShare.test.ts` (`initialBase`,
   `composeLink`), `users/addressProbe.test.ts` (`normalizeBase`, `probeUrl`, and `checkAddress`:
   the request options key by key, every verdict, the deadline on fake timers, never the network),
+  `users/accountErrors.test.ts` (every code of `ACCOUNT_ERROR_CODES`, `PENDING_SETUP` included,
+  the answers read from the status, and each key a sentence in the four catalogues),
   and the `users` row of `settingsTabs.test.ts`.
 - `./dev.py test front-utility component-unit`: `tabs/UsersTab.test.ts` (the tab against a mocked
   server that changes as the backend would), `users/LinkShare.component.test.ts` (not
   `LinkShare.test.ts`: `linkShare.test.ts` is in the same folder, and macOS volumes ignore case),
-  `users/InviteDialog.test.ts`, `users/ResetLinkDialog.test.ts`, `AccountDeletionDialog.test.ts`
-  (both modes) and `tabs/ProfileTab.test.ts`.
+  `users/InviteDialog.test.ts`, `users/ResetLinkDialog.test.ts`, `users/UserRow.pendingSetup.test.ts`
+  (the row of an account waiting for its setup: the badge, `data-pending-setup`, no
+  **Reactivate** and no `limit` reason, the hint; every other row unchanged),
+  `AccountDeletionDialog.test.ts` (both modes) and `tabs/ProfileTab.test.ts`.
 - `./dev.py test front-utility admin-users` (`frontend/e2e/settings/admin-users.spec.ts`): the tab
   on the lane's real backend, `e2e_test_admin` acting on disposable accounts only. Only an
   administrator has the tab; the own row has no action; deactivate and reactivate, promote and
