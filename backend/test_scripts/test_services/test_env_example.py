@@ -62,8 +62,8 @@ COMPOSE_FILES = ("docker-compose.yml", "docker-compose.prod.yml")
 #: (1)(4) Read by the application and kept out of .env.example on purpose, with the reason. A ratchet: an entry whose
 #: variable is no longer read, or gets a variable line, fails until it is removed.
 UNDOCUMENTED_ON_PURPOSE: dict[str, str] = {
-    "FLY_APP_NAME": "set by Fly.io on every machine, read by the idle suspension (sleep_wake/suspend.py); not an option",
-    "FLY_MACHINE_ID": "set by Fly.io on every machine, read by the idle suspension (sleep_wake/suspend.py); not an option",
+    "FLY_APP_NAME": "set by Fly.io on every machine, read for the idle suspension (config/sleep_wake.py); not an option",
+    "FLY_MACHINE_ID": "set by Fly.io on every machine, read for the idle suspension (config/sleep_wake.py); not an option",
     "LIBREFOLIO_DISABLE_DONATION_POPUP": "workstream A keeps the hidden switch out of .env.example and the docs",
     "LIBREFOLIO_TEST_LANE_ID": "internal token the test runner sets for the server it owns",
 }

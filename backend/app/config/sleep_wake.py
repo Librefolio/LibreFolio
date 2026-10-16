@@ -206,3 +206,16 @@ def idle_suspend_minutes() -> int:
     if not _DIGITS.fullmatch(raw) or not 1 <= int(raw) <= IDLE_SUSPEND_MINUTES_MAX:
         raise SleepWakeConfigError("LIBREFOLIO_IDLE_SUSPEND_MINUTES", "IDLE_SUSPEND_MINUTES_INVALID", f"expected whole minutes from 1 to {IDLE_SUSPEND_MINUTES_MAX}")
     return int(raw)
+
+
+def fly_machine_identity(environ: Mapping[str, str] | None = None) -> tuple[str, str] | None:
+    """The app and the machine of this Fly.io machine, ``FLY_APP_NAME`` and ``FLY_MACHINE_ID``; None off Fly.
+
+    Fly sets both on every machine: they are not options of LibreFolio. The idle suspension reads them
+    (``services/platform/sleep_wake/suspend.py``); ``environ`` replaces the process environment in tests.
+    """
+    app = _value("FLY_APP_NAME", environ)
+    machine = _value("FLY_MACHINE_ID", environ)
+    if app is None or machine is None:
+        return None
+    return app, machine
