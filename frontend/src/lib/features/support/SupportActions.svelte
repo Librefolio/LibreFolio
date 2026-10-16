@@ -20,12 +20,12 @@
     }));
 </script>
 
-<div class={`space-y-4 ${className}`.trim()} data-testid="support-actions">
+<div class={`space-y-4 text-lf-primary ${className}`.trim()} data-testid="support-actions">
     <a
         href={BUY_ME_A_COFFEE_URL}
         target="_blank"
         rel="noopener noreferrer"
-        class="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:focus-visible:ring-offset-slate-900"
+        class="flex w-full items-center justify-center gap-2 rounded-lg bg-lf-donate px-4 py-3 text-sm font-medium text-lf-on-status transition-colors hover:bg-lf-donate-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-lf-donate focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         onclick={() => onCoffeeClick?.()}
         data-testid={coffeeTestId}
     >
@@ -33,10 +33,10 @@
         <span>{$_('help.buyMeACoffee')}</span>
     </a>
 
-    <div class="flex items-center gap-3 text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-slate-400 dark:text-slate-500">
-        <span class="h-px flex-1 bg-black/10 dark:bg-white/10"></span>
+    <div class="flex items-center gap-3 text-[0.7rem] font-semibold uppercase tracking-[0.28em] text-lf-muted">
+        <span class="h-px flex-1 bg-lf-subtle"></span>
         <span>{$_('support.shareDivider')}</span>
-        <span class="h-px flex-1 bg-black/10 dark:bg-white/10"></span>
+        <span class="h-px flex-1 bg-lf-subtle"></span>
     </div>
 
     <div class="flex flex-wrap items-center justify-center gap-3">
