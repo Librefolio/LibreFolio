@@ -4264,3 +4264,113 @@ Simulazione con le risoluzioni su `624fa5609`: **0 conflitti, lint pulito, `mkdo
 **Revisione combinata** (dev + W-B53, nell'albero simulato, corsia 6184): `services config-brim` **51**, `app-lifecycle` **51** (i
 miei 49 e i 2 di H-15), `config-env-example` **38**, `brim-parse-pool` **17**. Porta libera. **Handoff FROZEN** (20:2x): due
 commit, codice e journal; su dev solo il primo.
+
+**W-B53 committato** (coordinatore, 20:18): `193412cdf` (codice) e `7fda52929` (journal) sul ramo (HEAD `7fda52929`, verificato,
+worktree pulito); cherry-pick **`618d7208e`** in `dev_release2` (treno 133) con le mie 3 risoluzioni (`overview.md` controllato:
+16 `brim-parse-pool`, 17 `scheduler`, 18 `idle-monitor`); il cancello su dev lo gira il coordinatore; la riga ✨ del CHANGELOG nei
+suoi record. **MF** (MF-I2, `auto_cost.py`): risposto (a), cambia lui le 4 righe di `is_split_linked` sul suo ramo; il mio ramo
+in quel file aggiunge solo `_handover_cost` (decisione 47), lontano dal blocco 70–95.
+
+### FE8b — la cartella delle transazioni in `features/`: analisi ⏳ (2026-10-16)
+
+**Stato reale** (HEAD `7fda52929`; `dev_release2` `618d7208e`: **stessa lista di file**, contenuti diversi, vedi sotto; strumenti
+in sola lettura: `files/scripts/fe8b_inventory.py`, `files/scripts/fe8b_mapping.py`, uscite in `files/fe8b/`):
+- **FE8a fatto** (15/10): i tagli delle tre modali in `form/`, `bulk/`, `wizard/`. I padri restano grandi (Wizard 5 053, Bulk
+  3 389, Form 1 704 righe): il ridisegno dello stato in classi è fuori dalla 1.3 (disegno di FE8a). **FE8b è una sola rinomina.**
+- **Da spostare**: `components/transactions/**` 66 file (29 264 righe), `utils/transactions/**` 49 (11 553), `utils/brim/**` 7
+  (779), `stores/transactions/**` 3 (740); in più `ui/display/CompactCashCell` (+test) e 3 test in `utils/__tests__`.
+- **Usati da fuori**: 17 moduli, 31 righe d'import in 24 file: le rotte `transactions`, `brokers/[id]`, `dashboard`;
+  `features/files` (`FileSetBadges`, `FilesTable` → `importReportSets`); `components/assets/AssetDataEditorSection`
+  (`eventTypes`, `eventSaveError`); `ui/display/CompactCashCell` (`transactionTypeStore`, `signHintColor`);
+  `ui/select/ImportPluginSelect` e `features/settings/tabs/AboutTab` (`pluginText`); `utils/broker/brokerHelpers`
+  (`pluginKind`); 3 test in `utils/__tests__`; l'harness `ReportSetCardInModalHarness`; lo spec `tx-fx-completeness`.
+- **`vi.mock` su moduli che si spostano**: 7 (`ImportWizardModal.test.ts` 5, `TransactionFormModal.test.ts` 1,
+  `txPayloadHelpers.test.ts` 1), tutti sul file che definisce: si aggiornano i percorsi, nessun barile in mezzo.
+- **Barili**: `components/transactions/index.ts` (7 righe) e `shared/index.ts` (3), usati solo dalle 3 rotte.
+- **Percorsi fuori dal codice**: runner `_frontend_transaction.py` 19 e `_frontend_utility.py` 27 (i Vitest elencati per
+  percorso, che `check-orphans` confronta); gate con percorsi reali `htmlSink` 6, `htmlInterpolation` 4, `flagFont` 1,
+  `moneyRenderSites` 3; baseline dei colori 37 righe di misura e 3 `~split` di FE8a; 4 spec E2E; 1 harness; doc per
+  sviluppatori 11 pagine; **devWiki 99 pagine, 258 righe**; 3 docstring del backend (`schemas/transactions/type_metadata.py`,
+  `test_brim_providers.py`, `test_brim_degiro.py`; `test_brim_providers.py:6202` **legge `utils/brim/pluginKind.ts` come
+  testo**). I 3 test del Designer Lab usano `TX_TABLE` solo come chiave di una fixture in memoria: non leggono il file.
+- **Il precedente di Y** (FE7 `6f7ac70ce`, FE3 `aec49a9cb`, FE6 `ce828e9c1`, FE2 `51aff4a12`, tutti del 16/10): sole
+  rinomine (FE7: 101 file, 138 righe tolte e 138 messe), **nessun barile nuovo e D-P4 rinviato a FE9** («fra feature si
+  importa dal file che definisce», D-Y5 e D-Y13 del piano 09), righe di misura della baseline rinominate con gli stessi conteggi,
+  **dichiarazioni `~split` lasciate com'erano** (anche quella di `GrowthChart`), doc e devWiki nello stesso commit; un modulo
+  usato da molti fuori (`BrokerIcon`, 17) è andato in `ui/display`; `utils/broker/` è rimasto dov'era.
+- **La mia base è indietro di 343 commit**: fra questi i lotti dei colori sui file delle transazioni (12:08–15:44, `48ecea1e2`,
+  `1a01ae733`, `9c79d5b35`, `70bae91b4`, `c4b8a4ae3`, `d39728347`), per cui 36 dei file da spostare differiscono da dev
+  (+1 115/−882). I miei commit su quei file (W-B44, W-B39, C-34, C-97a) sono già in dev con altri id. → **prima di FE8b serve
+  l'aggiornamento della base**, o la rinomina porterebbe contenuti vecchi.
+
+**Già fatto o contraddetto**: il `features/transactions/index.ts` della riga FE8b del §7 è superato dal precedente di Y (D-P4 a
+FE9); i tagli dei file grandi (P2.4) sono FE8a. P-14 (l'accento di «broker» in 46 chiavi di `es`) e U-B9 (broker mock senza
+plugin predefinito), sulla stessa riga del §7, non sono spostamenti: lotti piccoli a parte.
+
+**Disegno proposto** (la forma del piano 43; mappa in `files/fe8b/mapping.tsv`: **124 spostamenti e 2 barili tolti, nessuna
+collisione, uguale su dev**):
+
+| Cartella | File (test) | Cosa |
+|---|---|---|
+| `features/transactions/` | 24 (9) | `TransactionsTable`, `types.ts`, i due store, il nucleo che più parti usano (`txPayloadHelpers`, `txCommitApi`, `commitRefusal`, `resolveValidationMessage`, `useValidateScheduler`, `resolveBrimNotice`, `resolveFormItems`, `loadTransactionRows`, `txDisplayHelpers`, `TransactionTypeSearchSelect`), `TransactionActionModal` |
+| `form/` | 13 (4) | `TransactionFormModal` e le sue sezioni, `txFormFields`, `signHintColor`, `CompactCashCell` |
+| `bulk/` | 18 (6) | `TransactionBulkModal` e i suoi pezzi, `PromoteAllModal`, `PromoteMergeModal`, `TransactionPickerModal`, `TransactionResultBanner`, `bulkDisplay`, `bulkTodos`, `promoteHelpers`, `promoteSuggest` |
+| `import/` | 56 (21) | `ImportWizardModal` e i passi (`wizard/` confluisce qui, come deciso in FE8a), l'`import/` di oggi, `ImportBrokerMismatchModal`, `ParseDetailModal`, `TransactionCompareModal`, i 14 moduli `import*`, `gapFixModel`, …, `defaultPluginCheck`, `isFakeAssetId` |
+| `events/`, `cells/`, `wac/` | 8 (3), 3, 2 (1) | come oggi; `eventTypes` in `events/` |
+
+**Decisioni** (proposte; le alternative sotto):
+- **F1 · niente `index.ts`**: D-P4 a FE9, come Y. I due barili si tolgono; le 3 rotte importano dai file che definiscono.
+  Alternativa: il barile spostato come file pubblico della feature (anticipa D-P4 per una sola feature, ed esporta
+  `TransactionFormModal`, che un test prende con `vi.mock`).
+- **F2 · `utils/brim/` diviso**: restano `pluginText` e `pluginKind` (+test), usati da broker, settings e `ui/select`, e letti
+  come testo dal backend; vanno in `import/` `defaultPluginCheck` (+test) e `isFakeAssetId`, usati solo dall'import.
+  Alternativa: tutta la cartella nella feature (tre import nuovi verso la feature, due dei quali inversioni: `ui/select` e
+  `utils/broker`).
+- **F3 · `CompactCashCell` in `form/`**: scritto come editor generico, ma lo usano solo le transazioni (sezioni del Form, Form,
+  WAC) e importa tipi delle transazioni (`SignRule`, `computeSignHint`); lasciato in `ui/display`, diventerebbe un import
+  `ui → feature`. Alternativa: resta, e FE9 lo rende generico.
+- **F4 · le modali nella cartella della loro parte**; alternativa a pari costo: lo specchio di oggi (`modals/` e `shared/`
+  restano), con `wizard/` in `import/` e i moduli di `utils` presso i loro utilizzatori.
+
+**Conflitti previsti**:
+- Nessun ramo con commit fuori da dev tocca i file che si spostano. E (+40) e B (+5) aggiungono righe a
+  `_frontend_utility.py`; BK cambia una riga di misura della baseline, non delle transazioni (`--resolve`).
+- Il lavoro non committato degli altri non lo vedo: chiedo il **congelamento dei percorsi** per la durata di FE8b, con un
+  annuncio come per FE8a: `components/transactions/**`, `utils/transactions/**`, `utils/brim/{defaultPluginCheck,isFakeAssetId}*`,
+  `stores/transactions/**`, `ui/display/CompactCashCell*`. Nei file condivisi (rotte, `AssetDataEditorSection`, `features/files`,
+  runner, gate, baseline, doc, devWiki) cambio solo righe di percorso.
+- C-97b e C-97c scrivono poi sui percorsi nuovi (il motivo dell'ordine). La decisione 47 (sul mio ramo, aspetta J-17) non
+  tocca i file che si spostano; in doc e devWiki (`wac.md`, `overview.md`) FE8b cambia solo percorsi.
+
+**Complessità e rischi**: alta per ampiezza (~250 file toccati: 124 rinomine, ~300 specificatori d'import, ~260 righe della
+devWiki), nulla per logica. I rischi:
+- un import relativo sbagliato: lo prendono svelte-check e la build;
+- un `vi.mock` che non punta più al modulo (il test passerebbe senza mock): controllo esplicito dei 7;
+- un gate che confronta percorsi reali;
+- un test che legge un file per percorso (`pluginKind`, che resta);
+- la somiglianza delle rinomine (≥ 95 %), misurata per file prima dell'handoff.
+
+**Passi**:
+0. Il coordinatore aggiorna la base (dev → W). Verifico HEAD; rifaccio inventario e mappa sulla base nuova.
+1. `files/scripts/fe8b_move.py`, deterministico, dry run e poi `--apply`:
+   - `mv`, non `git mv` (lo staging è del coordinatore);
+   - ogni specificatore che risolve a un file spostato riscritto nel suo stile: `$lib` resta `$lib`, relativo resta relativo;
+     i 4 relativi che escono dalla feature diventano `$lib`;
+   - i barili espansi nelle 3 rotte;
+   - i percorsi nei runner, nei gate, negli E2E, nell'harness, nelle docstring del backend, nella doc e nella devWiki;
+   - le righe di misura della baseline rinominate (stessi conteggi); le `~split` lasciate.
+2. Controlli statici: ogni specificatore risolve; i 7 `vi.mock` risolvono al file nuovo; i vecchi percorsi a zero fuori dalla
+   storia (journal, `~split`, `LibreFolio_devWiki/log.md`); somiglianza per file.
+3. Prove nella corsia 6184; E2E in uno slot.
+4. Plan e BACKLOG; simulazione del cherry-pick su dev con lo strict build; handoff FROZEN: un commit di rinomina e il journal.
+
+**Definizione di fatto**: vecchi percorsi a zero in `frontend/`, `scripts/`, `.github/`, `backend/`,
+`mkdocs_src/docs/developer/` (eccezioni dichiarate: le `~split`, la storia); rinomine ≥ 95 %; nessun barile né shim nuovo;
+svelte-check 0 errori e 0 avvisi; i Vitest delle categorie toccate verdi; `front build`; `theme-roles.mjs --check` pulito con gli
+stessi totali; `check-orphans`; `check_source_paths.py` a 5 path mancanti come oggi; `mkdocs build` strict e `check-links`; `lint
+--dead-code` senza reperti nuovi.
+
+**Selettori proposti**: `front check`; `front-transaction tx-unit`; `front-utility core-unit`, `component-unit`; `front-broker
+broker-unit`; `front-asset asset-unit`; `check-orphans`; `front build`; `theme-roles.mjs --check`; `lint --dead-code`; `mkdocs
+build` e `check-links`; `check_source_paths.py`. In slot: `front-transaction all --workers 4`, `front-broker detail`,
+`front-portfolio dashboard`, `front-utility files`, `front-asset asset-data-editor`, `front-utility onboarding-tour`.
