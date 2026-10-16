@@ -99,7 +99,6 @@ lib/features/brokers/lots/LotsAnalysisPanel.svelte	42
 lib/features/brokers/lots/UnifiedLotsTable.svelte	84
 lib/features/dashboard/ExposureTable.svelte	2
 lib/features/dashboard/KpiSection.svelte	6
-lib/features/dashboard/OtherPeriodEffectsTable.svelte	8
 lib/features/dashboard/PositionsPanel.svelte	46
 lib/features/files/FileGrid.svelte	1
 lib/features/risk/RiskReturnLevel.svelte	4

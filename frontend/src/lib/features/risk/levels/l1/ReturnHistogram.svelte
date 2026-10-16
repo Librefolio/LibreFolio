@@ -26,6 +26,7 @@
 <script lang="ts">
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {_ as t} from '$lib/i18n';
+    import {SIGN_BAR} from '$lib/theme/toneClasses';
 
     import {axisPercent, figurePercent, type ReturnHistogram} from './l1Helpers';
 
@@ -38,7 +39,7 @@
 
     function barClass(bin: {holdsCut: boolean; belowCut: boolean}): string {
         if (bin.holdsCut) return 'bg-lf-warning';
-        if (bin.belowCut) return 'bg-lf-loss/80';
+        if (bin.belowCut) return SIGN_BAR.histogram.loss;
         return 'bg-lf-neutral';
     }
 </script>

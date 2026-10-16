@@ -45,6 +45,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     import {buildAssetSetHurtRows, type AssetSetHurtRow} from './assetSetLevels';
     import {assetNameColumn, figureCell} from './assetSetTable';
@@ -121,7 +122,7 @@
         return fraction === null ? null : -Math.abs(fraction);
     }
 
-    const LOSS_CLASS = 'tabular-nums text-lf-loss';
+    const LOSS_CLASS = `tabular-nums ${SIGN_TEXT.riskTable.loss}`;
 
     type LossColumn = 'badDay' | 'badMonth' | 'worstFall' | 'currentFall' | 'toPeak';
 
