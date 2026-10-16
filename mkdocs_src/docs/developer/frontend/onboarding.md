@@ -87,7 +87,7 @@ Frontend paths below are relative to `frontend/src/`.
 | `lib/features/onboarding/onboardingGuideCatalog.ts` | Step ids and flow definitions |
 | `lib/features/onboarding/onboardingGuide.svelte.ts` | The engine, singleton `onboardingGuide`: start, step, finish, skip, replay, queue |
 | `lib/features/onboarding/guideAnchors.svelte.ts` | Anchor registry and the `guideAnchor` action |
-| `lib/features/onboarding/appBootstrap.svelte.ts` | Bootstrap loads and the Welcome redirect rule |
+| `lib/features/onboarding/appBootstrap.svelte.ts` | Bootstrap loads and the Welcome redirect rule; starts the open-registration warning |
 | `lib/features/onboarding/onboardingRouteSettlement.ts` | Applies the redirect, or starts the tour, once per settled route |
 | `lib/features/onboarding/components/OnboardingOverlayHost.svelte` | Presentation table of every step; renders the intro scene or the single coachmark |
 | `lib/features/onboarding/components/OnboardingCoachmark.svelte` | Measures the anchor; spotlight, pointer, panel placement, waiting and stalled states |
@@ -116,6 +116,14 @@ one state.
 | `blocked` | user settings failed, or progress failed and no completed or skipped Welcome was loaded before | `OnboardingBootstrapBlock`, with a retry and a logout button |
 | `degraded` | progress failed, but a completed or skipped Welcome was already loaded | the app, with `OnboardingBootstrapBanner` and its retry button |
 | `ready` | everything loaded | the app |
+
+Before the loaders, as soon as `load()` knows the user — right after its guard on the user id, and
+before it returns early for a user already loaded — it calls `startOpenRegistrationNotice()`, a
+dependency of `createAppBootstrap()` like the loaders. The default calls the
+[open-registration warning](components/features/auth.md#open-registration-notice)'s
+`startOpenRegistrationNotice()` without arguments and ignores the stop function it returns. So the
+warning starts even when a loader fails or hangs, and never without a user. Every `load()` may call
+it: only the first start watches.
 
 `appBootstrap.resolveDestination()` turns the requested path into a destination. While Welcome is
 **due** — or a Welcome replay is armed — every app route resolves to
@@ -494,7 +502,7 @@ test, and provides `deleteDisposableUser()` to remove it at the end.
 | `backend/test_scripts/test_api/test_settings_api.py` | The endpoints, including the exact flow and step arrays of the progress read |
 | `backend/test_scripts/test_db/db_schema_validate.py` | Migration 004 and its grandfathered rows |
 | `backend/test_scripts/test_db/test_db_referential_integrity.py` | The canonical E2E users, completed on every flow and step |
-| `frontend/src/lib/stores/app/onboarding.test.ts` | Controller, API contract (`ONBOARDING_FLOWS` pinned by hand), storage keys, cross-tab drop, bootstrap |
+| `frontend/src/lib/stores/app/onboarding.test.ts` | Controller, API contract (`ONBOARDING_FLOWS` pinned by hand), storage keys, cross-tab drop, bootstrap, including the start of the open-registration warning (before the loaders, also when they fail, never without a user) |
 | `frontend/src/lib/features/onboarding/guideAnchors.test.ts` | Anchor registry and action |
 | `frontend/src/lib/features/onboarding/guideCopy.test.ts` | No step text announces another guide |
 | `frontend/src/lib/features/onboarding/onboardingRouteSettlement.test.ts` | Welcome redirect or tour start, exactly once |
