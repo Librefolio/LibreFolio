@@ -3724,3 +3724,214 @@ seguono da CP-7a; la Dashboard no. Contratto (letto sul codice di oggi):
   test_csv_freezes_entire_output[securities]` e `::test_xlsx_matches_entire_literal_csv_output[securities]`, i rossi
   noti di W (forma D6 di C-97a) già curati in dev (`0c3275057`), fuori dal perimetro di J-24. Porta 6185 libera.
   **J-24 pronto per l'ingresso.**
+
+#### CP-7b — V1: il prezzo di riferimento dei lotti dalla casa (analisi, 16/10 ~20:40, sola lettura)
+
+Via del coordinatore all'analisi (20:32), dopo l'ingresso di J-24 (merge `31a59bdb1`, treno 134). Base `896963d81`
+(contiene J-17, CP-13a, J-24, MF ondata 1b con il lotto 1: `_load_split_ratios` chiama la casa, corpo da tenere).
+- **Stato reale** (verificato):
+  - `financial_math/lots/prices.py::PriceHistoryLookup` legge solo le chiusure di mercato salvate (ultima ≤ data,
+    `exact` se del giorno, `fallback` se più vecchia), senza scambi. Decide tre cose:
+    1. il **modo stimato** (`lots_analysis_service.py:142`, `estimated_mode = price_lookup.latest() is None`), che oggi
+       accende l'avviso `CURRENT_PRICE_ASSUMED_AT_COST` per un asset senza quotazioni anche quando BUY e SELL lo prezzano
+       (**J-28**);
+    2. il **riferimento** che il motore FIFO dà ai lotti aperti da una rettifica (`:146-152`, `reference_price_lookup`);
+    3. `opening_reference_price` (sintesi `:743`, storici `lots/histories.py:274-288`, cambi `lots/conversions.py:126-141`),
+       convertito alla data della chiusura usata (`resolved_date`), non alla data d'apertura.
+  - I prezzi di valutazione dei lotti vengono già dalla casa (`build_asset_price_series`, `:313`), ma la serie si
+    costruisce **dopo** il motore, che il riferimento lo vuole **durante**.
+  - Regola della casa (`AssetPriceSeries.resolve`): ultima osservazione ≤ data, quotazione o media degli scambi del
+    giorno (BUY/SELL; una rettifica non lo è più, J-17), portata avanti; una quotazione vince solo nel suo giorno. Quindi
+    differisce da `PriceHistoryLookup` quando un BUY/SELL è più recente dell'ultima quotazione, o quando non c'è
+    quotazione ma ci sono scambi.
+  - `reference_price_source` (`exact | fallback | unavailable`): il frontend non lo legge; l'AI Export lo porta come
+    stringa (`asset.lot_detail`, `opening_reference_price_source`).
+- **Contratto proposto**:
+  1. La serie della casa si costruisce prima del motore (stessi ingressi: righe di prezzo, transazioni, split, quota
+     base) e alimenta il riferimento: `exact` solo per una quotazione del giorno; `fallback` per una quotazione portata
+     avanti o un segno da scambi (stimato); niente riferimento se il giorno è MISSING (resta il ripiego al prezzo del
+     lotto, come oggi).
+  2. `estimated_mode = not price_series.has_observations` (nessuna quotazione e nessun BUY/SELL): l'avviso dei lotti si
+     accende solo quando i lotti sono davvero al costo → **J-28 chiusa**, con la descrizione di
+     `LotSummarySchema.value_source` (`schemas/portfolio.py:829`: anche un prezzo di scambio è `MARKET_PRICE`; `None`
+     senza segno con l'asset quotato) e `api sync`.
+  3. `opening_reference_price`, gli storici e il fabbisogno dei cambi leggono la serie; il riferimento si converte **alla
+     data d'apertura** (la data che rappresenta, come la casa converte ogni segno al giorno chiesto), non a quella
+     dell'osservazione. `PriceHistoryLookup` sparisce (regola 5: una sola regola del prezzo).
+  4. Docstring di `fifo/engine.py::_handover_currency` («the average cost the units leave with» → il costo della riga,
+     segnalato dal docs-writer di J-24).
+- **Valori che cambiano** (solo lotti aperti da una rettifica, che leggono il mercato; un lotto aperto da un BUY ha il
+  suo prezzo):
+  - riferimento, rendimento relativo, valore di mercato d'apertura (anche `opening_reference_unit_price` e
+    `opening_market_value` di `asset.lot_detail` nell'AI Export, builder invariato, nessun aumento) quando un BUY/SELL
+    è più recente dell'ultima quotazione alla data d'apertura, o non c'è quotazione ma c'è uno scambio prima;
+  - riferimento in valuta estera: il cambio della data d'apertura al posto di quello dell'osservazione (scarto piccolo,
+    solo con una chiusura portata avanti);
+  - `CURRENT_PRICE_ASSUMED_AT_COST` non compare più per un asset prezzato da scambi senza quotazioni (i suoi lotti erano
+    già valutati agli scambi).
+- **Superfici**: `lots_analysis_service.py`, `financial_math/lots/{prices,conversions,histories}.py`,
+  `financial_math/fifo/engine.py` (solo docstring), `schemas/portfolio.py` (una descrizione); test dei lotti; doc
+  (`fifo-lot-analysis`, `developer/backend/transactions/lots_analysis_service.md`, `price_resolver.md`). Nessun `.svelte`,
+  nessuna voce della mappa del renderer.
+- **Conflitti**: MF-E (sintesi del lotto nella casa) aspetta CP-7b; tengo questi file fino all'ingresso. Il corpo di
+  `_load_split_ratios` di MF resta.
+- **Prove**: rossi (test-author) per il riferimento da scambi, la conversione alla data d'apertura, `estimated_mode` e
+  l'avviso (J-28), il fabbisogno dei cambi; verdi `lots-analysis-pure`, `roi-fifo-utils`, `ai-export` (asset), `api`
+  dei lotti; `api sync`; doc. Peso: medio-piccolo.
+- **Per Y** (domanda del coordinatore): i campi rimasti di Y12b (R17, W8, P4, P5, V11) sono di **MF-P**, onda 3 di MF
+  dopo CP-7b: R17, W8, V11 direttamente; P4 dopo MF-A (onda 2); P5 dopo MF-E, che aspetta questo CP-7b. CP-7b è il
+  mio solo pezzo sul cammino di Y; J-26 (sonda reale) non lo tocca.
+
+#### CP-7b — codice (via del coordinatore 20:58, decisioni 1–3 come proposte; 16/10 dalle 21:00)
+
+- ✅ **Passo 1 — il codice (2026-10-16)**. I rossi li scrive il test-author in parallelo, senza lanciare nulla
+  (contratto in `files/j/cp7b/test_author_prompt.md` della sessione).
+  > **Note implementazione**:
+  > - `financial_math/lots/prices.py`: `PriceHistoryLookup` e `PricePoint` tolti. `opening_reference_price(lot, price_series,
+  >   quote_base_quantity)` legge la serie della casa; la data restituita è sempre quella d'apertura (P21).
+  > - `lots_analysis_service.py`: la serie (`build_asset_price_series`) e `quote_base_quantity` si costruiscono prima del
+  >   motore, e la seconda costruzione sparisce. `reference_price_lookup` legge `price_series.resolve(opened_at)`:
+  >   MISSING → nessun riferimento; `exact` solo con `MarkSource.MARKET`, altrimenti `fallback`. I parametri
+  >   `price_lookup` → `price_series` (sintesi, storici, fabbisogno dei cambi).
+  > - `lots/conversions.py::collect_fx_needs` e `lots/histories.py::build_return_history`: `price_series: AssetPriceSeries`.
+  > - `schemas/portfolio.py`: la descrizione di `LotSummarySchema.value_source` (J-28).
+  > - `fifo/engine.py::_handover_currency`: la docstring dice il costo della riga, non il costo medio.
+  > - `ai_export/components/asset_payloads.py`: solo il commento F6 sul riferimento d'apertura. Il contratto e le
+  >   versioni non cambiano.
+  > - ruff e black verdi.
+  >
+  > **⚠️ Fuori pista — un nuovo codice d'avviso**. Un segno da scambi è `fallback` (decisione 1). Così un lotto aperto da
+  > una rettifica, su un asset senza quotazioni ma con scambi prima, passa da `REFERENCE_PRICE_UNAVAILABLE` (riferimento
+  > = prezzo del lotto) a `REFERENCE_PRICE_FALLBACK` («ultimo prezzo noto {reference_price}»). È coerente con la decisione,
+  > e il testo resta vero. Nessun caso nella demo.
+  >
+  > **⚠️ Fuori pista — decisione 2 alla lettera lasciava un buco**. Prima, gli storici dei lotti (valore, rendimento)
+  > valutavano al costo i giorni senza prezzo solo se l'asset non aveva quotazioni. Con «nessuna osservazione»
+  > per-asset, un asset senza quotazioni il cui primo possesso è una rettifica prima del primo BUY avrebbe perso i punti
+  > al costo fra la rettifica e il BUY. La Dashboard (J-17) invece li valuta al costo, giorno per giorno.
+  > Domanda al coordinatore (21:15), risposta **(a)**: «the Dashboard's per-day rule in the lots too. That's J-17/P2:
+  > one rule in the whole app, and no gap the Dashboard doesn't have. Pin it in the tests with the warning range.»
+  > Codice:
+  > - `lots/prices.py::last_day_without_observation(price_series, days)`: l'ultimo dei giorni senza osservazione ≤ sé
+  >   (sono sempre i giorni prima della prima osservazione).
+  > - Il servizio calcola `at_cost_until` su `history_dates` (ogni giorno, dalla prima transazione alla fine).
+  > - `build_value_history`/`build_return_history`: `estimated_mode: bool` → `at_cost_until: date | None`. Lo snapshot
+  >   del giorno riceve `at_cost`; un prezzo senza cambio resta un buco, come sulla Dashboard.
+  > - La sintesi resta al costo solo se la fine non ha osservazione (`at_cost_until == actual_to`).
+  > - L'avviso `CURRENT_PRICE_ASSUMED_AT_COST` ha lo stesso cancello e un intervallo esatto: `date_to = at_cost_until`
+  >   al posto della fine.
+  > - Lo storico della performance (ROI/TWRR) non ha mai valutato al costo: salta i giorni senza prezzo per ogni asset.
+  >   CP-7b non lo cambia; voce J-33 nel backlog.
+  > - Test-author e docs-writer avvisati della modifica al contratto.
+  >
+  > **Demo** (`db populate --force` nella corsia, poi lettura in sola lettura, `files/j/cp7b/demo_probe.py`):
+  > - il riferimento cambia per un solo lotto: la rettifica in entrata tx 60, AAPL su Interactive Brokers (utente 8),
+  >   11/10, 1,5 pezzi. Da 300,0201 USD (quotazione del 09/10, `fallback`) a 299,8200 USD (scambio dello stesso giorno,
+  >   `fallback`), con il cambio dell'11/10 invece del 09/10;
+  > - tx 74 (AAPL su eToro, 04/10): stesso prezzo (quotazione del 02/10), solo la data del cambio va al 04/10;
+  > - l'avviso al costo sparisce per «Test KRW Stock» (#17: scambi, nessuna quotazione);
+  > - nessun asset ha il primo possesso da rettifica prima della prima osservazione: la regola per giorno non cambia la
+  >   demo.
+- ✅ **Passo 2 — rossi e documentazione dagli specialisti (2026-10-16)**.
+  > **Note implementazione**:
+  > - **Test-author** (nessuna esecuzione). Rossi e test migrati in `test_lots_analysis_pure.py` e
+  >   `test_financial/test_lots_analysis_service.py`.
+  >   - Casi (a)–(d) del riferimento: guidano il vero `get_lots_analysis` su righe in memoria, con loader e sessione
+  >     finti, in EUR; nessun DB.
+  >   - (e)–(f): data e valuta del riferimento, fabbisogno del cambio alla data d'apertura.
+  >   - `last_day_without_observation`: 6 casi.
+  >   - Lo storico al costo fino a `at_cost_until`.
+  >   - Servizio, (g)–(l): J-28; la sola rettifica al costo con l'intervallo dell'avviso; il riferimento dal BUY più
+  >     recente; il cambio del giorno d'apertura; la rettifica prima della prima quotazione e prima del primo BUY, al costo
+  >     fino a lì.
+  >   - `TestPriceHistoryLookup` tolto; `test_adjustment_before_the_first_quote_has_no_value_point` sostituito da (k).
+  >     La decisione (a) ne rovescia l'attesa.
+  >   - Il test rinominato perché diceva il contrario di ciò che fissa.
+  > - **Docs-writer** (EN, nessuna esecuzione), sei pagine:
+  >   - `fifo-lot-analysis` (Open Return per Lot, Estimated-at-Cost riscritta per giorno, un paragrafo in From Lots to
+  >     Aggregate Metrics);
+  >   - `developer/.../lots_analysis_service.md` (sottosezione nuova `#reference-price`), `price_resolver.md`,
+  >     `financial_math.md`, `fifo_lot_engine.md`;
+  >   - `user/dashboard/positions` (due punti).
+  >   - Poi `price-resolution` (la frase dei lotti), la nota sulla rettifica senza costo e il nome
+  >     `_closure_prefix` in `lots_analysis_service.md`.
+  >
+  > **⚠️ Fuori pista — le scoperte del docs-writer**:
+  > - Un **valore che cambia** e non era nella lista: un asset prezzato solo da scambi in valuta estera, in un giorno
+  >   senza cambio, prima era al costo (il modo stimato valeva per tutto l'asset). Ora è un buco, e la sintesi ha
+  >   `value_source` null. È la regola della Dashboard (un prezzo senza cambio non è «nessun prezzo») e la descrizione
+  >   nuova di `value_source`. Nella demo nessun caso: lo scambio di «Test KRW Stock» è in EUR.
+  > - **Rettifica senza costo** (vecchie righe): il lotto FIFO è a costo zero, il costo medio della Dashboard lo conta
+  >   ignoto. Nei giorni al costo i lotti mostrano 0, la Dashboard nulla. Differenza documentata e preesistente (pagina
+  >   `adjustment`), che CP-7b allarga ai giorni prima della prima osservazione di un asset prezzato dopo. Non la decido
+  >   qui: è la gemella in entrata di J-11. → **J-35**, e una frase onesta nella pagina dei lotti.
+  > - Due **messaggi del riferimento** inesatti, uno anche per la decisione 1 (la media degli scambi del giorno è
+  >   `fallback`) → **J-36**.
+  > - Nella performance dei lotti, la gamba di un trasferimento che attraversa il perimetro in un giorno al costo svuota
+  >   ROI/TWRR → aggiunta a **J-33**.
+  > - Commenti fermi corretti in passando (solo commenti):
+  >   - `ai_export/components/asset_core.py`, il commento F6 sul valore d'apertura;
+  >   - `financial_math/lots/economic_events.py:157`, `_closure_proceeds_prefix`, che non esiste.
+  > - Il commento del catalogo di `lots-analysis-pure` (`scripts/test_runner/_backend_services.py:893, 1895-1899`) ora è
+  >   fermo: l'unità resta pura, ma ha casi asincroni con loader e sessione finti. Il file è condiviso: lo propongo nel
+  >   passaggio di consegne, non lo tocco.
+- ✅ **Passo 3 — rossi sul codice vecchio (2026-10-16, 21:19–21:24)**. Comando: `files/j/cp7b/red.sh` (toglie la patch del
+  codice, lancia `services lots-analysis-pure` e `services roi-fifo-utils` nella corsia 6185, rimette la patch; «worktree
+  back to the saved state»).
+  > **Note implementazione**:
+  > - `roi-fifo-utils`: **6 rossi**, 844 verdi. I rossi sono esattamente quelli del servizio: (g), (i), (j), (k), (l) e il
+  >   test di J-28 rinominato. La guardia (h) passa.
+  > - `lots-analysis-pure`: 73 rossi, 104 verdi. 67 tracce lette:
+  >   - 3 `AssertionError`, i rossi di valore: due BUY più recenti dell'ultima chiusura (100 invece di 120) e nessuna
+  >     chiusura con un BUY prima (90/`unavailable` invece di 120/`fallback`);
+  >   - 6 `AttributeError`: manca `last_day_without_observation`;
+  >   - 58 `TypeError` sulle firme nuove (`price_series=`, `at_cost_until=`): i test spostati e i rossi che chiamano l'API
+  >     nuova.
+  > - Le guardie (una chiusura del giorno vince su un BUY dello stesso giorno, una chiusura di tre giorni prima, niente
+  >   prima dell'apertura, il lotto di un BUY) passano sul codice vecchio.
+  >
+  > **⚠️ Fuori pista**: il primo parser delle cause ha letto male il formato del log (le righe `FAILED` sono senza
+  > motivo). Ho rifatto la lettura sulle tracce.
+- ✅ **Passo 4 — verdi sul codice nuovo (2026-10-16, 21:25–22:02)**. Comando: `files/j/cp7b/runs.sh green` (corsia 6185,
+  un'azione alla volta, carico < 50).
+  > **Note implementazione**:
+  > - verdi: `services financial-math` **488**, `lots-analysis-pure` **177**, `roi-fifo-utils` **850**,
+  >   `ai-export` `-k components_asset` **121**, `db populate --force`, `api portfolio` **51**;
+  > - porta 6185 libera.
+  >
+  > **⚠️ Fuori pista**: il carico è salito a 185 (altre corsie) fra `ai-export` e `db populate`; la corsa ha atteso 25 minuti
+  > da sola.
+  >
+  > **Valori della demo, misurati sul populate del 16/10** (sola lettura, `files/j/cp7b/demo_probe.py` e calcolo sul DB
+  > della corsia):
+  > - **AAPL, il lotto della rettifica tx 60** (+1,5 su Interactive Brokers, 11/10, costo 175 USD). Visibile a chi vede
+  >   quel broker: utenti 1–6 e 8.
+  >   - Riferimento: da 300,0201 USD a 299,82 USD. Prima la quotazione del 09/10 portata avanti; ora la vendita tx 10
+  >     dello stesso broker l'11/10, a 299,82. Resta `fallback`.
+  >   - Il cambio non cambia: l'11/10 è una domenica e la demo non ha cambi nel fine settimana, quindi vale il 09/10
+  >     come prima.
+  >   - In EUR: da 268,2032 a 268,0243.
+  >   - «Open Return»: dal **2,342 % al 2,410 %** (+0,068 punti, con la quotazione del 16/10).
+  >   - `opening_market_value` di `asset.lot_detail` (AI Export): −0,27 EUR.
+  >   - Il banner `REFERENCE_PRICE_FALLBACK` mostra 299,82 invece di 300,0201006729037.
+  > - **AAPL, il lotto della rettifica tx 74** (eToro, 04/10): prezzo invariato (la quotazione del 02/10). Anche il 04/10
+  >   è una domenica, quindi lo stesso cambio. Nulla di visibile.
+  > - **«Test KRW Stock»** (#17, un BUY in EUR su Directa: utenti 1, 2, 5): sparisce il banner «No market price
+  >   available … estimated at cost». I valori sono invariati: il BUY lo prezzava già.
+  > - La regola per giorno non tocca la demo: nessun asset ha giorni prima della sua prima osservazione.
+- ✅ **Passo 5 — controlli statici e doc (2026-10-16, 22:03–22:20)**. Comandi: `files/j/cp7b/checks.sh` (ONLY: api-sync,
+  check-orphans, mkdocs-build, check-links) e `files/j/cp7b/tv.sh`.
+  > **Note implementazione**:
+  > - `api sync`: esito 0. Il client generato è ignorato da git, quindi nessuna differenza tracciata.
+  > - `check-orphans`, `mkdocs build` (rigoroso, 3076 URL relativi risolti) e `mkdocs check-links`: esito 0.
+  > - `translate-validate` con la patch della doc tolta e rimessa: da 882 a 891 errori strutturali, tutti in
+  >   `fifo-lot-analysis` → **J-34**.
+  > - Non lanciati: `front check` (nessun file del frontend toccato; il client rigenerato cambia solo una descrizione),
+  >   `i18n check` (nessuna chiave), `all-backend` (la corsa la decide il coordinatore).
+  >
+  > **⚠️ Fuori pista**: il primo conteggio di `tv.sh` dava 0 righe, perché le righe d'errore sono rientrate. Rifatto
+  > togliendo gli spazi in testa.
+  >
+  > **Backlog**: J-28 chiusa; nuove J-33 (performance dei lotti), J-34 (traduzioni), J-35 (rettifica senza costo),
+  > J-36 (due messaggi del riferimento). DevWiki: nota datata in `decisions/adjustment-is-never-a-price.md` e voce in
+  > `log.md`.

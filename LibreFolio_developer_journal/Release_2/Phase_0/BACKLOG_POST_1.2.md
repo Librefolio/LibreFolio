@@ -4456,8 +4456,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   sé in B-13 (solo testo decimale semplice prima di `from_json`). Proposta: `_as_amount` rifiuta esponenti e lunghezze
   oltre la precisione del suo contesto (`_EXACT`, 60 cifre), così ogni chiamante è protetto; rosso prima (test-author).
   Dopo CP-10a e CP-7a. Dettagli: piano J, §10 «CP-15».
-- **J-28 · L'avviso dei lotti «nessun prezzo di mercato, valore al costo» scatta anche quando gli scambi prezzano
-  l'asset** — basso, chiarezza; J, 16/10 (letto durante J-17). `lots_analysis_service.py:141` mette `estimated_mode` quando
+- ✅ **J-28 · L'avviso dei lotti «nessun prezzo di mercato, valore al costo» scatta anche quando gli scambi prezzano
+  l'asset** — basso, chiarezza; J, 16/10 (letto durante J-17). **Chiusa da CP-7b il 16/10** (commit al checkpoint):
+  l'avviso e il valore al costo seguono la regola per giorno della Dashboard (nessuna osservazione ≤ il giorno, né
+  quotazione né BUY o SELL), e l'avviso nomina esattamente quei giorni; descrizione di `value_source` corretta. Testo
+  originale: `lots_analysis_service.py:141` mette `estimated_mode` quando
   l'asset non ha quotazioni (`PriceHistory`) fino alla fine della finestra, e `:283` aggiunge
   `CURRENT_PRICE_ASSUMED_AT_COST` («No market price … open value estimated at cost, market P&L excluded»). Ma il valore
   dei lotti viene dal risolutore unico, che usa anche i prezzi di BUY e SELL: un asset senza quotazioni ma con scambi è
@@ -4508,6 +4511,62 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
   `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
   J, §10 «J-24».
+- **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
+  medio-basso, numeri; J, 16/10, trovata in CP-7b.
+  - Dove: `lots/histories.py::build_performance_history` (ROI e TWRR dei lotti, `PERFORMANCE_HISTORY`). Fa la NAV solo
+    nei giorni con un prezzo; i flussi di prima li porta al primo giorno con la NAV.
+  - Il caso: un asset il cui primo possesso è una rettifica prima della sua prima osservazione. Da CP-7b gli storici del
+    valore e del rendimento valutano al costo i giorni senza osservazione ≤ sé, come la Dashboard (J-17, decisione (a)
+    del coordinatore). La performance invece ha un buco in quei giorni, e il salto dal costo al primo prezzo può cadere
+    fuori dalla catena del TWRR.
+  - C'era già prima di CP-7b, per ogni asset.
+  - Stesso caso, effetto più forte (docs-writer di CP-7b): un trasferimento che attraversa il perimetro dei broker in un
+    giorno al costo non ha prezzo, quindi `invalid_external_flow_from` svuota ROI e TWRR da quel giorno in poi. La
+    Dashboard valuta quella gamba al costo.
+  - Proposta: la NAV di quei giorni, e la gamba di un trasferimento che attraversa il perimetro, al costo dei lotti LONG
+    aperti (costo noto, cambio all'apertura; un giorno con un lotto SHORT aperto o un costo ignoto resta senza punto), con
+    le stesse `at_cost_until`; rosso prima. Dichiarare prima i valori che cambiano.
+  - Dettagli: piano J, §10 «CP-7b — codice».
+- **J-34 · Debito di traduzione di CP-7b (il riferimento dei lotti e i giorni al costo)** — basso, documentazione; J,
+  16/10. Pagine EN cambiate di senso, senza stamp:
+  - `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`:
+    - Open Return per Lot: le tre provenienze del riferimento, `exact`/`fallback`, il cambio della data d'apertura,
+      l'esempio nuovo «A lot received by succession», il consiglio ritolto;
+    - Estimated-at-Cost riscritta per giorno, con la rettifica senza costo;
+    - un paragrafo di From Lots to Aggregate Metrics.
+  - `…/portfolio-engine/price-resolution` (§ Missing Marks, la frase dei lotti) e `user/dashboard/positions` (due punti).
+
+  `translate-validate` (16/10): da 882 a 891 errori strutturali, tutti in `fifo-lot-analysis`: 24 righe nuove e 15
+  sparite. Sono l'ammonimento nuovo, che sposta il tipo dei seguenti, e il link nuovo ad `adjustment`. La pagina aveva
+  già debito (J-25, J-29, J-32): tradurla in un giro solo. Dettagli: piano J, §10 «CP-7b — codice».
+- **J-35 · Un lotto aperto da una rettifica senza costo vale 0 nei giorni al costo, la Dashboard lo lascia senza
+  valore** — basso, numeri; J, 16/10 (docs-writer di CP-7b).
+  - Il motore FIFO apre il lotto a costo zero («a zero-cost quantity correction»). Il costo medio della Dashboard invece
+    conta quel costo come ignoto (`ADD_UNKNOWN_COST`, `report_complete=False`), quindi `_value_held_position` lascia la
+    posizione MISSING. È la differenza documentata in `financial-theory/instruments/transaction-types/adjustment`
+    («the FIFO lot opens at zero cost, but the average cost (WAC) treats the cost as unknown»).
+  - Effetto: nei giorni senza osservazione (CP-7b, regola per giorno) i lotti mostrano quel lotto a 0, la Dashboard
+    nulla. Prima di CP-7b succedeva solo per un asset senza alcuna osservazione; ora anche prima della prima
+    osservazione di un asset prezzato dopo.
+  - Raro: una rettifica positiva si salva senza costo solo se legata a uno split, che non apre lotti. Restano le righe
+    salvate prima dell'obbligo, e quelle il cui evento di split è poi diventato un aggiustamento di prezzo (il percorso
+    di P-10: `transactions/auto_cost.py:76-82`, fissato da `test_portfolio_wac.py:521`), che aprono un lotto a costo
+    zero.
+  - Proposta: decidere insieme a J-11 (la rettifica in uscita senza costo) se una rettifica senza costo ha un costo
+    zero o ignoto. Se ignoto: un segno `cost_known` sul lotto, messo dal motore, e niente valore al costo senza di
+    esso (sintesi e storici); rosso prima.
+  - Dettagli: piano J, §10 «CP-7b — codice».
+- **J-36 · I due messaggi del prezzo di riferimento dei lotti dicono cose inesatte** — basso, chiarezza; J, 16/10
+  (docs-writer di CP-7b). Chiavi `dataQuality.referencePriceFallback` / `referencePriceUnavailable`, quattro cataloghi.
+  - `referencePriceUnavailable` («relative return cannot be computed»): falso per un lotto col suo costo, che ripiega
+    sul proprio prezzo (`opening_reference_price`, sorgente `exact`). Vero solo per un lotto a costo zero.
+  - `referencePriceFallback` («Lot opening price unavailable on the exact date — using last known price
+    {reference_price}»): da CP-7b esce anche per la media degli scambi del giorno stesso (decisione 1: `exact` solo per
+    una quotazione), quando un prezzo quel giorno c'è. Inoltre `{reference_price}` è nativo, senza valuta né conversione.
+  - Proposta: testi che dicono cosa fa il calcolo («no market quote on the opening day — the reference is the last
+    known price, a carried quote or a trade price»; «no price on or before the opening day — the relative return uses
+    the lot's own price, when it has one»), e il prezzo convertito con la sua valuta; quattro lingue.
+  - Dettagli: piano J, §10 «CP-7b — codice».
 
 ## Z · Sospensione e risveglio (fase 01)
 
