@@ -80,12 +80,14 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     message to the OLD address only — never the new one —, exactly what ``build_email_changed`` writes in the account's
     language, the new address masked, the instance being the host of ``LIBREFOLIO_PUBLIC_URL`` when links are ready and
     ``INSTANCE_FALLBACK`` («LibreFolio») otherwise — never a request's host —; one unit spent. Nothing when the two
-    addresses are the same (letter case and spaces aside), nothing logged either; email off — the self-hosted default
-    — is an ``info`` line and no warning, decided before any session is opened; the account gone is an ``info`` line,
-    and so is a notice past its limits (contract 15); email set but unusable or the instance blocked, the budget spent,
-    the server refusing, an old address that is not one address: a warning ``not sent`` with the reason's type and
-    code; any other error an error with its type alone, without a traceback. It never raises, reads the configuration
-    off the event loop, and no log event holds either address.
+    addresses are the same by ``user_service.same_email`` — A's one rule of decision P18 (lot E4c): A–Z in any case,
+    every other character as written, nothing stripped —, nothing logged either; a letter beyond A–Z in another case
+    makes another address, whose notice goes to the old one as written. Email off — the self-hosted default — is an
+    ``info`` line and no warning, decided before any session is opened; the account gone is an ``info`` line, and so is
+    a notice past its limits (contract 15); email set but unusable or the instance blocked, the budget spent, the server
+    refusing, an old address that is not one address: a warning ``not sent`` with the reason's type and code; any other
+    error an error with its type alone, without a traceback. It never raises, reads the configuration off the event
+    loop, and no log event holds either address.
 15. The limits of the notice (lot E4b, security review): ``EMAIL_CHANGE_NOTICES_BY_ACCOUNT`` and
     ``EMAIL_CHANGE_NOTICES_BY_MAILBOX`` ship as two ``SlidingWindowLimiter`` of 3 per 3600 s, keyed by the account's id
     and by the old mailbox, letter case aside. Before it writes anything, the work asks both: when the account, or the
@@ -1567,6 +1569,10 @@ NEW_ADDRESS = "zq.new-alice.secret@example.org"
 NEW_LOCAL_PART = "zq.new-alice.secret"
 #: An old address that is not one address.
 NOT_ONE_ADDRESS = "zq_alice@example.com, zq-other@example.com"
+#: An address and the same letters with ``á`` in another case, in NFC (one code point each): beyond A–Z
+#: ``user_service.same_email`` compares a letter as written, so they are two addresses (EMF-059).
+ACCENTED_OLD = "zq_\u00e1lice@example.com"
+ACCENTED_NEW = "zq_\u00c1lice@example.com"
 
 
 def _notices(events: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -1653,9 +1659,9 @@ async def test_the_instance_is_the_public_host_or_librefolio(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("new", [pytest.param("zq_alice@example.com", id="the-same-address"), pytest.param("  ZQ_Alice@Example.COM ", id="the-same-address-in-other-letters-and-spaces")])
+@pytest.mark.parametrize("new", [pytest.param("zq_alice@example.com", id="the-same-address"), pytest.param("ZQ_Alice@Example.COM", id="the-same-address-in-other-capitals")])
 async def test_nothing_when_the_address_did_not_change(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, new: str) -> None:
-    """EMF-046 — contract 14: the same address, whatever its letter case and the spaces around it: nothing is sent, no account is looked up, nothing is spent, nothing is logged."""
+    """EMF-046 — contract 14: the same address by ``user_service.same_email`` (decision P18), as written or with A–Z in other capitals: nothing is sent, no account is looked up, nothing is spent, nothing is logged. No case with spaces around: both addresses come from the database, where ``EmailStr`` stripped them, and ``same_email`` strips nothing (A's contract), so a space would make another address. The boundary, a letter beyond A–Z in another case, is EMF-059."""
     print_section(f"EMF-046: {new!r}")
     alice = await _add_user(engine, ALICE)
     lookups = _lookups(monkeypatch)
@@ -1669,6 +1675,26 @@ async def test_nothing_when_the_address_did_not_change(monkeypatch: pytest.Monke
     assert (fake.connections, budget.count(), lookups) == (0, 0, [])
     assert _notices(events) == []
     print_success("nothing")
+
+
+@pytest.mark.asyncio
+async def test_another_case_beyond_a_to_z_is_another_address_and_the_notice_goes(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter) -> None:
+    """EMF-059 — contract 14, the boundary of EMF-046: Alice's address ``zq_álice@example.com`` changes to ``zq_Álice@example.com``, apart in the case of ``á`` alone, a letter beyond A–Z, which ``user_service.same_email`` compares as written (decision P18's documented limit): two addresses. The notice goes as for any change: the account looked up, one message, to the old address exactly as written (the envelope's recipient: the fake server takes an address beyond ASCII with ``SMTPUTF8``), one unit spent, the notice sent logged with her id."""
+    print_section("EMF-059: another case beyond A–Z")
+    assert ACCENTED_OLD.casefold() == ACCENTED_NEW.casefold() and not user_service.same_email(ACCENTED_OLD, ACCENTED_NEW), "precondition: one mailbox for casefold, two addresses for P18's rule"
+    alice = await _add_user(engine, ALICE, email=ACCENTED_OLD)
+    lookups = _lookups(monkeypatch)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        with capture_logs() as events:
+            returned = await flows.email_changed_work(alice.id, alice.email, ACCENTED_NEW, engine=engine)
+
+    assert returned is None
+    assert [message.rcpt_tos for message in fake.messages] == [[ACCENTED_OLD]], "one message, to the old address exactly as written"
+    assert (lookups, budget.count()) == ([alice.id], 1)
+    assert [(event.get("event"), event.get("log_level"), event.get("user_id")) for event in _notices(events)] == [("Email change notice sent to the previous address", "info", alice.id)]
+    print_success("two addresses: the notice to the old one, as written")
 
 
 @pytest.mark.asyncio

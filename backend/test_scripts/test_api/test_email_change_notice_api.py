@@ -1,8 +1,10 @@
 """The notice of an email change, scheduled by ``PUT /auth/profile`` (lot E4b, on workstream A's A6e), over HTTP, in-process.
 
 A6e made an email change ask for the current password, end every other session of the account and give this one a new
-session cookie. E4a wrote the notice, ``flows.email_changed_work`` (its own rules are EMF-043…052, its limits EMF-054…058,
-in ``test_services/test_email_flows.py``); E4b schedules it from A's route. This module pins the hook. The contract:
+session cookie. E4a wrote the notice, ``flows.email_changed_work`` (its own rules are EMF-043…052 and EMF-059, its limits
+EMF-054…058, in ``test_services/test_email_flows.py``); E4b schedules it from A's route. Since decision P18 (lot E4c on
+E's side), A's route and the notice tell two addresses apart with one rule, ``user_service.same_email``: A–Z in any
+case, every other character as written, nothing stripped. This module pins the hook. The contract:
 
 1. An email change accepted — the right current password, email ready —: the answer is A's, 200 ``{user: {email: <the
    new address>}, message: "Profile updated successfully"}`` with a new ``session`` cookie that signs in as the new
@@ -16,9 +18,10 @@ in ``test_services/test_email_flows.py``); E4b schedules it from A's route. This
    the process's default database.
 3. No email change, no notice: a username-only change, the stored address sent again, an empty body — 200 as before, the
    session goes on —: no SMTP conversation, no event of E, the budget untouched.
-4. The same mailbox in other letters (``Zq-Vera@example.com`` → ``zq-vera@example.com``): A compares addresses exactly,
-   so it is a change — the password asked, the new letters stored, a new cookie —, but the notice compares them
-   case-folded: no email, no event of E.
+4. The same address in other capitals (``Zq-Vera@example.com`` → ``zq-vera@example.com``) is no email change, for A as
+   for E: ``same_email`` folds A–Z. Asked without the current password: 200 with A's message and the new form, which is
+   stored; no session ended — the answer sets no session cookie, and the one the browser signed in with still signs
+   in —; and no notice: no SMTP conversation, no event of E, the budget untouched.
 5. Email off (no ``LIBREFOLIO_SMTP_*``, the default of a self-hosted instance): the same answer and the same new cookie;
    E logs one ``info`` line, «Email change notice: email is off, nothing sent», with the account's id — no warning, no
    error.
@@ -32,11 +35,17 @@ in ``test_services/test_email_flows.py``); E4b schedules it from A's route. This
    stored, a new cookie that signs in —, and sends nothing: no SMTP conversation, no budget unit; E logs one ``info``
    line, «Email change notice: past its limits, nothing sent», with the account's id — no warning. (The limit per old
    mailbox, and the window, are EMF-054…058.)
+9. A letter beyond A–Z in another case (``zq-vÉra@example.com`` → ``zq-véra@example.com``) makes another address, for
+   A as for E: ``same_email`` compares it as written (P18's documented limit). With the right current password the
+   change answers as in 1 — 200 with the new address and A's message, a new session cookie that signs in as it, the
+   new address stored —, and the notice goes as in 1: exactly one email, to the old address exactly as stored (the
+   envelope's recipient: the fake server advertises ``SMTPUTF8`` and takes an address beyond ASCII), one unit of the
+   budget, the work's ``info`` line with the account's id.
 
 E's events are the notice's lines («Email change notice…») and the delivery's («Email sent», «Email not sent…», «Email
-configuration…»). Wherever a case has them (1, 5, 7, 8), they name neither the old address nor the new one, nor either's
-local part: the delivery logs the recipient's domain alone, and redacts the address a server quotes in its refusal. The
-lines of A's route and of ``user_service.update_profile`` are A's, and are not looked at here.
+configuration…»). Wherever a case has them (1, 5, 7, 8, 9), they name neither the old address nor the new one, nor
+either's local part: the delivery logs the recipient's domain alone, and redacts the address a server quotes in its
+refusal. The lines of A's route and of ``user_service.update_profile`` are A's, and are not looked at here.
 
 Pure: the real auth router runs in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed at teardown);
 accounts are rows with a real bcrypt hash at cost 4, signed in through ``POST /auth/login`` by a client that keeps the
@@ -72,7 +81,7 @@ from backend.app.config import API_V1_PREFIX
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import User, UserSettings
 from backend.app.db.session import get_session_generator
-from backend.app.services.accounts import auth_service
+from backend.app.services.accounts import auth_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import delivery, flows, smtp
 from backend.app.services.email.messages import build_email_changed, masked_address
@@ -101,9 +110,14 @@ OLD_LOCAL_PART = "zq-vera"
 #: On another domain than the old address: the masked form the notice shows, ``***@moved.example.com``, is this one's.
 NEW = "zq-north@moved.example.com"
 NEW_LOCAL_PART = "zq-north"
-#: One mailbox in two spellings: A compares addresses exactly, the notice case-folded.
+#: One address in two spellings, apart in the case of A–Z alone: the same address for A and for E, who compare two
+#: addresses with one rule, ``user_service.same_email`` (decision P18).
 CASE_OLD = "Zq-Vera@example.com"
 CASE_NEW = "zq-vera@example.com"
+#: Two addresses apart in the case of ``é`` alone, in NFC (one code point each): beyond A–Z ``same_email`` compares a
+#: letter as written, so they are two addresses for A and for E alike (ECN-009).
+ACCENTED_OLD = "zq-v\u00c9ra@example.com"
+ACCENTED_NEW = "zq-v\u00e9ra@example.com"
 #: The addresses one account goes through in ECN-008, four changes in the hour: each change leaves the one before it.
 MOVES = (OLD, "zq-vera-1@moved.example.com", "zq-vera-2@moved.example.com", "zq-vera-3@moved.example.com", "zq-vera-4@moved.example.com")
 UPDATED = "Profile updated successfully"
@@ -298,6 +312,12 @@ def _assert_renewed(response: httpx.Response, before: str | None) -> None:
     assert renewed and renewed != before, f"the answer of an email change sets a new session cookie: {response.headers.get_list('set-cookie')}"
 
 
+def _assert_not_renewed(response: httpx.Response) -> None:
+    """The answer sets no session cookie, matched by name in its ``Set-Cookie`` headers: no email change, no session ended."""
+    written = [header for header in response.headers.get_list("set-cookie") if header.split(";", 1)[0].partition("=")[0].strip() == auth_api.SESSION_COOKIE_NAME]
+    assert written == [], f"no email change, no new session cookie: {response.headers.get_list('set-cookie')}"
+
+
 def _answer_recorded(app: FastAPI, order: list[str]) -> Any:
     """``app``, writing ``answered`` in ``order`` once the answer to ``PUT /auth/profile`` is complete: its last body part sent."""
 
@@ -419,7 +439,7 @@ async def test_the_notice_is_queued_after_the_answer_with_both_addresses_and_the
 
 
 # =============================================================================
-# 3–4. NO NOTICE WITHOUT A CHANGE OF MAILBOX
+# 3–4. NO EMAIL CHANGE, NO NOTICE
 # =============================================================================
 
 
@@ -453,26 +473,29 @@ async def test_no_notice_without_an_email_change(private: _Private, monkeypatch:
 
 
 @pytest.mark.asyncio
-async def test_the_same_mailbox_in_other_letters_is_a_change_for_a_but_no_notice(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
-    """ECN-004 — contract 4: stored ``Zq-Vera@example.com``, asked ``zq-vera@example.com`` with the password. The precondition, verified: A compares exactly, so it is a change — 200, the new letters stored, a new cookie that signs in. And the notice compares case-folded: the same mailbox, nothing to tell it — no SMTP conversation, no event of E, no budget unit."""
-    print_section("ECN-004: the same mailbox in other letters")
+async def test_the_same_address_in_other_capitals_is_no_change_and_no_notice(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
+    """ECN-004 — contract 4: stored ``Zq-Vera@example.com``, asked ``zq-vera@example.com`` without the current password. A and E compare two addresses with one rule, ``user_service.same_email`` (decision P18): apart in the case of A–Z alone, they are the same address, so this is no email change. 200 with A's message and the new form, which is stored; the answer sets no session cookie, and the one the browser signed in with still signs in: no session ended. And no notice: no SMTP conversation, no event of E, no budget unit."""
+    print_section("ECN-004: the same address in other capitals")
+    assert CASE_OLD != CASE_NEW and user_service.same_email(CASE_OLD, CASE_NEW), "precondition: one address, apart in the case of A–Z alone"
     vera = await _add_user(private.engine, VERA, CASE_OLD)
 
     with FakeSmtpServer() as fake:
         _ready(monkeypatch, fake)
         async with _signed_in(private.app) as browser:
             before = _cookie(browser)
-            response, events = await _change(browser, {"email": CASE_NEW, "current_password": PASSWORD})
+            response, events = await _change(browser, {"email": CASE_NEW})
+            held = _cookie(browser)
             me = await browser.get(ME)
 
     assert response.status_code == 200, response.text
-    assert response.json()["user"]["email"] == CASE_NEW
-    _assert_renewed(response, before)
-    assert (me.status_code, me.json()["user"]["email"]) == (200, CASE_NEW)
-    assert await _stored_email(private.engine, vera.id) == CASE_NEW, "A stores the new letters: for A it is a change"
-    assert (fake.connections, budget.count()) == (0, 0), "the same mailbox: no notice"
+    assert (response.json()["user"]["email"], response.json()["message"]) == (CASE_NEW, UPDATED)
+    _assert_not_renewed(response)
+    assert held == before, "the browser still holds the cookie it signed in with"
+    assert (me.status_code, me.json()["user"]["email"]) == (200, CASE_NEW), f"that cookie still signs in, the new form shown: {me.status_code} {me.text}"
+    assert await _stored_email(private.engine, vera.id) == CASE_NEW, "the new form stored: the same address, written as asked"
+    assert (fake.connections, budget.count()) == (0, 0), "the same address: no notice"
     assert _e_events(events) == []
-    print_success(f"{CASE_OLD} → {CASE_NEW}: a change for A, no notice")
+    print_success(f"{CASE_OLD} → {CASE_NEW}: no password asked, the session goes on, no notice")
 
 
 # =============================================================================
@@ -598,3 +621,37 @@ async def test_past_three_notices_an_hour_the_change_goes_through_without_one(pr
     every_event = [event for _response, _before, events in changes for event in events]
     assert _naming(_e_events(every_event), *MOVES, *(address.partition("@")[0] for address in MOVES)) == [], "E's events name none of the addresses"
     print_success("four changes, each 200 with a new cookie; three notices, the fourth skipped")
+
+
+# =============================================================================
+# 9. A LETTER BEYOND A–Z IN ANOTHER CASE: ANOTHER ADDRESS, AND ITS NOTICE
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_another_case_beyond_a_to_z_is_a_change_and_the_old_address_gets_the_notice(private: _Private, monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter) -> None:
+    """ECN-009 — contract 9: stored ``zq-vÉra@example.com``, asked ``zq-véra@example.com`` with the right current password. The two are apart in the case of ``é`` alone, a letter beyond A–Z, which ``user_service.same_email`` compares as written (decision P18's documented limit): two addresses, for A as for E. A's answer as in ECN-001 — 200 with the new address and A's message, a new session cookie that signs in as it, the new address stored —; then the notice as in ECN-001: exactly one email, to the old address exactly as stored (the envelope's recipient: the fake server takes an address beyond ASCII with ``SMTPUTF8``), one budget unit, the delivery's and the notice's ``info`` lines, the notice's with the account's id and its language. E's events name neither address."""
+    print_section("ECN-009: another case beyond A–Z")
+    assert ACCENTED_OLD.casefold() == ACCENTED_NEW.casefold() and not user_service.same_email(ACCENTED_OLD, ACCENTED_NEW), "precondition: one mailbox for casefold, two addresses for P18's rule"
+    vera = await _add_user(private.engine, VERA, ACCENTED_OLD)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        async with _signed_in(private.app) as browser:
+            before = _cookie(browser)
+            response, events = await _change(browser, {"email": ACCENTED_NEW, "current_password": PASSWORD})
+            me = await browser.get(ME)
+
+    assert response.status_code == 200, response.text
+    assert (response.json()["user"]["email"], response.json()["message"]) == (ACCENTED_NEW, UPDATED)
+    _assert_renewed(response, before)
+    assert (me.status_code, me.json()["user"]["email"]) == (200, ACCENTED_NEW), f"the new cookie signs in as the new address: {me.status_code} {me.text}"
+    assert await _stored_email(private.engine, vera.id) == ACCENTED_NEW
+
+    assert [message.rcpt_tos for message in fake.messages] == [[ACCENTED_OLD]], "exactly one email, to the old address exactly as stored"
+    assert budget.count() == 1
+    assert [(event["event"], event["log_level"]) for event in _e_events(events)] == [("Email sent", "info"), ("Email change notice sent to the previous address", "info")]
+    assert [(event.get("user_id"), event.get("language")) for event in _notices(events)] == [(vera.id, "en")]
+    local_parts = [address.partition("@")[0] for address in (ACCENTED_OLD, ACCENTED_NEW)]
+    assert _naming(_e_events(events), ACCENTED_OLD, ACCENTED_NEW, *local_parts) == [], "E's events name neither address: the delivery logs the recipient's domain alone"
+    print_success(f"{ACCENTED_OLD} → {ACCENTED_NEW}: a change, a new cookie, the notice to the old address")
