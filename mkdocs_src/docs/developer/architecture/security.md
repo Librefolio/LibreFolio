@@ -563,6 +563,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
 | `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away; the block page has no button for it yet |
 | `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
+| `GET /backup/restore/outcome` | `backup_restore.get_restore_outcome` | The outcome of a restore, for the page that asked its restart, with the one-time ticket of that request instead of a session ([The Outcome Ticket](#backup-restore-outcome)): a restart that came back blocked reads `pending`, `waiting: "instance_blocked"`. It starts nothing |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
@@ -588,8 +589,9 @@ valid session gets these answers:
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
-  `/system/info` and `/system/ready` answer as on any other instance. Only the scheduled wake-up
-  tells, and only to the holder of its token: `status: "blocked"`.
+  `/system/info` and `/system/ready` answer as on any other instance. Only the scheduled wake-up and the
+  outcome of a restore tell, and only to the holder of their token or ticket: `status: "blocked"`, and
+  `waiting: "instance_blocked"`.
 - The public routes outside the list answer `401` only while the instance is blocked. From them, a
   caller without a session can tell that the instance is blocked, and nothing more: they return no
   data.
@@ -617,11 +619,15 @@ full backup is on the list too, for the administrator (`backup_instance`: start,
 delete; decision 12) and for the hosting panel (`backup_panel`: the same four, with the panel's token
 instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with its own token instead
 of a session: on a blocked instance it runs no job and answers `blocked` (decision D-W3). The routes of a
-restore stay out, all of them (`/backup/restore/…`: the upload, the check, the confirmation, the status, the
-cancellation and the restart): the block lets the data leave, never come in, and nobody stops the server through
-the API. Nor is a restore confirmed before the block applied while it lasts (developer decision P7): the startup step
+restore stay out (`/backup/restore/…`: the upload, the check, the confirmation, the status, the cancellation and the
+restart): the block lets the data leave, never come in, and nobody stops the server through the API. Nor is a restore
+confirmed before the block applied while it lasts (developer decision P7): the startup step
 reads `LIBREFOLIO_BLOCKED` and leaves it waiting (`instance_blocked`) until the first start after the unblock
-([Restoring a Backup](#backup-restore)). Any other
+([Restoring a Backup](#backup-restore)). The one route of a restore on the list is its outcome, read with the ticket of
+the restart (`GET /backup/restore/outcome`, lot B5c): it starts nothing, changes nothing but its own ticket, and
+returns three fields and no data. When the block takes effect at the restart that a page asked, that page reads `instance_blocked`
+there, where its session may be gone (without `JWT_SECRET` every start ends them) and the status route answers `401`
+or `423`. Any other
 addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
@@ -775,7 +781,8 @@ A restore of the whole instance comes in two moves, and neither touches the live
 archive into `.restore/stage/<stage id>/`, brings the copy to this LibreFolio's revision and checks it. The
 confirmation (lot B3) records the restore; the next start of the server applies it, before any startup step reads the
 data. The code is in `backend/app/services/platform/instance_backup/`: `apply.py` (the state, the swap, the rollback,
-the commit), `restart.py`, `restore_jobs.py` (the checks of the API) and `paths.py`; the routes are in
+the commit), `restart.py`, `outcome.py` (the ticket of the outcome), `restore_jobs.py` (the checks of the API) and
+`paths.py`; the routes are in
 `backend/app/api/v1/backup/restore.py`, the command line in `scripts/backup_cli.py`. The administrator's side is
 «Restore an Archive» in [Command-Line Tools](../../admin/cli_tools.md).
 
@@ -790,8 +797,9 @@ before J reads them, since an exponent would be expanded in full.
 
 ### 🔐 The Routes {: #backup-restore-routes }
 
-Every route under `/backup/restore` requires an administrator (`require_admin`), and none is in
-`ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error answers `{"detail": {"code": …, "message": …}}`
+Every route under `/backup/restore` requires an administrator (`require_admin`), but `GET /backup/restore/outcome`,
+which takes the one-time ticket of a restart instead ([The Outcome Ticket](#backup-restore-outcome)); it is also the
+only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error answers `{"detail": {"code": …, "message": …}}`
 (`backup_error`), never with a path of the server in it.
 
 | Route | What it does |
@@ -800,8 +808,9 @@ Every route under `/backup/restore` requires an administrator (`require_admin`),
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
 | `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable` |
 | `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting |
-| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`); its copy stays until the check expires, and can be confirmed again. `404` `restore_not_pending` |
-| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `409` `restore_not_pending` |
+| `DELETE /backup/restore/pending` | Drops the restore waiting (`204`) with its checked copy and its check record, as `backup pending --cancel` does (B-17): confirming that check again answers `404` `restore_stage_not_found`. `404` `restore_not_pending` |
+| `POST /backup/restore/restart` | Stops the server so that it applies the restore waiting: see [The Restart](#backup-restore-restart). `202` `RestoreRestartAccepted`: the `RestoreStatus` and `outcome_ticket`, with `Cache-Control: no-store`. `409` `restore_not_pending`; `500` `restore_restart_failed` when the ticket cannot be written, or `restore_folder_unusable`: no restart then |
+| `GET /backup/restore/outcome` | No session: the ticket of the restart in the `X-Restore-Ticket` header. `200` `RestoreOutcome`, `state` (`pending`, `in_progress`, `committed` or `rolled_back`), `reason` and `waiting` only, with `Cache-Control: no-store`, as often as asked until the ticket expires, a final outcome included; the same `404` `restore_outcome_not_found` for every ticket that does not give it. See [The Outcome Ticket](#backup-restore-outcome) |
 
 Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backup/restore/upload` accepts at the time of
 the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
@@ -905,7 +914,8 @@ start stops, the state stays `rolling_back`, and every later start tries again.
 ### 🔌 The Restart {: #backup-restore-restart }
 
 A restore is applied at a start, never while the server serves. `POST /backup/restore/restart` answers `202` with the
-restore waiting; once the answer is sent, a `BackgroundTask` calls `restart.request_restart()`, which logs a warning
+restore waiting and the ticket of its outcome ([The Outcome Ticket](#backup-restore-outcome)); once the answer is sent,
+a `BackgroundTask` calls `restart.request_restart()`, which logs a warning
 and sends SIGTERM to the server's root process (`restart.server_pid()`, as for the boot): uvicorn's master stops its
 workers, and the shutdown budget bounds the stop («Stopping the Server» in
 [Configuration](../../admin/configuration.md)). The route answers `409` `restore_not_pending` unless a restore waits,
@@ -928,9 +938,46 @@ budget runs out. A Fly.io Machine stopped under `on-fail` waits for the Fly Prox
 service lets it. Without a supervisor the server stays stopped until someone starts it, and the restore is applied
 then.
 
+### 🎫 The Outcome Ticket {: #backup-restore-outcome }
+
+A restore ends every session, and without `JWT_SECRET` every start does too: once the server is back, the page that
+asked the restart cannot tell from its session what became of the restore. So the restart request hands it a one-time
+ticket (lot B5c, `instance_backup/outcome.py`), and `GET /backup/restore/outcome` tells the holder of that ticket, without
+a session, the state of that restore and nothing else.
+
+- **Issued** by `POST /backup/restore/restart`, before the stop is scheduled, under the restore's lock
+  (`apply.prepare_restart`), so that two restart requests take turns and no cancel or confirmation comes in between:
+  `secrets.token_urlsafe(32)`, 256 random bits, returned once in `outcome_ticket`. When it cannot be written, the route
+  answers `500` and the server keeps running.
+- **Kept as a hash.** Only its SHA-256 is stored, in `.restore/outcome-ticket.json` (`OutcomeTicket`), with the stage
+  of its restore, `issued_at` and `expires_at`: `0600`, written atomically, never through a link, and read only in the
+  shape this LibreFolio writes. `.restore` is never swapped, so the ticket outlives the restart, the swap, the commit and
+  a rollback.
+- **In a header.** The page sends it in `X-Restore-Ticket`, never in the URL, which the access log records
+  ([Request Logs](#request-logs)): the route ignores the query string, and a `?ticket=…` typed by hand is written there
+  as `***`. LibreFolio never logs it, and the page keeps it in memory only.
+- **One restore, one hour.** It answers only for the restore of its stage, until one hour after the restart request
+  (`OUTCOME_TICKET_TTL`), room for a first start that migrates a large database: as often as it is asked, a final
+  outcome (`committed`, `rolled_back`) included (decision N53). Were a final answer read only once, losing it, to a
+  connection reset while LibreFolio starts, would leave the retry a `404`, and the page would fall back on its session,
+  which reads «restored» after a rollback without `JWT_SECRET`. One-time means one ticket per restart: a new restart
+  request replaces it; a new confirmation and a cancel, from the API or the command line, remove it, and so does its
+  holder presenting it expired.
+- **One answer for every miss.** No ticket, a malformed one, an unknown one (never issued, replaced or removed), an
+  expired one (then removed) or one of another restore: the same `404` `restore_outcome_not_found`. The hashes are
+  compared in constant time (`hmac.compare_digest`), and a wrong ticket changes nothing: the route removes a ticket
+  only when its own holder presents it expired.
+- **Nothing more.** `RestoreOutcome` holds `state`, `reason` and `waiting`: no name, date, version or path.
+
+When the route answers `404`, `401` or `423` (a ticket expired, replaced or removed, a server without the route, a
+proxy in between), the page falls back on `GET /backup/restore/status` with its session, where a `401` means that the
+session ended (`restoreOutcome()`, `frontend/src/lib/features/backup/backupApi.ts`).
+
 Tests: `./dev.py test services backup-apply` (`backend/test_scripts/test_services/test_backup_apply.py`: the state,
-the swap, every rollback, the commit, the sessions and the links), `./dev.py test api backup-restore-apply` (the four
-routes, the signal recorded and never sent), `./dev.py test utils backup-cli-restore` (the command line) and
+the swap, every rollback, the commit, the sessions and the links), `./dev.py test services backup-outcome`
+(`backend/test_scripts/test_services/test_backup_outcome.py`: the ticket), `./dev.py test api backup-restore-apply`
+(the routes, the ticket, the signal recorded and never sent), `./dev.py test utils backup-cli-restore` (the command
+line) and
 `./dev.py test e2e backup-roundtrip` (a populated instance backed up, restored on an empty one, then started in a
 fresh process).
 
@@ -1148,10 +1195,10 @@ never shown as "up to date".
 uvicorn writes one line per request, with its path and query string: HTTP requests on the `uvicorn.access` logger,
 WebSocket handshakes on `uvicorn.error`. A credential in a query string would reach that line in clear, so
 `configure_logging()` (`backend/app/logging_config.py`) adds a filter to both loggers. It replaces with `***` the value
-of every credential-like query parameter: one named exactly `code`, or whose name holds `token`, `secret`, `password`,
-`passwd`, `api_key`/`apikey`/`api-key` or `signature`, in any case, judged on the name percent-decoded as the app reads
-it. The filter masks every string argument of the record where it stands, so the line keeps its shape, and the log
-stays on everywhere. A value is not decoded: a URL encoded inside another parameter's value is not read.
+of every credential-like query parameter: one named exactly `code`, or whose name holds `token`, `ticket`, `secret`,
+`password`, `passwd`, `api_key`/`apikey`/`api-key` or `signature`, in any case, judged on the name percent-decoded as
+the app reads it. The filter masks every string argument of the record where it stands, so the line keeps its shape,
+and the log stays on everywhere. A value is not decoded: a URL encoded inside another parameter's value is not read.
 
 The links the app writes carry their tokens in the URL fragment, which the browser never sends, and the app's
 redirects (`?redirect=`, `?returnTo=`) carry a path and query, never a fragment: the filter covers a token typed by
