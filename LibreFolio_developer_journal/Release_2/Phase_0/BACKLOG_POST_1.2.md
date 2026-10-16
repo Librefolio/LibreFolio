@@ -3290,6 +3290,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `serve_plugin_static` (`backend/app/api/v1/uploads.py:541`) confronta i percorsi come stringhe: una cartella sorella
   che comincia con lo stesso nome passerebbe il controllo. Oggi non ce n'è nessuna, e la rotta chiede il login. Cura:
   `Path.is_relative_to`, con U-B3 (lotto W5), d'accordo con H. Dettagli: piano 04, §1.1 e §7.
+  ✅ 16/10 (triage): chiusa da `6e8251014` (14/10, in v1.2.1, «fix(server): keep served file paths inside their folder»):
+  `serve_plugin_static` usa `confined_path` (`backend/app/utils/runtime/paths.py`: `resolve()` e `is_relative_to`);
+  CHANGELOG 1.2.1 «The server keeps every file it serves inside the folder it belongs to». Dettagli: piano 04, sezione «Triage».
 - **W-B2 · Il cambio di provider scollega in silenzio le transazioni dagli eventi automatici** — medio-basso, dati; W,
   14/10 (analisi). `asset_sources/provider_management.py:186-195` (di X): cambiando i parametri o il provider di un
   asset, gli eventi del provider si cancellano e le transazioni collegate perdono il collegamento senza avviso. È il
@@ -3301,11 +3304,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   ✅ 15/10 (F36, decisione 36): confermata (lista, lettura, parse e cancellazione aperti a chiunque con il login) e chiusa:
   un file senza broker lo raggiungono solo chi l'ha caricato e l'admin (senza caricatore registrato, come i file di prima
   del 24/01/2026, solo l'admin); 403 per gli altri, assente dalle loro liste. Dettagli: piano 04, sezione F36.
+  Riferimenti (triage 16/10): `3907eed36`; CHANGELOG [Unreleased] «Broker reports uploaded by older versions are no
+  longer open to every user» (non in 1.2.1).
 - **W-B4 · Gli id dei file BRIM accettati senza controllo del formato** — basso, sicurezza; coordinatore, 14/10. Le rotte
   `/brokers/import/files/{file_id}` accettano una stringa qualsiasi: un controllo del formato UUID all'ingresso è una
   difesa in più sui percorsi. Dettagli: piano 04.
   ✅ 15/10 (F36): un `file_id` che non è un UUID nella forma canonica minuscola risponde 404 prima di ogni ricerca (prima
   un id di 300 caratteri dava 500, un file `<uuid>-1` veniva servito, e su macOS anche l'id in maiuscolo).
+  Riferimenti (triage 16/10): `3907eed36`; CHANGELOG [Unreleased] «Report file ids are checked first» (non in 1.2.1).
 - **W-B5 · La cassa del broker conta le transazioni future** — da verificare, numeri; coordinatore, 14/10 (D-J16
   dell'analisi di J, con B15 lato broker). `TransactionService.get_cash_balances`
   (`backend/app/services/transactions/transaction_service.py:476-480`) somma tutte le transazioni del broker, anche
@@ -3380,6 +3386,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `POST /transactions/commit` con un `link_uuid` su due broker la crea, e cancellando uno dei due broker ne resta una metà
   (N1b-1 la converte per segno, come lo split). Cura: `pairBrokerMismatch` per una FX_CONVERSION su due broker, con il
   rosso. Dettagli: piano 04, §12, N1.
+  ✅ 16/10: `_validate_linked_pair` rifiuta una FX_CONVERSION su due broker (`pairBrokerMismatch`, `brokerA`/`brokerB`;
+  chiave i18n nelle 4 lingue); rosso visto, `services transaction` 67/67. Update e promozione non possono crearla. Dettagli:
+  piano 04, sezione W-B17. Residuo → W-B46.
 - **W-B18 · `test_account_deletion_api.py`: docstring ferme al piano 34** — minimo, test; W, 15/10 (N1, segnalato da
   test-author). ACCDEL-003 dice ancora «NEW, red today» e che la guardia conta ogni superutente con `count_superusers`
   (l'endpoint usa `count_active_superusers`); ACCDEL-002/004/005 dicono «green today and after the fix» (la cura del
@@ -3573,6 +3582,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   vicini sullo stesso percorso hanno `test.setTimeout(60_000)`: col carico a 43–49 è scaduto prima di ogni controllo; da solo,
   col carico a 30, passa in 3,5 s. Cura: allinearlo ai vicini, in un lotto piccolo dopo l'ingresso del lotto di T (che tocca
   quello spec e i due `TxForm*`) e l'aggiornamento della mia base. Dettagli: messaggio del coordinatore, 16/10 08:01.
+  ✅ 16/10: `test.setTimeout(60_000)` in testa a T13. Dettagli: piano 04, sezione W-B45.
+- **W-B46 · Le regole delle coppie scritte a mano, non lette dalla tabella** — minimo, dati; W, 16/10 (W-B17).
+  `_validate_linked_pair` (`backend/app/services/transactions/validation.py`) codifica a mano broker, asset e quantità di
+  TRANSFER, CASH_TRANSFER e (da W-B17) FX_CONVERSION, mentre `TX_TYPE_METADATA` dichiara le `pair_field_constraints` e la
+  promozione le legge già (`_check_promote_constraints`, `backend/app/services/transactions/promotion.py`). La tabella vuole
+  anche `cash_currency: different` per FX_CONVERSION, che nessuna regola di creazione controlla: una FX_CONVERSION nella
+  stessa valuta passa dall'API. Leggerla cambia ciò che l'API accetta → da decidere. Cura: le regole delle coppie lette dalla
+  tabella, come W-B31/W-B36 per le regole 5–12, con le eccezioni nominate. Dettagli: piano 04, sezione W-B17.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il

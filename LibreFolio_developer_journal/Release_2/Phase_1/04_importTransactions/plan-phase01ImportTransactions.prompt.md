@@ -3354,3 +3354,131 @@ F36-01/04/05 invariate, doc con docs-writer; dopo W-B44, commit separati. Cura p
 - Prove leggere ✅ (08:13–08:16, carico < 50): `black`/`ruff` puliti su `brokers.py` e `test_brim_api.py`; `api sync` (nessuna
   differenza tracciata: client e `openapi.json` ignorati); `front check` 0 errori, 0 avvisi; `git diff --check` pulito; porta
   libera. I file di W-B32 sono identici fra HEAD e `dev_release2`: cherry-pick pulito.
+
+> **W-B32 committato** (coordinatore, 08:18): `77fbc8687` sul ramo, cherry-pick `84d24ed03` in `dev_release2` (treno 101),
+> journal `a4f682261`. **Base aggiornata**: merge di `dev_release2` (`c94254695`) senza conflitti → HEAD `647167f46`
+> (verificato, worktree pulito). Via a W-B43 (TC-13) e W-B45 (T13), commit separati, prove leggere col carico < 50.
+
+### W-B45 — T13 di `transactions-modals.spec.ts` col tempo dei vicini ✅ (2026-10-16) — 🧊 FROZEN
+
+**Analisi** (08:19, codice di `647167f46`): T13 (`invalid TX in BulkModal shows issues banner with clickable error`,
+`frontend/e2e/transactions/transactions-modals.spec.ts:1211`) passa da `openCreateFlow`, il form, lo spazio di lavoro e la
+risposta di `validate` col tempo di serie (30 s); gli altri test del file con `test.setTimeout(60_000)` (399, 431, 485, 585,
+628, 707) lo hanno per il giro di benvenuto di un conto nuovo. Col carico a 43–49 T13 è scaduto prima di ogni controllo; da
+solo, col carico a 30, passa in 3,5 s (T, 08:01). **Cura** (08:20): `test.setTimeout(60_000)` in testa a T13, con un commento
+nello stile del file. Nessun rosso possibile (dipende dal carico). **Prove**: `prettier` pulito; `front check` 0 errori, 0
+avvisi (il tsconfig comprende `e2e/`); `git diff --check` pulito. E2E non girato: cambia solo il tempo concesso, un test verde
+non può diventare rosso (e ogni avvio del server ricostruirebbe la build debug, stantia dopo il lotto di T). Il file è identico
+in `dev_release2`: cherry-pick pulito.
+
+### W-B43 — tre debolezze in `asset-data-editor.spec.ts` e `fx-csv-import.spec.ts`: analisi ✅, codice ⛔ (2026-10-16)
+
+**Stato reale** (codice di `647167f46`): il lotto W1-g di T è entrato (`fx-csv-import.spec.ts:289` usa
+`getByTestId('info-banner-info')`), ma **il lotto di T sui quattro file di `ui/data-editor`** (riservato dalle 05:13: `DataEditor`,
+`CsvEditor`, `DataImportModal`, `ErasableNumberCell`, più `asset-data-editor.spec.ts:287` e `fx-csv-import.spec.ts:53,56`, dove un
+attributo di stato sostituisce `.text-red-500`) **non è né nella mia base né in `dev_release2`**: le righe 53 e 56 di
+`fx-csv-import.spec.ts` (`assertNoErrors`) e 286–287 di `asset-data-editor.spec.ts` usano ancora `.text-red-500`, e nessun
+componente di `ui/data-editor` ha un `data-state`. Le tre debolezze di TC-13:
+- `asset-data-editor.spec.ts:376` (test 21, «stale toggle is visible in toolbar»): tutto dentro `if (await
+  staleToggle.isVisible({timeout: 3000}).catch(() => false))`, che non aspetta e fa passare il test senza asserire nulla; il
+  contatore si cerca per classe (`span.text-amber-600, span.text-amber-400`), classi che il lotto di T sostituirà; il toggle è
+  `data-editor-stale-toggle` in `DataEditor.svelte:647` (file di T). Cura: un asset proprio con righe stantie (dato deterministico),
+  il toggle atteso visibile, il contatore per `data-testid` o `data-state` del lotto di T, col numero atteso.
+- nessun controllo positivo della ✗: `assertNoErrors` (`fx-csv-import.spec.ts:51-58`) prova solo l'assenza di
+  `.text-red-500:has-text("✗")`; dopo il passaggio ai ruoli quel selettore non troverebbe più nulla e il controllo passerebbe a
+  vuoto. Cura: un controllo positivo (una riga sbagliata → l'indicatore c'è, per l'attributo di stato di T) accanto a quello
+  negativo.
+- `fx-csv-import.spec.ts:56` dipende dalla parola «error» (testo tradotto). Cura: lo stato o il conteggio per `data-testid`.
+**Blocco**: le tre cure usano l'attributo o i `data-testid` che porta il lotto di T, e le righe sono riservate a T: W-B43 aspetta
+quel lotto (detto al coordinatore). Poi: test-author, E2E dei due spec in uno slot.
+
+> **W-B45 committato** (coordinatore, 08:25): `7ab9add9e` sul ramo (HEAD, verificato), cherry-pick `72ac088fc` (treno 102).
+> Via: il triage delle voci di sicurezza e dati aperte (W-B1, W-B3, W-B4, W-B5, W-B17), poi la prima ancora aperta per
+> gravità, rosso prima, lotto piccolo; W-B19 (copia della convalida del saldo) è matematica finanziaria di J: avvisare prima.
+
+### Triage di W-B1, W-B3, W-B4, W-B5, W-B17 ✅ (2026-10-16)
+
+Sul codice di `7ab9add9e`, sola lettura:
+- **W-B1** (icona dei plugin con `startswith`): **già chiusa** da `6e8251014` (14/10, in `v1.2.1`: `git tag --contains`),
+  «fix(server): keep served file paths inside their folder»: `serve_plugin_static` (`backend/app/api/v1/uploads.py:545`) usa
+  `confined_path` (`backend/app/utils/runtime/paths.py`: `resolve()` della radice e del candidato, poi `is_relative_to`);
+  CHANGELOG 1.2.1 «The server keeps every file it serves inside the folder it belongs to». Chiusa nel backlog col riferimento.
+- **W-B3** e **W-B4**: già ✅ (F36, `3907eed36`); le righe del CHANGELOG («Broker reports uploaded by older versions are no
+  longer open to every user», «Report file ids are checked first») sono in [Unreleased], non in 1.2.1 (il commit non è in
+  nessun tag): aggiunti i riferimenti.
+- **W-B5**: già ✅ (`6be11ecf3`, N1a); il resto è W-B19 (di J, non lo tocco).
+- **W-B17**: **aperta** → il lotto seguente.
+
+### W-B17 — una FX_CONVERSION su due broker rifiutata dall'API ✅ (2026-10-16) — 🧊 FROZEN
+
+**Stato reale**: `_validate_linked_pair` (`backend/app/services/transactions/validation.py:39-87`) rifiuta TRANSFER e
+CASH_TRANSFER sullo stesso broker, un TRANSFER con asset diversi o quantità non opposte, ma nessuna regola per FX_CONVERSION;
+la docstring dice «FX_CONVERSION intra-broker is allowed». I metadati (`type_metadata.py`, blocco FX_CONVERSION:
+`pair_field_constraints` e `promote_from`) vogliono `broker_id: equal` (e `cash_currency: different`); form, promozione e
+import scrivono sempre le due metà sullo stesso broker. Chiamante unico: `resolve_create_links`
+(`batch_creates.py:321`), solo per le creazioni con `link_uuid`: le coppie già salvate non si riconvalidano negli update
+(nessun dato esistente diventa intoccabile). I codici sono letterali (nessun enum); il frontend traduce
+`transactions.errors.<code>`. Test vicini: `test_transaction_service.py:1696` (TRANSFER sullo stesso broker, rifiutato) e
+`:1737` (FX_CONVERSION sullo stesso broker, ammessa).
+**Disegno** (dentro il backlog approvato: «Cura: `pairBrokerMismatch` per una FX_CONVERSION su due broker, con il rosso»):
+- una regola in `_validate_linked_pair`, nello stile delle altre: FX_CONVERSION con `a.broker_id != b.broker_id` →
+  `("FX_CONVERSION requires both legs on one broker (got brokers A and B)", "pairBrokerMismatch", {"brokerA", "brokerB"})`
+  (parametri A/B come `typeA/typeB`, `assetA/assetB`); la docstring corretta;
+- la chiave `transactions.errors.pairBrokerMismatch` con `dev.py i18n add` nelle 4 lingue, sul modello di
+  `pairAssetMismatch` (EN «Both sides of a currency exchange must be on the same broker»);
+- rosso prima (test-author, servizi: nessun server, nessuna ricostruzione), accanto ai due test vicini;
+- doc per sviluppatori (docs-writer) dove si elencano le regole delle coppie.
+Fuori: leggere tutte le `pair_field_constraints` dalla tabella (come W-B31/W-B36 per le regole 5–12) e la regola
+`cash_currency: different` → residuo, se non già coperta altrove. Le coppie su due broker già nel DB (solo via API) restano:
+la cancellazione di un broker ne converte la metà per segno (N1b-1).
+**Rosso** ✅ (08:36, test-author; carico 41): `TestLinkedPairValidation::test_pairing_rejects_fx_conversion_cross_broker` in
+`backend/test_scripts/test_services/test_transaction_service.py`, subito dopo la guardia
+`test_pairing_allows_fx_conversion_same_broker` (invariata): EUR −500 su `test_broker` (finanziato il giorno prima) e USD +540 su
+`test_broker_overdraft`, `link_uuid` comune; `services transaction <nome>` → **1 fallito**: «W-B17: /transactions/commit saves an
+exchange split across broker 1 (EUR) and 2 (USD) with no error … got committed=True, issues []». Scelta del test-author (da
+rivedere se serve): `execute_batch` non fa commit né rollback (lo fa il chiamante), quindi il batch è avvolto in un savepoint
+(`session.begin_nested()`) chiuso come fa la rotta (commit se `committed`, rollback altrimenti), così la rilettura «niente
+scritto» (per descrizione, `service.query` sui due broker, dopo una barriera sul deposito di setup) ha senso; tutto resta nella
+transazione del fixture `session`, annullata alla fine (DB della corsia verificato vuoto). Nessun id TX-U (la classe non li usa;
+TX-U-122 è già prenotato nella checklist di RoadmapV3).
+**Cura** ✅ (08:38): `/tmp/libreFolio_w_wb17_cure.py --apply`: in `_validate_linked_pair` la regola FX_CONVERSION con broker
+diversi → `pairBrokerMismatch` (`brokerA`, `brokerB`), la docstring corretta; `dev.py i18n add
+transactions.errors.pairBrokerMismatch` (EN «Both sides of a currency exchange must be on the same broker», IT, FR, ES, sul
+modello di `pairAssetMismatch`). **Verdi**: `services transaction` **67/67** (08:39).
+**Prove** (08:47, carico 40): `black`/`ruff` puliti; `i18n check` strict (4770 chiavi); `prettier` pulito sui 4 JSON; `git diff
+--check` pulito; i file sono identici in `dev_release2`.
+> **⏸ STOP del developer** (coordinatore, ~08:50): nessuna prova in corso, porta libera, worktree lasciato com'era. **Ripresa**
+> alle 10:32: HEAD ancora `7ab9add9e`, delta di W-B17 intatto. Notizie: il lotto di T su `ui/data-editor` è entrato alle 10:19
+> (`eb4040cd1`) → W-B43 sbloccata, base da aggiornare al prossimo checkpoint; **P2 decisa dal developer** («una rettifica non è
+> mai un prezzo»): la 47 entra dopo il lotto J-17 di J.
+**Dopo la ripresa** (10:33–10:36, carico 11–32):
+- Portata della regola: `TXUpdateItem` non ha `broker_id` (un update non sposta una gamba); i tipi in coppia non hanno
+  scambi di tipo (`SWAP_GROUPS`, `type_metadata.py:143`); la promozione legge già `broker_id: equal` dalla tabella
+  (`_check_promote_constraints`, `promotion.py:243`): la creazione con `link_uuid` era l'unica via, ed è chiusa.
+- Suite che costruiscono coppie FX col batch, senza server: `services broker` **76/76**, `services
+  transaction-cost-basis-rule` **74/74**, `db brim` **28/28**; nessun test, dato del mock o spec E2E crea una FX_CONVERSION su
+  due broker (grep: `tx-clone`, `tx-bulk-row-order` e gli altri usano un broker solo; il mock la scrive con l'ORM, su IB).
+  API ed E2E non girati: ogni avvio del server ricostruirebbe la build debug (la base e le sorgenti i18n sono cambiate), e
+  la regola è nel servizio, provato direttamente; il frontend traduce il codice nuovo.
+- Doc: docs-writer (10:37) su `developer/backend/transactions/service.md:210-212` e
+  `developer/architecture/patterns/brim_plugin_guide.md:749-752`, pagine solo EN, che dicevano che una FX_CONVERSION può stare
+  su due broker.
+- **Residuo → W-B46**: le regole delle coppie restano scritte a mano; la tabella vuole anche `cash_currency: different` per
+  FX_CONVERSION, che nessuna regola di creazione controlla (solo la promozione, `promotion.py:252`): una FX_CONVERSION nella
+  stessa valuta passa ancora dall'API.
+- **Doc** ✅ (10:41, docs-writer): `developer/backend/transactions/service.md:210-213` («… and one broker for both legs of an
+  `FX_CONVERSION` (`pairBrokerMismatch`, params `brokerA`/`brokerB`)», al posto di «allows an intra-broker `FX_CONVERSION`») e
+  `developer/architecture/patterns/brim_plugin_guide.md:749-752` («an `FX_CONVERSION` must stay on **one**
+  (`pairBrokerMismatch`) … while an `FX_CONVERSION` pair saved the same way passes it», vero per DEGIRO: `_fx_pair` crea le due
+  gambe sul broker di `parse()`); grep di `developer/`: i codici delle coppie solo in queste due pagine, nient'altro di falso
+  (`service.md:183`, `:249` e `database/index.md:151` restano veri). Pagine solo EN: nessun debito di traduzione.
+- `mkdocs build` strict ✅ (110 s) e `check-links` ✅ (97 validi), 10:42–10:47, carico 40–42; `git diff --check` pulito; porta
+  libera.
+- **Cherry-pick**: i file di W-B17 sono identici in `dev_release2`, tranne `service.md`, che differisce solo per gli hunk della
+  47 (`8b3e6b766`, righe 71–101 e 252–355; `dev_release2` non l'ha cambiata dopo la merge-base); simulato con `git merge-file`
+  (base = HEAD, nostra = `dev_release2`, loro = il worktree): 0 conflitti, la riga nuova al suo posto.
+> **⚠️ Fuori pista**: il riavvio delle 10:03 ha svuotato `/tmp`: gli script e i log di prima (`/tmp/libreFolio_w_*`, citati nelle
+> sezioni W-B39, W-B42, W-B44, W-B32, W-B17) non ci sono più; le prove restano trascritte qui. Regola nuova (coordinatore,
+> 10:47): ciò che serve di nuovo (patch, lavoro parcheggiato, script, log) va nella cartella della sessione; i log di W-B17 sono
+> copiati lì (`files/logs/`). Regola nuova anche per i colori: prima di scrivere in un `.svelte` delle aree IW, TR, AF, BK, IM,
+> DV o T, avvisare il coordinatore; backend, test fuori da quelle cartelle e doc no.
