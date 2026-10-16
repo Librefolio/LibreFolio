@@ -4,25 +4,31 @@
  * Centralised file upload function to avoid duplicated FormData/axios patterns.
  */
 
-import {axiosInstance} from '$lib/api';
+import {axiosInstance, zodiosApi} from '$lib/api';
 import {get} from 'svelte/store';
 import {_} from '$lib/i18n';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import type {UploadScope, UploadedFile} from '$lib/types/files';
 
 /**
  * Upload a file to the backend static uploads endpoint.
  *
  * @param file - The File or Blob to upload
  * @param description - Optional description metadata
+ * @param scope - Who sees the file: `common` (the image pickers), `personal` (the Files page). Without it, the backend
+ *   decides: images common, the rest personal
  * @returns The URL of the uploaded file
  * @throws Error if upload fails or response has no URL
  */
-export async function uploadFile(file: File, description?: string): Promise<string> {
+export async function uploadFile(file: File, description?: string, scope?: UploadScope): Promise<string> {
     const formData = new FormData();
     formData.append('file', file);
     if (description) {
         formData.append('description', description);
+    }
+    if (scope) {
+        formData.append('scope', scope);
     }
 
     const response = await axiosInstance.post('/api/v1/uploads', formData);
@@ -33,6 +39,15 @@ export async function uploadFile(file: File, description?: string): Promise<stri
     }
 
     return url;
+}
+
+/**
+ * Change who sees an uploaded file. Only its uploader and the admins may: the backend answers 403 or 404 otherwise.
+ *
+ * @returns The file as the backend now describes it
+ */
+export async function setUploadScope(fileId: string, scope: UploadScope): Promise<UploadedFile> {
+    return (await zodiosApi.update_file_api_v1_uploads__file_id__patch({scope}, {params: {file_id: fileId}})) as UploadedFile;
 }
 
 /**

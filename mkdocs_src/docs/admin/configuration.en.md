@@ -41,6 +41,7 @@ the same sample as `.env`.
 | `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
 | `LIBREFOLIO_BLOCKED` | _not set_ | Leave it unset. A hosting provider sets it to block the instance: users can still sign in and out, and see a block page instead of the app. `1`, `true`, `yes` or `on` block; `0`, `false`, `no` or `off` do not, in any case; any other value stops the server at startup. Read from the environment only, in every profile. See [Hosting for Others](hosting_providers.md#instance-block). |
 | `LIBREFOLIO_DELETION_DATE` | _not set_ | Leave it unset. The day the hosting provider will delete a blocked instance and its data, as an ISO date such as `2026-11-14`, shown on the block page. Any other value stops the server at startup. Read from the environment only. See [Hosting for Others](hosting_providers.md#deletion-date). |
+| `LIBREFOLIO_WAKE_TOKEN` | _not set_ | Optional. The token of the [scheduled wake-up](sleep_wake.md#wake-sync), which a hosting panel or a cron job of yours calls to bring prices and exchange rates up to date without a user. Not set: the route answers `404`, as if it did not exist. At least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`: a token of its own, not another secret. `LIBREFOLIO_WAKE_TOKEN_FILE` reads it from a file instead: see [Secrets in Files](#secret-files). A token that cannot be used does not stop the server: the route answers `503`, and the log says why. |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
 users start from the **Default Currency** in [Global Settings](settings.md).
@@ -97,7 +98,7 @@ users start from the **Default Currency** in [Global Settings](settings.md).
 
 ## 🔐 Secrets {: #secrets }
 
-Four options are secrets: keep them as private as the database. Each one can be written in `.env` or
+These options are secrets: keep them as private as the database. Each one can be written in `.env` or
 read from a file.
 
 | Secret | From a file | What it is |
@@ -106,6 +107,7 @@ read from a file.
 | `LIBREFOLIO_INSTANCE_KEY` | `LIBREFOLIO_INSTANCE_KEY_FILE` | The [instance key](#instance-key). Not set: LibreFolio creates one in the data directory. |
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the first two, a file that cannot give it does not stop the server: it only turns the web search off. |
 | `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
+| `LIBREFOLIO_WAKE_TOKEN` | `LIBREFOLIO_WAKE_TOKEN_FILE` | The token of the [scheduled wake-up](sleep_wake.md#wake-sync), in the main options above. A token that cannot be used, or a file that cannot give it, does not stop the server either: the scheduled wake-up answers `503` until it is fixed. |
 
 A plugin may have secrets of its own, such as the API key of a paid data source: see
 [Plugin Settings](#plugin-settings).

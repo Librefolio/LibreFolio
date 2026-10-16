@@ -4,6 +4,8 @@
  */
 import type {EmailStatus, EmailTestFailure} from './emailApi';
 import type {LinksProbeState} from './emailLinks';
+import type {ForgotFailure} from './forgotPasswordApi';
+import type {LinkSendFailure} from './sendLinkApi';
 import type {ResendFailure, VerificationLinkRefusal} from './verificationApi';
 
 type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
@@ -143,5 +145,46 @@ export function resendFailureMessage(translate: Translate, failure: ResendFailur
             return translate('email.verification.resendErrors.unavailable');
         default:
             return translate('email.verification.resendErrors.generic');
+    }
+}
+
+/** «Send by email» failed: what to tell the administrator. */
+export function linkSendFailureMessage(translate: Translate, failure: LinkSendFailure): string {
+    switch (failure.errorCode) {
+        case 'EMAIL_UNAVAILABLE':
+            return translate('email.sendLink.errors.EMAIL_UNAVAILABLE');
+        case 'EMAIL_LINKS_UNAVAILABLE':
+            return translate('email.sendLink.errors.EMAIL_LINKS_UNAVAILABLE');
+        case 'EMAIL_LINK_INVALID':
+            return translate('email.sendLink.errors.EMAIL_LINK_INVALID');
+        case 'EMAIL_ACCOUNT_INACTIVE':
+            return translate('email.sendLink.errors.EMAIL_ACCOUNT_INACTIVE');
+        case 'EMAIL_RECIPIENT_REQUIRED':
+            return translate('email.sendLink.errors.EMAIL_RECIPIENT_REQUIRED');
+        case 'EMAIL_RECIPIENT_NOT_ALLOWED':
+            return translate('email.sendLink.errors.EMAIL_RECIPIENT_NOT_ALLOWED');
+        case 'EMAIL_RECIPIENT_INVALID':
+            return translate('email.sendLink.errors.EMAIL_RECIPIENT_INVALID');
+        case 'EMAIL_RATE_LIMITED':
+            return translate('email.sendLink.errors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
+        case 'EMAIL_DELIVERY_FAILED':
+            return translate(ownKey(SMTP_ERROR_KEYS, failure.smtpCode) ?? 'email.smtpErrors.SEND_FAILED');
+        default:
+            return translate('email.sendLink.errors.generic');
+    }
+}
+
+/** «Forgot password» was refused: what to tell whoever asked. */
+export function forgotFailureMessage(translate: Translate, failure: ForgotFailure): string {
+    switch (failure.errorCode) {
+        case 'FORGOT_PASSWORD_DISABLED':
+            return translate('email.forgot.errors.FORGOT_PASSWORD_DISABLED');
+        case 'EMAIL_UNAVAILABLE':
+        case 'EMAIL_LINKS_UNAVAILABLE':
+            return translate('email.forgot.errors.unavailable');
+        case 'EMAIL_RATE_LIMITED':
+            return translate('email.forgot.errors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
+        default:
+            return translate('email.forgot.errors.generic');
     }
 }

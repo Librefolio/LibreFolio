@@ -379,8 +379,6 @@
   },
   "events": {
     "deleteSuccess": "{n} evento/i eliminato/i",
-    "deleteNotFound": "Evento/i non trovato/i: {ids}",
-    "deleteBlocked": "Impossibile eliminare: {n} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)",
     "fxBannerContext": "per eventi dividendi/cassa",
     "exists": {
       "title": "Questo evento esiste già",

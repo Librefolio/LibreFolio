@@ -20,8 +20,9 @@
  *
  * Keys arrive as the backend writes them: asset types upper case (`ETF`, `CROWDFUND`…), sectors as `FinancialSector`
  * values (`"Health Care"`), each beside the engine's two buckets, `"Liquidity"` and `"Unknown"`. The lookup ignores
- * case, spaces and underscores. A subtype (`ETF_STOCK`) is resolved to its family by the caller, with
- * `assetTypeFamily`: importing `$lib/utils/assetTypes` here would drag the generated API client into every consumer.
+ * case, spaces and underscores ({@link lookupKey}, exported so the Designer Lab keys its edits the same way). A subtype
+ * (`ETF_STOCK`) is resolved to its family by the caller, with `assetTypeFamily`: importing `$lib/utils/assetTypes` here
+ * would drag the generated API client into every consumer.
  *
  * @module lib/theme/chartCategories
  */
@@ -200,7 +201,7 @@ export const CATEGORY_SEQUENCE: readonly string[] = ['STOCK', 'ETF', 'BOND', 'CR
 export const KEYLESS_SEQUENCE: readonly string[] = CATEGORY_KEYS.sector;
 
 /** A key as the lookup compares it: case, spaces and underscores ignored (`Health Care`, `HEALTH_CARE`, `healthcare`). */
-function lookupKey(key: string): string {
+export function lookupKey(key: string): string {
     return key.replace(/[\s_]/g, '').toUpperCase();
 }
 
