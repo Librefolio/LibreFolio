@@ -48,14 +48,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔄 Changed
 
 - An empty or blank secret counts as not set, as if the variable were absent.
-- Changing your password signs out every other device; the one you changed it from stays signed in.
+- Changing your password or your email signs out every other device; the one you changed it from stays signed in.
+- **Changing your email asks for your current password** in Settings › Profile.
 - A password reset from the command line, a deactivation or a demotion signs the account out of every device; reactivating an account does not bring its old sessions back.
 - Import wizard: when a broker's default plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your language.
 - `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
 - The list of exchange-rate providers no longer waits for the ECB and the SNB every time it opens: each provider's currency list is kept for a day, and a slow or unreachable provider is given up after 5 seconds, showing the last list it gave.
-- «Enable registration» becomes «Registration»: the upgrade keeps an open instance open and a closed one closed. The login page offers «Register here» only when registration is open.
+- «Enable registration» becomes «Registration»: the upgrade keeps an open instance open and a closed one closed. The login page offers «Register here» only when registration is open, or while the instance has no account yet.
 - `./dev.py user create`, `invite` and `activate` warn, then go ahead, when the instance has reached `LIBREFOLIO_MAX_USERS`.
-- API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`.
+- API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`, with `first_account_open` true while the instance has no account.
 - Docker: the image exposes only port 6040, and both compose files set `PORT=6040` inside the container; `PORT` in `.env` still chooses the host port. The unused 6041 mapping is gone.
 - **Live prices pause while you are away.** On the Assets page (every minute) and on an asset's page (every 30 seconds), live prices stop refreshing while the tab is in the background or after two minutes without using the page, with a small «Updates paused» label, and start again by themselves as soon as you come back. An asset's page now sends one request per refresh instead of two, and none at all on a date range that ends in the past.
 - **Saving the asset events editor is all or nothing.** The Events tab saves deletions, edits and new rows in one step: if anything is refused, none of them is kept, and the message, in your language, names the event at fault. An event linked to transactions can no longer be deleted together with other changes: the save stops and says which event and how many transactions use it, so remove the link first. Until now the other changes were saved and that deletion was skipped with a warning. Deleting an event and giving its date and type to another in the same save now works.
@@ -146,10 +147,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Breaking changes
 
-- The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `closed`): an API client that read the old key must read the new one.
+- The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `disabled`): an API client that read the old key must read the new one.
 - **`DELETE /api/v1/assets/events` requires `asset_id`.** Only that asset's events are deleted, so a wrong or crafted request can no longer delete another asset's events. A request with `ids` alone is refused (422), and an id of another asset answers `not_found`, its event untouched. A client deleting events must send their asset.
 - **`POST /api/v1/assets/events` answers a refusal with an object.** `detail` is `{error_code, message, params}` instead of a sentence; `params` names the item (`item_index`, `asset_id`) and the events at fault. A missing asset is now a 400 instead of a 200 that saved nothing. A client showing `detail` as text must read `detail.message`.
 - **The four placeholder backup endpoints are removed**: `/api/v1/backup/export`, `/backup/restore`, `/backup/formats` and `/backup/status` only answered "not implemented". The instance backup has its own endpoints under `/api/v1/backup/instance`.
+- **A new instance registers by invitation.** Its first account signs up without one and becomes the administrator; every later account needs an invitation link, unless an administrator sets «Registration» to Open. An upgraded instance keeps the mode it had.
+- `GET /api/v1/settings/global` and `/settings/global/{key}` need a signed-in session: an API client must sign in to read them.
+- `PUT /api/v1/auth/profile` with a new `email` needs `current_password`: missing → 400 `CURRENT_PASSWORD_REQUIRED`, wrong → 400 `CURRENT_PASSWORD_INVALID`.
 
 ---
 
