@@ -15,8 +15,9 @@
  * 3. **C2, one literal per line.** Every colour of the file sits alone on a `light:`/`dark:` line, and those lines are
  *    the colours `categoryColor` returns: the Lab exports an edit by file and line.
  * 4. **The sequences (GR5).** A sequence in order, then one shade further at each round, 98 distinct colours for the 14
- *    sectors; the Growth chart's broker lines are the first eight types, cycled, read at each draw so a Designer Lab
- *    edit reaches them (`growthBrokerColor`, TD-1b).
+ *    sectors; the Growth chart's broker lines are the first eight types the same way, 56 distinct colours (DV-8), the
+ *    shades toward the poles the chart passes or else the page's card, read only from the ninth line on; read at each
+ *    draw so a Designer Lab edit reaches them (`growthBrokerColor`, TD-1b).
  * 5. **C3, the hook.** In a debug build the Lab answers first; a null answer, a missing hook or the flag off leave the
  *    table's value. In a release build the hook is gone: the esbuild the release build minifies with, run on this
  *    source with the define a release build sets, leaves no trace of it.
@@ -48,6 +49,7 @@ import {ciede2000, deltaE00, labOf, SHARMA_PAIRS, SRGB_LAB} from '$test/colorDis
 import {CATEGORY_BUCKETS, CATEGORY_KEYS, CATEGORY_SEQUENCE, categoryColor, type CategoryKind, isUnclassifiedCountry, KEYLESS_SEQUENCE, lookupKey, sequenceColor} from './chartCategories';
 import {growthBrokerColor} from './chartPalettes';
 import {familyShade, shadePoles} from './chartShades';
+import {setRoleReader} from './roleColors';
 
 // =============================================================================
 // The designer's tables (round 2), as she wrote them: key, light, dark
@@ -304,21 +306,97 @@ describe('sequenceColor — a sequence in order, then one shade further at each 
     });
 });
 
-describe('growthBrokerColor — the Growth chart’s broker lines (GR5, TD-1b)', () => {
-    it.each(THEME_CASES)("%s: lines 0–15 take the designer's first eight types in her order, then the same eight again", (_theme, dark) => {
-        const eight = CATEGORY_SEQUENCE.map((key) => {
+describe('growthBrokerColor — the Growth chart’s broker lines (GR5, TD-1b, DV-8)', () => {
+    /** The designer's colours of her first eight types, in her order, as `same` reads them: the bases of lines 0–7. */
+    function designerEight(dark: boolean): string[] {
+        return CATEGORY_SEQUENCE.map((key) => {
             const row = DESIGNER_TYPES.find(([type]) => type === key);
             if (!row) throw new Error(`${key} is not a type of the designer's table`);
             return same(dark ? row[2] : row[1]);
         });
+    }
+
+    /** The roles read while `draw` runs, through an injected reader that answers none: the stand-ins stand. */
+    function rolesReadBy(draw: () => unknown): string[] {
+        const read: string[] = [];
+        setRoleReader((role) => {
+            read.push(role);
+            return '';
+        });
+        draw();
+        setRoleReader(null);
+        return read;
+    }
+
+    afterEach(() => {
+        setRoleReader(null);
+    });
+
+    it.each(THEME_CASES)("%s: lines 0–7 take the designer's first eight types, in her order", (_theme, dark) => {
+        const eight = designerEight(dark);
         expect(eight, 'barrier: eight distinct colours, so a line out of place is seen').toHaveLength(8);
         expect(new Set(eight).size).toBe(8);
 
-        expect(Array.from({length: 16}, (_, index) => same(growthBrokerColor(index, dark)))).toEqual([...eight, ...eight]);
+        expect(eight.map((_, index) => same(growthBrokerColor(index, dark)))).toEqual(eight);
+    });
+
+    it.each(THEME_CASES)('%s: from line 8 the same eight, one shade further at each round, toward the poles of the page’s card (DV-8)', (_theme, dark) => {
+        // With no tokens.css the page's card is the stand-in of `--lf-surface-card`, DARK_CARD in the dark theme; the
+        // light theme's poles are literals, whatever the card.
+        const poles = shadePoles(dark, DARK_CARD);
+        const eight = designerEight(dark);
+        const firstShades = eight.map((base) => same(familyShade(base, 1, poles)));
+        expect(
+            firstShades.filter((shade, rank) => shade === eight[rank]),
+            'barrier: a shade is not its base, so a repeat of the eight is seen',
+        ).toEqual([]);
+
+        expect(
+            eight.map((_, rank) => same(growthBrokerColor(eight.length + rank, dark))),
+            'lines 8–15: the eight, one shade on',
+        ).toEqual(firstShades);
+
+        // Eight rounds: the bases, their six shades, and the round the cycle restarts with.
+        const lines = Array.from({length: 64}, (_, index) => growthBrokerColor(index, dark));
+        expect(lines, 'every line: the sequence of the eight types, on the default poles').toEqual(lines.map((_, index) => sequenceColor('type', CATEGORY_SEQUENCE, index, dark, poles)));
+    });
+
+    it.each(THEME_CASES)('%s: lines 0–55 are 56 distinct colours, never a silent repeat; line 56 starts the cycle again at the first shade', (_theme, dark) => {
+        // The eight types, each its base and its six GR4 shades.
+        const lines = Array.from({length: 57}, (_, index) => same(growthBrokerColor(index, dark)));
+        expect(new Set(lines.slice(0, 56)).size).toBe(56);
+        expect(lines[56], 'line 56 starts the cycle again at the first shade, by design').toBe(lines[8]);
+    });
+
+    it('dark: shades toward the poles it is given, else toward the page’s card as read at the call', () => {
+        const black = shadePoles(true, '#000000');
+        const stock = designerEight(true)[0];
+        const onBlack = familyShade(stock, 1, black);
+        expect(same(onBlack), 'barrier: a black card shades line 8 otherwise than the default card, so the poles used show').not.toBe(same(familyShade(stock, 1, shadePoles(true, DARK_CARD))));
+
+        expect(growthBrokerColor(8, true, black), 'explicit poles win over the default ones').toBe(onBlack);
+
+        setRoleReader((role) => (role === '--lf-surface-card' ? '#000000' : ''));
+        expect(growthBrokerColor(8, true), 'no poles given: those of the card the page has at the call, not of a fixed one').toBe(onBlack);
+    });
+
+    it.each(THEME_CASES)('%s: reads the page’s card only where a shade needs the default poles — not for lines 0–7, not when the poles are given', (_theme, dark) => {
+        expect(
+            rolesReadBy(() => CATEGORY_SEQUENCE.map((_, index) => growthBrokerColor(index, dark))),
+            'lines 0–7 are base colours: no role is read for them',
+        ).toEqual([]);
+        expect(
+            rolesReadBy(() => growthBrokerColor(8, dark)),
+            'line 8, the first shade: its default poles read the card, once',
+        ).toEqual(['--lf-surface-card']);
+        expect(
+            rolesReadBy(() => growthBrokerColor(8, dark, shadePoles(dark, DARK_CARD))),
+            'poles given: the page’s card is not read',
+        ).toEqual([]);
     });
 
     it('follows a Designer Lab edit (C3): read through categoryColor at each call, never kept from an earlier one', () => {
-        // The hook harness of section 5: `publishHook` and `EDITED`. Line 1 is ETF.
+        // The hook harness of section 5: `publishHook` and `EDITED`. Line 1 is ETF; line 9, ETF one shade on.
         expect(same(growthBrokerColor(1, false)), 'barrier: before the edit, the table value').toBe('#1D5BD8');
 
         vi.stubGlobal('__LF_DESIGNER_LAB__', true);
@@ -326,7 +404,9 @@ describe('growthBrokerColor — the Growth chart’s broker lines (GR5, TD-1b)',
 
         expect(growthBrokerColor(1, false)).toBe(EDITED);
         expect(hook).toHaveBeenLastCalledWith('type', 'ETF', false);
-        expect(growthBrokerColor(9, true), 'the same line in the next round, dark theme').toBe(EDITED);
+        const editedShade = familyShade(EDITED, 1, shadePoles(true, DARK_CARD));
+        expect(same(editedShade), 'barrier: the first shade of the edit is not the edit itself').not.toBe(same(EDITED));
+        expect(growthBrokerColor(9, true), 'line 9, the same type one shade on, dark theme: the edit reaches the shaded line too').toBe(editedShade);
         expect(same(growthBrokerColor(0, false)), 'a line the edit leaves alone keeps its table value').toBe('#6D28D9');
     });
 });

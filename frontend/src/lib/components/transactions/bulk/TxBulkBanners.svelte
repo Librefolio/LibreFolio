@@ -111,7 +111,7 @@
         <TransactionResultBanner variant="error" title={`⛔ ${$t('common.saveCancelled')}`} dismissible ondismiss={() => (commitFailed = false)} testId="tx-bulk-error">
             {#snippet titleAction()}
                 {#if hasWacFxIssues}
-                    <button type="button" class="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-800/40 hover:bg-red-200 dark:hover:bg-red-700/50 font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx-error">
+                    <button type="button" class="text-xs px-2 py-0.5 rounded bg-lf-danger-line/50 hover:bg-lf-danger-line font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx-error">
                         {syncFxLoading ? '⏳' : '🔄'} Sync FX
                     </button>
                 {/if}
@@ -153,7 +153,7 @@
         <TransactionResultBanner variant="warning" title={`⚠️ ${$t('transactions.validate.issuesHeader')}`} dismissible ondismiss={() => (issuesDismissed = true)} testId="tx-bulk-issues-header">
             {#snippet titleAction()}
                 {#if hasWacFxIssues}
-                    <button type="button" class="text-xs px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/50 font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx">
+                    <button type="button" class="text-xs px-2 py-0.5 rounded bg-lf-warning-line/50 hover:bg-lf-warning-line font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx">
                         {syncFxLoading ? '⏳' : '🔄'} Sync FX
                     </button>
                 {/if}
@@ -201,8 +201,8 @@
         </InfoBanner>
     {/if}
     {#if todoBlockerEntries.length > 0}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs" data-testid="tx-bulk-todo-blockers">
-            <button type="button" class="flex w-full items-center gap-1.5 p-3 text-left font-medium text-red-800 dark:text-red-200" onclick={() => (todoBlockersExpanded = !todoBlockersExpanded)} data-testid="tx-bulk-todo-blockers-toggle">
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg text-xs" data-testid="tx-bulk-todo-blockers">
+            <button type="button" class="flex w-full items-center gap-1.5 p-3 text-left font-medium text-lf-danger-on-soft" onclick={() => (todoBlockersExpanded = !todoBlockersExpanded)} data-testid="tx-bulk-todo-blockers-toggle">
                 {#if todoBlockersExpanded}
                     <ChevronDown size={14} class="shrink-0" />
                 {:else}
@@ -214,7 +214,7 @@
                 <ul class="max-h-72 space-y-2 overflow-y-auto px-3 pb-3">
                     {#each todoBlockerEntries as entry}
                         <li class="space-y-1.5">
-                            <button type="button" class="block w-full text-left text-red-700 dark:text-red-300 leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
+                            <button type="button" class="block w-full text-left text-lf-danger-on-soft leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
                                 <span class="font-mono opacity-70">#{entry.rowNumber}</span>
                                 {resolveBrimTodoMessage(entry.todo, $t)}
                             </button>
@@ -254,11 +254,11 @@
         </InfoBanner>
     {/if}
     {#if bannerSuggestions.length > 0}
-        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner" onclickcapture={() => (promoteBannerSeen = true)}>
+        <div class="bg-lf-success-soft border border-lf-success-line rounded-lg p-3 text-xs" data-testid="promote-suggest-banner" onclickcapture={() => (promoteBannerSeen = true)}>
             <div class="flex items-center gap-2 mb-1.5">
-                <span class="font-medium text-green-800 dark:text-green-200">{$t('transactions.promoteSuggest.detected')}</span>
+                <span class="font-medium text-lf-success-on-soft">{$t('transactions.promoteSuggest.detected')}</span>
                 {#if mergeAllPairs.length > 1}
-                    <button type="button" class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded bg-libre-green text-white hover:bg-libre-green/90 font-medium" onclick={() => (promoteAllOpen = true)} data-testid="promote-suggest-merge-all">
+                    <button type="button" class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded bg-lf-action text-lf-on-action hover:bg-lf-action-hover font-medium" onclick={() => (promoteAllOpen = true)} data-testid="promote-suggest-merge-all">
                         <Link2 size={12} />
                         {$t('transactions.promoteSuggest.mergeAll', {values: {n: mergeAllPairs.length}})}
                     </button>
@@ -279,20 +279,15 @@
                     {@const deltaDays = opA && opB ? Math.round((new Date(opB.fields.date).getTime() - new Date(opA.fields.date).getTime()) / 86400000) : 0}
                     {@const targetLabel = $t('transactions.types.' + sug.targetType) || sug.targetType}
                     <li class="relative pl-3 flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
-                        <span class="absolute left-0 top-1 text-green-800 dark:text-green-200">•</span>
-                        <button
-                            type="button"
-                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-700/40 font-medium"
-                            onclick={() => triggerPromoteFromSuggestion(sug)}
-                            data-testid="promote-suggest-link-{idx}"
-                        >
+                        <span class="absolute left-0 top-1 text-lf-success-on-soft">•</span>
+                        <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-lf-info-soft border border-lf-info-line text-lf-info-on-soft hover:bg-lf-info-line font-medium" onclick={() => triggerPromoteFromSuggestion(sug)} data-testid="promote-suggest-link-{idx}">
                             <Link2 size={12} />
                             {$t('transactions.promoteSuggest.merge')}
                         </button>
                         <!-- Row A reference (clickable — "from" / negative side) -->
                         <button
                             type="button"
-                            class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
+                            class="underline text-lf-secondary hover:text-lf-link"
                             onclick={() => {
                                 if (opA) tableRef?.navigateToRowId(opA.tempId);
                             }}
@@ -300,12 +295,12 @@
                             {rowIdxA >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxA + 1}}) : typeA}
                         </button>
                         <img src={getTransactionTypeIconUrl(typeA)} alt="" class="w-4 h-4 inline object-contain" />
-                        <span class="text-gray-500">{$t('common.and')}</span>
+                        <span class="text-lf-muted">{$t('common.and')}</span>
                         <!-- Row B reference -->
                         {#if sug.isDB}
                             <button
                                 type="button"
-                                class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
+                                class="underline text-lf-secondary hover:text-lf-link"
                                 onclick={() => {
                                     const op = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
                                     if (op) tableRef?.navigateToRowId(op.tempId);
@@ -316,7 +311,7 @@
                         {:else}
                             <button
                                 type="button"
-                                class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
+                                class="underline text-lf-secondary hover:text-lf-link"
                                 onclick={() => {
                                     if (opB) tableRef?.navigateToRowId(opB.tempId);
                                 }}
@@ -325,11 +320,11 @@
                             </button>
                         {/if}
                         <img src={getTransactionTypeIconUrl(typeB)} alt="" class="w-4 h-4 inline object-contain" />
-                        <span class="text-gray-500">→</span>
-                        <span class="font-medium text-green-700 dark:text-green-300">{targetLabel}</span>
+                        <span class="text-lf-muted">→</span>
+                        <span class="font-medium text-lf-success-on-soft">{targetLabel}</span>
                         <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline object-contain" />
                         {#if deltaDays !== 0}
-                            <span class="text-gray-400">(Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d)</span>
+                            <span class="text-lf-muted">(Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d)</span>
                         {/if}
                         {#if sug.targetType === 'FX_CONVERSION' && opA?.fields.cash && opB?.fields.cash}
                             {@const aAmtFx = Number(opA.fields.cash.amount)}
@@ -341,7 +336,7 @@
                                     {@const cacheKey = `${fxInfo.base}-${fxInfo.quote}-${fromOpFx.fields.date}`}
                                     {@const fxPoint = fxMarketCache.get(cacheKey)}
                                     {@const tooltipData = buildFxTooltipData(fxInfo, fxPoint)}
-                                    <span class="text-gray-400 mx-0.5">·</span>
+                                    <span class="text-lf-muted mx-0.5">·</span>
                                     <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
                                         <span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400 cursor-help" data-testid="promote-suggest-fx-info-{idx}">
                                             {@html formatCurrencyCodeHtml(fxInfo.base)}
@@ -349,7 +344,7 @@
                                             {@html formatCurrencyCodeHtml(fxInfo.quote)}
                                             <span class="font-mono">@ {formatFixed(fxInfo.impliedRate, 4)}</span>
                                             {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
-                                                <span class="text-amber-500">⚠️</span>
+                                                <span class="text-lf-warning">⚠️</span>
                                             {/if}
                                         </span>
                                     </Tooltip>
@@ -360,7 +355,7 @@
                 {/each}
             </ul>
             {#if allSuggestions.length > 5}
-                <span class="text-gray-500 text-[11px] mt-1">{$t('transactions.promoteSuggest.bannerMore', {values: {n: allSuggestions.length - 5}})}</span>
+                <span class="text-lf-muted text-[11px] mt-1">{$t('transactions.promoteSuggest.bannerMore', {values: {n: allSuggestions.length - 5}})}</span>
             {/if}
         </div>
     {/if}

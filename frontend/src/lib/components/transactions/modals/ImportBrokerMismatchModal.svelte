@@ -87,7 +87,7 @@
 
 <ModalBase maxWidth="max-w-lg" onRequestClose={requestClose} {open} {zIndex} testId="import-broker-mismatch-modal">
     <div class="modal-header">
-        <AlertTriangle class="text-amber-500 shrink-0" size={22} />
+        <AlertTriangle class="text-lf-warning shrink-0" size={22} />
         <h2 class="modal-title">{$t('importWizard.brokerMismatch.title')}</h2>
         {#if total > 1}
             <span class="counter" data-testid="import-broker-mismatch-counter">{$t('importWizard.brokerMismatch.counter', {values: {current, total}})}</span>

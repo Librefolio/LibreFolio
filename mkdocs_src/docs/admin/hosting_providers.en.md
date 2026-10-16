@@ -102,6 +102,10 @@ your users sign in again after each restart. See
   [Environment Variables](configuration.md).
 - HTTPS in front of it: see [Expose Securely](service_exposure.md) and
   [HTTPS and reverse proxies](configuration.md#session-cookie-secure).
+- On Fly.io, `LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP`, so that the limits per visitor's address
+  count each visitor apart, not everyone as Fly's proxy. The managed profile does not set it, since
+  the header depends on the proxy in front of the instance: see «The Visitor's Address» in
+  [Checking Connection Security](connection_checks.md#reverse-proxy).
 - A monitor on `GET /api/v1/system/ready`: see the monitoring tip in
   [Advanced Docker](docker_advanced.md).
 - If your hosting panel takes its backups: its own `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, never shared

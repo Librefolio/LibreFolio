@@ -3538,3 +3538,202 @@ Diciassette commit fuori da `dev_release2`, più questo diario: note di X (H-14/
 blocco, H-17 (la mia parte), `b-doc-notes` (B-4, B-5), H-1/4/6/9, H-3 opzione B. Nel backlog, all'ingresso il
 coordinatore chiude con ✅ H-1, H-4, H-6, H-9, H-14, H-15, H-16. H-17 resta aperta fino alle due righe di B. H-3 resta
 aperta per l'opzione A (P24). Restano aperte anche H-5 (traduzioni), H-18 (sezione C, la UI comune) e H-19 (ad A).
+
+> **Ultima validazione e ingresso**: il coordinatore ha committato il diario (`306554879`) e fuso `dev_release2` (merge
+> `0d7503098`, pulito: J CP-7a, W-B17, Z7c-1, i ruoli di T). Sulla revisione combinata, una alla volta, carico sotto 50
+> (12:03–12:43): `api sync`, `front check` 0/0, Vitest `InstanceBlockedPage` 36, `db populate --force`,
+> `api instance-block` 62, `api system` 118. **Entrati nel treno 110** (merge `0ecc5ed27`, registro `0f3b9e3db`),
+> con 🔒/✨ per H-15 e la card, e due righe 📚 (`34e1e8092`). Chiuse H-1, H-4, H-6, H-9, H-14, H-15, H-16. Base portata
+> avanti con fast-forward a `0f3b9e3db`, eseguito dal coordinatore: le mie regole mi vietano di muovere la storia.
+
+### P17 — l'indirizzo del client dietro un proxy fidato (2026-10-16, pomeriggio) — in corso
+
+Decisione del developer (P17): nel cloud l'indirizzo vero del visitatore si legge da `Fly-Client-IP`. Oggi i limiti per
+client (le email di registrazione di E5b, i login falliti di A) vedono solo il proxy di Fly e contano tutti i visitatori
+insieme. Il contratto l'ho mandato alle 12:4x e il coordinatore l'ha approvato, **compreso il punto 4**, come sua
+decisione da far rivedere al developer.
+
+**Il contratto approvato**:
+
+- `LIBREFOLIO_CLIENT_IP_HEADER`, un campo di `Settings`, vuoto di default e validato all'avvio. Deve essere il nome di
+  un header (token HTTP); `X-Forwarded-For` e `Forwarded` sono rifiutati;
+- **nessuna voce in `PROFILE_DEFAULTS["managed"]`**: il cloud la imposta nel suo ambiente, come
+  `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`;
+- `services/platform/client_address.py`:
+  - `client_address(request)`: con la variabile vuota, `request.client.host` com'è oggi. Con la variabile impostata e
+    l'header presente una volta con un solo IP, quell'IP normalizzato. Senza header, il peer. Con un header malformato,
+    il peer e un avviso una volta per processo, mai col valore;
+  - `client_rate_key(address)`: la regola di oggi di E (`flows.address_key`). E la toglie dal suo codice nel suo lotto,
+    senza shim; fino ad allora le copie sono due, ed è previsto;
+  - `mask_client_address(address)`, per il log: IPv4 per /24, IPv6 per /48;
+- doc secondo C-99. La spiegazione intera va in `admin/connection_checks.en.md`, «Behind a Reverse Proxy» (pagina con
+  traduzioni); una riga in `admin/configuration.en.md`, una riga del cloud in `hosting_providers.en.md`, poi
+  `.env.example` e `security.md`;
+- chi la chiama, nei propri lotti dopo il mio: E (`api/v1/email.py:157`, `:203`, `auth.py:274`, `address_key`) e A (il
+  limitatore dei login falliti).
+
+**Fatti verificati**:
+
+- uvicorn parte coi default (`Dockerfile`: `proxy_headers`, `FORWARDED_ALLOW_IPS=127.0.0.1`), quindi su Fly il peer è
+  il proxy;
+- la doc di Fly («Request headers») dice che il proxy imposta `Fly-Client-IP` e sovrascrive quello mandato dal client,
+  mentre `X-Forwarded-For` si può falsificare;
+- `api/v1/system/connection.py` e `utils/runtime/network.py` restano come sono: classificano l'indirizzo dall'ultimo
+  `X-Forwarded-For` solo per dare un consiglio, non per una decisione di sicurezza.
+
+**⚠️ Fuori pista**: la riga del docstring di `instance_block.py` per `POST /api/v1/auth/setup` (P16(d)) descriverebbe
+una rotta che a `0f3b9e3db` non esiste ancora: A7 non è entrato. La scrivo quando A7 è nella mia base.
+
+#### P17 — passo 1, rossi ✅ (2026-10-16, pomeriggio)
+
+> **Note implementazione** (test-author, niente lanciato da lui): `test_client_address.py`, nuovo, 21 funzioni e 131
+> casi, registrato come `services client-address` (`isolation="pure"`). Coprono il campo (vuoto, valori accettati e
+> rifiutati, le liste `X-Forwarded-For` e `Forwarded` con `FORWARDED_ALLOW_IPS` nel messaggio, nessun profilo che lo
+> imposta) e `client_address()`: variabile vuota, un solo IP normalizzato, header assente, i malformati con un solo
+> avviso che non contiene mai il valore, nome senza distinzione di maiuscole, WebSocket, lettura una sola volta e
+> `reset_client_address_cache()`. Più `client_rate_key()` e `mask_client_address()`, con valori espliciti.
+>
+> **Rossi** (13:09–13:11): 131 falliti, 34 sulla barriera del campo e 97 su quella del modulo. Ruff e black puliti.
+
+#### P17 — passo 2, la cura e i chiamanti (2026-10-16, pomeriggio) — verdi in corso
+
+> **⚠️ Fuori pista**: il docs-writer ha visto che la variabile, da sola, non avrebbe fatto niente. I tre punti che
+> contano per client leggevano `request.client.host`, quindi le pagine admin avrebbero detto una cosa falsa. Al
+> coordinatore ho proposto due strade, e ha scelto la (1) (13:07): cambio io solo le tre chiamate. Ha verificato che
+> E4b (`b22747e52`) e A (`946285a91`) hanno quelle righe uguali, solo spostate; E4b aggiunge `flows as email_flows`
+> agli import di `auth.py`, quindi al merge si risolvono righe vicine, non il significato. I test API di E e della
+> registrazione li lancio io. Il limitatore dei login falliti non esiste ancora: tolto dai testi.
+>
+> **Note implementazione** (`files/p17/apply_p17.py` della sessione, provato a secco, ruff e black puliti):
+>
+> - `config/__init__.py`: `import re`, `_HEADER_TOKEN` e `_LIST_HEADERS`, il campo `LIBREFOLIO_CLIENT_IP_HEADER` col
+>   validatore `after` (spazi tolti, vuoto ammesso, token HTTP, liste rifiutate, maiuscole conservate). La docstring
+>   del modulo lo elenca;
+> - `services/platform/client_address.py`, nuovo: il nome dell'header è letto una volta (`functools.cache`),
+>   l'avviso una sola volta per processo (una lista come flag, sul modello del resolver di X),
+>   `reset_client_address_cache()`, `client_rate_key()` (la regola di `flows.address_key`, nella sua casa nuova),
+>   `mask_client_address()`;
+> - `.env.example`: la sezione «The Visitor's Address Behind a Reverse Proxy», con la riga commentata e il rimando
+>   alla doc;
+> - le tre chiamate: `api/v1/email.py` (le due letture `address = request.client.host if request.client else None`)
+>   e `api/v1/auth.py` (`registration_email_allowed`), più un import ciascuno;
+> - doc (docs-writer, secondo C-99): la sottosezione `#client-address` in `admin/connection_checks.en.md`, con la
+>   regola di sicurezza in un riquadro e corretto l'ultimo paragrafo dei «Limits», che diceva che non c'erano proxy
+>   fidati da configurare; una riga in `admin/configuration.en.md`; un punto in `admin/hosting_providers.en.md`; la
+>   sottosezione `#client-address` in `developer/architecture/security.md`, che io ho corretto sui chiamanti dopo la
+>   strada (1). Le pagine solo inglesi puntano a `connection_checks.md#reverse-proxy`, perché `#client-address` non
+>   esiste ancora nelle traduzioni.
+> - Fly: la doc ufficiale «Request headers» dice che il proxy imposta `Fly-Client-IP`; che sovrascriva quello del
+>   client lo dicono fonti esterne. Resta la prova di accettazione del cloud già nel contratto.
+>
+> **Il ruff della prova a secco**: segnalava I001 sui due import solo perché il modulo nuovo non esisteva ancora nel
+> worktree, e quindi non lo riconosceva come modulo del progetto. Applicata la cura, è pulito senza `--fix`.
+
+> **Verdi parziali** (13:11–13:23, una alla volta, carico sotto 50): `services client-address` **131**,
+> `config-env-example` 38, `config-package` 694, nessun fallito.
+>
+> **⏸️ Pausa del developer** (13:22): ho fermato solo lo script che mette in fila le prove (PID 48197, con `kill`), e ho
+> lasciato finire il test in corso (`config-package`). Porta 6181 libera. **Restano da lanciare**: `services
+> profile-defaults` e `config-misc`; `db populate --force`; `api email`, `email-verification`,
+> `email-verification-hooks`, `registration` e `auth`; `mkdocs build` e `check-links`. Lo script è
+> `files/runs/p17.sh green` nella cartella della sessione: rilancia anche i tre già verdi. Poi l'handoff, FROZEN.
+> Worktree sporco col lotto P17, nessun merge aperto, HEAD `0f3b9e3db`.
+
+> **Ripresa** (14:14, via del developer). B conferma: `RestoreCard` è un componente a parte, montato solo in
+> `BackupTab`; la pagina di blocco tiene solo `BackupDownloadCard`, come vuole P7.
+>
+> **Verdi** (14:14–14:40, una alla volta, carico sotto 50, HEAD `0f3b9e3db`):
+>
+> - `services profile-defaults` 52 e `config-misc` 12;
+> - `db populate --force`, poi `api email` 160, `email-verification` 49, `email-verification-hooks` 16,
+>   `registration` 96 e `auth` 88. Sono le rotte con le tre chiamate cambiate: con la variabile vuota, il
+>   comportamento di prima;
+> - `check-links` 97;
+> - insieme ai verdi di prima della pausa: `client-address` 131, `config-env-example` 38, `config-package` 694.
+>
+> **⚠️ Fuori pista — `mkdocs build` rigoroso rosso, non per il lotto**: un solo avviso, in
+> `developer/backend/transactions/wac.md`, il link `split_promote.md#transfer-giving-leg` verso un'ancora che non
+> esiste. Il link l'ha messo `54880598b` («fix(transactions): emptied manual cost basis…», treno 111), che è già nella
+> base `0f3b9e3db`; io quelle pagine non le tocco. Visto che la build dà solo quell'avviso, le mie quattro pagine non
+> ne aggiungono. Va girato al proprietario delle pagine delle transazioni.
+>
+> **H-5**: aggiunto il debito di traduzione di P17, `connection_checks` e `configuration`, con l'ordine.
+
+#### Checkpoint P17 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore
+
+> **Ingresso**: P17 committato (`22d6dc84e` feat, `551843bdc` doc, `55a6646ff` diario) e fuso in dev (merge
+> `b1df87bd4`, pulito). L'avviso di `mkdocs` in `wac.md` è stato corretto su dev (`ed500643f`). A B5c il coordinatore
+> ha chiesto chi scrive la voce `GET /backup/restore/outcome` in `instance_block.py`: la scrive B, nello stesso commit
+> della rotta, e io rivedo il diff (ticket confrontato a tempo costante, una volta sola, senza ticket la stessa risposta
+> di una rotta che non esiste, solo `{state, reason, waiting}`).
+
+### TC-16 — `FilePreviewModal.test.ts:598`, rosso sotto carico (2026-10-16, pomeriggio) — triage
+
+Viene dai colori: due rossi in un giro con carico fra 41 e 52, verde da solo (37 su 37). Me l'ha dato il coordinatore
+come voce H, con il triage prima di tutto.
+
+> **Prove** (skill `test-triage`):
+>
+> - la riga 598 è il primo `expect` del `waitFor` di `listening()`, nel `describe` «PDF stage state (fake EmbedPDF)».
+>   Aspetta che il visore finto abbia registrato i tre ascoltatori del componente, e 14 casi la usano. Il `waitFor` non
+>   ha un budget, quindi vale quello di default di testing-library, 1 s;
+> - la catena del componente (`FilePreviewModal.svelte`, ~206–232) non ha ritardi fissi: `Promise.all` di due
+>   `import()` dinamici (`@embedpdf/snippet` e `pdfViewerAssets`), `pdfViewerAssets(document.baseURI)`,
+>   `EmbedPDF.init`, `await viewer.registry`, poi le iscrizioni;
+> - il file da solo (15:11, carico 47, `--reporter=verbose`): 37 su 37. I casi del `describe` durano fra 66 e 276 ms; i
+>   primi tre (247, 186, 276 ms) sono i più lenti, perché pagano il riscaldamento dei primi `import()` dinamici del file.
+>   Il margine di 1 s è quindi circa 4 volte la durata da solo. Nel giro dei colori, con i worker paralleli di Vitest e
+>   la macchina carica, la catena lo supera.
+>
+> **Verdetto: assumption, il tempo** (§2). La condizione aspettata è quella giusta: il test deve sincronizzarsi col
+> visore finto prima di mandargli i suoi segnali. Il budget invece è una scommessa sulla velocità della macchina. Non
+> c'è uno stato del prodotto da rendere osservabile (§6): quello che vede l'utente, `data-state`, resta `loading` sia
+> prima sia dopo le iscrizioni.
+>
+> **Cura proposta**, solo nel test:
+>
+> 1. un `beforeAll` nel `describe` che importa una volta `@embedpdf/snippet` e `pdfViewerAssets`, così il riscaldamento
+>    si paga fuori da ogni attesa (l'hook ha il suo limite);
+> 2. un budget esplicito per le attese della catena del visore nello stesso `describe` (`listening()` e i `waitFor`
+>    delle righe ~781, ~795, ~825, ~856): una costante da 3 s, oltre 10 volte il caso più lento misurato da solo, e
+>    dentro i 5 s di un test.
+>
+> Il file sta in `features/files/**`, l'area T dei colori: prima di scriverci chiedo l'OK al coordinatore. La
+> riparazione la fa il test-author.
+
+> **Via del coordinatore** (15:19): sì, solo nel test, col test-author. Avvisa lui i colori.
+>
+> **Note implementazione** (test-author, niente lanciato da lui), solo `FilePreviewModal.test.ts`, nel `describe` «PDF
+> stage state»:
+>
+> - `const VIEWER_WAIT = {timeout: 3_000}`, con il perché nel commento (66–276 ms da solo, 1 s dava un margine di circa
+>   4 volte, 3 s più di 10 volte, dentro i 5 s di un test);
+> - un `beforeAll` che importa una volta `@embedpdf/snippet` e `pdfViewerAssets`. Sono mock, il secondo parziale con
+>   `importOriginal`, e caricarli prima non cambia quello che i test vedono: `pdfViewerAssets.ts` al caricamento
+>   definisce solo costanti;
+> - `VIEWER_WAIT` su `listening()`, sulle due attese di `registryAsks`, su quella di `tiles` di lunghezza 2 (il secondo
+>   visore dopo il `rerender`) e su `findByTestId('file-preview-pdf-fallback')`. Quest'ultima non era nella mia lista,
+>   ma aspetta il ramo d'errore della stessa catena: la accetto;
+> - lasciata col default l'attesa di `onRequestClose` (~838). Il suo ascoltatore si registra nello stesso passo
+>   sincrono dei tre, quindi passa al primo controllo e il tempo non c'entra;
+> - limite noto: 3 s valgono per un'attesa, non per un caso. «Stays open when it moves to another file» ha due attese
+>   della catena; la seconda trova però i moduli già caricati.
+>
+> **Prove**: `prettier --check` pulito. Il file da solo (15:33, carico 42): 37 su 37, e i casi del visore ora durano
+> 56–135 ms (prima 66–276). Il riscaldamento è uscito dalle attese. Resta la prova a carico crescente, in una finestra
+> leggera del coordinatore.
+
+> **Prova sotto carico** (slot 2, 16:03–16:13, chiusura alle 16:15, senza aspettare il carico apposta: nello slot 1
+> girava l'`all-backend` di MF):
+>
+> - `front-utility component-unit` n. 1: **4041 su 4041**, 359 s, carico salito da 46 a circa 106;
+> - `front-utility component-unit` n. 2: **4041 su 4041**, 194 s, carico intorno a 66;
+> - `FilePreviewModal.test.ts` è nel catalogo (`_frontend_utility.py:285`), quindi i suoi 37 casi sono girati due volte
+>   coi worker paralleli e un carico oltre il doppio di quello del giro dei colori (41–52);
+> - i tre giri del file da solo non sono partiti: alle 16:13:07 il controllo dello script ha visto troppo vicina la
+>   chiusura. Restano le due prove leggere di prima (15:11 e 15:33);
+> - slot liberato alle 16:13; porta 6181 libera.
+>
+> **Verdetto confermato**: assumption, il tempo; curato nel test.
+
+#### Checkpoint TC-16 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore

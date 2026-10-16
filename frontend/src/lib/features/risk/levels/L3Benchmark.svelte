@@ -153,7 +153,7 @@
      confirming it: republished from the picker, because the rest of this page and its tests
      read L3's benchmark here. -->
 <div class="flex items-center gap-2" data-testid="risk-l3-benchmark" data-benchmark-id={selected ?? ''} data-benchmark-state={benchmarkState}>
-    <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l3.benchmark')}</span>
+    <span class="shrink-0 text-xs text-lf-muted">{$t('risk.levels.l3.benchmark')}</span>
     <div class="min-w-0 max-w-xs flex-1">
         <BenchmarkSelect bind:value={selected} bind:state={benchmarkState} measuredAssetIds={[]} {period} {currency} boxClass="w-full" testid="risk-l3-benchmark-select" onchange={choose} />
     </div>

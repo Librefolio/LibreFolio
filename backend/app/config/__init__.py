@@ -33,6 +33,8 @@ Environment Variables (see .env):
         for Settings fields, ENVIRONMENT_PROFILE_DEFAULTS (profile_default()) for the variables of the section modules
     LIBREFOLIO_FRAME_PROTECTION: X-Frame-Options and frame-ancestors on every response (default: off; managed: on)
     LIBREFOLIO_CSP_REPORT_ONLY: Report-only Content-Security-Policy on the web app's pages (default: off; managed: on)
+    LIBREFOLIO_CLIENT_IP_HEADER: The header a trusted reverse proxy passes the visitor's address in, such as Fly-Client-IP
+        (default: unset, the connection's address; no profile sets it)
 
 Secrets (JWT_SECRET, LIBREFOLIO_INSTANCE_KEY, ...) also accept NAME_FILE, the path of a file holding the value: see
 env_secret(). Addresses (LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL, ...) follow one rule: see env_url(). Every
@@ -40,6 +42,7 @@ variable the code reads is listed in .env.example.
 """
 
 import os
+import re
 from pathlib import Path
 from typing import Literal, cast
 from urllib.parse import urlsplit
@@ -88,6 +91,11 @@ ENVIRONMENT_PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
         "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500,
     },
 }
+
+#: The name of an HTTP header (RFC 9110 ``token``), for ``LIBREFOLIO_CLIENT_IP_HEADER``.
+_HEADER_TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+#: Headers holding a list of addresses, whose first value the client chooses: never ``LIBREFOLIO_CLIENT_IP_HEADER``.
+_LIST_HEADERS = frozenset({"x-forwarded-for", "forwarded"})
 
 #: The secrets that make an instance trust a session or decrypt its data, in every form. A test runtime never inherits
 #: them (``configure_test_runtime`` in ``scripts/cli_base.py``): a test lane signs and derives with secrets of its own.
@@ -288,6 +296,22 @@ class Settings(BaseSettings):
     # Report-only Content-Security-Policy on the web app's pages (D5): violations show in the browser console, nothing
     # is blocked. Off by default
     LIBREFOLIO_CSP_REPORT_ONLY: bool = False
+
+    # The header in which a trusted reverse proxy passes the visitor's address (P17), such as Fly.io's Fly-Client-IP:
+    # services/platform/client_address.py. Empty by default: the connection's address. No profile sets it
+    LIBREFOLIO_CLIENT_IP_HEADER: str = ""
+
+    @field_validator("LIBREFOLIO_CLIENT_IP_HEADER", mode="after")
+    @classmethod
+    def _client_ip_header(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            return ""
+        if not _HEADER_TOKEN.fullmatch(value):
+            raise ValueError(f"LIBREFOLIO_CLIENT_IP_HEADER={value!r}: expected the name of one HTTP header, such as Fly-Client-IP")
+        if value.lower() in _LIST_HEADERS:
+            raise ValueError(f"LIBREFOLIO_CLIENT_IP_HEADER={value!r}: a list of addresses whose first value the client chooses; for X-Forwarded-For set FORWARDED_ALLOW_IPS, which uvicorn reads")
+        return value
 
     # Native quantitative engines
     RISK_SIMULATION_WORKERS: int = Field(1, ge=1, le=8)
