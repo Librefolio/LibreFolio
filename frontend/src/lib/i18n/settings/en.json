@@ -30,6 +30,8 @@
     "passwordChanged": "Password changed successfully",
     "passwordChangeFailed": "Failed to change password",
     "currentPasswordIncorrect": "Current password is incorrect",
+    "currentPasswordRequired": "Enter your current password to change your email",
+    "emailPasswordHint": "To change your email, enter your current password. Your other devices will be signed out.",
     "passwordsMustMatch": "Passwords must match",
     "passwordMustBeDifferent": "New password must be different from current",
     "language": "Language",

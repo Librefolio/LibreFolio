@@ -348,7 +348,7 @@
             />
         </div>
         {#if analysed}
-            <span class="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{$t('importWizard.reportSet.status.analysed')}</span>
+            <span class="shrink-0 rounded-full bg-lf-info-soft px-2 py-0.5 text-xs font-medium text-lf-info-on-soft">{$t('importWizard.reportSet.status.analysed')}</span>
         {/if}
         <span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium {statusClass[status]}" data-testid="report-set-status">
             {#if status === 'loading'}

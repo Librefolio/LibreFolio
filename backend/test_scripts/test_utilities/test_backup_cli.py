@@ -47,6 +47,14 @@ Instance backup, the command line (workstream B, lot B1): ``scripts/backup_cli.p
     folder that existed left as it was (B1 fix 8: "the missing folders are created only when the archive gets there").
 (j) The help: ``--no-verify`` compares the entry names without reading the entries; ``--output`` is checked before the
     backup starts; a relative path starts from the project root.
+(k) ``cmd_restore`` (lot B2a): without ``--dry-run``, and for a missing file, exit 1 and nothing created in the data
+    directory. ``--dry-run`` checks the archive on a copy in ``.restore/stage/``: exit 0 for a restorable archive, its
+    report printed (the backup's revision, its files, its administrators named), the copy removed and the data
+    directory as it was; exit 1 with the ``StagingError`` code for a refused one (not a backup, a backup of another
+    LibreFolio, an altered or added entry), with the blocker for a backup without active administrator, while another
+    check runs, and when ``.restore`` is a link (named, nothing written through it). ``_print_stage_report`` of an
+    upgrade lists the migrations, the tables the upgrade changed and the warnings. The script runs
+    ``restore --dry-run`` end to end; ``restore --help`` says what a dry run does.
 
 Pure: data directories in ``tmp_path``. In this process a command sees a production data directory of the test through
 its environment (``LIBREFOLIO_TEST_MODE`` removed, ``LIBREFOLIO_DATA_DIR`` in ``tmp_path``, set with ``monkeypatch``
@@ -57,7 +65,8 @@ that need a failure replace, for that test only, ``shutil.move``, ``shutil.disk_
 that puts one folder and everything below it on another device, as a disk mounted there), or ``jobs.run_backup``,
 ``jobs.archive_name`` and ``jobs.build_archive``;
 the permission cases are skipped as root, which bypasses them. ``LF_APP_VERSION`` is set, so no git process runs. No
-lane database, no server, no network.
+lane database, no server, no network. The restore cases need a real database: one, made once for the module by
+``alembic upgrade head`` in a child with the same environment as the script's children, on a file of ``tmp_path``.
 """
 
 from __future__ import annotations
@@ -76,6 +85,7 @@ import subprocess
 import sys
 import zipfile
 from contextlib import closing
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -85,7 +95,8 @@ from backend.app.config import get_data_dir
 from backend.app.services.platform.instance_backup import jobs
 from backend.app.services.platform.instance_backup.archive import build_archive, check_archive
 from backend.app.services.platform.instance_backup.manifest import BackupManifest
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, backups_dir, ensure_private_dir, job_dir, jobs_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, STAGE_LOCK_FILE, backups_dir, ensure_private_dir, job_dir, jobs_dir, restore_dir, stages_dir
+from backend.app.services.platform.instance_backup.staging import ALEMBIC_INI, AppliedMigration, StagedBackup, StagingReport, TableRows
 from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts import backup_cli
@@ -1096,3 +1107,274 @@ def test_the_help_says_what_no_verify_compares_and_where_a_relative_path_starts(
     create_help = help_of(monkeypatch, capsys, "backup", "create")
     assert "checked before the backup starts" in create_help, f"--output says it is checked first: {create_help}"
     print_success("--no-verify, --output and the relative-path line")
+
+
+# =============================================================================
+# (k) cmd_restore
+# =============================================================================
+
+
+#: The accounts of the restore cases, in the order they are inserted: (username, is_active, is_superuser).
+RESTORE_ACCOUNTS = (("zoe_admin", 1, 1), ("bob_user", 1, 0), ("olga_former_admin", 0, 1), ("ada_admin", 1, 1))
+#: A user and a disabled administrator: nobody could manage the instance after a restore.
+WITHOUT_ADMINISTRATOR = (("bob_user", 1, 0), ("olga_former_admin", 0, 1))
+CREATED = "2026-10-15 10:15:00.000000"
+#: The last line of a dry run that found the archive restorable.
+RESTORABLE_LINE = "✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed."
+
+
+@pytest.fixture(scope="module")
+def head_database(tmp_path_factory) -> Path:
+    """A real database at this LibreFolio's head, made once by ``alembic upgrade head`` in a process of its own, in
+    rollback-journal mode so that a copy of the file is the whole database."""
+    root = tmp_path_factory.mktemp("migrated")
+    database, configured = root / "head.db", root / "configured-data-dir"
+    command = [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_INI), "-x", f"sqlalchemy.url=sqlite:///{database}", "upgrade", "head"]
+    try:
+        done = subprocess.run(command, cwd=PROJECT_ROOT, env=child_env(configured), stdin=subprocess.DEVNULL, capture_output=True, encoding="utf-8", timeout=5 * CLI_TIMEOUT, check=False)
+    except subprocess.TimeoutExpired as exc:
+        pytest.fail(f"precondition: alembic upgrade head did not end within {5 * CLI_TIMEOUT}s: {exc.stdout!r} {exc.stderr!r}")
+    assert done.returncode == 0, f"precondition: alembic upgrade head of a new database exited {done.returncode}\n--- stdout\n{done.stdout[-TAIL:]}\n--- stderr\n{done.stderr[-TAIL:]}"
+    with closing(sqlite3.connect(database)) as conn:
+        conn.execute("PRAGMA journal_mode=DELETE")
+    assert not configured.exists(), f"alembic wrote in the configured data directory: {listing(configured)}"
+    return database
+
+
+def restorable(tmp_path: Path, database: Path, accounts=RESTORE_ACCOUNTS) -> Path:
+    """The archive of a data directory whose database is a copy of ``database`` with ``accounts``, and ``FILES``."""
+    data = make_data_dir(tmp_path / "source", database=False)
+    (data / DATABASE_ENTRY).parent.mkdir(parents=True)
+    shutil.copyfile(database, data / DATABASE_ENTRY)
+    with closing(sqlite3.connect(data / DATABASE_ENTRY)) as conn, conn:
+        conn.executemany(
+            "INSERT INTO users (username, email, hashed_password, is_active, is_superuser, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(name, f"{name}@example.test", "$argon2id$not-a-real-hash", active, admin, CREATED, CREATED) for name, active, admin in accounts],
+        )
+    work = tmp_path / "work"
+    work.mkdir()
+    return build_archive(data, work, work / NAME, origin="cli").path
+
+
+def revision_in(archive: Path) -> str | None:
+    with zipfile.ZipFile(archive) as zf:
+        return BackupManifest.from_bytes(zf.read(MANIFEST_ENTRY)).alembic_revision
+
+
+def restore(path: Path, *, dry_run: bool = True) -> int:
+    """``cmd_restore`` as ``dev.py backup restore`` runs it; an exception escaping it is a traceback for the user."""
+    try:
+        return backup_cli.cmd_restore(argparse.Namespace(test_db=False, archive=str(path), dry_run=dry_run))
+    except Exception as exc:
+        pytest.fail(f"backup restore raised {type(exc).__name__} ({exc}): the user would get a traceback instead of a message and exit code 1")
+
+
+def stages_left(root: Path) -> list[str]:
+    """What ``.restore/stage/`` holds but its lock: the copies a dry run left behind."""
+    folder = stages_dir(root)
+    return sorted(path.name for path in folder.iterdir() if path.name != STAGE_LOCK_FILE) if folder.is_dir() else []
+
+
+def outside_restore(root: Path) -> list[str]:
+    return [name for name in listing(root) if not name.startswith(".restore")]
+
+
+def test_restore_without_dry_run_exits_1_and_creates_nothing(tmp_path, monkeypatch, capsys, head_database):
+    print_section("cmd_restore")
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
+    archive = restorable(tmp_path, head_database)
+    before = listing(root)
+    assert restore(archive, dry_run=False) == 1, "without --dry-run, exit code 1"
+    out = capsys.readouterr().out
+    assert "❌ Only --dry-run is available for now" in out, f"the command says only --dry-run is available: {out}"
+    assert listing(root) == before, f"nothing is created in the data directory, not even .restore: {sorted(set(listing(root)) - set(before))}"
+    print_success("no --dry-run → 1, nothing created")
+
+
+def test_restore_of_a_missing_file_exits_1_and_creates_nothing(tmp_path, monkeypatch, capsys):
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
+    before = listing(root)
+    assert restore(tmp_path / "absent.zip") == 1, "a missing archive is exit code 1"
+    assert f"❌ No file at {tmp_path / 'absent.zip'}" in capsys.readouterr().out, "the command says there is no file"
+    assert listing(root) == before, f"nothing is created: {sorted(set(listing(root)) - set(before))}"
+    print_success("missing file → 1, nothing created")
+
+
+def test_a_dry_run_reports_what_a_restore_would_do_and_removes_its_copy(tmp_path, monkeypatch, capsys, head_database):
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
+    archive = restorable(tmp_path, head_database)
+    before, database = listing(root), sha256_of(root / DATABASE_ENTRY)
+    code = restore(archive)
+    out = capsys.readouterr().out
+    assert code == 0, f"a restorable archive is exit code 0: {out}"
+    said = [
+        f"🔎 Checking {archive} on a copy, in {stages_dir(root)}",
+        "   … checking",
+        "   … unpacking",
+        "   … verifying",
+        f"📦 Made by LibreFolio {APP_VERSION} (cli)",
+        f"   Database: revision {revision_in(archive)}, this LibreFolio's own: restored as it is",
+        f"   Files: {len(FILES)}",
+        "   Instance key: not included",
+        "   Administrators: ada_admin, zoe_admin",
+        RESTORABLE_LINE,
+    ]
+    assert [line for line in said if line not in out] == [], f"the dry run says what a restore would do: {out}"
+    assert "… upgrading" not in out and "⚠️" not in out and "❌" not in out, f"at the head: no upgrade, nothing to warn: {out}"
+    assert stages_left(root) == [], f"the copy is removed: {stages_left(root)}"
+    assert (outside_restore(root), sha256_of(root / DATABASE_ENTRY)) == (before, database), "the data directory is as it was"
+    print_success("dry run → 0, report printed, copy removed")
+
+
+def test_a_dry_run_of_a_backup_without_administrator_exits_1_and_says_why(tmp_path, monkeypatch, capsys, head_database):
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
+    assert restore(restorable(tmp_path, head_database, WITHOUT_ADMINISTRATOR)) == 1, "a blocked restore is exit code 1"
+    out = capsys.readouterr().out
+    assert "❌ The backup has no active administrator: after a restore nobody could manage the instance" in out, f"the blocker is said: {out}"
+    assert "Administrators:" not in out and "✅" not in out, f"no administrator named, nothing called restorable: {out}"
+    assert stages_left(root) == [], f"the copy is removed: {stages_left(root)}"
+    print_success("no active administrator → 1")
+
+
+@pytest.mark.parametrize(
+    ("case", "code"),
+    [
+        ("not-a-zip", "not_a_backup"),
+        ("no-manifest", "not_a_backup"),
+        ("another-librefolio", "revision_unknown"),
+        ("altered-entry", "checksum_mismatch"),
+        ("added-entry", "unexpected_entry"),
+    ],
+)
+def test_a_dry_run_of_a_refused_archive_exits_1_with_its_code(good_archive, tmp_path, monkeypatch, capsys, case, code):
+    """(k) ``another-librefolio``: the archives of (d), whose database records a revision this LibreFolio's migrations
+    do not have."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
+    archive = good_archive if case == "another-librefolio" else bad_archive(case, good_archive, tmp_path)
+    assert restore(archive) == 1, f"{case}: exit code 1"
+    out = capsys.readouterr().out
+    assert f"({code})" in out and "❌" in out and "✅" not in out, f"{case}: the refusal and its code {code}: {out}"
+    assert stages_left(root) == [], f"{case}: no copy left: {stages_left(root)}"
+    print_success(f"{case} → 1 ({code})")
+
+
+def test_a_dry_run_while_another_check_runs_exits_1(tmp_path, monkeypatch, capsys, head_database):
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
+    archive = restorable(tmp_path, head_database)
+    ensure_private_dir(stages_dir(root), root)
+    holder = jobs._RunLock(stages_dir(root) / STAGE_LOCK_FILE)
+    assert holder.try_acquire(), "precondition: the lock of the checks is free"
+    try:
+        code = restore(archive)
+    finally:
+        holder.release()
+    out = capsys.readouterr().out
+    assert code == 1 and "❌ Another archive is being checked" in out, f"busy: exit code 1 and a message, got {code}: {out}"
+    assert stages_left(root) == [], f"no copy made: {stages_left(root)}"
+    print_success("another check running → 1")
+
+
+@needs_symlinks
+def test_a_dry_run_names_a_restore_folder_that_is_a_link_and_writes_nothing_through_it(tmp_path, monkeypatch, capsys, head_database):
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "instance"))
+    archive = restorable(tmp_path, head_database)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    restore_dir(root).symlink_to(elsewhere, target_is_directory=True)
+    assert restore(archive) == 1, ".restore a link: exit code 1"
+    out = capsys.readouterr().out
+    assert f"❌ {restore_dir(root)} is not a plain folder (a link, or a file)" in out, f"the message names .restore: {out}"
+    assert list(elsewhere.iterdir()) == [], f"nothing is created through the link: {listing(elsewhere)}"
+    print_success(".restore a link → 1, named, nothing written through it")
+
+
+def upgrade_report(**changes) -> StagingReport:
+    """The report of an older backup's check, as staging writes it: two migrations, a table whose rows the upgrade
+    changed, one it left alone and one it created empty, a fix, both warnings of a broken reference added."""
+    staged_at = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
+    report = StagingReport(
+        stage_id=VALID_ID,
+        staged_at=staged_at,
+        expires_at=staged_at + timedelta(hours=24),
+        backup=StagedBackup(created_at=datetime(2026, 10, 15, 10, 15, tzinfo=UTC), app_version="v1.2.0", origin="ui", alembic_revision="004_older"),
+        app_version=APP_VERSION,
+        head_revision="006_head",
+        action="upgrade",
+        migrations=[AppliedMigration(revision="005_tokens", message="Accounts: tokens"), AppliedMigration(revision="006_head", message="Accounts: registration mode")],
+        post_migration_fixes=["event_types"],
+        tables={"users": TableRows(before=3, after=4), "brokers": TableRows(before=2, after=2), "account_tokens": TableRows(before=None, after=0)},
+        foreign_key_violations_before=0,
+        foreign_key_violations_after=1,
+        files=3,
+        files_size=2048,
+        database_size=1024 * 1024,
+        instance_key_included=False,
+        administrators=["ada_admin"],
+        warnings=["rows_changed", "foreign_key_violations_added"],
+        blockers=[],
+    )
+    return report.model_copy(update=changes)
+
+
+def test_the_report_of_an_upgrade_lists_its_migrations_changes_and_warnings(capsys):
+    """(k) ``_print_stage_report`` of an older backup: the revision upgraded, each migration, the tables whose rows the
+    upgrade changed (not the one it created empty: no row changed there), the fixes, and the warnings."""
+    report = upgrade_report()
+    backup_cli._print_stage_report(report)
+    out = capsys.readouterr().out
+    lines = [
+        "📦 Made by LibreFolio v1.2.0 (ui) on 2026-10-15 10:15:00 UTC",
+        "   Database: revision 004_older, upgraded on the copy to 006_head (2 migrations):",
+        "     - 005_tokens: Accounts: tokens",
+        "     - 006_head: Accounts: registration mode",
+        "   Post-migration fixes applied to the copy: event_types",
+        "   Rows: 6 in 3 tables, 1.0 MB",
+        "   Changed by the upgrade: users (3 → 4)",
+        "   Files: 3, 2.0 KB",
+        "   Administrators: ada_admin",
+        "⚠️  The upgrade changed the rows of some tables (listed above)",
+        "⚠️  The upgrade added broken references to the copy",
+    ]
+    assert [line for line in lines if line not in out.splitlines()] == [], f"every line of an upgrade's report: {out}"
+    backup_cli._print_stage_report(report.model_copy(update={"migrations": report.migrations[1:]}))
+    assert "(1 migration):" in capsys.readouterr().out, "one migration, singular"
+    print_success("upgrade report: migrations, changes, fixes, warnings")
+
+
+#: Tables of a report, and what «Changed by the upgrade» lists for them (``None``: no such line). A table absent on one
+#: side counts as empty: created or dropped empty, it changed no row.
+CHANGED_TABLES = [
+    pytest.param({"users": (3, 3), "plugin_settings": (None, 0), "old_cache": (0, None)}, None, id="only-tables-created-or-dropped-empty"),
+    pytest.param({"users": (3, 3), "plugin_settings": (None, 2)}, "plugin_settings (— → 2)", id="a-table-created-with-rows"),
+    pytest.param({"users": (3, 3), "old_cache": (5, None)}, "old_cache (5 → —)", id="a-table-dropped-with-rows"),
+]
+
+
+@pytest.mark.parametrize(("tables", "listed"), CHANGED_TABLES)
+def test_the_tables_an_upgrade_changed_are_those_whose_rows_differ(capsys, tables, listed):
+    """(k) «Changed by the upgrade» follows staging's ``rows_changed``: only the tables whose count differs, an absent
+    table counting as empty; with none, no such line at all."""
+    rows = {name: TableRows(before=before, after=after) for name, (before, after) in tables.items()}
+    backup_cli._print_stage_report(upgrade_report(tables=rows, warnings=["rows_changed"] if listed else []))
+    changed = [line for line in capsys.readouterr().out.splitlines() if "Changed by the upgrade" in line]
+    assert changed == ([f"   Changed by the upgrade: {listed}"] if listed else []), f"{tables}: {changed}"
+    print_success(f"{list(tables)}: {changed or 'no line'}")
+
+
+def test_the_script_checks_an_archive_for_a_restore(tmp_path, head_database):
+    """(k) ``python scripts/backup_cli.py restore ARCHIVE --dry-run``, as ``dev.py backup`` runs it."""
+    data = make_data_dir(tmp_path / "instance").resolve()
+    archive = restorable(tmp_path, head_database)
+    done = script("restore", str(archive), "--dry-run", env=child_env(data), cwd=tmp_path)
+    assert done.returncode == 0, f"restore --dry-run must exit 0, it exited {done.returncode}\n--- stdout\n{done.stdout[-TAIL:]}\n--- stderr\n{done.stderr[-TAIL:]}"
+    assert RESTORABLE_LINE in done.stdout and "Administrators: ada_admin, zoe_admin" in done.stdout, f"the report and its verdict: {done.stdout[-TAIL:]}"
+    assert stages_left(data) == [], f"the copy is removed: {stages_left(data)}"
+    print_success("script restore --dry-run → 0")
+
+
+def test_the_help_of_restore_says_what_a_dry_run_does(monkeypatch, capsys):
+    restore_help = help_of(monkeypatch, capsys, "backup", "restore")
+    assert "--dry-run Unpack the archive into a copy, upgrade and check it, report, then remove the copy; the instance is left as it is" in restore_help, f"--dry-run says what it does: {restore_help}"
+    group = help_of(monkeypatch, capsys, "backup")
+    assert "What a restore would do: unpacked, upgraded and checked on a copy, then removed" in group, f"backup --help shows the dry run: {group}"
+    print_success("restore --help and backup --help")

@@ -528,10 +528,11 @@ debito di traduzione di F-5 (di M).
   `:1789` e `:1806`, converte i prezzi uno a uno (`:1795`, `:1813`) e su un TRANSFER sposta l'unrealized al costo. Va
   in T-U5 con V2/P2 e R4 di T e con le quantità di B12: insieme 1½–2 g. Dettagli: idem, §14 e §17.6.
 - **B10 · `periodBasePnl` dichiarato e mai usato** — minimo; I, 10/10. `GrowthChart.svelte:594-600`.
-- **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
+- ✅ **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
   si contano solo per le valute tenute in cassa (`native_cash.py:271-279`; motore `:808` e `:922-923`). La cura cambia
   NAV e linee anche con la sola cassa in valuta base, quindi il golden della guardia andrebbe rigenerato: serve una
   decisione. Va in T-U1 o T-U5. Dettagli: idem, §14 e §17.6.
+  - **Chiusa** (16/10, 03:55) da J CP-6 (decisione 28, `58c10197c`), entrato col treno 87 (`628e3e49e`); golden W1 rigenerato.
 - **B12 · Le quantità dei contributi leggono le date future** — minimo, latente; I, 11/10. Senza `date_to`,
   `_get_transactions` (`portfolio_service.py:1721`) legge anche le righe future; l'unico chiamante, `get_report`
   (`:2234`), passa sempre la data di fine, quindi nessun effetto in produzione. Va in T-U5 con B8. Validare le date
@@ -1944,11 +1945,38 @@ plugin.
   - **Decisione D3 (coordinatore, 15/10):** T sposta `CONTRAST_PAIRS` da `themeTokens.gate.test.ts` a un modulo condiviso dopo T-8; il pannello lo legge da lì, senza copie.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab».
-- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10.
+- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10. ✅ 16/10: validato su `e44383f13`, con i commit `4cc601e57` e `88ef51358`; la correzione di svelte-check è nel commit del checkpoint finale.
   - **Dopo l'ingresso di T-8:** verifica del catalogo sui ruoli nuovi (barra verde, stati espliciti, terminale, interruttore, ombre, viola AI, hover dei campi) e una prova L1 a mano. Niente isole `.dark`/`.light`: T usa ruoli dedicati (D2).
   - **Dopo l'ingresso del modulo di DV** (`lib/theme/chartCategories.ts`, contratto C1–C4): livello `category` (scheda «Categorie», aggancio C3 con `categoryColor` su `LabHook`, segnale C4 `notifyChartColorsChange()`, export e `verify-export`, una riga nella skill, test unit ed E2E). «Per valore» non basta: tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro.
 
+  - **In corso (15/10, notte; T e DV entrati in `a0915bef9`):**
+    - i ruoli di T-8/T-8b sono tutti modificabili: 92 ruoli root e 88 alias, tutti col loro ruolo;
+    - prefissi delle classi allineati a `PREFIXES` (D-a), con 2 chip delle ombre;
+    - C4 emesso dall'engine, anche per le definizioni dei ruoli riscritte da L2;
+    - livello `category` per chiave, scritto; `verify-export` trova le righe di categoria per chiave e tema;
+    - `CHART_PATH_RE` accetta già `features/{dashboard,risk,brokers/lots}` (Y3, Y4b, Y5).
+
+    Checkpoint intermedio il 16/10 alle 02:0x (`4cc601e57`). Copia sostituita da `lookupKey` di TD-1 dopo il merge di base `0b229ef95` (02:15).
+    Validazione pesante su `e44383f13`, 16/10 03:26–03:50:
+    - unitari 712, gate 186, svelte-check 0 errori dopo una correzione di una riga mia;
+    - parità identica, MkDocs strict 0/0, `check-links` 96;
+    - E2E `live` 12, `all` 17 più 624 unitari, `e2e` a 4 worker 17, `check-orphans` verde;
+    - build di release con 0 tracce del Lab.
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Giro 3 della designer nel Lab» e «Cursore dell'opacità nell'editor».
+
+- **L-17 · Il selettore di elementi nomina la categoria di una fetta** — basso; L, 15/10 (L-16, punto 5, nel backlog su decisione del coordinatore).
+  - Oggi il selettore riporta i colori di un grafico, ma non la categoria (`type:ETF`) di una fetta: un colore può appartenere a due categorie, per esempio ETF e Tecnologia.
+  - Servirebbe che il grafico dichiarasse la chiave della fetta puntata, nell'opzione o con un attributo dati; da concordare con DV.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab».
+
+- **L-18 · Togliere i vecchi percorsi `components/` dei grafici dopo Y3 e Y5** — minimo; L, 16/10 (L-16).
+  - `CHART_PATH_RE` (`scan-colors.mjs`) accetta i due percorsi finché gli spostamenti della 1.3 non sono finiti. Y4b è già entrato e `components/risk` non esiste più.
+  - Dopo Y3 (`features/dashboard/`) e Y5 (`features/brokers/lots/`):
+    - togliere i rami `components/(dashboard|risk|brokers/lots)` della regex, le righe sintetiche corrispondenti di `scanColors.test.ts` e la parentesi sui due percorsi in `designer-lab.md`;
+    - aggiornare la costante `GROWTH` di `pickView.test.ts` e l'esempio JSON con `components/brokers/BrokerImportFilesModal.svelte`.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab», passo 7.
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2473,8 +2501,46 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   vicino e lo annota nel piano come **«da rivedere»**.
   - W3-a: le barre della dashboard prendono il ruolo del testo (più scure in chiaro, niente fluo in scuro); le barre
     categoriali «Costo d'acquisto» e «Liquidità» restano blu e smeraldo, in attesa di un ruolo categoriale.
+  - TD-3: i pulsanti attivi della card «Allocazione Patrimoniale» seguono la designer (`--lf-action`), non D-T16
+    (`--lf-checked`); solo in quel pannello.
+  - W3-c: i toast in scuro diventano pieni chiari col testo scuro, anche l'errore (`danger` + `on-status`, non
+    `danger-solid`); il banner della qualità dei dati tiene l'errore nel tono d'avviso, e per l'hover dei suoi pulsanti
+    manca un ruolo; la barra PAC «bilanciata» passa da `libre-green` a `success`, la «sconosciuta» va su `neutral` con
+    la traccia ancora di palette; i chip neutri su `bg-lf-neutral`.
+  - Rimandato: le due funzioni di segno di `brokers/lots/LotCustodyModal.svelte` (righe 103–114), dopo l'ingresso di J,
+    che ha il file aperto; `ui/input/DistributionEditor.svelte` (copie di `pacTargetBar`/`pacTargetTotal`) con W1-d,
+    dopo che G avrà cambiato l'asserzione `text-green-600` di `gallery.spec.ts:6067`. ✅ `LotCustodyModal` fatto il 16/10
+    dopo J CP-16 (I1).
+  - I1: le righe evidenziate delle liste su `bg-lf-selected`, più quiete in scuro della vecchia piena verde; il bordo
+    quasi nero del selettore dei segnali su `border-lf-input` (manca un bordo di campo forte); il filtro attivo di
+    `CheckMenu` sui ruoli `info`; l'avviso dentro il tooltip di `FxProviderSelect` resta `#fbbf24` finché
+    `ui/feedback/Tooltip.svelte` non passa a `bg-lf-inverse` (Q10 li lega: da proporre come lotto a parte). ✅ Q10 fatto
+    il 16/10.
+  - Q10: in scuro tutti i tooltip diventano chiari col testo scuro; tre ruoli `-on-inverse` nuovi (pericolo, info,
+    attenuato) col valore del tema opposto, la regola di Q10 estesa; info e attenuato a 4,54:1 in chiaro; l'ombra dei
+    tooltip è quella dei menu.
+  - W1-d: il suggerimento evidenziato di `TagInput` passa dal blu a `bg-lf-selected`.
+  - Rimandati da W1-d: `ui/input/ExactDecimalInput.svelte` ed `ExactQuantityInput.svelte`, insieme ai chiamanti che gli
+    passano classi di palette (`INPUT` del pianificatore PAC, `ui.ts:39`; `!bg-white` in `TxFormSingleSection` e
+    `TxFormPairSection`) e ai test che leggono i loro colori, con l'OK dei proprietari.
+  - W1-c, W1-e, W2-a (bozze dello slot, in ingresso col secondo slot): preset inattivi che si scuriscono al passaggio come
+    oggi; badge della durata personalizzata ancora ambra; tooltip, modali e onboarding sui ruoli (fondale delle modali e
+    del coachmark al 60 %, tessere del logo bianche anche in scuro, contorno di «Riprova» tenue sul banner).
+  - Da sapere per W5/W6: quando `AssetCurrencyChangeModal` porterà il suo bordo rosso sui ruoli (per esempio
+    `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
+    della modale, non un `contentClass`.
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
+- **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
+  `test-author` il 16/10 in I1, fuori dai colori. `SimpleSelect`: la lista resta aperta quando `disabled` o `loading` si
+  accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
+  `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
+  va tolto. Dettagli: piano di T, I1, passo 4.
+- **TC-12 · Dopo l'ingresso di Y5: la voce orfana del coachmark nel gate** — minimo; T, 16/10. Con W2-a il bagliore del
+  coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione `ARBITRARY_ALLOWED` di
+  `frontend/scripts/theme/theme-roles.mjs` (riga 84). La si toglie quando Y5 è entrato (Y cambia la riga 70 dello stesso
+  file), insieme ai commenti di `src/themeRoles.gate.test.ts` (righe ~218 e ~547) che descrivono ancora il vecchio
+  bagliore `rgba`. Dettagli: piano di T, «W1-c, W1-e e W2-a», passo 3.
 
 ---
 
@@ -2915,8 +2981,17 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: nascondere il link finché l'istanza non risponde, con uno stato `data-*` sulla scheda che le prove
     e la galleria possano aspettare. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
     «A6d.1».
-- **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; da E tramite il coordinatore
+- ✅ **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; chiusa in A6d (15/10); da E tramite il coordinatore
   (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
+- **A-21 · Lo username accetta qualsiasi testo, e finisce nel saluto delle email** — basso; dal coordinatore (15/10,
+  dalla revisione di sicurezza di E3).
+  - Oggi `username` ha solo una lunghezza (3–50): passano anche frasi intere, link e testo che imita un messaggio
+    del sistema, e le email di E lo mettono nel saluto.
+  - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
+    inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
+    password (decisione 37).
+- **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
+  verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -3604,6 +3679,27 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   (`123456789012.123456` torna `123456789012.123459`). Fino a ~1e10 il 6° decimale regge: nessun portafoglio personale
   ci arriva. Ma `backend-db.instructions.md` («`Numeric(18, 6)` for precision») fa credere a 18 cifre esatte. Proposta:
   scriverlo in quelle istruzioni e nella pagina dev del DB; nessun cambio di schema. Dettagli: piano J, §10 «CP-15».
+- **J-19 · Il PAC finisce in `worker_crashed` sotto carico** — da capire: OOM o timeout del worker; basso, robustezza;
+  segnalata da G tramite il coordinatore, 16/10. Il 15/10 alle 23:05, nella galleria G-13 dei colori, il 4° e il 5°
+  calcolo del PAC sono finiti in `tool_error` con `worker_crashed`: il processo isolato dello strumento è uscito prima
+  del risultato. Carico fra 80 e 96, macchina molto in swap. Rifatto con il carico a 40–61: 8 su 8 verdi. Il runtime dei
+  Tools non è cambiato da `g-final3`. Dettagli: checkpoint di G-13 dei colori.
+  - **Dal codice** (J, sola lettura): un superamento misurato della memoria dà `memory_limit`
+    (`tools/process_tree.py`, `observe_memory_limit`), un tempo scaduto dà `execution_timeout`
+    (`tools/executor.py`, `_read_exact`, `_wait_result`). `worker_crashed` vuol dire che il figlio è uscito o ha chiuso il
+    tubo senza nessuno dei due: ucciso da fuori, un limite colpito dentro il figlio, o un errore all'avvio sotto swap.
+  - **Proposta**: registrare nel log, e nelle metriche dell'elemento, il codice d'uscita del figlio (negativo = il
+    segnale) e il picco di memoria osservato. Alla prossima caduta, il triage con la skill `test-triage`. Il file è dei
+    Tools: lotto piccolo, d'accordo col proprietario del runtime.
+- ✅ **J-20 · `AllocationItem.value` si dice «0-100» ma con la liquidità negativa esce da quei limiti** — minimo,
+  chiarezza (contratto dell'API); segnalata da Y (Y10, decisione 49) tramite il coordinatore, 16/10.
+  `backend/app/schemas/portfolio.py:79` descrive `value` come «Percentage share (0-100)»: con la liquidità negativa le
+  quote positive superano 100 e la riga della liquidità va sotto zero. Cura: descrivere la quota sul totale netto, che
+  può superare 100 o scendere sotto zero quando la liquidità è negativa; poi `api sync`. Nessun valore cambia. Lotto: J,
+  dentro CP-6.
+  ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
+  0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
+  senza file tracciati cambiati. Commit: il checkpoint di CP-6.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -3748,6 +3844,15 @@ sulla base `23f6578f3`.
   - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
 
   Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
+- **B-11 · Debito di traduzione delle pagine admin di B2 e B8** — piccolo, doc; B, 15/10 (B2). Pagine inglesi scritte
+  da docs-writer, senza timbro. In it, fr ed es mancano:
+  - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»;
+  - in `configuration`, le righe nuove di «Main Options» e di «Secrets»;
+  - in `admin/index`, la riga di riepilogo, più tre aggiunte che le traduzioni non avevano già dal 12/10.
+
+  `hosting_providers` non ha nessuna traduzione: tutta la pagina, con le sezioni nuove `#panel-backups` e
+  `#restore-upload-limit`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
+  §13, «B2b — l'API della prova su copia».
 
 ## E · Email (fase 01)
 
@@ -3778,13 +3883,22 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   `StarletteDeprecationWarning` a ogni 422 delle quattro risposte di `api/v1/settings.py` che lo usano; il nome nuovo
   è `HTTP_422_UNPROCESSABLE_CONTENT` (lo usa `api/v1/email.py`); gli altri router scrivono `422`.
   Dettagli: piano 08, «E2.4».
-- **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
+- ✅ **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
   `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
   backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
   (`TypeError: "…" is not a function`), e con lui ogni pagina. Successo con `EmailInstanceConfig` (corretto: docstring
   su una riga). Le docstring di `backend/app/schemas` hanno 131 tratti tra doppi backtick: da sfuggire in
   `api sync` (un passo come `fix-openapi-discriminators.mjs`) o da vietare con un test sullo schema.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E2b.4».
+  - 16/10, E: chiusa con una guardia; il generatore non si tocca (decisione del coordinatore, nessun caso oggi). Il
+    rischio è più stretto del previsto. Un testo esce solo in quattro forme, ognuna con i suoi caratteri vietati:
+    `.describe()` su più righe e su una riga, le descrizioni Handlebars, il JSDoc. La docstring di un modello esce
+    solo quando un campo è tipizzato direttamente con lui. Oggi nessun testo rompe il client, e 49 componenti sono
+    latenti: basta un loro uso diretto come campo per romperlo.
+    La guardia è `schemas openapi-client-text`
+    (`test_openapi_client_text.py`, OCT-001…032). Legge `app.openapi()`, fallisce nominando campo, forma e
+    carattere, e scatta se cambiano la versione o le opzioni del generatore. La regola 4 di «Contract Rules» è in
+    `developer/api/overview.md`. Dettagli: piano 08, «E-5.0»…«E-5.3».
 - **E-6 · Il registro delle schede di Impostazioni importa ogni corpo di scheda** — minimo; E, 15/10 (E2b). Ogni
   scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
   (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un

@@ -73,7 +73,7 @@ reports partial portfolio results while a filtered asset is stale.
 | Mock provider refusal | `backend/app/services/asset_source_providers/mockprov/plugin.py` |
 | Dashboard CTA branch | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | Banner (icon per CTA) | `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` |
-| Lab action mapping | `frontend/src/lib/components/risk/syncTargets.ts` |
+| Lab action mapping | `frontend/src/lib/features/risk/syncTargets.ts` |
 | Service tests (`TestStalePriceDataQuality`) | `backend/test_scripts/test_services/test_financial/test_portfolio_service.py` |
 | Pure test (CTA) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_data_quality_report.py` |
 | E2E | `frontend/e2e/portfolio/stale-price-banner.spec.ts` |
