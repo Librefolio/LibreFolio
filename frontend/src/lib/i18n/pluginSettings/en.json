@@ -28,7 +28,7 @@
       "set": "Set",
       "setOn": "Set on {date}",
       "unset": "Not set",
-      "unreadable": "Saved, but this instance's key cannot read it: enter it again.",
+      "unreadable": "Saved, but this instance's key cannot read it. If an administrator can put the old key back, that comes first; otherwise enter it again.",
       "replace": "Replace",
       "clear": "Clear",
       "willClear": "It will be deleted when you save.",
