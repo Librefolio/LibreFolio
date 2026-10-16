@@ -49,5 +49,5 @@ investor rarely says aloud: does all this complexity earn more than a single wor
 | Role | Path |
 |------|------|
 | The thesis | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/01-tesi-e-quattro-domande.md` |
-| The four levels | `frontend/src/lib/components/risk/levels/RiskLevelsPanel.svelte` |
-| L3, the outward question | `frontend/src/lib/components/risk/levels/L3RiskAdjusted.svelte` |
+| The four levels | `frontend/src/lib/features/risk/levels/RiskLevelsPanel.svelte` |
+| L3, the outward question | `frontend/src/lib/features/risk/levels/L3RiskAdjusted.svelte` |

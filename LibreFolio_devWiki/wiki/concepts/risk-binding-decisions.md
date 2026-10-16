@@ -53,5 +53,5 @@ Checked on the code at `e3a55b85f`: D374 (`RISK_DISCARD_ATTEMPTS = 3` in `riskSt
 |------|------|
 | The list (README, «Decisioni che vincolano il lavoro») | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/README.md` |
 | The full decision records | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/04-decisioni-e-questioni-aperte.md` |
-| D374 | `frontend/src/lib/stores/risk/riskStore.svelte.ts` |
+| D374 | `frontend/src/lib/features/risk/riskStore.svelte.ts` |
 | D380, D381 | `backend/app/services/risk/metrics.py` |
