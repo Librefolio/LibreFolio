@@ -253,15 +253,15 @@ Generated: ${new Date().toISOString()}
     }
 </script>
 
-<div class="space-y-8" data-testid="about-tab" data-busy={isLoading ? 'true' : 'false'} aria-busy={isLoading}>
+<div class="space-y-8 text-lf-primary" data-testid="about-tab" data-busy={isLoading ? 'true' : 'false'} aria-busy={isLoading}>
     <!-- App Info -->
     <div class="flex items-center space-x-4">
-        <div class="w-14 h-14 rounded-xl shadow-sm flex items-center justify-center p-2" style="background:#fff">
+        <div class="w-14 h-14 rounded-xl shadow-sm flex items-center justify-center p-2 bg-lf-logo shadow-lf-shadow-card">
             <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
         </div>
         <div>
-            <h3 class="text-xl font-bold text-gray-800" data-testid="about-app-name">LibreFolio</h3>
-            <button type="button" class="text-gray-500 hover:text-gray-700 transition-colors cursor-pointer text-left" title={$_('changelog.title')} onclick={() => (changelogOpen = true)} data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</button>
+            <h3 class="text-xl font-bold text-lf-primary" data-testid="about-app-name">LibreFolio</h3>
+            <button type="button" class="text-lf-muted hover:text-lf-secondary transition-colors cursor-pointer text-left" title={$_('changelog.title')} onclick={() => (changelogOpen = true)} data-testid="about-version">{$_('settings.version')} {systemInfo?.app_version ?? '...'}</button>
         </div>
     </div>
 
@@ -269,7 +269,7 @@ Generated: ${new Date().toISOString()}
 
     <!-- Description -->
     <div class="space-y-2">
-        <p class="text-gray-600">
+        <p class="text-lf-secondary">
             {$_('settings.aboutDescription')}
         </p>
     </div>
@@ -277,59 +277,59 @@ Generated: ${new Date().toISOString()}
     <!-- Links -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <!-- Website -->
-        <a class="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all group" href={websiteUrl} rel="noopener noreferrer" target="_blank">
-            <Globe class="text-gray-700" size={24} />
+        <a class="flex items-center space-x-3 p-4 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-all group" href={websiteUrl} rel="noopener noreferrer" target="_blank">
+            <Globe class="text-lf-secondary" size={24} />
             <div class="flex-1">
-                <p class="font-medium text-gray-700 flex items-center">
+                <p class="font-medium text-lf-secondary flex items-center">
                     {$_('settings.officialWebsite')}
                     <ExternalLink class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" size={14} />
                 </p>
-                <p class="text-sm text-gray-500">{$_('settings.visitWebsite')}</p>
+                <p class="text-sm text-lf-muted">{$_('settings.visitWebsite')}</p>
             </div>
         </a>
 
         <!-- GitHub -->
-        <a class="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all group" href={githubUrl} rel="noopener noreferrer" target="_blank">
-            <Github class="text-gray-700" size={24} />
+        <a class="flex items-center space-x-3 p-4 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-all group" href={githubUrl} rel="noopener noreferrer" target="_blank">
+            <Github class="text-lf-secondary" size={24} />
             <div class="flex-1">
-                <p class="font-medium text-gray-700 flex items-center">
+                <p class="font-medium text-lf-secondary flex items-center">
                     {$_('settings.githubRepo')}
                     <ExternalLink class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" size={14} />
                 </p>
-                <p class="text-sm text-gray-500">{$_('settings.viewSource')}</p>
+                <p class="text-sm text-lf-muted">{$_('settings.viewSource')}</p>
             </div>
         </a>
 
         <!-- License -->
-        <a class="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all group md:col-span-2" href={githubUrl + '/blob/main/LICENSE'} rel="noopener noreferrer" target="_blank">
-            <Scale class="text-gray-700" size={24} />
+        <a class="flex items-center space-x-3 p-4 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-all group md:col-span-2" href={githubUrl + '/blob/main/LICENSE'} rel="noopener noreferrer" target="_blank">
+            <Scale class="text-lf-secondary" size={24} />
             <div class="flex-1">
-                <p class="font-medium text-gray-700 flex items-center">
+                <p class="font-medium text-lf-secondary flex items-center">
                     {$_('settings.license')}
                     <ExternalLink class="ml-1 opacity-0 group-hover:opacity-100 transition-opacity" size={14} />
                 </p>
-                <p class="text-sm text-gray-500">GNU Affero General Public License v3.0 (AGPL-3.0)</p>
+                <p class="text-sm text-lf-muted">GNU Affero General Public License v3.0 (AGPL-3.0)</p>
             </div>
         </a>
     </div>
 
     <!-- Support -->
-    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800/60" data-testid="about-support-card">
+    <div class="rounded-xl border border-lf-subtle bg-lf-panel p-4 shadow-sm shadow-lf-shadow-card" data-testid="about-support-card">
         <div class="mb-4 space-y-1">
-            <h4 class="text-md font-semibold text-gray-800 dark:text-slate-100">{$_('support.title')}</h4>
-            <p class="text-sm leading-relaxed text-gray-600 dark:text-slate-300">{$_('support.description')}</p>
+            <h4 class="text-md font-semibold text-lf-primary">{$_('support.title')}</h4>
+            <p class="text-sm leading-relaxed text-lf-secondary">{$_('support.description')}</p>
         </div>
         <SupportActions onShare={openSocialShare} />
     </div>
 
     <!-- System Info with Copy Button -->
-    <div class="pt-6 border-t border-gray-200">
+    <div class="pt-6 border-t border-lf-subtle">
         <div class="flex items-center justify-between mb-4">
-            <h4 class="text-md font-medium text-gray-700">{$_('settings.systemInfo')}</h4>
-            <button class="flex items-center space-x-2 px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="about-copy-report" disabled={!systemInfo} onclick={copySystemInfo}>
+            <h4 class="text-md font-medium text-lf-secondary">{$_('settings.systemInfo')}</h4>
+            <button class="flex items-center space-x-2 px-3 py-1.5 text-sm bg-lf-panel hover:bg-lf-neutral rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" data-testid="about-copy-report" disabled={!systemInfo} onclick={copySystemInfo}>
                 {#if copied}
-                    <Check size={16} class="text-green-600" />
-                    <span class="text-green-600">{$_('common.copied')}</span>
+                    <Check size={16} class="text-lf-success" />
+                    <span class="text-lf-success">{$_('common.copied')}</span>
                 {:else}
                     <Copy size={16} />
                     <span>{$_('settings.copyForIssue')}</span>
@@ -341,86 +341,86 @@ Generated: ${new Date().toISOString()}
             <LoadingSpinner />
         {:else if systemInfo}
             <div class="grid grid-cols-2 gap-4 text-sm">
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <Tag size={18} class="text-libre-green mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <Tag size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-gray-500 text-xs">{$_('settings.appVersion')}</p>
-                        <p class="font-medium text-gray-700">{systemInfo.app_version}</p>
+                        <p class="text-lf-muted text-xs">{$_('settings.appVersion')}</p>
+                        <p class="font-medium text-lf-secondary">{systemInfo.app_version}</p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
                     <span class="text-lg mt-0.5 shrink-0">🐍</span>
                     <div>
-                        <p class="text-gray-500 text-xs">{$_('settings.pythonVersion')}</p>
-                        <p class="font-medium text-gray-700">{systemInfo.python_version}</p>
+                        <p class="text-lf-muted text-xs">{$_('settings.pythonVersion')}</p>
+                        <p class="font-medium text-lf-secondary">{systemInfo.python_version}</p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <Monitor size={18} class="text-purple-500 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <Monitor size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-gray-500 text-xs">{$_('settings.operatingSystem')}</p>
-                        <p class="font-medium text-gray-700">{systemInfo.os_name} {systemInfo.os_version}</p>
+                        <p class="text-lf-muted text-xs">{$_('settings.operatingSystem')}</p>
+                        <p class="font-medium text-lf-secondary">{systemInfo.os_name} {systemInfo.os_version}</p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <HardDrive size={18} class="text-orange-500 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <HardDrive size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div class="flex-1 min-w-0">
-                        <p class="text-gray-500 text-xs">{$_('settings.platform')}</p>
-                        <p use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-gray-700 text-xs" title={systemInfo.platform}>{systemInfo.platform}</p>
+                        <p class="text-lf-muted text-xs">{$_('settings.platform')}</p>
+                        <p use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-lf-secondary text-xs" title={systemInfo.platform}>{systemInfo.platform}</p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <Container size={18} class="text-cyan-600 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <Container size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-gray-500 text-xs">{$_('settings.deploymentMode')}</p>
-                        <p class="font-medium text-gray-700">
+                        <p class="text-lf-muted text-xs">{$_('settings.deploymentMode')}</p>
+                        <p class="font-medium text-lf-secondary">
                             {systemInfo.deployment_mode === 'docker' ? $_('settings.deploymentModeDocker') : $_('settings.deploymentModeLocal')}
                         </p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <AppWindow size={18} class="text-sky-500 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <AppWindow size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div class="flex-1 min-w-0">
-                        <p class="text-gray-500 text-xs">{$_('settings.browser')}</p>
-                        <p use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-gray-700 text-xs" title={userAgent}>{userAgent}</p>
+                        <p class="text-lf-muted text-xs">{$_('settings.browser')}</p>
+                        <p use:scrollOnOverflow class="{overflowScrollTextClass} font-medium text-lf-secondary text-xs" title={userAgent}>{userAgent}</p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <Maximize2 size={18} class="text-teal-500 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <Maximize2 size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-gray-500 text-xs">{$_('settings.viewport')}</p>
-                        <p class="font-medium text-gray-700">{viewportWidth} × {viewportHeight}</p>
+                        <p class="text-lf-muted text-xs">{$_('settings.viewport')}</p>
+                        <p class="font-medium text-lf-secondary">{viewportWidth} × {viewportHeight}</p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <Layers size={18} class="text-indigo-500 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <Layers size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-gray-500 text-xs flex items-center gap-1">
+                        <p class="text-lf-muted text-xs flex items-center gap-1">
                             {$_('settings.devicePixelRatio')}
                             <Tooltip text={$_('settings.devicePixelRatioHint')} position="top">
-                                <Info size={12} class="text-gray-400 hover:text-libre-green cursor-help transition-colors" />
+                                <Info size={12} class="text-lf-muted hover:text-lf-link cursor-help transition-colors" />
                             </Tooltip>
                         </p>
-                        <p class="font-medium text-gray-700">{devicePixelRatio}x</p>
+                        <p class="font-medium text-lf-secondary">{devicePixelRatio}x</p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <SunMoon size={18} class="text-amber-500 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <SunMoon size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-gray-500 text-xs">{$_('settings.theme')}</p>
-                        <p class="font-medium text-gray-700">
+                        <p class="text-lf-muted text-xs">{$_('settings.theme')}</p>
+                        <p class="font-medium text-lf-secondary">
                             {$_(THEME_LABELS[themePreference].key)}
                             {#if themePreference === 'auto'}
-                                <span class="text-gray-400">({$_(THEME_LABELS[themeResolved].key)})</span>
+                                <span class="text-lf-muted">({$_(THEME_LABELS[themeResolved].key)})</span>
                             {/if}
                         </p>
                     </div>
                 </div>
-                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                    <Languages size={18} class="text-rose-500 mt-0.5 shrink-0" />
+                <div class="flex items-start space-x-3 p-3 bg-lf-panel rounded-lg">
+                    <Languages size={18} class="text-lf-link mt-0.5 shrink-0" />
                     <div>
-                        <p class="text-gray-500 text-xs">{$_('settings.language')}</p>
-                        <p class="font-medium text-gray-700">{LOCALE_NAMES[currentLocale]}</p>
+                        <p class="text-lf-muted text-xs">{$_('settings.language')}</p>
+                        <p class="font-medium text-lf-secondary">{LOCALE_NAMES[currentLocale]}</p>
                     </div>
                 </div>
             </div>
@@ -429,15 +429,15 @@ Generated: ${new Date().toISOString()}
 
     <!-- Installed Plugins -->
     {#if !isLoading}
-        <div class="pt-6 border-t border-gray-200">
-            <h4 class="text-md font-medium text-gray-700 mb-4">{$_('settings.installedPlugins')}</h4>
+        <div class="pt-6 border-t border-lf-subtle">
+            <h4 class="text-md font-medium text-lf-secondary mb-4">{$_('settings.installedPlugins')}</h4>
 
             <!-- Asset Providers -->
             {#if assetProviders.length > 0}
                 <details class="mb-3 group">
-                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <span class="text-sm font-medium text-gray-700">{$_('settings.assetProviders')} ({assetProviders.length})</span>
-                        <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
+                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                        <span class="text-sm font-medium text-lf-secondary">{$_('settings.assetProviders')} ({assetProviders.length})</span>
+                        <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
                         {#each assetProviders as p}
@@ -449,15 +449,15 @@ Generated: ${new Date().toISOString()}
                                 class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-libre-green hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
                                 {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
-                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-lf-panel p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-libre-green/10 text-libre-green flex items-center justify-center text-xs font-bold shrink-0">
                                         {codeInitials(p.code)}
                                     </div>
                                 {/if}
                                 <div class="min-w-0">
-                                    <p class="text-sm font-medium text-gray-800 truncate">{p.name}</p>
-                                    <p class="text-xs text-gray-400 truncate">{p.code}</p>
+                                    <p class="text-sm font-medium text-lf-primary truncate">{p.name}</p>
+                                    <p class="text-xs text-lf-muted truncate">{p.code}</p>
                                 </div>
                             </svelte:element>
                         {/each}
@@ -468,9 +468,9 @@ Generated: ${new Date().toISOString()}
             <!-- FX Providers -->
             {#if fxProviders.length > 0}
                 <details class="mb-3 group">
-                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <span class="text-sm font-medium text-gray-700">{$_('settings.fxProviders')} ({fxProviders.length})</span>
-                        <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
+                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                        <span class="text-sm font-medium text-lf-secondary">{$_('settings.fxProviders')} ({fxProviders.length})</span>
+                        <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
                         {#each fxProviders as p}
@@ -482,15 +482,15 @@ Generated: ${new Date().toISOString()}
                                 class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getProviderUrl(p) ? 'hover:border-blue-400 hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
                                 {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
-                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
+                                    <img src={p.icon_url} alt={p.name} class="w-8 h-8 rounded object-contain shrink-0 bg-lf-panel p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-blue-500/10 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
                                         {p.code.slice(0, 3).toUpperCase()}
                                     </div>
                                 {/if}
                                 <div class="min-w-0">
-                                    <p class="text-sm font-medium text-gray-800 truncate">{p.name}</p>
-                                    <p class="text-xs text-gray-400 truncate">{p.code}</p>
+                                    <p class="text-sm font-medium text-lf-primary truncate">{p.name}</p>
+                                    <p class="text-xs text-lf-muted truncate">{p.code}</p>
                                 </div>
                             </svelte:element>
                         {/each}
@@ -501,9 +501,9 @@ Generated: ${new Date().toISOString()}
             <!-- Import Plugins -->
             {#if importPlugins.length > 0}
                 <details class="mb-3 group">
-                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                        <span class="text-sm font-medium text-gray-700">{$_('settings.importPlugins')} ({importPlugins.length})</span>
-                        <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
+                    <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                        <span class="text-sm font-medium text-lf-secondary">{$_('settings.importPlugins')} ({importPlugins.length})</span>
+                        <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                     </summary>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
                         {#each importPlugins as p}
@@ -515,15 +515,15 @@ Generated: ${new Date().toISOString()}
                                 class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-lg shadow-sm {getDocsUrl(p) ? 'hover:border-amber-400 hover:shadow-md cursor-pointer transition-all' : ''}"
                             >
                                 {#if p.icon_url && !failedIconUrls.has(p.icon_url)}
-                                    <img src={p.icon_url} alt={brimPluginName(p, $_)} class="w-8 h-8 rounded object-contain shrink-0 bg-gray-50 p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
+                                    <img src={p.icon_url} alt={brimPluginName(p, $_)} class="w-8 h-8 rounded object-contain shrink-0 bg-lf-panel p-0.5" onerror={() => p.icon_url && markIconFailed(p.icon_url)} />
                                 {:else}
                                     <div class="w-8 h-8 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center text-xs font-bold shrink-0">
                                         {codeInitials(p.code)}
                                     </div>
                                 {/if}
                                 <div class="min-w-0">
-                                    <p class="text-sm font-medium text-gray-800 truncate">{brimPluginName(p, $_)}</p>
-                                    <p class="text-xs text-gray-400 truncate">{p.code}</p>
+                                    <p class="text-sm font-medium text-lf-primary truncate">{brimPluginName(p, $_)}</p>
+                                    <p class="text-xs text-lf-muted truncate">{p.code}</p>
                                 </div>
                             </svelte:element>
                         {/each}
@@ -533,9 +533,9 @@ Generated: ${new Date().toISOString()}
 
             <!-- Installed Signals -->
             <details class="mb-3 group" data-testid="about-installed-signals">
-                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <span class="text-sm font-medium text-gray-700">{$_('settings.installedSignals')} ({installedSignals.length})</span>
-                    <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
+                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                    <span class="text-sm font-medium text-lf-secondary">{$_('settings.installedSignals')} ({installedSignals.length})</span>
+                    <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                 </summary>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3 pl-1">
                     {#each installedSignals as signal}
@@ -551,8 +551,8 @@ Generated: ${new Date().toISOString()}
                                 {signal.icon}
                             </div>
                             <div class="min-w-0">
-                                <p class="text-sm font-medium text-gray-800 truncate">{signal.displayNameKey ? $_(signal.displayNameKey) : signal.displayName}</p>
-                                <p class="text-xs text-gray-400 truncate">{signal.backendSignalCode ?? signal.type}</p>
+                                <p class="text-sm font-medium text-lf-primary truncate">{signal.displayNameKey ? $_(signal.displayNameKey) : signal.displayName}</p>
+                                <p class="text-xs text-lf-muted truncate">{signal.backendSignalCode ?? signal.type}</p>
                             </div>
                         </svelte:element>
                     {/each}
@@ -561,25 +561,30 @@ Generated: ${new Date().toISOString()}
 
             <!-- Plugin Diagnostics -->
             <details bind:open={toolPanelOpen} class="mb-3 group" data-testid="about-plugin-diagnostics">
-                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <span class="text-sm font-medium text-gray-700">{$_('settings.pluginDiagnostics')}</span>
-                    <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
+                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                    <span class="text-sm font-medium text-lf-secondary">{$_('settings.pluginDiagnostics')}</span>
+                    <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                 </summary>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 pl-1">
                     {#each PLUGIN_SYSTEMS as definition}
-                        <div class="p-3 bg-white border border-gray-100 rounded-lg shadow-sm" data-testid={'about-plugin-diagnostics-' + definition.system} data-status={failuresForSystem(definition.system).length > 0 ? 'failed' : 'ok'} data-failures={failuresForSystem(definition.system).length}>
-                            <p class="text-sm font-medium text-gray-800 mb-2">{$_(definition.labelKey)}</p>
+                        <div
+                            class="p-3 bg-lf-card border border-lf-subtle rounded-lg shadow-sm shadow-lf-shadow-card"
+                            data-testid={'about-plugin-diagnostics-' + definition.system}
+                            data-status={failuresForSystem(definition.system).length > 0 ? 'failed' : 'ok'}
+                            data-failures={failuresForSystem(definition.system).length}
+                        >
+                            <p class="text-sm font-medium text-lf-primary mb-2">{$_(definition.labelKey)}</p>
                             {#if failuresForSystem(definition.system).length > 0}
                                 <div class="space-y-2">
                                     {#each failuresForSystem(definition.system) as failure}
-                                        <div class="rounded-md bg-red-50 border border-red-100 p-2">
-                                            <p class="text-xs font-medium text-red-700">{failure.filename}</p>
-                                            <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-red-600" title={failure.error}>{failure.error}</p>
+                                        <div class="rounded-md bg-lf-danger-soft border border-lf-danger-line p-2">
+                                            <p class="text-xs font-medium text-lf-danger-on-soft">{failure.filename}</p>
+                                            <p use:scrollOnOverflow class="{overflowScrollTextClass} text-xs text-lf-danger" title={failure.error}>{failure.error}</p>
                                         </div>
                                     {/each}
                                 </div>
                             {:else}
-                                <div class="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-100 rounded-md p-2">
+                                <div class="flex items-center gap-2 text-xs text-lf-success-on-soft bg-lf-success-soft border border-lf-success-line rounded-md p-2">
                                     <Check size={14} class="shrink-0" />
                                     <span>{$_('settings.pluginDiagnosticsAllLoaded')}</span>
                                 </div>
@@ -595,20 +600,20 @@ Generated: ${new Date().toISOString()}
     <SocialShareModal open={sharePlatform !== null} platform={sharePlatform ?? 'x'} onClose={closeSocialShare} />
 
     <!-- Credits with foldable dependencies -->
-    <div class="pt-6 border-t border-gray-200">
-        <h4 class="text-md font-medium text-gray-700 mb-4">{$_('settings.credits')}</h4>
+    <div class="pt-6 border-t border-lf-subtle">
+        <h4 class="text-md font-medium text-lf-secondary mb-4">{$_('settings.credits')}</h4>
 
         {#if systemInfo}
             <!-- Backend Libraries (foldable) -->
             <details class="mb-3 group">
-                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <span class="text-sm font-medium text-gray-700">{$_('settings.backendLibraries')} ({systemInfo.backend_dependencies.length})</span>
-                    <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
+                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                    <span class="text-sm font-medium text-lf-secondary">{$_('settings.backendLibraries')} ({systemInfo.backend_dependencies.length})</span>
+                    <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                 </summary>
                 <div class="flex flex-wrap gap-2 mt-3 pl-1">
                     {#each systemInfo.backend_dependencies as dep}
-                        <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
-                            {dep.name} <span class="text-gray-400">{dep.version}</span>
+                        <span class="px-2 py-1 bg-lf-panel text-lf-secondary rounded text-xs">
+                            {dep.name} <span class="text-lf-muted">{dep.version}</span>
                         </span>
                     {/each}
                 </div>
@@ -616,14 +621,14 @@ Generated: ${new Date().toISOString()}
 
             <!-- Frontend Libraries (foldable) -->
             <details class="mb-3 group">
-                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <span class="text-sm font-medium text-gray-700">{$_('settings.frontendLibraries')} ({systemInfo.frontend_dependencies.length})</span>
-                    <ChevronDown size={16} class="text-gray-400 transition-transform group-open:rotate-180" />
+                <summary class="flex items-center justify-between cursor-pointer select-none p-3 bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors">
+                    <span class="text-sm font-medium text-lf-secondary">{$_('settings.frontendLibraries')} ({systemInfo.frontend_dependencies.length})</span>
+                    <ChevronDown size={16} class="text-lf-muted transition-transform group-open:rotate-180" />
                 </summary>
                 <div class="flex flex-wrap gap-2 mt-3 pl-1">
                     {#each systemInfo.frontend_dependencies as dep}
-                        <span class="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
-                            {dep.name} <span class="text-gray-400">{dep.version}</span>
+                        <span class="px-2 py-1 bg-lf-panel text-lf-secondary rounded text-xs">
+                            {dep.name} <span class="text-lf-muted">{dep.version}</span>
                         </span>
                     {/each}
                 </div>
@@ -631,7 +636,7 @@ Generated: ${new Date().toISOString()}
         {/if}
 
         <!-- Made with love -->
-        <div class="flex items-center justify-center space-x-2 text-gray-500 pt-4 border-t border-gray-100">
+        <div class="flex items-center justify-center space-x-2 text-lf-muted pt-4 border-t border-lf-subtle">
             <span>{$_('settings.madeWith')}</span>
             <Heart class="text-red-500" size={16} />
             <span>{$_('settings.inItaly')}</span>
