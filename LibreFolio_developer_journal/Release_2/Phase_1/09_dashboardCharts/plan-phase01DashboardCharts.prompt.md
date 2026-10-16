@@ -2276,3 +2276,111 @@ scrivono qui quando partono.
 >
 > **Checkpoint Y-11**: il JSON del corpus e `timeSeriesAggregationGolden.test.ts`; il backlog (Y-11 ✅) e il piano
 > vanno nel journal.
+> - **Salvato**: `4c1f2fee6` (test) e `c27c34619` (journal). Y-11 entra con Y3 e Y9, dopo le E2E.
+
+### Y9-3 — test e guardie ✅ (2026-10-16, 03:57–04:08; checkpoint mandato alle 04:08)
+
+> **Note implementazione**:
+> - In `chartFont.ts`, due guardie `try`. Se `document.fonts.load` lancia un'eccezione sincrona, la richiesta si
+>   considera chiusa: senza la guardia, la richiesta che parte all'import romperebbe l'import di tutti i grafici. Se la
+>   lancia `check`, `chartFontLoaded()` restituisce true e il ridisegno viene saltato.
+> - `test-author`:
+>   - `chartFont.load.test.ts`, 16 test: i 13 di prima e 3 nuovi sulle guardie. Ha anche provato che, su una copia
+>     senza guardie, i 3 nuovi test falliscono;
+>   - `PriceChartFull.tooltipEscape.test.ts`, 17 test;
+>   - `chartFlagFont.test.ts`, 16 test.
+> - La registrazione di `chartFont.load.test.ts` in `chart-safety-unit` è rimessa con la patch salvata.
+>
+> **Prove**: `chart-safety-unit` dal runner, 7 file e 72 test; `echartsTooltipHelpers.test.ts` 47; svelte-check 0 errori
+> e 0 avvisi; `check-orphans` pulito, con i 2 rossi di Y10 messi da parte; Prettier e `git diff --check` puliti.
+
+### Y3 + Y9 — E2E d'ingresso ⏳ (slot 2, 04:30–05:00)
+
+> **Note implementazione**: l'elenco l'ha approvato il coordinatore alle 04:10. Prima le spec principali, poi le altre se
+> c'è tempo. Lo slot deve essere libero entro le 05:00, per la galleria di X. Le 3 «Live price direction flash» devono
+> essere verdi: la correzione di Z è entrata con il treno 60. Niente galleria per Y3 e Y9: la copre la candidata dei
+> colori delle 05:30.
+> - **Script**: `/tmp/libreFolio_y3y9_e2e.sh`, una spec alla volta, `--workers 2` e `nice`. Ogni spec ha un orario
+>   oltre il quale non parte.
+> - **Ordine**: `front-portfolio dashboard`, `front-asset asset-detail`, `asset-name-xss`, `front-fx fx-detail`,
+>   `front-broker detail`, `front-portfolio dashboard-cache`, `front-fx fx-flag-font`; poi, se c'è tempo,
+>   `privacy-masking`, `yield-on-cost-real`, `broker-filter-label` e `broker-icons`.
+> - **04:44, nessun via allo slot.** Le 7 spec principali chiedono circa 34 minuti e non stanno più prima delle 05:00.
+>   Ho chiesto al coordinatore di spostarle dopo la galleria di X (mia preferenza), oppure di lanciare subito solo
+>   `dashboard`. HEAD `fd77a13ee`: Y9-3 è committato in `fd77a13ee`.
+
+### Y10 — E2E rossa scritta ✅ (2026-10-16, 04:12–04:44; `test-author`, niente lanciato)
+
+> **Note implementazione**: `frontend/e2e/portfolio/allocation-negative-cash.spec.ts`, 4 test, non registrato.
+> - **Endpoint intercettato**: la Dashboard legge il blocco `summary` di `POST /api/v1/portfolio/report`
+>   (`portfolioStore.fetchReport`). Il commento in testa al rosso Vitest, che dice «GET /portfolio/summary», è sbagliato:
+>   lo correggo con il codice di Y10.
+> - **La riscrittura**, solo per i tipi e i settori:
+>   - via la riga di liquidità vera, e una riga «Liquidity» con −P/6, dove P è il totale delle posizioni;
+>   - le quote ricalcolate con la formula del backend, quindi i positivi arrivano a circa 120;
+>   - lo schema verificato con il `PortfolioSummary` del client generato.
+> - **I test**:
+>   - rossi: la nota, firmata e nella valuta, sulle schede tipo e settore; la privacy attivata e disattivata sul posto
+>     (le cifre mascherate, il segno e la valuta restano). Tutti e due falliscono alla prima asserzione sulla nota;
+>   - guardie verdi: nessun arco per la liquidità, letto con l'hook `__lfChart`; senza intercettazione, nessuna nota.
+> - **Assunzioni da verificare alla prima corsa**: un solo report per caricamento, `route.fulfill` con il corpo
+>   modificato, e l'importo della nota in un solo pezzo (`-8,333.33 € 🇪🇺 EUR`). L'ultima la seguo nel codice.
+> - **04:45–04:49, coordinatore**: le E2E di Y3 e Y9 si spostano dopo le 06:45, dopo lo slot dei colori di DV, all'ora
+>   che darà. Y10 ha il via, codice compreso, con le prove leggere fino alle 05:25. Alle 06:45:
+>   - se Y10 è completo, verde e committato, una sola corsa per Y3, Y9 e Y10;
+>   - altrimenti Y10 va salvato come patch fuori dal repo, e la corsa gira sulla HEAD committata.
+>   Dalle 05:30 alle 06:45 la macchina è ferma: nessuna prova, si scrive soltanto.
+> - **C-34**: la correzione di W a `TransactionBulkModal` è in `dev_release2` (`60917185c`), non ancora nella mia base.
+>   La voce dell'elenco ammesso in `escapeHtml.single.test.ts` si toglie insieme all'aggiornamento della base che porta
+>   quel commit: tolta adesso, il test diventerebbe rosso, perché nel mio albero la copia c'è ancora.
+
+### Y10 — 54-1, Y-6, decisione 49: il codice ✅ (2026-10-16, 04:45–05:00)
+
+> **Note implementazione**:
+> - **`features/dashboard/AllocationHistoryChart.svelte`**:
+>   - l'asse ha `min` e `max` in forma di funzione: 0–100 entro un punto di tolleranza, perché le quote arrotondate a
+>     due decimali possono sommare 100,01; fuori da quella fascia segue la pila, alla decina successiva;
+>   - `stackStrategy: 'samesign'` è dichiarato su ogni serie;
+>   - nel tooltip per tipo, le famiglie con valore assoluto > 0,01. La regola dei primi cinque oltre sei, e il
+>     «Remaining», contano solo le famiglie positive; quelle negative vengono dopo, ognuna con la sua riga
+>     `data-allocation-family`. Per farlo il corpo del ciclo è diventato `familyHtml`;
+>   - nel tooltip per settore, le voci negative hanno righe proprie dopo `buildTooltipByThreshold`, che riceve solo i
+>     positivi. L'helper condiviso resta com'è.
+> - **`features/dashboard/AllocationPanel.svelte`**:
+>   - Y-6: `emoji` tolto da `AllocEntry` e da `toAllocEntries`;
+>   - `negativeCash()` legge l'`amount` della riga `Liquidity` quando è sotto zero;
+>   - la nota `allocation-negative-cash-note` (`dashboard.allocationNegativeCash`, con l'importo scritto da
+>     `formatCurrencyAmountPlain` nella valuta mostrata, quindi mascherato con il segno fuori, D8) compare solo nella
+>     vista «ora», per tipo e per settore;
+>   - la nota è un fratello sotto l'area del grafico, non dentro il contenitore assoluto della torta: per i
+>     portafogli senza scoperto il DOM non cambia, e con lui gli scatti. Usa solo utility `*-lf-*`.
+> - **`components/charts/AllocationPieChart.svelte`**: il commento «0-100» ora dice che è una quota del totale netto.
+> - **i18n**: `./dev.py i18n add` ha messo `dashboard.allocationNegativeCash` nella sorgente `dashboard`, in 4 lingue
+>   (EN «Negative cash: {amount}», IT «Liquidità negativa: {amount}», FR «Liquidités négatives : {amount}», con lo
+>   spazio prima dei due punti come le altre voci FR, ES «Liquidez negativa: {amount}»). Una riga per lingua.
+> - **`moneyRenderSites`**: non serve registrare niente. La nota passa da `formatCurrencyAmountPlain`, uno dei
+>   formattatori sicuri; lo conferma `core-unit`.
+> - **Runner**: i 2 Vitest sono in `allocation-unit`, con la `desc` estesa. L'E2E è una nuova azione,
+>   `front-portfolio allocation-negative-cash`. Le righe `if … return False` le ho scritte su due righe, così ruff
+>   resta a 28 come HEAD.
+> - **Commento corretto** nel rosso Vitest del pannello: l'endpoint è `POST /portfolio/report`, non
+>   `GET /portfolio/summary`.
+> - **Rossi → verdi**: `AllocationHistoryChart.negativeCash` 9 su 9, `AllocationPanel.negativeCash` 10 su 10.
+>
+> **Decisioni notturne, da rivedere**:
+> - la tolleranza di un punto sull'asse: uno scoperto sotto l'1 % viene tagliato di meno di un punto, cioè non si
+>   vede;
+> - i negativi in coda ai tooltip, sotto il «Remaining», come nel grafico, dove stanno sotto lo zero;
+> - la nota solo nella vista «ora», perché nella storia lo scoperto è già disegnato;
+> - la documentazione per l'utente non è toccata. Se la si vuole, è una frase nella pagina della Dashboard, con le
+>   traduzioni.
+>
+> **Prove leggere** (04:54–05:01, una alla volta con `nice`, prima della fermata delle 05:20): `front check` 0 errori e 0
+> avvisi; `allocation-unit` 8 file e 192 test, compresi i 2 ex rossi; `core-unit` 173 file e 6146 test, con
+> `moneyRenderSites` e i gate; `component-unit` 149 file e 3939 test; `./dev.py i18n check` pulito;
+> `theme-roles --check` pulito; `check-orphans` pulito, con l'E2E nuova registrata; `git diff --check` pulito; ruff
+> 28 come HEAD; Prettier pulito. La 6189 è libera.
+>
+> **Checkpoint Y10** (mandato alle 05:03): 12 percorsi, cioè i 3 componenti, le 4 sorgenti i18n, i 2 Vitest, l'E2E e il
+> runner, più il piano per il journal. L'E2E `allocation-negative-cash` non è mai stata lanciata: è nella corsa unica
+> di Y3, Y9 e Y10, all'ora che darà il coordinatore.
