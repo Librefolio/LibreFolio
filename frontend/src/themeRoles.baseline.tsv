@@ -144,8 +144,6 @@ lib/features/risk/levels/l4/L4Simulation.svelte	45
 lib/features/risk/levels/l4/TornadoChart.svelte	4
 lib/features/settings/SettingToggle.svelte	18
 lib/features/settings/tabs/AboutTab.svelte	21
-lib/features/settings/tabs/ProfileTab.svelte	1
-lib/features/support/DonationPopupModal.svelte	28	#ffffff
 lib/features/support/SocialShareModal.svelte	1
 lib/features/support/supportLinks.ts	14
 lib/features/tools/ToolAboutPanel.svelte	58
