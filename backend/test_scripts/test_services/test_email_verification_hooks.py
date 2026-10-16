@@ -11,13 +11,18 @@ hooks of E5b are in place. The contract:
    back); without one, ``RegistrationError("EMAIL_VERIFICATION_UNAVAILABLE")`` and everything rolled back — no account,
    no token, the invitation still live.
 3. ``user_service.update_user_status`` revokes the account's verification tokens when it changes ``is_active`` — an
-   administrator decided —, and only then; other purposes are untouched. ``user_service.set_user_active`` revokes them
-   either way: activating a waiting account makes it active, deactivating it ends its wait.
+   administrator decided —, and when it deactivates an account that waits, already inactive (revised 16/10, after the
+   security review of E5b): its wait ends, committed and logged. An inactive account without links told inactive:
+   nothing changes, nothing is committed or logged. Other purposes are untouched. ``user_service.set_user_active``
+   revokes them either way: activating a waiting account makes it active, deactivating it ends its wait.
 4. ``verification.holds_place(session, user)``: inactive with a live verification link (neither consumed, revoked nor
    expired at ``now``); ``verification.place_holders(session)`` is the set of such accounts' ids, each once.
 5. ``settings_service._refuse_what_cannot_turn_on``: ``GlobalSettingUnavailableError(key, "EMAIL_VERIFICATION_UNAVAILABLE")``
    for ``require_email_verification`` going from off to on while no email with a link can go out; nothing for on → on,
    on → off, off → off, another setting, or when such an email can go.
+6. ``verification.registration_email_allowed(address)``: ten registration emails an hour per client address, keyed by
+   ``flows.address_key`` (an IPv6 client by its /64); the eleventh refused and counted for nothing; no address, no
+   limit.
 
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown); a new instance registers by invitation (workstream A), so the cases that
@@ -45,6 +50,7 @@ import pytest_asyncio
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from structlog.testing import capture_logs
 
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User
@@ -54,7 +60,9 @@ from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus
 from backend.app.services.email import delivery, verification
+from backend.app.services.email.flows import address_key
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_utils import print_section, print_success
 
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
@@ -278,26 +286,83 @@ async def test_register_user_holds_the_account_and_the_limit_counts_it(engine: A
 
 
 @pytest.mark.asyncio
-async def test_update_user_status_revokes_the_verification_links_when_is_active_changes(engine: AsyncEngine) -> None:
-    """EVK-004 — contract 3: activating a waiting account revokes its verification links and makes it active; its live reset link is untouched. A call that changes nothing (inactive told inactive) revokes nothing."""
+async def test_update_user_status_revokes_the_verification_links_when_it_ends_a_wait(engine: AsyncEngine) -> None:
+    """EVK-004 — contract 3: activating a waiting account revokes its verification links and makes it active; its live reset link is untouched. Deactivating an account that waits — already inactive — revokes its verification links too (revised 16/10, after the security review of E5b): its wait ends, committed, and «User status changed» is logged for it."""
     print_section("EVK-004: update_user_status")
     now = utcnow()
     vera = await _add_user(engine, "zq_vera", active=False)
     wanda = await _add_user(engine, "zq_wanda", active=False)
     first, second = await _link(engine, vera, "live", now=now), await _link(engine, vera, "live", now=now)
     reset = await _issue(engine, AccountTokenPurpose.PASSWORD_RESET, user_id=vera.id)
-    kept = await _link(engine, wanda, "live", now=now)
+    ended = await _link(engine, wanda, "live", now=now)
 
-    async with AsyncSession(engine, expire_on_commit=False) as session:
-        assert await user_service.update_user_status(session, await session.get(User, vera.id), is_active=True) is None
-        assert await user_service.update_user_status(session, await session.get(User, wanda.id), is_active=False) is None
+    with capture_logs() as events:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            assert await user_service.update_user_status(session, await session.get(User, vera.id), is_active=True) is None
+            assert await user_service.update_user_status(session, await session.get(User, wanda.id), is_active=False) is None
 
     assert [await _status(engine, issued.token) for issued in (first, second)] == [TokenStatus.REVOKED, TokenStatus.REVOKED]
     assert await _status(engine, reset.token, AccountTokenPurpose.PASSWORD_RESET) == TokenStatus.VALID
-    assert await _status(engine, kept.token) == TokenStatus.VALID, "no change of is_active: nothing revoked"
+    assert await _status(engine, ended.token) == TokenStatus.REVOKED, "deactivating an account that waits ends its wait"
     async with AsyncSession(engine) as session:
         assert (await session.get(User, vera.id)).is_active is True
-    print_success("revoked on a change of is_active only")
+        assert (await session.get(User, wanda.id)).is_active is False
+    changed = [event.get("user_id") for event in events if event.get("event") == "User status changed"]
+    assert changed == [vera.id, wanda.id], events
+    print_success("revoked on activation, and on deactivating a waiting account")
+
+
+@pytest.mark.asyncio
+async def test_deactivating_an_inactive_account_without_links_changes_nothing(engine: AsyncEngine) -> None:
+    """EVK-009 — contract 3: an inactive account that does not wait — no verification link at all — told inactive again: nothing changes — its ``updated_at`` as it was, no commit of a change, no «User status changed» —; its live reset link untouched."""
+    print_section("EVK-009: an inactive account, told inactive")
+    xena = await _add_user(engine, "zq_xena", active=False)
+    reset = await _issue(engine, AccountTokenPurpose.PASSWORD_RESET, user_id=xena.id)
+    async with AsyncSession(engine) as session:
+        updated_before = (await session.get(User, xena.id)).updated_at
+
+    with capture_logs() as events:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            assert await user_service.update_user_status(session, await session.get(User, xena.id), is_active=False) is None
+
+    async with AsyncSession(engine) as session:
+        stored = await session.get(User, xena.id)
+        assert (stored.is_active, stored.updated_at) == (False, updated_before)
+    assert [event for event in events if event.get("event") == "User status changed"] == []
+    assert await _status(engine, reset.token, AccountTokenPurpose.PASSWORD_RESET) == TokenStatus.VALID
+    print_success("nothing changed, nothing logged")
+
+
+@pytest.mark.parametrize(
+    ("first", "eleventh", "limited"),
+    [
+        pytest.param("198.51.100.7", "198.51.100.7", True, id="ipv4-the-eleventh-of-the-hour-refused"),
+        pytest.param("2001:db8:1:2::10", "2001:db8:1:2:ffff::1", True, id="ipv6-one-64-is-one-client"),
+        pytest.param("198.51.100.7", "203.0.113.9", False, id="another-address-is-another-count"),
+        pytest.param(None, None, False, id="no-address-not-limited"),
+    ],
+)
+def test_registration_emails_are_counted_per_client_address(monkeypatch: pytest.MonkeyPatch, first: str | None, eleventh: str | None, limited: bool) -> None:
+    """EVK-010 — E5b, after the security review: ``registration_email_allowed(address)`` admits ten registration emails an hour per client address — keyed by ``address_key``, an IPv6 client by its /64 — and refuses the eleventh, a refused one counted for nothing; past the hour of the first ten, the address is admitted again. Another address has a count of its own; a request without an address is not limited here. A private limiter with the shipped limit, on a fake clock."""
+    print_section(f"EVK-010: {first} then {eleventh}")
+    assert (verification.REGISTRATION_EMAILS_BY_ADDRESS.limit, verification.REGISTRATION_EMAILS_BY_ADDRESS.window_seconds) == (10, 3600), "the shipped limit"
+    clock = [1_000.0]
+    limiter = SlidingWindowLimiter(10, 3600, clock=lambda: clock[0])
+    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", limiter)
+
+    admitted = [verification.registration_email_allowed(first) for _registration in range(10)]
+    clock[0] += 60
+    later = [verification.registration_email_allowed(eleventh) for _registration in range(2)]
+    key = address_key(eleventh)
+    counted = limiter.count(key) if key is not None else len(limiter)
+    clock[0] = 1_000.0 + 3600 + 1
+    past_the_hour = verification.registration_email_allowed(eleventh)
+
+    assert admitted == [True] * 10
+    assert later == ([False, False] if limited else [True, True])
+    assert counted == (10 if limited else 2 if key is not None else 0), "a refused one counts for nothing; no address, no count"
+    assert past_the_hour is True
+    print_success("limited" if limited else "not limited")
 
 
 @pytest.mark.asyncio

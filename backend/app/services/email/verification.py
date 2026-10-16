@@ -53,6 +53,12 @@ RESEND_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
 #: Per account, counted on the verification links already emailed: one every 5 minutes, 3 an hour.
 VERIFICATION_EMAIL_MIN_INTERVAL = timedelta(minutes=5)
 VERIFICATION_EMAILS_PER_HOUR = 3
+#: Per recipient mailbox (case-insensitive): 3 verification emails an hour, whatever account they are for, since several
+#: accounts may give the same mailbox, as with ``flows.FORGOT_BY_MAILBOX``. Counted on the emails that went out.
+VERIFICATION_BY_MAILBOX = SlidingWindowLimiter(3, 60 * 60)
+#: Registration emails per client address, an IPv6 client by its /64: 10 an hour. Past it the account is still created
+#: and waits, but its email does not go: its owner asks for the link again from the sign-in page (coordinator, 16/10).
+REGISTRATION_EMAILS_BY_ADDRESS = SlidingWindowLimiter(10, 60 * 60)
 
 
 class EmailVerificationUnavailableError(EmailError):
@@ -204,13 +210,16 @@ def _per_account_retry_after(created: list[datetime], now: datetime) -> float | 
     return max(waits).total_seconds() if waits else None
 
 
-async def _issue_and_send(session: AsyncSession, user: User, now: datetime) -> str:
+async def _issue_and_send(session: AsyncSession, user: User, now: datetime, *, needs_place: bool = False) -> str:
     """Email the account a new verification link, which replaces its others; returns the email's language.
 
-    Configuration, links and hourly budget first: nothing is created when the email cannot go. The new token carries
-    the account's address, and is committed before the email; when the email does not go, it loses its address and
-    stays as a hold, so the account still waits. Raises what ``send_email`` raises, and ``EmailRateLimitedError`` when
-    another request emailed a link meanwhile.
+    Configuration, links, hourly budget and the recipient's mailbox first: nothing is created when the email cannot go.
+    The new token carries the account's address, and is committed before the email; when the email does not go, it
+    loses its address and stays as a hold, so the account still waits. ``needs_place``: the account holds no place yet
+    (its link expired), so the user limit is counted again inside the write transaction. Raises what ``send_email``
+    raises; ``EmailRateLimitedError`` when another request emailed a link meanwhile; ``VerificationUserLimitError`` when
+    another took the last place meanwhile; ``EmailVerificationNotNeededError`` or ``VerificationAccountDisabledError``
+    when the account stopped waiting meanwhile.
     """
     state = await require_email()
     links = require_links()
@@ -219,7 +228,17 @@ async def _issue_and_send(session: AsyncSession, user: User, now: datetime) -> s
         raise EmailRateLimitedError(budget.retry_after)
     # Read now: a rollback expires ``user``, and an async session cannot reload it.
     user_id, address, username = user.id, user.email, user.username
-    await token_service.revoke_tokens(session, user_id=user_id, purpose=VERIFICATION, now=now)
+    mailbox = address.strip().casefold()
+    by_mailbox = VERIFICATION_BY_MAILBOX.peek(mailbox)
+    if not by_mailbox.allowed:
+        raise EmailRateLimitedError(by_mailbox.retry_after)
+    # The first write takes SQLite's lock: what follows sees every request that wrote before this one.
+    if not await token_service.revoke_tokens(session, user_id=user_id, purpose=VERIFICATION, now=now):
+        # No unspent link left: the account no longer waits (its link was clicked, or an administrator decided
+        # meanwhile), and a new link would make it wait again.
+        active = (await session.execute(select(User.is_active).where(User.id == user_id))).scalar_one_or_none()
+        await session.rollback()
+        raise EmailVerificationNotNeededError() if active else VerificationAccountDisabledError()
     issued = await token_service.issue_token(session, VERIFICATION, user_id=user_id, email=address, now=now)
     # Counted again inside the write transaction, the new link included: of two requests that passed the first count
     # together, the second sees the first one's link here and stops (SQLite writes one at a time).
@@ -227,6 +246,15 @@ async def _issue_and_send(session: AsyncSession, user: User, now: datetime) -> s
     if len(created) > VERIFICATION_EMAILS_PER_HOUR or sum(value > now - VERIFICATION_EMAIL_MIN_INTERVAL for value in created) > 1:
         await session.rollback()
         raise EmailRateLimitedError(VERIFICATION_EMAIL_MIN_INTERVAL.total_seconds())
+    if needs_place:
+        from backend.app.services.accounts.registration_service import user_usage  # noqa: PLC0415 — it calls this module
+
+        # As ``register_user`` does: counted after the write, the new link included; of two requests that saw the same
+        # free place, the second sees the first one's link here.
+        usage = await user_usage(session, now=now)
+        if usage.max_users is not None and usage.used > usage.max_users:
+            await session.rollback()
+            raise VerificationUserLimitError()
     await session.commit()
     token_id = issued.record.id
     try:
@@ -247,8 +275,19 @@ async def _issue_and_send(session: AsyncSession, user: User, now: datetime) -> s
         await session.execute(update(AccountToken).where(AccountToken.id == token_id).values(email=None))
         await session.commit()
         raise
+    VERIFICATION_BY_MAILBOX.hit(mailbox)
     logger.info("Verification link emailed", user_id=user_id, token_id=token_id, language=language)
     return language
+
+
+def registration_email_allowed(address: str | None) -> bool:
+    """Whether a registration from the client ``address`` may send its verification email now; counted when it may.
+
+    10 an hour per client address (``REGISTRATION_EMAILS_BY_ADDRESS``, an IPv6 client by its /64). A request without
+    an address is not limited here: the mailbox and the hourly budget still are.
+    """
+    key = address_key(address)
+    return key is None or REGISTRATION_EMAILS_BY_ADDRESS.hit(key).allowed
 
 
 async def registration_email_work(user_id: int, *, engine: AsyncEngine | None = None, now: datetime | None = None) -> None:
@@ -264,6 +303,9 @@ async def registration_email_work(user_id: int, *, engine: AsyncEngine | None = 
                 logger.info("Verification email: the account no longer waits, nothing sent", user_id=user_id)
                 return
             await _issue_and_send(session, user, now or utcnow())
+    except (EmailVerificationNotNeededError, VerificationAccountDisabledError):
+        # The account stopped waiting between the check above and the write: the same outcome, the same line.
+        logger.info("Verification email: the account no longer waits, nothing sent", user_id=user_id)
     except (EmailError, ValueError) as exc:
         logger.warning("Verification email: not sent", user_id=user_id, reason=type(exc).__name__, code=getattr(exc, "code", None))
     except Exception as exc:  # noqa: BLE001 — a background task has nobody to raise to: log and end
@@ -329,6 +371,8 @@ async def resend_verification(session: AsyncSession, *, identifier: str, passwor
     user = await user_service.get_user_by_username_or_email(session, identifier)
     password_ok = await asyncio.to_thread(verify_password_or_dummy, password, user.hashed_password if user else None)
     if not password_ok or user is None:
+        # Logged as the login logs its failures, without the identifier: monitoring that watches them sees these too.
+        logger.warning("Verification resend refused: wrong credentials")
         raise VerificationCredentialsError()
     if user.is_active:
         raise EmailVerificationNotNeededError()
@@ -339,9 +383,10 @@ async def resend_verification(session: AsyncSession, *, identifier: str, passwor
     retry_after = _per_account_retry_after(await _emailed_in_last_hour(session, user.id, moment), moment)
     if retry_after is not None:
         raise EmailRateLimitedError(retry_after)
-    if not await _holds_live_link(session, user.id, moment):
+    needs_place = not await _holds_live_link(session, user.id, moment)
+    if needs_place:
         from backend.app.services.accounts.registration_service import user_usage  # noqa: PLC0415 — it calls this module
 
         if (await user_usage(session, now=moment)).full:
             raise VerificationUserLimitError()
-    return await _issue_and_send(session, user, moment)
+    return await _issue_and_send(session, user, moment, needs_place=needs_place)
