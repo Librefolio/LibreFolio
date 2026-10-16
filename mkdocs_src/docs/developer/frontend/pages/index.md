@@ -22,6 +22,8 @@ frontend/src/routes/
 │   └── +page.svelte          # Invitation link page (public, /invite#token=…)
 ├── reset-password/
 │   └── +page.svelte          # Password-reset link page (public, /reset-password#token=…)
+├── setup/
+│   └── +page.svelte          # Setup link page of the initial administrator (public, /setup#token=…)
 ├── (app)/                    # Authenticated routes
 │   ├── +layout.svelte        # App shell: auth check, bootstrap/onboarding gate, sidebar, header, guide host
 │   ├── +layout.ts            # ssr = false, prerender = false
@@ -70,13 +72,15 @@ frontend/src/routes/
 - Redirect to dashboard after login
 - User preferences (language, theme) applied on login
 
-### 🔗 Account Link Pages (`/invite`, `/reset-password`)
+### 🔗 Account Link Pages (`/invite`, `/reset-password`, `/setup`)
 
 - Public access, not prerendered: the SPA fallback serves them
 - The token of the link travels in the fragment (`#token=…`) and leaves the address bar on load
 - `/invite` opens **RegisterCard** in invitation mode; `/reset-password` opens
-  **ResetPasswordCard**; a link that cannot be used shows **LinkStatusCard**
-- Both end on the login page, with a success message
+  **ResetPasswordCard**; `/setup`, the setup link of the initial administrator, opens
+  **SetupCard**; a link that cannot be used shows **LinkStatusCard**
+- `/invite` and `/reset-password` end on the login page, with a success message; `/setup` signs the
+  administrator in and goes to `/dashboard`
 - Details: [Account Link Pages](../components/features/auth.md#link-pages)
 
 ### 👋 Welcome (`/welcome`)

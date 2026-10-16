@@ -115,7 +115,7 @@ repairs it.
 | Carried-forward FX count for Risk and Signals | `backend/app/services/series_preparation.py` |
 | Staleness threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |
 | `DataQualityReport.carried_forward_fx_*`, `MISSING_FX_RATES` | `backend/app/schemas/portfolio.py` |
-| Risk surfacing of carried-forward pairs | `backend/app/services/risk/service.py` |
+| Risk surfacing of carried-forward pairs | `backend/app/services/risk/data_quality.py` |
 | `POST /fx/currencies/convert` with `BackwardFillInfo` | `backend/app/api/v1/fx/currencies.py` |
 | Banner sync range (±7 days, capped at today) | `frontend/src/lib/utils/sync/syncRange.ts` |
 | Full history on pair creation (D1) | `frontend/src/lib/services/fxCreationSync.ts` |

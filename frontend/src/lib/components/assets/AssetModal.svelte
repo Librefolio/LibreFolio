@@ -383,6 +383,18 @@
     let searchResultSelected = $state(false);
     /** True once the user explicitly picks a currency in the form (manual intent). */
     let currencyUserSet = $state(false);
+    /** The currency and the type a blank create form starts with (resetForm): the report of a search names them only
+     * once they say something about the asset (P20). */
+    let blankCurrency = $state('');
+    let blankAssetType = $state('');
+    /** What the form holds, for the report of a search that found nothing useful (P20): its identifiers, and the
+     * currency and the type once they say something about the asset — an edit, an import's prefill, the user's choice,
+     * or not the blank form's default. No other data leaves. */
+    let searchReportContext = $derived({
+        currency: editMode || !!prefillData?.currency || currencyUserSet || currency !== blankCurrency ? currency : null,
+        assetType: editMode || !!prefillData?.asset_type || assetType !== blankAssetType ? assetType : null,
+        identifiers: identifierRows.filter((row) => row.value.trim() !== '').map((row) => ({type: row.type, value: row.value})),
+    });
 
     // Dirty tracking — snapshot of initial form to detect unsaved changes
     let initialSnapshot = $state('');
@@ -594,6 +606,8 @@
         displayName = '';
         currency = get(userSettings)?.base_currency ?? 'EUR';
         assetType = 'STOCK';
+        blankCurrency = currency;
+        blankAssetType = assetType;
         iconUrl = null;
         quoteBaseQuantity = 1;
         quoteBaseQuantityTouched = false;
@@ -1498,12 +1512,12 @@
                             {/each}
                         </div>
                         {#key activeSearchQuery}
-                            <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} />
+                            <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={activeSearchQuery} hideTitle={true} hints={searchHints} reportContext={searchReportContext} />
                         {/key}
                     </div>
                 {:else}
                     {#key activeSearchQuery}
-                        <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} />
+                        <AssetSearchAutocomplete onselect={handleSearchSelect} initialQuery={editMode ? '' : activeSearchQuery} hints={searchHints} reportContext={searchReportContext} />
                     {/key}
                 {/if}
             </div>

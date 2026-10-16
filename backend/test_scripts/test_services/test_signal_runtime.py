@@ -7,9 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.main import app
-from backend.app.services import signal_runtime
 from backend.app.services.platform import app_lifespan
-from backend.app.services.signal_runtime import SignalRuntimeUnavailable, validate_signal_runtime
+from backend.app.services.signals import runtime as signal_runtime
+from backend.app.services.signals.runtime import SignalRuntimeUnavailable, validate_signal_runtime
 
 
 def test_validate_signal_runtime_accepts_locked_stack():

@@ -75,7 +75,7 @@ graph LR
 | Role | Path |
 |------|------|
 | Canonical contracts | `backend/app/schemas/signals.py` |
-| Signal service | `backend/app/services/signal_service.py` |
+| Signal service | `backend/app/services/signals/service.py` |
 | Plugin registry | `backend/app/services/provider_registry.py` |
 | Production plugins | `backend/app/services/signal_plugins/` |
 | Catalog + schema mapper | `frontend/src/lib/charts/signals/catalogMapper.ts`, `schemaMapper.ts` |

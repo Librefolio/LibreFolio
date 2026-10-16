@@ -914,7 +914,7 @@ class TestInstanceConfigLive:
         ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here) — and the password rules: {response.text}"
         assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
-        assert body["support_url"] is None, f"support_url must be null on a lane that sets no {SUPPORT_URL_VARIABLE}, and the app then links to the project's GitHub issues: {response.text}"
+        assert body["support_url"] is None, f"support_url must be null on a lane that sets no {SUPPORT_URL_VARIABLE}, and the asset search then offers a new GitHub issue on a self-hosted instance, no report link on a managed one: {response.text}"
 
 
 def _instance_app() -> FastAPI:

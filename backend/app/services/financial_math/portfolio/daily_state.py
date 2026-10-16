@@ -25,6 +25,7 @@ from backend.app.services.financial_math.portfolio.models import (
     DailyPortfolioState,
     DailyPositionState,
     EngineEndState,
+    InternalAssetTransfer,
     InTransitInterval,
     PnlCandleContribution,
     PortfolioCalculationResult,
@@ -107,6 +108,7 @@ class DailyStateBuilder:
         date_from: date_type,
         date_to: date_type,
         frame_start: date_type | None = None,
+        period_start: date_type | None = None,
         split_linked_tx_ids: set[int] | None = None,
         split_history: dict[int, SplitHistory] | None = None,
         mark_series: dict[int, AssetPriceSeries] | None = None,
@@ -141,6 +143,9 @@ class DailyStateBuilder:
         # frame_start: first day to emit DailyPortfolioState. Before this = pre-frame (accounting only).
         # None → same as date_from (no pre-frame, full evaluation from start).
         self.frame_start = frame_start if frame_start is not None else date_from
+        # period_start: the day whose end the position_states_start snapshot is taken at (MF-A: the start of the
+        # caller's period, while the replay itself runs from date_from). None → the first frame day.
+        self.period_start = period_start if period_start is not None else self.frame_start
         self.split_history: dict[int, SplitHistory] = {}
         for asset_id, history in (split_history or {}).items():
             unique_by_event_id: dict[int, SplitRecord] = {}
@@ -249,7 +254,6 @@ class DailyStateBuilder:
         # Position state snapshots
         position_states_start: list[DailyPositionState] = []
         position_states_end: list[DailyPositionState] = []
-        is_first_frame_day = True
         # Universe of broker ids in this scope — used to fan out the date-only
         # cash/ECF aggregates above into their per-broker components below.
         all_broker_ids: set[int] = {ctxn.tx.broker_id for ctxn in self.classified_txs}
@@ -401,6 +405,8 @@ class DailyStateBuilder:
         for history in self.split_history.values():
             dirty_days.update(split.date for split in history if self.frame_start <= split.date <= self.date_to)
         dirty_days.add(self.frame_start)
+        if self.frame_start <= self.period_start <= self.date_to:
+            dirty_days.add(self.period_start)
 
         current = self.frame_start
         while current <= self.date_to:
@@ -735,14 +741,13 @@ class DailyStateBuilder:
                     from_reinvested=day_acq_from_r,
                 )
 
-            # 4b2. Position state snapshots (start of frame + every day end)
-            if is_first_frame_day:
+            # 4b2. Position state snapshot at the end of the period's start day
+            if current == self.period_start:
                 for (aid, bid), qty in cumulative_qty.items():
                     if qty <= 0:
                         continue
                     ps = self._build_position_state(aid, bid, qty, current, cost_pool)
                     position_states_start.append(ps)
-                is_first_frame_day = False
 
             # 4h. Allocation: cash as Liquidity (type + sector, not geography)
             by_type["Liquidity"] = by_type.get("Liquidity", zero) + cumulative_cash + it_cash
@@ -796,7 +801,9 @@ class DailyStateBuilder:
         return PortfolioCalculationResult(
             daily_states=states,
             position_states_start=position_states_start,
+            position_states_start_date=self.period_start,
             position_states_end=position_states_end,
+            internal_asset_transfers=self._internal_asset_transfers(),
             native_cash=self.native_cash,
             end_state=EngineEndState(
                 cumulative_cash=cumulative_cash,
@@ -1249,30 +1256,18 @@ class DailyStateBuilder:
         """
         return tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and tx.quantity is not None and tx.quantity != 0 and (tx.id is None or tx.id not in self.split_linked_tx_ids)
 
-    def _internal_transfer_flows(self) -> list[tuple[date_type, int, int, Decimal]]:
-        """Lot 41 — the capital flows of the internal pairs between two brokers (step 3b).
+    def _internal_pairs(self) -> list[tuple[ClassifiedTransaction, ClassifiedTransaction, date_type, bool]]:
+        """The linked internal pairs between two brokers: ``(sender, receiver, arrival_date, is_cash)``, once each.
 
-        One ``(arrival_date, sender_broker_id, receiver_broker_id, value)`` for each
-        linked-internal CASH_TRANSFER / FX_CONVERSION / TRANSFER pair whose two legs sit on
-        different brokers. The sender is the leg going out (negative amount for cash, negative
-        quantity for securities), the receiver the leg coming in; the arrival date is the later
-        leg's date. Pairs without exactly one of each, same-broker pairs and ADJUSTMENT pairs
-        give no flow.
-
-        ``value`` is what the arrival brings into the receiver's NAV, valued on the arrival
-        date as the NAV values it — the received amount converted at that date, or the market
-        value of the received quantity — at the sender's share, like the value in transit. A
-        security with no price at all moves at the book cost the arrival adds to the receiver's
-        pool, as the NAV values such a holding at its cost (J-17). A value that cannot be computed
-        (a missing FX rate, an unknown cost) gives no flow, which is what the arrival adds to the NAV.
-
-        Pure: it records no missing data, so a build with this method returning ``[]`` differs
-        only in the per-broker capital.
+        One for each linked-internal CASH_TRANSFER / FX_CONVERSION / TRANSFER pair whose two legs sit on different
+        brokers. The sender is the leg going out (negative amount for cash, negative quantity for securities), the
+        receiver the leg coming in; the arrival date is the later leg's date. Pairs without exactly one of each,
+        same-broker pairs and ADJUSTMENT pairs are left out.
         """
         zero = Decimal("0")
         ctxn_by_id = {ctxn.tx.id: ctxn for ctxn in self.classified_txs if ctxn.tx.id is not None}
         seen_pairs: set[tuple[int, int]] = set()
-        flows: list[tuple[date_type, int, int, Decimal]] = []
+        pairs: list[tuple[ClassifiedTransaction, ClassifiedTransaction, date_type, bool]] = []
         for ctxn in self.classified_txs:
             tx = ctxn.tx
             if ctxn.classification != "linked_internal" or ctxn.paired_tx is None or tx.id is None or tx.type not in _LINKED_TYPES:
@@ -1295,13 +1290,58 @@ class DailyStateBuilder:
                 logger.debug("Internal pair without one sender and one receiver: no broker flow", pair=pair_key)
                 continue
             sender, receiver = senders[0], receivers[0]
-            arrival = max(sender.tx.date, receiver.tx.date)
+            pairs.append((sender, receiver, max(sender.tx.date, receiver.tx.date), is_cash))
+        return pairs
+
+    def _internal_transfer_flows(self) -> list[tuple[date_type, int, int, Decimal]]:
+        """Lot 41 — the capital flows of the internal pairs between two brokers (step 3b).
+
+        One ``(arrival_date, sender_broker_id, receiver_broker_id, value)`` for each pair of :meth:`_internal_pairs`.
+
+        ``value`` is what the arrival brings into the receiver's NAV, valued on the arrival
+        date as the NAV values it — the received amount converted at that date, or the market
+        value of the received quantity — at the sender's share, like the value in transit. A
+        security with no price at all moves at the book cost the arrival adds to the receiver's
+        pool, as the NAV values such a holding at its cost (J-17). A value that cannot be computed
+        (a missing FX rate, an unknown cost) gives no flow, which is what the arrival adds to the NAV.
+
+        Pure: it records no missing data, so a build with this method returning ``[]`` differs
+        only in the per-broker capital.
+        """
+        zero = Decimal("0")
+        flows: list[tuple[date_type, int, int, Decimal]] = []
+        for sender, receiver, arrival, is_cash in self._internal_pairs():
             flow_value = self._internal_pair_value(sender, receiver, arrival, is_cash=is_cash)
             if flow_value is None:
                 continue
             if flow_value != zero:
                 flows.append((arrival, sender.tx.broker_id, receiver.tx.broker_id, flow_value))
         return flows
+
+    def _internal_asset_transfers(self) -> list[InternalAssetTransfer]:
+        """MF-A, P22 — the securities the internal pairs move between two brokers, with their value on arrival.
+
+        The value is :meth:`_internal_pair_value`'s, the one the brokers' capital moves at; the cost moved is what the
+        sender's average-cost pool gave up for the units (None when that cost is incomplete). Pure, like the flows.
+        """
+        transfers: list[InternalAssetTransfer] = []
+        for sender, receiver, arrival, is_cash in self._internal_pairs():
+            if is_cash or receiver.tx.asset_id is None:
+                continue
+            sender_step = self._movement_cost_step(sender.tx)
+            cost_moved = -sender_step.cost_report_change if sender_step is not None and sender_step.report_complete else None
+            transfers.append(
+                InternalAssetTransfer(
+                    departure=sender.tx.date,
+                    arrival=arrival,
+                    asset_id=receiver.tx.asset_id,
+                    sender_broker_id=sender.tx.broker_id,
+                    receiver_broker_id=receiver.tx.broker_id,
+                    value_at_arrival=self._internal_pair_value(sender, receiver, arrival, is_cash=False),
+                    cost_moved=cost_moved,
+                )
+            )
+        return transfers
 
     def _internal_pair_value(self, sender: ClassifiedTransaction, receiver: ClassifiedTransaction, arrival: date_type, *, is_cash: bool) -> Decimal | None:
         """What one internal pair's arrival brings into the receiver's NAV, at the sender's share; None when unknown.

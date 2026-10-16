@@ -255,7 +255,7 @@ together before proposing any removal. See
   it is a methodology bug for *collection*. Any scanner (vulture, grep-for-callers,
   coverage cross-check) must run on the whole codebase first and filter findings
   afterwards — otherwise a symbol used only by the excluded area reads as dead. It
-  happened twice with `resolve_ai_export_temporal_class` (`signal_plugins/base.py`,
+  happened twice with `resolve_ai_export_temporal_class` (`signals/base.py`,
   called only from `ai_export/components/technical_shared.py`): both audits excluded
   ai_export up front and both reported the same false positive. Collect wide, report
   narrow.
