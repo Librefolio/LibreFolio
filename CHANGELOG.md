@@ -141,6 +141,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **On a phone, a table's selection and actions columns scroll with it.** The «Actions» header stayed pinned at the right edge while the rows' ⋮ scrolled away, and the checkbox column covered the start of the first column; both now move with the table, and the header still stays on top when the table scrolls.
 - **Resizing a column follows the pointer, and works with a finger.** On several tables (Files, the import wizard, the PAC allocator) dragging a column edge moved it by only part of the drag; it now follows the pointer, a resized column keeps its width on a narrow screen, and columns can be resized by touch.
 - The image picker no longer reloads its list over and over when it has nothing to show.
+- **After an upgrade the browser no longer keeps the build's `_app/env.js` and `_app/version.json` for a year**: only the hashed chunks under `_app/immutable/` are cached long-term.
+- **Portfolio: on a day when only an exchange rate moves**, foreign securities and cash in transit are revalued at that day's rate, and a new market quote replaces a purchase price even when it equals the previous close; before, the daily lines and the summary on such a day kept the previous day's value.
 
 #### 🔒 Security
 
@@ -148,6 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.
 - **Report file ids are checked first.** An id that is not a file's own UUID answers 404; a very long one used to cause a server error.
 - **Thumbnails of uploaded images are no longer kept by shared caches**: they are sent `Cache-Control: private`, so a proxy in front of the instance does not store them.
+- **Every response carries `X-Content-Type-Options: nosniff` and `Referrer-Policy: strict-origin-when-cross-origin`.** Fonts and source maps are served with their own type, also without the system's MIME table.
 
 ### ⚠️ Breaking changes
 

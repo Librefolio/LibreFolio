@@ -46,7 +46,8 @@ financial math layer ([[decisions/financial-math-one-home]]). It imports only `C
 | `NativeCash.flows(date_from, date_to)` | `CashFlows` of `(date_from, date_to]`: signed and absolute sums by type, income and costs by position, unallocated by broker |
 | `NativeCash.sums_by_date(date_from, date_to, types)` | counted movements summed by date and type, dates ascending |
 | `NativeCash.missing_conversions(date_from, date_to, types)` | `MissingCashConversion(pair, dates)` for every pair that could not be converted |
-| `NativeCash.rate_change_days(date_from, date_to)` | the days a held foreign currency's rate changes (the first rate counts) |
+| `NativeCash.rate_change_days(date_from, date_to)` | the days a held foreign currency's rate changes (the first rate counts); computed by `change_days` |
+| `change_days(read, currencies, days)` | pure, the one home of «the day a rate changes» (J CP-6, 2026-10-16): the days of the calendar on which the caller's reading gives a currency another rate than on the previous day; a rate on the first day counts. The native cash reads the last rate known, on the calendar of its rate points; the portfolio engine the exact day's rate, on its frame |
 | `NativeCash.foreign_cash_broker_ids` | brokers with a counted movement outside the report currency |
 | `NativeCash.exchange_results(date_from, date_to)` | each foreign-cash broker's exchange result on cash over `(date_from, date_to]`, returned whole |
 | `CONVERSION_DUST` | `Decimal("1e-9")`: below it an exchange result is the rounding of two conversions, not a result |
