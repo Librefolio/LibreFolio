@@ -2840,8 +2840,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   `e2e/designer-lab/designer-lab-picker.spec.ts` lo usa come elemento rimappato da `app.css`. Migra a `text-lf-muted`
   quando L sposta il soggetto del test: si sblocca con l'ingresso di L-20 (coordinatore, 16/10 12:12). Dettagli: [piano di TR](../Phase_1/10_colorSystem/TR-transactionColors/plan-phase00TransactionColors.prompt.md),
   sezione «Cosa resta, e perché».
-  ✅ 16/10, lotto 6 di TR: L-20 (`d2e4ae947`, in `dev_release2` con `460529690`) toglie il sottotitolo dal test; il
-  `<p>` passa a `text-lf-muted`. Lo SHA arriva col checkpoint.
+  ✅ 16/10, `546204732` (lotto 6 di TR): L-20 (`d2e4ae947`, in `dev_release2` con `460529690`) toglie il sottotitolo
+  dal test; il `<p>` passa a `text-lf-muted`.
 - ✅ **TR-2 · Due conferme verdi piene senza ruolo per l'hover** — basso; TR, 16/10. `PromoteMergeModal.svelte:262`
   (`bg-green-600 hover:bg-green-700`) e `TransactionActionModal.svelte:387` (lo stesso verde, col ramo ambra dello split
   nello stesso ternario) restano legacy e interi: manca un `success-hover`. Serve un ruolo di T, oppure una decisione:
