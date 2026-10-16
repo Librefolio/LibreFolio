@@ -75,8 +75,9 @@ export interface RawPricePoint {
 }
 
 /** Defensively read the stale-days count from either the snake_case (raw API) or
- *  camelCase (legacy internal) backward-fill shape. */
-function extractDaysBack(point: RawPricePoint): number {
+ *  camelCase (legacy internal) backward-fill shape: 0 for a stored row, more for a point filled backward from one.
+ *  The one home of that rule: the sync dialog's warning reads it too (C-66). */
+export function extractDaysBack(point: Pick<RawPricePoint, 'backward_fill_info' | 'backwardFillInfo'>): number {
     const info = point.backward_fill_info;
     if (info && typeof info === 'object' && 'days_back' in info) {
         const value = (info as {days_back: unknown}).days_back;

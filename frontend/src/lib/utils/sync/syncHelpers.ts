@@ -1,5 +1,5 @@
 /**
- * Shared sync helpers — used by SyncModalBase, FxSyncModal, AssetSyncModal, PageSyncAllModal.
+ * Shared sync helpers — used by SyncModalBase, FxSyncModal, AssetSyncModal, PageSyncModal.
  *
  * Centralises:
  *  - SyncResult interface (common fields for FX and Asset sync results)
@@ -13,6 +13,7 @@ import type {Component, Snippet} from 'svelte';
 import {AlertCircle, AlertTriangle, Check, SkipForward} from 'lucide-svelte';
 import type {LegDetail} from '$lib/utils/providerHelpers';
 import {formatFixed} from '$lib/utils/core/formatFixed';
+import {extractDaysBack, type RawPricePoint} from '$lib/utils/assetPriceDerived';
 
 // =========================================================================
 // Sync status type and result interface
@@ -91,6 +92,18 @@ export interface SyncSection {
     resultRow: Snippet<[SyncResult, boolean]>;
     /** Count label for summary footer (e.g. 'assets', 'pairs') */
     countLabel: string;
+    /** The targets whose shown data already holds a stored row in the range (C-66): before the sync starts, the dialog
+     * warns that it replaces those rows with the data provider's values, manual edits included. */
+    existingIds?: string[];
+}
+
+/** A point a page shows: its date, and whether it was filled backward from an earlier stored row. */
+export type ShownPoint = {date: string} & Pick<RawPricePoint, 'backward_fill_info' | 'backwardFillInfo'>;
+
+/** Whether `points` hold a stored row dated between `start` and `end`, the dates of a sync (`start` may be `'min'`):
+ * a point filled backward from an earlier date is not one. Such a row is what a sync replaces (C-66). */
+export function hasStoredPointInRange(points: readonly ShownPoint[], start: string, end: string): boolean {
+    return points.some((point) => (start === 'min' || point.date >= start) && point.date <= end && extractDaysBack(point) === 0);
 }
 
 // =========================================================================

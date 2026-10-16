@@ -45,7 +45,7 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
-    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
+    import {hasStoredPointInRange, type AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -207,6 +207,9 @@
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    /** The sync dialog's assets whose shown prices hold a stored row in its range (C-66): the dialog warns that the sync
+     * replaces them. */
+    let syncModalWithData = $derived(syncModalOpen ? syncModalAssets.filter((a) => hasStoredPointInRange(getAssetPriceStore(a.id, a.currency).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)).map((a) => a.id) : []);
 
     /** True when the date range ends today (or later) → show live prices from providers */
     let isHeadToday = $derived(dateEnd >= new Date().toISOString().slice(0, 10));
@@ -1868,6 +1871,7 @@
     bind:open={syncModalOpen}
     {dateEnd}
     dateStart={syncDateStart}
+    withDataInRange={syncModalWithData}
     onclose={() => {
         syncModalOpen = false;
     }}
