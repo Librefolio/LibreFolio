@@ -753,6 +753,9 @@ function resultFor(request: RiskRequest, analytic: RiskAnalyticRequest, options:
                         {date: '2024-03-18', drawdown: -0.032},
                     ],
                     maximum_drawdown: -0.087,
+                    // The rise from the trough back to the prior peak, which L1
+                    // reads as is: the backend's −MDD/(1+MDD), drawdown_summary 1.2.0.
+                    maximum_drawdown_trough_to_peak_ratio: 0.087 / 0.913,
                     maximum_drawdown_peak_date: '2023-11-14',
                     maximum_drawdown_trough_date: '2023-12-03',
                     maximum_drawdown_recovery_status: 'open',
