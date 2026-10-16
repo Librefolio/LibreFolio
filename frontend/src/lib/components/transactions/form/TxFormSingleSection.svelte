@@ -182,7 +182,7 @@
                     placeholder="0"
                     ariaLabel={$t('transactions.table.quantity')}
                     ariaDescribedby={qtyHint ? quantityHintId : undefined}
-                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
+                    className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
                     disabled={isReadonly}
                     testid="tx-form-quantity"
                 />
@@ -230,7 +230,7 @@
                     placeholder="0"
                     ariaLabel={$t('transactions.table.quantity')}
                     ariaDescribedby={qtyHint ? quantityHintId : undefined}
-                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
+                    className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
                     disabled={isReadonly}
                     testid="tx-form-quantity"
                 />

@@ -358,7 +358,5 @@
     onkeydown={stepValue}
     onkeyup={handleKeyup}
     style={inlineStyle || undefined}
-    class={`w-full rounded-lg border bg-white px-3 py-2 font-mono text-gray-900 outline-none transition-colors focus:border-libre-green focus:ring-1 focus:ring-libre-green read-only:cursor-default disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-900 dark:text-gray-100 ${
-        locallyInvalid ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-    } ${className}`}
+    class={`w-full rounded-lg border border-lf-input bg-lf-field px-3 py-2 font-mono text-lf-primary placeholder:text-lf-placeholder outline-none transition-colors hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus aria-invalid:border-lf-danger read-only:cursor-default disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
 />

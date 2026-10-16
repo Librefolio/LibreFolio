@@ -159,7 +159,7 @@
     let signState = $derived(signStateFor(rawValue));
     let signInvalid = $derived(signState === 'bad');
     let canShowSignColor = $derived(!externalInvalid && !decimalValidity.empty && decimalValidity.syntaxValid && decimalValidity.digitsValid && decimalValidity.rangeValid);
-    let signBorderColor = $derived(canShowSignColor && signState === 'bad' ? 'oklch(0.637 0.237 25.331 / 0.7)' : canShowSignColor && signState === 'ok' ? 'oklch(0.765 0.177 163.223 / 0.7)' : '');
+    let signBorderColor = $derived(canShowSignColor && signState === 'bad' ? 'color-mix(in oklab, var(--lf-danger) 70%, transparent)' : canShowSignColor && signState === 'ok' ? 'color-mix(in oklab, var(--lf-success) 70%, transparent)' : '');
     let mergedStyle = $derived(`${inlineStyle.trim().replace(/;$/, '')}${inlineStyle.trim() && signBorderColor ? '; ' : ''}${signBorderColor ? `border-color: ${signBorderColor}` : ''}`);
 
     $effect(() => {

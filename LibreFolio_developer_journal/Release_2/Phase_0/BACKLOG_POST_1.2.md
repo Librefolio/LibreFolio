@@ -225,7 +225,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     `gate-plugin-i18n-ownership`), e il rifiuto nomina il plugin col suo nome. Resta la parte b, il 400 del parse
     tradotto nel wizard e il codice dell'anteprima illeggibile (K2b, dopo un commit del coordinatore su `brokers.py`
     e `uploads.py`).
-- **C-71 · Due «Rolling Return» con lo stesso nome** — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
+- ✅ **C-71 · Due «Rolling Return» con lo stesso nome** (chiusa 16/10 dal coordinatore: CP-10a di J, decisione 29, treno 100 — resta un solo Rolling Return in giorni di calendario, l'indicatore della 1.1 è ritirato) — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
   della 1.1 (`rolling_return`, finestra in osservazioni) resta nel catalogo dei segnali e usa la stessa chiave di nome,
   `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
   calendario, nascosto dal catalogo). Chi viene dalla 1.1 può leggerli come un doppione. Da fare: un nome che dica la
@@ -2273,6 +2273,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       dello scatto.
 
     Se la causa è nel prodotto, va segnalata e non corretta qui.
+  - *16/10, coppia di G-13 (r1↔r2):* ancora una variante su 16, sempre su mobile in `es/light`, e ora anche in
+    `assets/detail-editor`: l'header è visibile in una run e nascosto nell'altra, 7,7 % dei pixel. Dettagli:
+    [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md).
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
 - **G-12 · Due commenti nel codice descrivono ancora il vecchio helper della gallery** — minimo; G, 15/10, handoff di
@@ -2298,7 +2301,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     usa il contratto, non il contratto. Decide comunque il proprietario.
 
   Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passo 8.
-- **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
+- ✅ **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
   assegnata a G.
   - Quando: T entra in `dev_release2` (D-T20, dopo la revisione di T-8 da parte del developer). Via e slot li dà il
     coordinatore; fino ad allora nessuna run.
@@ -2312,8 +2315,26 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - 0 instabili di inquadratura, salvo l'eventuale variante di G-11;
     - `media/asset-picker-modal` stabile;
     - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
+  - ✅ **16/10, fatto.** Tre gallery complete di `a2c1c39f4`, a 6 worker, con un populate nuovo per run e
+    `live_price_check` 0:
+    - `g-ref13-r1`, 00:02: 6 rossi di carico (build di altre corsie);
+    - `g-ref13-r2`, 00:52: verde;
+    - `g-ref13-r3`, 05:28: verde.
+  - **La coppia del rumore è r1↔r2**: 22 `stable`, 137 `low`, 18 `medium`, 4 `unstable` (il 15/10: 40/112/19/6).
+    - Inquadrature uguali salvo G-11.
+    - `media/asset-picker-modal` è `low`: G-10 funziona.
+    - Restano `unstable` di contenuto `files/brim-report-sets` (G-17) e `brokers/import-nway-compare`.
+  - **r2↔r3 non è una coppia del rumore: attraversa la data UTC.** Il planner del PAC data lo scenario con la minore
+    fra la data locale e quella UTC (N26), quindi gli scatti PAC di r1 e r2, presi fra le 00:02 e le 01:31, mostrano il
+    15/10. Regola nel README del toolkit: niente catture fra mezzanotte locale e mezzanotte UTC.
+  - **Riferimento delle candidate del 16/10: `g-ref13-r3`**, con le maschere e la stabilità di `g-ref13__r1__vs__r2`.
+  - **Candidata della notte `g-cand16a`** (`72e66d1a6`): verde, 2904 PNG.
+    - Diff contro r3: 2720 immagini cambiate, quasi tutte per la migrazione ai ruoli di colore.
+    - Foglio per il developer, ordinato per cambio visibile: `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html`.
+      Dal 16/10 il comando è nel toolkit, su richiesta del coordinatore: `gallery_tool sheet <diff> --lang it`.
 
-  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
+  Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md) e
+  [stabilità](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/stability-2026-10-16.md).
 - **G-14 · Gli orari della gallery dipendono dal fuso della macchina** — basso; G, 15/10, su domanda del coordinatore
   (revisione di `settings/backup-ready`, B). **Proposta: valore e momento li decide il developer.**
   - Ogni istante si disegna nel fuso del browser, e la gallery lo lascia alla macchina: non c'è `timezoneId`.
@@ -2354,7 +2375,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
 
   Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
-- **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
+- ✅ **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
   developer approva dagli scatti le barre «ideale vs reale» sui colori delle categorie, D-T21).
   - Fatto da test-author, nel perimetro di G. Lo scatto è nel test `PAC allocator result`, fra il piano e la prova: 8
     scatti per progetto.
@@ -2375,6 +2396,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     serve.
   - Verifica: statica pulita (`tsc` con i soli 2 errori di base, prettier). La run filtrata a 1 worker parte dopo il
     merge della punta; poi la coppia di G-13 lo include.
+  - ✅ **15/10–16/10, verificata.** Codice `73f7d32c6`, in `dev_release2` con `a8991e20b`.
+    - Run filtrata a 1 worker su `a2c1c39f4` (`g-g16-w1b`): verde, 16 PNG per scatto. Le impronte dei tre scatti PAC
+      esistenti sono uguali a `g-final3`: richiudere la sezione funziona.
+    - Nella coppia di G-13 lo scatto è `stable`, 0/16.
+    - La prima run (`g-g16-w1`, 23:05, carico 80–96) era rossa per un `worker_crashed` dello strumento PAC, non per lo
+      scatto. Il coordinatore l'ha instradato a J (1.3).
+    - Resta per dopo: le barre dei settori, con un seed dai settori validi.
+- **G-17 · Il nome casuale dell'account usa e getta è rumore di contenuto** — basso; G, 16/10, coppia di G-13.
+  - `files/brim-report-sets` è `unstable` (16/16, fino al 3,2 %): il nome `demo_xxxxxx` dell'account del test compare
+    nella tabella e nel filtro «Caricato da» aperto, che si allarga con lui. Lo stesso nome è fra le cause di diversi
+    `medium`.
+  - Proposta (perimetro G, test-author): in `registerGalleryAccount` (`galleryReportSets.ts`), un nome deterministico
+    per test e progetto, con il ripiego casuale se la registrazione risponde che esiste già. Così lo scatto diventa
+    uguale fra due run.
+  - Da valutare con la pulizia degli account (`cleanupGalleryAccount`): un nome fisso non deve scontrarsi con quello di
+    una run interrotta che non l'ha cancellato.
+
+  Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md), «La coppia del rumore».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2520,12 +2559,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     attenuato) col valore del tema opposto, la regola di Q10 estesa; info e attenuato a 4,54:1 in chiaro; l'ombra dei
     tooltip è quella dei menu.
   - W1-d: il suggerimento evidenziato di `TagInput` passa dal blu a `bg-lf-selected`.
-  - Rimandati da W1-d: `ui/input/ExactDecimalInput.svelte` ed `ExactQuantityInput.svelte`, insieme ai chiamanti che gli
-    passano classi di palette (`INPUT` del pianificatore PAC, `ui.ts:39`; `!bg-white` in `TxFormSingleSection` e
-    `TxFormPairSection`) e ai test che leggono i loro colori, con l'OK dei proprietari.
+  - Rimandati da W1-d, consegnati col lotto input (`37972b529`, 16/10): `ExactDecimalInput` ed `ExactQuantityInput` con i
+    chiamanti (`INPUT` del PAC, i form delle transazioni, i 6 campi dei grafici di DV). Da rivedere: un campo non valido
+    resta rosso anche col fuoco (`aria-invalid:border-lf-danger` vince su `focus:`).
   - W1-c, W1-e, W2-a (bozze dello slot, in ingresso col secondo slot): preset inattivi che si scuriscono al passaggio come
     oggi; badge della durata personalizzata ancora ambra; tooltip, modali e onboarding sui ruoli (fondale delle modali e
     del coachmark al 60 %, tessere del logo bianche anche in scuro, contorno di «Riprova» tenue sul banner).
+  - W1-e, dalla galleria candidata di G: il bordo N3 di `ModalBase` (1 px sopra e sotto) rende ogni modale 2 px più alta;
+    le scene adattate al dialogo crescono di 2–3 px (`transactions/form-modal-transfer` 884 → 886). Voluto; senza
+    ingombro sarebbe un'ombra interna.
+  - W1-f1, W1-g, W2-b (16/10): la barra della sync su `bg-lf-warning` (l'ambra era un accento, non un avviso); i banner in
+    scuro più accesi (prima il testo era al 60 % di proposito, commit `7b4090d74`); le tinte `-soft`/`-line` in scuro
+    opache; nel changelog il filo del `mark` come ombra interna e la testata dei capitoli al passaggio su `bg-lf-neutral`.
   - Da sapere per W5/W6: quando `AssetCurrencyChangeModal` porterà il suo bordo rosso sui ruoli (per esempio
     `border-lf-danger-line`), quel nome viene prima di `border-lf-raised` di `ModalBase` e perderebbe: servirà una variante
     della modale, non un `contentClass`.
@@ -2536,13 +2581,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
   `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
   va tolto. Dettagli: piano di T, I1, passo 4.
-- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10 (commit del checkpoint di T dopo
-  il secondo slot). Con W2-a il bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
+- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10, commit `d3b04a867`. Con W2-a il
+  bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
   `ARBITRARY_ALLOWED` di `frontend/scripts/theme/theme-roles.mjs` (riga 84). Non si poteva aspettare Y5: il gate
   (`themeRoles.gate.test.ts`, «keeps … ARBITRARY_ALLOWED current») vuole che una voce che non lascia passare niente si
   tolga, e nel secondo slot è caduto. Tolta la riga 84 con l'OK del coordinatore (Y5 cambia la riga 70: il merge a tre vie
   è pulito); riscritti i due commenti di `src/themeRoles.gate.test.ts` (~218, ~547). Dettagli: piano di T, «Secondo
   slot».
+- **TC-13 · Tre controlli deboli negli E2E dell'editor dei dati (spec di W)** — minimo; T, 16/10, lotto W1-f2. Fuori
+  dalle righe approvate, già presenti: in `asset-data-editor.spec.ts` il test 21 sta dentro un `if (await
+  staleToggle.isVisible(...))` che non aspetta, quindi il suo verde non prova il contatore; nessun controllo positivo
+  tocca il ✗ di `CsvEditor`; `fx-csv-import.spec.ts:56` dipende dalla parola inglese «error». Lotto W1-g, stesso file: il
+  test 14 («info banner reflects current direction», riga 289 e seguenti) tiene la guardia `if (count() > 0)`, che ora
+  non serve più (il banner c'è sempre) e può nascondere un'assenza, e non verifica l'ordine dei codici dopo lo scambio
+  (`toContainText(/EUR.*USD/)`, poi `/USD.*EUR/`, varrebbe in tutte e quattro le lingue). Da proporre a W. Dettagli:
+  piano di T, «W1-f1, W2-b, W2-d e W1-f2», passi 7 e 9.
+- **TC-14 · I test «in scuro» di `image-crop.spec.ts` non sanno se il tema è scuro** — minimo; T, 16/10, lotto W1-g. Il
+  `beforeEach` (riga 616) e F1 (riga 643) riconoscono lo scuro da `[class*="dark"]`, che prende qualsiasi elemento con
+  un'utility `dark:`: in chiaro il `beforeEach` può non cliccare il selettore del tema, e F1 passa comunque. La migrazione
+  ai ruoli toglie le classi `dark:` e rende il controllo via via giusto, ma la cura è leggere solo `html` con
+  `toHaveClass(/\bdark\b/)`. Da proporre al proprietario degli spec dei file. Dettagli: piano di T, «W1-f1, W2-b, W2-d e
+  W1-f2», passo 10.
 
 ---
 
@@ -3659,7 +3718,7 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
     - oppure il pannello le nasconde.
 
   Prima un rosso sul caso speculare di W. Dettagli: piano J, §10 «Domande di W N1».
-- **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
+- ✅ **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
   non esperti); J, 15/10, nella nota sul punto 29 per il coordinatore.
   - `rolling_volatility`, `rolling_sharpe` e `rolling_beta` dichiarano `"x-suffix": "days"` sulla finestra (come oggi
     `rolling_return`), mentre il tooltip condiviso `signals.tooltips.riskWindow` dice «Number of prepared daily return
@@ -3667,6 +3726,9 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   - Per questi stimatori le osservazioni sono la misura giusta (annualizzazione per periodi): si cambia **solo
     l'etichetta**, in «osservazioni», nei 4 cataloghi. Deciso dal coordinatore il 15/10: nessun cambio di calcolo.
   -   Va con CP-10a, insieme al punto 29 (un solo Rolling Return a giorni di calendario, approvato dal developer il 15/10).
+  ✅ Chiusa da J il 16/10 in CP-10a: le tre finestre dichiarano `"x-suffix": "observations"`, con la chiave nuova
+  `signals.units.observations` nei 4 cataloghi; il tooltip `signals.tooltips.riskWindow` resta. Nessun calcolo cambia.
+  La matrice dei plugin lo fissa (`test_period_params_declare_their_unit_and_tooltip`). Commit: il checkpoint di CP-10a.
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati».
 - **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
@@ -3733,6 +3795,34 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   ✅ Chiusa da J il 16/10 in CP-6: la descrizione dice la formula (`amount / sum of all slices × 100`, arrotondata a
   0,01) e che con la liquidità negativa la fetta della cassa va sotto zero e le altre possono superare 100. `api sync`
   senza file tracciati cambiati. Commit: il checkpoint di CP-6.
+- **J-21 · La linea di un segnale del backend scavalca i punti che non hanno un valore** — basso, chiarezza; trovata dal
+  test-author di J (CP-10a), 16/10. Il renderer toglie i punti senza numero (`charts/signals/backendRenderer.ts:215`),
+  giustamente: mai uno zero finto. Ma `components/charts/chartCoreHelpers.ts:334` mette `connectNulls` a `true` quando
+  il segnale non lo dice, e il renderer non lo dice mai: la linea unisce i due lati del buco come se ci fossero valori.
+  Vale per ogni segnale del backend; il Rolling Return a calendario, ora nel pannello, ne ha quando manca il prezzo di
+  riferimento a metà serie. Proposta: per i segnali del backend la linea si interrompe dove il punto non ha valore
+  (`connectNulls: false` nel renderer), con un Vitest. File dei grafici: Y (FE2), o J d'accordo con Y. Dettagli: piano J,
+  §10 «CP-10a».
+- **J-22 · Debito di traduzione di CP-10a (un solo Rolling Return, J-13)** — basso, documentazione; J, 16/10. Pagine EN
+  cambiate di senso, senza stamp: `financial-theory/fundamentals/returns` (tutta la sezione Rolling Return; esce l'ancora
+  `#rolling-return-sessions`), `financial-theory/technical-analysis/indicators/index` (introduzione, righe Rolling Return e
+  Rolling Beta), `financial-theory/technical-analysis/risk-metrics/volatility` (prima frase della volatilità mobile),
+  `user/assets/detail/signals` (la voce Rolling Return e il paragrafo sulle finestre). ⚠️ `returns` e `signals` vanno
+  tradotte **nello stesso giro**: le pagine IT/FR/ES dei segnali puntano a `#rolling-return-sessions`, che oggi esiste
+  solo nelle `returns` IT/FR/ES; tradotta `returns` da sola, quei tre link si rompono. Dettagli: piano J, §10 «CP-10a».
+- **J-23 · Due incoerenze nelle pagine dell'analisi tecnica** — minimo, documentazione; trovate dal docs-writer di J
+  (CP-10a), 16/10, già prima del lotto. `financial-theory/technical-analysis/index.en.md:17` dice i concetti del gruppo
+  Rischio «sotto Risk Metrics», ma quello del Rolling Return sta sotto Returns; la riga Underwater Drawdown di
+  `indicators/index.en.md` porta a `max-drawdown`, mentre il `docs_path` del plugin e la pagina dei segnali portano a
+  `current-drawdown`. Da allineare in un lotto di documentazione, con il loro debito di traduzione.
+- **J-24 · Consegna al costo d'un titolo estero: i lotti e la Dashboard danno totali diversi** — basso, numeri (caso
+  raro); trovata dal docs-writer di J (CP-7a), 16/10, già da CP-16. Una rettifica in uscita col costo, su un titolo in
+  un'altra valuta: i lotti valutano la consegna al cambio del giorno (da CP-7a la differenza di cambio dal giorno
+  d'acquisto è realizzata; prima stava nel «di mercato»), la Dashboard toglie il costo dal capitale al valore storico e
+  la lascia cadere. Scarto dei totali: `q × costo × (cambio alla consegna − cambio all'acquisto)`. Decisione del
+  developer: (A, proposta) «al costo» anche nella valuta del report: i lotti valutano la consegna al costo medio storico
+  del pool nella valuta del report, come la Dashboard; (B) tenerla così e scriverlo nella pagina. Dettagli: piano J, §10
+  «CP-7».
 
 ## Z · Sospensione e risveglio (fase 01)
 
