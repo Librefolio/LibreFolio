@@ -2714,12 +2714,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
       della skill), così in scuro non ce n'è uno diverso dagli altri.
   - **Non di DV**, annotati per non perderli:
-    - `INPUT` e `TITLE_INPUT` di `planner/ui.ts` vanno col lotto di T sull'input;
-    - i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi) vanno anche loro col lotto di T
-      sull'input: `ChartSignalsSection`:609 e 798, `ChartAestheticsSection`:221 e 237, `SignalParamControl`:79 e 93;
-    - `ExposureMaps` (4) aspetta Y9.
+    - ✅ `INPUT` e `TITLE_INPUT` di `planner/ui.ts`: migrati dal lotto di T sull'input, `37972b529` (16/10);
+    - ✅ i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi): stesso lotto di T, `37972b529`;
+    - ✅ `ExposureMaps` (4): migrato da DV in W6-c, `5d2c1ce62` (16/10), dopo Y9;
+    - `KpiSection` (W6-b), 6 classi: le catene verso `KpiMetricBar`, ancora legacy (`components/ui/display`).
+      - Sono `valueColor`@354 e le barre @405 (valore contabile, blu) e @417 (liquidità, smeraldo, legata anche al
+        punto 2.2).
+      - Le prende T con `ui/display` (coordinatore, 16/10 10:58).
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
-    «W5-PAC» e «W5-charts».
+    «W5-PAC», «W5-charts» e «W6».
 - **DV-8 · Le linee dei broker ripetono i colori dal nono broker** — minimo; DV, 16/10 (W6-c, rilettura dello skill
   `design-system`).
   - `growthBrokerColor(index, dark)` (`frontend/src/lib/theme/chartPalettes.ts`) prende

@@ -271,21 +271,21 @@
     const fmtPct = (v: number) => formatPercent(v, {signed: false});
 </script>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="kpi-row">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-lf-primary" data-testid="kpi-row">
     <!-- Card 1 — Period P&L -->
-    <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
+    <div class="relative @container bg-lf-card rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
         {#if periodPnlPositive !== undefined}
             <div class="absolute top-0 left-0 right-0 h-0.5 {periodPnlPositive ? SIGN_BAR.accent.gain : SIGN_BAR.accent.loss}"></div>
         {/if}
         <div class="flex items-center justify-between">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.periodPnl')}</p>
+            <p class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('dashboard.periodPnl')}</p>
             <DocsLink path="user/dashboard/kpi-cards/#card-1-period-pl" label={$_('dashboard.periodPnl')} size={14} />
         </div>
         <div class="relative">
             {#if loading}
                 <div class="absolute inset-0 z-10 flex flex-col gap-2">
-                    <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-                    <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+                    <div class="h-7 w-3/4 bg-lf-neutral rounded animate-pulse"></div>
+                    <div class="h-3 w-1/2 bg-lf-panel rounded animate-pulse"></div>
                 </div>
             {/if}
             <div class:invisible={loading}>
@@ -317,33 +317,33 @@
                     <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor={SIGN_BAR.kpi.gain} valueColor={SIGN_TEXT.kpi.gain} />
                     <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor={SIGN_BAR.kpi.loss} valueColor={SIGN_TEXT.kpi.loss} />
                 </div>
-                <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
+                <p class="text-[10px] text-lf-muted mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
             </div>
         </div>
     </div>
 
     <!-- Card 2 — Returns -->
-    <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-returns">
+    <div class="relative @container bg-lf-card rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-returns">
         {#if roiIsPositive !== undefined}
             <div class="absolute top-0 left-0 right-0 h-0.5 {roiIsPositive ? SIGN_BAR.accent.gain : SIGN_BAR.accent.loss}"></div>
         {/if}
         <div class="flex items-center justify-between">
-            <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.returns')}</p>
+            <p class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('dashboard.returns')}</p>
             <DocsLink path="user/dashboard/kpi-cards/#card-2-returns" label={$_('dashboard.returns')} size={14} />
         </div>
         {#if loading}
-            <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-            <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
+            <div class="h-7 w-3/4 bg-lf-neutral rounded animate-pulse"></div>
+            <div class="h-3 w-1/2 bg-lf-panel rounded animate-pulse mt-2"></div>
         {:else}
             <!-- Timing effect hero (no bar) -->
             <div class="flex items-center justify-between">
                 <Tooltip text={$_('dashboard.timingEffectTooltip')} position="top">
                     <div class="flex flex-col cursor-help">
-                        <span class="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-wide border-b border-dotted border-gray-300 dark:border-gray-600 inline-block">{$_('dashboard.timingEffect')}</span>
+                        <span class="text-[10px] text-lf-muted uppercase tracking-wide border-b border-dotted border-lf-input inline-block">{$_('dashboard.timingEffect')}</span>
                         <span class="text-[10px] italic" data-testid="kpi-timing-effect-label" style={timingColor(0.4, 0.6)}>{timingLabel}</span>
                     </div>
                 </Tooltip>
-                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors {timingEffectVal == null ? 'text-gray-400 dark:text-gray-500' : ''}" data-testid="kpi-timing-effect-value" style={timingColor(0.3, 0.7)}>
+                <span class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold tabular-nums transition-colors {timingEffectVal == null ? 'text-lf-muted' : ''}" data-testid="kpi-timing-effect-value" style={timingColor(0.3, 0.7)}>
                     {#if timingEffectVal == null}—{:else}<TweenedValue value={timingEffectVal} format={(v) => `${formatFixed(v, 2, {signed: true})} ${$_('dashboard.pp')}`} />{/if}
                 </span>
             </div>
@@ -356,23 +356,23 @@
                 <KpiMetricBar testid="kpi-return-mwrr-cum" label={$_('dashboard.mwrrCum')} tooltip={$_('dashboard.mwrrCumTooltip')} value={mwrrCumPct} numericValue={mwrrCumVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(mwrrCumVal ?? 0)} barColor={retBarColor(mwrrCumVal ?? 0)} />
                 <KpiMetricBar testid="kpi-return-mwrr-ann" label={$_('dashboard.mwrrAnn')} tooltip={$_('dashboard.mwrrAnnTooltip')} value={mwrrAnnPct} numericValue={mwrrAnnVal ?? undefined} formatValue={fmtPct} barPct={retBarPct(mwrrAnnVal ?? 0)} barColor={retBarColor(mwrrAnnVal ?? 0)} />
             </div>
-            <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodBasedReturns')}</p>
+            <p class="text-[10px] text-lf-muted mt-1 italic">{$_('dashboard.periodBasedReturns')}</p>
         {/if}
     </div>
 
     <!-- Card 3 — Net Worth -->
-    <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
+    <div class="relative @container bg-lf-card rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-net-worth">
         <div class="flex items-center justify-between">
             <Tooltip text={$_('dashboard.netWorthTooltip')} position="top">
-                <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.netWorth')}</p>
+                <p class="text-xs font-medium uppercase tracking-wide text-lf-muted">{$_('dashboard.netWorth')}</p>
             </Tooltip>
             <DocsLink path="user/dashboard/kpi-cards/#card-3-net-worth" label={$_('dashboard.netWorth')} size={14} />
         </div>
         {#if loading}
-            <div class="h-7 w-3/4 bg-gray-200 dark:bg-slate-700 rounded animate-pulse"></div>
-            <div class="h-3 w-1/2 bg-gray-100 dark:bg-slate-700 rounded animate-pulse mt-2"></div>
+            <div class="h-7 w-3/4 bg-lf-neutral rounded animate-pulse"></div>
+            <div class="h-3 w-1/2 bg-lf-panel rounded animate-pulse mt-2"></div>
         {:else}
-            <p class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-gray-800 dark:text-gray-100 text-right tabular-nums" data-testid="kpi-value">
+            <p class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-lf-primary text-right tabular-nums" data-testid="kpi-value">
                 <TweenedValue value={navHeroAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false})} />
             </p>
             {#if totalPnlAmt != null}
@@ -420,7 +420,7 @@
                 />
                 <KpiDivergingFlowBar label={$_('dashboard.netDepositedCapital')} tooltipHtml={netDepositedTooltipHtml} value={netDepositedStr} depositPct={depositBarPct} withdrawPct={withdrawBarPct} valueColor={netDepositedPositive ? SIGN_TEXT.kpi.gain : SIGN_TEXT.kpi.loss} />
             </div>
-            <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodScopeNote')}</p>
+            <p class="text-[10px] text-lf-muted mt-1 italic">{$_('dashboard.periodScopeNote')}</p>
         {/if}
     </div>
 </div>

@@ -97,17 +97,10 @@ lib/features/brokers/lots/LotGanttChart.svelte	36
 lib/features/brokers/lots/LotWacPriceChart.svelte	48
 lib/features/brokers/lots/LotsAnalysisPanel.svelte	42
 lib/features/brokers/lots/UnifiedLotsTable.svelte	84
-lib/features/dashboard/AllocationHistoryChart.svelte	4
-lib/features/dashboard/ContributionTable.svelte	14
 lib/features/dashboard/ExposureTable.svelte	2
-lib/features/dashboard/ExposureTreemap.svelte	10
-lib/features/dashboard/GrowthChart.svelte	86
-lib/features/dashboard/KpiCard.svelte	14
-lib/features/dashboard/KpiSection.svelte	50
-lib/features/dashboard/OtherPeriodEffectsTable.svelte	28
-lib/features/dashboard/PerformanceChart.svelte	4
+lib/features/dashboard/KpiSection.svelte	6
+lib/features/dashboard/OtherPeriodEffectsTable.svelte	8
 lib/features/dashboard/PositionsPanel.svelte	46
-lib/features/dashboard/YieldOnCostCell.svelte	8
 lib/features/files/FileGrid.svelte	1
 lib/features/risk/RiskReturnLevel.svelte	4
 lib/features/settings/CachePanel.svelte	34
@@ -146,7 +139,6 @@ routes/(app)/assets/+page.svelte	234
 routes/(app)/assets/[id]/+page.svelte	312
 routes/(app)/brokers/+page.svelte	38
 routes/(app)/brokers/[id]/+page.svelte	141
-routes/(app)/dashboard/+page.svelte	77
 routes/(app)/fx/+page.svelte	97
 routes/(app)/fx/[pair]/+page.svelte	169
 routes/(app)/settings/+page.svelte	3
