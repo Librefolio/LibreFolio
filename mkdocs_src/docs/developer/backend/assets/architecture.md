@@ -10,11 +10,11 @@ responsibility:
 | Module | Responsibility |
 |--------|----------------|
 | `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard; `AssetRateLimitedError` and the helpers that recognise a refusal for too many requests (`rate_limited_from_response()`, `rate_limited_from_exception()`, `raise_if_rate_limited()`). |
-| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors (hiding an error's texts whole when the call carries a personal secret), and runs the call in a thread of its own (`_run_provider_in_thread`); `public_asset_url()`, which withholds an asset URL that shows one of the provider's secrets; `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; provider-parameter hashing; error sanitization. |
+| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors (hiding an error's texts whole when the call carries a personal secret), and runs the call in a thread of its own (`_run_provider_in_thread`); `public_asset_url()`, which withholds an asset URL that shows one of the provider's secrets; `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; `asset_cache_key()`, the one key of the history and current caches (provider, identifier, input type, parameter hash, settings), and `drop_asset_cache_entries()`, which drops both entries of an assignment; provider-parameter hashing; error sanitization. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
-| `price_store.py` | Price upserts/deletes, OHLC integrity checks, and bounded write chunks. |
+| `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price refused, a provider's truncated), and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
@@ -163,6 +163,15 @@ Persistence intentionally does **not** claim one atomic transaction for the whol
 `last_fetch_at` is committed separately afterwards. This keeps SQLite writer-lock windows bounded
 and preserves truthful partial results when one step fails. Provider-generated events remain
 scoped by `provider_assignment_id`, so manual events are not replaced.
+
+`bulk_upsert_prices()` writes `open`, `high`, `low` and `close` through
+`truncate_priceHistory()` (`backend/app/db/precision.py`): 12 decimal places, then 15
+significant digits, both rounded down — what a `RealDecimal(24, 12)` column reads back (see
+[Decimal Columns](../../architecture/database/index.md#decimal-columns)). That truncation is
+for a provider's long floats. A manual call (`source_plugin_key="MANUAL"`, the default, used by
+`POST /assets/prices`) is checked first instead: `_reject_prices_over_the_limit()` refuses the
+whole call when a price exceeds either limit, before anything of it is written — a
+`ValueError`, which the route answers with HTTP 400 naming the asset, the maxima and the dates.
 
 ---
 
@@ -378,11 +387,14 @@ cost unknown it stays `MISSING`.
 - **Canonical cache ownership**: `assets/core.py` owns the history, current, metadata,
   search-result, and search-query singleton caches. Responsibility modules dereference these
   objects through `core`, preserving one identity and one monkeypatch point.
-- **`_asset_current_cache`**: caches provider current-value results. The live-query path keys by
-  provider code, identifier, and identifier type; refresh keys also include the provider-parameter
-  hash so parameter changes cannot reuse stale data. Both also include the fingerprint of the
-  provider's settings, as do the history, metadata and search-query keys, so different settings never
+- **`_asset_current_cache`**: caches provider current-value results. The live-query path and refresh
+  share one key, built by `asset_cache_key()`: provider code, identifier, identifier type and the
+  provider-parameter hash, so parameter changes cannot reuse stale data and two assets whose
+  parameters differ never share a value. The key also includes the fingerprint of the provider's
+  settings, as do the history, metadata and search-query keys, so different settings never
   share an entry (see [Plugin Settings](../../architecture/patterns/plugin_settings.md#caching)).
+  The code that drops entries, when a parametric assignment changes or an asset's currency changes,
+  goes through `drop_asset_cache_entries()`, which keys them the same way.
 - **Provider Pre-warm**: `_prewarm_provider_caches()` runs asynchronously in the application
   lifespan, instantiating registered providers and allowing providers with internal data caches
   to warm them.
@@ -411,13 +423,13 @@ cost unknown it stays `MISSING`.
 | `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
-| `POST /api/v1/assets/prices` | POST | Bulk upsert prices |
+| `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 decimal places or 15 significant digits refuses the whole call (400) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
 | `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
-| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
+| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only; a value over 6 decimal places or 15 significant digits is a 400 `EVENT_TOO_MANY_DIGITS`); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
 | `DELETE /api/v1/assets/events` | DELETE | Bulk delete the events of one asset (`asset_id` required, with `ids`): an id of another asset comes back `not_found`, an event a transaction uses `in_use` |
 | `POST /api/v1/assets/events/query` | POST | Bulk event query, each event with its `id` and `is_auto` flag |
 | `GET /api/v1/assets/events` | GET | Events by id |

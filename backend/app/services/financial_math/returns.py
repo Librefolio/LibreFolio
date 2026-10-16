@@ -1,6 +1,9 @@
 """
 Returns: Simple ROI, TWRR, MWRR (XIRR) and annualization — pure math, no I/O.
 
+Also: rebasing to a period's start, net holding return, G/L ratio, realized gain, price return,
+and the gain that recovers a drawdown (``required_recovery_return``).
+
 Provides TWRR, MWRR (XIRR), and Simple ROI calculations.
 
 Cash flow sign convention (standard finance):
@@ -231,6 +234,24 @@ def price_return(start: Decimal | None, end: Decimal | None) -> Decimal | None:
     if start is None or end is None or start == 0:
         return None
     return end / start - 1
+
+
+def required_recovery_return(drawdown: float) -> float | None:
+    """The gain that brings a value back to its peak after a peak-relative drawdown: ``-d / (1 + d)``.
+
+    ``drawdown`` is a ratio at or below zero (``-0.2`` = 20 % below the peak), so a fall of 20 % needs a
+    gain of 25 %. The form ``-d / (1 + d)`` keeps small values precise, where ``1 / (1 + d) - 1`` loses
+    digits. 0 when nothing is lost (never a negative zero); None for a total loss (``d <= -1``), which no
+    finite gain recovers. A positive or non-finite drawdown is a caller's error: ValueError.
+    """
+    value = float(drawdown)
+    if not math.isfinite(value) or value > 0:
+        raise ValueError("drawdown must be a finite ratio at or below zero")
+    if value <= -1.0:
+        return None
+    if value == 0:
+        return 0.0
+    return -value / (1.0 + value)
 
 
 def calculate_simple_roi(current_nav: Decimal, total_invested: Decimal) -> Decimal:

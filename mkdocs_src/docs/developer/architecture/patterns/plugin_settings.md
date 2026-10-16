@@ -593,8 +593,9 @@ by the code alone for a provider without fields). Different settings never share
 users with the same values do.
 
 - Code that deletes entries by key rebuilds the settings part with `settings_cache_part_for(code)`, as
-  a call would compute it now. An entry stored under other settings has another key: no lookup reaches
-  it, and it expires with its TTL.
+  a call would compute it now (for the asset history and current values, through
+  `drop_asset_cache_entries()` in `assets/core.py`). An entry stored under other settings has another
+  key: no lookup reaches it, and it expires with its TTL.
 - The FX catalogue's fallback, the last list a provider returned, served for a few minutes when the
   provider fails, is kept by provider code, not by settings.
 - The fingerprint covers the core's caches only. A cache the plugin keeps itself must not mix results

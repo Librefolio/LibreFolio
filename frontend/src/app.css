@@ -205,10 +205,6 @@ html.dark .bg-gray-100 {
     background-color: var(--theme-bg-tertiary) !important;
 }
 
-html.dark .text-gray-800 {
-    color: var(--theme-text-primary) !important;
-}
-
 html.dark .text-gray-600,
 html.dark .text-gray-700 {
     color: var(--theme-text-secondary) !important;

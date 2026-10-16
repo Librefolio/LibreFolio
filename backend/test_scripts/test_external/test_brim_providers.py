@@ -40,7 +40,8 @@ import pytest
 from pydantic import BaseModel
 
 from backend.app.config import PROJECT_ROOT
-from backend.app.db.models import TransactionType
+from backend.app.db import precision
+from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.brim import (
     COMBINED_REQUIRED_HEADERS,
     BRIMCombinedTable,
@@ -6301,6 +6302,105 @@ class TestBundledPluginIcons:
                 problems.append(f"{code}: {relative!r} is not a file of {folder}")
 
         assert not problems, f"{len(problems)} bundled icon(s) the app cannot serve:\n" + "\n".join(f"  {problem}" for problem in problems)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C-97a, decision D6: a value a plugin COMPUTES is rounded by the plugin, with
+# ``precision.round_computed_value`` (column scale ROUND_HALF_EVEN, then 15
+# significant digits on a RealDecimal column), so the batch does not refuse it;
+# a value READ from the file stays as read (decision D2). The rows are the
+# bundled samples with one cell changed, parsed by the rows-level parser, as in
+# test_credit_agricole_securities_ignores_recap_footer.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _decimal_limit_issue():
+    """``precision.decimal_limit_issue``, looked up when the test runs (new in C-97a)."""
+    found = getattr(precision, "decimal_limit_issue", None)
+    if found is None:
+        pytest.fail("backend/app/db/precision.py has no decimal_limit_issue: nothing tells whether the cost basis this plugin computed is one the batch accepts")
+    return found
+
+
+def _set_cells(rows: List[List[Any]], header: List[Any], match: dict, values: dict, *, first_only: bool = True) -> int:
+    """Set ``values`` (column name -> cell) on the rows whose cells equal ``match`` (column name -> cell); returns how many."""
+    index = {str(cell).strip(): position for position, cell in enumerate(header)}
+    changed = 0
+    for row in rows:
+        if all(len(row) > index[name] and str(row[index[name]]).strip() == cell for name, cell in match.items()):
+            for name, cell in values.items():
+                row[index[name]] = cell
+            changed += 1
+            if first_only:
+                break
+    return changed
+
+
+def _succession_costs(out, name: str) -> set:
+    """The per-unit cost bases of the ADJUSTMENTs (successions, transfers-in) of the asset the plugin extracted as ``name``."""
+    return {tx.cost_basis_override.amount for tx in out.transactions if tx.type == TransactionType.ADJUSTMENT and tx.cost_basis_override is not None and getattr(out.extracted_assets.get(tx.asset_id), "extracted_name", None) == name}
+
+
+class TestComputedValuesAreRounded:
+    """C-97a D6: Intesa's per-unit cost (cost / qty) and Crédit Agricole's bond price (price / 100) are rounded by the plugin."""
+
+    INTESA_FUND_ISIN = "LU2178929613"
+    CA_BOND = "BTP 1/12/2026 1.25%"
+    CA_FUND = "AMUNDI PRIMO INV LC"
+
+    def test_intesa_snapshot_per_unit_cost_is_rounded_by_the_plugin(self):
+        """Red. A snapshot position with a fiscal cost of 1000.00 EUR for 3 units.
+
+        Before: cost_basis_override 333.3333333333333333333333333 (cost / qty, 28 digits), which the batch now
+        refuses (more than 12 decimals). Contract: 333.333333333333 (round_computed_value: 12 decimals,
+        ROUND_HALF_EVEN, 15 significant digits), which decimal_limit_issue accepts.
+        """
+        rows = read_rows(INTESA_PATRIMONIO_SAMPLE)
+        header = next(row for row in rows if any(str(cell).strip() == "Numero Quote" for cell in row))
+        cost_column = next(str(cell).strip() for cell in header if str(cell).strip().startswith("Controvalore di carico fiscale"))
+        assert _set_cells(rows, header, {"ISIN": self.INTESA_FUND_ISIN}, {"Numero Quote": "3", cost_column: "1.000,00"}) == 1, f"the sample has no fund {self.INTESA_FUND_ISIN} to edit"
+
+        out = IntesaSanpaoloBrokerProvider()._parse_patrimonio(rows, broker_id=9)
+
+        seed = next(tx for tx in out.transactions if tx.type == TransactionType.ADJUSTMENT and tx.asset_id in out.extracted_assets and out.extracted_assets[tx.asset_id].extracted_isin == self.INTESA_FUND_ISIN)
+        assert seed.quantity == Decimal("3"), f"the edited position was read as {seed.quantity} units, not 3"
+        assert seed.cost_basis_override is not None
+        amount = seed.cost_basis_override.amount
+        assert amount == Decimal("333.333333333333"), f"an Intesa snapshot of 3 units at a fiscal cost of 1000.00 EUR seeds a per-unit cost basis of {amount}: the batch refuses the import; expected 333.333333333333 (round_computed_value)"
+        issue = _decimal_limit_issue()(amount, Transaction, "cost_basis_override")
+        assert issue is None, f"the per-unit cost basis {amount} the Intesa plugin computed is refused by decimal_limit_issue: {issue}"
+
+    def test_credit_agricole_bond_succession_price_over_100_is_rounded_by_the_plugin(self):
+        """Red. A bond carried in (GIRO ALTRO DOSSIER) at 95,123456789087 per 100 of nominal.
+
+        Before: per-unit cost 0.95123456789087 (price / 100, 14 decimals), which the batch now refuses. Contract:
+        0.951234567891 (12 decimals, ROUND_HALF_EVEN: the digit after the 12th is 8, so not ROUND_DOWN's
+        0.951234567890), which decimal_limit_issue accepts.
+        """
+        rows = read_rows(CA_SAMPLE)
+        header = rows[0]
+        assert _set_cells(rows, header, {"Nome": self.CA_BOND, "Causale": "GIRO ALTRO DOSSIER"}, {"Prezzo": "95,123456789087"}) == 1, f"the sample has no succession of {self.CA_BOND} to edit"
+
+        out = CreditAgricoleBrokerProvider()._parse_securities(rows, broker_id=1)
+
+        costs = _succession_costs(out, self.CA_BOND)
+        assert Decimal("0.951234567891") in costs, f"a {self.CA_BOND} carried in at 95,123456789087 per 100 seeds per-unit cost bases {sorted(costs)}: the batch refuses 14 decimals; expected 0.951234567891 (round_computed_value)"
+        refused = {cost: _decimal_limit_issue()(cost, Transaction, "cost_basis_override") for cost in costs}
+        assert not {cost: issue for cost, issue in refused.items() if issue is not None}, f"decimal_limit_issue still refuses the bond cost bases the plugin computed: {refused}"
+
+    def test_guard_credit_agricole_fund_succession_price_stays_as_read(self):
+        """GUARD (D2, green before and after): a fund is priced per unit, nothing is computed, the price is kept as read.
+
+        17 significant digits, which the batch refuses later: rounding a value read from a file is not the plugin's job.
+        """
+        rows = read_rows(CA_SAMPLE)
+        header = rows[0]
+        assert _set_cells(rows, header, {"Nome": self.CA_FUND, "Causale": "VERS.TITOLI"}, {"Prezzo": "4,9812345678912345"}) == 1, f"the sample has no succession of {self.CA_FUND} to edit"
+
+        out = CreditAgricoleBrokerProvider()._parse_securities(rows, broker_id=1)
+
+        costs = _succession_costs(out, self.CA_FUND)
+        assert Decimal("4.9812345678912345") in costs, f"a {self.CA_FUND} carried in at 4,9812345678912345 seeds per-unit cost bases {sorted(costs)}: a price read from the file must stay as read (D2)"
 
 
 if __name__ == "__main__":
