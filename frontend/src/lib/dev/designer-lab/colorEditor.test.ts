@@ -15,6 +15,11 @@
  * on `<html>`, so a variable it must resolve is set there (jsdom answers custom properties on `<html>`), and the test
  * where it is missing is the control that proves it is read. Assertions go through test ids and the values the test
  * passed in, never through the Lab's labels.
+ *
+ * The last block is the editor of a chart category (`category`, contract C1–C4 with DV): it starts from the value the
+ * tables write for the scope, lists the category's line in each theme, offers no translucent variants (a category is
+ * edited by key, not by value), and a chart colour that is also a category's colour warns which categories editing the
+ * value reaches. Its keys and values are made up too.
  */
 
 import {afterEach, describe, expect, it, vi} from 'vitest';
@@ -22,7 +27,7 @@ import {cleanup, fireEvent, render, screen} from '$test/component';
 import ColorEditor from './ColorEditor.svelte';
 import {parseColor, rgbaToOklch, type Rgba} from './color.js';
 import {changeId, emptyState, upsertChange} from './store';
-import type {CatalogLiteral, CatalogVar, ColorCatalog, LabChange, LabSelection, LabState} from './types';
+import type {CatalogLiteral, CatalogVar, ColorCatalog, LabChange, LabSelection, LabState, Scope} from './types';
 
 const OVERLAY = 'color-mix(in oklab, #0f1412 60%, transparent)';
 const SELECTED = 'color-mix(in oklab, var(--lf-focus) 12%, transparent)';
@@ -244,5 +249,80 @@ describe('ColorEditor — a value that is not a colour', () => {
         expect(screen.queryByTestId('lab-editor-a')).toBeNull();
         expect(screen.queryByTestId('lab-editor-l')).toBeNull();
         expect(screen.getByTestId('lab-editor-apply')).toBeDisabled();
+    });
+});
+
+describe('ColorEditor — a chart category, edited by key', () => {
+    const TABLES = 'src/lab-test/categories.ts';
+    /** A line of the category tables, or (without a category) a chart colour elsewhere: made-up values. */
+    function chartLine(id: number, file: number, line: number, raw: string, theme: 'light' | 'dark', category?: string): CatalogLiteral {
+        return {id, file, line, col: 16, raw, kind: 'hex', key: raw.toLowerCase(), alpha: 1, zone: 'ts', theme, layer: 'chart-color', preview: true, chart: true, snippet: `${theme}: '${raw}',`, ...(category ? {category} : {})};
+    }
+    // `type:AAA` and `sector:Zed Sector` share their light value: an edit of that value reaches both categories.
+    const categoryCatalog: ColorCatalog = {
+        ...catalog,
+        files: [TABLES, 'src/lab-test/Chart.svelte'],
+        css_vars: [],
+        literals: [chartLine(0, 0, 10, '#2B4C7E', 'light', 'type:AAA'), chartLine(1, 0, 11, '#7EA6E0', 'dark', 'type:AAA'), chartLine(2, 0, 20, '#2B4C7E', 'light', 'sector:Zed Sector'), chartLine(3, 0, 21, '#334455', 'dark', 'sector:Zed Sector'), chartLine(4, 1, 5, '#5A6B7C', 'light')],
+        by_value: {},
+        categories: [
+            {target: 'type:AAA', kind: 'type', key: 'AAA', light: 0, dark: 1},
+            {target: 'sector:Zed Sector', kind: 'sector', key: 'Zed Sector', light: 2, dark: 3},
+        ],
+    };
+    const AAA: LabSelection = {layer: 'category', target: 'type:AAA'};
+
+    function renderCategory(selection: LabSelection, scope: Scope, dark = false) {
+        const onApply = vi.fn<(change: LabChange) => void>();
+        render(ColorEditor, {props: {catalog: categoryCatalog, lab: emptyState(), selection, scope, dark, revision: 0, onApply, onRemove: vi.fn(), onClose: vi.fn()}});
+        return {onApply};
+    }
+
+    it.each([
+        ['light', false, '#2B4C7E'],
+        ['dark', false, '#7EA6E0'],
+        ['both', false, '#2B4C7E'],
+        ['both', true, '#7EA6E0'],
+    ] as const)('starts from the value the table writes for the scope (%s, page dark %s)', (scope, dark, value) => {
+        renderCategory(AAA, scope, dark);
+        expect(screen.getByTestId('lab-editor-from')).toHaveTextContent(value);
+        expect(to()).toHaveValue(value);
+    });
+
+    it('says what a category edit reaches and lists its line in each theme, with no translucent-variants checkbox', () => {
+        renderCategory(AAA, 'both');
+        expect(screen.getByTestId('lab-editor-category-reach')).toBeInTheDocument();
+        const rows = Array.from(screen.getByTestId('lab-editor-category-lines').querySelectorAll('li'));
+        expect(rows.map((li) => li.textContent?.includes(`${TABLES}:10`) && li.textContent.includes('#2B4C7E'))).toEqual([true, false]);
+        expect(rows.map((li) => li.textContent?.includes(`${TABLES}:11`) && li.textContent.includes('#7EA6E0'))).toEqual([false, true]);
+        expect(screen.queryByTestId('lab-editor-alpha')).toBeNull();
+        expect(screen.queryByTestId('lab-editor-occurrences')).toBeNull();
+        // Edited by key: the value the category shares with another is not this editor's concern.
+        expect(screen.queryByTestId('lab-editor-category-warning')).toBeNull();
+    });
+
+    it('applies a category change: its layer, target and scope, the table’s value as the start', async () => {
+        const {onApply} = renderCategory(AAA, 'dark');
+        await fireEvent.input(to(), {target: {value: '#123456'}});
+        await fireEvent.click(screen.getByTestId('lab-editor-apply'));
+        expect(onApply).toHaveBeenCalledTimes(1);
+        const change = {layer: 'category', target: 'type:AAA', scope: 'dark', from: '#7EA6E0', to: '#123456'} as const;
+        const applied = onApply.mock.calls[0][0];
+        expect(applied).toEqual({...change, id: changeId(change)});
+        expect('alphaVariants' in applied).toBe(false);
+    });
+
+    it('warns, on a chart colour that is a category’s colour, which categories editing the value reaches', () => {
+        renderCategory({layer: 'chart-color', target: '#2b4c7e'}, 'both');
+        const warning = screen.getByTestId('lab-editor-category-warning');
+        expect(warning).toHaveTextContent('type:AAA');
+        expect(warning).toHaveTextContent('sector:Zed Sector');
+    });
+
+    it('gives no warning on a chart colour no category writes', () => {
+        renderCategory({layer: 'chart-color', target: '#5a6b7c'}, 'both');
+        // Barrier: the editor lists the colour's occurrence, so the warning had what it needs to appear.
+        expect(screen.getByTestId('lab-editor-occurrences').querySelectorAll('li')).toHaveLength(1);
+        expect(screen.queryByTestId('lab-editor-category-warning')).toBeNull();
     });
 });

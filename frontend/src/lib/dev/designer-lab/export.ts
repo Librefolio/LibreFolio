@@ -12,7 +12,7 @@ import type {CatalogLiteral, ColorCatalog, LabAnchor, LabAnchorCandidate, LabCha
 import {isSafeCssValue, isSafeSelector} from './engine/targets';
 
 export const EXPORT_SCHEMA = 'lf-designer-lab/1';
-const LAYERS = ['css-var', 'css-literal', 'chart-color', 'proposal', 'element'] as const;
+const LAYERS = ['css-var', 'css-literal', 'chart-color', 'proposal', 'element', 'category'] as const;
 const SCOPES: Scope[] = ['light', 'dark', 'both'];
 const LITERAL_LAYERS: Record<string, Layer[]> = {'css-literal': ['css-literal'], 'chart-color': ['chart-color'], proposal: ['script', 'markup', 'static']};
 const SOURCE_KINDS: SourceKind[] = ['var', 'tailwind-class', 'rule-literal', 'inline', 'attribute', 'current-color', 'chart', 'unknown'];
@@ -51,6 +51,8 @@ export interface ExportChange {
     color_key?: string;
     /** The element the change was decided on (always for `element`). */
     anchor?: LabAnchor;
+    /** `category`: the chart category the change colours, as its table writes it; the occurrences are its lines. */
+    category?: {kind: 'type' | 'sector' | 'bucket'; key: string};
     occurrences: ExportOccurrence[];
     note?: string;
     shots?: string[];
@@ -117,6 +119,14 @@ function exportChange(catalog: ColorCatalog, change: LabChange): ExportChange {
         out.property = change.property ?? '';
         if (change.colorKey) out.color_key = change.colorKey;
         out.occurrences = (change.anchor?.candidates ?? []).map((c) => ({file: c.file, line: c.line, raw: c.needle, why: c.why}));
+    } else if (change.layer === 'category') {
+        // By key: the category's own line in each theme of the change, never the other places that write its value.
+        const category = catalog.categories?.find((c) => c.target === change.target);
+        if (category) {
+            out.category = {kind: category.kind, key: category.key};
+            const ids = change.scope === 'both' ? [category.light, category.dark] : [category[change.scope]];
+            out.occurrences = ids.filter((id): id is number => id !== null && !!catalog.literals[id]).map((id) => literalOccurrence(catalog, catalog.literals[id]));
+        }
     } else {
         out.granularity = change.occurrence === undefined ? 'value' : 'occurrence';
         out.alpha_variants = change.alphaVariants !== false;
@@ -292,6 +302,12 @@ export function parseImport(text: string, base: LabState, catalog: ColorCatalog)
             }
             change.property = property;
             if (property === 'chart') change.colorKey = c.color_key;
+        } else if (c.layer === 'category') {
+            // A category of this catalogue only: its key names lines of the tables the app is built with.
+            if (!/^(type|sector|bucket):[A-Za-z0-9 _&.-]{1,60}$/.test(c.target) || (catalog.categories && !catalog.categories.some((x) => x.target === c.target))) {
+                errors.push(`change ${i}: unknown category ${c.target.slice(0, 80)}`);
+                return;
+            }
         } else if (c.layer !== 'css-var') change.alphaVariants = c.alpha_variants !== false;
         if (c.anchor !== undefined) {
             const anchor = sanitizeAnchor(c.anchor);

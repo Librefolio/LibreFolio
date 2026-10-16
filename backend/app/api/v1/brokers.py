@@ -452,8 +452,8 @@ async def list_broker_access(
     """
     List all users with access to a broker.
 
-    Any user with access to the broker can view the access list.
-    Superusers can view any broker's access list.
+    Any authenticated user can read the access list of any existing broker, email addresses included; a broker that
+    does not exist answers 404.
     """
     service = BrokerService(session)
     broker = await service.get_by_id(
@@ -490,10 +490,10 @@ async def bulk_update_broker_access(
 
     Rules:
     - Only OWNERs (or superusers) can call this endpoint.
-    - At least one OWNER must remain after the operation.
+    - At least one OWNER must remain after the operation: nobody, the caller included, can remove or downgrade the
+      last one.
     - Only OWNERs can have share_percentage > 0.
     - Sum of all share_percentage values must be ≤ 1.0 (fraction, not percent).
-    - The calling user cannot remove themselves as the last OWNER.
     """
     if not items:
         raise HTTPException(status_code=422, detail="At least one access item is required")
