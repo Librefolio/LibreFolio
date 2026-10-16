@@ -1,0 +1,436 @@
+import {describe, it, expect} from 'vitest';
+import {FAKE_ASSET_ID_BASE, isFakeAssetId} from '$lib/features/transactions/import/isFakeAssetId';
+import type {BrimParseResponse} from '$lib/types';
+import {buildMergedTransactions, mergeCandidates, uniqueCandidateId, type MergeSourceResult, type MergeBroker} from './importMerge';
+import type {AssetResolution} from './importTypes';
+
+const FAKE = FAKE_ASSET_ID_BASE;
+
+type Candidates = AssetResolution['candidates'];
+const cand = (asset_id: number, match_confidence: string): Candidates[number] => ({asset_id, name: `asset ${asset_id}`, match_confidence});
+
+/** Assemble a "done" parse result around a loose response body. */
+const src = (fileId: string, brokerId: number, response: Record<string, unknown>): MergeSourceResult => ({
+    fileId,
+    brokerId,
+    status: 'done',
+    response: response as unknown as BrimParseResponse,
+});
+
+describe('uniqueCandidateId', () => {
+    // Policy (mirrors the backend's `search_asset_candidates`, see
+    // test_brim_bulk_candidates.py): one distinct asset id among the candidates — of ANY
+    // confidence — selects it. Two or more distinct ids is an ambiguity the wizard must not
+    // arbitrate on its own, regardless of how strong either match is individually. The prior
+    // `uniqueExactCandidateId` only ever looked at the EXACT tier, which both force-selected an
+    // EXACT match over a competing HIGH one (silently discarding the ambiguity) and refused a
+    // lone HIGH match that was never in doubt.
+    it('collapses a primary-column match and an alias match for the same asset to one candidate, and selects it', () => {
+        // mergeCandidates is what actually dedupes same-id entries (see below); this asserts
+        // uniqueCandidateId agrees once that dedup has happened — a single distinct id, EXACT
+        // via the primary column, HIGH via the alias, resolves same as any other lone match.
+        expect(uniqueCandidateId([cand(2, 'exact'), cand(2, 'high')])).toBe(2);
+    });
+    it('rejects the ambiguity between an EXACT and a HIGH match for two different assets', () => {
+        expect(uniqueCandidateId([cand(1, 'exact'), cand(2, 'high')])).toBeNull();
+    });
+    it('rejects the ambiguity between two EXACT matches for two different assets', () => {
+        expect(uniqueCandidateId([cand(1, 'exact'), cand(2, 'exact')])).toBeNull();
+    });
+    it('selects a lone HIGH-confidence candidate — no EXACT match is required', () => {
+        expect(uniqueCandidateId([cand(5, 'high')])).toBe(5);
+    });
+    it('returns null for an empty candidate list', () => {
+        expect(uniqueCandidateId([])).toBeNull();
+    });
+});
+
+describe('mergeCandidates', () => {
+    it('unions by asset id, keeping the strongest confidence, sorted strongest-first', () => {
+        const merged = mergeCandidates([cand(1, 'medium'), cand(2, 'low')], [cand(1, 'exact'), cand(3, 'high')]);
+        expect(merged.map((c) => c.asset_id)).toEqual([1, 3, 2]);
+        expect(merged.find((c) => c.asset_id === 1)?.match_confidence).toBe('exact');
+    });
+    it('sorts an unknown confidence tier last', () => {
+        const merged = mergeCandidates([cand(1, 'mystery')], [cand(2, 'high')]);
+        expect(merged.map((c) => c.asset_id)).toEqual([2, 1]);
+    });
+});
+
+describe('buildMergedTransactions — flattening', () => {
+    it('concatenates every done file into one globally-indexed list', () => {
+        const results = [src('fileA', 1, {transactions: [{type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: 10}]}), src('fileB', 1, {transactions: [{type: 'SELL', date: '2024-05-02', quantity: 2, asset_id: 11}]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr.map((t) => t.index)).toEqual([0, 1]);
+        expect(txArr.map((t) => t.sourceFileId)).toEqual(['fileA', 'fileB']);
+    });
+
+    it('processes only done results that carry a response', () => {
+        const results: MergeSourceResult[] = [
+            {fileId: 'pending', brokerId: 1, status: 'pending', response: null},
+            {fileId: 'err', brokerId: 1, status: 'error', response: {transactions: [{type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: 1}]} as unknown as BrimParseResponse},
+            src('done', 1, {transactions: [{type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: 1}]}),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr).toHaveLength(1);
+        expect(txArr[0].sourceFileId).toBe('done');
+    });
+
+    it('leaves a real asset id untouched and records no resolution for it', () => {
+        const {txArr, assetMap} = buildMergedTransactions([src('f', 1, {transactions: [{type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: 42}]})], [{id: 1}], []);
+        expect(txArr[0].tx.asset_id).toBe(42);
+        expect(assetMap.size).toBe(0);
+    });
+});
+
+describe('buildMergedTransactions — fake id remapping', () => {
+    const twoFilesSameFake = () => [
+        src('fileA', 1, {transactions: [{type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: FAKE}], asset_mappings: [{fake_asset_id: FAKE, extracted_isin: 'IT0001', candidates: [], selected_asset_id: null}]}),
+        src('fileB', 1, {transactions: [{type: 'BUY', date: '2024-05-02', quantity: 1, asset_id: FAKE}], asset_mappings: [{fake_asset_id: FAKE, extracted_isin: 'IT0002', candidates: [], selected_asset_id: null}]}),
+    ];
+
+    it('gives each file its own global fake id so two instruments never share a resolution', () => {
+        const {txArr, assetMap, fileIdOfFake} = buildMergedTransactions(twoFilesSameFake(), [{id: 1}], []);
+        // The two colliding plugin ids are remapped to distinct globals.
+        expect(txArr[0].tx.asset_id).not.toBe(txArr[1].tx.asset_id);
+        expect(assetMap.size).toBe(2);
+        // Provenance is recorded per global id.
+        expect(fileIdOfFake.get(txArr[0].tx.asset_id as number)).toBe('fileA');
+        expect(fileIdOfFake.get(txArr[1].tx.asset_id as number)).toBe('fileB');
+        // Each resolution keeps its own extracted code.
+        expect(assetMap.get(txArr[0].tx.asset_id as number)?.extractedIsin).toBe('IT0001');
+        expect(assetMap.get(txArr[1].tx.asset_id as number)?.extractedIsin).toBe('IT0002');
+    });
+
+    it('reuses one global id for repeats of the same plugin fake within a file', () => {
+        const results = [
+            src('fileA', 1, {
+                transactions: [
+                    {type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: FAKE},
+                    {type: 'SELL', date: '2024-05-03', quantity: 1, asset_id: FAKE},
+                ],
+                asset_mappings: [{fake_asset_id: FAKE, extracted_isin: 'IT0001', candidates: [], selected_asset_id: null}],
+            }),
+        ];
+        const {txArr, assetMap} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr[0].tx.asset_id).toBe(txArr[1].tx.asset_id);
+        expect(assetMap.size).toBe(1);
+    });
+
+    it('auto-binds a lone exact candidate but lets an explicit selection win', () => {
+        const results = [
+            src('auto', 1, {transactions: [{type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: FAKE}], asset_mappings: [{fake_asset_id: FAKE, candidates: [cand(99, 'exact')], selected_asset_id: null}]}),
+            src('explicit', 2, {transactions: [{type: 'BUY', date: '2024-05-01', quantity: 1, asset_id: FAKE}], asset_mappings: [{fake_asset_id: FAKE, candidates: [cand(99, 'exact')], selected_asset_id: 77}]}),
+        ];
+        const {txArr, assetMap} = buildMergedTransactions(results, [{id: 1}, {id: 2}], []);
+        expect(assetMap.get(txArr[0].tx.asset_id as number)?.resolvedAssetId).toBe(99);
+        expect(assetMap.get(txArr[1].tx.asset_id as number)?.resolvedAssetId).toBe(77);
+    });
+});
+
+describe('buildMergedTransactions — selection and duplicates', () => {
+    const buy = (asset_id: number, date = '2024-05-01') => ({type: 'BUY', date, quantity: 1, asset_id});
+
+    it('auto-selects unique rows and never a likely duplicate', () => {
+        const results = [src('f', 1, {transactions: [buy(1), buy(2)], duplicates: {tx_likely_duplicates: [{tx_row_index: 1, tx_existing_matches: [{existing_tx_id: 500}]}]}})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr[0].duplicateStatus).toBe('unique');
+        expect(txArr[0].selected).toBe(true);
+        expect(txArr[1].duplicateStatus).toBe('likely');
+        expect(txArr[1].selected).toBe(false);
+    });
+
+    it('does not select a row dated before the broker opened', () => {
+        const results = [src('f', 1, {transactions: [buy(1, '2024-05-01')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1, opened_at: '2024-06-01'}], []);
+        expect(txArr[0].selected).toBe(false);
+    });
+
+    it('drops a duplicate whose only DB match is being deleted, restoring auto-select', () => {
+        const results = [src('f', 1, {transactions: [buy(1)], duplicates: {tx_likely_duplicates: [{tx_row_index: 0, tx_existing_matches: [{existing_tx_id: 500}]}]}})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], [500]);
+        expect(txArr[0].duplicateStatus).toBe('unique');
+        expect(txArr[0].selected).toBe(true);
+        expect(txArr[0].dupMatches).toEqual([]);
+    });
+
+    it('keeps the tier but prunes the deleted match when others survive', () => {
+        const results = [src('f', 1, {transactions: [buy(1)], duplicates: {tx_likely_duplicates: [{tx_row_index: 0, tx_existing_matches: [{existing_tx_id: 500}, {existing_tx_id: 501}]}]}})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], [500]);
+        expect(txArr[0].duplicateStatus).toBe('likely');
+        expect(txArr[0].dupMatches).toHaveLength(1);
+        expect(txArr[0].dupMatches[0].existing_tx_id).toBe(501);
+    });
+
+    it('marks a possible duplicate, which still auto-selects', () => {
+        const results = [src('f', 1, {transactions: [buy(1)], duplicates: {tx_possible_duplicates: [{tx_row_index: 0, tx_existing_matches: []}]}})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr[0].duplicateStatus).toBe('possible');
+        expect(txArr[0].selected).toBe(true);
+    });
+});
+
+describe('mergeCandidates — unknown confidence tiers on both sides', () => {
+    it('sorts several unknown tiers to the end without treating either operand specially', () => {
+        // Three distinct ids, two of them with confidences absent from CONF_ORDER: the
+        // comparator hits the `?? 9` fallback on both operands across its passes.
+        const merged = mergeCandidates([cand(1, 'mystery'), cand(2, 'enigma')], [cand(3, 'high')]);
+        expect(merged[0].asset_id).toBe(3);
+        expect(
+            merged
+                .slice(1)
+                .map((c) => c.asset_id)
+                .sort((a, b) => a - b),
+        ).toEqual([1, 2]);
+    });
+
+    it('replaces a colliding id whose stored confidence is unknown with a known-stronger one', () => {
+        // Same id in both lists: existing tier is unknown (→ 9), incoming 'high' (< 9) wins.
+        const merged = mergeCandidates([cand(1, 'mystery')], [cand(1, 'high')]);
+        expect(merged).toHaveLength(1);
+        expect(merged[0].match_confidence).toBe('high');
+    });
+
+    it('keeps the stored candidate when a colliding one is weaker, even if its tier is unknown', () => {
+        // id 1 seen first as 'high' (1); the colliding 'mystery' scores 9 (≥ 1) so the guard's
+        // else-branch fires and nothing is replaced. Exercises the unknown `?? 9` on the incoming
+        // operand and the "don't replace" path of the merge guard together.
+        const merged = mergeCandidates([cand(1, 'high')], [cand(1, 'mystery')]);
+        expect(merged).toHaveLength(1);
+        expect(merged[0].match_confidence).toBe('high');
+    });
+});
+
+describe('uniqueCandidateId — nullish input', () => {
+    it('treats a null candidate list as empty', () => {
+        expect(uniqueCandidateId(null as unknown as Candidates)).toBeNull();
+    });
+});
+
+describe('buildMergedTransactions — todos, sparse rows and mapping edges', () => {
+    const buy = (asset_id?: number) => ({type: 'BUY', date: '2024-05-01', quantity: 1, asset_id});
+
+    it('attaches field todos per row and tolerates missing evidence/context', () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy(10), buy(11)],
+                field_todos: [
+                    {tx_index: 0, field: 'quantity', severity: 'warn', reason_code: 'A', message: 'm1', evidence: ['e1'], context: {k: 1}},
+                    {tx_index: 0, field: 'cash_amount', severity: 'error', reason_code: 'B', message: 'm2'},
+                ],
+            }),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        // Row 0 gathers both todos (second reuses the list built by the first → both branches of `?? []`).
+        expect(txArr[0].todos).toHaveLength(2);
+        expect(txArr[0].todos[0].evidence).toEqual(['e1']);
+        expect(txArr[0].todos[0].context).toEqual({k: 1});
+        // A todo with no evidence/context falls back to [] / undefined.
+        expect(txArr[0].todos[1].evidence).toEqual([]);
+        expect(txArr[0].todos[1].context).toBeUndefined();
+        // Row 1 has no todos → the `?? []` fallback at push time.
+        expect(txArr[1].todos).toEqual([]);
+    });
+
+    it('drops a possible duplicate whose only DB match is being deleted', () => {
+        const results = [src('f', 1, {transactions: [buy(1)], duplicates: {tx_possible_duplicates: [{tx_row_index: 0, tx_existing_matches: [{existing_tx_id: 700}]}]}})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], [700]);
+        // hadMatches true, no survivor → `continue` → the row reverts to unique/auto-select.
+        expect(txArr[0].duplicateStatus).toBe('unique');
+        expect(txArr[0].selected).toBe(true);
+    });
+
+    it('keeps a possible duplicate that carries no matches array at all', () => {
+        const results = [src('f', 1, {transactions: [buy(1)], duplicates: {tx_possible_duplicates: [{tx_row_index: 0}]}})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        // `tx_existing_matches ?? []` → empty, hadMatches false → stays possible with no matches.
+        expect(txArr[0].duplicateStatus).toBe('possible');
+        expect(txArr[0].dupMatches).toEqual([]);
+    });
+
+    it('emits no rows for a done file whose response has no transactions array', () => {
+        const results = [src('empty', 1, {})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr).toEqual([]);
+    });
+
+    it('auto-selects a dateless row despite a broker opening date, and leaves a non-numeric asset id untouched', () => {
+        const results = [src('f', 1, {transactions: [{type: 'DEPOSIT', quantity: 1}]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1, opened_at: '2024-06-01'}], []);
+        // No date → the opening cutoff cannot apply, so the row stays auto-selected.
+        expect(txArr[0].selected).toBe(true);
+        // asset_id absent → origAssetId null → never remapped.
+        expect(txArr[0].tx.asset_id).toBeUndefined();
+    });
+
+    it('remaps a fake asset id even when the file omits asset_mappings, recording no resolution', () => {
+        const results = [src('f', 1, {transactions: [buy(FAKE)]})];
+        const {txArr, assetMap} = buildMergedTransactions(results, [{id: 1}], []);
+        // The fake id is remapped (first allocation reuses FAKE_ASSET_ID_BASE) but no mapping exists.
+        expect(txArr[0].tx.asset_id).toBe(FAKE);
+        expect(assetMap.size).toBe(0);
+    });
+
+    it('records a resolution with empty candidates and normalises notice kind/reason', () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy(FAKE)],
+                asset_mappings: [{fake_asset_id: FAKE, notices: [{kind: 'ambiguous', reason: 'many'}, {}], selected_asset_id: null}],
+            }),
+        ];
+        const {txArr, assetMap} = buildMergedTransactions(results, [{id: 1}], []);
+        const resolvedId = txArr[0].tx.asset_id as number;
+        const resolution = assetMap.get(resolvedId)!;
+        // `candidates ?? []` with no candidates key, and no exact match to auto-bind.
+        expect(resolution.candidates).toEqual([]);
+        expect(resolution.resolvedAssetId).toBeNull();
+        // Notices are string-normalised; the empty `{}` notice becomes {kind:'', reason:''}.
+        expect(resolution.notices).toEqual([
+            {kind: 'ambiguous', reason: 'many'},
+            {kind: '', reason: ''},
+        ]);
+    });
+});
+
+describe('U6: buildMergedTransactions — the database verdict, kept apart from duplicateStatus', () => {
+    // `duplicateStatus` is rewritten later by the in-batch pass on every cross-file secondary;
+    // `dbDuplicateStatus` is the copy of the database's own verdict that the resolver reads.
+    const buy = (asset_id: number) => ({type: 'BUY', date: '2024-05-01', quantity: 1, asset_id});
+
+    it('records likely, possible, or nothing, as the parse report says', () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy(1), buy(2), buy(3)],
+                duplicates: {
+                    tx_likely_duplicates: [{tx_row_index: 0, tx_existing_matches: [{existing_tx_id: 500}]}],
+                    tx_possible_duplicates: [{tx_row_index: 1, tx_existing_matches: [{existing_tx_id: 501}]}],
+                },
+            }),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr.map((t) => t.duplicateStatus)).toEqual(['likely', 'possible', 'unique']);
+        expect(txArr[0].dbDuplicateStatus).toBe('likely');
+        expect(txArr[1].dbDuplicateStatus).toBe('possible');
+        expect(txArr[2].dbDuplicateStatus).toBeUndefined();
+    });
+
+    it('records nothing for a row whose only database matches are all pending deletion', () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy(1), buy(2), buy(3)],
+                duplicates: {
+                    tx_likely_duplicates: [
+                        {tx_row_index: 0, tx_existing_matches: [{existing_tx_id: 700}, {existing_tx_id: 701}]},
+                        {tx_row_index: 2, tx_existing_matches: [{existing_tx_id: 702}, {existing_tx_id: 703}]},
+                    ],
+                    tx_possible_duplicates: [{tx_row_index: 1, tx_existing_matches: [{existing_tx_id: 704}]}],
+                },
+            }),
+        ];
+        // Rows 0 and 1 lose every match to the bulk editor's deletions; row 2 keeps one.
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], [700, 701, 702, 704]);
+        expect(txArr[0].duplicateStatus).toBe('unique');
+        expect(txArr[0].dbDuplicateStatus).toBeUndefined();
+        expect(txArr[1].duplicateStatus).toBe('unique');
+        expect(txArr[1].dbDuplicateStatus).toBeUndefined();
+        // Contrast: one surviving match keeps the verdict.
+        expect(txArr[2].dbDuplicateStatus).toBe('likely');
+        expect(txArr[2].dupMatches.map((m) => m.existing_tx_id)).toEqual([703]);
+    });
+});
+
+describe('C2: buildMergedTransactions — rows before the broker history (H0)', () => {
+    // The parse of a combined report-set file carries `history_start` (H0): what precedes it is
+    // already represented in LibreFolio, so those rows start deselected, like the rows before the
+    // broker opening. H0 itself is in the history: its rows keep the usual default.
+    const cashRow = (date: string) => ({type: 'FEE', date, quantity: 0});
+
+    it('starts every row dated before H0 deselected', () => {
+        const results = [src('combined', 1, {history_start: '2020-02-03', transactions: [cashRow('2019-01-07'), cashRow('2019-12-31'), cashRow('2020-02-02')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr.map((t) => t.selected)).toEqual([false, false, false]);
+    });
+
+    it('reads H0 per response: a row before H0 in one file, the same date in a file without H0', () => {
+        const results = [src('combined', 1, {history_start: '2020-02-03', transactions: [cashRow('2019-12-31')]}), src('generic', 1, {transactions: [cashRow('2019-12-31')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr.map((t) => [t.sourceFileId, t.selected])).toEqual([
+            ['combined', false],
+            ['generic', true],
+        ]);
+    });
+
+    it('keeps the usual default on H0 and after it (unchanged behaviour)', () => {
+        const results = [
+            src('combined', 1, {
+                history_start: '2020-02-03',
+                transactions: [cashRow('2020-02-03'), cashRow('2020-02-04'), cashRow('2020-03-31')],
+                duplicates: {tx_likely_duplicates: [{tx_row_index: 2, tx_existing_matches: [{existing_tx_id: 900}]}]},
+            }),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        // On H0 and after: auto-selected unless the usual rules say otherwise (a likely duplicate).
+        expect(txArr.map((t) => t.selected)).toEqual([true, true, false]);
+    });
+
+    it('leaves a response with a null H0 as it was (unchanged behaviour)', () => {
+        const results = [src('combined', 1, {history_start: null, transactions: [cashRow('2019-12-31')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+        expect(txArr[0].selected).toBe(true);
+    });
+});
+
+describe('C3: buildMergedTransactions — fakeRemapByFile, the remap of each file’s plugin fake ids', () => {
+    // The truth positions of a report set carry the plugin's fake ids of their own file. The
+    // gap-fix turns them into the assets the user resolved through this map — plugin id → global
+    // id, per file — built by the same rules that remap the rows (plan C3.0). Plugin fakes and
+    // globals share one range, so only the ids that appear in rows may be in it.
+    const buy = (asset_id: number, date = '2024-05-01') => ({type: 'BUY', date, quantity: 1, asset_id});
+    const mapping = (fake_asset_id: number, isin: string) => ({fake_asset_id, extracted_isin: isin, candidates: [], selected_asset_id: null});
+
+    /** The C3 field, read through a structural type so this file compiles before the field exists. */
+    function fakeRemapOf(result: ReturnType<typeof buildMergedTransactions>): Map<string, Map<number, number>> {
+        const remap = (result as {fakeRemapByFile?: unknown}).fakeRemapByFile;
+        expect(remap, 'buildMergedTransactions returns fakeRemapByFile (phase C3)').toBeInstanceOf(Map);
+        return remap as Map<string, Map<number, number>>;
+    }
+
+    it('maps each file’s plugin ids to the globals of its rows: the same plugin id in two files is two globals', () => {
+        const results = [src('fileA', 1, {transactions: [buy(FAKE), buy(FAKE - 1), buy(42)], asset_mappings: [mapping(FAKE, 'IT0001'), mapping(FAKE - 1, 'IT0002')]}), src('fileB', 1, {transactions: [buy(FAKE, '2024-05-02'), buy(FAKE, '2024-05-03')], asset_mappings: [mapping(FAKE, 'IT0003')]})];
+        const result = buildMergedTransactions(results, [{id: 1}], []);
+        const remap = fakeRemapOf(result);
+        const {txArr} = result;
+
+        expect(remap.get('fileA')?.get(FAKE)).toBe(txArr[0].tx.asset_id);
+        expect(remap.get('fileA')?.get(FAKE - 1)).toBe(txArr[1].tx.asset_id);
+        expect(remap.get('fileB')?.get(FAKE)).toBe(txArr[3].tx.asset_id);
+        expect(remap.get('fileB')?.get(FAKE)).toBe(txArr[4].tx.asset_id);
+        expect(remap.get('fileA')?.get(FAKE)).not.toBe(remap.get('fileB')?.get(FAKE));
+    });
+
+    it('holds only the plugin ids that appear in rows: not a mapping without rows, not a real id', () => {
+        const results = [src('fileA', 1, {transactions: [buy(FAKE), buy(42)], asset_mappings: [mapping(FAKE, 'IT0001'), mapping(FAKE - 5, 'IT0009')]})];
+        const remap = fakeRemapOf(buildMergedTransactions(results, [{id: 1}], []));
+
+        expect([...(remap.get('fileA')?.keys() ?? [])]).toEqual([FAKE]);
+    });
+
+    it('its globals are exactly the fake ids the rows were remapped to', () => {
+        const results = [src('fileA', 1, {transactions: [buy(FAKE), buy(FAKE - 1)]}), src('fileB', 2, {transactions: [buy(FAKE - 1), buy(7), buy(FAKE)]}), src('fileC', 1, {transactions: [buy(FAKE)]})];
+        const result = buildMergedTransactions(results, [{id: 1}, {id: 2}], []);
+        const remap = fakeRemapOf(result);
+        const globals = [...remap.values()].flatMap((perFile) => [...perFile.values()]).sort((x, y) => x - y);
+        const rowFakes = [...new Set(result.txArr.map((t) => t.tx.asset_id).filter((id): id is number => typeof id === 'number' && isFakeAssetId(id)))].sort((x, y) => x - y);
+
+        expect(globals).toEqual(rowFakes);
+        expect(globals).toHaveLength(5);
+    });
+
+    it('a file without fake ids, or a result that is not done, has nothing to remap', () => {
+        const results: MergeSourceResult[] = [src('real-only', 1, {transactions: [buy(42)]}), {fileId: 'err', brokerId: 1, status: 'error', response: {transactions: [buy(FAKE)]} as unknown as BrimParseResponse}];
+        const remap = fakeRemapOf(buildMergedTransactions(results, [{id: 1}], []));
+
+        expect(remap.get('real-only')?.size ?? 0).toBe(0);
+        expect(remap.get('err')?.size ?? 0).toBe(0);
+    });
+});

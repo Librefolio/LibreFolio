@@ -83,7 +83,7 @@ incoming rows, so the default path produces it. Checked at `083ed26dc`:
 | Auto writes the WAC (`_compute_wac_for_auto_items`) | `backend/app/services/transactions/auto_cost.py` |
 | Required-cost-basis check, Auto rows skipped | `backend/app/services/transactions/batch_costs.py` |
 | `ADD_ZERO_COST`, empty-pool unit cost | `backend/app/services/financial_math/average_cost.py` |
-| Form default (Auto) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
-| Bulk default for new rows (Auto) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Form default (Auto) | `frontend/src/lib/features/transactions/form/TransactionFormModal.svelte` |
+| Bulk default for new rows (Auto) | `frontend/src/lib/features/transactions/bulk/TransactionBulkModal.svelte` |
 | Test pinning the decision | `backend/test_scripts/test_api/test_wac_inline.py` |
 | Analysis and decision (§1, §2, §10) | `LibreFolio_developer_journal/Release_2/phases/39_autoCostNoPosition/plan-phase00AutoCostNoPosition.prompt.md` |

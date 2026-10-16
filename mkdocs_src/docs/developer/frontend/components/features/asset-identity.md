@@ -250,7 +250,7 @@ an ISIN that is primary on a duplicate asset and alternative on the good one pro
 candidates, side by side — which is exactly the moment offering a merge costs the user least.
 
 The wizard makes that offer through `duplicateCandidates()` in
-`lib/utils/transactions/importResolutionHelpers.ts`: the resolution card shows its duplicate notice
+`lib/features/transactions/import/importResolutionHelpers.ts`: the resolution card shows its duplicate notice
 and **Merge** button only when at least two candidates are `EXACT` or `HIGH`. Ticker (`MEDIUM`)
 and name (`LOW`) matches never raise it — two funds from the same issuer are supposed to look
 alike.

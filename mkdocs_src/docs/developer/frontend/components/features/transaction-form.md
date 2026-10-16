@@ -1,13 +1,13 @@
 # 📝 Transaction Form Modal
 
 The Transaction Form Modal (`TransactionFormModal.svelte`, in
-`frontend/src/lib/components/transactions/modals/`) creates, edits or displays one transaction —
+`frontend/src/lib/features/transactions/form/`) creates, edits or displays one transaction —
 or one linked pair, shown as a single two-sided form. It adapts its fields to the selected
 transaction type, validates against the backend while the user types, and either hands the result
 back to the bulk workspace or commits it itself.
 
 The modal owns the whole state — the draft, the validation, the handlers — and renders its
-sections through four components in `frontend/src/lib/components/transactions/form/`, which read
+sections through four components in `frontend/src/lib/features/transactions/form/`, which read
 that state as props, write back only what they bind, and call the modal's handlers:
 
 | Component | Section |
@@ -67,7 +67,7 @@ values the new type forbids.
 
 ### 📋 Common Fields
 
-`FormDraft` (declared, with `DualDraftTo`, in `components/transactions/form/txFormTypes.ts`):
+`FormDraft` (declared, with `DualDraftTo`, in `features/transactions/form/txFormTypes.ts`):
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -145,7 +145,7 @@ the implied rate (To ÷ From) and, in its tooltip, the market rate on the From d
 ### 📤 How the pair is submitted {: #pair-submission }
 
 `collectDualCreates()` calls `buildDualCreatePayloads('fx', …)`
-(`lib/utils/transactions/txPayloadHelpers.ts`), which returns two `FX_CONVERSION` items:
+(`lib/features/transactions/txPayloadHelpers.ts`), which returns two `FX_CONVERSION` items:
 
 | Field | From item | To item |
 |---|---|---|
@@ -190,7 +190,7 @@ The form checks locally only what it can know without the ledger:
   (`computeSignHint`) disables the footer button.
 - **Hints** — the single-layout cash editor always carries *💡 Total amount (not per share)*
   (`transactions.form.cashLabelTotal`). The quantity and cash editors also show the hint of the
-  type's sign rule (`signHintText()` → `signHintKey()` in `lib/utils/transactions/txFormFields.ts`:
+  type's sign rule (`signHintText()` → `signHintKey()` in `lib/features/transactions/form/txFormFields.ts`:
   *must be > 0*, *enter positive — auto-negated on save*, *must be 0*, *must be ≠ 0*). Negative
   quantity rules are auto-flipped like cash (`effectiveQtyRule`), so a `SELL` quantity is typed as
   a positive number.
@@ -207,7 +207,7 @@ then keeps only this row's issues plus the global ones.
 ## 💰 WAC State
 
 The cost-basis editor is `WacPreviewSection`
-(`frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte`). The form shows it where
+(`frontend/src/lib/features/transactions/wac/WacPreviewSection.svelte`). The form shows it where
 a cost basis applies: on the receiving side of a paired `TRANSFER`, and on an `ADJUSTMENT`. BUY and
 SELL do not show it.
 

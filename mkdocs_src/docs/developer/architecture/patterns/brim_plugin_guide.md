@@ -639,7 +639,7 @@ transaction breaks these rules, so flip source signs as needed:
 
     The user reads the file's language only if the notice code has **no**
     `importWizard.brimNotice.<code>` key. The wizard resolves a notice with
-    `resolveBrimNoticeMessage` (`frontend/src/lib/utils/transactions/resolveBrimNotice.ts`):
+    `resolveBrimNoticeMessage` (`frontend/src/lib/features/transactions/resolveBrimNotice.ts`):
     a key, when it exists, replaces the plugin's message with the text in the UI language;
     without one, the plugin's `message` is shown as written. The `degiro_*` codes have no
     key on purpose, and `test_no_i18n_key_overrides_the_language_of_the_file`
@@ -815,7 +815,7 @@ and a **To** line in the bulk editor's markup (`renderFromToHtml` mirrors `rende
 row selects both legs (`setPairSelected`: its tick shows the pair as selected only when both
 legs are, and select all, deselect all and select visible move both legs too), only complete
 pairs reach the bulk editor, and each pair reaches it with a fresh `link_uuid`, the same for
-both legs (`frontend/src/lib/utils/transactions/importPairs.ts`, and `pairCellHtml.ts` beside
+both legs (`frontend/src/lib/features/transactions/import/importPairs.ts`, and `pairCellHtml.ts` beside
 it for the cell): the plugin's ids repeat whenever the same statement is parsed again, so two
 uploads of one statement would share them. The counters and the `Import {n} transactions`
 button count transactions, not rows, so a pair counts as two (`step4SelectedCount` and

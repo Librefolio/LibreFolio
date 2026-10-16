@@ -47,6 +47,6 @@ Minutes. No product defect.
 
 | Role | Path |
 |------|------|
-| The test, with the `props` key and its comment | `frontend/src/lib/components/transactions/events/EventExistsPanel.test.ts` |
-| The component and its `events` prop | `frontend/src/lib/components/transactions/events/EventExistsPanel.svelte` |
+| The test, with the `props` key and its comment | `frontend/src/lib/features/transactions/events/EventExistsPanel.test.ts` |
+| The component and its `events` prop | `frontend/src/lib/features/transactions/events/EventExistsPanel.svelte` |
 | The library's version (`@testing-library/svelte`) | `frontend/package.json` |

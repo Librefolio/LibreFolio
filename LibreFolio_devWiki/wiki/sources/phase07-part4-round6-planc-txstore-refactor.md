@@ -25,7 +25,7 @@ Architectural refactor introducing `txStore.svelte.ts` as the single source of t
 - **txStore architecture**: `Map<number, TXReadItem>` populated once via `reload()` → `setAll(main, partners)`. Provides `get()`, `getPartner()`, `getAll()`, `getFiltered()`, `canEdit()`, `invalidate()`
 - **WorkspaceIntent pattern**: toolbar actions pass `{action, txIds}` to BulkModal instead of full data objects. Actions: create, edit, delete, clone
 - **PendingOp model**: BulkModal holds `Array<PendingOp>` where each op is `{op: 'create'|'edit'|'delete', ...}`. Status derived from diff vs txStore
-- **Interface deduplication** (Step 6a): created `frontend/src/lib/components/transactions/types.ts` as canonical source for TXReadItem, ValidationIssue, AssetEvent interfaces
+- **Interface deduplication** (Step 6a): created `frontend/src/lib/features/transactions/types.ts` as canonical source for TXReadItem, ValidationIssue, AssetEvent interfaces
 - **LOC reduction**: BulkModal -30% (1766→~1200), +page.svelte -30% (1035→~700), txStore ~120 LOC added
 - **26 use cases covered** with architecture: CREATE(3), EDIT(5), CLONE(2), DELETE(5), PICKER(3), RESET(4), VALIDATE(2), COMMIT(2) + 2 future (Piano D: Split/Promote)
 - **Migration was incremental**: Step 1 (create store) → Step 2 (migrate Picker) → Step 3 (migrate BulkModal) → Step 4 (simplify +page) → Step 5 (full E2E) → Step 6 (polish)

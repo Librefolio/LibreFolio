@@ -196,13 +196,13 @@ const REGISTRY: Site[] = [
         why: "The P&L-total row of the Abs tooltip, in buildGrowthTooltip (moved out of GrowthChart.svelte with the rest of the tooltip in FE6a), a consumer of fmtCurrency that §1.8 did not list. fmtCurrency is masked at its definition in that same function, through maskFormattedNumber, which keeps the locale's sign outside the mask and masks the digits only (D8, D23b); the gate cannot follow a call into a local closure, so this row still matches through its totalPnlVal/pnlColor tokens. Unmasking the definition would bring the definition line back as an unregistered hit: the boundary is guarded by this gate, as for LotComparisonChart.formatAxisCurrency. The masking of this row is pinned behaviourally by GrowthChart.test.ts «masks every tooltip amount in the Abs, P&L-total and candle rows, keeping the currency and the sign readable».",
     },
     {
-        file: 'lib/components/transactions/events/EventCreateMiniModal.svelte',
+        file: 'lib/features/transactions/events/EventCreateMiniModal.svelte',
         snippet: '`${formatFixed(amt, 2)} ${assetCurrency}`',
         status: 'public',
         why: "The success toast for a created asset event. Asset events are asset-level, not the user's (backend/app/db/models.py, class AssetEvent: «Events are NOT transactions — they describe what happens to the asset globally, not what happens in a user's portfolio»), so the amount is public under the 2026-09-22 rule. It was registered as unmasked until that rule existed.",
     },
     {
-        file: 'lib/components/transactions/events/AssetEventPicker.svelte',
+        file: 'lib/features/transactions/events/AssetEventPicker.svelte',
         snippet: "`${formatFixed(diff, 2, {signed: true})}${crossCurrency ? ' ≠' : ''}`",
         status: 'not-money',
         why: 'A cash delta rendered with no currency marker, used to rank candidate matches; it matches form B only through the crossCurrency flag, a boolean, beside the number. Judgement site in the class of MeasurePanel: catching it would mean chasing every decimal formatter (formatFixed, toFixed) over arbitrary numbers, and a gate that fires on arbitrary numbers is a gate someone switches off.',
@@ -289,7 +289,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         expect(listOf('public')).toEqual([
             // one element per line: parallel removals must not touch the same line
             'lib/components/charts/PriceChartFull.svelte',
-            'lib/components/transactions/events/EventCreateMiniModal.svelte',
+            'lib/features/transactions/events/EventCreateMiniModal.svelte',
         ]);
     });
 
