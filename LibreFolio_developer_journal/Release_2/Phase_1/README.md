@@ -172,3 +172,4 @@ Sono tutti locali: la push la fa il developer.
 | 83 | 16/10 03:00 | E: E-5 (guardia dei testi OpenAPI che il generatore incolla grezzi; regola 4 dei contratti API; 52 componenti latenti, nessuno rotto) | `01598f9ad` |
 | 84 | 16/10 03:05 | X: CP11b (scheda Impostazioni › Plugin, «Configura» dal pannello del fornitore e dalla ricerca, legenda 👑, sottosistema i18n `pluginSettings`; E2E 104) | `0241a87e8` |
 | 85 | 16/10 03:07 | Z: Z7b (lo scheduler rimanda gli elementi `RATE_LIMITED` fino a `retry_at` e aspetta 1, 2, 4… minuti dopo un errore; campi nuovi nello stato e nella risposta del risveglio) | `e5e2595e7` |
+| 86 | 16/10 03:52 | H: CP7b-1 (F15 sempre attivo: `nosniff` e `Referrer-Policy` su ogni risposta; F28: solo `_app/immutable/` immutabile; tipi MIME registrati dall'app; all-backend 17 084/0) | `1f4c5aeca` |
