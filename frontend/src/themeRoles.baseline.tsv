@@ -59,8 +59,7 @@ lib/components/transactions/import/ReportSetCard.svelte	75
 lib/components/transactions/modals/ImportBrokerMismatchModal.svelte	1
 lib/components/transactions/modals/ImportWizardModal.svelte	222	#dc2626
 lib/components/transactions/modals/ParseDetailModal.svelte	141
-lib/components/transactions/modals/PromoteMergeModal.svelte	65
-lib/components/transactions/modals/TransactionActionModal.svelte	5
+lib/components/transactions/modals/PromoteMergeModal.svelte	62
 lib/components/transactions/modals/TransactionBulkModal.svelte	9
 lib/components/transactions/modals/TransactionCompareModal.svelte	4
 lib/components/transactions/wac/WacPreviewSection.svelte	21
