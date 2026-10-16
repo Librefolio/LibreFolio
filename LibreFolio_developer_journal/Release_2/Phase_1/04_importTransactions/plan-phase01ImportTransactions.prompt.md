@@ -3066,3 +3066,180 @@ testo renderizzato con i parametri in `ctx` (W-B38), e quello della regola 10 pe
 > `features/brokers/lots/`; `BrokerIcon` → `components/ui/display/`; `components/files/*` → `features/files/`; in
 > `ImportWizardModal` cambia solo una riga d'import): non toccarli fino al suo ingresso (dopo le 06:45). Nessuno dei due
 > tocca il delta di W-B41, W-B29, W-B38. 05:30–06:45 macchina ferma: nessuna prova.
+
+> **Lotti committati** (coordinatore, 05:20): `f2b6c0983` W-B41, `f9969056e` W-B29, `52387e2c0` W-B38, `238ff0381` journal →
+> HEAD `238ff0381` (verificato, worktree pulito). I tre cherry-pick su `dev_release2` simulano puliti ed entrano dopo il
+> blocco dei colori (destinazione ferma fino alle ~06:45); il journal entra con la 47. Prenotazione nuova: lotto «input» dei
+> colori (mattino) su `transactions/form/TxFormSingleSection.svelte`, `TxFormPairSection.svelte`, righe di
+> `TransactionFormModal.test.ts` e di `e2e/transactions/transactions-modals.spec.ts`. Durante la sosta (05:30–06:45): le
+> analisi in sola lettura di W-B39 e W-B42 (via del coordinatore); `routes/(app)/transactions/+page.svelte` è libero (Y5
+> cambia al più la riga d'import di `BrokerIcon`, già sul suo ramo `6f7ac70ce`). Il codice dopo l'aggiornamento della base.
+
+### W-B39 — uno split o una promozione rifiutati lo dicono ✅ (2026-10-16) — 🧊 FROZEN
+
+**Stato reale** (codice di `238ff0381`, sola lettura):
+- `frontend/src/routes/(app)/transactions/+page.svelte`: `confirmSplit()` (~437) e `onPromoteMergeConfirm()` (~408, anche
+  per `confirmPromote`) chiamano `commitTransactions` (`utils/transactions/txCommitApi.ts`), che ha `toast: false` di
+  serie; su `committed=false` scrivono solo `console.error`, la modale (`TransactionActionModal` per lo split,
+  `ConfirmModal`/`PromoteMergeModal` per la promozione) resta aperta senza un perché. Anche un errore di rete tace. Sono i
+  due soli chiamanti diretti della pagina; il Form e il Bulk mostrano i problemi nei loro riquadri.
+- **La promozione ha lo stesso difetto**: la includo (stessa funzione, stessa pagina).
+- I problemi si traducono già con `resolveIssueMessage` (`utils/transactions/resolveValidationMessage.ts`), con le chiavi
+  `transactions.errors.*` di ogni codice di split e promozione (`typeCannotSplit`, `splitIdsMismatch`, `alreadyPaired`,
+  `noPromoteRule`, `promoteRefNotFound`, `accessDenied`, `balanceAssetNegative`, `costBasisRequired`, `wacFxUnavailable`…);
+  i toast accettano HTML (icone e bandiere, come i riquadri). Il contesto (`brokers`, `getAllAssets`, icone) si costruisce
+  come in `TransactionBulkModal.svelte:1400`; la pagina ha già `brokers` e l'archivio degli asset.
+- **Il caso della 47**: `wacFxUnavailable` si traduce «❌ WAC calculation failed.» (il Form aggiunge il link per sincronizzare
+  i cambi e «or switch to manual mode», che per uno split non vale): da solo, per uno split, non dice niente. Il problema
+  porta `params.pairs` (`services/transactions/batch_costs.py:62-82`).
+- Doc utente (`user/transactions/index.en.md:50`, della 47): «If that cost needs an exchange rate LibreFolio does not have,
+  the pair stays linked» — non dice come lo si scopre.
+**Disegno proposto** (decisione notturna, da rivedere: toast d'errore come le altre azioni della pagina, non un riquadro
+nella modale):
+1. Sulla pagina, a `committed=false`: un toast d'errore con il titolo che c'è già (`transactions.split.failed`,
+   `transactions.promote.failed`) e i problemi tradotti (`resolveIssueMessage`), senza doppioni; su un errore di rete il suo
+   messaggio. La modale resta aperta (com'è oggi: si annulla). La composizione in una funzione pura in
+   `utils/transactions/` (es. `commitRefusalMessage`), con il suo Vitest.
+2. In `resolveIssueMessage`, additivo: `ResolvableIssue.operation?`; per `wacFxUnavailable` su `operation === 'split'` la
+   chiave nuova `transactions.errors.wacFxUnavailableSplit` (4 lingue, `dev.py i18n add`), con `{pairs}`: «le unità che
+   escono prendono il costo medio, che chiede il cambio {pairs}: sincronizza i cambi, poi riprova». Vale anche nel Bulk.
+   Prima dell'ingresso della 47 il ramo non si raggiunge, ma non dipende dal suo codice: il commit entra da solo.
+3. Test (test-author): Vitest in `resolveValidationMessage.test.ts` (lo split prende il testo nuovo coi `pairs`, una
+   creazione tiene quello di oggi) e della funzione nuova; un E2E nuovo `e2e/transactions/tx-split-refusal.spec.ts` (non
+   `transactions-modals.spec.ts`, prenotato dai colori): coppia TRANSFER propria via API, split dal menu della riga
+   (`context-menu-action-split`, `tx-action-modal-confirm`), il commit intercettato con `route.fulfill` (`committed:false`,
+   un problema `wacFxUnavailable` sullo split: niente 47 e niente dati sui cambi) → `toast-error` visibile, nessuna `{`, la
+   coppia (`USD`, parametro, non testo tradotto), la modale aperta; lo stesso per la promozione di due righe proprie.
+   Pulizia in `afterEach`. Precedenti di `route.fulfill`: `tx-selection-after-bulk.spec.ts`, `tx-broker-icon-hydration.spec.ts`.
+4. Doc (docs-writer, EN): una frase vicino alla riga 79 di `user/transactions/index.en.md` («If a Promote pair or a Split pair
+   is refused, nothing changes and an error message says why.»), lontana dalle righe della 47 (cherry-pick pulito); IT/FR/ES
+   a mano e `translate-stamp`, come C-89.
+5. CHANGELOG 🐛: «A refused Split pair or Promote pair now says why: until now the confirmation stayed open with no message.»
+**Prove previste**: Vitest dei due file, `front check`, `i18n check`, gate dei colori, E2E del file nuovo (slot), `mkdocs
+build` e `check-links`.
+
+**Via del coordinatore** (05:21) al disegno proposto: funzione pura in `utils/transactions/` + Vitest,
+`wacFxUnavailableSplit` con `i18n add`, `tx-split-refusal.spec.ts` con coppia propria e `route.fulfill`, frase vicino alla
+riga 79; il toast invece del riquadro va nella lista come decisione notturna. Codice da scrivere dopo il suo commit di merge,
+anche durante la sosta; Vitest, `mkdocs build` ed E2E dopo le 06:45.
+**Base aggiornata** (05:22–05:24): merge di `dev_release2` (`72e66d1a6`) aperto dal coordinatore su `238ff0381`; un conflitto
+in `mkdocs_src/docs/developer/architecture/overview.md`, l'elenco degli `STARTUP_STEPS`: tenuti tutti e due, nell'ordine del
+codice fuso (`app_lifespan.py:207-215`): 11 `lone-transfer-legs` (47), 12–15 invariati, 16 `idle-monitor` (Z). Rivisti i
+file fusi da soli cambiati da tutte e due le parti: rispetto a `dev_release2` restano solo le aggiunte della 47 (5 file; le
+righe tolte sono testi della merge-base riscritti dalla 47); gli altri identici; ogni voce W del backlog una volta sola.
+Messo in stage solo `overview.md`; commit di merge del coordinatore `b8dd7bdc4` (genitori `238ff0381` + `72e66d1a6`),
+verificato. `mkdocs build` dopo le 06:45.
+**Cura pronta, non applicata** (05:27): `/tmp/libreFolio_w_wb39_cure.py` (dry run pulito, 3 file, ogni modifica trovata una
+volta): nuovo `frontend/src/lib/utils/transactions/commitRefusal.ts` (`commitRefusalMessage`: titolo scappato, poi una riga
+«• motivo» per ogni motivo distinto, da `resolveIssueMessage`; senza problemi l'errore di rete; il toast rende HTML
+sanificato con `whitespace-pre-line`); `resolveValidationMessage.ts` (`ResolvableIssue.operation?`; `wacFxUnavailable` su uno
+`split` prova `transactions.errors.wacFxUnavailableSplit`, poi la chiave generica); la pagina (`issueContext()` come il
+contesto del Bulk, toast d'errore al posto dei due `console.error`; la modale resta aperta); con `--apply`, `dev.py i18n add`
+della chiave nelle 4 lingue (lessico dei cataloghi: IT «Scollega coppia», «tassi FX»; FR «Séparer la paire»; ES «Separar
+par»). Si applica dopo i rossi delle 06:45.
+**In corso** (05:28): test-author (rossi: Vitest del risolutore, Vitest nuovo della funzione, E2E nuovo con `route.fulfill`,
+registrazione nel runner; nessun comando che carichi la macchina, niente file prenotati); docs-writer (la frase EN in fondo
+alla riga 79 di `user/transactions/index.en.md`; IT/FR/ES a mano da me, `translate-stamp` dopo le 06:45).
+**Doc** ✅ (05:33): docs-writer, `user/transactions/index.en.md:79`, in fondo allo stesso paragrafo: «If a **Promote pair**
+or a **Split pair** is refused, nothing changes: an error message says why, and the confirmation stays open.» (la pagina non
+ha una riga di data); IT, FR, ES a mano sulla stessa riga 79 (lessico delle pagine: «Promuovi coppia»/«Scollega coppia»,
+«Promouvoir la paire»/«Séparer la paire», «Promover par»/«Separar par»); solo la riga 79 in tutte e quattro, la riga 50 della
+47 intatta. Doc per sviluppatori: nessuna pagina descrive come la pagina riporta un commit; il solo posto adatto alla riga
+«`wacFxUnavailable` su `split` prova prima `wacFxUnavailableSplit`» è `developer/backend/transactions/split_promote.md:90-94`,
+che viene dal commit della 47 (`8b3e6b766`) → quella riga entra con la 47 (residuo annotato qui). `translate-stamp` della
+pagina dopo le 06:45.
+**Rossi scritti** (05:48, test-author, niente eseguito: macchina ferma):
+- `frontend/src/lib/utils/transactions/resolveValidationMessage.test.ts`: un `describe` W-B39. (a) rosso: `wacFxUnavailable`
+  su `split` col testo dello split e i `pairs` (oggi il generico); (b) e (c) guardie verdi (su `create` il generico; split
+  senza chiave dello split → il generico).
+- Nuovo `frontend/src/lib/utils/transactions/commitRefusal.test.ts` (10 casi del contratto, compreso «un errore di rete
+  uguale al titolo non aggiunge niente», chiesto da me dopo il dubbio 2 del test-author: la pagina passa come ripiego il
+  titolo stesso → nella cura `networkError !== title`): oggi non si carica (modulo assente, codice nuovo).
+- Nuovo `frontend/e2e/transactions/tx-split-refusal.spec.ts`: S1 (split della coppia TRANSFER finanziata di
+  `fixtures/owned-pair.ts`, `openAccountWithPair`, rifiuto `wacFxUnavailable` servito da `page.route` su `POST
+  /transactions/commit` con un `TXBatchResponse` valido per lo schema: il client valida le risposte, `validate:
+  'response'`) e P1 (promozione di un WITHDRAWAL e un DEPOSIT gemelli su due broker propri, rifiuto `accessDenied` col
+  broker); conto usa e getta, `afterEach` con broker `force` e conto; rossi attesi a `toast-error` visibile (5 s).
+  `data-testid` della promozione: `dt-row-checkbox-tx-{id}`, `toolbar-action-promote`, `confirm-modal-confirm/cancel`.
+- Runner: `scripts/test_runner/_frontend_transaction.py` (azione `tx-split-refusal`), `_frontend_utility.py` (una riga
+  in `core-unit`, dopo `resolveValidationMessage.test.ts`): righe aggiunte soltanto.
+- Lacune di `data-testid` viste (non mie da chiudere ora): `ConfirmModal` senza prop `testId`; `promote-merge-modal`
+  su due elementi, il suo «Annulla» senza testid.
+**Alle 06:45, in ordine** (carico < 70, una prova alla volta): Vitest dei due file (rossi); E2E `front-transaction
+tx-split-refusal` (rossi); `python3 /tmp/libreFolio_w_wb39_cure.py --apply` (file + `i18n add`); Vitest (verdi);
+`prettier`; `front check`; `i18n check`; gate dei colori; E2E (verdi); `check-orphans`; `mkdocs build`, `check-links`;
+`translate-stamp --file user/transactions/index.en.md`.
+**Ordine rivisto** (coordinatore, 05:50: gli E2E solo nel suo slot 2, col suo via, ~10–15 minuti, perché ricostruiscono
+il frontend; prima le prove leggere, subito dopo il «blocco finito» dei colori; uno script con un orario di taglio). Per
+tenere il rosso prima della cura anche nell'E2E, la cura è divisa in due (`--part A|B`, dry run puliti):
+- **A** (livello unità: la funzione, il risolutore, la chiave) nella fase leggera: `/tmp/libreFolio_w_light.sh` → Vitest
+  rossi, A applicata, Vitest verdi, `prettier`, `front check`, `i18n check`, gate dei colori, `check-orphans`, `mkdocs
+  build`, `check-links`;
+- **B** (il cablaggio della pagina, ciò che vede l'E2E) nello slot: `/tmp/libreFolio_w_slot.py --until HH:MM
+  [--with-wb42]` → E2E rosso (B si applica solo se il rosso è quello del toast W-B39), B, E2E verde, E2E di W-B42,
+  `front check` se resta tempo; prima di ogni passo il tempo stimato e il carico; al taglio SIGINT al gruppo del passo.
+**Niente `translate-stamp`** (decisione notturna, da rivedere): la cache di Aphra tiene un hash per pagina EN; la pagina ha
+il debito della 47 (riga 50, solo EN): uno stamp lo nasconderebbe. La pagina resta in debito; le frasi IT/FR/ES a mano
+restano.
+**Eseguito** (via del coordinatore 06:48, «blocco finito»; slot 2 fino alle 07:10, poi slot 1 fino alle 07:20):
+- **Rossi Vitest** ✅ (06:50, carico 51): `vitest run` dei due file → 1 fallito per il motivo atteso («expected 'WAC
+  calculation failed.' to contain 'Average cost of the units that leave …'»), `commitRefusal.test.ts` non si carica («Cannot
+  find module './commitRefusal'»); le guardie (b) e (c) verdi, 52 passati. Log `/tmp/libreFolio_w_wb39_vitest_red.log`.
+- **Parte A** ✅ (06:51): `commitRefusal.ts`, `resolveValidationMessage.ts`, `dev.py i18n add` della chiave (una riga in
+  ciascuna delle 4 sorgenti `frontend/src/lib/i18n/transactions/*.json`). **Verdi**: `vitest run` dei due file **63/63**;
+  `prettier --write` (riformattati `commitRefusal.test.ts` e i due spec, che i test-author non potevano formattare durante la
+  sosta), poi `--check` pulito.
+- **E2E rosso** ✅ (slot 2, 06:51:55–07:05:34, 820 s): `front-transaction tx-split-refusal` **2 falliti su 2 al punto
+  atteso**: S1 (split) e P1 (promozione), «W-B39: a refused split/promote raises an error toast», `toast-error` non visibile
+  in 5 s, nessun retry; le asserzioni sul payload passate prima. Il tempo: due build debug di vite (2m14s e 3m25s) e la doc
+  (173 s, stantia per le frasi della riga 79), col carico a 48–73. Log `/tmp/libreFolio_w_slot_e2e-red.log`.
+- **Parte B** ✅ (07:05:34): il cablaggio della pagina (`issueContext()`, i due toast d'errore). L'E2E verde saltato dallo
+  script per il taglio delle 07:10 (263 s rimasti < 360 stimati).
+- `front check` ✅ (07:06–07:08, fuori slot, con B dentro): **0 errori, 0 avvisi**.
+- **E2E verdi** ✅ (slot 1, 07:08:45–07:19): `tx-split-refusal` **2/2** (437 s, con la ricostruzione); `front-asset
+  asset-event-delete` **4/4** (182 s) per W-B42.
+- **Prove leggere** ✅ (07:20–07:24, una alla volta, `nice`, carico < 70; `/tmp/libreFolio_w_light2.sh`): `prettier --check`
+  sugli 11 file del frontend pulito; `i18n check` (4751 chiavi, strict); gate dei colori pulito; `check-orphans` (461 file
+  Vitest e 132 spec E2E raggiungibili); `mkdocs build` strict (137 s); `check-links` (97 validi); `git diff --check` pulito;
+  porta libera. `black`/`ruff` sui due file del runner: `_frontend_utility.py` pulito; in `_frontend_transaction.py` i
+  rilievi ci sono già in HEAD (black riformatterebbe le stesse 50 righe della vecchia lista di `front_tx_unit`; ruff 4
+  PLC0415, import locali di `db_populate`), le righe nuove sono pulite: il file condiviso non si riformatta.
+**Cherry-pick**: i file di W-B39 sono identici fra HEAD e `dev_release2`, tranne `user/transactions/index.en.md`, che
+differisce per la riga 50 della 47; la frase nuova è alla riga 79, il contesto coincide. La pagina non importa `BrokerIcon`
+(Y5 non la tocca).
+**Residui**: la riga per sviluppatori in `developer/backend/transactions/split_promote.md` entra con la 47 (sopra); i
+`data-testid` mancanti di `PromoteMergeModal` → **W-B44**; `ConfirmModal` senza prop `testId` (UI condivisa) → al
+coordinatore.
+
+### W-B42 — gli scenari 3 e 4 di `asset-event-delete.spec.ts` ✅ (2026-10-16) — 🧊 FROZEN
+
+- Scenario 3 (`delete asset with events shows appropriate warning`): ogni passo è dentro un `if` su una sonda
+  `isVisible().catch(() => false)`, con `.first()` senza filtro e un filtro per testo `/delete|elimina/i`: passa sempre, anche
+  se non trova niente; non verifica l'avviso del titolo. **Proposta**: asset proprio con un evento (e una transazione
+  collegata, `linkDividend`), card cercata per id (`asset-card-{id}`), menu della card → «elimina» per `data-testid`
+  (`context-menu-action-delete` o quello della card), l'avviso della conferma visibile per `data-testid`, annulla, l'asset
+  ancora presente (API). L'interfaccia della cancellazione degli asset è di X: solo il test cambia.
+- Scenario 4 (`event badge reflects current link state`): verifica soltanto che il primo pallino abbia un `data-testid` ben
+  formato, sui collegamenti del mock. Il pallino porta l'id della transazione (`TransactionsTable.svelte:716`,
+  `tx-event-dot-${tx.id}`). **Proposta**: un DIVIDEND proprio collegato a un evento proprio (`linkDividend`) →
+  `tx-event-dot-{txId}` visibile; scollegato via API (`asset_event_id: null`) e ricaricata la pagina → il pallino sparisce:
+  lo «stato del collegamento» del titolo.
+- Nessuno dei due scrive su dati condivisi oggi: è un debito di qualità, non un rischio. Peso: minimo; dopo W-B39.
+
+**Riscritti** (06:07, test-author, niente eseguito: macchina ferma; via del coordinatore alle 05:21, «poi W-B42»): solo
+`frontend/e2e/assets/asset-event-delete.spec.ts` (+156 −50), titoli invariati, scenari 1 e 2 e `asset-events-owned.ts`
+intatti.
+- Scenario 3: asset proprio con un DIVIDEND (verificato), card `asset-card-<id>` visibile; la cancellazione parte dalla riga
+  della vista a elenco (`view-mode-list`, ricerca `assets-search-input` col nome unico, `row-actions-<id>` →
+  `context-menu-action-delete`: stesso gestore della card, il cui cestino non ha `data-testid`); la conferma
+  (`confirm-modal-message`) col nome dell'asset e nessuna `{`; annulla; asset ed evento ancora salvati (API).
+- Scenario 4: DIVIDEND proprio collegato (`linkDividend`), `/transactions?broker_id=<proprio>`, `tx-event-dot-<txId>`
+  visibile; scollegato con un commit `{updates: [{id, asset_event_id: 0}]}` (**`null` in un update vuol dire «non
+  cambiare»**: lo `0` scollega, come fa l'editor), riletto; ricaricata la pagina, il pallino ha conteggio 0, la riga c'è,
+  l'evento resta.
+- **Comportamento trovato** (UI degli asset, di X; solo lettura): la conferma della cancellazione di un asset non nomina gli
+  eventi (testo fisso «Provider assignments and price history will be removed»), che spariscono in cascata senza avviso;
+  una transazione blocca la cancellazione solo dopo la conferma; l'etichetta «N assets» della conferma multipla è inglese
+  scritta a mano; cestino della card e conferma singola senza `data-testid` → al coordinatore per la sezione di X.
+Prova: E2E `front-asset asset-event-delete` nello slot. ✅ (slot 1, 07:16–07:19): **4/4** (182 s; scenario 3 19,0 s,
+scenario 4 8,7 s), al primo giro; `prettier` pulito (riformattato alle 06:51), `front check` 0/0.
