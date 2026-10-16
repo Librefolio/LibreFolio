@@ -3797,3 +3797,36 @@ FE5c-7 committed: `086a50005` + journal `f4cd61273`.
 >   - l'aggiornamento della base, che porta anche le classi di DV in `components/charts/`;
 >   - lo slot E2E: `asset-detail`, `asset-data-editor`, `asset-event-delete`, `onboarding-guides`, e gli scatti della
 >     galleria della pagina.
+
+FE5c-8 committed: `103149654` + journal `95b0be788`. Backlog X-R17–X-R20 `c13cc2d1a`; base aggiornata con `dev_release2`
+`7f58a6292`, HEAD `fa97791f6`.
+
+**Verifica della base `fa97791f6`** (07:41–07:47):
+- `api sync`; `front check` → 0/0;
+- `core-unit` → rosso in `fxRoutesStore.test.ts`, che non è mio né del merge (2 su 6458);
+- **triage**: con il carico a ~100 il primo caso ha superato i 5 s di Vitest, perché ogni caso fa un `import()` a
+  freddo del grafo dello store, e il secondo caso ha ereditato la chiamata rimasta in sospeso. Da solo il file passa
+  in 2,1 s;
+- **verdetto: assunzione (il tempo)**, non «instabile». Aperta **X-R21**, la cura dopo il backend del CP13.
+- `core-unit` va rilanciato a carico basso prima delle E2E del FE5c.
+
+### CP13 — backend ⏳ (via del coordinatore 16/10, 07:37; il frontend aspetta P20)
+
+Ordine: (1) `env_url` spostato, (2) `LIBREFOLIO_SUPPORT_URL`, (3) F21. Commit separati dal FE5c e fra loro.
+
+1. ✅ (07:44–07:52) **`env_url(name)`** in `backend/app/config/__init__.py`, accanto a `env_secret`, con l'ok di A e di H.
+   > **Note implementazione**:
+   > - È il `_url()` di `config/accounts.py`, con le stesse regole: vuota o fatta di spazi → `None`; il valore,
+   >   ripulito dagli spazi, deve cominciare con `http://` o `https://`; via una barra finale; altrimenti `ValueError`
+   >   col nome della variabile.
+   > - Gestisce gli spazi da sé, perché `_blank_to_none` resta ad A per gli altri accessori.
+   > - In `accounts.py` sparisce `_url`, e `public_url()` e `billing_url()` chiamano `env_url`. Nient'altro toccato, come
+   >   chiesto da A (A7a lavora lì).
+   > - Doc: la docstring del pacchetto e `developer/architecture/settings.md`, con `env_url()` nella base e un punto
+   >   sulla regola degli indirizzi.
+   > - **Prove**:
+   >   - `services registration` → **147 passed**: i test di A sugli accessori coprono spazi, barra finale, solo http(s)
+   >     e il log del valore non valido;
+   >   - `services config-package` → **694 passed**;
+   >   - ruff e black puliti; `git diff --check` pulito.
+   >   - I test diretti di `env_url` arrivano col passo 2, nello stesso file di quelli di `support_url`.
