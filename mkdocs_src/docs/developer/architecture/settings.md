@@ -58,7 +58,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
       `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
-      settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`) — are
+      settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`), the order
+      of the asset providers in the search (`LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`,
+      `LIBREFOLIO_ASSET_PROVIDERS_ORDER`) — are
       read in `backend/app/config/` (base or section module), from
       `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
       launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
@@ -91,8 +93,10 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
       `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
-      `web_link_finder_max_results()`, and `plugin_setting_env()` and `plugin_setting_env_origin()`
-      for the [plugin settings](patterns/plugin_settings.md#environment)), `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
+      `web_link_finder_max_results()`, `plugin_setting_env()` and `plugin_setting_env_origin()`
+      for the [plugin settings](patterns/plugin_settings.md#environment), and
+      `asset_providers_premium()` and `asset_providers_order()` for the
+      [search order](patterns/asset_plugin_guide.md#search-order)), `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
       `smtp_port()`, `smtp_user()`, `smtp_password()`, `smtp_sender()`, `smtp_reply_to()`,
       `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)),
       `sleep_wake.py` (Z: the pauses a provider gets after answering HTTP 429,
