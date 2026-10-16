@@ -248,10 +248,11 @@ a class you changed, every ternary you touched.
 | A0 · Analisi al coordinatore | ✅ 16/10 |
 | A1 · Piano nel journal, `npm ci` | ✅ 16/10 |
 | A2 · Test `GlobalSettingsTab.test.ts:937` (test-author) | ✅ 16/10 |
-| A3 · Lotti IM-1…IM-6 (sotto-agenti in parallelo; Donation all'OK di A) | ✅ 16/10 (Donation in attesa dell'OK di A) |
+| A3 · Lotti IM-1…IM-6 (sotto-agenti in parallelo; Donation all'OK di A) | ✅ 16/10 (Donation con l'OK di A, checkpoint 2) |
 | A4 · Rilettura dei diff e prove leggere | ✅ 16/10 |
-| A5 · Slot pesante | ⏳ in attesa dello slot |
-| A6 · `--update`, backlog IM-n, checkpoint | ✅ `--update` e backlog 16/10; checkpoint 1 mandato |
+| A5 · Slot pesante | ⏳ in coda (dopo AF, G, L-20, W6) |
+| A6 · `--update`, backlog IM-n, checkpoint | ✅ checkpoint 1 = `b5abcbdaa`, base merge `d95d6236c` |
+| A7 · Fotocamera, `DonationPopupModal`, C4 | ✅ 16/10, checkpoint 2 mandato |
 
 ### A0 · Analisi ✅ 16/10
 
@@ -337,3 +338,44 @@ a class you changed, every ternary you touched.
 >
 > **⚠️ Fuori pista**: la Vitest dei lotti è partita mentre il carico tornava a 86 (era 44 un minuto prima, al primo
 > controllo); è durata pochi secondi. Non eseguiti: `front check`, `component-unit`, E2E (slot pesante).
+
+### A6 · Checkpoint 1 ✅ 16/10
+
+> **Note implementazione**: il coordinatore ha committato i lotti IM-1…IM-6 (senza Donation) come **`b5abcbdaa`**
+> (23 file) e ha fatto la base merge con `e36e45f0d`, che porta i ruoli nuovi di T (`text-lf-on-overlay`,
+> `*-gain-soft`, `*-loss-soft`, `success-hover`, `info-hover`): **`d95d6236c`**, `--check` pulito, nessun `--resolve`.
+> Dopo la merge, `api sync` rilanciato con carico 49,6 (esito 0, solo file ignorati).
+
+### A7 · Fotocamera, `DonationPopupModal`, C4 ✅ 16/10
+
+> **Note implementazione**:
+> - `ProfileTab`: l'icona della fotocamera sul fondale passa da `text-white` a `text-lf-on-overlay` (ruolo provvisorio
+>   di T, `f043c1b58`): 1 → 0 classi.
+> - `DonationPopupModal`, con l'OK di A (16/10, girato dal coordinatore: nessun lavoro di A aperto su quei file),
+>   seguendo la testata di `LoginCard`:
+>   - testata `bg-lf-brand`, logo `bg-lf-logo` al posto di `style="background:#fff"`, nome `text-lf-on-brand`;
+>   - corpo, area di supporto e piede `bg-lf-card`; caffè `text-lf-donate`; titolo `text-lf-primary`; messaggio
+>     `text-lf-secondary`; nota della donazione `text-lf-link`;
+>   - riquadro di `SupportActions`: da `bg-white/70` a `bg-lf-panel border border-lf-subtle shadow-sm
+>     shadow-lf-shadow-card`;
+>   - «Più tardi» `bg-lf-panel text-lf-secondary hover:bg-lf-neutral`.
+>
+>   Risultato: 28 → 0 classi, `#ffffff` → nessun colore scritto a mano.
+> - **C4**: con Donation spariscono gli ultimi usi di `bg-libre-beige` e `text-libre-dark` (tutti nell'area IM). Il gate
+>   (`p1Classes` contro `classUses`) le dava morte: tolte da `app.css` le due regole `html.dark .bg-libre-beige` e
+>   `html.dark .text-libre-dark`, e nient'altro (diff di 10 righe, solo cancellazioni).
+> - Prove leggere, sotto `nice -n 10` con carico < 50: `--check` pulito; gate 66/66 (C4 compreso); Prettier sui 3
+>   file conforme; `git diff --check` pulito; regola 8 e colori solo `dark:` per elemento: 0 casi; `dark_only_check.py`
+>   del coordinatore: 0. Vitest `features/support/**`, `ProfileTab`, `DeferredAppPopups`, `themeModeReads.gate`: 8
+>   file, 194 test verdi.
+> - `--update`: m1 7.284 → 7.255, m2 49 → 48. Area IM: m1 1.048 → **54**, m2 6 → **0**. Restano `SettingToggle` 18
+>   (interruttori, T), `supportLinks` 14 (marchi), `AboutTab` 21 (famiglie di plugin, cuore), `SocialShareModal` 1
+>   (bottone «copia» col marchio).
+> - Backlog: IM-1 e IM-2 chiuse.
+>
+> **⚠️ Fuori pista**:
+> - Togliendo le due regole da `app.css` ho cancellato per errore anche `html.dark .text-libre-green`, che ha ancora
+>   usi fuori area. L'ho rimessa identica subito dopo, prima di ogni prova; il diff finale contiene solo le due regole
+>   morte.
+> - Fra le 11:53 e le 11:57 la rete è caduta e il turno si è chiuso con errore. Le tre modifiche erano già su disco;
+>   ripreso alle 12:00 con lo stato verificato da `git status`.
