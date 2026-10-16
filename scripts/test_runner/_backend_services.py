@@ -382,6 +382,14 @@ def services_provider_contracts(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Provider contract tests", verbose=verbose)
 
 
+def services_provider_policy(verbose: bool = False, test_names: list = None) -> bool:
+    """Test where the asset providers stand in the asset search (F21): tier, priority and search order."""
+    print_section("Services: Asset Provider Policy")
+    print_info("Testing: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER, provider_policy (tier, priority, search order), AssetSourceProvider declarations, AssetSearchService.search order (offline, no DB)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_policy.py", test_names)
+    return run_command(cmd, "Asset provider policy tests", verbose=verbose)
+
+
 def services_synthetic_yield(verbose: bool = False, test_names: list = None) -> bool:
     """Test synthetic yield calculation for SCHEDULED_YIELD assets."""
     print_section("Services: Synthetic Yield Calculation")
@@ -1493,6 +1501,16 @@ Note: No backend server required.
     add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
+    add_test(
+        cat,
+        "provider-policy",
+        services_provider_policy,
+        name="Provider Policy",
+        desc="F21, where the asset providers stand in the search: LIBREFOLIO_ASSET_PROVIDERS_PREMIUM/ORDER read stripped, lowercased, in order, once each; effective tier and priority (declared, else the variables'; unknown codes dropped and warned once per process); search order premium first, then priority, ties and repeated codes as given (D-X3); search_rank; tier/search_priority checked at class definition; the non-streaming search answers provider by provider in that order",
+        # PURE: no lane DB, no server, no network. Both variables are set with monkeypatch in this process; the registry
+        # provider_policy sees and core.configured_provider are replaced by stand-ins; each search runs a query of its own.
+        isolation="pure",
+    )
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
