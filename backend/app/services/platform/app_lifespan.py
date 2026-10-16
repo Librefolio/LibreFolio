@@ -34,6 +34,7 @@ from backend.app.services.files.static_uploads import seed_default_avatars
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
+from backend.app.services.platform.instance_backup.apply import apply_pending_restore, finish_pending_restore, hold_serving_lock
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
@@ -213,8 +214,11 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("configuration-checks", lambda: _check_configuration()),
     Step("signal-plugins", lambda: _load_signal_plugins()),
     Step("tool-catalog", lambda: _load_tool_catalog()),
+    Step("pending-restore", lambda: asyncio.to_thread(apply_pending_restore)),
     # Ensure all data directories exist (prod or test based on mode)
     Step("data-directories", lambda: ensure_data_dirs()),
+    # Before any step reads the data: from here on a restore never swaps or undoes under this process
+    Step("serving-lock", lambda: asyncio.to_thread(hold_serving_lock)),
     Step("risk-scenarios", lambda: _load_risk_scenarios()),
     Step("default-avatars", lambda: _seed_avatars()),
     # Ensure database exists and is migrated
@@ -225,6 +229,9 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("global-settings", lambda: _initialize_global_settings()),
     # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist
     Step("admin-bootstrap", lambda: startup_admin_bootstrap()),
+    # The first start on restored data completed: commit the restore (B3), before any step reports on or serves the data.
+    # A step before this one that raises rolls the restore back at the next start; one after it no longer does (N57).
+    Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
     # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),

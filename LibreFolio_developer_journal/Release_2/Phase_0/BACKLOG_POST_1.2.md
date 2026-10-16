@@ -4833,15 +4833,69 @@ sulla base `23f6578f3`.
   - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
 
   Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
-- **B-11 · Debito di traduzione delle pagine admin di B2 e B8** — piccolo, doc; B, 15/10 (B2). Pagine inglesi scritte
-  da docs-writer, senza timbro. In it, fr ed es mancano:
-  - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»;
+- **B-11 · Debito di traduzione delle pagine admin di B2, B3 e B8** — piccolo, doc; B, 15/10 (B2; B3 il 16/10). Pagine
+  inglesi scritte da docs-writer, senza timbro. In it, fr ed es mancano:
+  - in `cli_tools`, la sezione «🧪 Try a Restore on a Copy»; da B3, le sezioni «♻️ Restore an Archive» (`#backup-restore`)
+    e «⏳ Follow or Cancel a Restore» (`#backup-pending`), più i ritocchi del consiglio iniziale, dell'introduzione di
+    «Back Up the Instance», di «Use an Archive on Another Installation» e del blocco Docker;
   - in `configuration`, le righe nuove di «Main Options» e di «Secrets»;
   - in `admin/index`, la riga di riepilogo, più tre aggiunte che le traduzioni non avevano già dal 12/10.
 
   `hosting_providers` non ha nessuna traduzione: tutta la pagina, con le sezioni nuove `#panel-backups` e
-  `#restore-upload-limit`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
+  `#restore-upload-limit`. Da B6a-bis: la pagina nuova `admin/backup_restore.en.md` (tutta), una frase in «💾 Backup» di
+  `filesystem` e un punto in `admin/index`. Si fa con la pipeline Aphra, su richiesta del developer; si somma a B-7. Dettagli: piano 07,
   §13, «B2b — l'API della prova su copia».
+- **B-12 · Un salto d'orologio fra i worker di un server con `--workers N`, nel primo avvio dopo un ripristino** —
+  piccolo, nessun rischio per i dati; B, 16/10 (B3, revisione di sicurezza di metà percorso). Ogni processo legge il
+  «boot» una volta (il master di uvicorn, con l'ora di creazione di psutil, che su Linux si sposta con un salto
+  d'orologio). Se il salto cade fra la lettura di due worker, il secondo vede il ripristino «applicato da un altro boot»:
+  se il primo tiene già il lock di «server acceso», l'avvio si ferma e quello dopo annulla il ripristino; se non lo tiene
+  ancora, non ha letto niente, e aspetta a `serving-lock` che l'annullamento finisca (lock esclusivo durante le
+  rinomine). Al più un `mkdir` del passo `data-directories` dentro le rinomine fa fallire l'annullamento: l'avvio si
+  ferma e il seguente lo completa. In tutti i casi il ripristino va rifatto, i dati di prima restano. Lo stesso
+  per due contenitori sulla stessa cartella dati (spazi di PID diversi). Cura: un'identità senza orologio su Linux
+  (`starttime` in tick da `/proc/<pid>/stat`, più `/proc/sys/kernel/random/boot_id`).
+  Dettagli: piano 07, §13, «B3 — revisione di sicurezza di metà percorso».
+- ✅ **B-13 · I totali di controllo di J (CP-15) nel manifest, nella prova su copia e nell'e2e** — medio; B, 16/10 (B3).
+  **Fatto il 16/10** nel lotto B-13 (commit del coordinatore dopo l'handoff delle 08:40).
+  CP-15 è entrato (`financial_math/ledger_totals.py`: `compute_control_totals(session)`, `ControlTotals.to_json()`):
+  il manifest li porta (§3.2 del piano 07), la prova li ricalcola sulla copia e li confronta con un avviso, l'e2e
+  `backup-roundtrip` li confronta al posto dei report (il suo `TODO(CP-15)`). Dettagli: piano 07, §3.2 e §13.
+- **B-14 · La pagina di blocco non ha il pulsante del backup** — piccolo; B, 16/10 (docs-writer, B6a-bis). Il piano 07
+  (§3.11) voleva la scheda di scaricamento di B5a (`BackupDownloadCard.svelte`) anche nella pagina di blocco
+  (`features/instance/components/InstanceBlockedPage.svelte`, di H); oggi un admin di un'istanza bloccata scarica il
+  backup solo dall'API, dalla CLI o dal pannello (le rotte sono in `ALLOWED_WHEN_BLOCKED`), e la doc lo dice
+  (`hosting_providers`, `backup_restore`). Proposta: in B5, con il permesso di H sulla pagina. Dettagli: piano 07, §13,
+  «B6a-bis». **In corso, H** (coordinatore, 16/10 alle 05:52): la pagina di blocco monta `BackupDownloadCard.svelte`
+  (senza props) sotto l'avviso, in una sezione sua, con un `ToastContainer`. Si chiude quando entra il lotto di H; poi B
+  aggiorna le due frasi della doc («no backup button yet» in `backup_restore.en.md`, «the block page has no button for
+  it yet» in `hosting_providers.en.md`).
+- **B-15 · Un 413 di un proxy davanti a LibreFolio, sul caricamento di un archivio, dà un messaggio generico** — minimo;
+  B, 16/10 (docs-writer, B5b). Un proxy (nginx `client_max_body_size`, Fly, un CDN) che rifiuta il corpo con un 413
+  senza il `code` di LibreFolio fa dire alla scheda «The server answered with an error: the server's log has the
+  cause.», ma il log di LibreFolio non ne sa niente. Proposta: un 413 senza codice → un codice suo della scheda
+  (`proxy_too_large`, «A proxy in front of LibreFolio refused an archive this large: ask whoever runs it, or restore
+  from the command line»), con la chiave nelle quattro lingue e un caso in `restoreFlow.test.ts`. La guida
+  (`backup_restore.en.md`, «What Settings › Backup Says») descrive già il caso. Dettagli: piano 07, §13, «B5b».
+- **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
+  16/10 (docs-writer, B5b). Se la richiesta di riavvio è accettata ma il server non scende (segnale perso, un processo
+  che non esce), la sonda lo vede sempre su, lo stato resta `pending`, e la pagina continua a dire «LibreFolio is
+  restarting» senza il suggerimento «has not come back yet», che parte solo col server giù. La guida lo spiega (riga
+  di risoluzione dei problemi: riavvialo a mano). Proposta: server su e stato `pending` oltre `slowAfterMs` → un
+  messaggio suo nell'overlay («LibreFolio did not stop: restart it yourself»), deciso con il coordinatore (cambia un
+  caso fissato di `restoreFlow.test.ts`). Dettagli: piano 07, §13, «B5b».
+- ✅ **B-17 · «Cancel the restore» della scheda non toglie la copia di un ripristino confermato dalla CLI** — minimo; B,
+  16/10 (docs-writer, B5b). **Fatto il 16/10 in B5c** (checkpoint delle 18:22): `DELETE /backup/restore/pending` chiama
+  `cancel_restore(drop_copy=True)` come la CLI, e la copia si toglie dentro il lock del ripristino; la scheda non chiama
+  più `dropCheck`. Testo d'origine: la scheda, dopo un annullamento accettato, toglie la copia con `DELETE /stage/{stage_id}`;
+  la CLI non tiene il record della prova, quindi per un ripristino confermato da riga di comando la richiesta è
+  rifiutata (ignorata) e la copia resta in `.restore/stage/` finché una prova avviata dalla scheda non la trova più
+  vecchia di 24 ore; dopo l'annullamento dalla scheda, `backup pending --cancel` non la raggiunge più. La guida dice di
+  annullarlo dalla riga di comando. Proposta: `DELETE /backup/restore/pending` chiama `cancel_restore(drop_copy=True)`
+  come la CLI (una riga in `api/v1/backup/restore.py:309`, due casi di `test_backup_restore_apply.py`, la riga di
+  `security.md`), e la scheda smette di chiamare `dropCheck` (i suoi casi tornano «nessuna cancellazione della
+  copia»). Da fare insieme al biglietto dell'esito (B5c, se scelto): toccano la stessa API. Dettagli: piano 07, §13,
+  «B5b».
 
 ## E · Email (fase 01)
 

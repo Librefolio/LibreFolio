@@ -9,6 +9,8 @@
   check's end is recorded. ``read_check`` follows it; a check whose server stopped reads as ``restore_interrupted``.
 - ``remove_check`` drops an ended check with its copy; ``prune`` drops what is older than ``STAGE_LIFETIME``, and
   ends a check its stopped server left running.
+- ``confirm_check`` confirms the restore of a finished check (lot B3, ``apply.py``): its copy then waits for the next
+  start, and neither ``remove_check`` nor ``prune`` removes it until that restore is finished.
 
 The upload is removed as soon as its check ends: the copy (``.restore/stage/<stage id>/``) is what a restore uses.
 """
@@ -27,6 +29,7 @@ from typing import Literal
 
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
+from backend.app.services.platform.instance_backup.apply import RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
 from backend.app.services.platform.instance_backup.jobs import _lock_held, _out_of_space, _RunLock
 from backend.app.services.platform.instance_backup.paths import (
     STAGE_LOCK_FILE,
@@ -80,6 +83,10 @@ class CheckNotFoundError(LookupError):
 
 class CheckRunningError(RuntimeError):
     """The check still runs: it cannot be removed yet."""
+
+
+class CheckPendingError(RuntimeError):
+    """A restore waits to apply the check's copy, or is being applied: the copy cannot be removed."""
 
 
 @dataclass(frozen=True)
@@ -284,7 +291,28 @@ def remove_check(stage_id: str, *, data_dir: Path | None = None) -> None:
     check = read_check(stage_id, data_dir=data_dir)
     if check.status == "running":
         raise CheckRunningError("The check still runs")
+    if protected_stage(data_dir) == check.stage_id:
+        raise CheckPendingError("A restore waits to apply this copy")
     _remove(data_dir, check)
+
+
+def confirm_check(stage_id: str, *, confirmed_by: str, data_dir: Path | None = None) -> RestoreState:
+    """Confirm the restore of a finished check: the next start of the server applies its copy (``apply.py``).
+
+    ``BackupPathError`` when ``.restore`` is a link or a file: the confirmation writes there, and a link is refused rather
+    than followed (behind one, a check is not found by the routes that only read). Then ``CheckNotFoundError``;
+    ``CheckRunningError`` while it runs; ``RestoreNotRestorableError`` when it refused the archive; then the errors of
+    ``apply.confirm_restore``.
+    """
+    data_dir = data_dir or get_data_dir()
+    if os.path.lexists(restore_dir(data_dir)) and not is_plain_dir(restore_dir(data_dir)):
+        raise BackupPathError(restore_dir(data_dir))
+    check = read_check(stage_id, data_dir=data_dir)
+    if check.status == "running":
+        raise CheckRunningError("The check still runs")
+    if check.status == "failed":
+        raise RestoreNotRestorableError("The check refused the archive")
+    return confirm_restore(stage_id, confirmed_by=confirmed_by, data_dir=data_dir)
 
 
 def prune(data_dir: Path, now: datetime | None = None) -> None:
@@ -292,22 +320,26 @@ def prune(data_dir: Path, now: datetime | None = None) -> None:
 
     While no check runs, a check still recorded as running was left by a stopped server: it is ended as
     ``restore_interrupted`` first, its copy removed. Nothing is removed through a link: a folder that is not a plain
-    one is left alone.
+    one is left alone. The copy of a restore not finished yet (``apply.protected_stage``) is kept however old, with its
+    check: the restore needs it at the next start.
     """
     if not is_plain_dir(restore_dir(data_dir)):
         return
     cutoff = (now or _now()) - STAGE_LIFETIME
     idle = not _a_check_runs(data_dir)
-    recorded = _prune_checks(data_dir, cutoff, idle=idle)
+    protected = protected_stage(data_dir)
+    recorded = _prune_checks(data_dir, cutoff, idle=idle, protected=protected)
     if idle:
-        _prune_unrecorded(data_dir, cutoff, recorded)
+        _prune_unrecorded(data_dir, cutoff, recorded if protected is None else recorded | {protected})
 
 
-def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool) -> set[str]:
-    """End the checks a stopped server left running (when ``idle``), remove the ended ones older than ``cutoff``; the ids
-    of every check found."""
+def _prune_checks(data_dir: Path, cutoff: datetime, *, idle: bool, protected: str | None = None) -> set[str]:
+    """End the checks a stopped server left running (when ``idle``), remove the ended ones older than ``cutoff`` but the
+    ``protected`` one; the ids of every check found."""
     checks = _checks(data_dir)
     for check in checks:
+        if check.stage_id == protected:
+            continue
         if check.status == "running" and idle:
             try:
                 check = read_check(check.stage_id, data_dir=data_dir)
