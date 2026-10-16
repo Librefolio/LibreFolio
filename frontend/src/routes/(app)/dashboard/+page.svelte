@@ -75,8 +75,11 @@
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {classifyFxSyncOutcome, formatFxSyncResult, FX_SYNC_TIMEOUT_MS, type FxPairSyncCompleteDetail, type FxSyncResponse} from '$lib/services/fxCreationSync';
-    import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
-    import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
+    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
+    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
+    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
+    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
