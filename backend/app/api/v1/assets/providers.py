@@ -27,6 +27,7 @@ from backend.app.schemas.provider import (
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.provider_policy import provider_priority, provider_tier
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 
@@ -83,6 +84,8 @@ async def list_providers(
                     icon_url=instance.get_icon,
                     kind=instance.provider_kind,
                     supports_search=supports_search,
+                    tier=provider_tier(code),
+                    priority=provider_priority(code),
                     params_schema=schema_fields,
                     accepted_identifier_types=[t.value for t in instance.accepted_identifier_types],
                     provider_help_url=instance.provider_help_url,

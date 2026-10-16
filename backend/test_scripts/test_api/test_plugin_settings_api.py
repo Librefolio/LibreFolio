@@ -7,9 +7,11 @@ The contract pinned here:
 1. **The catalogue**: a test-only plugin is listed only when ``plugin_code`` names it; ``family`` filters; each field
    shows what its declaration says and its state for the caller; system fields are editable by an administrator only,
    user fields by their owner; ``MOCKFX`` is read-only for a member. Each entry says whether its plugin is
-   ``configured`` (a boolean). The full catalogue lists ``justetf`` (``preferred_currency``) and ``borsa_italiana``
-   (``preferred_language``): one user select each, editable by a member, on its default ``all``, configured, its
-   options with their label keys; a member saves them, reads them back as theirs, and clears them.
+   ``configured`` (a boolean), and carries its icon, ``icon_url``: null or a URL, ``justetf``'s the one
+   ``GET /assets/provider`` publishes for it, the test doubles' null. The full catalogue lists ``justetf``
+   (``preferred_currency``) and ``borsa_italiana`` (``preferred_language``): one user select each, editable by a
+   member, on its default ``all``, configured, its options with their label keys; a member saves them, reads them back
+   as theirs, and clears them.
 2. **Secrets are write-only**: a secret goes in ``secret_value`` and never comes back — no response of this module
    (every body is collected) ever holds a marker secret; a set secret shows only ``is_set`` and ``source: db``.
 3. **All or nothing**: a refused write answers 422 whose ``detail.results`` lists every item with ``success`` and
@@ -351,6 +353,39 @@ async def test_a_member_saves_the_search_preferences_and_clears_them(lane: _Lane
     assert {code: (field["value"], field["source"], field["is_set"]) for code, field in restored.items()} == dict.fromkeys(_SEARCH_PREFERENCES, ("all", "default", False))
     assert await _user_rows(member.user_id) == [], "nothing left behind"
     print_success("EUR and en saved as the member's own, JPY refused, both cleared")
+
+
+#: justetf's icon today: what its plugin's ``get_icon`` gives, and ``GET /assets/provider`` publishes.
+JUSTETF_ICON = "https://www.justetf.com/android-chrome-144x144.png?v2"
+
+
+def _a_valid_icon(value: Any) -> bool:
+    """``icon_url`` as the catalogue promises it: null, or a non-blank URL without surrounding whitespace."""
+    return value is None or (isinstance(value, str) and value != "" and value == value.strip())
+
+
+@pytest.mark.asyncio
+async def test_every_entry_carries_its_plugins_icon(lane: _Lane):
+    """1: every entry has ``icon_url``, null or a URL: justetf's is the icon ``GET /assets/provider`` publishes for it;
+    mockprov and MOCKFX, named, have none and answer null — the key is there all the same."""
+    print_section("1: the plugin's icon in the catalogue")
+    member = await lane.member("ps_icon")
+
+    response = await lane.call("GET", CATALOGUE, account=member)
+    doubles = [await _entry(lane, member, code) for code in ("mockprov", "MOCKFX")]
+    providers = await lane.call("GET", "/assets/provider", account=member, params={"providers": "justetf"})
+
+    assert response.status_code == 200, response.text
+    entries = [*response.json()["plugins"], *doubles]
+    wrong = {entry["plugin_code"]: entry.get("icon_url", "<no icon_url key>") for entry in entries if "icon_url" not in entry or not _a_valid_icon(entry["icon_url"])}
+    assert not wrong, f"every entry must carry icon_url, null or a non-blank URL: {wrong}"
+    icons = {entry["plugin_code"]: entry["icon_url"] for entry in entries}
+    assert "justetf" in icons, f"the full catalogue lists {sorted(icons)}"
+    assert providers.status_code == 200, providers.text
+    published = [provider["icon_url"] for provider in providers.json() if provider["code"] == "justetf"]
+    assert (icons["justetf"], published) == (JUSTETF_ICON, [JUSTETF_ICON]), "justetf's icon in the catalogue is the one the asset provider list publishes"
+    assert (icons["mockprov"], icons["MOCKFX"]) == (None, None)
+    print_success("icon_url in every entry; justetf's is the provider list's, the test doubles' null")
 
 
 # =============================================================================

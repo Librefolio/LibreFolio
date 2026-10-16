@@ -988,6 +988,12 @@ async def test_list_asset_providers(test_server):
             assert by_code[code]["supports_meaningful_volume"] is False, f"{code} should NOT declare meaningful volume support"
             assert by_code[code]["volume_kind"] == "unknown", f"{code} should default to unknown volume kind"
 
+        # F21: where each provider stands in the asset search. A lane sets neither LIBREFOLIO_ASSET_PROVIDERS_PREMIUM nor
+        # LIBREFOLIO_ASSET_PROVIDERS_ORDER (configure_test_runtime drops them) and no shipped plugin declares otherwise,
+        # so every listed provider is community at the default priority.
+        placements = {p["code"]: (p.get("tier"), p.get("priority")) for p in providers}
+        assert placements == dict.fromkeys(placements, ("community", 100)), f"every listed provider must be community at priority 100 on a lane without overrides: {placements}"
+
         print_success(f"✓ Listed {len(providers)} providers")
         print_info(f"  Providers: {', '.join([p['code'] for p in providers])}")
 

@@ -58,9 +58,9 @@ Hover **Unrealized change** to split it by the currency your assets are priced i
 |-----|---------------|
 | 📈 **Assets in USD** | What your dollar assets did *in dollars* — their own price change — counted at the day's exchange rate |
 | 💱 **USD → EUR rate** | What the exchange rate did to what you paid for them |
-| ❔ **USD, not split** | Only when, on the first or last day, some of those assets had no price, no rate or an incomplete purchase cost: their change, in one piece |
+| ❔ **USD, not split** | Only when, on the first or last day, some of those assets had no rate or an incomplete purchase cost: their change, in one piece |
 
-There is a 📈 row for every currency, euro included, and a 💱 row for every currency other than your display currency; together the rows add up **exactly** to the Unrealized change.
+There is a 📈 row for every currency, euro included, and a 💱 row for every currency other than your display currency; together the rows add up **exactly** to the Unrealized change. On a day an asset is valued at what it cost you, because it has no price at all, it has no unrealized gain or loss and adds nothing to any row.
 
 ??? example "A US ETF on a euro dashboard"
 

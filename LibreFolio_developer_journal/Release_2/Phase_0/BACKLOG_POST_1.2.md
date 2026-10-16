@@ -3658,6 +3658,136 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
   ✅ **Chiusa da X il 16/10**, primo pezzo del FE5c: tolti il campo e l'import, e `front check` passa a 0 errori.
   Commit del coordinatore, lotto FE5c-1. Dettagli: piano 03, sezione «FE5c-1».
+- **X-R14 · La pagina di dettaglio dei cambi tiene copie degli helper dei segnali** — minimo, frontend; X, 16/10 (FE5c-2).
+  `fx/[pair]/+page.svelte` ha copie identiche di `parseBackendSignalResults`, `signalDataContextFingerprint` e
+  `comparisonAssetIds`, che il FE5c ha portato in `lib/charts/chartPageSignals.ts` (N18). E `toSlug` di
+  `assetDetailFxRequirements.ts` è una copia di `createPairSlug` (`fxStoreRegistry.ts`), che però rende maiuscolo.
+  Da adottare e unificare nel FE4 (CP7). Dettagli: piano 03, sezione «FE5c-2» e «FE5c-6».
+- **X-R15 · Due testi inglesi fissi nella pagina dell'asset** — minimo, i18n; X, 16/10 (FE5c-3, FE5c-5). «Provider»
+  (il titolo della fonte nel pannello dei metadati) e «✏️ Manual» (il chip dell'intestazione) non passano dal
+  catalogo. Il FE5c li sposta così come sono, in `AssetDetailMetadataPanel` e in `AssetDetailHeader`: due chiavi in
+  `assets` dopo il taglio, come O-8. Dettagli: piano 03, sezione «FE5c-3/4/5».
+- **X-R16 · Un segnale non valido salta la cache dei prezzi della pagina dell'asset** — basso, frontend; X, 16/10
+  (test-author del FE5c-2). In `loadChartData`, `parseBackendSignalResults` rifiuta tutta la risposta se un solo
+  segnale non è valido. Questa parte è voluta: nessun segnale del backend viene mostrato, e `signalRequestFailed` lo
+  dice.
+  - **Il difetto**: il `throw` salta anche la scrittura dei prezzi nella cache e `resolveMaxStartFromChartData()`.
+    Con «Tutto», l'inizio dell'intervallo non si risolve, e i prezzi già arrivati non entrano nella cache.
+  - **Cura**: leggere i segnali dopo la cache e la risoluzione, o catturare l'errore solo attorno ai segnali. Con un
+    test di componente o E2E che instrada un segnale non valido.
+  - Fuori dal FE5c, che sposta il codice senza cambiarlo. Dettagli: piano 03, sezione «FE5c-2».
+- **X-R17 · La conferma di cancellazione di un asset non nomina i suoi eventi** — basso, UX; dal test-author di
+  W-B42 (lettura), girata a X dal coordinatore il 16/10. La descrizione della conferma singola
+  (`routes/(app)/assets/+page.svelte:1808`, `assets.delete.confirmWarning`) dice «Provider assignments and price history
+  will be removed», ma anche gli eventi (dividendi, split) se ne vanno in cascata. Cura: una frase nella chiave in 4
+  lingue, e lo stesso nella conferma multipla. Dopo il FE5c.
+- **X-R18 · Una transazione blocca la cancellazione solo dopo la conferma** — basso, UX; stessa origine.
+  `confirmDeleteAsset` (`:925`) chiama il DELETE e solo allora riceve `HAS_TRANSACTIONS`, con il conteggio e il link
+  alle transazioni; la multipla fa lo stesso (`:995`). L'utente conferma una cosa che non può succedere. Cura: usare il
+  `tx_count` della riga della lista (`:554`) per aprire la conferma già bloccata, con il link. È solo un'indicazione,
+  perché può contare solo le transazioni visibili all'utente, e il controllo del backend resta quello che decide. Dopo
+  il FE5c.
+- **X-R19 · «N assets» in inglese fisso nella conferma multipla** — minimo, i18n; stessa origine.
+  `itemsLabel={\`${deletingAssets.length} assets\`}` (`:1826`). Cura: una chiave con il plurale in `assets.delete`, 4
+  lingue. Dopo il FE5c.
+- **X-R20 · Il cestino della card e la conferma singola senza `data-testid`** — minimo, test; stessa origine.
+  Il bottone del cestino di `AssetCard.svelte:318` non ha `data-testid`, e la `ConfirmModal` singola (`:1805`) non
+  passa `testId` (la multipla nemmeno). Cura: `asset-card-delete-btn` e `testId` sulle due conferme, poi le E2E che
+  oggi passano dal testo o dalla posizione. Dopo il FE5c.
+- **X-R21 · `fxRoutesStore.test.ts` va in timeout sotto carico, e il secondo caso eredita il primo** — basso, test; X,
+  16/10 (triage durante la verifica della base `fa97791f6`).
+  - **Il caso**: in `core-unit`, con la macchina a carico ~100, il file ha impiegato 7,5 s. Il primo caso è andato in
+    timeout ai 5 s di default di Vitest; il secondo ha fallito con «`listRoutes` chiamata 2 volte». Da solo il file
+    passa in 2,1 s, e il primo caso impiega 437 ms.
+  - **Verdetto del triage: assunzione (il tempo)**. Ogni caso fa `vi.resetModules()` e poi un `import()` a freddo di
+    `fxRoutesStore`, che si porta dietro tutto il grafo di `fxStoreRegistry`, dentro i 5 s di default.
+  - **La cascata**: il caricamento rimasto in sospeso chiama il mock condiviso (`vi.hoisted`) durante il caso
+    successivo.
+  - **Cura, solo nel test**:
+    - scaldare il grafo una volta sola, in un `beforeAll` con un timeout ampio, prima dei `resetModules`;
+    - dare a ogni caso il suo mock, così un timeout non si propaga.
+  - Mio, perché è nell'area del FE4. Dettagli: piano 03, sezione «CP13».
+  ✅ **Chiusa da X il 16/10**:
+  - un mock nuovo per caso, installato con `vi.doMock`, così una lettura in sospeso non viene contata nel caso dopo;
+  - il grafo dello store si scalda una volta in `beforeAll`;
+  - `afterEach` aspetta `vi.dynamicImportSettled()`, alla sua prima volta nel repo.
+  - Il file da solo dà 5/5, e il primo caso passa da 437 a 57 ms; `core-unit` è verde.
+  - Commit del coordinatore, lotto X-R21. Dettagli: piano 03, sezione «X-R21».
+- **X-R22 · L'invito a reinserire un segreto illeggibile non dice di ripristinare prima la vecchia chiave** — basso,
+  testi; da H (H-3, opzione B), girata a X dal coordinatore il 16/10.
+  - **Il problema**: salvare un segreto riscrive la sua riga con la chiave attuale. Se l'amministratore ripristina poi
+    la vecchia chiave d'istanza, il segreto appena reinserito diventa illeggibile a sua volta.
+  - La doc di H (`481a93f1c`, su `admin/configuration.md#plugin-secrets`, non ancora in `dev_release2` il 16/10 alle
+    10:35) ora dice: «If you still have the old key, put it back before anyone enters them again».
+  - **I miei due testi** dicono solo «enter it again», senza l'ordine:
+    - il suggerimento dell'interfaccia, `frontend/src/lib/i18n/pluginSettings/en.json:31` (4 lingue);
+    - la riga della tabella in `mkdocs_src/docs/user/settings/plugins.en.md:117`.
+  - **Attenzione**: la pagina di H **cita alla lettera** il testo dell'interfaccia («The tab says so under each one:
+    *Saved, but this instance's key cannot read it: enter it again.*»). Cambiando la chiave i18n va cambiata nello
+    stesso commit anche la citazione nella sua pagina, con l'ok di H.
+  - **Cura**: dopo che `481a93f1c` è nella mia base, un lotto piccolo dopo FE5c e CP13, che allinea:
+    - la chiave in 4 lingue;
+    - la riga della mia pagina utente, con il link alla sezione di H;
+    - la citazione nella pagina di H.
+- **X-R23 · Il caricamento dei dati della pagina dell'asset resta nella pagina** — medio, refactor; X, 16/10 (FE5c,
+  pezzo 9, decisione del coordinatore). Il FE5c ha tolto alla pagina `routes/(app)/assets/[id]/+page.svelte` gli
+  helper, i pannelli, la barra e il polling; restano `loadChartData` (~310 righe) e il caricamento dei confronti.
+  - **Perché non nel FE5c**: leggono e scrivono una trentina dei ~80 `$state` della pagina. Spostarli vuol dire
+    ridisegnare lo stato della pagina (una classe o uno store `.svelte.ts` con le richieste e le loro generazioni), con
+    rischio alto e conflitti con J, Y e Z.
+  - **Cura**: un lotto dopo la 1.3, con le E2E della pagina come rete. Dettagli: piano 03, sezione «FE5c», pezzo 9.
+- **X-R24 · La ricerca senza `providers` interroga anche il provider dei test** — basso, API; X, 16/10 (test-author di
+  F21, in lettura). `AssetSearchService.search` e `search_stream` (`services/assets/search.py`), quando la richiesta non
+  dice quali provider, prendono tutto `AssetProviderRegistry.list_providers()`, compreso `mockprov`, che è `test_only` e
+  sa cercare.
+  - **Effetto**: una chiamata diretta a `/assets/provider/search?q=…` senza `providers` restituisce anche i risultati
+    «Mock Asset» in produzione. L'interfaccia passa sempre `providers`, quindi l'utente non li vede.
+  - **Cura**: escludere i provider `test_only` dalla lista di default, come fa già `GET /assets/provider`. Prima va
+    controllato che nessun test, API o E2E, cerchi senza `providers` aspettandosi i risultati del mock.
+  - **Collegato, minimo**: la docstring di `services/assets/__init__.py` dice che `AssetSourceProvider` e
+    `AssetSourceError` stanno in `core.py`, ma sono in `base.py`.
+  - Dettagli: piano 03, sezione «CP13», F21.
+- **X-R25 · `test_complete_e2e_flow_justetf` va in timeout alla ricerca quando un fornitore esterno è lento** — basso,
+  test; trovato da J in `all-backend`, girato a X dal coordinatore il 16/10.
+  - **Il caso**: `backend/test_scripts/test_e2e/test_search_to_prices.py`, step 1, chiede
+    `/assets/provider/search?q=iShares Core MSCI World` **senza `providers`**, con `TIMEOUT = 30.0`. Da solo passa 3/3
+    in 18 s.
+  - **Perché**: senza `providers` la ricerca interroga tutti i fornitori in parallelo. Ognuno ha 30 s sul server
+    (`services/assets/search.py`, `timeout=30.0`), più il ripiego del link finder quando non trova niente. L'attesa
+    del test, 30 s, è uguale al budget di un solo fornitore, non a quello della richiesta. **Verdetto: assunzione
+    (il tempo)**; il prodotto è corretto.
+  - **Cura**, nel test:
+    - `providers=justetf` allo step 1, perché il test è su justETF, così non dipende dagli altri fornitori, `mockprov`
+      compreso (X-R24);
+    - un tempo di attesa per la ricerca sopra quello del server, almeno 60 s con la risoluzione degli URL.
+  - Un lotto piccolo, quando c'è tempo.
+- **X-R26 · `AssetDetailLive`: un cambio d'asset diretto confronta il primo prezzo con l'ultimo dell'asset di prima**
+  — minimo, latente; trovato dal test-author scrivendo i rossi delle correzioni dal vivo, X, 16/10.
+  - **Il caso**: l'effetto riparte quando cambia l'asset, ma tiene `#previousNative`. Il primo tick del nuovo asset
+    si confronterebbe col prezzo del vecchio, e il lampeggio sarebbe falso.
+  - **Oggi la pagina non ci arriva**: al cambio d'asset `reloadPage()` mette prima `assetInfo = null`
+    (`routes/(app)/assets/[id]/+page.svelte` ~1058). L'effetto passa così dal ramo fermo, che azzera il riferimento.
+  - **Cura, se mai servisse**: azzerare il riferimento solo quando cambia l'id dell'asset. Azzerarlo a ogni nuova
+    esecuzione romperebbe il caso «keeps no trace of a dropped answer».
+  - Dettagli: piano 03, «Correzioni dal vivo 1 e 2».
+- **X-R27 · Il cambio di valuta di un asset non invalida mai le sue cache** — basso, backend; colori (slot TR,
+  corsia 6154, 16/10 13:43), girato a X dal coordinatore il 16/10.
+  - **Il sintomo nel log**: `wipe_market_data: cache invalidation skipped — 'Asset' object has no attribute
+    'provider_code'`.
+  - **Perché**: il passo 4 di `services/assets/currency_change.py` (~149–161) legge `provider_code`,
+    `provider_params`, `identifier` e `identifier_type` da `Asset`. Quei campi stanno sull'assegnazione del fornitore
+    (`AssetProviderAssignment`). L'eccezione è presa e solo registrata: dopo un cambio di valuta le cache della storia
+    e del prezzo corrente restano fino alla loro scadenza (15 min e 2 min).
+  - **Cura**, con un rosso prima: leggere l'assegnazione e costruire la chiave da lì.
+- **X-R28 · La cache del prezzo corrente ha una chiave senza i parametri del fornitore** — basso, backend; X, 16/10,
+  trovato misurando X-R27.
+  - **Il caso**: `services/assets/price_query.py:764` mette in `_asset_current_cache` la chiave `(codice,
+    identificativo, tipo, impostazioni)`. `refresh.py:229` e le invalidazioni (`provider_management.py` ~236,
+    `currency_change.py`) usano invece la chiave a cinque elementi, con l'hash dei parametri (#R3-4).
+  - **Effetti**: due assegnazioni con stesso codice, identificativo e tipo ma parametri diversi si scambierebbero il
+    prezzo corrente per 2 minuti. Nessuna invalidazione raggiunge quelle voci.
+  - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
+    punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
 
 ## W · Import e transazioni (fase 01)
 
@@ -3925,19 +4055,33 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md). Righe scritte da J
 il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 scritte il 15/10, nel checkpoint CP-1.
 
+**16/10, ripartizione con MF** (piano di MF approvato dal developer, via il coordinatore alle 13:26). Passano a MF:
+- CP-3 (U5a: B8, V2/P2, R4, B19 e il TRANSFER di P22);
+- CP-5 (U2, U6, T-B4);
+- U3 e U7 di CP-11, con O4;
+- la matematica di CP-12 (U9, T-B8);
+- CP-13 meno CP-13a (U8 lato backend);
+- i residui R6–R10 di T-U4.
+
+Le loro righe nelle altre sezioni le riconcilia il coordinatore. Restano a J: J-17, CP-13a (P19), J-24, CP-7b, J-26,
+J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dettagli: piano di MF, §2; piano J, §10.
+
 - **J-1 · Copie della matematica comune fuori dall'inventario del 43** — basso; J, 14/10 (analisi). Ognuna va nel
   lotto che unifica la sua famiglia:
   - `risk/metrics.py:741` (giorni di calendario → osservazioni, con 365) → U4a, CP-10;
   - `portfolio_service.py:824` (G/L % della posizione) → U4b, CP-4;
   - `series_preparation.py:184` (fattore di cambio ricavato dal close) → U1, CP-11;
   - `fx.py:717` (inversione del tasso nella catena delle rotte) → U1, nei file di X dopo il suo PL4 (D-J17);
-  - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12;
+  - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12; **→ MF**
+    (MF-D, 16/10);
   - frontend, per Y con U8: `lib/charts/signals/CompoundSignal.ts:69` (curva what-if, eccezione interattiva da
-    dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita).
+    dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita): il
+    secondo diventa un campo del backend con P19 (CP-13a di J, 16/10), poi Y lo legge.
   - **15/10, nella revisione di V-3 per W**: la quantità per posizione a una data non ha una funzione nella casa, e oggi
     si conta in più posti: in `transactions/balances.py` (`get_asset_holdings` e la metà delle quantità di
     `_get_balances_before_date` e del replay della validazione) e nel `cumulative_qty` del motore. Da decidere se il
     registro delle quantità appartiene alla casa. La metà della cassa la rifà W come W-B19, su `native_balances`.
+    **→ MF** (MF-G, su `ledger_totals.position_quantities`, 16/10).
   - **15/10, nel piano di CP-6**: un buco nei cambi si legge in due modi. Il motore valuta i titoli e la cassa in
     transito a giorno esatto (`fx_rate_map.get`: niente cambio → valore mancante, `daily_state.py:1031`,
     `_convert`); la cassa nativa porta avanti l'ultimo cambio noto senza limite (`native_cash._rate_at`). Con un buco
@@ -4116,9 +4260,10 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
     `lots_analysis_service.py:728-770` e `:1042-1045`, e di riflesso l'AI Export (`payloads/portfolio_broker.py:604-606`,
     `:775-776`);
   - duplicati senza cambio di valore: l'identità del periodo nell'AI Export (`portfolio_financial.py:489`,
-    `broker_financial.py:434`, CP-12); la G/L % in `portfolio_service.py:824`, `:939` (CP-4);
+    `broker_financial.py:434`, CP-12; **→ MF**, la matematica di CP-12, 16/10); la G/L % in `portfolio_service.py:824`,
+    `:939` (CP-4);
   - **in un file di W**: `brokers/summary.py:119-135`, terza copia della G/L %, nella valuta dell'asset: da smistare
-    dal coordinatore.
+    dal coordinatore. ✅ Fatta da CP-7a (`gain_loss_ratio`, treno 107, `4f9e94420`).
 
   Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati», «Inventario del punto 26».
 - **J-15 · La galleria ristampa l'output di Playwright senza flush** — basso, strumenti (programma colori); J, 15/10,
@@ -4145,6 +4290,11 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   non è un prezzo osservato); per quelle in entrata, segnare solo se l'asset non ha ancora una quotazione di mercato.
   Prima il rosso; serve la decisione del developer, perché cambia il comportamento dei seed. Dettagli: piano J, §10
   «CP-16».
+  **Decisione del developer** (P2, 16/10): «le rettifiche sono transazioni; portano un WAC, che può voler dire molte cose
+  e non è il prezzo dell'asset in quel momento; i prezzi si deducono solo da un acquisto»: una rettifica non è mai
+  un'osservazione di prezzo, in entrata e in uscita (per la SELL decide il developer). Caso senza prezzo, **opzione A**:
+  una posizione senza alcuna osservazione vale il suo costo storico, come stima dichiarata («valutato al costo, nessun
+  prezzo»). Lotto J-17 dopo CP-7a, disegno approvato il 16/10: piano J, §10 «J-17».
 - **J-18 · Su SQLite `Numeric(18, 6)` si salva come numero in virgola mobile** — basso, dati; trovata dal test-author di
   J il 16/10 (CP-15), con una prova su file. SQLAlchemy su SQLite non passa i Decimal al driver: li converte in `float`
   e li rilegge con 6 decimali, quindi un importo o una quantità oltre ~15 cifre significative si salva arrotondato
@@ -4200,6 +4350,11 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   developer: (A, proposta) «al costo» anche nella valuta del report: i lotti valutano la consegna al costo medio storico
   del pool nella valuta del report, come la Dashboard; (B) tenerla così e scriverlo nella pagina. Dettagli: piano J, §10
   «CP-7».
+  **Decisione del developer** (P21, 16/10): «convertire nella valuta di destinazione al cambio del giorno della
+  transazione, e fare ogni calcolo nella valuta di destinazione, come nel fix appena prima della 1.2». I lotti la
+  seguono già (CP-7a); la Dashboard no: si allinea la Dashboard (la distribuzione al cambio del giorno della rettifica,
+  la differenza col costo storico nel realizzato), lotto proprio dopo J-17. La proposta (A) cade. Dettagli: piano J,
+  §10 «J-24».
 - **J-25 · Debito di traduzione di CP-7a (lotti in un'altra valuta)** — basso, documentazione; J, 16/10. Pagine EN
   cambiate di senso, senza stamp: `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`
   (sezione nuova `#lots-in-another-currency` con l'esempio D-J1), `…/fifo-engine/index` (una frase rovesciata, un
@@ -4218,6 +4373,38 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   sé in B-13 (solo testo decimale semplice prima di `from_json`). Proposta: `_as_amount` rifiuta esponenti e lunghezze
   oltre la precisione del suo contesto (`_EXACT`, 60 cifre), così ogni chiamante è protetto; rosso prima (test-author).
   Dopo CP-10a e CP-7a. Dettagli: piano J, §10 «CP-15».
+- **J-28 · L'avviso dei lotti «nessun prezzo di mercato, valore al costo» scatta anche quando gli scambi prezzano
+  l'asset** — basso, chiarezza; J, 16/10 (letto durante J-17). `lots_analysis_service.py:141` mette `estimated_mode` quando
+  l'asset non ha quotazioni (`PriceHistory`) fino alla fine della finestra, e `:283` aggiunge
+  `CURRENT_PRICE_ASSUMED_AT_COST` («No market price … open value estimated at cost, market P&L excluded»). Ma il valore
+  dei lotti viene dal risolutore unico, che usa anche i prezzi di BUY e SELL: un asset senza quotazioni ma con scambi è
+  valutato allo scambio (`:760`, ramo `MARKET_PRICE`), e l'avviso dice il falso. C'era già prima di J-17. Proposta:
+  l'avviso solo quando i lotti sono davvero al costo, cioè senza alcuna osservazione (né quotazione né BUY o SELL), la
+  condizione del ramo `ESTIMATED_AT_COST`; rosso prima. Nello stesso lotto la descrizione di `LotSummarySchema.value_source`
+  (`schemas/portfolio.py:829`: «MARKET_PRICE quando c'è un prezzo reale, se no ESTIMATED_AT_COST»), che è anche
+  `MARKET_PRICE` per un prezzo di scambio e `None` senza segno con l'asset quotato; `api sync`. Dopo CP-7b (V1 tocca la
+  stessa sintesi). Dettagli: piano J, §10 «J-17», rapporto degli specialisti.
+- **J-29 · Debito di traduzione di J-17 (una rettifica non è un prezzo; valore al costo)** — basso, documentazione; J,
+  16/10. Pagine EN cambiate di senso, senza stamp, tutte sotto `financial-theory/technical-analysis/`:
+  - in `performance-metrics/portfolio-engine/`: `price-resolution`, `index` (§2, §3), `nav`, `deposited-capital`,
+    `period-pnl`;
+  - `performance-metrics/fifo-engine/fifo-lot-analysis` (sezione `#estimated-at-cost` riscritta);
+  - `performance-metrics/weighted-average-cost` e `risk-metrics/data-quality`.
+
+  Pagine utente: `user/dashboard/index`, `positions`, `charts`, `kpi-cards`, e `user/tools/pac-allocator/index`.
+  `translate-validate` (16/10) dà 18 errori strutturali nuovi da J-17, su 747 del sito:
+  - 12 per il link nuovo a `index.md#3-position-state` (`price-resolution`, `nav`, `period-pnl`, `deposited-capital`);
+  - 3 per un blocco di formula nuovo in `price-resolution`;
+  - 3 per un link nuovo a `#estimated-at-cost` in `fifo-lot-analysis`.
+
+  Tradurre `index` con le quattro pagine che vi puntano, nello stesso giro. Dettagli: piano J, §10 «J-17».
+- **J-30 · Il primo parse del BRIM dopo l'avvio supera i 30 s del test sotto carico** — basso, tempo dei test e prima
+  importazione; J, 16/10 (slot 2 di J-17), da smistare dal coordinatore (area del BRIM). Il primo
+  `POST /brokers/import/files/{id}/parse` fa partire il pool dei processi (`brim_parse_pool.py`, forkserver): **48,8 s**
+  nello slot e **31,2 s** al rilancio, con carico 100–158; i parse seguenti 0,2–1 s. `test_brim_api.py::TestParseEndpoint`
+  aspetta 30 s fissi (`TIMEOUT`), quindi il primo test della classe scade. Verdetto `test-triage`: lentezza.
+  Strade possibili: scaldare il pool all'avvio del server, oppure una fixture che lo scaldi prima dei test temporizzati.
+  Allungare il tempo no. Dettagli: piano J, §10 «J-17», slot 2.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -4331,11 +4518,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   (la cache di Aphra è del 10/10, l'inglese è cambiato dopo), quindi niente stamp: da chiudere col prossimo giro di
   traduzione, verificando che i commenti dell'albero spagnolo vengano tradotti, oppure a mano in un lotto di doc.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-12».
-- **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc; docs-writer
-  di Z, 16/10 (Z-5). In «Configuration Integration» la pagina dice che il backend non valida gli intervalli delle regole
-  dello scheduler e che li fa rispettare solo il dialogo: falso da `84d9e3360` (9/10), che li controlla a ogni
-  salvataggio (`SettingConstraint` in `schemas/settings.py`, ~391–403). Fuori dal lotto Z-5: una frase da correggere.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-5».
+- ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
+  docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
+  ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro
+  `GLOBAL_SETTINGS_CONSTRAINTS` e risponde 422 senza scrivere nulla, e che i ripieghi del caricamento restano per i
+  valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
+  rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
 
 ## B · Backup e Docker (fase 01)
 

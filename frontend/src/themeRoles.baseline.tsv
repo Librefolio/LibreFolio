@@ -11,6 +11,13 @@ lib/components/assets/EventDataImportModal.svelte	12
 lib/components/assets/IdentifierPrimaryChooser.svelte	11
 lib/components/assets/PriceDataImportModal.svelte	6
 lib/components/assets/ScheduledInvestmentEditor.svelte	4
+lib/components/assets/detail/AssetCalendarWindowControls.svelte	11
+lib/components/assets/detail/AssetChartModeToggle.svelte	20
+lib/components/assets/detail/AssetDetailHeader.svelte	28
+lib/components/assets/detail/AssetDetailMeasuresSection.svelte	19
+lib/components/assets/detail/AssetDetailMetadataPanel.svelte	54
+lib/components/assets/detail/AssetDetailSignalsPanel.svelte	13
+lib/components/assets/detail/AssetDetailToolbarActions.svelte	32
 lib/components/charts/ChartAestheticsSection.svelte	16
 lib/components/table/DataTableCellContent.svelte	4
 lib/components/transactions/bulk/TxBulkBanners.svelte	2
@@ -52,7 +59,7 @@ lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/providerHelpers.ts	20
 lib/utils/transactions/pairCellHtml.ts	2
 routes/(app)/assets/+page.svelte	4
-routes/(app)/assets/[id]/+page.svelte	312
+routes/(app)/assets/[id]/+page.svelte	123
 routes/(app)/brokers/[id]/+page.svelte	12
 routes/(app)/fx/+page.svelte	4
 routes/(app)/fx/[pair]/+page.svelte	54
@@ -64,3 +71,8 @@ routes/(app)/fx/[pair]/+page.svelte	54
 ~split	lib/components/transactions/modals/ImportWizardModal.svelte	lib/components/transactions/wizard/UploadStep.svelte,lib/components/transactions/wizard/SelectFilesStep.svelte,lib/components/transactions/wizard/AnalyzeStep.svelte,lib/components/transactions/wizard/DuplicatesStep.svelte,lib/components/transactions/wizard/ReviewStep.svelte,lib/components/transactions/wizard/WizardFooter.svelte	595	#dc2626
 ~split	lib/components/transactions/modals/TransactionBulkModal.svelte	lib/components/transactions/bulk/TxBulkBanners.svelte,lib/components/transactions/bulk/TxBulkToolbar.svelte	190
 ~split	lib/components/transactions/modals/TransactionFormModal.svelte	lib/components/transactions/form/TxFormBanners.svelte,lib/components/transactions/form/TxFormPairSection.svelte,lib/components/transactions/form/TxFormSingleSection.svelte,lib/components/transactions/form/TxFormOptionalSection.svelte	218
+~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetChartModeToggle.svelte,lib/components/assets/detail/AssetCalendarWindowControls.svelte	198
+~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailHeader.svelte	258
+~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailMetadataPanel.svelte	312
+~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailSignalsPanel.svelte,lib/components/assets/detail/AssetDetailMeasuresSection.svelte	230
+~split	routes/(app)/assets/[id]/+page.svelte	routes/(app)/assets/[id]/+page.svelte,lib/components/assets/detail/AssetDetailToolbarActions.svelte	155

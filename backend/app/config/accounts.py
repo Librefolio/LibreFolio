@@ -5,6 +5,8 @@ Owner: workstream A (accounts). Read from the process environment only, never fr
 
 import os
 
+from backend.app.config import env_url
+
 
 def donation_popup_disabled() -> bool:
     """``LIBREFOLIO_DISABLE_DONATION_POPUP``: ``1``, ``true`` or ``yes``, in any case, turns the donation popup off."""
@@ -56,21 +58,11 @@ def max_users() -> int | None:
     return limit
 
 
-def _url(name: str) -> str | None:
-    """The http(s) URL in the variable ``name``, one trailing slash removed; None when unset or blank."""
-    value = _blank_to_none(name)
-    if value is None:
-        return None
-    if not value.lower().startswith(("http://", "https://")):
-        raise ValueError(f"{name}={value!r}: expected an http:// or https:// address")
-    return value[:-1] if value.endswith("/") else value
-
-
 def public_url() -> str | None:
     """``LIBREFOLIO_PUBLIC_URL``: the address users reach the instance at, for links built outside a browser (CLI, email)."""
-    return _url("LIBREFOLIO_PUBLIC_URL")
+    return env_url("LIBREFOLIO_PUBLIC_URL")
 
 
 def billing_url() -> str | None:
     """``LIBREFOLIO_BILLING_URL``: where the administrator manages the subscription of a managed instance."""
-    return _url("LIBREFOLIO_BILLING_URL")
+    return env_url("LIBREFOLIO_BILLING_URL")
