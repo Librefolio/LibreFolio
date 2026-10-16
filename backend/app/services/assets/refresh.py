@@ -232,11 +232,16 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                 history_requested = start == "min" or start < today
                 if prov.supports_history and history_requested:
                     try:
+                        # Prices stop at yesterday: today's close is not in yet, and today's value comes from
+                        # get_current_value below. Events do not: a date announced for today (a dividend, a split) is a
+                        # fact, so the call asks up to today and today's prices are dropped before the cache and the
+                        # write (X-R12). The same calls as before: only their end moves to today.
                         history_end = min(end, today - timedelta(days=1)) if end >= today else end
+                        call_end = today if end >= today else end
                         if start == "min" or start <= history_end:
                             cached_dates = {}
                             fetch_start: AssetHistoryStartDate | None = start
-                            fetch_end = history_end
+                            fetch_end = call_end
 
                             if start != "min":
                                 # Check history cache (smart range)
@@ -261,9 +266,10 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                             logger.debug(f"History cache HIT for asset {asset_id} ({len(prices_data)} points)")
                                             fetch_start = None  # skip fetch
                                         else:
-                                            # Partial gap — fetch the missing range
+                                            # Partial gap — fetch the missing range (up to today when it is asked, for
+                                            # today's events)
                                             fetch_start = min(needed_dates)
-                                            fetch_end = max(needed_dates)
+                                            fetch_end = call_end if end >= today else max(needed_dates)
 
                             if fetch_start is not None:
                                 hist_data = await core.call_provider(
@@ -276,9 +282,13 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                     fetched_points = [p.model_dump() for p in hist_data.prices]
                                     if start == "min":
                                         cached_dates = {}
-                                    # Merge into cached_dates
+                                    # Merge into cached_dates: prices up to history_end only (today's comes from the
+                                    # current value; a history point dated today would not be a close yet)
+                                    last_price_day = history_end.isoformat()
                                     for p in fetched_points:
                                         d_iso = p["date"].isoformat() if hasattr(p["date"], "isoformat") else str(p["date"])
+                                        if d_iso > last_price_day:
+                                            continue
                                         cached_dates[d_iso] = p
                                     logger.debug(f"Fetched {len(fetched_points)} historical prices for asset {asset_id}")
                                 if hist_data and hist_data.events:
