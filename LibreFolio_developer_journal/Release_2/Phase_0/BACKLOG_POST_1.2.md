@@ -4164,6 +4164,14 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   3. Un `support_url` con `user:pass@` (`url.username` o `url.password`) conta come mancante.
   4. `create-edit.en.md`: in modifica il rapporto porta anche gli identificativi dell'asset (ISIN, ticker…). Dirlo.
   - Se il punto 2 cambia quello che vede un utente `managed`, va ritoccata la riga del CHANGELOG.
+- **X-R38 · Cambi: un tasso enorme si salva come infinito, e il suo inverso come zero** — medio, **dopo X-R35**; il lato
+  FX dello stesso buco di W-B58 (W lo chiude per transazioni e prezzi). W l'ha annotato come **W-B61**; girato a X dal
+  coordinatore il 17/10.
+  - Un tasso manuale `1E+400` si salva come `inf`, e il suo inverso come `0`; `truncate_fx_rate` solleva un'eccezione
+    già da `1E+50`.
+  - **Direzione** (la stessa di W-B58): un limite alle cifre intere in ogni scrittura dei cambi (manuale, provider,
+    inverso), una lettura che non solleva mai, un 4xx e mai un 500.
+  - Riusare l'helper di W `max_integer_digits(model, column)` in `db/precision.py`, che entra con W-B58.
 
 ## W · Import e transazioni (fase 01)
 
