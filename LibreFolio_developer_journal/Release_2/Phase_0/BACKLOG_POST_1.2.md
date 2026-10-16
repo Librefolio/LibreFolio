@@ -3016,7 +3016,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   `[class*="dark"]` della pagina, e F1 accetta lo stesso ripiego come prova del tema scuro. La migrazione toglie le classi
   `dark:`: F1 rosso alle 22:30, con la pagina in chiaro (verdetto del triage: assunzione). La correzione: aspettare il
   toggle e asserire `html.dark`; la scrive test-author, con l'OK del coordinatore (la spec non è di AF). Dettagli: piano
-  AF, passo 16.4.
+  AF, passo 16.4. 16/10, 23:00: correzione scritta (piano AF, passo 16.5), da verificare nello slot di recupero; restano
+  deboli F2 e F3, che decidono con `isVisible()` istantanei se aprire le modali e non verificano il tema (seguito
+  possibile).
 - **AF-13 · Il runner rifà la build del frontend per un `.DS_Store`** — basso; AF, 16/10 (slot E).
   `check_frontend_needs_build` (`scripts/cli_base.py`) confronta l'mtime di ogni file sotto `frontend/src`, file nascosti
   compresi: un `.DS_Store` toccato da macOS ha fatto rifare la build a metà di uno slot (circa 7 minuti col carico a
