@@ -81,7 +81,6 @@ export const LITERAL_EXCEPTIONS = [
  */
 export const ARBITRARY_ALLOWED = {
     'lib/features/support/supportLinks.ts': 'the brand colours of Reddit, Facebook, Instagram and TikTok on their share buttons: not ours to theme',
-    'lib/features/onboarding/components/OnboardingCoachmark.svelte': 'the glow of the coachmark, a legacy colour: it migrates with onboarding (wave W2)',
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
