@@ -2889,3 +2889,125 @@ frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
 > - il frontend senza `{@html}`.
 >
 > **Dopo E4c** resta una revisione delta: le due righe di `same_email`.
+
+#### E4c — La metà `same_email`, sul merge con A (P18, A-27, A7a) ✅ (2026-10-16, 20:01–20:29)
+> **Il via del coordinatore** (20:01): A è entrato in `dev_release2` (`68355911f`). Il mio aggiornamento della base è
+> aperto: HEAD `8949dd4af`, MERGE_HEAD `68355911f`, base comune `26dda1a26`, 410 file portati dal merge.
+>
+> **I cinque conflitti**, risolti aggiungendo, e solo questi messi in stage:
+> - `backend/app/api/v1/auth.py`, in `update_profile`: la riga di A, `email_changes = … not
+>   user_service.same_email(…)`, con il suo commento P18, e subito dopo le mie due righe (il commento e `old_email`).
+>   Controllato il resto del file:
+>   - A-27: `change_password` revoca i `PASSWORD_RESET` (riga 353), e `user_service.update_profile` fa lo stesso al
+>     cambio d'email (riga 510);
+>   - le mie quattro aggiunte: l'import (48), `background` (368), `old_email` (391), `add_task` (415).
+> - `developer/architecture/security.md`:
+>   - nel primo blocco, «The sessions» di A, con A-27, «The notice» mio e «The log» di A;
+>   - nel secondo, la frase di A con la strada self-service che A mi chiedeva: «Forgot password» emette un link solo per
+>     email, all'indirizzo dell'account, nei suoi limiti. Il punto A-27 di A resta intero.
+> - `admin/email.en.md`: i miei due punti di E4b, perché quelli di `dev_release2`, «coming» e «held», erano di prima di
+>   E4b, più il punto nuovo di A sul link di setup, verso `hosting_providers.md#initial-admin`. La pagina esiste solo
+>   in EN, quindi l'ancora regge in ogni build. A, su questa pagina, ha cambiato solo quel punto.
+> - `user/settings/profile.en.md`: i tre punti di A («refused», «saved» con A-27, «Only the capitals changed») e il mio
+>   avviso, subito dopo «Email saved».
+> - `LibreFolio_devWiki/log.md`: l'unione, prima la voce J-17 di dev e poi la mia.
+>
+> **Gli altri file cambiati da tutte e due le parti**, controllati:
+> - i tre test adattati da A, con le varianti NFC e le mie modifiche di E4c-H (EMF-036, EMV-033);
+> - le 7 righe SMTP più quella della password, insieme alle 4 di `LIBREFOLIO_ADMIN_*`;
+> - `#send-by-email`, `#forgot-password` e `#verify-email`;
+> - la riga Email di `admin/index`;
+> - il runner, con le mie registrazioni ed `email-case` di A;
+> - la riga della devWiki ed E-9.
+>
+> **E4c**, non in stage. Sei file sono anche nel merge (MM): i tre test adattati da A, `admin/email`, `admin/users` e
+> `admin/cli_tools`. Il commit del merge è solo l'indice, quindi E4c resta separato.
+> - **Codice**:
+>   - `flows.py`, `email_changed_work()`: `user_service.same_email(old_address, new_address)`, con la docstring;
+>   - `verification.py`, `confirm_email()`: `not user_service.same_email(record.email, user.email)`.
+> - **Test** (`test-author`, in corso): ECN-004 (ora rosso sulla combinata, perché si aspetta un cookie nuovo), EMF-046
+>   (il caso con gli spazi), EMV-024 (il caso con gli spazi), e i nuovi casi non ASCII (ECN-009 e uno EMF).
+> - **Docs**:
+>   - le 8 modifiche A7a da `files/e4c/a7a_docs.md` (5 nella pagina sviluppatori, 3 in `admin/email`). Il blocco del
+>     punto d'introduzione l'ho tolto, perché c'è già quello di A;
+>   - nella pagina sviluppatori, le due frasi «stripped and case-folded» diventano `same_email()`;
+>   - in `admin/email`, «Not for capitals alone» nell'avviso;
+>   - `admin/users.en.md:211` («set to an address LibreFolio can use»);
+>   - `admin/cli_tools.en.md:108` (il pannello chiuso di P1);
+>   - `access_control.md`, «Issued by»: la strada self-service, come A chiedeva;
+>   - la devWiki `domains/email.md`: A7a, E4c fatto, A-21 ancora aperto, E-9.
+>
+> **I test del `test-author`**:
+> - **ECN-004 riscritto**: un cambio di sole maiuscole avviene senza password, 200, la forma nuova salvata, nessun
+>   cookie nuovo (`_assert_not_renewed`, un aiuto nuovo), il vecchio cookie che entra ancora, nessun avviso.
+> - **EMF-046**: il caso con gli spazi è tolto (gli indirizzi arrivano dal database, ripuliti da `EmailStr`, e
+>   `same_email` non toglie spazi), e resta la variante A–Z.
+> - **EMV-024**: lo stesso per gli spazi, più un terzo caso: una variante non ASCII viene rifiutata come `revoked`.
+> - **Nuovi**: ECN-009 (É ed é sono un cambio vero: password, cookie nuovo, l'avviso al vecchio indirizzo esatto) ed
+>   EMF-059 (lo stesso in `email_changed_work`).
+> - Ogni caso nuovo controlla prima che le due grafie siano uguali per `casefold()` e diverse per `same_email`. Quindi
+>   sul vecchio codice sarebbero rossi, e fanno da guardia a E4c.
+> - Il controllo del `test-author` su `EmailStr` e `smtplib` l'ha fatto con il Python del venv, da `/tmp`, fuori dalla
+>   corsia: nessun test.
+>
+> **L'ho verificato nel codice di A** (`user_service.update_profile`, il ramo `elif`): un cambio di sole maiuscole salva
+> la forma nuova senza controllare l'unicità, come ECN-004 si aspetta.
+>
+> **Revisione combinata** (il merge in stage più E4c fuori stage; `files/tools/e4cs_checks.sh`, carico sotto 50,
+> 20:20–20:29):
+>
+> | Prova | Esito |
+> |---|---|
+> | `ruff`, `black` (7 file) | puliti ✅ |
+> | `services`: `email-config`, `email-messages`, `email-delivery`, `email-checks`, `email-links` | 144, 316, 108, 87, 74 ✅ |
+> | `services email-flows` | 146 ✅ (145 più EMF-059) |
+> | `services email-verification` | 125 ✅ (124 più il terzo caso di EMV-024) |
+> | `services email-verification-hooks` | 32 ✅ |
+> | `services email-case` (di A) | 67 ✅ |
+> | `api email` | 158 ✅ |
+> | `api email-verification` | 49 ✅ |
+> | `api email-verification-hooks` | 16 ✅ |
+> | `api email-change-notice` | 14 ✅ (13 più ECN-009) |
+> | `api auth` | 95 ✅ |
+> | `api profile` | 28 ✅ |
+> | `api registration` | 102 ✅ |
+> | `api sync`, `i18n check` | 4 787 chiavi ✅ |
+> | `front check` | 0/0 ✅ |
+> | `lint --dead-code` | nulla nei file di E: `build_admin_setup` è sparito, A7a gli dà un chiamante ✅ |
+> | `mkdocs build` stretto | 0 ✅ |
+> | `check-links` | 97 ✅ |
+> | `git diff --check` e `--cached --check` | puliti ✅ |
+>
+> Alla fine la porta 6188 era libera.
+>
+> **Da sapere per il commit del merge**: sei file sono sia nell'indice del merge sia modificati dopo da E4c (MM). Sono
+> `test_email_flows.py`, `test_email_verification.py`, `admin/cli_tools`, `admin/email`, `admin/users` e
+> `access_control.md`. Il merge si committa con l'indice com'è, senza `-a`; E4c è il checkpoint dopo.
+>
+> Nel dead-code ci sono due reperti di H, «referenced only by tests», in `client_address.py`: `mask_client_address` e
+> `reset_client_address_cache`, che è per i test di proposito. Sono di H, e lo dico al coordinatore solo come
+> informazione.
+>
+> **Il merge committato dal coordinatore, solo l'indice** (20:30): `602c865a9`, con genitori `8949dd4af` e `68355911f`.
+> I 12 file di E4c restano fuori, per il checkpoint.
+>
+> **La revisione di sicurezza delta di E4c** (a mano, perché sono due righe), ✅ nessun reperto:
+> - **`email_changed_work()`** con `same_email()`. Ora l'avviso parte anche per una variante non ASCII (É ed é), che
+>   per A è un cambio vero. Non si amplifica niente:
+>   - quel cambio chiede la password attuale;
+>   - restano i limiti dell'avviso, 3 all'ora per account e 3 per vecchia casella. La chiave della casella è ancora
+>     `strip().casefold()`, che unisce proprio quelle varianti in una sola: il lato prudente.
+>
+>   Un cambio di sole maiuscole A–Z, per A, non è un cambio, e il gancio non parte nemmeno.
+> - **`confirm_email()`** con `same_email()`: diventa più severo. Un link mandato a una variante non ASCII viene
+>   rifiutato e revocato, il lato sicuro.
+>   - Non può chiudere fuori nessuno. Un account in attesa è inattivo, quindi non può cambiare email da solo, e non
+>     esiste una via dell'admin per cambiarla.
+>   - Dopo un rifiuto, «Send the link again» dà un link nuovo.
+> - **Gli ingressi**: `same_email()` non toglie spazi. Le due funzioni però ricevono indirizzi dal database, già
+>   validati e ripuliti da `EmailStr` quando sono stati scritti, oppure dalla riga del token, cioè l'indirizzo a cui il
+>   link è partito, preso dal database. Nessun valore grezzo di una richiesta arriva a questi confronti.
+>
+> **La simulazione del coordinatore** su `dev_release2` di adesso (`e5c80ad7c`, con A-25 e W-B53): due conflitti
+> nelle docs, `admin/configuration.en.md` (la riga `LIBREFOLIO_BRIM_PREWARM` di W-B53) e `user/settings/profile.en.md`
+> (A-25). Dopo il checkpoint di E4c arriva un secondo piccolo aggiornamento della base, poi lo slot `all-backend`.
