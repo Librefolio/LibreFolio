@@ -184,7 +184,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "fx-add-pair", front_fx_add_pair, name="FX Add Pair", desc="Add pair modal, validation", tests="fx/fx-add-pair.spec.ts")
     add_test(cat, "fx-editor", front_fx_editor, name="FX Data Editor", desc="Inline editing, save, cancel", tests="fx/fx-data-editor.spec.ts")
     add_test(cat, "fx-csv-import", front_fx_csv_import, name="FX CSV Import", desc="CSV upload, preview, import", tests="fx/fx-csv-import.spec.ts")
-    add_test(cat, "fx-sync", front_fx_sync, name="FX Sync Modal", desc="Sync modal, providers, results", tests="fx/fx-sync.spec.ts")
+    add_test(cat, "fx-sync", front_fx_sync, name="FX Sync Modal", desc="Sync modal, providers, results, sync-all overwrite warning (C-66: stored rates counted, rates filled backward not)", tests="fx/fx-sync.spec.ts")
     add_test(cat, "fx-sync-mock", front_fx_sync_mock, name="FX Sync (mock providers)", desc="Sync against MOCKFX/MOCKFX_FAIL: batch announcement, success/failure tallies, mixed batch + retry-failed, second sync reports nothing changed (disposable pairs, no network)", tests="fx/fx-sync-mock.spec.ts")
     add_test(cat, "fx-api", front_fx_api, name="FX API Routes", desc="API routes via Playwright", tests="fx/fx-api.spec.ts")
     add_test(cat, "fx-settings", front_fx_settings, name="FX Chart Settings", desc="Chart interval, granularity", tests="fx/fx-chart-settings.spec.ts")

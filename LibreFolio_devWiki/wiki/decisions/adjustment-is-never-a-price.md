@@ -55,7 +55,15 @@ The hierarchy is MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING. 
     permanent artifact. A priced ADJUSTMENT-in (+50) followed by an orphan transfer out of everything kept −50 forever.
 - **Lots:** an asset priced only by adjustments has its lots at cost, and its histories start at the first quote, BUY or
   SELL.
-  - Still open, J-28: the lots warning `CURRENT_PRICE_ASSUMED_AT_COST` fires on "no quote" even when trades price the lots.
+  - *Update 2026-10-16 (CP-7b):* the lots now follow the Dashboard's rule **day by day** (coordinator's decision (a):
+    «one rule in the whole app, and no gap the Dashboard doesn't have»). An open LONG lot is at cost on every day with
+    no observation on or before it — the days before the asset's first quote, BUY or SELL — even when the asset is priced
+    later (`lots/prices.py::last_day_without_observation`, the service's `at_cost_until`). A price without a rate stays
+    a gap. `CURRENT_PRICE_ASSUMED_AT_COST` names exactly those days, so J-28 is closed. The lot summary is at cost only
+    when the end date has no observation. The reference of a lot opened by an ADJUSTMENT is the home's mark on its
+    opening day (trades included, `exact` only for that day's quote), converted at the opening date's rate (P21).
+  - Left open: a costless ADJUSTMENT-in opens a zero-cost FIFO lot (shown at 0 on at-cost days), while the average cost
+    counts it unknown (J-35). The lots' ROI/TWRR history still skips unpriced days (J-33).
 - **AI Export:** `unit_price` is null for at-cost rows. Versions: `asset.provenance` 2, `asset.positions_by_broker` 2,
   `portfolio.provenance` and `broker.provenance` 3, `portfolio.positions` and `broker.positions` 2.
   - A component bumped without its `COMPACT_COMPONENT_VERSIONS` entry falls back to YAML (`DEFAULT_COMPACT_VERSIONS = {1}`).
@@ -72,6 +80,8 @@ The hierarchy is MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING. 
 | `VALUED_AT_COST` issue | `backend/app/services/financial_math/portfolio/data_quality.py` |
 | Grace and listing | `backend/app/services/portfolio_service.py` |
 | Cost pool (zero-cost convention) | `backend/app/services/financial_math/average_cost.py` |
+| Lots: reference price, days at cost (CP-7b) | `backend/app/services/financial_math/lots/prices.py` |
+| Lots: at-cost warning range | `backend/app/services/lots_analysis_service.py` |
 | AI Export semantics and unit price | `backend/app/services/ai_export/components/asset_core.py` |
 | PAC source mapping | `frontend/src/lib/features/tools/pac-allocator/planner/source.ts` |
 
@@ -79,4 +89,4 @@ The hierarchy is MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING. 
 - [[decisions/financial-math-one-home]]
 - [[entities/portfolio-engine]]
 - Source: `LibreFolio_developer_journal/Release_2/Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md`,
-  §10 «J-17»; backlog J-17, J-28, J-29.
+  §10 «J-17», «CP-7b — codice»; backlog J-17, J-28, J-29, J-33, J-35.

@@ -13,17 +13,21 @@ hosting panel (decision 12: on a blocked instance the data can still be taken aw
 token, not a session), the outcome of a restore for the page that asked its restart, with that restart's one-time
 ticket instead of a session (lot B5c: it starts nothing, and tells that page that the restore waits for the unblock),
 and the scheduled wake-up, with its own token (decision D-W3: it runs no job and answers
-``blocked``). Registration stays out; anything else goes through the developer first. A test pins the list.
+``blocked``). Registration stays out, and so does the initial administrator's setup (decision P16(d)); anything else
+goes through the developer first. A test pins the list.
 
 FastAPI hands a dependency the endpoint function of the matched route (``scope["endpoint"]``), not its full path, so
 the list holds endpoint functions. The refusal is ``423 Locked`` with the code ``instance_blocked``, and only a
 signed-in user gets it: anyone else gets the 401 of ``get_current_user``, so a protected route answers a caller without
 a session the same way whether or not the instance is blocked. A public route outside the list (registration, the
+initial administrator's setup ``POST /auth/setup``, the email verification ``POST /email/verification/confirm``, the
 address probe ``GET /auth/address-probe``, the reference lists of ``utilities``, the AI Export catalogue) answers
 that 401 only while the instance is blocked: from those, a caller without a session can tell that it
-is blocked, and nothing more. The address probe's 401 carries no CORS header, so an administrator's check from another
-address reads it as not verifiable: intended (A6a). The web app tells 423
-from a permission refusal (403) and shows the block page.
+is blocked, and nothing more. The web app keeps the anonymous pages of a link (``/invite``, ``/setup``,
+``/verify-email``) on that 401 instead of sending them to the login (``frontend/src/lib/api/zodios-client.ts``, lot
+A7b), so the page can say that the instance is blocked. The address probe's 401 carries no CORS header, so an
+administrator's check from another address reads it as not verifiable: intended (A6a). The web app tells 423 from a
+permission refusal (403) and shows the block page.
 """
 
 from typing import Annotated

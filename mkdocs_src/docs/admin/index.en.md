@@ -17,7 +17,7 @@ command line, through environment variables, or in the app's **Admin** and **Use
 
 ### ⚙️ System Configuration
 - 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.
-- 📧 **[Email](email.md)**: Optional SMTP email: the variables, the test email in Settings › Email, email verification, and what to check when it fails.
+- 📧 **[Email](email.md)**: Optional SMTP email: the variables, the test email in Settings › Email, links sent by email, forgotten passwords, email verification, the notice of an email change, and what to check when it fails.
 - ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals).
 - 👥 **[Users & Invitations](users.md)**: Manage the accounts of the instance from the app's **Users** tab: invitations, password-reset links, administrator rights, deactivation and deletion.
 

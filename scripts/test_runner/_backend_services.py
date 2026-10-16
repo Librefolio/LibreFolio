@@ -893,6 +893,16 @@ def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
 
 
+def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
+    print_section("Services: Lone Transfer Legs (decision 47)")
+    print_info("Testing: backend/app/services/transactions/lone_transfer_legs.py, its startup step (app_lifespan) and the offline post-migration script")
+    print_info("Tests: handed over at the leg's own broker's Auto cost, a missing conversion left a TRANSFER, receiving and linked legs untouched, dry run, second run, startup step and wrapper, script lines and exit code")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lone_transfer_legs.py", test_names)
+    return run_command(cmd, "Lone transfer legs tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -1119,9 +1129,9 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
 
 
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address, client_rate_key and mask_client_address (P17)."""
+    """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
-    print_info("Testing: backend/app/config/__init__.py (LIBREFOLIO_CLIENT_IP_HEADER), backend/app/services/platform/client_address.py (client_address, reset_client_address_cache, client_rate_key, mask_client_address)")
+    print_info("Testing: backend/app/config/__init__.py (LIBREFOLIO_CLIENT_IP_HEADER), backend/app/services/platform/client_address.py (client_address, client_rate_key)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_client_address.py", test_names)
     return run_command(cmd, "Client address tests", verbose=verbose)
 
@@ -1720,7 +1730,7 @@ Note: No backend server required.
         "email-flows",
         services_email_flows,
         name="E-mail Flows",
-        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: held first (FORGOT_PASSWORD_DISABLED), then per address keyed by address_key (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: open as shipped (no hold since lot E4), per address keyed by H's client_rate_key, its one home (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
@@ -1730,7 +1740,7 @@ Note: No backend server required.
         "email-verification",
         services_email_verification,
         name="E-mail Verification",
-        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance (counted again inside the write), the budget, a link emailed meanwhile rolled back; per recipient mailbox (case-folded, across accounts) 3 an hour, a failed email not counted; an account that stopped waiting meanwhile gets no new link; a wrong password logged without what was typed; no token, password, identifier or address in the logs",
+        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (H's client_rate_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance (counted again inside the write), the budget, a link emailed meanwhile rolled back; per recipient mailbox (case-folded, across accounts) 3 an hour, a failed email not counted; an account that stopped waiting meanwhile gets no new link; a wrong password logged without what was typed; no token, password, identifier or address in the logs",
         # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
         # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
         # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
@@ -1957,6 +1967,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "lone-transfer-legs",
+        services_lone_transfer_legs,
+        name="Lone Transfer Legs",
+        desc="Decision 47: the lone giving TRANSFER legs a broker deletion left before 1.3, handed over at their own broker's Auto cost — a missing conversion leaves the leg, dry run, second run, the startup step after post-migration-fixes, the offline script's lines and exit code",
+        # The category default (write-scoped), although every database is a private file under tmp_path built by the
+        # real migrations: the startup wrapper's cases make such a file's engine the configured one, and a wrapper that
+        # reached the lane's engine all the same would open a session there — through a double that writes nothing.
+    )
+    add_test(
+        cat,
         "portfolio-allocation-source",
         services_portfolio_allocation_source,
         name="Portfolio Allocation Source",
@@ -2106,7 +2126,7 @@ Note: No backend server required.
         "client-address",
         services_client_address,
         name="Client Address",
-        desc="P17: LIBREFOLIO_CLIENT_IP_HEADER a str, '' in the code, stripped, empty or blank unset, a header token kept as written (case kept), anything else (space, colon, slash, comma, tab or line break inside, quotes, '=', non-ASCII letter or digit) refused naming the variable, X-Forwarded-For and Forwarded in any case refused naming FORWARDED_ALLOW_IPS too, listed by no profile and '' under every one, managed included; client_address(connection), Request and WebSocket alike: unset the peer exactly as it is (None without a client) and no header read; set, the name matched whatever its case, one line of one IP address normalised (IPv4-mapped as its IPv4, IPv6 compressed, lower case), absent the peer without a warning, malformed (two lines even valid, a list, a port, brackets, a zone, a leading zero, empty or blank, text, a space inside, a network) the peer and one warning per process, word for word, with header (lower case), lines and length only, the value and the address inside it in no log record; the name read once per process until reset_client_address_cache(), which re-arms the warning; client_rate_key (IPv4 as is, IPv4-mapped as its IPv4, IPv6 by its /64, a zone ignored, a name as written, no key for None or '') and mask_client_address (IPv4 by its /24, IPv4-mapped as its IPv4, IPv6 by its /48, a name as written, nothing for None or '')",
+        desc="P17: LIBREFOLIO_CLIENT_IP_HEADER a str, '' in the code, stripped, empty or blank unset, a header token kept as written (case kept), anything else (space, colon, slash, comma, tab or line break inside, quotes, '=', non-ASCII letter or digit) refused naming the variable, X-Forwarded-For and Forwarded in any case refused naming FORWARDED_ALLOW_IPS too, listed by no profile and '' under every one, managed included; client_address(connection), Request and WebSocket alike: unset the peer exactly as it is (None without a client) and no header read; set, the name matched whatever its case, one line of one IP address normalised (IPv4-mapped as its IPv4, IPv6 compressed, lower case), absent the peer without a warning, malformed (two lines even valid, a list, a port, brackets, a zone, a leading zero, empty or blank, text, a space inside, a network) the peer and one warning per process, word for word, with header (lower case), lines and length only, the value and the address inside it in no log record; the name read once per process, the warning once too (a test starts both over as a new process: the cache of _configured_header cleared, _warned emptied, N58); client_rate_key (IPv4 as is, IPv4-mapped as its IPv4, IPv6 by its /64, a zone ignored, a name as written, no key for None or ''); neither reset_client_address_cache nor mask_client_address in the module (H-22)",
         # PURE: Settings built from the environment alone (_env_file=None), or read through get_settings() in test mode with
         # a data directory under tmp_path, every variable set and removed by monkeypatch; connections are Starlette Request
         # and WebSocket objects on raw scopes; the module's logger is replaced by a recorder, and its cache is reset before

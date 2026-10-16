@@ -435,11 +435,27 @@ stay until the new ones land.
 
 It touches neither `refreshVersion` nor `requestPortfolioRefresh()`, the signals of the user's
 **Refresh**: the caches are already marked, and the risk and lots panels on screen keep their
-answers, marked stale, until they next load. On the Dashboard it
-leaves `syncLoading` alone, so the **Refresh** button does not spin, and it does nothing once the
-page is destroyed (`pageAlive`). On the broker page the **Refresh** icon follows `reportLoading`, so
-it spins while the overview is asked again; the broker summary (`loadBroker()`) and the
-transactions, which that page's **Refresh** asks again too, are left as they are.
+answers, marked stale, until they next load. Nor does it hold the **Refresh** button. Since Y11
+(decision 48) the button of each page, `sync-button` on the Dashboard and `broker-refresh` on the
+broker page, follows `pageBusy.busy` (`lib/stores/app/pageBusy.svelte.ts`): it spins, disabled,
+while one of the page's big requests is pending — a load the page starts on a trigger (the first
+load, a **Refresh**, a change of period or currency), wrapped there in `pageBusy.track()`, or a
+panel's own load, which `pageBusy.join()` counts only while one of those is pending. The reload is
+wrapped in neither, so no **Refresh** button waits or spins while it runs.
+
+On the Dashboard the call is `loadAll(false, false, {background: true})`, and the option keeps the
+page from saying it is busy (Z-18): a screen reader would announce «busy» for a price refresh
+nobody asked for. The root (`data-testid="dashboard-page"`) binds `aria-busy` and `data-busy` to
+`reportLoading || contributionLoading || contributionRefreshing || syncLoading`. With `background`,
+`loadAll()` does not turn `reportLoading` on, and `loadContribution({background})` asks a stale
+cached contribution again under `contributionInBackground` instead of `contributionRefreshing`: a
+non-reactive flag that keeps a second request from leaving, as `contributionRefreshing` does, but
+that the root does not read. The reload thus turns neither attribute on, while a load the user asks
+for still does; and it does nothing once the page is destroyed (`pageAlive`). On the broker page
+`loadOverview()` has no such option: the `reportLoading` it turns on only shows the skeletons drawn
+while no figures are on screen yet, and the page's root publishes no `aria-busy`. The broker
+summary (`loadBroker()`) and the transactions, which that page's **Refresh** asks again too, are
+left as they are.
 
 No other page listens for `prices`. The broker list (`routes/(app)/brokers/+page.svelte`) and the
 risk panels of the asset pages read the caches the signal marked stale, so they ask again the next
@@ -496,7 +512,8 @@ of them only in part, such as the client's own tests, must still load it.
 | `lib/features/live-updates/LiveUpdatesStatus.test.ts` (Vitest, jsdom) | `./dev.py test front-utility component-unit` | The pill only in `paused-idle`, with a label and a hint, and no button |
 | `lib/components/assets/detail/assetDetailLive.svelte.test.ts` (Vitest, jsdom, fake clock around the flash) | `./dev.py test front-utility core-unit` | The [asset detail poll](#asset-detail): what its effect reads, when it starts and stops the poller, the outcome it hands back, the answers it drops, the price summary with its conversion and fallback, the [flash](#price-flash) and its decay, put out by the effect's cleanup too, and the [chart head](#chart-head): the merge, the same-close guard on the native close, and the silent reload |
 | `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden |
-| `frontend/e2e/portfolio/price-refresh-reload.spec.ts` (Playwright) | `./dev.py test front-portfolio price-refresh` | [Updating prices…](#price-refresh) on a stubbed catch-up: the notice while a job runs, gone at `idle`. (a) Once a catch-up that updated something is over, the Dashboard asks for its main report again, once, the very question on screen, with no navigation; (b) a broker's page, the same on its overview report; (c) on the Dashboard, no reload after a catch-up whose job the page never saw run (`starting` → `idle`, no notice at any moment, even with `last_refreshed` true), nor after one that updated nothing (the notice comes and goes); then the control in the same page, a catch-up that updated something, reloads it once |
+| `frontend/e2e/portfolio/price-refresh-reload.spec.ts` (Playwright) | `./dev.py test front-portfolio price-refresh` | [Updating prices…](#price-refresh) on a stubbed catch-up: the notice while a job runs, gone at `idle`. (a) Once a catch-up that updated something is over, the Dashboard asks for its main report again, once, the very question on screen, with no navigation; (b) a broker's page, the same on its overview report; (c) on the Dashboard, no reload after a catch-up whose job the page never saw run (`starting` → `idle`, no notice at any moment, even with `last_refreshed` true), nor after one that updated nothing (the notice comes and goes); then the control in the same page, a catch-up that updated something, reloads it once; (d) on the Dashboard, from the end of a catch-up that updated something to the user's next click, the whole reload in it, neither the root (`dashboard-page`) nor `sync-button` takes `data-busy="true"`, read from a record in the page of every value `data-busy` takes on `dashboard-page`, `sync-button` and `broker-refresh`, while the control, a **Refresh** the user asks for in the same page, makes both say busy, then idle again; (e) a broker's page, the same for `broker-refresh` (its root publishes no `data-busy`), with the same control |
+| `frontend/e2e/portfolio/page-busy.spec.ts` (Playwright) | `./dev.py test front-portfolio page-busy` | Its two cases of [Updating prices…](#price-refresh), on a stubbed catch-up that updated something, the reload held by `page.route` until the case lets it through and every value of the button's `data-busy` recorded in the page. Dashboard: from the reload's send to its landing `sync-button` stays idle and enabled, and the root (`dashboard-page`) keeps `data-busy="false"` while the reload is held; the control, a change of period to 6M in the same page, keeps the button busy until the new report is back. Broker detail: the same for `broker-refresh` and the broker's overview (its root publishes no `data-busy`) |
 
 The live-pause E2E drives time with `page.clock`, since minutes of cadence can be neither waited for nor
 guessed, and answers `POST /assets/prices/current` in the browser with an empty, schema-valid
