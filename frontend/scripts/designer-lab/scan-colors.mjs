@@ -190,9 +190,7 @@ export function listSourceFiles(root = FRONTEND_DIR) {
 /** @typedef {'css-literal' | 'chart-color' | 'script' | 'markup' | 'static'} Layer */
 /** @typedef {{start: number, end: number, prelude: string, parent: CssBlock | null}} CssBlock */
 
-// The `features/` folders next to their `components/` ones: those features move there (dashboard Y3, risk Y4b, broker
-// lots Y5), and both paths hold until they have.
-const CHART_PATH_RE = /\/(components\/(charts|dashboard|risk|brokers\/lots)|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
+const CHART_PATH_RE = /\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$/i;
 
 /**
  * The chart categories with a fixed colour (contract C1–C2 with DV): the file that holds them, its two tables (the asset

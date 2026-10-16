@@ -76,5 +76,5 @@ is green only until the key gets translated.
 |------|------|
 | Scheduler characterisation | `frontend/src/lib/features/settings/SchedulerConfigModal.test.ts` |
 | Settings tab characterisations | `frontend/src/lib/features/settings/tabs/PreferencesTab.test.ts`, `GlobalSettingsTab.test.ts` |
-| Broker sharing characterisations | `frontend/src/lib/components/brokers/BrokerSharingPanel.test.ts` |
+| Broker sharing characterisations | `frontend/src/lib/features/brokers/BrokerSharingPanel.test.ts` |
 | Test authoring rules | `.github/agents/test-author.agent.md` |

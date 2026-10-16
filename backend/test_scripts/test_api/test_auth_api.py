@@ -25,7 +25,7 @@ from typing import Optional, Union
 import httpx
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException, Request, Response
+from fastapi import BackgroundTasks, HTTPException, Request, Response
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -46,6 +46,12 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 10.0
 #: The global setting that decides who may register (release 1.3: open, invite or disabled), and its row's key.
 REGISTRATION_MODE_KEY = "registration_mode"
+
+
+def _register_http_request() -> Request:
+    """The HTTP request ``auth_api.register`` reads the client address from, as FastAPI hands it over (E5b: the limit
+    of registration emails per client address)."""
+    return Request({"type": "http", "method": "POST", "path": "/api/v1/auth/register", "headers": [], "client": ("127.0.0.1", 50000)})
 
 
 def _error_code(response: httpx.Response) -> Optional[str]:
@@ -236,13 +242,16 @@ class TestRegister:
             async with AsyncSession(engine, expire_on_commit=False) as session:
                 assert await user_service.count_users(session) == 0, "Precondition: the private database must have no user"
                 assert (await effective_registration_mode(session)).mode == "disabled", "Precondition: registration must be disabled"
+                # Keyword arguments, as FastAPI calls the route: E5b added ``background`` before ``session``.
                 response = await auth_api.register(
                     AuthRegisterRequest(
                         username=username,
                         email=f"{username}@example.com",
                         password="TestPass123!",
                     ),
-                    session,
+                    background=BackgroundTasks(),
+                    http_request=_register_http_request(),
+                    session=session,
                 )
 
             assert response.user.username == username
@@ -1853,7 +1862,7 @@ class TestPasswordWorkLeavesTheEventLoopFree:
         username, password = "loop_newcomer", "NewcomerPass123!"
 
         async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
-            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), session)
+            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), background=BackgroundTasks(), http_request=_register_http_request(), session=session)
 
         assert response.user.username == username, f"register must answer with the new user: got {response!r}"
         assert [call["password"] for call in hashing.calls] == [password.encode("utf-8")], f"register must hash the chosen password, once: {hashing.calls}"

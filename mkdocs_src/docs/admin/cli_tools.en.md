@@ -103,6 +103,7 @@ pipenv run ./dev.py user activate <username>
 - ⏱️ A reset ends the sessions already open: every device signed in to the account is signed out at its next request. To lock someone out for good, deactivate the account: it is refused from its next request, and activating it again does not bring its old sessions back.
 - 👑 `deactivate` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote or activate another administrator first` and exits with `1`.
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
+- 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
 - 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front.
 
 ### 🔗 Send a Password-Reset Link {: #reset-link }
