@@ -104,6 +104,8 @@ The other variables, and the `.env` file, are described in [Configuration](confi
 
 ## 💾 Backup
 
+The recommended way is a backup archive, made while LibreFolio keeps running: see [Backup, Restore and Moving Your Instance](backup_restore.md). Copying the data directory by hand, below, is the alternative.
+
 ### 📦 Simple Backup
 
 The easiest way to back up LibreFolio is to copy the entire data directory:

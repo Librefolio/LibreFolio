@@ -181,6 +181,7 @@ plugins:
             Global Settings: Impostazioni Globali
             "Users & Invitations": "Utenti e inviti"
             Filesystem Structure: Struttura Filesystem
+            Backup, Restore & Moving: Backup, ripristino e trasloco
             Advanced Docker: Docker Avanzato
             Host Installation: Installazione su Host
             Expose Securely: Esporre in Sicurezza
@@ -427,6 +428,7 @@ plugins:
             Global Settings: Paramètres Globaux
             "Users & Invitations": "Utilisateurs et invitations"
             Filesystem Structure: Structure du Système de Fichiers
+            Backup, Restore & Moving: Sauvegarde, restauration et déménagement
             Advanced Docker: Docker Avancé
             Host Installation: Installation sur l'Hôte
             Expose Securely: Exposer en Sécurité
@@ -673,6 +675,7 @@ plugins:
             Global Settings: Configuración Global
             "Users & Invitations": "Usuarios e invitaciones"
             Filesystem Structure: Estructura del Sistema de Archivos
+            Backup, Restore & Moving: Copia de seguridad, restauración y traslado
             Advanced Docker: Docker Avanzado
             Host Installation: Instalación en Host
             Expose Securely: Exponer en Seguridad
@@ -974,6 +977,7 @@ nav:
           - Users & Invitations: admin/users.md
       - 🧹 Maintenance & Operations:
           - CLI Admin Tools: admin/cli_tools.md
+          - Backup, Restore & Moving: admin/backup_restore.md
           - Filesystem Structure: admin/filesystem.md
   - 📚 Financial Theory:
       - Overview: financial-theory/index.md
