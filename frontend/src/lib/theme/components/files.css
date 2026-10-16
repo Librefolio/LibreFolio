@@ -1,5 +1,5 @@
 /*
- * Files area: grid, preview, the files page, the broker import files.
+ * Files area: preview, the files page, the broker import files.
  *
  * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
  * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
@@ -10,50 +10,6 @@
  * Divergences between similar components are kept on purpose: the designer decides (phase B, `--lf-*` roles).
  */
 :root {
-    /* FileGrid.svelte */
-    --lf-cmp-file-grid-border: #e5e7eb;
-    --lf-cmp-file-grid-border-dark: #374151;
-    --lf-cmp-file-grid-surface-bg: #fff; /* white */
-    --lf-cmp-file-grid-surface-bg-dark: #1f2937;
-    --lf-cmp-file-grid-faint-text: #9ca3af;
-    --lf-cmp-file-grid-search-input-text: #374151;
-    --lf-cmp-file-grid-search-input-text-dark: #f3f4f6;
-    --lf-cmp-file-grid-search-clear-bg: #e5e7eb;
-    --lf-cmp-file-grid-search-clear-bg-dark: #374151;
-    --lf-cmp-file-grid-muted-text: #6b7280;
-    --lf-cmp-file-grid-muted-text-dark: #9ca3af;
-    --lf-cmp-file-grid-file-card-hover-shadow: #0000001a; /* rgb(0 0 0 / 0.1) */
-    --lf-cmp-file-grid-file-card-hover-shadow-dark: #0000004d; /* rgb(0 0 0 / 0.3) */
-    --lf-cmp-file-grid-file-card-selectable-hover-border: #d1d5db;
-    --lf-cmp-file-grid-file-card-selectable-hover-border-dark: #4b5563;
-    --lf-cmp-file-grid-file-card-selected-border: #1a4031;
-    --lf-cmp-file-grid-file-card-selected-border-dark: #10b981;
-    --lf-cmp-file-grid-file-card-selected-bg: #f0fdf4;
-    --lf-cmp-file-grid-file-card-selected-bg-dark: #10b9811a; /* rgba(16, 185, 129, 0.1) */
-    --lf-cmp-file-grid-file-preview-bg: #f3f4f6;
-    --lf-cmp-file-grid-file-preview-bg-dark: #374151;
-    --lf-cmp-file-grid-selected-badge-bg: #1a4031;
-    --lf-cmp-file-grid-selected-badge-bg-dark: #10b981;
-    --lf-cmp-file-grid-selected-badge-text: #fff; /* white */
-    --lf-cmp-file-grid-strong-text: #1f2937;
-    --lf-cmp-file-grid-strong-text-dark: #f3f4f6;
-    --lf-cmp-file-grid-card-actions-border: #f3f4f6;
-    --lf-cmp-file-grid-card-actions-border-dark: #374151;
-    --lf-cmp-file-grid-action-btn-border: #e5e7eb;
-    --lf-cmp-file-grid-action-btn-border-dark: #4b5563;
-    --lf-cmp-file-grid-action-btn-bg: #fff; /* white */
-    --lf-cmp-file-grid-action-btn-bg-dark: #374151;
-    --lf-cmp-file-grid-action-btn-hover-bg: #f3f4f6;
-    --lf-cmp-file-grid-action-btn-hover-bg-dark: #4b5563;
-    --lf-cmp-file-grid-action-btn-danger-text: #dc2626;
-    --lf-cmp-file-grid-action-btn-danger-text-dark: #fca5a5;
-    --lf-cmp-file-grid-action-btn-danger-border: #fecaca;
-    --lf-cmp-file-grid-action-btn-danger-border-dark: #dc26264d; /* rgba(220, 38, 38, 0.3) */
-    --lf-cmp-file-grid-action-btn-danger-hover-bg: #fef2f2;
-    --lf-cmp-file-grid-action-btn-danger-hover-bg-dark: #dc262633; /* rgba(220, 38, 38, 0.2) */
-    --lf-cmp-file-grid-action-btn-danger-hover-border: #fecaca;
-    --lf-cmp-file-grid-action-btn-danger-hover-border-dark: #dc262666; /* rgba(220, 38, 38, 0.4) */
-
     /* FilePreviewModal.svelte */
     --lf-cmp-file-preview-header-border: #e5e7eb;
     --lf-cmp-file-preview-header-border-dark: #334155;

@@ -610,7 +610,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | ✅ integrato `f043c1b58` |
 | 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | ✅ integrato `be911db7e` (commit `18824449c` e `a317392d4`) |
 | 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | ✅ commit `e5e427f8e`; lo slot (`slot5.sh`, 45 minuti al massimo) verso le 17:00 |
-| 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | 🔄 checkpoint consegnato (14:2x): gate 100/101 col solo rosso dichiarato (i due G6 di DV, via con la base merge dopo DV); `front check` 0 e 0 |
+| 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | ✅ commit `8fb80d3b8`; entra col resto della UI dopo lo slot |
+| 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | 🔄 checkpoint consegnato: 978/979 col rosso dichiarato, `front check` 0 e 0; TC-16 registrato (orologio, non mio) |
 
 ## Avanzamento
 
@@ -2608,3 +2609,68 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > DV; **domanda aperta 6 alla designer** nello skill, la tinta di `selected` (il valore è di T, dal suo verde del
 > focus; muted, stati e segni sotto 4,5:1), segnalata al coordinatore; larghezze, nomi e link dello skill a posto;
 > `git diff --check` pulito.
+
+> ✅ **Committato** dal coordinatore: `8fb80d3b8` (14:19). Entra insieme al resto della UI (`e5e427f8e`) dopo il mio slot,
+> nella nostra corsia dopo IW, verso le 15:45; prima la base merge con DV (entrato, `adbc2a4b7`), che toglie il rosso
+> dichiarato. Nello slot i gate Vitest: `slot5.sh` ora lancia i quattro gate dei colori (`themeRoles`, `themeTokens`,
+> `themeColorMeta`, `themeComponentTokens`). La domanda 6 è nella raccolta del coordinatore per la designer.
+
+### I component tokens, parte 1: `ModalBase`, `ConfirmModal`, `FileGrid` — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 14:19): prima i file miei, `ModalBase` con `tone="danger"` e il suo test, `ConfirmModal` con
+> `dialogs.css`, `FileGrid` con `files.css` (OK di H). Gli altri uno per uno, dopo l'ingresso del proprietario, sbloccati
+> dal coordinatore: `TransactionsTable` di TR (verso le 14:30), `BrokerImportFilesModal` e `UnifiedLotsTable` di BK
+> (verso le 15:05), `ImportBrokerMismatchModal` di IW (verso le 15:45). `brokers-detail.spec.ts`, righe 392–419: OK della
+> 1.3 (14:2x); Y ha la stessa spec in un commit non entrato, coi suoi hunk dalla riga 569, e la modifica chiude il suo
+> Y-13. TC-15: OK sui quattro file miei, in un lotto dopo; `ChartSignalsSection` va a DV.
+
+> ✅ **1 · `ModalBase`, il tono:** `tone?: 'default' | 'danger'`, un solo ternario su larghezza e colore del bordo
+> (`{tone === 'danger' ? 'border-2 border-lf-danger-line' : 'border border-lf-raised'}`, regola 4), lo stato in
+> `data-tone` (regola 10), nelle due strade (`noTransition` e no); il commento del `<style>` riscritto (niente più nomi
+> di chiamanti); il doc di `contentClass`: «solo disposizione, mai un colore». Il rosso del tono è `danger-line`, il
+> ruolo che AF e il coordinatore avevano nominato per la sua cornice (prima `border-red-300`/`border-red-700`).
+
+> ✅ **2 · `ConfirmModal` e `FileGrid` sui ruoli** (`files/T-r2/ct_transform.py`, che verifica il testo di partenza):
+> - `ConfirmModal`: lo `<style>` intero sui ruoli, senza le 12 regole `.dark`; l'import di `dialogs.css` tolto (non ne
+>   legge più nulla). Bordi `border-subtle`; titolo `text-primary`; messaggio ed elementi `text-secondary`; descrizione e
+>   dettagli `text-muted`; l'azione di un esito da blu a `link`; l'interruttore della lista `surface-panel`, al passaggio
+>   `surface-neutral` **col testo `secondary`** (muted su neutral 4,01:1); la lista `surface-field`; i pulsanti
+>   `surface-panel`/`surface-neutral` col testo secondary, `action`/`action-hover` con `on-action`, `danger-solid`/
+>   `danger-hover` con `on-danger-solid`, `warning`/`warning-hover` con `on-status`.
+> - `FileGrid`: i 22 token mappati, le 16 regole `.dark` tolte, l'import di `files.css` tolto. La scheda `surface-card`
+>   con `border-subtle`, l'ombra al passaggio `shadow-card`, il bordo selezionabile `border-input`, la selezionata
+>   `checked` su `selected`, l'anteprima `surface-panel`, il distintivo `checked` con `on-checked`, titolo `text-primary`,
+>   metadati `text-muted`, i pulsanti d'azione `surface-card`/`surface-hover` con `border-subtle`, quello di cancellazione
+>   `danger` su `danger-line`, al passaggio su `danger-soft`. **Due regole del sistema applicate:** sulla scheda
+>   selezionata i metadati passano a `text-secondary` (regola 5, TC-15); la casella di ricerca è un campo (`border-input`
+>   su `surface-field`, `border-input-hover` al passaggio, `focus` mentre l'input ha il fuoco: prima il campo aveva
+>   `outline: none` senza alcun segno del fuoco, regola 8), col segnaposto `text-placeholder`.
+> - Le aree: 30 token `--lf-cmp-confirm-*` tolti da `dialogs.css`, 42 `--lf-cmp-file-grid-*` da `files.css`, e le
+>   intestazioni aggiornate; nessun altro file li nominava (sorgenti, E2E, script, MkDocs, skill).
+
+> ⚠️ **Fuori pista:** la sostituzione specifica della casella di ricerca non era scattata (il selettore catturato dallo
+> script includeva il commento `/* Search bar */`), e la casella aveva preso bordo e fondo della scheda; corretta a mano,
+> verificata rileggendo le regole.
+
+> ✅ **3 · Prove leggere** (sotto `nice`): Prettier verde (riformattato `ModalBase`: le props su più righe); `--check`
+> coi soli due G6 di DV (via con la base merge); i quattro gate dei colori e i 26 file di unità che nominano questi
+> componenti **970/971**, l'unico rosso quello dichiarato; il gate dei token di componente verde (nessun token orfano).
+
+> ✅ **4 · I test** (test-author, 16/10): `ModalBase.test.ts` 11/11 (8 nuovi, 4 per strada, `noTransition` sì e no): lo
+> stato da `data-tone` prima, poi le classi esatte del ternario e una negazione per classe (`.not.toHaveClass(a, b)`
+> passa se ne manca una sola), `contentClass` aggiunto nei due toni; il tipo `Tone` preso dalle props del componente.
+> Prova di mutazione sugli aiuti: 6 cornici sbagliate tutte prese, i 2 controlli giusti verdi. `brokers-detail.spec.ts`:
+> esattamente le righe 392, 395, 412 e 419 (4 aggiunte, 4 tolte), su `toHaveAttribute('data-selected', …)`; verificato
+> che la selezione dal Gantt passa da `rowSelection` di `DataTable`, la stessa che dà la classe e l'attributo, e che
+> `getRowClass` di `UnifiedLotsTable` dà solo `lot-row-tinted`. Lo spec si prova nello slot (`front-broker detail`).
+
+> ✅ **5 · Prove leggere** (sotto `nice`, carico 41–60): `front check` **0 errori e 0 avvisi**; Prettier verde sui file del
+> delta; `--check` coi soli due G6 di DV; i quattro gate e i 26 file di unità **978/979**, l'unico rosso quello
+> dichiarato; `git diff --check` pulito; porta libera. Lo skill `design-system`, regola 9, ora dice `tone="danger"`; il
+> backlog, TC-10, segna la variante fatta (AF passa a `tone` dopo l'ingresso).
+
+> ⚠️ **Fuori pista — un rosso non mio, triage:** al secondo giro dell'insieme dei 30 file, due test di
+> `FilePreviewModal.test.ts` (riga 598, `listening()`: `viewer.opened` vuoto) rossi a carico 41–52. Lo stesso codice
+> verde al primo giro, da solo due volte (37/37) e al terzo giro dell'insieme (978/979); fra i giri `ModalBase` era
+> cambiato solo nella formattazione. Ipotesi 2 dello skill di triage, l'orologio: `waitFor` col budget predefinito di 1 s
+> su una catena asincrona. Verdetto: assunzione del test. Registrato **TC-16** per il proprietario dell'area dei file.
