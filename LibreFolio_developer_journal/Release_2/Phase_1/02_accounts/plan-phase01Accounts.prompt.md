@@ -4682,3 +4682,52 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Merge committato** dal coordinatore: `71a92cec9` (genitori `546295d77` + `81bc305b9`). **`utils dev-cli-image`
 >   rifatto** su `71a92cec9` (avvio 19:53, carico 32): **94/94 in 336 s** ✅. Porta libera. Revisione combinata tutta
 >   verde; pronta per l'ingresso (la simulazione del coordinatore su dev, con MF, O-20, H-21, è pulita).
+
+### Ingresso del treno 131 e ordine dei lotti seguenti (2026-10-16, 20:00–20:10)
+> - **Entrata in dev**: giornale `6e7f7f3c7`, merge in `dev_release2` **`68355911f`** (treno 131: P18, A-24, A-27, A7a,
+>   A7c, A-22). Righe del CHANGELOG mandate al coordinatore ed entrate (`docs(journal): trains 129-131, changelog A`):
+>   🔒 A-22 e A7c (con quella di A-27), ⚠️ P18 (unicità senza maiuscole, l'avvio che si ferma, il ripristino di un backup
+>   vecchio), 🔄 P18 (accesso e «password dimenticata» con qualunque maiuscola, cambio di sole maiuscole, API), ✨
+>   `user set-email`. **A7a senza riga**: il link `/setup#token=…` non ha ancora la sua pagina (A7b); il testo A7a+A7b del
+>   coordinatore entra con A7b.
+> - **Ordine deciso dal coordinatore** (20:10): **A-25** (rossi in corso, piccolo) → **A7b** (necessaria in 1.3: F02 è una
+>   funzione del Cloud e oggi il link non ha pagina) → **A8** (F15, limite dei tentativi di accesso) → **A9** (F05 parte
+>   account + F09 note legali).
+
+#### A-25.1 — Rossi scritti (2026-10-16, 19:45–20:05)
+> - **`test-author`**, solo scrittura:
+>   - `frontend/src/lib/features/auth/emailCase.test.ts` (nuovo, 23 casi, ambiente node): tutto rosso finché
+>     `emailCase.ts` non c'è. Piega solo A–Z (`ÉMILE@X.COM` → `Émile@x.com`, lettere fuori da A–Z intatte, nessun
+>     `trim`, nessuna normalizzazione); `sameEmail` vero/falso nei due versi.
+>   - `ProfileTab.test.ts`, nuovo blocco «a change of capitals only (P18)»: rossi (nessun campo password né avviso,
+>     ogni «Salva» acceso; corpo esattamente `{email}` dalla riga e da «salva tutto»; da un cambio vero a uno di sole
+>     maiuscole il campo sparisce e la password non parte); guardia C5 (maiuscole fuori da A–Z: password chiesta).
+>   - `emailCase.test.ts` registrato da me in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`).
+> - **Punti fuori dal contratto, segnalati dal `test-author`** (da backlog, non in A-25): dopo un salvataggio con il
+>   dominio in maiuscole la riga resta «modificata» (il server mette il dominio in minuscolo, l'input tiene quanto
+>   scritto); un indirizzo cambiato altrove mentre la scheda è aperta può lasciare un 400 senza campo per la password.
+> - Bozza della correzione pronta (`work/a25/apply_a25.py`: `emailCase.ts` nuovo e cinque modifiche di logica di
+>   `ProfileTab.svelte`, nessuna classe), a secco pulita.
+
+#### A-25.2 — Rossi osservati, correzione, verdi (2026-10-16, 20:05–)
+> - **Rossi** (`work/a25/vitest.sh red`, carico 46): `emailCase.test.ts` rosso intero (`Cannot find module
+>   './emailCase'`); `ProfileTab.test.ts` 8 rossi (il campo password ancora lì, il corpo con `current_password`), 80
+>   verdi (la guardia C5 compresa).
+> - **Correzione** (`work/a25/apply_a25.py`): `frontend/src/lib/features/auth/emailCase.ts` nuovo (`emailFold`,
+>   `sameEmail`, A–Z soltanto); in `ProfileTab.svelte` `emailChangesAddress = emailModified && !sameEmail(...)`, che
+>   governa `emailNeedsPassword`, lo svuotamento della password e il blocco del campo; `emailPayload()` manda `{email}`
+>   da solo per un cambio di sole maiuscole (riga e «salva tutto»). Solo logica, nessuna classe. `prettier`: i due
+>   file prodotto puliti; i due di test riformattati con `--write` (solo a capo, la versione HEAD era pulita).
+> - **Verdi**: `vitest` dei due file **111/111** (88 + 23).
+> - **Doc**: `user/settings/profile.en.md` («is another address»; per le sole maiuscole nessuna password chiesta) e
+>   `developer/frontend/components/features/settings.md` (il punto «Only the capitals changed»). Debito di traduzione:
+>   `profile`.
+> - `front check` (svelte-check) **0 errori, 0 avvisi** ✅; `mkdocs build --strict` ✅ (3 076 URL), `check-links` ✅ 97;
+>   `test check-orphans` ✅ (tutti i file di test registrati e raggiungibili da un `all`). Porta libera; `git diff
+>   --check` pulito.
+
+#### A-25.3 — Handoff FROZEN 🧊 (2026-10-16, 20:15)
+> - HEAD `6e7f7f3c7`; delta: `emailCase.ts` e `emailCase.test.ts` nuovi, `ProfileTab.svelte` (solo logica),
+>   `ProfileTab.test.ts`, `_frontend_utility.py` (registrazione), due pagine di doc, piano e backlog (A-25 ✅, A-28
+>   nuova).
+> - Prossimo: **A7b** (ordine del coordinatore: A-25 → A7b → A8 → A9).
