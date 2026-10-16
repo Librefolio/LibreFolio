@@ -91,10 +91,12 @@ import pytest
 from fastapi import FastAPI
 from structlog.testing import capture_logs
 
+from backend.app import config
 from backend.app.api.v1.auth import get_current_user
 from backend.app.api.v1.backup import backup_router, restore
 from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED
-from backend.app.config.backup import MANAGED_MAX_UPLOAD_MB, MAX_UPLOAD_VARIABLE, BackupConfigError, backup_max_upload_mb
+from backend.app.config import backup as backup_config
+from backend.app.config.backup import BackupConfigError, backup_max_upload_mb
 from backend.app.schemas.backup import RestoreErrorCode, RestoreStageReport
 from backend.app.services.platform.instance_backup import restore_jobs
 from backend.app.services.platform.instance_backup import staging as staging_service
@@ -1372,7 +1374,14 @@ def test_openapi_documents_a_raw_upload_and_the_answers_under_the_backup_tag():
 
 
 def test_the_variable_and_the_managed_default_are_the_documented_ones():
-    assert (MAX_UPLOAD_VARIABLE, MANAGED_MAX_UPLOAD_MB) == (LIMIT_VARIABLE, 500), f"decision 43: {MAX_UPLOAD_VARIABLE}, {MANAGED_MAX_UPLOAD_MB} MB"
+    """(e) Decision 43: the variable's name, and 500 MB in the managed profile. The 500 is the entry of H's
+    ``ENVIRONMENT_PROFILE_DEFAULTS`` for that variable (H-17), which ``backup_max_upload_mb()`` reads through
+    ``profile_default``, and ``config/backup.py`` keeps no managed value of its own beside it: one source, so the two can
+    never disagree. The variable is read from the module itself, so the absence is checked on the limit's module."""
+    variable = backup_config.MAX_UPLOAD_VARIABLE
+    managed = config.ENVIRONMENT_PROFILE_DEFAULTS.get("managed", {})
+    assert (variable, managed.get(variable)) == (LIMIT_VARIABLE, 500), f"decision 43: {variable}, {managed.get(variable)} MB in ENVIRONMENT_PROFILE_DEFAULTS['managed']"
+    assert not hasattr(backup_config, "MANAGED_MAX_UPLOAD_MB"), f"config/backup.py keeps a managed value of its own beside the table's, MANAGED_MAX_UPLOAD_MB = {getattr(backup_config, 'MANAGED_MAX_UPLOAD_MB', None)!r}: two sources that can disagree"
 
 
 @pytest.mark.parametrize(
