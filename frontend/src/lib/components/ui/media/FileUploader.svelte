@@ -290,21 +290,21 @@
         justify-content: center;
         min-height: 150px;
         padding: 1.5rem;
-        border: 2px dashed var(--lf-cmp-file-uploader-drop-zone-border);
+        border: 2px dashed var(--lf-border-input);
         border-radius: 8px;
-        background: var(--lf-cmp-file-uploader-drop-zone-bg);
+        background: var(--lf-surface-panel);
         cursor: pointer;
         transition: all 0.2s;
     }
 
     .drop-zone:hover,
     .drop-zone.dragging {
-        border-color: var(--lf-cmp-file-uploader-drop-zone-hover-border);
-        background: var(--lf-cmp-file-uploader-drop-zone-hover-bg);
+        border-color: var(--lf-focus);
+        background: var(--lf-surface-hover);
     }
 
     .drop-zone.dragging {
-        background: var(--lf-cmp-file-uploader-drop-zone-dragging-bg);
+        background: var(--lf-selected);
     }
 
     .drop-zone.has-files {
@@ -312,37 +312,27 @@
         padding: 1rem;
     }
 
-    :global(.dark) .drop-zone {
-        border-color: var(--lf-cmp-file-uploader-drop-zone-border-dark);
-        background: var(--lf-cmp-file-uploader-drop-zone-bg-dark);
-    }
-
-    :global(.dark) .drop-zone:hover,
-    :global(.dark) .drop-zone.dragging {
-        border-color: var(--lf-cmp-file-uploader-drop-zone-hover-border-dark);
-        background: var(--lf-cmp-file-uploader-drop-zone-hover-bg-dark);
-    }
-
     :global(.upload-icon) {
-        color: var(--lf-cmp-file-uploader-faint-text);
+        color: var(--lf-text-muted);
         margin-bottom: 0.5rem;
     }
 
     .drop-text {
         font-size: 0.9375rem;
         font-weight: 500;
-        color: var(--lf-cmp-file-uploader-text);
+        color: var(--lf-text-secondary);
         margin: 0;
-    }
-
-    :global(.dark) .drop-text {
-        color: var(--lf-cmp-file-uploader-text-dark);
     }
 
     .drop-hint {
         font-size: 0.75rem;
-        color: var(--lf-cmp-file-uploader-faint-text);
+        color: var(--lf-text-muted);
         margin: 0.25rem 0 0;
+    }
+
+    /* On the selected tint the muted text falls under 4.5:1 (rule 5, TC-15): the hint reads secondary while dragging. */
+    .drop-zone.dragging .drop-hint {
+        color: var(--lf-text-secondary);
     }
 
     .selected-files {
@@ -357,18 +347,13 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 0.75rem;
-        background: var(--lf-cmp-file-uploader-file-item-bg);
-        border: 1px solid var(--lf-cmp-file-uploader-file-item-border);
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 6px;
     }
 
-    :global(.dark) .file-item {
-        background: var(--lf-cmp-file-uploader-file-item-bg-dark);
-        border-color: var(--lf-cmp-file-uploader-file-item-border-dark);
-    }
-
     .file-item :global(svg) {
-        color: var(--lf-cmp-file-uploader-file-icon-text);
+        color: var(--lf-text-muted);
         flex-shrink: 0;
     }
 
@@ -383,31 +368,22 @@
     .file-name {
         flex: 1;
         font-size: 0.8125rem;
-        color: var(--lf-cmp-file-uploader-file-name-text);
+        color: var(--lf-text-primary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    :global(.dark) .file-name {
-        color: var(--lf-cmp-file-uploader-file-name-text-dark);
-    }
-
     .file-size {
         font-size: 0.75rem;
-        color: var(--lf-cmp-file-uploader-faint-text);
+        color: var(--lf-text-muted);
         flex-shrink: 0;
     }
 
     /* Edited file indicator */
     .file-item.edited {
-        border-color: var(--lf-cmp-file-uploader-file-item-edited-border);
-        background: var(--lf-cmp-file-uploader-file-item-edited-bg);
-    }
-
-    :global(.dark) .file-item.edited {
-        border-color: var(--lf-cmp-file-uploader-file-item-edited-border-dark);
-        background: var(--lf-cmp-file-uploader-file-item-edited-bg-dark);
+        border-color: var(--lf-info);
+        background: var(--lf-info-soft);
     }
 
     .edit-btn,
@@ -420,7 +396,7 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: var(--lf-cmp-file-uploader-faint-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
@@ -434,59 +410,34 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: var(--lf-cmp-file-uploader-restore-btn-text);
+        color: var(--lf-warning);
         cursor: pointer;
         transition: all 0.15s;
     }
 
-    :global(.dark) .restore-btn {
-        color: var(--lf-cmp-file-uploader-restore-btn-text-dark);
-    }
-
     .edit-btn:hover {
-        background: var(--lf-cmp-file-uploader-edit-btn-hover-bg);
-        color: var(--lf-cmp-file-uploader-edit-btn-hover-text);
-    }
-
-    :global(.dark) .edit-btn:hover {
-        background: var(--lf-cmp-file-uploader-edit-btn-hover-bg-dark);
-        color: var(--lf-cmp-file-uploader-edit-btn-hover-text-dark);
+        background: var(--lf-info-soft);
+        color: var(--lf-info);
     }
 
     .remove-btn:hover {
-        background: var(--lf-cmp-file-uploader-remove-btn-hover-bg);
-        color: var(--lf-cmp-file-uploader-remove-btn-hover-text);
-    }
-
-    :global(.dark) .remove-btn:hover {
-        background: var(--lf-cmp-file-uploader-remove-btn-hover-bg-dark);
-        color: var(--lf-cmp-file-uploader-remove-btn-hover-text-dark);
+        background: var(--lf-danger-soft);
+        color: var(--lf-danger);
     }
 
     .restore-btn:hover {
-        background: var(--lf-cmp-file-uploader-restore-btn-hover-bg);
-        color: var(--lf-cmp-file-uploader-restore-btn-text);
-    }
-
-    :global(.dark) .restore-btn:hover {
-        background: var(--lf-cmp-file-uploader-restore-btn-hover-bg-dark);
-        color: var(--lf-cmp-file-uploader-restore-btn-text-dark);
+        background: var(--lf-warning-soft);
+        color: var(--lf-warning);
     }
 
     .errors {
         display: flex;
         gap: 0.5rem;
         padding: 0.75rem;
-        background: var(--lf-cmp-file-uploader-errors-bg);
-        border: 1px solid var(--lf-cmp-file-uploader-errors-border);
+        background: var(--lf-danger-soft);
+        border: 1px solid var(--lf-danger-line);
         border-radius: 6px;
-        color: var(--lf-cmp-file-uploader-errors-text);
-    }
-
-    :global(.dark) .errors {
-        background: var(--lf-cmp-file-uploader-errors-bg-dark);
-        border-color: var(--lf-cmp-file-uploader-errors-border-dark);
-        color: var(--lf-cmp-file-uploader-errors-text-dark);
+        color: var(--lf-danger-on-soft);
     }
 
     .error-list {
@@ -522,39 +473,22 @@
     }
 
     .btn-secondary {
-        background: var(--lf-cmp-file-uploader-btn-secondary-bg);
-        color: var(--lf-cmp-file-uploader-text);
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
+        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
     }
 
     .btn-secondary:hover {
-        background: var(--lf-cmp-file-uploader-btn-secondary-hover-bg);
-        color: var(--lf-cmp-file-uploader-btn-secondary-hover-text);
-    }
-
-    :global(.dark) .btn-secondary {
-        background: var(--lf-cmp-file-uploader-btn-secondary-bg-dark);
-        color: var(--lf-cmp-file-uploader-text-dark);
-    }
-
-    :global(.dark) .btn-secondary:hover {
-        background: var(--lf-cmp-file-uploader-btn-secondary-hover-bg-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .btn-primary {
-        background: var(--lf-cmp-file-uploader-btn-primary-bg);
-        color: var(--lf-cmp-file-uploader-btn-primary-text);
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover {
-        background: var(--lf-cmp-file-uploader-btn-primary-hover-bg);
-    }
-
-    :global(.dark) .btn-primary {
-        background: var(--lf-cmp-file-uploader-btn-primary-bg-dark);
-        color: var(--lf-cmp-file-uploader-btn-primary-text-dark);
-    }
-
-    :global(.dark) .btn-primary:hover {
-        background: var(--lf-cmp-file-uploader-btn-primary-hover-bg-dark);
+        background: var(--lf-action-hover);
     }
 </style>
