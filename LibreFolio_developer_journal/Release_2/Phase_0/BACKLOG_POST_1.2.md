@@ -3591,6 +3591,24 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - **Cura, se mai servisse**: azzerare il riferimento solo quando cambia l'id dell'asset. Azzerarlo a ogni nuova
     esecuzione romperebbe il caso «keeps no trace of a dropped answer».
   - Dettagli: piano 03, «Correzioni dal vivo 1 e 2».
+- **X-R27 · Il cambio di valuta di un asset non invalida mai le sue cache** — basso, backend; colori (slot TR,
+  corsia 6154, 16/10 13:43), girato a X dal coordinatore il 16/10.
+  - **Il sintomo nel log**: `wipe_market_data: cache invalidation skipped — 'Asset' object has no attribute
+    'provider_code'`.
+  - **Perché**: il passo 4 di `services/assets/currency_change.py` (~149–161) legge `provider_code`,
+    `provider_params`, `identifier` e `identifier_type` da `Asset`. Quei campi stanno sull'assegnazione del fornitore
+    (`AssetProviderAssignment`). L'eccezione è presa e solo registrata: dopo un cambio di valuta le cache della storia
+    e del prezzo corrente restano fino alla loro scadenza (15 min e 2 min).
+  - **Cura**, con un rosso prima: leggere l'assegnazione e costruire la chiave da lì.
+- **X-R28 · La cache del prezzo corrente ha una chiave senza i parametri del fornitore** — basso, backend; X, 16/10,
+  trovato misurando X-R27.
+  - **Il caso**: `services/assets/price_query.py:764` mette in `_asset_current_cache` la chiave `(codice,
+    identificativo, tipo, impostazioni)`. `refresh.py:229` e le invalidazioni (`provider_management.py` ~236,
+    `currency_change.py`) usano invece la chiave a cinque elementi, con l'hash dei parametri (#R3-4).
+  - **Effetti**: due assegnazioni con stesso codice, identificativo e tipo ma parametri diversi si scambierebbero il
+    prezzo corrente per 2 minuti. Nessuna invalidazione raggiunge quelle voci.
+  - **Cura proposta**: una sola funzione in `services/assets/core.py` che costruisce la chiave, usata nei quattro
+    punti, con un rosso per ciascun difetto. È naturale farla nello stesso lotto di X-R27.
 
 ## W · Import e transazioni (fase 01)
 

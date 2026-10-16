@@ -4356,3 +4356,71 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 >     La pagina non ci arriva.
 >   - Un commento esistente («The converted chart reloads on every landing poll», nel caso della conversione
 >     arrivata tardi) resta vero per quel caso, il cui grafico non ha il punto di oggi.
+> - **Committate** dal coordinatore: `2a038b362` (fix) e `cecaa144b` (diario).
+
+#### Icone in Impostazioni › Plugin — frontend ✅ (2026-10-16, 15:03–16:23)
+
+> - **Partenza**: HEAD `cecaa144b`, con il backend del lotto (4 file) ancora sporco dalle 12:07.
+> - **Frontend**, con le sole classi di ruolo (skill design-system):
+>   - `pluginSettingsApi.ts`: `PluginSettingsEntry.icon_url: string | null`, obbligatorio come ogni campo;
+>     `entryOf` lo legge con `textOrNull`.
+>   - `pluginSettingsForm.ts`: `FAMILY_ICONS` accanto a `FAMILY_TITLE_KEYS`, con `asset` → `ChartColumn` e `fx` →
+>     `Coins`, le icone della home della documentazione. Una famiglia nuova aggiunge una riga.
+>   - `PluginSettingsTab.svelte`: il titolo `<h3>` di ogni famiglia comincia con la sua icona, `aria-hidden`,
+>     `data-testid="plugin-settings-family-icon"`, senza classi di colore: eredita il ruolo del titolo.
+>   - `PluginSettingsForm.svelte`: il titolo `<h4>` comincia con
+>     `<img alt="" referrerpolicy="no-referrer" data-testid="plugin-settings-plugin-icon">`; senza icona, o quando
+>     l'immagine non si carica, con `Puzzle` (`text-lf-muted`, `aria-hidden`,
+>     `data-testid="plugin-settings-plugin-icon-fallback"`).
+>     - Un'immagine fallita registra il suo indirizzo (`failedIconUrl`): il ripiego resta finché il plugin non
+>       pubblica un'altra icona.
+>     - Con `alt=""` il nome accessibile del titolo, e quindi quello della sezione (`aria-labelledby`), resta il nome
+>       del plugin.
+> - **Documentazione**:
+>   - user `settings/plugins.en.md`: le icone delle famiglie e quella del plugin, con il pezzo di puzzle quando manca;
+>   - developer `patterns/plugin_settings.md`: `icon_url` nella tabella dell'API (con la sua fonte, la property
+>     `get_icon` dei prezzi e `icon` dei cambi), nella mappa dei sorgenti, nell'interfaccia (`FAMILY_ICONS`, il
+>     ripiego) e nei test del backend.
+> - **CHANGELOG**: una frase in coda alla riga ✨ «Settings › Plugins» di `[Unreleased]`. La scheda è nuova in
+>   questa versione, quindi nessuna riga a parte.
+> - **Test**: il test-author lavora sui 5 file di test della cartella: fabbriche con `icon_url: null`, `entryOf`,
+>   `FAMILY_ICONS`, l'icona per famiglia, l'icona del plugin, il ripiego, l'errore di caricamento.
+>   - **Esito**: i 5 file passano da 284 a **304 casi**, tutti verdi; prettier pulito. Prima delle fabbriche
+>     aggiornate, 11 casi rossi (i `toStrictEqual` di `entryOf` senza `icon_url`).
+>     - `pluginSettingsApi`: da 119 a 128 casi. Ci sono anche un elenco come icona, che diventa `null`, e un'icona che
+>       attraversa lo schema generato: un client generato vecchio toglierebbe le icone senza dire niente.
+>     - `pluginSettingsForm`: da 116 a 118 casi, con `FAMILY_ICONS` controllata per identità e famiglia per famiglia.
+>     - `PluginSettingsTab`: da 6 a 10 casi (PST-07…09). PST-08 e PST-09 confrontano il disegno dell'SVG: non usano né
+>       classi né colori, solo il markup.
+>     - `PluginSettingsForm.component`: da 34 a 39 casi (PSF-26…30). Fra questi PSF-29: dopo un errore, la stessa URL
+>       tiene il ripiego, e una URL nuova riporta l'immagine.
+>     - `PluginSettingsModal`: 9 casi, nessuno nuovo; cambiano solo le fabbriche.
+>   - **Dal test-author, preso**: con `icon_url` `undefined` (fuori da `entryOf`), `showIcon` disegnava un `<img>`
+>     vuoto, che non scatta mai `error`. Ora `showIcon` è `!!entry.icon_url && …`, che copre anche la stringa vuota.
+> - **Prove fin qui**:
+>   - la cartella, 304/304;
+>   - `front check` 0/0. È partito alle 15:35:50 a carico 45 ed è finito alle 15:39:40, quando il carico era 166.
+> - **⏸️ STOP del coordinatore (15:45)**: il carico alto faceva cadere il controllo della galleria di G sul FE5c. Ho
+>   fermato il copione mentre aspettava di far partire `core-unit`, che quindi non è mai partito.
+>   - **Regola nuova**: controlli leggeri solo con carico ≤ **50**, misurato subito prima di partire. Il cancello di
+>     `files/checks/check.sh` ora parte da 50.
+>   - Restano da fare, al via: `core-unit`, `component-unit` e `mkdocs build`.
+> - **Ripresa (16:03)**, sempre con il cancello a 50; prove tutte verdi:
+>   - `core-unit` → **185 file, 6717/6717** (+11);
+>   - `component-unit` → **158 file, 4078/4078**, compresi `ProviderAssignmentSection`, `AssetSearchAutocomplete` e
+>     `AssetModal.providerLifecycle`, che leggono le voci attraverso `entryOf`;
+>   - `mkdocs build` stretto: c'è solo l'avviso noto di dev (`wac.md`), corretto in `ed500643f`, che arriva col
+>     prossimo merge. Nessun avviso viene dalle due pagine.
+>   - ruff, black, prettier e `git diff --check` puliti.
+> - **Backend del lotto**: le prove delle 13:1x restano valide (`plugin-settings-service` 96, `plugin-settings-runtime`
+>   120, `api plugin-settings` 14), perché il merge 16 non ha toccato `backend/`.
+> - **Galleria**: lo scatto `settings/plugins` cambia, con le icone. Il coordinatore lo dice a colori e a G.
+
+#### X-R27 e X-R28 — le chiavi delle cache degli asset ⏳ (aperti il 16/10, 15:03; dopo il lotto icone)
+
+> - **X-R27**, dai colori: `currency_change.py` legge i campi del fornitore da `Asset`, dove non ci sono. Così
+>   l'invalidazione delle cache, dopo un cambio di valuta, non avviene mai: l'`AttributeError` è preso e registrato.
+> - **X-R28**, trovato misurando X-R27: `price_query.py:764` mette in cache il prezzo corrente senza l'hash dei
+>   parametri, mentre `refresh.py` e le invalidazioni lo usano.
+> - **Cura proposta**: una funzione unica della chiave in `services/assets/core.py`, usata nei quattro punti, con un
+>   rosso per ciascun difetto prima della correzione. Le righe sono nel backlog, sezione X.
