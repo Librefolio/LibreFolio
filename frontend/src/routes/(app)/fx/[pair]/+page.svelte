@@ -57,6 +57,8 @@
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultsToCanonicalFxDataPoints, displayFxDelta, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
+    import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -271,6 +273,10 @@
         return items;
     });
 
+    /** The sync dialog's pairs whose shown rates hold a stored row in its range (C-66), for its warning: this pair from
+     * its chart, a compared pair from its rate store; a comparison asset is not counted. */
+    let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(slug === data.canonicalSlug ? chartData : getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -296,7 +302,7 @@
             date: point.date,
             value: rate ?? 0,
             missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+            staleDays: extractDaysBack(point),
         };
     }
 
@@ -1643,5 +1649,5 @@
     />
 
     <!-- Page Sync Modal (sync all FX pairs + assets present on page) -->
-    <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
+    <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} fxPairsWithDataInRange={syncFxPairsWithData} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
 </div>
