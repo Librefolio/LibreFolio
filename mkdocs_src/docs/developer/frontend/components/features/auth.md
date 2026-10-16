@@ -130,6 +130,21 @@ The `RegisterCard` handles new user registration with client-side validation.
 />
 ```
 
+## 🗝️ ForgotPasswordCard {: #forgotpasswordcard }
+
+The sign-in's **Forgot Password?** card, `lib/features/auth/ForgotPasswordCard.svelte` (`forgot-modal`). It calls
+`instanceConfig.load()` on mount, sharing the sign-in page's request, then shows:
+
+- while `email.links` of `GET /system/instance` is true, workstream E's
+  [«forgot password» form](../../../backend/email.md#forgot-form), `ForgotPasswordEmailForm`;
+- otherwise the warning `auth.emailRecoveryNotAvailable` (`forgot-email-unavailable`).
+
+The box of server commands stays in both cases (`forgot-reset-commands`: `user reset` for Docker and for a host
+installation, then `auth.contactAdministrator`), written once as a snippet. Under the form it sits in a native
+`<details>` closed by default (`forgot-commands-panel`, its `<summary>` `forgot-commands-toggle` with the
+`auth.serverTerminalInstructions` title and a chevron): the developer's decision P1, 16/10. Under the warning it stays
+open, as before. **Back to Login** dispatches `gotoLogin`.
+
 ## 🔗 Account Link Pages {: #link-pages }
 
 Two routes open the single-use links of the accounts, which an administrator issues from the API or

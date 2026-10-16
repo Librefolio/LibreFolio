@@ -4,7 +4,7 @@ category: decision
 status: resolved
 date: 2026-10-15
 tags: [auth, security, frontend, backend, logging]
-related: [domains/auth, features/F-001, problems/login-account-enumeration-before-password]
+related: [domains/auth, domains/email, features/F-001, problems/login-account-enumeration-before-password]
 ---
 
 # Decision: Account link tokens travel in the URL fragment

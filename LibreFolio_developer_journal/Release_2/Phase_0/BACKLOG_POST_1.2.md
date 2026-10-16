@@ -4905,6 +4905,12 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   rivedere). L'azione manda l'invito sempre nella lingua predefinita dell'istanza; `POST /email/links` accetterebbe
   `language`, ma la 1.3 non mostra un selettore. Da aggiungere se serve invitare chi parla un'altra lingua.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E4.1».
+- **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
+  sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
+  con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
+  username, testo libero di 50 caratteri. Il tetto resta `LIBREFOLIO_SMTP_MAX_PER_HOUR` per processo. Da valutare: una
+  chiave che tolga il `+tag` (e i punti per i domini che li ignorano), oppure un controllo sullo username nelle
+  email. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E6.9».
 
 ## Y · Cruscotto e grafici (fase 01)
 
