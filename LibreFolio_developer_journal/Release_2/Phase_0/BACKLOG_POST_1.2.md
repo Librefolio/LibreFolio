@@ -4491,6 +4491,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (`test_adjustment_out_with_cost_numbers.py`) la legge in USD. Cura: un caso in `test_orphan_transfer_after_broker_delete.py`
   con un titolo comprato in USD e il rapporto in EUR, dalla cancellazione del broker che riceve ai numeri di lotti e
   Dashboard. Dettagli: piano 04, sezione «Decisione 47 in dev: la prova con J-24».
+- **W-B56 · Il costo medio dell'anteprima esce senza arrotondamento** — minimo, numeri; W, 16/10 (C-97a, E2E di FE8b).
+  `compute_wac_iterative` (`backend/app/services/portfolio_service.py`, casa di MF) rende la media con tutte le cifre del
+  quoziente (100 / 3 = 33.333…): l'anteprima la mostra, il commit in Auto la scrive, e se un utente la «congela» in un
+  costo manuale la conferma la rifiuta (oltre 12 decimali, D2). Proposta del coordinatore: `round_computed_value` alla
+  fonte, come D6 per i valori calcolati. Da decidere con MF (avvisato dal coordinatore). La parte urgente, il controllo
+  dei decimali che rifiutava l'importo di un costo Auto, è nel checkpoint «C-97a, il costo Auto». Dettagli: piano 04.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
