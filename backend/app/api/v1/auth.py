@@ -33,7 +33,7 @@ from backend.app.schemas.auth import (
     UpdateProfileResponse,
 )
 from backend.app.schemas.users import AccountDeletionPreviewRead, BrokerAccessItemRead, BrokerDeletionItemRead
-from backend.app.services.accounts import address_probe, registration_service, settings_service, token_service, user_service
+from backend.app.services.accounts import address_probe, password_policy, registration_service, settings_service, token_service, user_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -226,6 +226,13 @@ _REGISTRATION_REFUSALS: dict[str, int] = {
 }
 
 
+def _refuse_weak_password(password: str) -> None:
+    """400 ``PASSWORD_TOO_WEAK`` naming the rules a new password misses (decision 37), before anything else is read."""
+    failed = password_policy.failed_rules(password)
+    if failed:
+        raise HTTPException(status_code=400, detail={"error_code": "PASSWORD_TOO_WEAK", "message": "The password does not meet the password rules", "rules": failed})
+
+
 @router.post("/register", response_model=AuthRegisterResponse, status_code=201)
 async def register(request: AuthRegisterRequest, session: AsyncSession = Depends(get_session_generator)):
     """
@@ -235,6 +242,7 @@ async def register(request: AuthRegisterRequest, session: AsyncSession = Depends
     everyone, ``invite`` requires ``invite_token``, and ``open`` accepts anyone; a valid invitation sets the role.
     A refusal for the limit tells nothing about how many accounts exist: whoever asks is not signed in.
     """
+    _refuse_weak_password(request.password)
     try:
         user = await registration_service.register_user(
             session,
@@ -280,6 +288,7 @@ async def reset_password_with_link(request: PasswordResetRequest, session: Async
 
     A link that is not valid — used, expired, revoked, unknown, or of another purpose — changes nothing.
     """
+    _refuse_weak_password(request.new_password)
     user = await user_service.complete_password_reset(session, request.token, request.new_password)
     if user is None:
         raise HTTPException(status_code=400, detail={"error_code": "TOKEN_INVALID", "message": "This password-reset link is not valid"})
@@ -300,6 +309,8 @@ async def change_password(
     Requires the current password for verification. Every other session of the account ends; this one
     receives a new session cookie in the response, and carries on.
     """
+    _refuse_weak_password(request.new_password)
+
     # Verify current password
     if not await asyncio.to_thread(verify_password, request.current_password, current_user.hashed_password):
         logger.warning("Password change failed: wrong current password", user_id=current_user.id)
