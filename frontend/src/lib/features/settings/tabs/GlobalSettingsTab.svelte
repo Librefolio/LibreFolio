@@ -456,32 +456,32 @@
 </script>
 
 <!-- Mobile: Custom dropdown category selector -->
-<div bind:this={dropdownRef} class="sm:hidden mb-4">
-    <span class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+<div bind:this={dropdownRef} class="sm:hidden mb-4 text-lf-primary">
+    <span class="block text-sm font-medium text-lf-secondary mb-2">
         {$_('settings.category')}
     </span>
     <div class="relative">
         <button
-            class="w-full flex items-center justify-between px-4 py-3 border border-gray-300 dark:border-slate-600
-                   rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 text-sm
-                   focus:ring-2 focus:ring-libre-green focus:border-libre-green transition-all"
+            class="w-full flex items-center justify-between px-4 py-3 border border-lf-input
+                   rounded-lg bg-lf-field text-lf-primary hover:border-lf-input-hover text-sm
+                   focus:ring-2 focus:ring-lf-focus focus:border-lf-focus transition-all"
             onclick={toggleDropdown}
             type="button"
             data-testid="global-settings-mobile-category-trigger"
         >
             <span class="flex items-center gap-2">
                 {#if SelectedCategoryIcon}
-                    <SelectedCategoryIcon size={16} class="text-gray-500 dark:text-gray-400" />
+                    <SelectedCategoryIcon size={16} class="text-lf-muted" />
                 {/if}
                 {selectedCategoryLabel}
             </span>
-            <ChevronDown class="text-gray-400 transition-transform {showDropdown ? 'rotate-180' : ''}" size={18} />
+            <ChevronDown class="text-lf-muted transition-transform {showDropdown ? 'rotate-180' : ''}" size={18} />
         </button>
 
         {#if showDropdown}
             <div
-                class="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200
-                        dark:border-slate-600 rounded-lg shadow-lg overflow-hidden z-50"
+                class="absolute top-full left-0 right-0 mt-1 bg-lf-card border border-lf-raised
+                        rounded-lg shadow-lg shadow-lf-shadow overflow-hidden z-50"
                 data-testid="global-settings-mobile-category-menu"
             >
                 <!-- All Settings option -->
@@ -490,7 +490,7 @@
                     onclick={() => selectCategoryMobile('all')}
                     data-testid="global-settings-mobile-category-all"
                     class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
-                           {selectedCategory === 'all' ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                           {selectedCategory === 'all' ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-secondary hover:bg-lf-hover'}"
                 >
                     <span class="flex-1">{categoryLabels['all'] ?? ''}</span>
                     {#if selectedCategory === 'all'}
@@ -505,9 +505,9 @@
                         onclick={() => selectCategoryMobile(cat.id)}
                         data-testid="global-settings-mobile-category-{cat.id}"
                         class="w-full flex items-center gap-3 px-4 py-3 text-sm text-left transition-colors
-                               {selectedCategory === cat.id ? 'bg-libre-green/10 text-libre-green font-medium' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                               {selectedCategory === cat.id ? 'bg-lf-selected text-lf-link font-medium' : 'text-lf-secondary hover:bg-lf-hover'}"
                     >
-                        <cat.icon size={16} class={selectedCategory === cat.id ? 'text-libre-green' : 'text-gray-400'} />
+                        <cat.icon size={16} class={selectedCategory === cat.id ? 'text-lf-link' : 'text-lf-muted'} />
                         <span class="flex-1">{categoryLabels[cat.id] ?? cat.id}</span>
                         {#if selectedCategory === cat.id}
                             <ChevronRight size={16} />
@@ -519,13 +519,13 @@
     </div>
 </div>
 
-<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px]" data-testid="global-settings-tab" data-busy={isLoading || isSaving ? 'true' : 'false'} aria-busy={isLoading || isSaving}>
+<div class="flex flex-col sm:flex-row gap-4 sm:gap-6 min-h-[300px] sm:min-h-[400px] text-lf-primary" data-testid="global-settings-tab" data-busy={isLoading || isSaving ? 'true' : 'false'} aria-busy={isLoading || isSaving}>
     <!-- Left sidebar: Category navigation (hidden on mobile) -->
     <div class="hidden sm:block w-48 flex-shrink-0">
         <nav class="space-y-1">
             <button
                 class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
-                    {selectedCategory === 'all' ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
+                    {selectedCategory === 'all' ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}"
                 onclick={() => (selectedCategory = 'all')}
             >
                 <span class="flex-1 text-left">{categoryLabels['all'] ?? ''}</span>
@@ -539,7 +539,7 @@
                     onclick={() => (selectedCategory = cat.id)}
                     data-testid="global-settings-category-{cat.id}"
                     class="w-full flex items-center px-3 py-2 text-sm rounded-lg transition-colors
-                        {selectedCategory === cat.id ? 'bg-libre-green text-white' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}"
+                        {selectedCategory === cat.id ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-secondary hover:bg-lf-hover'}"
                 >
                     <cat.icon size={16} class="mr-2" />
                     <span class="flex-1 text-left">{categoryLabels[cat.id] ?? cat.id}</span>
@@ -554,9 +554,9 @@
     <!-- Right side: Settings content -->
     <div class="flex-1 space-y-4">
         <!-- Header with lock/unlock - Title and icons on same row, description below -->
-        <div class="pb-4 border-b border-gray-200 dark:border-slate-700">
+        <div class="pb-4 border-b border-lf-subtle">
             <div class="flex items-center justify-between gap-2 mb-1 min-h-[36px]">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{$_('settings.globalSettings')}</h3>
+                <h3 class="text-lg font-semibold text-lf-primary">{$_('settings.globalSettings')}</h3>
                 <div class="flex items-center gap-1 flex-shrink-0">
                     {#if canEdit}
                         {#if !isLocked}
@@ -566,7 +566,7 @@
                             onclick={toggleLock}
                             data-testid="settings-lock-toggle"
                             class="p-2 rounded-lg transition-all
-                                {isLocked ? 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50'}"
+                                {isLocked ? 'bg-lf-panel text-lf-secondary hover:bg-lf-neutral' : 'bg-lf-warning-soft text-lf-warning hover:bg-lf-warning-line'}"
                             title={isLocked ? $_('settings.clickToEdit') : $_('settings.clickToLock')}
                         >
                             {#if isLocked}
@@ -576,13 +576,13 @@
                             {/if}
                         </button>
                     {:else}
-                        <div class="flex items-center space-x-2 px-3 py-2 bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded-lg" data-testid="settings-readonly-indicator" title={$_('settings.readOnlyMode')}>
+                        <div class="flex items-center space-x-2 px-3 py-2 bg-lf-panel text-lf-muted rounded-lg" data-testid="settings-readonly-indicator" title={$_('settings.readOnlyMode')}>
                             <ShieldOff size={18} />
                         </div>
                     {/if}
                 </div>
             </div>
-            <p class="text-sm text-gray-500 dark:text-gray-400">{$_('settings.globalSettingsDescription')}</p>
+            <p class="text-sm text-lf-muted">{$_('settings.globalSettingsDescription')}</p>
         </div>
 
         {#if error}
@@ -603,7 +603,7 @@
         {#if isLoading}
             <LoadingSpinner />
         {:else if settings.length === 0}
-            <div class="text-center py-8 text-gray-500">
+            <div class="text-center py-8 text-lf-muted">
                 {$_('settings.noGlobalSettings')}
             </div>
         {:else}
@@ -612,7 +612,7 @@
                     {@const category = getCategoryForSetting(setting.key)}
                     {#if setting.value_type === 'bool'}
                         <!-- Boolean toggle (self-contained component) -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4" data-testid="global-setting-{setting.key}">
+                        <div class="bg-lf-panel rounded-lg px-4" data-testid="global-setting-{setting.key}">
                             <SettingToggle
                                 value={editedValues[setting.key] === 'true'}
                                 label={getSettingLabel(setting.key)}
@@ -635,7 +635,7 @@
                         </div>
                     {:else if setting.value_type === 'int' || setting.value_type === 'float'}
                         <!-- Numeric input (self-contained component) -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4" data-testid="global-setting-{setting.key}">
+                        <div class="bg-lf-panel rounded-lg px-4" data-testid="global-setting-{setting.key}">
                             <SettingNumber
                                 value={editedValues[setting.key]}
                                 label={getSettingLabel(setting.key)}
@@ -658,7 +658,7 @@
                         </div>
                     {:else}
                         <!-- Language / Currency / Theme use the shared wrappers (same controls as PreferencesTab); any other string setting keeps the generic text row -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4" data-locked={setting.key === 'registration_mode' ? String(registrationLocked) : undefined} data-testid="global-setting-{setting.key}">
+                        <div class="bg-lf-panel rounded-lg p-4" data-locked={setting.key === 'registration_mode' ? String(registrationLocked) : undefined} data-testid="global-setting-{setting.key}">
                             {#if setting.key === 'default_language'}
                                 <SettingSelect
                                     value={editedValues[setting.key]}
@@ -741,13 +741,13 @@
                                 <!-- Generic string setting: raw text input -->
                                 <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                                     <div class="flex-1 min-w-0">
-                                        <label for={setting.key} class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-200">
+                                        <label for={setting.key} class="flex items-center text-sm font-medium text-lf-secondary">
                                             {#if category}
-                                                <category.icon size={16} class="mr-2 text-gray-500 dark:text-gray-400" />
+                                                <category.icon size={16} class="mr-2 text-lf-muted" />
                                             {/if}
                                             {getSettingLabel(setting.key)}
                                         </label>
-                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <p class="text-xs text-lf-muted mt-1">
                                             {getSettingHint(setting.key)}
                                         </p>
                                     </div>
@@ -771,13 +771,13 @@
                                             }}
                                             disabled={isLocked}
                                             class="w-32 px-3 py-2 border rounded-lg text-sm
-                                                {isLocked ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white text-gray-900 focus:ring-2 focus:ring-libre-green focus:border-libre-green'}"
+                                                {isLocked ? 'bg-lf-panel text-lf-muted cursor-not-allowed border-lf-subtle' : 'bg-lf-field text-lf-primary border-lf-input hover:border-lf-input-hover focus:ring-2 focus:ring-lf-focus focus:border-lf-focus'}"
                                         />
                                     </div>
                                 </div>
                             {/if}
                             {#if setting.updated_at && typeof setting.updated_at === 'string'}
-                                <p class="text-xs text-gray-400 mt-2">
+                                <p class="text-xs text-lf-muted mt-2">
                                     {$_('common.updated')}: {new Date(setting.updated_at).toLocaleString(uiLocale())}
                                 </p>
                             {/if}
@@ -789,7 +789,7 @@
                 {#if selectedCategory === 'sync' || selectedCategory === 'all'}
                     <!-- Scheduler Status Row (clickable → opens log modal) -->
                     <div
-                        class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                        class="bg-lf-panel rounded-lg px-4 py-3 cursor-pointer hover:bg-lf-neutral transition-colors"
                         data-testid="scheduler-status-row"
                         onclick={() => (showLogModal = true)}
                         role="button"
@@ -800,15 +800,15 @@
                     >
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2 min-w-0">
-                                <BarChart3 size={16} class="text-gray-500 dark:text-gray-400 shrink-0" />
+                                <BarChart3 size={16} class="text-lf-muted shrink-0" />
                                 <div class="min-w-0">
-                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    <span class="text-sm font-medium text-lf-secondary">
                                         {$_('settings.global.scheduler.status.title')}
                                     </span>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <p class="text-xs text-lf-muted mt-0.5">
                                         {#if schedulerState?.current_price?.last_run_at}
                                             {$_('settings.global.scheduler.status.lastRun')}: {new Date(schedulerState.current_price.last_run_at).toLocaleString(uiLocale())}
-                                            <span class="inline-block w-2 h-2 rounded-full ml-1 {schedulerState.current_price.last_status === 'ok' ? 'bg-green-500' : schedulerState.current_price.last_status === 'partial' ? 'bg-yellow-500' : 'bg-red-500'}"></span>
+                                            <span class="inline-block w-2 h-2 rounded-full ml-1 {schedulerState.current_price.last_status === 'ok' ? 'bg-lf-success' : schedulerState.current_price.last_status === 'partial' ? 'bg-lf-warning' : 'bg-lf-danger'}"></span>
                                         {:else}
                                             {$_('settings.global.scheduler.status.neverRun')}
                                         {/if}
@@ -820,22 +820,22 @@
                                     {/if}
                                 </div>
                             </div>
-                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0" type="button">
+                            <button class="text-xs text-lf-link hover:text-lf-link/80 font-medium shrink-0" type="button">
                                 {$_('settings.global.scheduler.status.details')}
                             </button>
                         </div>
                     </div>
 
                     <!-- Scheduler Config Row (opens config modal) -->
-                    <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4 py-3" data-testid="scheduler-config-row">
+                    <div class="bg-lf-panel rounded-lg px-4 py-3" data-testid="scheduler-config-row">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2 min-w-0">
-                                <Settings size={16} class="text-gray-500 dark:text-gray-400 shrink-0" />
+                                <Settings size={16} class="text-lf-muted shrink-0" />
                                 <div class="min-w-0">
-                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    <span class="text-sm font-medium text-lf-secondary">
                                         {$_('settings.global.scheduler.configTitle')}
                                     </span>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <p class="text-xs text-lf-muted mt-0.5">
                                         {$_('settings.global.scheduler.status.configSummary', {
                                             values: {
                                                 freq: editedValues['scheduler_current_price_frequency_minutes'] || '10',
@@ -846,7 +846,7 @@
                                     </p>
                                 </div>
                             </div>
-                            <button class="text-xs text-libre-green hover:text-libre-green/80 font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="scheduler-config-btn" disabled={isLocked} onclick={() => (showConfigModal = true)}>
+                            <button class="text-xs text-lf-link hover:text-lf-link/80 font-medium shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" type="button" data-testid="scheduler-config-btn" disabled={isLocked} onclick={() => (showConfigModal = true)}>
                                 {$_('settings.global.scheduler.status.configure')}
                             </button>
                         </div>
