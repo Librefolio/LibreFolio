@@ -3671,3 +3671,12 @@ and the lots warning names exactly those days, which closes J-28. A lot opened b
 its opening day as its reference, trades included, converted at that day's rate.
 Updated: [[decisions/adjustment-is-never-a-price]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | CP-9a: the risk service split by theme, T-R1 risk half closed
+The risk service is split into `risk/{plan,scope,replay,results,data_quality}.py`, `RiskService` keeping the
+orchestration; the risk side reads the FX routes through the home's `load_configured_fx_pair_sets`. Source-file rows
+that sent moved behaviour to `risk/service.py` now point to its new module.
+Updated: [[decisions/financial-math-one-home]], [[entities/portfolio-service]], [[features/F-110]],
+[[problems/asset-set-scope-has-no-primary-series]], [[problems/stale-price-banner-never-emitted]],
+[[problems/fx-backward-fill-unbounded-stale-rates]], [[decisions/asset-global-page-shows-no-money]].
+Graph: not updated; graphify is not available in this worktree.
