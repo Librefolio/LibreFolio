@@ -50,6 +50,7 @@ The frontend computes no financial quantity — cost, P&L, capital, NAV, returns
 
 ## Design System
 
+- **The design system — read it before building or changing any UI**: the two themes («Stone and Sage» in light, «Slate and Sage» in dark), every colour role with its value in both themes and when to use it, the shared colour folder `lib/theme/` (components take colours from it, never define them) and all the colour rules: skill `design-system` (`.github/skills/design-tools/design-system/SKILL.md`)
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file); the colour roles live in `lib/theme/tokens.css`, which `app.css` imports
 - **Colours are roles** (colour programme, workstream T): new and migrated code writes only the role utilities, never a palette class (`bg-white`, `text-gray-500`, `dark:bg-slate-800`) or a hand-written colour (`#1a4031`, `rgba(…)`, `white`)
   - surfaces `bg-lf-app` (behind the shell), `bg-lf-page` (standalone pages), `bg-lf-header` (the app header, D-T23), `bg-lf-card`, `bg-lf-panel`, `bg-lf-field`, `hover:bg-lf-hover`, `bg-lf-neutral`, `bg-lf-inverse`, `bg-lf-overlay`, `bg-lf-logo`; floating card, modal or dropdown `border-lf-raised shadow-lf-shadow`
@@ -57,7 +58,7 @@ The frontend computes no financial quantity — cost, P&L, capital, NAV, returns
   - text `text-lf-primary`, `text-lf-secondary`, `text-lf-muted`, `placeholder:text-lf-placeholder`, `text-lf-link`; borders `border-lf-subtle`, `border-lf-input` (`hover:border-lf-input-hover`); focus `ring-lf-focus`
   - brand `bg-lf-brand` + `text-lf-on-brand` (the login card header), primary button `bg-lf-action hover:bg-lf-action-hover text-lf-on-action`, `bg-lf-selected`, selected control `bg-lf-checked` + `text-lf-on-checked` (D-T16)
   - states `success`, `warning`, `danger`, `info`: `text-lf-<state>`, `bg-lf-<state>-soft`, `border-lf-<state>-line`, `text-lf-<state>-on-soft`, `bg-lf-<state> text-lf-on-status`; solid red button `bg-lf-danger-solid text-lf-on-danger-solid`; `text-lf-gain`, `text-lf-loss`, `text-lf-donate`
-  - special: switch `bg-lf-switch-*`, terminal `bg-lf-terminal`, `<mark>` `bg-lf-mark`, AI `text-lf-ai`; the full table is in the skill `theme-roles`
+  - special: switch `bg-lf-switch-*`, terminal `bg-lf-terminal`, `<mark>` `bg-lf-mark`, AI `text-lf-ai`; the full palette, with both themes' values and when to use each role, is in the skill `design-system`
 - **Dark theme**: a role changes value under `html.dark` — never write `dark:` on a role utility. A component not migrated yet keeps its look from the frozen legacy remap of `app.css` (P1); migrate an element whole, never mixing roles and palette classes on it
 - **Gates**: `src/themeRoles.gate.test.ts` (a ratchet: legacy classes and colour literals per file only go down; role grammar) and `src/themeTokens.gate.test.ts` (both themes, contrast pairs). A file split is declared in the same commit: `node frontend/scripts/theme/theme-roles.mjs --split OLD:NEW1,NEW2`. How to migrate, the class → role table and the merge rule of the baseline: skill `theme-roles` (`.github/skills/design-tools/theme-roles/SKILL.md`)
 - **Font**: `'LF Flags', Inter, system-ui, sans-serif` (`html`, `@theme --font-sans`; `--font-mono` also starts with `'LF Flags'`)

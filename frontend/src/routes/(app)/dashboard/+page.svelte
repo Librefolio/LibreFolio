@@ -50,24 +50,24 @@
         type PortfolioAcquisitionFundingSeries,
     } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
-    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
-    import {readDashboardView, writeDashboardView} from '$lib/stores/portfolio/dashboardViewStore';
+    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {ensureAssetsLoaded, getAssetInfo, assetStoreVersion} from '$lib/stores/reference/assetStore';
     import {getAssetPanelAssetId, buildAssetPanelUrl} from '$lib/utils/broker/assetPanelUrl';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
-    import {createDateRangeController} from '$lib/stores/dateRangeController.svelte';
+    import {createDateRangeController} from '$lib/features/dashboard/dateRangeController.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
-    import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
-    import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
+    import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
+    import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
+    import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
-    import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
-    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
+    import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
+    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
@@ -77,7 +77,7 @@
     import {TransactionFormModal, TransactionsTable, resolveFormItemsForView, loadPartnerRows, loadEventTooltipMap, type FormModalItems} from '$lib/components/transactions';
     import type {TXReadItem, AssetEvent} from '$lib/components/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -707,6 +707,22 @@
         }
     }
 
+    /**
+     * The server caught up on prices and updated something (Z5, Z-13): what «Aggiorna» does, in background. The
+     * stale report is asked again without force and the risk and lots panels reload; the figures stay until the new
+     * ones land. Run after the dispatch, so every store has marked its answers stale first.
+     */
+    function reloadAfterPriceCatchUp() {
+        if (!pageAlive) return;
+        refreshVersion += 1;
+        void loadAll();
+    }
+    onMount(() =>
+        registerPortfolioMutationListener('dashboard:prices', (signal) => {
+            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
+        }),
+    );
+
     async function loadAiExportCompatibility() {
         aiExportCatalogLoading = true;
         try {
@@ -822,7 +838,13 @@
     });
 </script>
 
-<div class="space-y-4" data-testid="dashboard-page" use:guideAnchor={'page.dashboard'} aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading} data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}>
+<div
+    class="space-y-4 text-lf-primary"
+    data-testid="dashboard-page"
+    use:guideAnchor={'page.dashboard'}
+    aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading}
+    data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}
+>
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
     <PageToolbar
@@ -847,7 +869,7 @@
                  edge lines up with the picker's instead of stretching to the wider column. -->
             <div class="flex items-center gap-3 {filtersStacked ? 'w-full justify-around' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                 <!-- Currency override selector -->
-                <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <div class="flex items-center gap-1.5 text-xs text-lf-muted">
                     <!-- Round 13: "Valuta:" is an extra/decorative label — the select itself
                          (flag + code) already conveys enough at very narrow widths, so it hides
                          first via the independent noExtraLabel threshold, well before labelHide*
@@ -884,7 +906,7 @@
                     <button
                         bind:this={brokerFilterTriggerEl}
                         class="flex items-center gap-1.5 min-w-0 max-w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors whitespace-nowrap
-                       {brokerFilterActive ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700' : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                       {brokerFilterActive ? 'bg-lf-selected text-lf-link border-lf-focus' : 'bg-lf-card text-lf-secondary border-lf-input hover:bg-lf-hover'}"
                         onclick={toggleBrokerFilterDropdown}
                         data-testid="broker-filter-trigger"
                     >
@@ -897,23 +919,15 @@
                     {#if brokerFilterOpen}
                         <div
                             bind:this={brokerFilterPanelEl}
-                            class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                            class="fixed z-50 w-56 bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow overflow-hidden"
                             style:left={`${brokerFilterDropdownPosition.left}px`}
                             style:top={`${brokerFilterDropdownPosition.top}px`}
                             data-broker-filter-panel
                         >
                             <!-- Select All / Deselect All -->
-                            <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
-                                <button
-                                    type="button"
-                                    class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => selectBrokers(allBrokers.map((b) => b.id))}>{$_('common.selectAll')}</button
-                                >
-                                <button
-                                    type="button"
-                                    class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-                                    onclick={() => selectBrokers([])}>{$_('common.clearAll')}</button
-                                >
+                            <div class="flex gap-2 px-2.5 py-2 border-b border-lf-subtle">
+                                <button type="button" class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral transition-colors" onclick={() => selectBrokers(allBrokers.map((b) => b.id))}>{$_('common.selectAll')}</button>
+                                <button type="button" class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral transition-colors" onclick={() => selectBrokers([])}>{$_('common.clearAll')}</button>
                             </div>
                             <!-- Broker list -->
                             <div class="max-h-52 overflow-y-auto mx-2.5 my-2 space-y-0.5">
@@ -923,7 +937,7 @@
                                     {@const RoleIcon = role ? getRoleIcon(role) : null}
                                     <button
                                         type="button"
-                                        class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors {isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300'}"
+                                        class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] rounded hover:bg-lf-hover transition-colors {isSelected ? 'text-lf-link' : 'text-lf-secondary'}"
                                         onclick={() => toggleBroker(broker.id)}
                                         data-testid="broker-filter-item-{broker.id}"
                                     >
@@ -933,7 +947,7 @@
                                             <RoleIcon size={14} class={getRoleIconColor(role)} />
                                         {/if}
                                         {#if isSelected}
-                                            <svg class="w-3.5 h-3.5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg class="w-3.5 h-3.5 text-lf-link flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
                                             </svg>
                                         {/if}
@@ -962,7 +976,7 @@
             />
 
             <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
                 onclick={handleSync}
                 disabled={syncLoading}
                 data-testid="sync-button"
@@ -985,8 +999,8 @@
             <!-- Cash Balances — same position as broker detail (right after the KPIs), using
                  summary.cash_balances which already aggregates by currency across all brokers
                  in scope (all accessible brokers, or the broker-filter subset if active). -->
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="dashboard-cash-balances">
-                <div class="flex items-center space-x-2 text-gray-700 dark:text-gray-200 mb-4">
+            <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="dashboard-cash-balances">
+                <div class="flex items-center space-x-2 text-lf-secondary mb-4">
                     <Wallet size={20} />
                     <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                 </div>
@@ -994,13 +1008,13 @@
                 {#if summary?.cash_balances && summary.cash_balances.length > 0}
                     <div class="flex flex-wrap gap-2">
                         {#each [...summary.cash_balances].sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount)) as balance}
-                            <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
+                            <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary">
                                 {@html formatCurrencyAmountHtml(parseFloat(balance.amount), balance.code)}
                             </span>
                         {/each}
                     </div>
                 {:else}
-                    <p class="text-gray-400 dark:text-gray-500 text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
+                    <p class="text-lf-muted text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
                 {/if}
             </div>
 
@@ -1057,19 +1071,19 @@
                     }}
                 />
             {:else if brokersReady}
-                <p class="py-12 text-center text-sm italic text-gray-400 dark:text-gray-500" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
+                <p class="py-12 text-center text-sm italic text-lf-muted" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
             {:else}
                 <!-- Owned brokers still loading (cold load): say so instead of an empty tab. -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center" data-testid="dashboard-risk-loading">
-                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center" data-testid="dashboard-risk-loading">
+                    <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
                 </div>
             {/if}
         </div>
     {:else if activeTab === 'transazioni'}
         <div data-testid="dashboard-transactions-tab">
             {#if txLoading && txMainRows.length === 0}
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center">
-                    <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center">
+                    <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
                 </div>
             {:else}
                 <TransactionsTable

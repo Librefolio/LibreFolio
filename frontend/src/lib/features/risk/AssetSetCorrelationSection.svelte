@@ -131,31 +131,27 @@
          legacy panel used to publish it for the whole page; it no longer mounts
          here, and a gate on a component that left is a gate that waits forever. -->
     <div data-testid="risk-correlation-content" data-busy={controller.initialLoading ? 'true' : 'false'} data-catalog={controller.catalogState}>
-        <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{$t('risk.analytics.correlation.description')}</p>
+        <p class="mb-3 text-xs text-lf-muted">{$t('risk.analytics.correlation.description')}</p>
 
         {#if controller.loadError}
             <div class="py-6 text-center" data-testid="risk-correlation-error">
-                <p class="text-sm text-red-600 dark:text-red-400">{$t('risk.states.loadFailed')}</p>
-                <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry"
-                    >{$t('common.retry')}</button
-                >
+                <p class="text-sm text-lf-danger">{$t('risk.states.loadFailed')}</p>
+                <button type="button" class="mt-2 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry">{$t('common.retry')}</button>
             </div>
         {:else if output}
             <CorrelationHeatmap {output} {assetLabels} {assetTypes} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
         {:else if controller.initialLoading}
-            <div class="h-48 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-correlation-loading"></div>
+            <div class="h-48 animate-pulse rounded-lg bg-lf-panel" data-testid="risk-correlation-loading"></div>
         {:else if controller.loadDiscarded}
             <!-- The answer arrived and a session transition made it unreadable, twice
                  running. "No result" here would describe the world, when the fact is
                  about this client — and the cure is to ask again, not to explain, so
                  this branch carries the action and nothing else. -->
             <div class="py-6 text-center" data-testid="risk-correlation-discarded">
-                <button type="button" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry"
-                    >{$t('common.retry')}</button
-                >
+                <button type="button" class="rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => void controller.loadBase(true)} data-testid="risk-correlation-retry">{$t('common.retry')}</button>
             </div>
         {:else}
-            <p class="py-6 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-correlation-empty">{$t('risk.states.empty')}</p>
+            <p class="py-6 text-center text-sm text-lf-muted" data-testid="risk-correlation-empty">{$t('risk.states.empty')}</p>
         {/if}
     </div>
 </RiskLevelSection>

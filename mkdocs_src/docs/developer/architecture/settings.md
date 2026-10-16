@@ -36,17 +36,38 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       entry per profile `LIBREFOLIO_PROFILE` accepts; every key a `Settings` field with a code default;
       every value valid for its field in strict mode and, for `managed`, different from the code
       default; a set value kept; and, parametrised over every field any profile lists, the code
-      default kept by a self-hosted install. The table reaches `Settings` fields only: a variable that
-      a section module reads from `os.environ` decides its managed default itself, from
-      `get_settings().LIBREFOLIO_PROFILE`, as `backup_max_upload_mb()` in `config/backup.py` does
-      (`MANAGED_MAX_UPLOAD_MB`, 500, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is unset or blank). To
-      give the managed profile a new default, a workstream adds one entry to
-      `PROFILE_DEFAULTS["managed"]`: a `Settings` field with a code default, and a value of the field's
-      own type, written as its code default is (`60.0`, `True`; never `"60"`, nor `1` for a flag), that
-      differs from the code default. It adds the same entry to `MANAGED_DEFAULTS` in the test file, the
-      decided table that `PROFILE_DEFAULTS["managed"]` must equal; the parametrised cases (the managed
-      value given to a field nobody set, the guards on the table, the self-hosted code defaults) then
-      cover the new field. Admin view:
+      default kept by a self-hosted install. The table reaches `Settings` fields only; the variables
+      of the section modules have their own table, in the next point. To give a `Settings` field a
+      new managed default, a workstream adds one entry to `PROFILE_DEFAULTS["managed"]`: a field with
+      a code default, and a value of the field's own type, written as its code default is (`60.0`,
+      `True`; never `"60"`, nor `1` for a flag), that differs from the code default. It adds the same
+      entry to `MANAGED_DEFAULTS` in the test file, the decided table that
+      `PROFILE_DEFAULTS["managed"]` must equal; the parametrised cases (the managed value given to a
+      field nobody set, the guards on the table, the self-hosted code defaults) then cover the new
+      field.
+    - **Profile defaults of the section modules' variables** (`ENVIRONMENT_PROFILE_DEFAULTS` in
+      `__init__.py`): for each profile, the values it gives the variables that a section module of
+      `backend/app/config/` reads from `os.environ`, outside `Settings`. `selfhosted` lists none: a
+      self-hosted install keeps every code default. A section module calls
+      `profile_default(name, fallback)`, and only while its variable is unset: the function returns
+      the active profile's value for `name` or, when the profile lists none, `fallback` itself, the
+      code's own default (the self-hosted behaviour). The profile is
+      `get_settings().LIBREFOLIO_PROFILE`, read at each call. A blank or an invalid value stays under
+      the module's own rules: a module can, for example, treat a blank value as unset, and answer an
+      invalid one with a coded error when the value is used rather than stop the startup.
+      `profile_default()` converts nothing (a `cast`): an entry is written in the type of the
+      module's fallback (`500`, never `"500"`). The first entry is the upload limit of a restore:
+      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43).
+      `./dev.py test services profile-defaults` guards this table too: one entry per profile;
+      `selfhosted` empty; `managed` equal, value and type, to `ENVIRONMENT_MANAGED_DEFAULTS`, the
+      decided table of the test file; no key that is a `Settings` field or sits in both tables; every
+      key read, as a string constant, by a section module, and documented in `.env.example`; and, for
+      every listed name, `profile_default()` returning the fallback under `selfhosted` and the
+      table's value under `managed`. To give such a variable a managed default, a workstream adds one
+      entry to `ENVIRONMENT_PROFILE_DEFAULTS["managed"]` and the same entry to
+      `ENVIRONMENT_MANAGED_DEFAULTS` in the test file, says the managed value in the variable's
+      commented line of `.env.example`, and calls `profile_default(NAME, fallback)` in its section
+      module while the variable is unset. Admin view of both tables:
       [The Managed Profile](../../admin/hosting_providers.md#managed-profile).
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,

@@ -14,15 +14,15 @@
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {todayIso} from '$lib/utils/dateOnly';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
-    import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
-    import BrokerImportFilesModal from '$lib/components/brokers/BrokerImportFilesModal.svelte';
-    import BrokerSharingPanel from '$lib/components/brokers/BrokerSharingPanel.svelte';
-    import LotsAnalysisPanel from '$lib/components/brokers/lots/LotsAnalysisPanel.svelte';
-    import KpiSection from '$lib/components/dashboard/KpiSection.svelte';
-    import AllocationPanel from '$lib/components/dashboard/AllocationPanel.svelte';
-    import GrowthChart from '$lib/components/dashboard/GrowthChart.svelte';
-    import PositionsPanel from '$lib/components/dashboard/PositionsPanel.svelte';
+    import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
+    import BrokerImportFilesModal from '$lib/features/brokers/BrokerImportFilesModal.svelte';
+    import BrokerSharingPanel from '$lib/features/brokers/BrokerSharingPanel.svelte';
+    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
+    import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
+    import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
+    import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
+    import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
@@ -65,7 +65,7 @@
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
-    import {requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
@@ -432,6 +432,21 @@
         if (txLoaded) await loadTransactions(true);
     }
 
+    /**
+     * The server caught up on prices and updated something (Z5, Z-13): what «Aggiorna» does, in background. The
+     * stale overview is asked again without force and the risk and lots panels reload; the figures stay until the
+     * new ones land. Run after the dispatch, so every store has marked its answers stale first.
+     */
+    function reloadAfterPriceCatchUp() {
+        refreshVersion += 1;
+        void loadOverview();
+    }
+    onMount(() =>
+        registerPortfolioMutationListener(`broker-page:${data.brokerId}:prices`, (signal) => {
+            if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
+        }),
+    );
+
     async function handleUpdated() {
         await loadBroker();
     }
@@ -463,9 +478,9 @@
     }
 </script>
 
-<div class="space-y-6" data-testid="broker-detail-page">
+<div class="space-y-6 text-lf-primary" data-testid="broker-detail-page">
     <div class="flex items-center space-x-4" use:guideAnchor={'broker.detail.header'} data-testid="broker-detail-header">
-        <button class="p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
+        <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors" data-testid="broker-back-button" on:click={handleBack} title={$_('common.back')}>
             <ArrowLeft size={20} />
         </button>
 
@@ -488,40 +503,40 @@
                             {#if role === 'OWNER'}<Crown size={13} />{:else if role === 'EDITOR'}<Pencil size={13} />{:else}<Eye size={13} />{/if}
                         </span>
                     {/if}
-                    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 truncate" data-testid="broker-name">{broker.name}</h1>
+                    <h1 class="text-2xl font-bold text-lf-primary truncate" data-testid="broker-name">{broker.name}</h1>
                 </div>
                 {#if broker.description}
-                    <p class="text-gray-500 dark:text-gray-400 text-sm truncate" data-testid="broker-description">{broker.description}</p>
+                    <p class="text-lf-muted text-sm truncate" data-testid="broker-description">{broker.description}</p>
                 {/if}
             </div>
 
             {#if safeString(broker.portal_url)}
-                <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-gray-500 hover:text-libre-green hover:bg-libre-green/10 rounded-lg transition-colors flex-shrink-0" title={$_('brokers.openPortal')}>
+                <a href={safeString(broker.portal_url)} target="_blank" rel="noopener noreferrer" class="flex items-center justify-center p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors flex-shrink-0" title={$_('brokers.openPortal')}>
                     <ExternalLink size={20} />
                 </a>
             {/if}
         {:else if !error}
             <div class="flex-1">
-                <div class="h-8 w-48 bg-gray-200 rounded animate-pulse"></div>
+                <div class="h-8 w-48 bg-lf-neutral rounded animate-pulse"></div>
             </div>
         {/if}
     </div>
 
     {#if loading && !broker}
-        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-gray-100">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-white rounded-xl shadow-sm p-12 text-center border border-red-100">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
-                <Briefcase class="text-red-600" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-danger-line">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-danger-soft rounded-full mb-4">
+                <Briefcase class="text-lf-danger" size={32} />
             </div>
-            <h3 class="text-lg font-semibold text-gray-700 mb-2">{$_('common.error')}</h3>
-            <p class="text-gray-500 mb-4">{error}</p>
-            <button on:click={handleRefresh} class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors">
+            <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.error')}</h3>
+            <p class="text-lf-muted mb-4">{error}</p>
+            <button on:click={handleRefresh} class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors">
                 {$_('common.retry')}
             </button>
         </div>
@@ -556,7 +571,7 @@
                      spread apart. Without the wrapper, justify-around treats them as 2 separate
                      flex children and splits them apart with a wide gap in between (same mistake
                      dashboard's equivalent row never had — compare its currency-override block). -->
-                <div class="flex items-center justify-around gap-1.5 text-xs text-gray-500 dark:text-gray-400 {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
+                <div class="flex items-center justify-around gap-1.5 text-xs text-lf-muted {filtersStacked ? 'w-full' : ''}" style={filtersStacked && pickerMaxWidth ? `max-width: ${pickerMaxWidth}px` : ''}>
                     <div class="flex items-center gap-1.5">
                         <span class="whitespace-nowrap">{$_('common.currency')}:</span>
                         <div class="w-28">
@@ -578,18 +593,14 @@
 
             {#snippet actions({showActionLabels})}
                 {#if canEdit}
-                    <button
-                        on:click={handleEdit}
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                        data-testid="broker-edit-button"
-                    >
+                    <button on:click={handleEdit} class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="broker-edit-button">
                         <Pencil size={14} />
                         {#if showActionLabels}<span>{$_('common.edit')}</span>{/if}
                     </button>
                 {/if}
                 <button
                     on:click={() => handleTabChange('info')}
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                     data-testid="broker-share-button"
                     title={$_('brokers.sharing.title')}
                 >
@@ -599,7 +610,7 @@
                 <button
                     on:click={handleRefresh}
                     disabled={loading || reportLoading}
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                     title={$_('dashboard.syncData')}
                     data-testid="broker-refresh"
                 >
@@ -628,8 +639,8 @@
 
                 <!-- Cash Balances — moved up right below the KPIs so the "economic position"
                      (NAV + Gain/Loss + Cash by currency) is visible together at a glance. -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-cash-balances">
-                    <div class="flex items-center space-x-2 text-gray-700 dark:text-gray-200 mb-4">
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-cash-balances">
+                    <div class="flex items-center space-x-2 text-lf-secondary mb-4">
                         <Wallet size={20} />
                         <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
                     </div>
@@ -637,13 +648,13 @@
                     {#if broker.cash_balances && broker.cash_balances.length > 0}
                         <div class="flex flex-wrap gap-2">
                             {#each [...broker.cash_balances].sort((a, b) => parseCurrencyAmount(b.amount) - parseCurrencyAmount(a.amount)) as balance}
-                                <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
+                                <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary">
                                     <CurrencyAmount amount={parseCurrencyAmount(balance.amount)} code={balance.code} />
                                 </span>
                             {/each}
                         </div>
                     {:else}
-                        <p class="text-gray-400 dark:text-gray-500 text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
+                        <p class="text-lf-muted text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
                     {/if}
                 </div>
 
@@ -703,20 +714,11 @@
             <div class="space-y-4" data-testid="broker-transactions-tab">
                 <div class="flex flex-wrap items-center justify-between gap-2" data-testid="broker-transactions-actions">
                     <div class="flex items-center gap-2">
-                        <button
-                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                            on:click={() => (importFilesModalOpen = true)}
-                            data-testid="broker-show-import-history"
-                        >
+                        <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={() => (importFilesModalOpen = true)} data-testid="broker-show-import-history">
                             <FileText size={15} />
                             <span class="hidden sm:inline">{$_('brokers.showImportHistory')}</span>
                         </button>
-                        <a
-                            href={transactionsPageUrl}
-                            class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                            title={$_('brokers.viewInTransactionsHint')}
-                            data-testid="broker-view-in-transactions"
-                        >
+                        <a href={transactionsPageUrl} class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" title={$_('brokers.viewInTransactionsHint')} data-testid="broker-view-in-transactions">
                             <ArrowRightLeft size={15} />
                             <span class="hidden sm:inline">{$_('brokers.viewInTransactions')}</span>
                         </a>
@@ -724,15 +726,11 @@
                     <div class="flex items-center gap-2">
                         <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
                         {#if canEdit}
-                            <button
-                                class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
-                                on:click={openImportTransactions}
-                                data-testid="broker-import-transactions"
-                            >
+                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={openImportTransactions} data-testid="broker-import-transactions">
                                 <Upload size={15} />
                                 <span class="hidden sm:inline">{$_('common.import')}</span>
                             </button>
-                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-all" on:click={openNewTransaction} data-testid="broker-new-transaction">
+                            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" on:click={openNewTransaction} data-testid="broker-new-transaction">
                                 <Plus size={15} />
                                 <span class="hidden sm:inline">{$_('transactions.addTransaction')}</span>
                             </button>
@@ -742,8 +740,8 @@
 
                 <div data-testid="broker-transactions">
                     {#if txLoading && !txLoaded}
-                        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-12 text-center">
-                            <RefreshCw class="text-libre-green animate-spin mx-auto" size={28} />
+                        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center">
+                            <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
                         </div>
                     {:else}
                         <TransactionsTable
@@ -771,45 +769,45 @@
             </div>
         {:else if activeTab === 'info'}
             <div class="grid grid-cols-1 xl:grid-cols-2 gap-4" data-testid="broker-info-tab">
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-metadata">
-                    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3">{$_('brokers.metadata')}</h3>
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-metadata">
+                    <h3 class="font-semibold text-lf-secondary mb-3">{$_('brokers.metadata')}</h3>
                     <div class="space-y-2 text-sm">
                         <div class="flex justify-between">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.isActive')}</span>
-                            <span class="font-medium {broker.is_active ? 'text-green-600' : 'text-red-500'}">
+                            <span class="text-lf-muted">{$_('brokers.isActive')}</span>
+                            <span class="font-medium {broker.is_active ? 'text-lf-success' : 'text-lf-danger'}">
                                 {broker.is_active ? '✓ Active' : '✗ Closed'}
                             </span>
                         </div>
                         {#if safeString(broker.opened_at)}
                             <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">{$_('brokers.openedAt')}</span>
-                                <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
+                                <span class="text-lf-muted">{$_('brokers.openedAt')}</span>
+                                <span class="text-lf-secondary">{formatDate(broker.opened_at, $uiLocaleStore)}</span>
                             </div>
                         {/if}
                         <div class="flex justify-between">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.allowOverdraft')}</span>
-                            <span class="font-medium {broker.allow_cash_overdraft ? 'text-green-600' : 'text-gray-400'}">
+                            <span class="text-lf-muted">{$_('brokers.allowOverdraft')}</span>
+                            <span class="font-medium {broker.allow_cash_overdraft ? 'text-lf-success' : 'text-lf-muted'}">
                                 {broker.allow_cash_overdraft ? '✓' : '✗'}
                             </span>
                         </div>
                         <div class="flex justify-between">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.allowShorting')}</span>
-                            <span class="font-medium {broker.allow_asset_shorting ? 'text-green-600' : 'text-gray-400'}">
+                            <span class="text-lf-muted">{$_('brokers.allowShorting')}</span>
+                            <span class="font-medium {broker.allow_asset_shorting ? 'text-lf-success' : 'text-lf-muted'}">
                                 {broker.allow_asset_shorting ? '✓' : '✗'}
                             </span>
                         </div>
-                        <div class="flex justify-between border-t border-gray-100 dark:border-slate-700 pt-2 mt-2">
-                            <span class="text-gray-500 dark:text-gray-400">{$_('brokers.createdInSystem')}</span>
-                            <span class="text-gray-700 dark:text-gray-200">{formatDate(broker.created_at, $uiLocaleStore)}</span>
+                        <div class="flex justify-between border-t border-lf-subtle pt-2 mt-2">
+                            <span class="text-lf-muted">{$_('brokers.createdInSystem')}</span>
+                            <span class="text-lf-secondary">{formatDate(broker.created_at, $uiLocaleStore)}</span>
                         </div>
                     </div>
 
                     {#if broker.total_value_base_currency}
                         {@const totalValue = safeCurrency(broker.total_value_base_currency)}
                         {#if totalValue}
-                            <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
-                                <div class="text-sm text-gray-500 dark:text-gray-400">{$_('common.totalValue')}</div>
-                                <div class="text-2xl font-bold text-libre-green">
+                            <div class="mt-4 pt-4 border-t border-lf-subtle">
+                                <div class="text-sm text-lf-muted">{$_('common.totalValue')}</div>
+                                <div class="text-2xl font-bold text-lf-link">
                                     <CurrencyAmount amount={parseCurrencyAmount(totalValue.amount)} code={totalValue.code} />
                                 </div>
                             </div>
@@ -817,9 +815,9 @@
                     {/if}
                 </div>
 
-                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 p-4" data-testid="broker-sharing-section">
-                    <h3 class="font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
-                        <Users size={18} class="text-libre-green" />
+                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-sharing-section">
+                    <h3 class="font-semibold text-lf-secondary mb-3 flex items-center gap-2">
+                        <Users size={18} class="text-lf-link" />
                         {$_('brokers.sharing.title')}
                     </h3>
                     <BrokerSharingPanel brokerId={broker.id} readOnly={safeString(broker.user_role) !== 'OWNER'} onChanged={handleUpdated} bind:hasChanges={sharingHasChanges} />

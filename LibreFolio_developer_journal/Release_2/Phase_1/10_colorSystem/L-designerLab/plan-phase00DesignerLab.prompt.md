@@ -1800,3 +1800,206 @@ Le quattro fasi previste:
 > | categorie | 27, con 54 letterali |
 >
 > I conteggi si spostano per il lotto di T (`custom` 1500 → 1931, `tw` 10270 → 9520). Porta libera, HEAD invariata. Niente E2E e niente build, come chiesto.
+
+> **Ingresso nel target (03:56):** `2c485d3d4`, merge di `d8a69ab62`; l'albero coincide. Verificato in sola lettura: worktree portato a `2c485d3d4`, pulito, porta libera.
+
+## ✅ L-18 — Togliere i vecchi percorsi `components/` dei grafici (16/10/2026, mattina; prove leggere verdi alle 08:46)
+
+**Richiesta del coordinatore (08:34):** «Y è entrato (`d5c3c3ae3`): Y3, Y5 e Y6 hanno spostato dashboard, broker e file. […] Piccolo lotto, adesso: L-18 più la doc.»
+1. In `CHART_PATH_RE` togliere `components/dashboard`, `components/risk` e `components/brokers/lots`; `components/charts` e `charts` restano. Test di `test-author`.
+2. In `designer-lab.md` la frase dei percorsi dice solo i nuovi. L'esempio JSON passa al percorso vero di `BrokerImportFilesModal.svelte`, da verificare.
+3. Facoltative: le costanti estetiche di `pickView.test.ts` e `scanColors.test.ts`.
+
+Prove leggere: unitari del Lab, `--check`, parità dello scanner, MkDocs strict e `check-links`. Niente E2E: il catalogo non cambia.
+
+**✅ Passo 1 — verifica e regex (08:35–08:40).**
+- **Base:** HEAD `d5c3c3ae3`, pulita, con L-16 (`2c485d3d4`) dentro; porta libera.
+- **Cartelle:** `components/dashboard`, `risk`, `brokers` e `files` non esistono più; `components/charts` ha 70 file. I percorsi veri sono `features/dashboard/GrowthChart.svelte`, `features/risk/CorrelationHeatmap.svelte` (radice piatta), `features/brokers/lots/LotsAnalysisPanel.svelte` e `features/brokers/BrokerImportFilesModal.svelte`.
+- **Regex** (`scan-colors.mjs:193`): ora è `\/(components\/charts|charts|features\/(brokers\/lots|dashboard|risk|tools\/pac-allocator\/planner\/result))\/|chart[^/]*$`, e il commento di transizione è tolto.
+  - `components\/charts` è assorbito da `charts`; resta perché la doc lo nomina, ed era così anche prima di L-16.
+- **Catalogo:** **hash identico** prima e dopo (`sha256:45af67d34891482b…`), stessi livelli: css-literal 1104, chart-color 369, script 105, markup 2, static 70.
+- **Prova sulla regex:**
+  - danno chart: `components/charts/`, un `charts/` qualunque, `features/{dashboard,risk,brokers/lots}/`, il risultato del PAC, i nomi con «chart»;
+  - non danno chart: `components/{dashboard,risk,brokers/lots}/`, `features/brokers/` fuori da `lots`, `utils/format.ts`.
+
+> **⚠️ Fuori pista — l'esempio JSON:** `BrokerImportFilesModal.svelte` è in `features/brokers/`, ma non contiene più `#374151`. Il lotto di T ha messo `border-bottom-color: var(--lf-cmp-broker-import-files-divider-border-dark)`. Col solo percorso nuovo l'esempio resterebbe falso.
+> - Il catalogo registra oggi lo stesso valore e lo stesso tema in `src/lib/components/ui/feedback/LoadingSpinner.svelte:60:23`, selettore `:global(.dark) .spinner`, proprietà `border-color`. L'esempio passa lì, e id, target, from e to non cambiano.
+> - Altri esempi della pagina hanno righe scadute: `AssetCard.svelte:133` (ora `case 'up':`) e `DataTable.svelte:1607` (ora `}`), mentre `TransactionsTable.svelte:993` (`tx-table`) è giusto. Sono fuori perimetro: `docs-writer` li elenca, e vanno nel backlog.
+
+**✅ Passo 2 — test e doc (agenti in parallelo, 08:40–08:44):**
+- `test-author` (`e9283542`): in `scanColors.test.ts` via le righe di `components/{dashboard,risk}`, una riga per ogni alternativa della regex, il rischio al percorso piatto vero, e una riga negativa per una cartella di prima. In `pickView.test.ts`, `GROWTH` passa a `features/dashboard/GrowthChart.svelte`.
+- `docs-writer` (`9decc98d`): la frase dei percorsi (549–553), l'esempio JSON su `LoadingSpinner.svelte:60`, e l'elenco degli esempi scaduti, solo da riportare.
+> **`docs-writer`, fatto (08:4x), senza run:**
+> - righe 549–552: la frase elenca solo quello che la regex accetta oggi, senza gli spostamenti;
+> - righe 1218–1226: l'occorrenza è `LoadingSpinner.svelte:60:23`, `:global(.dark) .spinner`, `border-color`, riletta sul file (`col` a base 1 come nello scanner). Il resto della modifica non cambia, e nessun'altra frase dipendeva dall'esempio. Nessun percorso della pagina punta più a file che non esistono.
+> - **Esempi scaduti, riportati e non corretti:**
+>   - `AssetCard.svelte:133`, per `--color-emerald-600@light`: oggi c'è solo un `dark:border-emerald-600` alla riga 134, e le cifre di `impact` sono vecchie;
+>   - `DataTable.svelte:1607` con `#64748b`: il valore non c'è più nel file, e la regola `th` legge un ruolo di componente. Serve una cattura nuova, non un numero di riga;
+>   - `TransactionsTable.svelte:993` è giusto.
+>
+>   Vanno nel backlog come **L-19**.
+>
+> **`test-author`, fatto (08:42):** 21 file, **713/713**, Prettier pulito. Con la sola regex nuova erano 712, con 2 rossi: proprio le righe dei rami tolti.
+> - `scanColors.test.ts`, le righe positive di «recognises a chart by %s»:
+>   - tolte `components/dashboard/Kpi.svelte` e `components/risk/Heatmap.svelte`;
+>   - aggiunte `components/charts/GeographyMap.svelte` (un file vero) e `features/insights/charts/Trend.svelte`;
+>   - il rischio passa al percorso piatto vero, `features/risk/CorrelationHeatmap.svelte`.
+>
+>   Ogni nome di file è senza «chart», quindi combacia un solo ramo. Togliere un'alternativa fa fallire una riga sola; l'eccezione è `components\/charts`, assorbito da `charts`.
+> - Negativo: una riga per `components/dashboard/Kpi.svelte` (`script`, `chart: false`), con un commento perché nessuno la tolga solo perché la cartella non esiste più.
+> - `pickView.test.ts:23`: `GROWTH` è ora `src/lib/features/dashboard/GrowthChart.svelte`. Cambia solo l'etichetta: il catalogo è sintetico e scrive `chart: true`.
+> - Lasciati come sono, su consiglio dell'agente, `catalogView.test.ts` ed `exportFormat.test.ts`: usano `components/charts/GrowthChart.svelte`, che è ancora una cartella di grafici.
+> - Nota innocua: anche `src/lib/i18n/charts/` combacia con `charts`, ma contiene solo `.json`/`.txt`, che lo scanner non legge.
+
+**✅ Passo 3 — prove leggere (08:44:41–08:46:51, sotto `nice -n 10`, script `/tmp/libreFolio_L18_light.sh`).** Nessun E2E e nessuna build dell'app.
+
+| Prova | Esito |
+|---|---|
+| `git diff --check` | 0 righe |
+| unitari del Lab + `chartCategories.test.ts` | 21 file, **713/713** |
+| Prettier sulle 4 cartelle del Lab | pulito |
+| scanner | 2886 ms |
+| **hash del catalogo**, prima e dopo la regex | **identico**, `sha256:45af67d34891482b…`; livelli css-literal 1104, chart-color 369, script 105, markup 2, static 70 |
+| parità scanner/Python | **identica**: tw 8042, custom 2777, arbitrary 12, hex 1343, fn 237, var_uses 1408 (872 distinte), var_defs 1097, files 1253 |
+| MkDocs strict | 0 warning, 0 errori |
+| `check-links` | **97** link validi |
+
+Porta 6152 libera; HEAD `d5c3c3ae3` invariata.
+
+> **⚠️ Fuori pista — STOP del developer, subito dopo le prove (08:4x):** «il developer chiede di fermare tutti i sotto-agenti. Smetti subito L-18». Le prove erano già finite verdi. Ho fermato tutto e lasciato il worktree com'era, con 6 file non committati; nessun processo, i due sotto-agenti inattivi. Poi FROZEN.
+>
+> **Ripresa (10:21):** «Riprendi L-18, adesso. Il developer ha riavviato la macchina, quindi `/tmp` è vuota. Scrivi nel piano la nota delle prove leggere che avevi già fatto […] e chiudi L-18 nel backlog.»
+> - **Verifica (10:22):**
+>   - HEAD `d5c3c3ae3` e gli stessi 6 file;
+>   - `mtime` di tutti prima dell'inizio delle prove (08:38–08:44:34 contro 08:44:41), quindi le prove valgono per questo albero;
+>   - `git diff --check` pulito, porta libera, nessun processo nella corsia.
+> - **Previsione verso il target `eb4040cd1`, che porta il quarto lotto di T:**
+>   - HEAD è un suo antenato;
+>   - il target non tocca nessuno dei miei 6 file né il resto del Lab;
+>   - `LoadingSpinner.svelte:60` ha ancora `border-color: #374151;`, quindi l'esempio JSON resta vero;
+>   - `components/{dashboard,risk,brokers}` sono ancora vuote.
+> - I log di `/tmp` non ci sono più; i verdetti sono qui sopra. Lo script di parità resta salvato nei file della sessione.
+
+**✅ Passo 4 — checkpoint (16/10, 10:2x):** L-18 ✅ nel backlog, L-19 per gli esempi scaduti, handoff FROZEN.
+
+## ✅ L-20 — Il test del selettore in tema scuro non deve dipendere dal sottotitolo di `/transactions` (16/10/2026; validato alle 13:18)
+
+**Richiesta del coordinatore (11:10):** «TR sta migrando `/transactions`. `e2e/designer-lab/designer-lab-picker.spec.ts`, nel test «dark-theme pick of a text-gray-500 element», fissa come soggetto il sottotitolo di `routes/(app)/transactions/+page.svelte:738`, un `text-gray-500` rimappato da `app.css`. Quando TR lo migra, il test perde il soggetto. […] rendi il test indipendente dalla migrazione. […] Scegli tu la strada più robusta. […] Solo test-author su quel file, solo prove leggere, poi la run E2E del Lab nella coda pesante. Mandami prima il piano breve.»
+
+**Analisi (11:11–11:20, sola lettura).** Base: HEAD `6e569084a`, pulita, con dentro L-18 (`f96043473`); porta libera.
+- **Il test** (`designer-lab-picker.spec.ts:419–441`): login, `/transactions`, tema scuro, precondizione `toHaveClass(text-gray-500)` sul sottotitolo, poi la scelta con Alt+Shift+D. Controlla tema e ambito scuri, `data-kind="var"`, il badge `lab-picked-dark-override` e una prima variabile qualunque.
+- **Il contratto vero:**
+  - il badge vale `winner.important && /html\.dark/` sul selettore (`pickView.ts:261`);
+  - il tipo è `var` perché la regola vincente è fuori dal layer `utilities` e legge una variabile (`classify()`).
+- **In `app.css` (208–221, fuori da ogni layer) le regole di quel tipo sono:**
+  - `html.dark .text-gray-{800,900}` → `--theme-text-primary`;
+  - `html.dark .text-gray-{600,700}` → `--theme-text-secondary`;
+  - `html.dark .text-gray-{400,500}` → `--theme-text-muted`;
+  - `.text-libre-dark` → `--theme-text-primary`;
+  - `.text-libre-green` scrive un letterale, quindi non dà `var`.
+- **Dopo la migrazione 1:1 di TR** il sottotitolo passa a un'utility di ruolo: in scuro vince l'utility, il badge non c'è più e il test cade.
+- **Gli altri test che usano il sottotitolo** passano da `colourSourceOf()`, che accetta sia palette sia ruolo (L-10, L-13 W4): Esc e Alt+Shift+D nel picker; L1, sospensione ed export/import nel live. Reggono una migrazione 1:1 sullo stesso `<p>`, quindi restano fuori perimetro.
+- **La pagina developer** non nomina il sottotitolo; la docstring del runner («dark override») resta vera.
+- **Unitari:** il badge è coperto da `pickView.test.ts:412–420`, con il caso P1 e le varianti.
+- **Backlog:** L-13 aveva già previsto (B6) che la pulizia di T toglierà l'override P1, e che allora il test andrà ritirato o spostato.
+
+**Strada proposta: un soggetto proprio, con la regola vera.**
+1. Pagina `/` del visitatore, come il test del ruolo: niente login, niente dati, niente area di TR.
+2. A runtime, nel CSSOM della pagina, il test cerca le regole fuori da `utilities` che hanno `html.dark .<classe>` nel selettore, `color` `!important` e un valore `var(--…)`. Preferisce una classe che Tailwind genera anche come utility di testo, così l'override vince davvero su un'utility. L'ordine è quello del CSSOM, quindi deterministico.
+3. Aggiunge al `body` un `<p>` con `data-testid`, `position: fixed` e uno z-index sotto il velo (2147483646), senza colore inline e con la classe trovata. Poi lo sceglie con Alt+Shift+D, come oggi.
+4. Le asserzioni sono quelle di oggi, più una più forte: la prima variabile della catena è **quella** che la regola legge.
+5. Senza nessuna regola del genere, cioè dopo B6, c'è un `test.skip` con un messaggio esplicito: cita B6 e L-13, e conta le regole `html.dark` viste.
+
+**Alternative scartate:**
+- cercare un elemento già presente nella pagina: dipende dal markup che cambia a ogni ondata;
+- una pagina fissa del Lab: il selettore lavora nelle schede dell'app e salta gli stili del Lab, e servirebbe codice di debug solo per un test.
+
+**Perimetro:** solo `designer-lab-picker.spec.ts`, scritto da `test-author`: il test, un helper locale per il CSSOM, l'intestazione (righe 13–16).
+
+**Prove:**
+- leggere: Prettier, tsc temporaneo sugli E2E, `git diff --check`;
+- coda pesante, corsia 6152: `front-designer-lab picker`, poi `e2e` a 4 worker.
+
+**Stato:** piano mandato al coordinatore; aspetto l'OK.
+
+**OK del coordinatore (11:17):** «L-20: OK, come l'hai scritto: il soggetto è proprio, sulla pagina `/` del visitatore; la regola è quella vera dell'app, cercata nel CSSOM; il `<p>` va iniettato sotto il velo; in più l'asserzione sulla variabile letta dalla regola; dopo B6 il test si salta, con un messaggio esplicito.»
+- L'helper locale va bene; se lo usa un terzo spec, si sposta in `lab-helpers.ts`.
+- **Coda pesante:** la corsia è libera. Va presa appena `test-author` ha scritto, nella corsia 6152: `api sync`, `front-designer-lab picker`, il blocco a 4 worker.
+- **Condizioni:**
+  - se `/tmp` della corsia è vuota per il riavvio, si ripopola con `db populate --force --clean`;
+  - avvisare all'inizio e alla fine;
+  - restare sotto i 45 minuti.
+
+**✅ Passo 1 — verifiche per il brief (11:18–11:21, sola lettura):**
+- `/` del visitatore ha l'interruttore del tema, perché `AuthPageFrame.svelte` monta `ThemeToggle`.
+- `retarget()` (`picker/anchor.ts:166`) sposta la scelta solo su un `<svg>` lucide antenato, quindi un `<p>` resta sé stesso.
+- Il velo è `position:fixed; z-index:2147483646` (`picker/overlay.ts:142`).
+- Il runner non nomina il titolo del test; la sua descrizione «dark override» resta vera.
+- **`/tmp/librefolio-r2-l` non esiste più** dopo il riavvio: ripopolamento previsto. La validazione della cartella di test controlla sovrapposizioni e marcatori, non che esista.
+- Script `/tmp/libreFolio_L20_run.sh`, `light|heavy`, con copia nei file della sessione, `L-20-2026-10-16/`. La fase `heavy` fa: `api sync`, populate, `picker`, e solo se è verde il blocco `e2e` a 4 worker; poi la porta.
+
+**✅ Passo 2 — il test (`test-author` `f2887b05`, 11:2x–11:35, senza E2E):** brief con il progetto approvato, punto per punto:
+- pagina `/` col Lab aperto prima;
+- la ricerca nel CSSOM sul modello di `colourSourceOf()`, preferendo una classe che Tailwind genera anche come utility;
+- 0 regole lette = rosso; nessun candidato = salto con messaggio;
+- il `<p data-testid="e2e-lab-dark-override-subject">` iniettato dopo `chooseTheme`, sotto il velo, con la precondizione sul colore calcolato;
+- le asserzioni di oggi più `data-route="/"` e la variabile esatta;
+- titolo e intestazione nuovi.
+> **Esito (11:35):** solo `designer-lab-picker.spec.ts`, +171/−13.
+> - Intestazione 13–21; costanti 81–89 (`DARK_OVERRIDE_SUBJECT`, `BELOW_THE_VEIL = 2147483000`, `LAB_OWN_ATTR`).
+> - Helper `darkOverridesOf(page)` (134–236): un solo `page.evaluate` sul modello di `colourSourceOf`. Divide il selettore sulle virgole di primo livello, rispettando parentesi e stringhe. Rende i candidati `{className, variable, selector, utility}` nell'ordine del CSSOM.
+> - Il test (535–599) ha il titolo «a dark-theme pick of an element under an app.css !important override shows the variable the override reads». Il `<p>` sta in basso a sinistra, perché l'interruttore è in alto a destra.
+> - **Aggiunta di `test-author`, che tengo:** la precondizione controlla anche che la variabile abbia un valore in scuro. Altrimenti `<p>` e sonda erediterebbero entrambi il colore del `body`, e il confronto passerebbe senza provare niente.
+> - **Scelta attesa oggi:** `text-gray-800` con `--theme-text-primary`.
+>   - È la prima regola `!important` di colore su `html.dark .<classe>` (`app.css:208–210`); quelle prima toccano solo il fondo.
+>   - L'utility esiste: 79 usi nudi in `src/`, e `.text-gray-800` è in `@layer utilities` nella build delle 03:50, letta in sola lettura.
+>   - Senza l'override il `<p>` sarebbe grigio 800, non `#f8fafc`: la precondizione prova davvero qualcosa.
+> - **Elemento iniettato contro elemento dell'app:** nessuna differenza che arrivi alle asserzioni.
+>   - Il velo e la cornice del Lab sono saltati da `elementsFromPoint`.
+>   - `retarget()` lascia il `<p>` com'è.
+>   - Il test id `e2e-…` è sconosciuto al catalogo, quindi niente candidati di test id; il selettore di componente dà 1 corrispondenza.
+> - **Rischi residui annotati:**
+>   - stessa classe in due override con variabili diverse: oggi no, e la precondizione lo nominerebbe;
+>   - salto sbagliato se il CSSOM fosse letto prima di `app.css`: impossibile dopo il rendering della scheda di login.
+> - **Controlli di `test-author`:** Prettier pulito; tsc temporaneo con `noUnusedLocals` a exit 0 (il file di configurazione è cancellato); `git diff --check` pulito; la divisione dei selettori provata in Node.
+>
+> **Mia revisione del diff (11:35):** conforme al progetto.
+> - Le letture del CSSOM a 0 regole danno rosso, non il salto.
+> - Dopo `test.skip(true, …)` c'è un `return`.
+> - L'asserzione sulla variabile è esatta: `toHaveText` con una stringa confronta il testo intero.
+> - Gli import restano tutti usati dagli altri test.
+>
+> **Prove leggere (11:35, fase `light`):** `git diff --check` 0 righe; Prettier pulito sullo spec.
+>
+> **Slot pesante (coordinatore, 12:04):** «La 1.3 ci presta il suo slot 1 appena finisce l'`all-backend` di A, verso le 12:10–12:20, fino alle 13:15. Lo usate tu e poi G-18. […] Resta sotto i 25 minuti […] Script e log nella tua cartella di sessione, non in `/tmp`.»
+> - Lo script è ora nei file della sessione, `L-20-2026-10-16/libreFolio_L20_run.sh`, e i log stanno accanto (`run-light/`, `run-heavy/`). Le copie in `/tmp` sono cancellate.
+> - Controllo del tempo: il blocco a 4 worker, circa 3 minuti, parte solo entro i 1200 s dall'inizio. Così la run resta sotto i 25 minuti.
+> - Pronto alle 12:05: HEAD `6e569084a`, 3 file nello stato, porta libera. Aspetto il via.
+> - **Cambio (12:12):** «lo slot 1 prestato dalla 1.3 va a IM […] Tu parti nella nostra corsia subito dopo AF, verso le 12:45: ti mando il via. Il piano resta lo stesso».
+> - **Ritardo (12:45):** AF rilancia 6 spec prima di entrare, perché X aspetta quell'ingresso; ha tempo fino alle 13:10. «Tu parti subito dopo, verso le 13:10: ti mando il via.»
+
+**✅ Passo 3 — prove leggere, poi coda pesante nella 6152 (16/10, 13:05–13:18),** con avviso al coordinatore all'inizio e alla fine.
+> **Cambio d'ordine del coordinatore (11:23):** «la corsia è di G adesso, per la sua run filtrata della galleria (~10–15 minuti). Quando test-author ha finito L-20, parti solo dopo il mio via». Le prove leggere si fanno subito; la fase `heavy` aspetta il via.
+>
+> **Via (13:04):** «Via a L-20, adesso, nello slot 2 prestato dalla 1.3. Corsia 6152 + `/tmp/librefolio-r2-l`, taglio alle 13:35: dopo le 13:30 non parte nessun passo nuovo. […] il blocco a 4 worker solo se `picker` è verde. Se il carico a 1 minuto è sopra 60, usane 2.»
+> - Lo script (`files/L-20-2026-10-16/libreFolio_L20_run.sh`, versione 2) controlla le 13:30 prima di ogni passo nuovo e sceglie i worker dal carico a 1 minuto (`sysctl vm.loadavg`) al momento del blocco.
+> - Inizio annunciato alle 13:05, con il carico a 83.
+>
+> **Esito della fase `heavy`** (verdetti in `files/L-20-2026-10-16/run-heavy/verdicts.txt`):
+>
+> | Ora | Passo | Esito |
+> |---|---|---|
+> | 13:05:26 | porta | libera, carico 96,6 |
+> | 13:06:02 | `api sync` | exit 0, 3 righe di stato (36 s) |
+> | 13:06:16 | `db populate --force --clean` | exit 0 (la cartella della corsia ricreata dopo il riavvio) |
+> | 13:15:59 | `front-designer-lab picker` | exit 0, **4/4** in 17,8 s |
+> | 13:15:59 | worker del blocco | carico 52,1 → **4 worker** |
+> | 13:18:26 | `front-designer-lab e2e` | exit 0, **17/17** in 45,3 s |
+> | 13:18:27 | porta a fine run | libera (`lsof` exit 1) |
+>
+> - **Il test nuovo è passato, non saltato:** `designer-lab-picker.spec.ts:535`, 833 ms da solo e 3,2 s a 4 worker. La ricerca nel CSSOM ha quindi trovato un override, e l'Element tab ha mostrato badge, `var` e la variabile esatta.
+> - I 9 minuti e mezzo del passo `picker` sono quasi tutti costruzione: la build di debug (al posto della build di release delle 03:50) e la doc (197 s), con il carico 80–96. 479 s in tutto, poi il populate del runner e i test.
+> - Durata totale **13 minuti**, sotto i 25; nessun passo dopo le 13:30. Nel worktree resta la build di debug; HEAD `6e569084a` invariata, 3 file nello stato.
+> - Fine annunciata alle 13:18.
+
+**✅ Passo 4 — checkpoint (16/10, 13:2x):** L-20 ✅ nel backlog, handoff FROZEN.

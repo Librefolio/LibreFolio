@@ -5,6 +5,12 @@ description: "Use this skill when migrating a frontend component to the colour r
 
 # Colour roles — migrating the interface
 
+> **Building or changing UI?** Start from the skill [`design-system`](../design-system/SKILL.md): the two themes
+> («Stone and Sage», «Slate and Sage»), every role and when to use it (its light and dark values in
+> [`palette.md`](../design-system/palette.md)), the shared colour folder `lib/theme/`, the contrast pairs and all the
+> rules. This skill is about migrating what still writes palette
+> classes, and about the ratchet's baseline.
+
 ## The one idea
 
 A colour in the interface says **what it is for**: a card, the muted text, the border of a field, an error. Each of
@@ -101,6 +107,10 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
 2. **No `dark:` on a role.** The role already changes with the theme. Drop the `dark:` half of every converted pair.
 3. **Set the text role on the component's root** (`text-lf-primary`): in dark, `body` still passes the legacy text
    colour down until the clean-up.
+   - **And on every native field**, with its placeholder role: `<input class="… text-lf-primary
+     placeholder:text-lf-placeholder">`, the same on `<textarea>` and `<select>`, even inside a parent that already
+     gives the colour. `app.css` colours native fields in dark only while they carry no `-lf-` class, so a migrated
+     field falls back to the preflight: the inherited colour, the placeholder at 50 % of it.
 4. **Every `border` names its role** (`border border-lf-subtle`): Tailwind v4 draws an unnamed border in
    `currentColor`.
 5. **No hand-written colours.**

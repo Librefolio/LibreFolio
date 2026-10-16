@@ -152,7 +152,9 @@ def _promoted_state_issues(
 
     A promote changes the type of two rows, so both must satisfy the rules of the new
     type like any created or updated row; a row linked to an asset event, for example,
-    cannot become a TRANSFER. Nothing is changed when an issue is returned.
+    cannot become a TRANSFER. The changed type (``changed_fields``) holds the points of
+    decision P6 on every field: a promote into a CASH_TRANSFER or an FX_CONVERSION of a
+    row at 0 is refused (``cashNonzero``). Nothing is changed when an issue is returned.
     """
     issues: list[TXValidationIssue] = []
     for transaction in (transaction_a, transaction_b):
@@ -164,6 +166,7 @@ def _promoted_state_issues(
             cash=cash,
             asset_event_id=transaction.asset_event_id,
             cost_basis_mode=None,
+            changed_fields=frozenset({"type"}),
         )
         for rule_error in rule_errors:
             issues.append(

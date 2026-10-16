@@ -247,7 +247,7 @@ average cost comes from this one function.
 | PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/wac.py` |
 | `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
 | Batch auto cost basis | `backend/app/services/transactions/auto_cost.py` |
-| Dashboard tooltip | `frontend/src/lib/components/dashboard/KpiSection.svelte` |
+| Dashboard tooltip | `frontend/src/lib/features/dashboard/KpiSection.svelte` |
 | AI Export provenance v2 | `backend/app/services/ai_export/components/portfolio_financial.py` |
 | AI Export provenance v2 (broker) | `backend/app/services/ai_export/components/broker_financial.py` |
 | AI Export component catalogue (both provenances declared `version=2`) | `backend/app/services/ai_export/components/catalog.py` |

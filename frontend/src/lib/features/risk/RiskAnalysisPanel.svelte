@@ -12,7 +12,7 @@
     import BenchmarkSelect from '$lib/features/risk/BenchmarkSelect.svelte';
     import type {RiskBenchmarkState} from '$lib/features/risk/riskBenchmarkStore.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-    import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
+    import KpiCard from '$lib/features/dashboard/KpiCard.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
@@ -567,16 +567,16 @@
     yet"; this attribute separates the two — and `error` separates a fetch that
     failed from one that is merely slow, which `pending` alone could not say.
 -->
-<div class="space-y-4" data-testid="risk-analysis-panel" data-catalog={catalog ? 'ready' : loadError ? 'error' : 'pending'} data-busy={initialLoading ? 'true' : 'false'}>
+<div class="space-y-4 text-lf-primary" data-testid="risk-analysis-panel" data-catalog={catalog ? 'ready' : loadError ? 'error' : 'pending'} data-busy={initialLoading ? 'true' : 'false'}>
     {#if showBetaBanner}
         <RiskBetaBanner />
     {/if}
 
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title || $t('risk.title')}</h2>
+            <h2 class="text-lg font-semibold text-lf-primary">{title || $t('risk.title')}</h2>
             {#if subtitle || internalSubset}
-                <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="risk-scope-label">
+                <p class="text-sm text-lf-muted" data-testid="risk-scope-label">
                     {internalSubset ? $t('risk.internalSubset') : subtitle}
                 </p>
             {/if}
@@ -585,7 +585,7 @@
             <div class="flex items-center gap-2">
                 <button
                     type="button"
-                    class="flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 disabled:opacity-50"
+                    class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50"
                     onclick={() => (syncOpen = true)}
                     disabled={syncAssets.length === 0 && syncFxPairs.length === 0}
                     data-testid="risk-sync-button"
@@ -593,13 +593,7 @@
                     <RotateCw size={14} />
                     {$t('common.sync')}
                 </button>
-                <button
-                    type="button"
-                    class="flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 disabled:opacity-50"
-                    onclick={() => loadBase(true)}
-                    disabled={initialLoading || refreshing}
-                    data-testid="risk-refresh-button"
-                >
+                <button type="button" class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50" onclick={() => loadBase(true)} disabled={initialLoading || refreshing} data-testid="risk-refresh-button">
                     <RefreshCw size={14} class={refreshing ? 'animate-spin' : ''} />
                     {$t('common.refresh')}
                 </button>
@@ -608,7 +602,7 @@
     </div>
 
     {#if loadError}
-        <div class="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300" data-testid="risk-load-error">
+        <div class="rounded-xl border border-lf-danger-line bg-lf-danger-soft p-4 text-sm text-lf-danger-on-soft" data-testid="risk-load-error">
             {$t('risk.states.loadFailed')}
         </div>
     {/if}
@@ -618,20 +612,20 @@
     {/if}
 
     {#if qualityStatus}
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 px-3 py-2 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-quality-summary">
-            <span>{$t('risk.quality.status')}: <strong class="text-gray-700 dark:text-gray-200">{$t(`risk.quality.${qualityStatus}`)}</strong></span>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-lf-subtle bg-lf-panel px-3 py-2 text-xs text-lf-muted" data-testid="risk-quality-summary">
+            <span>{$t('risk.quality.status')}: <strong class="text-lf-secondary">{$t(`risk.quality.${qualityStatus}`)}</strong></span>
             <span>{$t('risk.quality.carriedPrices')}: {carriedPricePoints}</span>
             <span>{$t('risk.quality.carriedFx')}: {carriedFxPoints}</span>
         </div>
     {/if}
 
     {#if supportsKpi}
-        <div class="flex flex-wrap items-end gap-3 rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-3" data-testid="risk-free-control">
-            <label class="text-xs text-gray-500 dark:text-gray-400">
+        <div class="flex flex-wrap items-end gap-3 rounded-xl border border-lf-subtle bg-lf-card p-3" data-testid="risk-free-control">
+            <label class="text-xs text-lf-muted">
                 {$t('chartSettings.params.riskFreeAnnualRate')}
                 <span class="mt-1 flex items-center gap-1">
                     <input
-                        class="w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                        class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                         type="number"
                         use:numericArrows={{step: 0.1}}
                         step="0.1"
@@ -642,7 +636,7 @@
                     <span>%</span>
                 </span>
             </label>
-            <button class="rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={() => (appliedRiskFreePercent = riskFreePercentInput)} disabled={riskFreePercentInput === appliedRiskFreePercent} data-testid="risk-free-apply">
+            <button class="rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={() => (appliedRiskFreePercent = riskFreePercentInput)} disabled={riskFreePercentInput === appliedRiskFreePercent} data-testid="risk-free-apply">
                 {$t('common.apply')}
             </button>
         </div>
@@ -678,12 +672,12 @@
                 <div class="space-y-2" data-testid="risk-contribution-bars">
                     {#each contributionRows as row}
                         <div class="grid grid-cols-[minmax(7rem,1fr)_minmax(10rem,2fr)_5rem] items-center gap-2 text-xs" data-testid="risk-contribution-row-{row.asset_id}">
-                            <span class="truncate text-gray-600 dark:text-gray-300" title={row.name}>{row.name}</span>
-                            <div class="relative h-5 rounded bg-gray-100 dark:bg-slate-700">
-                                <div class="absolute left-1/2 top-0 h-full w-px bg-gray-400 dark:bg-slate-500"></div>
+                            <span class="truncate text-lf-secondary" title={row.name}>{row.name}</span>
+                            <div class="relative h-5 rounded bg-lf-panel">
+                                <div class="absolute left-1/2 top-0 h-full w-px bg-lf-input"></div>
                                 <div class="absolute top-1/2 h-2 -translate-y-1/2 rounded {row.percentage != null && row.percentage < 0 ? `right-1/2 ${POLARITY_TONES.riskContributionBar.negative}` : `left-1/2 ${POLARITY_TONES.riskContributionBar.positive}`}" style={`width: ${row.barWidth}%`}></div>
                             </div>
-                            <span class="text-right font-mono text-gray-700 dark:text-gray-200">{formatPercent(row.percentage, true)}</span>
+                            <span class="text-right font-mono text-lf-secondary">{formatPercent(row.percentage, true)}</span>
                         </div>
                     {/each}
                 </div>
@@ -701,9 +695,9 @@
     {/if}
 
     {#if supportsComparison}
-        <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-comparison-controls">
-            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{analyticTitle('comparison', 'risk.analytics.comparison.name')}</h3>
-            <p class="text-xs text-gray-400 dark:text-gray-500">{analyticDescription('comparison')}</p>
+        <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-comparison-controls">
+            <h3 class="text-sm font-semibold text-lf-secondary">{analyticTitle('comparison', 'risk.analytics.comparison.name')}</h3>
+            <p class="text-xs text-lf-muted">{analyticDescription('comparison')}</p>
             <div class="mt-3 flex flex-wrap items-end gap-2">
                 <BenchmarkSelect
                     bind:value={comparisonAssetId}
@@ -718,7 +712,7 @@
                         controller.resetAnalysis('comparison');
                     }}
                 />
-                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runComparison} disabled={!comparisonUsable || comparisonLoading} data-testid="risk-comparison-run">
+                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runComparison} disabled={!comparisonUsable || comparisonLoading} data-testid="risk-comparison-run">
                     <Play size={13} />
                     {$t('risk.actions.compare')}
                 </button>
@@ -744,18 +738,18 @@
     {/if}
 
     {#if supportsStress}
-        <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-stress-controls">
-            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{analyticTitle('stress', 'risk.analytics.stress.name')}</h3>
-            <p class="text-xs text-gray-400 dark:text-gray-500">{analyticDescription('stress')}</p>
+        <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-stress-controls">
+            <h3 class="text-sm font-semibold text-lf-secondary">{analyticTitle('stress', 'risk.analytics.stress.name')}</h3>
+            <p class="text-xs text-lf-muted">{analyticDescription('stress')}</p>
             {#if scope.kind === 'asset'}
                 <div class="mt-3 grid gap-3 sm:grid-cols-2">
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.stress.preset')}
                         <div class="mt-1">
                             <SimpleSelect value={stressPresetId} options={hypotheticalShockOptions} compact testId="risk-stress-preset" onchange={selectStressPreset} />
                         </div>
                     </label>
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.stress.dimension')}
                         <div class="mt-1">
                             <SimpleSelect value={stressDimension} options={stressDimensionOptions} compact testId="risk-stress-dimension" onchange={(value) => changeStressDimension(value as RiskScenarioDimension)} />
@@ -764,11 +758,11 @@
                 </div>
                 <div class="mt-3 space-y-2" data-testid="risk-stress-buckets">
                     {#each stressVisibleBuckets as bucket}
-                        <label class="grid grid-cols-[minmax(8rem,1fr)_7rem] items-center gap-2 text-xs text-gray-500 dark:text-gray-400" data-testid="risk-stress-bucket-{bucket}">
+                        <label class="grid grid-cols-[minmax(8rem,1fr)_7rem] items-center gap-2 text-xs text-lf-muted" data-testid="risk-stress-bucket-{bucket}">
                             <span class="truncate" title={stressBucketLabel(bucket, stressDimension)}>{stressBucketLabel(bucket, stressDimension)}</span>
                             <span class="flex items-center gap-1">
                                 <input
-                                    class="w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                                    class="w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                                     type="number"
                                     use:numericArrows
                                     min="-100"
@@ -783,29 +777,37 @@
                         </label>
                     {/each}
                 </div>
-                <label class="mt-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <label class="mt-3 flex items-center gap-2 text-xs text-lf-muted">
                     <input type="checkbox" bind:checked={stressShowAllBuckets} data-testid="risk-stress-show-all" />
                     {$t('risk.stress.showAllBuckets')}
                 </label>
             {:else}
                 <div class="mt-3 flex flex-wrap items-end gap-2">
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.stress.uniformShock')}
                         <span class="mt-1 flex items-center gap-1">
-                            <input class="w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="number" use:numericArrows min="-100" step="1" bind:value={stressPercent} data-testid="risk-stress-input" />
+                            <input
+                                class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                                type="number"
+                                use:numericArrows
+                                min="-100"
+                                step="1"
+                                bind:value={stressPercent}
+                                data-testid="risk-stress-input"
+                            />
                             <span>%</span>
                         </span>
                     </label>
                 </div>
             {/if}
             <div class="mt-3 flex items-center gap-2">
-                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runStress} disabled={stressLoading} data-testid="risk-stress-run">
+                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runStress} disabled={stressLoading} data-testid="risk-stress-run">
                     <Play size={13} />
                     {$t('risk.actions.runScenario')}
                 </button>
             </div>
             {#if stressClientError}
-                <p class="mt-2 text-xs text-amber-600 dark:text-amber-400" data-testid="risk-stress-no-assets">{$t('risk.states.noAssets')}</p>
+                <p class="mt-2 text-xs text-lf-warning" data-testid="risk-stress-no-assets">{$t('risk.states.noAssets')}</p>
             {/if}
         </section>
 
@@ -818,7 +820,7 @@
                 {#if stressOutput?.impacts?.length}
                     <div class="mt-3 overflow-x-auto">
                         <table class="w-full text-xs" data-testid="risk-stress-impacts">
-                            <thead class="text-left text-gray-400">
+                            <thead class="text-left text-lf-muted">
                                 <tr>
                                     <th class="py-1">{$t('common.asset')}</th>
                                     <th class="py-1 text-right">{$t('risk.metrics.shock')}</th>
@@ -828,8 +830,8 @@
                             </thead>
                             <tbody>
                                 {#each stressOutput.impacts as impact}
-                                    <tr class="border-t border-gray-100 dark:border-slate-700">
-                                        <td class="py-1.5 text-gray-700 dark:text-gray-200">{assetLabels.get(impact.asset_id) ?? `#${impact.asset_id}`}</td>
+                                    <tr class="border-t border-lf-subtle">
+                                        <td class="py-1.5 text-lf-secondary">{assetLabels.get(impact.asset_id) ?? `#${impact.asset_id}`}</td>
                                         <td class="py-1.5 text-right font-mono">{formatPercent(impact.shock_return, true)}</td>
                                         <td class="py-1.5 text-right font-mono">{formatPercent(singleValue(impact.contribution_return), true)}</td>
                                         <td class="py-1.5 text-right font-mono">{formatAmount(impact.impact_amount)}</td>
@@ -839,19 +841,19 @@
                         </table>
                     </div>
                     <div class="mt-4 space-y-3" data-testid="risk-stress-audit">
-                        <h4 class="text-xs font-semibold text-gray-600 dark:text-gray-300">{$t('risk.stress.auditTitle')}</h4>
+                        <h4 class="text-xs font-semibold text-lf-secondary">{$t('risk.stress.auditTitle')}</h4>
                         {#each stressOutput.impacts as impact}
-                            <div class="rounded-lg border border-gray-100 p-3 dark:border-slate-700" data-testid="risk-stress-audit-asset-{impact.asset_id}">
-                                <p class="text-xs font-medium text-gray-700 dark:text-gray-200">{assetLabels.get(impact.asset_id) ?? `#${impact.asset_id}`}</p>
+                            <div class="rounded-lg border border-lf-subtle p-3" data-testid="risk-stress-audit-asset-{impact.asset_id}">
+                                <p class="text-xs font-medium text-lf-secondary">{assetLabels.get(impact.asset_id) ?? `#${impact.asset_id}`}</p>
                                 {#if singleValue(impact.metadata_fallback)}
-                                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-400" data-testid="risk-stress-metadata-fallback-{impact.asset_id}">
+                                    <p class="mt-1 text-xs text-lf-warning" data-testid="risk-stress-metadata-fallback-{impact.asset_id}">
                                         {$t('risk.stress.missingMetadataOther')}
                                     </p>
                                 {/if}
                                 {#if (impact.bucket_audit ?? []).length > 0}
                                     <div class="mt-2 overflow-x-auto">
                                         <table class="w-full text-xs">
-                                            <thead class="text-left text-gray-400">
+                                            <thead class="text-left text-lf-muted">
                                                 <tr>
                                                     <th class="py-1">{$t('risk.stress.exposureBucket')}</th>
                                                     <th class="py-1 text-right">{$t('risk.stress.exposure')}</th>
@@ -864,13 +866,13 @@
                                             <tbody>
                                                 {#each impact.bucket_audit ?? [] as audit}
                                                     {@const appliedBucket = scalarString(audit.applied_bucket_id)}
-                                                    <tr class="border-t border-gray-100 dark:border-slate-700" data-testid="risk-stress-audit-bucket-{impact.asset_id}-{audit.exposure_bucket_id}">
-                                                        <td class="py-1.5 text-gray-700 dark:text-gray-200">{stressBucketLabel(audit.exposure_bucket_id, stressImpactDimension(impact.dimension))}</td>
+                                                    <tr class="border-t border-lf-subtle" data-testid="risk-stress-audit-bucket-{impact.asset_id}-{audit.exposure_bucket_id}">
+                                                        <td class="py-1.5 text-lf-secondary">{stressBucketLabel(audit.exposure_bucket_id, stressImpactDimension(impact.dimension))}</td>
                                                         <td class="py-1.5 text-right font-mono">{formatPercent(audit.exposure)}</td>
-                                                        <td class="py-1.5 text-gray-700 dark:text-gray-200">{appliedBucket ? stressBucketLabel(appliedBucket, stressImpactDimension(impact.dimension)) : '—'}</td>
+                                                        <td class="py-1.5 text-lf-secondary">{appliedBucket ? stressBucketLabel(appliedBucket, stressImpactDimension(impact.dimension)) : '—'}</td>
                                                         <td class="py-1.5 text-right font-mono">{formatPercent(audit.bucket_shock, true)}</td>
                                                         <td class="py-1.5 text-right font-mono">{formatPercent(audit.shock_contribution, true)}</td>
-                                                        <td class="py-1.5 text-gray-700 dark:text-gray-200">{$t(`risk.stress.rules.${audit.rule}`)}</td>
+                                                        <td class="py-1.5 text-lf-secondary">{$t(`risk.stress.rules.${audit.rule}`)}</td>
                                                     </tr>
                                                 {/each}
                                             </tbody>
@@ -885,28 +887,28 @@
         {/if}
 
         {#if scope.kind === 'asset'}
-            <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-replay-controls">
-                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{$t('risk.replay.title')}</h3>
-                <p class="text-xs text-gray-400 dark:text-gray-500">{$t('risk.replay.compositionNotice')}</p>
+            <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-replay-controls">
+                <h3 class="text-sm font-semibold text-lf-secondary">{$t('risk.replay.title')}</h3>
+                <p class="text-xs text-lf-muted">{$t('risk.replay.compositionNotice')}</p>
                 <div class="mt-3 grid gap-3 sm:grid-cols-3">
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.replay.preset')}
                         <div class="mt-1">
                             <SimpleSelect value={replayPresetId} options={historicalReplayOptions} compact testId="risk-replay-preset" onchange={selectReplayPreset} />
                         </div>
                     </label>
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.replay.start')}
-                        <input class="mt-1 block w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="date" bind:value={replayStart} data-testid="risk-replay-start" />
+                        <input class="mt-1 block w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" type="date" bind:value={replayStart} data-testid="risk-replay-start" />
                     </label>
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.replay.end')}
-                        <input class="mt-1 block w-full rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200" type="date" bind:value={replayEnd} data-testid="risk-replay-end" />
+                        <input class="mt-1 block w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" type="date" bind:value={replayEnd} data-testid="risk-replay-end" />
                     </label>
                 </div>
                 <div class="mt-3 flex flex-wrap items-end gap-3">
                     <div>
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.replay.proxy')}</span>
+                        <span class="text-xs text-lf-muted">{$t('risk.replay.proxy')}</span>
                         <SignalAssetParamControl
                             value={replayProxyAssetId}
                             excludeAssetIds={[scope.asset_id]}
@@ -919,7 +921,7 @@
                             }}
                         />
                     </div>
-                    <label class="flex items-center gap-2 pb-1 text-xs text-gray-500 dark:text-gray-400">
+                    <label class="flex items-center gap-2 pb-1 text-xs text-lf-muted">
                         <input
                             type="checkbox"
                             checked={replayExcludeAsset}
@@ -933,7 +935,7 @@
                         />
                         {$t('risk.replay.exclude')}
                     </label>
-                    <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runReplay} disabled={replayLoading || !replayStart || !replayEnd} data-testid="risk-replay-run">
+                    <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runReplay} disabled={replayLoading || !replayStart || !replayEnd} data-testid="risk-replay-run">
                         <Play size={13} />
                         {$t('risk.actions.runReplay')}
                     </button>
@@ -947,7 +949,7 @@
                         <KpiCard label={$t('risk.metrics.impactAmount')} value={formatAmount(replayOutput?.impact_amount)} />
                     </div>
                     {#if replayAudit}
-                        <div class="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300" data-testid="risk-replay-audit">
+                        <div class="mt-3 space-y-2 text-xs text-lf-secondary" data-testid="risk-replay-audit">
                             <p>{$t('risk.replay.proxyCount')}: <strong>{replayAudit.proxy_count}</strong></p>
                             <p>{$t('risk.replay.excludedCount')}: <strong>{replayAudit.excluded_count}</strong></p>
                             <p data-testid="risk-replay-audit-missing-history-policy">
@@ -980,11 +982,11 @@
     {/if}
 
     {#if supportsSimulation}
-        <section class="rounded-xl border border-gray-100 dark:border-slate-700 bg-white dark:bg-slate-800 p-4" data-testid="risk-simulation-controls">
-            <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{analyticTitle('simulation', 'risk.analytics.simulation.name')}</h3>
-            <p class="text-xs text-gray-400 dark:text-gray-500">{analyticDescription('simulation')}</p>
+        <section class="rounded-xl border border-lf-subtle bg-lf-card p-4" data-testid="risk-simulation-controls">
+            <h3 class="text-sm font-semibold text-lf-secondary">{analyticTitle('simulation', 'risk.analytics.simulation.name')}</h3>
+            <p class="text-xs text-lf-muted">{analyticDescription('simulation')}</p>
             <div class="mt-3 flex flex-wrap items-end gap-3">
-                <label class="text-xs text-gray-500 dark:text-gray-400">
+                <label class="text-xs text-lf-muted">
                     {$t('risk.params.sampling')}
                     <div class="mt-1 w-28">
                         <SimpleSelect
@@ -998,10 +1000,10 @@
                         />
                     </div>
                 </label>
-                <label class="text-xs text-gray-500 dark:text-gray-400">
+                <label class="text-xs text-lf-muted">
                     {$t('risk.params.horizonDays')}
                     <input
-                        class="mt-1 block w-24 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                        class="mt-1 block w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                         type="number"
                         use:numericArrows
                         min="1"
@@ -1011,17 +1013,17 @@
                         data-testid="risk-simulation-horizon"
                     />
                 </label>
-                <label class="text-xs text-gray-500 dark:text-gray-400">
+                <label class="text-xs text-lf-muted">
                     {$t('risk.params.paths')}
                     <div class="mt-1 w-28">
                         <SimpleSelect value={String(simulationPaths)} options={pathOptions} compact testId="risk-simulation-paths" onchange={(value) => (simulationPaths = Number(value))} />
                     </div>
                 </label>
                 {#if simulationSampling === 'mc'}
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.params.randomSeed')}
                         <input
-                            class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                            class="mt-1 block w-28 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                             type="number"
                             use:numericArrows
                             min="0"
@@ -1031,10 +1033,10 @@
                         />
                     </label>
                 {:else}
-                    <label class="text-xs text-gray-500 dark:text-gray-400">
+                    <label class="text-xs text-lf-muted">
                         {$t('risk.params.sobolStartIndex')}
                         <input
-                            class="mt-1 block w-28 rounded border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-2 py-1 text-sm text-gray-700 dark:text-gray-200"
+                            class="mt-1 block w-28 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
                             type="number"
                             use:numericArrows
                             min="0"
@@ -1044,7 +1046,7 @@
                         />
                     </label>
                 {/if}
-                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runSimulation} disabled={simulationLoading} data-testid="risk-simulation-run">
+                <button class="flex items-center gap-1.5 rounded-lg bg-lf-action px-3 py-1.5 text-xs font-medium text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={runSimulation} disabled={simulationLoading} data-testid="risk-simulation-run">
                     <Play size={13} />
                     {$t('risk.actions.simulate')}
                 </button>
@@ -1076,7 +1078,7 @@
                     </div>
                 {/if}
                 {#if simulationOutput}
-                    <p class="mt-2 text-xs text-gray-400 dark:text-gray-500" data-testid="risk-simulation-assumptions">
+                    <p class="mt-2 text-xs text-lf-muted" data-testid="risk-simulation-assumptions">
                         {$t('risk.simulation.assumptions', {values: {paths: simulationOutput.path_count, days: simulationOutput.horizon_days}})}
                     </p>
                 {/if}

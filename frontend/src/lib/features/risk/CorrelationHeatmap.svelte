@@ -38,6 +38,7 @@
      */
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_FONT_FAMILY, CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
@@ -69,6 +70,7 @@
         type ExposureGroup,
         type HeatmapPoint,
     } from './correlationHelpers';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -126,9 +128,9 @@
         wrapperWidth = Math.floor(entry?.contentRect.width ?? wrapper?.clientWidth ?? 0);
     });
 
-    /** ECharts' own axis-label font, set explicitly so that what is measured here is what gets drawn. */
+    /** The charts' own axis-label font (K-13), set explicitly so that what is measured here is what gets drawn. */
     const AXIS_FONT_SIZE = 12;
-    const AXIS_FONT_FAMILY = 'sans-serif';
+    const AXIS_FONT_FAMILY = CHART_FONT_FAMILY;
     const AXIS_LINE_HEIGHT = 14;
     /** Row names wrap onto a second line past this width; rotated column names are cut with an ellipsis past theirs. */
     const Y_LABEL_MAX = 200;
@@ -347,11 +349,6 @@
         if (container) void tick().then(render);
     });
 
-    /** Asset names are user data and the tooltip is raw HTML. */
-    function escapeHtml(value: string): string {
-        return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-    }
-
     /**
      * One asset in the tooltip: its name, then one line for its sectors and one
      * for its countries, whatever the ordering. A full list made the tooltip tall
@@ -455,7 +452,7 @@
             return;
         }
         if (!chart) {
-            chart = echarts.init(container);
+            chart = echarts.init(container, CHART_INIT_THEME);
             attachChartReady(chart, container, 'correlation-heatmap');
             scheduleFirstRenderStabilityFix(chart, container);
             // The other direction of the link: a cell clicked in the matrix selects its ranking entry, if it has one.
@@ -560,11 +557,11 @@
 
 <div class="space-y-3">
     <div class="flex items-center justify-end">
-        <div class="inline-flex max-w-full overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-600" role="group" aria-label={$t('risk.assetSet.ordering.label')}>
+        <div class="inline-flex max-w-full overflow-x-auto rounded-lg border border-lf-subtle" role="group" aria-label={$t('risk.assetSet.ordering.label')}>
             {#each modes as mode (mode)}
                 <button
                     type="button"
-                    class="shrink-0 px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors {ordering === mode ? 'bg-libre-green text-white' : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-300 dark:hover:bg-slate-700'}"
+                    class="shrink-0 px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors {ordering === mode ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-hover'}"
                     aria-pressed={ordering === mode}
                     onclick={() => (orderingOverride = mode)}
                     data-testid="risk-correlation-ordering-{mode}"
@@ -589,14 +586,14 @@
                                 <span class="rounded-full px-2 py-0.5">{group.icon} {group.name} <span class="font-semibold">· {group.count}</span></span>
                             {/each}
                         </div>
-                        <span class="shrink-0 font-semibold text-slate-600 dark:text-slate-300 {ordering === row.dimension ? 'underline decoration-libre-green decoration-2 underline-offset-2' : ''}">{row.label}</span>
+                        <span class="shrink-0 font-semibold text-lf-secondary {ordering === row.dimension ? 'underline decoration-lf-link decoration-2 underline-offset-2' : ''}">{row.label}</span>
                         {#each row.summary as group, index (index)}
                             {#if compactRows[row.dimension]}
                                 <Tooltip text={group.name} position="top">
-                                    <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 whitespace-nowrap text-slate-600 dark:bg-slate-700 dark:text-slate-300">{group.icon} <span class="font-semibold tabular-nums">{group.count}</span></span>
+                                    <span class="shrink-0 rounded-full bg-lf-panel px-2 py-0.5 whitespace-nowrap text-lf-secondary">{group.icon} <span class="font-semibold tabular-nums">{group.count}</span></span>
                                 </Tooltip>
                             {:else}
-                                <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 whitespace-nowrap text-slate-600 dark:bg-slate-700 dark:text-slate-300">{group.icon} {group.name} <span class="font-semibold tabular-nums">· {group.count}</span></span>
+                                <span class="shrink-0 rounded-full bg-lf-panel px-2 py-0.5 whitespace-nowrap text-lf-secondary">{group.icon} {group.name} <span class="font-semibold tabular-nums">· {group.count}</span></span>
                             {/if}
                         {/each}
                     </div>
@@ -617,19 +614,19 @@
                     <div bind:this={container} style:width="{layout.width}px" style:height="{layout.height}px"></div>
                     <!-- Inside the scrolling box and under the cells, not under the card: it starts
                          where the first column starts and moves with the matrix when the card scrolls. -->
-                    <div class="pb-2 text-[11px] leading-tight text-slate-500 dark:text-slate-400" style:margin-left="{layout.grid.left}px" style:width="{legendWidth}px" data-testid="risk-correlation-legend">
-                        <div class="h-2 rounded-full border border-slate-200 dark:border-slate-600" style:background="linear-gradient(to right, {scale[0]}, {scale[1]}, {scale[2]})"></div>
+                    <div class="pb-2 text-[11px] leading-tight text-lf-muted" style:margin-left="{layout.grid.left}px" style:width="{legendWidth}px" data-testid="risk-correlation-legend">
+                        <div class="h-2 rounded-full border border-lf-subtle" style:background="linear-gradient(to right, {scale[0]}, {scale[1]}, {scale[2]})"></div>
                         <div class="mt-1 grid grid-cols-3 gap-2">
                             <div>
-                                <div class="font-semibold text-slate-700 dark:text-slate-200">−1 · {$t('risk.assetSet.legend.negative')}</div>
+                                <div class="font-semibold text-lf-secondary">−1 · {$t('risk.assetSet.legend.negative')}</div>
                                 <div>{$t('risk.assetSet.band.inverse')}</div>
                             </div>
                             <div class="text-center">
-                                <div class="font-semibold text-slate-700 dark:text-slate-200">0 · {$t('risk.assetSet.legend.none')}</div>
+                                <div class="font-semibold text-lf-secondary">0 · {$t('risk.assetSet.legend.none')}</div>
                                 <div>{$t('risk.assetSet.band.low')}</div>
                             </div>
                             <div class="text-right">
-                                <div class="font-semibold text-slate-700 dark:text-slate-200">+1 · {$t('risk.assetSet.legend.positive')}</div>
+                                <div class="font-semibold text-lf-secondary">+1 · {$t('risk.assetSet.legend.positive')}</div>
                                 <div>{$t('risk.assetSet.band.high')}</div>
                             </div>
                         </div>
@@ -637,7 +634,7 @@
                 </div>
                 {#if overflowing}
                     <!-- A fade on the right edge: the matrix goes on, and it scrolls. -->
-                    <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-linear-to-l from-white dark:from-slate-800"></div>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-linear-to-l from-lf-card"></div>
                 {/if}
             </div>
         </div>
