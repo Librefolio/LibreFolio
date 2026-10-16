@@ -31,6 +31,13 @@ from backend.app.db.real_decimal import REAL_SIGNIFICANT_DIGITS, RealDecimal
 #: The codes of ``decimal_limit_issue``: the same values as ``TXValidationCode`` (schemas/transactions/batch.py).
 DECIMAL_PLACES_EXCEEDED = "decimalPlacesExceeded"
 SIGNIFICANT_DIGITS_EXCEEDED = "significantDigitsExceeded"
+INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
+
+#: The digits before the decimal point of a quantity and of a transaction amount (night decision N63, 17/10/2026): 15,
+#: as many as a REAL gives back, not the 12 their declarations leave (``RealDecimal(22, 10)``, ``Numeric(18, 6)``). A
+#: thousand billion VND or IDR is a real amount, and release 1.2, which never enforced the declarations on SQLite, may
+#: hold such data already. Every other column keeps the digits it declares (``max_integer_digits``).
+_INTEGER_DIGITS_BY_COLUMN = {("transactions", "quantity"): REAL_SIGNIFICANT_DIGITS, ("transactions", "amount"): REAL_SIGNIFICANT_DIGITS}
 
 _WIDE_CONTEXT = Context(prec=60)
 _REAL_DOWN = Context(prec=REAL_SIGNIFICANT_DIGITS, rounding=ROUND_DOWN)
@@ -137,7 +144,10 @@ def round_computed_value(value: Decimal, model: Type[SQLModel], column_name: str
     """A value that was COMPUTED (a quotient, a product), rounded to what the column keeps: C-97, decision D6.
 
     ``ROUND_HALF_EVEN`` to the column scale and, on a ``RealDecimal`` column, to ``REAL_SIGNIFICANT_DIGITS``
-    significant digits: the result always passes ``decimal_limit_issue``. For the values a plugin derives, such as a
+    significant digits: the result passes the decimal places of ``decimal_limit_issue`` and, on a ``RealDecimal``
+    column, its significant digits too (on a ``Numeric`` column, such as an amount, ``1234567890.1234567`` becomes
+    ``1234567890.123457``, still 16 significant digits); never its digits before the decimal point (W-B58), which no
+    rounding can bring back. For the values a plugin derives, such as a
     per-unit cost from a total and a quantity (1000 / 3 → 333.333333333333). Never for a value the user typed or a
     file holds: over the limit those are refused, never rounded (decision D2).
 
@@ -154,22 +164,79 @@ def round_computed_value(value: Decimal, model: Type[SQLModel], column_name: str
     return rounded
 
 
+def _digit_counts(value: Decimal) -> Optional[Tuple[int, int, int]]:
+    """``(decimal places, significant digits, integer digits)`` of ``value``, trailing zeros not counted; None when it is
+    not finite. Read from its digits, never through a context, so nothing rounds, overflows or underflows:
+    ``1E+1000000`` has 1 000 001 integer digits, ``1E-2000000`` 2 000 000 decimal places (W-B58).
+    """
+    if not value.is_finite():
+        return None
+    _sign, digits, exponent = value.as_tuple()
+    kept = len(digits)
+    while kept > 1 and digits[kept - 1] == 0:
+        kept -= 1
+    exponent += len(digits) - kept
+    if digits[:kept] == (0,):
+        return 0, 1, 0
+    return max(0, -exponent), kept, max(0, kept + exponent)
+
+
+def max_integer_digits(model: Type[SQLModel], column_name: str) -> int:
+    """The digits before the decimal point a value of the column may have (W-B58): 15 for a quantity and a transaction
+    amount (decision N63), otherwise what the column declares, precision − scale (12 for a price, a per-unit cost basis
+    and an event value, 24 for a volume).
+    """
+    precision, scale = get_model_column_precision(model, column_name)
+    return _INTEGER_DIGITS_BY_COLUMN.get((model.__tablename__, column_name), precision - scale)
+
+
+def integer_digits_issue(value: Decimal, model: Type[SQLModel], column_name: str) -> Optional[Tuple[str, int]]:
+    """``(INTEGER_DIGITS_EXCEEDED, max_integer_digits)`` when ``value`` is not finite or has more digits before the
+    decimal point than the column takes, otherwise None: the size limit alone (W-B58). For a value whose decimals are
+    not refused (a volume, a count) and for a provider's value before it is truncated (``storable_value``).
+    """
+    maximum = max_integer_digits(model, column_name)
+    counts = _digit_counts(value)
+    if counts is None or counts[2] > maximum:
+        return INTEGER_DIGITS_EXCEEDED, maximum
+    return None
+
+
 def decimal_limit_issue(value: Decimal, model: Type[SQLModel], column_name: str) -> Optional[Tuple[str, int]]:
     """What keeps ``value`` out of the column, or None: the input limit of C-97 (issue #43), never a rounding.
 
     ``(DECIMAL_PLACES_EXCEEDED, scale)`` when its decimals, trailing zeros not counted, exceed the column scale (a
     quantity keeps 10, a price and a per-unit cost basis 12, an amount 6); otherwise ``(SIGNIFICANT_DIGITS_EXCEEDED, 15)`` when it has more
-    significant digits than a REAL gives back (``REAL_SIGNIFICANT_DIGITS``, decision D1). The scale is the model's.
+    significant digits than a REAL gives back (``REAL_SIGNIFICANT_DIGITS``, decision D1); otherwise
+    ``(INTEGER_DIGITS_EXCEEDED, max_integer_digits)`` when it has more digits before the decimal point than the column
+    takes (15 for a quantity and an amount, decision N63; the declared ones elsewhere), or is not finite (W-B58:
+    ``1E+60``, one digit and no decimals, passed, and past 1.8e308 a double is infinite). The order keeps the answers of
+    C-97a: a value over two limits names the first. The scale is the model's; the digits are counted without a context
+    (``_digit_counts``), so ``1E+1000000`` and ``1E-2000000`` are refused, never an overflow or a zero.
     """
     _precision, scale = get_model_column_precision(model, column_name)
-    _sign, digits, exponent = value.normalize(_WIDE_CONTEXT).as_tuple()
-    if not isinstance(exponent, int):
-        return None
-    if -exponent > scale:
+    maximum = max_integer_digits(model, column_name)
+    counts = _digit_counts(value)
+    if counts is None:
+        return INTEGER_DIGITS_EXCEEDED, maximum
+    places, significant, integer = counts
+    if places > scale:
         return DECIMAL_PLACES_EXCEEDED, scale
-    if len(digits) > REAL_SIGNIFICANT_DIGITS:
+    if significant > REAL_SIGNIFICANT_DIGITS:
         return SIGNIFICANT_DIGITS_EXCEEDED, REAL_SIGNIFICANT_DIGITS
+    if integer > maximum:
+        return INTEGER_DIGITS_EXCEEDED, maximum
     return None
+
+
+def storable_value(value: Decimal, model: Type[SQLModel], column_name: str) -> Optional[Decimal]:
+    """A provider's value as the column keeps it (``truncate_to_db_precision``), or None when no truncation makes it fit:
+    not finite, or more digits before the decimal point than the column takes (W-B58). Never raises; the caller skips a
+    None and says so. Within those digits the truncation needs at most 15 + 12 digits, far from its context's 60.
+    """
+    if integer_digits_issue(value, model, column_name) is not None:
+        return None
+    return truncate_to_db_precision(value, model, column_name)
 
 
 # ============================================================================
@@ -180,6 +247,17 @@ def decimal_limit_issue(value: Decimal, model: Type[SQLModel], column_name: str)
 def truncate_priceHistory(value: Decimal, column_name: str = "close") -> Decimal:
     """Truncate value with the precision used in DB price_history.<column_name>."""
     return truncate_to_db_precision(value, PriceHistory, column_name)
+
+
+def storable_price(value: Decimal, column_name: str = "close") -> Optional[Decimal]:
+    """A provider's price as ``price_history.<column_name>`` keeps it (``truncate_priceHistory``), or None when it cannot:
+    not finite, more integer digits than the column declares, or — a close — above zero and truncated to zero (``1E-13``
+    at 12 decimal places: a close is never 0, and returns divide by it). W-B58.
+    """
+    stored = storable_value(value, PriceHistory, column_name)
+    if stored is None or (column_name == "close" and stored == 0 and value != 0):
+        return None
+    return stored
 
 
 def truncate_fx_rate(value: Decimal) -> Decimal:
