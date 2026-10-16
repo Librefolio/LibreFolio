@@ -171,22 +171,22 @@
 </script>
 
 <div class="space-y-4" data-testid="risk-asset-set-l3" data-benchmark={benchmarkApplies ? 'true' : 'false'}>
-    <p class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.assetSet.levels.l3.description')}</p>
+    <p class="text-xs text-lf-muted">{$t('risk.assetSet.levels.l3.description')}</p>
 
     {#if failed}
         <div class="py-4 text-center" data-testid="risk-asset-set-l3-error">
-            <p class="text-sm text-red-600 dark:text-red-400">{$t('risk.states.loadFailed')}</p>
-            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l3-retry">{$t('common.retry')}</button>
+            <p class="text-sm text-lf-danger">{$t('risk.states.loadFailed')}</p>
+            <button type="button" class="mt-2 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => onretry?.()} data-testid="risk-asset-set-l3-retry">{$t('common.retry')}</button>
         </div>
     {:else if loading && !hasAnyFigure}
-        <div class="h-64 animate-pulse rounded-lg bg-gray-100 dark:bg-slate-700" data-testid="risk-asset-set-l3-loading"></div>
+        <div class="h-64 animate-pulse rounded-lg bg-lf-panel" data-testid="risk-asset-set-l3-loading"></div>
     {:else if discarded && !hasAnyFigure}
         <!-- The frame carries the sentence (`answer_discarded`); the body carries the cure. -->
         <div class="py-4 text-center" data-testid="risk-asset-set-l3-discarded">
-            <button type="button" class="mt-2 rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-700" onclick={() => onretry?.()} data-testid="risk-asset-set-l3-retry">{$t('common.retry')}</button>
+            <button type="button" class="mt-2 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={() => onretry?.()} data-testid="risk-asset-set-l3-retry">{$t('common.retry')}</button>
         </div>
     {:else if assetRows.length === 0}
-        <p class="py-4 text-center text-sm text-gray-400 dark:text-gray-500" data-testid="risk-asset-set-l3-empty">{$t('risk.states.empty')}</p>
+        <p class="py-4 text-center text-sm text-lf-muted" data-testid="risk-asset-set-l3-empty">{$t('risk.states.empty')}</p>
     {:else}
         <!-- The table, the chart and their notes are the shared level's (`RiskReturnLevel`):
              the data first, then its chart (the developer's review, 30/09). The notes are the
@@ -214,7 +214,7 @@
                     <!-- Two lines (the developer's review, round 4): the window, then what is annualised.
                          Only volatility and the average return are; Sharpe and Sortino derive from them,
                          and beta and correlation have no unit of time — the line claims no more. -->
-                    <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-asset-set-l3-period" data-start={calculationWindow.start} data-end={calculationWindow.end} data-days={calculationWindow.days} data-narrowed={String(calculationWindow.narrowed)}>
+                    <p class="text-xs text-lf-muted" data-testid="risk-asset-set-l3-period" data-start={calculationWindow.start} data-end={calculationWindow.end} data-days={calculationWindow.days} data-narrowed={String(calculationWindow.narrowed)}>
                         <span class="block" data-testid="risk-asset-set-l3-period-window">{periodWindowText}</span><span class="block" data-testid="risk-asset-set-l3-period-annualized">{$t('risk.assetSet.levels.l3.period.annualized')}</span>
                     </p>
                 {/if}

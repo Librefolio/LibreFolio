@@ -32,7 +32,7 @@
         testid?: string;
     }
 
-    let {label, value, numericValue, formatValue, tooltip = '', tooltipHtml = '', barPct, barColor = 'bg-slate-400 dark:bg-slate-500', valueColor = 'text-gray-700 dark:text-gray-300', marker, markerTooltip = '', testid}: Props = $props();
+    let {label, value, numericValue, formatValue, tooltip = '', tooltipHtml = '', barPct, barColor = 'bg-lf-input', valueColor = 'text-lf-secondary', marker, markerTooltip = '', testid}: Props = $props();
 
     /**
      * Clamp to 0..100, and send anything non-finite to 0.
@@ -61,14 +61,14 @@
     <div class="flex items-center justify-between gap-2 text-xs">
         {#if tooltipHtml}
             <Tooltip html={tooltipHtml} position="top" wrapperClass="min-w-0">
-                <span class="block truncate min-w-0 cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
+                <span class="block truncate min-w-0 cursor-help border-b border-dotted border-lf-input text-lf-muted" title={label}>{label}</span>
             </Tooltip>
         {:else if tooltip}
             <Tooltip text={tooltip} position="top" wrapperClass="min-w-0">
-                <span class="block truncate min-w-0 cursor-help border-b border-dotted border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
+                <span class="block truncate min-w-0 cursor-help border-b border-dotted border-lf-input text-lf-muted" title={label}>{label}</span>
             </Tooltip>
         {:else}
-            <span class="block truncate min-w-0 text-gray-500 dark:text-gray-400" title={label}>{label}</span>
+            <span class="block truncate min-w-0 text-lf-muted" title={label}>{label}</span>
         {/if}
         <span class="shrink-0 whitespace-nowrap font-medium tabular-nums transition-colors duration-300 {valueColor}" data-testid={testid ? `${testid}-value` : undefined}>
             {#if numericValue !== undefined && formatValue}
@@ -78,14 +78,14 @@
             {/if}
         </span>
     </div>
-    <div class="relative w-full h-1.5 bg-gray-100 dark:bg-slate-700 rounded-full">
+    <div class="relative w-full h-1.5 bg-lf-neutral rounded-full">
         <div class="h-full rounded-full transition-all duration-700 ease-out {barColor}" style="width: {clampedBar}%"></div>
     </div>
     {#if clampedMarker != null && clampedMarker > 0 && markerTooltip}
         <div class="relative w-full h-0">
             <div class="absolute transition-[left] duration-700 ease-out" style="left: {clampedMarker}%; transform: translateX(-50%); top: -15px;">
                 <Tooltip text={markerTooltip} position="top">
-                    <div class="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[5px] border-l-transparent border-r-transparent border-b-gray-600 dark:border-b-gray-300 cursor-help"></div>
+                    <div class="w-0 h-0 border-l-[4px] border-r-[4px] border-b-[5px] border-l-transparent border-r-transparent border-b-lf-secondary cursor-help"></div>
                 </Tooltip>
             </div>
         </div>

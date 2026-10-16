@@ -45,17 +45,17 @@
 </script>
 
 <ModalBase maxWidth="2xl" onRequestClose={handleRequestClose} {open} testId="broker-sharing-modal" zIndex={50}>
-    <div class="bg-white dark:bg-slate-800 rounded-xl w-full flex flex-col max-h-[85vh]">
+    <div class="bg-lf-card rounded-xl w-full flex flex-col max-h-[85vh]">
         <!-- Header -->
-        <div class="p-4 border-b border-gray-200 dark:border-slate-700 shrink-0">
+        <div class="p-4 border-b border-lf-subtle shrink-0">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
-                    <Users class="text-libre-green" size={20} />
-                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                    <Users class="text-lf-link" size={20} />
+                    <h2 class="text-lg font-semibold text-lf-primary">
                         {$_('brokers.sharing.title')} — {brokerName}
                     </h2>
                 </div>
-                <button class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors" on:click={handleRequestClose} type="button">
+                <button class="p-1.5 text-lf-muted hover:text-lf-secondary rounded-lg transition-colors" on:click={handleRequestClose} type="button">
                     <X size={20} />
                 </button>
             </div>

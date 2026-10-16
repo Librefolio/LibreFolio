@@ -1235,7 +1235,7 @@
     let busy = $derived(loading || assetEditLoading || assets.some((a) => a.loadingPrices));
 </script>
 
-<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-testid="assets-page">
+<div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-testid="assets-page">
     <!-- Header: Title left, ViewModeToggle + Add Asset right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
@@ -1244,15 +1244,15 @@
         <div use:guideAnchor={'asset.page.overview'} data-testid="asset-page-overview-guide-target">
             <!-- The pill sits beside the heading, not inside it: a status is not part of the title. -->
             <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
                     {$t('common.assets')}
                     {#if assets.length > 0}
-                        <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{assets.length}</span>
+                        <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{assets.length}</span>
                     {/if}
                 </h2>
                 <LiveUpdatesStatus state={liveUpdatesState} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">{$t('assets.subtitle')}</p>
+            <p class="text-lf-muted text-sm">{$t('assets.subtitle')}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedAssetRows.length > 0}
@@ -1274,13 +1274,13 @@
                     {#each [...filterCurrencies] as currency}
                         <span
                             class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium
-                                     bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300
-                                     border border-amber-200 dark:border-amber-700 rounded-full"
+                                     bg-lf-warning-soft text-lf-warning-on-soft
+                                     border border-lf-warning-line rounded-full"
                         >
                             {getCurrencyInfo(currency).flag_emoji}
                             {currency}
                             <button
-                                class="hover:text-red-500 transition-colors"
+                                class="hover:text-lf-danger transition-colors"
                                 onclick={(e) => {
                                     e.stopPropagation();
                                     filterCurrencies = new Set([...filterCurrencies].filter((c) => c !== currency));
@@ -1291,7 +1291,7 @@
                 </div>
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="assetsViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="assets-add-button" use:guideAnchor={'asset.page.add'} onclick={handleAddAsset}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors whitespace-nowrap" data-testid="assets-add-button" use:guideAnchor={'asset.page.add'} onclick={handleAddAsset}>
                 <Plus size={16} />
                 {$t('assets.modal.title')}
             </button>
@@ -1350,9 +1350,9 @@
                         <!-- Search — Round 14: min-w bumped (was a flat w-44/176px that felt too
                              cramped) so it stays comfortably readable even under pressure. -->
                         <div class="relative {filterWidthClass}">
-                            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 text-lf-muted" size={14} />
                             <input
-                                class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green"
+                                class="w-full pl-8 pr-3 py-1.5 text-sm border border-lf-input rounded-lg bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus focus:border-lf-focus"
                                 data-testid="assets-search-input"
                                 oninput={handleSearchInput}
                                 placeholder={$t('assets.searchPlaceholder')}
@@ -1369,11 +1369,11 @@
                              lines up as a column with Row 2 in every language. On phones
                              (oneColumn) it shares the row with Search and keeps that column only
                              while its labels fit half the row (lot 51, R-1). -->
-                        <div class="flex {pillWidthClass} rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden" data-testid="assets-active-filter">
+                        <div class="flex {pillWidthClass} rounded-lg border border-lf-subtle overflow-hidden" data-testid="assets-active-filter">
                             <button
                                 type="button"
-                                class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-600 transition-colors whitespace-nowrap
-                                       {filterShowActive ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                                class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-lf-subtle transition-colors whitespace-nowrap
+                                       {filterShowActive ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                                 data-testid="assets-active-toggle"
                                 aria-pressed={filterShowActive}
                                 onclick={() => (filterShowActive = !filterShowActive)}
@@ -1383,7 +1383,7 @@
                             <button
                                 type="button"
                                 class="flex-1 px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap
-                                       {filterShowInactive ? 'bg-amber-500 text-white' : 'bg-white dark:bg-slate-700 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                                       {filterShowInactive ? 'bg-lf-warning text-lf-on-status' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                                 data-testid="assets-inactive-toggle"
                                 aria-pressed={filterShowInactive}
                                 onclick={() => (filterShowInactive = !filterShowInactive)}
@@ -1428,9 +1428,7 @@
                             <button
                                 bind:this={typeFilterTriggerEl}
                                 class="flex items-center justify-between gap-1.5 w-full px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors min-w-0
-                                       {filterTypes.size > 0
-                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700'
-                                    : 'bg-white dark:bg-slate-700 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600'}"
+                                       {filterTypes.size > 0 ? 'bg-lf-info-soft text-lf-info-on-soft border-lf-info-line' : 'bg-lf-card text-lf-secondary border-lf-subtle hover:bg-lf-hover'}"
                                 data-testid="assets-type-filter"
                                 onclick={toggleTypeFilterDropdown}
                             >
@@ -1450,7 +1448,7 @@
                                 <!-- svelte-ignore a11y_interactive_supports_focus -->
                                 <div
                                     bind:this={typeFilterPanelEl}
-                                    class="fixed z-50 w-56 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg overflow-hidden"
+                                    class="fixed z-50 w-56 bg-lf-card border border-lf-raised rounded-lg shadow-lg shadow-lf-shadow overflow-hidden"
                                     style:left={`${typeFilterDropdownPosition.left}px`}
                                     style:top={`${typeFilterDropdownPosition.top}px`}
                                     onclick={(e) => e.stopPropagation()}
@@ -1462,24 +1460,24 @@
                                     data-type-filter-panel
                                 >
                                     <!-- Select All / Clear All buttons -->
-                                    <div class="flex gap-2 px-2.5 py-2 border-b border-gray-100 dark:border-slate-700">
+                                    <div class="flex gap-2 px-2.5 py-2 border-b border-lf-subtle">
                                         <button
                                             type="button"
-                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral hover:text-lf-primary transition-colors"
                                             onclick={() => {
                                                 filterTypes = new Set(availableTypes);
                                             }}>{$t('common.selectAll')}</button
                                         >
                                         <button
                                             type="button"
-                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-gray-200 dark:border-slate-600 rounded bg-gray-50 dark:bg-slate-900 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+                                            class="flex-1 px-2 py-1 text-[11px] font-medium border border-lf-subtle rounded bg-lf-panel text-lf-secondary hover:bg-lf-neutral hover:text-lf-primary transition-colors"
                                             onclick={() => {
                                                 filterTypes = new Set();
                                             }}>{$t('common.clearAll')}</button
                                         >
                                     </div>
                                     <!-- Option list -->
-                                    <div class="max-h-52 overflow-y-auto border border-gray-100 dark:border-slate-700 mx-2.5 my-2 rounded-md">
+                                    <div class="max-h-52 overflow-y-auto border border-lf-subtle mx-2.5 my-2 rounded-md">
                                         {#each availableTypes as typeVal}
                                             <!-- The per-type testid is the only handle a test has on these rows: the
                                                  row carries a shared icon (the six ETF subtypes all draw etf.png by
@@ -1488,7 +1486,7 @@
                                             <button
                                                 type="button"
                                                 data-testid="assets-type-filter-option-{typeVal}"
-                                                class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+                                                class="flex items-center gap-2 w-full px-2 py-1.5 text-left text-[13px] text-lf-secondary hover:bg-lf-hover transition-colors cursor-pointer"
                                                 onclick={() => {
                                                     const next = new Set(filterTypes);
                                                     if (next.has(typeVal)) next.delete(typeVal);
@@ -1498,7 +1496,7 @@
                                             >
                                                 <span
                                                     class="flex items-center justify-center w-4 h-4 rounded-sm border transition-colors shrink-0
-                                                             {filterTypes.has(typeVal) ? 'bg-libre-green border-libre-green text-white dark:bg-emerald-400 dark:border-emerald-400 dark:text-slate-900' : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-500'}"
+                                                             {filterTypes.has(typeVal) ? 'bg-lf-checked border-lf-checked text-lf-on-checked' : 'bg-lf-field border-lf-input'}"
                                                 >
                                                     {#if filterTypes.has(typeVal)}
                                                         <Check size={12} />
@@ -1506,7 +1504,7 @@
                                                 </span>
                                                 <img src={getAssetTypeIconUrl(typeVal)} alt="" class="w-4 h-4 object-contain shrink-0" />
                                                 <span class="flex-1">{$t(`assets.types.${typeVal}`) || typeVal}</span>
-                                                <span class="text-[10px] font-mono text-gray-400 dark:text-gray-500 tabular-nums">{typeCounts[typeVal] ?? 0}</span>
+                                                <span class="text-[10px] font-mono text-lf-muted tabular-nums">{typeCounts[typeVal] ?? 0}</span>
                                             </button>
                                         {/each}
                                     </div>
@@ -1516,7 +1514,7 @@
 
                         <!-- Reset filters -->
                         {#if hasActiveFilters}
-                            <button class="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400 transition-colors" onclick={clearFilters} title={$t('fx.filter.resetFilters')}>
+                            <button class="p-1.5 rounded-md hover:bg-lf-hover text-lf-muted hover:text-lf-danger transition-colors" onclick={clearFilters} title={$t('fx.filter.resetFilters')}>
                                 <X size={16} />
                             </button>
                         {/if}
@@ -1534,7 +1532,7 @@
                      the page has one sync button instead of two side by side. -->
                 <Tooltip text={$t('risk.assetSet.syncSelectionHint')} position="bottom" interactiveChild>
                     <button
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-slate-700"
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50 disabled:hover:bg-lf-card"
                         onclick={(event) => {
                             // Not up to the Tooltip wrapper: its click pins the hint for thirty
                             // seconds, which would float over the modal this button opens.
@@ -1551,7 +1549,7 @@
                 </Tooltip>
                 <Tooltip text={$t('risk.assetSet.reloadHint')} position="bottom" interactiveChild>
                     <button
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:hover:bg-white dark:disabled:hover:bg-slate-700"
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50 disabled:hover:bg-lf-card"
                         onclick={(event) => {
                             event.stopPropagation();
                             labPanel?.reload();
@@ -1568,10 +1566,10 @@
                 {#if viewMode === 'list'}
                     <ColumnVisibilityToggle tableRef={assetTableRefs['own']?.getTableRef()} additionalTableRefs={[assetTableRefs['others']?.getTableRef(), assetTableRefs['analysis']?.getTableRef()].filter((r) => r != null)} showLabel={showActionLabels} />
                 {:else}
-                    <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                    <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-absolute"
                             onclick={() => {
                                 globalViewMode = 'absolute';
@@ -1580,7 +1578,7 @@
                         </button>
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-percentage"
                             onclick={() => {
                                 globalViewMode = 'percentage';
@@ -1590,17 +1588,13 @@
                     </div>
                 {/if}
                 <!-- Settings -->
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    onclick={handleGlobalSettings}
-                    data-testid="assets-chart-settings-button"
-                >
+                <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={handleGlobalSettings} data-testid="assets-chart-settings-button">
                     <Settings size={14} />
                     {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
                 </button>
                 <!-- Sync All -->
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                     onclick={handleSyncAllAssets}
                     data-testid="assets-sync-all-button"
                     use:guideAnchor={'asset.page.sync'}
@@ -1610,7 +1604,7 @@
                 </button>
                 <!-- Refresh All -->
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
+                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                     onclick={() => {
                         for (const a of assets) invalidateAssetPriceStore(a.id);
                         rearmMaxPendingBeforeReload();
@@ -1628,20 +1622,20 @@
     <!-- Content -->
     {#if activeTab === 'correlation'}
         {#if loading}
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
-                <RefreshCw class="text-libre-green animate-spin mx-auto" size={32} />
+            <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+                <RefreshCw class="text-lf-link animate-spin mx-auto" size={32} />
             </div>
         {:else if error}
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
-                <p class="text-red-600 dark:text-red-400">{error}</p>
+            <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-6 text-center">
+                <p class="text-lf-danger-on-soft">{error}</p>
             </div>
         {:else}
             <AssetSetRiskPanel
                 bind:this={labPanel}
                 bind:canSync={labCanSync}
                 onfitperiod={(range) => {
-                    // A period set by code must switch the picker's preset off by hand:
-                    // `activePreset` is bound to it, and would keep the old badge lit.
+                    // A period set by code must switch the preset of the picker off by hand:
+                    // activePreset is bound to it, and would keep the old badge lit.
                     activePreset = null;
                     handleDateRangeChange(range.start, range.end);
                 }}
@@ -1657,35 +1651,35 @@
             />
         {/if}
     {:else if loading}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400">{$t('common.loading')}</p>
+            <p class="text-lf-muted">{$t('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
-            <p class="text-red-600 dark:text-red-400">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={loadAssets}>
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-6 text-center">
+            <p class="text-lf-danger-on-soft">{error}</p>
+            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={loadAssets}>
                 {$t('common.retry')}
             </button>
         </div>
     {:else if filteredAssets.length === 0}
         <!-- Empty state -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
                 <BarChart3 class="text-green-600 dark:text-green-400" size={32} />
             </div>
             {#if assets.length === 0}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('assets.empty.noAssets')}</h3>
-                <p class="text-gray-500 dark:text-gray-400 mb-4">{$t('assets.empty.noAssetsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'assets.add'} onclick={handleAddAsset}>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$t('assets.empty.noAssets')}</h3>
+                <p class="text-lf-muted mb-4">{$t('assets.empty.noAssetsDesc')}</p>
+                <button class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" use:guideAnchor={'assets.add'} onclick={handleAddAsset}>
                     <Plus size={16} class="inline mr-1" />
                     {$t('assets.modal.title')}
                 </button>
             {:else}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$t('common.noMatchesTitle')}</h3>
-                <p class="text-gray-500 dark:text-gray-400">{$t('assets.empty.noMatchesDesc')}</p>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$t('common.noMatchesTitle')}</h3>
+                <p class="text-lf-muted">{$t('assets.empty.noMatchesDesc')}</p>
             {/if}
         </div>
     {:else if viewMode === 'grid'}
@@ -1695,10 +1689,10 @@
                 {#if panel.items.length > 0}
                     <section data-testid="assets-panel-{panel.id}">
                         <header class="mb-2 px-1">
-                            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                                {$t(`assets.panels.${panel.id}`)} <span class="text-gray-400 dark:text-gray-500 font-normal">({panel.items.length})</span>
+                            <h2 class="text-sm font-semibold text-lf-secondary">
+                                {$t(`assets.panels.${panel.id}`)} <span class="text-lf-muted font-normal">({panel.items.length})</span>
                             </h2>
-                            <p class="text-[11px] text-gray-400 dark:text-gray-500">{$t(`assets.panels.${panel.id}Hint`)}</p>
+                            <p class="text-[11px] text-lf-muted">{$t(`assets.panels.${panel.id}Hint`)}</p>
                         </header>
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             {#each panel.items as asset (asset.id)}
@@ -1747,10 +1741,10 @@
                 {#if panel.items.length > 0}
                     <section data-testid="assets-table-panel-{panel.id}">
                         <header class="mb-2 px-1">
-                            <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
-                                {$t(`assets.panels.${panel.id}`)} <span class="text-gray-400 dark:text-gray-500 font-normal">({panel.items.length})</span>
+                            <h2 class="text-sm font-semibold text-lf-secondary">
+                                {$t(`assets.panels.${panel.id}`)} <span class="text-lf-muted font-normal">({panel.items.length})</span>
                             </h2>
-                            <p class="text-[11px] text-gray-400 dark:text-gray-500">{$t(`assets.panels.${panel.id}Hint`)}</p>
+                            <p class="text-[11px] text-lf-muted">{$t(`assets.panels.${panel.id}Hint`)}</p>
                         </header>
                         <AssetTable
                             bind:this={assetTableRefs[panel.id]}

@@ -148,8 +148,8 @@ test.describe('WAC Mode — Auto/Manual Toggle & Blur', () => {
         // re-format it on blur — that is display, not an edit).
         await expectAmountValue(amountInput, valueBeforeBlur);
 
-        // ...and the mode must still be Auto (green highlight on the auto toggle).
-        await expect(autoToggle).toHaveClass(/bg-libre-green/, {timeout: 3_000});
+        // ...and the mode must still be Auto: the Auto toggle is pressed.
+        await expect(autoToggle).toHaveAttribute('aria-pressed', 'true', {timeout: 3_000});
     });
 
     // === W10 — Modify value → switches to Manual ===
@@ -176,8 +176,8 @@ test.describe('WAC Mode — Auto/Manual Toggle & Blur', () => {
         const manualToggle = page.getByTestId('tx-form-cost-basis-toggle-manual');
         await expect(manualToggle).toHaveClass(/font-medium/, {timeout: 3_000});
 
-        // Auto toggle should have lost its green highlight
-        await expect(autoToggle).not.toHaveClass(/bg-libre-green/, {timeout: 3_000});
+        // The Auto toggle is no longer pressed
+        await expect(autoToggle).toHaveAttribute('aria-pressed', 'false', {timeout: 3_000});
     });
 
     // === W11 — Auto → Manual → Auto: table cleared, placeholder shown ===
@@ -202,7 +202,7 @@ test.describe('WAC Mode — Auto/Manual Toggle & Blur', () => {
 
         // Switch back to Auto
         await autoToggle.click();
-        await expect(autoToggle).toHaveClass(/bg-libre-green/, {timeout: 3_000});
+        await expect(autoToggle).toHaveAttribute('aria-pressed', 'true', {timeout: 3_000});
 
         // Input should now show placeholder (not the manual value)
         // In auto mode without result yet, the field shows the "auto" placeholder
@@ -227,7 +227,7 @@ test.describe('WAC Mode — Auto/Manual Toggle & Blur', () => {
         await manualToggle.click();
         await expect(manualToggle).toHaveClass(/font-medium/, {timeout: 3_000});
         await autoToggle.click();
-        await expect(autoToggle).toHaveClass(/bg-libre-green/, {timeout: 3_000});
+        await expect(autoToggle).toHaveAttribute('aria-pressed', 'true', {timeout: 3_000});
 
         // Check placeholder text
         const amountInput = page.getByTestId('tx-form-cost-basis-input-amount');

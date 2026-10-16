@@ -446,7 +446,9 @@ call gets no value for the field, so a required one makes the plugin
 `Plugin setting unreadable: it must be entered again`. `plugin_secrets_key_status(session)` counts
 by `key_id`, without decrypting, the stored secrets of each scope that the current key did not
 encrypt, or all of them when the key cannot be used; without stored secrets it reads no key, so it
-never creates the key file. No startup check calls it yet.
+never creates the key file. At every start, the step `plugin-secrets-check` (workstream H) calls it
+and logs an error when stored `system` secrets are unreadable, with their count alone: the `user`
+secrets are left to their users ([Plugin Secrets Check](../security.md#plugin-secrets-check)).
 
 **An unusable instance key.** A configured key (`LIBREFOLIO_INSTANCE_KEY`,
 `LIBREFOLIO_INSTANCE_KEY_FILE`) that cannot be used stops the server at startup. A generated key file
@@ -796,6 +798,7 @@ The other units that touch the plugin settings:
 | `./dev.py test utils gate-plugin-i18n-ownership` | The settings' keys in each plugin's fragment ([Labels and Translations](#translations)) |
 | `./dev.py test services provider-errors` | Among the provider error paths, justETF's `preferred_currency` declaration and the rows its search keeps |
 | `./dev.py test services borsa-italiana-search` | Borsa Italiana's `preferred_language` on a fund and on a share, the site searched in Italian whatever the preference |
+| `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
 | `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM) and `pluginSettingsApi.test.ts` (the narrowing of the answers, and every outcome of a save through the real client, only the transport faked) |
 | `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…24), `PluginSettingsTab.test.ts` (PST-01…06) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
 | `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
