@@ -2367,3 +2367,267 @@ tutti e due i lati. A ha dato l'ok per `ForgotPasswordCard`, `linkShareActions.t
 >   diversi;
 > - **le conferme di EMV**: un link mandato a una variante non A–Z si revoca;
 > - le docs: «stripped and case-folded» diventa «as `user_service.same_email()` compares them».
+>
+> **Preparazione** (16/10, 13:05, sola lettura su `b22747e52`):
+> - `same_email()` non c'è ancora nel ramo di A: la sua punta, `946285a91`, ha solo il contratto nel journal.
+> - Nessun ciclo d'import: `flows.py:25` e `verification.py:35` importano già `user_service`, e `user_service` non
+>   importa niente da `services/email`.
+> - I confronti da cambiare sono esattamente due:
+>   - `flows.py:339`: `old_address.strip().casefold() == new_address.strip().casefold()` diventa
+>     `user_service.same_email(old_address, new_address)`;
+>   - `verification.py:337`: `record.email.strip().casefold() != user.email.strip().casefold()` diventa
+>     `not user_service.same_email(record.email, user.email)`.
+> - Le chiavi dei limiti restano `strip().casefold()`: `flows.py:215` (identificativo), `:286` (casella del
+>   «password dimenticata»), `:352` (casella dell'avviso) e `verification.py:231` (casella della verifica).
+
+### E6 — la chiusura, senza la galleria (2026-10-16)
+
+E4b è stato committato dal coordinatore (12:37) in tre commit: `a31738e00` (codice), `dfc7847fb` (docs) e
+`b22747e52` (journal). L'ingresso segue quest'ordine: H, Z5, A7a con P18, poi E4b. Quando A è entrato, il
+coordinatore aggiorna la mia base. Allora risolvo io il merge di `auth.py`, come scritto nell'handoff, e tolgo la
+frase falsa di `email.md:276-279`. Poi vengono E4c ed E6.
+
+**Fino ad allora**, sempre su indicazione del coordinatore: E6 senza la galleria, con le sette righe di C-99 in
+`configuration.en.md` e tutto ciò che non tocca i file di A.
+
+#### E6.0 — Via, perimetro e regola dei campi nativi ✅ (2026-10-16, 12:40)
+> **Base**: HEAD `b22747e52`, worktree pulito.
+>
+> **Regola nuova dei colori** (T, `a317392d4`, dalla skill `design-system`): un `<input>`, `<select>` o `<textarea>`
+> con una classe `-lf-` scrive anche `text-lf-primary` e, se ha un segnaposto, `placeholder:text-lf-placeholder`.
+> Il cancello non la controlla; la regola descrive un difetto vero del tema scuro. I due campi nativi di E sono già in
+> regola:
+> - `SendLinkByEmail.svelte:50`;
+> - `ForgotPasswordEmailForm.svelte:44`.
+>
+> **Il perimetro adesso**:
+> - le sette righe C-99;
+> - `TODO_FUTURI` → `TODO_Completati` (la sola voce «📧 Server email»);
+> - la pagina `domains/email.md` della devWiki (`project-historian`, in sottofondo);
+> - il giro di coerenza su `admin/email.en.md`;
+> - le prove leggere.
+>
+> **Dopo l'ingresso di A7a**:
+> - le docs di `build_admin_setup()`;
+> - la frase di `email.md:276-279`;
+> - E4c;
+> - E-4, con l'ok di A.
+>
+> **Dopo E4c**, gli slot (`all-backend`, l'E2E del dominio, la galleria `settings/email`) e la revisione di sicurezza
+> finale.
+
+#### E6.1 — Le sette righe di C-99 in `configuration.en.md` ✅ (2026-10-16, 12:47; build ✅, `check-links` ✅)
+> **La regola C-99** (developer, `b171c058e`): una variabile nuova si spiega per intero nella pagina della sua funzione;
+> in `configuration.md` ha una riga sola nella tabella, con il link.
+>
+> **Le righe**: sette, in fondo alla tabella «Main Options», nell'ordine di `email.md#variables`: `HOST`, `TLS`,
+> `PORT`, `USER`, `FROM`, `REPLY_TO`, `MAX_PER_HOUR`. Ognuna ha una frase e il link a `email.md#variables`; quella di
+> `TLS` va a `#encryption-modes`. La password ha già la sua riga nella tabella dei segreti.
+>
+> **Nessun timbro di traduzione**: la pagina ha già un debito con la pipeline. L'MD5 nella cache
+> (`3be3e504…`, 10/10) non è quello di oggi (`16e96a45…`, prima delle mie righe), per il lavoro di più workstream, E
+> compresa (`6d6965293`, le docs di E5b): un timbro lo nasconderebbe. Le righe vanno in IT, FR ed ES con la pipeline,
+> o col riordino del manuale admin di fine 1.3.
+
+#### E6.2 — `TODO_FUTURI` → `TODO_Completati` ✅ (2026-10-16, 12:50)
+> Come per A4b: la voce «📧 Server email — verifica account, inviti, recupero password (da P2-1)» esce da
+> `TODO_FUTURI.md`. Entra in cima a `TODO_Completati.md` come «📧 Email del server — prova, link per email, password
+> dimenticata, verifica, avviso ✅», con Risultato, Origine e Cosa resta.
+>
+> **Contraddetti dalla specifica**: l'SMTP dalle impostazioni dell'admin e `aiosmtplib`.
+>
+> **I residui** puntano al backlog: E-2, E-3, E-4, E-6, E-7, E-8, e F19 fuori dalla 1.3. Nessuna voce futura nuova:
+> il coordinatore aveva limitato il lavoro alla sola sezione dell'email.
+>
+> Nessun link verso la sezione tolta, in docs, codice, `.github` o devWiki.
+
+#### E6.3 — La FAQ «Ho dimenticato la password» ✅ (2026-10-16, 12:53; build ✅, `check-links` ✅)
+> `community/faq.en.md:58` diceva «Recovery by e-mail is not available yet», falso dopo E4b.
+>
+> **Ora**: si clicca *Forgot Password?*; se l'istanza manda email si riceve un link valido 30 minuti (link a
+> `getting-started.md#forgot-password`), altrimenti si chiede all'amministratore. La frase di A6 sul link di reset
+> dell'admin e sulla riga di comando resta com'era.
+>
+> **Traduzioni**: solo EN, senza timbro. La pagina ha già un debito: l'MD5 in cache (`db467242…`, 10/10) non è quello
+> di oggi, per `2b0715532` di A (le pagine dei link). IT, FR ed ES dicono ancora «non ancora disponibile» e non hanno
+> la frase di A6: la pipeline sistemerà tutte e due le cose.
+>
+> **Già a posto, verificato**: `admin/settings` nelle 4 lingue (riga *Require Email Verification*, da E5b). Nelle docs
+> non resta nessun «coming soon» o «not available yet» sull'email, a parte le traduzioni della FAQ.
+
+#### E6.4 — Il debito di traduzione delle pagine di E ✅ (2026-10-16, 12:56)
+> **Il metodo**: le pagine `.en.md` toccate dai 13 commit di E sulle docs (`git log --no-merges --grep=email`, da
+> `380a3e768`), più `configuration` e la FAQ di oggi. Per ognuna ho confrontato l'MD5 di oggi con la cache di Aphra
+> (`mkdocs_src/aphra-pipeline/.translate-hashes.json`), senza `dev.py`. Il log è in
+> `files/logs/e6_translation_debt.txt`, nella cartella della sessione.
+>
+> | Pagina | Traduzioni | Stato |
+> |---|---|---|
+> | `admin/cli_tools` | IT, FR, ES | debito dal 10/10 |
+> | `admin/configuration` | IT, FR, ES | debito dal 10/10 (con le sette righe di C-99) |
+> | `admin/index` | IT, FR, ES | debito dal 10/10 (con la riga Email) |
+> | `admin/settings` | IT, FR, ES | debito dal 10/10 (la riga di *Require Email Verification* è già nelle 4 lingue) |
+> | `community/faq` | IT, FR, ES | debito dal 10/10 (con E6.3) |
+> | `user/getting-started` | IT, FR, ES | debito dal 10/10 (con `#verify-email` e `#forgot-password`) |
+> | `user/settings/profile` | IT, FR, ES | debito dal 04/09 (di A, con `#email-change`) |
+> | `admin/email`, `admin/users` | — | solo EN, per scelta |
+>
+> Su nessuna di queste pagine il debito è solo di E, quindi **nessun timbro**: la pipeline le rifà intere, quando il
+> developer la lancia. Tradurre `admin/email` nella 1.3 resta una sua decisione.
+
+#### E6.5 — `lint --dead-code --scope backend` ✅ (2026-10-16, 12:54)
+> `files/tools/e6_dead_code.sh`, con l'attesa del carico sotto 50 (era tra 109 e 167 per dieci minuti). Esito: 5 reperti
+> «Unreferenced» e 45 «Referenced only by tests», nessuno nuovo nei file di E salvo il transitorio dichiarato:
+> `build_admin_setup` (`services/email/messages.py:177`), che riceve il suo chiamante con A7a.
+>
+> Dopo A7a si rifà: il reperto deve sparire.
+
+#### E6.6 — La pagina `domains/email.md` della devWiki ✅ (2026-10-16, 13:02)
+> Scritta dal `project-historian` in sottofondo, con un perimetro stretto: la pagina nuova, una riga in `index.md` e una
+> voce in `log.md`. I due file condivisi li fonde il coordinatore all'ingresso.
+>
+> **La pagina** (~285 righe, inglese, `features: []`: nessun codice F per l'email; il primo libero è F-115):
+> - cosa fa;
+> - un grafo mermaid;
+> - le decisioni: D-E1…D-E14 con la 44 e la 45, le decisioni di sicurezza di E3s, E5b ed E4b, P1, la regola di E4c;
+> - i limiti noti;
+> - 16 problemi risolti, presi dai «Fuori pista» con la loro sezione;
+> - cosa viene dopo;
+> - 50 «Source files».
+>
+> `check_source_paths.py`: 0 percorsi mancanti nella pagina; nel resto della wiki 5, già prima.
+>
+> **La mia rilettura**: tre affermazioni verificate sul codice.
+> - Il link di verifica usa il frammento (`token_service.py:83`) ✅.
+> - L'email di prova prende il nome dell'istanza dall'host della richiesta (`api/v1/email.py:97`, `request.url.netloc`)
+>   ✅.
+> - **Una correzione**: non è vero che «solo i limiti per account» reggono tra processi. Lo fanno quelli del «password
+>   dimenticata» e della verifica, contati sulle righe dei token (`flows.py:49`, `verification.py:53`). Quello per
+>   account dell'avviso, invece, è in memoria (`flows.py:55`). Frase corretta.
+>
+> Ho aggiunto la FAQ (E6.3) al punto di E6.
+>
+> **Proposte dello storico per altre pagine**, non applicate perché sono condivise (vanno nell'handoff):
+> - un punto in `domains/auth.md`, «Key decisions»;
+> - `domains/email` nei `related:` di `decisions/link-tokens-in-the-url-fragment.md`;
+> - una riga in `problems/generated-client-widens-nullable-scalar.md` (E-2);
+> - una riga, facoltativa, in `raw/ingest-registry.md`.
+
+#### E6.7 — Il giro di coerenza su `admin/email.en.md`, e un difetto della UI ✅ (2026-10-16, 13:08; prove ✅)
+> **Il giro** l'ha fatto `docs-writer` in sottofondo, senza `dev.py`. Ha controllato contro il codice:
+> - i numeri;
+> - le 37 righe di log, compresa quella `info` di E4b;
+> - i codici d'errore;
+> - gli avanzi della tenuta;
+> - le ancore;
+> - la card di P1.
+>
+> **Nove modifiche piccole**, ognuna con la prova nel codice:
+> - la scheda mostra il limite orario, l'unico valore di `LIBREFOLIO_SMTP_*` che si vede;
+> - `"available"` vale anche «nessun blocco del fornitore» (`links.py:101`);
+> - la scheda Email viene dopo **Backup**, non dopo **Admin** (`settingsTabs.ts`, ordine 130);
+> - un a capo di troppo nella citazione dell'avviso della card;
+> - un'email di reset non partita conta lo stesso, per account e per casella (`flows.py:286` e `_recent_resets`, che
+>   conta anche le righe revocate: verificato da me);
+> - la riga `RECIPIENT_REFUSED` del dialogo;
+> - tre righe di log (la casella, e `user_id` in due righe `failed`).
+>
+> **Le mie modifiche, dalle sue proposte**:
+> - **«💡 Examples» spostata** prima di «🌐 Emails with a Link», per seguire i quattro passi dell'introduzione: uno
+>   spostamento puro, fatto con `files/tools/e6_move_examples.py`, che controlla intestazioni, separatori e righe (né
+>   aggiunte né perse). Nessun riferimento «above» o «below» dipendeva dall'ordine;
+> - il link a `hosting_providers.md#instance-block` e quello a `users.md#waiting` (l'ancora c'è, `users.en.md:93`);
+> - l'email di prova nomina l'istanza con l'indirizzo che il browser ha raggiunto, non con `LIBREFOLIO_PUBLIC_URL`
+>   (`api/v1/email.py:97`).
+>
+> **Il difetto della UI** (dal suo rapporto): in «Spedisci per email», un `RECIPIENT_REFUSED` diceva «The SMTP server
+> refused **your** address.», il testo dell'email di prova. Qui però l'indirizzo rifiutato è quello dell'invitato o
+> dell'account.
+> - Il test è stato scritto prima, dal `test-author`: in `emailText.test.ts`, la riga di `LINK_SEND_FAILURES` vuole la
+>   chiave nuova, e il commento d'intestazione lo dice. Rossi attesi: ETX-11 ed ETX-13. Le tabelle dell'email di prova
+>   restano com'erano.
+> - La cura:
+>   - in `linkSendFailureMessage`, un ramo per `RECIPIENT_REFUSED` verso `email.sendLink.errors.RECIPIENT_REFUSED`;
+>   - la chiave nei 4 cataloghi email: «The SMTP server refused the recipient's address.» e le traduzioni, che nominano
+>     tutte il destinatario. Il test non controlla il testo: l'ha avvertito il `test-author`.
+> - Docs:
+>   - `admin/email.en.md`, una riga sua nella tabella del dialogo («the one in **Send to** for an invitation, the email
+>     of the account for a reset link»);
+>   - `developer/backend/email.md`: la frase di `linkSendFailureMessage()`, e nella tabella «Testing» «ETX-01…10»
+>     diventa «ETX-01…14», com'era già da E4a.
+>
+> **Rimandati dopo l'ingresso di A**, perché stanno in pagine su cui lavora anche A:
+> - `admin/users.en.md:205` (la mia sezione di E4b): «`LIBREFOLIO_PUBLIC_URL` set» diventa «set to an address
+>   LibreFolio can use» (`links.py`, `_usable_base`);
+> - `admin/cli_tools.en.md:107`: la schermata *Forgot Password?* mostra i comandi in un pannello chiuso quando l'email
+>   funziona (P1).
+>
+> **Restano per A7a ed E4c** (dal suo rapporto):
+> - A7a: le righe 418-419 e 454 (il primo account non aspetta) e 605 (i `kind` di `Email sent`, senza `admin_setup`);
+> - E4c: la riga di log «the link was sent to another address», e una frase sull'avviso che salta quando il vecchio e
+>   il nuovo indirizzo sono lo stesso (`flows.py:339`).
+>
+> **Da sapere**: le quattro citazioni senza ancora (righe 78, 119, 433, 593) sono volute. Le versioni IT, FR ed ES delle
+> pagine di arrivo non hanno quelle ancore, e la build stretta delle lingue che mostrano questa pagina inglese
+> fallirebbe.
+
+#### ⏸️ Pausa del developer (2026-10-16, 13:23) — FROZEN fino al via del coordinatore
+> **Stato**:
+> - HEAD `b22747e52`;
+> - nel worktree, non committati, 15 file modificati e 1 nuovo: il primo gruppo di E6, cioè E6.1, E6.2, E6.3, E6.6 ed
+>   E6.7, più questo piano.
+>
+> **Le prove di E6** (`files/tools/e6_checks.sh`, carico sotto 50):
+>
+> | Prova | Esito |
+> |---|---|
+> | `i18n build` e `i18n check` stretto | 4 773 chiavi (+1) ✅ |
+> | Vitest `emailText.test.ts` e `SendLinkByEmail.test.ts` | 289 ✅ |
+> | `prettier` | pulito ✅ |
+> | `front check` | 0/0 ✅ |
+> | `mkdocs build` stretto | 0 WARNING o ERROR, 3 076 URL di asset risolti ✅ |
+> | `check-links` | **non eseguito** |
+>
+> **Perché `check-links` non è partito**: alla pausa la build era già in corsa, e l'ho lasciata finire. Ho fermato lo
+> script (`kill` sul suo PID, 44572) prima che lanciasse `check-links`, che è il primo passo alla ripresa.
+>
+> **La domanda di A su P18** (dal coordinatore, 13:2x), con la risposta mandata direttamente ad A. Con l'indice unico
+> su `lower(email)`, i due test con varianti ASCII della stessa casella non si possono più creare: EMF
+> `test_three_reset_emails_an_hour_per_mailbox_whatever_the_account` e EMV
+> `test_a_mailbox_gets_three_registration_emails_an_hour_whatever_the_account`. A li riscrive con varianti non ASCII.
+> - **Il senso resta**: le chiavi dei limiti sono `casefold`, e le varianti non ASCII (NFC) sono una casella sola e
+>   quattro account.
+> - **Ma il finto SMTP non annuncia `SMTPUTF8`**: `send_message` alza `SMTPNotSupportedError` lato client, cioè
+>   `SEND_FAILED`, e niente arriva in `rcpt_tos`. Il test EMV andrebbe rosso, perché il limite conta solo le email
+>   partite; in quello EMF cadrebbero le asserzioni sui messaggi consegnati.
+> - **La cura, mia**: il finto annuncia `SMTPUTF8` e `8BITMIME` e accetta i parametri dopo `MAIL FROM:<…>`. Va in un
+>   mini-lotto al via, prima di P18 o insieme, con un caso che fissa «non ASCII verso un server senza `SMTPUTF8` →
+>   `SEND_FAILED`».
+>
+> **Alla ripresa, in ordine**:
+> 1. `check-links`.
+> 2. Il checkpoint del primo gruppo di E6 al coordinatore, che lo committa prima di aggiornare la base.
+> 3. Il mini-lotto `SMTPUTF8` del finto, prima di P18.
+> 4. Dopo l'ingresso di A:
+>    - il merge di `auth.py` e la frase di `email.md:276-279`;
+>    - E4c;
+>    - le docs rimandate (`users.en.md:205`, `cli_tools.en.md:107`, quelle di A7a);
+>    - il `lint --dead-code` di nuovo;
+>    - E-4, con l'ok di A.
+> 5. Gli slot (`all-backend`, l'E2E del dominio, la galleria) e la revisione di sicurezza finale.
+
+#### ▶️ Ripresa (2026-10-16, 14:14)
+> Il via del coordinatore, sulla ripresa del developer, in quest'ordine:
+> 1. `check-links`;
+> 2. il checkpoint di E6 per il suo commit;
+> 3. il mini-lotto `SMTPUTF8`, che sblocca P18 di A. Lo dico ad A quando è committato.
+>
+> **La nota del coordinatore durante la pausa (13:24), per i merge**:
+> - **P17 di H** cambia i tre punti che leggono l'indirizzo del client: `email.py` ~157 e ~203, `auth.py` ~274.
+>   - Passano da `request.client.host` a `client_address(request)`, con il modulo nuovo
+>     `services/platform/client_address.py` e la variabile `LIBREFOLIO_CLIENT_IP_HEADER`.
+>   - Quando P17 arriva nella mia base, al merge si tengono le righe di H.
+> - **In E4c**, `flows.address_key` va sostituito con `client_rate_key` di H.
+>
+> **`check-links`** (14:14, `files/tools/e6_check_links.sh`): ✅ 97 link validi, tutti quelli che attraversano i confini.
+> Le prove del primo gruppo di E6 sono così complete.
