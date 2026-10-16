@@ -3453,6 +3453,18 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura proposta: il pre-passaggio parallelo solo per la categoria intera, come i consolidati. Con un test.
 
   Dettagli: piano H, §14, lotto «H-23», passo 1.
+  - Cura fatta il 16-17/10 (lotto «H-25», piano H §14): `_parallel_prepass_applies()` in `_cli.py`, la regola dei
+    pre-passaggi consolidati. Niente pre-passaggio parallelo con un'azione singola o con dei nomi di test.
+- **H-26 · I nomi di test dopo `all` vengono scartati in silenzio** — basso, runner; H (dal test-author di H-25),
+  17/10.
+  - Il parser accetta `test_names` dopo qualsiasi azione (`_cli.py` ~331, `nargs="*"`), ma le 16 azioni `all` sono
+    tutte registrate con `test_names=False`. `run_test_from_registry()` chiama allora la funzione senza nomi
+    (`accepts_test_names`, ~95): `./dev.py test services all foo` fa girare tutta la categoria, senza dirlo.
+  - Cura proposta: rifiutare i nomi su un'azione che non li prende, con exit 2 e un messaggio che dice di nominare
+    l'azione, oppure applicarli a tutta la categoria (`-k` su ogni unità). La seconda è più utile ma più larga: va
+    decisa col coordinatore. Con un test.
+
+  Dettagli: piano H, §14, lotto «H-25», passo 2.
 
 ## A · Account e accessi (fase 01)
 
