@@ -3538,3 +3538,125 @@ Diciassette commit fuori da `dev_release2`, più questo diario: note di X (H-14/
 blocco, H-17 (la mia parte), `b-doc-notes` (B-4, B-5), H-1/4/6/9, H-3 opzione B. Nel backlog, all'ingresso il
 coordinatore chiude con ✅ H-1, H-4, H-6, H-9, H-14, H-15, H-16. H-17 resta aperta fino alle due righe di B. H-3 resta
 aperta per l'opzione A (P24). Restano aperte anche H-5 (traduzioni), H-18 (sezione C, la UI comune) e H-19 (ad A).
+
+> **Ultima validazione e ingresso**: il coordinatore ha committato il diario (`306554879`) e fuso `dev_release2` (merge
+> `0d7503098`, pulito: J CP-7a, W-B17, Z7c-1, i ruoli di T). Sulla revisione combinata, una alla volta, carico sotto 50
+> (12:03–12:43): `api sync`, `front check` 0/0, Vitest `InstanceBlockedPage` 36, `db populate --force`,
+> `api instance-block` 62, `api system` 118. **Entrati nel treno 110** (merge `0ecc5ed27`, registro `0f3b9e3db`),
+> con 🔒/✨ per H-15 e la card, e due righe 📚 (`34e1e8092`). Chiuse H-1, H-4, H-6, H-9, H-14, H-15, H-16. Base portata
+> avanti con fast-forward a `0f3b9e3db`, eseguito dal coordinatore: le mie regole mi vietano di muovere la storia.
+
+### P17 — l'indirizzo del client dietro un proxy fidato (2026-10-16, pomeriggio) — in corso
+
+Decisione del developer (P17): nel cloud l'indirizzo vero del visitatore si legge da `Fly-Client-IP`. Oggi i limiti per
+client (le email di registrazione di E5b, i login falliti di A) vedono solo il proxy di Fly e contano tutti i visitatori
+insieme. Il contratto l'ho mandato alle 12:4x e il coordinatore l'ha approvato, **compreso il punto 4**, come sua
+decisione da far rivedere al developer.
+
+**Il contratto approvato**:
+
+- `LIBREFOLIO_CLIENT_IP_HEADER`, un campo di `Settings`, vuoto di default e validato all'avvio. Deve essere il nome di
+  un header (token HTTP); `X-Forwarded-For` e `Forwarded` sono rifiutati;
+- **nessuna voce in `PROFILE_DEFAULTS["managed"]`**: il cloud la imposta nel suo ambiente, come
+  `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`;
+- `services/platform/client_address.py`:
+  - `client_address(request)`: con la variabile vuota, `request.client.host` com'è oggi. Con la variabile impostata e
+    l'header presente una volta con un solo IP, quell'IP normalizzato. Senza header, il peer. Con un header malformato,
+    il peer e un avviso una volta per processo, mai col valore;
+  - `client_rate_key(address)`: la regola di oggi di E (`flows.address_key`). E la toglie dal suo codice nel suo lotto,
+    senza shim; fino ad allora le copie sono due, ed è previsto;
+  - `mask_client_address(address)`, per il log: IPv4 per /24, IPv6 per /48;
+- doc secondo C-99. La spiegazione intera va in `admin/connection_checks.en.md`, «Behind a Reverse Proxy» (pagina con
+  traduzioni); una riga in `admin/configuration.en.md`, una riga del cloud in `hosting_providers.en.md`, poi
+  `.env.example` e `security.md`;
+- chi la chiama, nei propri lotti dopo il mio: E (`api/v1/email.py:157`, `:203`, `auth.py:274`, `address_key`) e A (il
+  limitatore dei login falliti).
+
+**Fatti verificati**:
+
+- uvicorn parte coi default (`Dockerfile`: `proxy_headers`, `FORWARDED_ALLOW_IPS=127.0.0.1`), quindi su Fly il peer è
+  il proxy;
+- la doc di Fly («Request headers») dice che il proxy imposta `Fly-Client-IP` e sovrascrive quello mandato dal client,
+  mentre `X-Forwarded-For` si può falsificare;
+- `api/v1/system/connection.py` e `utils/runtime/network.py` restano come sono: classificano l'indirizzo dall'ultimo
+  `X-Forwarded-For` solo per dare un consiglio, non per una decisione di sicurezza.
+
+**⚠️ Fuori pista**: la riga del docstring di `instance_block.py` per `POST /api/v1/auth/setup` (P16(d)) descriverebbe
+una rotta che a `0f3b9e3db` non esiste ancora: A7 non è entrato. La scrivo quando A7 è nella mia base.
+
+#### P17 — passo 1, rossi ✅ (2026-10-16, pomeriggio)
+
+> **Note implementazione** (test-author, niente lanciato da lui): `test_client_address.py`, nuovo, 21 funzioni e 131
+> casi, registrato come `services client-address` (`isolation="pure"`). Coprono il campo (vuoto, valori accettati e
+> rifiutati, le liste `X-Forwarded-For` e `Forwarded` con `FORWARDED_ALLOW_IPS` nel messaggio, nessun profilo che lo
+> imposta) e `client_address()`: variabile vuota, un solo IP normalizzato, header assente, i malformati con un solo
+> avviso che non contiene mai il valore, nome senza distinzione di maiuscole, WebSocket, lettura una sola volta e
+> `reset_client_address_cache()`. Più `client_rate_key()` e `mask_client_address()`, con valori espliciti.
+>
+> **Rossi** (13:09–13:11): 131 falliti, 34 sulla barriera del campo e 97 su quella del modulo. Ruff e black puliti.
+
+#### P17 — passo 2, la cura e i chiamanti (2026-10-16, pomeriggio) — verdi in corso
+
+> **⚠️ Fuori pista**: il docs-writer ha visto che la variabile, da sola, non avrebbe fatto niente. I tre punti che
+> contano per client leggevano `request.client.host`, quindi le pagine admin avrebbero detto una cosa falsa. Al
+> coordinatore ho proposto due strade, e ha scelto la (1) (13:07): cambio io solo le tre chiamate. Ha verificato che
+> E4b (`b22747e52`) e A (`946285a91`) hanno quelle righe uguali, solo spostate; E4b aggiunge `flows as email_flows`
+> agli import di `auth.py`, quindi al merge si risolvono righe vicine, non il significato. I test API di E e della
+> registrazione li lancio io. Il limitatore dei login falliti non esiste ancora: tolto dai testi.
+>
+> **Note implementazione** (`files/p17/apply_p17.py` della sessione, provato a secco, ruff e black puliti):
+>
+> - `config/__init__.py`: `import re`, `_HEADER_TOKEN` e `_LIST_HEADERS`, il campo `LIBREFOLIO_CLIENT_IP_HEADER` col
+>   validatore `after` (spazi tolti, vuoto ammesso, token HTTP, liste rifiutate, maiuscole conservate). La docstring
+>   del modulo lo elenca;
+> - `services/platform/client_address.py`, nuovo: il nome dell'header è letto una volta (`functools.cache`),
+>   l'avviso una sola volta per processo (una lista come flag, sul modello del resolver di X),
+>   `reset_client_address_cache()`, `client_rate_key()` (la regola di `flows.address_key`, nella sua casa nuova),
+>   `mask_client_address()`;
+> - `.env.example`: la sezione «The Visitor's Address Behind a Reverse Proxy», con la riga commentata e il rimando
+>   alla doc;
+> - le tre chiamate: `api/v1/email.py` (le due letture `address = request.client.host if request.client else None`)
+>   e `api/v1/auth.py` (`registration_email_allowed`), più un import ciascuno;
+> - doc (docs-writer, secondo C-99): la sottosezione `#client-address` in `admin/connection_checks.en.md`, con la
+>   regola di sicurezza in un riquadro e corretto l'ultimo paragrafo dei «Limits», che diceva che non c'erano proxy
+>   fidati da configurare; una riga in `admin/configuration.en.md`; un punto in `admin/hosting_providers.en.md`; la
+>   sottosezione `#client-address` in `developer/architecture/security.md`, che io ho corretto sui chiamanti dopo la
+>   strada (1). Le pagine solo inglesi puntano a `connection_checks.md#reverse-proxy`, perché `#client-address` non
+>   esiste ancora nelle traduzioni.
+> - Fly: la doc ufficiale «Request headers» dice che il proxy imposta `Fly-Client-IP`; che sovrascriva quello del
+>   client lo dicono fonti esterne. Resta la prova di accettazione del cloud già nel contratto.
+>
+> **Il ruff della prova a secco**: segnalava I001 sui due import solo perché il modulo nuovo non esisteva ancora nel
+> worktree, e quindi non lo riconosceva come modulo del progetto. Applicata la cura, è pulito senza `--fix`.
+
+> **Verdi parziali** (13:11–13:23, una alla volta, carico sotto 50): `services client-address` **131**,
+> `config-env-example` 38, `config-package` 694, nessun fallito.
+>
+> **⏸️ Pausa del developer** (13:22): ho fermato solo lo script che mette in fila le prove (PID 48197, con `kill`), e ho
+> lasciato finire il test in corso (`config-package`). Porta 6181 libera. **Restano da lanciare**: `services
+> profile-defaults` e `config-misc`; `db populate --force`; `api email`, `email-verification`,
+> `email-verification-hooks`, `registration` e `auth`; `mkdocs build` e `check-links`. Lo script è
+> `files/runs/p17.sh green` nella cartella della sessione: rilancia anche i tre già verdi. Poi l'handoff, FROZEN.
+> Worktree sporco col lotto P17, nessun merge aperto, HEAD `0f3b9e3db`.
+
+> **Ripresa** (14:14, via del developer). B conferma: `RestoreCard` è un componente a parte, montato solo in
+> `BackupTab`; la pagina di blocco tiene solo `BackupDownloadCard`, come vuole P7.
+>
+> **Verdi** (14:14–14:40, una alla volta, carico sotto 50, HEAD `0f3b9e3db`):
+>
+> - `services profile-defaults` 52 e `config-misc` 12;
+> - `db populate --force`, poi `api email` 160, `email-verification` 49, `email-verification-hooks` 16,
+>   `registration` 96 e `auth` 88. Sono le rotte con le tre chiamate cambiate: con la variabile vuota, il
+>   comportamento di prima;
+> - `check-links` 97;
+> - insieme ai verdi di prima della pausa: `client-address` 131, `config-env-example` 38, `config-package` 694.
+>
+> **⚠️ Fuori pista — `mkdocs build` rigoroso rosso, non per il lotto**: un solo avviso, in
+> `developer/backend/transactions/wac.md`, il link `split_promote.md#transfer-giving-leg` verso un'ancora che non
+> esiste. Il link l'ha messo `54880598b` («fix(transactions): emptied manual cost basis…», treno 111), che è già nella
+> base `0f3b9e3db`; io quelle pagine non le tocco. Visto che la build dà solo quell'avviso, le mie quattro pagine non
+> ne aggiungono. Va girato al proprietario delle pagine delle transazioni.
+>
+> **H-5**: aggiunto il debito di traduzione di P17, `connection_checks` e `configuration`, con l'ordine.
+
+#### Checkpoint P17 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore
