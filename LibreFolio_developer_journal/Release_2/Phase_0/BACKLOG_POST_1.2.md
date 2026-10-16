@@ -4209,6 +4209,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   - 3 per un link nuovo a `#estimated-at-cost` in `fifo-lot-analysis`.
 
   Tradurre `index` con le quattro pagine che vi puntano, nello stesso giro. Dettagli: piano J, §10 «J-17».
+- **J-30 · Il primo parse del BRIM dopo l'avvio supera i 30 s del test sotto carico** — basso, tempo dei test e prima
+  importazione; J, 16/10 (slot 2 di J-17), da smistare dal coordinatore (area del BRIM). Il primo
+  `POST /brokers/import/files/{id}/parse` fa partire il pool dei processi (`brim_parse_pool.py`, forkserver): **48,8 s**
+  nello slot e **31,2 s** al rilancio, con carico 100–158; i parse seguenti 0,2–1 s. `test_brim_api.py::TestParseEndpoint`
+  aspetta 30 s fissi (`TIMEOUT`), quindi il primo test della classe scade. Verdetto `test-triage`: lentezza.
+  Strade possibili: scaldare il pool all'avvio del server, oppure una fixture che lo scaldi prima dei test temporizzati.
+  Allungare il tempo no. Dettagli: piano J, §10 «J-17», slot 2.
 
 ## Z · Sospensione e risveglio (fase 01)
 
