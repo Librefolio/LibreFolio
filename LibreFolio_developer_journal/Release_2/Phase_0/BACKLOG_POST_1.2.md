@@ -4347,6 +4347,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   118 il 16/10, verdetto ambiente. Cura: il runner rifà il seed quando un'azione `api` singola trova il DB senza gli utenti
   di fixture, o lo dice prima di partire. Registro del runner: superficie condivisa, decide il coordinatore. Dettagli: piano 04,
   sezione C-97a.
+- **W-B55 · La 47 in un'altra valuta non ha una prova da capo a fondo** — minimo, test; W, 16/10 (decisione 47 con J-24).
+  La gamba che cede prende il costo Auto del suo broker nella valuta dell'ultimo acquisto (`_handover_cost`,
+  `compute_wac_iterative`), e con J-24 la Dashboard ne realizza la differenza di cambio nel giorno della consegna. Oggi è
+  coperto in due metà: i test di W scrivono la riga in EUR (più i casi di cambio mancante), il «foreign book» di J
+  (`test_adjustment_out_with_cost_numbers.py`) la legge in USD. Cura: un caso in `test_orphan_transfer_after_broker_delete.py`
+  con un titolo comprato in USD e il rapporto in EUR, dalla cancellazione del broker che riceve ai numeri di lotti e
+  Dashboard. Dettagli: piano 04, sezione «Decisione 47 in dev: la prova con J-24».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il

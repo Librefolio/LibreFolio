@@ -4374,3 +4374,52 @@ stessi totali; `check-orphans`; `check_source_paths.py` a 5 path mancanti come o
 broker-unit`; `front-asset asset-unit`; `check-orphans`; `front build`; `theme-roles.mjs --check`; `lint --dead-code`; `mkdocs
 build` e `check-links`; `check_source_paths.py`. In slot: `front-transaction all --workers 4`, `front-broker detail`,
 `front-portfolio dashboard`, `front-utility files`, `front-asset asset-data-editor`, `front-utility onboarding-tour`.
+
+**FE8b: via** (coordinatore, 20:41): F1–F4 come raccomandato (niente `index.ts`, `utils/brim/` diviso, `CompactCashCell` in
+`form/`, ogni modale nella cartella della sua parte). **Passo 0, aggiornamento della base** ✅: la fusione di dev `e5c80ad7c`
+aperta dal coordinatore nel mio worktree, **7 conflitti risolti per unione** (`files/scripts/merge_e5c80ad7c_resolve.py`):
+`test_app_lifecycle.py` e `settings.md` col lato di dev, che contiene già il mio; `overview.md` nell'ordine del codice fuso
+(11 `lone-transfer-legs`, poi i passi di dev 12–19); `wac.md` col link ancorato a `split_promote.md#transfer-giving-leg`
+(l'àncora c'è con la 47); `devWiki/index.md` la mia riga V-3 più quella di J-17; **`price_resolver.md`**: J-17 («un
+ADJUSTMENT non è mai un prezzo», decisione P2) risponde al punto aperto che il testo della 47 segnalava → il testo di dev, con
+il caso della 47 nominato dentro il punto di J-17; `user/dashboard/charts.en.md` il punto di J-17 e l'ultima frase della 47.
+Fusi da git: il risultato differisce da dev solo per i 3 commit della 47 e per il journal (conteggi per file uguali alla patch
+della 47, salvo le mie 3 risoluzioni). > **⚠️ Fuori pista**: in `devWiki/log.md` l'entrata della 47 ha perso la riga «Graph: not
+updated…» già all'aggiornamento di base delle 10:49 (due entrate aggiunte in fondo dai due lati, intercalate da git): cosmetico,
+lasciato. Prove sul tree fuso: `app-lifecycle` 51, `lone-transfer-legs` 20, `orphan-transfer-numbers` 21, `broker` 79,
+`transaction-cost-basis-rule` 80, `roi-fifo-utils` 833, `portfolio-engine` 40, `lots-analysis-pure` 163, `mkdocs build` strict
+e `check-links` exit 0, `check_source_paths.py` a 5. Committata dal coordinatore: **`cec9c6ab1`**; poi dev `27994759a` (J-24,
+MF C e MF-I2 su `auto_cost.py`, A-25, Z) fuso pulito: HEAD **`f33306e41`**. Lo strumento dello spostamento è pronto
+(`files/scripts/fe8b_move.py`, dry run pulito: 0 import irrisolti, 0 nomi di cartelle vecchie, ogni file spostato ≥ 95 %
+simile, 4 barili espansi, 6 `vi.mock`, 12 righe della baseline, 360 menzioni di percorso). **La 47 entra in dev prima di FE8b**
+(coordinatore, 20:52), dopo la prova con J-24.
+
+### Decisione 47 in dev: la prova con J-24 ✅ (2026-10-16)
+
+**J-24** (`9d702ae8d`, regola P21 del developer, «ogni importo al cambio del suo giorno»): un ADJUSTMENT in uscita con un costo
+lasciava il capitale al costo storico del pool e non realizzava nulla; ora esce a quantità × costo dichiarato al cambio del suo
+giorno (D), e la differenza dal costo medio che il pool cede (C) è realizzata, come nei lotti (CP-7a); il flusso del giorno per
+TWRR e MWRR segue. La 47 scrive proprio quelle righe: la gamba che cede, ADJUSTMENT-out al **costo Auto del suo broker**
+(`_handover_cost` → `compute_wac_iterative` senza suggerimento di valuta: la valuta dell'**ultimo acquisto**, ogni acquisto
+convertito al cambio del suo giorno).
+
+**Prove su `f33306e41`** (20:54–20:59, corsia 6184, `files/scripts/j24_checks.sh`, una alla volta): `app-lifecycle` **51**,
+`lone-transfer-legs` **20**, `orphan-transfer-numbers` **21**, `broker` **79**, `transaction-cost-basis-rule` **80**,
+`roi-fifo-utils` **865** (con i test di J-24), `portfolio-engine` **41**, `lots-analysis-pure` **163**. Tutto verde.
+
+**I numeri della 47 (V-3) non cambiano**: i test di W li fissano tutti in EUR, senza cambi (il libro S7 e lo specchio, «B
+cancellato»: Dashboard 120 investiti e P&L 60; lotti realizzato 0, proventi 80). In una valuta il costo Auto sulla riga è il
+costo medio, al cambio 1: D = C, J-24 realizza 0. Il libro CP-16 di J (`test_adjustment_out_with_cost_numbers.py`, lo stesso
+S7 con la riga della 47) ne è la guardia, «uguale prima e dopo J-24». **Cambia la gamba in un'altra valuta** (costo Auto in USD,
+rapporto in EUR, cambio mosso fra l'acquisto e la consegna): la Dashboard realizza D − C nel giorno della consegna, come già i
+lotti. Il «foreign book» di J fissa esattamente questa forma: 10 X′ comprati per 1 000 USD a 1,25 (C = 800 EUR), consegnati a
+100 USD l'uno a 1,60 (D = 625 EUR): investito 175, P&L e realizzato −175; prima di J-24 0, 0, 0, contro il −175 dei lotti.
+Per la 47 vuol dire: cancellato il broker che ricevette un titolo in USD, il broker che lo mandò mostra quel giorno un
+realizzato di cambio, e Dashboard e lotti dicono lo stesso numero. Il test di W «capitale e P&L non si muovono» riguarda le
+gambe di cassa, che J-24 non tocca. Nessun test va da capo a fondo in valuta (la cancellazione scrive il costo Auto in USD, la
+Dashboard lo legge): coperto in due metà, W scrive la riga (in EUR, più i casi di cambio mancante), J la legge (anche in USD)
+→ **W-B55**.
+
+**CHANGELOG** (proposta, 🐛 Fixed, dopo la riga di N1b sulla metà che riceve): vedi il messaggio al coordinatore delle 21:0x.
+Prossimi: `all-backend` nello slot del coordinatore (~21:30–21:40), l'ingresso della 47 per fusione del mio ramo (47 e journal,
+43 file senza conflitti, verificato dal coordinatore), poi FE8b.
