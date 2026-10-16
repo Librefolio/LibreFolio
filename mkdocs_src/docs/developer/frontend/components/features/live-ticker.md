@@ -125,7 +125,9 @@ even on two ticks in the same direction, and applies `.lf-price-flash-up` or
 resting colour in 1.3 s. `LIVE_PRICE_FLASH_DECAY_MS` (1300 ms, exported by the module) then resets
 the direction to
 neutral. Under `prefers-reduced-motion` the colour swaps without the animation and the same timer
-clears it. Test hooks: `data-testid="asset-detail-live-price"` and `data-live-price-direction`.
+clears it. When the effect re-runs (another asset, display currency or FX gap) or the page goes
+away, its cleanup stops that timer and puts the direction back to neutral too, so a flash cut short
+never stays lit. Test hooks: `data-testid="asset-detail-live-price"` and `data-live-price-direction`.
 
 #### 📈 Chart head {: #chart-head }
 
@@ -135,9 +137,12 @@ not carry (`original_close`, `backward_fill_info`…) stay on the point, and the
 from `chartData`, recompute. It acts only when the asset has a provider — without one the endpoint
 echoes the last stored close, so there is nothing to merge — and not while the chart, or the
 calendar of returns, is reloading, nor when the answer has an `error` or no `as_of_date`; a close
-equal to the one already charted for that date changes nothing. In a chart converted to another
-currency (the polled close is in the asset's own currency) or in calendar-return mode, it reloads
-the chart silently (`loadChartData(true)`) instead of merging.
+equal to the one already charted for that date changes nothing. The comparison is made in the
+asset's own currency, the poll's: the point's native close, `original_close ?? close`, since in a
+converted chart `close` is in the display currency and `original_close` holds the native one. In a
+chart converted to another currency (the polled close is in the asset's own currency) or in
+calendar-return mode, a close that changed reloads the chart silently (`loadChartData(true)`)
+instead of merging.
 
 ## ⏸️ Pause and resume {: #pause-and-resume }
 
@@ -342,6 +347,7 @@ tab: the scheduler's current-price refresh calls the same service on its own sch
 | `lib/services/livePriceService.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | `toLivePriceResult`, `fetchCurrentPrices` on a faked axios adapter, `livePollOutcome`, `livePollFailure` and `computeDirection` |
 | `lib/features/live-updates/activityTracker.test.ts` (Vitest, node, fake clock) | `./dev.py test front-utility core-unit` | The five input events, `hidden` and `visible`, `touch()`, the subscribers, and no listener left after `dispose()` |
 | `lib/features/live-updates/LiveUpdatesStatus.test.ts` (Vitest, jsdom) | `./dev.py test front-utility component-unit` | The pill only in `paused-idle`, with a label and a hint, and no button |
+| `lib/components/assets/detail/assetDetailLive.svelte.test.ts` (Vitest, jsdom, fake clock around the flash) | `./dev.py test front-utility core-unit` | The [asset detail poll](#asset-detail): what its effect reads, when it starts and stops the poller, the outcome it hands back, the answers it drops, the price summary with its conversion and fallback, the [flash](#price-flash) and its decay, put out by the effect's cleanup too, and the [chart head](#chart-head): the merge, the same-close guard on the native close, and the silent reload |
 | `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden |
 
 The E2E drives time with `page.clock`, since minutes of cadence can be neither waited for nor
