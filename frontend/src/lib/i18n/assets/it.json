@@ -325,7 +325,9 @@
       "placeholder": "Cerca per nome, ticker, ISIN...",
       "searching": "Ricerca in corso...",
       "timeout": "Ricerca scaduta. Riprova.",
-      "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile"
+      "rankHint": "Posizione nella ricerca web (metaricerca su più motori) — il primo risultato è la corrispondenza più probabile",
+      "notConfigured": "{provider} va configurato prima di poter cercare",
+      "crownLegend": "👑 la valuta del fondo"
     },
     "comparison": {
       "title": "Confronto Dati Provider",
