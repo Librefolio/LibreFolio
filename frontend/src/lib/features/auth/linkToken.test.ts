@@ -23,6 +23,12 @@
  * are pinned in `src/routes/invite/page.test.ts` and `src/routes/reset-password/page.test.ts`.
  *
  * Written red-first, before `linkToken.ts` exists: every case fails on the import until it does.
+ *
+ * Accounts lot A7b (F02; plan A7b, C3): a third link, `/setup#token=…`, the setup link of the initial administrator,
+ * read with the same `takeLinkToken` and inspected with the purpose `admin_setup` (`InspectedLinkPurpose`: `LinkPurpose`
+ * stays the links an administrator shares). Its case below was red at the type checker (`front check`), not under vitest:
+ * `inspectLinkToken` forwards whatever purpose it is given, so at runtime the case passes before A7b and after. The
+ * runtime red of the purpose is the page's, in `src/routes/setup/page.test.ts`.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -92,6 +98,18 @@ describe('inspectLinkToken — what the server says the link is worth', () => {
         expect(mocks.inspect).toHaveBeenCalledTimes(1);
         expect(mocks.inspect.mock.calls[0][0], 'the body of POST /auth/tokens/inspect').toStrictEqual({token: 'tok-42', purpose});
         expect(result, 'the answer of the generated client, untouched').toBe(answer);
+    });
+
+    // red until A7b — at the type checker only (`front check`): `inspectLinkToken` did not admit 'admin_setup'.
+    it("posts {token, purpose: 'admin_setup'} for the setup link of the initial administrator, and returns the answer as it is", async () => {
+        const answer = {status: 'valid', purpose: 'admin_setup', expires_at: '2026-10-17T08:00:00Z', username: 'carla.rossi'};
+        mocks.inspect.mockResolvedValue(answer);
+
+        const result = await inspectLinkToken('setup-tok-42', 'admin_setup');
+
+        expect(mocks.inspect).toHaveBeenCalledTimes(1);
+        expect(mocks.inspect.mock.calls[0][0], 'the body of POST /auth/tokens/inspect').toStrictEqual({token: 'setup-tok-42', purpose: 'admin_setup'});
+        expect(result, 'the answer of the generated client, untouched: the account to set up included').toBe(answer);
     });
 
     it('lets a failed request through to the caller, who shows the error and offers a retry', async () => {

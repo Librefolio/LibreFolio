@@ -68,7 +68,7 @@ Its order is contractual:
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |
 | 9 | `resolve_create_links()` | Resolve unconsumed create correlation groups into reciprocal database links |
-| 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC and convert missing FX data into issues |
+| 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC, then give the giving leg of each split `TRANSFER` pair the Auto cost of its own broker ([Split & Promote](split_promote.md#transfer-giving-leg)); convert missing FX data into issues |
 | 11 | `validate_cost_basis()` | Flush and enforce required cost basis after WAC and promote handling |
 | 12 | `validate_balances()` | Flush and replay end-of-day balances from each broker's earliest affected date |
 | 13 | `finalize_response()` | Derive `committed`, result statuses, counts, and WAC output |
@@ -83,6 +83,8 @@ stores all state that must survive across stages. This includes:
 - preloaded transactions and the touched-broker set;
 - the earliest affected date per broker;
 - transient create-correlation groups and the groups consumed by promote;
+- the giving legs of the `TRANSFER` pairs the batch splits, each with its split's
+  index (`handover_rows`), which the WAC stage prices;
 - optional inline `wac_results`; and
 - `commit_requested`, which affects only final response semantics.
 
@@ -96,7 +98,8 @@ loops append row-level failures while continuing with other rows. This is not a
 promise that every possible error is collected:
 
 - any `accessDenied` issue causes an early response before mutation stages run;
-- inline WAC is skipped when a non-balance issue already exists; and
+- inline WAC, and with it the cost of a split's giving leg, is skipped when a
+  non-balance issue already exists; and
 - balance replay catches the first balance exception and does not continue through
   the remaining broker/date replays.
 
@@ -137,7 +140,10 @@ parsed create and update. A `quantity` keeps 10 decimal places, a `cash.amount` 
 manual `cost_basis_override` — a per-unit price — 12, the scales of their `transactions`
 columns; any of them at most 15 significant digits: `decimal_limit_issue()`
 (`backend/app/db/precision.py`) takes the scale from the model and does not count
-trailing zeros. A value over a limit
+trailing zeros. An Auto cost basis (`cost_basis_mode` `auto` or `auto-detail`) is not
+checked: the batch recomputes its amount and reads only its currency (`auto_cost.py`),
+so the preview's average the Form sends back, 100 / 3 in full, is no value of the user's.
+A value over a limit
 is refused, never rounded: one issue per field, with code `decimalPlacesExceeded` or
 `significantDigitsExceeded` (both in `TXValidationCode`, listed by
 `GET /transactions/types` → `validation_codes`), params `{"max": N}` and `field`
@@ -280,13 +286,14 @@ The other half — on that broker, whatever the caller's role there — becomes 
 standalone row a split of the pair leaves (backlog V-3; D-J4, decisions of
 2026-10-13 and 2026-10-15), instead of a linked type without its partner, which
 the FIFO lots refuse for a `TRANSFER` (`TRANSFER_PAIR_MISSING`). Two cases only
-lose the link: the giving leg of a `TRANSFER`, and a link no split knows.
+lose the link: a link no split knows, and the giving leg of a `TRANSFER` whose cost
+needs a missing conversion (below).
 
 | Surviving half | Becomes |
 |----------------|---------|
 | Received `TRANSFER` (quantity > 0) | `ADJUSTMENT` with the same quantity, asset, cost basis and its currency, cash currency, date, description and tags; first given its sender's Auto cost when it has no cost basis (below) |
 | `CASH_TRANSFER`, `FX_CONVERSION` | `WITHDRAWAL` when its amount is negative, `DEPOSIT` otherwise, without asset |
-| Giving `TRANSFER` (quantity < 0) | Still a `TRANSFER`, without its link — for now (below) |
+| Giving `TRANSFER` (quantity < 0) | `ADJUSTMENT` with the same quantity, asset, cash currency, date, description and tags, and the Auto cost of **its own** broker as its cost basis (below); still a `TRANSFER`, without its link, when that cost needs a missing conversion |
 | Any other type carrying a link (an `ADJUSTMENT` can) | The same type, without its link |
 
 Each of these rows loses its `related_transaction_id` and gets a new `updated_at`,
@@ -316,11 +323,34 @@ empty pool gives what Auto gives, a zero cost (backlog P-1); a missing conversio
 writes nothing, and the `ADJUSTMENT` stays without a cost basis (see
 [WAC & Cost Basis — Diagnostics](wac.md#diagnostics)).
 
-**The giving leg of a `TRANSFER`** only loses its link, for now. The outgoing side
+**The giving leg of a `TRANSFER`** (decision 47 of release 1.3). The outgoing side
 of a `TRANSFER` takes no cost basis (`cost_basis_pair` in `TX_TYPE_METADATA` marks
-it `forbidden`), so the split's conversion would leave an `ADJUSTMENT` taking units
-out without a cost, which reads the units it moved as destroyed. Its conversion
-waits for the developer's answer to point 47 of release 1.3.
+it `forbidden`), and an `ADJUSTMENT` taking units out without one reads the units
+it moved as destroyed: a write-off in the FIFO lots. So the leg leaves at the
+**Auto cost of its own broker**, at which the lots hand its units over (see
+[Hand-over at cost](fifo_lot_engine.md#handover-at-cost)). `_handover_cost()`
+(`auto_cost.py`) computes it: `_auto_cost()` on the leg's broker, up to its date,
+without the leg itself — not `_auto_cost_source()`, which for a `TRANSFER` still
+linked names the partner's broker, here the one being deleted. Like the receiving
+legs' costs, it is computed before any row changes, so a computation that fails
+leaves every row as it was. Then `make_standalone()` turns the leg into an
+`ADJUSTMENT` and `_write_auto_cost()` writes `cost_basis_override` and
+`cost_basis_currency`; an empty pool gives a zero cost there too. When the cost
+needs a missing conversion (no `wac`), the leg stays a `TRANSFER` and only loses
+its link: the lots refuse it (`TRANSFER_PAIR_MISSING`) and the Dashboard counts it
+at market value, as before decision 47, rather than read an `ADJUSTMENT` without a
+cost as units destroyed.
+
+The same cost is written wherever else a giving leg leaves its pair: on a split of
+the pair, in the batch's WAC stage (see
+[Split & Promote](split_promote.md#transfer-giving-leg)), and, on the legs that a
+deletion before 1.3 left as a `TRANSFER` without its partner, by the
+`lone-transfer-legs` step that runs right after the post-migration fixes (see
+[Lone giving legs](../../architecture/database/index.md#lone-transfer-legs)).
+Tests: `./dev.py test services broker` (`TestDeleteBulkCrossBrokerPair`: BR-U-073,
+076, 078 and 086–088) and `./dev.py test services orphan-transfer-numbers`
+(`TestOrphanOutgoingTransfer`: the sending broker's lots and Dashboard once the
+receiver is deleted).
 
 What the conversion changes in the figures:
 
@@ -332,6 +362,16 @@ What the conversion changes in the figures:
   in-kind `ADJUSTMENT` (`_is_capital_adjustment()`), instead of their market value
   at arrival (`DailyStateBuilder._transfer_leg_capital()`): its gain also counts
   what the units gained before the transfer.
+- **Given asset.** The sending broker's lots no longer fail on
+  `TRANSFER_PAIR_MISSING`: the `ADJUSTMENT_OUT` closes its FIFO lots at the row's
+  cost, the value handed over counting as their proceeds, and the asset's
+  performance history counts that value as money out (see
+  [Lots Analysis Service](lots_analysis_service.md#history-builders)). On the
+  Dashboard the units leave the sending broker's capital at their average cost
+  (`_is_capital_adjustment()`), instead of their market value on the transfer date
+  (`_transfer_leg_capital()`). The price marks also read the row's cost as an
+  observed `TRADE` price: an interplay still open, pending the developer's J-17
+  (see [Price Resolver](price_resolver.md#design-contract)).
 - **Cash halves.** Capital and P&L do not change: an unlinked `CASH_TRANSFER` or
   `FX_CONVERSION` already counted as an external cash flow
   (`ScopeAwareTransactionClassifier`), as the `DEPOSIT` or `WITHDRAWAL` it becomes
@@ -346,7 +386,7 @@ What the conversion changes in the figures:
 savepoint of its own (`self.session.begin_nested()`) through `_delete_one()`, which
 flushes its writes, the broker's own delete included, while the savepoint is open: a
 write error surfaces before the savepoint is released. A broker whose deletion fails
-at any point — even after `delete_by_broker()` wrote the Auto cost on a receiving
+at any point — even after `delete_by_broker()` wrote an Auto cost on a surviving
 half or unlinked the broker's own pairs — leaves every row as it was, its own and the
 other halves on other brokers. Its result has `success=False` and the error as
 `message`; the brokers before and after it in the request are still deleted.

@@ -117,7 +117,10 @@ Migration `005_accounts_invites` added three columns:
   change or reset (a reset link included), an email change, a deactivation or a demotion (from the CLI or the
   administrator API), when an administrator signs the account out everywhere, and when the initial administrator
   spends its setup link, ending every older session of the
-  account. See [Session Revocation](../security.md#session-revocation).
+  account. See [Session Revocation](../security.md#session-revocation). The first start after a
+  [restore](../security.md#backup-restore) gives every account the restore time in milliseconds instead (or one more
+  than the largest version either database held, when the clock is behind it): a time, not a counter, which a later
+  `end_sessions()` still raises by one.
 - ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified, set by `confirm_email()`
   when an account opens its verification link ([Email Verification](../../backend/email.md#verification)). It is a
   record, not a gate: nothing reads it to let an account in. The accounts that existed before the migration stay

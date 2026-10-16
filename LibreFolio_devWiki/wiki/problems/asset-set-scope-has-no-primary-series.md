@@ -106,7 +106,9 @@ cancelled the first plan is unchanged.
 
 | Role | Path |
 |------|------|
-| Builds the scope; empty values for an asset set; one preparation per request; observation gate counts the prepared set for `asset_set_*` | `backend/app/services/risk/service.py` |
+| Builds the scope; empty values for an asset set | `backend/app/services/risk/scope.py` |
+| One preparation per request | `backend/app/services/risk/service.py` |
+| Observation gate counts the prepared set for `asset_set_*` | `backend/app/services/risk/results.py` |
 | Supports ASSET_SET; consumes many series | `backend/app/services/risk_plugins/correlation/plugin.py` |
 | Supports ASSET_SET; returns no amount without weights | `backend/app/services/risk_plugins/stress/plugin.py` |
 | Scope and payload schemas; `RiskAssetSet*Output` | `backend/app/schemas/risk.py` |

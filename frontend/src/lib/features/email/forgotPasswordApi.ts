@@ -13,7 +13,7 @@ export async function requestPasswordResetEmail(identifier: string): Promise<voi
 
 /** Why the request was refused. */
 export interface ForgotFailure {
-    /** `FORGOT_PASSWORD_DISABLED`, `EMAIL_UNAVAILABLE`, `EMAIL_LINKS_UNAVAILABLE`, `EMAIL_RATE_LIMITED`, `INVALID` (422) or `UNKNOWN`. */
+    /** `EMAIL_UNAVAILABLE`, `EMAIL_LINKS_UNAVAILABLE`, `EMAIL_RATE_LIMITED`, `INVALID` (422) or `UNKNOWN`. */
     errorCode: string;
     /** `EMAIL_RATE_LIMITED`: seconds until a new request may go. */
     retryAfter?: number;

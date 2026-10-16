@@ -62,6 +62,8 @@ CONSUMERS = {
     "backend/app/services/series_preparation.py": {"STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/eligibility.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
     "backend/app/services/risk/service.py": {"RISK_MIN_OBSERVATIONS", "STALE_PRICE_THRESHOLD_DAYS"},
+    # A risk result's data quality states the threshold in its stale warnings and the banner's FX issue.
+    "backend/app/services/risk/data_quality.py": {"STALE_PRICE_THRESHOLD_DAYS"},
     # The two stale replay exclusions state the threshold in their sentence; the replay warns past
     # the excluded share.
     "backend/app/services/risk_plugins/stress/plugin.py": {"STALE_PRICE_THRESHOLD_DAYS", "REPLAY_EXCLUDED_WEIGHT_WARNING_SHARE"},

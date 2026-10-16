@@ -240,7 +240,7 @@
 
                 <button
                     type="button"
-                    class={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent dark:focus-visible:ring-offset-slate-800 ${shareConfig.brandClass}`}
+                    class={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${shareConfig.brandClass}`}
                     onclick={copyAndGo}
                     data-testid="support-social-share-copy"
                     data-copy-state={copyState}

@@ -4596,3 +4596,464 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 > - **Dal test-author, non preso**:
 >   - la data `end` in UTC vicino alla mezzanotte, che c'era già prima;
 >   - `results` vuoto che diventa `null`, come un errore. Va bene: per il chiamante significa «nessun risultato».
+> - **O-20 committato**: `2b0be1d05` (fix) e `24242bdd2` (diario), in dev con il merge `967ddbda4` (treno 127).
+>   - Il coordinatore ha portato il mio ramo a `967ddbda4` per avanzamento rapido: AF lotto 9 sulla pagina
+>     dell'asset, `ModalBase`, `ConfirmModal`.
+
+#### C-66 — l'avviso nel dialogo di sync ✅ scritto e provato in Vitest (19:30–20:09; E2E in uno slot)
+
+> - **Rossi prima** (test-author): **26 casi**, tutti rossi per la ragione giusta, e i 104 esistenti verdi (6 file).
+>   - 13 su `hasStoredPointInRange`, nel file nuovo `utils/sync/__tests__/syncHelpers.test.ts`, registrato in
+>     `core-unit`.
+>   - 1 su `extractDaysBack` esportato.
+>   - 9 su `SyncModalBase`:
+>     - un avviso per sezione, col titolo solo se le sezioni attive sono più d'una;
+>     - nessun avviso senza intersezione;
+>     - gli id che non sono bersagli vengono ignorati;
+>     - l'avviso sparisce allo Start e non torna con i risultati, anche falliti; torna a una nuova apertura;
+>     - la frase c'è nei 4 cataloghi.
+>   - 1 per ciascun involucro (`AssetSyncModal`, `FxSyncModal`, `PageSyncModal`).
+> - **Implementazione** (innesto `files/checks/c66_splice.py`, 30 sostituzioni, tutte verificate a vuoto):
+>   - `extractDaysBack` esportato, unica casa della regola dei punti riempiti all'indietro;
+>   - `SyncSection.existingIds` e `hasStoredPointInRange()` in `syncHelpers.ts`;
+>   - `SyncModalBase` mostra un `InfoBanner` di avviso per sezione prima dello Start
+>     (`{testId}-overwrite-warning`, con `data-section`, `data-existing` e `data-total`);
+>   - le prop degli involucri: `withDataInRange`, `assetsWithDataInRange`, `fxPairsWithDataInRange`;
+>   - le pagine calcolano gli id dai dati che mostrano:
+>     - Asset ed FX dalle proprie store;
+>     - le pagine di dettaglio dal grafico del proprio asset o della coppia, e dalle store delle coppie.
+>   - Prese due note del test-author:
+>     - le due pagine FX ora usano `extractDaysBack` invece della loro copia della regola;
+>     - corretti i commenti che dicevano `PageSyncAllModal`.
+> - **Non contati, documentati**: gli asset di confronto delle pagine di dettaglio; i dialoghi aperti dai pannelli
+>   di rischio, dal modulo delle transazioni e dal PAC, che non passano id e quindi non avvisano.
+> - **i18n**: `fx.sync.overwriteWarning` nelle 4 lingue, col vocabolario di `common.provider`; in FR c'è uno spazio
+>   prima di «:», come nel resto del file.
+> - **Documentazione**:
+>   - user: `assets/index.en.md` e `fx/sync.en.md`, una frase ciascuno;
+>   - developer: `core-ui/modals.md`, un paragrafo sull'avviso.
+>   - CHANGELOG: una riga ✨ in `[Unreleased]`.
+> - **Prove**, col cancello a 50:
+>   - i 6 file **130/130**;
+>   - `i18n check` rigoroso;
+>   - `front check` 0/0;
+>   - `core-unit` **189 file, 6848/6848**;
+>   - `component-unit` **158 file, 4109/4109**;
+>   - `mkdocs build` stretto, verde, senza avvisi.
+> - **⚠️ Fuori pista (ambiente)**: il primo `front check` ha dato 1 errore in `pac-allocator/planner/source.ts:290`.
+>   - Il client generato era delle 18:39, cioè di prima dell'avanzamento rapido, e il backend di dev ha aggiunto
+>     `ESTIMATED_AT_COST` a quel campo.
+>   - Dopo `api sync`: 0/0.
+> - **Resta**: l'E2E del C-66, che il test-author scrive senza farlo girare, insieme all'E2E combinato `asset-modal` e
+>   `asset-list` con AF lotto 9. Gireranno nello slot che il coordinatore assegna.
+> - **E2E del C-66, scritti dal test-author e non ancora fatti girare** (20:2x). Sono 5 test, tutti col filtro
+>   `C-66`:
+>   - `front-asset asset-list C-66` (2): un periodo con prezzi salvati avvisa una volta, con `data-existing` fra 1 e
+>     il totale e il testo uguale a quello del catalogo; un periodo futuro, riempito solo all'indietro, non avvisa.
+>     Senza premere Start e senza richieste di sync.
+>   - `front-fx fx-sync C-66` (2): lo stesso per le coppie.
+>   - `front-asset asset-detail C-66` (1): la sezione `assets` conta l'asset della pagina, `data-existing="1"`.
+>   - La fixture nuova `e2e/fixtures/sync-overwrite.ts` contiene:
+>     - le precondizioni lette dall'API;
+>     - la frase del catalogo, con `intl-messageformat`;
+>     - il registro delle richieste di sync.
+>   - `assets-helpers.ts`: `goToAssetsPage` e `goToAssetDetailPage` accettano `search`.
+>   - Le `desc=` del runner per `asset-list`, `asset-detail` e `fx-sync` dicono la copertura C-66.
+> - **Ritocco**: nella pagina FX, `syncModalWithData` usa un `Set` invece di `includes` dentro `filter`, che era
+>   quadratico. Nota del test-author. `front check` 0/0.
+> - ruff e black segnalano solo gli E701 già presenti nei file del runner, su righe non toccate. Il perimetro del
+>   lint è `backend/`.
+> - **Slot E2E** alle 20:45, cut-off 21:15, con il copione `files/checks/c66_e2e_slot.sh`:
+>   1. `front-asset asset-list C-66`, poi `front-fx fx-sync C-66`, poi `front-asset asset-detail C-66`;
+>   2. poi `front-asset asset-modal` e `front-asset asset-list` per intero, sulla revisione combinata con AF lotto 9.
+> - **Slot 1 (20:32–20:48)**, anticipato perché J aveva finito. Porta 6183 libera alla fine.
+>   - C-66:
+>     - `asset-list C-66` 2/2;
+>     - `fx-sync C-66` 2/2;
+>     - `asset-detail C-66` 1/1.
+>   - **Revisione combinata con AF lotto 9**: `asset-modal` 18/18, `asset-list` 30/30.
+>   - **Pagine toccate dal C-66, per intero**: `fx-sync` 5/5, `fx-list` 12/12, `fx-detail` 17/17, `asset-detail` 35/35.
+>   - Una sola build, al primo spec.
+> - **C-66 ✅ pronto per l'handoff**. Le voci C-66 (sezione W/C del backlog) e O-20 (backlog 38) le chiude il
+>   coordinatore, perché non sono nella mia sezione.
+> - **C-66 committato**: `32c64bbd9` (feat) e `a335fa78d` (diario).
+
+### Diciottesimo aggiornamento di base: `dev_release2` (`27994759a`, con Y11 `pageBusy`) nel ramo X — merge aperto, combinato verde (2026-10-16, 20:50–21:01)
+
+> - **Conflitti** (HEAD `a335fa78d`, MERGE_HEAD `27994759a`):
+>   - `assets/+page.svelte`, sugli import: tenuti sia `pageBusy` di Y sia il mio `hasStoredPointInRange`.
+>     - I `pageBusy.track` di Y coprono il caricamento, i ricaricamenti, il periodo e gli aggiornamenti.
+>     - I miei gestori della creazione (`handleAssetCreated`, `handleCreatedAssetSynced`) restano fuori dal
+>       tracciamento, come vuole P3, e Y li ha già annotati.
+>     - Rispetto a dev, il file differisce solo per le aggiunte del C-66.
+>   - `CHANGELOG.md`: aggiuntivo. Prima le due righe ✨ di dev (`user set-email`, `LIBREFOLIO_BRIM_PREWARM`), poi la
+>     mia.
+>   - In stage solo quei due file.
+> - **Prove leggere sulla revisione combinata**, col cancello a 50:
+>   - `api sync`;
+>   - `front check` 0/0;
+>   - `core-unit` **190 file, 6866/6866**;
+>   - `component-unit` **158 file, 4123/4123**.
+> - **Prossimo**: lo slot 2 (~21:30, dopo E) con `front-asset asset-list` e `front-portfolio page-busy` sulla
+>   revisione combinata, poi l'ingresso in dev.
+> - **Merge 18 committato** dal coordinatore: `941704538`, più il diario in `910c8f962`.
+> - **Slot 3 (21:01–21:12)**, preso in prestito, sulla revisione combinata `910c8f962`:
+>   - `front-asset asset-list` **30/30**;
+>   - `front-portfolio page-busy` **12/12**.
+>   - La build del frontend ha preso circa 7 minuti con carico 66–71. Alla fine la porta 6183 era libera, e lo slot è
+>     stato restituito subito perché Y aspettava.
+> - **Prossimo**: F21/C-90, poi O-8.
+> - **C-66 in dev**: merge `4b2e0df80` (treno 138). Il coordinatore ha chiuso C-66 e O-20 nei backlog.
+
+### F21, C-90 e P20 — frontend e `mailto:` ✅ (2026-10-16, 21:15–00:05; sotto-lotti 1 e 2 in dev, il 3 consegnato)
+
+> - **Tre sotto-lotti**, ciascuno col suo checkpoint:
+>   1. **P20 backend**: `LIBREFOLIO_SUPPORT_URL` accetta `mailto:` e un indirizzo, secondo la specifica di H.
+>      - L'indirizzo passa da `EmailStr`, senza DNS, dopo un controllo esplicito di `?`, `#`, `%`, `,`, `;`, `<`, `>`,
+>        `"` e degli spazi, che `EmailStr` da solo accetterebbe o toglierebbe ai bordi.
+>      - Lo schema vale con qualunque maiuscola e si salva `mailto:`; `env_url` resta solo http(s).
+>      - Il rosso è del test-author, in `test_config_package.py`.
+>   2. **C-90**: la nota accanto all'esito di «Testa configurazione».
+>   3. **F21 e P20 nel frontend** (`AssetSearchAutocomplete`):
+>      - con almeno un premium, la sezione Premium e la sezione community chiusa, con l'avviso alla prima apertura;
+>      - «Segnalacelo» dopo ogni ricerca: `mailto:`, oppure la pagina col rapporto negli appunti, oppure la issue
+>        di GitHub;
+>      - il frontend ricontrolla lo schema, mai `javascript:`.
+> - Z prende `assets/+page.svelte` e `assets/[id]/+page.svelte` (lotto A); i miei sotto-lotti non li toccano.
+> - **Z-8 su `assetDetailLive.svelte.ts`**: ok, lo scrive Z. Gli ho segnalato che il test fissa gli ingressi
+>   dell'effetto e che `live-ticker.md` va tenuto allineato.
+
+1. ✅ **P20 backend: `mailto:` in `LIBREFOLIO_SUPPORT_URL`** (21:15–23:35; consegnato al coordinatore alle 23:36).
+   > **Note implementazione**:
+   > - **Il rosso** (test-author): 58 casi nuovi in `test_config_package.py` e due righe in
+   >   `test_system_api.py::test_the_configured_support_address_is_answered`
+   >   (`mailto:Help@Example.ORG` → `mailto:Help@example.org`; `mailto:help?cc=x@example.org` → `null`).
+   >   Lanciato prima del codice: **12 rossi, 789 verdi**.
+   > - **`config/platform.py`**:
+   >   - `support_url()` toglie gli spazi ai bordi. Se il valore comincia con `mailto:`, con qualunque maiuscola,
+   >     passa a `_mailto()`; altrimenti a `env_url()`, che resta solo http(s);
+   >   - `_mailto()` rifiuta l'indirizzo vuoto, gli spazi, `? # % , ; < > " /` (`_MAILTO_FORBIDDEN`) e quello che
+   >     `EmailStr` rifiuta (senza DNS). Il `ValueError` nomina la variabile e cita il valore;
+   >   - il valore valido si restituisce come `mailto:` più l'indirizzo normalizzato da `EmailStr`.
+   > - **`schemas/system.py`**: la descrizione di `InstanceConfigResponse.support_url` dice le due forme, e `null`
+   >   quando non è impostata o non è valida.
+   > - **Doc**: `.env.example`, con la nota «l'indirizzo è pubblico»; `admin/configuration.en.md`;
+   >   `admin/hosting_providers.en.md`; `developer/architecture/settings.md`.
+   > - **CHANGELOG**: la riga arriva col sotto-lotto 3, quando la segnalazione diventa visibile.
+   > - **Due cose da dire a H**, che ha scritto la specifica:
+   >   - la stretta oltre la specifica: anche `<`, `>`, `"` e `/` sono rifiutati;
+   >   - `EmailStr` restituisce un dominio punycode in Unicode: `xn--bcher-kva.de` diventa `bücher.de`.
+   > - **Prove**, con il carico a ≤ 50, una alla volta:
+   >   - `services config-package` → **804/804**;
+   >   - `services config-env-example` → **38/38**;
+   >   - `api sync` → ok;
+   >   - `mkdocs build` (stretto, 22:05–22:08) → verde, nessun avviso, 3076 URL relativi risolti.
+   >
+   > **⚠️ Fuori pista (21:50)**: `api system` avvia il server della corsia.
+   > - Il server ricostruisce il frontend quando un file di `frontend/src` è più recente della build, file di test
+   >   compresi (`cli_base.check_frontend_needs_build`).
+   > - Il test-author del C-90 aveva già scritto in `ProviderAssignmentSection.test.ts` quando l'ho fermato: la build
+   >   delle 21:03 è scaduta, e `api system` è diventato un passo pesante, che chiede uno slot.
+   > - La catena è ripartita senza `api system`. Il test-author finisce i casi nel file, ma non lancia niente.
+   > - **Lezione**: prima di far partire un test-author sul frontend, finire i test API che avviano il server.
+   >
+   > **Slot per `api system`** (coordinatore, 22:02): lo slot 1 va prima a W per l'FE8b, poi a me verso le 22:50. Il commit
+   > del sotto-lotto 1 arriva dopo. Intanto vanno avanti i rossi del C-90 e il sotto-lotto 3, solo controlli leggeri.
+   > Script dello slot: `files/checks/slot.sh <prefisso> "<cat> <azione> …" …` (log `files/checks/logs/<prefisso>_N.log`).
+   >
+   > **Slot 1** (23:26–23:33, carico 49–88):
+   > - prima il Vitest di `AssetModal` (42/42), che prova che il codice compila prima della build pesante;
+   > - poi `test db populate --force`, sulla corsia, che è il setup delle API;
+   > - infine `api system` → **122/122**. Il server ha ricostruito il frontend in debug e la doc, scaduti dalle 21:50.
+   > - Porta 6183 libera alle 23:33:30; il coordinatore è stato avvisato subito, perché Y aspettava.
+   > - ruff e black puliti sui quattro file Python; `git diff --check` pulito.
+   >
+   > **Cosa resta fuori dal commit del sotto-lotto 1**:
+   > - `admin/configuration.en.md`: il docs-writer del sotto-lotto 3 ha riscritto la riga di `LIBREFOLIO_SUPPORT_URL`,
+   >   e ora punta all'ancora `#let-us-know`, che solo il sotto-lotto 3 aggiunge. Il file va col sotto-lotto 3, se no
+   >   la build stretta di quel commit fallirebbe;
+   > - la riga del CHANGELOG su `mailto:`, che sta in quella di «Let us know».
+
+2. ✅ **C-90: la nota sulla portata della prova** (21:30–22:27) — committato dal coordinatore: `656667b86`, solo i suoi
+   percorsi, ed entrato in `dev_release2` (22:35). Il journal va col commit del sotto-lotto 1.
+   > **Note implementazione**:
+   > - **Il rosso** (test-author): 8 casi nuovi in `ProviderAssignmentSection.test.ts`, nel blocco
+   >   «the probe’s scope note (C-90)». Tre casi chiedono la nota dopo una prova manuale con una riga `history` riuscita,
+   >   con un avviso, oppure riuscita mentre il prezzo corrente falliva. Cinque casi la vietano: prima della prova, durante,
+   >   con la prova fallita in blocco, senza riga `history`, dopo una prova automatica.
+   >   - Il testo si confronta col catalogo, e il caso controlla che la chiave esista.
+   >   - Il test-author aveva toccato anche il `totalLineOf` dei casi M-18. Non serve, perché la nota sta fuori dalla lista
+   >     dei risultati, e l'ha riportato com'era: il diff del file è di sole aggiunte (+173).
+   >   - **Rosso confermato** (22:03, carico 47): **3 rossi, 56 verdi su 59**. I tre falliscono per la nota assente.
+   > - **Il codice**:
+   >   - `assets.probe.scopeNote` in 4 lingue, con `dev.py i18n add` (sorgente `i18n/assets/`);
+   >   - in `ProviderAssignmentSection.svelte`, `showScopeNote`: una prova manuale conclusa con una riga `history`
+   >     che non è un errore;
+   >   - la nota è un `<p>` dopo la lista bordata, `data-testid="provider-test-scope-note"`, icona `Info`, solo ruoli
+   >     (`text-lf-muted`);
+   >   - una lettura della storia fallita davvero non mostra la nota: l'asset creato non avrebbe lo storico promesso.
+   > - Prettier pulito sui due file.
+   > - **CHANGELOG**: una riga in «✨ Added», dopo quella del C-66 («Test configuration says what it read…»). Il CHANGELOG
+   >   non rende vecchio il sito della doc, che guarda solo `mkdocs_src/docs/**/*.md` (`dev.py:auto_build_mkdocs`).
+   > - **Prove** (22:19–22:25, carico 41–47, una alla volta):
+   >   - Vitest `ProviderAssignmentSection.test.ts` → **59/59**;
+   >   - colori `theme-roles.mjs --check` → puliti;
+   >   - `i18n check` → 4789 chiavi, rigoroso;
+   >   - `front check` → **0 errori, 0 avvisi**.
+   > - Nessuna E2E guarda la struttura dell'esito della prova (`asset-modal.spec.ts` clicca solo il pulsante), e nessuno
+   >   scatto della galleria mostra una prova conclusa.
+
+3. ✅ **F21 e P20 nel frontend** (22:10–00:03; consegnato al coordinatore alle 00:05).
+   > **Disegno** (dentro il perimetro approvato; `AssetModal.svelte` concesso dal coordinatore alle 21:57 per una prop):
+   > - **Due moduli puri** accanto al componente (FE5a li sposterà con gli altri):
+   >   - `assetSearchSections.ts`: `searchRank`, `orderSearchResults` (stabile: premium prima, poi priorità più bassa;
+   >     ai valori di default resta l'ordine d'arrivo, D-X3), `hasPremium`, `splitSearchResults`;
+   >   - `assetSearchReport.ts`: `supportChannel` (ricontrolla lo schema: `mailto:` con un solo indirizzo senza
+   >     `? # % , ; < > " /` né spazi, oppure http(s) con un host; tutto il resto → issue di GitHub),
+   >     `buildSearchReport` e `reportHref` (`mailto:` con le righe in CRLF, RFC 6068; la issue con `title` e `body`;
+   >     la pagina così com'è).
+   >   - Prima i moduli sono **stub** con le firme definitive, che lanciano «not implemented»: i rossi falliscono caso
+   >     per caso, non all'import. Le implementazioni aspettano in `files/drafts/`.
+   > - **Le sezioni** si mostrano solo quando un provider **interrogato da questa ricerca** è premium:
+   >   - un premium deselezionato lascia la lista com'era;
+   >   - la sezione community parte chiusa, e all'apertura mostra l'avviso sopra i risultati;
+   >   - l'apertura vale per l'istanza del componente (cioè per l'asset), non si salva da nessuna parte;
+   >   - gli indici `asset-search-result-{i}` continuano dalla sezione premium a quella community.
+   > - **La segnalazione** compare dopo ogni ricerca finita, anche con «nessun risultato» o con l'errore, mai durante.
+   >   - Con le sezioni sta fra le due; altrimenti in fondo alla tendina.
+   >   - Il rapporto è **in inglese, fisso**: lo legge il supporto, e una issue di GitHub è in inglese. Le scritte
+   >     della UI sono tradotte.
+   >   - Gli esiti per provider vengono dagli eventi dello stream (`provider_results`, `provider_error` con
+   >     `error_code`) o dalle liste della risposta REST. Chi non ha risposto, per esempio per il timeout, compare come
+   >     «no answer».
+   >   - Il contesto (valuta, tipo, identificativi) arriva da `AssetModal`, con la prop `reportContext`.
+   >   - Con il canale «pagina», il clic apre la pagina e copia il rapporto con `writeTextToClipboard`, seguito da un
+   >     toast.
+   > - **Chiavi i18n** (11, in `assets.search.*`): `premiumBadge`, `premiumEmpty`, `communitySection` (ICU, FR con
+   >   `many`), `communityWarning`, `reportQuestion`, `reportAction`, `reportVia.{mailto,page,github}`, `reportCopied`,
+   >   `reportCopyFailed`. Lo script è `files/checks/sublot3_i18n.sh`.
+   > - **Bozza del componente**: `files/drafts/AssetSearchAutocomplete.svelte`. La riga del risultato è spostata così
+   >   com'è nello snippet `resultRow`, con lo script `files/checks/sublot3_template.py`, che conta ogni sostituzione.
+   >   - Il tooltip del link legge chiavi letterali (`REPORT_VIA_KEY`), non un template: l'audit i18n le vede tutte.
+   >   - Il badge «Premium» usa la coppia `bg-lf-info-soft` / `text-lf-info-on-soft`, come gli altri badge dell'app.
+   >     Non c'è un componente badge condiviso.
+   > - **`AssetModal`**: `searchReportContext` derivato (valuta, tipo, identificativi non vuoti) sulle due chiamate.
+   >   Lo script è `files/checks/sublot3_modal.py`.
+   > - **Conflitto previsto** (coordinatore, 22:35): le 2 righe di registrazione in `_frontend_utility.py` toccano lo
+   >   stesso file dell'FE8b di W, che cambia righe di percorso. Chi entra per secondo risolve: quasi certamente io,
+   >   dopo l'FE8b.
+   >
+   > **I rossi** (test-author, 22:05–22:40, scritti e non lanciati):
+   > - `assetSearchSections.test.ts` (nuovo, core-unit): 28 casi, 27 rossi attesi;
+   > - `assetSearchReport.test.ts` (nuovo, core-unit): 70 casi, 69 rossi attesi. Contiene 44 righe di
+   >   `supportChannel` e la privacy: niente campi fuori dall'input, niente `window.location`;
+   > - `AssetSearchAutocomplete.test.ts`: 26 casi nuovi (F1–F9 e R1–R14), 24 rossi attesi. Il controllo D-X3 (F1) è
+   >   già verde;
+   > - `AssetModal.test.ts`: un caso eseguito sulle due chiamate della ricerca;
+   > - nessun caso esistente toccato; i due file puri sono registrati nel `core-unit`.
+   >
+   > **Decisioni alla revisione** (22:45):
+   > - **`notify()` al posto di `toasts`**, come vuole `frontend.instructions.md`, sul modello di `LinkShare`
+   >   (`accounts.link.copied`). Gli eventi sono `assets.search.report.copied` e `assets.search.report.copyFailed`,
+   >   con `detail: {channel: 'page'}`; i test leggono la metà strutturata. Ho chiesto al test-author di adattare R9 e R10.
+   > - **Il rapporto resta raggiungibile** (R15, segnalato dal test-author). Oggi, dopo una ricerca vuota o fallita e un
+   >   clic fuori, la tendina non si riapre finché non si scrive di nuovo, e il caso tipico della segnalazione si perde.
+   >   Quindi `handleFocusIn` riapre quando una ricerca è finita, e svuotare la casella dimentica la ricerca.
+   >   È una decisione dentro il perimetro di P20 («dopo ogni ricerca»).
+   > - **Fuori perimetro**: con streaming e REST entrambi falliti il messaggio non è tradotto. Va nel backlog come
+   >   **X-R31**.
+   >
+   > **⚠️ Fuori pista**: la prima corsa dei rossi era in coda al cancello del carico (150–190, slot di W). L'ho fermata
+   > prima che partisse, per lanciare i rossi una volta sola, sui file finali.
+   >
+   > **Rosso confermato** (22:55, carico 45), una sola corsa sui quattro file: **124 rossi, 62 verdi (186)**, esattamente i
+   > rossi attesi. Per file: Sections 27/28, Report 69/70, AssetModal 2/39, Autocomplete 26/49. I fallimenti sono
+   > «not implemented» degli stub (41), chiavi assenti dal catalogo, ordine e sezioni non applicati; nessun errore
+   > d'import.
+   >
+   > **Il codice** (22:57, `files/checks/sublot3_apply.sh`, che si ferma se un file è cambiato dopo la bozza):
+   > - i due moduli puri, il componente, la prop in `AssetModal` (`sublot3_modal.py`), le 11 chiavi in 4 lingue
+   >   (`sublot3_i18n.sh`); Prettier pulito sui quattro file di prodotto.
+   > - **Verde** (23:01, carico 48): **186/186** al primo giro.
+   > - `check-orphans` → ogni test registrato è raggiungibile; colori → puliti; `i18n check` → 4800 chiavi, rigoroso.
+   >
+   > **⚠️ Fuori pista (23:06)**: `front check` → **1 errore** di tipo. `instanceConfig.config.support_url` esce dal
+   > client generato come `string | (string | null)[] | null`.
+   > - È un difetto del generatore: ogni stringa nullable con descrizione riceve anche `Array<string | null>` nel tipo
+   >   TypeScript (345 campi). Il validatore Zod a runtime accetta solo `string | null`.
+   > - La cura sta nel punto d'uso: a `supportChannel` arriva solo una stringa, altrimenti `null`.
+   > - Vitest non l'aveva visto, perché non controlla i tipi.
+   >
+   > **CHANGELOG**: due righe in «✨ Added» dopo quella del C-90, le fonti premium e «Let us know» con
+   > `LIBREFOLIO_SUPPORT_URL`. La seconda copre anche il `mailto:` del sotto-lotto 1.
+   >
+   > **In corso** (in background):
+   > - l'E2E di F21 e P20, scritto dal test-author in `asset-modal.spec.ts`, due casi con le risposte instradate, da
+   >   lanciare in uno slot;
+   > - la doc, scritta dal docs-writer: `user/assets/create-edit.en.md` (la nota C-90, la ricerca e «Let us know»),
+   >   `asset_plugin_guide.md` «Search Order», `search_link_finder.md` «Frontend wiring», la riga di
+   >   `LIBREFOLIO_SUPPORT_URL` in `admin/configuration.en.md`.
+   >
+   > **Effetto sulla galleria**:
+   > - la galleria degli import risponde alla ricerca con un errore per ogni provider (`galleryReportSets.ts`): negli
+   >   scatti della modale dell'asset precompilata, la riga della segnalazione comparirà sotto «nessun risultato»;
+   > - nessuna spec della galleria la controlla. Va detto a G.
+   >
+   > **`front check` dopo la cura** (23:11–23:14): **0 errori, 0 avvisi**.
+   >
+   > **La doc** (docs-writer, 23:05–23:25, solo inglese, nessuna build lanciata):
+   > - `user/assets/create-edit.en.md`:
+   >   - il passo 2 della creazione rimanda a «Let us know»;
+   >   - due sezioni nuove, `#search-online-results` e `#let-us-know`, con la tabella delle tre destinazioni e cosa
+   >     contiene il rapporto;
+   >   - la frase del C-90 nel passo 2 di «Connect a price provider»;
+   > - `asset_plugin_guide.md` «Search Order», `search_link_finder.md` «Frontend wiring» (la prop `reportContext` e un
+   >   paragrafo sul rapporto), la riga di `LIBREFOLIO_SUPPORT_URL` in `admin/configuration.en.md`;
+   > - non timbrata: è contenuto nuovo, e il debito di traduzione resta vero. Le pagine developer non puntano alle ancore
+   >   utente nuove, che in IT/FR/ES non esistono ancora.
+   > - Fuori perimetro, non corretto: in `asset_plugin_guide.md`, «How It Works» dice che il frontend chiama `GET …/search`.
+   >   In realtà usa prima lo streaming e il REST solo come ripiego.
+   >
+   > **⚠️ Fuori pista — le impostazioni predefinite nel rapporto** (segnalato dal docs-writer, 23:20):
+   > - un modulo nuovo e vuoto parte con valuta = valuta base dell'utente e tipo = STOCK, quindi il rapporto diceva
+   >   «In the form: currency EUR, type STOCK» anche se l'utente non li aveva scelti: un indizio falso per il supporto;
+   > - il developer aveva detto «valuta ed exchange **se c'erano**»;
+   > - **regola nuova**: il rapporto nomina valuta e tipo solo in modifica, se li ha riempiti l'import, se li ha scelti
+   >   l'utente (`currencyUserSet`) o se sono diversi dai valori del modulo vuoto, registrati in `resetForm`
+   >   (`blankCurrency`, `blankAssetType`). Gli identificativi restano come prima;
+   > - **i rossi** (test-author): tre casi nuovi in `AssetModal.test.ts`:
+   >   - (c) creazione senza precompilazione: nessuna riga «In the form»;
+   >   - (d) modifica: `currency USD, type STOCK`;
+   >   - (e) tipo cambiato in ETF: solo `type ETF`.
+   >   Attesi rossi (c) ed (e). Il codice è pronto in `files/checks/sublot3_modal_defaults.py`;
+   > - la valuta base si legge una sola volta, in `resetForm` (`get(userSettings)`), quindi il valore registrato lì
+   >   resta coerente anche se le impostazioni arrivano dopo;
+   > - la doc utente è già allineata: «unless they are still the defaults of a new, blank form».
+   > - **Rosso** (23:22, carico 38): (c) ed (e) rossi, 2 su 91 insieme al file ASA. I 49 casi ASA verdi confermano anche
+   >   il restringimento di `support_url`.
+   > - **Il codice** (23:24): `blankCurrency` e `blankAssetType` sono registrati in `resetForm`.
+   >   - ⚠️ Fuori pista: il derivato stava alla riga ~218 e leggeva `currencyUserSet` e `blankCurrency`, dichiarati circa
+   >     170 righe più sotto. A runtime va bene, perché `$derived` è pigro, ma svelte-check vede l'espressione sul posto
+   >     (rischio TS2448). L'ho spostato dopo le dichiarazioni (riga 393).
+   > - **Verde** (23:26, all'inizio dello slot 1): `AssetModal.test.ts` **42/42**.
+   >
+   > **Sotto-lotto 1 committato ed entrato** (coordinatore, 23:40): `62933bf46` (codice) e `b3e2fae02` (journal). Il
+   > coordinatore ha risolto `hosting_providers.en.md`, tenendo la mia riga del supporto e quella di B sulla politica di
+   > riavvio. Al prossimo aggiornamento di base va unito a mano `_frontend_utility.py` (FE8b di W più le mie 2 righe).
+   >
+   > **L'E2E** (test-author, 23:05–23:25, scritto, non ancora lanciato): un blocco in fondo a
+   > `e2e/assets/asset-modal.spec.ts`, due test.
+   > 1. **Premium prima**:
+   >    - nello stream instradato il premium risponde per ultimo, così l'ordine viene dal livello e non dall'arrivo;
+   >    - la segnalazione sta in mezzo; la community è chiusa (`data-count` 1), e aperta mostra l'avviso e il risultato #2;
+   >    - il link GitHub decodificato contiene l'URL della issue, `Search:`, le righe dei provider della ricerca
+   >      instradata, e la riga `LibreFolio …`, con profilo e `html[lang]`, letta con `expect.poll`.
+   > 2. **`mailto:` e riapertura**:
+   >    - `/system/instance` instradato con `mailto:support@example.org`, ricerca vuota;
+   >    - l'href `mailto:` ha CRLF e oggetto;
+   >    - un clic sul campo del nome chiude la tendina, il focus la riapre in `empty` con la riga, senza una seconda
+   >      ricerca.
+   >
+   > - **Le rotte**:
+   >   - solo i percorsi esatti, solo GET;
+   >   - le risposte vere riscritte, togliendo `content-encoding` e `content-length`, perché il backend comprime in
+   >     gzip da 1 KB in su;
+   >   - premium = il primo codice cercabile in ordine di codice (oggi `borsa_italiana`), community = il secondo
+   >     (`justetf`).
+   > - Visto dal test-author, fuori perimetro: la vecchia rotta «Bug G» su `/settings/user`, nello stesso file, fa
+   >   `fulfill({response, json})`. Si romperebbe allo stesso modo se quella risposta arrivasse a 1 KB.
+   > - **Slot 2** chiesto per `front-asset asset-modal` (tutto il file) e `front-utility plugin-settings` (la ricerca
+   >   con «Configure» e 👑), circa 20 minuti. La build del frontend fatta nello slot 1 contiene già il codice finale: fino
+   >   allo slot non tocco `frontend/src` né il CHANGELOG.
+   > - **La galleria** (via coordinatore): G riceve la nota sulla riga della segnalazione negli scatti degli import, e
+   >   lo scatto delle sezioni premium da pianificare.
+   >
+   > **Slot 2** (23:41–23:48, carico 51–75, porta 6183):
+   > - `front-asset asset-modal` → **20/20**: tutto il file, compresi i due test nuovi di F21 e P20 (19 e 20);
+   > - `front-utility plugin-settings` → **5/5**: la ricerca con «Configure» e la legenda della 👑 passano per la stessa
+   >   tendina;
+   > - nessuna ricostruzione: la build dello slot 1 conteneva già il codice finale;
+   > - porta libera alle 23:48:02; il coordinatore è stato avvisato subito, perché Y aspettava.
+   >
+   > **⚠️ Fuori pista (23:41)**: prima dello slot l'unico file più recente della build era `frontend/src/.DS_Store`.
+   > - È un file di Finder, scritto alle 23:37, ignorato da `frontend/.gitignore` e non tracciato.
+   > - `check_frontend_needs_build` guarda tutti i file sotto `src` e avrebbe ricostruito il frontend per niente (6–7
+   >   minuti sotto carico): l'ho tolto. Finder lo ricrea quando serve.
+   > - Detto al coordinatore all'inizio dello slot.
+   > - Il controllo potrebbe ignorare i file di sistema come `.DS_Store`: si annota, non è un lavoro di X.
+   >
+   > **Controlli finali** (23:49–00:03, carico ≤ 50, uno alla volta):
+   > - `front check` → **0 errori, 0 avvisi**, sul codice finale (dopo lo spostamento del derivato in `AssetModal`);
+   > - `mkdocs build` stretto → verde, nessun avviso, nessuna riga INFO su ancore; 3076 URL relativi risolti;
+   > - `mkdocs check-links` → **97** link validi;
+   > - colori → puliti; `git diff --check` → pulito; porta 6183 libera.
+   >
+   > **Per dopo**:
+   > - lo scatto di galleria delle sezioni premium (il DoD lo chiede), da fare con G: serve un provider premium
+   >   instradato, come nell'E2E;
+   > - la traduzione di `create-edit` (le ancore `#search-online-results` e `#let-us-know`) e della riga di
+   >   `LIBREFOLIO_SUPPORT_URL` in `configuration`, alla prossima corsa di Aphra.
+
+### Diciannovesimo aggiornamento di base e ingresso del sotto-lotto 3 ⏳ (2026-10-17, dalle 00:04)
+
+> - **Commit del coordinatore**: `2c6fa9cfb` (codice del sotto-lotto 3) e `2a77ce1e5` (journal). Poi il merge di
+>   `dev_release2` `91d89bce6` nel ramo X, senza conflitti (anche `_frontend_utility.py` e CHANGELOG): HEAD
+>   **`ce8480897`** (genitori `2a77ce1e5` + `91d89bce6`), verificato, worktree pulito.
+>   - Le mie 2 righe del `core-unit` sono ancora al loro posto dopo l'FE8b di W (righe 105–106).
+>   - `481a93f1c` di H è ora nella base: X-R22 si può fare.
+> - **Prove sulla revisione combinata** (richiesta del coordinatore), leggere, a carico < 50, una alla volta: `api sync`,
+>   `front check`, Vitest dei 4 file della ricerca più `AssetModal` e `ProviderAssignmentSection`, `mkdocs build`
+>   stretto, `check-links`. Poi `front-asset asset-modal` nello slot 2 dopo Y (dev ha portato le modali di import di T e
+>   le pagine asset di Z). Verde → ingresso. Dopo l'ingresso, O-8 (prima di toccare `AssetDataEditorSection` va chiesto
+>   al coordinatore: W ha il via sulle righe `step` per C-97b).
+> - **Regola della notte** (coordinatore, 00:04): una domanda che solo il developer può sciogliere va scritta qui e
+>   mandata al coordinatore, poi si passa alla voce dopo.
+
+### X-R22 — l'ordine per reinserire un segreto illeggibile: proposta ⏳ (2026-10-17, 00:10; serve l'ok di H)
+
+**Stato verificato** (su `ce8480897`):
+- il testo dell'interfaccia, `pluginSettings.secret.unreadable` (`frontend/src/lib/i18n/pluginSettings/*.json:31`): «Saved,
+  but this instance's key cannot read it: enter it again.». Lo vede chi guarda il campo: l'amministratore per i segreti
+  d'istanza, l'utente per i propri. Quindi la frase deve funzionare per entrambi;
+- la riga della mia pagina `user/settings/plugins.en.md:119` (solo inglese, nessuna traduzione) cita quel testo e dice
+  «Type the secret again and save it»;
+- la pagina di H, `admin/configuration.en.md` § «Saved Secrets and the Instance Key» (`#plugin-secrets`, riga 315), cita
+  alla lettera il testo dell'interfaccia; subito dopo dice già l'ordine giusto («If you still have the old key, put it
+  back before anyone enters them again»). Le pagine IT/FR/ES di `configuration` non hanno questa sezione: nessun debito
+  di traduzione in più;
+- nessun test confronta il testo: `PluginSettingsForm.component.test.ts` guarda `data-problem` e il tipo della nota.
+
+**Proposta**:
+- la chiave, in 4 lingue:
+  - EN «Saved, but this instance's key cannot read it. If an administrator can put the old key back, that comes first;
+    otherwise enter it again.»
+  - IT «Salvato, ma la chiave di questa istanza non riesce a leggerlo. Se un amministratore può rimettere la vecchia
+    chiave, va fatto prima; altrimenti inseriscilo di nuovo.»
+  - FR «Enregistré, mais la clé de cette instance ne peut pas le lire. Si un administrateur peut remettre l'ancienne clé,
+    c'est à faire d'abord ; sinon, saisissez-le à nouveau.»
+  - ES «Guardado, pero la clave de esta instancia no puede leerlo. Si un administrador puede volver a poner la clave
+    anterior, eso va primero; si no, vuelve a introducirlo.»
+- la mia riga: la citazione nuova, e in «What to do» prima la vecchia chiave (con il link a `#plugin-secrets`), poi il
+  reinserimento;
+- la pagina di H: solo la citazione, sostituita con il testo nuovo. Serve l'ok di H, chiesto al coordinatore.
+
+**Via del coordinatore** (00:21): tutte e tre le modifiche, citazione di H compresa; H rivede al checkpoint.
+
+> **Note implementazione** (00:25–00:40):
+> - la chiave, con `dev.py i18n update` in 4 lingue (`files/checks/xr22_i18n.sh`), dopo lo slot dell'E2E, per non
+>   rendere vecchia la build dello slot;
+> - le due pagine dal docs-writer: la riga di `user/settings/plugins.en.md` (la citazione nuova; in «What to do»
+>   prima la vecchia chiave, poi il reinserimento) e, in `admin/configuration.en.md`, solo la citazione dopo «The tab
+>   says so under each one:». La frase di H resta parola per parola.
+> - **⚠️ Fuori pista**: il primo `mkdocs build` stretto è fallito: «Doc file 'user/settings/plugins.en.md' contains a
+>   link '../../admin/configuration.md#plugin-secrets', but the doc 'admin/configuration.it.md' does not contain an
+>   anchor».
+>   - `user/settings/plugins` esiste solo in inglese, quindi in ogni lingua si serve la pagina inglese, e le sue ancore
+>     si controllano contro `configuration.it|fr|es.md`, che non hanno ancora la sezione di H.
+>   - La cura: il link alla pagina senza ancora, con il nome della sezione («Saved Secrets and the Instance Key»), come
+>     fa già la riga 87.
+>   - Lezione: da una pagina solo inglese, mai un'ancora che le traduzioni della pagina di arrivo non hanno.
+> - **Fuori perimetro**: `admin/backup_restore.en.md:33`, la pagina di B, dice «reported as set but unreadable: enter
+>   it again» con parole sue, senza l'ordine di H-3. Va segnalato al coordinatore.
+> - **Prove** (carico ≤ 50): `i18n check` → 4924 chiavi, rigoroso; Vitest `features/plugin-settings/` → **304/304**
+>   (nessun test confronta il testo); `mkdocs build` stretto → verde dopo la cura.
