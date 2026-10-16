@@ -5,6 +5,7 @@
     import {zodiosApi} from '$lib/api';
     import {fetchReport} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {Briefcase, Plus, RefreshCw} from 'lucide-svelte';
     import BrokerCard from '$lib/features/brokers/BrokerCard.svelte';
     import BrokerDiscoveryCard from '$lib/features/brokers/BrokerDiscoveryCard.svelte';
@@ -96,12 +97,13 @@
         // without this guard, a second concurrent loadBrokers() could fire and race the
         // first one while reassigning brokers/brokerBreakdownById mid-flight.
         if (brokers.length > 0 && !loading) {
-            void loadBrokers();
+            void pageBusy.track('brokers-currency', loadBrokers);
         }
     }
 
     onMount(async () => {
-        await loadBrokers();
+        // The first load holds the page's Refresh button (Y11).
+        await pageBusy.track('brokers-first-load', loadBrokers);
         onboardingGuide.maybeStartContextual('broker_page_guide');
     });
 
@@ -302,7 +304,7 @@
                     message: escapeHtml($_(transactionCount > 0 ? 'brokers.deletedWithTransactions' : 'brokers.deleted', {values: {name: target.name, count: transactionCount}})),
                 },
             });
-            await loadBrokers();
+            await pageBusy.track('brokers-reload', loadBrokers);
         } catch (e) {
             if (!isClientSessionCurrent(sessionGeneration)) return;
             notify({
@@ -331,11 +333,11 @@
     }
 
     async function handleCreated() {
-        await loadBrokers();
+        await pageBusy.track('brokers-reload', loadBrokers);
     }
 
     async function handleUpdated() {
-        await loadBrokers();
+        await pageBusy.track('brokers-reload', loadBrokers);
     }
 </script>
 
@@ -362,14 +364,21 @@
                         placeholder={baseCurrency}
                         onchange={() => {
                             targetCurrencyManuallySet = true;
-                            void loadBrokers();
+                            void pageBusy.track('brokers-currency', loadBrokers);
                         }}
                     />
                 </div>
             </div>
 
-            <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" disabled={loading} on:click={loadBrokers} title="Refresh">
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={18} />
+            <button
+                class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors disabled:opacity-50"
+                data-testid="brokers-refresh"
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                disabled={pageBusy.busy}
+                on:click={() => pageBusy.track('brokers-refresh', loadBrokers)}
+                title="Refresh"
+            >
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={18} />
             </button>
             <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" data-testid="add-broker-button" use:guideAnchor={'broker.page.add'} on:click={openCreateModal}>
                 <Plus size={18} />
