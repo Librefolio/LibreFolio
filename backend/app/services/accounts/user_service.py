@@ -468,7 +468,8 @@ async def update_profile(
         user.username = username
 
     # Check email uniqueness (if changing)
-    if email is not None and email != user.email:
+    email_changed = email is not None and email != user.email
+    if email_changed:
         existing = await get_user_by_email(session, email)
         if existing:
             return None, "Email already registered"
@@ -485,7 +486,8 @@ async def update_profile(
     await session.commit()
     await session.refresh(user)
 
-    logger.info("User profile updated", user_id=user.id, username=user.username, email=user.email)
+    # Never the address in the log (workstream E's rule): whether it changed is enough.
+    logger.info("User profile updated", user_id=user.id, username=user.username, email_changed=email_changed)
     return user, None
 
 
