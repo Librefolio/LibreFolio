@@ -58,7 +58,7 @@ export type UpdateProfileResponse = z.infer<typeof schemas.UpdateProfileResponse
 // =============================================================================
 
 /** Catalogue keys of the sign-in failures the login card translates. */
-export type AuthErrorKey = 'auth.invalidCredentials' | 'auth.invalidInput' | 'auth.loginFailed' | 'auth.accountDisabled' | 'auth.loginServerUnreachable' | 'auth.loginServerError' | 'auth.tooManyAttempts';
+export type AuthErrorKey = 'auth.invalidCredentials' | 'auth.invalidInput' | 'auth.loginFailed' | 'auth.accountDisabled' | 'auth.loginServerUnreachable' | 'auth.loginServerError' | 'auth.tooManyAttempts' | 'email.verification.loginRequired';
 
 /**
  * Why the last sign-in failed: a catalogue key, translated where it is drawn so it follows

@@ -27,6 +27,16 @@ Zeros are compared numerically. Today the synthetic flow of a zero start NAV is 
 that is ``Decimal("-0")``; ``Decimal("-0") == Decimal("0")``, and the NamedTuples compare their
 fields with ``==``, so the sign of a zero is not part of the contract.
 
+CP-10a (workstream J, developer's decision 29 — one Rolling Return, in calendar days): the price
+return of two prices gets its home here too. ``price_return(start, end)`` is ``end / start - 1``
+exactly, that expression and no rounding, and ``None`` when a price is missing or the start price is
+zero: never a division by zero. Two sites write it in place today and will call it, with identical
+values: the prepared returns of ``series_preparation.py`` (``current.target_close /
+previous.target_close - Decimal("1")``) and the calendar rolling return
+(``signal_plugins/calendar_rolling_return/plugin.py``, ``(current.close / reference.close - one) *
+hundred``). Both are copied below as they stand (``*_today``) and compared exactly. Red by absence,
+like the CP-4a names: ``returns.price_return`` is read while each test runs.
+
 Pure: no database, no server, no network.
 """
 
@@ -511,3 +521,82 @@ class TestGainLossRatio:
             result = ratio if ratio is not None else Decimal("0")
             assert result == _broker_gain_loss_pct_today(gain, base), f"broker, gain={gain} base={base}: {result}"
             assert result == _headline_gain_loss_pct_today(gain, base), f"headline, gain={gain} base={base}: {result}"
+
+
+# =============================================================================
+# price_return (CP-10a)
+# =============================================================================
+
+
+def _prepared_return_today(previous_close: Decimal, current_close: Decimal) -> Decimal:
+    """The prepared return of ``series_preparation.py`` (``prepare_asset_series_set``), before its ``float()``, as written."""
+    return current_close / previous_close - Decimal("1")
+
+
+def _calendar_return_today(reference_close: Decimal, current_close: Decimal) -> Decimal:
+    """The calendar rolling return of ``calendar_rolling_return/plugin.py`` (``compute``), before its ``float()``, as written."""
+    one = Decimal("1")
+    hundred = Decimal("100")
+    return (current_close / reference_close - one) * hundred
+
+
+class TestPriceReturn:
+    """``price_return(start, end)``: ``end / start - 1``, exact; ``None`` without a price or on a zero start price."""
+
+    def test_a_gain_is_end_over_start_minus_one_exactly(self):
+        result = returns.price_return(Decimal("100"), Decimal("110"))
+
+        assert isinstance(result, Decimal)
+        assert result == Decimal("110") / Decimal("100") - 1
+        assert result == Decimal("0.1")
+
+    def test_a_loss_gives_a_negative_return(self):
+        result = returns.price_return(Decimal("120"), Decimal("90"))
+
+        assert result == Decimal("90") / Decimal("120") - 1
+        assert result == Decimal("-0.25")
+
+    def test_the_start_price_comes_first_and_the_end_price_second(self):
+        """The signature is ``price_return(start, end)``: by position and by name alike."""
+        assert returns.price_return(Decimal("100"), Decimal("110")) != returns.price_return(Decimal("110"), Decimal("100"))
+        assert returns.price_return(start=Decimal("100"), end=Decimal("110")) == Decimal("0.1")
+        assert returns.price_return(end=Decimal("110"), start=Decimal("100")) == Decimal("0.1")
+
+    def test_the_result_is_not_rounded(self):
+        """No quantize and no float: 1 / 3 − 1 keeps the precision of the Decimal context; through a float it would read
+        -0.6666666666666667."""
+        result = returns.price_return(Decimal("3"), Decimal("1"))
+
+        assert result == Decimal("1") / Decimal("3") - 1
+        assert result != Decimal(str(1.0 / 3.0 - 1.0))
+
+    @pytest.mark.parametrize("zero", ["0", "0.00", "-0"])
+    def test_a_zero_start_price_has_no_return(self, zero):
+        """Never a division by zero: the zero is compared by value, whatever its exponent or sign."""
+        assert returns.price_return(Decimal(zero), Decimal("110")) is None
+
+    @pytest.mark.parametrize(
+        ("start", "end"),
+        [
+            pytest.param(None, "110", id="no-start-price"),
+            pytest.param("100", None, id="no-end-price"),
+            pytest.param(None, None, id="no-price-at-all"),
+            pytest.param(None, "0", id="no-start-price-and-a-zero-end"),
+        ],
+    )
+    def test_a_missing_price_has_no_return(self, start, end):
+        assert returns.price_return(_dec(start), _dec(end)) is None
+
+    def test_a_zero_end_price_is_a_total_loss(self):
+        """Only the START price makes the return undefined: an end price of zero is ``0 / start - 1``, that is -1."""
+        assert returns.price_return(Decimal("100"), Decimal("0")) == Decimal("-1")
+
+    def test_matches_today_prepared_and_calendar_returns(self):
+        """Characterization: on every ordered pair of a grid of prices (gains, losses, flat pairs, awkward decimals),
+        ``price_return`` is exactly today's prepared return, and times a hundred exactly today's calendar return."""
+        prices = (Decimal("100"), Decimal("110"), Decimal("101.37"), Decimal("99.83"), Decimal("0.0042"), Decimal("12345.678901"), Decimal("3"))
+
+        for start, end in itertools.product(prices, repeat=2):
+            result = returns.price_return(start, end)
+            assert result == _prepared_return_today(start, end), f"prepared return, {start} -> {end}: {result}"
+            assert result * Decimal("100") == _calendar_return_today(start, end), f"calendar return, {start} -> {end}: {result}"

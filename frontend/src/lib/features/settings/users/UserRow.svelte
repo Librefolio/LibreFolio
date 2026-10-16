@@ -36,7 +36,8 @@ managed from the Profile tab.
     let expanded = $state(false);
 
     const deactivateReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser && isOnlyActiveAdmin ? 'last-admin' : null);
-    const reactivateReason = $derived<Reason | null>(full ? 'limit' : null);
+    // An account waiting for its email verification with a live link already holds its place (workstream E)
+    const reactivateReason = $derived<Reason | null>(full && !account.holds_place ? 'limit' : null);
     const demoteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_active && isOnlyActiveAdmin ? 'last-admin' : null);
     const deleteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser ? 'demote-first' : null);
     const reasons = $derived([...new Set([account.is_active ? deactivateReason : reactivateReason, account.is_superuser ? demoteReason : null, deleteReason].filter((reason): reason is Reason => reason !== null))]);

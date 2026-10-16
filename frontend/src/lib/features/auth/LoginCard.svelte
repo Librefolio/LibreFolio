@@ -6,6 +6,7 @@
     import {goto} from '$app/navigation';
     import {Lock, User} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
+    import VerificationNotice from '$lib/features/email/VerificationNotice.svelte';
 
     type _DispatchEvents = {
         gotoRegister: void;
@@ -60,7 +61,10 @@
             {/if}
 
             <!-- Error Message -->
-            {#if $authError}
+            {#if $authError?.key === 'email.verification.loginRequired'}
+                <!-- An account waiting for its email verification (workstream E): «send the link again» with these credentials -->
+                <VerificationNotice {password} {username} />
+            {:else if $authError}
                 <div class="bg-lf-danger-soft border border-lf-danger-line text-lf-danger-on-soft px-4 py-2 rounded-lg text-sm" data-testid="login-error">
                     {$_($authError.key)}
                 </div>
