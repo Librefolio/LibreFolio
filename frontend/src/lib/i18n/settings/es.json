@@ -162,7 +162,9 @@
           "last6h": "Últimas 6 horas",
           "last24h": "Últimas 24 horas",
           "last7d": "Últimos 7 días",
-          "last30d": "Últimos 30 días"
+          "last30d": "Últimos 30 días",
+          "deferred": "Aplazado: proveedor en pausa",
+          "retryAt": "Reintento a las {time}"
         },
         "status": {
           "title": "Estado del Planificador",
@@ -170,7 +172,9 @@
           "neverRun": "Nunca ejecutado",
           "details": "Detalles…",
           "configure": "Configurar…",
-          "configSummary": "Cada {freq}min · {times} · {days}"
+          "configSummary": "Cada {freq}min · {times} · {days}",
+          "retryAt": "Elementos en pausa reintentados a las {time}",
+          "nextAttemptAt": "Fallido: nuevo intento a las {time}"
         },
         "timezone": "Zona horaria",
         "timezoneChangeWarning": "Cambiar la zona horaria mantiene iguales estas horas y días, pero cambia el instante real de ejecución en UTC.",
