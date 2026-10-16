@@ -2904,3 +2904,383 @@ pausa scrivo solo il codice e non lancio niente, nemmeno `dev.py i18n add`.
    > - Non lanciati: E2E, galleria, mkdocs (CP11c); `vite build` e `front build`, vietati stanotte dal coordinatore.
 
 ### Checkpoint CP11b — pronto, FROZEN (2026-10-16, 02:30)
+
+Committato dal coordinatore: `649783e3f` (codice, 28 file) e `9bc442ca9` (journal).
+
+### Tredicesimo aggiornamento di base: `dev_release2` (`db384eaf5`) nel ramo X ✅ (2026-10-16) — merge `7b903ccef`
+
+- **Fusioni automatiche**, verificate sulla revisione combinata:
+  - `assets/*.json`: le mie 2 chiavi presenti e le 2 di W tolte;
+  - `_frontend_utility.py`: le 5 registrazioni mie e le 7 del bersaglio, tutte presenti.
+- **Prove leggere d'ingresso**, una alla volta con `nice` e il carico ≤ 70 (`/tmp/libreFolio_cp11b_entry_checks.sh`), tutte
+  verdi: `api sync` senza file tracciati cambiati; `i18n check` severo (4748 chiavi); `front check` 0/0;
+  `core-unit` 6144; `component-unit` 3900.
+- **E2E prima dell'ingresso**, su richiesta del coordinatore (cambia la barra delle schede di ogni pagina delle
+  Impostazioni, e i pannelli degli asset). Slot pesante 1, una spec alla volta (`/tmp/libreFolio_cp11b_e2e.sh`, log in
+  `/tmp/libreFolio_cp11b_e2e/`).
+  - `front-asset asset-modal` 17 verdi, ricostruzione del frontend compresa (la prima corsa la fa quando le
+    sorgenti cambiano).
+  - `front-utility settings` 50, `admin-users` 10, `scheduler` 17, `email-tab` 5, `backup` 5: tutti verdi, nessuna
+    prova instabile. In tutto 104, dalle 02:39 alle 03:00. Porta 6183 libera.
+  - Le altre spec che passano dalle Impostazioni non dipendono dall'elenco delle schede: nessun ciclo sulle schede, e
+    i filtri di testo di `select-components.spec.ts` non prendono «Plugins».
+- `providerProbe.ts` (riga 111, Q10 dei colori): il CP11b non lo tocca, verificato.
+
+### CP11b in `dev_release2` ✅ (2026-10-16) — treno 84, merge `0241a87e8`, con le due righe ✨ nel CHANGELOG
+
+### CP11c — E2E, documentazione, sicurezza, galleria ⏳ (via del coordinatore 2026-10-16, 03:01)
+
+Ordine dato dal coordinatore:
+1. E2E nuovi, documentazione, la riga di nav in `mkdocs.yml` (dichiarata) e il link nella scheda;
+2. revisione di sicurezza CP10–CP11;
+3. galleria. `gallery.spec.ts` è sorvegliato dai colori: l'elenco degli scatti va prima al coordinatore, che lo
+   concorda con G; la run filtrata si fa in uno slot suo, prima delle 05:15 (dalle 05:30 alle 06:45 la macchina è
+   ferma).
+
+La base si aggiorna al checkpoint. Da non toccare: `e2e/fx/fx-list.spec.ts` ed `e2e/assets/asset-data-editor.spec.ts`
+(W1-c dei colori) e `components/assets/providerProbe.ts` (Q10 dei colori).
+
+1. ⏳ Avvio, alle 03:05.
+   > - Galleria: proposto al coordinatore uno scatto solo, `settings/plugins` (e2e_test_user, tutte le lingue e i
+   >   temi, desktop e mobile, regola C4 sul desktop). Facoltativo, se G lo vuole: la modale «Configura» sopra
+   >   la modale dell'asset.
+   > - In parallelo, su file diversi:
+   >   - test-author: la spec nuova `e2e/settings/plugin-settings.spec.ts` con l'azione `front-utility plugin-settings`;
+   >   - docs-writer: la pagina utente nuova, più le pagine per admin e per sviluppatori lasciate indietro dal CP11a;
+   >   - security-review, in sola lettura.
+   > - Mio: la riga di nav `- Plugin Settings: user/settings/plugins.md` in `mkdocs.yml`, e il `DocsLink` della
+   >   scheda verso `user/settings/plugins/` (N14 chiusa).
+2. ⏳ (2026-10-16, 03:20–03:35) La revisione di sicurezza CP10–CP11 (security-review, in sola lettura).
+   > **Esito**: nessuna vulnerabilità sfruttabile su questo ramo, perché nessun plugin di produzione dichiara un
+   > segreto. Verificati e sani: crittografia e AAD, schemi di lettura, 422 e log, autorizzazioni (gestito
+   > compreso), percorsi dei valori personali, cache della ricerca, componenti nuovi (nessun `{@html}`, segreti mai
+   > nei `notify`, nella console o negli URL), stato fra utenti, CSRF, SQL, alias delle variabili, cancellazione utente.
+   > Rilievi:
+   > - **MEDIUM, latente (9/10)**: il mascheramento sostituiva una forma alla volta, prima la più lunga. Un utente che
+   >   sceglie un segreto personale lungo, parzialmente sovrapposto a un segreto di sistema che l'errore del fornitore
+   >   mostra (contesto noto + un carattere), lasciava in chiaro il resto del segreto di sistema.
+   >   - La correzione proposta, unire gli intervalli, da sola **non basta**: verificato in processo, la forma del
+   >     testo mascherato (`'***'` contro `…apikey=***`) dice ancora se l'ipotesi è giusta. Un carattere alla volta
+   >     resta un oracolo.
+   >   - **Correzione fatta** (N15):
+   >     - `mask_text` trova tutte le occorrenze nel testo originale e unisce quelle sovrapposte o contigue;
+   >     - modalità `whole`: quando la chiamata porta un segreto personale (`BoundSettings.carries_user_secrets`), il
+   >       confine degli asset nasconde intero ogni testo che mostra un segreto, e tiene tipo e `error_code`;
+   >     - i log restano mascherati con precisione; le chiamate con soli segreti di sistema restano come prima.
+   >   - Prova in processo: due ipotesi danno uscite identiche (`***`, `FETCH_ERROR`).
+   > - **LOW (9/10), percorso già esistente**: `buildProbeTooltipHtml` (`providerProbe.ts:109,138`) restituisce il
+   >   testo dell'errore senza escaparlo, reso con `{@html}`; DOMPurify ferma gli script ma non immagini, form e stili.
+   >   La correzione, `escapeHtml(result.detail)` nei due rami più la prova, tocca un file di Q10 dei colori.
+   >   **APERTO**: per decisione del coordinatore (04:25) si fa dopo l'aggiornamento della base al checkpoint del CP11c,
+   >   che porta Q10 (entrato in `dev_release2` come `503dce683`). Prima non si può aggiornare: i miei file aperti
+   >   (`configuration.en.md`, `hosting_providers.en.md`, `_frontend_utility.py`) toccano gli stessi file.
+   > - **LOW, latente**:
+   >   - la sonda calcola `provider_url` fuori dal confine; ora `core.public_asset_url` lo trattiene (None, e un
+   >     avviso nel log) se mostra un segreto;
+   >   - per gli autori di plugin, la regola nelle guide (affidata a docs-writer): mai un segreto in `get_asset_url`,
+   >     in `cooldown_scope`, o in una richiesta con l'host preso da identificatore o parametri.
+   > - **Informativo, profilo gestito**: `NOT_CONFIGURED` nomina il campo nascosto quando la variabile dell'hoster non è
+   >   valida. È un identificatore pubblico, nessun valore. Accettato, nessuna modifica.
+   > - **Non di sicurezza**: l'input del segreto leggeva `form.texts[...]` senza `own()`. Corretto.
+   > - Le prove di regressione le scrive un test-author a parte, e partono dopo l'E2E in corso: ogni unità `services`
+   >   ricrea il DB della corsia.
+
+**Decisione notturna, da rivedere**
+- **N15.** Una chiamata asset che porta un segreto personale nasconde intero ogni testo d'errore che mostra un segreto,
+  invece di mascherarlo in loco: meno dettaglio per chi ha scelto il segreto, nessun oracolo sul segreto di sistema.
+  I log restano mascherati con precisione per l'admin.
+3. ⏳ (2026-10-16, 03:26–03:50) La spec E2E nuova (test-author).
+   > **Note implementazione**:
+   > - `frontend/e2e/settings/plugin-settings.spec.ts`, 5 prove, registrata come `front-utility plugin-settings`:
+   >   - la scheda, in sola lettura, per un membro e per un admin;
+   >   - «Configura» su mockprov per un membro (numero e segreto personale) e per un admin (segreto dell'istanza);
+   >   - la ricerca con la riga «da configurare» e la legenda della 👑, con lo stream SSE simulato.
+   > - mockprov non si sceglie nella modale dell'asset (il pannello lo filtra di proposito): le prove 2 e 3 creano un
+   >   asset loro via API, con mockprov e un identificativo che il mock rifiuta, ne aprono la modifica e cliccano
+   >   `provider-configure`.
+   > - La pulizia, sempre, via API: dopo la prima corsa, nel DB della corsia zero righe di mockprov e zero asset
+   >   rimasti.
+   >
+   > **⚠️ Fuori pista**:
+   > - **Difetto del prodotto, corretto**: la modale «Configura» non aveva un'area che scorresse. Con i 7 campi di
+   >   mockprov, a 1280×720 «Salva» e «Chiudi» finivano sotto il bordo: `allowOverflow` toglieva il limite di 90vh, e la
+   >   pagina è bloccata. Prima corsa: 3 prove verdi e 2 rosse per timeout.
+   >   - Ora titolo e «Chiudi» restano fermi e il corpo scorre in mezzo (`min-h-0 flex-1 overflow-y-auto`), dentro la
+   >     colonna di `ModalBase`.
+   >   - Le select aprono l'elenco con `position:fixed`, quindi il corpo che scorre non le taglia.
+   >   - Con i plugin di produzione (un campo ciascuno) non si vedeva.
+   > - **Seconda corsa, ambiente**: il backend di prova non ha risposto in 300 s. `server --test` ricostruisce il sito
+   >   della documentazione se una pagina è più nuova, e docs-writer stava salvando pagine. Le E2E e la galleria vanno
+   >   lanciate dopo `mkdocs build`, a documentazione ferma.
+4. ✅ (2026-10-16, 03:05–04:00) La documentazione (docs-writer), più le mie righe.
+   > **Note implementazione**:
+   > - Pagina nuova `user/settings/plugins.en.md`, con l'immagine `settings/plugins` (lo scatto arriva con la
+   >   galleria).
+   > - 21 pagine aggiornate:
+   >   - utente: indice delle impostazioni, justETF e Borsa Italiana con la preferenza;
+   >   - admin: `configuration` e `hosting_providers`;
+   >   - galleria desktop e mobile;
+   >   - sviluppatori: `plugin_settings`, guide asset e FX, `registry_pattern`, `frontend/i18n`, `test-walkthrough`
+   >     utils e front-utility, `assets/architecture`, `search_link_finder`, `api/overview`, componenti e toolbar delle
+   >     impostazioni.
+   > - Le due regole della revisione di sicurezza sono nelle guide. Nessuna pagina timbrata: ogni modifica aggiunge
+   >   contenuto, quindi resta debito di traduzione.
+   > - Mie:
+   >   - la nav, rinominata `- Plugins: user/settings/plugins.md`, con `nav_translations` IT/FR/ES. «Plugin Settings»
+   >     era anche il titolo della pagina per sviluppatori, e una traduzione le avrebbe rinominate tutte e due;
+   >   - il passo 8 di `.github/instructions/backend-providers-asset.instructions.md`: le impostazioni e le regole per
+   >     gli autori.
+   > - `mkdocs build` severo verde (94 s), `check-links` 97 link (il `DocsLink` nuovo compreso).
+   >
+   > **⚠️ Fuori pista**:
+   > - Il primo `mkdocs build` severo è fallito con 5 avvisi: la pagina nuova, senza traduzioni, si costruisce anche in
+   >   IT/FR/ES, e i suoi link puntavano ad ancore che esistono solo in inglese (`admin/configuration#plugin-*`,
+   >   `#startup-checks`, `justetf#search-currency`). Ora i link vanno alle pagine, senza ancora.
+   > - docs-writer ha trovato:
+   >   - Nessuna colonna salva l'URL dell'asset: ho corretto le docstring, l'URL è solo «mostrato».
+   >   - Un campo personale obbligatorio lascerebbe per sempre `NOT_CONFIGURED` le chiamate fatte per nessuno
+   >     (prezzi, job), mentre la scheda direbbe «configurato». Ora la dichiarazione lo rifiuta: N16.
+   >   - Il `CHANGELOG.md` riga 40, la voce del CP10, dice ancora «la schermata arriva dopo». Lo segnalo al
+   >     coordinatore.
+
+**Decisione notturna, da rivedere**
+- **N16.** Un campo personale non può essere `required` (`validate_declaration`): le chiamate fatte per nessuno non lo
+  ricevono mai. Nessun plugin lo dichiarava.
+5. ✅ (2026-10-16, 04:00–04:05) Le prove di regressione della sicurezza (un test-author a parte), in 4 file esistenti,
+   senza file nuovi. Lanciate dopo la documentazione e prima dell'E2E, una alla volta con il carico fra 38 e 39:
+   > - `services secret-masking` 68: 20 nuove (l'attacco della sovrapposizione chiuso; con `whole` le due ipotesi
+   >   danno la stessa uscita; intervalli sovrapposti o contigui; `mask_exception` e `masked_description` con `whole`).
+   > - `services plugin-settings-runtime` 120: 24 nuove:
+   >   - `carries_user_secrets`;
+   >   - `call_provider` con mockprov e un segreto personale: stesso errore, stesso codice, testi `***` per le due
+   >     ipotesi; senza segreto personale il mascheramento resta preciso;
+   >   - `public_asset_url`, e la sonda che trattiene un URL con un segreto (di sistema o personale).
+   > - `services plugin-settings-contract` 194: 4 nuove (un campo personale obbligatorio rifiutato, anche alla
+   >   registrazione).
+   > - Vitest `PluginSettingsForm.component.test.ts` 34: PSF-25, un segreto con chiave `constructor`.
+   > - Lint e formato puliti; nessun difetto del prodotto; porta 6183 libera.
+6. ✅ (2026-10-16, 04:05–04:22) E2E nuove dopo la correzione della modale, e controlli leggeri.
+   > - `front-utility plugin-settings`: due corse 5/5 (04:05, con la ricostruzione del frontend, e 04:10), più una con
+   >   `--workers 4`, 5/5 in 21,6 s (04:22).
+   > - Le due prove di «Configura» passano da 60 s di timeout a 4–5,5 s. I controlli della correzione: il modulo di
+   >   mockprov supera il corpo della modale, «Chiudi» resta tutto nella finestra, e «Salva» si raggiunge scorrendo il
+   >   corpo a ognuno dei 4 salvataggi.
+   > - Dopo ogni corsa, nel DB della corsia: zero righe di mockprov, zero impostazioni personali, zero asset di prova.
+   > - Controlli leggeri (`/tmp/libreFolio_cp11c_checks.sh`): `front check` 0/0, `core-unit` 6144, `component-unit` 3901,
+   >   `check-orphans` pulito, `i18n check` severo. Porta 6183 libera.
+   > - tsc sulla configurazione e2e: 2 errori che c'erano già (`onboarding-tour.spec.ts:863` e il percorso
+   >   `$lib/api/generated` in `src/lib/types/files.ts`), non miei. Le mie due spec sono pulite.
+7. ✅ (2026-10-16, 04:25–04:30) La galleria.
+   > - G ha dato l'ok allo scatto `settings/plugins` (senza la modale), alle sue condizioni:
+   >   - dopo `waitForSettled`, nessun `plugin-settings-load-error` né `plugin-settings-empty`, e almeno una
+   >     `plugin-settings-family`;
+   >   - nessun `plugin-setting-secret-state` con `data-state` `set` o `env`;
+   >   - sul desktop la regola degli schermi alti, come `email`, e oltre ~2500 px la prima famiglia; sul mobile il
+   >     primo schermo;
+   >   - solo `data-testid`, niente attese a tempo né maschere.
+   > - Il messaggio originale di G (arrivato dopo il riassunto del coordinatore, che accettava anche `TEST_ADMIN`)
+   >   chiedeva la vista di un membro: uso `TEST_USER`, aggiunto all'import di `test-users` (unico tocco permesso oltre
+   >   al test). È la vista che la pagina del manuale utente descrive. `data-busy` della scheda vale `true` dal primo
+   >   render (`loading = $state(true)`), quindi `waitForSettled` aspetta davvero.
+   > - Test scritto in `gallery.spec.ts`, dopo `email`: +36 righe e 1 riga d'import. Prettier pulito.
+   > - Run filtrata nello slot del coordinatore, verso le 04:50, da finire entro le 05:15:
+   >   `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r13-x … mkdocs gallery --test-port 6183 --filter "plugins - all
+   >   languages and themes" --workers 2`. La ricarica del DB della galleria non riceve `--data-dir`, quindi passa per
+   >   la variabile.
+   > - `providerProbe.ts`: per decisione del coordinatore, le due righe di escape arrivano dopo l'aggiornamento della
+   >   base al checkpoint del CP11c, che porta Q10.
+   > - Slot pesante 2 dal coordinatore. Run filtrata, `--filter "plugins - all languages and themes"`: solo quel test,
+   >   verificato con `--list`. 2 prove passate (desktop e mobile) in 1,4 minuti, dalle 04:27:40 alle 04:29:49.
+   > - 16 immagini (4 lingue × 2 temi × 2 viewport), ignorate da git per regola (`.gitignore:79`).
+   > - Desktop: 📐 blocco di 656 px, schermo 1280×745 in tutte le lingue, ben sotto i 2500.
+   > - Guardato a occhio lo scatto desktop in inglese, tema scuro: ruoli corretti, la barra del membro, le due schede
+   >   «Configurato».
+   > - Slot liberato e porta 6183 libera alle 04:30.
+
+### Checkpoint CP11c — pronto, FROZEN (2026-10-16, 04:35)
+
+Previsione dei conflitti contro `dev_release2` (`3edfc4b9a`): sette file in comune, e un solo punto vicino.
+- `admin/hosting_providers.en.md:44`:
+  - io riscrivo la riga della tabella sui campi bloccati dall'ambiente;
+  - il bersaglio aggiunge subito sotto la riga nuova del limite di caricamento del ripristino (B);
+  - risoluzione: la mia riga 44, poi la loro riga nuova; il resto come nel bersaglio.
+- Gli altri sei (`gallery.spec.ts`, `admin/configuration.en.md`, `api/overview.md`,
+  `frontend/components/features/settings.md`, `frontend/i18n.md`, `_frontend_utility.py`) hanno pezzi a più di 3 righe
+  di distanza.
+
+Resta aperto, da fare subito dopo l'aggiornamento della base: l'escape in `providerProbe.ts` (righe 109 e 138), con la
+sua prova.
+
+Committato dal coordinatore: `c8d23c544` (fix, 39 file) e `3d122d28a` (journal).
+
+### Quattordicesimo aggiornamento di base: `dev_release2` (`3edfc4b9a`, con Q10 dei colori) nel ramo X ✅ (2026-10-16) — merge `024a6a067`
+
+- Un conflitto, previsto, in `admin/hosting_providers.en.md`. Risolto tenendo la mia riga dei campi bloccati
+  dall'ambiente e subito sotto la riga nuova del limite di caricamento del ripristino; il «four things» del bersaglio
+  torna. In stage solo quel file; il commit del merge l'ha fatto il coordinatore.
+- Fusioni automatiche controllate: `gallery.spec.ts` (lo scatto e `TEST_USER`), `_frontend_utility.py`,
+  `frontend/i18n.md`, `admin/configuration.en.md`, `api/overview.md`, `features/settings.md`.
+
+### Sicurezza, il punto aperto: l'escape del tooltip della sonda ✅ (2026-10-16, 04:45) — commit a parte
+
+- `providerProbe.ts::buildProbeTooltipHtml`: `escapeHtml(result.detail ?? 'Error')` per un fallimento, e
+  `escapeHtml(result.detail ?? '—')` nel ramo di ripiego. Le tabelle non cambiano, e nemmeno la riga 111 di Q10 (il
+  bordo). La prova (`providerProbe.test.ts`) la sistema test-author.
+- La prova (test-author): `providerProbe.test.ts` 38/38. Il caso del fallimento ora vuole il testo escapato; 8 casi
+  nuovi (markup ostile su fallimento e ripiego, testo semplice invariato, le tabelle intatte). Il revisore lo chiude:
+  le celle delle tabelle non possono portare testo del fornitore.
+- Prove d'ingresso su `024a6a067` più l'escape, una alla volta con `nice` e il carico ≤ 70
+  (`/tmp/libreFolio_cp11c_entry_checks.sh`, log in `/tmp/libreFolio_cp11c_entry/`):
+  - `front check` 0/0, dopo `api sync`;
+  - `core-unit` 6154;
+  - services `secret-masking` 68, `plugin-settings-runtime` 120, `plugin-settings-contract` 194;
+  - `mkdocs build` severo (74 s), `check-links` 97, `i18n check` severo (4750 chiavi). Porta 6183 libera.
+- Niente E2E: lo slot 2 era di A fino alle 05:25. Le E2E `plugin-settings` verdi erano sulla base precedente; si
+  possono rifare dopo le 06:45.
+
+> **⚠️ Fuori pista**: il primo `front check` dava 1 errore in `LoginCard.svelte:112`: `first_account_open`, il flag
+> di A6d entrato con la base. Il client generato (ignorato da git) era ancora quello di prima dell'aggiornamento:
+> `api sync`, nessun file tracciato cambiato, poi `front check` 0/0. Dopo ogni aggiornamento di base che cambia l'API,
+> `api sync` va prima di `front check`.
+
+### CP11c ed escape in `dev_release2` ✅ (2026-10-16) — treno 91
+
+- Commit sul mio ramo: `17a8b396f` (fix) e `a10af747d` (journal).
+- Merge in `dev_release2`: `2f1d77a23`. Il mio ramo è stato portato avanti alla punta, HEAD `6c03c38b8` (verificato).
+- CHANGELOG: nessuna riga 🔒, perché la funzione non è ancora uscita. La riga «Settings › Plugins» ora dice che il
+  segreto non si vede «nemmeno nel messaggio d'errore di una fonte né nell'indirizzo della pagina di un asset».
+
+### X-R12 — gli eventi del fornitore datati oggi ✅ (via del coordinatore 2026-10-16, 04:50; pronto alle 05:10)
+
+Ordine dato dal coordinatore: X-R12, poi FE5c più X-R13 (sblocca Z7c-1; da controllare con la regola dei colori
+«niente elementi misti»), poi CP13. Un commit per lotto. Dalle 05:30 alle 06:45 la macchina è ferma: nessuna prova,
+nemmeno leggera, solo scrittura.
+
+1. ✅ (04:50–04:53) La correzione, in `services/assets/refresh.py::_fetch_refresh_item`.
+   > **Note implementazione**:
+   > - Quando l'intervallo arriva a oggi, la chiamata della storia finisce **oggi** (`call_end`), non più ieri. È così
+   >   solo quando la storia è già chiesta (`start == "min" or start < today`): le stesse chiamate di prima, cambia solo
+   >   la fine.
+   > - I prezzi della storia dopo `history_end` (ieri) restano fuori dalla cache e da `prices_data`: il prezzo di oggi
+   >   resta il valore corrente.
+   > - Gli eventi fino a oggi restano.
+   > - Con un buco nella cache e `end >= today`, la chiamata va fino a oggi; la copertura si conta ancora fino a ieri.
+   > - Un intervallo passato non cambia, e `start == today` non chiama la storia.
+   > - `end_date` è inclusivo in tutti i plugin che danno la storia: Yahoo aggiunge un giorno da sé; justETF, Borsa,
+   >   scheduled_investment e mockprov filtrano con `<=`; css_scraper non ha storia.
+   > - Prova in processo (`/tmp/libreFolio_xr12_smoke.py`), tutto come atteso:
+   >   - la chiamata finisce oggi;
+   >   - il prezzo di oggi è quello corrente (11), non quello della storia (10);
+   >   - il dividendo di oggi resta;
+   >   - la cache non ha oggi.
+   > - Le suite esistenti del percorso sono verdi: `services asset-source-refresh` 12, `utils provider-core-cache` 29,
+   >   `services rate-limit-results` 23, `services scheduler-jobs` 43.
+   >
+   > **⚠️ Fuori pista**: la prima delle quattro suite è partita con il carico a 74,4, sopra 70. Il ciclo stampava il
+   > carico ma non aspettava. Le altre tre sono partite sotto 70. D'ora in poi il controllo del carico resta un passo
+   > che blocca.
+2. ✅ (05:08) I test di regressione: test-author, sei test `test_fetch_*` in
+   `test_services/test_asset_source_refresh.py`.
+   > **Note implementazione**:
+   > - **Il fornitore finto** gira in processo, registra ogni chiamata e restituisce un evento solo se l'intervallo
+   >   chiesto ne contiene la data, come uno vero.
+   > - **La data** è fissata con la fixture `xr12_today` (non autouse), che sostituisce `refresh.date_type`, l'unico
+   >   orologio di `_fetch_refresh_item`, e svuota le due cache del core prima e dopo ogni test.
+   >   - Non è autouse perché `_prepare_refresh_items` usa `date_type` in un `isinstance`.
+   > - **La chiave di cache** è ricostruita dalle stesse parti di `refresh.py`: se cambia, i test falliscono, non passano
+   >   in silenzio.
+   > - **I sei casi**:
+   >   1. intervallo fino a oggi;
+   >   2. cache fino a ieri, cioè colpo pieno senza chiamata;
+   >   3. buco nella cache: chiamata dal giorno mancante fino a oggi;
+   >   4. intervallo passato: la chiamata finisce a `end`, senza valore corrente;
+   >   5. `start == today`: nessuna chiamata della storia;
+   >   6. punti futuri del fornitore scartati.
+   > - **Prove** (ognuna dopo il controllo del carico, con `nice`):
+   >   - `services asset-source-refresh` → **18 passed**, i 12 di prima più i 6 nuovi (05:08, carico 54;
+   >     `/tmp/libreFolio_xr12_test_1.log`);
+   >   - **rosso sul codice vecchio**: con il `refresh.py` di HEAD rimesso per una sola run e poi ripristinato (`cmp`
+   >     uguale), **3 failed, 15 passed**, esattamente 1, 3 e 6, i casi previsti. Cadono per la ragione giusta: la chiamata
+   >     della storia finisce ieri (3/17) invece che oggi (3/18), e nel buco finisce al giorno mancante. 2, 4 e 5 tengono
+   >     i casi invariati (`/tmp/libreFolio_x_fe5c/xr12_red_proof.log`);
+   >   - `ruff check` e `black --check` sui due file: puliti.
+
+**Decisione notturna, da rivedere**
+- **N17.** La correzione è generica, nel refresh, senza toccare i plugin. Il costo noto è su justETF: con `end_date`
+  uguale a oggi, la sua storia aggiunge la quotazione corrente (`add_current`, solo per l'EUR), cioè una richiesta in
+  più per ETF per ora di cache del grafico, per un punto che il core poi scarta. Gli eventi di justETF vengono da righe
+  passate del grafico, quindi non ci guadagna niente.
+  - Alternativa, da decidere di giorno: la storia di justETF smette di aggiungere la quotazione corrente, perché il
+    core non usa mai un prezzo di storia datato oggi.
+
+### FE5c — il taglio della pagina dell'asset, più X-R13: analisi ⏳ (2026-10-16, 04:58)
+
+Inventario in sola lettura (agente explore): `routes/(app)/assets/[id]/+page.svelte`, 3603 righe, lo script va dalla 1
+alla 2698.
+- **Lo stato**: ~80 `$state` in un unico centro (148–371), letti e scritti da quasi tutte le regioni.
+- **Helper puri, spostabili così come sono**:
+  - `isRecord`, `parseBackendSignalResults`, `priceConversionErrorFromItem`;
+  - le tre funzioni del calendario (1191–1291), `comparisonAssetIds`, `mergeChartPointsIncremental` (2542),
+    `emptyCalendarReturnView`.
+  - Due chiedono attenzione: `calendarDataFingerprint` legge un `$derived`, `translateCalendarProblem` usa `$t`.
+- **Il markup**:
+  - poco costosi: intestazione (2707–2765), metadati e classificazione (3445–3560), scheda del rischio (3562–3583),
+    modali (3585–3603);
+  - intrecciati: la barra degli strumenti (2775–2888) e l'area del grafico (2943–3292), che ha i controlli del
+    calendario duplicati a 2973 e 3211.
+- **Colori**: zero classi `-lf-`, quindi zero elementi misti. Baseline 312 (`themeRoles.baseline.tsv:259`).
+- **X-R13**:
+  - alla riga 3496, `emoji: getSectorEmoji(name)` non lo legge nessuno: `AllocationEntry` ha solo
+    `name`/`value`/`amount`, e il grafico ricava l'emoji da sé alla riga 210;
+  - va tolto, con l'import della riga 33.
+- **Prove**:
+  - `comparisonSignalPages.test.ts:67` legge il sorgente della pagina come testo (`catalogueError(...)`, l'helper,
+    nessuna chiave con `_i18n:`): `catalogueError` e le sue chiamate restano nella pagina;
+  - una dozzina di spec E2E e la galleria selezionano i `data-testid` della pagina;
+  - nessun `vi.mock` sui moduli della pagina (D-P4 libera);
+  - l'àncora `guideAnchor('asset.detail.header')` resta.
+- **Punti caldi per i conflitti**: il polling dal vivo di Z (`74d028ec6`, ≈1486–1606), la scheda e gli import del
+  rischio di Y4b (`51aff4a12`), la barra degli strumenti dei colori.
+- **Taglio proposto**, dai pezzi meno cari:
+  1. X-R13;
+  2. gli helper puri in `.ts`, con le loro unità;
+  3. il pannello dei metadati;
+  4. la scheda del rischio e le modali;
+  5. l'intestazione;
+  6. `requiredFxPairs` e `assetDetailIssues` come funzioni pure;
+  7. i pannelli dei segnali e delle misure;
+  8. i controlli del calendario in un componente solo;
+  9. la barra degli strumenti, e il caricamento più il polling in uno stato `.svelte.ts`.
+- **Regole del taglio**: le classi si spostano con i loro elementi interi; le classi nuove solo sui ruoli; il taglio va
+  dichiarato con `theme-roles.mjs --split` nello stesso commit.
+- **Chiesto al coordinatore** che cosa serve a Z7c-1, che decide se il pezzo 9 va anticipato. Nella pausa dalle 05:30
+  alle 06:45 scrivo i pezzi 1–5; le prove partono dopo.
+
+**Risposta del coordinatore (04:59)**:
+- l'ordine resta 1→9, con il pezzo 9 per ultimo;
+- Z7c-1 non chiede il taglio: chiede solo che `pollLivePriceOnce` restituisca l'esito `{ok, notBefore}`, poche righe che Z
+  scrive nella pagina e che entrano **prima** del pezzo 9. Al pezzo 9 le sposto nello stato `.svelte.ts` così come
+  sono;
+- le righe ≈1486–1606 non si toccano fino al pezzo 9: allora il coordinatore aggiorna la base con le righe di Z;
+- un commit per pezzo, e `--split` nel commit di ogni pezzo che sposta classi;
+- J (CP-10a) aggiunge casi a `e2e/assets/asset-detail.spec.ts`, solo per `data-testid`: se un `data-testid` deve
+  cambiare, va detto al coordinatore prima del commit.
+
+#### FE5c-1 · X-R13 ✅ (2026-10-16, 05:06)
+
+> **Note implementazione**: due righe tolte da `routes/(app)/assets/[id]/+page.svelte`:
+> - `emoji: getSectorEmoji(name)` nel `map` dei settori passato ad `AllocationPieChart` (`AllocationEntry` ha solo
+>   `name`/`value`/`amount`, e il grafico legge l'emoji dal negozio dei settori);
+> - l'import ormai inutile (riga 33).
+>
+> Nessun'altra lettura di `getSectorEmoji` nella pagina (grep).
+> - Prova: `dev.py front check` → `svelte-check found 0 errors and 0 warnings` (05:06, carico 62).
+> - La pagina passa da 3603 a 3602 righe; da qui i numeri di riga dell'inventario scalano di 1 dopo la 33.
+
+> **⚠️ Fuori pista**:
+> - il primo `front check` (05:03) è uscito con 4 errori, tutti in `ui/input/PasswordStrength.svelte`
+>   (`password_rules`, di A6c). La causa era il client generato vecchio (04:46, zero `password_rules`): il ramo è
+>   avanzato fino a `6c03c38b8` e quindi `api sync` serviva ancora.
+> - L'ho lanciato **senza attendere il carico**: alla partenza la media di 1 minuto era 81, sopra la soglia di 70.
+>   Errore mio, senza danni (`api sync` è leggero ed è finito in pochi secondi).
+> - Da qui ogni prova passa da `/tmp/libreFolio_x_fe5c_check.sh`, che aspetta il carico ≤ 70 prima di partire.

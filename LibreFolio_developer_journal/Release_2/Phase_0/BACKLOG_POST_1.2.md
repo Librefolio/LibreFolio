@@ -528,10 +528,11 @@ debito di traduzione di F-5 (di M).
   `:1789` e `:1806`, converte i prezzi uno a uno (`:1795`, `:1813`) e su un TRANSFER sposta l'unrealized al costo. Va
   in T-U5 con V2/P2 e R4 di T e con le quantità di B12: insieme 1½–2 g. Dettagli: idem, §14 e §17.6.
 - **B10 · `periodBasePnl` dichiarato e mai usato** — minimo; I, 10/10. `GrowthChart.svelte:594-600`.
-- **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
+- ✅ **B11 · I giorni «dirty» non contano i cambi dei titoli** — medio, ½ g; test-author di I, 10/10. I giorni di cambio
   si contano solo per le valute tenute in cassa (`native_cash.py:271-279`; motore `:808` e `:922-923`). La cura cambia
   NAV e linee anche con la sola cassa in valuta base, quindi il golden della guardia andrebbe rigenerato: serve una
   decisione. Va in T-U1 o T-U5. Dettagli: idem, §14 e §17.6.
+  - **Chiusa** (16/10, 03:55) da J CP-6 (decisione 28, `58c10197c`), entrato col treno 87 (`628e3e49e`); golden W1 rigenerato.
 - **B12 · Le quantità dei contributi leggono le date future** — minimo, latente; I, 11/10. Senza `date_to`,
   `_get_transactions` (`portfolio_service.py:1721`) legge anche le righe future; l'unico chiamante, `get_report`
   (`:2234`), passa sempre la data di fine, quindi nessun effetto in produzione. Va in T-U5 con B8. Validare le date
@@ -1944,11 +1945,38 @@ plugin.
   - **Decisione D3 (coordinatore, 15/10):** T sposta `CONTRAST_PAIRS` da `themeTokens.gate.test.ts` a un modulo condiviso dopo T-8; il pannello lo legge da lì, senza copie.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab».
-- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10.
+- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10. ✅ 16/10: validato su `e44383f13`, con i commit `4cc601e57` e `88ef51358`; la correzione di svelte-check è nel commit del checkpoint finale.
   - **Dopo l'ingresso di T-8:** verifica del catalogo sui ruoli nuovi (barra verde, stati espliciti, terminale, interruttore, ombre, viola AI, hover dei campi) e una prova L1 a mano. Niente isole `.dark`/`.light`: T usa ruoli dedicati (D2).
   - **Dopo l'ingresso del modulo di DV** (`lib/theme/chartCategories.ts`, contratto C1–C4): livello `category` (scheda «Categorie», aggancio C3 con `categoryColor` su `LabHook`, segnale C4 `notifyChartColorsChange()`, export e `verify-export`, una riga nella skill, test unit ed E2E). «Per valore» non basta: tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro.
 
+  - **In corso (15/10, notte; T e DV entrati in `a0915bef9`):**
+    - i ruoli di T-8/T-8b sono tutti modificabili: 92 ruoli root e 88 alias, tutti col loro ruolo;
+    - prefissi delle classi allineati a `PREFIXES` (D-a), con 2 chip delle ombre;
+    - C4 emesso dall'engine, anche per le definizioni dei ruoli riscritte da L2;
+    - livello `category` per chiave, scritto; `verify-export` trova le righe di categoria per chiave e tema;
+    - `CHART_PATH_RE` accetta già `features/{dashboard,risk,brokers/lots}` (Y3, Y4b, Y5).
+
+    Checkpoint intermedio il 16/10 alle 02:0x (`4cc601e57`). Copia sostituita da `lookupKey` di TD-1 dopo il merge di base `0b229ef95` (02:15).
+    Validazione pesante su `e44383f13`, 16/10 03:26–03:50:
+    - unitari 712, gate 186, svelte-check 0 errori dopo una correzione di una riga mia;
+    - parità identica, MkDocs strict 0/0, `check-links` 96;
+    - E2E `live` 12, `all` 17 più 624 unitari, `e2e` a 4 worker 17, `check-orphans` verde;
+    - build di release con 0 tracce del Lab.
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Giro 3 della designer nel Lab» e «Cursore dell'opacità nell'editor».
+
+- **L-17 · Il selettore di elementi nomina la categoria di una fetta** — basso; L, 15/10 (L-16, punto 5, nel backlog su decisione del coordinatore).
+  - Oggi il selettore riporta i colori di un grafico, ma non la categoria (`type:ETF`) di una fetta: un colore può appartenere a due categorie, per esempio ETF e Tecnologia.
+  - Servirebbe che il grafico dichiarasse la chiave della fetta puntata, nell'opzione o con un attributo dati; da concordare con DV.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab».
+
+- **L-18 · Togliere i vecchi percorsi `components/` dei grafici dopo Y3 e Y5** — minimo; L, 16/10 (L-16).
+  - `CHART_PATH_RE` (`scan-colors.mjs`) accetta i due percorsi finché gli spostamenti della 1.3 non sono finiti. Y4b è già entrato e `components/risk` non esiste più.
+  - Dopo Y3 (`features/dashboard/`) e Y5 (`features/brokers/lots/`):
+    - togliere i rami `components/(dashboard|risk|brokers/lots)` della regex, le righe sintetiche corrispondenti di `scanColors.test.ts` e la parentesi sui due percorsi in `designer-lab.md`;
+    - aggiornare la costante `GROWTH` di `pickView.test.ts` e l'esempio JSON con `components/brokers/BrokerImportFilesModal.svelte`.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-16 — Giro 3 nel Lab», passo 7.
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2245,6 +2273,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       dello scatto.
 
     Se la causa è nel prodotto, va segnalata e non corretta qui.
+  - *16/10, coppia di G-13 (r1↔r2):* ancora una variante su 16, sempre su mobile in `es/light`, e ora anche in
+    `assets/detail-editor`: l'header è visibile in una run e nascosto nell'altra, 7,7 % dei pixel. Dettagli:
+    [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md).
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
 - **G-12 · Due commenti nel codice descrivono ancora il vecchio helper della gallery** — minimo; G, 15/10, handoff di
@@ -2270,7 +2301,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     usa il contratto, non il contratto. Decide comunque il proprietario.
 
   Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passo 8.
-- **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
+- ✅ **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
   assegnata a G.
   - Quando: T entra in `dev_release2` (D-T20, dopo la revisione di T-8 da parte del developer). Via e slot li dà il
     coordinatore; fino ad allora nessuna run.
@@ -2284,8 +2315,26 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - 0 instabili di inquadratura, salvo l'eventuale variante di G-11;
     - `media/asset-picker-modal` stabile;
     - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
+  - ✅ **16/10, fatto.** Tre gallery complete di `a2c1c39f4`, a 6 worker, con un populate nuovo per run e
+    `live_price_check` 0:
+    - `g-ref13-r1`, 00:02: 6 rossi di carico (build di altre corsie);
+    - `g-ref13-r2`, 00:52: verde;
+    - `g-ref13-r3`, 05:28: verde.
+  - **La coppia del rumore è r1↔r2**: 22 `stable`, 137 `low`, 18 `medium`, 4 `unstable` (il 15/10: 40/112/19/6).
+    - Inquadrature uguali salvo G-11.
+    - `media/asset-picker-modal` è `low`: G-10 funziona.
+    - Restano `unstable` di contenuto `files/brim-report-sets` (G-17) e `brokers/import-nway-compare`.
+  - **r2↔r3 non è una coppia del rumore: attraversa la data UTC.** Il planner del PAC data lo scenario con la minore
+    fra la data locale e quella UTC (N26), quindi gli scatti PAC di r1 e r2, presi fra le 00:02 e le 01:31, mostrano il
+    15/10. Regola nel README del toolkit: niente catture fra mezzanotte locale e mezzanotte UTC.
+  - **Riferimento delle candidate del 16/10: `g-ref13-r3`**, con le maschere e la stabilità di `g-ref13__r1__vs__r2`.
+  - **Candidata della notte `g-cand16a`** (`72e66d1a6`): verde, 2904 PNG.
+    - Diff contro r3: 2720 immagini cambiate, quasi tutte per la migrazione ai ruoli di colore.
+    - Foglio per il developer, ordinato per cambio visibile: `diffs/g-ref13-r3__vs__g-cand16a/contact_sheet.it.html`.
+      Dal 16/10 il comando è nel toolkit, su richiesta del coordinatore: `gallery_tool sheet <diff> --lang it`.
 
-  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
+  Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md) e
+  [stabilità](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/stability-2026-10-16.md).
 - **G-14 · Gli orari della gallery dipendono dal fuso della macchina** — basso; G, 15/10, su domanda del coordinatore
   (revisione di `settings/backup-ready`, B). **Proposta: valore e momento li decide il developer.**
   - Ogni istante si disegna nel fuso del browser, e la gallery lo lascia alla macchina: non c'è `timezoneId`.
@@ -2326,7 +2375,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
 
   Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
-- **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
+- ✅ **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
   developer approva dagli scatti le barre «ideale vs reale» sui colori delle categorie, D-T21).
   - Fatto da test-author, nel perimetro di G. Lo scatto è nel test `PAC allocator result`, fra il piano e la prova: 8
     scatti per progetto.
@@ -2347,6 +2396,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     serve.
   - Verifica: statica pulita (`tsc` con i soli 2 errori di base, prettier). La run filtrata a 1 worker parte dopo il
     merge della punta; poi la coppia di G-13 lo include.
+  - ✅ **15/10–16/10, verificata.** Codice `73f7d32c6`, in `dev_release2` con `a8991e20b`.
+    - Run filtrata a 1 worker su `a2c1c39f4` (`g-g16-w1b`): verde, 16 PNG per scatto. Le impronte dei tre scatti PAC
+      esistenti sono uguali a `g-final3`: richiudere la sezione funziona.
+    - Nella coppia di G-13 lo scatto è `stable`, 0/16.
+    - La prima run (`g-g16-w1`, 23:05, carico 80–96) era rossa per un `worker_crashed` dello strumento PAC, non per lo
+      scatto. Il coordinatore l'ha instradato a J (1.3).
+    - Resta per dopo: le barre dei settori, con un seed dai settori validi.
+- **G-17 · Il nome casuale dell'account usa e getta è rumore di contenuto** — basso; G, 16/10, coppia di G-13.
+  - `files/brim-report-sets` è `unstable` (16/16, fino al 3,2 %): il nome `demo_xxxxxx` dell'account del test compare
+    nella tabella e nel filtro «Caricato da» aperto, che si allarga con lui. Lo stesso nome è fra le cause di diversi
+    `medium`.
+  - Proposta (perimetro G, test-author): in `registerGalleryAccount` (`galleryReportSets.ts`), un nome deterministico
+    per test e progetto, con il ripiego casuale se la registrazione risponde che esiste già. Così lo scatto diventa
+    uguale fra due run.
+  - Da valutare con la pulizia degli account (`cleanupGalleryAccount`): un nome fisso non deve scontrarsi con quello di
+    una run interrotta che non l'ha cancellato.
+
+  Dettagli: [analisi G-13](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-g13-2026-10-16.md), «La coppia del rumore».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2508,11 +2575,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
   `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
   va tolto. Dettagli: piano di T, I1, passo 4.
-- **TC-12 · Dopo l'ingresso di Y5: la voce orfana del coachmark nel gate** — minimo; T, 16/10. Con W2-a il bagliore del
-  coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione `ARBITRARY_ALLOWED` di
-  `frontend/scripts/theme/theme-roles.mjs` (riga 84). La si toglie quando Y5 è entrato (Y cambia la riga 70 dello stesso
-  file), insieme ai commenti di `src/themeRoles.gate.test.ts` (righe ~218 e ~547) che descrivono ancora il vecchio
-  bagliore `rgba`. Dettagli: piano di T, «W1-c, W1-e e W2-a», passo 3.
+- ✅ **TC-12 · La voce orfana del coachmark nel gate** — minimo; T, 16/10; chiusa il 16/10 (commit del checkpoint di T dopo
+  il secondo slot). Con W2-a il bagliore del coachmark è su `var(--lf-tour-glow)` e non chiede più l'eccezione
+  `ARBITRARY_ALLOWED` di `frontend/scripts/theme/theme-roles.mjs` (riga 84). Non si poteva aspettare Y5: il gate
+  (`themeRoles.gate.test.ts`, «keeps … ARBITRARY_ALLOWED current») vuole che una voce che non lascia passare niente si
+  tolga, e nel secondo slot è caduto. Tolta la riga 84 con l'OK del coordinatore (Y5 cambia la riga 70: il merge a tre vie
+  è pulito); riscritti i due commenti di `src/themeRoles.gate.test.ts` (~218, ~547). Dettagli: piano di T, «Secondo
+  slot».
 
 ---
 
@@ -2593,6 +2662,29 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - test nuovi `stressBucketLabel.test.ts` e `categoryLabels.test.ts`, 9 e 9, registrati in `core-unit`;
     - il mirror di `L4Shock.test.ts` è allineato, 22.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
+- **DV-7 · W5-PAC e W5-charts: colori rimasti in palette, in attesa di una scelta o di un lotto di T** — minimo; DV,
+  16/10 (W5-PAC, W5-charts).
+  - **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100 dark:bg-slate-700`).
+    - Nessun ruolo la distingue dalla barra «sconosciuta», che nel lotto di T è `bg-lf-neutral`: `bg-lf-neutral` dà
+      ΔE00 0, `bg-lf-panel` e `bg-lf-hover` danno 3,4 e 2,5; la palette di oggi dà 6,9 in chiaro e 15,3 in scuro.
+    - Serve un ruolo per la traccia (T) o una scelta della designer.
+  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149, `ResultCell`:79 e
+    `DistributionDialog`:102.
+    - Sono un colore di dato accanto al neutro dell'obiettivo (`bg-lf-secondary`), non il marchio: `bg-lf-action` in
+      scuro è spento sulla traccia.
+    - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
+  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **I 4 interruttori di `ChartAestheticsSection`** (W5-charts), 16 classi: traccia e manopola alle righe 111/119,
+    133/141, 155/162 e 176/184.
+    - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
+      della skill), così in scuro non ce n'è uno diverso dagli altri.
+  - **Non di DV**, annotati per non perderli:
+    - `INPUT` e `TITLE_INPUT` di `planner/ui.ts` vanno col lotto di T sull'input;
+    - i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi) vanno anche loro col lotto di T
+      sull'input: `ChartSignalsSection`:609 e 798, `ChartAestheticsSection`:221 e 237, `SignalParamControl`:79 e 93;
+    - `ExposureMaps` (4) aspetta Y9.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
+    «W5-PAC» e «W5-charts».
 
 ---
 
@@ -2763,6 +2855,14 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-17 · I default del profilo gestito passano da due meccanismi** — basso; H (CP7b-2), 16/10.
+  - `PROFILE_DEFAULTS` (`config/__init__.py`) copre solo i campi di `Settings`, con un test di guardia sulla tabella.
+  - Il limite di upload del ripristino di B decide il suo default da sé: `MANAGED_MAX_UPLOAD_MB` (500) in
+    `config/backup.py`, perché `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` si legge da `os.environ`.
+  - Cura proposta: una sola tabella, o un accessore `profile_default(name, fallback)` che anche i moduli di sezione
+    usano, così la guardia copre ogni default del profilo. Da concordare con B.
+
+  Dettagli: piano H, §14 «CP7b-2», passo 2.
 
 ## A · Account e accessi (fase 01)
 
@@ -2871,6 +2971,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
     delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
     (15/10, 16:56) conferma che è debito di A.
+  - Da A6d, A6e e A6c (16/10), nessun timbro: `admin/settings` (introduzione, «Who Can Sign Up», che in IT/FR/ES manca
+    del tutto), `admin/configuration`, `admin/service_exposure`, `admin/hosting_providers`, `admin/cli_tools` (anche
+    «➕ Create and List Users», le regole della password), `user/installation`, `user/settings/profile` («Changing
+    Your Email», «🔑 Change Password»), `admin/email`.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
@@ -3140,11 +3244,23 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     li genera da sé.
   - Un lotto con un test di regressione su `mockprov`, dopo X1–X8, che toccano lo stesso percorso.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», nota su X-R12.
+  ✅ **Chiusa da X il 16/10**:
+  - la chiamata della storia finisce oggi;
+  - i prezzi della storia dopo ieri restano fuori dalla cache e dai prezzi, così il prezzo di oggi resta il valore
+    corrente;
+  - gli eventi fino a oggi restano;
+  - con un buco nella cache, la chiamata va fino a oggi.
+
+  Sei test di regressione in `test_asset_source_refresh.py`, tre dei quali rossi sul codice di prima. Non su `mockprov`
+  ma su un fornitore finto in processo, che restituisce gli eventi solo dentro l'intervallo chiesto. Commit del
+  coordinatore, lotto X-R12. Decisione notturna N17 sul costo di justETF. Dettagli: piano 03, sezione «X-R12».
 - **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
   colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
   ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
   settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
+  ✅ **Chiusa da X il 16/10**, primo pezzo del FE5c: tolti il campo e l'import, e `front check` passa a 0 errori.
+  Commit del coordinatore, lotto FE5c-1. Dettagli: piano 03, sezione «FE5c-1».
 
 ## W · Import e transazioni (fase 01)
 
@@ -3759,6 +3875,10 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
   esegua i job, con lo stato riletto dentro il lock. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
+- **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10 (Z7c-2).
+  Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
+  nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
 
 ## B · Backup e Docker (fase 01)
 

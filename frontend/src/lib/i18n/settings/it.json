@@ -162,7 +162,9 @@
           "last6h": "Ultime 6 ore",
           "last24h": "Ultime 24 ore",
           "last7d": "Ultimi 7 giorni",
-          "last30d": "Ultimi 30 giorni"
+          "last30d": "Ultimi 30 giorni",
+          "deferred": "Rimandato: fornitore in pausa",
+          "retryAt": "Nuovo tentativo alle {time}"
         },
         "status": {
           "title": "Stato Scheduler",
@@ -170,7 +172,9 @@
           "neverRun": "Mai eseguito",
           "details": "Dettagli…",
           "configure": "Configura…",
-          "configSummary": "Ogni {freq}min · {times} · {days}"
+          "configSummary": "Ogni {freq}min · {times} · {days}",
+          "retryAt": "Elementi in pausa ritentati alle {time}",
+          "nextAttemptAt": "Non riuscito: nuovo tentativo alle {time}"
         },
         "timezone": "Fuso orario",
         "timezoneChangeWarning": "Cambiare fuso mantiene invariati questi orari e giorni, ma cambia l'istante effettivo di esecuzione in UTC.",
