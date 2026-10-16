@@ -26,6 +26,14 @@
  * page publishes no `data-busy` on its root to say that the reload is back: there the landing is read from a count of
  * the reports, kept in the page.
  *
+ * And what such a reload cascades into (N55, `pageBusy.join`). The reload's report drops what a panel loaded lazily —
+ * the P&L candles of the growth chart, the contribution of the positions panel — and a panel left on that view (saved
+ * per user in this context's localStorage, set here through the panel's own toggles) asks it again at once. Such a load
+ * joins with a token only when the page is waiting already: after a reload in background it runs alone, and the button
+ * stays idle while it is held too; after a period change it joins the period's token, and the button waits for it once
+ * the period's own report is back. Each cascaded request is held by its body (the section it asks alone, no history),
+ * and its sameness with the one on screen is checked.
+ *
  * Busy or idle is read only from `data-busy` and `disabled`: no class (the spin is one), no colour, no text.
  *
  * Read-only on the shared database: TEST_USER, nothing written. «Aggiorna» re-reads and syncs nothing
@@ -62,7 +70,13 @@ const ROUND_TRIP_MS = 30_000;
 /** Login, a full page load and a held round trip; the route-change case pays two pages. */
 const TEST_MS = 120_000;
 
-type ReportBody = {include_history?: boolean; broker_ids?: number[]; date_range?: {start?: string; end?: string}};
+type ReportBody = {
+    include_history?: boolean;
+    include_pnl_candles?: boolean;
+    include_positions_contribution?: boolean;
+    broker_ids?: number[];
+    date_range?: {start?: string; end?: string};
+};
 
 /**
  * The report that draws the Dashboard, or a broker's overview: history on. The contribution and the P&L candles ask
@@ -77,6 +91,27 @@ function isMainReport(request: Request): boolean {
 function isBrokerOverview(brokerId: number): (request: Request) => boolean {
     return (request) => {
         if (!isMainReport(request)) return false;
+        const ids = (request.postDataJSON() as ReportBody | null)?.broker_ids ?? [];
+        return ids.length === 1 && ids[0] === brokerId;
+    };
+}
+
+/** A report that asks one lazy section alone, with no history: the P&L candles, or the contribution. */
+function isReportOf(request: Request, section: 'include_pnl_candles' | 'include_positions_contribution'): boolean {
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== REPORT_PATH) return false;
+    const body = request.postDataJSON() as ReportBody | null;
+    return body?.[section] === true && body.include_history === false;
+}
+
+/** The P&L candles the growth chart asks in its candles view (`loadPnlCandles` on the Dashboard). */
+function isPnlCandles(request: Request): boolean {
+    return isReportOf(request, 'include_pnl_candles');
+}
+
+/** The contribution the positions panel of broker `brokerId` asks in its Performance view (`loadContribution` on its page), for that broker alone. */
+function isBrokerContribution(brokerId: number): (request: Request) => boolean {
+    return (request) => {
+        if (!isReportOf(request, 'include_positions_contribution')) return false;
         const ids = (request.postDataJSON() as ReportBody | null)?.broker_ids ?? [];
         return ids.length === 1 && ids[0] === brokerId;
     };
@@ -211,12 +246,13 @@ async function brokerIdByName(page: Page, name: string): Promise<number> {
 }
 
 /**
- * A broker's page on its overview tab, loaded from scratch and settled. Its root publishes no `data-busy`: the button's
- * is the barrier, held by the first load (`broker-first-load`) until the broker, its overview and the broker and asset
- * caches are all in. On the overview tab, where no risk or lots panel adds loads of its own to the button.
+ * A broker's page on `tab`, loaded from scratch and settled. Its root publishes no `data-busy`: the button's is the
+ * barrier, held by the first load (`broker-first-load`) until the broker, its overview and the broker and asset caches
+ * are all in. On the overview tab, where no risk or lots panel adds loads of its own to the button — or on the
+ * positions tab, whose lots panel stays closed.
  */
-async function openBrokerDetail(page: Page, brokerId: number): Promise<Locator> {
-    await navigateTo(page, `/brokers/${brokerId}?tab=panoramica`);
+async function openBrokerDetail(page: Page, brokerId: number, tab: 'panoramica' | 'posizioni' = 'panoramica'): Promise<Locator> {
+    await navigateTo(page, `/brokers/${brokerId}?tab=${tab}`);
     await expect(page.getByTestId('broker-name'), `the page of broker ${brokerId} did not load its broker`).toBeVisible({timeout: ROUND_TRIP_MS});
     const refresh = page.getByTestId('broker-refresh');
     await expectIdle(refresh, "the broker's page settled with its Refresh button still waiting");
@@ -397,6 +433,84 @@ async function countReports(page: Page): Promise<() => Promise<ReportCount>> {
             return {...count};
         }, key);
 }
+
+/**
+ * Waits until every report the page has sent since `reports` started counting has landed in the page, but the ones
+ * still held: what was let through is back, and its answer's microtasks — the page's own load, a panel's cascade, the
+ * tokens they begin and end — have run.
+ */
+async function landedAllBut(reports: () => Promise<ReportCount>, held: () => number, what: string): Promise<void> {
+    await expect
+        .poll(
+            async () => {
+                const count = await reports();
+                return count.sent - count.landed - held();
+            },
+            {message: `${what} never landed in the page`, timeout: ROUND_TRIP_MS},
+        )
+        .toBe(0);
+}
+
+/** P3: the button is idle and can be pressed now, and no value it took since `busySeen` started recording was busy. */
+async function expectNeverWaited(button: Locator, busySeen: () => Promise<string[]>, what: string): Promise<void> {
+    await expect(button, `the Refresh button waits for ${what}`).toHaveAttribute('data-busy', 'false');
+    await expect(button, `the Refresh button cannot be pressed during ${what}`).toBeEnabled();
+    expect(await busySeen(), `the Refresh button waited at some moment of ${what}`).not.toContain('true');
+}
+
+/** A toggle that publishes `aria-pressed`, pressed unless it is already: the state is asked first, the end state asserted. */
+async function pressToggle(button: Locator, why: string): Promise<void> {
+    await expect(button, why).toBeVisible({timeout: ROUND_TRIP_MS});
+    if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+    await expect(button, why).toHaveAttribute('aria-pressed', 'true');
+}
+
+/**
+ * Saves the growth chart's view as P&L → Candles the way a user does, through its toggles: GrowthChart writes the mode
+ * and the submode per user in this context's localStorage on the click, and reads them back when it mounts.
+ */
+async function saveCandlesView(page: Page): Promise<void> {
+    await openDashboard(page);
+    const chart = page.getByTestId('growth-chart');
+    await pressToggle(chart.getByTestId('growth-toggle-pnl'), 'the P&L mode of the growth chart could not be chosen');
+    await pressToggle(chart.getByTestId('growth-pnl-submode-candles'), 'the candles submode of the growth chart could not be chosen');
+}
+
+/**
+ * How many candles the growth chart draws with a real body: 0 until its candles are in, every bucket being the `'-'`
+ * gap sentinel until then. Read from the ECharts instance the chart publishes as `__lfChart`, as dashboard.spec.ts reads it.
+ */
+async function candleBodies(chart: Locator): Promise<number> {
+    return chart.locator('[data-chart-ready]').evaluate((node) => {
+        const option = (node as unknown as {__lfChart?: {getOption?: () => {series?: unknown} | undefined}}).__lfChart?.getOption?.();
+        const drawn: unknown = option?.series;
+        const series = Array.isArray(drawn) ? (drawn as Array<{type?: unknown; data?: unknown} | null>) : [];
+        let bodies = 0;
+        for (const one of series) {
+            if (one?.type !== 'candlestick' || !Array.isArray(one.data)) continue;
+            bodies += one.data.filter((point) => point != null && point !== '-').length;
+        }
+        return bodies;
+    });
+}
+
+/**
+ * Saves the positions panel's view as Performance the way a user does, on the broker's positions tab: PositionsPanel
+ * writes its mode per user in this context's localStorage, and reads it back when it mounts. Its toggle sets the mode
+ * rather than flipping it, and publishes no pressed state: the end state is the view itself, the contribution table.
+ */
+async function savePerformanceView(page: Page, brokerId: number): Promise<void> {
+    await openBrokerDetail(page, brokerId, 'posizioni');
+    const panel = page.getByTestId('positions-panel');
+    await panel.getByTestId('positions-toggle-performance').click();
+    await expect(panel.getByTestId('contribution-table'), `the Performance view of broker ${brokerId} shows no contribution: check populate_mock_data.py`).toBeVisible({timeout: ROUND_TRIP_MS});
+}
+
+/**
+ * Two page loads (the one that saves the view, the one under test) and up to four held requests: one load and two
+ * holds more than the P3 cases the describe's budget was sized for.
+ */
+const CASCADE_TEST_MS = TEST_MS + 2 * ROUND_TRIP_MS;
 
 test.describe('Page busy: the Refresh button waits for the big requests of its own page (Y11)', () => {
     test.describe.configure({timeout: TEST_MS});
@@ -618,6 +732,177 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
             expect(await busySeen(), 'the control: the recording missed the button waiting, so its silence above proves nothing').toContain('true');
             await period.release();
             await expectIdle(refresh, 'the control: the overview of the new period is back, and the Refresh button still waits');
+        } finally {
+            for (const gate of holds) await gate.dispose();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('Dashboard on a saved P&L candles view: the candles the reload in background cascades into never make the Refresh button wait, while those a period change cascades into do (N55)', async ({page}) => {
+        test.setTimeout(CASCADE_TEST_MS);
+        await saveCandlesView(page);
+        const reports = recordMainReports(page);
+        const candles = recordMainReports(page, isPnlCandles);
+        // After the sign-in and the visit that saved the view, before the page under test loads: the document under
+        // test hears no catch-up but the stub's.
+        const catchUp = await simulateCatchUp(page);
+        const holds: Hold[] = [];
+        const held = (): number => holds.reduce((sum, gate) => sum + gate.pending(), 0);
+        try {
+            const refresh = await openDashboard(page);
+            const dashboard = page.getByTestId('dashboard-page');
+            const chart = page.getByTestId('growth-chart');
+            await expect(chart.getByTestId('growth-toggle-pnl'), 'precondition: the Dashboard opened on the saved P&L mode').toHaveAttribute('aria-pressed', 'true');
+            await expect(chart.getByTestId('growth-pnl-submode-candles'), 'precondition: the Dashboard opened on the saved candles submode').toHaveAttribute('aria-pressed', 'true');
+            await expect.poll(() => candleBodies(chart), {message: 'precondition: the saved candles view never drew its candles', timeout: ROUND_TRIP_MS}).toBeGreaterThan(0);
+            expect(candles.length, 'precondition: the saved candles view asked its candles at load').toBeGreaterThan(0);
+            await expect(page.locator(CATCH_UP_NOTICE), 'precondition: the running catch-up shows its notice (Z5)').toBeVisible({timeout: ROUND_TRIP_MS});
+            await expect.poll(() => catchUp.served.includes('running'), {message: 'precondition: the tracker never asked the status route', timeout: ROUND_TRIP_MS}).toBe(true);
+            expect(reports.length, 'precondition: the Dashboard asked its main report').toBeGreaterThan(0);
+            const onScreen = reports[reports.length - 1];
+            const candlesOnScreen = candles[candles.length - 1];
+            const busySeen = await recordBusy(page, 'sync-button');
+            const count = await countReports(page);
+
+            // 1. The catch-up ends having updated something. Held: the main report the reload sends, and the candles its
+            //    landing cascades into — the report drops them, and the chart, still on candles, asks again. Both sent
+            //    once the stub has said so; nothing else on the settled page asks either.
+            const reload = await hold(page, REPORT_PATH, (request) => isMainReport(request) && catchUp.served.includes('idle'));
+            holds.push(reload);
+            const cascade = await hold(page, REPORT_PATH, (request) => isPnlCandles(request) && catchUp.served.includes('idle'));
+            holds.push(cascade);
+            catchUp.header = null;
+            catchUp.status = catchUpOverWithUpdates();
+            const sent = await heldRequest(reload, 'the reload in background after the catch-up');
+            expect(sent.postDataJSON(), 'the held report is not the question on screen asked again').toEqual(onScreen.postDataJSON());
+            await expect(dashboard, 'the page does not say it is loading the held reload').toHaveAttribute('data-busy', 'true');
+            await expectNeverWaited(refresh, busySeen, 'the reload in background after a price catch-up (P3)');
+
+            await reload.release();
+            const cascaded = await heldRequest(cascade, 'the candles the landed reload cascades into (the chart, still on candles, did not ask them again)');
+            expect(cascaded.postDataJSON(), 'the held candles are not the candles on screen asked again').toEqual(candlesOnScreen.postDataJSON());
+            await landedAllBut(count, held, 'the reload in background');
+            await waitForSettled(dashboard, ROUND_TRIP_MS);
+            await expectNeverWaited(refresh, busySeen, 'the candles the reload in background cascades into (N55: alone, with no token)');
+
+            await cascade.release();
+            await landedAllBut(count, held, 'the candles the reload in background cascades into');
+            await expect.poll(() => candleBodies(chart), {message: 'the candles the reload cascades into never reached the chart', timeout: ROUND_TRIP_MS}).toBeGreaterThan(0);
+            await expectNeverWaited(refresh, busySeen, 'the reload in background and the candles it cascades into, from the send of one to the landing of the other (P3, N55)');
+
+            // 2. The control, in the same page and under the same recording: a period change waits for its report, and
+            //    then for the candles that report cascades into — they join the period's token (N55).
+            const asked = new Set(reports.map(periodOf));
+            const askedCandles = new Set(candles.map(periodOf));
+            const sixMonths = page.getByTestId('date-preset-6m');
+            await expect(sixMonths, 'precondition: 6M is a change of period (the Dashboard opens on 3M)').toHaveAttribute('data-active', 'false');
+            const period = await hold(page, REPORT_PATH, (request) => isMainReport(request) && !asked.has(periodOf(request)));
+            holds.push(period);
+            const periodCandles = await hold(page, REPORT_PATH, (request) => isPnlCandles(request) && !askedCandles.has(periodOf(request)));
+            holds.push(periodCandles);
+            await sixMonths.click();
+            await expect(sixMonths).toHaveAttribute('data-active', 'true');
+            await heldRequest(period, 'the report of the new period');
+            await expectBusy(refresh, 'the control: the report of the new period is pending, and the Refresh button does not wait for it');
+            expect(await busySeen(), 'the control: the recording missed the button waiting, so its silence above proves nothing').toContain('true');
+
+            await period.release();
+            await heldRequest(periodCandles, 'the candles the report of the new period cascades into (the chart, still on candles, did not ask them)');
+            await landedAllBut(count, held, 'the report of the new period');
+            await expectBusy(refresh, 'the control (N55): the report of the new period is back, and the Refresh button does not wait for the candles it cascades into — they did not join its token');
+
+            await periodCandles.release();
+            await expectIdle(refresh, 'the control: the candles of the new period are back, and the Refresh button still waits');
+            await landedAllBut(count, held, 'the candles of the new period');
+        } finally {
+            for (const gate of holds) await gate.dispose();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('Broker detail on a saved Performance view: the contribution the reload in background cascades into never makes the Refresh button wait, while the one a period change cascades into does (N55)', async ({page}) => {
+        test.setTimeout(CASCADE_TEST_MS);
+        const brokerId = await brokerIdByName(page, BROKER_WITH_HOLDINGS);
+        const isOverview = isBrokerOverview(brokerId);
+        const isContribution = isBrokerContribution(brokerId);
+        await savePerformanceView(page, brokerId);
+        const overviews = recordMainReports(page, isOverview);
+        const contributions = recordMainReports(page, isContribution);
+        // After the sign-in and the visit that saved the view, before the page under test loads: the document under
+        // test hears no catch-up but the stub's.
+        const catchUp = await simulateCatchUp(page);
+        const holds: Hold[] = [];
+        const held = (): number => holds.reduce((sum, gate) => sum + gate.pending(), 0);
+        try {
+            const refresh = await openBrokerDetail(page, brokerId, 'posizioni');
+            const panel = page.getByTestId('positions-panel');
+            const contributionTable = panel.getByTestId('contribution-table');
+            await expect(contributionTable, 'precondition: the positions tab opened on the saved Performance view, its contribution in').toBeVisible({timeout: ROUND_TRIP_MS});
+            await expect(panel, 'precondition: the Performance view settled').toHaveAttribute('data-busy', 'false');
+            expect(contributions.length, 'precondition: the saved Performance view asked its contribution at load').toBeGreaterThan(0);
+            await expect(page.locator(CATCH_UP_NOTICE), 'precondition: the running catch-up shows its notice (Z5)').toBeVisible({timeout: ROUND_TRIP_MS});
+            await expect.poll(() => catchUp.served.includes('running'), {message: 'precondition: the tracker never asked the status route', timeout: ROUND_TRIP_MS}).toBe(true);
+            expect(overviews.length, "precondition: the broker's page asked its overview").toBeGreaterThan(0);
+            const onScreen = overviews[overviews.length - 1];
+            const contributionOnScreen = contributions[contributions.length - 1];
+            const busySeen = await recordBusy(page, 'broker-refresh');
+            // The page's root says nothing of the reload: the reports are counted in the page, and the count says when it is back.
+            const reports = await countReports(page);
+
+            // 1. The catch-up ends having updated something. Held: this broker's overview the reload sends, and the
+            //    contribution it cascades into — the reload shows the cached overview first, which carries none, and
+            //    the panel, still on Performance, asks again at once. Both sent once the stub has said so; nothing else
+            //    on the settled positions tab asks either.
+            const reload = await hold(page, REPORT_PATH, (request) => isOverview(request) && catchUp.served.includes('idle'));
+            holds.push(reload);
+            const cascade = await hold(page, REPORT_PATH, (request) => isContribution(request) && catchUp.served.includes('idle'));
+            holds.push(cascade);
+            catchUp.header = null;
+            catchUp.status = catchUpOverWithUpdates();
+            const sent = await heldRequest(reload, 'the reload in background after the catch-up');
+            expect(sent.postDataJSON(), 'the held report is not the overview on screen asked again').toEqual(onScreen.postDataJSON());
+            const cascaded = await heldRequest(cascade, 'the contribution the reload cascades into (the panel, still on Performance, did not ask it again)');
+            expect(cascaded.postDataJSON(), 'the held contribution is not the contribution on screen asked again').toEqual(contributionOnScreen.postDataJSON());
+            const inFlight = await reports();
+            expect(inFlight.sent - inFlight.landed, 'the page does not count the held reports in flight (is a report still sent by XHR?): their landing could not be read').toBeGreaterThanOrEqual(held());
+            await expect(panel, 'the panel does not show its own loading for the contribution it asked again (N55)').toHaveAttribute('data-busy', 'true');
+            await expectNeverWaited(refresh, busySeen, 'the reload in background after a price catch-up and the contribution it cascades into (P3, N55: alone, with no token)');
+
+            await reload.release();
+            await landedAllBut(reports, held, 'the reload in background');
+            await expectNeverWaited(refresh, busySeen, 'the contribution the reload in background cascades into, once the reload is back (N55)');
+
+            await cascade.release();
+            await landedAllBut(reports, held, 'the contribution the reload in background cascades into');
+            await expect(contributionTable, 'the contribution the reload cascades into never reached the Performance view').toBeVisible({timeout: ROUND_TRIP_MS});
+            await expect(panel).toHaveAttribute('data-busy', 'false');
+            await expectNeverWaited(refresh, busySeen, 'the reload in background and the contribution it cascades into, from their send to their landing (P3, N55)');
+
+            // 2. The control, in the same page and under the same recording: a period change waits for its overview, and
+            //    then for the contribution that overview cascades into — it joins the period's token (N55).
+            const asked = new Set(overviews.map(periodOf));
+            const askedContributions = new Set(contributions.map(periodOf));
+            const sixMonths = page.getByTestId('date-preset-6m');
+            await expect(sixMonths, "precondition: 6M is a change of period (the broker's page opens on 3M)").toHaveAttribute('data-active', 'false');
+            const period = await hold(page, REPORT_PATH, (request) => isOverview(request) && !asked.has(periodOf(request)));
+            holds.push(period);
+            const periodContribution = await hold(page, REPORT_PATH, (request) => isContribution(request) && !askedContributions.has(periodOf(request)));
+            holds.push(periodContribution);
+            await sixMonths.click();
+            await expect(sixMonths).toHaveAttribute('data-active', 'true');
+            await heldRequest(period, 'the overview of the new period');
+            await expectBusy(refresh, 'the control: the overview of the new period is pending, and the Refresh button does not wait for it');
+            expect(await busySeen(), 'the control: the recording missed the button waiting, so its silence above proves nothing').toContain('true');
+
+            await period.release();
+            await heldRequest(periodContribution, 'the contribution the overview of the new period cascades into (the panel, still on Performance, did not ask it)');
+            await landedAllBut(reports, held, 'the overview of the new period');
+            await expectBusy(refresh, "the control (N55): the overview of the new period is back, and the Refresh button does not wait for the contribution it cascades into — it did not join the period's token");
+
+            await periodContribution.release();
+            await expectIdle(refresh, 'the control: the contribution of the new period is back, and the Refresh button still waits');
+            await landedAllBut(reports, held, 'the contribution of the new period');
+            await expect(contributionTable, 'the contribution of the new period never reached the Performance view').toBeVisible({timeout: ROUND_TRIP_MS});
         } finally {
             for (const gate of holds) await gate.dispose();
             await page.unrouteAll({behavior: 'ignoreErrors'});

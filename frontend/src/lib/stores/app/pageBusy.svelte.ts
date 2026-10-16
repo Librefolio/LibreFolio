@@ -13,6 +13,10 @@
  *   the portfolio bus.
  * - **Never for** the live-price poller, the actions with an indicator of their own (price and FX sync, the PAC's
  *   «Calcola», the import wizard, a save in a modal), or the small background reads.
+ * - **`join` for the loads a panel asks by itself** when its data is missing — the P&L candles, the contribution
+ *   (decision N55). With a big request pending (the user's period, currency, scope, Refresh) it takes a token of its
+ *   own, so the button also waits for what that request cascades into; on an idle page it runs without one. A
+ *   background reload drops that data too, and asking it again must not spin the button (P3).
  * - **A token per request or per chain.** `end` takes it back, well or badly; a token that never comes back is dropped
  *   after its timeout (`PAGE_BUSY_TIMEOUT_MS`, two minutes, or `timeoutMs`), with one console warning naming it. The
  *   request itself is not cancelled: only the button stops waiting for it.
@@ -91,6 +95,15 @@ async function track<T>(label: string, work: () => Promise<T>, options?: BusyOpt
     }
 }
 
+/**
+ * A load that completes what the page is already doing (N55): like `track` while a big request is pending, without a
+ * token on an idle page. Decided at the call, on the list read untracked: the panels call it from an `$effect`.
+ */
+async function join<T>(label: string, work: () => Promise<T>, options?: BusyOptions): Promise<T> {
+    if (untrack(() => pending).length === 0) return work();
+    return track(label, work, options);
+}
+
 function reset(): void {
     for (const timer of timers.values()) clearTimeout(timer);
     timers.clear();
@@ -101,6 +114,7 @@ export const pageBusy = {
     begin,
     end,
     track,
+    join,
     reset,
     /** Reactive: at least one big request of this page is pending. */
     get busy(): boolean {
