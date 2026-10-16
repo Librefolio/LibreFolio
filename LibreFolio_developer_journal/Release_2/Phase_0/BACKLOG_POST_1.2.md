@@ -4711,6 +4711,26 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   valori salvati prima del controllo o scritti a mano. Era: diceva che il backend non valida e che i limiti li fa
   rispettare solo il dialogo, falso da `84d9e3360` (9/10). Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-17».
+- **Z-18 · Il Dashboard si dichiara «occupato» durante la ricarica dopo un recupero dei prezzi** — basso, accessibilità;
+  Y tramite il coordinatore, 16/10 (Z-13, P3 di Y11). La ricarica in background dopo un recupero
+  (`reloadAfterPriceCatchUp()` → `loadAll()`) mette `reportLoading = true` mentre chiede di nuovo il report stale, e la
+  radice della pagina (`data-testid="dashboard-page"`, `routes/(app)/dashboard/+page.svelte:841`) passa a
+  `aria-busy="true"` e `data-busy="true"`: un lettore di schermo annuncia «occupato» per un semplice aggiornamento dei
+  prezzi. P3 di Y11 copre solo il pulsante. Cura possibile, da decidere dopo l'ingresso di Y11: una variante in
+  background di `loadAll()` che non tocca il `reportLoading` della radice (la logica è di Z, il markup della radice è
+  nell'area di DV). La pagina del broker non ha `aria-busy` sulla radice, ma la sua icona «Aggiorna» segue
+  `reportLoading` e gira durante la stessa ricarica (scritto in `live-ticker.md`): da guardare con la stessa cura.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Chiusura del piano».
+- **Z-19 · N58: due funzioni di produzione che servono solo ai test** — basso; coordinatore (da H-22), 16/10. La
+  convenzione N58 vuole che nessuna funzione di produzione esista solo per i test: un test azzera da sé la sua cache
+  (`cache_clear()`, una fixture), e solo quando non si può una voce `ignore_names` del dead-code con la ragione.
+  `--dead-code` segnala due funzioni di Z: `reset_provider_cooldowns()` (`services/platform/provider_cooldown.py`,
+  Z7a), che chiama solo `PROVIDER_COOLDOWNS.clear()`, e `reset_shutdown_budget_state()`
+  (`services/platform/shutdown_budget.py`, Z6b), che azzera solo `_watchdog`. Cura: toglierle; i test azzerano lo
+  stato da sé (`PROVIDER_COOLDOWNS.clear()` o un `Cooldowns` nuovo con `monkeypatch`, il modulo lo prevede; una fixture
+  che rimette `_watchdog` a `None`), e PCD-018 e SDB-032, che provano le due funzioni, si riscrivono sul comportamento.
+  Nel prossimo lotto di codice di Z (Z-14 o il primo che arriva). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Chiusura del piano».
 
 ## B · Backup e Docker (fase 01)
 
