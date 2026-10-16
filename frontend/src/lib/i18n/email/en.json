@@ -129,6 +129,7 @@
         "EMAIL_RECIPIENT_NOT_ALLOWED": "A reset link goes only to the address of its account.",
         "EMAIL_RECIPIENT_INVALID": "This is not one valid email address.",
         "EMAIL_RATE_LIMITED": "The hourly email limit is reached: try again in {minutes} min.",
+        "RECIPIENT_REFUSED": "The SMTP server refused the recipient's address.",
         "generic": "The email could not be sent."
       }
     },

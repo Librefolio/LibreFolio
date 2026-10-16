@@ -168,6 +168,8 @@ export function linkSendFailureMessage(translate: Translate, failure: LinkSendFa
         case 'EMAIL_RATE_LIMITED':
             return translate('email.sendLink.errors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
         case 'EMAIL_DELIVERY_FAILED':
+            // The refused recipient is the invitee or the account here, not the administrator's own address of the test email.
+            if (failure.smtpCode === 'RECIPIENT_REFUSED') return translate('email.sendLink.errors.RECIPIENT_REFUSED');
             return translate(ownKey(SMTP_ERROR_KEYS, failure.smtpCode) ?? 'email.smtpErrors.SEND_FAILED');
         default:
             return translate('email.sendLink.errors.generic');
