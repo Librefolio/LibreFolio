@@ -29,9 +29,9 @@
 | Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, `8b2d4782d`); **Z2b ✅ entrato** (treno 88, `812ca49cc`); decisioni notturne N-Z2b-1…6 «da rivedere» |
 | Z3 | Scheduler: recupero immediato al ritorno e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ✅ 16/10: commit `a4da204b4` e `70ccbeadc` (diagramma), prove d'ingresso verdi; decisioni D-Z3-1…4 «da rivedere» |
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ entrato (treno 77, `2980e2a00`); decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi |
-| Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
+| Z5 | «Aggiornamento prezzi…» | ⏳ dal 16/10 07:39 (area avvisi di H dentro): codice, test e doc verdi sul leggero sulla base `a3e8e73f7`; mancano i 2 casi della rotta sul server della corsia, nello slot `api` del coordinatore; N-Z5-1…5 «da rivedere» |
 | Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
-| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ entrato** (treno 85, `e5e2595e7`; N-Z7b-1…7 «da rivedere»); **Z7c-2** ⏳ codice, test e doc scritti, checkpoint intermedio il 16/10 ~05:30, verdi dopo le 06:45; **Z7c-1** ⏳ in bozza fuori dal repo, dopo l'aggiornamento della base |
+| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ entrato** (treno 85, `e5e2595e7`; N-Z7b-1…7 «da rivedere»); **Z7c-2 ✅ entrato** (treno 97, `0dfc7cbbe`); **Z7c-1 ✅ entrato** (treno 105, `dd4a97e01`, con Z-9; N-Z7c1-1…5 «da rivedere») |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 
@@ -2084,6 +2084,16 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    - `check-orphans`: tutti i file registrati e raggiungibili da un `all`;
    - `revert-code` ripristina dalla base fissa `dc6b32050`, non da HEAD, visto che il commit porta il codice in HEAD.
    ✅ 16/10 08:35 — Slot unico fatto (A e B, sopra): Z7c-1 pronto per l'ingresso, il piano è l'unico delta.
+   ✅ 16/10 10:38 — Prove d'ingresso sulla base aggiornata `a3e8e73f7` (dev `d5c3c3ae3`), con Z5 parcheggiato:
+   `core-unit` 179 file, 6405 test (08:48); `front check` 0/0 alle 10:37, dopo il fermo voluto dal developer
+   (08:5x–10:32).
+   > **⚠️ Fuori pista**: il primo `front check` delle 10:34 aveva 1 errore, `verification_required` su
+   > `AuthRegisterResponse` in `RegisterCard.svelte`. Era il client generato del worktree (ignorato da git), fermo alle
+   > 08:26, prima che la base portasse E5b: dopo `api sync` è verde. Il riavvio delle ~10:03 aveva svuotato `/tmp`,
+   > con lo script delle prove e la data-dir della corsia: lo script ora sta in `files/z_run.sh`, i log in
+   > `files/logs/` (regola 2 del coordinatore).
+   > **Entrato** (coordinatore, 16/10 ~10:44): treno 105, merge `dd4a97e01`, insieme a Z-9; nel CHANGELOG la mia riga
+   > più il rimando a «Sleep and Wake › Provider Pauses».
 
 ### Z-9 — la doc delle pause dei fornitori (lotto di sola doc, dopo Z7c-1)
 
@@ -2245,11 +2255,41 @@ l'intestazione in `developer/backend/scheduler.md`; la parte frontend in `live-t
      > `createPriceRefresh()` leggeva `requestPortfolioRefresh` al caricamento del modulo. Ora le dipendenze di default
      > si leggono quando servono; il test condiviso resta com'è.
    - ✅ 16/10 08:17–08:35 — Z5 parcheggiato per lo slot E2E di Z7c-1, poi rimesso.
-   - ⏳ **Bug trovato da docs-writer**: le pagine senza sessione (`/invite`, `/reset-password`, `/verify-email`)
-     ricevono l'intestazione; la domanda di stato riceve un 401, e l'intercettore manda al login perdendo il link.
-     Correzione in bozza (`files/z5-draft/code/…/priceRefresh.ts`): la domanda va con `fetch`, e un 4xx ferma il
-     tracciamento e fa ignorare le intestazioni fino al reset della sessione. I suoi rossi li scrive test-author, in
-     una copia fuori dal repo. Backlog Z-13 (la pagina aperta non si ricarica da sola).
-   - ✅ 16/10 08:39 — Z5 parcheggiato di nuovo per l'aggiornamento della base (coordinatore).
-4. Doc: bozze di docs-writer fuori dal repo, in aggiornamento per la correzione. ⏳
-5. Checkpoint FROZEN, dopo lo slot `api` breve che chiama il coordinatore. ⏳
+   - ✅ 16/10 10:38–10:49 — **Bug trovato da docs-writer**: le pagine senza sessione (`/invite`, `/reset-password`,
+     `/verify-email`) ricevono l'intestazione; la domanda di stato riceveva un 401, e l'intercettore mandava al login
+     perdendo il link. Correzione: la domanda va con `fetch` (`PRICE_REFRESH_STATUS_PATH`, `PriceRefreshStatusError`),
+     e un 4xx ferma il tracciamento e fa ignorare le intestazioni fino a `reset()` (il reset della sessione); `stop()`
+     da solo non toglie la sospensione; 5xx ed errori di rete restano fallimenti, con l'attesa crescente. Il 423 di
+     un'istanza bloccata ferma anche lui il tracciamento: la rotta è sotto la dipendenza `refuse_when_blocked` di tutto
+     `/api/v1` (`router.py:34`). Con `fetch` sparisce anche l'import ritardato di `$lib/api`.
+     - Rossi: test-author ha scritto 25 casi in una copia fuori dal repo (fermato dal developer alle 08:4x, file
+       coerente), portati nel worktree dopo il ritorno di Z5 e formattati con Prettier (solo a capo): `core-unit` 22
+       rossi, tutti nel file nuovo, per i motivi giusti (`PriceRefreshStatusError is not a constructor`, il `fetch`
+       mai chiamato, `PRICE_REFRESH_STATUS_PATH` mancante); gli altri 179 file verdi.
+     - Verdi: `core-unit` 180 file, 6462 test.
+     Backlog Z-13 (la pagina aperta non si ricarica da sola).
+   - ✅ 16/10 08:39 — Z5 parcheggiato di nuovo per l'aggiornamento della base (coordinatore); rimesso alle 10:38 con
+     `z5-park.sh unpark` sulla base `a3e8e73f7`, senza conflitti (la base aveva toccato solo i tre file del runner, in
+     punti lontani).
+   - ✅ 16/10 10:50–11:15 — Di nuovo sulla base `a3e8e73f7`, una prova alla volta col carico sotto 50:
+     `scheduler-price-refresh` 44, `sleep-wake-activity` 111, `scheduler-catchup` 73, `scheduler-backoff` 79; in
+     processo PRAPI-003…008 e il file del risveglio, 80; ruff pulito; black ha riformattato solo la riga `print_info`
+     di `api_system_price_refresh` in `_backend_api.py` (il file era pulito a HEAD); `api sync`; `front check` 0/0;
+     `i18n check` stretto, 4775 chiavi; `check-orphans`. In processo anche i tre test di H che percorrono le rotte
+     (`test_instance_block.py`: ogni rotta di `/api/v1` passa prima dal blocco, l'elenco dei permessi è invariato) e
+     i due sull'ordine del router di `system` (`/system/block` resta l'ultima): 3 e 2 verdi.
+   - Regole del coordinatore del 16/10 ~11:0x: Z5 non scrive in nessun `.svelte` delle aree dei colori (solo `.ts`,
+     JSON dell'i18n, backend, test, doc). La skill `design-system` (D-T29) l'ho letta dal suo commit
+     (`git show 6e569084a:…`), non dal checkout principale, che le mie regole escludono: Z5 non ha markup, quindi
+     niente da applicare; vale per i lotti futuri.
+4. ✅ 16/10 11:11–11:14 — Doc: le sei bozze di docs-writer, scritte sugli stessi blob di `a3e8e73f7` (verificato
+   prima di copiarle): `admin/sleep_wake.en.md` (sezione `#price-refresh`), `developer/backend/scheduler.md`
+   (sezione `#price-refresh` con un diagramma di sequenza), `live-ticker.md` (sezione `#price-refresh` e la riga del
+   test), e una riga ciascuna in `developer/api/index.md`, `developer/architecture/security.md` (tra gli endpoint
+   privati; non nella tabella delle rotte permesse a istanza bloccata) e `developer/architecture/overview.md` (il
+   middleware dell'attività aggiunge le intestazioni registrate). La riga di `priceRefresh.test.ts` corrisponde ai
+   blocchi `describe` del file finale. `mkdocs build` stretto 0 avvisi; `check-links` 97 validi; il diagramma
+   controllato a occhio servendo il sito sulla porta della corsia per un minuto (screenshot), poi porta libera.
+5. Checkpoint FROZEN, dopo lo slot `api` breve che chiama il coordinatore: `api system-price-refresh` (i 2 casi
+   sulla corsia; il runner ripopola la data-dir svuotata dal riavvio e ricostruisce il frontend), poi `api system` e
+   `api instance-block` interi. ⏳
