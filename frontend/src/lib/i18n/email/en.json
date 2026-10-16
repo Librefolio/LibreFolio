@@ -138,7 +138,6 @@
       "sending": "Sending…",
       "accepted": "If an active account matches, its owner gets an email with a link to choose a new password. Check the inbox and the spam folder: the link works for 30 minutes.",
       "errors": {
-        "FORGOT_PASSWORD_DISABLED": "Password reset by email is not available on this instance yet: ask its administrator.",
         "unavailable": "This instance cannot send emails right now: ask its administrator.",
         "EMAIL_RATE_LIMITED": "Too many requests for now: try again in {minutes} min.",
         "generic": "The request could not be sent: try again."
