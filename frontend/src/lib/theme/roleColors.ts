@@ -4,8 +4,9 @@
  * ECharts draws on a canvas from options built in TypeScript, so a role (`--lf-*`) reaches a chart only as a colour
  * string computed when the option is built. This module is that read: the GR4 shades take the card, the correlation
  * scale takes danger, panel and info, a readable text takes the primary and the inverse text (DV, the designer's round
- * 2), the PAC's ideal weights take the secondary text (TD-1). T widens the list of roles to every chart neutral in B4,
- * with the parity gate below it.
+ * 2), the PAC's ideal weights take the secondary text (TD-1), and the neutrals of every chart — axes, grids, labels,
+ * tooltip boxes, pointers — take the texts, the borders, the card, the neutral surface and the text on a state fill
+ * (`chartNeutrals` in `./chartTheme`, B4, DV). The parity gate below keeps the stand-ins equal to tokens.css.
  *
  * - **Where it reads: the chart's own element.** tokens.css recomputes the roles in the `.light`/`.dark` subtrees, so a
  *   chart inside a forced subtree, or in the Lab's preview, reads its roles from its own element, not from `<html>`.
@@ -27,15 +28,36 @@ import {readableOn} from './contrast';
 import {themed, type ThemePair} from './themePair';
 
 /** The roles the charts read. */
-export type ChartRole = '--lf-surface-card' | '--lf-surface-panel' | '--lf-text-primary' | '--lf-text-secondary' | '--lf-text-on-inverse' | '--lf-danger' | '--lf-info';
+export type ChartRole =
+    | '--lf-surface-card'
+    | '--lf-surface-panel'
+    | '--lf-surface-neutral'
+    | '--lf-text-primary'
+    | '--lf-text-secondary'
+    | '--lf-text-muted'
+    | '--lf-text-on-inverse'
+    | '--lf-border-subtle'
+    | '--lf-border-raised'
+    | '--lf-border-input'
+    | '--lf-on-status'
+    | '--lf-warning'
+    | '--lf-danger'
+    | '--lf-info';
 
 /** tokens.css, resolved per theme: what a role reads where the stylesheet is not loaded. Kept equal by the parity gate. */
 const STAND_INS: Readonly<Record<ChartRole, ThemePair>> = {
     '--lf-surface-card': {light: '#fafbfa', dark: '#151b19'},
     '--lf-surface-panel': {light: '#e8ece9', dark: '#1b2421'},
+    '--lf-surface-neutral': {light: '#d8e0dc', dark: '#222c28'},
     '--lf-text-primary': {light: '#1c2420', dark: '#edf2f0'},
     '--lf-text-secondary': {light: '#4a5550', dark: '#9ba8a2'},
+    '--lf-text-muted': {light: '#616d67', dark: '#7f8c87'},
     '--lf-text-on-inverse': {light: '#fafbfa', dark: '#151b19'},
+    '--lf-border-subtle': {light: '#d8e0dc', dark: '#222c28'},
+    '--lf-border-raised': {light: '#d8e0dc', dark: '#2e3b36'},
+    '--lf-border-input': {light: '#7e8984', dark: '#606f6a'},
+    '--lf-on-status': {light: '#fafbfa', dark: '#151b19'},
+    '--lf-warning': {light: '#ae4e00', dark: '#f59e0b'},
     '--lf-danger': {light: '#c82838', dark: '#ff7a86'},
     '--lf-info': {light: '#155eef', dark: '#3f86fa'},
 };

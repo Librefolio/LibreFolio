@@ -2858,6 +2858,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       `SIGN_BADGE.loss`, che escono dal baseline.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «W6», passi W6-a e DV-9.
+- **DV-10 · B4: quel che i neutri dei grafici sui ruoli lasciano alla designer** — minimo; DV, 16/10 notte (B4,
+  D-T27).
+  - **Da rivedere con lei:** la mappa voce → ruolo è il ruolo più vicino. In scuro assi e griglie passano da 1,93 a
+    1,21:1 sulla card (`border-subtle`, come i divisori); i riquadri dei tooltip sono popover (`card`, `raised`).
+    - I tooltip di correlazione e rischio/rendimento prendono il riquadro comune: il loro bordo non riprende più il
+      colore del punto o della cella sotto il puntatore (ECharts lo faceva quando il bordo non era indicato), ed è il
+      bordo neutro di tutti gli altri tooltip.
+  - **Restano in `chartTheme.ts` coi valori legacy:** le serie, gli stati, i segni (guadagno e perdita aspettano un
+    lotto con lei: fondono il rosso dei prezzi e quello del portafoglio), i punti del rischio/rendimento.
+  - **`GEO_MAP_COLORS.land`** non va su un ruolo: su `neutral` starebbe a ΔE00 4,1/3,7 dal primo gradino della scala
+    (GR5.1). È lo zero della scala, da decidere con lei.
+  - **Il testo dei bottoni di stato del Gantt** (`on-status`) resta sotto 4,5:1 sui pieni legacy ambra e cielo di
+    `LOT_STATE_COLORS` (3,07 e 3,95:1 in chiaro), come prima: si cura coi pieni di stato.
+  - **Quattro helper puri leggono i ruoli su `<html>`,** non sull'elemento del grafico (`buildSecondaryYAxes`,
+    `buildSignalReferencePrimitives`, `buildScatterOption`, `buildGrowthFullSeries`): oggi nessun effetto, da
+    sistemare se un grafico entra in un sottoalbero a tema forzato.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
+    «B4».
 
 ---
 

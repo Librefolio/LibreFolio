@@ -8,9 +8,11 @@
  *   resolver (`scripts/theme/theme-roles.mjs`, as `src/themeTokens.gate.test.ts` uses it) makes of `var(<role>)`. Its
  *   red says what to do: «update the stand-in in roleColors.ts to tokens.css».
  * - **The role list is the module's.** `ChartRole` is a type, erased at run time, so the list is scraped from its
- *   declaration in roleColors.ts: a role added to the union enters the gate the day it is declared. Positive control:
- *   every role of the union is read by chart code — directly, `.color('--lf-…')` in a production source, or through
- *   `readableText`, whose reads are recorded at run time — so the gate checks no dead role.
+ *   declaration in roleColors.ts: a role added to the union enters the gate the day it is declared. The union is read
+ *   on one line or as Prettier breaks it, one member per line after a leading `|`, and a member written otherwise is
+ *   named, never skipped. Positive control: every role of the union is read by chart code — directly,
+ *   `.color('--lf-…')` in a production source, or through `readableText`, whose reads are recorded at run time — so the
+ *   gate checks no dead role.
  * - **The paths without a page.** An injected reader answers before any element is looked for, so it works here, and
  *   it is handed the scope; with none, a node run reads every stand-in. A `#rrggbb` passes as it is; any other notation
  *   needs a canvas, which a node run has not, so the stand-in takes its place. `dark` picks the stand-in, nothing else.
@@ -42,17 +44,24 @@ afterEach(() => {
     setRoleReader(null);
 });
 
-/** The members of `export type ChartRole = …;`, each a quoted role — or a marker naming a member written otherwise. */
-function scrapeChartRoles(): {roles: ChartRole[]; declarations: number; unread: string[]} {
-    const source = readFileSync(ROLE_COLORS_TS, 'utf-8');
+/**
+ * The members of the one `export type ChartRole = …;` in `source`, each a quoted role — or a marker naming a member
+ * written otherwise. Pure, so the forms it must read are tried on synthetic sources too. One leading `|` is the
+ * syntax's, not a member: Prettier writes it before the first member once the union no longer fits on one line.
+ */
+function scrapeChartRoles(source: string): {roles: ChartRole[]; declarations: number; unread: string[]} {
     const declarations = [...source.matchAll(/export type ChartRole\s*=([^;]+);/g)];
     if (declarations.length !== 1) return {roles: [], declarations: declarations.length, unread: []};
-    const members = declarations[0][1].split('|').map((member) => member.trim());
+    const members = declarations[0][1]
+        .trim()
+        .replace(/^\|/, '')
+        .split('|')
+        .map((member) => member.trim());
     const roles = members.flatMap((member) => /^'(--lf-[a-z0-9-]+)'$/.exec(member)?.[1] ?? []) as ChartRole[];
     return {roles, declarations: 1, unread: members.filter((member) => !/^'--lf-[a-z0-9-]+'$/.test(member))};
 }
 
-const SCRAPE = scrapeChartRoles();
+const SCRAPE = scrapeChartRoles(readFileSync(ROLE_COLORS_TS, 'utf-8'));
 const ROLES = SCRAPE.roles;
 const ROLE_THEMES = ROLES.flatMap((role) => THEMES.map((theme) => [role, theme] as const));
 
@@ -86,6 +95,32 @@ describe('the role list — scraped from the ChartRole union, and every role rea
         expect(SCRAPE.declarations, 'roleColors.ts: expected exactly one `export type ChartRole = …;`').toBe(1);
         expect(SCRAPE.unread, 'members of ChartRole the scrape cannot read as a quoted role: the parity gate would skip them').toEqual([]);
         expect(ROLES).toEqual(expect.arrayContaining(['--lf-surface-card', '--lf-text-primary', '--lf-danger', '--lf-info']));
+    });
+
+    it('positive control: the scrape reads the union on one line and as Prettier breaks it, and still names a member it cannot read', () => {
+        const roles = ['--lf-surface-card', '--lf-text-primary', '--lf-info'];
+        const forms = {
+            'one line': `export type ChartRole = ${roles.map((role) => `'${role}'`).join(' | ')};`,
+            // What Prettier writes once the union outgrows printWidth: one member per line, each after a `|`, the first one too.
+            'one member per line, after a leading |': `export type ChartRole =\n${roles.map((role) => `    | '${role}'`).join('\n')};`,
+        };
+        for (const [form, source] of Object.entries(forms)) {
+            expect(scrapeChartRoles(source), `${form}: the union is not read as written — a role the scrape misses leaves the parity gate`).toEqual({roles, declarations: 1, unread: []});
+        }
+
+        // One leading `|` is the syntax's; anything else that is not a quoted role is a member the scrape must name.
+        const unreadable = {
+            'an empty member in the middle': "export type ChartRole = '--lf-surface-card' | | '--lf-info';",
+            'a second leading |': "export type ChartRole =\n    | | '--lf-surface-card'\n    | '--lf-info';",
+            'a type, not a quoted role': "export type ChartRole = '--lf-surface-card' | string;",
+            'a double-quoted role': `export type ChartRole = '--lf-surface-card' | "--lf-info";`,
+        };
+        expect(Object.fromEntries(Object.entries(unreadable).map(([what, source]) => [what, scrapeChartRoles(source).unread])), 'a member the scrape cannot read went unnamed: the parity gate would skip it in silence').toEqual({
+            'an empty member in the middle': [''],
+            'a second leading |': [''],
+            'a type, not a quoted role': ['string'],
+            'a double-quoted role': ['"--lf-info"'],
+        });
     });
 
     it('positive control: every role of the union is read by chart code, directly or through readableText — the gate checks no dead role', () => {
