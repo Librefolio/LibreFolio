@@ -284,6 +284,7 @@ duplicati (D1); la timeline della card del set (12).
    > nessun processo rimasto, porta 6151 libera.
 3. ⏳ Slot pesanti A (IW-1…IW-3) e B (IW-4, IW-5), quando li assegna il coordinatore: `api sync` (fatto),
    `front check`, `front-utility core-unit`, `front-utility component-unit`, E2E mirati (elenco nella sezione dei lotti).
+   Superato dal passo 7: uno slot unico per tutto, chiesto e concesso il 16/10.
 4. ✅ Checkpoint 1 (16/10, 12:05; committato dal coordinatore: `48ecea1e2`): `--update` della baseline, che si stringe solo sulle 17 righe dell'area (m1 8.249 →
    **6.967**, −1.282; m2 54 → **53**, via `#dc2626`); voci IW-1…IW-8 nel backlog; messaggio al coordinatore con file,
    prove, esclusioni, conflitti, messaggio di commit, «dove guardarlo». Poi FROZEN.
@@ -304,6 +305,19 @@ duplicati (D1); la timeline della card del set (12).
      test verdi** (12:19); `--update`: m1 6.967 → **6.953** (AssetGroupStep 14 → 8, ImportWizardModal 8 → 0, riga tolta).
    - **Area:** m1 1.310 → **14** (AssetGroupStep 8: badge `KIND_TONES` con anello, 3 stelle; GapFixToggle 4;
      `pairCellHtml.ts` 2), m2 **0**.
+   - ✅ Checkpoint 2 committato dal coordinatore: `9c79d5b35` (6 file); SHA messo nella voce IW-1 del backlog.
+6. ✅ Preparazione dello slot (16/10, 12:22–12:53; coordinatore, 12:21: «uno alla volta, sotto `nice` e con carico sotto 50, senza server»),
+   script `iw_prep.sh` in sessione, log `prep_*.log`:
+   1. `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py front build --debug`: uscita 0 in
+      482 s; il build lancia `svelte-check` sull'albero intero: **0 errori, 0 avvisi** (è il `front check` di
+      `npm run check`, sullo stesso albero `9c79d5b35`);
+   2. `… dev.py mkdocs build`: uscita 0 in 203 s, 3.076 URL relativi risolti;
+   3. `… dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-iw db populate --force --clean --with-reports`
+      (cartella della corsia, assente fino a ora; `--with-reports` come il populate che il runner degli E2E rifà da
+      sé all'inizio di una corsa): uscita 0 in 34 s; istantanea del DB nell'archivio ignorato `.testLog/00_archive/`.
+   Porta 6151 libera alla fine; nessun server avviato.
+7. ⏳ Slot pesante unico (~15:30, dopo TR, sulla base attuale): `front check`, `front-utility core-unit`,
+   `front-utility component-unit`, poi le 13 spec di `front-transaction`.
 
 ## Definizione di fatto
 
