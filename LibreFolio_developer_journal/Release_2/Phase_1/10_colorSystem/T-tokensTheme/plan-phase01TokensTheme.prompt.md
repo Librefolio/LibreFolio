@@ -613,7 +613,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | ✅ commit `8fb80d3b8`; entra col resto della UI dopo lo slot |
 | 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | ✅ commit `4a7ba1d7e`; base merge `1427d5ea1` (DV e BK), gate 119/119 |
 | 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | ✅ commit `26b45f520` |
-| 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | 🔄 prove leggere verdi (310/310, m2 16 → 3) |
+| 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `c4b8a4ae3` |
+| 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | 🔄 checkpoint consegnato (15:4x): 1179/1179, `SimpleSelect.test.ts` 45/45; mutazione e `front check` nello slot |
 
 ## Avanzamento
 
@@ -2768,3 +2769,27 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **2 · Prove leggere** (sotto `nice`): Prettier verde; `--check` con 1 file sotto il record, poi `--update`:
 > **m2 16 → 3** (la riga di `TransactionsTable` tolta dal baseline); `--check` pulito; i quattro gate dei colori e i 5
 > file di unità che nominano la tabella **310/310**. `front check` non lanciato: solo `<style>`.
+
+> ✅ **Committato** dal coordinatore: `c4b8a4ae3` (15:02); tutti gli hunk dentro lo `<style>`. Le due scelte da rivedere
+> (il punto dell'evento in `info`, l'impulso dall'indaco al verde) sono i punti 23 e 24 della raccolta per la designer.
+> `ImportBrokerMismatchModal` si sblocca dopo l'ingresso di IW, verso le 15:55.
+
+> ✅ **2 · TC-15 applicato** (15:0x, via del coordinatore): le quattro bozze copiate nell'albero (le select non erano
+> cambiate dalla base delle bozze, `26b45f520` → `c4b8a4ae3`): 35 righe aggiunte, nient'altro. Prove leggere prima del
+> fermo: Prettier verde; `--check` pulito; i quattro gate e i 26 file di unità che nominano le select (senza
+> `SimpleSelect.test.ts`, in scrittura) **1179/1179**. Lo skill `design-system`, regola 5: la regola delle select e il
+> «fate lo stesso» per una lista nuova che tinge le righe; il backlog: TC-15 chiusa.
+
+> ⏸️ **Fermo delle prove leggere fino alle 15:45** (coordinatore, 15:1x: carico 80, la verifica di FE5c di G ha 3 rossi
+> di carico). Test-author, che stava girando le Vitest del suo test di `SimpleSelect` (`data-highlighted`), fermato: chiude
+> la modifica senza altre esecuzioni. **Dopo le 15:45, sotto carico 50:** `SimpleSelect.test.ts` e la prova di mutazione,
+> poi il checkpoint di TC-15.
+
+> ✅ **3 · Il test di `SimpleSelect`** (test-author, prima del fermo): `SimpleSelect.test.ts` 40 → **45/45**; un describe
+> «TC-15» che legge `data-highlighted` su tutte le opzioni (un solo `"true"`, gli altri `"false"`, anche i disabilitati):
+> all'apertura (su `apple`, perché `acai` è disabilitato; sul valore scelto), con la tastiera (ArrowDown salta i
+> disabilitati, ArrowUp torna), col puntatore, e mai su un'opzione disabilitata (con un controllo che il `mouseenter`
+> arriva davvero). L'intestazione del file aggiornata. **Non eseguiti** per il fermo: la prova di mutazione (pronta in
+> `files/T-r2/tc15_mutation.sh`: M0 di controllo, M1 senza attributo, M2 che segue la selezione, M3 senza la guardia dei
+> disabilitati) e `front check`, che passa allo slot. Il coordinatore (15:41): le prove fatte bastano per il checkpoint,
+> il resto lo copre lo slot.
