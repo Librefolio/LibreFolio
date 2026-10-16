@@ -73,9 +73,9 @@
     <!-- Header -->
     <div class="modal-header" data-testid={testId || undefined}>
         {#if danger}
-            <AlertTriangle class="text-red-500" size={24} />
+            <AlertTriangle class="text-lf-danger" size={24} />
         {:else if warning}
-            <AlertTriangle class="text-amber-500" size={24} />
+            <AlertTriangle class="text-lf-warning" size={24} />
         {/if}
         <h2 class="modal-title">{title}</h2>
         <button aria-label="Close" class="close-btn" onclick={onCancel} type="button">
@@ -91,9 +91,9 @@
                 {#each results as r}
                     <li class="result-item">
                         {#if r.success}
-                            <Check size={14} class="text-emerald-500 shrink-0" />
+                            <Check size={14} class="text-lf-success shrink-0" />
                         {:else}
-                            <XCircle size={14} class="text-red-500 shrink-0" />
+                            <XCircle size={14} class="text-lf-danger shrink-0" />
                         {/if}
                         <span class="result-label">{r.label}</span>
                         {#if r.detail}
