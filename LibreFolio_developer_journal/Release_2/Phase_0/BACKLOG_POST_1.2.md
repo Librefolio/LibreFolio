@@ -2518,6 +2518,34 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Dopo G-18», verifica di FE5c.
+- **G-20 · Gli scatti del ripristino B5b** — medio; 1.3 tramite il coordinatore, 16/10 sera. Non è per subito.
+  - Gli stati da fotografare, nella scheda Backup dell'admin:
+    1. il report del controllo della copia, la finestra `restore-report` (`RestoreReportModal.svelte`): i totali
+       (`restore-report-totals`, con `data-status="changed"` per l'avviso di differenza) e gli avvisi
+       (`restore-report-warnings`); poi `-ready`, `-migrations`, `-admins`, `-blocker`;
+    2. la conferma con la parola da digitare (`restore-confirm-word`, `restore-confirm-input`, `restore-confirm`);
+    3. l'overlay del riavvio (`restart-overlay`, `restart-detail`);
+    4. l'esito. Il fallimento ha la sua schermata: l'overlay con `data-outcome="rolled_back"` e il motivo (es.
+       `first_start_failed`), poi l'avviso `restore-last-result` sulla card. Il successo (`committed`) no: la pagina
+       passa all'accesso senza dire niente (FBKP-107). Cosa fotografare per il successo va chiarito con la 1.3.
+  - B ha già simulato il flusso in `frontend/e2e/settings/backup.spec.ts` (`0cd910a7e`). La fixture `restoreTest`,
+    con la sua `lane`, risponde sempre nella pagina al riavvio (`POST /api/v1/backup/restore/restart`). Quando il caso
+    lo chiede, risponde anche a upload, controllo, esito, stato e `GET /api/v1/system/ready`.
+    - FBKP-102 finge upload e controllo: al server non arriva niente.
+    - FBKP-103…105 partono da un ripristino in attesa finto; FBKP-103 è il rollback (`first_start_failed`).
+    - FBKP-106 e 107 usano il server vero della corsia, tranne il riavvio.
+    - Le fixture le passa B.
+  - Proposta (test-author, perimetro G): gli scatti nel test di Settings, gli aiuti in
+    `frontend/e2e/fixtures/galleryBackup.ts`, che già finge la card del backup. Solo intercept finti, come in
+    FBKP-102…105: nessun archivio caricato, nessun ripristino in attesa sul server della corsia, nessun riavvio.
+  - Da decidere anche l'inquadratura mobile di `settings/backup-ready`. Con B la card del ripristino sta sotto quella
+    del backup, e su mobile resta tutta sotto il bordo dello schermo (`dh` en 1167 su 740): non si vede. Su desktop lo
+    schermo si allunga e mostra le due card intere.
+  - Poi: un doppio lancio a/b filtrato, come per `settings/plugins` ed `email`, e le righe di
+    `mkdocs_src/docs/gallery/*.en.md` scritte da docs-writer.
+
+  Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
+  «Dopo G-18», `settings/backup-ready` per la 1.3.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
