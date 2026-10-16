@@ -29,8 +29,9 @@ Modules:
 * ``ledger_totals`` — the control totals of the transaction ledger, with no price, rate or
   cost: cash per broker and currency and quantity per broker and asset, which a backup
   writes and a restore checks.
-* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, the
-  conversion between cumulative and annualized returns, a period's start (rebasing), the
+* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series (the
+  Dashboard's MWRR rule, one for the card and every point of the line, in
+  ``period_mwrr`` and ``period_mwrr_series``), the conversion between cumulative and annualized returns, a period's start (rebasing), the
   net return of a holding, a gain or loss as a fraction of its base, the gain or loss a
   disposal realizes, the return between two prices, and the gain that recovers a drawdown.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.

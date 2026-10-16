@@ -48,7 +48,7 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series), annualization, period rebasing, G/L ratio, realized gain, price return, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio, realized gain, price return, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
@@ -79,6 +79,12 @@ backend/app/services/financial_math/
 `fifo/models.py` also holds the engine's economic allocations (events, groups, per-lot
 accumulators); `portfolio/models.py` holds `ValuationSource`, `EngineEndState` and
 `PortfolioCalculationResult`.
+
+`period_mwrr()` and `period_mwrr_series()` (`returns.py`) hold the Dashboard's MWRR rule, one rule for the card and for
+every point of the line (developer decision D-MF5): no rate when the value is zero or less, or when the net invested
+capital up to that day — the first snapshot's value plus the flows after it (decision N54) — is zero or less; the
+series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()` remain the bare solves, without that
+rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
 
 ### ⚙️ The Portfolio Package at Work {: #portfolio-package }
 
