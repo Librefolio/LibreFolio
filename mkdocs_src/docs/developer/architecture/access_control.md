@@ -168,8 +168,9 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
 - **Password reset** (`user reset`, `user_service.reset_password()`) sets the new hash, computed
   in a worker thread off the event loop, and ends every session of the account in the same
   commit: each device gets `401` at its next request, and signs in again with the new password.
-  A [password-reset link](#reset-links) does the same when it is spent. To keep the account out
-  altogether, deactivate it.
+  The same commit revokes the account's live [password-reset links](#reset-links) (A-27). A
+  password-reset link does the same when it is spent. To keep the account out altogether,
+  deactivate it.
 - **The account's own changes** end its other sessions as well: a password change
   (`POST /api/v1/auth/change-password`) and an email change (`PUT /api/v1/auth/profile`, which asks
   for the current password: see [Changing the Email](security.md#email-change)). The device that
@@ -404,6 +405,10 @@ the administrator does not choose the new password: whoever spends the link does
   token, hashes the new password with bcrypt in a worker thread, ends every session of the account and
   revokes its other live reset links, in one commit; the answer is `200`. A link that is not valid
   (used, expired, revoked, unknown or of another purpose) changes nothing: `400` `TOKEN_INVALID`.
+- **Revoked** with the account's password or address: a password change, an email change (the same
+  address in another A–Z case is none) and `./dev.py user reset` revoke its live reset links,
+  whoever issued them, in the commit of the change (lot A-27,
+  [Session Revocation](security.md#session-revocation)).
 
 Tests: `./dev.py test services registration`
 (`backend/test_scripts/test_services/test_registration_service.py`: the variables, the effective

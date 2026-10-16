@@ -38,7 +38,7 @@ As soon as the email in the field differs from your current one, a **Current Pas
 
 - **Wrong password**: the tab says *Current password is incorrect*. Your new email stays in its field and only the password is emptied: type it again, then save.
 - **Email refused for another reason**, for example because another account already uses it, even with other capitals: the tab shows the reason, and your current email comes back.
-- **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again.
+- **Email saved**: you stay signed in on this device. Every other device signed in to your account is signed out, and needs to sign in again. Any password-reset link sent to you before the change stops working, even one still waiting in your old mailbox.
 - **Only the capitals changed**, such as `Anna@example.com` for `anna@example.com`: it is still your address, so no device is signed out and it stays verified. Only the letters A to Z are matched this way, accented letters are not: `Émile@example.com` and `émile@example.com` are two different addresses.
 
 Changing only your username asks for no password and signs no device out.
@@ -63,7 +63,7 @@ The **Change Password** button (always available, no unlock needed) opens a moda
 
 The checklist follows what you type, and the server applies exactly the same rules. Letters and digits of any alphabet count: `É` is an uppercase letter, `é` a lowercase one. A special character is anything that is neither a letter, a number nor a space, such as `!`, `_` or `€`. If the server still refuses the new password, the modal says *Password does not meet security requirements*, and the checklist shows which rules are missing.
 
-After confirmation, your session remains active — you do not need to log in again. Every other device signed in to your account is signed out.
+After confirmation, your session remains active — you do not need to log in again. Every other device signed in to your account is signed out. Any password-reset link sent to you before the change stops working.
 
 ### 🗑️ Delete Account
 
