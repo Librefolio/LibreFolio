@@ -735,7 +735,7 @@
                     <span data-testid="tx-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{mainRows.length}</span>
                 {/if}
             </h2>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('transactions.subtitle')}</p>
+            <p class="text-lf-muted text-sm">{$_('transactions.subtitle')}</p>
         </div>
         <div class="flex items-center gap-2 ml-auto">
             {#if selectedRows.length > 0}
