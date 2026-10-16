@@ -19,7 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {ChartLine, Pencil, RefreshCw, RotateCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
+    import {ChartLine, Pencil, RefreshCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -36,10 +36,10 @@
     import AssetDetailMeasuresSection from '$lib/components/assets/detail/AssetDetailMeasuresSection.svelte';
     import AssetDetailHeader from '$lib/components/assets/detail/AssetDetailHeader.svelte';
     import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
+    import AssetDetailToolbarActions from '$lib/components/assets/detail/AssetDetailToolbarActions.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import AssetRiskScenariosView from '$lib/features/risk/AssetRiskScenariosView.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
@@ -94,11 +94,10 @@
     import {buildAssetDetailIssues, buildRequiredFxPairs, type AssetDetailIssuesInput, type RequiredFxPairInfo, type RequiredFxPairsInput} from '$lib/components/assets/detail/assetDetailFxRequirements';
     import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/components/assets/detail/assetDetailFxPair';
     import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
-    import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
     import {aiExportCatalogLoader, emptyAiExportCompatibility, type AiExportCatalogCompatibilityResult} from '$lib/features/ai-export/catalog/compatibility';
-    import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
+    import {buildAiExportMenuLabels, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
@@ -2419,62 +2418,28 @@
         {/snippet}
 
         {#snippet actions({showActionLabels})}
-            <AiExportMenu
-                domain="asset"
-                compatibility={assetAiExportCompatibility}
-                memoryKey={`asset:${data.assetId}`}
-                defaultSelectionId="asset.market_analysis"
-                disabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
-                labels={assetAiExportLabels}
-                showLabel={showActionLabels}
-                onprepare={handleAssetAiExport}
-                oncopied={handleAssetAiExportCopied}
-                onerror={(error) => toasts.error(getAiExportErrorMessage($t, error))}
-            />
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid="asset-detail-edit-btn"
-                disabled={!assetInfo || !classificationLoaded}
-                onclick={() => {
+            <AssetDetailToolbarActions
+                {showActionLabels}
+                assetId={data.assetId}
+                aiExportCompatibility={assetAiExportCompatibility}
+                aiExportLabels={assetAiExportLabels}
+                aiExportDisabled={assetAiExportCatalogLoading || assetAiExportCatalogFailed || !assetInfo}
+                onaiexportprepare={handleAssetAiExport}
+                onaiexportcopied={handleAssetAiExportCopied}
+                editDisabled={!assetInfo || !classificationLoaded}
+                onedit={() => {
                     editDataForModal = buildEditData();
                     editModalOpen = true;
                 }}
-            >
-                <Pencil size={14} />
-                {#if showActionLabels}<span>{$t('common.edit')}</span>{/if}
-            </button>
-            {#if syncBlocked}
-                <Tooltip text={syncDisabledReason} position="top" maxWidth="320px" interactiveChild>
-                    <button
-                        class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors opacity-50 cursor-not-allowed"
-                        data-testid="asset-detail-sync-btn"
-                        disabled={syncing || syncBlocked}
-                        onclick={handleSync}
-                    >
-                        <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                        {#if showActionLabels}<span class="line-through">{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
-                    </button>
-                </Tooltip>
-            {:else}
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                    data-testid="asset-detail-sync-btn"
-                    disabled={syncing || syncBlocked || !providerAssignmentLoaded}
-                    onclick={handleSync}
-                >
-                    <RotateCw class={syncing ? 'animate-spin' : ''} size={14} />
-                    {#if showActionLabels}<span>{syncing ? $t('common.syncing') : isParametric ? $t('assetDetail.recalculate') : $t('common.sync')}</span>{/if}
-                </button>
-            {/if}
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="asset-detail-refresh-btn"
-                disabled={loading}
-                onclick={() => handleRefresh()}
-            >
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
-                {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
-            </button>
+                {syncBlocked}
+                {syncDisabledReason}
+                {syncing}
+                {isParametric}
+                {providerAssignmentLoaded}
+                onsync={handleSync}
+                {loading}
+                onrefresh={() => handleRefresh()}
+            />
         {/snippet}
     </PageToolbar>
 
