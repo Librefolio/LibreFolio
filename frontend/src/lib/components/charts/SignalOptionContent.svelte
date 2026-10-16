@@ -18,11 +18,11 @@
         <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
             <span class="shrink-0 font-medium text-lf-primary">{name}</span>
             {#if subtitle}
-                <span class="signal-option-subtitle min-w-0 flex-1 whitespace-normal text-[11px] leading-4 text-lf-muted">{@html renderedSubtitle}</span>
+                <span class="signal-option-subtitle min-w-0 flex-1 whitespace-normal text-[11px] leading-4 text-lf-secondary">{@html renderedSubtitle}</span>
             {/if}
         </div>
         {#if dataSubtitle}
-            <span class="mt-0.5 block text-[10px] leading-4 text-lf-muted">{dataSubtitle}</span>
+            <span class="mt-0.5 block text-[10px] leading-4 text-lf-secondary">{dataSubtitle}</span>
         {/if}
     </div>
 </div>
