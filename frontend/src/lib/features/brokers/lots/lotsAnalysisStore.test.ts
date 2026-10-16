@@ -53,7 +53,7 @@ async function loadStore(): Promise<LotsStore> {
     try {
         module = (await import(/* @vite-ignore */ STORE_MODULE)) as Record<string, unknown>;
     } catch (error) {
-        throw new Error(`src/lib/stores/portfolio/lotsAnalysisStore.svelte.ts does not exist yet: the lots panel has no cache, so every return to the Dashboard asks for the analysis again (${String(error)})`);
+        throw new Error(`src/lib/features/brokers/lots/lotsAnalysisStore.svelte.ts does not exist yet: the lots panel has no cache, so every return to the Dashboard asks for the analysis again (${String(error)})`);
     }
     for (const name of ['fetchLotsAnalysis', 'peekLotsAnalysis']) {
         expect(typeof module[name], `lotsAnalysisStore exports no ${name}()`).toBe('function');

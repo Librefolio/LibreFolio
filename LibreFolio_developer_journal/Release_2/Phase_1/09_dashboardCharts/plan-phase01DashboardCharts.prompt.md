@@ -1989,3 +1989,668 @@ scrivono qui quando partono.
 > in `features/risk/` e 49 modifiche. Restano fuori gli 8 rossi di Y9 e Y10 e il piano, che va nel commit del journal.
 > Non ci sono righe di CHANGELOG: è uno spostamento interno. Le E2E `risk` e `risk-lab` aspettano lo slot del
 > coordinatore, dopo H e A.
+
+### Y4b — commit e revisione combinata ⏳ (2026-10-16, 02:26–)
+
+> **Note implementazione**: il coordinatore ha salvato Y4b in `51aff4a12`, 152 file (103 rinomine e 49 modifiche), e il
+> journal in `26cdfb3ec`. Poi ha aggiornato la base: merge pulito di `dev_release2` (`57802d827`, con DV TD-1),
+> HEAD `9295febe9`, con `_frontend_utility.py` fuso da solo e `theme-roles --check` pulito.
+> - **Prove leggere sulla revisione combinata** (`/tmp/libreFolio_y4b_entry_light.sh`, una alla volta con `nice`, ognuna
+>   dopo il carico sotto 70), tutte verdi:
+>   - `api sync`, senza cambi tracciati;
+>   - `front check`: 0 errori, 0 avvisi;
+>   - i 7 test unitari del rischio: 26 file, 972 test;
+>   - `core-unit`: 171 file e 5900 test. Un file in più per l'ingresso di DV.
+> - **E2E nello slot pesante 2** (via del coordinatore, 02:27): `risk` e poi `risk-lab`, `--workers 2` e `nice`
+>   (`/tmp/libreFolio_y4b_e2e.sh`).
+> - **Le registrazioni dei rossi** di Y9 e Y10 si rimettono solo dopo le E2E (coordinatore), così la revisione che entra
+>   resta pulita.
+>   - La patch salvata non si applica più, perché Y4b ha cambiato le righe del rischio che fanno da contesto.
+>   - Le rimette `files/y9y10_runner_reapply.py`: prende i pezzi dalla copia salvata e li inserisce per ancora, con il
+>     percorso nuovo `features/risk/` del rosso di `CorrelationHeatmap`. A secco passa, e le ancore coincidono con il
+>     file di oggi.
+> - **Per il passo 2 di Y9**:
+>   - DV TD-1 toglie `PAC_EXPOSURE_BAR_COLORS` da `chartTheme.ts`, quindi `ExposureBars.svelte` non importa più
+>     `chartTheme`. `files/y9_k13_apply.py` aggiunge la riga d'import dopo quella di `echarts`, ed è già previsto;
+>   - a secco sulla base nuova: 18 chiamate in 17 file.
+>   - L'aggiunta a `chartTheme.ts` va in fondo al file, una zona che DV non tocca.
+> - **E2E** (slot 2, `9295febe9`): `front-portfolio risk` 38 su 38 (02:33–02:43, build compresa), `front-portfolio
+>   risk-lab` 44 su 44 (02:43–02:48). La 6189 è libera. Handoff d'ingresso al coordinatore alle 02:48.
+> - **Registrazioni dei rossi** rimesse dopo le E2E, come da ok del coordinatore: `files/y9y10_runner_reapply.py
+>   --apply`, +40 −2. `check-orphans` è pulito con gli 8 rossi registrati; ruff dà 28 avvisi come HEAD. Non sono
+>   committate.
+
+### Y9 — passo 1, rossi ✅ (2026-10-16, 00:58–02:50)
+
+> **Note implementazione**: `test-author` ha scritto sei file nuovi. Li ho lanciati uno alla volta con `nice` e il
+> reporter verboso, alle 02:48. Il risultato è identico alla previsione: **19 rossi e 30 verdi**.
+>
+> | File | Rossi | Verdi | Motivo dei rossi (asserzione) |
+> |---|---:|---:|---|
+> | `charts/AllocationPieChart.tooltipEscape` | 3 | 4 | il carico diventa un elemento: titolo da `data.caption`, riga del padre con uno e con due anelli |
+> | `charts/CandlestickChart.tooltipEscape` | 4 | 3 | intestazione: codice e bandiera, con e senza conversione |
+> | `charts/PriceChartFull.tooltipEscape` | 5 | 5 | bandiera della riga sovrapposta; codice e bandiera della riga principale, con e senza conversione |
+> | `features/risk/CorrelationHeatmap.tooltipEscape` | 1 | 2 | la copia locale lascia `'` e `"` |
+> | `utils/core/escapeHtml.single` | 1 | 5 | un solo escaper fuori elenco: `features/risk/CorrelationHeatmap.svelte:352` |
+> | `charts/chartFlagFont` | 5 | 11 | `CHART_FONT_FAMILY` e `CHART_INIT_THEME` assenti; 18 su 18 `echarts.init` senza il tema |
+>
+> Nessun rosso viene dall'import o dall'impianto di prova: i verdi comprendono i controlli positivi, cioè un tema in
+> linea che funziona anche dopo un `setOption(…, true)`, e gli scanner provati su sorgenti inventati.
+> - **Per il passo 2** (reperti di `test-author`, non ancora coperti da test):
+>   - le bandiere dei marcatori d'evento (`PriceChartFull.svelte:812`, `:815`) sono lo stesso vettore di K-15, e le
+>     metto nel passo 2;
+>   - `marker.type` grezzo (`:808`), le date di `formatDay` e i colori negli attributi `style` vengono da valori
+>     interni o dal backend, quindi il rischio è basso: li valuto nel passo 2;
+>   - le graffe nel rich text di ECharts della torta (`:361`, `:546`) sono testo su canvas, non HTML;
+>   - l'asse di `CorrelationHeatmap` fissa `fontFamily: 'sans-serif'` (`:131`, `:276`, `:478`), e lì il tema non
+>     arriva. È una decisione del passo 2.
+
+### Y4b — ingresso ✅ (2026-10-16, 02:52)
+
+> **Note implementazione**: il treno 81 l'ha portato in `dev_release2` con il merge `08efa5ac3`. FE2b è chiuso: il
+> rischio è in `lib/features/risk/`. Resta Y4a (FE2a, i segnali), dopo FE4 e FE5a di X. Y3 parte dopo l'ingresso del
+> lotto di T, verso le 03:20, al messaggio del coordinatore. Il passo 2 di Y9 l'ho proposto per subito, perché Y3 è
+> fermo, e aspetto il via.
+
+### Y9 — passo 2, prima parte ✅ (2026-10-16, 02:52–03:05; via del coordinatore alle 02:52, checkpoint prima di Y3)
+
+> **Condizioni del coordinatore**:
+> - un checkpoint di Y9 prima di applicare Y3, anche se il lotto non è finito;
+> - `document.fonts.load` prima del primo disegno, coperto da un test.
+>
+> **Note implementazione**:
+> - **K-13**: un modulo nuovo, `lib/components/charts/chartFont.ts`, con `CHART_FONT_FAMILY` («'LF Flags'» più il
+>   default di ECharts, che su Windows è 'Microsoft YaHei', letto come lo legge ECharts) e `CHART_INIT_THEME`.
+>   `files/y9_k13_apply.py --apply` ha portato il tema in 18 chiamate `echarts.init` di 17 file, ognuno con la sua riga
+>   d'import.
+> - **K-15**, con l'`escapeHtml` condiviso:
+>   - `AllocationPieChart`: il titolo e la riga del padre;
+>   - `CandlestickChart`: valuta e bandiera nell'intestazione, con e senza conversione;
+>   - `PriceChartFull`: la bandiera della riga sovrapposta, valuta e bandiera della riga principale, e nei marcatori
+>     d'evento le due bandiere e `marker.type`.
+> - **C-34**: `CorrelationHeatmap` usa l'`escapeHtml` condiviso al posto della copia a tre caratteri. Il font del suo asse
+>   (`AXIS_FONT_FAMILY`) diventa `CHART_FONT_FAMILY`, così il tema non viene scavalcato e la misura resta uguale al
+>   disegno.
+> - **Il test rosso di K-13** l'ho puntato a `chartFont` a mano (l'import, l'esempio sintetico, i messaggi) e poi
+>   formattato con Prettier. È una sostituzione meccanica di percorso, come quelle degli script di spostamento.
+>
+> **Prove**, una alla volta con `nice`:
+> - i 6 file di Y9, da soli: 49 verdi su 49 (prima 19 rossi e 30 verdi). `front-portfolio chart-safety-unit` dal
+>   runner: 6 file, 49 test;
+> - i test esistenti dei grafici toccati: 13 file, 359 test. I grafici dei lotti hanno solo test degli helper, e
+>   `GeographyMap` ed `ExposureMaps` non hanno test;
+> - `theme-roles --check` pulito; `front check` 0 errori e 0 avvisi;
+> - `core-unit`: 171 file e 5900 test, compresi i gate `htmlSink`, `htmlInterpolation` e `themeRoles`;
+> - `front-fx fx-unit`: 4 file e 138 test, compreso `flagFont.gate`;
+> - Prettier pulito; `git diff --check` pulito;
+> - `check-orphans` sullo stato del checkpoint, con i 2 rossi di Y10 messi da parte e rimessi: pulito.
+>
+> **Decisioni notturne, da rivedere**:
+> - **`chartFont.ts` e non `chartTheme.ts`**. `chartTheme.test.ts`, dei colori, visita ogni export di `chartTheme.ts`
+>   e vuole che ogni stringa sia un colore: una famiglia di font lì lo romperebbe. Un modulo a parte, accanto agli altri
+>   helper di ECharts, lascia intatti i file dei colori.
+> - **Escape anche dove i rossi non arrivavano**: le bandiere dei marcatori d'evento e `marker.type`. I test per
+>   questi arrivano nella seconda parte.
+> - **Il runner per il checkpoint** ha solo la registrazione di Y9 (`chart-safety-unit`). Le righe di Y10 sono in
+>   `files/_frontend_portfolio.y9y10.after-y4b.py` e tornano con il codice di Y10.
+>
+> **Resta per la seconda parte**:
+> 1. `document.fonts.load` prima del primo disegno, con il suo test (condizione 2), scritto da `test-author`;
+> 2. i test sull'escape dei marcatori, e il nome dell'alias `chartTheme` nel test di K-13;
+> 3. la documentazione con `docs-writer` (`developer/frontend/components/charts.md`, `styling.md`);
+> 4. con lo slot, le E2E dei grafici e una galleria filtrata sui grafici con bandiere;
+> 5. le righe CHANGELOG nell'handoff d'ingresso.
+
+### Y9 — passo 2, seconda parte ⏳ (2026-10-16, dalle 03:08; prima parte salvata in `dae8b4442` e `7e3c88e5e`)
+
+> **Note implementazione**:
+> - **Il carico del font** (condizione 2 del coordinatore).
+>   - Il problema: un canvas disegna il testo una volta sola, con le facce già caricate, e il browser scarica una faccia
+>     `unicode-range` solo per il testo della pagina che ne ha bisogno. Il testo del canvas non conta, e
+>     `document.fonts.ready` aspetta solo le facce già richieste.
+>   - In `chartFont.ts`, `chartFontReady()` fa una sola richiesta, in cache:
+>     `document.fonts.load("16px 'LF Flags'", '🇺🇸')`. Non rifiuta mai, e senza `document.fonts` (nei test e su un
+>     server) si risolve subito. C'è anche `chartFontLoaded()` (`document.fonts.check`).
+>   - La richiesta parte quando il modulo viene caricato. Ogni grafico lo importa prima di poter disegnare, quindi la
+>     richiesta precede sempre il primo disegno.
+>   - La rete di sicurezza è in `scheduleFirstRenderStabilityFix` (`echartsTooltipHelpers.ts`), che 16 grafici su 17
+>     chiamano dopo il primo `setOption`: se la faccia non c'è ancora, un solo `resize()` quando arriva. Il diciassettesimo
+>     è `LotGanttChart`, che non disegna bandiere.
+> - **Test**, affidati a `test-author`:
+>   - `chartFont.load.test.ts`, nuovo: la richiesta all'import, la cache, che non rifiuti mai, `check`, l'ordine «load
+>     prima del primo `setOption`» su un grafico vero montato, e il ridisegno una volta sola;
+>   - i marcatori d'evento in `PriceChartFull.tooltipEscape.test.ts`;
+>   - il nome dell'alias in `chartFlagFont.test.ts`.
+>   Il file nuovo è registrato in `chart-safety-unit`.
+> - **Documentazione**, affidata a `docs-writer`: `developer/frontend/components/charts.md` (font, carico ed escape, con
+>   le guardie) e la sezione 'LF Flags' di `styling.md`.
+>
+> **Decisione notturna, da rivedere**: «prima del primo disegno» qui vuol dire che la richiesta del font parte prima, ed
+> è garantito. Che il caricamento sia finito prima del disegno non è garantito: in quel caso raro il grafico si
+> ridisegna una volta, appena la faccia arriva. Aspettare il font prima del primo `setOption` voleva dire cambiare il
+> flusso d'avvio di 17 componenti diversi, e rendere asincroni i test dei grafici. Sul Mac della galleria non si vede
+> differenza.
+>
+> **Checkpoint Y9-2** (03:32, chiesto dal coordinatore per aggiornare la base prima di Y3; il lotto di T è entrato in
+> `503dce683`):
+> - **Entrano**:
+>   - `chartFont.ts`, con il carico del font, ed `echartsTooltipHelpers.ts`, con il ridisegno;
+>   - la documentazione di `docs-writer`: `charts.md` («Chart Text and Tooltips», con le sezioni sul font, sull'HTML dei
+>     tooltip e sulle guardie), `styling.md` (il testo dei grafici nella sezione 'LF Flags') e `security.md` (la terza
+>     guardia di «Output Escaping»). `docs-writer` ha anche corretto: «two letters» vale dove manca il glifo, Windows
+>     compreso, non su ogni Linux; e `TransactionBulkModal` importa già `escapeHtml`, ha solo una copia in linea;
+>   - il piano.
+> - **Restano fuori**, perché `test-author` li sta scrivendo:
+>   - `chartFont.load.test.ts`, nuovo;
+>   - i test dei marcatori in `PriceChartFull.tooltipEscape.test.ts`;
+>   - l'alias in `chartFlagFont.test.ts`;
+>   - la loro registrazione in `_frontend_portfolio.py`;
+>   - i 2 rossi di Y10.
+>   Nessuno di questi file è cambiato in `dev_release2`: lo è solo `security.md`, che entra.
+> - **Prove**:
+>   - i test dei grafici toccati, compreso `echartsTooltipHelpers.test.ts`: 14 file e 406 test;
+>   - svelte-check: 0 errori e 0 avvisi;
+>   - Prettier sui due file di codice;
+>   - `mkdocs build` stretto: 3068 URL relativi risolti. `check-links`: 96 link validi;
+>   - `git diff --check` pulito.
+> - **Salvato**: il coordinatore ha committato `26978e101` (codice e documentazione) e `8c762a10f` (journal). Poi ha
+>   aggiornato la base: merge pulito di `dev_release2` (`503dce683`, con il lotto di T e TD-3), HEAD `a1e4e5448`, con
+>   `security.md` fuso da solo.
+
+### Y9 — passo 2, i test di `test-author` ✅ (2026-10-16, 03:09–03:35; non ancora committati, sono il checkpoint Y9-3)
+
+> **Note implementazione**: tutti e tre i file sono verdi da soli, e lo restano dopo il merge della base.
+> - **`chartFont.load.test.ts`**, nuovo, 13 test:
+>   - all'import, `load` è chiamato una sola volta, con un `font` che il parser CSS accetta e che nomina 'LF Flags', e
+>     un campione fatto solo di indicatori regionali;
+>   - la cache: una sola promessa, un solo `load`;
+>   - non rifiuta mai: né dopo un `load` rimandato, né dopo un `load` rifiutato, né senza `document.fonts`;
+>   - `chartFontLoaded()` segue `check`;
+>   - **prima del primo disegno**: monta `SemiDonutChart` con un ECharts finto, e nel registro `fonts.load` viene prima
+>     del primo `setOption`. Il controllo inverso usa con `vi.doMock` una versione che chiede la faccia solo quando un
+>     grafico la chiede, e lì la richiesta arriva dopo: così il test può fallire davvero;
+>   - il ridisegno: un solo `resize` in più quando la faccia arriva dopo; nessuno se c'era già; nessuno su un grafico
+>     già chiuso.
+> - **`PriceChartFull.tooltipEscape.test.ts`**: 17 test (10 di prima e 7 nuovi), sul tipo del marcatore, sulla sua
+>   bandiera e su quella d'origine di un marcatore convertito, più i controlli sul percorso e le guardie sui codici.
+> - **`chartFlagFont.test.ts`**: 16 test. L'alias è ora `chartFont`, e la sezione «Why it is red today» è al passato.
+> - **Reperti di `test-author`**:
+>   - `ScatterChart` chiama la passata di stabilità prima del primo `setOption`. Per K-13 non cambia niente;
+>   - un `load` fallito non viene ritentato, come dice la documentazione;
+>   - un'eccezione sincrona di `document.fonts.load` romperebbe l'import di tutti i grafici. Le specifiche la
+>     escludono, ma una guardia `try` costa poco: la metto nel checkpoint Y9-3.
+
+### Y3 — FE6b, la dashboard in `lib/features/dashboard/` ⏳ (2026-10-16, dalle 03:33; via del coordinatore)
+
+> **Note implementazione**:
+> 1. **Base**: HEAD `a1e4e5448`, con il lotto di T e `AllocationPanel.svelte` nella forma finale. `api sync` non cambia
+>    file tracciati.
+> 2. **Il runner messo da parte**, come per Y4b: la registrazione non committata di `chartFont.load.test.ts` (Y9-3) è
+>    salvata in `files/_frontend_portfolio.y9-3.py` e `files/y9-3_runner.patch`, e `_frontend_portfolio.py` è tornato a
+>    HEAD.
+> 3. **Spostamento**: `files/y3_move.py --apply`, 37 file (i 35 previsti più i 2 rossi di Y10, che seguono la cartella) e
+>    42 specificatori riscritti in 8 file. `components/dashboard/` non esiste più; `dashboardViewStore` e
+>    `dateRangeController` sono ora in `features/dashboard/`.
+> 4. **Percorsi**: `files/y3_paths.py --apply`, 74 sostituzioni in 29 file. Restano fuori di proposito:
+>    - `pickView.test.ts` e `scanColors.test.ts`, di L;
+>    - i commenti di storia in `KpiDivergingFlowBar.test.ts` e `KpiMetricBar.test.ts`;
+>    - le cronache.
+> 5. **Colori**, con lo strumento:
+>    - `--check` pulito;
+>    - `--update`: 11 righe rinominate, conteggi identici a coppie, nessun'altra riga, «m1 10166 → 10166, m2 71 → 71»;
+>    - i totali sono identici prima e dopo: 10166/71, 263 file.
+>    - **Da sapere**: la dichiarazione `~split` di Y1 (`GrowthChart`, riga 272) cita ancora
+>      `lib/components/dashboard/`. `--update` lascia le dichiarazioni come sono, perché sono un registro, e a mano il
+>      baseline non si tocca. `--check` è pulito; lo segnalo ai colori.
+> 6. **devWiki**: tre tabelle «Source files» di `sources/` (`GrowthChart.svelte` due volte, `YieldOnCostCell.svelte`)
+>    portate al percorso nuovo, come in Y4b. `check_source_paths` torna ai 5 percorsi mancanti di prima.
+> 7. **Documentazione**: l'albero di `developer/frontend/index.md` era vecchio, già da Y4b: `stores/risk/`, e
+>    `features/` con solo `auth` e `settings`. Ora è anche stantio per Y3. Lo corregge `docs-writer`.
+>
+> **Prove leggere** (03:37–03:53, una alla volta con `nice`):
+> - `front check`: 0 errori, 0 avvisi;
+> - `component-unit`: 149 file e 3939 test;
+> - `growth-chart-memo` 166, `allocation-unit` 173 (6 file), `utils gate-i18n-usage` 195;
+> - `check-orphans` sullo stato del checkpoint, con messi da parte i 3 file di test non registrati di proposito: pulito;
+> - knip: gli stessi reperti di Y8, a percorsi normalizzati;
+> - `mkdocs build` stretto, 3068 URL; `check-links`, 96;
+> - `git diff --check` pulito, `theme-roles --check` pulito.
+>
+> **⚠️ Fuori pista**:
+> - **`asset-unit`, 5 rossi.**
+>   - 3 rossi in `chartCoreHelpers.test.ts`, colpa di Y3: un `ENOENT` su `components/dashboard/growthChartData.ts`, perché
+>     il test costruisce il percorso con un template, `` new URL(`../dashboard/${file}`, import.meta.url) ``, che lo
+>     script non riconosce. L'ho corretto a mano in `../../features/dashboard/${file}`. Era l'unico template di quella
+>     forma nel frontend: ho controllato anche quelli del rischio.
+>   - 2 rossi in `timeSeriesAggregationGolden.test.ts`, che non vengono da Y3 ma da **Y8** (`a25d09a69`, I-01). Il
+>     verdetto è **difetto**: Y8 ha cambiato di proposito la somma con i punti mancanti e non ha ricatturato il corpus
+>     golden, e nelle prove di Y8 mancava `asset-unit`. Il test è rosso sul target dal treno di Y8. È nel backlog come
+>     Y-11, e lo segnalo al coordinatore con il rimedio.
+>   - Dopo la correzione, `asset-unit` ha solo i 2 rossi di Y8 (874 verdi su 876).
+> - **`core-unit`, 1 rosso**: `themeModeReads.gate.test.ts` (R, W8) confronta un elenco in ordine, e quello ricevuto è
+>   ordinato per percorso. Con `features/dashboard/` le due voci della dashboard (`AllocationHistoryChart` e
+>   `OtherPeriodEffectsTable`) cadono dopo `RiskCardGrid`. Ho spostato quelle due righe dell'elenco atteso, senza altri
+>   cambi: il gate dà 24 verdi su 24.
+> - **Prettier**: l'import di `chartCoreHelpers.test.ts`, riscritto dallo script, era diventato troppo lungo. Prettier
+>   l'ha rimandato a capo (41 righe in più, 28 in meno). Gli altri 41 file erano già puliti.
+>
+> **Checkpoint Y3**: 102 percorsi in `files/y3_stage_code.txt`: 35 cancellazioni, 35 file nuovi in
+> `features/dashboard/` e 32 modifiche. Restano fuori:
+> - i 3 file di Y9-3: `chartFont.load.test.ts`, più i cambi di `test-author` in `PriceChartFull.tooltipEscape.test.ts` e
+>   in `chartFlagFont.test.ts`;
+> - i 2 rossi di Y10, ora in `features/dashboard/`;
+> - il piano e il backlog, che vanno nel commit del journal.
+> - **Salvato**: `ce828e9c1` (67 file: 35 rinomine e 32 modifiche) e `0eefb51df` (journal). Poi il merge di
+>   `dev_release2` (`d0efca910`, con CP7b-1 e CP-6), pulito: HEAD `ee8b4edad`, `theme-roles --check` pulito. La riga
+>   `~split` l'ha girata il coordinatore ai colori. Le E2E di Y3 vanno nello slot 2, dopo quelle di A, verso le 04:30.
+
+### Y-11 — il corpus golden dopo I-01 ⏳ (2026-10-16, dalle 03:56; via del coordinatore)
+
+> **Note implementazione**: `api sync` sulla base nuova non cambia file tracciati.
+> - Il corpus si accetta con la procedura scritta nel file: lo script di rigenerazione mostra la deriva, `--accept`
+>   riscrive il JSON, e `GOLDEN_DIGEST` si aggiorna a mano.
+> - `test-author` deve prima controllare che cambino solo voci di `aggregateSumSeries` con punti mancanti, e solo come
+>   vuole I-01. Una deriva diversa sarebbe un altro difetto: in quel caso si ferma.
+
+### Y9-3 — i test di `test-author` e la guardia ⏳ (2026-10-16, dalle 03:57)
+
+> **Note implementazione**:
+> - la registrazione di `chartFont.load.test.ts` è rimessa con `git apply` della patch salvata, che si applica pulita;
+> - in `chartFont.ts` una guardia `try` su `document.fonts.load` (un'eccezione sincrona all'import romperebbe tutti i
+>   grafici) e su `check`, che nella passata di stabilità restituisce true. I test di queste guardie li aggiunge
+>   `test-author` in `chartFont.load.test.ts`.
+>
+> **Fatto** (`test-author`, 03:57–04:02):
+> - lo script senza flag mostra 4 voci cambiate su 276, nessuna aggiunta o tolta. Le voci sono
+>   `aggregateSumSeries|{all-missing-values,partial-missing-bucket}|{weekly,monthly}`, cioè 6 secchi;
+> - cambiano solo `sourcePointCount` (contano i punti presenti) e `missing`, che non viene più copiato dall'ultimo punto
+>   del secchio. Nessuna somma cambia, perché nel corpus i punti mancanti valgono 0;
+> - i 6 secchi sono stati confrontati con un calcolo I-01 indipendente, fatto sugli input dei casi, e coincidono;
+> - poi `--accept`, il nuovo `GOLDEN_DIGEST` (`sha256:007e69d21f…`) e il commento che registra I-01 e le chiavi
+>   cambiate.
+>
+> **Prove**: il golden 10 su 10 e `timeSeriesAggregation.test.ts` 47 su 47, ciascuno da solo; `front-asset asset-unit`
+> dal runner, 20 file e 876 test verdi (prima 2 rossi); `git diff --check` pulito. Il golden non vede la regressione
+> «la somma salta i mancanti», perché i suoi mancanti valgono 0. La coprono i test di I-01 in
+> `timeSeriesAggregation.test.ts`, con segnaposto come 999.
+>
+> **Checkpoint Y-11**: il JSON del corpus e `timeSeriesAggregationGolden.test.ts`; il backlog (Y-11 ✅) e il piano
+> vanno nel journal.
+> - **Salvato**: `4c1f2fee6` (test) e `c27c34619` (journal). Y-11 entra con Y3 e Y9, dopo le E2E.
+
+### Y9-3 — test e guardie ✅ (2026-10-16, 03:57–04:08; checkpoint mandato alle 04:08)
+
+> **Note implementazione**:
+> - In `chartFont.ts`, due guardie `try`. Se `document.fonts.load` lancia un'eccezione sincrona, la richiesta si
+>   considera chiusa: senza la guardia, la richiesta che parte all'import romperebbe l'import di tutti i grafici. Se la
+>   lancia `check`, `chartFontLoaded()` restituisce true e il ridisegno viene saltato.
+> - `test-author`:
+>   - `chartFont.load.test.ts`, 16 test: i 13 di prima e 3 nuovi sulle guardie. Ha anche provato che, su una copia
+>     senza guardie, i 3 nuovi test falliscono;
+>   - `PriceChartFull.tooltipEscape.test.ts`, 17 test;
+>   - `chartFlagFont.test.ts`, 16 test.
+> - La registrazione di `chartFont.load.test.ts` in `chart-safety-unit` è rimessa con la patch salvata.
+>
+> **Prove**: `chart-safety-unit` dal runner, 7 file e 72 test; `echartsTooltipHelpers.test.ts` 47; svelte-check 0 errori
+> e 0 avvisi; `check-orphans` pulito, con i 2 rossi di Y10 messi da parte; Prettier e `git diff --check` puliti.
+
+### Y3 + Y9 — E2E d'ingresso ⏳ (slot 2, 04:30–05:00)
+
+> **Note implementazione**: l'elenco l'ha approvato il coordinatore alle 04:10. Prima le spec principali, poi le altre se
+> c'è tempo. Lo slot deve essere libero entro le 05:00, per la galleria di X. Le 3 «Live price direction flash» devono
+> essere verdi: la correzione di Z è entrata con il treno 60. Niente galleria per Y3 e Y9: la copre la candidata dei
+> colori delle 05:30.
+> - **Script**: `/tmp/libreFolio_y3y9_e2e.sh`, una spec alla volta, `--workers 2` e `nice`. Ogni spec ha un orario
+>   oltre il quale non parte.
+> - **Ordine**: `front-portfolio dashboard`, `front-asset asset-detail`, `asset-name-xss`, `front-fx fx-detail`,
+>   `front-broker detail`, `front-portfolio dashboard-cache`, `front-fx fx-flag-font`; poi, se c'è tempo,
+>   `privacy-masking`, `yield-on-cost-real`, `broker-filter-label` e `broker-icons`.
+> - **04:44, nessun via allo slot.** Le 7 spec principali chiedono circa 34 minuti e non stanno più prima delle 05:00.
+>   Ho chiesto al coordinatore di spostarle dopo la galleria di X (mia preferenza), oppure di lanciare subito solo
+>   `dashboard`. HEAD `fd77a13ee`: Y9-3 è committato in `fd77a13ee`.
+
+### Y10 — E2E rossa scritta ✅ (2026-10-16, 04:12–04:44; `test-author`, niente lanciato)
+
+> **Note implementazione**: `frontend/e2e/portfolio/allocation-negative-cash.spec.ts`, 4 test, non registrato.
+> - **Endpoint intercettato**: la Dashboard legge il blocco `summary` di `POST /api/v1/portfolio/report`
+>   (`portfolioStore.fetchReport`). Il commento in testa al rosso Vitest, che dice «GET /portfolio/summary», è sbagliato:
+>   lo correggo con il codice di Y10.
+> - **La riscrittura**, solo per i tipi e i settori:
+>   - via la riga di liquidità vera, e una riga «Liquidity» con −P/6, dove P è il totale delle posizioni;
+>   - le quote ricalcolate con la formula del backend, quindi i positivi arrivano a circa 120;
+>   - lo schema verificato con il `PortfolioSummary` del client generato.
+> - **I test**:
+>   - rossi: la nota, firmata e nella valuta, sulle schede tipo e settore; la privacy attivata e disattivata sul posto
+>     (le cifre mascherate, il segno e la valuta restano). Tutti e due falliscono alla prima asserzione sulla nota;
+>   - guardie verdi: nessun arco per la liquidità, letto con l'hook `__lfChart`; senza intercettazione, nessuna nota.
+> - **Assunzioni da verificare alla prima corsa**: un solo report per caricamento, `route.fulfill` con il corpo
+>   modificato, e l'importo della nota in un solo pezzo (`-8,333.33 € 🇪🇺 EUR`). L'ultima la seguo nel codice.
+> - **04:45–04:49, coordinatore**: le E2E di Y3 e Y9 si spostano dopo le 06:45, dopo lo slot dei colori di DV, all'ora
+>   che darà. Y10 ha il via, codice compreso, con le prove leggere fino alle 05:25. Alle 06:45:
+>   - se Y10 è completo, verde e committato, una sola corsa per Y3, Y9 e Y10;
+>   - altrimenti Y10 va salvato come patch fuori dal repo, e la corsa gira sulla HEAD committata.
+>   Dalle 05:30 alle 06:45 la macchina è ferma: nessuna prova, si scrive soltanto.
+> - **C-34**: la correzione di W a `TransactionBulkModal` è in `dev_release2` (`60917185c`), non ancora nella mia base.
+>   La voce dell'elenco ammesso in `escapeHtml.single.test.ts` si toglie insieme all'aggiornamento della base che porta
+>   quel commit: tolta adesso, il test diventerebbe rosso, perché nel mio albero la copia c'è ancora.
+
+### Y10 — 54-1, Y-6, decisione 49: il codice ✅ (2026-10-16, 04:45–05:00)
+
+> **Note implementazione**:
+> - **`features/dashboard/AllocationHistoryChart.svelte`**:
+>   - l'asse ha `min` e `max` in forma di funzione: 0–100 entro un punto di tolleranza, perché le quote arrotondate a
+>     due decimali possono sommare 100,01; fuori da quella fascia segue la pila, alla decina successiva;
+>   - `stackStrategy: 'samesign'` è dichiarato su ogni serie;
+>   - nel tooltip per tipo, le famiglie con valore assoluto > 0,01. La regola dei primi cinque oltre sei, e il
+>     «Remaining», contano solo le famiglie positive; quelle negative vengono dopo, ognuna con la sua riga
+>     `data-allocation-family`. Per farlo il corpo del ciclo è diventato `familyHtml`;
+>   - nel tooltip per settore, le voci negative hanno righe proprie dopo `buildTooltipByThreshold`, che riceve solo i
+>     positivi. L'helper condiviso resta com'è.
+> - **`features/dashboard/AllocationPanel.svelte`**:
+>   - Y-6: `emoji` tolto da `AllocEntry` e da `toAllocEntries`;
+>   - `negativeCash()` legge l'`amount` della riga `Liquidity` quando è sotto zero;
+>   - la nota `allocation-negative-cash-note` (`dashboard.allocationNegativeCash`, con l'importo scritto da
+>     `formatCurrencyAmountPlain` nella valuta mostrata, quindi mascherato con il segno fuori, D8) compare solo nella
+>     vista «ora», per tipo e per settore;
+>   - la nota è un fratello sotto l'area del grafico, non dentro il contenitore assoluto della torta: per i
+>     portafogli senza scoperto il DOM non cambia, e con lui gli scatti. Usa solo utility `*-lf-*`.
+> - **`components/charts/AllocationPieChart.svelte`**: il commento «0-100» ora dice che è una quota del totale netto.
+> - **i18n**: `./dev.py i18n add` ha messo `dashboard.allocationNegativeCash` nella sorgente `dashboard`, in 4 lingue
+>   (EN «Negative cash: {amount}», IT «Liquidità negativa: {amount}», FR «Liquidités négatives : {amount}», con lo
+>   spazio prima dei due punti come le altre voci FR, ES «Liquidez negativa: {amount}»). Una riga per lingua.
+> - **`moneyRenderSites`**: non serve registrare niente. La nota passa da `formatCurrencyAmountPlain`, uno dei
+>   formattatori sicuri; lo conferma `core-unit`.
+> - **Runner**: i 2 Vitest sono in `allocation-unit`, con la `desc` estesa. L'E2E è una nuova azione,
+>   `front-portfolio allocation-negative-cash`. Le righe `if … return False` le ho scritte su due righe, così ruff
+>   resta a 28 come HEAD.
+> - **Commento corretto** nel rosso Vitest del pannello: l'endpoint è `POST /portfolio/report`, non
+>   `GET /portfolio/summary`.
+> - **Rossi → verdi**: `AllocationHistoryChart.negativeCash` 9 su 9, `AllocationPanel.negativeCash` 10 su 10.
+>
+> **Decisioni notturne, da rivedere**:
+> - la tolleranza di un punto sull'asse: uno scoperto sotto l'1 % viene tagliato di meno di un punto, cioè non si
+>   vede;
+> - i negativi in coda ai tooltip, sotto il «Remaining», come nel grafico, dove stanno sotto lo zero;
+> - la nota solo nella vista «ora», perché nella storia lo scoperto è già disegnato;
+> - la documentazione per l'utente non è toccata. Se la si vuole, è una frase nella pagina della Dashboard, con le
+>   traduzioni.
+>
+> **Prove leggere** (04:54–05:01, una alla volta con `nice`, prima della fermata delle 05:20): `front check` 0 errori e 0
+> avvisi; `allocation-unit` 8 file e 192 test, compresi i 2 ex rossi; `core-unit` 173 file e 6146 test, con
+> `moneyRenderSites` e i gate; `component-unit` 149 file e 3939 test; `./dev.py i18n check` pulito;
+> `theme-roles --check` pulito; `check-orphans` pulito, con l'E2E nuova registrata; `git diff --check` pulito; ruff
+> 28 come HEAD; Prettier pulito. La 6189 è libera.
+>
+> **Checkpoint Y10** (mandato alle 05:03): 12 percorsi, cioè i 3 componenti, le 4 sorgenti i18n, i 2 Vitest, l'E2E e il
+> runner, più il piano per il journal. L'E2E `allocation-negative-cash` non è mai stata lanciata: è nella corsa unica
+> di Y3, Y9 e Y10, all'ora che darà il coordinatore.
+> - **Salvato**: `1bb8dc990` (`fix(dashboard)`) e `036d957c0` (journal). Poi il merge di `dev_release2` (`2f637d7cb`)
+>   senza conflitti: HEAD `4cffd9586`, worktree pulito, verificato. La base contiene `60917185c` (C-34 di W).
+
+### C-34 — la guardia senza l'eccezione temporanea ⏳ (2026-10-16, 05:03; non committata)
+
+> **Note implementazione**: in `TransactionBulkModal.svelte` la copia dell'escaper non c'è più (0 occorrenze dopo
+> `60917185c`). Ho tolto la voce dall'elenco ammesso di `escapeHtml.single.test.ts`, che ora ha una sola eccezione,
+> `inlineMath.ts`. La sezione «Why it is red today» è diventata «Why it was red before C-34» e racconta le due copie,
+> tolte da Y9 e da W. Prettier ha anche rimandato a capo una catena, che sfuggiva perché il file era non tracciato al
+> controllo di Y9-1. La guardia dà 6 verdi su 6 (05:04, prima della fermata delle 05:25).
+> - La documentazione la aggiorna `docs-writer`, scrivendo e basta: `charts.md`, che ha «Tooltip HTML» e la tabella
+>   delle guardie, e `security.md`, «Output Escaping». La build stretta e il controllo dei link si fanno dopo le 06:45.
+> - **Dopo le 06:45**, sulla revisione fusa: `api sync`, svelte-check, `allocation-unit`, `core-unit`,
+>   `component-unit`, `mkdocs build` e `check-links`; poi la corsa unica delle E2E di Y3, Y9 e Y10.
+> - **Documentazione aggiornata** (`docs-writer`, scrivendo e basta, 05:05–05:09): in `charts.md`, «Tooltip HTML» e la
+>   riga della guardia nella tabella, e in `security.md`, il terzo punto di «Output Escaping». Ora c'è una sola
+>   eccezione, `inlineMath.ts`, e resta la regola per cui un'eccezione che non ha più una copia fa fallire la guardia.
+> - **05:07, aggiornamento della base** con il secondo lotto di T (`72e66d1a6`). Delle 27 modifiche di `dev_release2`
+>   (`git diff HEAD...72e66d1a6`), l'unico file in comune è il baseline dei colori, il conflitto previsto, da risolvere
+>   solo con `theme-roles.mjs --resolve`. Ho chiesto al coordinatore di aprire il merge prima delle 05:25.
+> - **05:09, merge risolto** (MERGE_HEAD `72e66d1a6` su `4cffd9586`, aperto dal coordinatore): `theme-roles.mjs --resolve`,
+>   poi `--check` pulito. Il baseline fuso ha le 11 righe di Y3 in `features/dashboard/` e non ha le righe che T ha
+>   tolto. In stage solo il baseline; il commit di merge lo fa il coordinatore.
+> - **La regola dei colori sulle classi miste** (`-lf-` mai su un elemento che ha già classi di tavolozza). La scansione
+>   delle righe aggiunte nei `.svelte` dai lotti di stanotte (Y8, Y7, Y4b, Y3, Y9, Y10) e del worktree trova 0 elementi
+>   misti, e 0 anche nei file dove ho toccato classi, guardati come sono oggi. Lo script è
+>   `/tmp/libreFolio_mixed_scan.py`; non vede le direttive `class:` né gli attributi su più righe.
+> - **Merge committato** dal coordinatore: `47c03681a` (genitori `4cffd9586` e `72e66d1a6`), verificato. La riga
+>   `~split` di `GrowthChart`, l'unica con `lib/components/dashboard/`, resta perché è un registro storico.
+> - **Guardia C-34 sulla revisione fusa**: 6 verdi su 6 (05:10). Anche con il secondo lotto di T dentro, nessun escaper
+>   nuovo fuori dall'elenco.
+> - **Dopo le 06:45**: svelte-check, `allocation-unit`, `core-unit`, `component-unit`, `api sync`, e per i documenti
+>   `mkdocs build` stretto e `check-links`; poi la corsa unica delle E2E di Y3, Y9 e Y10 all'ora del coordinatore
+>   (`DEADLINE=HHMM bash /tmp/libreFolio_y3y9y10_e2e.sh`). La guardia e i due documenti vanno nel prossimo lotto.
+
+### Y5 — FE7, broker e lotti in `lib/features/brokers/` ✅ applicato (2026-10-16, 05:12–05:17; via del coordinatore)
+
+> **Note implementazione**: via alle 05:12 per Y5 e poi Y6, solo scrittura. Commit separati, in sequenza: Y5 committato
+> subito, poi Y6 sopra, perché i due lotti hanno file in comune (il baseline, `ImportWizardModal.svelte`,
+> `files/+page.svelte`, alcune pagine della devWiki). Scelta del coordinatore, prima opzione.
+> 1. **Base**: `47c03681a`. Totali prima: 9701/64, 244 file.
+> 2. **Spostamento** (`files/y5_move.py --apply`): 42 file. `components/brokers/**` va in `features/brokers/`, con
+>    `lots/`; `lotsAnalysisStore` (con il test) in `features/brokers/lots/`; `BrokerIcon` (con il test) in
+>    `components/ui/display/`. 52 specificatori riscritti in 28 file.
+> 3. **Percorsi** (`files/y5_paths.py --apply`): 65 sostituzioni in 33 file, compreso `theme-roles.mjs:70`, l'eccezione
+>    del colore generato dei lotti, solo il percorso.
+> 4. **Colori**: `--check` pulito, poi `--update`. 16 righe rinominate a coppie, con conteggi identici, nessun'altra
+>    riga. I totali sono identici, 9701/64, e `--check` è di nuovo pulito.
+> 5. **devWiki**: 4 righe di «Source files» in `sources/` portate al percorso nuovo, come in Y4b e Y3.
+>    `check_source_paths` torna ai 5 di prima.
+> 6. **Prettier**: i 67 file del frontend erano già puliti. `git diff --check` pulito.
+> - **Restano di proposito**: `designer-lab.md`, di L; gli alberi sintetici di `test_i18n_usage_gate.py`; l'albero di
+>   `developer/frontend/index.md`, che si corregge in Y6 per tutti e due gli spostamenti.
+> - **Checkpoint**: 143 percorsi (`files/y5_stage_code.txt`), mandato alle 05:17. Le prove leggere vengono dopo le
+>   06:45.
+> - **Committato**: `6f7ac70ce` (42 rinomine e 59 modifiche), HEAD `6f7ac70ce`.
+
+### Y6 — FE3, i file in `lib/features/files/` ✅ applicato (2026-10-16, 05:17–05:20; sopra Y5 committato)
+
+> **Note implementazione**:
+> 1. **Spostamento** (`files/y6_move.py --apply`): 7 file, da `components/files/` a `features/files/`, e 8 specificatori
+>    riscritti. `utils/files` e `stores/files` restano dove sono.
+> 2. **Percorsi** (`files/y6_paths.py --apply`): 14 sostituzioni in 9 file, compresa la chiave di
+>    `htmlSink.gate.test.ts:70`, il gate di K, che si confronta con il percorso (via libera dei colori), e
+>    `_frontend_utility.py`.
+> 3. **Colori**: `--check` pulito, poi `--update`. Cambia una riga sola, `lib/features/files/FileGrid.svelte 1`, come
+>    avevano previsto i colori. I totali sono identici, 9701/64, e `--check` è di nuovo pulito.
+> 4. **devWiki**: una riga di «Source files» (`phase-final-bugs-2026-06-25.md:41`, `FilesTable.svelte`) portata al
+>    percorso nuovo. `check_source_paths` torna ai 5 di prima.
+> 5. **Prettier**: 12 file già puliti; `git diff --check` pulito.
+> 6. **Documentazione**: l'albero di `developer/frontend/index.md` lo corregge `docs-writer`, scrivendo e basta, per
+>    tutti e due gli spostamenti (`components/brokers/`, `components/files/`, `lotsAnalysisStore`).
+> - **L'albero è corretto** (`docs-writer`, 05:18–05:21): via `components/brokers/` e `components/files/`, via
+>   `lotsAnalysisStore` dal commento di `stores/portfolio/`; `brokers/` e `files/` aggiunti fra le `features/`, in
+>   ordine alfabetico. Nessun'altra riga era vecchia. `designer-lab.md` (`:550` e `:1220`) cita ancora i percorsi
+>   vecchi dei broker: è di L, e lo segnalo al coordinatore.
+> - **Checkpoint Y6**: 30 percorsi (`files/y6_stage_code.txt`), mandato alle 05:22. Fuori: il lotto C-34 e il piano.
+> - **Committato**: `aec49a9cb` (7 rinomine e 16 modifiche), HEAD `aec49a9cb`. La nota su `designer-lab.md` l'ha girata il
+>   coordinatore ai colori. Fuori restano solo il lotto C-34 e il piano.
+
+### Dopo le 06:45 — prove leggere su tutto, poi la corsa E2E unica ⏳ (preparato alle 05:25, niente lanciato)
+
+> **Note implementazione**:
+> - **Prove leggere**, con `/tmp/libreFolio_after0645_light.sh`, una alla volta con `nice` e il carico sotto 70:
+>   - `api sync`, `front check` e `theme-roles --check`;
+>   - la guardia C-34;
+>   - `chart-safety-unit`, `allocation-unit` e `store-unit` (`lotsAnalysisStore`);
+>   - `front-broker broker-unit` e `front-utility onboarding-component-unit`, che hanno test spostati da Y5;
+>   - `core-unit`, `component-unit` e `asset-unit`;
+>   - `check-orphans`, `mkdocs build` stretto e `check-links`, per i documenti di C-34 e per l'albero di Y6;
+>   - `git diff --check`.
+> - Poi il coordinatore committa il lotto C-34 e dà l'ora della corsa E2E.
+> - **Corsa E2E unica** per Y3, Y9, Y10, Y5 e Y6: `DEADLINE=HHMM bash /tmp/libreFolio_y3y9y10_e2e.sh`, 18 spec in ordine di
+>   priorità (circa 88 minuti se partono tutte; lo script salta quelle che non stanno prima della scadenza):
+>   - `dashboard`, `allocation-negative-cash`, `asset-detail`, `asset-name-xss`, `fx-detail`, `front-broker detail` e
+>     `list`, `front-utility files`, `dashboard-cache`, `fx-flag-font`, `front-user broker-sharing`, `broker-icons`,
+>     `files-pdf-offline`, `tx-import-flow`;
+>   - poi le extra: `privacy-masking`, `yield-on-cost-real`, `broker-filter-label`, `tx-broker-icon-hydration`.
+>   - Se Y5 o Y6 non passano le prove leggere, li correggo con un commit sopra, oppure li toglie il coordinatore prima
+>     dell'ingresso.
+
+### Y12a — U8, analisi in sola lettura ✅ (2026-10-16, 05:25–05:30; agente `explore`, durante la fermata; HEAD `aec49a9cb`)
+
+> **Note implementazione**. Le fonti: l'inventario del 43 (righe R17, V11, W7, W8, P4 e P5, e la riga U8 a `:538`), il
+> backlog (T-U8 a `:672-675`, J-1 a `:3457-3465`) e il piano di J (`05_numbersAnalysis`; CP-13 «U8 lato backend per Y»
+> a `:232`, che dipende da CP-3 e CP-4). I percorsi sono quelli dopo Y3 e Y5. «(a)» vuol dire che basta il frontend,
+> «(b)» che serve un campo nuovo del backend.
+>
+> | Voce | Codice di oggi | Campo del backend | Verdetto | Rosso da scrivere prima |
+> |---|---|---|---|---|
+> | **W7** | `features/dashboard/ExposureTable.svelte:181`: `nav_weight_percent ?? (valore/NAV)·100` | `nav_weight_percent` c'è già (`schemas/portfolio.py:395`) | **(a)**: togliere il ripiego, così con null si legge «—» | `ExposureTable.test.ts`: con `nav_weight_percent: null`, valore 100 e NAV 1000, la cella dice «—» e non 10 % |
+> | **`LotCustodyModal`, valore d'apertura** | `features/brokers/lots/LotCustodyModal.svelte:235-238`: `original_quantity × opening_unit_price`, mostrato a `:313-314`. È anche sbagliato per i lotti trasferiti o rettificati, e sulla valuta | `LotSummarySchema.original_cost` c'è già (`portfolio.py:796`, `:808`), nella valuta di destinazione o null; altri componenti dei lotti lo usano già | **(a)** | `LotCustodyModal.test.ts`: con `original_cost '150'`, quantità 10 e prezzo 10, mostra 150 e non 100; con null, «—» |
+> | **Dichiarazioni delle misure interattive** | `charts/signals/MeasureSignal.ts` (R18: Δ, Δ% e annualizzazione), `CompoundSignal.ts` (R19, il «cosa succede se»), `LinearSignal.ts`, `SineSignal.ts` | non serve | **(a)**: una dichiarazione nel codice dell'eccezione e della sua regola (43 `:334`; T-U8) | una guardia che legge il sorgente: i 4 file portano il marcatore, e nessun altro file ha uno schema di annualizzazione senza marcatore |
+> | **J-1, `CompoundSignal.ts:69`** | la curva del «cosa succede se» | non serve | **(a)**, insieme alle dichiarazioni | la stessa guardia |
+> | **J-1, `features/risk/levels/levelHelpers.ts:359`** | `1/(1−perdita) − 1`, il rendimento che recupera una perdita | nessuno trovato, e nessun checkpoint nominato | **decisione aperta**: un campo del backend (Y12b) o una dichiarazione | dipende dalla decisione |
+> | **R17** | `features/dashboard/KpiSection.svelte:80-134` (Δ del giorno e Δ% dalla `history`), `:243` (`mwrr − twrr`) | nessuno a livello di portafoglio; lo porta CP-13 | **(b)** | i valori del backend mostrati così come sono, diversi da quelli che darebbe la `history` |
+> | **W8** | `features/dashboard/ExposureTreemap.svelte:442-445`: costo = valore − gl, poi gl/costo | nessun G/L % per gruppo; CP-13 | **(b)** | il tooltip di un nodo mostra il G/L % del gruppo che manda il backend |
+> | **P4** | `features/dashboard/PerformanceChart.svelte:200-210`: contributo % = valore/apertura | nessuno; CP-13 | **(b)** | il suffisso del tooltip è il campo del backend |
+> | **P5** | `lotComparisonChartHelpers.ts:150-172`, `LotComparisonChart.svelte:524-531`, `unifiedLotsTableHelpers.ts:109-183` | per lotto c'è; per l'aggregato e il piè di tabella no. CP-13 e CP-7 (le regole del realizzato) | **(b)** | l'aggregato e il piè di tabella leggono il backend |
+> | **V11** | `LotWacPriceChart.svelte:1413`: il valore di un BUY è `|qty| × prezzo` | per evento no; CP-13. Il riscalamento di `lotWacPriceChartHelpers.ts:109` è solo una scala di visualizzazione | **(b)** per evento; la bolla per lotto potrebbe già usare `original_cost` | il valore della bolla è quello del backend |
+>
+> - **Conflitti**: nessuno di questi file è di X, W o H.
+>   - Sui lotti lavora J (CP-16; e il suo piano a `:2453`, `:2481` e `:2536` tocca `LotCustodyModal` e i suoi helper):
+>     prima di toccare `LotCustodyModal` serve un accordo con J.
+>   - Il piano R dei colori nomina KpiSection, ExposureTreemap, PerformanceChart, i grafici dei lotti e `MeasureSignal`.
+>     Le loro ondate sono finite o non cambiano i componenti; da riconfermare con i colori al momento.
+>   - Il T-D9 di J è segnato ✔ su `MeasureSignal.ts:103,133`: prima di dichiarare, controllare se la soglia è già
+>     allineata alla casa della matematica.
+> - **Ordine proposto per Y12a**, dopo l'ingresso della corsa unica (il codice cambierebbe la build delle E2E):
+>   1. W7: il rosso, poi via il ripiego;
+>   2. `LotCustodyModal`: il rosso, poi `original_cost`, dopo l'accordo con J;
+>   3. le dichiarazioni (4 file e la guardia), dopo aver ricontrollato T-D9;
+>   4. `levelHelpers:359`: secondo la decisione.
+> - **Decisione notturna, da rivedere**: le dichiarazioni sono un commento-marcatore in testa e una guardia che legge il
+>   sorgente, perché un commento da solo invecchia. **Va invece al developer** (lista di domattina, tramite il
+>   coordinatore): `levelHelpers:359`. La mia proposta è un campo del backend (Y12b, J), perché non è una misura
+>   interattiva e la regola 10 vuole la matematica in un posto solo; l'alternativa è dichiararla come aritmetica di
+>   visualizzazione.
+
+### Nota: gallerie e giorno UTC ✅ (2026-10-16, 06:15; avviso di G inoltrato dal coordinatore)
+
+> **Note implementazione**. Il backend ragiona in UTC, quindi due scatti sono confrontabili solo se cadono nello stesso
+> giorno UTC: la mezzanotte che conta è alle **02:00 ora locale**. Ho controllato le mie gallerie, leggendo gli orari
+> di partenza nei `report.md` dei diff in `LibreFolio_visual_review/diffs/` (`/tmp/libreFolio_y_gallery_days.log`):
+>
+> | Lotto | A (riferimento) | B (candidato) | Giorno UTC |
+> |---|---|---|---|
+> | Y1 | `g-final3-r1`, 15/10 09:14 | 15/10 14:46, 15:05, 15:07 | 15/10 per tutti |
+> | Y2 | `g-final3-r1`, 15/10 09:14 | 15/10 16:54, 18:00 | 15/10 per tutti |
+> | Y7 (mobile) | `g-ref13-r1`, 16/10 00:02 | 16/10 01:33, chiusa alle 01:44:46; diff alle 01:45:32 con 0 immagini mancanti in A | 15/10 per tutti |
+>
+> - Nessun confronto passa le 02:00: le attribuzioni di Y1, Y2 e Y7 restano valide.
+> - **Y-11** non è una galleria: è il JSON di una funzione pura, `timeSeriesAggregation.ts`, che usa solo getter UTC su
+>   date fisse e non legge l'orologio. Non dipende né dal giorno né dal fuso.
+> - **D'ora in poi**: una galleria fatta dopo le 02:00 di oggi vuole un riferimento preso anch'esso dopo le 02:00 locali
+>   del 16/10, per esempio una run del blocco dei colori. `g-ref13-r1` e `g-final3` sono del 15/10 UTC: per questo
+>   giorno non valgono più come riferimento.
+>
+> **Ingresso senza galleria** (decisione del coordinatore, 06:14). Basta la corsa E2E unica: Y3, Y5 e Y6 sono
+> spostamenti, Y9 non tocca il markup, e Y10 cambia il DOM solo quando la liquidità va sotto zero. Ho verificato i tre
+> punti in cui poteva cambiare qualcosa:
+> - **asse di `CorrelationHeatmap`**: `'sans-serif'` è diventato `CHART_FONT_FAMILY`, cioè `'LF Flags', sans-serif`
+>   (`chartFont.ts:26`). `'LF Flags'` copre solo `U+1F1E6-1F1FF` e sul Mac usa `local('Apple Color Emoji')`
+>   (`static/lf-flags.css:18-24`). Le misure del testo latino e le bandiere restano le stesse;
+> - **il campo `emoji` tolto da `AllocationPanel`**: nessuno lo leggeva, perché `AllocationPieChart` prende le emoji
+>   dallo store dei settori (`getSectorEmoji`, `:211`) e mai da `entry.emoji`;
+> - **asse e impilamento di `AllocationHistoryChart`**: con dati tutti positivi il massimo resta 100 e il minimo 0.
+>
+> Se servirà una galleria più avanti, il riferimento sarà il candidato dei colori di oggi (06:10–06:50).
+
+### Prove leggere dopo il blocco dei colori ✅ (2026-10-16, 06:48–07:08; HEAD `aec49a9cb`, con il lotto C-34 nel worktree)
+
+> **Note implementazione**. Lo script è `/tmp/libreFolio_after0645_light.sh`: una prova alla volta, con `nice`, e solo se
+> il carico è sotto 70; il log di ogni prova è in `/tmp/libreFolio_0645_<prova>.log`. Copre Y3, Y9, Y-11, Y10, Y5 e Y6,
+> già committati, più il lotto C-34.
+>
+> | Prova | Esito |
+> |---|---|
+> | `api sync` | nessun cambiamento tracciato |
+> | `front check` | svelte-check 0 errori, 0 avvisi |
+> | `theme-roles.mjs --check` | gate dei colori puliti |
+> | guardia C-34 (`escapeHtml.single.test.ts`) | 6/6 |
+> | `front-portfolio chart-safety-unit` | 7 file, 72 test |
+> | `front-portfolio allocation-unit` | 8 file, 192 test |
+> | `front-portfolio store-unit` | 4 file, 52 test |
+> | `front-broker broker-unit` | 5 file, 57 test |
+> | `front-utility onboarding-component-unit` | 15 file, 449 test |
+> | `front-utility core-unit` | 174 file, 6 220 test (gate per percorso e lotti di Y5 compresi) |
+> | `front-utility component-unit` | 150 file, 3 980 test (file e broker di Y5 e Y6 compresi) |
+> | `front-asset asset-unit` | 20 file, 876 test (il golden di Y-11 compreso) |
+> | `check-orphans` | ogni file registrato, ogni test raggiungibile |
+> | `check_source_paths.py` | 5 percorsi mancanti su 4 026, già noti e non miei (cartelle generate: `htmlcov-*`, `coverage-js`, una sonda) |
+> | `mkdocs build` | nessun avviso; 3 076 URL relativi risolti |
+> | `mkdocs check-links` | 97 link validi |
+> | `git diff --check` | pulito; porta 6189 libera |
+>
+> Poi viene l'handoff del lotto C-34, e dopo il suo commit la corsa E2E unica: `DEADLINE=0850`, slot 1, dopo W.
+
+### Corsa E2E unica per Y3, Y9, Y10, Y5 e Y6 (2026-10-16, dalle 07:20; HEAD `be90b30e0`, che è la fusione con dev `1d37087f8`, DV compreso)
+
+> **Note implementazione**.
+> - **Prima della corsa**:
+>   - la fusione con DV ha portato modifiche alle API (`api/v1/settings.py`, `schemas/settings.py`,
+>     `schemas/transactions/transactions.py`), così ho rifatto `api sync`: nessun file tracciato cambiato;
+>   - il conflitto nel baseline l'ho risolto solo con `theme-roles.mjs --resolve`, poi `--check` pulito; il commit
+>     della fusione l'ha fatto il coordinatore.
+> - **Lo script**: `SKIP_API_SYNC=1 DEADLINE=0850 bash /tmp/libreFolio_y3y9y10_e2e.sh`. Una spec alla volta, `--workers 2`.
+>   Una spec parte solo se, secondo la sua stima, finisce entro DEADLINE − 2 minuti. I log sono
+>   `files/y3y9y10_e2e_<azione>.log` nella cartella della sessione.
+> - **La prima spec ha girato da sola**: «Running 27 tests using 2 workers», cioè `dashboard.spec` (26 test più il
+>   setup). Il coordinatore temeva che `--workers 2` con un'azione allargasse la corsa a tutta la categoria: non succede.
+> - **I 3 test «Live price direction flash» di `asset-detail` sono verdi**, anzi 4 su 4: la correzione di Z tiene.
+> - **`allocation-negative-cash`**, alla prima corsa in assoluto: 4/4.
+>
+> **⚠️ Fuori pista: un rosso in `front-broker detail`, 36 su 37.**
+> - Il test è `brokers-detail.spec.ts:553`, «Value presentation toggle…». Cade nell'helper `goToBrokerWithHoldings`, a
+>   `:104`: dopo il clic sulla card, `toHaveURL(/\/brokers\/\d+/, {timeout: 5000})` legge `/brokers` per 5 s.
+> - **Triage** (skill `test-triage`, ipotesi in ordine):
+>   - §1, la forma: no. La card si cerca per nome ed era visibile, e gli altri 16 test che passano dallo stesso helper
+>     sono verdi;
+>   - §2, l'orologio: sì. Il `load` di `brokers/[id]/+page.ts` non aspetta niente, quindi l'URL cambia quando il codice
+>     della pagina di dettaglio è caricato, e ogni test parte da un contesto nuovo, senza cache. Lo stesso test dura
+>     4,2 s a macchina scarica (15/10, 14:20), 15,8 s sotto carico (Y8) e 29,2 s qui: è arrivato al clic dopo circa
+>     24 s, nel picco di carico della corsa (media su 5 minuti 73,9). I 5 s sono l'attesa più stretta della catena
+>     (card 8 s, nome 10 s; il default di `expect` è 3 s);
+>   - §3, lo stato condiviso: nel frattempo altri test hanno creato e cancellato 6 broker, ma l'helper filtra per nome,
+>     e non c'è nessun segno che la lista si sia mossa sotto il clic.
+> - L'istantanea della pagina è andata persa: Playwright pulisce `test-results` alla spec dopo, e in locale non ci sono
+>   tracce (`trace: 'on-first-retry'`, 0 ripetizioni).
+> - **Verdetto: un'assunzione sul tempo.** Non dipende da Y5, che è solo uno spostamento: la stessa spec era verde nel
+>   giro di Y8, sotto carico.
+> - **Correzione** (scelta (b) del coordinatore, 07:58): `test-author` cambia i tre punti della spec, `:72`, `:104` e
+>   `:140`. Prima si aspetta la pagina di destinazione, `broker-detail-page`, con il tempo della navigazione; poi si
+>   controlla l'URL. Dopo la corsa, `front-broker detail` gira da solo nello slot, entro le 08:50. Commit a parte,
+>   `test(e2e): …`.
+> - **Correzione della nota sul limite di 30 s**: non vale per il test rosso. Il blocco FIFO ha già
+>   `test.describe.configure({timeout: 60_000})`, a `:281`. I 30 s di default valgono per gli altri 12 test di
+>   `Broker Detail Page`: è un rischio nei picchi di carico, mai visto.
+> - **Esteso dal coordinatore** (08:08), nello stesso commit:
+>   - `:329`, «View Asset»: la stessa correzione, su `asset-detail-page`;
+>   - `test.describe.configure({timeout: 60_000})` come prima istruzione di `Broker Detail Page`.
+>
+>   Restano solo elencati `:205-206` (ora `:213-214`) e `:33/:35`. La coda del test a `:582` (era `:573`) non gira da
+>   luglio: è **Y-12** nel backlog, e il coordinatore porta al developer la decisione sulla funzione.
+>
+> **Esito della corsa unica** (07:20:02–08:09:58, HEAD `be90b30e0`). Ogni spec da sola, `--workers 2`; in ogni riga i
+> test verdi su quelli girati.
+>
+> | Lotto | Spec |
+> |---|---|
+> | Y3 | `front-portfolio dashboard` 27/27; `dashboard-cache` 6/6 |
+> | Y10 | `front-portfolio allocation-negative-cash` 4/4 |
+> | Y9 | `front-asset asset-detail` 33/33; `asset-name-xss` 2/2; `front-fx fx-detail` 17/17; `fx-flag-font` 7/7 |
+> | Y5 | `front-broker detail` **36/37**; `front-broker list` 9/9; `front-user broker-sharing` 17/17; `front-portfolio broker-icons` 1/1; `front-transaction tx-import-flow` 10/10 |
+> | Y6 | `front-utility files` 29/29; `files-pdf-offline` 1/1 |
+> | altre | `privacy-masking` 18/18; `yield-on-cost-real` 2/2; `broker-filter-label` 2/2; `tx-broker-icon-hydration` 2/2 |
+>
+> In tutto 223 verdi su 224, 18 spec su 18, nessuna saltata per la scadenza. Alla fine la porta 6189 era libera.
+>
+> **La correzione del rosso.** L'ha scritta `test-author`, senza lanciare niente: +22/−6 in
+> `e2e/brokers/brokers-detail.spec.ts`, solo quel file.
+> - **I quattro clic che navigano** (`goToFirstBrokerDetail`, `goToBrokerWithHoldings`, il test del clic sulla card e
+>   «View Asset»): prima la pagina di destinazione, `broker-detail-page` o `asset-detail-page`, che è la radice
+>   incondizionata della route, con 10 s di tempo; poi l'URL, ormai immediato. In SvelteKit 2 l'ordine è: carica il
+>   codice della route, poi `pushState`, poi `root.$set`.
+> - **`Broker Detail Page`**: `test.describe.configure({timeout: 60_000})` come prima istruzione. Il commento non
+>   ricopia «a 30 s finiva il tempo» del blocco FIFO, perché per questo blocco C-58 aveva misurato il contrario
+>   (13 s); cita invece i circa 24 s prima del primo clic, misurati oggi a carico 70.
+> - **La riprova**, Prettier pulito, poi `front-broker detail` da solo (08:15:39–08:21:11): **37/37** in 3,5 minuti, a
+>   carico 45–53. I quattro test toccati durano 7,5–11,4 s, il più lento della spec 16,0 s. Porta 6189 libera.
