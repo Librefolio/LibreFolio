@@ -97,6 +97,8 @@ $$
 t_{\mathrm{start}}=\max(t_{\mathrm{from}},\ t_{\mathrm{oldest\ open\ lot}})
 $$
 
+Lots are counted at each broker: a transfer opens a lot dated at its arrival at the receiving broker. A stock split rescales the open lots and keeps their dates, so it never shortens the window.
+
 Then:
 
 $$

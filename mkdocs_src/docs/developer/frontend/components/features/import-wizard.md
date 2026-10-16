@@ -9,9 +9,9 @@ The modal owns the whole state machine — the step, the files, the parse result
 resolutions, every handler. Each step's markup is a component that reads that state as props,
 writes back only what it binds, and calls the modal's handlers: `UploadStep`, `SelectFilesStep`,
 `AnalyzeStep`, `DuplicatesStep`, `ReviewStep` and the `WizardFooter` (each step's Back, Continue
-and Import buttons), in `frontend/src/lib/components/transactions/wizard/`, with the types they
+and Import buttons), in `frontend/src/lib/features/transactions/import/`, with the types they
 share in `wizardTypes.ts` (`StepId` among them); the `assets`, `fix` and `gapFix` steps were
-already components, in `components/transactions/import/`.
+already components, in `features/transactions/import/`.
 
 This page documents the two things that are easy to get wrong when working on it: **how we
 decide that two transactions are the same** and **the review UIs built on top of that
@@ -120,7 +120,7 @@ on `upload`.
 
 ### 🧮 The pure util and its tests
 
-`lib/utils/brim/defaultPluginCheck.ts` holds the two decisions, without state or I/O:
+`lib/features/transactions/import/defaultPluginCheck.ts` holds the two decisions, without state or I/O:
 
 | Function | Contract |
 |---|---|
@@ -147,7 +147,7 @@ nothing to say, leaves the reason out: the prompt still says where the file belo
 
 ### 🪟 The prompt: `ImportBrokerMismatchModal.svelte`
 
-`lib/components/transactions/modals/ImportBrokerMismatchModal.svelte`
+`lib/features/transactions/import/ImportBrokerMismatchModal.svelte`
 (`import-broker-mismatch-modal`), mounted by the wizard while `mismatchPrompt` is set. It takes the
 file's broker (`broker`, a `BrokerMismatchBroker`), that broker's default plugin (`defaultPlugin`,
 a `BrokerMismatchPlugin`) and the `targets` (`BrokerMismatchTarget`: a broker with its `plugin`).
@@ -221,7 +221,7 @@ Three namespaces, in the four catalogues:
 ## 🧩 Step components
 
 The conditional steps each have their own component, all under
-`lib/components/transactions/import/`. The two components that report sets add there —
+`lib/features/transactions/import/`. The two components that report sets add there —
 `ReportSetCard` (in `select`) and `GapFixStep` — are described in [Report sets](#report-sets).
 
 ### 🧬 `AssetGroupStep.svelte` — unify assets
@@ -265,7 +265,7 @@ Renders the rows a plugin booked but could not fully understand: `blocker` (red,
 `warning` (amber, advisory), grouped by the nature of the question so similar cases are settled
 together. Fee/tax rows have no quantity field and may legitimately carry **no asset at all**.
 
-Which rows enter the step is decided by the pure module `lib/utils/transactions/fixRowLifecycle.ts`.
+Which rows enter the step is decided by the pure module `lib/features/transactions/import/fixRowLifecycle.ts`.
 `isFixStepTodo` keeps three kinds of todo: a `blocker` on a field the duplicate comparison keys on
 (`DUP_RELEVANT_FIELDS`: `type`, `date`, `quantity`, `asset_id`, `cash`, `cash.amount`,
 `cash.code`), a `warning` on `asset_id` (a charge or income attached to no instrument), and a
@@ -325,10 +325,10 @@ The decisions live in two pure modules, tested without the component
 (`./dev.py test front-transaction tx-unit`); the wizard keeps the reactive state and the server
 calls:
 
-- `lib/utils/transactions/importReportSets.ts` — grouping, how a set is read (the choices the card
+- `lib/features/transactions/import/importReportSets.ts` — grouping, how a set is read (the choices the card
   offers, the memory of the last analysis, the set request), selection, analysis units, the card's
   timeline and the FilesTable badges;
-- `lib/utils/transactions/gapFixModel.ts` — the gap-fix requests and the view of the `gapFix` step.
+- `lib/features/transactions/import/gapFixModel.ts` — the gap-fix requests and the view of the `gapFix` step.
 
 | Function (`importReportSets.ts`) | Contract |
 |---|---|

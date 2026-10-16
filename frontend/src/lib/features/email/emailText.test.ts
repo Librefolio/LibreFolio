@@ -22,14 +22,16 @@
  *     literal or arbitrary value, no `dark:`, no important modifier, every role declared in tokens.css; and each state
  *     is drawn in its own family, a tinted box pairing its soft surface with the on-soft text — `LINKS_PROBE_CLASSES`
  *     included: `checking` muted, `match` in the success family, the four warnings in the warning family's box;
- *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the seven states of the page of a
- *     verification link — `checking`, the four refusals of the link, `missing`, `error` — with
- *     `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
+ *   - the verification of an address (lot E5a): `VERIFY_PAGE_KEYS` words each of the eight states of the page of a
+ *     verification link — `checking`, the four refusals of the link, `missing`, `error`, and `blocked` since lot E-10 —
+ *     with `email.verification.page.<state>`; `resendFailureMessage` makes exactly one translator call per failure —
  *     `email.verification.resendErrors.<CODE>` for the five codes the owner can act on, the minutes until the next
  *     request for a rate limit, `…resendErrors.unavailable` for the four ways the instance cannot send, and
  *     `…resendErrors.generic` for anything else, an inherited name included —; every one of these keys, and the
  *     notice's and the page's own (`loginRequired`, `resend`, `resending`, `resent`, `verified` with its
  *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
+ *   - the page on a blocked instance (lot E-10): its eighth state, `blocked`, has a key of its own, in the four
+ *     catalogues without a placeholder — `email.verification.page.blocked` names nothing the page fills;
  *   - «send by email» and «forgot password» (lot E4a): `linkSendFailureMessage` makes one translator call per failure —
  *     `email.sendLink.errors.<CODE>` for the codes of `POST /email/links`, the minutes for a rate limit, the SMTP reason's
  *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited) but
@@ -374,8 +376,8 @@ describe('the class maps — whole strings of colour roles (theme-roles skill)',
 });
 
 // =====================================================================================================================
-/** The seven states of the page of a verification link. */
-const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error'];
+/** The eight states of the page of a verification link: `blocked` since lot E-10, the instance blocked by its provider. */
+const VERIFY_PAGE_STATES: VerifyPageStatus[] = ['checking', 'expired', 'consumed', 'revoked', 'unknown', 'missing', 'error', 'blocked'];
 
 /** What `resendFailureMessage` asked the translator for, how many times, and what it returned. */
 function askedResend(failure: ResendFailure): {calls: number; key: string | undefined; values: Values | undefined; answer: string} {
@@ -399,7 +401,7 @@ const RESEND_FAILURES: Array<{label: string; failure: ResendFailure; key: string
 ];
 
 describe('the verification of an address (lot E5a) — its words', () => {
-    it('ETX-07: VERIFY_PAGE_KEYS words each of the seven states of the page with a key of its own', () => {
+    it('ETX-07: VERIFY_PAGE_KEYS words each of the eight states of the page with a key of its own', () => {
         expect(VERIFY_PAGE_KEYS).toEqual(Object.fromEntries(VERIFY_PAGE_STATES.map((state) => [state, `email.verification.page.${state}`])));
     });
 

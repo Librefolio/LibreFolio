@@ -32,7 +32,7 @@ const HASH = 'sha256:11111111111111111111111111111111111111111111111111111111111
 const INDEX = {statics: ['tx-table', 'tx-row'], prefixes: ['filter-currency-row-', 'row-']};
 
 const DATA_TABLE = 'src/lib/components/table/DataTable.svelte';
-const TX_TABLE = 'src/lib/components/transactions/TransactionsTable.svelte';
+const TX_TABLE = 'src/lib/features/transactions/TransactionsTable.svelte';
 const APP_CSS = 'src/app.css';
 const CARD = 'src/lib/components/ui/Card.svelte';
 const TOKENS = 'src/lib/theme/tokens.css';
