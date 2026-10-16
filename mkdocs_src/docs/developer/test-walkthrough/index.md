@@ -28,6 +28,12 @@ All tests are executed through `dev.py`:
 ./dev.py test api all --list
 ```
 
+Test names go only to the actions that take them, which `./dev.py test <category> --help` marks
+`[TEST_NAME]`. `all`, `db create`, `db populate` and most Vitest unit actions (such as
+`front-fx fx-unit`) take none: a name after one of them stops the command with exit code 2 before
+it does anything, even with `--list` — after `all`, name the action instead
+(`./dev.py test services <action> test_foo`).
+
 The action is required, `--list` included: `all` lists the whole category, an action name narrows
 the list to that action (on a backend category, to the first test file the action runs). On a
 backend category `--list` runs `pytest --collect-only` and prints the test names grouped by file and
@@ -43,7 +49,7 @@ Playwright spec files (Vitest files are not listed).
 | `--cov-clean-backend` | Together with `--coverage`, clean Python coverage from backend tests (`htmlcov-backend/` + `.coverage_data/backend`) |
 | `--cov-clean-backend-e2e` | Together with `--coverage`, clean Python coverage collected during E2E runs (`htmlcov-backend-e2e/` + `.coverage_data/frontend`) |
 | `--cov-clean-js` | Clean JS/Svelte coverage (`coverage-js/`). Manual utility only — a `--coverage js` run cleans it by itself |
-| `--workers N\|auto` | Run isolation-safe backend units in parallel, for a whole category or suite only: naming one action, or filtering by test name (pytest `-k`), keeps them serial. The same number sets the Playwright workers, capped at half the logical cores. Default `1` — the serial path, unchanged. `auto` is half the cores |
+| `--workers N\|auto` | Run isolation-safe backend units in parallel, for a whole category or suite only: naming one action, or filtering by test name (pytest `-k`, which only a named action takes), keeps them serial. The same number sets the Playwright workers, capped at half the logical cores. Default `1` — the serial path, unchanged. `auto` is half the cores |
 | `--fail-fast` | Stop handing out work after the first red. The default runs everything and reports every failure |
 | `--resume` | Continue from the last failure: skip the tests the run cache records as passed and run the rest (see *Run cache and timing campaign* below) |
 | `--fresh-run` | Delete the run cache before starting, and open a new timing campaign. Without a category it only deletes the cache |
