@@ -5149,7 +5149,7 @@
       ]
     },
     "get_positions_contribution": {
-      "gross_gains": "74.7961772173988918459055015",
+      "gross_gains": "83.4258263386396526772793053",
       "gross_losses": "0",
       "other_effects": [
         {
@@ -5183,15 +5183,15 @@
           "asset_type": "STOCK",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "524.280000000000",
+          "end_value": "524.28000000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": "2.50000000",
           "period_income": "11.34000000",
-          "period_pnl": "66.272000000000",
+          "period_pnl": "79.76000000",
           "period_pnl_percent": null,
           "period_realized_gain_loss": "26.97600000",
-          "period_unrealized_delta": "30.456000000000",
+          "period_unrealized_delta": "43.94400000",
           "start_value": "0"
         },
         {
@@ -5202,15 +5202,15 @@
           "asset_type": "ETF",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "996.1781772173988918459055015",
+          "end_value": "991.3198263386396526772793053",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
           "period_income": null,
-          "period_pnl": "8.5241772173988918459055015",
+          "period_pnl": "3.6658263386396526772793053",
           "period_pnl_percent": null,
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": "8.5241772173988918459055015",
+          "period_unrealized_delta": "3.6658263386396526772793053",
           "start_value": "0"
         },
         {
@@ -5221,15 +5221,15 @@
           "asset_type": "HOLD",
           "broker_id": "B",
           "broker_name": "B",
-          "end_value": null,
+          "end_value": "250.2500000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
           "period_income": null,
-          "period_pnl": null,
+          "period_pnl": "0",
           "period_pnl_percent": null,
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": null,
+          "period_unrealized_delta": "0",
           "start_value": "0"
         },
         {
@@ -5240,7 +5240,7 @@
           "asset_type": "STOCK",
           "broker_id": "B",
           "broker_name": "B",
-          "end_value": null,
+          "end_value": "131.07000000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-16",
           "period_fees_taxes": null,
@@ -9346,7 +9346,7 @@
         ]
       },
       "positions_contribution": {
-        "gross_gains": "74.7961772173988918459055015",
+        "gross_gains": "83.4258263386396526772793053",
         "gross_losses": "0",
         "other_effects": [
           {
@@ -9380,15 +9380,15 @@
             "asset_type": "STOCK",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "524.280000000000",
+            "end_value": "524.28000000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": "2.50000000",
             "period_income": "11.34000000",
-            "period_pnl": "66.272000000000",
+            "period_pnl": "79.76000000",
             "period_pnl_percent": null,
             "period_realized_gain_loss": "26.97600000",
-            "period_unrealized_delta": "30.456000000000",
+            "period_unrealized_delta": "43.94400000",
             "start_value": "0"
           },
           {
@@ -9399,15 +9399,15 @@
             "asset_type": "ETF",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "996.1781772173988918459055015",
+            "end_value": "991.3198263386396526772793053",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
             "period_income": null,
-            "period_pnl": "8.5241772173988918459055015",
+            "period_pnl": "3.6658263386396526772793053",
             "period_pnl_percent": null,
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": "8.5241772173988918459055015",
+            "period_unrealized_delta": "3.6658263386396526772793053",
             "start_value": "0"
           },
           {
@@ -9418,15 +9418,15 @@
             "asset_type": "HOLD",
             "broker_id": "B",
             "broker_name": "B",
-            "end_value": null,
+            "end_value": "250.2500000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
             "period_income": null,
-            "period_pnl": null,
+            "period_pnl": "0",
             "period_pnl_percent": null,
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": null,
+            "period_unrealized_delta": "0",
             "start_value": "0"
           },
           {
@@ -9437,7 +9437,7 @@
             "asset_type": "STOCK",
             "broker_id": "B",
             "broker_name": "B",
-            "end_value": null,
+            "end_value": "131.07000000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-16",
             "period_fees_taxes": null,
@@ -12326,8 +12326,8 @@
       ]
     },
     "get_positions_contribution": {
-      "gross_gains": "3.2114999438141347373337914",
-      "gross_losses": "3.952200000000",
+      "gross_gains": "0",
+      "gross_losses": "13.48800000",
       "other_effects": [
         {
           "broker_id": null,
@@ -12346,16 +12346,16 @@
           "asset_type": "STOCK",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "501.728400000000",
+          "end_value": "520.80000000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
           "period_income": null,
-          "period_pnl": "-3.952200000000",
-          "period_pnl_percent": "-0.0053",
+          "period_pnl": "-13.48800000",
+          "period_pnl_percent": "-0.0173",
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": "-3.952200000000",
-          "start_value": "752.592600000000"
+          "period_unrealized_delta": "-13.48800000",
+          "start_value": "781.20000000"
         },
         {
           "annualized_return": null,
@@ -12365,16 +12365,16 @@
           "asset_type": "ETF",
           "broker_id": "A",
           "broker_name": "A",
-          "end_value": "930.4078142662531520825483319",
+          "end_value": "927.1963143224390173452145406",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
           "period_income": null,
-          "period_pnl": "3.2114999438141347373337914",
-          "period_pnl_percent": "0.0035",
+          "period_pnl": "0E-25",
+          "period_pnl_percent": "0.0000",
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": "3.2114999438141347373337914",
-          "start_value": "927.1963143224390173452145405"
+          "period_unrealized_delta": "0E-25",
+          "start_value": "927.1963143224390173452145406"
         },
         {
           "annualized_return": null,
@@ -12384,16 +12384,16 @@
           "asset_type": "HOLD",
           "broker_id": "B",
           "broker_name": "B",
-          "end_value": null,
+          "end_value": "250.2500000",
           "is_fully_sold": false,
           "oldest_open_lot_date": "2091-01-02",
           "period_fees_taxes": null,
           "period_income": null,
-          "period_pnl": null,
-          "period_pnl_percent": null,
+          "period_pnl": "0",
+          "period_pnl_percent": "0.0000",
           "period_realized_gain_loss": null,
-          "period_unrealized_delta": null,
-          "start_value": null
+          "period_unrealized_delta": "0",
+          "start_value": "250.2500000"
         }
       ],
       "unallocated": []
@@ -13652,8 +13652,8 @@
         ]
       },
       "positions_contribution": {
-        "gross_gains": "3.2114999438141347373337914",
-        "gross_losses": "3.952200000000",
+        "gross_gains": "0",
+        "gross_losses": "13.48800000",
         "other_effects": [
           {
             "broker_id": null,
@@ -13672,16 +13672,16 @@
             "asset_type": "STOCK",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "501.728400000000",
+            "end_value": "520.80000000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
             "period_income": null,
-            "period_pnl": "-3.952200000000",
-            "period_pnl_percent": "-0.0053",
+            "period_pnl": "-13.48800000",
+            "period_pnl_percent": "-0.0173",
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": "-3.952200000000",
-            "start_value": "752.592600000000"
+            "period_unrealized_delta": "-13.48800000",
+            "start_value": "781.20000000"
           },
           {
             "annualized_return": null,
@@ -13691,16 +13691,16 @@
             "asset_type": "ETF",
             "broker_id": "A",
             "broker_name": "A",
-            "end_value": "930.4078142662531520825483319",
+            "end_value": "927.1963143224390173452145406",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
             "period_income": null,
-            "period_pnl": "3.2114999438141347373337914",
-            "period_pnl_percent": "0.0035",
+            "period_pnl": "0E-25",
+            "period_pnl_percent": "0.0000",
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": "3.2114999438141347373337914",
-            "start_value": "927.1963143224390173452145405"
+            "period_unrealized_delta": "0E-25",
+            "start_value": "927.1963143224390173452145406"
           },
           {
             "annualized_return": null,
@@ -13710,16 +13710,16 @@
             "asset_type": "HOLD",
             "broker_id": "B",
             "broker_name": "B",
-            "end_value": null,
+            "end_value": "250.2500000",
             "is_fully_sold": false,
             "oldest_open_lot_date": "2091-01-02",
             "period_fees_taxes": null,
             "period_income": null,
-            "period_pnl": null,
-            "period_pnl_percent": null,
+            "period_pnl": "0",
+            "period_pnl_percent": "0.0000",
             "period_realized_gain_loss": null,
-            "period_unrealized_delta": null,
-            "start_value": null
+            "period_unrealized_delta": "0",
+            "start_value": "250.2500000"
           }
         ],
         "unallocated": []

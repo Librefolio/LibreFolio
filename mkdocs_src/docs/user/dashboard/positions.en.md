@@ -93,6 +93,8 @@ Which positions made or lost money in the period, and how? **Period** lists ever
 - **Closed positions** are in italics, or carry a **Closed** badge in the chart; to list one kind only, show **Status** and filter it.
 - **In the Map**, gains stack right of zero and losses left, the net result closing the row; each percentage compares with the position's start value.
 - **A position's Period P&L** can differ from its lifetime gain: only the period counts.
+- **Start Value** and **End Value** are worked out as the **Value** in **Portfolio** — same prices, an asset with no price at what it cost you, each day's exchange rate — so the rows plus the **Other Period Effects** add up to the [Period P&L card](kpi-cards.md#card-1-period-pl). A **`—`** in **Unrealized change** means a value could not be computed, such as a missing exchange rate or purchase cost: it is not a zero.
+- **Securities moved between two of your brokers** during the period split their result: the sending broker's row keeps what they did until they arrived, the receiving broker's what they did after; the total does not change.
 
 ??? tip "🙈 Hide amounts — what the chart still shows"
 
