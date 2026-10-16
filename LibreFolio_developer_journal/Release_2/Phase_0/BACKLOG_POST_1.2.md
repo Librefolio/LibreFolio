@@ -3137,6 +3137,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   ADJUSTMENT col suo costo (Auto se mancava, finché c'è il mittente; senza, «costo mancante» con l'avviso), quelle di
   cassa un DEPOSIT o un WITHDRAWAL. **Resta aperto il punto 47** del developer: la gamba in uscita di un TRANSFER perde
   solo il link, come prima; se si decide di convertirla, è un lotto nuovo.
+  ◐ 16/10 (decisione 47, lotto di W pronto, **ingresso dopo J-17**): la gamba in uscita diventa un ADJUSTMENT-out al costo
+  Auto del suo broker (`_handover_cost`; i lotti la consegnano a quel costo con CP-16 di J), senza un cambio resta un
+  TRANSFER senza link; lo split di una coppia TRANSFER fa lo stesso nel batch (rifiutato con `WAC_FX_UNAVAILABLE` se manca
+  il cambio), il promote toglie il costo dal lato che cede; le gambe sole già nei DB le converte il passo d'avvio
+  `lone-transfer-legs` dopo le correzioni post-migrazione (dry run nella riga di comando). Dettagli: piano 04, sezione
+  «Decisione 47».
 - **W-B7 · `TODO_FUTURI`, eventi collegabili: percorso e conteggi superati** — minimo; W, 14/10 (analisi). L'endpoint è
   `POST /transactions/events/suggest`, i test API sono 10 e non 8, `suggest_events_bulk` sta in
   `services/transactions/transaction_service.py:492`. Si aggiorna quando la voce entra nel lotto K3. Dettagli: piano 04,
@@ -3328,6 +3334,16 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `BRIMValidationIssue.message` (import) come «{type} requires asset_id». Cura: `e.message()` (i parametri restano in
   `ctx`); cambia testi visibili nelle risposte (in meglio). W-B36 tiene apposta i testi di prima (letterali per tipo dove
   lo erano). Dettagli: piano 04, sezione W-B36.
+- **W-B39 · Uno split rifiutato non dice niente all'utente** — basso, chiarezza; W, 16/10 (decisione 47, docs-writer).
+  `confirmSplit()` (`frontend/src/routes/(app)/transactions/+page.svelte`) scrive i problemi del batch solo in console.
+  Con la 47 uno split si rifiuta anche per un cambio mancante (`WAC_FX_UNAVAILABLE` sull'operazione `split`), e prima già
+  per altri codici: l'utente non vede il perché. Proposta: mostrare il problema (toast o pannello, con il codice tradotto).
+  Frontend delle transazioni (FE8, dopo il lotto A dei colori). Dettagli: piano 04, sezione «Decisione 47».
+- **W-B40 · Lo split di una coppia non ancora salvata nel Bulk non applica la 47** — basso, numeri; W, 16/10 (decisione
+  47, docs-writer). `TransactionBulkModal.svelte` (~933) cambia solo i tipi di una coppia TRANSFER non salvata: l'ADJUSTMENT
+  in uscita si crea senza costo e i lotti leggono le unità come distrutte. Da decidere: il backend dà il costo Auto a un
+  ADJUSTMENT −q creato che lo chiede (oggi `cost_basis_mode` non è ammesso su un ADJUSTMENT negativo: cambia i metadati),
+  oppure il Bulk non scioglie in ADJUSTMENT una coppia non salvata. Dettagli: piano 04, sezione «Decisione 47».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
