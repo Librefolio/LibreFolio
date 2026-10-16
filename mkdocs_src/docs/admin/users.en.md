@@ -102,8 +102,10 @@ its owner opens the link LibreFolio emails to its address. Until then:
   works even on a full instance, and so does `user activate` on the
   [command line](cli_tools.md), without a limit warning. Once the link has expired, reactivating it
   needs a free place, as for any deactivated account;
-- **Delete** removes it, as any account. `user deactivate` on the command line keeps it but ends
-  the wait: its links stop working, and it can sign in only once reactivated.
+- **Delete** removes it, as any account. This tab offers no **Deactivate** for an account that is
+  not active; `user deactivate` on the command line, or the administrator API
+  (`PATCH /api/v1/users/{id}` with `is_active: false`), keeps it but ends the wait: its links stop
+  working, its place is free, and it can sign in only once reactivated.
 
 How the verification works, and its limits: [Email Verification](email.md#verification).
 

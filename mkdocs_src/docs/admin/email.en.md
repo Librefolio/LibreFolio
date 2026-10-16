@@ -409,7 +409,8 @@ that LibreFolio emails to the address of the account. The switch is in **Setting
   [command line](cli_tools.md), nor the accounts that already exist.
 - **Right after the registration**, the login page says: *Account created. We sent you an email
   with a link to activate it: open it within 24 hours, then sign in.*
-- **The email**, *Confirm your email address*, leaves at once, in the instance's
+- **The email**, *Confirm your email address*, leaves at once, unless a limit holds it back
+  ([Limits of the Verification Emails](#verification-limits)), in the instance's
   **Default Language**: a new account has no language of its own yet. Its button,
   **Confirm my email address**, opens a link that starts with `LIBREFOLIO_PUBLIC_URL`
   ([Emails with a Link](#public-url)) and works once, for 24 hours.
@@ -456,21 +457,30 @@ apart from an account an administrator deactivated.
   While its link is live, this takes no extra place, since its place is already counted:
   **Reactivate** works even on a full instance, and `user activate` prints no limit warning. Once
   the link has expired, reactivating it needs a free place, as for any deactivated account.
-- **To turn it away**, delete it ([Delete an Account](users.md#delete)), or run `user deactivate`:
-  it stops waiting, its links stop working, and signing in tells its owner that the account is
-  disabled.
+- **To turn it away**, delete it ([Delete an Account](users.md#delete)), or deactivate it: with
+  `user deactivate` on the command line, or with the administrator API
+  (`PATCH /api/v1/users/{id}` with `is_active: false`). Deactivated, it stops waiting: its links stop
+  working, its place is free, and signing in tells its owner that the account is disabled. The
+  Users tab itself offers no **Deactivate** for an account that is not active: there, **Delete** is
+  the way.
 
-### 📏 Limits of «Send the Link Again» {: #verification-limits }
+### 📏 Limits of the Verification Emails {: #verification-limits }
 
 | Limit | Past it |
 | --- | --- |
-| 10 requests every 15 minutes from the same address, counted before the password is checked; an IPv6 address counts by its /64 | The request is refused until the oldest of them is 15 minutes old. |
+| The emails of 10 registrations an hour from the same address; an IPv6 address counts by its /64 | The next new accounts are still created and wait, but their emails do not leave: their owners ask for the link again from the login page, under the limits below. |
+| 10 requests of **Send the link again** every 15 minutes from the same address, counted before the password is checked; an IPv6 address counts by its /64 | The request is refused until the oldest of them is 15 minutes old. |
 | 1 email every 5 minutes, and 3 an hour, for the same account, the email of the registration included | The request is refused: the page says in how many minutes to try again. |
+| 3 emails an hour to the same mailbox, in capitals or not, whatever account they are for: the email of a registration and the links sent again alike, and only the emails that went out | **Send the link again** is refused: the page says in how many minutes to try again. After a registration, the account is created and waits, but no email leaves: its owner asks for the link again later. |
 | The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. |
 | A free place, once the account's link has expired | The request is refused: its owner is told to ask you. |
 
-A link whose email did not go out does not count against the account's limits. Behind a reverse
-proxy, the address that counts follows the rules given in [Forgotten Passwords](#forgot-password).
+A link whose email did not go out counts neither for the account nor for the mailbox. If the
+account stops waiting in the meantime — its link opened, or an administrator activated or
+deactivated it — no new link is sent. The limits per address and per mailbox are kept in the memory
+of each server process: with several processes, each keeps its own count, and a restart forgets
+them. Behind a reverse proxy, the address that counts follows the rules given in
+[Forgotten Passwords](#forgot-password).
 
 ---
 
@@ -572,11 +582,13 @@ the start.
 | `Forgotten password: no email sent` | `warning` | Email or `LIBREFOLIO_PUBLIC_URL` stopped working after the answer, or the email was refused: `reason` and `code` say which. A link created for it is revoked. |
 | `Forgotten password: the request failed` | `error` | An unexpected error, with its type in `error` and nothing more: no detail of the request reaches the log. |
 | `Registration waits for email verification` | `info` | A new account waits for its link; with `user_id`. The `User registered` line of the same registration has `waits_for_email` set to true. |
+| `Verification email held: too many registrations from this address` | `info` | The address of the registration already had the emails of 10 registrations in the hour: the account waits without its email; with `user_id`. |
 | `Verification link emailed` | `info` | A verification link went out: `user_id`, `token_id` and `language`. |
 | `Verification email: not sent` | `warning` | The email of a registration did not go out: `reason` and `code` say why. The account still waits, and its owner can ask for the link again. |
 | `Verification email: the account no longer waits, nothing sent` | `info` | An administrator activated, deactivated or deleted the account before its email left; with `user_id`. |
 | `Verification email: the request failed` | `error` | An unexpected error, with its type in `error` and nothing more. |
 | `Login refused: email not verified` | `info` | A waiting account signed in with the right password; with `user_id`. |
+| `Verification resend refused: wrong credentials` | `warning` | Someone asked for a new verification link with a wrong password, or for an account that does not exist. Neither what was typed nor the address is logged. |
 | `Email verified` | `info` | A link was opened: the account is active; `user_id` and `token_id`. |
 | `Email verification refused: the link's email did not go out` | `info` | Someone opened a link whose email LibreFolio counted as not sent: the account still waits, and **Send the link again** works. |
 | `Email verification refused: the link was sent to another address` | `info` | The account's address changed after the link was sent: that link stops working. |
