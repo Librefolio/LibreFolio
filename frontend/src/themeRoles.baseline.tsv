@@ -46,21 +46,13 @@ lib/components/ui/data-editor/DataEditor.svelte	5
 lib/components/ui/display/BrokerIcon.svelte	4
 lib/components/ui/feedback/LoadingSpinner.svelte	0	#10b981	#1a4031	#374151	#6b7280	#9ca3af	#e5e7eb
 lib/components/ui/modals/ConfirmModal.svelte	4
-lib/features/brokers/BrokerCard.svelte	64
-lib/features/brokers/BrokerDiscoveryCard.svelte	9
-lib/features/brokers/BrokerForm.svelte	72
-lib/features/brokers/BrokerImportFilesModal.svelte	12
-lib/features/brokers/BrokerModal.svelte	23
-lib/features/brokers/BrokerSharingModal.svelte	10
-lib/features/brokers/BrokerSharingPanel.svelte	223
-lib/features/brokers/DeleteBrokerDialog.svelte	30
-lib/features/brokers/lots/LotComparisonChart.svelte	96
+lib/features/brokers/BrokerCard.svelte	12
+lib/features/brokers/BrokerForm.svelte	4
+lib/features/brokers/BrokerSharingPanel.svelte	45
+lib/features/brokers/lots/LotComparisonChart.svelte	2
 lib/features/brokers/lots/LotCustodyModal.svelte	205
-lib/features/brokers/lots/LotDataQualityBanner.svelte	20
-lib/features/brokers/lots/LotGanttChart.svelte	36
-lib/features/brokers/lots/LotWacPriceChart.svelte	48
-lib/features/brokers/lots/LotsAnalysisPanel.svelte	42
-lib/features/brokers/lots/UnifiedLotsTable.svelte	84
+lib/features/brokers/lots/LotGanttChart.svelte	4
+lib/features/brokers/lots/UnifiedLotsTable.svelte	60
 lib/features/dashboard/ExposureTable.svelte	2
 lib/features/dashboard/KpiSection.svelte	4
 lib/features/dashboard/PositionsPanel.svelte	46
@@ -83,8 +75,7 @@ lib/utils/providerHelpers.ts	20
 lib/utils/transactions/pairCellHtml.ts	6
 routes/(app)/assets/+page.svelte	4
 routes/(app)/assets/[id]/+page.svelte	312
-routes/(app)/brokers/+page.svelte	38
-routes/(app)/brokers/[id]/+page.svelte	141
+routes/(app)/brokers/[id]/+page.svelte	12
 routes/(app)/fx/+page.svelte	4
 routes/(app)/fx/[pair]/+page.svelte	54
 routes/+page.svelte	1
