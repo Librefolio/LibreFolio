@@ -69,11 +69,17 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
 vi.mock('$lib/stores/reference/assetStore', () => ({mergeAssets: vi.fn(), invalidateAfterMutation: vi.fn()}));
 
 import AssetModal from './AssetModal.svelte';
+import type {ComponentProps} from 'svelte';
 import {get} from 'svelte/store';
 import {zodiosApi} from '$lib/api';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
+import {isParametricProvider} from '$lib/utils/providerHelpers';
+
+/** The creation callbacks, typed from the component: the contract under test (O-20). */
+type OnCreated = NonNullable<ComponentProps<typeof AssetModal>['oncreated']>;
+type OnSynced = NonNullable<ComponentProps<typeof AssetModal>['onsynced']>;
 
 // --- Helpers ------------------------------------------------------------
 const createFn = () => vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post as never) as ReturnType<typeof vi.fn>;
@@ -248,7 +254,8 @@ describe('AssetModal — create submit', () => {
         await waitFor(() => expect(saveBtn()).toBeEnabled());
         await fireEvent.click(saveBtn());
 
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(42));
+        // No provider: no price sync starts (O-20).
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(42, {syncing: false}));
         expect(createFn()).toHaveBeenCalledWith([
             expect.objectContaining({
                 display_name: 'Apple Inc.',
@@ -365,12 +372,12 @@ describe('AssetModal — opt-in creation success links', () => {
         expect(toasts.info).not.toHaveBeenCalled();
     }
 
-    async function mountCreation(id: number, name: string, linkCreatedAsset?: boolean) {
+    async function mountCreation(id: number, name: string, linkCreatedAsset?: boolean, onsynced?: OnSynced) {
         vi.mocked(zodiosApi.create_assets_bulk_api_v1_assets_post).mockResolvedValueOnce(createdResponse(id, name));
-        const oncreated = vi.fn<(assetId: number) => void>();
+        const oncreated = vi.fn<OnCreated>();
         const goto = vi.spyOn(navigation, 'goto');
         const hrefBefore = window.location.href;
-        render(AssetModal, {open: true, oncreated, ...(linkCreatedAsset === undefined ? {} : {linkCreatedAsset})});
+        render(AssetModal, {open: true, oncreated, ...(linkCreatedAsset === undefined ? {} : {linkCreatedAsset}), ...(onsynced ? {onsynced} : {})});
         await waitForForm();
         await fill('asset-modal-display-name', name);
         await waitFor(() => expect(nameInput()).toHaveValue(name));
@@ -378,8 +385,12 @@ describe('AssetModal — opt-in creation success links', () => {
         return {oncreated, goto, hrefBefore};
     }
 
-    async function expectCreationClosed(oncreated: (assetId: number) => void, id: number) {
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(id));
+    /**
+     * `oncreated` received exactly `expected`: after a creation, the id and whether its one price sync started —
+     * `[id, {syncing}]` (O-20); after a failed provider assignment, the id alone — `[id]`.
+     */
+    async function expectCreationClosed(oncreated: OnCreated, expected: Parameters<OnCreated>) {
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(...expected));
         await waitFor(() => expect(screen.queryByTestId('asset-modal-form')).toBeNull());
         expect(oncreated).toHaveBeenCalledTimes(1);
     }
@@ -414,7 +425,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await fireEvent.click(saveBtn());
 
-        await expectCreationClosed(oncreated, id);
+        await expectCreationClosed(oncreated, [id, {syncing: false}]);
         const content = toastMarkup('success');
         const anchor = within(content).getByTestId('toast-asset-link');
         expect(anchor).toBeInstanceOf(HTMLAnchorElement);
@@ -437,7 +448,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await fireEvent.click(saveBtn());
 
-        await expectCreationClosed(oncreated, id);
+        await expectCreationClosed(oncreated, [id, {syncing: false}]);
         const content = toastMarkup('success');
         expect(content).toHaveTextContent(name);
         expect(content.getElementsByTagName('a')).toHaveLength(0);
@@ -456,7 +467,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await fireEvent.click(saveBtn());
 
-        await expectCreationClosed(oncreated, id);
+        await expectCreationClosed(oncreated, [id, {syncing: false}]);
         const content = toastMarkup('success');
         expect(content).toHaveTextContent(name);
         expect(content.getElementsByTagName('img')).toHaveLength(0);
@@ -495,7 +506,7 @@ describe('AssetModal — opt-in creation success links', () => {
 
             await saveWithUntestedProvider();
 
-            await expectCreationClosed(oncreated, id);
+            await expectCreationClosed(oncreated, [id, {syncing: true}]);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledWith([{asset_id: id, provider_code: PROVIDER_CODE, identifier: PROVIDER_IDENTIFIER, identifier_type: 'TICKER', provider_params: null}]);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
@@ -526,7 +537,8 @@ describe('AssetModal — opt-in creation success links', () => {
 
         await saveWithUntestedProvider();
 
-        await expectCreationClosed(oncreated, id);
+        // The assignment failure reports the id alone: no sync starts (O-20).
+        await expectCreationClosed(oncreated, [id]);
         expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
         const content = toastMarkup('warning');
         expect(content).toHaveTextContent(name);
@@ -577,6 +589,173 @@ describe('AssetModal — opt-in creation success links', () => {
         expect(zodiosApi.create_assets_bulk_api_v1_assets_post).not.toHaveBeenCalled();
         expect(zodiosApi.patch_assets_bulk_api_v1_assets_patch).toHaveBeenCalledWith([expect.objectContaining({asset_id: id, display_name: 'Owned edited name'})]);
         expect(goto).not.toHaveBeenCalled();
+    });
+
+    // =====================================================================
+    // O-20: the modal owns the one price sync of a creation. `oncreated(id, {syncing})` says whether it
+    // started, `onsynced(id, result)` how it ended — the asset's result, or null when the request failed —
+    // so the Assets page shows it and reloads instead of starting a second sync of its own.
+    // No sync, no `onsynced`.
+    // =====================================================================
+    describe('the one price sync of a creation (O-20)', () => {
+        const SCHEDULED = 'scheduled_investment';
+        const scheduledProviderFixture: Awaited<ReturnType<typeof zodiosApi.list_providers_api_v1_assets_provider_get>> = [
+            {
+                code: SCHEDULED,
+                name: 'Owned scheduled investment',
+                description: 'Synthetic parametric provider metadata; no network implementation',
+                kind: 'parametric_generation',
+                supports_search: false,
+                // The real plugin's schema: no field of its own, the schedule editor instead.
+                params_schema: [{key: '_ui_component', type: 'ui_component', required: false, description: 'Custom editor: ScheduledInvestmentEditor', default: SCHEDULED}],
+                accepted_identifier_types: ['AUTO_GENERATED'],
+            },
+        ];
+
+        afterEach(() => {
+            // Back to the module mock's own answer (`() => false`) for every later test.
+            vi.mocked(isParametricProvider).mockReset();
+        });
+
+        it('reports the sync through onsynced(assetId, results[0]) once it has answered, never before', async () => {
+            const id = 4207;
+            const name = 'Owned synced asset';
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockResolvedValueOnce({
+                results: [{asset_id: id, success: true, message: '[[assigned-response]]'}],
+                success_count: 1,
+            });
+            let finishSync!: (response: SyncResponse) => void;
+            const pendingSync = new Promise<SyncResponse>((resolve) => {
+                finishSync = resolve;
+            });
+            const result = {asset_id: id, status: 'partial' as const, points_fetched: 5, points_changed: 3, inserted_count: 2, updated_count: 1, errors: ['[[sync-note]]']};
+            const syncResponse: SyncResponse = {results: [result], success_count: 1};
+            vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockReturnValueOnce(pendingSync);
+            const onsynced = vi.fn<OnSynced>();
+            try {
+                const {oncreated} = await mountCreation(id, name, true, onsynced);
+                await chooseProviderWithoutProbing();
+
+                await saveWithUntestedProvider();
+
+                await expectCreationClosed(oncreated, [id, {syncing: true}]);
+                expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
+                // The request is out and unanswered: the sync has started, it has not ended.
+                expect(onsynced).not.toHaveBeenCalled();
+
+                finishSync(syncResponse);
+                await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, result));
+                expect(onsynced).toHaveBeenCalledTimes(1);
+                expect(oncreated).toHaveBeenCalledTimes(1);
+                // Reported, not announced: the caller owns the sync's toast, the modal only its creation's.
+                expectOnlySuccessToast();
+            } finally {
+                // Always settle the test-owned promise, even after an assertion fails.
+                finishSync(syncResponse);
+                await pendingSync;
+            }
+        });
+
+        it('reports a failed sync request through onsynced(assetId, null)', async () => {
+            const id = 4208;
+            const name = 'Owned sync-failed asset';
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockResolvedValueOnce({
+                results: [{asset_id: id, success: true, message: '[[assigned-response]]'}],
+                success_count: 1,
+            });
+            const syncError = new Error('[[sync-request-failed]]');
+            vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockRejectedValueOnce(syncError);
+            // The failure is logged and swallowed (non-blocking): silenced here, and checked below.
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+            await chooseProviderWithoutProbing();
+
+            await saveWithUntestedProvider();
+
+            await expectCreationClosed(oncreated, [id, {syncing: true}]);
+            await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, null));
+            expect(onsynced).toHaveBeenCalledTimes(1);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
+            expect(warn).toHaveBeenCalledWith(expect.any(String), syncError);
+            expectOnlySuccessToast();
+        });
+
+        it('starts no sync without a provider: oncreated(assetId, {syncing: false}) and no onsynced', async () => {
+            const id = 4209;
+            const name = 'Owned provider-less asset';
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+
+            await fireEvent.click(saveBtn());
+
+            await expectCreationClosed(oncreated, [id, {syncing: false}]);
+            // The sync, when there is one, is requested in the same synchronous step that calls oncreated: no
+            // request now is none ever, and onsynced only answers a request.
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+            expect(onsynced).not.toHaveBeenCalled();
+        });
+
+        it('starts no sync when the provider assignment fails: oncreated(assetId) alone and no onsynced', async () => {
+            const id = 4210;
+            const name = 'Owned unassigned asset';
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(providerFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockRejectedValueOnce(new Error('[[assignment-failed]]'));
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+            await chooseProviderWithoutProbing();
+
+            await saveWithUntestedProvider();
+
+            await expectCreationClosed(oncreated, [id]);
+            // Presence first: the assignment was attempted, and failed — the reason there is no sync.
+            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
+            // oncreated is the last step of that path: no request now is none ever.
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+            expect(onsynced).not.toHaveBeenCalled();
+        });
+
+        it('syncs a parametric provider too: scheduled_investment with a schedule posts the sync from resume, {syncing: true}', async () => {
+            const id = 4211;
+            const name = 'Owned scheduled asset';
+            // The real classification: the sync used to be skipped exactly because this said true.
+            vi.mocked(isParametricProvider).mockImplementation((code) => code === SCHEDULED);
+            vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(scheduledProviderFixture);
+            vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mockResolvedValueOnce({
+                results: [{asset_id: id, success: true, message: '[[assigned-response]]'}],
+                success_count: 1,
+            });
+            const result = {asset_id: id, status: 'ok' as const, points_fetched: 31, points_changed: 31};
+            vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).mockResolvedValueOnce({results: [result], success_count: 1});
+            const onsynced = vi.fn<OnSynced>();
+            const {oncreated} = await mountCreation(id, name, true, onsynced);
+
+            // Its identifier is generated (AUTO_GENERATED is its only type) and its parameters are the schedule
+            // editor's: the first period it adds is the schedule this creation carries.
+            expect(screen.queryByTestId('provider-code-select-button')).toBeNull();
+            await fireEvent.click(screen.getByTestId('asset-modal-provider-header'));
+            await fireEvent.click(await screen.findByTestId('provider-code-select-button'));
+            await fireEvent.click(await screen.findByTestId(`provider-option-${SCHEDULED}`));
+            await waitFor(() => expect(screen.queryByTestId(`provider-option-${SCHEDULED}`)).toBeNull());
+            await fireEvent.click(await screen.findByTestId('schedule-add-first-period'));
+            await waitFor(() => expect(screen.getByTestId('schedule-status')).toHaveAttribute('data-valid', 'true'));
+            await waitFor(() => expect(saveBtn()).toBeEnabled());
+
+            await saveWithUntestedProvider();
+
+            await expectCreationClosed(oncreated, [id, {syncing: true}]);
+            // Precondition, verified: assigned WITH its schedule — without one the assignment, and the sync, are skipped.
+            expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
+            const assignment = vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mock.calls[0]?.[0]?.[0];
+            expect(assignment).toMatchObject({asset_id: id, provider_code: SCHEDULED, identifier_type: 'AUTO_GENERATED'});
+            expect(assignment?.provider_params?.schedule, 'the assignment carries the schedule the editor built').toHaveLength(1);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
+            expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
+            await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, result));
+            expect(onsynced).toHaveBeenCalledTimes(1);
+        });
     });
 });
 
@@ -647,7 +826,7 @@ describe('AssetModal — prefill (create wizard)', () => {
         await waitFor(() => expect(screen.getByTestId('asset-modal-more-info')).toHaveAttribute('data-expanded', 'true'));
 
         await fireEvent.click(saveBtn());
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(99));
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(99, {syncing: false}));
         expect(createFn()).toHaveBeenCalledWith([expect.objectContaining({display_name: 'Apple Inc.', identifier_isin: 'US0378331005'})]);
     });
 
@@ -674,7 +853,7 @@ describe('AssetModal — prefill (create wizard)', () => {
         expect(screen.getByTestId('asset-modal-more-info')).toHaveAttribute('data-expanded', 'false');
 
         await fireEvent.click(saveBtn());
-        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(101));
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(101, {syncing: false}));
         expect(createFn()).toHaveBeenCalledWith([
             expect.objectContaining({
                 display_name: 'Vanguard FTSE',
