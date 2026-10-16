@@ -32,7 +32,10 @@ Fill in your details:
 !!! info "First User = Admin"
 
     The very first account to register becomes the **administrator**: it manages the instance-wide
-    **[Global Settings](../admin/settings.md)** and every admin feature.
+    **[Global Settings](../admin/settings.md)** and every admin feature. On an instance whose
+    administrator was created from the server's configuration, by a hosting provider for example,
+    nobody registers first: that administrator receives a setup link, which opens the instance's
+    setup page, where they choose the password and are signed in.
 
 ### ✉️ If You Received an Invitation Link {: #invitation-link }
 

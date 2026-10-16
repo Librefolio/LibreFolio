@@ -491,6 +491,26 @@ def services_registration(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Registration service tests", verbose=verbose)
 
 
+def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> bool:
+    """Test F02, the initial administrator: its variables, the startup bootstrap, the setup link, setup-link."""
+    print_section("Services: Initial Administrator (F02)")
+    print_info("Testing: backend/app/config/accounts.py admin_bootstrap_config, services/accounts/bootstrap_admin_service.py, token_service.issue_token(token=), user_usage, scripts/user_cli.py setup-link")
+    print_info("Tests: the variables and their errors, created/ignored/pending/rearmed/expired, two workers, the link logged once and emailed, setup completed, the waiting administrator in the usage")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_admin_bootstrap.py", test_names)
+    return run_command(cmd, "Initial administrator tests", verbose=verbose)
+
+
+def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
+    """Test P18: email addresses unique regardless of A–Z case, in the rule, the index, the lookups and the writes."""
+    print_section("Services: Email Addresses Regardless of Case (P18)")
+    print_info("Testing: user_service.email_fold/same_email, the index ux_users_email_lower, get_user_by_email and get_user_by_username_or_email, create_user, register_user, update_profile, the F02 bootstrap")
+    print_info("Tests: A–Z folded and nothing else, the index refusing a case variant through the ORM and plain SQL, lookups in any case, case-only changes of one's own address, the non-ASCII limit")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_case.py", test_names)
+    return run_command(cmd, "Email case tests", verbose=verbose)
+
+
 def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
     """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
     print_section("Services: Password Policy")
@@ -677,7 +697,7 @@ def services_session_version(verbose: bool = False, test_names: list = None) -> 
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
     print_info("Testing: auth_service.py (SessionClaims, sv), api/v1/auth.py (get_current_user), user_service.py (end_sessions, reset/active/admin)")
-    print_info("Tests: claims round trip, cookies without sv at version 0, untrusted tokens never raise, another version refused, raised by one only by reset/deactivate/demote, bcrypt off the loop")
+    print_info("Tests: claims round trip, cookies without sv at version 0, untrusted tokens never raise, another version refused, raised by one only by reset/deactivate/demote, bcrypt off the loop; A-27, the live reset links revoked by reset_password and a real address change, and by nothing else")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_session_version.py", test_names)
     return run_command(cmd, "Session version tests", verbose=verbose)
@@ -1600,6 +1620,25 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "admin-bootstrap",
+        services_admin_bootstrap,
+        name="Initial Administrator (F02)",
+        desc="LIBREFOLIO_ADMIN_* read and refused by code, the startup bootstrap (created, ignored, pending, rearmed, expired, two workers), the link logged once and emailed, complete_admin_setup, the waiting administrator in user_usage, user setup-link",
+        # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch; the
+        # email faked in this process; the race holds two connections to that private file only. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-case",
+        services_email_case,
+        name="Email Addresses Regardless of Case (P18)",
+        desc="email_fold and same_email fold A–Z only, the unique index on lower(email), lookups in any case, case variants refused on create and register, a case-only change of one's own address keeps sessions and verification, F02, the non-ASCII limit",
+        # PURE: every database is a private file under tmp_path built with create_all; variables removed with monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "password-policy",
         services_password_policy,
         name="Password Policy",
@@ -1790,7 +1829,7 @@ Note: No backend server required.
         "session-version",
         services_session_version,
         name="Session Version",
-        desc="sv claim: SessionClaims round trip, no sv = version 0, untrusted tokens are None, get_current_user refuses another version, end_sessions, +1 by reset/deactivate/demote only, refusals change nothing",
+        desc="sv claim: SessionClaims round trip, no sv = version 0, untrusted tokens are None, get_current_user refuses another version, end_sessions, +1 by reset/deactivate/demote only, refusals change nothing; A-27: reset_password and a real address change revoke the live reset links, nothing else",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The JWT secret and hash_password are replaced with monkeypatch, in this process only.
         isolation="pure",

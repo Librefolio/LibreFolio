@@ -3414,6 +3414,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     del tutto), `admin/configuration`, `admin/service_exposure`, `admin/hosting_providers`, `admin/cli_tools` (anche
     «➕ Create and List Users», le regole della password), `user/installation`, `user/settings/profile` («Changing
     Your Email», «🔑 Change Password»), `admin/email`.
+  - Da A7a (16/10), nessun timbro: sezioni nuove in `admin/configuration` («The Initial Administrator») e
+    `admin/cli_tools` (`user setup-link`), con le ancore `#initial-admin` e `#setup-link` da tenere uguali in ogni lingua;
+    `admin/hosting_providers` (`#initial-admin`); una o due frasi in `admin/settings`, `admin/users`, `admin/index`,
+    `admin/host_installation`, `admin/docker_advanced`, `user/installation`, `user/getting-started`.
+  - Da P18 (16/10), nessun timbro: in `admin/cli_tools` due sezioni nuove, «Change the Email Address of an Account»
+    (`#set-email`) e «Two Accounts with the Same Email Address» (`#email-case-conflict`), con le ancore da tenere uguali
+    in ogni lingua (oggi le pagine inglesi linkano `cli_tools.md` per nome di sezione, senza ancora); una frase in
+    `admin/docker_advanced` (un riavvio non aiuta finché gli account non sono separati); in `user/settings/profile`
+    «Changing Your Email» (un punto cambiato, uno nuovo: le maiuscole).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
@@ -3505,6 +3514,67 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
     inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
     password (decisione 37).
+  - In più (dal `test-author` di A-22, 16/10): uno username può contenere `@` e somigliare a un indirizzo, quindi un
+    evento di log che porta lo username («User logged in» e altri) può scrivere qualcosa che sembra un'email; e il login
+    cerca «username o email» con un solo campo, quindi uno username uguale all'indirizzo di un altro account è ambiguo.
+    Il carattere `@` va escluso con la stessa regola.
+  - **Allargata dal coordinatore** (16/10, con P18): gli username diventano unici senza distinzione di maiuscole, come gli
+    indirizzi (P18); username nuovi senza `@`, e un identificativo con `@` cerca solo l'email (oggi
+    `get_user_by_username_or_email` prende il primo dei due, senza ordine: il login e la «password dimenticata» per email
+    possono finire sull'account sbagliato, nota di E). Per gli username già salvati con `@` o con varianti di maiuscole,
+    prima un'analisi, nessun cambio silenzioso. Lotto dopo P18.
+- ✅ **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; chiusa in A-22
+  (16/10); dal `test-author` di A7c (16/10).
+  - `api/v1/auth.py` ~160–167: «Login failed: user not found», «…wrong password», «…user inactive» con
+    `username=request.username`; il login accetta anche l'email in quel campo, quindi un tentativo fallito con l'email
+    la scrive nel log, contro la regola di E (nessun indirizzo nei log).
+  - Cura proposta: `user_id` quando l'account esiste (password sbagliata, account disattivo), niente dell'identificativo
+    quando non esiste; un rosso in-process come PROF-017. Da fare subito dopo A7c o in A8, che riscrive quel percorso.
+    Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7c».
+  - Fatta così (16/10): LOGIN-027…033 in `test_auth_api.py`; dettagli nel piano, «A-22».
+- **A-23 · L'avvio della verifica dell'indirizzo risponde 500 quando la chiave d'istanza non si può usare** — basso; da
+  H (H-19, tramite il coordinatore, 16/10).
+  - `POST /api/v1/users/address-probe` (`address_probe.issue_probe_nonce()`, firma il nonce con una chiave derivata dalla
+    chiave d'istanza) risponde 500 se la chiave non si può usare, mentre `GET /auth/address-probe`
+    (`verify_probe_nonce()`) lo tollera.
+  - Cura: 503 con un codice d'errore, e il dialogo della scheda Utenti lo dice come «non verificabile». Lotto piccolo dopo
+    A7a/A7b; diventa urgente solo se il developer sceglie l'opzione A di H-3 (P24).
+- ✅ **A-24 · Tre test di E diventano impossibili con P18** — basso; chiusa il 16/10 (delta A-24 dopo il merge di base
+  `12cd3c2e0`, commit del coordinatore); A (16/10, dai verdi di P18).
+  - `test_email_flows.py` (`ONE_MAILBOX`, la riga 1356), `test_email_verification.py` EMV-043 (`MAILBOX_VARIANTS`, la
+    riga 166) e `test_email_verification_api.py` EVA-016 (`MAILBOX_VARIANTS`, la riga 122) creano quattro account sulla
+    stessa casella scritta in quattro forme ASCII: con l'indice `ux_users_email_lower` la seconda riga è rifiutata.
+  - Cura (decisa dal coordinatore, approvata da E, 16/10): varianti con lettere non ASCII in letterali NFC (`\u00e4`
+    precomposta), una casella per le chiavi `casefold` di E, quattro righe per l'indice A–Z. La scrive A con un
+    `test-author` **dopo il mini-lotto di E** che fa accettare `SMTPUTF8` al suo SMTP finto (oggi un destinatario non
+    ASCII dà `SEND_FAILED`).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «P18.4» e «P18.5».
+- **A-25 · La scheda Profilo chiede la password per un cambio di sole maiuscole** — basso; dal `docs-writer` di P18
+  (16/10).
+  - `features/settings/tabs/ProfileTab.svelte` righe 89–92 confronta l'indirizzo esatto: con un cambio di sole maiuscole
+    la scheda chiede la password attuale, avvisa della disconnessione e tiene «Salva» spento, mentre il server (C5 di
+    P18) non chiede nulla e non chiude sessioni.
+  - Cura approvata dal coordinatore (16/10): solo logica, nessuna classe; un helper `sameEmail` (A–Z come il backend),
+    `emailNeedsPassword` e il blocco della password solo per un indirizzo diverso; rossi prima in `ProfileTab.test.ts`.
+    Lotto subito dopo l'aggiornamento di base che porta IM, come commit a sé; poi una frase in `user/settings/profile`.
+- **A-26 · Il confronto «modelli = migrazione» di 005 non vede un indice su espressione non unico** — minimo; dal
+  `test-author` di P18 (16/10).
+  - In `test_migration_005_accounts.py`, la chiave `indexes` di `_shape` viene dall'inspector di SQLAlchemy, che salta gli
+    indici su espressione da entrambe le parti (con un avviso). Gli insiemi unici li vede (riparazione di P18), ma un
+    indice su espressione **non** unico presente da una parte sola, o lo stesso con due nomi, passerebbe.
+  - Cura: costruire quella chiave da `_index_list` (origine `'c'`). Oggi nessun indice del genere esiste; per
+    `ux_users_email_lower` nome e SQL li fissa MIG009-003.
+- ✅ **A-27 · Un cambio dell'indirizzo o della password non revoca i link di reset vivi** — medio (sicurezza); chiusa il
+  16/10 (lotto A-27, commit del coordinatore); dalla revisione di E (E6.9), tramite il coordinatore (16/10).
+  - `user_service.update_profile` (cambio vero dell'indirizzo: anche `PUT /auth/profile` e `user set-email`) e la rotta
+    `POST /auth/change-password` chiudono le sessioni ma lasciano vivi i link `PASSWORD_RESET`: con la «password
+    dimenticata» aperta, chi controlla la vecchia casella chiede un link prima del cambio e lo usa dopo, entro 30 minuti.
+    Stesso buco in `user_service.reset_password` (CLI `user reset`), trovato da A.
+  - Cura: `token_service.revoke_tokens(…, purpose=PASSWORD_RESET)` nella stessa transazione del cambio, come già fanno
+    `create_password_reset` e `complete_password_reset`; rossi prima. Lotto a sé dopo l'ingresso di P18.
+  - Fatta così (16/10): i tre punti; rossi nel contratto 7 di `test_session_version.py` e REVOKE-003…007 di
+    `test_session_revocation_api.py`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A-27».
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 

@@ -111,7 +111,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
-      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
+      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`, and
+      `admin_bootstrap_config()`, the [initial administrator](access_control.md#initial-admin), its
+      token also as `_FILE`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
       `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
       `web_link_finder_max_results()`, `plugin_setting_env()` and `plugin_setting_env_origin()`
@@ -138,7 +140,8 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       ([Registration Modes](access_control.md#registration-modes)). An invalid
       `LIBREFOLIO_SUPPORT_URL` does not either: `support_link()`
       (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
-      `support_url: null`, so the app keeps its link to the project's GitHub issues.
+      `support_url: null`, so the app keeps its link to the project's GitHub issues. An unusable
+      `LIBREFOLIO_ADMIN_*` value does stop it, as `admin_bootstrap_config()` runs in the startup audit.
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector
@@ -228,7 +231,7 @@ The global keys declared today, and where the **Admin** tab shows them
 | Key | Type | Default | In the Admin tab |
 |-----|------|---------|------------------|
 | `session_ttl_hours` | int | `24` | Session → **Session Duration** |
-| `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
+| `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. The startup that creates the [initial administrator](access_control.md#initial-admin) writes `invite` too. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
 | `require_email_verification` | bool | `false` | Security → **Require Email Verification**: every account created by `POST /auth/register` but the first waits for an emailed link ([Email Verification](../backend/email.md#verification)). It turns on only while an email with a link can go out: the switch is disabled while its saved value is off and `email.links` of `GET /system/instance` is false, and `PATCH /settings/global/bulk` refuses an off-to-on change with 409 `EMAIL_VERIFICATION_UNAVAILABLE` (`GlobalSettingUnavailableError`). Turning it off always works |
 | `max_file_upload_mb` | int | `10` | Memory → **Max File Upload Size** |
 | `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label from `settings.globalSettingNames.scheduler_enabled`) |
