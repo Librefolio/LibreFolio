@@ -921,3 +921,105 @@ class TestProfileLogsNoAddress:
         updates = [event for event in events if event.get("event") in (PROFILE_UPDATED, USER_PROFILE_UPDATED)]
         assert updates == [], f"A refused change updates nothing, so it logs neither «{PROFILE_UPDATED}» nor «{USER_PROFILE_UPDATED}»: {updates}"
         print_success(f"✓ 400 CURRENT_PASSWORD_INVALID; {len(events)} events and {len(records)} records without an address")
+
+
+# ============================================================================
+# THE SAME ADDRESS WHATEVER ITS A–Z CASE — P18 (PROF-020 to PROF-022), on the lane's server
+# ============================================================================
+# Developer decision P18 (release 1.3, workstream A; contract approved by the coordinator): two addresses are the same
+# when they match once A–Z are folded to a–z, as SQLite's lower() folds them; letters outside ASCII compare as written, a
+# documented limit not tested here. Its C5: changing one's own address in its A–Z case alone keeps the same address — no
+# password, no session ended, the new form stored —, while another account's address, in any A–Z case, is taken. Until
+# P18 addresses are compared exactly, as A6e's C2 in the module docstring still says. EmailStr lowercases the domain and
+# never the local part, so the cases vary the case of the local part. The accounts are those of
+# TestEmailChangeNeedsThePassword: registered on the lane's server by create_and_login_user, with a lower-case address,
+# every device closed and every account deleted at teardown, after a red too. EMAIL_TAKEN and _local_part_in_capitals
+# serve TestTheSameAddressWhateverItsCase only, so they live next to it.
+
+#: The plain ``detail`` of PUT /auth/profile for an address another account has, as PROF-009 reads it: an API string.
+EMAIL_TAKEN = "Email already registered"
+
+
+def _local_part_in_capitals(address: str, suffix: str = "") -> str:
+    """``address`` with its local part, ``suffix`` appended, in capitals and its domain as it is: the same address up to
+    the A–Z case when ``suffix`` is empty, another address otherwise. The server keeps a local part as it is sent."""
+    local, _, domain = address.rpartition("@")
+    return f"{(local + suffix).upper()}@{domain}"
+
+
+class TestTheSameAddressWhateverItsCase:
+    """PUT /auth/profile under P18, on the lane's server: the own address in another A–Z case is the same address (C5),
+    another account's address in another A–Z case is taken, and any other address is still an email change, which needs
+    the password (A6e).
+
+    «NEW, red until P18» marks the contract: today addresses are compared exactly, so the own address in capitals is an
+    email change, which asks for the password, and another account's address in capitals is free, so it is taken, every
+    other session ending. «GUARD» marks what holds today and must keep holding.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("password", ["absent", "wrong"])
+    async def test_the_own_address_in_another_case_is_the_same_address(self, accounts: _Accounts, password: str):
+        """PROF-020 — NEW, red until P18 (today 400 CURRENT_PASSWORD_REQUIRED, or CURRENT_PASSWORD_INVALID with the
+        wrong one: compared exactly, it is an email change): the own address with its local part in capitals is the same
+        address (P18, C5). Without current_password, or with a wrong one beside it — not checked, as for a username-only
+        change —: 200, and the answer's user has the new form; the answer sets no session cookie; GET /auth/me returns
+        the new form on this device and on a second one, signed in before: no session ended."""
+        print_section(f"PROF-020: the own address in capitals, password {password}")
+        account = await accounts.register()
+        second = await accounts.new_device(account)
+        answer = await _me(second)
+        assert _profile(answer, account) is not None, f"Precondition: the second session must be signed in as {account.username}: GET /auth/me {answer}"
+        new_form = _local_part_in_capitals(account.email)
+        assert new_form != account.email and new_form.lower() == account.email, f"setup: {new_form} must be {account.email} in another A–Z case"
+        sent: dict[str, Any] = {"email": new_form}
+        if password == "wrong":
+            sent["current_password"] = _wrong_password()
+
+        response = await _put_profile(account.device, sent)
+
+        status, body = _answer(response)
+        assert status == 200 and (body["user"]["id"], body["user"]["email"]) == (account.user_id, new_form), f"The own address in another A–Z case needs no password, and the answer carries its new form {new_form}: {status} {body}"
+        assert _session_set_cookies(response) == [], f"The same address is no email change: no session cookie may be set, Set-Cookie {response.headers.get_list('set-cookie')}"
+        for label, device in (("This device", account.device), ("The second session, opened before,", second)):
+            answer = await _me(device)
+            assert _profile(answer, account) == (account.username, new_form), f"{label} must stay signed in, with the new form {new_form}: the same address ends no session, GET /auth/me {answer}"
+        print_success(f"✓ password {password}: 200, the new form stored, no cookie set, both sessions signed in")
+
+    @pytest.mark.asyncio
+    async def test_another_accounts_address_in_another_case_is_taken(self, accounts: _Accounts):
+        """PROF-021 — NEW, red until P18 (today 200: compared exactly, another account's address in capitals is free, so
+        the email changes and the other sessions end): with the right current password, another account's address in
+        another A–Z case — its local part and its domain in capitals — is refused as that address is: 400, ``detail`` the
+        plain string «Email already registered»; nothing changes: no session cookie is set, and GET /auth/me still shows
+        the old address."""
+        print_section("PROF-021: another account's address in capitals")
+        account = await accounts.register()
+        holder = await accounts.register()
+        taken = holder.email.upper()
+        assert taken != holder.email and taken.lower() == holder.email, f"setup: {taken} must be {holder.email} in another A–Z case"
+
+        response = await _put_profile(account.device, {"email": taken, "current_password": TEST_PASSWORD})
+
+        status, body = _answer(response)
+        detail = body.get("detail") if isinstance(body, dict) else body
+        assert (status, detail) == (400, EMAIL_TAKEN), f"{taken} is the address of {holder.username} in another A–Z case: expected 400 {EMAIL_TAKEN!r}, as for that address itself, got {status} {body}"
+        assert _session_set_cookies(response) == [], f"A refused change must set no session cookie: Set-Cookie {response.headers.get_list('set-cookie')}"
+        await _assert_nothing_written(account, "The refused email change")
+        print_success(f"✓ 400 «{EMAIL_TAKEN}», the address unchanged")
+
+    @pytest.mark.asyncio
+    async def test_another_address_still_needs_the_password(self, accounts: _Accounts):
+        """PROF-022 — GUARD, green today and after (A6e, as PROF-010): the own address in capitals with one more letter
+        is another address, not the same one in another case: without current_password it is refused with 400
+        CURRENT_PASSWORD_REQUIRED, and nothing is written."""
+        print_section("PROF-022: another address, without current_password")
+        account = await accounts.register()
+        other = _local_part_in_capitals(account.email, suffix="x")
+        assert other.lower() != account.email, f"setup: {other} must be another address than {account.email}, whatever the case"
+
+        answer = _answer(await _put_profile(account.device, {"email": other}))
+
+        _assert_password_refusal(answer, "CURRENT_PASSWORD_REQUIRED", "An email change to another address without current_password")
+        await _assert_nothing_written(account, "The refused email change")
+        print_success("✓ 400 CURRENT_PASSWORD_REQUIRED, the email unchanged")
