@@ -2822,10 +2822,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 - ✅ **IM-1 · `DonationPopupModal` sui ruoli** — basso (28 classi, `#ffffff`); origine IM, 16/10. Chiusa il 16/10 con
   l'OK di A, nel checkpoint IM 2: 28 → 0, e via da `app.css` le regole morte `html.dark .bg-libre-beige` e
-  `html.dark .text-libre-dark` (C4). Commit: quello del checkpoint IM 2.
+  `html.dark .text-libre-dark` (C4). Commit `8636a368f`.
   Dettagli: [piano IM](../Phase_1/10_colorSystem/IM-settingsColors/plan-phase00SettingsColors.prompt.md), «A7».
 - ✅ **IM-2 · Icona della fotocamera sul fondale dell'avatar** — minimo (`ProfileTab`, `text-white`); origine IM, 16/10.
-  Chiusa il 16/10 nel checkpoint IM 2: `text-lf-on-overlay`, ruolo di T da `f043c1b58`. Dettagli: piano IM, «A7».
+  Chiusa il 16/10, commit `8636a368f`: `text-lf-on-overlay`, ruolo di T da `f043c1b58`. Dettagli: piano IM, «A7».
 - **IM-3 · Famiglie di plugin di «Informazioni»** — basso (`AboutTab`: 4 card e 4 badge, 20 classi); origine IM, 16/10.
   Accenti categoriali (asset verde, cambi blu, import ambra, segnali viola) e i neutri delle loro card restano legacy
   (G3) finché non ci sono i ruoli categoriali; in scuro le card restano blu notte. Dettagli: piano IM, §5 «IM-5».

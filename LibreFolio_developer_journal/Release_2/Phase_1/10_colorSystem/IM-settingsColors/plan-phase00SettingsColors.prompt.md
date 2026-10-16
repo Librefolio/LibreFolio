@@ -250,9 +250,9 @@ a class you changed, every ternary you touched.
 | A2 · Test `GlobalSettingsTab.test.ts:937` (test-author) | ✅ 16/10 |
 | A3 · Lotti IM-1…IM-6 (sotto-agenti in parallelo; Donation all'OK di A) | ✅ 16/10 (Donation con l'OK di A, checkpoint 2) |
 | A4 · Rilettura dei diff e prove leggere | ✅ 16/10 |
-| A5 · Slot pesante | ⏳ in coda (dopo AF, G, L-20, W6) |
+| A5 · Slot pesante | ✅ 16/10, 12:24–13:06 su `53b6dd352`: tutto verde |
 | A6 · `--update`, backlog IM-n, checkpoint | ✅ checkpoint 1 = `b5abcbdaa`, base merge `d95d6236c` |
-| A7 · Fotocamera, `DonationPopupModal`, C4 | ✅ 16/10, checkpoint 2 mandato |
+| A7 · Fotocamera, `DonationPopupModal`, C4 | ✅ checkpoint 2 = `8636a368f`, base merge `53b6dd352` |
 
 ### A0 · Analisi ✅ 16/10
 
@@ -379,3 +379,55 @@ a class you changed, every ternary you touched.
 >   morte.
 > - Fra le 11:53 e le 11:57 la rete è caduta e il turno si è chiuso con errore. Le tre modifiche erano già su disco;
 >   ripreso alle 12:00 con lo stato verificato da `git status`.
+>
+> Il coordinatore l'ha committato come **`8636a368f`** (6 file; `app.css` controllato: solo le due regole morte) e ha
+> fatto la base merge con `be911db7e` (G-18, fix dello scanner di T): **`53b6dd352`**, `--check` pulito.
+
+### A5 · Slot pesante ✅ 16/10
+
+> **Note implementazione**: slot 1 della 1.3, assegnato dal coordinatore alle 12:24 con taglio alle 13:15 e nessun
+> passo nuovo dopo le 13:08. HEAD `53b6dd352` pulito, corsia `--test-port 6159` + `--data-dir /tmp/librefolio-r2-im`,
+> in serie con lo script `im_heavy_slot.sh` della cartella di sessione (log completi in `heavy/`). Due Playwright
+> worker erano permessi con carico < 35: alla partenza di ogni E2E il carico era fra 44 e 150, quindi sempre 1 worker.
+>
+> | Passo | Comando (`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`) | Esito | Durata | Carico |
+> |---|---|---|---|---|
+> | client API | `api sync` | 0 | 47 s | 32 |
+> | build | `server --test --build-only --port 6159 --data-dir /tmp/librefolio-r2-im` (frontend di debug, MkDocs, cache JS, nessun bind) | 0 | 7 min 25 s | 36→128 |
+> | tipi | `front check` | 0 errori, 0 avvisi | 60 s | 128 |
+> | Vitest | `test … front-utility component-unit` | 154 file, **4.027 test** verdi | 4 min 52 s | 119 |
+> | E2E | `test … front-utility settings` | **56/56** (con fx-chart-settings e plugin-settings, per il filtro di Playwright) | 7 min 19 s | 122 |
+> | E2E | `… front-utility scheduler` | **17/17** | 2 min 25 s | 132 |
+> | E2E | `… front-utility support-copy-and-go` | **16/16** | 2 min 43 s | 150 |
+> | E2E | `… front-utility image-crop "Avatar - Profile Settings"` | **6/6** | 1 min 12 s | 56 |
+> | E2E | `… front-user account-deletion` | **1/1** | 1 min 41 s | 48 |
+> | E2E | `… front-utility auth` | **34/34** | 4 min 18 s | 46 |
+> | E2E | `… front-utility changelog-locale` | **2/2** | 1 min 25 s | 116 |
+> | E2E | `… front-utility app-start-auth` | **3/3** | 55 s | 81 |
+> | E2E | `… front-utility onboarding-tour` | **10/10** | 1 min 33 s | 74 |
+> | E2E | `… front-utility email-verification` | **5/5** | 58 s | 48 |
+> | E2E | `… front-utility document-title` | **22/22** | 3 min 16 s | 45 |
+>
+> Totale E2E: **172 test, 0 rossi, 0 flaky, 0 saltati**; slot finito alle 13:06:35 (2.509 s). Porta 6159 libera
+> (`lsof -nP -iTCP:6159 -sTCP:LISTEN` vuoto), worktree pulito. Artefatti ignorati da git: build del frontend, sito
+> MkDocs, client API generato, log e snapshot del DB del runner (cartella dei log di prova), dati in
+> `/tmp/librefolio-r2-im` (29 MB).
+>
+> **⚠️ Fuori pista**: nessuno. Il carico alto (fino a 150, altre corsie) ha allungato la build, non ha dato rossi.
+
+## Chiusura
+
+- **Area IM (16/10, dopo `8636a368f`):** m1 1.048 → **54**, m2 6 → **0**. Restano solo elementi lasciati di proposito,
+  ognuno con la sua voce nel backlog:
+  - `SettingToggle` 18: interruttore, lotto unico di T;
+  - `supportLinks.ts` 14 e il bottone «copia» di `SocialShareModal` 1: marchi dei social (IM-5);
+  - `AboutTab` 21: famiglie di plugin categoriali (IM-3) e il cuore (IM-4).
+- **Catene:** il badge del provider nel log dello scheduler segue `PROVIDER_COLORS` (IM-6, fuori area).
+- **Definition of done:**
+  - file dei lotti senza classi legacy oltre i «resta» dichiarati;
+  - `--check` e gate verdi, `front check` 0/0, Vitest e E2E dei lotti verdi;
+  - porta libera, voci IM-n per i residui.
+- **Resta da fare, fuori da IM:**
+  - la revisione dell'aspetto del developer, dal foglio di confronto della galleria (D-T21), con i «da rivedere» del §5
+    e di A3;
+  - la galleria di fine giornata di G.
