@@ -56,6 +56,24 @@ Lot A6a (plan phase01Accounts §A6.1) adds:
     ``ACCOUNT_PROTECTED``, changing nothing; ``GET /users`` and ``PATCH`` answer ``protected: bool`` (a reason exists).
     Today it protects nobody: every account of the lane is ``protected: false``.
 
+Lot A7b (plan phase01Accounts, «A7b — Analisi e contratto», contract C5, its backend part) adds:
+
+13. ``pending_setup: bool`` on every account ``GET /users`` lists and ``PATCH /users/{user_id}`` answers, false by
+    default in ``AdminUserRead``. True exactly for an account waiting for its F02 setup, by the notion of
+    ``registration_service.pending_admin_filter()`` — the one ``user_usage`` counts (A7a, C4) and ``pending_admin``
+    reads (BOOT-016, ``test_admin_bootstrap.py``): inactive, with at least one ``admin_setup`` token and none of them
+    consumed; those tokens live, expired or revoked alike, the account an administrator or not. False for every other
+    account: an active one, its setup link live or spent; an inactive one whose setup link was spent (deactivated after
+    its setup); an inactive one without a setup link, with no token or with a token of another purpose; one waiting for
+    its email verification, for which ``holds_place`` stays workstream E's own flag — false, in turn, for the pending
+    administrator. The ``PATCH`` answer carries the flag of the account as it returns it, the one ``GET /users`` lists
+    right after. Nothing else changes in either answer: an account is exactly its nine fields, ``usage`` counts as before.
+14. ``PATCH /users/{user_id}`` refuses to activate that account (decision of the coordinator, 16/10): a body with
+    ``is_active: true`` — alone, or with ``is_superuser`` either way — is 409 ``PENDING_SETUP``, ``detail: {error_code,
+    message}``, and changes nothing, all or nothing: its password is a secret nobody knows, and the way in is a setup
+    link. Its link live or expired, alike. Every other inactive account is activated as before, and a ``PATCH`` that
+    leaves the pending administrator waiting still answers 200.
+
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` gives ``ACCOUNT_DISABLED`` and
 ``test_registration_api.py`` reads; the administrator's ``USER_LIMIT_REACHED`` carries ``limit``, ``used`` and
 ``billing_url`` in the same ``detail``.
@@ -89,12 +107,24 @@ process, once for the module, then copied per test —: the models do not declar
 by a spy. Assumed: the routes reach the hook as ``user_service.account_protection`` and the report cleanup as
 ``brim_provider.delete_files_for_brokers`` or a name ``user_service`` imported, the two names the spy replaces.
 
+A7b's cases run in-process only, on the private instance of ``create_all``. A pending administrator is an inactive
+superuser that ``pending_admin``, ``issue_setup_link`` and ``user_usage`` read: in the lane's database every concurrent
+unit would see it, and a run killed mid-test would leave it behind (the reason ``test_admin_setup_api.py`` gives). There
+the bootstrap itself makes it — ``run_admin_bootstrap`` on the instance still empty, the configuration handed to the
+service with a token the test holds, so that ``POST /auth/setup`` can spend it; run the link's lifetime and a minute
+ago when the case wants that link expired —, and every other state of a setup link is a row and tokens of the token
+service, an expired link issued the same way, never waited for. Its cleanup is the private file's. On the lane, the
+field is read by UADM-003, UADM-007 and UADM-008: false on every account they own.
+
 The unit is therefore write-scoped (the ``api`` category's default), with no ``exclusive_because``. bcrypt runs at its
 lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``, as in ``test_registration_api.py``); the lane's server
 keeps its own.
 
 Red until A5a: the routes do not exist. Red until A6a: the two routes UADM-001 now also covers, UADM-040 to UADM-043,
 UADM-050 to UADM-054, and the ``protected`` field UADM-003, UADM-007, UADM-008 and UADM-028 now expect on every account.
+Red until A7b: UADM-060 to UADM-065, on the missing ``pending_setup`` and the missing refusal; and UADM-003, UADM-007,
+UADM-008 and UADM-028 again, whose accounts must now be exactly nine fields. UADM-066 and UADM-067 are the guards of
+UADM-065, green today: what the refusal must not reach.
 """
 
 import ast
@@ -110,6 +140,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from secrets import token_urlsafe
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
@@ -128,14 +159,17 @@ from backend.app.api.v1 import auth as auth_api
 from backend.app.api.v1 import settings as settings_api
 from backend.app.api.v1 import users as users_api
 from backend.app.config import API_V1_PREFIX, get_settings
+from backend.app.config.accounts import AdminBootstrapConfig
 from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
 from backend.app.db.models import AccountToken, AccountTokenPurpose, Broker, BrokerUserAccess, GlobalSetting, OnboardingFlow, Transaction, TransactionType, User, UserOnboardingProgress, UserRole
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.brokers import BRDeleteItem
-from backend.app.services.accounts import auth_service, user_service
+from backend.app.schemas.users import AdminUserRead
+from backend.app.services.accounts import auth_service, registration_service, user_service
+from backend.app.services.accounts.bootstrap_admin_service import BootstrapAction, run_admin_bootstrap
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
-from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, consume_token, hash_token, issue_token
+from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus, consume_token, hash_token, inspect_token, issue_token, revoke_tokens
 from backend.app.services.brim import brim_provider
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
@@ -151,6 +185,8 @@ COOKIE = auth_api.SESSION_COOKIE_NAME
 
 INVITE = AccountTokenPurpose.INVITE
 PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
+ADMIN_SETUP = AccountTokenPurpose.ADMIN_SETUP
+EMAIL_VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
 
 REGISTRATION_VARIABLE = "LIBREFOLIO_REGISTRATION"
 MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
@@ -164,7 +200,7 @@ PUBLIC_URL = "https://librefolio.example.test/base/"
 PUBLIC_ORIGIN = "https://librefolio.example.test/base"
 BILLING_LINK = "https://billing.example.test/plans/family"
 
-USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place"})
+USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place", "pending_setup"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
 USAGE_KEYS = frozenset({"used", "max_users", "billing_url"})
 ISSUED_INVITE_KEYS = frozenset({"invite", "token", "path", "url"})
@@ -195,6 +231,13 @@ PROTECTION_REASON = "the paying administrator of this managed instance"
 FILES_REMOVED = 2
 TRANSACTION_DATE = date(2026, 1, 5)
 NOTHING_WAS_DELETED = "nothing was deleted"
+
+# Lot A7b: the pending administrator in the Users tab (contract C5).
+#: The F02 administrator the configuration of a private instance names (LIBREFOLIO_ADMIN_USERNAME, LIBREFOLIO_ADMIN_EMAIL), handed to the bootstrap.
+F02_USERNAME = "f02_admin"
+F02_EMAIL = "f02-admin@example.com"
+#: The password the pending administrator chooses through its setup link: it meets the rules (decision 37).
+SETUP_PASSWORD = "Setup-Admin-Pass-2026"
 
 
 @pytest.fixture(scope="module")
@@ -295,15 +338,16 @@ def _comparable(item: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     return {key: _instant(value) if key.endswith("_at") else value for key, value in item.items()}
 
 
-def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False) -> list[str]:
-    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its eight fields, with these values.
+def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False, pending_setup: bool = False) -> list[str]:
+    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its nine fields, with these values.
 
     ``protected`` is False unless the test replaced the hook: today the hook protects nobody (lot A6a).
-    ``holds_place`` is workstream E's flag, true only for an inactive account whose live verification link holds its place (``api email-verification-hooks``, EVH-006…012); no account here waits for one, the option being off.
+    ``holds_place`` is workstream E's flag, true only for an inactive account whose live verification link holds its place (``api email-verification-hooks``, EVH-006…012); false unless the case wrote such a link (UADM-060).
+    ``pending_setup`` is lot A7b's flag (C5), true only for the account waiting for its F02 setup (UADM-060 to UADM-064); false unless the case made one.
     """
     if not isinstance(item, dict) or set(item) != USER_ITEM_KEYS:
         return [f"{account.username}: an account must be exactly {sorted(USER_ITEM_KEYS)}, no hash and no secret: {item}"]
-    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected, "holds_place": holds_place}
+    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected, "holds_place": holds_place, "pending_setup": pending_setup}
     found = {key: item[key] for key in expected}
     violations = [] if found == expected else [f"{account.username}: expected {expected}, got {found}"]
     _expect(violations, _instant(item["created_at"]) is not None, f"{account.username}: created_at is not a timestamp: {item['created_at']!r}")
@@ -2107,3 +2151,357 @@ class TestAccountDeletionInProcess:
         _expect(violations, calls == [], f"a failed deletion must touch no report file: {calls}")
         assert not violations, f"A technical failure must delete nothing:{_verdict(violations)}"
         print_success("500, nothing deleted, no file touched")
+
+
+# ============================================================================
+# IN-PROCESS: THE PENDING ADMINISTRATOR IN THE USERS TAB (lot A7b, C5)
+# ============================================================================
+
+
+#: What a token in each state of ``_private_link`` reads as, once the scene is built.
+LINK_STATUSES = {"live": TokenStatus.VALID, "expired": TokenStatus.EXPIRED, "revoked": TokenStatus.REVOKED, "consumed": TokenStatus.CONSUMED}
+
+
+@dataclass(frozen=True)
+class _PendingAdmin:
+    """The F02 administrator the bootstrap made on a private instance, and the token of its setup link (live, unless the case asked for it expired)."""
+
+    account: _Account
+    token: str
+
+
+async def _bootstrap_pending_admin(private: _Private, *, expired: bool = False) -> _PendingAdmin:
+    """The pending administrator F02 makes: ``run_admin_bootstrap`` on the still empty private instance, for F02_USERNAME and F02_EMAIL, the token of its setup link given by the configuration so that the test holds the link; committed by the service. ``expired``: the bootstrap ran the link's lifetime and a minute ago, so the link has expired — never waited for — and the account waits all the same.
+
+    Run it first: the bootstrap creates its administrator on an instance without accounts only. It ends on what it
+    promises — ``CREATED``, the account an inactive superuser, the token an ``admin_setup`` link of that account, live or
+    expired as asked. ``account.password`` is the one its setup would choose, SETUP_PASSWORD; until then nobody knows it.
+    """
+    token = token_urlsafe(32)
+    moment = utcnow() - DEFAULT_TTL[ADMIN_SETUP] - timedelta(minutes=1) if expired else utcnow()
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        result = await run_admin_bootstrap(session, AdminBootstrapConfig(email=F02_EMAIL, username=F02_USERNAME, token=token), now=moment)
+    assert result.action == BootstrapAction.CREATED and result.user_id is not None, f"Setup: on an empty instance the bootstrap creates the pending administrator: {result!r}"
+    async with AsyncSession(private.engine) as session:
+        link = await inspect_token(session, token, ADMIN_SETUP)
+    owner = link.record.user_id if link.record is not None else None
+    expected = TokenStatus.EXPIRED if expired else TokenStatus.VALID
+    assert (link.status, owner) == (expected, result.user_id), f"Setup: the configuration's token must be a setup link of the new account {result.user_id}, {expected.value}: {link.status.value}, owner {owner}"
+    flags = (await _private_user(private, result.user_id))[:2]
+    assert flags == (False, True), f"Setup: the pending administrator is an inactive superuser: (is_active, is_superuser) {flags}"
+    return _PendingAdmin(account=_Account(user_id=result.user_id, username=F02_USERNAME, email=F02_EMAIL, password=SETUP_PASSWORD), token=token)
+
+
+async def _private_link(private: _Private, user_id: int, purpose: AccountTokenPurpose, state: str) -> None:
+    """A token of ``purpose`` for the account, through the token service: ``live`` (issued now), ``expired`` (issued its lifetime and a minute ago, never waited for), ``revoked``, or ``consumed`` by the account itself, as its setup or a reset spends it.
+
+    It ends on what it promises: the token reads as that state (LINK_STATUSES).
+    """
+    issued_at = utcnow() - DEFAULT_TTL[purpose] - timedelta(minutes=1) if state == "expired" else utcnow()
+    issued = await _private_issue(private, purpose, user_id=user_id, now=issued_at)
+    async with AsyncSession(private.engine) as session:
+        if state == "revoked":
+            await revoke_tokens(session, token_id=issued.record.id)
+        elif state == "consumed":
+            await consume_token(session, issued.token, purpose, consumed_by_user_id=user_id)
+        await session.commit()
+        status = (await inspect_token(session, issued.token, purpose)).status
+    assert status == LINK_STATUSES[state], f"Setup: a {state} {purpose.value} token must read {LINK_STATUSES[state].value}, it reads {status.value}"
+
+
+async def _pending_admin_ids(private: _Private) -> set[int]:
+    """The accounts ``registration_service.pending_admin_filter()`` selects in the private database: A7a's notion of the account waiting for its setup, the one C5 reuses."""
+    async with AsyncSession(private.engine) as session:
+        return set((await session.execute(select(User.id).where(*registration_service.pending_admin_filter()))).scalars().all())
+
+
+async def _private_listed(private: _Private, cookie: str) -> dict[int, dict[str, Any]]:
+    """GET /users as this administrator: the listed accounts by id, after a 200."""
+    response = await _call(private, "GET", "/users", cookie=cookie)
+    assert response.status_code == 200, f"GET /users as an administrator: {response.status_code} {response.text}"
+    return {item["id"]: item for item in response.json()["items"]}
+
+
+async def _private_view(private: _Private, cookie: str, user_id: int) -> tuple[Optional[dict[str, Any]], Any]:
+    """GET /users as this administrator: the account's item, found by id (None when absent), and the usage."""
+    response = await _call(private, "GET", "/users", cookie=cookie)
+    assert response.status_code == 200, f"GET /users as an administrator: {response.status_code} {response.text}"
+    body = response.json()
+    return next((item for item in body["items"] if item.get("id") == user_id), None), body.get("usage")
+
+
+async def _private_snapshot(private: _Private) -> dict[str, list[dict[str, Any]]]:
+    """Every row of ``users`` and ``account_tokens`` in the private database, as raw column values read from the tables: what a refused PATCH may not change. The test owns them all."""
+    async with AsyncSession(private.engine) as session:
+        users = (await session.execute(select(User.__table__).order_by(User.__table__.c.id))).mappings().all()
+        tokens = (await session.execute(select(AccountToken.__table__).order_by(AccountToken.__table__.c.id))).mappings().all()
+    return {"users": [dict(row) for row in users], "account_tokens": [dict(row) for row in tokens]}
+
+
+def _snapshot_changes(before: dict[str, list[dict[str, Any]]], after: dict[str, list[dict[str, Any]]]) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    """The rows of each table that are not the same before and after, as ``{table: {"before": […], "after": […]}}``; empty when nothing changed."""
+    changes: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    for table in sorted(before.keys() | after.keys()):
+        gone = [row for row in before.get(table, []) if row not in after.get(table, [])]
+        new = [row for row in after.get(table, []) if row not in before.get(table, [])]
+        if gone or new:
+            changes[table] = {"before": gone, "after": new}
+    return changes
+
+
+@dataclass(frozen=True)
+class _SetupScene:
+    """An account of the private instance: whether it is active and an administrator, its tokens as ``(purpose, state)`` in the order they are issued (``_private_link``), and the ``pending_setup`` C5 expects for it."""
+
+    active: bool
+    superuser: bool
+    tokens: tuple[tuple[AccountTokenPurpose, str], ...]
+    pending_setup: bool
+
+
+#: The scenes of BOOT-016 (``pending_admin``, ``test_admin_bootstrap.py``) as accounts of the Users tab, and three more:
+#: a re-armed link (what ``./dev.py user setup-link`` leaves), an account no longer an administrator, and an inactive
+#: administrator without a setup link — with no token, or with a reset link.
+PENDING_SETUP_SCENES = [
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "live"),), pending_setup=True), id="inactive-with-a-live-setup-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "expired"),), pending_setup=True), id="inactive-with-an-expired-setup-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "revoked"),), pending_setup=True), id="inactive-with-a-revoked-setup-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "revoked"), (ADMIN_SETUP, "live")), pending_setup=True), id="inactive-re-armed"),
+    pytest.param(_SetupScene(active=False, superuser=False, tokens=((ADMIN_SETUP, "live"),), pending_setup=True), id="inactive-not-an-administrator-with-a-live-setup-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "consumed"),), pending_setup=False), id="inactive-with-a-consumed-setup-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "consumed"), (ADMIN_SETUP, "live")), pending_setup=False), id="inactive-with-a-consumed-and-a-live-setup-link"),
+    pytest.param(_SetupScene(active=True, superuser=True, tokens=((ADMIN_SETUP, "live"),), pending_setup=False), id="active-with-a-live-setup-link"),
+    pytest.param(_SetupScene(active=True, superuser=True, tokens=((ADMIN_SETUP, "consumed"), (ADMIN_SETUP, "revoked")), pending_setup=False), id="active-after-its-setup"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((PASSWORD_RESET, "live"),), pending_setup=False), id="inactive-administrator-with-a-reset-link-only"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=(), pending_setup=False), id="inactive-administrator-without-any-link"),
+]
+
+#: What an administrator may do to the pending administrator that leaves it waiting for its setup, with whether it is an administrator afterwards.
+PENDING_ADMIN_CHANGES = [
+    pytest.param({"is_superuser": False}, False, id="demoted"),
+    pytest.param({"is_active": False}, True, id="deactivated-while-already-inactive"),
+]
+
+#: The detail of the refusal to activate the pending administrator carries exactly these keys (UADM-065); the wording of its message is not pinned.
+PENDING_SETUP_KEYS = frozenset({"error_code", "message"})
+
+#: PATCH bodies that would activate the pending administrator: refused whole, whatever else they ask.
+ACTIVATIONS = [
+    pytest.param({"is_active": True}, id="activate"),
+    pytest.param({"is_active": True, "is_superuser": True}, id="activate-as-an-administrator"),
+    pytest.param({"is_active": True, "is_superuser": False}, id="activate-and-demote"),
+]
+
+#: The pending administrator's setup link, live or expired: the account waits all the same (pending_admin_filter()).
+PENDING_LINKS = [pytest.param(False, id="its-link-live"), pytest.param(True, id="its-link-expired")]
+
+#: Inactive accounts that do not wait for a setup: an ordinary member, an administrator without any link, and an
+#: administrator whose setup link was spent — deactivated after its setup, its password known.
+NOT_PENDING_INACTIVE = [
+    pytest.param(_SetupScene(active=False, superuser=False, tokens=(), pending_setup=False), id="a-member-without-any-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=(), pending_setup=False), id="an-administrator-without-any-link"),
+    pytest.param(_SetupScene(active=False, superuser=True, tokens=((ADMIN_SETUP, "consumed"),), pending_setup=False), id="an-administrator-whose-setup-link-was-spent"),
+]
+
+
+class TestThePendingAdministratorInTheUsersTab:
+    """Lot A7b, C5: the Users tab tells the account waiting for its F02 setup from a deactivated one, and the PATCH refuses to activate it. In-process only: a pending administrator never enters the lane's database."""
+
+    @pytest.mark.asyncio
+    async def test_the_pending_administrator_is_listed_pending_setup_and_nobody_else(self, private: _Private) -> None:
+        """UADM-060: the bootstrap made the pending administrator; root (the caller), a member, a deactivated account and an account waiting for its email verification (a live verification link, written directly) are there too. GET /users → pending_setup true for the pending administrator only, false for every other account; holds_place true for the waiting account only — false for the pending administrator, whose place another rule counts —; each account exactly its nine fields; usage as before: used 4 (root, the member, the waiting account, the pending administrator), no limit, no billing link."""
+        print_section("UADM-060: GET /users with the pending administrator")
+        pending = await _bootstrap_pending_admin(private)
+        root, cookie = await _admin(private)
+        member = await _add_user(private, "member")
+        dormant = await _add_user(private, "dormant", active=False)
+        waiting = await _add_user(private, "waiting", active=False)
+        await _private_link(private, waiting.user_id, EMAIL_VERIFICATION, "live")
+
+        response = await _call(private, "GET", "/users", cookie=cookie)
+
+        assert response.status_code == 200, f"GET /users as an administrator: {response.status_code} {response.text}"
+        body = response.json()
+        items = {item["id"]: item for item in body["items"]}
+        # (account, is_active, is_superuser, holds_place, pending_setup)
+        expected = [(pending.account, False, True, False, True), (root, True, True, False, False), (member, True, False, False, False), (dormant, False, False, False, False), (waiting, False, False, True, False)]
+        flags = {item.get("username"): item.get("pending_setup", "<missing>") for item in body["items"]}
+        violations: list[str] = []
+        _expect(violations, sorted(items) == sorted(row[0].user_id for row in expected), f"GET /users must list every account of the instance: {sorted(items)}")
+        _expect(violations, flags == {F02_USERNAME: True, "root": False, "member": False, "dormant": False, "waiting": False}, f"pending_setup must be true for the pending administrator only: {flags}")
+        for account, active, superuser, holds_place, pending_setup in expected:
+            violations += _user_item_violations(items.get(account.user_id), account, active=active, superuser=superuser, holds_place=holds_place, pending_setup=pending_setup)
+        _expect(violations, body["usage"] == {"used": 4, "max_users": None, "billing_url": None}, f"usage must count as before — root, the member, the waiting account and the pending administrator: {body['usage']}")
+        assert not violations, f"GET /users must tell the pending administrator apart, and only it:{_verdict(violations)}"
+        print_success("pending_setup true for the pending administrator only; holds_place its own flag; usage unchanged")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scene", PENDING_SETUP_SCENES)
+    async def test_pending_setup_is_the_notion_of_pending_admin_filter(self, private: _Private, scene: _SetupScene) -> None:
+        """UADM-061: an account in one state of its setup links, beside root, the caller. GET /users → its pending_setup is true exactly when it is inactive with an admin_setup token and none of them consumed — live, expired or revoked alike, an administrator or not —: the notion of registration_service.pending_admin_filter(), which user_usage counts. Root's is false; both are exactly their nine fields.
+
+        Premise first: the filter selects the account exactly when the scene says it waits. If it no longer does, A7a's
+        notion has moved, and this expectation moves with it, not the flag.
+        """
+        print_section(f"UADM-061: pending_setup of an account active={scene.active}, administrator={scene.superuser}, tokens {[(purpose.value, state) for purpose, state in scene.tokens]}")
+        root, cookie = await _admin(private)
+        subject = await _add_user(private, "subject", admin=scene.superuser, active=scene.active)
+        for purpose, state in scene.tokens:
+            await _private_link(private, subject.user_id, purpose, state)
+        selected = subject.user_id in await _pending_admin_ids(private)
+        assert selected is scene.pending_setup, f"premise: pending_admin_filter() selects this account: {selected}; C5 expects pending_setup {scene.pending_setup} because it is the same notion — if the filter moved, this expectation moves with it"
+
+        items = await _private_listed(private, cookie)
+
+        violations = _user_item_violations(items.get(subject.user_id), subject, active=scene.active, superuser=scene.superuser, pending_setup=scene.pending_setup)
+        violations += _user_item_violations(items.get(root.user_id), root, active=True, superuser=True)
+        assert not violations, f"pending_setup must be the notion of pending_admin_filter():{_verdict(violations)}"
+        print_success(f"pending_setup {scene.pending_setup}, as the filter says; root false")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("change", "superuser_after"), PENDING_ADMIN_CHANGES)
+    async def test_the_patch_answer_carries_pending_setup_as_the_list_does(self, private: _Private, change: dict[str, bool], superuser_after: bool) -> None:
+        """UADM-062: PATCH /users/{the pending administrator} with a change that leaves it waiting for its setup — a demotion, or {is_active: false} on the account already inactive — → 200, the account exactly its nine fields, still inactive, pending_setup true. The answer replaces its row in the Users tab: it is the item GET /users lists right after.
+
+        Premise: after the change the filter still selects the account. The flag is the one of the account the PATCH
+        returns, as ``holds_place`` is.
+        """
+        print_section(f"UADM-062: PATCH {change} on the pending administrator")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+
+        response = await _call(private, "PATCH", f"/users/{pending.account.user_id}", cookie=cookie, json=change)
+
+        assert response.status_code == 200, f"PATCH {change} on the pending administrator: expected 200, got {response.status_code} {response.text}"
+        assert pending.account.user_id in await _pending_admin_ids(private), f"premise: after {change} the account still waits for its setup"
+        listed = (await _private_listed(private, cookie)).get(pending.account.user_id)
+        answer = response.json()
+        violations = _user_item_violations(answer, pending.account, active=False, superuser=superuser_after, pending_setup=True)
+        _expect(violations, _comparable(answer) == _comparable(listed), f"the answer must be the account as GET /users lists it right after: answered {answer}, listed {listed}")
+        assert not violations, f"The PATCH answer must carry pending_setup as the list does:{_verdict(violations)}"
+        print_success("200, pending_setup true, as the list says")
+
+    @pytest.mark.asyncio
+    async def test_once_set_up_the_administrator_is_pending_no_more_even_deactivated(self, private: _Private) -> None:
+        """UADM-063: the pending administrator, listed with pending_setup true, spends its setup link through POST /auth/setup (200): GET /users then lists it active, pending_setup false. Deactivated afterwards by root — PATCH {is_active: false} → 200 —, it is an ordinary inactive account, whose password is known: the answer, and the list after it, say pending_setup false.
+
+        Premise: once its link was spent, the filter no longer selects the account.
+        """
+        print_section("UADM-063: set up, then deactivated — pending no more")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        before = (await _private_listed(private, cookie)).get(user_id)
+
+        setup = await _call(private, "POST", "/auth/setup", json={"token": pending.token, "new_password": SETUP_PASSWORD})
+        assert setup.status_code == 200, f"Setup: POST /auth/setup with the live link: expected 200, got {setup.status_code} {setup.text}"
+        set_up = (await _private_listed(private, cookie)).get(user_id)
+        off = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json={"is_active": False})
+        assert off.status_code == 200, f"PATCH {{is_active: false}} after the setup: expected 200, got {off.status_code} {off.text}"
+        listed_off = (await _private_listed(private, cookie)).get(user_id)
+
+        assert user_id not in await _pending_admin_ids(private), "premise: once its link was spent, pending_admin_filter() no longer selects the account"
+        answer = off.json()
+        violations = _user_item_violations(before, pending.account, active=False, superuser=True, pending_setup=True)
+        violations += _user_item_violations(set_up, pending.account, active=True, superuser=True)
+        violations += _user_item_violations(answer, pending.account, active=False, superuser=True)
+        _expect(violations, _comparable(answer) == _comparable(listed_off), f"the answer must be the account as GET /users lists it right after: answered {answer}, listed {listed_off}")
+        assert not violations, f"An administrator set up is pending no more, even deactivated:{_verdict(violations)}"
+        print_success("pending before its setup; not after it, nor after a deactivation")
+
+    def test_admin_user_read_declares_pending_setup_false_by_default(self) -> None:
+        """UADM-064: AdminUserRead declares ``pending_setup: bool``, false by default — an AdminUserRead built without it is not pending —, and nothing else changes: its fields are exactly the nine an account is listed with."""
+        print_section("UADM-064: AdminUserRead.pending_setup")
+        declared = AdminUserRead.model_fields.get("pending_setup")
+        assert declared is not None, f"AdminUserRead must declare pending_setup (lot A7b, C5); it declares {sorted(AdminUserRead.model_fields)}"
+        built = AdminUserRead(id=1, username="built", email="built@example.com", is_active=False, is_superuser=True, created_at=utcnow(), protected=False)
+
+        violations: list[str] = []
+        _expect(violations, declared.annotation is bool, f"pending_setup must be a bool: {declared.annotation!r}")
+        _expect(violations, not declared.is_required() and declared.default is False, f"pending_setup must default to false: required {declared.is_required()}, default {declared.default!r}")
+        _expect(violations, built.pending_setup is False, f"an account built without it must not be pending: {built.pending_setup!r}")
+        _expect(violations, set(AdminUserRead.model_fields) == USER_ITEM_KEYS, f"AdminUserRead must be exactly {sorted(USER_ITEM_KEYS)}: {sorted(AdminUserRead.model_fields)}")
+        assert not violations, f"AdminUserRead.pending_setup broke its contract:{_verdict(violations)}"
+        print_success("a bool, false by default, nine fields")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("expired", PENDING_LINKS)
+    @pytest.mark.parametrize("change", ACTIVATIONS)
+    async def test_activating_the_pending_administrator_is_refused_and_changes_nothing(self, private: _Private, change: dict[str, bool], expired: bool) -> None:
+        """UADM-065: PATCH /users/{the pending administrator} with a body that activates it — {is_active: true}, alone or with is_superuser true or false — → 409, detail exactly {error_code: PENDING_SETUP, message}, the message a sentence whose wording is not pinned. All or nothing, as the route's other refusals: nothing changes — the account still inactive and an administrator, its session version and password hash as they were (every row of users and account_tokens as it was); its setup link neither consumed nor revoked; its row in GET /users and the usage identical. Its link live or expired: it waits all the same (pending_admin_filter()), its password a secret nobody knows; the way in is a setup link, not an activation.
+
+        Premise: the filter selects the account. No LIBREFOLIO_MAX_USERS in this process: the limit cannot refuse first.
+        """
+        print_section(f"UADM-065: PATCH {change} on the pending administrator, its link {'expired' if expired else 'live'}")
+        pending = await _bootstrap_pending_admin(private, expired=expired)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+        assert user_id in await _pending_admin_ids(private), "premise: pending_admin_filter() selects the pending administrator"
+        listed_before, usage_before = await _private_view(private, cookie, user_id)
+        assert listed_before is not None, "Presence barrier: GET /users must list the pending administrator, or «its row identical» below proves nothing"
+        before = await _private_snapshot(private)
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=change)
+
+        after = await _private_snapshot(private)
+        listed_after, usage_after = await _private_view(private, cookie, user_id)
+        detail = _detail(response)
+        account = next(row for row in after["users"] if row["id"] == user_id)
+        links = [(row["id"], row["consumed_at"], row["revoked_at"]) for row in after["account_tokens"] if row["user_id"] == user_id and row["purpose"] == ADMIN_SETUP]
+        changes = _snapshot_changes(before, after)
+        violations: list[str] = []
+        _expect(violations, _refusal(response) == (409, "PENDING_SETUP"), f"expected 409 PENDING_SETUP, got {response.status_code} {response.text}")
+        _expect(violations, set(detail) == PENDING_SETUP_KEYS and isinstance(detail.get("message"), str) and detail["message"].strip() != "", f"detail must be exactly {sorted(PENDING_SETUP_KEYS)}, the message a sentence: {detail}")
+        _expect(violations, not account["is_active"], f"the pending administrator must still be inactive: is_active {account['is_active']!r}")
+        _expect(violations, links != [] and all(consumed is None and revoked is None for _, consumed, revoked in links), f"its setup link must be neither consumed nor revoked: (id, consumed_at, revoked_at) {links}")
+        _expect(violations, changes == {}, f"a refused PATCH must change nothing, all or nothing — rows that changed: {changes}")
+        _expect(violations, (_comparable(listed_after), usage_after) == (_comparable(listed_before), usage_before), f"its row in GET /users and the usage must be identical: before {listed_before} {usage_before}, after {listed_after} {usage_after}")
+        assert not violations, f"Activating the pending administrator must be refused, and change nothing:{_verdict(violations)}"
+        print_success("409 PENDING_SETUP, nothing changed")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scene", NOT_PENDING_INACTIVE)
+    async def test_an_inactive_account_that_does_not_wait_for_its_setup_is_still_activated(self, private: _Private, scene: _SetupScene) -> None:
+        """UADM-066, guard of UADM-065 (green today): the pending administrator waits on the instance, and PATCH {is_active: true} on another inactive account, which does not wait for its setup — an ordinary member, an administrator without any link, an administrator whose setup link was spent (deactivated after its setup) — → 200, active in the answer and in the database, an administrator or not as before. The refusal is the pending administrator's alone: not the instance's while one waits, not every inactive administrator's, not every account that ever had a setup link.
+
+        Premise: the filter selects the pending administrator, and only it.
+        """
+        print_section(f"UADM-066: PATCH {{is_active: true}} on an inactive account that does not wait, administrator={scene.superuser}, tokens {[(purpose.value, state) for purpose, state in scene.tokens]}")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        subject = await _add_user(private, "subject", admin=scene.superuser, active=False)
+        for purpose, state in scene.tokens:
+            await _private_link(private, subject.user_id, purpose, state)
+        assert await _pending_admin_ids(private) == {pending.account.user_id}, "premise: pending_admin_filter() selects the pending administrator, and only it"
+
+        response = await _call(private, "PATCH", f"/users/{subject.user_id}", cookie=cookie, json={"is_active": True})
+
+        assert response.status_code == 200, f"PATCH {{is_active: true}} on an inactive account that does not wait for its setup: expected 200, got {response.status_code} {response.text}"
+        answer = response.json()
+        state = (await _private_user(private, subject.user_id))[:2]
+        violations: list[str] = []
+        _expect(violations, (answer.get("is_active"), answer.get("is_superuser")) == (True, scene.superuser), f"the answer must be the account active, is_superuser {scene.superuser}: {answer}")
+        _expect(violations, state == (True, scene.superuser), f"the account must be active in the database, is_superuser {scene.superuser}: (is_active, is_superuser) {state}")
+        assert not violations, f"An inactive account that does not wait for its setup must still be activated:{_verdict(violations)}"
+        print_success("200, active")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("change", "superuser_after"), PENDING_ADMIN_CHANGES)
+    async def test_a_patch_that_leaves_the_pending_administrator_waiting_still_answers_200(self, private: _Private, change: dict[str, bool], superuser_after: bool) -> None:
+        """UADM-067, guard of UADM-065 (green today): UADM-062's PATCHes on the pending administrator — a demotion, {is_active: false} on the account already inactive — still answer 200: only an activation is refused, not every change to the pending administrator, nor every body that names is_active. The answer and the database say inactive, an administrator or not as asked, and the account still waits: the filter selects it. Its pending_setup is UADM-062's to read (red until A7b): here only the status and the two states."""
+        print_section(f"UADM-067: PATCH {change} on the pending administrator still answers 200")
+        pending = await _bootstrap_pending_admin(private)
+        _, cookie = await _admin(private)
+        user_id = pending.account.user_id
+
+        response = await _call(private, "PATCH", f"/users/{user_id}", cookie=cookie, json=change)
+
+        assert response.status_code == 200, f"PATCH {change} leaves the pending administrator waiting: expected 200, got {response.status_code} {response.text}"
+        answer = response.json()
+        state = (await _private_user(private, user_id))[:2]
+        violations: list[str] = []
+        _expect(violations, (answer.get("is_active"), answer.get("is_superuser")) == (False, superuser_after), f"the answer must be the account inactive, is_superuser {superuser_after}: {answer}")
+        _expect(violations, state == (False, superuser_after), f"in the database: (is_active, is_superuser) {state}, expected {(False, superuser_after)}")
+        _expect(violations, user_id in await _pending_admin_ids(private), "the account must still wait for its setup: pending_admin_filter() no longer selects it")
+        assert not violations, f"A PATCH that leaves the pending administrator waiting must still go through:{_verdict(violations)}"
+        print_success("200, still waiting")
