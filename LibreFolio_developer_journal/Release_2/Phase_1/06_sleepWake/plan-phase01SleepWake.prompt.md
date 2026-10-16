@@ -29,9 +29,9 @@
 | Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, `8b2d4782d`); **Z2b ✅ entrato** (treno 88, `812ca49cc`); decisioni notturne N-Z2b-1…6 «da rivedere» |
 | Z3 | Scheduler: recupero immediato al ritorno e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ✅ 16/10: commit `a4da204b4` e `70ccbeadc` (diagramma), prove d'ingresso verdi; decisioni D-Z3-1…4 «da rivedere» |
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ entrato (treno 77, `2980e2a00`); decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi |
-| Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
+| Z5 | «Aggiornamento prezzi…» | ✅ entrato con Z-13 (merge in dev `12cd3c2e0`, 16/10): commit `3b016dd4e` (journal `ac52425bc`, `09e490057`), Z-13 `9d19c2093` (journal `9d95afc85`), base aggiornata `41b44fb64`; Z-13b per Y11 nel checkpoint successivo; N-Z5-1…5 «da rivedere» |
 | Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
-| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ entrato** (treno 85, `e5e2595e7`; N-Z7b-1…7 «da rivedere»); **Z7c-2** ⏳ codice, test e doc scritti, checkpoint intermedio il 16/10 ~05:30, verdi dopo le 06:45; **Z7c-1** ⏳ in bozza fuori dal repo, dopo l'aggiornamento della base |
+| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ entrato** (treno 85, `e5e2595e7`; N-Z7b-1…7 «da rivedere»); **Z7c-2 ✅ entrato** (treno 97, `0dfc7cbbe`); **Z7c-1 ✅ entrato** (treno 105, `dd4a97e01`, con Z-9; N-Z7c1-1…5 «da rivedere») |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 
@@ -138,7 +138,7 @@ nessun EventSource né WebSocket, SvelteKit senza `version.pollInterval`).
 
 | # | Decisione | Proposta | Stato |
 |---|---|---|---|
-| D1 | Dove sta «Aggiornamento in pausa» | Locale, vicino al prezzo live; nell'area di H solo «Aggiornamento prezzi…» | proposta |
+| D1 | Dove sta «Aggiornamento in pausa» | Locale, vicino al prezzo live; nell'area di H solo «Aggiornamento prezzi…» | ✅ confermata (coordinatore, 16/10 ~11:29): la pillola resta locale; l'area di H è per gli avvisi dell'istanza |
 | D2 | Pausa del client per tutti | Sì, 10 minuti, 0 = mai | ✅ deciso (punto 31, 15/10): **2 minuti**, ripresa automatica, lista 60 s, dettaglio 30 s — sezione «Z1» |
 | D3 | C3 senza `isHeadToday` | Guardia aggiunta in Z1 dopo un rosso; fusione C2/C3 a X (FE5) | in Z1: la fusione la fa Z, coordinata con X dal coordinatore (punto 31) |
 | D4 | Il polling conta come presenza | Sì (evita sospensioni a raffica) | ✅ deciso (punto 32, 15/10): sì; sospensione dopo **5 minuti** senza richieste come default del cloud |
@@ -2052,13 +2052,48 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      backend su questa rotta (solo le rotte email lo mandano). Aggiunto il passo `docs` ad `apply_z7c1.py`; `check`
      a secco: tutti i passi applicabili, bozze di test-author comprese. La tabella dei test della pagina si incolla
      dopo i verdi (righe pronte nel README di docs-writer).
-2. Rossi: passo `e2e` → `front-asset live-pause` ((g) e (h) rossi, il resto verde); passo `unit` →
-   `front-utility core-unit`. ⏳
-3. Codice: passo `code` → i verdi; `front check`, Prettier, cancello dei colori; `front-asset asset-detail` sul
-   lampo del prezzo, che passa da `pollLivePriceOnce`. ⏳
-4. Doc: la bozza di `live-ticker.md` (docs-writer, verificata il 16/10 ~06:11) entra col passo `docs`; la tabella
-   «How it is tested» si aggiorna dopo i verdi. ⏳
-5. Checkpoint FROZEN, con la riga di `_frontend_utility.py` dichiarata (il coordinatore avvisa i colori). ⏳
+2. Rossi:
+   - ✅ 16/10 07:10 — passo `unit` (le due bozze di test e la riga di core-unit): `front-utility core-unit` 2 file
+     rossi su 175, 102 test rossi su 6359, proprio come previsto da test-author: `activePolling.test.ts` 38 su 92,
+     `livePriceService.test.ts` 64 su 75; gli altri 173 file verdi.
+   - ✅ 16/10 08:25–08:35 — Slot 2 (coordinatore), con Z5 parcheggiato fuori dal worktree (`files/z5-park.sh park`:
+     875 righe di patch e 5 file non tracciati; restava solo il giornale) e `/tmp/libreFolio_z7c1_slot.sh`:
+     - **A**, `revert-code` dalla base `dc6b32050`, `front-asset live-pause` filtrato su `\(g\)|\(h\)`: 2 rossi per il
+       motivo giusto. In (h) la lista col vecchio codice chiede a +0, +60, +120 e +240 s invece di aspettare i 300 s
+       della pausa; in (g) gli intervalli non raddoppiano. Lo `svelte-check` della ricostruzione elenca i tipi mancanti
+       nei test, come previsto: è solo diagnostico.
+3. Codice:
+   - ✅ 16/10 07:13 — passo `code`: `front-utility core-unit` 175/175 file, 6359/6359 test. Prettier: solo
+     `livePriceService.test.ts` (a capo negli argomenti di `.then`); la bozza E2E formattata fuori dal repo con la
+     `.prettierrc` del frontend (un'istruzione, solo a capo). `front check`: 0 errori, 0 avvisi. Cancello dei colori
+     pulito. Nessuno spec E2E stubba l'endpoint in errore: l'attesa crescente tocca solo (g) e (h).
+     > **⚠️ Fuori pista**: `RATE_LIMITED` era esportato ma nessun file fuori dal modulo, test compresi, lo importa
+     > (i due componenti della prova usano la stringa): sarebbe un export morto per knip. Ora è privato; bozza del
+     > codice e pagina di doc allineate.
+   - ✅ 16/10 08:35 — **B**, nello stesso slot: passo `code` di nuovo (file identici al commit `6eea03fcf`),
+     `front-asset live-pause` intero 8/8 (52 s), `front-asset asset-detail` «Live price direction flash» 4/4. Porta
+     6186 libera; Z5 rimesso al suo posto (`unpark`).
+4. ✅ 16/10 07:24 — Doc: passo `docs` (`live-ticker.md`) e, sui verdi di Vitest, la tabella «How it is tested»: la
+   riga di `activePolling.test.ts`, la riga nuova di `livePriceService.test.ts`, (g) e (h) nella riga E2E (stato
+   `running` e pillola nascosta, verificati nella bozza dello spec), il paragrafo sotto. `mkdocs build` stretto 0
+   avvisi; `check-links` 97 validi. Il sito è già aggiornato, così lo slot E2E non lo ricostruisce.
+5. ✅ 16/10 07:27 — Checkpoint **intermedio**, chiesto dal coordinatore prima dello slot E2E: codice, rossi (Vitest e
+   lo spec E2E con (g) e (h), applicato senza ancora averlo eseguito), doc e piano. Prima del commit:
+   - le due descrizioni di `live-pause` in `_frontend_asset.py` (righe di Z1), dal `RUNNER.md` di test-author; la
+     descrizione di `core-unit` in `_frontend_utility.py` resta com'è, perché è una riga condivisa da tutti i lotti;
+   - `check-orphans`: tutti i file registrati e raggiungibili da un `all`;
+   - `revert-code` ripristina dalla base fissa `dc6b32050`, non da HEAD, visto che il commit porta il codice in HEAD.
+   ✅ 16/10 08:35 — Slot unico fatto (A e B, sopra): Z7c-1 pronto per l'ingresso, il piano è l'unico delta.
+   ✅ 16/10 10:38 — Prove d'ingresso sulla base aggiornata `a3e8e73f7` (dev `d5c3c3ae3`), con Z5 parcheggiato:
+   `core-unit` 179 file, 6405 test (08:48); `front check` 0/0 alle 10:37, dopo il fermo voluto dal developer
+   (08:5x–10:32).
+   > **⚠️ Fuori pista**: il primo `front check` delle 10:34 aveva 1 errore, `verification_required` su
+   > `AuthRegisterResponse` in `RegisterCard.svelte`. Era il client generato del worktree (ignorato da git), fermo alle
+   > 08:26, prima che la base portasse E5b: dopo `api sync` è verde. Il riavvio delle ~10:03 aveva svuotato `/tmp`,
+   > con lo script delle prove e la data-dir della corsia: lo script ora sta in `files/z_run.sh`, i log in
+   > `files/logs/` (regola 2 del coordinatore).
+   > **Entrato** (coordinatore, 16/10 ~10:44): treno 105, merge `dd4a97e01`, insieme a Z-9; nel CHANGELOG la mia riga
+   > più il rimando a «Sleep and Wake › Provider Pauses».
 
 ### Z-9 — la doc delle pause dei fornitori (lotto di sola doc, dopo Z7c-1)
 
@@ -2086,5 +2121,371 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
      `.env.example` resta (superficie condivisa, da dichiarare).
    - Più due link miei, in `apply_z9.py`: `developer/backend/scheduler.md` (lo stesso rimando a `.env.example`) e
      «Related» di `live-ticker.md`, che esiste solo dopo Z7c-1: `check` a secco fallisce solo lì, come previsto.
-2. Applicazione dopo l'ingresso di Z7c-1; `mkdocs build`, `check-links`. ⏳
-3. Checkpoint FROZEN; Z-9 chiusa con ✅ nel backlog. ⏳
+2. ✅ 16/10 07:32 — Applicata col via del coordinatore («Z-9 is yours now, as a separate lot»), su HEAD `053dc9dec`
+   (Z7c-1 salvato), con `apply_z9.py`: precondizioni tutte vere, compreso il «Related» di `live-ticker.md`. Ritocco a
+   mano in `scheduler.md`: il link admin si chiama «Sleep and Wake › Provider Pauses», per non avere due link
+   «Provider Pauses» di fila. `mkdocs build` stretto 0 avvisi, 3076 URL relativi risolti; `check-links` 97 validi.
+   Il sito è aggiornato, così lo slot E2E delle 08:30 non lo ricostruisce.
+3. ✅ 16/10 07:33 — Z-9 chiusa con ✅ nel backlog; checkpoint FROZEN inviato (sola doc, nessuna riga di CHANGELOG).
+
+### Z5 — «Aggiornamento prezzi…»: analisi (16/10 ~07:40, sola lettura, prima del codice)
+
+> **Via all'analisi** (coordinatore, 16/10 ~07:35): «Yes, the read-only Z5 analysis now. Ok to drop
+> `LIBREFOLIO_CLIENT_IDLE_MINUTES` from the scope (decision 31); write it in the analysis. Watch for overlaps with H in
+> the notices area, and with T on the colours of any new markup.» Il codice parte solo col suo via.
+>
+> Richiesta del developer, alla lettera: «All'avvio (e alla prima richiesta dopo un periodo di inattività) il recupero
+> dei prezzi EOD mancanti gira in background senza bloccare la UI, che mostra "Aggiornamento prezzi…"».
+
+**Stato reale** (HEAD `3660e4c92`).
+- Backend: il recupero in background c'è già (Z3). `run_due_jobs(reason)` gira per `startup` (5 s dopo l'avvio),
+  `return` (la prima richiesta dell'utente dopo 60 s di silenzio, `CATCH_UP_AFTER_SECONDS`, più 2 s d'assestamento),
+  `wake` e `tick`. Da fuori nessuno sa se un giro è in corso: c'è solo `busy("scheduler")` sul registro
+  dell'attività, che vale anche durante l'assestamento e quando non c'è niente da fare.
+- Frontend: l'area avvisi di H è dentro. `instanceNotices.show/hide`, gravità `info|warning|danger`, `role="status"`
+  per `info`, `data-testid="instance-notice"` con `data-notice-id`, sopra ogni pagina dello shell; i colori sono ruoli
+  nel componente di H. `requestPortfolioRefresh()` raggiunge già `portfolioStore`, `riskStore` e `lotsAnalysisStore`,
+  che segnano stale e ricaricano in background.
+- `LIBREFOLIO_CLIENT_IDLE_MINUTES` è superata dalla decisione 31 (pausa fissa di 2 min in `cadence.ts`): **fuori dal
+  perimetro** (coordinatore, 16/10 ~07:35).
+
+**Il problema di tempo.** La prima richiesta dopo il silenzio fa partire il recupero, ma il giro comincia almeno 2 s
+dopo, e all'apertura dell'app le prime risposte arrivano spesso prima. Un `GET` di stato chiesto «al caricamento» può
+non vederlo; un'intestazione impostata già al momento della spinta sì.
+
+**Disegno proposto.**
+- Backend:
+  1. `progress()` in `scheduler.py`: un'istantanea per processo, con `state` (`idle`, `starting`, `running`),
+     `reason`, `job`, `started_at`, e dell'ultimo giro finito `finished_at` e `refreshed` (almeno un elemento
+     aggiornato). `starting` va dalla spinta, o dall'avvio del ciclo per `startup`, all'inizio del primo job;
+     `running` dura mentre un job gira; `idle` a fine giro. Contano solo i giri di recupero (`startup`, `return`,
+     `wake`): i `tick` regolari no, per non mostrare l'avviso ogni pochi minuti.
+  2. `GET /api/v1/system/price-refresh`, con sessione, per qualunque utente: l'istantanea. In
+     `api/v1/system/price_refresh.py`, registrata nel pacchetto `system` come `wake.py`; schema in
+     `schemas/sleep_wake.py`.
+  3. L'intestazione `X-LibreFolio-Price-Refresh: starting|running` sulle risposte `/api/` mentre un recupero sta per
+     partire o gira. Va in `ActivityMiddleware` (mio), con un meccanismo generico
+     (`register_response_header(name, provider)`) che lo scheduler usa all'avvio del ciclo: la pila di H non cambia e
+     `activity.py` non importa lo scheduler. Stessa origine, niente CORS.
+- Frontend, nel nuovo `lib/features/price-refresh/priceRefresh.svelte.ts`:
+  1. l'intercettore delle risposte (`lib/api/zodios-client.ts`, condiviso con H) passa l'intestazione a
+     `priceRefresh.observe(value)`: due righe;
+  2. vista l'intestazione, chiede lo stato ogni 3 s con `startActivePolling`, che si ferma a scheda nascosta e dopo
+     2 min senza input, con l'attesa crescente di Z7c-1. Con `running` mostra
+     `instanceNotices.show({id: 'liveUpdates.priceRefresh', severity: 'info', messageKey: …})`; con `idle` lo toglie,
+     chiama `requestPortfolioRefresh()` se il giro ha aggiornato qualcosa, e smette di chiedere. Un recupero senza
+     niente da fare passa da `starting` a `idle` in circa 2 s: l'avviso non compare, niente sfarfallio;
+  3. il testo («Updating prices…», «Aggiornamento prezzi…», «Mise à jour des prix…», «Actualizando precios…») va nel
+     sottosistema i18n `liveUpdates`, che è mio. Nessun markup nuovo: lo disegna il componente di H.
+- Senza un recupero in corso il frontend non chiede niente, e la macchina può sospendersi come oggi.
+
+**Decisioni proposte** (notturne, «da rivedere», salvo diverso avviso del coordinatore).
+- N-Z5-1: l'avviso solo per i giri di recupero, non per i `tick`, e solo mentre un job gira.
+- N-Z5-2: intestazione più stato a richiesta; mai polling a vuoto.
+- N-Z5-3: `requestPortfolioRefresh()` solo se il giro ha aggiornato almeno un elemento.
+- N-Z5-4: avviso `info`, non chiudibile: sparisce da solo.
+- N-Z5-5: l'intestazione in `ActivityMiddleware`, non in una voce nuova della pila di H.
+
+**Fuori dal perimetro**: la «misura dell'avvio», proposta a H nell'analisi del 14/10, resta a H; `next_wake_at` è
+Z-7.
+
+**Superfici e sovrapposizioni.**
+- H: `zodios-client.ts` (due righe nell'intercettore delle risposte, accanto a quelle del blocco dell'istanza) e
+  `api/v1/system/__init__.py` (un import e un router, come per `wake`). Dello store e del componente degli avvisi
+  uso solo l'API pubblica.
+- T: nessun markup nuovo.
+- X: nessuna.
+- Mie: `scheduler.py`, `activity.py`, i nuovi `price_refresh.py` e `priceRefresh.svelte.ts`, lo schema, l'i18n
+  `liveUpdates`.
+
+**Test** (rossi prima, con test-author).
+- `services scheduler-progress`, nuovo, PURE: le transizioni, i motivi, `refreshed`.
+- `services sleep-wake-activity`: l'intestazione solo su `/api/` e solo durante un recupero.
+- `api system`, o un'azione nuova: 401 senza sessione, la forma della risposta.
+- `front-utility core-unit`: `priceRefresh.test.ts` con timer finti.
+- Facoltativo, un E2E `front-utility price-refresh` con intestazione e stato stubbati: l'avviso compare e sparisce.
+- Poi `api sync`, `front check`, `mkdocs build`, `check-links`. `config-package` non serve: nessuna variabile nuova.
+
+**Doc**: una frase in `admin/sleep_wake.en.md` su cosa vede l'utente durante un recupero; `progress()`, la rotta e
+l'intestazione in `developer/backend/scheduler.md`; la parte frontend in `live-ticker.md`.
+
+**Complessità e rischi**: media, circa 3–4 ore con i test.
+- L'intestazione costa poco, perché è la lettura di una variabile per risposta.
+- Intestazione e `GET` leggono lo stesso stato, quindi restano coerenti.
+- Con più worker lo stato è per processo e i job girano solo nel leader. Un follower risponde `idle`: l'avviso può
+  mancare, ma non resta mai acceso. L'immagine Docker avvia un worker.
+
+**Passi** (dopo il via): rossi (test-author) → backend → frontend → doc → prove leggere → E2E in uno slot → checkpoint.
+
+### Z5 — codice (autorizzato il 16/10 ~07:39)
+
+> **Via** (coordinatore): «Go for Z5 as analysed, with N-Z5-1…5 marked "da rivedere".» Per lo slot E2E delle 08:30:
+> «the E2E server and the build use your worktree, so they must contain only Z7c-1. Write Z5 (reds, backend,
+> frontend) now. Before the slot, save it as a patch outside the repo and take it out with `git apply -R`. Then run
+> A+B, and re-apply it.» Commit separati. Il coordinatore avvisa H delle due righe in `zodios-client.ts` e della
+> registrazione in `system/__init__.py`.
+>
+> **Carico** (coordinatore, 16/10 ~07:48): fino alla fine degli slot pesanti (~09:30) le prove leggere partono solo
+> col carico a 1 minuto sotto 50, guardando ogni 60 s; un timeout di Vitest sotto carico si riprova da solo prima di
+> chiamarlo rosso. `/tmp/libreFolio_z7c_run.sh` aggiornato (50 per le prove leggere, 70 nello slot assegnato).
+
+**Passi.**
+1. ✅ 16/10 07:48 — Bozze del codice fuori dal repo (`files/z5-draft/`): `price_refresh.py` e `priceRefresh.ts` nuovi,
+   `apply_z5.py` per le modifiche (tracker e cablaggio in `scheduler.py`; intestazioni di risposta in `activity.py`;
+   schema; router di `system`; due righe nell'intercettore). Resa in una copia temporanea (`/tmp/libreFolio_z5_render`):
+   `py_compile`, ruff, black e Prettier puliti; `check` a secco: ogni frammento una volta sola.
+   - `fetchStatus` importa `$lib/api` alla prima chiamata, non in cima: l'intercettore importa `priceRefresh.ts`, e un
+     import statico farebbe un ciclo.
+   - In corso: i rossi di test-author nel worktree (consegna entro le 08:20); la doc di docs-writer fuori dal repo,
+     perché una doc nel worktree farebbe ricostruire il sito nello slot.
+   - Per lo slot: `files/z5-park.sh` (`park`: patch dei file tracciati, giornale escluso, più un tar dei non
+     tracciati, poi `git apply -R`; `unpark`: il contrario, con i controlli) e `/tmp/libreFolio_z7c1_slot.sh` (A e B).
+2. ✅ 16/10 08:02–08:05 — Rossi (test-author, nel worktree, consegnati alle 08:00), uno alla volta col carico sotto 50:
+   - `services scheduler-price-refresh` (nuovo, PURE): 44 errori su 44, `AttributeError` su `PRICE_REFRESH`;
+   - `services sleep-wake-activity`, filtrato sui 10 test nuovi: 17 rossi su 17, `register_response_header` mancante;
+   - `front-utility core-unit`: rosso solo `priceRefresh.test.ts` (modulo assente), 175 file verdi;
+   - `api system-price-refresh` (nuovo): 2 casi sul server della corsia, in uno slot perché ricostruisce il frontend;
+     6 in processo.
+3. Codice:
+   - ✅ 16/10 08:05–08:17 — `apply_z5.py apply`, la chiave `liveUpdates.priceRefresh.running` con `dev.py i18n add`
+     nelle 4 lingue, `api sync`. Verdi: `scheduler-price-refresh` 44/44, `sleep-wake-activity` 111/111. Regressioni:
+     `scheduler-loop` 5, `scheduler-catchup` 73, `scheduler-backoff` 79, `scheduler-jobs` 43, `sleep-wake-suspend`
+     141, file del risveglio 74. PRAPI-003…008 in processo 6/6; `core-unit` 176 file, 6391 test; `front check` 0/0.
+     > **⚠️ Fuori pista**: `zodios-client.test.ts` è diventato rosso, perché mocka `portfolioMutation` solo in parte e
+     > `createPriceRefresh()` leggeva `requestPortfolioRefresh` al caricamento del modulo. Ora le dipendenze di default
+     > si leggono quando servono; il test condiviso resta com'è.
+   - ✅ 16/10 08:17–08:35 — Z5 parcheggiato per lo slot E2E di Z7c-1, poi rimesso.
+   - ✅ 16/10 10:38–10:49 — **Bug trovato da docs-writer**: le pagine senza sessione (`/invite`, `/reset-password`,
+     `/verify-email`) ricevono l'intestazione; la domanda di stato riceveva un 401, e l'intercettore mandava al login
+     perdendo il link. Correzione: la domanda va con `fetch` (`PRICE_REFRESH_STATUS_PATH`, `PriceRefreshStatusError`),
+     e un 4xx ferma il tracciamento e fa ignorare le intestazioni fino a `reset()` (il reset della sessione); `stop()`
+     da solo non toglie la sospensione; 5xx ed errori di rete restano fallimenti, con l'attesa crescente. Il 423 di
+     un'istanza bloccata ferma anche lui il tracciamento: la rotta è sotto la dipendenza `refuse_when_blocked` di tutto
+     `/api/v1` (`router.py:34`). Con `fetch` sparisce anche l'import ritardato di `$lib/api`.
+     - Rossi: test-author ha scritto 25 casi in una copia fuori dal repo (fermato dal developer alle 08:4x, file
+       coerente), portati nel worktree dopo il ritorno di Z5 e formattati con Prettier (solo a capo): `core-unit` 22
+       rossi, tutti nel file nuovo, per i motivi giusti (`PriceRefreshStatusError is not a constructor`, il `fetch`
+       mai chiamato, `PRICE_REFRESH_STATUS_PATH` mancante); gli altri 179 file verdi.
+     - Verdi: `core-unit` 180 file, 6462 test.
+     Backlog Z-13 (la pagina aperta non si ricarica da sola).
+   - ✅ 16/10 08:39 — Z5 parcheggiato di nuovo per l'aggiornamento della base (coordinatore); rimesso alle 10:38 con
+     `z5-park.sh unpark` sulla base `a3e8e73f7`, senza conflitti (la base aveva toccato solo i tre file del runner, in
+     punti lontani).
+   - ✅ 16/10 10:50–11:15 — Di nuovo sulla base `a3e8e73f7`, una prova alla volta col carico sotto 50:
+     `scheduler-price-refresh` 44, `sleep-wake-activity` 111, `scheduler-catchup` 73, `scheduler-backoff` 79; in
+     processo PRAPI-003…008 e il file del risveglio, 80; ruff pulito; black ha riformattato solo la riga `print_info`
+     di `api_system_price_refresh` in `_backend_api.py` (il file era pulito a HEAD); `api sync`; `front check` 0/0;
+     `i18n check` stretto, 4775 chiavi; `check-orphans`. In processo anche i tre test di H che percorrono le rotte
+     (`test_instance_block.py`: ogni rotta di `/api/v1` passa prima dal blocco, l'elenco dei permessi è invariato) e
+     i due sull'ordine del router di `system` (`/system/block` resta l'ultima): 3 e 2 verdi. Dopo il commit di Z5
+     (`3b016dd4e`), di H: `services app-lifecycle` 42 e `services security-headers` 15, verdi (11:20–11:37, il secondo
+     in attesa del carico sotto 50).
+   - Regole del coordinatore del 16/10 ~11:0x: Z5 non scrive in nessun `.svelte` delle aree dei colori (solo `.ts`,
+     JSON dell'i18n, backend, test, doc). La skill `design-system` (D-T29) l'ho letta dal suo commit
+     (`git show 6e569084a:…`), non dal checkout principale, che le mie regole escludono: Z5 non ha markup, quindi
+     niente da applicare; vale per i lotti futuri.
+4. ✅ 16/10 11:11–11:14 — Doc: le sei bozze di docs-writer, scritte sugli stessi blob di `a3e8e73f7` (verificato
+   prima di copiarle): `admin/sleep_wake.en.md` (sezione `#price-refresh`), `developer/backend/scheduler.md`
+   (sezione `#price-refresh` con un diagramma di sequenza), `live-ticker.md` (sezione `#price-refresh` e la riga del
+   test), e una riga ciascuna in `developer/api/index.md`, `developer/architecture/security.md` (tra gli endpoint
+   privati; non nella tabella delle rotte permesse a istanza bloccata) e `developer/architecture/overview.md` (il
+   middleware dell'attività aggiunge le intestazioni registrate). La riga di `priceRefresh.test.ts` corrisponde ai
+   blocchi `describe` del file finale. `mkdocs build` stretto 0 avvisi; `check-links` 97 validi; il diagramma
+   controllato a occhio servendo il sito sulla porta della corsia per un minuto (screenshot), poi porta libera.
+5. ✅ 16/10 11:58–12:09 — Slot 2 (coordinatore), su HEAD `ac52425bc` con solo il giornale modificato,
+   `files/z5_slot.sh`: `api system` 118/118 e `api instance-block` 62/62 al primo colpo; `api system-price-refresh` 7/8,
+   poi 8/8.
+   > **⚠️ Fuori pista**: PRAPI-002 si è fermato nel setup, prima della rotta: `e2e_test_user` non poteva entrare (401
+   > «Invalid credentials»). Il riavvio delle ~10:03 aveva svuotato `/tmp/librefolio-r13-z`; all'avvio il server aveva
+   > creato un DB vuoto, e una singola azione `api` non chiama `_api_setup` (il `db populate` lo fa solo `api all`). Gli
+   > altri casi e le due suite di H registrano utenti propri, perciò erano verdi. `db populate` senza `--force` rifiuta
+   > un DB che esiste; `db populate --force` (senza `--clean`, sulla mia data-dir, come fa `_api_setup`) l'ha
+   > ripopolato, e la stessa azione è passata 8/8. Nessuna modifica al test né al codice. Porta 6186 libera.
+   Z5 pronto per l'ingresso: il delta è solo il piano.
+
+### Z-13 — dopo un recupero la pagina aperta resta indietro: analisi (16/10 ~11:35, sola lettura)
+
+> **Via all'analisi** (coordinatore, 16/10 ~11:29): «Z-13: start the read-only analysis now. Before writing anything,
+> give me the list of pages and files; I'll check them against the colour areas.» Nello stesso messaggio: Z-12 dopo lo
+> slot `api`; Z-11 e Z-10 restano nel backlog; D1 confermata (la pillola resta locale).
+
+**Stato reale** (HEAD `ac52425bc`).
+- Z5, a fine recupero con `last_refreshed`, chiama `requestPortfolioRefresh()`, cioè il segnale `{kind: 'refresh'}` del
+  bus `stores/portfolio/portfolioMutation.ts`. Lo ascoltano tre store (`portfolioStore`, `riskStore`,
+  `lotsAnalysisStore`), che alzano solo il loro contatore di freschezza, qualunque sia il segnale; l'unico componente
+  in ascolto, `AssetEventPicker.svelte`, considera solo `mutation`.
+- Nessuna pagina ascolta il bus: chiamano `requestPortfolioRefresh()` dal loro «Aggiorna» e poi ricaricano da sole
+  (dashboard `handleSync`, broker `handleRefresh`). Una pagina già aperta non sa che le sue cache sono diventate
+  stale: mostra le cifre vecchie finché non si ricarica (cache di pagina E1: al caricamento mostra ciò che ha e chiede
+  di nuovo solo ciò che è stale).
+- Le due pagine sanno già ricaricare in background: il dashboard con `loadAll()` senza force (chiede solo il report
+  stale, e le cifre restano finché arrivano le nuove) e `refreshVersion`, che fa ricaricare i pannelli di rischio e
+  dei lotti; la pagina del broker con `loadOverview()` e il suo `refreshVersion` (pagina in modalità legacy).
+
+**Disegno proposto.**
+1. `portfolioMutation.ts`: un segnale nuovo, `{kind: 'prices'}`, con `notifyPricesCaughtUp()`. Gli store lo trattano
+   come gli altri senza modifiche; `AssetEventPicker` lo ignora già.
+2. `priceRefresh.ts` (mio): il default di `refreshPortfolio` diventa `notifyPricesCaughtUp()`.
+3. Dashboard e pagina del broker: un ascoltatore del bus, registrato al montaggio e tolto alla distruzione. Con
+   `prices` fa quello che fa «Aggiorna», ma in background: `refreshVersion += 1` e `loadAll()` / `loadOverview()`
+   senza force, niente spinner, le cifre restano finché arrivano le nuove. Solo `<script>`: nessun markup, nessuna
+   classe.
+4. Fuori: la lista degli asset e la pagina di un cambio (le storie dei grafici; i prezzi dal vivo hanno già il loro
+   ciclo) e il dettaglio di un asset (di X fino a FE5c). Nel backlog, se servono.
+
+**Superfici.**
+- Aree dei colori, solo `<script>`: `routes/(app)/dashboard/+page.svelte` (DV), `routes/(app)/brokers/[id]/+page.svelte`
+  (BK).
+- Condivisa, senza markup: `lib/stores/portfolio/portfolioMutation.ts` e il suo test.
+- Mie: `lib/features/price-refresh/priceRefresh.ts` e il suo test.
+- Doc: `admin/sleep_wake.en.md` (la frase «A page already open keeps its figures…»), `live-ticker.md`,
+  `developer/frontend/state/domain-state.md` (il bus).
+
+**Test** (test-author, rossi prima): `portfolioMutation.test.ts` (il segnale nuovo arriva agli ascoltatori, gli store
+segnano stale); `priceRefresh.test.ts` (il default; i casi «app instance» mockano oggi `requestPortfolioRefresh`); un
+E2E nuovo per Z5 e Z-13 insieme: dashboard aperto, intestazione e stato stubbati (`running`, poi `idle` con
+`last_refreshed`), l'avviso compare e sparisce e il dashboard chiede di nuovo il suo report senza navigare. Lo slot E2E
+è breve.
+
+**Decisione notturna proposta**, «da rivedere»: N-Z13-1, solo dashboard e broker, in background e senza force; i
+pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
+> **Rivista il 16/10 ~13:24** (vincolo di Y11, dal coordinatore): la ricarica non tocca `refreshVersion` né chiama
+> `requestPortfolioRefresh()`, i segnali dell'«Aggiorna» dell'utente; i pannelli restano indietro finché non si
+> ricaricano (Z-15). Vedi il passo 6.
+
+**Stima**: 2–3 ore con i test, più uno slot E2E breve.
+
+> **Via al disegno** (coordinatore, 16/10 ~11:33): «The Z-13 design is fine.» **OK dei colori** (16/10 ~11:35), con tre
+> condizioni: nei due `.svelte` solo righe dentro lo `<script>` (DV e BK hanno pezzi di markup aperti in entrambi);
+> niente Prettier né riformattazioni fuori dallo `<script>`; il coordinatore dà ai colori lo SHA all'ingresso. Si parte
+> dopo lo slot `api` di Z5.
+
+**Passi.**
+1. ✅ 16/10 11:36 — Codice in bozza fuori dal repo: `files/z13-draft/apply_z13.py`, con due passi, `bus`
+   (`portfolioMutation.ts` e `priceRefresh.ts`) e `pages` (i due `.svelte`). `pages` rifiuta di scrivere se un
+   frammento non sta dentro lo `<script>`. Nelle pagine il ricaricamento parte con `queueMicrotask`, dopo che tutti gli
+   ascoltatori del bus (gli store) hanno segnato stale, senza dipendere dall'ordine di registrazione. Resa su una copia
+   temporanea: `check` a secco pulito e i quattro file interi già conformi a Prettier, quindi nessun `--write` sui
+   `.svelte`. I rossi li scrive test-author, fuori dal repo.
+2. ✅ 16/10 12:11–12:21 — Rossi. test-author è caduto alle ~11:55 per l'errore del servizio (timeout di rete) dopo aver
+   scritto sei bozze fuori dal repo (11:45–11:49), senza README né nota per il runner. Le ho riviste: aggiunte
+   coerenti, con il contratto, ai file `portfolioMutation.test.ts`, `portfolioStore.test.ts`, `riskStore.test.ts`,
+   `lotsAnalysisStore.test.ts` e `priceRefresh.test.ts`, più lo spec nuovo `e2e/portfolio/price-refresh-reload.spec.ts`
+   (casi (a), (b), (c), completo). Applicate sui blob di HEAD. La registrazione l'ho scritta io: `front-portfolio
+   price-refresh` in `_frontend_portfolio.py`, la funzione su più righe. Il file aveva già 28 segnalazioni di ruff
+   (27 E701) e non era pulito per black: le mie righe non ne aggiungono, e black non ne tocca nessuna.
+   Rossi, tutti per il motivo giusto (`notifyPricesCaughtUp` manca, oppure `priceRefresh` non manda il segnale):
+   - `front-portfolio store-unit`: 6 rossi su 58;
+   - `front-portfolio risk-unit`: 1 su 41;
+   - `front-utility core-unit`: 2 su 6464.
+3. Codice:
+   - ✅ 16/10 12:22 — passo `bus`: `store-unit` 58/58, `risk-unit` 41/41, `core-unit` 6464/6464.
+   - ✅ 16/10 12:24–12:30 — passo `pages`. Due pezzi per pagina, tutti dentro lo `<script>`: dashboard +17 −1,
+     broker +16 −1. Prettier `--check` pulito sui due `.svelte` e sul codice; `--write` solo su due file di test
+     (`priceRefresh.test.ts` e lo spec), solo a capo. Cancello dei colori pulito; `front check` 0/0.
+   - ✅ 16/10 12:44–13:03 — Slot 2 (coordinatore, cut-off 13:15), con `files/z13_slot.sh`, dopo il `front build --debug`
+     nello stato di A (12:41–12:46, sotto carico 50) e il `mkdocs build` stretto (12:51, 0 avvisi):
+     - **A**, le pagine come a HEAD (senza ascoltatore), `front-portfolio price-refresh`: 3 rossi per il motivo giusto.
+       (a) «the Dashboard did not ask for its report again»; (b) «the broker page did not ask for its overview again»;
+       (c) le due «nessuna ricarica» passano, fallisce il controllo positivo. Nessuna ricostruzione.
+     - **B**, `apply_z13.py pages`, pagine identiche all'impronta delle 12:32: `price-refresh` 3/3 (47 s, una
+       ricostruzione), `front-portfolio dashboard-cache` 6/6 (31 s). Porta 6186 libera.
+     - Lo script stampa «A rc=0»: `$(date)` gira prima di `$?`. Gli esiti si leggono dai log (`files/logs/`).
+     Dopo lo slot: `check-links` 97 validi; il diagramma di `domain-state.md` controllato a vista, servendo il sito
+     sulla porta della corsia per un minuto (il nodo «End of a price catch-up» e l'arco `kind: prices` verso il
+     `fetchReport` del Dashboard).
+     > **Stato temporaneo**: alle 12:32 ho tolto l'ascoltatore dalle due pagine (`apply_z13.py revert-pages`, i file
+     > tornati identici a HEAD), per costruire il frontend prima dello slot nello stato di A, come chiesto dal
+     > coordinatore. Così lo slot ricostruisce una volta sola, per B. Per rimetterlo: `apply_z13.py pages`; impronta e
+     > copie dello stato applicato in `files/z13-draft/` (`pages_applied.md5`, `dashboard.applied.svelte`,
+     > `broker.applied.svelte`).
+4. ✅ 16/10 12:43 — Doc (docs-writer, nel worktree, verificata da me): `admin/sleep_wake.en.md#price-refresh` (la voce
+   «Afterwards»: il Dashboard o la pagina di un broker sullo schermo si aggiornano da soli in background; le altre
+   pagine al prossimo caricamento; la frase sul proxy), `live-ticker.md#price-refresh` e `#testing` (il segnale
+   `prices`, i due ascoltatori con `queueMicrotask`, le righe dei test e dello spec nuovo), `domain-state.md` (tabella,
+   diagramma, bus, il passo 5 del Dashboard, la pagina del broker). `scheduler.md` invariata.
+   > **⚠️ Fuori pista**: docs-writer ha segnalato che due commenti dei test (`riskStore.test.ts`,
+   > `lotsAnalysisStore.test.ts`) dicevano «asks again only what is stale». Per i pannelli è falso: con `refreshVersion`
+   > chiedono con force, come per «Aggiorna». Corretti, solo commenti. Fuori dal lotto, nel backlog come Z-14: le
+   > pagine di un asset e di un cambio hanno cache di sessione proprie (`assetPriceStoreRegistry.ts`,
+   > `fxStoreRegistry.ts`) che il bus non tocca.
+5. ✅ 16/10 13:05 — Checkpoint FROZEN inviato, con i due `.svelte` dichiarati per i colori (DV, BK) e
+   `portfolioMutation.ts` come superficie condivisa.
+6. Z-13b — la ricarica non passa dall'«Aggiorna» dell'utente (vincolo di Y11).
+   > **⚠️ Fuori pista** (coordinatore, 16/10 ~13:24, per conto di Y): con Y11 (P3, l'icona «Aggiorna» che gira mentre
+   > sono in volo le richieste «grandi») i pannelli di rischio e dei lotti si ricaricano sull'`$effect` di
+   > `refreshVersion`, seguito da `pageBusy`. La ricarica in background dopo un recupero non deve quindi usare
+   > `requestPortfolioRefresh()` (`kind: 'refresh'`) né toccare `refreshVersion`: sono i segnali dell'«Aggiorna»
+   > dell'utente, e i pannelli farebbero girare l'icona. Vanno bene le cache stale e `kind: 'mutation'`. Prima ancora,
+   > sempre per Y11: la ricarica non passa da `pageBusy`; le pagine chiamano già `loadAll()` / `loadOverview()`.
+   - ✅ 16/10 13:26 — In bozza, da FROZEN, fuori dal repo: `files/z13-draft/apply_z13b.py` (`check`, `apply`). Nei due
+     `.svelte` toglie `refreshVersion += 1` da `reloadAfterPriceCatchUp()` e ne riscrive il commento, solo righe dentro
+     lo `<script>` (dashboard ~710–719, DV; broker ~435–442, BK); poi i commenti dei due test degli store e i passi di
+     `live-ticker.md#price-refresh` e di `domain-state.md` (il passo 5 del Dashboard, la pagina del broker). Resa su
+     una copia: precondizioni vere, Prettier invariato sui quattro file del frontend; diff in
+     `files/z13-draft/z13b_dryrun.diff`. I quattro `refreshVersion += 1` che restano sono tutti azioni dell'utente
+     (sync FX, sync asset, «Aggiorna», Refresh del broker). Lo spec E2E non guarda né i pannelli né `refreshVersion`.
+   - ✅ 16/10 13:35 — Via del coordinatore: «Z-13b is the right way out»; Z-15 nel backlog, da decidere con Y dopo Y11.
+   - ✅ 16/10 14:15 — Applicato (`apply_z13b.py apply`) dopo il via del developer delle 14:14, sopra il merge aperto:
+     nessuno dei sei file né lo spec sta nell'indice del merge (`files/logs/z_merge_index_1334.txt`), quindi l'indice
+     resta quello del merge. Backlog: Z-13 chiusa (✅, `9d19c2093`), Z-15 aggiunta.
+   - ✅ 16/10 14:15–14:33 — Controlli leggeri sotto carico 50 (`files/z13b_light.sh`, log `files/logs/z_z13b-*`):
+     `git diff --check` pulito; Prettier `--check` pulito sui quattro file del frontend; `front check` 0/0;
+     `store-unit` 58/58 (con `lotsAnalysisStore.test.ts`); `risk-unit` 41/41; `front build --debug` (14:28, nessun
+     file di `src` più nuovo); `check-links` 97 validi. `mkdocs build` stretto **rosso, non per Z**: vedi sotto.
+     > **⚠️ Fuori pista**: il build stretto si ferma su un solo avviso, `developer/backend/transactions/wac.md` →
+     > `split_promote.md#transfer-giving-leg`, un'ancora che `split_promote.md` non ha su nessuno dei due lati del
+     > merge. Il link viene da dev, `54880598b` (16/10, «fix(transactions): emptied manual cost basis is refused, not
+     > kept», cherry-pick di `949da55f8`), già in `bfd33a0f5`: anche dev da solo è rosso in modalità stretta. Le mie
+     > pagine non danno avvisi. Non lo correggo io (fuori dal mio perimetro): segnalato al coordinatore. Il build
+     > fermo ha lasciato nel `site/` della corsia solo EN e IT. Non tocca lo slot: `server --build-only` costruisce la
+     > doc senza `--strict`, e solo se manca `site/index.html` o una pagina è più nuova.
+   - ✅ 16/10 15:01–15:08 — Slot 2 (`files/z_slot2.sh e2e`), solo lo stato B, nessuna ricostruzione (il frontend
+     delle 14:28): `front-portfolio price-refresh` 3/3 (44 s), `front-portfolio dashboard-cache` 6/6 (1,7 min).
+     > **⚠️ Fuori pista**: alle 15:03 il gate del coordinatore su dev (dopo l'ingresso di Z5 e Z-13) ha portato il
+     > carico a ~110, e il mio involucro aspettava il carico sotto 70 prima di `dashboard-cache`. Dentro lo slot e col
+     > cut-off alle 15:15, ho fermato solo quell'involucro in attesa (PID 70268 e il suo `sleep`, nessun test partito:
+     > rc 143 nel riepilogo, nessun log) e ho rilanciato subito il passo con la soglia alzata (15:04:27–15:08:39).
+   - ⏳ Il test dello spinner (Y11: l'icona non gira sul segnale `{kind: 'prices'}`), quando Y11 entra nella mia base.
+
+### Ingresso di Z5 e Z-13: aggiornamento della base (16/10, dalle 13:06)
+
+> **Salvato** (coordinatore, 16/10 ~13:05): Z-13 `9d19c2093` (feat, 14 percorsi) e `9d95afc85` (journal). Poi il
+> coordinatore ha aperto nel worktree `git merge bfd33a0f5` (dev con i lotti di H, W-B30, AF), con un conflitto in
+> `developer/api/index.md`: «Resolve it keeping both sides, stage only that file, don't commit.»
+
+1. ✅ 16/10 13:06 — Conflitto risolto: la riga `/system` di H (pagina di blocco più ricca, la frase su `/system/info` e
+   `/system/ready`, un modulo per risorsa) più la mia frase su `GET /system/price-refresh`, inserita prima della
+   sveglia programmata. La mia parte era esattamente la base `a3e8e73f7` più quella frase. Messo in stage solo quel
+   file. Verificate le altre sovrapposizioni fuse da sole: il backlog (la mia sezione intatta), `overview.md` (la mia
+   frase sulle intestazioni di risposta), `security.md` (`price-refresh` fra gli endpoint privati),
+   `_backend_services.py` (una sola registrazione di `scheduler-price-refresh`; il file si legge).
+2. Validazione combinata, sotto carico 50 (`files/z_combined.sh`), interrotta dalla **pausa del developer** (13:22):
+   - ✅ `api sync`; `front check` 0/0; `core-unit` 180 file, 6470 test; `store-unit` 58;
+     `scheduler-price-refresh` 44; `sleep-wake-activity` 111;
+   - ✅ `db populate --force`, partito alle 13:22:49, prima che fermassi la catena (13:23:01). L'ho lasciato finire
+     (13:23:39, PASSED) per non lasciare a metà la data-dir della corsia;
+   - ✅ 16/10 15:00–15:01, nello slot 2 (`files/z_slot2.sh backend`): `db populate --force` PASSED,
+     `api system-price-refresh` 8/8, `api system` 118/118. `mkdocs build` stretto rosso solo per l'avviso di dev
+     (`54880598b`; corretto su dev in `ed500643f`, che arriva col prossimo aggiornamento della base), ignorato
+     d'accordo col coordinatore; `check-links` 97. «combined green» inviato alle 15:01.
+   Stato alla pausa: HEAD `9d95afc85`, MERGE_HEAD `bfd33a0f5`, nessun file non fuso, tutto in stage, porta 6186 libera.
+3. Pausa del developer 13:22–14:14, FROZEN. Il coordinatore ha chiesto nel frattempo Z-13b (passo 6 di Z-13) e
+   confermato l'ordine: i controlli leggeri sotto carico 50 subito; nello slot 2, dopo TR (cut-off 15:10),
+   `db populate --force`, `api system-price-refresh` e `api system` → «combined green» (il merge non tocca le superfici
+   backend di Z5), poi gli E2E di Z-13b.
+   > **Nota** (16/10 ~13:30, sola lettura, da FROZEN): X ha trovato nello split FE5c-9b due difetti F26 preesistenti
+   > nel prezzo dal vivo della pagina di un asset, e li cura lui. (1) Sul grafico convertito il controllo «stessa
+   > chiusura» confronta la chiusura convertita con il prezzo nella valuta dell'asset, quindi ogni poll ricarica tutto
+   > il grafico. Il controllo viene da `93a88be2c` (I-bis #24), già in `v1.2.1`; Z1 (`74d028ec6`), unendo i due cicli,
+   > l'ha portato da ogni 60 s a ogni 30 s. Niente ciclo stretto: `loadChartData` non riscrive `assetInfo`. (2) Con il
+   > movimento ridotto il flash può restare acceso: il cleanup dell'effetto ferma il timer ma non azzera
+   > `livePriceDirection`. Viene da `52c8d0d70`, già in `v1.2.1`; la lista degli asset non ha il gemello. Segnalato al
+   > coordinatore: i paragrafi «Price flash» e «Chart head» di `live-ticker.md` descrivono i due comportamenti e vanno
+   > ritoccati nel commit di X; `asset-live-pause.spec.ts` non dipende dai due fix.
+4. ✅ 16/10 ~15:05 — Il coordinatore ha creato il merge nel worktree: `41b44fb64` (genitori `9d95afc85` e
+   `bfd33a0f5`), con l'indice com'era; Z5 e Z-13 entrati in dev con il merge `12cd3c2e0` (le pagine Dashboard e broker
+   fuse da sole con il markup di DV e BK). Il suo gate su dev gira dopo l'ingresso. Il fix `ed500643f` dell'avviso
+   mkdocs arriva col prossimo aggiornamento della base.
+5. ✅ 16/10 15:10 — Checkpoint di Z-13b inviato, FROZEN: i sei file di Z-13b più questo piano e il backlog (Z-13 ✅,
+   Z-15). I due `.svelte` sono di DV e BK: cambiano solo righe dentro lo `<script>`; lo SHA va ai colori.

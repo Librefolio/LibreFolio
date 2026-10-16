@@ -92,6 +92,7 @@ from backend.app.services.financial_math.returns import (
     cumulative_to_annualized,
     gain_loss_ratio,
     net_holding_return,
+    realized_gain,
     rebase_to_period,
 )
 from backend.app.services.financial_math.valuation import compute_holding_value
@@ -657,7 +658,7 @@ class PortfolioService:
 
         # Realized G/L of the SELLs in the period: proceeds minus the historical cost the
         # engine's average-cost pool gave up, both in base currency with the owner's share.
-        _realized_accum = sum((sale.proceeds - sale.cost for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to)), Decimal("0"))
+        _realized_accum = sum((gain for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
         oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: _oldest_open_lot_date(txns) for key, txns in lot_txns_by_key.items()}
         # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
@@ -1570,8 +1571,11 @@ class PortfolioService:
         # ── Realized gain/loss from SELLs in period: proceeds minus the historical cost the
         # engine's average-cost pool gave up (base currency, owner share applied) ──
         for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to):
+            gain = realized_gain(sale.proceeds, sale.cost)
+            if gain is None:
+                continue
             pos_key = (sale.broker_id, sale.asset_id)
-            per_realized[pos_key] += sale.proceeds - sale.cost
+            per_realized[pos_key] += gain
             per_cost_sold[pos_key] += sale.cost
 
         # ── Unrealized delta: 2-point computation per position ──

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
+    import KpiCard from '$lib/features/dashboard/KpiCard.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {_ as t} from '$lib/i18n';
@@ -60,16 +60,16 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="asset-risk-scenarios-view">
+<div class="space-y-4 text-lf-primary" data-testid="asset-risk-scenarios-view">
     <RiskBetaBanner />
 
-    <section class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800" data-testid="asset-risk-summary">
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{$t('risk.assetDetail.summaryTitle')}</h2>
-        <p class="text-sm text-gray-500 dark:text-gray-400">{$t('risk.assetDetail.summaryDescription')}</p>
+    <section class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm" data-testid="asset-risk-summary">
+        <h2 class="text-lg font-semibold text-lf-primary">{$t('risk.assetDetail.summaryTitle')}</h2>
+        <p class="text-sm text-lf-muted">{$t('risk.assetDetail.summaryDescription')}</p>
 
         {#if selectedRolling}
             <div class="mt-3 flex flex-wrap items-end gap-3">
-                <label class="min-w-52 text-xs text-gray-500 dark:text-gray-400">
+                <label class="min-w-52 text-xs text-lf-muted">
                     {$t('risk.assetDetail.rollingMetric')}
                     <div class="mt-1">
                         <SimpleSelect value={selectedRollingId} options={rollingOptions} compact testId="asset-risk-rolling-select" onchange={(value) => (selectedRollingId = value)} />
@@ -80,10 +80,10 @@
                 </div>
             </div>
         {:else}
-            <p class="mt-3 text-sm text-gray-500 dark:text-gray-400" data-testid="asset-risk-no-rolling">{$t('risk.assetDetail.noRollingMetric')}</p>
+            <p class="mt-3 text-sm text-lf-muted" data-testid="asset-risk-no-rolling">{$t('risk.assetDetail.noRollingMetric')}</p>
         {/if}
 
-        <button type="button" class="mt-3 text-sm font-medium text-libre-green hover:underline" onclick={() => onconfigure?.()} data-testid="asset-risk-configure-signals">
+        <button type="button" class="mt-3 text-sm font-medium text-lf-link hover:underline" onclick={() => onconfigure?.()} data-testid="asset-risk-configure-signals">
             {$t('risk.assetDetail.configureSignals')}
         </button>
     </section>

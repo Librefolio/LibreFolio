@@ -257,6 +257,17 @@ def api_system_wake(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "System API wake-up tests", verbose=verbose)
 
 
+def api_system_price_refresh(verbose: bool = False, test_names: list = None) -> bool:
+    """Test «Aggiornamento prezzi…» (GET /system/price-refresh): 401 and a valid answer on the lane, the chosen states in-process (lot Z5)."""
+    print_section("System API: the price refresh status")
+    print_info(
+        "Testing: GET /system/price-refresh → 401 without a session; any signed-in user 200 with state, reason, job, since, last_finished_at, last_refreshed; idle, starting, running, idle after a refreshed catch-up (in-process app, PRICE_REFRESH driven by the test); PriceRefreshResponse; OpenAPI"
+    )
+    print_info("Tests: PRAPI-001..008")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_price_refresh.py", test_names)
+    return run_command(cmd, "System API price refresh tests", verbose=verbose)
+
+
 def api_instance_block(verbose: bool = False, test_names: list = None) -> bool:
     """Test the instance block (workstream H, CP6): refuse_when_blocked, ALLOWED_WHEN_BLOCKED, GET /system/block."""
     print_section("Instance Block Tests")
@@ -881,6 +892,17 @@ Tests for REST API endpoints (server auto-started):
         # past its switches trapped) and the token variables are set with monkeypatch: no data directory, DB, server or
         # network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
+    )
+    # Write-scoped (the category default), no exclusive_because: on the lane's server the module only reads the status, as
+    # e2e_test_user, whose login counters (which no unit asserts) are the one write; the chosen states (starting, running,
+    # idle after a refreshed catch-up) run in-process, an app of the test holding the system router, get_current_user
+    # overridden and this pytest process's own PRICE_REFRESH driven and reset by the test, never the lane server's.
+    add_test(
+        api,
+        "system-price-refresh",
+        api_system_price_refresh,
+        name="System API Price Refresh",
+        desc="Lot Z5, «Aggiornamento prezzi…»: GET /system/price-refresh → 401 without a session; any signed-in user (e2e_test_user) 200, exactly state/reason/job/since/last_finished_at/last_refreshed with a valid state, whatever the lane's scheduler does; in-process: idle (all null, not refreshed), starting for wake with since, running for return with its job, idle after a refreshed catch-up with last_finished_at, datetimes ISO 8601 UTC; PriceRefreshResponse six fields, literals enforced (tick refused); OpenAPI, tag System, the 200 schema",
     )
     # H CP6: the block is set in the test process only (ASGI app + monkeypatch); the lane's backend stays unblocked, and
     # each test registers and deletes its own user, so the category's write-scoped holds.

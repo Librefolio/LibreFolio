@@ -933,8 +933,8 @@ describe('GlobalSettingsTab — saving everything at once', () => {
 
 // =========================================================================
 describe('GlobalSettingsTab — the three picker rows', () => {
-    /** The row a given key lives in, found through the label the dictionary gives it. */
-    const pickerRow = (label: string) => screen.getByText(label).closest('div.bg-gray-50') as HTMLElement;
+    /** The row a given key lives in: found through the label the tab gives it, then up to the `global-setting-{key}` wrapper every setting row publishes. */
+    const pickerRow = (label: string) => screen.getByText(label).closest('[data-testid^="global-setting-"]') as HTMLElement;
 
     it('gives the language row its own save and undo', async () => {
         await mountUnlocked([setting('default_language', 'en')]);

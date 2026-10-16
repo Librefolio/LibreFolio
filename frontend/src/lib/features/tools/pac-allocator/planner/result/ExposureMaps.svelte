@@ -7,6 +7,7 @@
 -->
 <script lang="ts" module>
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {buildGeoNameMaps} from '$lib/components/charts/geographyMapHelpers';
 
     /** The world map, fetched and registered once, then shared by every planner result. */
@@ -177,7 +178,7 @@
         let chart = charts[side];
         const fresh = chart === null;
         if (!chart) {
-            chart = echarts.init(element, undefined, {renderer: 'canvas'});
+            chart = echarts.init(element, CHART_INIT_THEME, {renderer: 'canvas'});
             charts[side] = chart;
             attachChartReady(chart, element, `pac-planner-exposure-map-${side}`);
             follow(side, chart);
@@ -255,14 +256,14 @@
         <div bind:this={frame} class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {#each SIDES as side (side)}
                 <figure class="min-w-0">
-                    <figcaption class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    <figcaption class="text-xs font-semibold uppercase tracking-wide text-lf-muted">
                         {side === 'target' ? text.target : text.final}
                     </figcaption>
                     <div bind:this={containers[side]} class="mt-1 h-52 w-full sm:h-60" data-testid="pac-planner-exposures-map" data-side={side} aria-hidden="true"></div>
                 </figure>
             {/each}
         </div>
-        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400" data-testid="pac-planner-exposures-scale">
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-lf-muted" data-testid="pac-planner-exposures-scale">
             <span>{$t(`${KEY}.exposures.scale`, {default: 'Colour scale'})}</span>
             <span class="tabular-nums">{formatPlannerPercentUnits('0', 0)}</span>
             <span class="h-2 w-32 rounded-sm" style:background="linear-gradient(to right, {colours.join(', ')})" aria-hidden="true"></span>

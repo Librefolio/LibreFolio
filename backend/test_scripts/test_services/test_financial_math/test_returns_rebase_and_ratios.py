@@ -37,6 +37,13 @@ previous.target_close - Decimal("1")``) and the calendar rolling return
 hundred``). Both are copied below as they stand (``*_today``) and compared exactly. Red by absence,
 like the CP-4a names: ``returns.price_return`` is read while each test runs.
 
+CP-7a (workstream J, developer's decision 26 — D-J1 option B, each leg of a disposal converted at its own date): the gain
+or loss a disposal realizes gets its home here. ``realized_gain(proceeds, cost)`` is ``proceeds - cost``, both already in
+one currency, and ``None`` when either is unknown (no rate): never computed from the known leg alone. The Dashboard's
+sales (``portfolio_service.py``, ``sale.proceeds - sale.cost``) and the lots' closures (``lots/conversions.py``,
+``convert_closure``) call it. Red by absence, like the names above: ``returns.realized_gain`` is read while each test
+runs, so before CP-7a each of its tests fails on the missing attribute and the rest of the file still collects.
+
 Pure: no database, no server, no network.
 """
 
@@ -600,3 +607,52 @@ class TestPriceReturn:
             result = returns.price_return(start, end)
             assert result == _prepared_return_today(start, end), f"prepared return, {start} -> {end}: {result}"
             assert result * Decimal("100") == _calendar_return_today(start, end), f"calendar return, {start} -> {end}: {result}"
+
+
+# =============================================================================
+# realized_gain (CP-7a)
+# =============================================================================
+
+
+class TestRealizedGain:
+    """``realized_gain(proceeds, cost)``: ``proceeds - cost``, exact; ``None`` when either leg is unknown.
+
+    Each leg arrives already converted by its caller, at its own date. Before CP-7a there was no ``returns.realized_gain``:
+    every test below failed on the missing attribute (AttributeError), and each caller wrote the subtraction in place.
+    """
+
+    @pytest.mark.parametrize(
+        ("proceeds", "cost", "expected"),
+        [
+            pytest.param("100", "90", "10", id="gain"),
+            pytest.param("99", "100", "-1", id="loss-the-D-J1-example"),
+            pytest.param("0", "0", "0", id="zeros"),
+            pytest.param("0", "80", "-80", id="nothing-received"),
+            pytest.param("859.375", "800", "59.375", id="exact-decimals"),
+        ],
+    )
+    def test_the_gain_is_proceeds_minus_cost(self, proceeds, cost, expected):
+        """``proceeds - cost`` as a Decimal, no rounding. Before CP-7a: AttributeError (no returns.realized_gain)."""
+        result = returns.realized_gain(Decimal(proceeds), Decimal(cost))
+
+        assert isinstance(result, Decimal)
+        assert result == Decimal(expected)
+
+    @pytest.mark.parametrize(
+        ("proceeds", "cost"),
+        [
+            pytest.param(None, "100", id="no-proceeds"),
+            pytest.param("99", None, id="no-cost"),
+            pytest.param(None, None, id="neither"),
+            pytest.param(None, "0", id="no-proceeds-and-a-zero-cost"),
+        ],
+    )
+    def test_an_unknown_leg_has_no_gain(self, proceeds, cost):
+        """None, never the known leg alone read as the gain. Before CP-7a: AttributeError (no returns.realized_gain)."""
+        assert returns.realized_gain(_dec(proceeds), _dec(cost)) is None
+
+    def test_the_proceeds_come_first_and_the_cost_second(self):
+        """The signature is ``realized_gain(proceeds, cost)``, by position and by name alike. Before CP-7a: AttributeError."""
+        assert returns.realized_gain(Decimal("100"), Decimal("90")) == Decimal("10")
+        assert returns.realized_gain(proceeds=Decimal("100"), cost=Decimal("90")) == Decimal("10")
+        assert returns.realized_gain(cost=Decimal("90"), proceeds=Decimal("100")) == Decimal("10")

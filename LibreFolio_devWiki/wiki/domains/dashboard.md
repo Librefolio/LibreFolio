@@ -109,6 +109,6 @@ Later ideas:
 | Engine | `backend/app/services/financial_math/portfolio/engine.py` |
 | ROI utilities | `backend/app/services/financial_math/returns.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
-| Positions panel | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
+| Positions panel | `frontend/src/lib/features/dashboard/PositionsPanel.svelte` |
 | Archived M1/M2 plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/` |
 | Archived M3 plans (Broker UI v2 + chart resolution) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/` |

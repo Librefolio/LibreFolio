@@ -15,8 +15,9 @@
 #   3. Access:          http://localhost:${PORT:-6040}
 #
 # Commands inside the running container (./dev.py docker exec <cmd>):
-#   ./dev.py docker exec user list                # user, db and info work
+#   ./dev.py docker exec user list                # user, db, info and backup work
 #   ./dev.py docker exec db current
+#   ./dev.py docker exec backup create            # one archive, in <data dir>/backups/
 #   The image has no test runner, frontend sources or Node: `test …` answers
 #   "not available" and `server --test` cannot start. Run test mode from a
 #   source checkout instead (./dev.py server --test, ./dev.py test …).

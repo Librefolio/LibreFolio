@@ -223,7 +223,7 @@
     {#if loading && rows.length === 0 && !correlation}
         <div class="space-y-2" data-testid="risk-l2-loading">
             {#each [0, 1, 2] as placeholder (placeholder)}
-                <div class="h-8 animate-pulse rounded bg-gray-100 dark:bg-slate-700"></div>
+                <div class="h-8 animate-pulse rounded bg-lf-panel"></div>
             {/each}
         </div>
     {:else}
@@ -287,14 +287,14 @@
             <!-- Kept as well as promoted: `data-uncovered` publishes the raw
                  fraction, which is what a test reads instead of going through a
                  formatted, translated string. -->
-            <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l2-uncovered" data-uncovered={uncovered}>
+            <p class="text-xs text-lf-muted" data-testid="risk-l2-uncovered" data-uncovered={uncovered}>
                 {$t('risk.levels.l2.uncovered.residual', {values: {share: share(uncovered)}})}
             </p>
         {/if}
 
         {#if rows.length > 0}
             <div class="space-y-2">
-                <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l2-rows-caption">{$t('risk.levels.l2.rowsCaption')}</p>
+                <p class="text-xs text-lf-muted" data-testid="risk-l2-rows-caption">{$t('risk.levels.l2.rowsCaption')}</p>
                 <ul class="space-y-3" data-testid="risk-l2-rows">
                     {#each shown as row (row.assetId)}
                         <li class="space-y-1" data-testid="risk-l2-row-{row.assetId}">
@@ -314,14 +314,14 @@
                                 valueClass="tabular-nums font-semibold"
                                 testId="risk-l2-divergence-bar-{row.assetId}"
                             />
-                            <div class="flex justify-end gap-4 text-xs text-gray-500 dark:text-gray-400">
+                            <div class="flex justify-end gap-4 text-xs text-lf-muted">
                                 <span>
                                     {$t('risk.levels.l2.weight')}
-                                    <span class="tabular-nums text-gray-700 dark:text-gray-200" data-testid="risk-l2-weight-{row.assetId}">{share(row.weight)}</span>
+                                    <span class="tabular-nums text-lf-secondary" data-testid="risk-l2-weight-{row.assetId}">{share(row.weight)}</span>
                                 </span>
                                 <span>
                                     {$t('risk.levels.l2.contribution')}
-                                    <span class="tabular-nums text-gray-700 dark:text-gray-200" data-testid="risk-l2-contribution-{row.assetId}">{share(row.contribution)}</span>
+                                    <span class="tabular-nums text-lf-secondary" data-testid="risk-l2-contribution-{row.assetId}">{share(row.contribution)}</span>
                                 </span>
                             </div>
                         </li>
@@ -330,12 +330,12 @@
             </div>
 
             {#if rows.length > visibleRows}
-                <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => (expanded = !expanded)} data-testid="risk-l2-toggle-all">
+                <button type="button" class="text-xs text-lf-link hover:underline" onclick={() => (expanded = !expanded)} data-testid="risk-l2-toggle-all">
                     {expanded ? $t('risk.levels.l2.showLess') : $t('risk.levels.l2.showAll')}
                 </button>
             {/if}
         {:else}
-            <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="risk-l2-empty">{$t('risk.states.unavailable')}</p>
+            <p class="text-sm text-lf-muted" data-testid="risk-l2-empty">{$t('risk.states.unavailable')}</p>
         {/if}
 
         {#if correlation}
@@ -343,14 +343,14 @@
                  it and which had never been mounted anywhere but the legacy panel:
                  the list above says how much each holding contributes, this says
                  which holdings are the same bet. -->
-            <div class="space-y-2 border-t border-gray-100 pt-4 dark:border-slate-700" data-testid="risk-l2-correlation">
-                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200">{$t('risk.levels.l2.correlation.title')}</h4>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l2.correlation.basis')}</p>
+            <div class="space-y-2 border-t border-lf-subtle pt-4" data-testid="risk-l2-correlation">
+                <h4 class="text-sm font-medium text-lf-secondary">{$t('risk.levels.l2.correlation.title')}</h4>
+                <p class="text-xs text-lf-muted">{$t('risk.levels.l2.correlation.basis')}</p>
                 {#if !hasRedundantPair}
                     <!-- An empty matrix and a broken one look alike, so the empty
                          one says so. The claim is about the SHAPE of the answer
                          and never about a coefficient. -->
-                    <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l2-correlation-no-redundancy">
+                    <p class="text-xs text-lf-muted" data-testid="risk-l2-correlation-no-redundancy">
                         {$t('risk.levels.l2.correlation.noRedundancy')}
                     </p>
                 {/if}

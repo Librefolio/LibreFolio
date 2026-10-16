@@ -31,6 +31,14 @@ key of its own, and no consumer handles the instance key itself. The contract:
     made is an error.
 (f) ``instance_key_status()`` reports the source, the problem and the permissions open to group or others, without
     creating the key, without waiting and without raising.
+(g) ``derive_key_from(key, purpose, length=32)`` (1.3.0, H-14): the derivation of ``derive_key`` from a key it is given,
+    for a restore that re-encrypts what a backup's instance key encrypted. Known answers computed by ``derive_key`` with
+    that key configured; equal to ``derive_key`` when given the instance key, configured or generated (read as the module
+    reads it); the key given wins over the instance's. Pure: it never looks for the instance key, generates no key file,
+    and a broken key source does not affect it. Checked in order: an invalid purpose or length is a ``ValueError`` with
+    the message of ``derive_key``, whatever the key; a key that is not a ``str`` is a ``TypeError``; a key shorter than
+    32 characters (bytes do not count) is an ``InstanceKeyError`` that never shows it, 32 is enough. Two keys, two
+    derived keys. Until it exists, each of its tests fails on its own barrier, ``derive_key_from is missing``.
 
 Pure: the data directory is in ``tmp_path`` (``LIBREFOLIO_TEST_MODE=1`` and ``LIBREFOLIO_TEST_DATA_DIR``) and the
 configured key is set or removed through ``monkeypatch``: no database, no server, no network, nothing written in the
@@ -56,7 +64,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
+from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError, read_secret_file
 from backend.app.services.platform import instance_key
 from backend.app.services.platform.instance_key import (
     INSTANCE_KEY_FILE,
@@ -902,3 +910,241 @@ def test_status_reports_the_permissions_open_to_group_or_others(data_dir, folder
         key_file.chmod(0o600)
     assert (status.source, status.problem, status.loose_modes) == ("generated", None, expected), f"folder {folder_mode:04o} and file {file_mode:04o} must report {expected}: {status}"
     print_success(f"folder {folder_mode:04o}, file {file_mode:04o}: {status.loose_modes}")
+
+
+# =============================================================================
+# (g) derive_key_from
+# =============================================================================
+
+#: The key the known answers below were computed with: by today's ``derive_key``, this key configured.
+DERIVE_FROM_KEY = "kat-key-for-derive-key-from-0123456789abcdef"
+DERIVE_FROM_ANSWERS = {
+    ("plugins.settings.v1", 32): "3d849b483f1ea4469d7f3262ce1d39d1c0b872379bdad562a78b61dc6a9f2e44",
+    ("test.vector:v1", 64): "52d0832aa8a14ca82040fbfdc1522a07b80884079a08a54fad1764cc22a58b17b24b183e20293e3213bca6fc3948b248c3df1d24987726075d05a9c3cb59eaa7",
+    ("a", 1): "45",
+}
+#: The purposes and lengths over which ``derive_key_from`` given the instance key must agree with ``derive_key``.
+EQUIVALENCE_REQUESTS = [("plugins.settings.v1", 32), ("plugins.settings.fingerprint.v1", 32), ("backup.v1", 32), ("plugins.settings.v1", 16), ("test.vector:v1", 64), ("a", 1), ("z" * 128, 255 * 32)]
+#: Starts every key of the error tests: no part of it may appear in a message.
+KEY_CANARY = "Zq7canary"
+
+#: Requests ``derive_key`` refuses, whatever the key: the same ones must be refused by ``derive_key_from`` first.
+INVALID_REQUESTS = [
+    pytest.param("Bad Purpose", 32, id="purpose-uppercase-and-space"),
+    pytest.param("", 32, id="purpose-empty"),
+    pytest.param("a" * 129, 32, id="purpose-129-characters"),
+    pytest.param("plugins.v1\n", 32, id="purpose-trailing-newline"),
+    pytest.param(PURPOSE, 0, id="length-zero"),
+    pytest.param(PURPOSE, 255 * 32 + 1, id="length-8161"),
+    pytest.param(PURPOSE, 16.0, id="length-float"),
+    pytest.param(PURPOSE, None, id="length-none"),
+]
+#: A usable key, and keys each refused for a reason of its own: none may hide that the request is invalid.
+KEYS_OF_EVERY_KIND = [
+    pytest.param(KNOWN_KEY, id="usable-key"),
+    pytest.param("short", id="key-too-short"),
+    pytest.param(KNOWN_KEY.encode("utf-8"), id="key-bytes"),
+    pytest.param(None, id="key-none"),
+]
+
+
+def _derive_key_from():
+    """``instance_key.derive_key_from``, looked up when a test runs: until it exists, its tests fail here, and only they."""
+    function = getattr(instance_key, "derive_key_from", None)
+    assert function is not None, "derive_key_from is missing from backend/app/services/platform/instance_key.py (H-14)"
+    return function
+
+
+@pytest.mark.parametrize(("purpose", "length", "expected"), [(purpose, length, answer) for (purpose, length), answer in DERIVE_FROM_ANSWERS.items()], ids=[f"{purpose}-{length}" for purpose, length in DERIVE_FROM_ANSWERS])
+def test_derive_key_from_gives_the_known_answers(data_dir, monkeypatch, purpose, length, expected):
+    """(g) Known answers of ``derive_key`` with the key configured: given the same key, ``derive_key_from`` gives them too."""
+    monkeypatch.setenv(KEY_VARIABLE, DERIVE_FROM_KEY)
+    assert derive_key(purpose, length).hex() == expected, f"barrier: derive_key({purpose!r}, {length}) with the key configured no longer gives the pinned answer, so the answer itself is in question"
+    derive_key_from = _derive_key_from()
+
+    derived = derive_key_from(DERIVE_FROM_KEY, purpose, length).hex()
+
+    assert derived == expected, f"derive_key_from(<key>, {purpose!r}, {length}) gives {derived}, derive_key with that key configured gives {expected}"
+    print_success(f"{purpose}, {length} bytes: {derived}")
+
+
+@pytest.mark.parametrize("source", ["configured", "generated"])
+def test_derive_key_from_given_the_instance_key_is_derive_key(data_dir, monkeypatch, source):
+    """(g) Given the instance key itself, configured or generated, ``derive_key_from`` gives what ``derive_key`` gives."""
+    print_section(f"derive_key_from: the derivation of derive_key, {source} key")
+    if source == "configured":
+        monkeypatch.setenv(KEY_VARIABLE, KNOWN_KEY)
+        key = KNOWN_KEY
+    else:
+        derive_key(PURPOSE)
+        assert instance_key_path().is_file(), f"barrier: the first use of derive_key must have generated {instance_key_path()}"
+        # Read as the module reads the generated key: read_secret_file drops a byte order mark and the trailing line breaks
+        key = read_secret_file(instance_key_path(), "instance key file")
+    derive_key_from = _derive_key_from()
+
+    differing = [(purpose[:24], length) for purpose, length in EQUIVALENCE_REQUESTS if derive_key_from(key, purpose, length) != derive_key(purpose, length)]
+
+    assert not differing, f"derive_key_from(<instance key>, purpose, length) differs from derive_key(purpose, length) for {differing}"
+    print_success(f"{len(EQUIVALENCE_REQUESTS)} purposes and lengths, the same derived keys")
+
+
+def test_derive_key_from_uses_the_key_given_never_the_instances(data_dir, monkeypatch):
+    """(g) Another instance key configured: ``derive_key_from(K, purpose)`` is what K gives, not what the instance gives."""
+    monkeypatch.setenv(KEY_VARIABLE, KNOWN_KEY)
+    with_k_configured = derive_key(PURPOSE)
+    monkeypatch.setenv(KEY_VARIABLE, DERIVE_FROM_KEY)
+    of_the_instance = derive_key(PURPOSE)
+    assert of_the_instance != with_k_configured, "barrier: two instance keys must give two derived keys"
+    derive_key_from = _derive_key_from()
+
+    derived = derive_key_from(KNOWN_KEY, PURPOSE)
+
+    assert derived != of_the_instance, "derive_key_from used the instance's key instead of the key it was given"
+    assert derived == with_k_configured, "derive_key_from(K, purpose) must be what derive_key(purpose) gives with K configured"
+    assert derived.hex() == KNOWN_ANSWER, "derive_key_from(K, purpose) must default to 32 bytes and give the OpenSSL known answer of K"
+    print_success("the key given, not the instance's")
+
+
+def test_derive_key_from_never_generates_the_key_file(data_dir):
+    """(g) No key configured and no key file yet: ``derive_key_from`` derives from its argument and creates nothing."""
+    derive_key_from = _derive_key_from()
+
+    derived = derive_key_from(KNOWN_KEY, PURPOSE)
+
+    assert derived.hex() == KNOWN_ANSWER, "derive_key_from(K, purpose) must be the derivation of K"
+    assert not instance_key_path().exists(), f"derive_key_from generated {instance_key_path()}: it must never look for the instance key"
+    assert not data_dir.exists(), f"derive_key_from created something in the data directory: {list(data_dir.rglob('*'))}"
+    print_success("derived, nothing generated")
+
+
+def test_derive_key_from_never_reads_the_environment_or_the_data_directory(data_dir, monkeypatch):
+    """(g) Pure: neither the configured key, nor its origin, nor the data directory, nor a key file is read."""
+
+    def tripwire(*_args, **_kwargs):
+        raise AssertionError("derive_key_from looked for the instance key: it must use only the key it is given")
+
+    for name in ("configured_instance_key", "configured_instance_key_origin", "get_data_dir", "read_secret_file"):
+        monkeypatch.setattr(instance_key, name, tripwire)
+    derive_key_from = _derive_key_from()
+
+    derived = derive_key_from(KNOWN_KEY, PURPOSE)
+
+    assert derived.hex() == KNOWN_ANSWER, "derive_key_from(K, purpose) must be the derivation of K"
+    print_success("no source of the instance key read")
+
+
+@pytest.mark.parametrize("broken", ["key-file-variable-missing", "configured-key-too-short", "generated-key-file-empty"])
+def test_a_broken_instance_key_does_not_affect_derive_key_from(data_dir, monkeypatch, tmp_path, waits, broken):
+    """(g) The instance's own key unusable: ``derive_key_from`` derives all the same and leaves every source as it was."""
+    key_file = data_dir / INSTANCE_KEY_FILE
+    if broken == "key-file-variable-missing":
+        monkeypatch.setenv(KEY_FILE_VARIABLE, str(tmp_path / "missing-key"))
+    elif broken == "configured-key-too-short":
+        monkeypatch.setenv(KEY_VARIABLE, "short-key")
+    else:
+        _write_key_file(data_dir, b"")
+    with pytest.raises(InstanceKeyError):
+        derive_key(PURPOSE)  # barrier: the instance key is really unusable
+    waits_before = len(waits)
+    derive_key_from = _derive_key_from()
+
+    derived = derive_key_from(KNOWN_KEY, PURPOSE)
+
+    assert derived.hex() == KNOWN_ANSWER, f"{broken}: derive_key_from(K, purpose) must be the derivation of K"
+    assert len(waits) == waits_before, f"{broken}: derive_key_from waited for a key file: {waits[waits_before:]}"
+    if broken == "generated-key-file-empty":
+        assert key_file.read_bytes() == b"", "derive_key_from touched the damaged key file"
+    else:
+        assert not data_dir.exists(), f"{broken}: derive_key_from created something in the data directory: {list(data_dir.rglob('*'))}"
+    print_success(f"{broken}: derived from the key given, nothing touched")
+
+
+@pytest.mark.parametrize("key", KEYS_OF_EVERY_KIND)
+@pytest.mark.parametrize(("purpose", "length"), INVALID_REQUESTS)
+def test_derive_key_from_refuses_an_invalid_request_before_looking_at_the_key(data_dir, purpose, length, key):
+    """(g) An invalid purpose or length is a ``ValueError`` with the message of ``derive_key``, whatever the key."""
+    with pytest.raises(ValueError) as refused_by_derive_key:
+        derive_key(purpose, length)  # barrier: derive_key refuses this request, and says how
+    derive_key_from = _derive_key_from()
+
+    with pytest.raises(ValueError) as raised:
+        derive_key_from(key, purpose, length)
+
+    assert str(raised.value) == str(refused_by_derive_key.value), f"derive_key_from must refuse the request as derive_key does:\n  expected {str(refused_by_derive_key.value)!r}\n  got      {str(raised.value)!r}"
+    assert not data_dir.exists(), "an invalid request must create nothing"
+    print_success(f"{str(purpose)[:24]!r}, {length!r}: {str(raised.value)[:60]}")
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param(KNOWN_KEY.encode("utf-8"), id="bytes"),
+        pytest.param(b"short", id="short-bytes"),
+        pytest.param(None, id="none"),
+        pytest.param(12345678901234567890123456789012345, id="int-of-35-digits"),
+    ],
+)
+def test_derive_key_from_refuses_a_key_that_is_not_text(data_dir, key):
+    """(g) The key is text, as the instance key is: bytes, ``None`` or a number is a ``TypeError``, whatever its length."""
+    derive_key_from = _derive_key_from()
+
+    with pytest.raises(TypeError) as raised:
+        derive_key_from(key, PURPOSE)
+
+    assert KNOWN_KEY not in str(raised.value), f"the error shows the key: {raised.value!r}"
+    assert not data_dir.exists(), "a refused key must create nothing"
+    print_success(f"{type(key).__name__}: {raised.value}")
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param(KEY_CANARY, id="9-characters"),
+        pytest.param((KEY_CANARY + "x" * INSTANCE_KEY_MIN_LENGTH)[: INSTANCE_KEY_MIN_LENGTH - 1], id="31-characters"),
+        pytest.param(KEY_CANARY + "é" * (INSTANCE_KEY_MIN_LENGTH - 1 - len(KEY_CANARY)), id="31-characters-53-bytes"),
+    ],
+)
+def test_derive_key_from_refuses_a_key_shorter_than_32_characters_without_showing_it(data_dir, key):
+    """(g) Shorter than 32 characters, however many bytes: an ``InstanceKeyError`` whose message holds no part of the key."""
+    assert len(key) < INSTANCE_KEY_MIN_LENGTH, f"precondition: {len(key)} characters"
+    derive_key_from = _derive_key_from()
+
+    with pytest.raises(InstanceKeyError) as raised:
+        derive_key_from(key, PURPOSE)
+
+    message = str(raised.value)
+    assert key not in message and KEY_CANARY not in message, f"the error shows the key: {message!r}"
+    assert not data_dir.exists(), "a refused key must create nothing"
+    print_success(f"{len(key)} characters refused: {message}")
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        pytest.param((KEY_CANARY + "x" * INSTANCE_KEY_MIN_LENGTH)[:INSTANCE_KEY_MIN_LENGTH], id="32-characters"),
+        pytest.param("é" * INSTANCE_KEY_MIN_LENGTH, id="32-characters-64-bytes"),
+    ],
+)
+def test_derive_key_from_accepts_a_key_of_32_characters(data_dir, monkeypatch, key):
+    """(g) 32 characters is enough, as for a configured key; the key's UTF-8 bytes are the input of the derivation."""
+    monkeypatch.setenv(KEY_VARIABLE, key)
+    configured = derive_key(PURPOSE)
+    derive_key_from = _derive_key_from()
+
+    derived = derive_key_from(key, PURPOSE)
+
+    assert derived == configured, "a key of 32 characters must give what derive_key gives with it configured"
+    assert derived == _derived_from(key, PURPOSE), "the derivation must be HKDF-SHA256 of the key's UTF-8 bytes"
+    print_success(f"{len(key)} characters, {len(key.encode('utf-8'))} bytes: accepted")
+
+
+def test_two_keys_give_two_derived_keys(data_dir):
+    """(g) Another key, even by one character, gives another derived key for the same purpose and length."""
+    derive_key_from = _derive_key_from()
+    keys = [KNOWN_KEY, KNOWN_KEY[:-1] + "8", DERIVE_FROM_KEY]
+    requests = [(PURPOSE, 32), ("backup.v1", 16), ("test.vector:v1", 64)]
+
+    collisions = [(purpose, length) for purpose, length in requests if len({derive_key_from(key, purpose, length) for key in keys}) != len(keys)]
+
+    assert not collisions, f"two keys gave the same derived key for {collisions}"
+    print_success(f"{len(keys)} keys, {len(requests)} requests: all different")

@@ -37,6 +37,7 @@ from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.email.delivery import EmailDeliveryError, EmailRateLimitedError, EmailUnavailableError, budget_status, email_config_state
 from backend.app.services.email.links import EmailLinksUnavailableError, links_state
 from backend.app.services.email.messages import EmailRecipientError
+from backend.app.services.platform.client_address import client_address
 
 logger = get_logger(__name__)
 
@@ -155,7 +156,7 @@ async def request_password_reset_email(
     asks for its current password (workstream A, lot A6e): a moment inside someone's session cannot move their address,
     then their password, through here.
     """
-    address = request.client.host if request.client else None
+    address = client_address(request)
     try:
         await flows.admit_forgotten_password(address, body.identifier)
     except EmailUnavailableError:
@@ -199,7 +200,7 @@ async def resend_email_verification(body: EmailVerificationResendRequest, reques
     ``smtp_code``); 422
     ``EMAIL_RECIPIENT_INVALID`` when the account's address is not one address.
     """
-    address = request.client.host if request.client else None
+    address = client_address(request)
     try:
         language = await verification.resend_verification(session, identifier=body.username, password=body.password, address=address)
     except verification.VerificationCredentialsError:
