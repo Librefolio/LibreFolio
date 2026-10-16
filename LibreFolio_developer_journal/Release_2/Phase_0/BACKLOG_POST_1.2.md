@@ -4831,7 +4831,10 @@ sulla base `23f6578f3`.
   CP-15 è entrato (`financial_math/ledger_totals.py`: `compute_control_totals(session)`, `ControlTotals.to_json()`):
   il manifest li porta (§3.2 del piano 07), la prova li ricalcola sulla copia e li confronta con un avviso, l'e2e
   `backup-roundtrip` li confronta al posto dei report (il suo `TODO(CP-15)`). Dettagli: piano 07, §3.2 e §13.
-- **B-14 · La pagina di blocco non ha il pulsante del backup** — piccolo; B, 16/10 (docs-writer, B6a-bis). Il piano 07
+- ✅ **B-14 · La pagina di blocco non ha il pulsante del backup** — piccolo; B, 16/10 (docs-writer, B6a-bis). **Fatto il
+  16/10**: la scheda nella pagina di blocco è entrata col lotto di H (H-12/21, base `0c79932a7`), che ha corretto anche la
+  sua frase di `hosting_providers.en.md`; B ha corretto le due della guida (`backup_restore.en.md`: «Make a Backup» e
+  «Bring Your LibreFolio Home») nel checkpoint della sera dopo `dbc2324d5`. Il piano 07
   (§3.11) voleva la scheda di scaricamento di B5a (`BackupDownloadCard.svelte`) anche nella pagina di blocco
   (`features/instance/components/InstanceBlockedPage.svelte`, di H); oggi un admin di un'istanza bloccata scarica il
   backup solo dall'API, dalla CLI o dal pannello (le rotte sono in `ALLOWED_WHEN_BLOCKED`), e la doc lo dice
