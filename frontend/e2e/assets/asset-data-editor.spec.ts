@@ -284,7 +284,7 @@ test.describe('Asset Data Editor', () => {
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;;;;;\nnot-a-date;USD;100;;;;\n2020-06-11;USD;abc;;;;');
 
         // Error indicators (✗) should be visible
-        const errorIndicators = modal.locator('.text-red-500');
+        const errorIndicators = modal.locator('[data-state="invalid"]');
         await expect(errorIndicators.first()).toBeVisible();
 
         // Import button should NOT show 3 valid rows (some are invalid)
@@ -343,7 +343,7 @@ test.describe('Asset Data Editor', () => {
         await textarea.fill('date;currency;type;amount;notes\n2020-03-15;USD;;1.25;test\n2020-06-01;USD;DIVIDEND;;test');
 
         // Error indicators should be visible
-        const errorIndicators = modal.locator('.text-red-500');
+        const errorIndicators = modal.locator('[data-state="invalid"]');
         await expect(errorIndicators.first()).toBeVisible();
     });
 
@@ -380,9 +380,9 @@ test.describe('Asset Data Editor', () => {
         // It may or may not be visible depending on data — check it doesn't crash
         if (await staleToggle.isVisible({timeout: 3000}).catch(() => false)) {
             await expect(staleToggle).toBeVisible();
-            // Toggle should contain the amber counter
-            const counter = staleToggle.locator('span.text-amber-600, span.text-amber-400');
-            await expect(counter.first()).toBeVisible();
+            // Toggle should contain the stale-row counter
+            const counter = staleToggle.getByTestId('data-editor-stale-count');
+            await expect(counter).toBeVisible();
         }
     });
 
