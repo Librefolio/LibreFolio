@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Sequence
+from typing import Callable, Sequence
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.portfolio import (
@@ -17,7 +17,7 @@ from backend.app.schemas.portfolio import (
     PerformanceHistoryPoint,
 )
 from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoLot, FragmentInterval, LotClosure
-from backend.app.services.financial_math.lots.conversions import FxRateResolver
+from backend.app.services.financial_math.lots.conversions import ConvertedClosure, FxRateResolver, convert_closure
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics
 from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
@@ -42,7 +42,9 @@ class _LotValueBasis:
     # A short's cumulative proceeds; 0 for a long, whose proceeds come from its closures.
     short_proceeds: Decimal
     last_date: date_type
+    # Running sums by close date: a long lot's proceeds, a short lot's buy-back costs (each empty for the other).
     proceeds_by_day: dict[date_type, Decimal]
+    buybacks_by_day: dict[date_type, Decimal]
 
 
 def build_performance_history(  # noqa: C901 — cash-flow collection loops with sequential guard filters
@@ -101,7 +103,7 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
         tx = context.tx_by_id.get(closure.transaction_id)
         if lot is None or tx is None or lot.direction != "LONG" or tx.broker_id not in scope_set:
             continue
-        proceeds = fx_resolver.convert(closure.proceeds, lot.currency or asset_currency, closure.close_date)
+        proceeds = convert_closure(closure, lot, fx_resolver).proceeds
         if proceeds is None:
             invalid_external_flow_from = closure.close_date if invalid_external_flow_from is None else min(invalid_external_flow_from, closure.close_date)
             continue
@@ -161,26 +163,45 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
 
 
 def known_realized_pnl(lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: FxRateResolver) -> Decimal | None:
-    """Realized P&L in the target currency; None when a closure has no rate."""
+    """Realized P&L in the target currency, each closure's legs at their own dates; None when one has no rate."""
     total = Decimal("0")
     for closure in closures:
-        converted = fx_resolver.convert(closure.realized_pnl, lot.currency, closure.close_date)
+        realized = convert_closure(closure, lot, fx_resolver).realized_pnl
+        if realized is None:
+            return None
+        total += realized
+    return total
+
+
+def known_cumulative_proceeds(lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: FxRateResolver) -> Decimal | None:
+    """Cumulative proceeds in the target currency; None when they, or one closure's, have no rate.
+
+    A long lot's are its closures', each in its own currency at its date; a short lot's are its opening sale's.
+    """
+    if lot.direction == "SHORT":
+        return fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date)
+    total = Decimal("0")
+    for closure in closures:
+        converted = convert_closure(closure, lot, fx_resolver).proceeds
         if converted is None:
             return None
         total += converted
     return total
 
 
-def known_cumulative_proceeds(lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: FxRateResolver) -> Decimal | None:
-    """Cumulative proceeds in the target currency; None when they, or one closure's, have no rate."""
-    if lot.direction == "SHORT":
-        return fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date)
+def known_buyback_cost(lot: FifoLot, closures: Sequence[LotClosure], fx_resolver: FxRateResolver) -> Decimal | None:
+    """What a short lot's closing purchases cost in the target currency, each at its date; 0 for a long lot.
+
+    None when one of them has no rate. A short lot's P&L is its opening proceeds minus these minus its open value.
+    """
+    if lot.direction != "SHORT":
+        return Decimal("0")
     total = Decimal("0")
     for closure in closures:
-        converted = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
-        if converted is None:
+        cost = convert_closure(closure, lot, fx_resolver).cost
+        if cost is None:
             return None
-        total += converted
+        total += cost
     return total
 
 
@@ -293,7 +314,10 @@ def build_return_history(
             if market_price is not None and converted_reference not in (None, Decimal("0")):
                 relative_return = (market_price / converted_reference) - Decimal("1")
             income, allocated_fees, allocated_taxes = _economics_on_date(lot_id, current_date, income_prefix, fees_prefix, taxes_prefix, withheld)
-            total_return, net_total_return = _lot_returns(basis.original_cost, total_value, income, allocated_fees, allocated_taxes)
+            # A short's total value is its P&L: it is read against the notional sold, as the lot summary reads
+            # total P&L / opening value, so a short at break-even returns 0, not −100%.
+            value_for_return = total_value if lot.direction == "LONG" else basis.original_cost + total_value
+            total_return, net_total_return = _lot_returns(basis.original_cost, value_for_return, income, allocated_fees, allocated_taxes)
             points.append(
                 LotReturnHistoryPoint(
                     lot_id=lot_id,
@@ -313,6 +337,7 @@ def _value_snapshot_on_date(
     lot: FifoLot,
     fragments: Sequence[FragmentInterval],
     proceeds_by_day: dict[date_type, Decimal],
+    buybacks_by_day: dict[date_type, Decimal],
     market_price: Decimal,
     current_date: date_type,
     converted_original_cost: Decimal,
@@ -326,7 +351,7 @@ def _value_snapshot_on_date(
         pnl = total_value - converted_original_cost
     else:
         proceeds = converted_short_proceeds
-        total_value = proceeds - open_value
+        total_value = proceeds - _prefix_value_on_date(buybacks_by_day, current_date) - open_value
         pnl = total_value
     return open_value, proceeds, total_value, pnl
 
@@ -387,18 +412,24 @@ def _lot_value_basis(lot: FifoLot, closures: Sequence[LotClosure], history_end: 
     """The converted cost, proceeds and last date of a lot's value series; None when the cost has no rate.
 
     Without its cost (or, for a short, its proceeds) in the target currency the lot gets no point: its P&L
-    would mix currencies. A long lot's series stops the day before the first closure whose proceeds have
-    no rate. Same rule as the average-cost lines: a point that cannot be computed is omitted.
+    would mix currencies. The series stops the day before the first closure whose proceeds (a long lot) or
+    buy-back cost (a short lot) has no rate. Same rule as the average-cost lines: a point that cannot be
+    computed is omitted.
     """
     original_cost = fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date)
     short_proceeds = fx_resolver.convert(lot.cumulative_proceeds, lot.currency, lot.opening_date) if lot.direction == "SHORT" else Decimal("0")
     if original_cost is None or short_proceeds is None:
         return None
     last_date = lot_history_end_date(lot, closures, history_end, extend_closed=True)
-    proceeds_by_day, proceeds_unknown_from = _closure_proceeds_prefix(lot, closures, fx_resolver)
-    if lot.direction == "LONG" and proceeds_unknown_from is not None:
-        last_date = min(last_date, proceeds_unknown_from - timedelta(days=1))
-    return _LotValueBasis(original_cost=original_cost, short_proceeds=short_proceeds, last_date=last_date, proceeds_by_day=proceeds_by_day)
+    proceeds_by_day: dict[date_type, Decimal] = {}
+    buybacks_by_day: dict[date_type, Decimal] = {}
+    if lot.direction == "LONG":
+        proceeds_by_day, unknown_from = _closure_prefix(lot, closures, fx_resolver, lambda converted: converted.proceeds)
+    else:
+        buybacks_by_day, unknown_from = _closure_prefix(lot, closures, fx_resolver, lambda converted: converted.cost)
+    if unknown_from is not None:
+        last_date = min(last_date, unknown_from - timedelta(days=1))
+    return _LotValueBasis(original_cost=original_cost, short_proceeds=short_proceeds, last_date=last_date, proceeds_by_day=proceeds_by_day, buybacks_by_day=buybacks_by_day)
 
 
 def _lot_snapshot_on_date(
@@ -421,6 +452,7 @@ def _lot_snapshot_on_date(
             lot=lot,
             fragments=fragments,
             proceeds_by_day=basis.proceeds_by_day,
+            buybacks_by_day=basis.buybacks_by_day,
             market_price=market_price,
             current_date=current_date,
             converted_original_cost=basis.original_cost,
@@ -434,7 +466,7 @@ def _lot_snapshot_on_date(
             proceeds = _prefix_value_on_date(basis.proceeds_by_day, current_date)
             total_value = open_value + proceeds
             return open_value, proceeds, total_value, total_value - basis.original_cost
-        total_value = basis.short_proceeds - open_value
+        total_value = basis.short_proceeds - _prefix_value_on_date(basis.buybacks_by_day, current_date) - open_value
         return open_value, basis.short_proceeds, total_value, total_value
     if estimated_mode and lot.direction == "LONG" and lot.original_quantity != Decimal("0"):
         open_value = open_quantity * (basis.original_cost / lot.original_quantity)
@@ -444,19 +476,20 @@ def _lot_snapshot_on_date(
     return None
 
 
-def _closure_proceeds_prefix(
+def _closure_prefix(
     lot: FifoLot,
     closures: Sequence[LotClosure],
     fx_resolver: FxRateResolver,
+    leg: Callable[[ConvertedClosure], Decimal | None],
 ) -> tuple[dict[date_type, Decimal], date_type | None]:
-    """Cumulative converted proceeds by close date, and the first close date whose proceeds have no rate.
+    """The running sum of one converted leg of the closures by close date, and the first close date it has no rate.
 
     From that date the lot's value is unknown: the prefix stops there instead of adding unconverted money.
     """
     running = Decimal("0")
     out: dict[date_type, Decimal] = {}
     for closure in sorted(closures, key=lambda item: (item.close_date, item.transaction_id, item.lot_id)):
-        converted = fx_resolver.convert(closure.proceeds, lot.currency, closure.close_date)
+        converted = leg(convert_closure(closure, lot, fx_resolver))
         if converted is None:
             return out, closure.close_date
         running += converted

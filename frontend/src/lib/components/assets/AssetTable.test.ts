@@ -3,10 +3,13 @@
  * AssetTable — component test (Vitest + jsdom).
  *
  * Subjects: the F15 usage badge plus lifecycle filtering, ordering and the
- * inactive table/card treatments. Their colours ARE the features — usage scope
- * and lifecycle are communicated visually at a glance — so here, exceptionally,
- * assertions read the class tokens that deliver those contracts. Behaviour is
- * still located by semantic attributes and deterministic ids, never by position.
+ * inactive table/card treatments. Lifecycle is read from the state the
+ * components publish — `data-lifecycle` on the table's status dot and on the
+ * card root, the `asset-row-inactive` row marker — never from a colour class.
+ * Only the F15 usage badge still reads class tokens, exceptionally: its tint IS
+ * the feature, and it stays on palette classes until the categorical roles
+ * come (AF-2). Behaviour is located by semantic attributes and deterministic
+ * ids, never by position.
  *
  * The store loaders the component kicks off (`ensureCurrenciesLoaded`,
  * `ensureAssetProvidersCached`) are fail-soft by design, so a `$lib/api` mock
@@ -66,6 +69,11 @@ function rowEl(id: number): HTMLElement {
 /** The badge span in the row's txCount cell, or null. */
 function badgeIn(rowElement: HTMLElement): HTMLElement | null {
     return rowElement.querySelector<HTMLElement>('td.td-data span.font-mono');
+}
+
+/** The lifecycle each status dot of the row publishes (`span[data-lifecycle]`), in document order. */
+function lifecycleDotsIn(rowElement: HTMLElement): Array<string | null> {
+    return Array.from(rowElement.querySelectorAll('span[data-lifecycle]'), (dot) => dot.getAttribute('data-lifecycle'));
 }
 
 beforeAll(async () => {
@@ -132,11 +140,12 @@ describe('asset lifecycle', () => {
         const inactive = rowEl(22);
         expect(active).not.toHaveClass('asset-row-inactive');
         expect(inactive).toHaveClass('asset-row-inactive');
-        expect(active.querySelector('span.w-2.h-2.rounded-full.bg-emerald-500')).not.toBeNull();
-        expect(inactive.querySelector('span.w-2.h-2.rounded-full.bg-red-400')).not.toBeNull();
+        // Exactly one status dot per row, publishing that row's lifecycle — so never the other one.
+        expect(lifecycleDotsIn(active), 'active row: one dot, published active').toEqual(['active']);
+        expect(lifecycleDotsIn(inactive), 'inactive row: one dot, published inactive').toEqual(['inactive']);
     });
 
-    it('publishes inactive card lifecycle and amber surfaces while the active card stays neutral', () => {
+    it('publishes the card lifecycle: active for an active asset, inactive for an inactive one', () => {
         render(AssetCard, {
             asset: {
                 id: 31,
@@ -161,11 +170,7 @@ describe('asset lifecycle', () => {
         const active = screen.getByTestId('asset-card-31');
         const inactive = screen.getByTestId('asset-card-32');
         expect(active).toHaveAttribute('data-lifecycle', 'active');
-        expect(active).toHaveClass('bg-white', 'dark:bg-slate-800');
-        expect(active).not.toHaveClass('bg-amber-50');
-        expect(active).not.toHaveClass('dark:bg-amber-950/30');
         expect(inactive).toHaveAttribute('data-lifecycle', 'inactive');
-        expect(inactive).toHaveClass('bg-amber-50', 'dark:bg-amber-950/30');
     });
 });
 

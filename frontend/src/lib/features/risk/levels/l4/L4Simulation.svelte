@@ -151,38 +151,40 @@
          *declared*, never estimated: a reader who cannot see the assumption is
          reading a number they believe was derived from their own data. -->
     <fieldset class="space-y-1.5" data-testid="risk-simulation-modes">
-        <legend class="mb-1 text-xs font-medium text-gray-700 dark:text-gray-200">{$t('risk.simulation.mode.label')}</legend>
+        <legend class="mb-1 text-xs font-medium text-lf-secondary">{$t('risk.simulation.mode.label')}</legend>
         {#each SIMULATION_MODES as option (option.id)}
-            <label
-                class="flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 {mode === option.id ? 'border-libre-green bg-libre-green/10 dark:bg-libre-green/20' : 'border-gray-300 dark:border-slate-600'}"
-                data-testid="risk-simulation-mode"
-                data-mode-id={option.id}
-                data-selected={mode === option.id}
-            >
+            <label class="flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 {mode === option.id ? 'border-lf-checked bg-lf-selected' : 'border-lf-input'}" data-testid="risk-simulation-mode" data-mode-id={option.id} data-selected={mode === option.id}>
                 <input type="radio" name="risk-simulation-mode" value={option.id} checked={mode === option.id} onchange={() => chooseMode(option.id)} class="mt-0.5 shrink-0" />
                 <span class="min-w-0">
                     <span class="flex flex-wrap items-center gap-1.5">
-                        <span class="text-sm font-medium text-gray-800 dark:text-gray-100">{$t(`risk.simulation.mode.${option.id}.label`)}</span>
+                        <span class="text-sm font-medium text-lf-primary">{$t(`risk.simulation.mode.${option.id}.label`)}</span>
                         {#if option.badge}
-                            <span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-gray-600 dark:bg-slate-700 dark:text-gray-300" data-testid="risk-simulation-mode-badge">
+                            <span class="rounded-full bg-lf-panel px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-lf-secondary" data-testid="risk-simulation-mode-badge">
                                 {$t(`risk.simulation.mode.${option.badge}`)}
                             </span>
                         {/if}
                     </span>
-                    <span class="block text-xs text-gray-500 dark:text-gray-400" data-testid="risk-simulation-mode-hypothesis">{$t(`risk.simulation.mode.${option.id}.hypothesis`)}</span>
+                    <span class="block text-xs text-lf-muted" data-testid="risk-simulation-mode-hypothesis">{$t(`risk.simulation.mode.${option.id}.hypothesis`)}</span>
                 </span>
             </label>
         {/each}
     </fieldset>
 
-    <div class="flex flex-wrap items-end gap-3 text-xs text-gray-500 dark:text-gray-400">
+    <div class="flex flex-wrap items-end gap-3 text-xs text-lf-muted">
         <label class="flex flex-col gap-1">
             {$t('risk.params.horizonDays')}
-            <input type="number" min="1" bind:value={horizonDays} onchange={invalidate} class="w-24 rounded border border-gray-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" data-testid="risk-simulation-horizon" />
+            <input
+                type="number"
+                min="1"
+                bind:value={horizonDays}
+                onchange={invalidate}
+                class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus"
+                data-testid="risk-simulation-horizon"
+            />
         </label>
         <label class="flex flex-col gap-1">
             {$t('risk.params.paths')}
-            <input type="number" min="1" bind:value={paths} onchange={invalidate} class="w-24 rounded border border-gray-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" data-testid="risk-simulation-paths" />
+            <input type="number" min="1" bind:value={paths} onchange={invalidate} class="w-24 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-paths" />
         </label>
         {#if showSampling}
             <div class="flex flex-col gap-1">
@@ -206,41 +208,41 @@
         {#if showSeed}
             <label class="flex flex-col gap-1">
                 {$t('risk.params.randomSeed')}
-                <input type="number" bind:value={randomSeed} onchange={invalidate} class="w-28 rounded border border-gray-200 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-700" data-testid="risk-simulation-seed" />
+                <input type="number" bind:value={randomSeed} onchange={invalidate} class="w-28 rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" data-testid="risk-simulation-seed" />
             </label>
         {/if}
-        <button type="button" class="rounded-lg bg-libre-green px-3 py-1.5 text-sm text-white hover:bg-primary-600 disabled:opacity-50" onclick={run} disabled={controller.simulationLoading} data-testid="risk-simulation-run">
+        <button type="button" class="rounded-lg bg-lf-action px-3 py-1.5 text-sm text-lf-on-action hover:bg-lf-action-hover disabled:opacity-50" onclick={run} disabled={controller.simulationLoading} data-testid="risk-simulation-run">
             {$t('risk.actions.simulate')}
         </button>
     </div>
 
     {#if output}
         <div class="flex flex-wrap gap-4 text-sm" data-testid="risk-simulation-terminal">
-            <span class="text-gray-700 dark:text-gray-200">{$t('risk.metrics.terminalMean')}: <strong class="tabular-nums">{signedPercent(output.terminal_mean_return)}</strong></span>
-            <span class="text-gray-700 dark:text-gray-200">{$t('risk.metrics.probabilityOfLoss')}: <strong class="tabular-nums">{formatPercent(output.probability_of_loss, {scale: 100, signed: false, digits: 1})}</strong></span>
+            <span class="text-lf-secondary">{$t('risk.metrics.terminalMean')}: <strong class="tabular-nums">{signedPercent(output.terminal_mean_return)}</strong></span>
+            <span class="text-lf-secondary">{$t('risk.metrics.probabilityOfLoss')}: <strong class="tabular-nums">{formatPercent(output.probability_of_loss, {scale: 100, signed: false, digits: 1})}</strong></span>
             {#if terminal}
                 <!-- The band, not just its middle: a median alone reads as a
                      prediction, and the whole point of a cone is that it is not one. -->
-                <span class="text-gray-500 dark:text-gray-400" data-testid="risk-simulation-band-range">{signedPercent(terminal.p05)} … {signedPercent(terminal.p95)}</span>
+                <span class="text-lf-muted" data-testid="risk-simulation-band-range">{signedPercent(terminal.p05)} … {signedPercent(terminal.p95)}</span>
             {/if}
         </div>
         {#if driftUncertainty}
             <!-- Adjacent to the numbers it qualifies, above the picture of them:
                  the reader meets the caveat before the cone, not after it. -->
             {#if driftUncertainty.exceedsBand}
-                <div class="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-900/20" data-testid="risk-simulation-drift-uncertainty" data-exceeds-band="true">
-                    <AlertTriangle size={14} class="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                    <p class="text-xs text-amber-800 dark:text-amber-200">
+                <div class="flex items-start gap-2 rounded-lg bg-lf-warning-soft px-3 py-2" data-testid="risk-simulation-drift-uncertainty" data-exceeds-band="true">
+                    <AlertTriangle size={14} class="mt-0.5 shrink-0 text-lf-warning" />
+                    <p class="text-xs text-lf-warning-on-soft">
                         {$t('risk.simulation.driftUncertaintyWide', {values: {count: driftUncertainty.observations, low: signedPercent(driftUncertainty.low), high: signedPercent(driftUncertainty.high)}})}
                     </p>
                 </div>
             {:else}
-                <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-simulation-drift-uncertainty" data-exceeds-band="false">
+                <p class="text-xs text-lf-muted" data-testid="risk-simulation-drift-uncertainty" data-exceeds-band="false">
                     {$t('risk.simulation.driftUncertainty', {values: {count: driftUncertainty.observations, low: signedPercent(driftUncertainty.low), high: signedPercent(driftUncertainty.high)}})}
                 </p>
             {/if}
         {/if}
-        <div class="rounded-lg border border-gray-100 p-2 dark:border-slate-700">
+        <div class="rounded-lg border border-lf-subtle p-2">
             <LineChart data={coneData} overlaySignals={coneOverlay} currency="%" viewMode="percentage" colorByBaseline={false} showGradient={false} height="280px" />
         </div>
         <SimulationProvenance {provenance} />

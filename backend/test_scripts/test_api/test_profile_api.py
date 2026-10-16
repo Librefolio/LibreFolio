@@ -670,3 +670,356 @@ class TestDeleteAccount:
                 assert response.status_code == 401, f"Session should be invalid, got {response.status_code}"
 
             print_success("Session invalidated after account deletion")
+
+
+# ============================================================================
+# NO ADDRESS IN THE LOGS — lot A7c (PROF-017 to PROF-019), in-process on a private database
+# ============================================================================
+# These imports and helpers serve TestProfileLogsNoAddress only, so they live next to it. The lane's server writes its
+# logs in a process of its own, which no test can capture: so these cases run in-process, on a private instance — the
+# real auth router, mounted as api/v1/router.py mounts it, in an app of this test whose get_session_generator opens
+# sessions on a private SQLite file under tmp_path, seeded as a new install (the global settings, no account), as in
+# test_admin_setup_api.py and test_users_admin_api.py. Nothing reaches the lane. bcrypt runs at its lowest cost in this
+# process (auth_service.BCRYPT_ROUNDS = 4); the lane's server keeps its own. Each address has a local part of its own
+# that no username shares: a log may carry the username, never the address, and the check looks for the local part
+# alone too.
+
+import logging
+from collections.abc import Iterable
+from pathlib import Path
+
+import structlog
+from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
+from structlog.testing import capture_logs
+
+from backend.app.api.v1 import auth as auth_api
+from backend.app.config import API_V1_PREFIX
+from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
+from backend.app.db.models import User
+from backend.app.db.session import get_session_generator
+from backend.app.services.accounts import auth_service, user_service
+from backend.app.services.accounts.settings_service import initialize_global_settings
+
+#: The loggers of PUT /auth/profile, both structlog.get_logger(__name__): the route's and update_profile's.
+PROFILE_LOGGERS = (auth_api.__name__, user_service.__name__)
+#: The event the route logs once the profile is updated, and the one update_profile logs, word for word.
+PROFILE_UPDATED = "Profile updated"
+USER_PROFILE_UPDATED = "User profile updated"
+#: The SQL loggers. Below WARNING they print every statement with its parameters and every row read, so the addresses an
+#: UPDATE writes and a SELECT reads too. configure_logging (backend/app/logging_config.py) sets them to WARNING: a running
+#: server never writes those records, caplog sees them only because it lowers the root's level. UADM-030
+#: (test_users_admin_api.py) pins that premise, read from configure_logging's source.
+SQL_LOGGERS = ("aiosqlite", "sqlalchemy.engine", "sqlalchemy.pool")
+
+
+@dataclass(frozen=True)
+class _Private:
+    """An instance of one test: the auth router, every session on ``engine``."""
+
+    engine: AsyncEngine
+    app: FastAPI
+
+
+def _private_app(engine: AsyncEngine) -> FastAPI:
+    """The real auth router, mounted under the API prefix as ``api/v1/router.py`` mounts it; ``get_session_generator`` opens sessions on ``engine``."""
+    app = FastAPI()
+    app.include_router(auth_api.router, prefix=API_V1_PREFIX)
+
+    async def private_session() -> AsyncIterator[AsyncSession]:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            yield session
+
+    app.dependency_overrides[get_session_generator] = private_session
+    return app
+
+
+@pytest_asyncio.fixture
+async def private(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[_Private]:
+    """A private SQLite file under tmp_path, schema and default settings as a new install starts with, no account; bcrypt at cost 4. Disposed at teardown."""
+    monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'profile-logs.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine) as session:
+            await initialize_global_settings(session)
+        yield _Private(engine=engine, app=_private_app(engine))
+    finally:
+        await engine.dispose()
+
+
+async def _in_process(private: _Private, method: str, path: str, *, cookie: Optional[str] = None, json: Any = None) -> httpx.Response:
+    """One request to the private instance, from a client of its own: no cookie jar, the session (if any) sent explicitly."""
+    headers = {"Cookie": f"{SESSION_COOKIE_NAME}={cookie}"} if cookie else {}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=private.app), base_url="http://test", timeout=TIMEOUT) as client:
+        return await client.request(method, f"{API_V1_PREFIX}{path}", json=json, headers=headers)
+
+
+@dataclass(frozen=True)
+class _PrivateAccount:
+    """An account of the private instance, signed in with the session ``cookie``; its username and its address carry tags of their own."""
+
+    user_id: int
+    username: str
+    email: str
+    cookie: str
+
+
+async def _signed_in_account(private: _Private) -> _PrivateAccount:
+    """An account written as a row with a real bcrypt hash of TEST_PASSWORD (cost 4), then signed in through POST /auth/login: all before any capture."""
+    username, email = _new_username("logs"), _new_email("inbox")
+    async with AsyncSession(private.engine, expire_on_commit=False) as session:
+        user = User(username=username, email=email, hashed_password=auth_service.hash_password(TEST_PASSWORD))
+        session.add(user)
+        await session.commit()
+    login = await _in_process(private, "POST", "/auth/login", json={"username": username, "password": TEST_PASSWORD})
+    cookies = _session_set_cookies(login)
+    assert login.status_code == 200 and len(cookies) == 1 and cookies[0], f"Setup: {username} could not sign in to the private instance: {login.status_code} {login.text}"
+    return _PrivateAccount(user_id=user.id, username=username, email=email, cookie=cookies[0])
+
+
+def _canary(logger_name: str) -> str:
+    """The canary logged through ``logger_name``, to both captures."""
+    return f"canary: the capture sees the events of {logger_name}"
+
+
+async def _logged_put_profile(private: _Private, cookie: str, body: dict[str, Any], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch) -> tuple[httpx.Response, list[dict[str, Any]], list[logging.LogRecord]]:
+    """PUT /auth/profile on the private instance with the session ``cookie``, and everything that request logged, from the
+    canaries to the answer: the structlog events (capture_logs) and the stdlib records (caplog at DEBUG, on the root and
+    on the loggers of PROFILE_LOGGERS, enabled even if a configuration disabled them).
+
+    Barriers first: a canary through each logger name of PROFILE_LOGGERS must reach both captures, or a capture that sees
+    nothing would pass for a request that logs nothing.
+    """
+    for name in PROFILE_LOGGERS:
+        monkeypatch.setattr(logging.getLogger(name), "disabled", False)
+    caplog.set_level(logging.DEBUG)
+    for name in PROFILE_LOGGERS:
+        caplog.set_level(logging.DEBUG, logger=name)
+    caplog.clear()
+    with capture_logs() as events:
+        for name in PROFILE_LOGGERS:
+            structlog.get_logger(name).debug(_canary(name))
+            logging.getLogger(name).debug(_canary(name))
+        response = await _in_process(private, "PUT", "/auth/profile", cookie=cookie, json=body)
+    records = list(caplog.records)
+    seen_events = {event.get("event") for event in events}
+    seen_records = {(record.name, record.getMessage()) for record in records}
+    for name in PROFILE_LOGGERS:
+        assert _canary(name) in seen_events, f"barrier: structlog events of {name} do not reach capture_logs"
+        assert (name, _canary(name)) in seen_records, f"barrier: stdlib records of {name} do not reach caplog at DEBUG"
+    return response, events, records
+
+
+def _shows_an_address(text: str, addresses: Iterable[str]) -> bool:
+    """Whether ``text`` shows one of ``addresses``, whole or by its local part alone, compared in lower case."""
+    lowered = text.lower()
+    return any(address.lower() in lowered or address.lower().partition("@")[0] in lowered for address in addresses)
+
+
+def _record_text(record: logging.LogRecord) -> str:
+    """All a stdlib record shows: its message and every attribute."""
+    return record.getMessage() + repr(vars(record))
+
+
+def _written_by_a_server(record: logging.LogRecord) -> bool:
+    """Whether a running server writes ``record``: every record but those below WARNING of the SQL loggers and their children."""
+    of_sql = any(record.name == name or record.name.startswith(f"{name}.") for name in SQL_LOGGERS)
+    return record.levelno >= logging.WARNING or not of_sql
+
+
+def _assert_no_address(events: list[dict[str, Any]], records: list[logging.LogRecord], addresses: Iterable[str], call: str) -> None:
+    """No structlog event, and no stdlib record a server would write, shows one of ``addresses``: in any key, value or
+    message, whole or by its local part, in any case."""
+    needles = sorted(set(addresses))
+    leaked_events = [event for event in events if _shows_an_address(repr(event), needles)]
+    leaked_records = [f"{record.name}: {record.getMessage()}" for record in records if _written_by_a_server(record) and _shows_an_address(_record_text(record), needles)]
+    assert leaked_events == [], f"{call}: structlog events showing {needles}, whole or by the local part: {leaked_events}"
+    assert leaked_records == [], f"{call}: stdlib records showing {needles}, whole or by the local part: {leaked_records}"
+
+
+def _the_event(events: list[dict[str, Any]], name: str) -> dict[str, Any]:
+    """The event ``name`` of the capture, asserted to be there once."""
+    matching = [event for event in events if event.get("event") == name]
+    assert len(matching) == 1, f"The request must log «{name}» once: {matching}"
+    return matching[0]
+
+
+class TestProfileLogsNoAddress:
+    """Lot A7c (release 1.3, workstream A): PUT /auth/profile writes no email address in any log — the rule of
+    workstream E, which matters most on the hosted cloud. The route's «Profile updated» and update_profile's «User
+    profile updated» keep ``user_id`` and ``username``, and ``email`` gives way to ``email_changed``: True when the
+    address changed, False otherwise. The service's line alone is pinned in test_services/test_user_profile.py
+    (UPROF-001, UPROF-002); here, the whole request and the route's line.
+
+    What is checked is everything the request logged, captured at DEBUG by ``_logged_put_profile``: no structlog event
+    and no stdlib record shows the old address or the new one, whole or by its local part, in any case — the SQL
+    loggers' records below WARNING aside, which no server writes (``SQL_LOGGERS``).
+
+    Today both lines log ``email=``: PROF-017 and PROF-018 are red on those two keywords alone (the request itself
+    succeeds); the refusal of PROF-019 logs no address and is a guard.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_email_change_logs_email_changed_never_an_address(self, private: _Private, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """PROF-017 — NEW, red today only because of the two ``email=`` keywords: update_profile's «User profile updated»
+        and the route's «Profile updated» both carry the new address. A signed-in user changes the email with the right
+        current password: 200, no event and no record of that request shows the old address or the new one, and
+        «Profile updated» is there once, without ``email``, with ``email_changed`` exactly True and the account's
+        ``user_id`` and ``username``."""
+        print_section("PROF-017: an email change logs email_changed, no address")
+        account = await _signed_in_account(private)
+        new_email = _new_email("moved")
+
+        response, events, records = await _logged_put_profile(private, account.cookie, {"email": new_email, "current_password": TEST_PASSWORD}, caplog, monkeypatch)
+
+        status, body = _answer(response)
+        assert status == 200 and body["user"]["email"] == new_email, f"barrier: the email change with the right password must succeed: {status} {body}"
+        _assert_no_address(events, records, [account.email, new_email], "PUT /auth/profile changing the email")
+        event = _the_event(events, PROFILE_UPDATED)
+        assert "email" not in event, f"«{PROFILE_UPDATED}» must carry no 'email' key: {event}"
+        assert event.get("email_changed") is True, f"«{PROFILE_UPDATED}» must carry email_changed=True, exactly, after an email change: {event}"
+        assert (event.get("user_id"), event.get("username")) == (account.user_id, account.username), f"«{PROFILE_UPDATED}» keeps user_id and username: {event}"
+        print_success(f"✓ 200; {len(events)} events and {len(records)} records without an address; email_changed True")
+
+    @pytest.mark.asyncio
+    async def test_a_username_change_logs_email_changed_false_never_the_address(self, private: _Private, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """PROF-018 — NEW, red today only because of the two ``email=`` keywords: both lines carry the address, unchanged.
+        A username-only change: 200, no event and no record of that request shows the address, and «Profile updated» is
+        there once, without ``email``, with ``email_changed`` exactly False, the account's ``user_id`` and the new
+        ``username``."""
+        print_section("PROF-018: a username-only change logs email_changed False, no address")
+        account = await _signed_in_account(private)
+        new_username = _new_username("renamed")
+
+        response, events, records = await _logged_put_profile(private, account.cookie, {"username": new_username}, caplog, monkeypatch)
+
+        status, body = _answer(response)
+        assert status == 200 and (body["user"]["username"], body["user"]["email"]) == (new_username, account.email), f"barrier: the username-only change must succeed: {status} {body}"
+        _assert_no_address(events, records, [account.email], "PUT /auth/profile changing the username only")
+        event = _the_event(events, PROFILE_UPDATED)
+        assert "email" not in event, f"«{PROFILE_UPDATED}» must carry no 'email' key: {event}"
+        assert event.get("email_changed") is False, f"«{PROFILE_UPDATED}» must carry email_changed=False, exactly, after a username-only change: {event}"
+        assert (event.get("user_id"), event.get("username")) == (account.user_id, new_username), f"«{PROFILE_UPDATED}» keeps user_id and the new username: {event}"
+        print_success(f"✓ 200; {len(events)} events and {len(records)} records without the address; email_changed False")
+
+    @pytest.mark.asyncio
+    async def test_a_refused_email_change_logs_no_address(self, private: _Private, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+        """PROF-019 — GUARD, green today and after: an email change with a wrong current password is refused, 400
+        CURRENT_PASSWORD_INVALID, and no event and no record of that request shows the old address or the one asked for;
+        nothing is updated, so neither «Profile updated» nor «User profile updated» is logged."""
+        print_section("PROF-019: a refused email change logs no address")
+        account = await _signed_in_account(private)
+        asked_for = _new_email("refused")
+
+        response, events, records = await _logged_put_profile(private, account.cookie, {"email": asked_for, "current_password": _wrong_password()}, caplog, monkeypatch)
+
+        _assert_password_refusal(_answer(response), "CURRENT_PASSWORD_INVALID", "An email change with a wrong current password")
+        _assert_no_address(events, records, [account.email, asked_for], "The refused PUT /auth/profile")
+        updates = [event for event in events if event.get("event") in (PROFILE_UPDATED, USER_PROFILE_UPDATED)]
+        assert updates == [], f"A refused change updates nothing, so it logs neither «{PROFILE_UPDATED}» nor «{USER_PROFILE_UPDATED}»: {updates}"
+        print_success(f"✓ 400 CURRENT_PASSWORD_INVALID; {len(events)} events and {len(records)} records without an address")
+
+
+# ============================================================================
+# THE SAME ADDRESS WHATEVER ITS A–Z CASE — P18 (PROF-020 to PROF-022), on the lane's server
+# ============================================================================
+# Developer decision P18 (release 1.3, workstream A; contract approved by the coordinator): two addresses are the same
+# when they match once A–Z are folded to a–z, as SQLite's lower() folds them; letters outside ASCII compare as written, a
+# documented limit not tested here. Its C5: changing one's own address in its A–Z case alone keeps the same address — no
+# password, no session ended, the new form stored —, while another account's address, in any A–Z case, is taken. Until
+# P18 addresses are compared exactly, as A6e's C2 in the module docstring still says. EmailStr lowercases the domain and
+# never the local part, so the cases vary the case of the local part. The accounts are those of
+# TestEmailChangeNeedsThePassword: registered on the lane's server by create_and_login_user, with a lower-case address,
+# every device closed and every account deleted at teardown, after a red too. EMAIL_TAKEN and _local_part_in_capitals
+# serve TestTheSameAddressWhateverItsCase only, so they live next to it.
+
+#: The plain ``detail`` of PUT /auth/profile for an address another account has, as PROF-009 reads it: an API string.
+EMAIL_TAKEN = "Email already registered"
+
+
+def _local_part_in_capitals(address: str, suffix: str = "") -> str:
+    """``address`` with its local part, ``suffix`` appended, in capitals and its domain as it is: the same address up to
+    the A–Z case when ``suffix`` is empty, another address otherwise. The server keeps a local part as it is sent."""
+    local, _, domain = address.rpartition("@")
+    return f"{(local + suffix).upper()}@{domain}"
+
+
+class TestTheSameAddressWhateverItsCase:
+    """PUT /auth/profile under P18, on the lane's server: the own address in another A–Z case is the same address (C5),
+    another account's address in another A–Z case is taken, and any other address is still an email change, which needs
+    the password (A6e).
+
+    «NEW, red until P18» marks the contract: today addresses are compared exactly, so the own address in capitals is an
+    email change, which asks for the password, and another account's address in capitals is free, so it is taken, every
+    other session ending. «GUARD» marks what holds today and must keep holding.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("password", ["absent", "wrong"])
+    async def test_the_own_address_in_another_case_is_the_same_address(self, accounts: _Accounts, password: str):
+        """PROF-020 — NEW, red until P18 (today 400 CURRENT_PASSWORD_REQUIRED, or CURRENT_PASSWORD_INVALID with the
+        wrong one: compared exactly, it is an email change): the own address with its local part in capitals is the same
+        address (P18, C5). Without current_password, or with a wrong one beside it — not checked, as for a username-only
+        change —: 200, and the answer's user has the new form; the answer sets no session cookie; GET /auth/me returns
+        the new form on this device and on a second one, signed in before: no session ended."""
+        print_section(f"PROF-020: the own address in capitals, password {password}")
+        account = await accounts.register()
+        second = await accounts.new_device(account)
+        answer = await _me(second)
+        assert _profile(answer, account) is not None, f"Precondition: the second session must be signed in as {account.username}: GET /auth/me {answer}"
+        new_form = _local_part_in_capitals(account.email)
+        assert new_form != account.email and new_form.lower() == account.email, f"setup: {new_form} must be {account.email} in another A–Z case"
+        sent: dict[str, Any] = {"email": new_form}
+        if password == "wrong":
+            sent["current_password"] = _wrong_password()
+
+        response = await _put_profile(account.device, sent)
+
+        status, body = _answer(response)
+        assert status == 200 and (body["user"]["id"], body["user"]["email"]) == (account.user_id, new_form), f"The own address in another A–Z case needs no password, and the answer carries its new form {new_form}: {status} {body}"
+        assert _session_set_cookies(response) == [], f"The same address is no email change: no session cookie may be set, Set-Cookie {response.headers.get_list('set-cookie')}"
+        for label, device in (("This device", account.device), ("The second session, opened before,", second)):
+            answer = await _me(device)
+            assert _profile(answer, account) == (account.username, new_form), f"{label} must stay signed in, with the new form {new_form}: the same address ends no session, GET /auth/me {answer}"
+        print_success(f"✓ password {password}: 200, the new form stored, no cookie set, both sessions signed in")
+
+    @pytest.mark.asyncio
+    async def test_another_accounts_address_in_another_case_is_taken(self, accounts: _Accounts):
+        """PROF-021 — NEW, red until P18 (today 200: compared exactly, another account's address in capitals is free, so
+        the email changes and the other sessions end): with the right current password, another account's address in
+        another A–Z case — its local part and its domain in capitals — is refused as that address is: 400, ``detail`` the
+        plain string «Email already registered»; nothing changes: no session cookie is set, and GET /auth/me still shows
+        the old address."""
+        print_section("PROF-021: another account's address in capitals")
+        account = await accounts.register()
+        holder = await accounts.register()
+        taken = holder.email.upper()
+        assert taken != holder.email and taken.lower() == holder.email, f"setup: {taken} must be {holder.email} in another A–Z case"
+
+        response = await _put_profile(account.device, {"email": taken, "current_password": TEST_PASSWORD})
+
+        status, body = _answer(response)
+        detail = body.get("detail") if isinstance(body, dict) else body
+        assert (status, detail) == (400, EMAIL_TAKEN), f"{taken} is the address of {holder.username} in another A–Z case: expected 400 {EMAIL_TAKEN!r}, as for that address itself, got {status} {body}"
+        assert _session_set_cookies(response) == [], f"A refused change must set no session cookie: Set-Cookie {response.headers.get_list('set-cookie')}"
+        await _assert_nothing_written(account, "The refused email change")
+        print_success(f"✓ 400 «{EMAIL_TAKEN}», the address unchanged")
+
+    @pytest.mark.asyncio
+    async def test_another_address_still_needs_the_password(self, accounts: _Accounts):
+        """PROF-022 — GUARD, green today and after (A6e, as PROF-010): the own address in capitals with one more letter
+        is another address, not the same one in another case: without current_password it is refused with 400
+        CURRENT_PASSWORD_REQUIRED, and nothing is written."""
+        print_section("PROF-022: another address, without current_password")
+        account = await accounts.register()
+        other = _local_part_in_capitals(account.email, suffix="x")
+        assert other.lower() != account.email, f"setup: {other} must be another address than {account.email}, whatever the case"
+
+        answer = _answer(await _put_profile(account.device, {"email": other}))
+
+        _assert_password_refusal(answer, "CURRENT_PASSWORD_REQUIRED", "An email change to another address without current_password")
+        await _assert_nothing_written(account, "The refused email change")
+        print_success("✓ 400 CURRENT_PASSWORD_REQUIRED, the email unchanged")

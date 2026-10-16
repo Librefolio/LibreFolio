@@ -241,11 +241,11 @@
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div class="flex flex-col max-h-[85vh]" oninput={handleFormChange}>
         <!-- Header (sticky top) -->
-        <div class="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100" data-testid="broker-modal-title" use:guideAnchor={'broker.modal'}>
+        <div class="flex items-center justify-between p-4 border-b border-lf-subtle shrink-0">
+            <h2 class="text-xl font-semibold text-lf-primary" data-testid="broker-modal-title" use:guideAnchor={'broker.modal'}>
                 {mode === 'create' ? $_('brokers.addBroker') : $_('brokers.editBroker')}
             </h2>
-            <button type="button" class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={loading} onclick={handleClose} aria-label={$_('common.close')} data-testid="broker-modal-close">
+            <button type="button" class="p-2 text-lf-muted hover:text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors disabled:opacity-50" disabled={loading} onclick={handleClose} aria-label={$_('common.close')} data-testid="broker-modal-close">
                 <X size={20} />
             </button>
         </div>
@@ -266,21 +266,21 @@
 <ModalBase maxWidth="sm" onRequestClose={cancelDiscard} open={showDiscardConfirm} zIndex={zIndex + 10} testId="broker-modal-discard-confirm">
     <div class="p-6">
         <div class="flex items-center gap-3 mb-3">
-            <div class="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-full">
-                <AlertTriangle class="text-amber-600 dark:text-amber-400" size={20} />
+            <div class="p-2 bg-lf-warning-soft rounded-full">
+                <AlertTriangle class="text-lf-warning" size={20} />
             </div>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+            <h2 class="text-lg font-semibold text-lf-primary">
                 {$_('common.discardChanges')}
             </h2>
         </div>
-        <p class="text-gray-600 dark:text-gray-300 text-sm mb-4">
+        <p class="text-lf-secondary text-sm mb-4">
             {$_('brokers.discardChangesWarning')}
         </p>
         <div class="flex justify-end gap-3">
-            <button type="button" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={cancelDiscard} data-testid="broker-modal-continue-editing">
+            <button type="button" class="px-4 py-2 text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors" onclick={cancelDiscard} data-testid="broker-modal-continue-editing">
                 {$_('common.continueEditing')}
             </button>
-            <button type="button" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors" onclick={confirmDiscard} data-testid="broker-modal-discard">
+            <button type="button" class="px-4 py-2 bg-lf-warning text-lf-on-status rounded-lg hover:bg-lf-warning-hover transition-colors" onclick={confirmDiscard} data-testid="broker-modal-discard">
                 {$_('common.discardAndClose')}
             </button>
         </div>

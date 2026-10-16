@@ -19,8 +19,9 @@
  *
  * Which answer is on screen. The panel shows the answer to the last question it asked — an earlier one may have been
  * superseded or discarded (`riskPanelController.svelte.ts`, `loadBaseAttempt`) — so every risk request is recorded from
- * before the navigation, and the screen is compared with the answer to the last one asked once the panel says it has
- * nothing left to ask (`data-busy="false"`, «Refresh» enabled).
+ * before the navigation, and the screen is compared with the answer to the last one asked once nothing is left to ask:
+ * the panel's `data-busy="false"`, and the page's Refresh (`sync-button`) idle, which waits for every base wave of the
+ * panel — the panel has no Refresh of its own (Y11, decision 48).
  *
  * Ownership. Each test registers its own account, which owns the whole portfolio under test: one broker, a deposit and
  * two purchases of seeded stocks (Apple and Microsoft: global rows, only read here) dated far enough back for the
@@ -399,9 +400,10 @@ const test = base.extend<{owned: Owned}>({
 /**
  * A full load of the Dashboard on its Risk tab over `period`, its risk traffic recorded from before the navigation.
  *
- * Returns once the panel has nothing left to ask: the catalog is in, the base waves are in (`data-busy`), and nothing
- * is being refreshed («Refresh» is disabled while a wave is asked) — so the answers on screen are final. The first
- * answer of the historical wave is awaited as the page's own response: the real engine answered.
+ * Returns once the panel has nothing left to ask: the catalog is in, the first base waves are in (the panel's
+ * `data-busy`), and nothing is being asked again — the page's Refresh publishes `data-busy="true"` while any base wave
+ * of the panel is pending, a later one included — so the answers on screen are final. The first answer of the
+ * historical wave is awaited as the page's own response: the real engine answered.
  */
 async function openRiskTab(page: Page, period: Period): Promise<{panel: Locator; traffic: RiskExchange[]}> {
     const traffic = recordRiskTraffic(page);
@@ -422,7 +424,7 @@ async function openRiskTab(page: Page, period: Period): Promise<{panel: Locator;
     const panel = page.getByTestId('risk-levels-panel');
     await expect(panel).toHaveAttribute('data-catalog', 'ready', {timeout: ENGINE_TIMEOUT_MS});
     await waitForSettled(panel, ENGINE_TIMEOUT_MS);
-    await expect(panel.getByTestId('risk-refresh-button'), 'nothing is still being asked: the answers on screen are final').toBeEnabled({timeout: ENGINE_TIMEOUT_MS});
+    await expect(page.getByTestId('sync-button'), 'nothing is still being asked: the answers on screen are final').toHaveAttribute('data-busy', 'false', {timeout: ENGINE_TIMEOUT_MS});
     // Behind the settled panel, so the absence is a statement about a finished load.
     await expect(panel.getByTestId('risk-load-error'), 'the base waves loaded').toHaveCount(0);
     return {panel, traffic};

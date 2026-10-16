@@ -27,19 +27,20 @@ $$
 \operatorname{mark}(a,t)=
 \begin{cases}
 \text{MARKET}(a,t) & \text{same-day asset-system quote}\\
-\operatorname{avg}(\text{TRADE}(a,t)) & \text{same-day BUY/SELL/priced ADJUSTMENT observations}\\
+\operatorname{avg}(\text{TRADE}(a,t)) & \text{same-day BUY/SELL observations}\\
 \text{last observation before }t & \text{carried forward (LOCF)}\\
 \varnothing & \text{no observation on or before }t
 \end{cases}
 $$
 
 - The unified resolver is the single valuation brain: `MARKET → TRADE_AVG → CARRIED → MISSING`.
+- Only market quotes and BUY/SELL trades are observations. An ADJUSTMENT never is, incoming or outgoing, with or without a cost basis: its cost basis is a cost, not what the asset was worth that day.
 - `CARRIED` is last-observation-carried-forward. It carries `days_back` staleness metadata.
 - `estimated=True` means TRADE-origin. A stale carried MARKET quote is stale, not estimated.
 - Marks stay in native currency; each consumer converts to $C^*$ at valuation date $t$.
 - Cost-basis FX remains pinned to the transaction date.
 - Cash stays in the currency it was recorded in, broker by broker, and is valued at the rate of $t$ (§5); each cash movement is still booked, and each external cash flow enters the capital, at the rate of its own date.
-- WAC is **never** used as valuation price.
+- WAC is **never** used as valuation price. A position whose asset has no mark at all ($\varnothing$) is counted at its cost basis instead, as a declared estimate, not a price (§3).
 
 See [Price Resolution](price-resolution.md) for the resolver contract and data-quality semantics.
 
@@ -51,9 +52,10 @@ For each position $(a, b)$ with $q(a,b,t) > 0$:
 
 $$
 \mathrm{MV}(a,b,t) =
-\frac{q(a,b,t)}{qbq(a)}\cdot
-\operatorname{mark}(a,t)\cdot
-\mathrm{fx}\bigl(\mathrm{ccy}_{mark}, C^*, t\bigr)
+\begin{cases}
+\dfrac{q(a,b,t)}{qbq(a)}\cdot \operatorname{mark}(a,t)\cdot \mathrm{fx}\bigl(\mathrm{ccy}_{mark}, C^*, t\bigr) & \operatorname{mark}(a,t) \neq \varnothing\\
+\mathrm{CB}(a,b,t) & \operatorname{mark}(a,t) = \varnothing \text{ and the cost of } (a,b) \text{ is complete}
+\end{cases}
 $$
 
 $$
@@ -65,6 +67,8 @@ $$
 $$
 
 Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$, kept in $C^*$ at historical rates (§4): the cost basis takes no exchange rate at $t$, so for a foreign asset the exchange-rate effect is part of $\mathrm{UGL}$.
+
+The second case covers an asset with no observation yet — no quote, no BUY or SELL on or before $t$, as for a holding received through adjustments or transfers. The position is valued at its cost basis, valuation source `ESTIMATED_AT_COST`: a declared estimate, not a price. It reports no unit price, it does not move with exchange rates, and its $\mathrm{UGL}$ is zero, with neither a price effect nor an exchange-rate effect. The choice is made day by day, with no look-ahead: from the first observation on, the mark wins, even an old one carried forward. A position whose cost is incomplete (§4) has no market value on such a day (`MISSING`) and is left out of $\mathrm{MV}(t)$. The valuation sources therefore rank `MARKET_PRICE` > `LAST_TRADE_PRICE` > `ESTIMATED_AT_COST` > `MISSING` ([Price Resolution](price-resolution.md)).
 
 ---
 

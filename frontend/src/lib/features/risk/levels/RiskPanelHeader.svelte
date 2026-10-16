@@ -8,7 +8,7 @@
     import {fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
-    import {RefreshCw, RotateCw} from 'lucide-svelte';
+    import {RotateCw} from 'lucide-svelte';
 
     /**
      * Everything above the answer: what it is, how stale it is, how to refresh it.
@@ -73,41 +73,25 @@
 
 <div class="flex flex-wrap items-start justify-between gap-3">
     <div>
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="risk-levels-title">{title || $t('risk.title')}</h2>
+        <h2 class="text-lg font-semibold text-lf-primary" data-testid="risk-levels-title">{title || $t('risk.title')}</h2>
         {#if subtitle || internalSubset}
-            <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="risk-scope-label">
+            <p class="text-sm text-lf-muted" data-testid="risk-scope-label">
                 {internalSubset ? $t('risk.internalSubset') : subtitle}
             </p>
         {/if}
     </div>
     {#if showActions}
         <div class="flex items-center gap-2">
-            <button
-                type="button"
-                class="flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 disabled:opacity-50"
-                onclick={() => (syncOpen = true)}
-                disabled={syncAssets.length === 0 && syncFxPairs.length === 0}
-                data-testid="risk-sync-button"
-            >
+            <button type="button" class="flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-3 py-1.5 text-xs text-lf-secondary disabled:opacity-50" onclick={() => (syncOpen = true)} disabled={syncAssets.length === 0 && syncFxPairs.length === 0} data-testid="risk-sync-button">
                 <RotateCw size={14} />
                 {$t('common.sync')}
-            </button>
-            <button
-                type="button"
-                class="flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 disabled:opacity-50"
-                onclick={() => controller.loadBase(true)}
-                disabled={controller.initialLoading || controller.refreshing}
-                data-testid="risk-refresh-button"
-            >
-                <RefreshCw size={14} class={controller.refreshing ? 'animate-spin' : ''} />
-                {$t('common.refresh')}
             </button>
         </div>
     {/if}
 </div>
 
 {#if controller.loadError}
-    <div class="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-700 dark:text-red-300" data-testid="risk-load-error">
+    <div class="rounded-xl border border-lf-danger-line bg-lf-danger-soft p-4 text-sm text-lf-danger-on-soft" data-testid="risk-load-error">
         {$t('risk.states.loadFailed')}
     </div>
 {/if}

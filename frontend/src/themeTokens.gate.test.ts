@@ -31,7 +31,8 @@
  *       and the marks the green sidebar draws (WCAG 1.4.11). The header is a neutral surface (D-T23), one of
  *       `SURFACES`; the green sidebar (D-T17) is none, and has pairs of its own, in the --lf-bar-* family, its alone. A
  *       pair under its minimum is red unless `KNOWN_EXCEPTIONS` holds it, and an entry there is the designer's
- *       decision, not ours;
+ *       decision, not ours. And the backdrop, --lf-surface-overlay, is one colour in both themes: the pairs of the
+ *       text on it hold for every theme only then;
  *   C4  every class the legacy remap rewrites (`html.dark .bg-white` …) is still written by a production source: a
  *       rule whose class lost its last use is dead, and leaves app.css in the change that removed that use.
  * And app.css imports tokens.css, and every rule of the remap that targets a field (`input`, `select`, `textarea`),
@@ -46,12 +47,15 @@
  * Colours come from the module's resolver, which reads the forms tokens.css uses — a hex, `transparent`, `var(--…)`,
  * `color-mix(in oklab, A p, B)` — and mixes as CSS Color 5 does (OKLab, premultiplied alpha). A new form fails C2
  * loudly before it could fail C3 in silence. Contrast is computed on the declared values, not on the page: an
- * opacity utility (`text-lf-muted/70`), a translucent layer, a gradient or an image behind the text are invisible
- * here, and a pair missing from `CONTRAST_PAIRS` is not checked at all — a new role that carries text or draws a
- * control adds its pairs in the same change. Nor is a control told apart by two colours at once, a fill and an edge:
- * that is no pair (the knob of a switch turned off, see `CONTRAST_PAIRS`). The pairs are the floor; the gallery and
- * the designer's review do the rest. C4 counts the class written whole in a production source (`classUses`): a class
- * assembled at run time (`` `bg-gray-${n}` ``) is no use, and a string that merely spells the class is one.
+ * opacity utility (`text-lf-muted/70`), a gradient or an image behind the text are invisible here. So is a
+ * translucent layer, unless it is a role whose pair names the opaque role it lies on, `over`: then the ratio is
+ * taken on the two composited as the browser draws them (the backdrop and the selected tint, over each surface they
+ * lie on); with no `over`, a translucent background is refused. A pair missing from `CONTRAST_PAIRS` is not checked
+ * at all — a new role that carries text or draws a control adds its pairs in the same change. Nor is a control told
+ * apart by two colours at once, a fill and an edge: that is no pair (the knob of a switch turned off, see
+ * `CONTRAST_PAIRS`). The pairs are the floor; the gallery and the designer's review do the rest. C4 counts the class
+ * written whole in a production source (`classUses`): a class assembled at run time (`` `bg-gray-${n}` ``) is no use,
+ * and a string that merely spells the class is one.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
  */
@@ -60,7 +64,7 @@ import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {APP_CSS, TOKEN_BLOCKS, blankCssComments, classUses, contrastRatio, p1Classes, parseTokens, readTokens, resolveColour, roleNames, toHex} from '../scripts/theme/theme-roles.mjs';
+import {APP_CSS, TOKEN_BLOCKS, blankCssComments, classUses, contrastRatio, over, p1Classes, parseTokens, readTokens, resolveColour, roleNames, toHex} from '../scripts/theme/theme-roles.mjs';
 
 type Tokens = ReturnType<typeof parseTokens>;
 type Rgba = ReturnType<typeof resolveColour>;
@@ -224,17 +228,24 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
 const TEXT = 4.5;
 const NON_TEXT = 3;
 const STATUSES = ['success', 'warning', 'danger', 'info'];
+/** A gain and a loss: the signed figures, as text and on their own tints (the sign badges). */
+const SIGNS = ['gain', 'loss'];
 /** The neutral surfaces text and controls are set on, the header's among them (D-T23); the green sidebar's pairs are its own. */
 const SURFACES = ['surface-app', 'surface-page', 'surface-header', 'surface-card', 'surface-panel', 'surface-field'];
 
 interface ContrastPair {
     foreground: string;
     background: string;
+    /** The opaque role a translucent background lies on, composited under it before the ratio is taken (`measurePair`). */
+    over?: string;
     min: number;
 }
 
 /** Every foreground on every background, as role variables: `--lf-text-muted` on `--lf-surface-panel`. */
 const pairs = (foregrounds: string[], backgrounds: string[], min: number): ContrastPair[] => foregrounds.flatMap((foreground) => backgrounds.map((background) => ({foreground: `--lf-${foreground}`, background: `--lf-${background}`, min})));
+
+/** Every foreground on a translucent background, once over each opaque role it lies on: `--lf-on-overlay` on `--lf-surface-overlay` over `--lf-surface-field`. */
+const pairsOver = (foregrounds: string[], background: string, unders: string[], min: number): ContrastPair[] => foregrounds.flatMap((foreground) => unders.map((under) => ({foreground: `--lf-${foreground}`, background: `--lf-${background}`, over: `--lf-${under}`, min})));
 
 /**
  * What the roles promise, in both themes: the designer's round 2, approved whole by the developer (D-T17, 15/10), with
@@ -246,12 +257,15 @@ const pairs = (foregrounds: string[], backgrounds: string[], min: number): Contr
  * darker than the page in light and a step lighter in dark, its controls drawn in the page's roles, its focus ring the
  * page's --lf-focus; «Offrimi un caffè», --lf-donate, is text on it and, under the pointer, on --lf-surface-hover. A
  * status is legible as text on the surfaces — the danger dot of the mobile menu, ringed in the header's colour, among
- * them — and on its own tint, where its on-soft text, the muted and the primary text are held to the same minimum;
- * text on a solid status is --lf-on-status, on the hover of a solid warning or donation button too, and on a solid
- * destructive button --lf-on-danger-solid, at rest and hovered. A selected control (D-T16: checkbox, radio, switch on,
- * selected day or preset): its fill, --lf-checked, reaches 3:1 on every surface it sits on; its mark, --lf-on-checked,
- * is held to the text minimum on the fill, as the decision quotes it; and the knob of a switch turned on,
- * --lf-switch-knob-on, reaches 3:1 on it.
+ * them — and on its own tint, where its on-soft text, the muted and the primary text are held to the same minimum. A
+ * gain and a loss are held like the statuses, as text on the surfaces and on their own tints, --lf-gain-soft and
+ * --lf-loss-soft (the sign badges): roles apart from the state tints, so the designer can part them. Text on a solid
+ * status is --lf-on-status, on the hover of a solid success, warning, info or donation button too (the success and
+ * info hovers, --lf-success-hover and --lf-info-hover, provisional), and on a solid destructive button
+ * --lf-on-danger-solid, at rest and hovered. A selected control (D-T16: checkbox, radio, switch on, selected day or
+ * preset): its fill, --lf-checked, reaches 3:1 on every surface it sits on; its mark, --lf-on-checked, is held to the
+ * text minimum on the fill, as the decision quotes it; and the knob of a switch turned on, --lf-switch-knob-on,
+ * reaches 3:1 on it.
  *
  * The green sidebar is no neutral surface. It is green in both themes (D-T17, which supersedes the neutral sidebar of
  * D-T15), drawn from a family of roles of its own, --lf-bar-*: D-T19 shared the family with the header, and D-T23 gave
@@ -272,22 +286,42 @@ const pairs = (foregrounds: string[], backgrounds: string[], min: number): Contr
  * terminal box, its text, its prompt and its comments; the AI accent as text on its tint, on the card and on the panel,
  * and --lf-on-ai on its solid fill.
  *
+ * And the text on the backdrop, --lf-on-overlay (provisional: a camera on an avatar, an icon on a scrim). The
+ * backdrop, --lf-surface-overlay, is translucent, so each of its pairs names the surface it lies on, `over`, and the
+ * ratio is taken on the two composited: once over each of `SURFACES`. That is sound because the backdrop is the same
+ * in both themes — `backdropFindings` holds it — so its composite over the brightest surface, the light theme's white
+ * field (--lf-surface-field, #ffffff), is the worst case of every theme, a white image under a dark-theme backdrop
+ * included. Measured on 16/10: 4.98:1 over the field, 5.10–5.60:1 over the other light surfaces, 17.88:1 and more in
+ * dark.
+ *
+ * And a selected row, option or chip, --lf-selected: a translucent tint of the focus green, so its pairs name the
+ * surface under it, `over`, as the backdrop's do. The link green is held on it over the app, the page, the header, the
+ * card and the field, never over a panel: 4.09:1 in dark. The primary and the secondary text are held over all six.
+ * The muted text, the statuses and the signs reach only 3.84–4.48:1 on it over most surfaces, so they are not promised
+ * there; a lighter tint would not cure it — at 6% the muted text still gives 4.17:1 — and it is an open item, TC-15.
+ * Measured on 16/10: the link 4.53:1 at worst, over the dark card; the secondary text 5.45:1, over the dark panel.
+ *
  * What C3 cannot express: a control told apart by two colours at once. The knob of a switch turned off,
  * --lf-switch-knob-off, is white on the light track of --lf-switch-off in light, and the control is recognised by the
  * --lf-border-input edge the knob is drawn with — an edge between two fills, which no pair holds. An item for the
  * designer's round 3. Nor a colour that is no role: the «insecure» tint behind the connection-security toggle is
- * `bg-lf-bar-danger/20`, composited over the bar — translucent, so no role, and no background a ratio could be taken
- * on: the icon on it measures 3.41:1 and the focus ring 3.94:1, checked by hand (15/10, after D-T25).
+ * `bg-lf-bar-danger/20`, composited over the bar — an opacity on a role, so no role of its own, and no background a
+ * pair could name (`over` composites a role, never an opacity utility): the icon on it measures 3.41:1 and the focus
+ * ring 3.94:1, checked by hand (15/10, after D-T25). Nor the hovered selection chip, `hover:bg-lf-checked/20`, an
+ * opacity utility as well: by hand, the link on it measured 3.99–4.43:1, so the two chips (SelectionBar, DataEditor)
+ * switch to `hover:text-lf-primary`, 10.09–12.86:1 (16/10).
  */
 const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['text-primary', 'text-secondary', 'text-muted', 'text-placeholder'], SURFACES, TEXT),
     ...pairs(['link'], ['surface-app', 'surface-page', 'surface-card', 'surface-panel'], TEXT),
     ...pairs(STATUSES, SURFACES, TEXT),
+    ...pairs(SIGNS, SURFACES, TEXT),
     ...pairs(['donate'], ['surface-app', 'surface-page', 'surface-header', 'surface-hover'], TEXT),
     ...STATUSES.flatMap((status) => pairs([status, `${status}-on-soft`, 'text-muted', 'text-primary'], [`${status}-soft`], TEXT)),
+    ...SIGNS.flatMap((sign) => pairs([sign, `${sign}-on-soft`, 'text-muted', 'text-primary'], [`${sign}-soft`], TEXT)),
     ...pairs(['on-brand'], ['brand'], TEXT),
     ...pairs(['on-action'], ['action', 'action-hover'], TEXT),
-    ...pairs(['on-status'], [...STATUSES, 'warning-hover'], TEXT),
+    ...pairs(['on-status'], [...STATUSES, 'success-hover', 'warning-hover', 'info-hover'], TEXT),
     ...pairs(['on-danger-solid'], ['danger-solid', 'danger-hover'], TEXT),
     ...pairs(['on-checked'], ['checked'], TEXT),
     ...pairs(['text-on-inverse', 'warning-on-inverse', 'danger-on-inverse', 'info-on-inverse', 'text-muted-on-inverse'], ['surface-inverse'], TEXT),
@@ -295,6 +329,9 @@ const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['terminal-text', 'terminal-prompt', 'terminal-comment'], ['terminal-bg'], TEXT),
     ...pairs(['ai'], ['ai-soft', 'surface-card', 'surface-panel'], TEXT),
     ...pairs(['on-ai'], ['ai'], TEXT),
+    ...pairsOver(['on-overlay'], 'surface-overlay', SURFACES, TEXT),
+    ...pairsOver(['link'], 'selected', ['surface-app', 'surface-page', 'surface-header', 'surface-card', 'surface-field'], TEXT),
+    ...pairsOver(['text-primary', 'text-secondary'], 'selected', SURFACES, TEXT),
     ...pairs(['border-input', 'border-input-hover'], SURFACES, NON_TEXT),
     ...pairs(['focus'], ['surface-app', 'surface-header', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
     ...pairs(['checked'], ['surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
@@ -315,6 +352,8 @@ interface KnownException {
     theme: Theme;
     foreground: string;
     background: string;
+    /** The pair's `over`, when it names one: an exception names one exact pair. */
+    over?: string;
     /** The designer's decision and its date: why the pair stays under its minimum. */
     reason: string;
 }
@@ -325,7 +364,38 @@ interface KnownException {
  */
 const KNOWN_EXCEPTIONS: readonly KnownException[] = [];
 
-const pairName = (theme: Theme, pair: {foreground: string; background: string}): string => `${theme}  ${pair.foreground} on ${pair.background}`;
+/** A pair as the messages name it, `over` included: two pairs that differ only by their `over` are two pairs. */
+const pairText = (pair: Pick<ContrastPair, 'foreground' | 'background' | 'over'>): string => `${pair.foreground} on ${pair.background}${pair.over === undefined ? '' : ` over ${pair.over}`}`;
+
+const pairName = (theme: Theme, pair: Pick<ContrastPair, 'foreground' | 'background' | 'over'>): string => `${theme}  ${pairText(pair)}`;
+
+/** A pair measured in a theme: the ratio, and the two colours it was taken on. */
+interface Contrast {
+    ratio: number;
+    foreground: Rgba;
+    /** Opaque: the background itself, or the background composited over the pair's `over`. */
+    background: Rgba;
+}
+
+/**
+ * A pair's contrast in a theme, or the reason it cannot be taken. A ratio needs an opaque background: a translucent one
+ * is composited over the role its pair names, `over`, as the browser composites it, and with no `over` it is refused.
+ * An `over` is read whenever a pair names one, and must be opaque itself.
+ */
+function measurePair(tokens: Tokens, pair: ContrastPair, theme: Theme): Contrast | string {
+    const foreground = colourOf(tokens, `var(${pair.foreground})`, theme);
+    if (typeof foreground === 'string') return foreground;
+    let background = colourOf(tokens, `var(${pair.background})`, theme);
+    if (typeof background === 'string') return background;
+    if (pair.over !== undefined) {
+        const under = colourOf(tokens, `var(${pair.over})`, theme);
+        if (typeof under === 'string') return under;
+        if (under.alpha < OPAQUE) return `${pair.over}, under the background, is translucent (${shown(under)}), and a composite needs an opaque one`;
+        background = over(background, under);
+    }
+    if (background.alpha < OPAQUE) return `the background is translucent (${shown(background)}), and a ratio needs an opaque one`;
+    return {ratio: contrastRatio(foreground, background), foreground, background};
+}
 
 describe('tokens.css: contrast in both themes (C3)', () => {
     it('measures contrast the WCAG way, composites a translucent colour and mixes in OKLab (positive control)', () => {
@@ -342,6 +412,19 @@ describe('tokens.css: contrast in both themes (C3)', () => {
         expect(veil.alpha, 'and scales its alpha').toBeCloseTo(0.4, 10);
     });
 
+    it('composites a translucent background over the opaque role its pair names, and refuses one with none (positive control)', () => {
+        const sample = parseTokens(':root,\nhtml.light,\n.light {\n    --lf-white: #ffffff;\n    --lf-veil: color-mix(in oklab, #000000 50%, transparent);\n}\n');
+        const veiled: ContrastPair = {foreground: '--lf-white', background: '--lf-veil', min: TEXT};
+        expect(measurePair(sample, {...veiled, over: '--lf-white'}, 'light'), 'half a black veil over white: the opaque mid grey #808080, composited in sRGB as the browser does — not the OKLab #636363 of a mix').toEqual({
+            ratio: expect.closeTo(3.977, 3),
+            foreground: {r: 1, g: 1, b: 1, alpha: 1},
+            background: {r: 0.5, g: 0.5, b: 0.5, alpha: 1},
+        });
+        expect(measurePair(sample, veiled, 'light'), 'the same veil with nothing under it is refused, as before').toBe('the background is translucent (#000000 at 50%), and a ratio needs an opaque one');
+        expect(measurePair(sample, {...veiled, over: '--lf-veil'}, 'light'), 'nor can it lie on another veil').toBe('--lf-veil, under the background, is translucent (#000000 at 50%), and a composite needs an opaque one');
+        expect(measurePair(sample, {...veiled, over: '--lf-ghost'}, 'light'), 'nor on a role that does not exist').toBe('tokens.css: --lf-ghost is not declared for the light theme');
+    });
+
     it('C3: every text pair reaches 4.5:1 and every non-text pair 3:1, in both themes', () => {
         const tokens = readTokens();
         const excepted = new Set(KNOWN_EXCEPTIONS.map((entry) => pairName(entry.theme, entry)));
@@ -349,22 +432,9 @@ describe('tokens.css: contrast in both themes (C3)', () => {
         for (const theme of THEMES) {
             for (const pair of CONTRAST_PAIRS) {
                 const name = pairName(theme, pair);
-                const foreground = colourOf(tokens, `var(${pair.foreground})`, theme);
-                const background = colourOf(tokens, `var(${pair.background})`, theme);
-                if (typeof foreground === 'string') {
-                    failures.push(`${name}: ${foreground}`);
-                    continue;
-                }
-                if (typeof background === 'string') {
-                    failures.push(`${name}: ${background}`);
-                    continue;
-                }
-                if (background.alpha < OPAQUE) {
-                    failures.push(`${name}: the background is translucent (${shown(background)}), and a ratio needs an opaque one`);
-                    continue;
-                }
-                const ratio = contrastRatio(foreground, background);
-                if (ratio < pair.min && !excepted.has(name)) failures.push(`${name}: ${ratioText(ratio)}:1 < ${pair.min}:1  (${shown(foreground)} on ${shown(background)})`);
+                const contrast = measurePair(tokens, pair, theme);
+                if (typeof contrast === 'string') failures.push(`${name}: ${contrast}`);
+                else if (contrast.ratio < pair.min && !excepted.has(name)) failures.push(`${name}: ${ratioText(contrast.ratio)}:1 < ${pair.min}:1  (${shown(contrast.foreground)} on ${shown(contrast.background)})`);
             }
         }
         const rule = 'Each pair is a promise of the roles: change the value of a role (the designer confirms it), never the pair list. A pair kept under its minimum is her decision, in KNOWN_EXCEPTIONS.';
@@ -372,7 +442,7 @@ describe('tokens.css: contrast in both themes (C3)', () => {
     });
 
     it('C3: CONTRAST_PAIRS lists each pair once', () => {
-        const names = CONTRAST_PAIRS.map((pair) => `${pair.foreground} on ${pair.background}`);
+        const names = CONTRAST_PAIRS.map(pairText);
         const twice = names.filter((name, index) => names.indexOf(name) !== index);
         expect(twice, 'a pair listed twice makes two promises, possibly at two minimums, and KNOWN_EXCEPTIONS can only answer the first: keep the stricter one').toEqual([]);
     });
@@ -380,10 +450,10 @@ describe('tokens.css: contrast in both themes (C3)', () => {
     it('C3: KNOWN_EXCEPTIONS holds only pairs still under their minimum, each with a reason', () => {
         const tokens = readTokens();
         const isStale = (entry: KnownException): boolean => {
-            const pair = CONTRAST_PAIRS.find((candidate) => candidate.foreground === entry.foreground && candidate.background === entry.background);
-            const foreground = colourOf(tokens, `var(${entry.foreground})`, entry.theme);
-            const background = colourOf(tokens, `var(${entry.background})`, entry.theme);
-            return pair === undefined || typeof foreground === 'string' || typeof background === 'string' || contrastRatio(foreground, background) >= pair.min;
+            const pair = CONTRAST_PAIRS.find((candidate) => candidate.foreground === entry.foreground && candidate.background === entry.background && candidate.over === entry.over);
+            if (pair === undefined) return true;
+            const contrast = measurePair(tokens, pair, entry.theme);
+            return typeof contrast === 'string' || contrast.ratio >= pair.min;
         };
         const stale = KNOWN_EXCEPTIONS.filter(isStale).map((entry) => pairName(entry.theme, entry));
         expect(stale, ['', 'These exceptions no longer match a pair under its minimum: delete them.', '', ...stale, ''].join('\n  ')).toEqual([]);
@@ -391,6 +461,73 @@ describe('tokens.css: contrast in both themes (C3)', () => {
             KNOWN_EXCEPTIONS.filter((entry) => entry.reason.trim().length < 20).map((entry) => pairName(entry.theme, entry)),
             'an exception carries the reason of the designer and its date',
         ).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C3: the backdrop, one colour in both themes
+// ---------------------------------------------------------------------------
+
+/** The backdrop of the modals: the translucent role the text on it, --lf-on-overlay, is measured over. */
+const BACKDROP = '--lf-surface-overlay';
+
+/**
+ * C3: what keeps the backdrop from being one colour in both themes — a theme that cannot read it, or two themes that
+ * read two colours. The on-overlay pairs are sound only while it is one: a dark-theme backdrop may lie on a white
+ * image, and the light theme's composite over its white field stands for that case only if the two backdrops are the
+ * same. C1 lets the dark block override a derived role, and a derived role may read one that follows the theme: either
+ * would part the two in silence. Colours are compared as this file shows them, `#rrggbb` and the alpha, after `var()`
+ * and `color-mix()` are resolved: the same colour written two ways is one colour.
+ */
+function backdropFindings(tokens: Tokens): string[] {
+    const out: string[] = [];
+    const read: Partial<Record<Theme, Rgba>> = {};
+    for (const theme of THEMES) {
+        const colour = colourOf(tokens, `var(${BACKDROP})`, theme);
+        if (typeof colour === 'string') out.push(`${theme}  ${BACKDROP}: ${colour}`);
+        else read[theme] = colour;
+    }
+    const {light, dark} = read;
+    if (light && dark && shown(light) !== shown(dark)) out.push(`${BACKDROP} is ${shown(light)} in light, ${shown(dark)} in dark`);
+    return out;
+}
+
+/** Three blocks with a backdrop derived once for both themes, as tokens.css writes it, and what the dark block may add to it. */
+const backdropTable = (derived: string, darkOverride?: string): string => `
+:root,
+html.light,
+.light {
+    --lf-surface-page: #f3f5f3;
+}
+
+:root,
+.light,
+.dark {
+    --lf-surface-overlay: ${derived};
+}
+
+html.dark,
+.dark {
+    --lf-surface-page: #0d1110;${darkOverride === undefined ? '' : `\n    --lf-surface-overlay: ${darkOverride};`}
+}
+`;
+
+describe('tokens.css: the backdrop is one colour in both themes (C3)', () => {
+    it('finds a backdrop that parts the two themes, overridden by the dark block or derived from a role that follows the theme, and passes one colour written twice (positive control)', () => {
+        const DERIVED = 'color-mix(in oklab, #0d1110 60%, transparent)';
+        const findings = (derived: string, darkOverride?: string): string[] => backdropFindings(parseTokens(backdropTable(derived, darkOverride)));
+        expect(findings(DERIVED), 'derived once for both themes').toEqual([]);
+        expect(findings(DERIVED, 'color-mix(in oklab, #0D1110 60%, transparent)'), 'the dark block overrides it with the same colour, in upper case').toEqual([]);
+        expect(findings(DERIVED, 'color-mix(in oklab, #000000 50%, transparent)'), 'the dark block overrides it with another colour, the likeliest slip').toEqual(['--lf-surface-overlay is #0d1110 at 60% in light, #000000 at 50% in dark']);
+        expect(findings('color-mix(in oklab, var(--lf-surface-page) 60%, transparent)'), 'derived from a role that follows the theme').toEqual(['--lf-surface-overlay is #f3f5f3 at 60% in light, #0d1110 at 60% in dark']);
+        expect(findings(DERIVED, 'rgb(0 0 0 / 60%)'), 'a form the resolver cannot read').toEqual(['dark  --lf-surface-overlay: tokens.css: cannot resolve «rgb(0 0 0 / 60%)»']);
+    });
+
+    it('C3: the backdrop, --lf-surface-overlay, is one colour in both themes: the pairs of the text on it rest on that', () => {
+        expect(CONTRAST_PAIRS.filter((pair) => pair.background === BACKDROP).map(pairText), 'positive control: the pairs this premise holds up are in CONTRAST_PAIRS').toContain('--lf-on-overlay on --lf-surface-overlay over --lf-surface-field');
+        const findings = backdropFindings(readTokens());
+        const rule = 'The backdrop is one colour in both themes: a dark-theme backdrop may lie on a white image, and the light composite over the white field stands for that case only then. Change it in the derived block, for both themes at once; never in the dark block.';
+        expect(findings, ['', rule, '', ...findings, ''].join('\n  ')).toEqual([]);
     });
 });
 

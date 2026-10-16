@@ -23,6 +23,7 @@ from backend.app.config import ensure_data_dirs, get_settings, is_test_mode
 from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
+from backend.app.services.accounts.bootstrap_admin_service import startup_admin_bootstrap
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.assets.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.assets.registry import AssetProviderRegistry
@@ -34,6 +35,7 @@ from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
+from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
 from backend.app.services.platform.sleep_wake.idle_monitor import start_idle_monitor, stop_idle_monitor
@@ -224,6 +226,10 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup()),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
+    # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist
+    Step("admin-bootstrap", lambda: startup_admin_bootstrap()),
+    # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
+    Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
     Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm()),

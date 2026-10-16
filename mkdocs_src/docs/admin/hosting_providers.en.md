@@ -5,6 +5,8 @@ association for its members, or a friend who hosts an instance for the family. O
 them are the **hosting provider**. A few settings exist for them:
 
 - the **managed profile** says that the instance is run for others;
+- the **initial administrator** is created by the instance at its first start, for the customer
+  you name, who activates it with a single-use link;
 - the **instance block** closes the app but keeps the data, for example when a subscription is not
   paid;
 - the **panel token** lets your hosting panel take backups of the instance;
@@ -96,12 +98,18 @@ your users sign in again after each restart. See
 ### 📋 For Each Instance
 
 - `LIBREFOLIO_PROFILE=managed`.
+- Its administrator, from `LIBREFOLIO_ADMIN_EMAIL`, with a setup link your panel delivers: see
+  [The Initial Administrator](#initial-admin).
 - A `JWT_SECRET` of at least 32 random characters, so that sessions survive restarts. To keep it out
   of `.env`, use `JWT_SECRET_FILE`: see «Secrets» in [Environment Variables](configuration.md).
 - Its own instance key: never share one key between instances. See «The Instance Key» in
   [Environment Variables](configuration.md).
 - HTTPS in front of it: see [Expose Securely](service_exposure.md) and
   [HTTPS and reverse proxies](configuration.md#session-cookie-secure).
+- On Fly.io, `LIBREFOLIO_CLIENT_IP_HEADER=Fly-Client-IP`, so that the limits per visitor's address
+  count each visitor apart, not everyone as Fly's proxy. The managed profile does not set it, since
+  the header depends on the proxy in front of the instance: see «The Visitor's Address» in
+  [Checking Connection Security](connection_checks.md#reverse-proxy).
 - A monitor on `GET /api/v1/system/ready`: see the monitoring tip in
   [Advanced Docker](docker_advanced.md).
 - If your hosting panel takes its backups: its own `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, never shared
@@ -111,6 +119,100 @@ your users sign in again after each restart. See
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
 - If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
   managed profile turns frame protection on.
+- Optionally, your own support page, `LIBREFOLIO_SUPPORT_URL`: where the users of the instance ask for
+  help, such as an asset the search does not find. Without it, the help links go to LibreFolio's
+  issues on GitHub. See «Main Options» in [Environment Variables](configuration.md).
+
+---
+
+## 👑 The Initial Administrator {: #initial-admin }
+
+Give each new instance its administrator from the environment. At its first start, the instance
+creates the account for the address you name, not yet active, and a setup link that works once, for
+72 hours. The link opens the instance's setup page, where your customer chooses the password and is
+signed in. Nobody can register first and take the administrator's place, even on an instance that
+is reachable from the internet from its first minute.
+
+### ⚙️ The Variables {: #initial-admin-variables }
+
+| Variable | What it does |
+| --- | --- |
+| `LIBREFOLIO_ADMIN_EMAIL` | Your customer's email address, the administrator's. Setting it turns the initial administrator on |
+| `LIBREFOLIO_ADMIN_USERNAME` | The administrator's username, `admin` when not set: 3 to 50 characters |
+| `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | The token of the setup link, chosen by your panel: 32 to 200 characters, only letters, digits and `-` `.` `_` `~`. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead, as Docker mounts its secrets |
+
+- Set them in the container's environment, or in `.env`, like the other variables of this page.
+- A value LibreFolio cannot use stops the server at startup, with an error that names the variable,
+  never the token. They are checked at every start, after the setup too.
+- Every detail, the case without a token included, is in «The Initial Administrator» in
+  [Environment Variables](configuration.md).
+
+### 🧾 Create the Administrator {: #initial-admin-create }
+
+1. Generate the token:
+
+    ```bash
+    openssl rand -hex 32
+    ```
+
+2. Before you start the new instance, give it the three variables:
+
+    ```bash
+    LIBREFOLIO_ADMIN_EMAIL=anna@example.com
+    LIBREFOLIO_ADMIN_USERNAME=anna
+    LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN=<the 64 characters printed by openssl>
+    ```
+
+3. Start the instance. Its log says `Initial administrator created, waiting for its setup link`.
+4. Send your customer the link: the instance's address, then `/setup#token=` and the token, such as
+   `https://librefolio.example.com/setup#token=<the token>`. LibreFolio neither logs nor emails
+   this link: delivering it is up to you, for example in your own «set your password» email.
+
+- ⏱️ The link works once, for 72 hours from that first start. A restart changes nothing: the link
+  you sent keeps working until it is used or expires.
+- 🔒 The token travels after the `#` of the link, a part that browsers never send to the server, so
+  it stays out of the access logs of the server and of every proxy on the way. Keep it as private as
+  a password until your customer has used it.
+- 🚪 The first start also sets **Registration** to **By invitation**: after the administrator,
+  people join with an invitation link. `LIBREFOLIO_REGISTRATION`, if you set it, still decides.
+- 📏 With `LIBREFOLIO_MAX_USERS`, the administrator takes a place from the first start, while it
+  waits too.
+- ⛔ While the instance is [blocked](#instance-block), the setup link does not work: the setup is
+  refused until you unblock the instance, and the 72 hours keep running meanwhile. If the link
+  expires in the meantime, give a new one ([A New Link](#initial-admin-new-link)).
+- 🔑 Without `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, the instance generates the token: it writes the
+  link once in its log, and emails it to `LIBREFOLIO_ADMIN_EMAIL` when its [email](email.md) works
+  and `LIBREFOLIO_PUBLIC_URL` is set. A token of your own lets your panel know the link before the
+  instance starts, without reading its log.
+
+### 🔁 A New Link {: #initial-admin-new-link }
+
+If your customer has not used the link within 72 hours, each start of the instance logs a warning:
+`The initial administrator's setup link has expired: run ./dev.py user setup-link, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`.
+Either way gives a new link, which works for 72 hours, and ends the earlier ones:
+
+- **A new token**: generate one, put it in `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` and restart the
+  instance (with Docker Compose, `docker compose up -d`: `docker compose restart` keeps the old
+  values), then send the new link. Generate a new token each time: a value the instance has already
+  seen never gives a new link.
+- **The command line**, from a shell on the server:
+  `docker compose exec librefolio python dev.py user setup-link` prints a new link, with a token the
+  instance generates. See «A New Setup Link for the Initial Administrator» in
+  [CLI Admin Tools](cli_tools.md).
+
+Both work before the link expires too, to replace a link that went astray.
+
+To change the address or the username before your customer activates the account, change
+`LIBREFOLIO_ADMIN_EMAIL` or `LIBREFOLIO_ADMIN_USERNAME` and restart: the waiting account takes the
+new value. If another account already holds it, the log has an error, and the account keeps its
+own.
+
+### ✅ Once the Account Is Active {: #initial-admin-active }
+
+Once your customer has chosen the password, the variables have done their work: every later start
+creates nothing and logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts`. You can
+leave them set, or remove them. On an instance that already has accounts, they create nothing
+either.
 
 ---
 
@@ -118,7 +220,8 @@ your users sign in again after each restart. See
 
 A hosting provider can block an instance, for example when its subscription is not paid. Users can
 still sign in, follow a password-reset link already sent to them, read why the instance is blocked
-and sign out; the rest of the app is closed.
+and sign out, and administrators can still download a backup of the instance; the rest of the app is
+closed.
 LibreFolio deletes nothing: the data stays as it is. The block works in both profiles.
 
 ### ⚙️ The Variables {: #block-variables }
@@ -153,8 +256,8 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
   with the deletion date when there is one.
 - While the instance is blocked, the [market data scheduler](settings.md#market-data-scheduler)
   runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
-  catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
-  (14 days by default).
+  catches up the history sync missed in the meantime and fills the gap the block left, going back
+  to each asset's and FX pair's last saved day, up to a year.
 
 ### 👀 What Users See {: #what-users-see }
 
@@ -169,7 +272,16 @@ After signing in, users get a full page instead of the app, **This instance is b
 - with `LIBREFOLIO_BILLING_URL` ([Environment Variables](configuration.md)),
   administrators also get a **Manage subscription** link to your subscription page, which opens in
   a new tab; the other users do not see it;
+- administrators also get a second card under the message, **Keep a copy of the data**: the backup
+  card of **Settings › Backup**, to back up the whole instance, follow the backup, download the
+  archive before the instance is gone, and delete it from the server. The other users do not see it:
+  their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
+
+The card makes the same archive as your [hosting panel](#panel-backups): it leaves out the logs and
+the instance key, and the card says so. Keep your copy of the instance's key, its
+`secrets/instance.key` or the key you configured, with the data: without it, what LibreFolio
+encrypted can no longer be read. See «The Instance Key» in [Environment Variables](configuration.md).
 
 A user still signed in after the restart gets the page as soon as the app asks the server for data.
 Once you lift the block and restart, users get the app back at their next page load.
@@ -183,7 +295,7 @@ On a blocked instance, only these API calls answer as usual:
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
-| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the block page has no button for it yet. For your panel, its [four routes](#panel-jobs), with its token |
+| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
 | The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
@@ -212,8 +324,9 @@ For a caller without a session, most of the API answers as on any other instance
 - the calls of the list above answer as usual: `/system/instance`, `/system/info` and
   `/system/ready` do not reveal the block.
 
-A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the address
-probe (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
+A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the setup of
+the [initial administrator](#initial-admin) (`POST /api/v1/auth/setup`), the address probe
+(`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`) and the AI
 Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
 then cannot confirm a public address, and the check of your instance's address reports it as not
 verifiable. From them, a caller without a session can tell that the instance is blocked, and nothing
@@ -383,3 +496,5 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   The guard on the API and its list
 - 🖼️ For developers: **[Frame Protection and the Report-Only Policy](../developer/architecture/security.md#managed-headers)** —
   The headers of the managed profile, directive by directive
+- 👑 For developers: **[The Initial Administrator](../developer/architecture/access_control.md#initial-admin)** —
+  The startup step, the setup link and its route

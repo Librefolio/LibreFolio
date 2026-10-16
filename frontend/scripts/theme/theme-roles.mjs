@@ -32,7 +32,16 @@
  *   G3  no element and no class string mixes role utilities with legacy classes: app.css exempts from its legacy dark
  *       remap every element carrying a role utility, so a half-migrated element would keep half of its old colours;
  *   G4  no arbitrary colour value (bg-[#…], ring-[rgb(…)]) unless it reads roles only (var(--lf-…)) or its file is in
- *       ARBITRARY_ALLOWED.
+ *       ARBITRARY_ALLOWED;
+ *   G5  one property, one ternary: no element sets one colour utility twice with the same variants (bg-lf-card and
+ *       bg-lf-hover), one of the two always on. Tailwind 4 emits two such utilities by name, so the later name wins
+ *       whatever the condition says: the idle colour and the state colour are the two branches of one ternary. Read
+ *       through the element's `class`, its `{…}` and `${…}` (a branching one is a condition, `?`, `&&`, `||`, `??`), its
+ *       `class:` directives and the UPPER_CASE string constants it names, the file's own and those it imports;
+ *   G6  a native field on roles names its text: an <input> with a text of its own, a <textarea> and a <select> that
+ *       carry a role utility write a base text role, and a placeholder role when they have a placeholder. app.css
+ *       colours the text and the placeholder of native fields only while they carry no role utility (`-lf-`), so a
+ *       migrated field would fall back to the preflight: the inherited colour, the placeholder at half of it.
  *
  * Command line, from any directory; files are named by their path under frontend/src:
  *   node frontend/scripts/theme/theme-roles.mjs --report                  what is left, and where; ratchet and grammar
@@ -46,7 +55,7 @@
 
 import {execFileSync} from 'node:child_process';
 import {existsSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
-import {basename, dirname, join, relative, resolve, sep} from 'node:path';
+import {basename, dirname, join, posix, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 /** `frontend/`. */
@@ -211,14 +220,60 @@ export function blankScriptComments(/** @type {string} */ code) {
 
 const SCRIPT_RE = /(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi;
 const STYLE_RE = /(<style\b[^>]*>)([\s\S]*?)(<\/style\s*>)/gi;
+/** A whole script or style block, kept as one part when the markup around it is split. */
+const SCRIPT_OR_STYLE_RE = /(<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>)/gi;
 
-/** A source without its comments, each part of a Svelte file by its own syntax. */
+/** A source without its comments, each part of a Svelte file by its own syntax: the markup's `{…}` expressions are script. */
 export function codeOf(/** @type {string} */ rel, /** @type {string} */ text) {
     if (!rel.endsWith('.svelte')) return blankScriptComments(text);
     return text
         .replace(/<!--[\s\S]*?-->/g, spaces)
         .replace(SCRIPT_RE, (_m, open, body, close) => open + blankScriptComments(body) + close)
-        .replace(STYLE_RE, (_m, open, body, close) => open + blankCssComments(body) + close);
+        .replace(STYLE_RE, (_m, open, body, close) => open + blankCssComments(body) + close)
+        .split(SCRIPT_OR_STYLE_RE)
+        .map((part, index) => (index % 2 === 1 ? part : blankExpressionComments(part)))
+        .join('');
+}
+
+/**
+ * Markup with the comments of its `{…}` expressions blanked. A line or block comment inside an attribute value or a text
+ * expression is script: left in, an apostrophe or a backtick in it opened a string that swallowed the markup after it
+ * (AF, lot 8: G3 on an `onfitperiod={…}` attribute that holds no class, and the swallowed elements never checked).
+ */
+function blankExpressionComments(/** @type {string} */ markup) {
+    let out = '';
+    let i = 0;
+    while (i < markup.length) {
+        const open = markup.indexOf('{', i);
+        if (open === -1) {
+            out += markup.slice(i);
+            break;
+        }
+        const end = expressionEnd(markup, open);
+        out += markup.slice(i, open + 1) + blankScriptComments(markup.slice(open + 1, end));
+        i = end;
+    }
+    return out;
+}
+
+/** The index of the `}` closing the markup expression opened at `start`, its strings and comments skipped. */
+function expressionEnd(/** @type {string} */ text, /** @type {number} */ start) {
+    let depth = 0;
+    for (let i = start; i < text.length; i++) {
+        const c = text[i];
+        if (c === '/' && text[i + 1] === '/') {
+            const end = text.indexOf('\n', i);
+            if (end === -1) return text.length;
+            i = end;
+        } else if (c === '/' && text[i + 1] === '*') {
+            const end = text.indexOf('*/', i + 2);
+            if (end === -1) return text.length;
+            i = end + 1;
+        } else if (c === "'" || c === '"' || c === '`') i = endOfString(text, i);
+        else if (c === '{') depth += 1;
+        else if (c === '}' && --depth === 0) return i;
+    }
+    return text.length;
 }
 
 /** The markup of a Svelte file: the bodies of its scripts and styles blanked. */
@@ -845,15 +900,229 @@ const hasLegacyClass = (/** @type {string} */ text) => new RegExp(LEGACY_CLASS_R
 const COLOUR_IN_VALUE_RE = /#[0-9a-fA-F]{3,8}(?![0-9A-Za-z])|(?<![A-Za-z0-9-])(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb|color-mix)\(|var\(--/;
 const LITERAL_IN_VALUE_RE = /#[0-9a-fA-F]{3,8}(?![0-9A-Za-z])|(?<![A-Za-z0-9-])(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\(/;
 
-/** @typedef {{rule: 'G1' | 'G2' | 'G3' | 'G4', file: string, line: number, text: string}} GrammarViolation */
+/** A role utility, whole: group 1 its variants, group 2 its colour utility (`bg`, `border-t`, `placeholder`). */
+const ROLE_TOKEN_RE = new RegExp(`^(${VARIANTS})(${PREFIX_ALT})-lf-[a-z0-9]+(?:-[a-z0-9]+)*${OPACITY}$`);
 
-/** G1–G4 on one source; `names` are the role names of tokens.css (roleNames). */
-export function grammarOf(/** @type {string} */ rel, /** @type {string} */ text, /** @type {Set<string>} */ names) {
-    return grammarOfCode(rel, codeOf(rel, text), names);
+/** The words of a class string that can be class names: a `${…}` fragment is not one. */
+const classWords = (/** @type {string} */ text) => text.split(/\s+/).filter((word) => word && !/[${}]/.test(word));
+
+/** An UPPER_CASE name, of any length (`TH`, `INPUT`): a constant when the module declares one of that name. */
+const UPPER_NAME_RE = /\b[A-Z][A-Z0-9_]*\b/g;
+
+/** An expression with its strings blanked: an operator inside a string is not one. */
+function withoutStrings(/** @type {string} */ expression) {
+    let out = '';
+    let last = 0;
+    for (const {value, index} of stringLiterals(expression)) {
+        out += expression.slice(last, index + 1) + spaces(value);
+        last = index + 1 + value.length;
+    }
+    return out + expression.slice(last);
 }
 
-/** G1–G4 on a source's code without comments. */
-function grammarOfCode(/** @type {string} */ rel, /** @type {string} */ code, /** @type {Set<string>} */ names) {
+/** Whether an expression chooses its classes: a ternary, `&&`, `||` or `??` outside its strings (not `?.`). */
+const branches = (/** @type {string} */ expression) => /\?(?!\.)|&&|\|\|/.test(withoutStrings(expression));
+
+/** A template literal's body: its static text, each `${…}` blanked, and the expressions of its `${…}`. */
+function templateParts(/** @type {string} */ body) {
+    /** @type {string[]} */
+    const expressions = [];
+    let text = '';
+    for (let i = 0; i < body.length; i++) {
+        if (body[i] === '\\') {
+            text += body.slice(i, i + 2);
+            i += 1;
+        } else if (body[i] === '$' && body[i + 1] === '{') {
+            const end = closing(body, i + 1);
+            expressions.push(body.slice(i + 2, end));
+            text += ' ';
+            i = end;
+        } else text += body[i];
+    }
+    return {text, expressions};
+}
+
+/** The class names an expression can give: the words of its strings, a template's included, and the UPPER_CASE constants it names. */
+function expressionClasses(/** @type {string} */ expression, /** @type {Map<string, string>} */ constants) {
+    /** @type {string[]} */
+    const out = [];
+    for (const {value, index} of stringLiterals(expression)) {
+        if (expression[index] !== '`') {
+            out.push(...classWords(value));
+            continue;
+        }
+        const parts = templateParts(value);
+        out.push(...classWords(parts.text));
+        for (const inner of parts.expressions) out.push(...expressionClasses(inner, constants));
+    }
+    for (const m of withoutStrings(expression).matchAll(UPPER_NAME_RE)) {
+        const value = constants.get(m[0]);
+        if (value !== undefined) out.push(...classWords(value));
+    }
+    return out;
+}
+
+/** The UPPER_CASE string constants a module declares, exported or not: `const BASE = 'px-2 bg-lf-card'`. */
+function stringConstants(/** @type {string} */ code) {
+    /** @type {Map<string, string>} */
+    const out = new Map();
+    for (const m of code.matchAll(/\bconst\s+([A-Z][A-Z0-9_]*)\s*=\s*(['"`])/g)) {
+        const start = (m.index ?? 0) + m[0].length - 1;
+        out.set(m[1], code.slice(start + 1, endOfString(code, start)));
+    }
+    return out;
+}
+
+/**
+ * The UPPER_CASE string constants a source can name: its own, and those it imports by name from a module of src
+ * (`$lib/…`, `./…`, `../…`), one level deep. `moduleConstants` gives a module's own, or null when src has no such module.
+ * @param {string} rel
+ * @param {string} code
+ * @param {(rel: string) => Map<string, string> | null} moduleConstants
+ */
+function constantsOf(rel, code, moduleConstants) {
+    const constants = stringConstants(code);
+    for (const m of code.matchAll(/\bimport\s*\{([^}]*)\}\s*from\s*['"]((?:\.{1,2}\/|\$lib\/)[^'"]+)['"]/g)) {
+        const base = m[2].startsWith('$lib/') ? `lib/${m[2].slice('$lib/'.length)}` : posix.join(posix.dirname(rel), m[2]);
+        const candidates = [base, `${base}.ts`, `${base}.js`, `${base}/index.ts`, `${base}/index.js`, base.replace(/\.js$/, '.ts')];
+        const theirs = candidates.map(moduleConstants).find(Boolean);
+        if (!theirs) continue;
+        for (const specifier of m[1].split(',')) {
+            const [name, alias] = specifier
+                .trim()
+                .replace(/^type\s+/, '')
+                .split(/\s+as\s+/);
+            const value = theirs.get(name);
+            if (value !== undefined) constants.set(alias ?? name, value);
+        }
+    }
+    return constants;
+}
+
+/**
+ * The classes of an element, as G5 and G6 read them. `always`: set in every state. `groups`: each a set chosen on a
+ * condition — a `{…}` or a template's `${…}` that branches, a `class:` directive. An expression that does not branch is
+ * read literal by literal: its strings are always on, and each `${…}` of its templates is judged on its own, whatever
+ * follows the template (`` `…`.trim() ``). UPPER_CASE string constants are read as their value; any other variable, a
+ * class prop, and the elements of an array of classes that branches anywhere, are not told apart.
+ * @param {Attribute[]} attributes
+ * @param {Map<string, string>} constants
+ */
+function elementClasses(attributes, constants) {
+    /** @type {string[]} */
+    const always = [];
+    /** @type {string[][]} */
+    const groups = [];
+    const expression = (/** @type {string} */ code) => {
+        if (branches(code)) {
+            groups.push(expressionClasses(code, constants));
+            return;
+        }
+        for (const {value, index} of stringLiterals(code)) {
+            if (code[index] !== '`') {
+                always.push(...classWords(value));
+                continue;
+            }
+            const parts = templateParts(value);
+            always.push(...classWords(parts.text));
+            parts.expressions.forEach(expression);
+        }
+        for (const m of withoutStrings(code).matchAll(UPPER_NAME_RE)) {
+            const value = constants.get(m[0]);
+            if (value !== undefined) always.push(...classWords(value));
+        }
+    };
+    for (const attribute of attributes) {
+        if (attribute.name.startsWith('class:')) groups.push([attribute.name.slice('class:'.length)]);
+        if (attribute.name !== 'class' || attribute.value === null) continue;
+        const value = attribute.value;
+        if (attribute.expression) {
+            expression(value);
+            continue;
+        }
+        let text = '';
+        for (let i = 0; i < value.length; i++) {
+            if (value[i] === '{') {
+                const end = closing(value, i);
+                expression(value.slice(i + 1, end));
+                text += ' ';
+                i = end;
+            } else text += value[i];
+        }
+        always.push(...classWords(text));
+    }
+    return {always, groups};
+}
+
+/** G5 on an element's classes: two role utilities on one colour utility and the same variants, one of them always on. */
+function oneTernaryViolations(/** @type {{always: string[], groups: string[][]}} */ classes) {
+    const slot = (/** @type {string} */ token) => {
+        const m = ROLE_TOKEN_RE.exec(token);
+        return m ? m[1] + m[2] : null;
+    };
+    const always = [...new Set(classes.always)].filter((token) => slot(token) !== null);
+    /** @type {string[]} */
+    const out = [];
+    const add = (/** @type {string} */ text) => {
+        if (!out.includes(text)) out.push(text);
+    };
+    for (let i = 0; i < always.length; i++) {
+        for (let j = i + 1; j < always.length; j++) {
+            const [a, b] = [always[i], always[j]].sort(byText);
+            if (slot(a) === slot(b)) add(`${a} always, ${b} always`);
+        }
+    }
+    for (const group of classes.groups) {
+        for (const token of new Set(group)) {
+            const s = slot(token);
+            if (s === null) continue;
+            for (const a of always) if (a !== token && slot(a) === s) add(`${a} always, ${token} on a condition`);
+        }
+    }
+    return out;
+}
+
+/** Input types with no text of their own: the field rules of app.css never coloured them either. */
+export const FIELD_TYPES_WITHOUT_TEXT = ['checkbox', 'radio', 'range', 'file', 'hidden', 'color', 'submit', 'button', 'reset', 'image'];
+
+/** G6 on a start tag: a native field on roles names its text role, and its placeholder role when it has a placeholder. */
+function nativeFieldViolation(/** @type {string} */ tag, /** @type {Attribute[]} */ attributes, /** @type {{always: string[], groups: string[][]}} */ classes) {
+    if (tag !== 'input' && tag !== 'textarea' && tag !== 'select') return null;
+    const all = [...classes.always, ...classes.groups.flat()];
+    if (!all.some((token) => token.includes('-lf-'))) return null;
+    const type = attributes.find((attribute) => attribute.name === 'type');
+    const typeValue = type?.value == null ? undefined : type.expression ? /^\s*(['"])(\w+)\1\s*$/.exec(type.value)?.[2] : type.value;
+    if (tag === 'input' && typeValue && FIELD_TYPES_WITHOUT_TEXT.includes(typeValue.toLowerCase())) return null;
+    /** @type {string[]} */
+    const missing = [];
+    if (!all.some((token) => token.startsWith('text-lf-'))) missing.push('no text role');
+    const placeholder = attributes.some((attribute) => attribute.name === 'placeholder' || (attribute.name === '' && attribute.value?.trim() === 'placeholder'));
+    if (tag !== 'select' && placeholder && !all.some((token) => /(?:^|:)placeholder:text-lf-/.test(token))) missing.push('no placeholder role');
+    return missing.length ? `<${tag}> ${missing.join(', ')}` : null;
+}
+
+/** @typedef {{rule: 'G1' | 'G2' | 'G3' | 'G4' | 'G5' | 'G6', file: string, line: number, text: string}} GrammarViolation */
+
+/**
+ * G1–G6 on one source; `names` are the role names of tokens.css (roleNames). `modules` holds the sources it may import
+ * constants from, by path under src: the tree reads them from disk.
+ * @param {string} rel
+ * @param {string} text
+ * @param {Set<string>} names
+ * @param {Record<string, string>} [modules]
+ */
+export function grammarOf(rel, text, names, modules = {}) {
+    return grammarOfCode(rel, codeOf(rel, text), names, (path) => (path in modules ? stringConstants(codeOf(path, modules[path])) : null));
+}
+
+/**
+ * G1–G6 on a source's code without comments.
+ * @param {string} rel
+ * @param {string} code
+ * @param {Set<string>} names
+ * @param {(rel: string) => Map<string, string> | null} moduleConstants
+ */
+function grammarOfCode(rel, code, names, moduleConstants) {
     /** @type {GrammarViolation[]} */
     const out = [];
     for (const m of code.matchAll(ROLE_CLASS_RE)) {
@@ -874,14 +1143,37 @@ function grammarOfCode(/** @type {string} */ rel, /** @type {string} */ code, /*
             if (!m[1].startsWith('--lf-')) out.push({rule: 'G4', file: rel, line: lineAt(code, m.index ?? 0), text: m[0]});
         }
     }
+    if (rel.endsWith('.svelte')) {
+        const constants = constantsOf(rel, code, moduleConstants);
+        for (const {tag, index, attributes} of startTags(markupOf(code))) {
+            const classes = elementClasses(attributes, constants);
+            const line = lineAt(code, index);
+            for (const text of oneTernaryViolations(classes)) out.push({rule: 'G5', file: rel, line, text});
+            const field = nativeFieldViolation(tag, attributes, classes);
+            if (field) out.push({rule: 'G6', file: rel, line, text: field});
+        }
+    }
     return out;
 }
 
-/** G1–G4 on every production source. */
+/** G1–G6 on every production source. */
 export function grammarOfTree(srcDir = SRC_DIR, names = roleNames(readTokens())) {
+    const sources = listSources(srcDir);
+    const known = new Set(sources);
+    /** @type {Map<string, Map<string, string>>} */
+    const constants = new Map();
+    const moduleConstants = (/** @type {string} */ rel) => {
+        if (!known.has(rel)) return null;
+        let own = constants.get(rel);
+        if (!own) {
+            own = stringConstants(sourceCode(srcDir, rel));
+            constants.set(rel, own);
+        }
+        return own;
+    };
     /** @type {GrammarViolation[]} */
     const out = [];
-    for (const rel of listSources(srcDir)) out.push(...grammarOfCode(rel, sourceCode(srcDir, rel), names));
+    for (const rel of sources) out.push(...grammarOfCode(rel, sourceCode(srcDir, rel), names, moduleConstants));
     return out;
 }
 

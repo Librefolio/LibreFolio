@@ -10,7 +10,7 @@ responsibility:
 | Module | Responsibility |
 |--------|----------------|
 | `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard; `AssetRateLimitedError` and the helpers that recognise a refusal for too many requests (`rate_limited_from_response()`, `rate_limited_from_exception()`, `raise_if_rate_limited()`). |
-| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors (hiding an error's texts whole when the call carries a personal secret), and runs the call in a thread of its own (`_run_provider_in_thread`); `public_asset_url()`, which withholds an asset URL that shows one of the provider's secrets; `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; provider-parameter hashing; error sanitization. |
+| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors (hiding an error's texts whole when the call carries a personal secret), and runs the call in a thread of its own (`_run_provider_in_thread`); `public_asset_url()`, which withholds an asset URL that shows one of the provider's secrets; `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; `asset_cache_key()`, the one key of the history and current caches (provider, identifier, input type, parameter hash, settings), and `drop_asset_cache_entries()`, which drops both entries of an assignment; provider-parameter hashing; error sanitization. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
@@ -372,9 +372,13 @@ If a price is requested for a date where no data exists (e.g., Sunday), the syst
 Backward fill reuses stored market prices only, and valuation adds no separate
 last-purchase-price fallback: the portfolio engine values each holding through the
 [Price Resolver](../transactions/price_resolver.md#the-daily-model) alone. On a day without a
-market price, the resolver falls back on the asset's own trades (BUY, SELL, priced ADJUSTMENT)
-when one is the latest observation, as for a fund with no published NAV, and the holding then
-reports `valuation_source = LAST_TRADE_PRICE`.
+market price, the resolver falls back on the asset's own trades (`BUY` or `SELL`; an `ADJUSTMENT`
+is never a price) when one is the latest observation, as for a fund with no published NAV, and
+the holding then reports `valuation_source = LAST_TRADE_PRICE`. With neither a quote nor a trade
+on or before the day, a holding whose cost is known counts at that book cost and reports
+`valuation_source = ESTIMATED_AT_COST` — no price at all (see
+[No observation: valued at cost](../transactions/price_resolver.md#valued-at-cost)); with its
+cost unknown it stays `MISSING`.
 
 ---
 
@@ -383,11 +387,14 @@ reports `valuation_source = LAST_TRADE_PRICE`.
 - **Canonical cache ownership**: `assets/core.py` owns the history, current, metadata,
   search-result, and search-query singleton caches. Responsibility modules dereference these
   objects through `core`, preserving one identity and one monkeypatch point.
-- **`_asset_current_cache`**: caches provider current-value results. The live-query path keys by
-  provider code, identifier, and identifier type; refresh keys also include the provider-parameter
-  hash so parameter changes cannot reuse stale data. Both also include the fingerprint of the
-  provider's settings, as do the history, metadata and search-query keys, so different settings never
+- **`_asset_current_cache`**: caches provider current-value results. The live-query path and refresh
+  share one key, built by `asset_cache_key()`: provider code, identifier, identifier type and the
+  provider-parameter hash, so parameter changes cannot reuse stale data and two assets whose
+  parameters differ never share a value. The key also includes the fingerprint of the provider's
+  settings, as do the history, metadata and search-query keys, so different settings never
   share an entry (see [Plugin Settings](../../architecture/patterns/plugin_settings.md#caching)).
+  The code that drops entries, when a parametric assignment changes or an asset's currency changes,
+  goes through `drop_asset_cache_entries()`, which keys them the same way.
 - **Provider Pre-warm**: `_prewarm_provider_caches()` runs asynchronously in the application
   lifespan, instantiating registered providers and allowing providers with internal data caches
   to warm them.

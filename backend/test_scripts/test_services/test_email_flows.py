@@ -1352,8 +1352,10 @@ async def test_the_block_is_asked_before_anything_else_by_every_flow(monkeypatch
 # 14. AFTER THE SECURITY REVIEW OF E3
 # =============================================================================
 
-#: One mailbox written four ways: accounts are distinct rows, the mailbox is one (compared without case).
-ONE_MAILBOX = ["zq-shared@example.com", "ZQ-SHARED@EXAMPLE.COM", "Zq-Shared@Example.com", "zq-shared@EXAMPLE.com"]
+#: One mailbox written four ways: accounts are distinct rows, the mailbox is one (compared without case). The ways differ
+#: in the case of ``ä`` and ``ö`` alone, in NFC (one code point each): since P18 an address is unique regardless of A–Z
+#: case (``ux_users_email_lower``).
+ONE_MAILBOX = ["zq-sh\u00e4r\u00f6d@example.com", "zq-sh\u00c4r\u00d6d@example.com", "zq-sh\u00e4r\u00d6d@example.com", "zq-sh\u00c4r\u00f6d@example.com"]
 
 
 @pytest.mark.asyncio
@@ -1434,8 +1436,10 @@ async def test_the_limit_per_address_counts_by_the_key(monkeypatch: pytest.Monke
 
 @pytest.mark.asyncio
 async def test_three_reset_emails_an_hour_per_mailbox_whatever_the_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, budget: SlidingWindowLimiter, forgot_limits: ForgotLimits) -> None:
-    """EMF-038 — contract 12: four accounts whose addresses are one mailbox written four ways (a mailbox is compared without case); each asks once, each well within its own limits. The first three get their email; the fourth gets nothing — the mailbox had three this hour —: no new row, its live link from an earlier request (ten minutes old) still live, nothing more spent, nothing raised. An hour later, by the limiters' clock, the same request for the fourth goes: the mailbox was all that held it."""
+    """EMF-038 — contract 12: four accounts whose addresses are one mailbox written four ways (a mailbox is compared without case; the four differ in the case of ``ä`` and ``ö`` alone, since P18 makes an address unique regardless of A–Z case); each asks once, each well within its own limits. The first three get their email; the fourth gets nothing — the mailbox had three this hour —: no new row, its live link from an earlier request (ten minutes old) still live, nothing more spent, nothing raised. An hour later, by the limiters' clock, the same request for the fourth goes: the mailbox was all that held it."""
     print_section("EMF-038: per mailbox")
+    assert len({address.casefold() for address in ONE_MAILBOX}) == 1, "precondition: four spellings of one mailbox"
+    assert len({user_service.email_fold(address) for address in ONE_MAILBOX}) == len(ONE_MAILBOX), "precondition: four accounts on one mailbox: one casefold key, four addresses for the A–Z unique index (P18)"
     moment = utcnow()
     accounts = [await _add_user(engine, f"zq_shared_{index}", email=address) for index, address in enumerate(ONE_MAILBOX)]
     earlier = await _issue(engine, PASSWORD_RESET, user_id=accounts[3].id, now=moment - timedelta(minutes=10))

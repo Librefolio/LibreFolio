@@ -22,7 +22,6 @@
     import type {UploadedFile, UploadScope} from '$lib/types';
     import {getPreviewTypeForUploadedFile} from '$lib/utils/files/filePreview';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
-    import '$lib/theme/components/files.css';
 
     interface Props {
         /** Files to display */
@@ -205,7 +204,7 @@
                             title={$t('uploads.copyLink') || 'Copy Link'}
                         >
                             {#if copiedFileId === file.id}
-                                <Check size={14} class="text-green-500" />
+                                <Check size={14} class="text-lf-success" />
                             {:else}
                                 <Link2 size={14} />
                             {/if}
@@ -256,19 +255,24 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 0.75rem;
-        border: 1px solid var(--lf-cmp-file-grid-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.5rem;
-        background: var(--lf-cmp-file-grid-surface-bg);
+        background: var(--lf-surface-field);
         margin-bottom: 0.75rem;
     }
 
-    :global(.dark) .grid-search {
-        background: var(--lf-cmp-file-grid-surface-bg-dark);
-        border-color: var(--lf-cmp-file-grid-border-dark);
+    /* A field's edge: the input border, darker under the pointer (D-T18), the focus colour while its input has the
+       focus — the input itself draws no outline. */
+    .grid-search:hover {
+        border-color: var(--lf-border-input-hover);
+    }
+
+    .grid-search:focus-within {
+        border-color: var(--lf-focus);
     }
 
     :global(.grid-search-icon) {
-        color: var(--lf-cmp-file-grid-faint-text);
+        color: var(--lf-text-muted);
         flex-shrink: 0;
     }
 
@@ -278,11 +282,11 @@
         outline: none;
         background: transparent;
         font-size: 0.875rem;
-        color: var(--lf-cmp-file-grid-search-input-text);
+        color: var(--lf-text-primary);
     }
 
-    :global(.dark) .grid-search-input {
-        color: var(--lf-cmp-file-grid-search-input-text-dark);
+    .grid-search-input::placeholder {
+        color: var(--lf-text-placeholder);
     }
 
     .grid-search-clear {
@@ -292,15 +296,10 @@
         width: 20px;
         height: 20px;
         border: none;
-        background: var(--lf-cmp-file-grid-search-clear-bg);
+        background: var(--lf-surface-neutral);
         border-radius: 50%;
-        color: var(--lf-cmp-file-grid-muted-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
-    }
-
-    :global(.dark) .grid-search-clear {
-        background: var(--lf-cmp-file-grid-search-clear-bg-dark);
-        color: var(--lf-cmp-file-grid-muted-text-dark);
     }
 
     /* Empty state */
@@ -310,7 +309,7 @@
         align-items: center;
         justify-content: center;
         padding: 2rem;
-        color: var(--lf-cmp-file-grid-faint-text);
+        color: var(--lf-text-muted);
         text-align: center;
     }
 
@@ -332,24 +331,15 @@
 
     /* Card */
     .file-card {
-        background: var(--lf-cmp-file-grid-surface-bg);
-        border: 1px solid var(--lf-cmp-file-grid-border);
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.5rem;
         overflow: hidden;
         transition: all 0.2s ease;
     }
 
-    :global(.dark) .file-card {
-        background: var(--lf-cmp-file-grid-surface-bg-dark);
-        border-color: var(--lf-cmp-file-grid-border-dark);
-    }
-
     .file-card:hover {
-        box-shadow: 0 4px 6px -1px var(--lf-cmp-file-grid-file-card-hover-shadow);
-    }
-
-    :global(.dark) .file-card:hover {
-        box-shadow: 0 4px 6px -1px var(--lf-cmp-file-grid-file-card-hover-shadow-dark);
+        box-shadow: 0 4px 6px -1px var(--lf-shadow-card);
     }
 
     /* Selectable mode */
@@ -360,27 +350,18 @@
     }
 
     .file-card.selectable:hover {
-        border-color: var(--lf-cmp-file-grid-file-card-selectable-hover-border);
-    }
-
-    :global(.dark) .file-card.selectable:hover {
-        border-color: var(--lf-cmp-file-grid-file-card-selectable-hover-border-dark);
+        border-color: var(--lf-border-input);
     }
 
     .file-card.selected {
-        border-color: var(--lf-cmp-file-grid-file-card-selected-border);
-        background: var(--lf-cmp-file-grid-file-card-selected-bg);
-    }
-
-    :global(.dark) .file-card.selected {
-        border-color: var(--lf-cmp-file-grid-file-card-selected-border-dark);
-        background: var(--lf-cmp-file-grid-file-card-selected-bg-dark);
+        border-color: var(--lf-checked);
+        background: var(--lf-selected);
     }
 
     /* Preview */
     .file-preview {
         height: 120px;
-        background: var(--lf-cmp-file-grid-file-preview-bg);
+        background: var(--lf-surface-panel);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -392,12 +373,8 @@
         height: 80px;
     }
 
-    :global(.dark) .file-preview {
-        background: var(--lf-cmp-file-grid-file-preview-bg-dark);
-    }
-
     .file-icon-wrapper {
-        color: var(--lf-cmp-file-grid-faint-text);
+        color: var(--lf-text-muted);
     }
 
     /* Selected badge */
@@ -408,15 +385,11 @@
         width: 20px;
         height: 20px;
         border-radius: 50%;
-        background: var(--lf-cmp-file-grid-selected-badge-bg);
-        color: var(--lf-cmp-file-grid-selected-badge-text);
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
         display: flex;
         align-items: center;
         justify-content: center;
-    }
-
-    :global(.dark) .selected-badge {
-        background: var(--lf-cmp-file-grid-selected-badge-bg-dark);
     }
 
     /* Card title */
@@ -424,7 +397,7 @@
         padding: 0.5rem 0.75rem 0;
         font-size: 0.8125rem;
         font-weight: 500;
-        color: var(--lf-cmp-file-grid-strong-text);
+        color: var(--lf-text-primary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -435,15 +408,11 @@
         font-size: 0.6875rem;
     }
 
-    :global(.dark) .card-title {
-        color: var(--lf-cmp-file-grid-strong-text-dark);
-    }
-
     /* Card meta */
     .card-meta {
         padding: 0.125rem 0.75rem 0.5rem;
         font-size: 0.6875rem;
-        color: var(--lf-cmp-file-grid-muted-text);
+        color: var(--lf-text-muted);
     }
 
     .card-meta.compact {
@@ -451,8 +420,9 @@
         font-size: 0.5625rem;
     }
 
-    :global(.dark) .card-meta {
-        color: var(--lf-cmp-file-grid-muted-text-dark);
+    /* On the selected tint the muted text falls under 4.5:1 (design system, rule 5; TC-15). */
+    .file-card.selected .card-meta {
+        color: var(--lf-text-secondary);
     }
 
     /* Card actions */
@@ -461,11 +431,7 @@
         justify-content: flex-end;
         gap: 0.25rem;
         padding: 0.375rem 0.5rem;
-        border-top: 1px solid var(--lf-cmp-file-grid-card-actions-border);
-    }
-
-    :global(.dark) .card-actions {
-        border-top-color: var(--lf-cmp-file-grid-card-actions-border-dark);
+        border-top: 1px solid var(--lf-border-subtle);
     }
 
     .action-btn {
@@ -474,50 +440,28 @@
         justify-content: center;
         width: 28px;
         height: 28px;
-        border: 1px solid var(--lf-cmp-file-grid-action-btn-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 0.375rem;
-        background: var(--lf-cmp-file-grid-action-btn-bg);
-        color: var(--lf-cmp-file-grid-muted-text);
+        background: var(--lf-surface-card);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.2s ease;
         text-decoration: none;
     }
 
-    :global(.dark) .action-btn {
-        background: var(--lf-cmp-file-grid-action-btn-bg-dark);
-        border-color: var(--lf-cmp-file-grid-action-btn-border-dark);
-        color: var(--lf-cmp-file-grid-muted-text-dark);
-    }
-
     .action-btn:hover {
-        background: var(--lf-cmp-file-grid-action-btn-hover-bg);
-        color: var(--lf-cmp-file-grid-strong-text);
-    }
-
-    :global(.dark) .action-btn:hover {
-        background: var(--lf-cmp-file-grid-action-btn-hover-bg-dark);
-        color: var(--lf-cmp-file-grid-strong-text-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .action-btn.danger {
-        color: var(--lf-cmp-file-grid-action-btn-danger-text);
-        border-color: var(--lf-cmp-file-grid-action-btn-danger-border);
-    }
-
-    :global(.dark) .action-btn.danger {
-        color: var(--lf-cmp-file-grid-action-btn-danger-text-dark);
-        border-color: var(--lf-cmp-file-grid-action-btn-danger-border-dark);
+        color: var(--lf-danger);
+        border-color: var(--lf-danger-line);
     }
 
     .action-btn.danger:hover {
-        background: var(--lf-cmp-file-grid-action-btn-danger-hover-bg);
-        color: var(--lf-cmp-file-grid-action-btn-danger-text);
-        border-color: var(--lf-cmp-file-grid-action-btn-danger-hover-border);
-    }
-
-    :global(.dark) .action-btn.danger:hover {
-        background: var(--lf-cmp-file-grid-action-btn-danger-hover-bg-dark);
-        color: var(--lf-cmp-file-grid-action-btn-danger-text-dark);
-        border-color: var(--lf-cmp-file-grid-action-btn-danger-hover-border-dark);
+        background: var(--lf-danger-soft);
+        color: var(--lf-danger);
+        border-color: var(--lf-danger-line);
     }
 </style>
