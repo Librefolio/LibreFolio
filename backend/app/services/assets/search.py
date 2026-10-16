@@ -226,10 +226,10 @@ class AssetSearchService:
                 providers_with_errors=[],
             )
 
-        # F21: premium providers first, then lower priority; ties keep the order of today, so with every value at its
-        # default the order does not change (D-X3). The results keep the providers' order (asyncio.gather).
-        rank = {code: position for position, code in enumerate(provider_policy.search_order([code for code, _ in valid_providers]))}
-        valid_providers.sort(key=lambda pair: rank[pair[0]])
+        # F21: premium providers first, then lower priority. The sort is stable: ties, a repeated code included, keep the
+        # order of today, so with every value at its default the order does not change (D-X3). The results keep the
+        # providers' order (asyncio.gather).
+        valid_providers.sort(key=lambda pair: provider_policy.search_rank(pair[0]))
 
         # Create search tasks for parallel execution
         async def search_single_provider(code: str, provider) -> tuple[str, list[dict], str | None, str | None]:
