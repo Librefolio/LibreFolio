@@ -412,7 +412,7 @@ decides who may sign up, and there is no limit. All four are optional: uncomment
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **By invitation** on a new instance unless an administrator changed it (an instance upgraded from an earlier version keeps the mode it had). Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. Whatever the value, the first account of a new instance can be created from the login page, with **Register here**, and becomes the administrator: see [Who Can Sign Up](settings.md#registration). |
-| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
+| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires, and each account waiting for its email verification while its link is live; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
 | `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link or forgotten-password email goes out ([Email](email.md)). |
 | `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. |
 
@@ -430,7 +430,8 @@ process needs the value: `Invalid account configuration`, with the variable and 
 
 ### 📏 When the Instance Is Full {: #user-limit }
 
-When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS`:
+When the active accounts, the pending invitations and the accounts waiting for their email
+verification reach `LIBREFOLIO_MAX_USERS`:
 
 - nobody can sign up without an invitation, whatever the [Registration](settings.md#registration)
   mode;
@@ -439,8 +440,10 @@ When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS
   [command line](cli_tools.md): `user create`, `user invite` and `user activate` print a warning,
   then go ahead.
 
-A place frees up when an account is deactivated or deleted, or when an invitation is revoked or
-expires. The first account of a new instance can always be created.
+A place frees up when an account is deactivated or deleted, when an invitation is revoked or
+expires, or when the link of an account waiting for its email verification expires (see
+*Email Verification* in [Email](email.md)). The first account of a new instance can always be
+created.
 
 ---
 

@@ -656,7 +656,13 @@ The hooks in workstream A's files, written by workstream E:
   answers it with 409 `EMAIL_VERIFICATION_UNAVAILABLE` (`_REGISTRATION_REFUSALS`). Otherwise the answer carries
   `verification_required` (`AuthRegisterResponse`, `false` by default); when it is true, the route queues
   `registration_email_work()` on the request's engine (`session.bind`), and the `User registered` event has
-  `waits_for_email`.
+  `waits_for_email`. Before it queues the email, the route asks
+  [`registration_email_allowed()`](#verification-functions) with `request.client.host`: past 10 registration emails
+  an hour from the same client address, the account is created and waits all the same (201,
+  `verification_required: true`), but no email is queued; the route logs
+  `Verification email held: too many registrations from this address`, and the owner asks for the link again from
+  the sign-in, under the [limits of «send the link again»](#verification-resend) (a night decision of 16/10, to be
+  reviewed).
 - **The user limit**: `user_usage()` also counts, once each, the inactive accounts holding a live verification
   token (`_live_verifications()`: not consumed, not revoked, not expired). Such an account already holds its place
   ([`holds_place()`](#verification-functions)): `PATCH /users/{id}` reactivates it on a full instance without 409
@@ -669,8 +675,10 @@ The hooks in workstream A's files, written by workstream E:
   `ACCOUNT_DISABLED`.
 - **Status changes**: `update_user_status()` (the administrator API) revokes the account's verification tokens
   when it changes `is_active`; `set_user_active()` (`user activate`, `user deactivate`) whenever it runs. A `PATCH`
-  with `is_active: false` on a waiting account, inactive already, changes nothing: its link stays live and counted.
-  To turn a waiting account away, an administrator deletes it, or runs `user deactivate`, which revokes its links.
+  with `is_active: false` on a waiting account, inactive already, ends the wait as `user deactivate` does: its
+  links are revoked, its place is free, and the answer says `holds_place: false`; on an inactive account that does
+  not wait, it still changes nothing. The Users tab offers no **Deactivate** for an inactive account: there, an
+  administrator turns a waiting account away with **Delete**.
 - **The option**: `update_global_settings()` checks an off-to-on change of `require_email_verification` with
   `ensure_verification_can_be_enabled()` (`_refuse_what_cannot_turn_on()`). A refusal is
   `GlobalSettingUnavailableError`, which `PATCH /api/v1/settings/global/bulk` answers with 409
@@ -719,6 +727,7 @@ Both last 24 hours, the default lifetime of the `email_verification` purpose, an
 | `async awaiting_verification(session, user)` | Whether the account waits: inactive, with an unspent verification token |
 | `async holds_place(session, user, *, now=None)` | Whether an inactive account already holds a place under `LIBREFOLIO_MAX_USERS`: it waits with a live link, which `user_usage()` counts. `PATCH /users/{id}` and `user activate` reactivate such an account without counting a new place, and the `PATCH` answer carries the flag |
 | `async place_holders(session, *, now=None)` | The ids of every account `holds_place()` would say yes to, in one query: the `holds_place` of each account in `GET /users` |
+| `registration_email_allowed(address)` | Whether a registration from the client `address` may send its verification email now, counted when it may: `REGISTRATION_EMAILS_BY_ADDRESS`, 10 an hour per client address through [`address_key()`](#flows), an IPv6 client by its /64. A request without an address is not limited here; the mailbox and the hourly budget still are. `POST /auth/register` asks it before it queues `registration_email_work()` |
 | `async hold_for_verification(session, user, *, first, now=None)` | Inside `register_user()`'s transaction, once the account is written. `False` for the instance's first account or with the option off. Otherwise, unless `links_can_go()`, it raises `RegistrationError("EMAIL_VERIFICATION_UNAVAILABLE")`, imported inside the function since `registration_service` is its caller; else the account becomes inactive and gets the hold (flushed, not committed), and it returns `True` |
 | `async registration_email_work(user_id, *, engine=None, now=None)` | The verification email of a registration, after the answer, with a session of its own. Nothing goes when the account no longer waits (an administrator changed its status meanwhile). It never raises: a refusal or a failure is logged, the account keeps waiting, and «send the link again» works, at once after a failed email |
 | `async confirm_email(session, token, *, now=None)` | Spends a link and returns the account: [Confirming a Link](#verification-confirm) |
@@ -735,27 +744,39 @@ Its refusals are `EmailError`s, each with its `code`: `EmailVerificationUnavaila
 `_issue_and_send()` emails the account a new link, for `registration_email_work()` and `resend_verification()`, in
 this order:
 
-1. Email usable ([`require_email()`](#flows)), links ready (`require_links()`), and the hourly budget peeked
-   (`EmailRateLimitedError`): nothing is created when the email cannot go.
-2. The account's verification tokens revoked, the hold included, and a new one issued that carries the account's
-   address.
+1. Email usable ([`require_email()`](#flows)), links ready (`require_links()`), the hourly budget peeked, then the
+   recipient's mailbox (`VERIFICATION_BY_MAILBOX`, peeked on the address stripped and case-folded): past either,
+   `EmailRateLimitedError` with the wait. Nothing is created when the email cannot go.
+2. The account's verification tokens revoked, the hold included. That first write takes SQLite's write lock, so what
+   follows sees every request that wrote before it. When it revokes nothing, the account no longer waits — its link
+   was opened, or an administrator activated or deactivated it meanwhile — and a new link would make it wait again:
+   the transaction rolls back, with `EmailVerificationNotNeededError` for an active account and
+   `VerificationAccountDisabledError` for an inactive one, and nothing is sent. Otherwise a new token is issued that
+   carries the account's address.
 3. The per-account limits counted again inside the write transaction, the new link included
    (`_emailed_in_last_hour()`): with more than 3 in the last hour, or more than one in the last 5 minutes, the
    transaction rolls back, the revocations with it, and it raises `EmailRateLimitedError` with a wait of 300 seconds.
    Of two requests that passed the first count together, the second stops here (SQLite writes one at a time).
-4. The commit, before the email.
-5. `build_verification()` in the [account's language](#flows), with the username, the link from
+4. With `needs_place` — «send the link again» for an account whose link has expired, which holds no place — the user
+   limit counted again in the same transaction, the new link included, as `register_user()` counts it: over the
+   limit, the transaction rolls back with `VerificationUserLimitError`. Of two requests that saw the same last free
+   place, the second sees the first one's link here.
+5. The commit, before the email.
+6. `build_verification()` in the [account's language](#flows), with the username, the link from
    [`email_link()`](#links), what is left of its lifetime ([`link_ttl()`](#flows)) and the instance's name
-   (`LinksState.instance`); then `send_email()` to the account's address, and the `Verification link emailed` event.
-6. When anything after the commit raises (the language, the link, the message or `send_email()`, whatever the
+   (`LinksState.instance`); then `send_email()` to the account's address. Once the email went out, a hit on
+   `VERIFICATION_BY_MAILBOX`, and the `Verification link emailed` event.
+7. When anything after the commit raises (the language, the link, the message or `send_email()`, whatever the
    exception), the email did not go as far as LibreFolio knows: the token just committed loses its address (`email`
    set to `NULL`, committed) and the exception goes on to the caller.
 
 The token stays as a hold, rather than being revoked as a forgotten password's link is: the account needs an unspent
 token to keep waiting, and keeps it, with its place while the token is live. The link cannot be confirmed, since
 `confirm_email()` refuses a token without `email` (without revoking it: [Confirming a Link](#verification-confirm)),
-and it no longer counts against the per-account limits, which count only tokens with an address: «send the link
-again» works at once. The same holds after a failed background email, which `registration_email_work()` logs.
+and it counts neither against the per-account limits, which count only tokens with an address, nor against the
+mailbox, which counts only emails that went out: «send the link again» works at once. The same holds after a failed
+background email, which `registration_email_work()` logs. A registration's email refused by the mailbox's limit
+leaves the hold in place: the account waits, and its owner asks for the link again later.
 
 ### 🔓 Confirming a Link {: #verification-confirm }
 
@@ -789,44 +810,50 @@ counts as never sent.
    more way to guess passwords. A request without a client address skips it.
 2. The account, looked up as the sign-in does (`get_user_by_username_or_email()`), and the password checked with
    workstream A's `verify_password_or_dummy()` in a worker thread: an unknown account costs a dummy hash, and both
-   raise `VerificationCredentialsError`.
+   log `Verification resend refused: wrong credentials`, then raise `VerificationCredentialsError`.
 3. An active account raises `EmailVerificationNotNeededError`; an inactive one that does not wait,
    `VerificationAccountDisabledError`.
 4. Email usable (`require_email()`) and links ready (`require_links()`).
 5. The per-account limits, on the links already emailed: `EmailRateLimitedError` with the wait.
 6. Without a live link, the account's place went with its link: if the instance is full now (`user_usage()`), it
-   raises `VerificationUserLimitError`.
+   raises `VerificationUserLimitError`, and [emailing the link](#verification-email) counts again inside its write
+   (`needs_place`).
 7. [Emailing a link](#verification-email).
 
 | Limit | Counted on | Past it |
 |-------|------------|---------|
 | `RESEND_BY_ADDRESS`: 10 requests every 15 minutes | The client address, `request.client.host`, through [`address_key()`](#flows): an IPv6 client by its /64. A request counts whatever its password | 429 `EMAIL_RATE_LIMITED` |
+| `REGISTRATION_EMAILS_BY_ADDRESS`: 10 registration emails an hour | The client address of `POST /auth/register`, through `address_key()` as above, counted when the email may go ([`registration_email_allowed()`](#verification-functions)). Registrations only: «send the link again» has `RESEND_BY_ADDRESS` | For a registration, no email queued (`Verification email held: …`), and the account still waits |
 | One email every 5 minutes, 3 an hour (`VERIFICATION_EMAIL_MIN_INTERVAL`, `VERIFICATION_EMAILS_PER_HOUR`) | The account's verification tokens that carry an address, created in the last hour: the links emailed, never a hold, so never a link whose email did not go out, which lost its address. «Send the link again» counts them first; every email counts them again inside the write transaction | 429 `EMAIL_RATE_LIMITED`, with the wait |
+| `VERIFICATION_BY_MAILBOX`: 3 emails an hour | The recipient's address stripped and case-folded, whatever account gives it: the registration's email and «send the link again» alike. Peeked before anything is created, hit only once the email went out | 429 `EMAIL_RATE_LIMITED` for «send the link again», with the wait; for a registration, no email (`Verification email: not sent`), and the account still waits |
 | The hourly budget of the instance | `budget_status()`, peeked before anything is created; the email spends its unit | 429 `EMAIL_RATE_LIMITED` |
-| A place under `LIBREFOLIO_MAX_USERS` | Only when the account's link has expired: a live link keeps the place | 409 `USER_LIMIT_REACHED` |
+| A place under `LIBREFOLIO_MAX_USERS` | Only when the account's link has expired: a live link keeps the place. Counted before, then again inside the write transaction | 409 `USER_LIMIT_REACHED` |
 
-`RESEND_BY_ADDRESS` is a `SlidingWindowLimiter` in the memory of the process, like the «forgot password» limiters,
-with the same consequences and the same proxy rules ([A Forgotten Password](#flow-forgot)); the per-account limits
-read the database.
+`RESEND_BY_ADDRESS`, `REGISTRATION_EMAILS_BY_ADDRESS` and `VERIFICATION_BY_MAILBOX` are `SlidingWindowLimiter`s in the
+memory of the process, like the «forgot password» limiters (`VERIFICATION_BY_MAILBOX` is the counterpart of
+`FORGOT_BY_MAILBOX`), with the same consequences; the two per-address limiters follow the same proxy rules
+([A Forgotten Password](#flow-forgot)). The per-account limits and the place read the database.
 
 ### 📝 What Is Logged {: #verification-logs }
 
 | Event | Level | Fields |
 |-------|-------|--------|
 | `Registration waits for email verification` | `info` | `user_id`: `hold_for_verification()` |
+| `Verification email held: too many registrations from this address` | `info` | `user_id`: `POST /auth/register` (`api/v1/auth.py`), past `REGISTRATION_EMAILS_BY_ADDRESS`; the account waits without its email |
 | `Verification link emailed` | `info` | `user_id`, `token_id`, `language`: after `Email sent` |
-| `Verification email: the account no longer waits, nothing sent` | `info` | `user_id`: `registration_email_work()`, for an account whose status changed meanwhile, or that no longer exists |
-| `Verification email: not sent` | `warning` | `user_id`, `reason` (the exception's class), `code`: a refusal or a failed delivery in `registration_email_work()`, such as email off, the hourly budget spent or a message the SMTP server did not take (its link lost its address); the account keeps waiting |
+| `Verification email: the account no longer waits, nothing sent` | `info` | `user_id`: `registration_email_work()`, for an account whose status changed meanwhile, or that no longer exists, whether its first check or the first write of `_issue_and_send()` finds it |
+| `Verification email: not sent` | `warning` | `user_id`, `reason` (the exception's class), `code`: a refusal or a failed delivery in `registration_email_work()`, such as email off, the hourly budget or the mailbox's limit spent, or a message the SMTP server did not take (its link lost its address); a waiting account keeps waiting |
 | `Verification email: the request failed` | `error` | `user_id`, `error` (the exception's class), and no traceback: a database error would print its SQL parameters |
 | `Email verified` | `info` | `user_id`, `token_id` |
 | `Email verification refused: the link's email did not go out` | `info` | `user_id`, `token_id`: a token without `email`, refused but not revoked; the account keeps waiting |
 | `Email verification refused: the link was sent to another address` | `info` | `user_id`, `token_id`: the link is revoked |
 | `Login refused: email not verified` | `info` | `user_id`: the login route (`api/v1/auth.py`), for a waiting account that gave the right password |
+| `Verification resend refused: wrong credentials` | `warning` | None: `resend_verification()`, for a wrong password or an unknown account. Logged as the login logs its failures, without the identifier, so that what watches those sees these too |
 
 No event holds a token, an address or an identifier. The `User registered` event of workstream A has
-`waits_for_email`, true when the new account waits for its link. A refusal of «send the link again» leaves no event of
-its own: the answer says it. The email itself leaves `Email sent` or `Email not sent` ([What Is Logged](#logs)), and
-workstream A's `token_service` logs each token it issues, consumes or revokes.
+`waits_for_email`, true when the new account waits for its link. Of the refusals of «send the link again», only the
+wrong credentials leave an event; the answer says the others. The email itself leaves `Email sent` or `Email not sent`
+([What Is Logged](#logs)), and workstream A's `token_service` logs each token it issues, consumes or revokes.
 
 ### 🖥️ In the Frontend {: #verification-frontend }
 
@@ -1220,15 +1247,16 @@ counter of its own.
 | `./dev.py test services email-links` | `test_services/test_email_links.py` (EML-001…012) | `links_state()` (ready, missing, invalid: no host, whitespace, a `?` or `#` even empty, an invalid port, an unclosed IPv6 bracket, credentials; an IPv6 literal and a capitalised scheme ready), `require_links()`, `email_link()` (the base plus the page path, the token in the fragment), `LinksState.instance`, `email_instance_config()` in every combination, a blocked instance included |
 | `./dev.py test services email-flows` | `test_services/test_email_flows.py` (EMF-001…052) | `supported_email_language()` and `account_language()` (the account's own language when the emails speak it, else `default_language`, else English, never creating a row, a row that no longer validates still giving its language); `send_test_email()`; `send_link_email()`: the order of its refusals, live tokens of the right purpose only, recipients and languages per purpose, a reset link of an inactive account refused, the link from `LIBREFOLIO_PUBLIC_URL` only; «forgot password»: the hold first in every state, and shipped on; `address_key()`; admission (configuration, 10 per address with an IPv6 client by its /64 and an IPv4 address sharing its count with its mapped form, 3 per identifier, the budget, no address no shared count), the background work (lookup as the login, active accounts only, nothing while an administrator's reset link is live, 3 emails an hour per mailbox, one reset every 5 minutes and 3 an hour per account, counted again inside the write transaction against a rival link made meanwhile, the link created only when the email can go and revoked when it does not, a blocked instance creating nothing, never raising, a failure logged with its type and without traceback or identifier); the email change notice (`email_changed_work()`: the old address only, the account's language, the public host or «LibreFolio», nothing for the same address, an `info` line with email off and a warning when configured but unusable, no address in a log, never raising) |
 | `./dev.py test api email` | `test_api/test_email_api.py` (EMA-001…048) | Admin only: 401 without a session, 403 for a member, nothing sent or spent; the status in its three states with the three checks, `links` and, when ready, the budget, never the SMTP configuration or a check's `summary`, without a connection or a name lookup; the test email (409, 422 only for `EmailRecipientError`, 429 with `Retry-After`, 502 with the `SmtpErrorCode`); `POST /email/links` with every answer, `EMAIL_ACCOUNT_INACTIVE` included; `POST /email/password-reset` held (the same 409 `FORGOT_PASSWORD_DISABLED` for any account, nothing counted, no work scheduled), and once open with every answer, the same 202 for any identifier, IPv6 clients counted by their /64; every link equal to the `LIBREFOLIO_PUBLIC_URL` one whatever Host, Origin, X-Forwarded-Host or Referer the request forges, and an unparsable `LIBREFOLIO_PUBLIC_URL` never a 500; `GET /system/instance`: `email` exactly `{available, links}`, false on a blocked instance, never a value of the configuration; both routes reading the configuration off the event loop |
-| `./dev.py test services email-verification` | `test_services/test_email_verification.py` (EMV-001…042) | The option and `links_can_go()`; `hold_for_verification()` (never the first account, the option off, 409 code when no email with a link can go, the account inactive with a hold token, nothing committed); `awaiting_verification()` (inactive with an unspent token, live or expired; not after a revocation or a use); the registration email (a token with the address replaces the hold, the link from `LIBREFOLIO_PUBLIC_URL`, the account's language, never raising); a failed email after the commit, six ways, leaving a hold that still waits, refused at confirmation without being revoked, and an immediate resend; the timeout after `DATA`; `confirm_email()` (active, `email_verified_at`, the other links revoked, a link sent to another address revoked); resend (the address limit before the password, the same refusal for an unknown account and a wrong password, active, deactivated, the per-account limits on emailed links only and recounted in the write transaction, a place again after an expired link); no token, address or identifier in a log |
-| `./dev.py test api email-verification` | `test_api/test_email_verification_api.py` (EVA-001…015) | Both routes without a session, none set; every status and body; the 401 and the 403 byte for byte the sign-in's; the 409s and the 502 without `problem` or `smtp_code`; `Retry-After` |
-| `./dev.py test services email-verification-hooks` | `test_services/test_email_verification_hooks.py` (EVK-001…008) | The hooks in workstream A's services: `user_usage()` counts an inactive account with a live verification link once (not one whose link expired, was revoked or used; an active account once); `register_user()` holds the account and the limit counts it, or rolls everything back on `EMAIL_VERIFICATION_UNAVAILABLE`, the invitation still live; `update_user_status()` revokes the verification links on a change of `is_active` only, `set_user_active()` either way (deactivating ends the wait); `holds_place()` and `place_holders()`: inactive with a live link, `now` deciding; `_refuse_what_cannot_turn_on()`: only `require_email_verification` off to on, without an email with a link |
-| `./dev.py test api email-verification-hooks` | `test_api/test_email_verification_hooks_api.py` (EVH-001…012) | In process, on the real auth, users, settings and email routers, with the option on: a registration answers 201 `verification_required`, the account inactive and the email's link from `LIBREFOLIO_PUBLIC_URL`; the login 403 `EMAIL_NOT_VERIFIED`, a wrong password the 401 of an unknown account; resend, the link opened, the login 200; the first account never waits; an invited one waits and spends its invitation; no email with a link: 409 `EMAIL_VERIFICATION_UNAVAILABLE`, nothing created, the invitation live; the option off as before. A waiting account takes a place while its link is live (`usage`, `holds_place`, a registration refused when full), none once expired; a reactivation on a full instance accepted while the link is live, refused once expired, the old link then revoked; `is_active: false` on a waiting account a no-op; the `PATCH` answer and `GET /users` carry `holds_place`, true while the link is live and false once it has expired. Settings: off to on 409 without email, nothing saved, 200 with email; on again, or off, always saved |
+| `./dev.py test services email-verification` | `test_services/test_email_verification.py` (EMV-001…048) | The option and `links_can_go()`; `hold_for_verification()` (never the first account, the option off, 409 code when no email with a link can go, the account inactive with a hold token, nothing committed); `awaiting_verification()` (inactive with an unspent token, live or expired; not after a revocation or a use); the registration email (a token with the address replaces the hold, the link from `LIBREFOLIO_PUBLIC_URL`, the account's language, never raising); a failed email after the commit, six ways, leaving a hold that still waits, refused at confirmation without being revoked, and an immediate resend; the timeout after `DATA`; `confirm_email()` (active, `email_verified_at`, the other links revoked, a link sent to another address revoked); resend (the address limit before the password, the same refusal for an unknown account and a wrong password, active, deactivated, the per-account limits on emailed links only and recounted in the write transaction, a place again after an expired link, counted again inside the write); the mailbox limit, case-folded, across accounts, a failed email not counted; an account that stopped waiting meanwhile gets no new link; a wrong password logged without what was typed; no token, address or identifier in a log |
+| `./dev.py test api email-verification` | `test_api/test_email_verification_api.py` (EVA-001…016) | Both routes without a session, none set; every status and body; the 401 and the 403 byte for byte the sign-in's; the 409s and the 502 without `problem` or `smtp_code`; `Retry-After`, for the mailbox limit too |
+| `./dev.py test services email-verification-hooks` | `test_services/test_email_verification_hooks.py` (EVK-001…010) | The hooks in workstream A's services: `user_usage()` counts an inactive account with a live verification link once (not one whose link expired, was revoked or used; an active account once); `register_user()` holds the account and the limit counts it, or rolls everything back on `EMAIL_VERIFICATION_UNAVAILABLE`, the invitation still live; `update_user_status()` revokes the verification links on a change of `is_active`, and on deactivating an account already inactive that waits (a regular inactive account unchanged, nothing committed), `set_user_active()` either way (deactivating ends the wait); `registration_email_allowed()`: 10 an hour per client address, an IPv6 /64 one client, none without an address; `holds_place()` and `place_holders()`: inactive with a live link, `now` deciding; `_refuse_what_cannot_turn_on()`: only `require_email_verification` off to on, without an email with a link |
+| `./dev.py test api email-verification-hooks` | `test_api/test_email_verification_hooks_api.py` (EVH-001…013) | In process, on the real auth, users, settings and email routers, with the option on: a registration answers 201 `verification_required`, the account inactive and the email's link from `LIBREFOLIO_PUBLIC_URL`; the login 403 `EMAIL_NOT_VERIFIED`, a wrong password the 401 of an unknown account; resend, the link opened, the login 200; the first account never waits; an invited one waits and spends its invitation; no email with a link: 409 `EMAIL_VERIFICATION_UNAVAILABLE`, nothing created, the invitation live; the option off as before. A waiting account takes a place while its link is live (`usage`, `holds_place`, a registration refused when full), none once expired; a reactivation on a full instance accepted while the link is live, refused once expired, the old link then revoked; `is_active: false` on a waiting account ends the wait (its link revoked, its place freed, the login then `ACCOUNT_DISABLED`); the `PATCH` answer and `GET /users` carry `holds_place`, true while the link is live and false once it has expired or the wait has ended; past the per-client limit a registration still waits, without its email, and its resend goes. Settings: off to on 409 without email, nothing saved, 200 with email; on again, or off, always saved |
 | `./dev.py test front-utility core-unit` | `frontend/src/lib/features/email/emailText.test.ts` (ETX-01…10), `emailApi.test.ts` (EAP-01…11), `emailLinks.test.ts` (ELK-01…09), `verificationApi.test.ts` (VFA-01…18), `sendLinkApi.test.ts` (SLA-01…14), `forgotPasswordApi.test.ts` (FPA-01…10) | The code-to-key maps (own entries only), the minutes, the failure messages and their keys in the four catalogues, the role classes (no palette class, no hex, no `dark:`); the links' keys and classes, `linksProbeWarns()`; `fetchEmailStatus()` narrowing the answer, `links` included; `issueProbeNonce()`; `readTestFailure()` on an `AxiosError` and on an `ApiError`, with the real client and a fake transport; `probeEmailLinks()` through workstream A's real `checkAddress()` and a fake fetch: `invalid` and `insecure` before any request, the normalized base probed, every verdict mapped, a timeout, never a rejection; the exported refusal helpers; the verification page keys and `resendFailureMessage()`; `confirmEmailVerification()`, `resendEmailVerification()`, `readLinkRefusal()` and `readResendFailure()` with the real client; `tokenFromLink()`, `sendByEmailVisible()`, `sendLinkByEmail()` and `readLinkSendFailure()` (a 422 of the request's validation read as an invalid address); `requestPasswordResetEmail()` and `readForgotFailure()`; `linkSendFailureMessage()` and `forgotFailureMessage()` |
 | `./dev.py test front-utility component-unit` | `frontend/src/lib/features/email/EmailSettingsTab.test.ts` (ETB-01…10 for the links), `VerifyEmailCard.test.ts` (VEC-01…07), `VerificationNotice.test.ts` (VNT-01…07), `frontend/src/routes/verify-email/page.test.ts` (VEP-01…10), `SendLinkByEmail.test.ts` (SLE-01…09), `ForgotPasswordEmailForm.test.ts` (FPF-01…06) | The tab in jsdom: each state, the notices, the budget, `data-busy` over every request, one email per click, the outcome after 200, 409, 422, 429, 502 and a network error, a failed read keeping the last state; the links' base checked only when ready, once per base (not after a test email), every outcome and **Check again**, an overtaken or unmounted check writing nothing, the block's own `data-busy`. jsdom pages are `http:`: the https case is pinned in `emailLinks.test.ts`. The verification card in each state; the sign-in's «send the link again» and its outcomes; the `/verify-email` page: the token out of the address bar, success to the sign-in with a message, each refusal, a missing token, a retry, `hashchange`, a late answer dropped. «Send by email» on its own (an invitation's editable address sent trimmed or not at all, a reset link without one, every failure, the busy state); the «forgot password» form on its own (the same answer as information, the hold, each refusal) |
 | `./dev.py test front-utility core-unit` | `frontend/src/lib/stores/app/auth.verification.test.ts` (AVR-01…05), `frontend/src/lib/features/auth/registrationErrors.verification.test.ts` (RVR-01…03) | The hooks in workstream A's modules: a 403 `EMAIL_NOT_VERIFIED` read as `email.verification.loginRequired`, `ACCOUNT_DISABLED` still `auth.accountDisabled`, any other 403 still `auth.loginFailed`, the code on a 401 changing nothing; a 409 `EMAIL_VERIFICATION_UNAVAILABLE` read as `email.verification.signUpUnavailable`, the other refusals keeping their keys; both texts sentences in the four catalogues |
 | `./dev.py test front-utility component-unit` | `frontend/src/lib/features/auth/LoginCard.verification.test.ts` (LVR-01…04), `RegisterCard.verification.test.ts` (RCV-01…03), `frontend/src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts` (GVR-01…05), `frontend/src/lib/features/settings/users/UserRow.verification.test.ts` (UVR-01…03) | The hooks in workstream A's components, in jsdom: the sign-in shows the verification notice instead of its danger box and sends the typed credentials; the registration's message with `verification_required`, the usual one without, and the sign-up refusal; the switch greyed out with its hint while off without `email.links`, usable with it, usable once saved on (the saved value decides, not the edited one), the 409 message, no «coming soon» badge; **Reactivate** usable on a full instance for an account that holds its place, off with the limit reason otherwise, usable whatever `holds_place` says with a free place |
 | `./dev.py test front-utility email-tab` | `frontend/e2e/settings/email-tab.spec.ts` | In the browser: an administrator's tab on the real backend in the `off` state, hidden from a member; the test email against a simulated API (200, 502, 429) |
+| `./dev.py test front-utility email-verification` | `frontend/e2e/auth-email-verification.spec.ts` (EVE-E-01…05) | In the browser, signed out on simulated answers: a sign-up that must wait goes back to the sign-in with a line of its own and signs nobody in; `EMAIL_VERIFICATION_UNAVAILABLE` keeps the register card with words of its own; `EMAIL_NOT_VERIFIED` draws the verification notice instead of the error box, and «send the link again» goes with the typed credentials. As an administrator, with `GET /system/instance` simulated: the switch of Settings › Admin off while `email.links` is false, usable when it is true; nothing saved |
 
 The backend files are under `backend/test_scripts/`. All twelve backend entries are `pure` in the runner catalogue:
 no lane database, no server. The two E2 files build their database as a private SQLite file under `tmp_path`, and
