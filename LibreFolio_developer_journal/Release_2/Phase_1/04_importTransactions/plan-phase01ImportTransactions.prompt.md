@@ -4094,3 +4094,173 @@ dev_release2 --docs`, 46 file del lotto, il journal escluso): **0 conflitti**; `
 `scripts/test_runner/_backend_utils.py`, il cui `black --check` fallisce già su HEAD e su `dev_release2` (una riga del banner
 del Designer Lab, non mia; le mie righe sono solo l'aggiunta di `real-decimal`); JSON validi; **`mkdocs build` strict exit 0 e
 `check-links` exit 0 sull'albero simulato**. `git diff --check` pulito; porta libera. **Handoff FROZEN** (18:2x): un commit.
+
+**C-97a committato** (coordinatore, 18:29): `5c4426e75` (codice) e `d8c2a13c7` (journal) sul ramo (HEAD `d8c2a13c7`, verificato,
+worktree pulito), cherry-pick **`bab52635d`** in `dev_release2` (treno 123), senza conflitti; il cancello su `dev` lo gira il
+coordinatore; la riga 🐛 del CHANGELOG nei suoi record. **Il conteggio di D5** (18:29, carico 31, copia di lavoro, sola lettura):
+nei dati del developer **nessuna riga ha `cost_basis_override`**: D5 non cambia nessun numero. Copia cancellata (`lsof +D` vuoto,
+`rm -rf`, `ls`). Prossimi: W-B53, FE8b (analisi), C-97b, C-97c.
+
+**C-97a, la forma dei valori calcolati (D6)** ✅ (2026-10-16, 19:4x–20:0x). **Trovato da MF**: il suo `all-backend` (su
+`0452e592c`, con C-97a) ha 2 rossi in External, `TestCreditAgricoleCanonicalCharacterization::test_csv_freezes_entire_output[securities]`
+e `test_xlsx_matches_entire_literal_csv_output[securities]` («complete parse output drifted»). Riprodotti nella mia corsia: **2 falliti**.
+**Triage** (skill `test-triage`; §1 no: i valori ci sono tutti, cambia la forma): confronto campo per campo, cambia solo
+`cost_basis_override.amount` (le 14 righe ADJUSTMENT del 2024-06-05; gli INTEREST nel messaggio di pytest sono l'inizio del dict
+troncato). `round_computed_value` quantizzava **sempre**, quindi riempiva fino alla scala: `100.00 / 100` → `1.000000000000`,
+`0.9369` → `0.936900000000`. Stesso valore, forma diversa: la caratterizzazione fissa la forma, e il wizard avrebbe mostrato gli zeri.
+**Verdetto: difetto, mio (D6).**
+> **⚠️ Fuori pista**: nei verdi di C-97a avevo girato di `external brim-providers` solo la classe nuova e Intesa, non i 737:
+> errore di selettore mio. D'ora in poi, quando cambia un plugin o un helper che i plugin chiamano, **tutto** `external brim-providers`.
+
+**Guardia rossa** (test-author `510e98ef`): `test_round_computed_value_keeps_the_form_of_a_value_that_fits` in
+`test_utilities/test_real_decimal.py`, 4 casi (`1.00`, `0.9369`, `100.00/100` su `cost_basis_override`, `12.5` su `amount`),
+confronto con `str()`, poi valore e `decimal_limit_issue`. **Rosso 4/4 per la ragione giusta** (`1.000000000000`,
+`0.936900000000`, `12.500000`). **Cura** (`files/scripts/c97a_form_fix.py --apply`, poi una rifinitura a mano):
+`round_computed_value` quantizza solo quando il valore ha **più decimali della scala**, o non è finito (lì il comportamento di
+prima: `quantize` rifiuta l'infinito); il passo a 15 cifre significative lascia com'è un valore che ne ha meno. Docstring
+aggiornata; le attese già scritte per D6 (1000/3, 100000/3, 2/3, 1/3 su importo e quantità, i due pareggi, il bond CA
+0.951234567891) restano valide, verificate a mano prima della cura. **Verdi** (corsia 6184, slot 2): `utils real-decimal`
+**96**; **tutto** `external brim-providers` **736 passati, 1 saltato** (il caso Degiro di `TestWindows1252Invariance`, già
+saltato prima); `services transaction-decimal-places` **44**. `black`/`ruff` puliti, `git diff --check` pulito. **Simulazione
+del cherry-pick** su `dev_release2` (`b9c549300`), i 2 file: **0 conflitti, pulito**. Doc invariate: descrivono la regola del
+valore (half-even alla scala, poi 15 cifre), che resta vera. **Handoff** al coordinatore come checkpoint a sé, prima di W-B53:
+`backend/app/db/precision.py` e `backend/test_scripts/test_utilities/test_real_decimal.py`.
+
+### W-B53 — scaldare il pool BRIM all'avvio: analisi ⏳ (2026-10-16)
+
+**Stato reale** (HEAD `d8c2a13c7`): `backend/app/services/brim/brim_parse_pool.py` crea il pool alla prima analisi (`_get_pool`,
+`ProcessPoolExecutor` con contesto `forkserver`); il primo worker è un interprete nuovo che importa
+`backend.app.services.brim.brim_provider` e tutto il registro dei plugin. Il test a tempo (`TIMEOUT = 30`,
+`backend/test_scripts/test_api/test_brim_api.py`, `TestParseEndpoint`) arriva dopo i 9 test di `TestFileStorage`: il suo primo
+`/parse` paga quel costo. **Misurato** (18:3x, carico ~31, `files/scripts/wb53_measure2.py`, `PYTHONPATH` alla radice come il
+server): oggi il primo richiamo che importa il modulo BRIM costa **3,94 s** (sotto carico 100–170 diventa i 31–49 s di J), il
+secondo 1 ms; con il **forkserver precaricato** (`set_forkserver_preload` + `forkserver.ensure_running()`) il primo richiamo
+costa **1,07 s** se arriva subito, **0,03 s** con 3 s di vantaggio. Memoria: il forkserver passa da 21 a **~90 MB**; i worker
+nascono da lui e ne condividono le pagine, quindi con più worker il totale è **minore** di oggi (oggi ognuno importa da sé).
+> **⚠️ Fuori pista — misura**: la prima misura dava 0,1 s e 20 MB: il precaricamento non era avvenuto, perché
+> `multiprocessing` inghiotte in silenzio l'`ImportError` del modulo da precaricare e il `sys.path` del mio script non aveva
+> la radice. Il server ce l'ha; il test della cura deve controllare che il modulo sia davvero caricato nel worker.
+
+**Disegno** (la prima proposta di J; nessuna interfaccia nuova):
+1. `brim_parse_pool.py`: `_get_pool` precarica il modulo BRIM nel forkserver (`set_forkserver_preload`) prima di creare il pool;
+   nuova `prewarm()`: con `forkserver` disponibile, precarica e avvia subito il forkserver (`multiprocessing.forkserver.ensure_running()`,
+   ritorna in ~10 ms, l'import avviene nel processo del forkserver); qualunque errore si registra e non ferma nulla (il pool
+   resta pigro, come oggi). Senza `forkserver` (solo `spawn`) non fa nulla. Il pool e i worker restano pigri: «un import non
+   avvia mai processi» resta vero (il forkserver parte all'avvio dell'app, non a un import).
+2. `services/platform/app_lifespan.py`: un passo `Step("brim-parse-pool", …)` dopo `market-holidays`, in background
+   (`asyncio.to_thread(prewarm)` tenuto da `_keep_in_background`), come il calendario dei mercati.
+3. Rossi (test-author): un worker del pool parte col modulo BRIM già caricato (osservato da una funzione d'aiuto in un modulo
+   di test che non lo importa); `prewarm()` avvia il forkserver prima di ogni analisi (in un interprete a parte: il forkserver è
+   unico per processo); il passo di avvio c'è, dopo `market-holidays`; guardie: `prewarm()` non solleva mai, l'analisi
+   funziona dopo il riscaldamento. Selettori: `services brim-parse-pool`, i test del ciclo di vita dell'app, `api brim` (slot).
+4. Doc: `developer/architecture/overview.md` (l'elenco dei passi di avvio), `developer/backend/brim/architecture.md` (la riga
+   «Parse»).
+
+**W-B53, rossi in scrittura** (18:4x, test-author): il worker nasce col modulo BRIM caricato (osservato in un interprete a parte,
+con un modulo sonda che non lo importa), `prewarm()` avvia il forkserver lasciando pigro il pool, il passo `brim-parse-pool`
+dopo `market-holidays`, guardie (nessuna eccezione da `prewarm`, analisi funzionante dopo). **Cura pronta**
+(`files/scripts/wb53_cure.py`, dry run pulito: 8 modifiche in `brim_parse_pool.py` e `app_lifespan.py`), non applicata.
+> **⚠️ Fuori pista — il contratto corretto dal test-author** (19:0x): precaricare `brim_provider` **non carica i 33 plugin**:
+> il registro li scopre al primo `get_provider_instance`, dentro `parse_file`, quindi ogni worker li avrebbe importati alla
+> prima analisi; la mia misura cronometrava solo l'import del modulo. Misurato (carico ~46): import 1,05 s + scoperta 0,35 s,
+> 107 MB in tutto. **Contratto nuovo**: il forkserver precarica un modulo nuovo e minimo,
+> `backend/app/services/brim/brim_parse_preload.py`, che importa `brim_provider` e il registro e lancia
+> `BRIMProviderRegistry.auto_discover()` dentro `try/except Exception` (il forkserver sopravvive solo a un `ImportError` nel
+> precaricamento; un errore di scoperta lo riporta il primo parse del worker, come oggi); `_PRELOAD` lo nomina per stringa (il
+> modulo del pool non deve scoprire i plugin quando lo si importa); una nota sul precaricamento unico per processo (il pool
+> BRIM è l'unico utente del forkserver). La scoperta gira sotto un lock e lascia `_discovery_done` vero: i worker lo ereditano.
+> Il test-author: il rosso decisivo chiede anche un plugin caricato e la scoperta fatta; una guardia (il modulo di
+> precaricamento non solleva quando la scoperta fallisce); `raising=False` nei due test che fanno girare tutto il lifespan
+> (`test_market_calendar.py`, `test_post_migration.py`). Cura aggiornata (`files/scripts/wb53_cure.py`, dry run pulito: 8
+> modifiche in 2 file e il modulo nuovo).
+
+**W-B53, rossi** ✅ (19:13–19:19, carico 45–49): `services brim-parse-pool` **8 falliti, 9 passati** (rosso decisivo: «worker … started
+without the BRIM module; a plugin module; the registry's discovery done»; rosso `prewarm`; le guardie che cadono solo per
+`prewarm` o il modulo mancanti; verdi gli 8 test di prima e la guardia «importare il pool resta leggero»), `services
+app-lifecycle` **2 falliti** (nessun passo `brim-parse-pool`), i due test del lifespan intero con lo stub `raising=False`
+verdi. Il test-author ha aggiunto anche la guardia «il forkserver resta a un solo thread dopo il precaricamento» (nel test di
+`prewarm`), che proposta da lui accolgo: forkare un processo con dei thread è ciò che il docstring del pool vieta. **Cura**
+✅ (19:20, `files/scripts/wb53_cure.py --apply`: 8 modifiche e `brim_parse_preload.py`). > **⚠️ Fuori pista**: `ruff` S110
+(`try`-`except`-`pass`) nel modulo di precaricamento, nessun precedente di `noqa: S110` nel codice: l'errore di scoperta ora si
+registra nel forkserver (`structlog`), il che serve anche all'operatore. Controllo a mano: il modulo di precaricamento, in un
+interprete nuovo con la radice nel `sys.path`, lascia la scoperta fatta, 33 plugin, 1 thread. **Verdi** ✅ (19:22–19:29, carico
+33–49): `services brim-parse-pool` **17/17** (18,6 s invece di 150 s: i test a interprete nuovo usano il forkserver
+precaricato), `app-lifecycle` **44**, `risk-all test_the_lifespan_prewarms` **1**, `db post-migration
+test_the_server_runs_the_fixes` **1**, `brim-parse-race` **42**, `brim-provider-base` **39**, `brim-parse-error` **4**;
+`black`/`ruff` puliti. Porta libera. Doc: docs-writer in corso; `api brim`: slot chiesto.
+
+> **N56 (coordinatore, 19:30): il riscaldamento è opzionale.** +80 MB fissi e +1,4 s di CPU a ogni avvio per 3,9 s alla
+> **prima** importazione: un cattivo affare per le macchine piccole del Cloud; i 30–48 s a freddo li vede solo la nostra
+> macchina di test sovraccarica. **Disegno (approvato)**: `LIBREFOLIO_BRIM_PREWARM` letto da un modulo di sezione nuovo,
+> `backend/app/config/brim.py` (proprietario W; lo schema di `sleep_wake.py`): non impostato o vuoto → **segue la modalità**
+> (spento in produzione, acceso in modalità test, letta solo con `is_test_mode()`: nessun cambio al runner, che toglie la
+> variabile e mette `LIBREFOLIO_TEST_MODE=1`); `1/true/yes/on` e `0/false/no/off` decidono; altro → `BrimConfigError` (un
+> `ValueError` con `.variable`), il passo lo registra come avviso e non avvia nulla. Il passo resta in elenco; il
+> precaricamento resta sulla via pigra (la prima analisi avvia il forkserver, che carica i plugin). Sezione «Broker Import»
+> di `.env.example` mia. **Revisione di H** (sola lettura, OK sulla posizione nei 3 hunk di `app_lifespan.py`): il test della
+> posizione con `assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("market-holidays", "brim-parse-pool", "scheduler"),
+> "STARTUP_STEPS")`; la modalità test solo con `is_test_mode()`; in `.env.example` la riga commentata
+> `# LIBREFOLIO_BRIM_PREWARM=false   # test mode: true`, nella sezione «Broker Import» dopo «Risk Engines»; doc secondo C-99
+> (la spiegazione intera sulla pagina della funzione, una riga in `configuration.md`); prove in più `shutdown-budget`,
+> `shutdown-process`, `config-env-example`, `app-lifecycle`.
+
+**W-B53/N56, rossi** ✅ (19:45–19:46, slot 2): test del test-author `5b49e819` (nessuna esecuzione sua). `services app-lifecycle`
+**3 falliti, 46 passati**: `…_starts_nothing_when_the_warm_up_is_off[production-default]` e `[off-in-test-mode]`, `…_logs_an_invalid_setting_starts_nothing_and_the_startup_goes_on`,
+tutti per «the step started {<Task pending … to_thread()>}» (il passo avviava comunque); `services config-brim` (file nuovo
+`test_services/test_config_brim.py`, registrato `isolation="pure"`) **51 falliti**, tutti `ModuleNotFoundError:
+backend.app.config.brim`, dentro i test e non alla raccolta. Il test della posizione è passato a `assert_in_relative_order`
+(rinominato `…_prewarmed_after_the_market_holidays_and_before_the_scheduler`); ogni caso mette la modalità con monkeypatch e
+ne verifica la premessa con `is_test_mode()`; l'avviso deve nominare la variabile; una barriera (lo stesso passo con `1` deve
+chiamare la controfigura in un thread) prova che i casi «nulla» provano qualcosa.
+> **⚠️ Fuori pista — la guardia di `.env.example` non vede una costante**: il rilevatore registra solo i nomi letterali, quindi
+> `os.environ.get(BRIM_PREWARM_VARIABLE, …)` non avrebbe obbligato la riga. `brim.py` legge col nome letterale (la costante
+> resta per i messaggi); verificato chiamando il rilevatore: lettura vista in `config/brim.py:44`, riga documentata.
+
+**Cura N56** ✅ (19:46, `files/scripts/wb53_n56_cure.py --apply`: 4 modifiche in 3 file e `config/brim.py` nuovo): il passo
+chiede `brim_prewarm_enabled()`; `BrimConfigError` → `logger.warning("BRIM parse pool prewarm off: invalid setting",
+variable=…, error=…)`; docstring del pool; la sezione «Broker Import» di `.env.example`. `black`/`ruff` puliti sui 9 file.
+**Verdi** ✅ (19:47–19:50, carico 46–58, slot 2; `files/scripts/n56_greens.sh`, uno alla volta): `services config-brim` **51**,
+`app-lifecycle` **49**, `brim-parse-pool` **17**, `shutdown-budget` **188**, `shutdown-process` **7**, `config-env-example`
+**38**, `risk-all test_the_lifespan_prewarms` **1**, `db post-migration test_the_server_runs_the_fixes` **1**. **Slot 2, `api
+brim`** ✅ (19:51–19:56): prima `db populate --force` sulla mia corsia (W-B54: i `services` lasciano il DB vuoto; 7096
+record), poi **118/118** in 2:20; nel log del server il forkserver parte all'avvio col precaricamento («BRIM parse pool
+forkserver started», 19:54:07) e il pool alla prima analisi, 12 s dopo; `TestParseEndpoint` tutto verde (J-30). Porta libera.
+> **⚠️ Fuori pista — «a ogni risveglio»**: il docs-writer ha notato che una macchina Fly *sospesa* riprende senza riavviare il
+> server (`admin/sleep_wake`): lì il costo è solo la memoria; la CPU si paga a ogni avvio vero (deploy, riavvio, risveglio di
+> una macchina *fermata*). La decisione non cambia (gli 80 MB bastano); corretti il docstring di `config/brim.py` e
+> `.env.example` («at every server start»); detto al coordinatore.
+
+**Doc N56** ✅ (docs-writer `c85c1769`, rivista e verificata sul codice): `developer/backend/brim/architecture.md`, la riga
+«Parse» e la sottosezione nuova «🔥 Preload and warm-up» `#parse-pool-warm-up` (precaricamento sulla via pigra, attesa della
+prima analisi, `prewarm()`, N56 con la tabella dei valori, il server di test che si scalda sempre, quattro regole, i
+selettori); `developer/architecture/overview.md`, il passo 15 `brim-parse-pool` (`scheduler` e `idle-monitor` diventano 16 e
+17); `developer/architecture/settings.md`, «Seven exist today» con `brim.py`; `admin/configuration.en.md`, **una riga** (C-99),
+dove ho corretto «by developer decision N56» in «by decision N56» (è del coordinatore). **IT/FR/ES di `configuration` non
+specchiate**: quelle pagine non hanno nessuna riga della 1.3 (EN 534 righe, IT 126), quindi la pagina intera va al giro di
+Aphra; **niente stamp**. Seguito accolto: una regola nella guida dei plugin BRIM (un modulo di plugin non avvia thread,
+processi o connessioni quando lo si importa: lo importa il forkserver, che deve restare a un thread).
+
+**W-B53, prove leggere e simulazione** ✅ (20:00–20:17, carico 46–49): `black`/`ruff` puliti sugli 11 `.py`, `git diff --check`
+pulito, `check-orphans` (360 file backend raggiungibili). **Simulazione del cherry-pick** su `dev_release2`: dev è andato avanti
+(merge di A, `68355911f`, poi `9d9030a94` e `624fa5609`): **3 conflitti veri** più 2 del journal.
+- `test_app_lifecycle.py`, la docstring del modulo: la frase di H-15 (`plugin-secrets-check`) nello stesso punto della mia →
+  tenute tutte e due, prima quella di H-15.
+- `overview.md`: il mio ramo ha ancora il passo `lone-transfer-legs` della decisione 47, che dev non ha, e dev ha
+  `admin-bootstrap` e `plugin-secrets-check` → i passi 11–15 di dev, poi `16. brim-parse-pool`, `17. scheduler`,
+  `18. idle-monitor`. > **⚠️ Fuori pista**: fuori dal blocco la fusione automatica avrebbe lasciato `16. scheduler` e `17.
+  idle-monitor` (stesso cambio dai due lati): pulita per git, sbagliata nel senso. L'avviso dello strict su
+  `#lone-transfer-legs` era un artefatto del blocco in conflitto.
+- `settings.md`: dev ha riscritto la frase (`env_url()`) → la sua, con «Seven exist today» (dev ha gli stessi sei moduli).
+- Il journal (plan 04, BACKLOG) resta sul mio ramo: il plan 04 di dev si ferma a 2817 righe, e la mia sezione del BACKLOG su
+  dev è un'altra.
+> **⚠️ Fuori pista — lo script di simulazione lintava file per file, dal worktree**: `ruff` decide «first-party» dai file
+> presenti, quindi i moduli nuovi di dev (`bootstrap_admin_service`, `plugin_secrets_check`) e i miei (`config/brim.py`, scritto
+> dopo `app_lifespan.py`) risultavano di terze parti: I001 falso. Corretto `files/scripts/sim_cherry_pick.sh`: prima tutte le
+> fusioni, poi il lint **dentro l'albero simulato**; e `--resolved=DIR`, che mette al posto di una fusione in conflitto il file
+> risolto (rifiutato se ha ancora i marcatori).
+
+Risoluzioni in `files/wb53_resolved/` (3 file, contro `9d9030a94`; fra quello e `624fa5609` nessuno dei 17 file è cambiato).
+Simulazione con le risoluzioni su `624fa5609`: **0 conflitti, lint pulito, `mkdocs build` strict exit 0, `check-links` exit 0**.
+**Revisione combinata** (dev + W-B53, nell'albero simulato, corsia 6184): `services config-brim` **51**, `app-lifecycle` **51** (i
+miei 49 e i 2 di H-15), `config-env-example` **38**, `brim-parse-pool` **17**. Porta libera. **Handoff FROZEN** (20:2x): due
+commit, codice e journal; su dev solo il primo.
