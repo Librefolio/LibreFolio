@@ -273,7 +273,7 @@
             <div class="icon-picker-trigger group relative cursor-pointer" data-testid="broker-icon-trigger" use:guideAnchor={'broker.icon'} on:click={() => (showImagePicker = true)} title={$_('uploads.selectIcon') || 'Select Icon'}>
                 <BrokerIcon altText="Icon" {iconUrl} pluginCode={defaultImportPlugin} {portalUrl} size="lg" />
                 <div class="absolute inset-0 rounded-full bg-lf-overlay opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <Upload class="text-white" size={16} />
+                    <Upload class="text-lf-on-overlay" size={16} />
                 </div>
             </div>
             <div class="flex-1 min-w-0">

@@ -4,8 +4,9 @@
 > analysis» (`aec04834-1532-4d86-9e3f-f942e82aca89`).
 > Branch `e-alfy-bk-broker-colors` (rinominato dall'app; prima `e-alfy-sturdy-couscous`).
 > - **Baseline dell'analisi:** `8f2824046`.
-> - **Base attuale:** `6e569084a`, fast-forward del coordinatore (skill `design-system` di T, D-T29, e treni della 1.3);
->   nessun file dell'area, del baseline o di `lib/theme/` è cambiato.
+> - **Base attuale:** `2eef01e59`, base merge del coordinatore dopo il checkpoint L1–L3 (`82f304f4a`), con i ruoli nuovi
+>   di T (`f043c1b58`: `text-lf-on-overlay`, `SIGN_BADGE`, gli hover pieni). Prima: `6e569084a`, fast-forward del
+>   coordinatore (skill `design-system` di T, D-T29, e treni della 1.3).
 > - **Corsia:** porta **6158**, dati **`/tmp/librefolio-r2-bk`**.
 > - **Comandi:** `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6158 --data-dir /tmp/librefolio-r2-bk …`.
 >
@@ -208,7 +209,26 @@ Backlog BK-n, messaggio CHECKPOINT READY al coordinatore, FROZEN.
 > backlog) più questo piano, nuovo. Commit proposto: `feat(theme): brokers and lots on colour roles`. Dopo la base merge
 > (ruoli nuovi di T, `f043c1b58`): BK-4 su `text-lf-on-overlay`.
 
-### S6 — Slot pesante L1–L3 ⏳ (slot del coordinatore)
+### S5b — Mini-checkpoint dopo la base merge: BK-4 e verifica di `SIGN_BADGE` ✅ (16/10/2026, inviato ~12:10; FROZEN)
+Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; vedere se i badge dei lotti con un segno
+(BK-2) vanno su `SIGN_BADGE`.
+> **Note implementazione**: L1–L3 committati dal coordinatore in `82f304f4a`, base merge `2eef01e59` (HEAD verificato,
+> albero pulito).
+> - **BK-4:** `BrokerForm`, l'icona `Upload` sullo scrim `bg-lf-overlay`: `text-white` → `text-lf-on-overlay` (bianco nei
+>   due temi, provvisorio). `BrokerForm` 5 → 4: resta solo l'interruttore (BK-3).
+> - **`SIGN_BADGE` (`bg-lf-gain-soft text-lf-gain-on-soft` / `loss`):** nessun badge di BK-2 dice un guadagno o una
+>   perdita. LONG/SHORT (`directionCell`, smeraldo/rosa con le frecce) è la direzione della posizione, non il segno di un
+>   numero finanziario (regola 7 della skill: P&L, rendimento, variazione di prezzo); una posizione corta non è una
+>   perdita. In più quei badge hanno un bordo e `SIGN_BADGE` non ha un ruolo di bordo (niente `gain-line`). Gli altri
+>   sono stati del lotto (aperto, parziale, chiuso, distribuito, in transito, degradato: nei grafici il colore viene da
+>   `LOT_STATE_COLORS`, cielo/ambra/ardesia) o categorie (custodia, in transito, marcatori della custodia). Restano tutti in
+>   BK-2, per il giro dei badge.
+> - **Prove** (12:06–12:09, `bk_mini_gates.sh` della sessione, nice, carico < 50 all'avvio): `api sync` exit 0; `--check`
+>   pulito (1 file sotto il record) → `--update` **m1 7.441 → 7.440**, m2 54 → 54 → `--check` pulito; Vitest dei gate
+>   `themeRoles`, `themeTokens`, `themeComponentTokens` 84/84; `BrokerModal.test.ts` (monta il form) 15/15; Prettier
+>   pulito su `BrokerForm`; `git diff --check` pulito; controllo «solo scuro» 0.
+
+### S6 — Slot pesante L1–L3 ⏳ (slot del coordinatore; in coda dopo AF, IM e W6)
 `api sync`; `front build --debug` e `mkdocs build` se mancano; `db populate --force --clean` sulla corsia se vuota;
 `front check`; `front-utility core-unit`, `component-unit`, `onboarding-component-unit`; E2E
 `front-broker list|detail|broker-recovery|broker-create-feedback`, `front-user broker-sharing|multi-user`,
