@@ -3679,6 +3679,14 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   Rischio «sotto Risk Metrics», ma quello del Rolling Return sta sotto Returns; la riga Underwater Drawdown di
   `indicators/index.en.md` porta a `max-drawdown`, mentre il `docs_path` del plugin e la pagina dei segnali portano a
   `current-drawdown`. Da allineare in un lotto di documentazione, con il loro debito di traduzione.
+- **J-24 · Consegna al costo d'un titolo estero: i lotti e la Dashboard danno totali diversi** — basso, numeri (caso
+  raro); trovata dal docs-writer di J (CP-7a), 16/10, già da CP-16. Una rettifica in uscita col costo, su un titolo in
+  un'altra valuta: i lotti valutano la consegna al cambio del giorno (da CP-7a la differenza di cambio dal giorno
+  d'acquisto è realizzata; prima stava nel «di mercato»), la Dashboard toglie il costo dal capitale al valore storico e
+  la lascia cadere. Scarto dei totali: `q × costo × (cambio alla consegna − cambio all'acquisto)`. Decisione del
+  developer: (A, proposta) «al costo» anche nella valuta del report: i lotti valutano la consegna al costo medio storico
+  del pool nella valuta del report, come la Dashboard; (B) tenerla così e scriverlo nella pagina. Dettagli: piano J, §10
+  «CP-7».
 
 ## Z · Sospensione e risveglio (fase 01)
 
