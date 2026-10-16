@@ -25,6 +25,7 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
+    import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG} from '$lib/components/charts/echartsAnimationConfig';
@@ -50,7 +51,7 @@
 
     export interface AllocationEntry {
         name: string;
-        /** Percentage share 0-100 */
+        /** Percentage share of the NET total: with negative cash the positive shares add up above 100 (decision 49). */
         value: number;
         /** Absolute amount in base currency */
         amount: number;
@@ -180,7 +181,7 @@
         if (!chartContainer) return;
 
         if (!chartInstance) {
-            chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartInstance = echarts.init(chartContainer, CHART_INIT_THEME, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'allocation-pie');
             // ECharts draws to a canvas, so a colour has no DOM an E2E could read.
             // Exposing the instance is the only way a test can assert that the
@@ -474,9 +475,9 @@
                     // Same precision as the member's own figure: two decimals beside one read
                     // as two different quantities (review of R12, 24/09/2026).
                     const parentTotal = roundedPercent(params.data?.primaryTotal ?? 0);
-                    parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${parentLabel} ${formatPercent(parentTotal, {digits: 2, signed: false, trim: true})}</span>`;
+                    parentLine = `<br/><span style="font-size:11px;opacity:0.7">↳ ${escapeHtml(parentLabel)} ${formatPercent(parentTotal, {digits: 2, signed: false, trim: true})}</span>`;
                 }
-                return `${iconHtml}${translated}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
+                return `${iconHtml}${escapeHtml(String(translated))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}${parentLine}`;
             }
             // Sector: display name already contains the emoji prefix
             return `${escapeHtml(String(params.name ?? ''))}: ${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}${amountLine}`;

@@ -67,7 +67,7 @@ export const LAB_PREFIXES = ['lib/dev/designer-lab/', 'routes/designer-lab/'];
  * @type {ReadonlyArray<{file: string, value: string | RegExp, reason: string}>}
  */
 export const LITERAL_EXCEPTIONS = [
-    {file: 'lib/components/brokers/lots/lotComparisonChartHelpers.ts', value: /^hsla?\(.*\$\{/, reason: "lotColor: an hsl() generated from the lot's id (R)"},
+    {file: 'lib/features/brokers/lots/lotComparisonChartHelpers.ts', value: /^hsla?\(.*\$\{/, reason: "lotColor: an hsl() generated from the lot's id (R)"},
     {file: 'lib/utils/colors.ts', value: /^hsla?\(.*\$\{/, reason: 'hsl() and hsla() generators with a computed hue (R)'},
     {file: 'lib/components/charts/ChartSettingsModal.svelte', value: '#000000', reason: 'the colour of a demo signal, never drawn (R)'},
     {file: 'lib/components/assets/AssetDataEditorSection.svelte', value: '#a855f7', reason: 'the colour of the preview line (R-6)'},
