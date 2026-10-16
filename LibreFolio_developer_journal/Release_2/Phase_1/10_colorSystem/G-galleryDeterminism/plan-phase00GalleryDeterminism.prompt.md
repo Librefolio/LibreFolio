@@ -1046,7 +1046,42 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
    > **Note implementazione**: nel README le righe della tabella (`gallery_snapshot.sh` scrive anche
    > `mixed_elements.json`; `gallery_tool.py` ha `mixed`) e una sezione 6, «Mixed elements (the runtime twin of G3)»:
    > perché, cosa c'è nel file, i tre comandi, l'avvertenza sul file candidato, `--collect` a mano. Backlog: G-18 ⏳.
-5. ⏳ Checkpoint al coordinatore. Poi, nello slot della coda pesante:
+5. ✅ 16/10 — Checkpoint al coordinatore (codice in `07fe58276`, base `5489d7a28`). Poi, nello slot della coda pesante:
    - la run filtrata `gallery_snapshot.sh g-mixed-probe … -- -f "Settings" --workers 4`;
    - DoD: un record per PNG, 0 errori, conteggi di ruolo e legacy maggiori di 0, il riassunto per area;
    - e quanti elementi misti ci sono oggi.
+
+   > **Note implementazione**: partenza alle 11:35:35, quando il carico a 1 minuto è sceso a 56,2. La regola del
+   > coordinatore era sotto 60, attesa al massimo 20 min; alle 11:28 il carico era 145. Fine alle 11:55:24.
+   > - La cartella dati della corsia era sparita col riavvio: l'ha ripopolata il comando stesso.
+   > - Il build ha preso 427 s, poi 36 test: 23 passati e 13 rossi.
+   > - **DoD della guardia, tutta verde:**
+   >   - 192 scatti scansionati e 192 PNG, nessuno senza record;
+   >   - 0 errori di scansione, 0 righe illeggibili, 0 troncati;
+   >   - ruolo e legacy maggiori di 0 in ogni scatto (mediane 66 e 115 su 374 elementi con classi);
+   >   - scansione in 4 ms di mediana e 24 ms al massimo, a carico 110;
+   >   - `live_price_check` pulito.
+   > - **Misti oggi in Settings: 0**, su 22 scatti distinti e 192 varianti. Il riassunto per area è vuoto.
+   >
+   > Controllo positivo del ramo dei misti, che la run non ha attraversato: la stessa fixture nel runner vero di
+   > Playwright, con la sua trasformazione TS, su una pagina fissa (`files/g18/pw/` nella sessione), PASS. Trova
+   > `div`, `span`, `rect` SVG e `p` doppio; ogni selettore nomina un solo elemento.
+
+   > **⚠️ Fuori pista — triage dei 13 rossi** (skill `test-triage`). Verdetto: **ambiente**, la macchina satura da
+   > processi fuori dalla corsia: carico 110–145 su 10 CPU, le 2 corsie pesanti della 1.3 e un render Remotion.
+   > - 11 test desktop sono rossi al login: l'app resta su `auth-loading` per 30 s. Sono i primi 12 della run, in tre
+   >   ondate da 4 nei primi 3 minuti (il 10° è verde). Dal 13° in poi è tutto verde.
+   >   - `POST /auth/login` risponde in 5,8–11,5 s, contro i 251 ms dell'unico normale.
+   >   - Un test chiude con 27 richieste statiche ancora in volo: i blocchi JS, quindi l'app non parte.
+   > - 2 test mobile (diagnostica plugin e tool) sono rossi con «an image on screen is still loading»: i loghi
+   >   `deposit.png` e `broker.png` arrivano in 16–18 s.
+   > - Le ipotesi in ordine:
+   >   - la forma della risposta non c'entra: non si legge un dato;
+   >   - nessun orologio fisso: si attendono lo stato d'arrivo e le immagini complete;
+   >   - nessuno stato condiviso: gli stessi test sono verdi minuti dopo su mobile, e lo erano in r2 e r3;
+   >   - la cascata ha una causa sola, il carico all'avvio del server.
+   > - **G-18 è escluso per costruzione:** ogni test rosso cade prima della sua prima cattura, e la scansione gira solo
+   >   dopo una cattura. Da quei test non c'è nessun record.
+   >
+   > Il coordinatore credeva la run morta col turno della sessione, caduto per la rete fra le 11:53 e le 11:57. In
+   > realtà era già finita da sola alle 11:55:24, e lo script ha raccolto i record.
