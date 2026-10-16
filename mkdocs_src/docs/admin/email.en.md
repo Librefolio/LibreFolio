@@ -348,12 +348,13 @@ username or their email address, without signing in.
 !!! warning "⏸️ Held for now"
 
     LibreFolio refuses every such request for now, with `FORGOT_PASSWORD_DISABLED`, and the login
-    page's **Forgot Password?** still shows the command-line reset. The reason: today, the email
-    address of an account can be changed with its session alone. With reset by email open, a moment
-    inside someone's session (a stolen session cookie, a computer left unlocked) would be enough to
+    page's **Forgot Password?** still shows the command-line reset. The reason: the email address of
+    an account used to change with its session alone. With reset by email open, a moment inside
+    someone's session (a stolen session cookie, a computer left unlocked) would have been enough to
     put one's own address on the account, then reset its password from there: a lasting takeover.
-    The hold is lifted together with the login page's form, once changing an account's email
-    address asks for its current password. The links an administrator emails are not affected.
+    Changing an account's email address now asks for its current password
+    ([Profile](../user/settings/profile.md)); the hold is lifted together with the login page's form.
+    The links an administrator emails are not affected.
 
 Once open, it works this way:
 
@@ -521,10 +522,10 @@ as `550 5.1.1 <***@example.com>: Recipient address rejected`.
   is written into an email on one line: control characters and line breaks become spaces, and the
   characters that reorder text (bidirectional controls) are removed. A crafted username can neither
   add lines of its own to an email nor disguise its text.
-- **Forgotten passwords are held** until changing an account's email address asks for its current
-  password. Once open, they tell nobody which accounts exist: the same answer for everyone, the
-  search after the answer, and limits per address, per username or email address, per mailbox and
-  per account ([Forgotten Passwords](#forgot-password)).
+- **Forgotten passwords are held** until the login page's form comes; changing an account's email
+  address already asks for its current password. Once open, they tell nobody which accounts
+  exist: the same answer for everyone, the search after the answer, and limits per address, per
+  username or email address, per mailbox and per account ([Forgotten Passwords](#forgot-password)).
 - **The hourly limit** caps what the instance can send, whatever happens: raise it only as far as
   you need.
 

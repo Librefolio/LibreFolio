@@ -172,6 +172,20 @@ async function type(input: HTMLInputElement, value: string) {
 }
 
 /**
+ * The current password an e-mail change asks for (lot A6e, contract C4): `profile-email-password`, rendered only
+ * while the profile is unlocked and the e-mail differs from the stored one — null otherwise.
+ */
+const emailPassword = () => screen.queryByTestId('profile-email-password') as HTMLInputElement | null;
+
+/** What alice types to confirm an e-mail change: the fixture's right password. */
+const CURRENT_PASSWORD = 'alice-current-secret';
+
+/** Type into the current-password field of an e-mail change, which must be there: an e-mail is not saved without it (A6e). */
+async function typeEmailPassword(value: string) {
+    await type(screen.getByTestId('profile-email-password') as HTMLInputElement, value);
+}
+
+/**
  * The per-field action button. Both rows render the pair twice — once for the
  * mobile layout and once for the desktop one — so this returns the list and the
  * callers act on the first, which is one *instance of the same control*, not an
@@ -317,14 +331,16 @@ describe('ProfileTab — per-field save and undo', () => {
         expect(profilePut()).toHaveBeenCalledWith({username: 'alice2'});
     });
 
-    it('sends the e-mail alone from the e-mail row', async () => {
+    it('sends the e-mail with the current password — and no username — from the e-mail row', async () => {
         await mountUnlocked();
         await type(email(), 'new@example.com');
+        // Lot A6e: an e-mail is not saved without the current password, which goes in the same request.
+        await typeEmailPassword(CURRENT_PASSWORD);
 
         await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
 
         await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
-        expect(profilePut()).toHaveBeenCalledWith({email: 'new@example.com'});
+        expect(profilePut()).toHaveBeenCalledWith({email: 'new@example.com', current_password: CURRENT_PASSWORD});
     });
 
     it('re-reads the session so the rest of the app sees the new identity', async () => {
@@ -339,6 +355,8 @@ describe('ProfileTab — per-field save and undo', () => {
     it('publishes a saved event naming the field key and a success toast', async () => {
         await mountUnlocked();
         await type(email(), 'new@example.com');
+        // A6e: no e-mail save without the current password.
+        await typeEmailPassword(CURRENT_PASSWORD);
 
         await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
 
@@ -408,6 +426,8 @@ describe('ProfileTab — when a per-field save is refused', () => {
         profilePut().mockRejectedValue(axiosError('Email already registered'));
         await mountUnlocked();
         await type(email(), 'taken@example.com');
+        // A6e: no e-mail save without the current password.
+        await typeEmailPassword(CURRENT_PASSWORD);
 
         await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
 
@@ -502,11 +522,13 @@ describe('ProfileTab — save all', () => {
         await mountUnlocked();
         await type(username(), 'alice2');
         await type(email(), 'new@example.com');
+        // A6e: the e-mail's request carries the current password; the username's never does.
+        await typeEmailPassword(CURRENT_PASSWORD);
 
         await fireEvent.click(saveAll()!);
 
         await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(2));
-        expect(profilePut().mock.calls.map((c) => c[0])).toEqual([{username: 'alice2'}, {email: 'new@example.com'}]);
+        expect(profilePut().mock.calls.map((c) => c[0])).toEqual([{username: 'alice2'}, {email: 'new@example.com', current_password: CURRENT_PASSWORD}]);
         const event = notify.mock.calls[0][0];
         expect(event.name).toBe('settings.profile.saved');
         expect(event.detail).toMatchObject({fields: 2, saved: ['username', 'email'], failed: []});
@@ -519,12 +541,14 @@ describe('ProfileTab — save all', () => {
         await mountUnlocked();
         await type(username(), 'alice2');
         await type(email(), 'new@example.com');
+        // A6e: no e-mail save without the current password.
+        await typeEmailPassword(CURRENT_PASSWORD);
 
         await fireEvent.click(saveAll()!);
 
         await waitFor(() => expect(error()).not.toBeNull());
         expect(profilePut()).toHaveBeenCalledTimes(2);
-        expect(profilePut().mock.calls.map((c) => c[0])).toEqual([{username: 'alice2'}, {email: 'new@example.com'}]);
+        expect(profilePut().mock.calls.map((c) => c[0])).toEqual([{username: 'alice2'}, {email: 'new@example.com', current_password: CURRENT_PASSWORD}]);
         expect(username()).toHaveValue('alice');
         expect(email()).toHaveValue('new@example.com');
         expect(checkAuth).toHaveBeenCalledTimes(1);
@@ -539,6 +563,8 @@ describe('ProfileTab — save all', () => {
         await mountUnlocked();
         await type(username(), 'alice2');
         await type(email(), 'new@example.com');
+        // A6e: no e-mail save without the current password.
+        await typeEmailPassword(CURRENT_PASSWORD);
 
         await fireEvent.click(saveAll()!);
 
@@ -977,5 +1003,311 @@ describe('ProfileTab — the creation date in the interface locale, the browser�
         appLanguage.set('en');
         await waitFor(() => expect(row, 'it → en in place — British again').toHaveTextContent(squash(longDate('en-GB'))));
         expect(row).not.toHaveTextContent(squash(longDate('en')));
+    });
+});
+
+// =========================================================================
+/**
+ * Lot A6e (release 1.3, workstream A) — changing the e-mail asks for the current password.
+ *
+ * Why. `PUT /auth/profile` moved the address on the session cookie alone: with the «forgotten password» mail, a few
+ * minutes at somebody else's unlocked session became the account for good. The server now wants `current_password`
+ * beside a new `email` — 400 `{error_code: CURRENT_PASSWORD_REQUIRED}` without it, `CURRENT_PASSWORD_INVALID` when it
+ * is wrong — and once the address has changed it signs the account's other sessions out. This block is the tab's half
+ * of the contract (C4):
+ *   - the field `profile-email-password` (`type="password"`, `autocomplete="current-password"`) and its hint
+ *     `profile-email-password-hint`: there exactly while the profile is unlocked and the e-mail differs from the
+ *     stored one; gone once it is the stored one again (typed back, its undo, undo all), and empty when it comes back;
+ *   - no e-mail save without it: while it is empty, the e-mail row's two Saves (the mobile and the desktop variant)
+ *     and save-all are off; a username change alone never asks for it;
+ *   - the request: `{email, current_password}` from the row and from save-all; the username's stays `{username}`;
+ *   - afterwards: emptied once the e-mail is saved; on a refusal with one of the two codes the banner carries
+ *     `data-error-code`, the new address stays for a retry and the password is emptied; a refusal without a code is
+ *     today's (the server's sentence, the address put back); a code the tab does not know is a generic text, never
+ *     «[object Object]».
+ *
+ * The cases of the blocks above that save an e-mail type the password first, for the same reason.
+ *
+ * Choices this block makes where the contract leaves room:
+ *   - a coded refusal is worded by the tab, from its code: the server's English sentence must not stand in for it (the
+ *     contract keeps the server's sentence for the refusal without a code);
+ *   - `data-error-code` names only a refusal the tab knows how to word. A code it does not know publishes none, like a
+ *     refusal without a code — the attribute absent or empty — as the accounts dialogs already do
+ *     (`data-error-code={error.code ?? ''}`, where `describeAccountError` reads an unknown code as `null`). Whoever reads
+ *     a code can then trust that the tab understood it; the unknown code itself is the server log's to keep.
+ *
+ * The real `auth.checkAuth()` re-reads /auth/me into the session store after a save. The mock does nothing, so a case
+ * about what follows a saved address has it store that address, as the real one would.
+ *
+ * Not asserted: the words of the hint and of the errors (catalogue entries — the code is the contract), and where in
+ * the e-mail row the field sits.
+ */
+describe('ProfileTab — changing the e-mail asks for the current password (A6e)', () => {
+    /** The two controls that save an e-mail change: the e-mail row's Save (its first variant, see `fieldButtons`), and save-all, which with the e-mail alone changed sends the e-mail's request alone. */
+    const EMAIL_SAVES = [
+        {via: "the e-mail row's Save", save: () => fieldButtons('profile-email', 'save')[0]},
+        {via: 'save all', save: () => screen.getByTestId('profile-save-all')},
+    ];
+
+    /** The refusals of a wrong or a missing current password, each with a sentence of the server's that the tab must not show in place of its own words. */
+    const PASSWORD_REFUSALS = [
+        {code: 'CURRENT_PASSWORD_INVALID', message: 'Current password is incorrect'},
+        {code: 'CURRENT_PASSWORD_REQUIRED', message: 'Current password is required to change the email'},
+    ];
+
+    const hint = () => screen.queryByTestId('profile-email-password-hint');
+    const saveAllButton = () => screen.getByTestId('profile-save-all');
+
+    /** The e-mail row's Saves, checked as a pair (mobile, desktop), so that «every one is off» never passes on an empty list. */
+    function emailSaves(): HTMLElement[] {
+        const saves = fieldButtons('profile-email', 'save');
+        expect(saves, "the e-mail row's Save, in its mobile and its desktop variant").toHaveLength(2);
+        return saves;
+    }
+
+    /** What the real `auth.checkAuth()` does once `address` is saved: the session store holds it. */
+    function storeAddressOnCheckAuth(address: string) {
+        checkAuth.mockImplementation(async () => {
+            user.set({username: 'alice', email: address, created_at: '2024-03-05T10:00:00Z'});
+            return undefined;
+        });
+    }
+
+    afterEach(() => {
+        // What a case left on the mocks and never consumed — a stored address, a queued refusal — must not reach the next one.
+        checkAuth.mockReset();
+        checkAuth.mockImplementation(async () => undefined);
+        profilePut().mockReset();
+    });
+
+    describe('the field', () => {
+        it('is not there while locked, nor once unlocked with nothing changed', async () => {
+            await mount();
+            expect(emailPassword()).toBeNull();
+
+            await fireEvent.click(screen.getByTestId('profile-edit-toggle'));
+            await waitFor(() => expect(email()).toBeEnabled());
+
+            expect(emailPassword()).toBeNull();
+            expect(hint()).toBeNull();
+        });
+
+        it('appears once the e-mail differs: an empty password input the browser fills with the current password, and its hint', async () => {
+            await mountUnlocked();
+
+            await type(email(), 'new@example.com');
+
+            await waitFor(() => expect(emailPassword(), 'an e-mail change asks for the current password').not.toBeNull());
+            const field = emailPassword();
+            expect(field).toHaveAttribute('type', 'password');
+            expect(field).toHaveAttribute('autocomplete', 'current-password');
+            expect(field).toHaveValue('');
+            expect(field).toBeEnabled();
+            expect(hint()).toBeInTheDocument();
+        });
+
+        const BACK_TO_STORED = [
+            {how: 'typed back', act: () => type(email(), 'alice@example.com')},
+            {how: "the e-mail's undo", act: () => fireEvent.click(fieldButtons('profile-email', 'undo')[0])},
+            {how: 'undo all', act: () => fireEvent.click(screen.getByTestId('profile-undo-all'))},
+        ];
+
+        it.each(BACK_TO_STORED)('goes once the e-mail is the stored one again ($how), and comes back empty', async ({act}) => {
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+            await typeEmailPassword(CURRENT_PASSWORD);
+            expect(emailPassword()).toHaveValue(CURRENT_PASSWORD);
+
+            await act();
+
+            await waitFor(() => expect(emailPassword()).toBeNull());
+            expect(email()).toHaveValue('alice@example.com');
+            expect(hint()).toBeNull();
+
+            await type(email(), 'other@example.com');
+
+            await waitFor(() => expect(emailPassword()).not.toBeNull());
+            // What was typed before the e-mail went back did not stay behind the scenes.
+            expect(emailPassword()).toHaveValue('');
+        });
+    });
+
+    describe('no e-mail save without it', () => {
+        it('keeps both e-mail Saves and save-all off while it is empty, turns them on once it is typed, and off again once emptied', async () => {
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+
+            for (const save of emailSaves()) expect(save).toBeDisabled();
+            expect(saveAllButton()).toBeDisabled();
+            // Only saving waits for the password: going back never does.
+            for (const undo of fieldButtons('profile-email', 'undo')) expect(undo).toBeEnabled();
+            expect(screen.getByTestId('profile-undo-all')).toBeEnabled();
+
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await waitFor(() => expect(saveAllButton()).toBeEnabled());
+            for (const save of emailSaves()) expect(save).toBeEnabled();
+
+            await typeEmailPassword('');
+
+            await waitFor(() => expect(saveAllButton()).toBeDisabled());
+            for (const save of emailSaves()) expect(save).toBeDisabled();
+        });
+
+        it('with both fields changed and no password, save-all waits, while the username row still saves alone — without a password', async () => {
+            await mountUnlocked();
+            await type(username(), 'alice2');
+            await type(email(), 'new@example.com');
+
+            expect(saveAllButton()).toBeDisabled();
+            const usernameSaves = fieldButtons('profile-username', 'save');
+            expect(usernameSaves).toHaveLength(2);
+            for (const save of usernameSaves) expect(save).toBeEnabled();
+
+            await fireEvent.click(usernameSaves[0]);
+
+            await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
+            expect(profilePut()).toHaveBeenCalledWith({username: 'alice2'});
+        });
+
+        it('asks nothing of a username change alone: no field, and its Saves and save-all are on', async () => {
+            await mountUnlocked();
+            await type(username(), 'alice2');
+
+            // The edit registered — its Saves are there — and still no password is asked for.
+            const usernameSaves = fieldButtons('profile-username', 'save');
+            expect(usernameSaves).toHaveLength(2);
+            for (const save of usernameSaves) expect(save).toBeEnabled();
+            expect(saveAllButton()).toBeEnabled();
+            expect(emailPassword()).toBeNull();
+            expect(hint()).toBeNull();
+        });
+    });
+
+    describe('what an e-mail save sends', () => {
+        // The e-mail row's request is pinned in «per-field save and undo» above, the request of both fields in «save all».
+        it('save all sends the e-mail with the current password', async () => {
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await fireEvent.click(saveAllButton());
+
+            await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
+            expect(profilePut()).toHaveBeenCalledWith({email: 'new@example.com', current_password: CURRENT_PASSWORD});
+        });
+
+        it("never puts the password in the username's request, even once it is typed", async () => {
+            await mountUnlocked();
+            await type(username(), 'alice2');
+            await type(email(), 'new@example.com');
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await fireEvent.click(fieldButtons('profile-username', 'save')[0]);
+
+            await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
+            expect(profilePut()).toHaveBeenCalledWith({username: 'alice2'});
+        });
+    });
+
+    describe('after an e-mail save, accepted or refused', () => {
+        it.each(EMAIL_SAVES)('empties the password once the e-mail is saved through $via: the field goes, and comes back empty', async ({save}) => {
+            storeAddressOnCheckAuth('new@example.com');
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await fireEvent.click(save());
+
+            await waitFor(() => expect(checkAuth).toHaveBeenCalled());
+            // Saved: the address is the stored one, so the field is gone…
+            await waitFor(() => expect(emailPassword()).toBeNull());
+            expect(email()).toHaveValue('new@example.com');
+            expect(error()).toBeNull();
+            await waitFor(() => expect(email()).toBeEnabled());
+
+            // …and the password did not outlive the save: the next change asks for it afresh.
+            await type(email(), 'newer@example.com');
+
+            await waitFor(() => expect(emailPassword()).not.toBeNull());
+            expect(emailPassword()).toHaveValue('');
+            expect(saveAllButton()).toBeDisabled();
+        });
+
+        const PASSWORD_REFUSAL_CASES = PASSWORD_REFUSALS.flatMap((refusal) => EMAIL_SAVES.map(({via, save}) => ({...refusal, via, save})));
+
+        it.each(PASSWORD_REFUSAL_CASES)('$code through $via: the banner carries the code, the new e-mail stays for a retry, the password is emptied', async ({code, message, save}) => {
+            profilePut().mockRejectedValue(axiosError({error_code: code, message}));
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+            await typeEmailPassword('not-the-password');
+
+            await fireEvent.click(save());
+
+            await waitFor(() => expect(error()).not.toBeNull());
+            expect(error()).toHaveAttribute('data-error-code', code);
+            // Worded by the tab from the code: neither the object itself nor the server's English sentence.
+            expect(error()).not.toHaveTextContent('[object Object]');
+            expect(error()).not.toHaveTextContent(message);
+            // Only the password has to be typed again: the address stays, and the field with it, emptied.
+            expect(email()).toHaveValue('new@example.com');
+            expect(emailPassword()).not.toBeNull();
+            expect(emailPassword()).toHaveValue('');
+            for (const button of emailSaves()) expect(button).toBeDisabled();
+            expect(saveAllButton()).toBeDisabled();
+        });
+
+        it('after a refused password, the retry sends the same e-mail with the password typed again', async () => {
+            profilePut()
+                .mockRejectedValueOnce(axiosError({error_code: 'CURRENT_PASSWORD_INVALID', message: 'Current password is incorrect'}))
+                .mockResolvedValueOnce({} as never);
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+            await typeEmailPassword('not-the-password');
+            await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+            await waitFor(() => expect(error()).toHaveAttribute('data-error-code', 'CURRENT_PASSWORD_INVALID'));
+            await waitFor(() => expect(email()).toBeEnabled());
+
+            await typeEmailPassword(CURRENT_PASSWORD);
+            await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+
+            await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(2));
+            expect(profilePut().mock.calls.map((c) => c[0])).toEqual([
+                {email: 'new@example.com', current_password: 'not-the-password'},
+                {email: 'new@example.com', current_password: CURRENT_PASSWORD},
+            ]);
+        });
+
+        it.each(EMAIL_SAVES)("a refusal without a code, through $via, is today's: the server's sentence, no code, the e-mail put back and the field gone", async ({save}) => {
+            profilePut().mockRejectedValue(axiosError('Email already registered'));
+            await mountUnlocked();
+            await type(email(), 'taken@example.com');
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await fireEvent.click(save());
+
+            await waitFor(() => expect(error()).not.toBeNull());
+            expect(error()).toHaveTextContent('Email already registered');
+            expect(error()!.getAttribute('data-error-code') ?? '', 'a sentence without a code publishes no code').toBe('');
+            await waitFor(() => expect(email()).toHaveValue('alice@example.com'));
+            // Back at the stored address: no password is asked for any more.
+            expect(emailPassword()).toBeNull();
+            expect(hint()).toBeNull();
+        });
+
+        it.each(EMAIL_SAVES)('a code the tab does not know, through $via: a generic text, never «[object Object]», and no code published', async ({save}) => {
+            profilePut().mockRejectedValue(axiosError({error_code: 'SOMETHING_NEW', message: 'Something the tab has never heard of'}));
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await fireEvent.click(save());
+
+            await waitFor(() => expect(error()).not.toBeNull());
+            expect(error()).not.toHaveTextContent('[object Object]');
+            expect(error()).toHaveTextContent(/\S/);
+            // Only a code the tab can word is published (see this block's comment): an unknown one reads as a generic failure.
+            expect(error()!.getAttribute('data-error-code') ?? '', 'an unknown code publishes no code').toBe('');
+        });
     });
 });
