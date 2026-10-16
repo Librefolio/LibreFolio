@@ -15,6 +15,7 @@ import {waitForSettled} from '../fixtures/app-events';
 import {API_BASE, goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
+import {INSTANCE_CONFIG_PATH} from '../fixtures/instance-config';
 import {schemas} from '../../src/lib/api/generated';
 
 /**
@@ -1104,5 +1105,229 @@ test.describe('Asset type select (R14–R16)', () => {
             }
             if (assetId !== null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
         }
+    });
+});
+
+// ============================================================================
+// Workstream X, sub-lot 3 — premium sources first (F21), «Can’t find it? Let us know» (P20).
+//
+// Search Online in the create dialog, in a real browser and offline. Three reads of the page are answered here, each
+// on its exact path and for GET only; anything else goes through:
+// - `GET /system/instance`: the backend's own answer with `support_url` set per test, so the report's channel is the
+//   test's, not the lane's;
+// - `GET /assets/provider`: the backend's own list, one searchable provider made premium (the first in code order,
+//   mockprov aside — the dropdown never shows it), every other one community at the default priority;
+// - `GET /assets/provider/search/stream`: a canned stream, as services/assets/search.py sends it — one event per
+//   provider the search asked, then `done`. No provider is reached.
+// The component test (AssetSearchAutocomplete.test.ts, blocks F21 and P20) pins the cases; this pins the path through
+// the dialog, the real provider list and the real link — read and decoded, never followed. Nothing is written: the
+// dialog is cancelled, and the routes go with the test's page.
+// ============================================================================
+
+const PROVIDER_LIST_PATH = `${API_BASE}/assets/provider`;
+const SEARCH_STREAM_PATH = `${API_BASE}/assets/provider/search/stream`;
+
+/** What the routes of one test chose, and what they served. */
+interface SearchBoundary {
+    /** The provider made premium: the first searchable one in code order, mockprov aside. */
+    premium: string;
+    /** The provider whose result fills the community section: the next one. */
+    community: string;
+    /** Each answer the page read the instance configuration with, as served. */
+    instance: Array<Record<string, unknown>>;
+    /** The providers each streamed search asked, in its order. */
+    searches: string[][];
+}
+
+/**
+ * Answer this page's `GET <path>` — that path only; any other method falls through — with the backend's own answer,
+ * rewritten. The headers that describe the body in transit go: the backend gzips from 1 KB up, and a kept
+ * `content-encoding` would have the browser decode plain JSON (fixtures/instance-config.ts). Nobody awaits a route
+ * callback, so it never throws (Bug G above): a read it leaves unanswered fails the test on its own assertions.
+ */
+async function serveRewritten(page: Page, path: string, rewrite: (body: unknown) => unknown): Promise<void> {
+    await page.route(
+        (url) => url.pathname === path,
+        async (route, request) => {
+            if (request.method() !== 'GET') return route.fallback();
+            try {
+                const response = await route.fetch();
+                const headers = {...response.headers()};
+                delete headers['content-encoding'];
+                delete headers['content-length'];
+                await route.fulfill({status: response.status(), headers, ...(response.ok() ? {json: rewrite(await response.json())} : {body: await response.body()})});
+            } catch (error) {
+                console.warn(`[asset-modal] left GET ${request.url()} unanswered: ${String(error)}`);
+            }
+        },
+    );
+}
+
+/** A search result as the backend sends it, under `provider`: checked against the generated schema. */
+function searchHit(provider: string, identifier: string) {
+    return schemas.FAProviderSearchResultItem.parse({identifier, identifier_type: 'TICKER', display_name: `E2E search ${identifier}`, provider_code: provider, currency: 'EUR', asset_type: 'ETF', provider_url: null, provider_params: null, via_web: false});
+}
+
+/**
+ * Install the three routes on this page, before it loads. With `found`, the premium provider answers two results and
+ * the community one one result; every other provider the search asks answers none — all of them, without `found`.
+ */
+async function routeSearchBoundary(page: Page, {supportUrl, found}: {supportUrl: string | null; found: boolean}): Promise<SearchBoundary> {
+    // The real list, through `page.request`, which no page route reaches.
+    const listed = await page.request.get(PROVIDER_LIST_PATH);
+    expect(listed.ok(), `GET ${PROVIDER_LIST_PATH} answered ${listed.status()}`).toBe(true);
+    const searchable = ((await listed.json()) as Array<{code: string; supports_search?: boolean}>)
+        .filter((provider) => provider.supports_search === true && provider.code !== 'mockprov')
+        .map((provider) => provider.code)
+        .sort();
+    if (searchable.length < 2) throw new Error(`F21 needs two searchable providers besides mockprov, one made premium and one left community; this backend lists ${JSON.stringify(searchable)}`);
+    const [premium, community] = searchable;
+    const boundary: SearchBoundary = {premium, community, instance: [], searches: []};
+    const hits: Record<string, unknown[]> = found ? {[premium]: [searchHit(premium, 'E2E-F21-P1'), searchHit(premium, 'E2E-F21-P2')], [community]: [searchHit(community, 'E2E-F21-C1')]} : {};
+
+    await serveRewritten(page, INSTANCE_CONFIG_PATH, (body) => {
+        const answer = {...(body as Record<string, unknown>), support_url: supportUrl};
+        boundary.instance.push(answer);
+        return answer;
+    });
+    await serveRewritten(page, PROVIDER_LIST_PATH, (body) => (body as Array<{code: string}>).map((provider) => ({...provider, ...(provider.code === premium ? {tier: 'premium', priority: 0} : {tier: 'community', priority: 100})})));
+    await page.route(
+        (url) => url.pathname === SEARCH_STREAM_PATH,
+        async (route, request) => {
+            if (request.method() !== 'GET') return route.fallback();
+            const asked = (new URL(request.url()).searchParams.get('providers') ?? '').split(',').filter((code) => code !== '');
+            boundary.searches.push(asked);
+            // The premium provider answers last: its results must lead by their tier, not by their arrival.
+            const answers = [...asked.filter((code) => code !== premium), ...asked.filter((code) => code === premium)].map((code) => ({event: 'provider_results', provider_code: code, results: hits[code] ?? []}));
+            const done = {event: 'done', total_results: answers.reduce((total, answer) => total + answer.results.length, 0), providers_queried: asked, providers_with_errors: []};
+            await route.fulfill({status: 200, contentType: 'text/event-stream', body: [...answers, done].map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}).catch((error) => console.warn(`[asset-modal] left GET ${request.url()} unanswered: ${String(error)}`));
+        },
+    );
+    return boundary;
+}
+
+/** The report a link to a new GitHub issue carries: the address it opens, and the lines of the issue's body. */
+function githubReport(href: string | null): {issue: string; lines: string[]} {
+    const url = new URL(href ?? 'about:blank');
+    return {issue: `${url.origin}${url.pathname}`, lines: (url.searchParams.get('body') ?? '').split('\n')};
+}
+
+test.describe('Asset search — premium first, «Can’t find it? Let us know» (F21, P20)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('premium results lead in a section of their own, the report row follows it, the community section stays closed until opened; the report is a prefilled GitHub issue', async ({page}) => {
+        const boundary = await routeSearchBoundary(page, {supportUrl: null, found: true});
+        const {premium, community} = boundary;
+        const query = 'E2E F21 world equity';
+
+        await goToAssetsPage(page);
+        await openCreateAssetModal(page);
+        const dialog = page.getByTestId('asset-modal');
+        await expect(dialog.getByTestId(`asset-search-provider-${premium}`), 'precondition: Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 10_000});
+        // Its input has no test id: it is the one text field of the search block.
+        await dialog.locator('[data-search-autocomplete] input[type="text"]').fill(query);
+        const results = dialog.getByTestId('asset-search-results');
+        await expect(results, 'the search ends with results').toHaveAttribute('data-state', 'results', {timeout: 15_000});
+        expect(boundary.searches, 'one search, which asked the premium provider and the community one').toEqual([expect.arrayContaining([premium, community])]);
+
+        // Premium first, though it answered last: its two results, in a section of their own, under its badge. Every
+        // result is this test's own (the stream is routed), so their count is the subject: the closed section draws none.
+        const premiumSection = results.getByTestId('asset-search-premium-section');
+        await expect(premiumSection.getByTestId('asset-search-premium-badge')).toBeVisible();
+        for (const [i, identifier] of ['E2E-F21-P1', 'E2E-F21-P2'].entries()) {
+            const row = premiumSection.getByTestId(`asset-search-result-${i}`);
+            await expect(row).toHaveAttribute('data-provider', premium);
+            await expect(row).toHaveAttribute('data-identifier', identifier);
+        }
+        await expect(results.locator('[data-testid^="asset-search-result-"]'), 'only the premium results are drawn').toHaveCount(2);
+
+        // Then the report row, outside the Premium section, then the community section's button: closed, counting one.
+        const reportRow = results.getByTestId('asset-search-report-row');
+        const toggle = results.getByTestId('asset-search-community-toggle');
+        await expect(reportRow).toBeVisible();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        await expect(toggle).toHaveAttribute('data-count', '1');
+        await expect(results.getByTestId('asset-search-community-warning'), 'closed: no warning yet').toHaveCount(0);
+        const placed = await results.evaluate((dropdown) => {
+            const [section, row, button] = ['asset-search-premium-section', 'asset-search-report-row', 'asset-search-community-toggle'].map((id) => dropdown.querySelector(`[data-testid="${id}"]`));
+            const follows = (a: Element | null, b: Element | null) => a !== null && b !== null && (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+            return {afterPremium: follows(section, row) && !section?.contains(row), beforeCommunity: follows(row, button)};
+        });
+        expect(placed, 'the report row stands between the Premium section, outside it, and the community one').toEqual({afterPremium: true, beforeCommunity: true});
+
+        // The report: no support address, so a new GitHub issue, in a new tab. Read from its href, never followed.
+        const link = reportRow.getByTestId('asset-search-report');
+        await expect(link).toHaveAttribute('data-channel', 'github');
+        await expect(link).toHaveAttribute('target', '_blank');
+        await expect(link).toHaveAttribute('rel', /(^|\s)noopener(\s|$)/);
+        await expect(link).toHaveAttribute('rel', /(^|\s)noreferrer(\s|$)/);
+        // Who wrote it: the app's version, the profile of the routed answer, the language in force. Polled: the page
+        // applies the instance's answer on a schedule of its own.
+        await expect.poll(() => boundary.instance.length, {message: 'the page read the instance configuration through the route'}).toBeGreaterThan(0);
+        const profile = String(boundary.instance.at(-1)?.profile);
+        const language = await page.locator('html').getAttribute('lang');
+        await expect.poll(async () => githubReport(await link.getAttribute('href')).lines.find((line) => line.startsWith('LibreFolio ')) ?? '', {message: 'the report names its writer'}).toMatch(new RegExp(`^LibreFolio .+, ${profile}, language ${language}$`));
+        const report = githubReport(await link.getAttribute('href'));
+        expect(report.issue, 'a new issue of the project').toBe('https://github.com/Librefolio/LibreFolio/issues/new');
+        expect(report.lines).toContain(`Search: ${query}`);
+        const outcome = (code: string) => (code === premium ? '2 results' : code === community ? '1 result' : '0 results');
+        expect(report.lines.filter((line) => line.startsWith('- ')).sort(), 'every provider searched, with what it answered').toEqual(boundary.searches[0].map((code) => `- ${code}: ${outcome(code)}`).sort());
+
+        // Opened: the warning, and the community result, numbered on from the premium ones.
+        await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await expect(results.getByTestId('asset-search-community-warning')).toBeVisible();
+        const communityRow = results.getByTestId('asset-search-result-2');
+        await expect(communityRow).toHaveAttribute('data-provider', community);
+        await expect(communityRow).toHaveAttribute('data-identifier', 'E2E-F21-C1');
+
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('asset-modal-form')).toBeHidden();
+    });
+
+    test('a mailto: support address sends the report by mail; a finished search closed by a click outside comes back on focus, with its report', async ({page}) => {
+        const boundary = await routeSearchBoundary(page, {supportUrl: 'mailto:support@example.org', found: false});
+        const query = 'E2E P20 nothing like it';
+
+        await goToAssetsPage(page);
+        await openCreateAssetModal(page);
+        const dialog = page.getByTestId('asset-modal');
+        await expect(dialog.getByTestId(`asset-search-provider-${boundary.premium}`), 'precondition: Search Online asks the provider made premium').toHaveAttribute('data-selected', 'true', {timeout: 10_000});
+        const input = dialog.locator('[data-search-autocomplete] input[type="text"]');
+        await input.fill(query);
+        const results = dialog.getByTestId('asset-search-results');
+        await expect(results, 'every provider answered nothing').toHaveAttribute('data-state', 'empty', {timeout: 15_000});
+        const reportRow = results.getByTestId('asset-search-report-row');
+        await expect(reportRow).toBeVisible();
+
+        // The routed support address reached the page: the report is a mail to it, which opens no tab.
+        const link = reportRow.getByTestId('asset-search-report');
+        await expect(link, 'the support address of the routed answer').toHaveAttribute('data-channel', 'mailto');
+        await expect(link, 'a mail opens no tab').not.toHaveAttribute('target');
+        const href = (await link.getAttribute('href')) ?? '';
+        const mail = /^mailto:support@example\.org\?subject=([^&]*)&body=([^&]*)$/.exec(href);
+        if (!mail) throw new Error(`the report is not mailto:support@example.org?subject=…&body=…: ${href}`);
+        expect(decodeURIComponent(mail[1])).toBe(`LibreFolio: asset not found — ${query}`);
+        expect(mail[2], 'a mail body breaks its lines with CRLF (RFC 6068)').toContain('%0D%0A');
+        const body = decodeURIComponent(mail[2]);
+        expect(body.replace(/\r\n/g, ''), 'every line break of the body is CRLF').not.toContain('\n');
+        expect(body.split('\r\n')).toContain(`Search: ${query}`);
+
+        // A click elsewhere in the dialog (its name field: a click on the overlay would close the dialog itself) closes
+        // the dropdown, report row included.
+        await dialog.getByTestId('asset-modal-display-name').click();
+        await expect(results).toHaveCount(0);
+        await expect(dialog.getByTestId('asset-modal-form'), 'the dialog stays open').toBeVisible();
+
+        // Back in the search box: the finished search shows again, with its report row — shown, not searched again.
+        await input.focus();
+        await expect(results).toHaveAttribute('data-state', 'empty');
+        await expect(results.getByTestId('asset-search-report-row')).toBeVisible();
+        expect(boundary.searches, 'the focus shows the last search: it does not search again').toHaveLength(1);
+
+        await page.getByTestId('asset-modal-cancel').click();
+        await expect(page.getByTestId('asset-modal-form')).toBeHidden();
     });
 });
