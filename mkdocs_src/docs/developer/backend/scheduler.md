@@ -6,14 +6,14 @@ LibreFolio embeds an automatic background daemon to fetch current prices, histor
 
 ## 🏗️ Overview
 
-The scheduler runs as an independent `asyncio.Task` inside the FastAPI lifespan. Every run goes through one function, `run_due_jobs(reason)`, which checks whether the configured sync jobs are due and runs those that are: at startup, at each 60-second tick, when a user comes back after a silence, and on a wake-up, through the scheduled wake-up route, coming next.
+The scheduler runs as an independent `asyncio.Task` inside the FastAPI lifespan. Every run goes through one function, `run_due_jobs(reason)`, which checks whether the configured sync jobs are due and runs those that are: at startup, at each 60-second tick, when a user comes back after a silence, and on a scheduled wake-up, when a hosting panel or a cron job calls `POST /api/v1/system/wake-sync` (see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync)).
 
 ```mermaid
 graph TD
     Start["🚀 Server Lifespan Startup"] --> FirstWait["⏳ Wait 5s or a nudge"]
     FirstWait -->|startup| Run["⚙️ run_due_jobs(reason)"]
     User["👤 User request after 60s of silence"] -.->|nudge| Wait
-    Wake["⏰ Scheduled wake-up route, coming next"] -.->|wake| Run
+    Wake["⏰ POST /system/wake-sync"] -.->|wake| Run
     Run -->|"return, wake: wait 2s first"| Lock["🔒 Run lock"]
     Lock --> Checks{"🚦 May it run?"}
     Checks -->|"No: disabled, blocked or not_leader"| Report["📋 RunReport"]
@@ -29,7 +29,7 @@ graph TD
 
 ## 🔄 Async Loop Daemon (`scheduler.py`)
 
-The main entry point is `scheduler_loop()` located in `backend/app/services/platform/scheduler/scheduler.py`. Every run of the jobs goes through `run_due_jobs(reason)`, in the same module: the loop calls it, and so will the scheduled wake-up route, coming next.
+The main entry point is `scheduler_loop()` located in `backend/app/services/platform/scheduler/scheduler.py`. Every run of the jobs goes through `run_due_jobs(reason)`, in the same module: the loop calls it, and so does the scheduled wake-up route (`backend/app/api/v1/system/wake.py`).
 
 * **Lifespan Task:** The `scheduler` startup step, the last of `STARTUP_STEPS` in `backend/app/services/platform/app_lifespan.py`, spawns it with `asyncio.create_task()`. On shutdown, the `scheduler` step, the first of `SHUTDOWN_STEPS`, sets the shutdown event and awaits the task before the providers are shut down, a run in progress included; when the shutdown deadline cuts the step, the task is cancelled (see the [lifecycle contract](../architecture/overview.md#lifecycle-contract)).
 * **Shutdown Event:** The loop waits on `shutdown_event: asyncio.Event`, its timer and the return nudge at once, so a shutdown ends a wait immediately. The event does not interrupt a run: the loop stops once the run in progress is over, then removes its return listener.
@@ -44,7 +44,7 @@ Each run has a reason (`RunReason`), which its log line carries; any other value
 | `startup` | The first run, `FIRST_RUN_DELAY_SECONDS` (5 s) after the loop starts, while the application finishes starting. A nudge brings it forward; a shutdown in the meantime ends the loop without it. |
 | `tick` | `TICK_SECONDS` (60 s) after the end of the previous run. |
 | `return` | At once, when a user's request comes after at least `CATCH_UP_AFTER_SECONDS` (60 s) of silence: see the nudge below. |
-| `wake` | The scheduled wake-up route, coming next. |
+| `wake` | A call to the scheduled wake-up route, `POST /api/v1/system/wake-sync`, which streams the run's report back to its caller: see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync). |
 
 **The nudge on return.** The loop registers a return listener, `scheduler-catch-up` (`CATCH_UP_LISTENER`), on the process's activity record (`current_activity()`, in `backend/app/services/platform/sleep_wake/activity.py`). The record calls it at the start of a user's request that comes after at least 60 seconds without one; the health and readiness probes do not count. The listener only sets the loop's nudge event, with `loop.call_soon_threadsafe()` so that it works from any thread, and the waiting loop runs `return` at once. The record measures the silence on the wall clock, so the time a machine spends suspended counts; the loop's own timer runs on the monotonic clock, which does not count it, so after a resume the next tick could still be up to a minute away. The nudge is cleared when a run starts: nudges that arrive during a run make one `return` run right after it.
 
