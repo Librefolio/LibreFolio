@@ -3243,3 +3243,114 @@ intatti.
   scritta a mano; cestino della card e conferma singola senza `data-testid` → al coordinatore per la sezione di X.
 Prova: E2E `front-asset asset-event-delete` nello slot. ✅ (slot 1, 07:16–07:19): **4/4** (182 s; scenario 3 19,0 s,
 scenario 4 8,7 s), al primo giro; `prettier` pulito (riformattato alle 06:51), `front check` 0/0.
+
+> **W-B39 e W-B42 committati** (coordinatore, 07:27): `df898b445` W-B39, `3564129b5` W-B42, `e7e03b19a` journal → HEAD
+> `e7e03b19a` (verificato, worktree pulito); in `dev_release2` per cherry-pick `c881237a9`, `9df17ef20` (treno 98), CHANGELOG
+> con la riga proposta; il journal entra con la 47. Le 4 note sulla UI degli asset vanno a X, il `testId` di `ConfirmModal` alla
+> sezione C. Via a: W-B44, analisi di W-B32, W-B43 dopo W1-g di T.
+
+### W-B44 — `PromoteMergeModal`: un solo `promote-merge-modal`, e Annulla col suo `data-testid` ✅ (2026-10-16) — 🧊 FROZEN
+
+**Analisi** (07:30, codice di `e7e03b19a`): `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` mette
+`promote-merge-modal` su `ModalBase` (`testId`, reso sul `role="dialog"`, `ModalBase.svelte:237`) e sul `div` interno (riga
+105): due elementi. Il pulsante Annulla (~259) non ha `data-testid`. Chi lo usa: `e2e/gallery.spec.ts:3378`
+(`[data-testid="promote-merge-modal"][role="dialog"]`: il `ModalBase`), `tx-selection-after-bulk.spec.ts:492` e
+`tx-split-refusal.spec.ts:294` (`toHaveCount(0)` a modale chiusa), `tx-bulk-promote-exec.spec.ts:357` (un commento che
+spiega il giro attorno al doppione). Il file non è tenuto dai colori (coordinatore).
+**Disegno**: il `div` interno diventa `promote-merge-modal-content` (come `tx-action-modal-content`), il `ModalBase` tiene
+`promote-merge-modal` (la galleria continua a funzionare), Annulla prende `promote-merge-cancel`; il commento di
+`tx-bulk-promote-exec.spec.ts` si aggiorna. Nessuna classe toccata. Cura pronta in `/tmp/libreFolio_w_wb44_cure.py` (dry run
+pulito, 2 file). Rosso: un Vitest nuovo `PromoteMergeModal.test.ts` (test-author, in corso), registrato in `front_tx_unit`.
+**Rosso** ✅ (07:38, carico 34): test-author, `frontend/src/lib/components/transactions/modals/PromoteMergeModal.test.ts`
+(nuovo, 4 test, registrato in `front_tx_unit` di `scripts/test_runner/_frontend_transaction.py`, una riga dopo
+`PromoteAllModal.test.ts`): `vitest run` **3 falliti, 1 passato** per i motivi attesi: «elements carrying
+data-testid="promote-merge-modal": expected 2 to be 1», «…promote-merge-modal-content: expected +0 to be 1»,
+«…promote-merge-cancel: expected +0 to be 1»; la guardia di Conferma (d) verde (`onConfirm` una volta con
+`{description: 'Savings out\nSavings in', tags: ['savings', 'monthly', 'transfer']}`, `onCancel` mai).
+**Cura** ✅ (07:39): `/tmp/libreFolio_w_wb44_cure.py --apply` (il `div` interno → `promote-merge-modal-content`, Annulla →
+`promote-merge-cancel`, il commento di `tx-bulk-promote-exec.spec.ts:357`). **Verdi**: `vitest run` **4/4**; `prettier`
+pulito sui 3 file; `front check` 0 errori, 0 avvisi; gate dei colori pulito; `check-orphans` (462 file Vitest
+raggiungibili); `git diff --check` pulito. `black`/`ruff` su `_frontend_transaction.py`: nessun rilievo nuovo (ruff 4 = HEAD;
+black +2 righe di diff = l'elemento in più dentro la vecchia lista non formattata da black, che black riformatterebbe già in
+HEAD). E2E non girati: nessun selettore usa l'id del `div` interno (grep), la galleria legge il `ModalBase` (invariato), gli
+altri spec `toHaveCount(0)` a modale chiusa o `promote-merge-confirm` (invariato). I file sono identici in `dev_release2`:
+cherry-pick pulito.
+
+### W-B32 — i report senza broker nella lista di ogni broker ✅ (2026-10-16) — 🧊 FROZEN
+
+**Stato reale** (codice di `e7e03b19a`, sola lettura):
+- `brim_provider.list_files(broker_ids=…)` (`backend/app/services/brim/brim_provider.py:1068-1071`) tiene i file del filtro **e**
+  quelli senza broker («legacy»). Tre chiamanti passano `broker_ids`: `delete_files_for_brokers` (:1277) e
+  `brim_report_sets.collect_members` (:128) filtrano già per uguaglianza su `target_broker_id`; la rotta `GET
+  /brokers/import/files` (`backend/app/api/v1/brokers.py:676-714`) no.
+- La rotta, per chi non è admin, passa **sempre** una lista (i broker accessibili, o la loro intersezione col filtro), anche
+  senza filtro nella richiesta; poi tiene i file senza broker solo se caricati dall'utente (decisione 36). Quindi togliere i
+  file senza broker dentro `list_files` quando c'è `broker_ids` li nasconderebbe anche nella pagina File, a chi li ha
+  caricati: rottura della decisione 36. La correzione va nella rotta.
+- Frontend: il wizard d'import (`ImportWizardModal.svelte:3475` e `:3778`) li scarta già sul client; la pagina File
+  (`routes/(app)/files/+page.svelte:335`) chiama senza filtro; **solo** «Uploaded Reports» del broker
+  (`BrokerImportFilesModal.svelte:95`, `broker_ids: [brokerId]`) li mostra, sotto **ogni** broker (i propri per l'utente,
+  tutti per l'admin), e la sua cancellazione multipla può cancellare un file che non è di quel broker.
+- Test: le guardie F36-04/05 (`test_brim_api.py:3165`, `:3191`) leggono la lista senza filtro → invariate; F36-01 (gli altri
+  utenti non li vedono, con e senza filtro) invariata. Diventano superati due commenti: l'aiuto di `test_brim_api.py:1170`
+  («the list also returns legacy files…») e `ImportWizardModal.svelte:3774` (FE8; Y5 cambia un import nello stesso file).
+**Proposta** (comportamento visibile → decisione del developer o del coordinatore se la ritiene dentro la decisione 36):
+nella rotta, con un `broker_ids` esplicito nella richiesta, i file senza broker restano fuori (una riga, prima del ramo
+dell'admin); senza filtro tutto com'è (la pagina File: i propri per l'utente, tutti per l'admin). `list_files` invariata.
+Rosso prima (test-author, nella classe F36 col `planter`): il caricatore e l'admin, con `broker_ids` del proprio broker, non
+vedono il file senza broker; senza filtro sì (guardie esistenti). Doc: docs-writer (dove la doc descrive la lista dei report
+di un broker). CHANGELOG 🐛: «A broker's report list no longer shows the reports an older version stored without a broker:
+they stay on the Files page.» Peso: minimo.
+**Approvata** (coordinatore, 07:32): dentro la decisione 36, **«Decisione notturna, da rivedere»**: con `broker_ids`
+esplicito i report senza broker fuori, senza filtro invariato, `list_files` intatta; rosso prima nella classe F36, guardie
+F36-01/04/05 invariate, doc con docs-writer; dopo W-B44, commit separati. Cura pronta in `/tmp/libreFolio_w_wb32_cure.py`
+(dry run pulito: la docstring della rotta e il filtro di tre righe prima del ramo dell'admin). Rosso: test-author in corso
+(07:34), senza corsia.
+**W-B44 committato** (coordinatore, 07:43): `911252a85` sul ramo (HEAD, verificato), cherry-pick `df6e2df10` in
+`dev_release2` (treno 99). Le righe del journal di W-B44 restano col prossimo commit del journal.
+**W-B32, preparazione dello slot** (slot 2 verso le 08:30, dopo J ed E5b, chiamato dal coordinatore):
+- Rosso scritto ✅ (07:41, test-author, niente eseguito): F36-16
+  `TestReportsWithoutBroker::test_the_list_of_a_broker_leaves_out_a_file_with_no_broker` in
+  `backend/test_scripts/test_api/test_brim_api.py`, parametrizzato su `uploader`/`administrator`: U possiede B con un report
+  caricato; un file senza broker di U piantato (`planter`); barriere: chi legge rilegge il file e lo vede senza filtro
+  (F36-04), il report di B è nella lista filtrata; il rosso: `legacy.file_id not in listed` con `broker_ids` = B; poi ogni
+  voce della lista è di B; pulizia in `finally` (report e broker; il file piantato lo spazza il `planter`). In più: la
+  docstring dell'aiuto `_files_on` (~1170) resa vera prima e dopo la cura; W-B32 nel titolo della «Category 18» e nella
+  docstring del modulo. `black`/`ruff` puliti.
+- Il server di test ricostruisce la build debug quando è stantia a ogni avvio (`dev.py server --test --build-only`,
+  `scripts/test_runner/_server.py:179`), e W-B44 ha cambiato `src/`: anche il rosso di `api brim` la ricostruisce → slot. La
+  doc si ricostruisce se un `.md` è più recente di `mkdocs_src/site/index.html` (`dev.py:2299`): la `mkdocs build` strict
+  fuori slot, dopo la doc di W-B32, la rende fresca e toglie ~2,5 minuti allo slot.
+- Script `/tmp/libreFolio_w_slot_wb32.py --until HH:MM` (dry run pulito): rosso F36-16 (`api brim list_of_a_broker`; la
+  cura solo se fallisce l'asserzione di F36-16 e solo i suoi 2 casi) → cura → `api brim` intero (116 test, ~3 minuti di
+  pytest l'ultima volta), o solo la classe F36 se l'intero non ci sta; carico < 70 prima di ogni passo; SIGINT al taglio.
+- **Doc** ✅ (07:51, docs-writer, niente eseguito): `developer/backend/brim/architecture.md` (169–173, «The list.»: la frase che
+  dava il vecchio comportamento come voluto è riscritta, con una nota «Before 1.3 … (W-B32)» come le altre della pagina);
+  `user/brokers/import.en.md:58` (un paragrafo in fondo a «🗂️ Uploaded reports»: i report che una versione precedente ha
+  salvato senza broker non sono in questa lista, chi li ha caricati e gli admin li trovano nella pagina File);
+  `user/files/index.en.md:69` (una frase: compaiono solo lì). Controllate e lasciate: `access_control.md:39-41`,
+  `frontend/components/features/brokers/modals.md:155-173` (diventa vera), e altre 12 pagine. Reperto: l'upload chiede un
+  broker da `f0b7aad8d` (24/01), lo stesso commit che registra chi carica: nessun file senza broker ha un caricatore
+  registrato, quindi in pratica li vedono solo gli admin (il test F36-16 pianta un file con caricatore: copre il ramo).
+- IT/FR/ES a mano (07:52) sulle due pagine utente, col lessico di ciascuna: `user/brokers/import.{it,fr,es}.md` (paragrafo
+  dopo la riga 56) e `user/files/index.{it,fr,es}.md` (fine della riga 44). Cache di Aphra: `import.en.md` senza altro debito
+  (md5 di HEAD = cache, 3 lingue fatte) → `translate-stamp --file user/brokers/import.en.md`, solo dopo un `--dry-run` che
+  nomina quella pagina sola (senza `--file` lo stamp prende tutte le pagine del nav); `files/index.en.md` ha già debito
+  (`14819e3b0`, la sezione «Shared or personal») → niente stamp.
+- `/tmp/libreFolio_w_docs_gate.sh 08:25` in corso (07:52): `mkdocs build` strict, `check-links`, il dry run e lo stamp, ognuno
+  col carico < 50 (regola delle 07:48) e attese di 60 s; si arrende alle 08:25 per non toccare lo slot.
+- Prove della doc ✅ (07:53–07:55, carico 27–35): `mkdocs build` strict (68 s), `check-links` puliti; dry run dello stamp: «1
+  file(s) would be stamped … user/brokers/import.en.md (MD5 2fb763ba→6327ae7e)» per it, fr, es (la mia guardia nello script
+  cercava il percorso a inizio riga, la riga comincia con «🔍»: lo stamp vero l'ho lanciato a mano, col carico a 35) →
+  «Stamped 1 file(s)»: in `mkdocs_src/aphra-pipeline/.translate-hashes.json` (tracciato e condiviso) cambia solo la voce di
+  quella pagina (md5 e `stamped_at` per lingua). `git diff --check` pulito. La doc è fresca per lo slot (la build segue le
+  modifiche delle traduzioni).
+- **Slot 2** ✅ (08:02–08:13, taglio 08:18; `/tmp/libreFolio_w_slot_wb32.py --until 08:18`): **rosso** F36-16 `api brim
+  list_of_a_broker` → **2 falliti su 2** (caricatore e admin) sull'asserzione attesa («a report with no broker shows in the list
+  of broker 11 … as the uploader reads it», «… broker 12 … as the administrator reads it»), 116 deselezionati, 361 s con la
+  ricostruzione della build debug; **cura** (`/tmp/libreFolio_w_wb32_cure.py --apply`: la docstring della rotta e il filtro di
+  tre righe); **verde**: `api brim` intero **118/118** (250 s; F36-16 e le guardie F36-01/04/05 dentro, la sola classe non
+  serviva). Log `/tmp/libreFolio_w_slot_red-f36-16.log`, `/tmp/libreFolio_w_slot_green-api-brim.log`.
+- Prove leggere ✅ (08:13–08:16, carico < 50): `black`/`ruff` puliti su `brokers.py` e `test_brim_api.py`; `api sync` (nessuna
+  differenza tracciata: client e `openapi.json` ignorati); `front check` 0 errori, 0 avvisi; `git diff --check` pulito; porta
+  libera. I file di W-B32 sono identici fra HEAD e `dev_release2`: cherry-pick pulito.

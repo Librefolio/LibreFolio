@@ -3472,12 +3472,22 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   aperta `promote-merge-modal` trova due elementi, e il suo «Annulla» non ha `data-testid`: un test della promozione con campi
   diversi non li può prendere in modo stabile (oggi nessuno lo fa). Cura: un `data-testid` per elemento, in
   `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte`. Dettagli: piano 04, sezione W-B39.
+  ✅ 16/10: `promote-merge-modal` solo sul dialogo, `promote-merge-modal-content` sul contenuto, `promote-merge-cancel` su
+  Annulla; Vitest `PromoteMergeModal.test.ts` 4/4 (3 rossi prima). Dettagli: piano 04, sezione W-B44.
+- **W-B45 · `transactions-modals.spec.ts`: T13 col tempo di serie di 30 s fra vicini a 60 s** — minimo, test; W, 16/10 (T,
+  colori, 08:01). In `frontend/e2e/transactions/transactions-modals.spec.ts:1211` T13 tiene il tempo di serie (30 s), mentre i
+  vicini sullo stesso percorso hanno `test.setTimeout(60_000)`: col carico a 43–49 è scaduto prima di ogni controllo; da solo,
+  col carico a 30, passa in 3,5 s. Cura: allinearlo ai vicini, in un lotto piccolo dopo l'ingresso del lotto di T (che tocca
+  quello spec e i due `TxForm*`) e l'aggiornamento della mia base. Dettagli: messaggio del coordinatore, 16/10 08:01.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
   caricatore e l'admin, ma nella lista «Uploaded Reports» di **ogni** broker (tutti per l'admin, i propri per gli altri).
   Da decidere: con un filtro di broker esplicito, escluderli (restano nella vista senza filtro della pagina File).
   Dettagli: piano 04, sezione F36.
+  ✅ 16/10 (decisione notturna dentro la decisione 36, da rivedere): con `broker_ids` esplicito la rotta lascia fuori i file
+  senza broker, senza filtro invariata (`list_files` intatta); F36-16 rosso 2/2 prima, `api brim` 118/118 dopo; doc in EN,
+  IT, FR, ES. Dettagli: piano 04, sezione W-B32.
 - **W-B33 · `transactions/service.md`, «Broker Deletion»: tre imprecisioni di testo** — minimo, doc; W, 15/10 (W-B20,
   docs-writer). In `mkdocs_src/docs/developer/backend/transactions/service.md`:
   - «One is required since (`costBasisRequired`)» resta senza data né versione e si legge troncata;
