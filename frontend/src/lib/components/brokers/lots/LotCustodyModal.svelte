@@ -10,6 +10,7 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatExactDecimal} from '$lib/utils/core/formatFixed';
     import {maskableQuantity} from '$lib/utils/privacy/maskable';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
     import {safeDecimal} from '$lib/types';
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
     import type {z} from 'zod';
@@ -101,16 +102,16 @@
     const formatPercent = (value: unknown): string => sharedFormatPercent(parseNumber(value), {scale: 100});
 
     function signedToneClass(value: number | null): string {
-        if (value == null) return 'text-slate-900 dark:text-slate-100';
-        if (value > 0) return 'text-emerald-600 dark:text-emerald-400';
-        if (value < 0) return 'text-red-500 dark:text-red-400';
-        return 'text-slate-500 dark:text-slate-300';
+        if (value == null) return 'text-lf-primary';
+        if (value > 0) return SIGN_TEXT.portfolio.gain;
+        if (value < 0) return SIGN_TEXT.portfolio.loss;
+        return SIGN_TEXT.portfolio.zero;
     }
 
     function eventDetailToneClass(tone?: EventDetailItem['tone']): string {
-        if (tone === 'positive') return 'text-emerald-600 dark:text-emerald-400';
-        if (tone === 'negative') return 'text-red-500 dark:text-red-400';
-        return 'text-slate-700 dark:text-slate-100';
+        if (tone === 'positive') return SIGN_TEXT.portfolio.gain;
+        if (tone === 'negative') return SIGN_TEXT.portfolio.loss;
+        return 'text-lf-primary';
     }
 
     function stateLabel(state: string): string {
