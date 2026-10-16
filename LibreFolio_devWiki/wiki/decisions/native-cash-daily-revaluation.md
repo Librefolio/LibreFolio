@@ -137,7 +137,8 @@ the engine (coordinator, 2026-10-12; [[decisions/ai-export-version-bump-once-per
   ([[problems/ai-export-reconciled-false-on-rounding-dust]]).
 - **Left in the residual, by design** (backlog section I): the exchange result on cash *in transit* (B17), the spread
   of an FX_CONVERSION on the same broker (B18), and the order of the unallocated rows (B19, order only). The
-  securities half of B11 stays open: [[problems/dirty-days-ignore-fx-only-moves]].
+  securities half of B11 stayed open here; J closed it in CP-6 (2026-10-16), with one `change_days` shared by the
+  native cash and the engine: [[problems/dirty-days-ignore-fx-only-moves]].
 - **Confirmed on real data** (developer, 2026-10-12, via the coordinator): after importing his Scalable Capital
   reports on his own server, the per-broker P&L chart looked «come me lo aspettavo» ("as I expected").
 
