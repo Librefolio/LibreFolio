@@ -23,8 +23,10 @@
  *     `isTimeout`, the summary says "Synced 3/4" around a translated verb, the
  *     section titles come from the catalogue. Everything is read from
  *     `data-testid`/`data-*` or from values the test itself injected. Wording is
- *     read once, and only negatively: in Italian, the sentences the base writes
- *     itself must not come out in English ("its own sentences", at the end).
+ *     read twice, and never pinned: in Italian, the sentences the base writes
+ *     itself must not come out in English ("its own sentences", at the end), and
+ *     the overwrite warning must read as the catalogue's own sentence, resolved
+ *     through the same formatter ("the warning before a sync…").
  *   - CSS classes. `allFailuresPartial` only softens the retry button's accent from
  *     red to amber; both of its arms are executed here, neither is asserted, because
  *     a colour is not a contract.
@@ -41,9 +43,13 @@
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
 import {tick} from 'svelte';
+import {get} from 'svelte/store';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {_} from '$lib/i18n';
 import type {SyncResult, SyncStatus} from '$lib/utils/sync/syncHelpers';
 import enCatalogue from '$lib/i18n/en.json';
+import esCatalogue from '$lib/i18n/es.json';
+import frCatalogue from '$lib/i18n/fr.json';
 import itCatalogue from '$lib/i18n/it.json';
 import Harness from '$test/harness/SyncModalBaseHarness.svelte';
 
@@ -85,6 +91,8 @@ interface Spec {
     id: string;
     targetIds: string[];
     doSyncFn: (ids: string[]) => Promise<SyncResult[]>;
+    /** The targets that already hold stored data in the range; left out, the section has none. */
+    existingIds?: string[];
 }
 
 function mount(specs: Spec[], props: Record<string, unknown> = {}) {
@@ -1110,6 +1118,176 @@ describe('SyncModalBase — the request limit it hands each section', () => {
         // and the 20 inside "120" must not count as citing the field.
         expect.soft(said, 'the applied limit is named').toMatch(new RegExp(`(?<!\\d)${appliedSec}(?!\\d)`));
         expect.soft(said, 'the field is not').not.toMatch(new RegExp(`(?<!\\d)${fieldSec}(?!\\d)`));
+    });
+});
+
+// =========================================================================
+// The warning before a sync that replaces stored data (C-66, F-094)
+// =========================================================================
+
+/**
+ * A sync writes every date the data provider returns and replaces what is stored,
+ * manual edits included: the provider wins. The dialog says so before Start, once
+ * per active section whose targets already hold stored rows in the range — which
+ * only the wrappers know, and hand over as `section.existingIds`.
+ *
+ * A warning is addressed by `{testId}-overwrite-warning` (the harness's testId is
+ * `harness-sync-modal`) and read through its three attributes: `data-section`,
+ * `data-existing` (the targets that are also in `existingIds`) and `data-total`
+ * (the section's targets). Its sentence is the catalogue's `fx.sync.overwriteWarning`,
+ * resolved here through the formatter the component uses — never pinned — and only
+ * after checking that the key exists: a missing key resolves to itself, and a dialog
+ * printing the key would then match.
+ *
+ * Absences are always asserted beside a presence (a warned section in the same
+ * dialog, or the same dialog before Start): "no warning" is also what a dialog that
+ * never warns renders.
+ *
+ * Red today: `SyncSection` has no `existingIds`, the base renders no warning, and the
+ * catalogues have no `fx.sync.overwriteWarning`.
+ */
+describe('SyncModalBase — the warning before a sync that replaces stored data', () => {
+    const OVERWRITE_KEY = 'fx.sync.overwriteWarning';
+    const WARNING = 'harness-sync-modal-overwrite-warning';
+
+    /** Whitespace between template nodes comes from the markup, not from the sentence. */
+    function normalize(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    function warnings(): HTMLElement[] {
+        return [...document.querySelectorAll<HTMLElement>(`[data-testid="${WARNING}"]`)];
+    }
+
+    /** Every warning on screen as its three attributes, by section: duplicates stay visible. */
+    function warned(): {section: string; existing: number; total: number}[] {
+        return warnings()
+            .map((el) => ({section: el.getAttribute('data-section') ?? '', existing: num(el, 'data-existing'), total: num(el, 'data-total')}))
+            .sort((a, b) => a.section.localeCompare(b.section));
+    }
+
+    /** The text of the one warning about `section`, whitespace normalised. */
+    function warningText(section: string): string {
+        const matches = warnings().filter((el) => el.getAttribute('data-section') === section);
+        if (matches.length !== 1) throw new Error(`expected one overwrite warning for section ${section}, found ${matches.length}; warned: ${JSON.stringify(warned())}`);
+        return normalize(matches[0].textContent);
+    }
+
+    /** The catalogue's sentence for these counts, formatted as the component formats it. */
+    function sentence(existing: number, total: number): string {
+        leaf(enCatalogue, OVERWRITE_KEY); // throws while the key is missing: it would resolve to itself
+        return normalize(get(_)(OVERWRITE_KEY, {values: {existing, total}}));
+    }
+
+    it('warns once for a single section, with how many of its targets hold stored data, in the sentence alone', async () => {
+        mount([{id: 'alpha', targetIds: ['a1', 'a2', 'a3'], existingIds: ['a1', 'a3'], doSyncFn: answersWith('ok')}]);
+
+        expect(warned()).toEqual([{section: 'alpha', existing: 2, total: 3}]);
+        // One active section: nothing to tell apart, so no title in front of the sentence.
+        expect(warningText('alpha')).toBe(sentence(2, 3));
+    });
+
+    it('warns once per section when two are active, each led by its own title and worded with its own counts', async () => {
+        mount([
+            {id: 'alpha', targetIds: ['a1', 'a2'], existingIds: ['a2'], doSyncFn: answersWith('ok')},
+            {id: 'beta', targetIds: ['b1', 'b2', 'b3'], existingIds: ['b1', 'b2', 'b3'], doSyncFn: answersWith('ok')},
+        ]);
+
+        expect(warned()).toEqual([
+            {section: 'alpha', existing: 1, total: 2},
+            {section: 'beta', existing: 3, total: 3},
+        ]);
+        // The harness titles a section `title:<id>`, a marker no catalogue holds.
+        expect(warningText('alpha')).toMatch(/^title:alpha/);
+        expect(warningText('alpha')).toContain(sentence(1, 2));
+        expect(warningText('beta')).toMatch(/^title:beta/);
+        expect(warningText('beta')).toContain(sentence(3, 3));
+    });
+
+    it('leads with the title whenever two sections are active, even when only one of them is warned', async () => {
+        mount([
+            {id: 'alpha', targetIds: ['a1', 'a2'], doSyncFn: answersWith('ok')},
+            {id: 'beta', targetIds: ['b1', 'b2'], existingIds: ['b2'], doSyncFn: answersWith('ok')},
+        ]);
+
+        expect(warned()).toEqual([{section: 'beta', existing: 1, total: 2}]);
+        expect(warningText('beta')).toMatch(/^title:beta/);
+        expect(warningText('beta')).toContain(sentence(1, 2));
+    });
+
+    it('ignores a section with no targets: it is not warned, and it does not bring the title in', async () => {
+        mount([
+            {id: 'alpha', targetIds: ['a1', 'a2'], existingIds: ['a1'], doSyncFn: answersWith('ok')},
+            {id: 'beta', targetIds: [], existingIds: ['b1'], doSyncFn: answersWith('ok')},
+        ]);
+
+        expect(warned()).toEqual([{section: 'alpha', existing: 1, total: 2}]);
+        expect(warningText('alpha')).toBe(sentence(1, 2));
+    });
+
+    it('says nothing for a section whose existing ids are absent, empty or none of its targets', async () => {
+        mount([
+            {id: 'absent', targetIds: ['n1'], doSyncFn: answersWith('ok')},
+            {id: 'empty', targetIds: ['e1'], existingIds: [], doSyncFn: answersWith('ok')},
+            {id: 'elsewhere', targetIds: ['x1', 'x2'], existingIds: ['y1', 'y2'], doSyncFn: answersWith('ok')},
+            // The control: the one section with an overlap is warned, so the silence of
+            // the other three is the rule and not a dialog that warns about nothing.
+            {id: 'control', targetIds: ['c1'], existingIds: ['c1'], doSyncFn: answersWith('ok')},
+        ]);
+
+        expect(warned()).toEqual([{section: 'control', existing: 1, total: 1}]);
+    });
+
+    it('counts only the targets: an existing id the section does not sync is ignored, and one listed twice counts once', async () => {
+        // zz and b1 are not synced here; a2 is, listed twice. The count is taken over the
+        // targets, so it can never exceed the total.
+        mount([{id: 'alpha', targetIds: ['a1', 'a2', 'a3'], existingIds: ['zz', 'a2', 'b1', 'a2'], doSyncFn: answersWith('ok')}]);
+
+        expect(warned()).toEqual([{section: 'alpha', existing: 1, total: 3}]);
+        expect(warningText('alpha')).toBe(sentence(1, 3));
+    });
+
+    it('withdraws the warning when the sync starts, and the results do not bring it back, a failure included', async () => {
+        const held = deferred<SyncResult[]>();
+        mount([{id: 'alpha', targetIds: ['a1', 'a2'], existingIds: ['a1'], doSyncFn: () => held.promise}]);
+        // The barrier: on screen before Start, so its absence below is the run's doing.
+        expect(warned()).toEqual([{section: 'alpha', existing: 1, total: 2}]);
+
+        await fireEvent.click(startButton());
+        await waitFor(() => expect(bodyState('data-busy')).toBe('true'));
+        expect(warned()).toEqual([]);
+
+        // A failed row leaves the footer offering a retry: that is still this run, not a new one.
+        held.resolve([result('a1', 'ok'), result('a2', 'failed')]);
+        await settled();
+        await idle();
+        expect(summary().failed).toBe(1);
+        expect(warned()).toEqual([]);
+    });
+
+    it('warns again when the dialog is opened afresh', async () => {
+        const {rerender} = mount([{id: 'alpha', targetIds: ['a1', 'a2'], existingIds: ['a2'], doSyncFn: answersWith('ok')}]);
+        await fireEvent.click(startButton());
+        await settled();
+        expect(warned()).toEqual([]);
+
+        await rerender({open: false});
+        await rerender({open: true});
+        await tick();
+
+        // A fresh open is a run that has not started: it is about to replace the same rows.
+        expect(screen.queryByTestId('sync-modal-results')).toBeNull();
+        expect(warned()).toEqual([{section: 'alpha', existing: 1, total: 2}]);
+    });
+
+    it('ships the sentence in all four catalogues, each in its own language', () => {
+        const english = leaf(enCatalogue, OVERWRITE_KEY);
+        for (const [locale, catalogue] of Object.entries({it: itCatalogue, fr: frCatalogue, es: esCatalogue})) {
+            // Positive control: a sibling key the same reader finds, so a red below is the key, not the reader.
+            expect(leaf(catalogue, 'fx.sync.start'), `fx.sync.start in ${locale}.json`).not.toBe('');
+            // The catalogue build fills a missing translation from English, so presence alone proves nothing.
+            expect(leaf(catalogue, OVERWRITE_KEY), `${OVERWRITE_KEY} in ${locale}.json is the English sentence: not translated`).not.toBe(english);
+        }
     });
 });
 

@@ -140,9 +140,15 @@ def round_computed_value(value: Decimal, model: Type[SQLModel], column_name: str
     significant digits: the result always passes ``decimal_limit_issue``. For the values a plugin derives, such as a
     per-unit cost from a total and a quantity (1000 / 3 → 333.333333333333). Never for a value the user typed or a
     file holds: over the limit those are refused, never rounded (decision D2).
+
+    A value that already fits comes back as it is, its form included: ``100.00 / 100`` stays ``1.00``, not
+    ``1.000000000000`` (the import shows it as computed, and the parse output stays what it was).
     """
     _precision, scale = get_model_column_precision(model, column_name)
-    rounded = value.quantize(Decimal(1).scaleb(-scale), rounding=ROUND_HALF_EVEN, context=_WIDE_CONTEXT)
+    exponent = value.as_tuple().exponent
+    rounded = value
+    if not isinstance(exponent, int) or -exponent > scale:
+        rounded = value.quantize(Decimal(1).scaleb(-scale), rounding=ROUND_HALF_EVEN, context=_WIDE_CONTEXT)
     if isinstance(model.__table__.columns[column_name].type, RealDecimal):
         rounded = _REAL_HALF_EVEN.plus(rounded)
     return rounded

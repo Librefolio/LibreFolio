@@ -120,7 +120,6 @@
     // =========================================================================
 
     let holdings = $derived(summary?.holdings ?? []);
-    let navAmount = $derived(summary ? parseFloat(summary.net_worth.amount) : 0);
     let displayCurrency = $derived(summary?.net_worth.code ?? 'EUR');
 
     /** Performance shows open+closed positions together — Status is a filterable
@@ -133,39 +132,40 @@
     let showPerformanceEmpty = $derived(semanticMode === 'performance' && (!contribution || (contributionPositions.length === 0 && otherEffects.length === 0)));
 </script>
 
-<div class="bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-4 flex flex-col" data-testid="positions-panel" aria-busy={showLoading} data-busy={showLoading ? 'true' : 'false'}>
+<div class="bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col" data-testid="positions-panel" aria-busy={showLoading} data-busy={showLoading ? 'true' : 'false'}>
     <!-- Header -->
     <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+        <h2 class="text-sm font-semibold text-lf-secondary">
             {$_('dashboard.positions')}
         </h2>
         <div class="flex items-center gap-2">
             <!-- Semantic toggle: Holdings / Performance -->
-            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 text-xs overflow-hidden" data-testid="positions-semantic-toggle">
-                <button class="px-2.5 py-1 transition-colors {semanticMode === 'holdings' ? 'bg-libre-green text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (semanticMode = 'holdings')} data-testid="positions-toggle-holdings">
+            <div class="flex rounded-lg border border-lf-subtle text-xs overflow-hidden" data-testid="positions-semantic-toggle">
+                <button class="px-2.5 py-1 transition-colors {semanticMode === 'holdings' ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-muted hover:bg-lf-hover'}" onclick={() => (semanticMode = 'holdings')} aria-pressed={semanticMode === 'holdings'} data-testid="positions-toggle-holdings">
                     {$_('dashboard.holdingsTab') || 'Holdings'}
                 </button>
-                <button class="px-2.5 py-1 transition-colors {semanticMode === 'performance' ? 'bg-libre-green text-white' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}" onclick={() => (semanticMode = 'performance')} data-testid="positions-toggle-performance">
+                <button
+                    class="px-2.5 py-1 transition-colors {semanticMode === 'performance' ? 'bg-lf-checked text-lf-on-checked' : 'text-lf-muted hover:bg-lf-hover'}"
+                    onclick={() => (semanticMode = 'performance')}
+                    aria-pressed={semanticMode === 'performance'}
+                    data-testid="positions-toggle-performance"
+                >
                     {$_('dashboard.performanceTab') || 'Performance'}
                 </button>
             </div>
 
             <!-- Visual toggle: Table / Map -->
-            <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 text-xs overflow-hidden" data-testid="positions-visual-toggle">
+            <div class="flex rounded-lg border border-lf-subtle text-xs overflow-hidden" data-testid="positions-visual-toggle">
                 <button
-                    class="px-2 py-1 transition-colors {visualMode === 'table' ? 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                    class="px-2 py-1 transition-colors {visualMode === 'table' ? 'bg-lf-neutral text-lf-secondary' : 'text-lf-muted hover:bg-lf-hover'}"
                     onclick={() => (visualMode = 'table')}
+                    aria-pressed={visualMode === 'table'}
                     title={$_('dashboard.viewTable')}
                     data-testid="positions-toggle-table"
                 >
                     <Table2 size={14} />
                 </button>
-                <button
-                    class="px-2 py-1 transition-colors {visualMode === 'map' ? 'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-700'}"
-                    onclick={() => (visualMode = 'map')}
-                    title={$_('dashboard.viewMap')}
-                    data-testid="positions-toggle-map"
-                >
+                <button class="px-2 py-1 transition-colors {visualMode === 'map' ? 'bg-lf-neutral text-lf-secondary' : 'text-lf-muted hover:bg-lf-hover'}" onclick={() => (visualMode = 'map')} aria-pressed={visualMode === 'map'} title={$_('dashboard.viewMap')} data-testid="positions-toggle-map">
                     <Grid2x2 size={14} />
                 </button>
             </div>
@@ -176,7 +176,7 @@
                 </div>
             {/if}
 
-            <a href={assetsHref} class="text-xs text-libre-green dark:text-green-400 hover:underline font-medium ml-1" data-testid="positions-see-all">
+            <a href={assetsHref} class="text-xs text-lf-link hover:underline font-medium ml-1" data-testid="positions-see-all">
                 {$_('dashboard.seeAllPositions')}
             </a>
         </div>
@@ -186,21 +186,21 @@
     {#if showLoading}
         <div class="space-y-2 flex-1">
             {#each {length: 5} as _}
-                <div class="h-9 bg-gray-100 dark:bg-slate-700 rounded animate-pulse"></div>
+                <div class="h-9 bg-lf-neutral rounded animate-pulse"></div>
             {/each}
         </div>
     {:else if showHoldingsEmpty}
-        <p class="text-sm text-gray-400 dark:text-gray-500 py-6 text-center flex-1 flex items-center justify-center">
+        <p class="text-sm text-lf-muted py-6 text-center flex-1 flex items-center justify-center">
             {$_('dashboard.noPositions')}
         </p>
     {:else if showPerformanceEmpty}
-        <p class="text-sm text-gray-400 dark:text-gray-500 py-6 text-center flex-1 flex items-center justify-center">
+        <p class="text-sm text-lf-muted py-6 text-center flex-1 flex items-center justify-center">
             {$_('dashboard.noPeriodPnl')}
         </p>
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable bind:this={exposureTableComponent} {holdings} {navAmount} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
+                <ExposureTable bind:this={exposureTableComponent} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
                 <ExposureTreemap {holdings} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}

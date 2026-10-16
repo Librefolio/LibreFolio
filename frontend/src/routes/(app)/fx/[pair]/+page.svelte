@@ -21,6 +21,7 @@
     import {goBack} from '$lib/stores/app/navigationStore';
     import {ArrowLeft, ArrowLeftRight, ChevronDown, Pencil, RefreshCw, RotateCw, Ruler, Settings, TrendingUp, Wrench, X} from 'lucide-svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -57,6 +58,8 @@
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import type {ViewMode} from '$lib/components/charts/ChartToolbar.svelte';
     import {apiResultsToCanonicalFxDataPoints, displayFxDelta, displayFxRate, ensureFxRangeLoaded, type FxDataPoint, getFxStore} from '$lib/stores/fxStoreRegistry';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
+    import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
     import type {LayoutMode} from '$lib/utils/layout/responsiveLayout.svelte';
@@ -271,6 +274,10 @@
         return items;
     });
 
+    /** The sync dialog's pairs whose shown rates hold a stored row in its range (C-66), for its warning: this pair from
+     * its chart, a compared pair from its rate store; a comparison asset is not counted. */
+    let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(slug === data.canonicalSlug ? chartData : getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
+
     // =========================================================================
     // Derived
     // =========================================================================
@@ -296,7 +303,7 @@
             date: point.date,
             value: rate ?? 0,
             missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+            staleDays: extractDaysBack(point),
         };
     }
 
@@ -593,8 +600,10 @@
     }
 
     async function retryBackendSignals() {
-        await loadFxSignalDefinitions(true);
-        await loadChartData();
+        await pageBusy.track('fx-detail-signals-retry', async () => {
+            await loadFxSignalDefinitions(true);
+            await loadChartData();
+        });
     }
 
     function connectCreationCompletion() {
@@ -657,7 +666,8 @@
     onMount(() => {
         pageMounted = true;
         const initializeAndStartGuide = async () => {
-            await initializePage();
+            // The first load holds the page's Refresh button (Y11).
+            await pageBusy.track('fx-detail-first-load', () => initializePage());
             if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
         };
         let initialSession = true;
@@ -666,10 +676,14 @@
             if (!initialSession && getClientSessionUserId() !== null) {
                 invalidateComparisonState();
                 if (signalDefinitionsReady) {
-                    void loadChartData().then(async () => {
-                        await maybeLoadComparison();
-                        if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
-                    });
+                    void pageBusy
+                        .track('fx-detail-session', async () => {
+                            await loadChartData();
+                            await maybeLoadComparison();
+                        })
+                        .then(() => {
+                            if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
+                        });
                 } else void initializeAndStartGuide();
             }
             initialSession = false;
@@ -698,7 +712,10 @@
                 connectCreationCompletion();
                 invalidateComparisonState();
                 if (signalDefinitionsReady) {
-                    void loadChartData().then(() => maybeLoadComparison());
+                    void pageBusy.track('fx-detail-orientation', async () => {
+                        await loadChartData();
+                        await maybeLoadComparison();
+                    });
                 }
             }
         }
@@ -1039,8 +1056,10 @@
         // stays meaningful across reloads/shares and the "All" badge doesn't
         // look stuck on a specific historical date.
         replaceHistoryDateRange(newStart, newEnd);
-        await loadChartData();
-        await maybeLoadComparison();
+        await pageBusy.track('fx-detail-period', async () => {
+            await loadChartData();
+            await maybeLoadComparison();
+        });
     }
 
     function handleMeasureClick(date: string, value: number) {
@@ -1083,9 +1102,9 @@
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
-        if (shouldReloadComparison) void maybeLoadComparison(newSignals);
+        if (shouldReloadComparison) void pageBusy.track('fx-detail-comparison', () => maybeLoadComparison(newSignals));
         if (shouldReloadBackend) {
-            void loadChartData(newSignals);
+            void pageBusy.track('fx-detail-signals', () => loadChartData(newSignals));
         }
     }
 
@@ -1314,8 +1333,14 @@
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$t('common.sync')}</span>{/if}
             </button>
-            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-detail-refresh-btn" disabled={loading} onclick={handleRefresh}>
-                <RefreshCw class={loading ? 'animate-spin' : ''} size={14} />
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                data-testid="fx-detail-refresh-btn"
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                disabled={pageBusy.busy}
+                onclick={() => void pageBusy.track('fx-detail-refresh', handleRefresh)}
+            >
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$t('common.refresh')}</span>{/if}
             </button>
         {/snippet}
@@ -1643,5 +1668,5 @@
     />
 
     <!-- Page Sync Modal (sync all FX pairs + assets present on page) -->
-    <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
+    <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} fxPairsWithDataInRange={syncFxPairsWithData} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
 </div>

@@ -29,8 +29,11 @@
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, displayFxDelta, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
+    import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {formatProviderText, formatSyncDetail} from '$lib/utils/providerHelpers';
@@ -118,6 +121,18 @@
     let addModalOpen = $state(false);
     let fxTourPreview = $state(false);
     let syncModalOpen = $state(false);
+    /** The sync dialog's pairs whose shown rates hold a stored row in its range (C-66): the dialog warns that the sync
+     * replaces them. */
+    let syncModalWithData = $derived.by(() => {
+        if (!syncModalOpen) return [];
+        const targets = new Set(syncModalPairs);
+        const withData: string[] = [];
+        for (const p of pairs) {
+            const id = `${p.config.base}-${p.config.quote}`;
+            if (targets.has(id) && hasStoredPointInRange(getFxStore(p.config.slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) withData.push(id);
+        }
+        return withData;
+    });
     let settingsModalOpen = $state(false);
     /** Slug of the pair currently being configured via per-card ⚙️ (null = global) */
     let settingsTargetSlug = $state<string | null>(null);
@@ -200,7 +215,7 @@
             date: point.date,
             value: rate ?? 0,
             missing: rate === null,
-            staleDays: point.backwardFillInfo?.daysBack ?? 0,
+            staleDays: extractDaysBack(point),
         };
     }
 
@@ -283,15 +298,20 @@
     }
 
     async function retryBackendSignals() {
-        await loadFxSignalDefinitions(true);
-        await fetchAllPairData();
+        await pageBusy.track('fx-signals-retry', async () => {
+            await loadFxSignalDefinitions(true);
+            await fetchAllPairData();
+        });
     }
 
     onMount(async () => {
         // Preload currency graph so provider icons are cached before FxTable renders (E1c fix)
         getCurrencyGraph();
-        await loadFxSignalDefinitions();
-        await loadPairSources();
+        // The first load holds the page's Refresh button (Y11): the catalog, the pairs, their rates.
+        await pageBusy.track('fx-first-load', async () => {
+            await loadFxSignalDefinitions();
+            await loadPairSources();
+        });
         // Load asset list for cross-domain signal selection
         loadAssetList();
         onboardingGuide.maybeStartContextual('fx_page_guide');
@@ -574,7 +594,7 @@
             setGlobalSettings(s, 'fx');
         }
         if (shouldReloadBackend) {
-            void fetchAllPairData();
+            void pageBusy.track('fx-settings', () => fetchAllPairData());
         }
     }
 
@@ -705,7 +725,7 @@
             invalidateAllFxStores();
             rearmMaxPendingBeforeReload();
             pairs = pairs.map((p) => ({...p, data: [], loading: true}));
-            await fetchAllPairData();
+            await pageBusy.track('fx-refresh', () => fetchAllPairData());
         } finally {
             refreshing = false;
         }
@@ -779,7 +799,7 @@
         // resolved date) so the URL stays meaningful across reloads/shares and
         // the "All" badge doesn't look stuck on a specific historical date.
         gotoDateRange(newStart, newEnd);
-        fetchAllPairData();
+        void pageBusy.track('fx-period', () => fetchAllPairData());
     }
 
     function handleAddPair() {
@@ -924,7 +944,7 @@
     async function handlePairCreated() {
         if (!pageAlive) return;
         addModalOpen = false;
-        await loadPairSources();
+        await pageBusy.track('fx-reload', () => loadPairSources());
     }
 
     async function handlePairCreationSynced(detail: FxPairSyncCompleteDetail) {
@@ -1088,8 +1108,14 @@
                 {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
-            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-refresh-all-button" onclick={handleRefreshAll}>
-                <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
+            <button
+                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                data-testid="fx-refresh-all-button"
+                data-busy={pageBusy.busy ? 'true' : 'false'}
+                disabled={pageBusy.busy}
+                onclick={handleRefreshAll}
+            >
+                <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
         {/snippet}
@@ -1205,7 +1231,7 @@
 <FxPairAddModal bind:open={addModalOpen} tourPreview={fxTourPreview} onclose={closeAddPair} oncreated={handlePairCreated} onsynced={handlePairCreationSynced} />
 
 <!-- Sync Modal -->
-<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} />
+<FxSyncModal bind:open={syncModalOpen} {dateEnd} dateStart={syncDateStart} onclose={() => (syncModalOpen = false)} onsynced={handleSynced} pairs={syncModalPairs} withDataInRange={syncModalWithData} />
 
 <!-- Chart Settings Modal (global or per-card depending on settingsTargetSlug) -->
 <ChartSettingsModal

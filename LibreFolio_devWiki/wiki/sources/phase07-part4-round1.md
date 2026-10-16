@@ -54,12 +54,12 @@ Massive post-walkthrough bugfix round for the `/transactions` page. Identified 8
 
 | Role | Path |
 |------|------|
-| Transactions table | `frontend/src/lib/components/transactions/TransactionsTable.svelte` |
+| Transactions table | `frontend/src/lib/features/transactions/TransactionsTable.svelte` |
 | Transactions page | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | DataTable | `frontend/src/lib/components/table/DataTable.svelte` |
 | DataTable filter | `frontend/src/lib/components/table/DataTableColumnFilter.svelte` |
 | Currency format helper | `frontend/src/lib/utils/currency/currencyFormat.ts` |
-| Event type emoji helper | `frontend/src/lib/utils/transactions/eventTypes.ts` |
+| Event type emoji helper | `frontend/src/lib/features/transactions/events/eventTypes.ts` |
 | Broker icon helper | `frontend/src/lib/utils/broker/brokerHelpers.ts` |
 | Backend currency util | `backend/app/utils/fx/currency.py` |
 | Mock data | `backend/test_scripts/test_db/populate_mock_data.py` |

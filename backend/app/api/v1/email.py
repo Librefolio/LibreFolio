@@ -150,16 +150,15 @@ async def request_password_reset_email(
     """No session needed. The answer never says whether an account matches: 202, the same for everyone, and the work
     (look the account up, create the link, send it) runs after it, in the background.
 
-    409 ``FORGOT_PASSWORD_DISABLED`` while the feature is held (``flows.FORGOT_PASSWORD_HELD``: until changing an account's
-    email asks for its password); 409 ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE`` when the instance cannot send
-    such an email, which ``GET /system/instance`` already says; 429 ``EMAIL_RATE_LIMITED`` with ``Retry-After`` past the
-    limits per address and per identifier, or with the hourly budget spent. Neither depends on the accounts.
+    409 ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE`` when the instance cannot send such an email, which
+    ``GET /system/instance`` already says; 429 ``EMAIL_RATE_LIMITED`` with ``Retry-After`` past the limits per address
+    and per identifier, or with the hourly budget spent. Neither depends on the accounts. Changing an account's email
+    asks for its current password (workstream A, lot A6e): a moment inside someone's session cannot move their address,
+    then their password, through here.
     """
     address = client_address(request)
     try:
         await flows.admit_forgotten_password(address, body.identifier)
-    except flows.ForgottenPasswordHeldError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "FORGOT_PASSWORD_DISABLED", "message": "Password reset by email is not available yet: ask an administrator"}) from None
     except EmailUnavailableError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_UNAVAILABLE", "message": "This instance cannot send emails"}) from None
     except EmailLinksUnavailableError:

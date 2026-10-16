@@ -351,8 +351,13 @@ class DailyStateBuilder:
                     else:
                         removed = -step.cost_report_change
                         if self._is_capital_adjustment(tx):
-                            cumulative_ecf -= removed
-                            cumulative_ecf_by_broker[tx.broker_id] -= removed
+                            # J-24: the units leave at the value they hand over, at the rate of their date; the
+                            # difference from the cost the pool gives up is realized, as for a SELL.
+                            handed_over = self._handed_over_value(ctxn, tx_qty)
+                            distributed = handed_over if handed_over is not None else removed
+                            cumulative_ecf -= distributed
+                            cumulative_ecf_by_broker[tx.broker_id] -= distributed
+                            realized_sales.append(self._realized_disposal(ctxn, tx_qty, removed, previous, handed_over))
                         if tx.type == TransactionType.SELL:
                             realized_sales.append(self._realized_sale(ctxn, tx_qty, removed, previous))
 
@@ -514,13 +519,17 @@ class DailyStateBuilder:
                         if tx.type == TransactionType.SELL:
                             realized_sales.append(self._realized_sale(ctxn, tx_qty, sell_cb_target, previous))
 
-                        # In-kind ADJUSTMENT-out (no cash proceeds): capital distribution.
-                        # Remove the cost from the capital baseline (mirror of the in-kind
-                        # contribution on ADJUSTMENT-in) so total P&L keeps tracking
-                        # unrealized instead of dumping the book into "Other".
-                        if self._is_capital_adjustment(tx):
-                            cumulative_ecf -= sell_cb_target
-                            cumulative_ecf_by_broker[bid] -= sell_cb_target
+                        # In-kind ADJUSTMENT-out (no cash proceeds): capital distribution of the value it hands over,
+                        # converted at the rate of its date (J-24, the developer's rule), the mirror of the in-kind
+                        # contribution on ADJUSTMENT-in; the difference from the historical cost the pool gives up is
+                        # realized, as for a SELL. Without a rate the realized is unknown and the capital takes the
+                        # historical cost, as before J-24.
+                        if self._is_capital_adjustment(tx) and step is not None:
+                            handed_over = self._handed_over_value(ctxn, tx_qty)
+                            distributed = handed_over if handed_over is not None else sell_cb_target
+                            cumulative_ecf -= distributed
+                            cumulative_ecf_by_broker[bid] -= distributed
+                            realized_sales.append(self._realized_disposal(ctxn, tx_qty, sell_cb_target, previous, handed_over))
 
                         # 3-pool per-broker: SELL → K[bid] += cost_basis, R[bid] += gain
                         if amount_target is not None:
@@ -887,6 +896,11 @@ class DailyStateBuilder:
         if tx.amount:
             converted = self._convert_movement(abs(tx.amount), tx.currency or self.target_currency, tx.date)
             proceeds = converted * ctxn.share if converted is not None else None
+        return self._realized_disposal(ctxn, tx_qty, cost, previous, proceeds)
+
+    def _realized_disposal(self, ctxn: ClassifiedTransaction, tx_qty: Decimal, cost: Decimal, previous: CostStep | None, proceeds: Decimal | None) -> RealizedSale:
+        """A disposal the engine replays: its proceeds (None when they could not be converted) against the historical cost it took from the pool."""
+        tx = ctxn.tx
         return RealizedSale(
             transaction_id=tx.id,
             asset_id=tx.asset_id,
@@ -897,6 +911,16 @@ class DailyStateBuilder:
             cost=cost,
             cost_complete=previous.report_complete if previous is not None else True,
         )
+
+    def _handed_over_value(self, ctxn: ClassifiedTransaction, tx_qty: Decimal) -> Decimal | None:
+        """J-24 — what a priced outgoing ADJUSTMENT hands over: ``|tx_qty| × cost_basis_override`` at the rate of its date.
+
+        In ``cost_basis_currency``, or in the asset's currency without one (the pool's rule for incoming adjustments);
+        ``tx_qty`` is already at the broker's share. None when the rate is missing, which is recorded with its date.
+        """
+        tx = ctxn.tx
+        currency = tx.cost_basis_currency or self.asset_currencies.get(tx.asset_id) or self.target_currency
+        return self._convert_movement(abs(tx_qty) * tx.cost_basis_override, currency, tx.date)
 
     def _add_unrealized_part(
         self,
@@ -1213,9 +1237,11 @@ class DailyStateBuilder:
         An opening / transfer / succession ADJUSTMENT that carries a per-unit
         ``cost_basis_override`` injects (qty>0) or removes (qty<0) real book value
         WITHOUT any cash counterpart. Economically this is a capital contribution /
-        distribution in kind (opening equity), NOT profit — so its cost must move the
+        distribution in kind (opening equity), NOT profit — so it must move the
         capital baseline (``cumulative_ecf``), leaving total P&L = NAV − capital to
-        reflect only genuine market / realized / income effects. Without this the
+        reflect only genuine market / realized / income effects: in at the cost it
+        adds to the pool, out at the value it hands over at the rate of its date
+        (J-24), the difference from the pool's cost being realized. Without this the
         injected book value leaks into the "Other / reconciliation residual".
 
         SPLIT-linked adjustments are excluded: a split redistributes existing cost
@@ -1324,8 +1350,9 @@ class DailyStateBuilder:
         security with no price at all counts at the cost the leg moves in its pool (``step``),
         as the holding itself is valued at its book cost (J-17), so the transfer stays neutral.
         With the pool's cost incomplete the holding is MISSING, and the leg still moves its known
-        cost (an unknown one counts as zero), like an in-kind ADJUSTMENT: the capital follows the
-        pool's book cost, so nothing is left behind once the units are gone.
+        cost (an unknown one counts as zero), as an incoming in-kind ADJUSTMENT moves the cost it
+        adds: the capital follows the pool's book cost, so nothing is left behind once the units are
+        gone. (An outgoing priced ADJUSTMENT leaves at the value it hands over instead, J-24.)
         None for any other row, for an internal-pair leg (step 3b handles it), for a
         split-linked row, or when the security cannot be valued that day.
         """
