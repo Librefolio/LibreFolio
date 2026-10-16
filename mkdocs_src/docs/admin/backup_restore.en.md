@@ -18,7 +18,7 @@ The archive is a zip with the layout of the [data directory](filesystem.md): unp
 | `custom-uploads/` | The files uploaded in the app |
 | `broker_reports/` | The broker reports |
 | `scenario_catalog/` | Your own stress scenarios, if you added any |
-| `manifest.json` | The description of the archive: the LibreFolio version that made it and when, the migration revision of the database, its rows per table, and the size and SHA-256 checksum of every file |
+| `manifest.json` | The description of the archive: the LibreFolio version that made it and when, the migration revision of the database, its rows per table, the ledger's control totals (the cash of every broker in each currency and the quantity of every position), and the size and SHA-256 checksum of every file |
 
 Never in the archive:
 
@@ -114,7 +114,7 @@ On a host installation, run `pipenv run ./dev.py backup …` with the path of th
 | | `backup inspect` | `backup restore --dry-run` |
 | --- | --- | --- |
 | It answers | Whether the archive is whole: the size and SHA-256 checksum of every entry, compared with the manifest | Whether this installation can restore it: the archive unpacked into a copy, brought up to date and checked |
-| It shows | Who made the archive and when, the revision of its database, its rows and tables, its files, and that the instance key is not included | The same, plus the migrations a restore would apply and the administrators you would sign in with |
+| It shows | Who made the archive and when, the revision of its database, its rows and tables, its files, and that the instance key is not included | The same, plus the migrations a restore would apply, the ledger's control totals of the copy compared with those the archive recorded, and the administrators you would sign in with |
 | It needs | Any LibreFolio, its server running or stopped: no data directory | The installation that would receive the archive, whose server may keep running, and free space in its data directory: the archive unpacked, plus twice its database, plus 64 MB |
 | It ends with | `✅ Every entry matches the manifest` | `✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed.` |
 
@@ -261,6 +261,10 @@ Two more messages:
 - `❌ The backup has no active administrator: after a restore nobody could manage the instance`: on the installation the backup comes from, make an active account administrator, then make a new backup.
 
 Every code: «Refusals — what the codes mean» in [CLI Admin Tools](cli_tools.md).
+
+One warning lets the restore go on, but read it before you confirm:
+
+- `⚠️ Ledger totals differ from the backup's (<n> lines):`: the cash of a broker or the quantity of a position in the copy, once up to date, is not the one the backup recorded. Transactions were lost, added or changed between the backup and the copy, by a migration that corrects data for instance. Read the lines that follow: each gives a broker's number, then a currency or an asset's number, with the backup's amount before the arrow and the copy's after it. The numbers are those in the addresses of the broker's and the asset's pages in the app, `/brokers/<id>` and `/assets/<id>`. Compare these lines with the instance the backup comes from. The warning never blocks the restore: whether you confirm it is up to you.
 
 ### 🔁 The Restore Does Not Go Through {: #restart-problems }
 
