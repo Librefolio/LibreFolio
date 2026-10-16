@@ -54,11 +54,11 @@ redesign) arrived in the lab's branch with the Risk → F merge `2c02ff070`.
 ## Source files
 | Role | Path |
 |------|------|
-| Verdicts, wording, batching | `frontend/src/lib/components/risk/eligibility.ts` |
-| Tests | `frontend/src/lib/components/risk/eligibility.test.ts` |
-| Panel: request, parking, holdings | `frontend/src/lib/components/risk/AssetSetRiskPanel.svelte` |
-| The "+" picker | `frontend/src/lib/components/risk/LabAssetPicker.svelte` |
-| Ladder and quick actions | `frontend/src/lib/components/risk/assetSetSelection.ts` |
+| Verdicts, wording, batching | `frontend/src/lib/features/risk/eligibility.ts` |
+| Tests | `frontend/src/lib/features/risk/eligibility.test.ts` |
+| Panel: request, parking, holdings | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |
+| The "+" picker | `frontend/src/lib/features/risk/LabAssetPicker.svelte` |
+| Ladder and quick actions | `frontend/src/lib/features/risk/assetSetSelection.ts` |
 | Usage panels (`assetScope`) | `frontend/src/routes/(app)/assets/+page.svelte` |
 | Engine | `backend/app/services/risk/eligibility.py` |
 

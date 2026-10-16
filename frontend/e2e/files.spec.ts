@@ -255,6 +255,30 @@ async function listRow(page: Page, type: 'static' | 'brim', fileId: string): Pro
 }
 
 /**
+ * The scope badge of a static row (decision 36): the `scope` cell by its column id, the badge by the variant the
+ * DataTable publishes on every badge cell — `default` for personal, `info` for common. A state, never the badge's words.
+ */
+function scopeBadge(row: Locator): Locator {
+    return row.locator('td[data-column-id="scope"] [data-badge-variant]');
+}
+
+/** Run a row action of a files table as a user does: the row's kebab opens the menu, the action is picked from it. */
+async function runRowAction(page: Page, row: Locator, fileId: string, action: string): Promise<void> {
+    await row.getByTestId(`row-actions-${fileId}`).click();
+    const menu = page.getByTestId('context-menu');
+    await expect(menu).toBeVisible();
+    await menu.getByTestId(`context-menu-action-${action}`).click();
+    await expect(menu).toBeHidden();
+}
+
+/** The scope the server holds for a static file: the ground truth behind the badge and the event. */
+async function storedScope(page: Page, fileId: string): Promise<string> {
+    const response = await page.request.get(`${API}/uploads/${fileId}`);
+    expect(response.ok(), `read the static resource ${fileId}: HTTP ${response.status()}`).toBe(true);
+    return ((await response.json()) as {scope: string}).scope;
+}
+
+/**
  * Wait for the preview modal to be open *and* done fetching.
  *
  * The modal renders a "Loading…" placeholder while the preview request is in
@@ -465,6 +489,78 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('file-clear')).toBeHidden();
             await expect(dropZone).toBeVisible();
             await expect(dropZone).not.toContainText('generic_dates.csv');
+        });
+    });
+
+    /**
+     * The scope of a static file (decision 36): common, seen by every signed-in user, or personal, seen by its uploader
+     * and the admins. A file uploaded from the Files page is personal, an image too: without a scope the server makes an
+     * image common, so an image is what proves the page sends `scope=personal` — and the test first checks that premise
+     * on this very PNG, uploaded through the API without a scope. The list shows the scope as a badge (`scopeBadge`) and
+     * offers the opposite one on the row — `share` at once, `makePersonal` behind a confirmation (`files-scope-confirm`,
+     * the ConfirmModal's testId on its header) — and the page reports each change as `file.scope.changed` with its file
+     * and new scope. Read from the event ring and the badge's variant, never from words; the server's own record is read
+     * back after each change, so an event the page emitted without the change going through cannot pass. Both files are
+     * this test's, deleted after it (`ownedStaticFiles`).
+     */
+    test.describe('File scope', () => {
+        test('an image uploaded from the page is personal, is shared, then made personal again', async ({page}) => {
+            test.setTimeout(60_000);
+            const filename = `scope-${uniqueSuffix()}.png`;
+
+            // Control: without a scope, the server makes this very image common. A personal one below can only come from
+            // the scope the page sent.
+            const unscopedId = await uploadStaticFile(page, `scope-control-${uniqueSuffix()}.png`, TEST_PNG, 'image/png');
+            ownedStaticFiles.push(unscopedId);
+            expect(await storedScope(page, unscopedId), 'premise: the server makes an image uploaded without a scope common').toBe('common');
+
+            // Settled first: the page's own load is over, and the reload after the upload is the last word on the list.
+            await openStaticTab(page);
+
+            await page.getByTestId('upload-button').click();
+            const uploader = page.getByTestId('file-uploader');
+            await expect(uploader).toBeVisible();
+            // Straight to the upload: selecting an image does not open the editor, its pencil does.
+            await uploader.getByTestId('file-input').setInputFiles({name: filename, mimeType: 'image/png', buffer: TEST_PNG});
+            await expect(uploader.getByTestId('file-drop-zone')).toContainText(filename);
+
+            // Armed before the click (a response is an edge, not a state): its id is the file this test owns.
+            const beforeUpload = await eventSeq(page);
+            const uploadResponse = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === `${API}/uploads`, {timeout: 30_000});
+            await uploader.getByTestId('file-upload-submit').click();
+            const upload = await uploadResponse;
+            expect(upload.ok(), `POST ${API}/uploads from the Files page: HTTP ${upload.status()}`).toBe(true);
+            const stored = ((await upload.json()) as {file: {id: string; scope: string; mime_type: string}}).file;
+            ownedStaticFiles.push(stored.id);
+            expect(stored.mime_type, 'the server took the upload as an image').toBe('image/png');
+            expect(stored.scope, 'an image uploaded from the Files page is personal: the page sent scope=personal').toBe('personal');
+            await waitForEvent(page, 'file.uploaded', {since: beforeUpload, timeout: 30_000});
+
+            await selectViewMode(page, 'list');
+            let row = await listRow(page, 'static', stored.id);
+            await expect(scopeBadge(row), 'the list shows the file personal').toHaveAttribute('data-badge-variant', 'default');
+
+            // Share: at once, no confirmation.
+            const beforeShare = await eventSeq(page);
+            await runRowAction(page, row, stored.id, 'share');
+            const shared = await waitForEvent(page, 'file.scope.changed', {since: beforeShare, timeout: 15_000});
+            expect(shared.detail, 'the page reports the file shared').toMatchObject({fileId: stored.id, scope: 'common'});
+            expect(await storedScope(page, stored.id), 'the server holds the file common').toBe('common');
+            row = await listRow(page, 'static', stored.id);
+            await expect(scopeBadge(row), 'the list shows the file common').toHaveAttribute('data-badge-variant', 'info', {timeout: 8_000});
+
+            // Make personal again: the page asks first.
+            const beforePersonal = await eventSeq(page);
+            await runRowAction(page, row, stored.id, 'makePersonal');
+            const header = page.getByTestId('files-scope-confirm');
+            await expect(header, 'making a file personal asks for a confirmation first').toBeVisible({timeout: 5_000});
+            await page.getByRole('dialog').filter({has: header}).getByTestId('confirm-modal-confirm').click();
+            const madePersonal = await waitForEvent(page, 'file.scope.changed', {since: beforePersonal, timeout: 15_000});
+            expect(madePersonal.detail, 'the page reports the file personal').toMatchObject({fileId: stored.id, scope: 'personal'});
+            await expect(header, 'the confirmation closes').toBeHidden();
+            expect(await storedScope(page, stored.id), 'the server holds the file personal').toBe('personal');
+            row = await listRow(page, 'static', stored.id);
+            await expect(scopeBadge(row), 'the list shows the file personal again').toHaveAttribute('data-badge-variant', 'default', {timeout: 8_000});
         });
     });
 

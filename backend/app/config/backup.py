@@ -6,9 +6,15 @@ Docker Compose put them there. Every default leaves an install as it was before 
 ``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`` (or ``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE``, as Docker secrets mount it) is the
 token a hosting panel presents to download backups of the instance (``api/v1/backup/panel.py``). Unset, those routes
 answer 404, as if they did not exist.
+
+``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` is the largest archive a restore accepts (decision 43): the hosting provider sets
+it, since in the cloud the customer is the administrator. Unset, there is no limit on a self-hosted instance and
+500 MB in the managed profile.
 """
 
-from backend.app.config import env_secret
+import os
+
+from backend.app.config import env_secret, get_settings
 
 #: The variable of the hosting panel's token; ``env_secret`` also reads it from ``<name>_FILE``.
 PANEL_TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
@@ -55,3 +61,23 @@ def backup_download_token() -> str | None:
             f"expected at least {PANEL_TOKEN_MIN_LENGTH} characters, for example the output of `openssl rand -hex 32`",
         )
     return token
+
+
+#: The variable of the largest archive a restore accepts, in megabytes; 0 is no limit.
+MAX_UPLOAD_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
+#: The limit of the managed profile while the variable is not set (decision 43).
+MANAGED_MAX_UPLOAD_MB = 500
+
+
+def backup_max_upload_mb() -> int:
+    """``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``: the largest archive a restore accepts, in megabytes; ``0`` is no limit.
+
+    Unset or blank: ``0`` on a self-hosted instance, ``MANAGED_MAX_UPLOAD_MB`` in the managed profile. Anything but a whole
+    number of ASCII digits raises ``BackupConfigError``.
+    """
+    raw = os.environ.get(MAX_UPLOAD_VARIABLE, "").strip()
+    if not raw:
+        return MANAGED_MAX_UPLOAD_MB if get_settings().LIBREFOLIO_PROFILE == "managed" else 0
+    if not (raw.isascii() and raw.isdigit()):
+        raise BackupConfigError(MAX_UPLOAD_VARIABLE, "BACKUP_MAX_UPLOAD_MB_INVALID", "expected a whole number of megabytes, 0 for no limit")
+    return int(raw)

@@ -29,7 +29,7 @@
         openFilterColumnId: string | null;
         toggleSort: (columnId: string) => void;
         applyColumnFilter: (columnId: string, filter: FilterValue | null) => void;
-        startResize: (columnId: string, event: MouseEvent) => void;
+        startResize: (columnId: string, event: PointerEvent) => void;
         handleHeaderTooltipGestureClick: (event: MouseEvent) => void;
         handleHeaderTooltipDblClick: (event: MouseEvent, url: string) => void;
         handleHeaderTooltipKeydown: (event: KeyboardEvent, url: string) => void;
@@ -172,7 +172,7 @@
     <!-- Resize handle -->
     {#if column.resizable !== false && enableColumnResize}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <span class="resize-handle" class:resizing={resizing?.columnId === column.id} onmousedown={(e) => startResize(column.id, e)}></span>
+        <span class="resize-handle" class:resizing={resizing?.columnId === column.id} onpointerdown={(e) => startResize(column.id, e)}></span>
     {/if}
 
     <!-- Filter popover -->
@@ -302,6 +302,8 @@
         width: 6px;
         background: transparent;
         cursor: col-resize;
+        /* A finger dragging the handle resizes the column instead of panning the table (D-Y18). */
+        touch-action: none;
         opacity: 0;
         transition: opacity 0.15s;
         z-index: 5;
