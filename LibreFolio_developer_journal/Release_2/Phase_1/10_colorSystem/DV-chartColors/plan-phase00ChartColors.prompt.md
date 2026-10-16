@@ -779,8 +779,10 @@ e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore
   >   - 4 test che importano il PAC da fuori, 21 in tutto: `ToolsHub` 3, `ToolHost` 4, `registry` 8,
   >     `moneyRenderSites` 6.
   > - Nessun test asserisce classi del PAC, E2E compreso: test-author non serve.
-- [ ] Checkpoint (16/10, 02:4x). Le prove pesanti nello slot delle 06:45 circa: `front check`, `core-unit`,
-  `component-unit`, E2E `pac-allocator-real`.
+- [x] ✅ (16/10/2026) Checkpoint: commit `4743b1542` del coordinatore (02:41), 43 file. Le merge simulate con il
+  target `db384eaf5` e con il ramo di T (`abc4c84de`) sono pulite, compreso il baseline.
+- [ ] Prove pesanti nello slot delle 06:45 circa, insieme a W5-charts: `front check`, `core-unit`, `component-unit`,
+  E2E `pac-allocator-real`.
 
 **Dove guardarlo, per il developer:**
 - Strumenti › PAC, in chiaro e in scuro: tutti i passi, cioè scenario, strategia, asset, obiettivi, broker, liquidità,
@@ -788,6 +790,150 @@ e gli stati, con la tabella della skill `theme-roles`. Con l'OK del coordinatore
   piano operativo, prova, barra dei tempi).
 - I campi di testo restano com'erano fino al lotto di T sull'input. Le barre verdi «dopo il piano» e la traccia
   degli obiettivi restano anche loro come prima.
+
+### W5-charts — Ruoli di colore nei componenti di `components/charts/` ⏳ (dal 16/10/2026)
+
+**Mandato.**
+- Proposta del coordinatore alle 02:41, dopo il commit di W5-PAC (`4743b1542`): «i file di `components/charts/` che
+  Y9 e K-15 non toccano». Stesse regole di W5-PAC: niente catene di classi, solo neutri, marchio e stati.
+- Elenco approvato alle 02:50; via libera della 1.3 alle 02:5x: stanotte nessuna sessione tocca quei file, e Y4a
+  (FE2a), che ne sposta 8 in `features/signals/`, parte dopo l'ingresso di DV.
+- Checkpoint in un commit separato da W5-PAC, entro le 06:30, per entrare nello slot delle 06:45.
+
+**Perimetro: 11 file**, più `frontend/src/themeRoles.baseline.tsv` (`--update`), questo piano e la riga DV-7 del
+backlog.
+
+| File | m1 → resto atteso | Con Y4a |
+|---|---|---|
+| `ChartSignalsSection.svelte` | 95 → 14 (2 campi) | `features/signals` |
+| `ChartAestheticsSection.svelte` | 78 → 30 (2 campi, 4 interruttori) | resta |
+| `ChartSettingsModal.svelte` | 47 → 0 | `features/signals` (D-Y14) |
+| `SignalStyleEditor.svelte` | 42 → 0 | `features/signals` |
+| `ChartToolbar.svelte` | 38 → 0 | resta |
+| `MeasurePanel.svelte` | 34 → 0 | `features/signals` (D-Y14) |
+| `SignalParamControl.svelte` | 24 → 14 (2 campi) | `features/signals` |
+| `SignalVisualLegend.svelte` | 16 → 0 | `features/signals` |
+| `ResolutionBadge.svelte` | 6 → 0 | resta |
+| `SignalOptionContent.svelte` | 6 → 0 | `features/signals` |
+| `SignalAssetParamControl.svelte` | 1 → 0 | `features/signals` |
+
+Nessuno ha `echarts.init`. Ho simulato C4 prima di cominciare: nessuna regola del rimappaggio di `app.css` muore.
+
+**Esclusi:**
+- I file di Y9 e K-15: `ScatterChart`, `CandlestickChart`, `SemiDonutChart`, `AllocationPieChart`, `LineChart`,
+  `PriceChartFull`, `GeographyMap`.
+- **I 6 campi di testo e numerici, 42 classi:** `ChartSignalsSection`:609 e 798, `ChartAestheticsSection`:221 e 237,
+  `SignalParamControl`:79 e 93.
+  - Stanno accanto a `SimpleSelect` e `SearchSelect`, ancora legacy (40 e 63), quindi vanno col lotto di T sull'input,
+    come `INPUT` nel PAC.
+- **I 4 interruttori di `ChartAestheticsSection`, 16 classi:** traccia e manopola, alle righe 111/119, 133/141, 155/162
+  e 176/184.
+  - Nell'app nessun interruttore usa ancora i ruoli Q2. Il coordinatore (02:50) li vuole tutti insieme in un lotto di
+    T, così in scuro non ce n'è uno diverso dagli altri. Annotati in DV-7.
+
+**Catene di classi: nessuna.**
+- Le prop di classe vanno solo alle icone lucide, dove la classe finisce sull'svg e ha una fonte sola.
+- `itemTone` di `OrderableList` passa un tono (`default`, `warning`, `error`), non classi: le classi le sceglie
+  `OrderableList`.
+- `ModalBase` è già migrato; `InfoBanner`, `OrderableList`, `SimpleSelect` e `SearchSelect` sono legacy, ma da questi
+  file non ricevono classi.
+
+**Scelte approvate dal coordinatore (02:50), coerenti con il PAC:**
+- segmenti attivi (7) → `bg-lf-checked text-lf-on-checked` (D-T16);
+- opzioni scelte di `SignalStyleEditor` (4) → `border-lf-checked bg-lf-selected`;
+- «Salva» → `bg-lf-action text-lf-on-action hover:bg-lf-action-hover`;
+- «Annulla» (`bg-gray-100 hover:bg-gray-200`) → `bg-lf-panel hover:bg-lf-neutral`;
+- icona di sincronizzazione (`hover:text-blue-500`) → `hover:text-lf-link`, come le altre icone della riga;
+- bottoni d'avviso del cambio (`text-amber-500 hover:text-amber-600`) → `text-lf-warning hover:text-lf-warning-hover`,
+  che scurisce al passaggio in entrambi i temi come oggi;
+- banner e note ambra → terna warning; elimina ed errori → `danger`;
+- selettori di colore: solo il bordo; casella → `accent-lf-checked`.
+
+**⚠️ Punto aperto per la designer** (coordinatore, 02:50): `--lf-surface-panel` e `--lf-surface-hover` coincidono in
+entrambi i temi, `#e8ece9` in chiaro e `#1b2421` in scuro.
+- Un `hover:bg-lf-hover` su un fondo `bg-lf-panel` non si vede.
+- Per ora, su un fondo panel l'hover è `hover:bg-lf-neutral`: «Annulla» di `ChartSettingsModal` e le righe di
+  `MeasurePanel`.
+- Domanda: l'hover deve distinguersi dal panel, o è voluto che un fondo panel non abbia hover?
+
+**Passi:**
+- [x] ✅ (16/10/2026) Conversione: il convertitore di W5-PAC, adattato, poi i ritocchi a mano.
+  > **Note implementazione**: `/tmp/libreFolio_dv_w5charts_convert.py`, fuori dal repo, ricavato da quello di W5-PAC.
+  >
+  > | Novità | Effetto |
+  > |---|---|
+  > | Esclusioni per frammento | `focus:ring-libre-green`, cioè i 6 campi; la traccia `'bg-libre-green' : 'bg-gray-300 dark:bg-slate-600'`; la manopola `transform rounded-full bg-white`. Nessun'altra riga le contiene. |
+  > | Contesto «segmento» | una stringa fatta solo di `bg-libre-green text-white` diventa `bg-lf-checked text-lf-on-checked` |
+  > | Contesto «su panel» | un `hover:bg` accanto a un fondo `gray-50/100` diventa `hover:bg-lf-neutral` |
+  > | Contesto «tenue» | il testo di stato accanto a un fondo di stato tenue diventa `-on-soft` (terna dell'avviso) |
+  > | Mappe fisse | `hover:text-blue-500` → `hover:text-lf-link`; `hover:text-amber-600` → `hover:text-lf-warning-hover` |
+  >
+  > - 135 stringhe convertite. Restano solo i 6 campi, le 4 tracce e le 4 manopole, come previsto.
+  > - **Ritocchi a mano:**
+  >   - `MeasurePanel`:544, la riga della misura: `bg-lf-panel` con `hover:bg-lf-neutral`, perché la classe sta su
+  >     due righe e il convertitore non vede il fondo;
+  >   - `SignalStyleEditor`:94–95, il popover che galleggia: `border-lf-raised` e `shadow-lf-shadow`, come
+  >     `HelpMenu`;
+  >   - `ChartToolbar`:42, il divisore di 1 px: `bg-lf-subtle`, che è un divisore, non un riempimento. Oggi `subtle` e
+  >     `neutral` hanno gli stessi valori;
+  >   - regola 3, `text-lf-primary` sulla radice di `ChartSettingsModal` (il contenuto dentro `ModalBase`),
+  >     `ChartSignalsSection` e `ChartAestheticsSection` (usati anche dalle pagine di asset e cambi), `MeasurePanel` e
+  >     `ChartToolbar`. Gli altri sei stanno dentro questi, o hanno già il testo esplicito (`SignalOptionContent`,
+  >     `ResolutionBadge`).
+  > - **Scelte per significato:**
+  >   - le etichette `bg-gray-100` vanno su `bg-lf-panel` per gradino: il testo `muted` sopra fa 4,52/4,54:1, contro
+  >     4,01/4,11:1 su `neutral`;
+  >   - la nota ambra di `MeasurePanel`:530 prende la terna con `-on-soft`: 6,37:1, contro 4,85:1 di `text-lf-warning`.
+  > - Altri contrasti, chiaro/scuro:
+  >   - segmento attivo `on-checked` su `checked`: 6,17/5,32;
+  >   - segmento spento `secondary` su `card`: 7,48/7,08;
+  >   - `warning-hover` su `card`: 6,83/5,48.
+  >
+  > **⚠️ Fuori pista: indentazione.** Il convertitore comprimeva l'indentazione delle righe di continuazione di una
+  > classe su più righe. Qui sono `MeasurePanel`:544 e `SignalStyleEditor`:94; le ho ripristinate da `HEAD`, e il PAC
+  > non ne ha. Corretto anche il convertitore: l'indentazione iniziale ora resta.
+  >
+  > **⚠️ Fuori pista: Prettier.** Ha riscritto 3 file (`ChartSettingsModal`, `ChartSignalsSection`, `ChartToolbar`),
+  > che a `HEAD` erano puliti: le classi più corte fanno stare gli elementi su meno righe. Tocca solo elementi
+  > convertiti.
+  >
+  > **Nota per la domanda alla designer:** il bottone di `SignalStyleEditor`:75 ha `hover:bg-lf-hover`.
+  > - Si vede dove l'editor sta sulla card (`ChartSignalsSection`).
+  > - Non si vede dove sta su un panel: le scatole di `SignalVisualLegend` e le righe di `MeasurePanel`.
+  > - È così anche oggi, in chiaro: `gray-50` su `gray-50`. Il componente non conosce il suo ospite, quindi resta.
+- [x] ✅ (16/10/2026) `theme-roles.mjs --update`, poi `--check`; i gate `themeRoles` (G1–G4) e `themeTokens` (C4).
+  > **Note implementazione:**
+  > - Prima di `--update`: `--check` pulito (11 file sotto il loro record), `themeRoles` 47/47, `themeTokens` 16/16.
+  >   Nessuna regola di `app.css` muore.
+  > - `--update`: m1 10441 → 10112 (−329 = 387 − 58), m2 83 → 83.
+  > - Il diff del baseline tocca solo righe di `components/charts/`: 8 file escono a zero, mentre
+  >   `ChartAestheticsSection` resta a 30, `ChartSignalsSection` a 14 e `SignalParamControl` a 14.
+  > - Poi `--check` pulito.
+- [x] ✅ (16/10/2026) Prove leggere: Prettier, compilatore Svelte, i test dei componenti e i gate, uno per volta.
+  > **Note implementazione:**
+  > - Prettier pulito e compilatore Svelte 11 file, 0 avvisi; `git diff --check` pulito.
+  > - Vitest, un file per volta, 14 file che importano o nominano i componenti: 762/762.
+  >   - `ChartSignalsSection` 21, `MeasurePanel` 23, `SignalTreeSelect` 28, `PriceChartFull` 36, `LineChart` 5,
+  >     `BenchmarkSelect` 73;
+  >   - `chartCoreHelpers` 287, `priceChartHelpers` 148, `echartsTooltipHelpers` 47, `measureSignal` 31,
+  >     `signalLabel` 16, `colors` 34;
+  >   - `htmlSink` 7, `moneyRenderSites` 6.
+  > - 7 gate, 201/201: `themeRoles` 47, `themeTokens` 16, `themeComponentTokens` 18, `themeColorMeta` 15,
+  >   `themeModeReads` 24, `designerLabImports` 27, `scanColors` 54.
+  > - Nessun test asserisce colori di questi file: le classi asserite sono `animate-spin`, `lf-compact-number-input` e
+  >   `hidden`, quindi test-author non serve.
+- [ ] Checkpoint, entro le 06:30. Le prove pesanti nello slot delle 06:45: `front check`, `core-unit`,
+  `component-unit`, E2E `pac-allocator-real` e `front-fx fx-settings`.
+
+**Dove guardarlo, per il developer:**
+- Dettaglio di un asset e di un cambio, in chiaro e in scuro:
+  - la barra del grafico, cioè linea o candele e assoluto o %;
+  - le misure sul grafico (pannello sotto il grafico);
+  - il badge della risoluzione.
+- ⚙️ Impostazioni del grafico (`assets/chart-settings` e `fx/chart-settings` in galleria): indicatori con le loro
+  icone, avvisi e stili, il popover dello stile, l'estetica con la scala dell'asse, l'anteprima, «Annulla» e «Salva».
+- Restano come prima i campi numerici e di testo (lotto di T sull'input) e i 4 interruttori dell'estetica (lotto di T
+  sugli interruttori).
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 
