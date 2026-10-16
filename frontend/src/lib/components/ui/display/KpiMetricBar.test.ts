@@ -15,8 +15,8 @@
  * same way, but towards "no caret" rather than a caret pinned at 0%, which
  * would point at a position nobody computed.
  *
- * Asserted on rendered geometry and meaningful classes — never on a translated
- * string.
+ * Asserted on rendered geometry and on what the caller passes in — never on a
+ * colour class or a translated string.
  */
 import {describe, expect, it} from 'vitest';
 import {render, screen, setupI18n, waitFor} from '$test/component';
@@ -38,13 +38,26 @@ function caret(container: HTMLElement): HTMLElement | null {
 
 describe('KpiMetricBar', () => {
     describe('the dashboard rendering, which the promotion must not disturb', () => {
-        it('draws the fill at the requested percentage with the default colour', async () => {
+        it('draws the fill at the requested percentage', async () => {
             await setupI18n();
             const {container} = render(KpiMetricBar, {props: {label: 'Equity', value: '42.5%', barPct: 42.5}});
 
             const bar = fill(container);
             expect(bar.style.width).toBe('42.5%');
-            expect(bar.className).toContain('bg-slate-400');
+        });
+
+        it('paints the fill with the colour the caller passes in', async () => {
+            // Every dashboard caller passes `barColor`, so this is the colour
+            // that reaches the screen; the default is a fallback nobody uses
+            // today, deliberately left unpinned. The value is neither a palette
+            // class nor a role: the subject is the prop arriving, and that must
+            // not go red when the colours change.
+            const colour = 'kpi-bar-test-colour';
+            await setupI18n();
+            const {container} = render(KpiMetricBar, {props: {label: 'Equity', value: '42.5%', barPct: 42.5, barColor: colour}});
+
+            const bar = fill(container);
+            expect(bar.classList.contains(colour), `barColor did not reach the fill; its classes are "${bar.className}"`).toBe(true);
         });
 
         it('shows a pre-formatted value verbatim', async () => {

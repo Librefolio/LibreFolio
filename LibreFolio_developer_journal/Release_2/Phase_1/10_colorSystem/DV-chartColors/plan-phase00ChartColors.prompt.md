@@ -1212,9 +1212,89 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > - Prettier pulito, compilatore 3 file 0 avvisi, `git diff --check` pulito.
   > - `--update`: m1 6.861 → 6.853 (−8); `OtherPeriodEffectsTable` esce dal baseline. `--check` pulito.
   > - Le Vitest di questi 3 file sono già fra le 92 di W6-a e W6-b.
-- [ ] Slot pesante unico, sotto i 45 minuti: `api sync`, `front check`, `core-unit`, `component-unit`, i gate Vitest
-  `themeRoles` e `themeTokens`, E2E `front-portfolio dashboard`, `risk`, `risk-lab` e `front-utility
-  pac-allocator-real`; se c'è tempo, `front-portfolio broker-filter-label` e `front-fx fx-settings`.
+- [x] ✅ (16/10/2026) Le 92 Vitest collegate a W6-a, W6-b e DV-9 (55 + 38, una in comune), un file per volta.
+  > **Note implementazione:**
+  > - Dalle 11:43:35 (carico 49,7) alle 12:17:42, su `bf2afbba3` e poi sul worktree che intanto riceveva DV-8 e
+  >   `ui/display`.
+  > - Quattro pause automatiche quando il carico superava 90, ripartendo sotto 60: alle 11:46, 11:50, 12:05 e 12:13.
+  > - **92 file, 3.742 test, 0 rossi** (`/tmp/libreFolio_dv_w6ab_vitest.summary`).
+  > - I file girati dopo le 12:03 vedono anche `ui/display`: per esempio `L2Diversification.test.ts`, 17/17.
+- [x] ⚠️ (16/10/2026) Slot pesante unico, sotto i 45 minuti: `api sync`, `front check`, `core-unit`, `component-unit`, i
+  gate Vitest `themeRoles` e `themeTokens`, E2E `front-portfolio dashboard`, `risk`, `risk-lab` e `front-utility
+  pac-allocator-real`; se c'è tempo, `front-portfolio broker-filter-label` e `front-fx fx-settings`. **Tutto verde
+  tranne 1 rosso di test, un'assunzione da riparare alla ripresa.**
+  > **Note implementazione:**
+  > - Via del coordinatore alle 13:04, sulla base merge **`9da2e5da9`**. È la punta `bfd33a0f5` con i lotti 1–8 di AF;
+  >   il baseline era in conflitto, risolto con `--resolve`, e il m1 combinato è 5.284.
+  > - Contiene W6-c, W6-a, W6-b, DV-9, DV-8 e `ui/display` (commit `5d2c1ce62`, `622683733`, `daea7b31c`,
+  >   `bf2afbba3`, `28f4bed75`, `a694d8fb2`).
+  > - Corsia 6156, `/tmp/librefolio-r2-dv`, dalle 13:06:43 alle 13:38:30 (32 minuti), carico da 91 a 99, sceso a 33
+  >   nel mezzo.
+  > - Guardie a orario fisso: gli E2E partono fino alle 13:40, i passi leggeri fino alle 13:45. Nessun passo è saltato.
+  >
+  > | Passo | Esito | Tempo |
+  > |---|---|---|
+  > | `api sync` | verde, 0 file tracciati cambiati | 34 s |
+  > | `front check` | 0 errori, 0 avvisi | 118 s |
+  > | `front-utility core-unit` | 179 file, 6.418 test | 125 s |
+  > | `front-utility component-unit` | **1 rosso**: 153/154 file, 4.040/4.041 test | 277 s |
+  > | gate Vitest `themeRoles.gate.test.ts` | 52/52 | 3 s |
+  > | gate Vitest `themeTokens.gate.test.ts` | 19/19 | 2 s |
+  > | E2E `front-portfolio dashboard` | 27 passed | 677 s, col rebuild unico di frontend e documentazione dopo la merge con AF |
+  > | E2E `front-portfolio risk` | 38 passed | 237 s |
+  > | E2E `front-portfolio risk-lab` | 44 passed | 292 s |
+  > | E2E `front-utility pac-allocator-real` | 1 passed | 45 s |
+  > | E2E `front-portfolio broker-filter-label` | 2 passed | 51 s |
+  > | E2E `front-fx fx-settings` | 3 passed | 45 s |
+  >
+  > - Gli E2E sono 115 test, nessuno ripetuto; ogni E2E ha ripopolato il DB. Alla fine la porta 6156 è libera e
+  >   l'HEAD è `9da2e5da9`.
+  > - Script, riassunto e log del passo stanno nella cartella della sessione, `files/w6-slot-2026-10-16/`, perché `/tmp`
+  >   non sopravvive a un riavvio.
+  >
+  > **Il rosso:** `src/lib/components/ui/display/KpiMetricBar.test.ts`:47, «draws the fill at the requested percentage
+  > with the default colour».
+  > - Asserisce `expect(bar.className).toContain('bg-slate-400')`, la classe palette della barra di default.
+  > - Il lotto `ui/display` l'ha portata sul ruolo `bg-lf-input`.
+  > - **Verdetto (`test-triage`): assunzione.** Il test asserisce una classe colore (la regola 10 dello skill
+  >   `design-system` lo vieta); il prodotto è giusto.
+  > - Gli altri test dei tre componenti passano. `KpiDivergingFlowBar.test.ts`:198–202 passa un proprio colore nella
+  >   prop e ne controlla l'arrivo, quindi non dipende dai miei valori.
+  > - Gli E2E non asseriscono classi colore dei tre componenti.
+  >
+  > **⚠️ Fuori pista: un'analisi mancata.** Nel lotto `ui/display` ho controllato le asserzioni di classe nei test dei
+  > chiamanti, ma non nei test dei tre componenti, che stanno accanto a loro. Da qui la ricerca copre ogni file
+  > `*.test.ts` che nomina i file toccati, non solo quelli dei chiamanti.
+  >
+  > **Pausa del developer** (coordinatore, durante lo slot): finito lo slot, FROZEN. Niente commit, niente comandi nuovi, niente
+  > sotto-agenti. Riparazione e ingresso alla ripresa.
+- [x] ✅ (16/10/2026) Alla ripresa, prima dell'ingresso: test-author ripara `KpiMetricBar.test.ts`:47, poi rilancio quel file da solo,
+  con carico sotto 50.
+  > **Correzione del coordinatore** (13:39): l'asserzione non va portata su `bg-lf-input`, che sarebbe ancora una classe
+  > colore (regola 10 dello skill `design-system`). Test-author asserisce qualcosa di semantico:
+  > - **il comportamento**: la larghezza richiesta, già asserita, e, con un valore di prova in `barColor`, che il colore
+  >   del chiamante arriva sulla barra, come fa `KpiDivergingFlowBar.test.ts`:198–202. Nessuna modifica al prodotto, e
+  >   la mia proposta: la barra di default non la usa nessun chiamante (gli 11 `KpiMetricBar` di `KpiSection` passano
+  >   tutti `barColor`);
+  > - **oppure lo stato con un attributo**: un `data-*` che `KpiMetricBar` pubblica sulla barra quando usa il colore di
+  >   default. È una piccola modifica d'interfaccia in un mio file, da decidere col coordinatore (`test-triage` §6).
+  > - `KpiDivergingFlowBar.test.ts`:198–202 usa `bg-blue-500` e `bg-red-500` come valori di prova: non dipendono dai
+  >   colori del prodotto, ma per coerenza con la regola 10 test-author può passare a valori di prova neutri.
+  >
+  > **Deciso** (coordinatore, 13:41): il comportamento, senza toccare il prodotto. Ripresa alle 14:14 (pausa del
+  > developer dalle 13:2x). Resta fuori `KpiDivergingFlowBar.test.ts`: i suoi sono valori di prova, non colori del
+  > prodotto.
+  >
+  > **Note implementazione** (16/10, 14:15–14:19):
+  > - **Cosa ha fatto test-author:**
+  >   - il test diventa «draws the fill at the requested percentage» e asserisce solo la larghezza (`42.5%`);
+  >   - il test nuovo «paints the fill with the colour the caller passes in» passa `barColor: 'kpi-bar-test-colour'`,
+  >     che non è né una classe palette né un ruolo, e controlla che arrivi sulla barra;
+  >   - l'intestazione del file ora dice «never on a colour class or a translated string».
+  >
+  >   Il componente non è toccato.
+  > - **Esito:** `KpiMetricBar.test.ts` 10/10 (erano 9 test, 1 rosso), girato col carico a 49. Gate Vitest
+  >   `themeRoles` 52/52 e `themeTokens` 19/19. Prettier, `--check` e `git diff --check` puliti.
 - [ ] W6-d, dopo l'ingresso di Y.
 - [x] ✅ (16/10/2026) DV-8, le linee dei broker dal nono in poi (coordinatore, 11:48: prima di `ui/display`, perché Y8 della 1.3 aspetta
   DV-8 su `GrowthChart.svelte`).
