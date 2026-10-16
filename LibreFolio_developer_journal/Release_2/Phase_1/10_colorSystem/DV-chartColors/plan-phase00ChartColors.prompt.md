@@ -1295,7 +1295,6 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   Il componente non è toccato.
   > - **Esito:** `KpiMetricBar.test.ts` 10/10 (erano 9 test, 1 rosso), girato col carico a 49. Gate Vitest
   >   `themeRoles` 52/52 e `themeTokens` 19/19. Prettier, `--check` e `git diff --check` puliti.
-- [ ] W6-d, dopo l'ingresso di Y.
 - [x] ✅ (16/10/2026) DV-8, le linee dei broker dal nono in poi (coordinatore, 11:48: prima di `ui/display`, perché Y8 della 1.3 aspetta
   DV-8 su `GrowthChart.svelte`).
   > **Note implementazione** (16/10, 11:50–12:0x), sulla base `bf2afbba3` (DV-9).
@@ -1373,6 +1372,171 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   pulito.
   > - `--update`: m1 6.853 → 6.799 (−54 = 52 + 2), m2 54 invariato. I tre componenti escono, `KpiSection` passa da 6 a
   >   4; poi `--check` pulito.
+- [x] ✅ (16/10/2026) Ingresso di W6 nel target: `adbc2a4b7` (coordinatore, 14:21). La riparazione è `b52575a3e`, la base
+  merge `f0bcf550e`, col baseline risolto. Il target scende da 5.740 a 4.290 classi m1.
+- [x] ✅ (16/10/2026) TC-15 in `ChartSignalsSection` (coordinatore, 14:21, su segnalazione di T): il testo attenuato
+  sulle righe selezionate sta sotto 4,5:1. Proposta seguita: sulla riga selezionata il testo attenuato passa a
+  `secondary`, e `link` non va mai sopra un `panel`. Le regole arriveranno con lo skill aggiornato dal lotto del gate di
+  T, non ancora entrato.
+  > **Note implementazione** (16/10, 14:22–14:30), sulla base `f0bcf550e`.
+  >
+  > **Misure** (carta, pannello e `selected` del selettore sopra la card, chiaro/scuro):
+  >
+  > | Testo | card | panel = hover | selected/card | selected/panel |
+  > |---|---|---|---|---|
+  > | `muted` | 5,20 / 4,99 | 4,52 / 4,54 | **4,38 / 4,25** | 3,84 / 3,84 |
+  > | `secondary` | 7,48 / 7,08 | 6,51 / 6,45 | 6,30 / 6,03 | 5,53 / 5,45 |
+  > | `link` | 6,17 / 5,32 | 5,36 / 4,84 | 5,19 / 4,53 | 4,56 / **4,09** |
+  >
+  > - `SearchSelect` colora la riga evidenziata `bg-lf-selected`. `TreeSelect` colora `bg-lf-selected` la riga attiva
+  >   e anche quella sotto il puntatore.
+  >
+  > **Fatto, solo classi:**
+  > - `ChartSignalsSection`, i 4 bottoni icona (sincronizza e dettaglio, della coppia di cambi e dell'asset):
+  >   `hover:bg-lf-hover hover:text-lf-link` → `hover:text-lf-primary`, come i bottoni «chiudi» di `PlannerDialog` e
+  >   `L4WhatIf`. `hover` ha il valore di `panel`, quindi `link` ci stava sopra.
+  > - `ChartSignalsSection`, l'interruttore «inverti la coppia»: acceso resta `text-lf-link`, ma senza fondo al
+  >   passaggio, quindi sulla card. L'hover di fondo c'è solo da spento: una sola ternaria (regola 4).
+  > - `ChartSignalsSection`:704, l'icona di ripiego nelle righe dell'elenco degli asset (`item`): `muted` → `secondary`.
+  >   Il campo chiuso (`selectedItem`, :717) resta `muted`, perché sta su `field`.
+  > - **In più, la stessa regola nella stessa sezione:** i due sottotitoli di `SignalOptionContent`, cioè le righe dei
+  >   tre selettori di indicatori di `ChartSignalsSection` (`SignalTreeSelect`): `muted` → `secondary`. Era il vero
+  >   testo attenuato su `selected`, a 11 e 10 px.
+  > - Nella mia area non ci sono altri `muted` o `link` dentro le opzioni dei selettori (ricerca sugli `{#snippet}`).
+  >
+  > **Prove:**
+  > - `ChartSignalsSection.test.ts` 21/21, `SignalTreeSelect.test.ts` 28/28, `htmlSink` 7/7, `themeRoles` 52/52;
+  > - Prettier, compilatore, regola 4 e `--check` puliti;
+  > - nessun test asserisce queste classi.
+  >
+  > **⚠️ Fuori pista: C4 rosso sul target.** `themeTokens.gate.test.ts` fa 18/19: `bg-white/90` non ha più usi, né
+  > sul mio HEAD né su `dev_release2`, ma `app.css`:254–257 ne tiene ancora la regola scura.
+  > - Gli ultimi usi li hanno tolti W5-charts, W6-c, W6-b e IM (`b5abcbdaa`); la merge li ha messi insieme.
+  > - `--check` non vede C4, e il mio slot era verde su `9da2e5da9`, perché lì IM non c'era ancora.
+  > - Segnalato al coordinatore alle 14:31, con la proposta di togliere il blocco nel checkpoint di TC-15.
+  > - **Rimedio** (coordinatore, 14:32: subito, separato da TC-15): ho tolto da `app.css` solo il blocco morto, cioè il
+  >   commento «Dark mode: Cards and modals» e la regola `html.dark .bg-white\/90`.
+  >   - Poi `themeTokens.gate.test.ts` 19/19 e `themeRoles` 52/52, col carico a 48; `--check`, Prettier e
+  >     `git diff --check` puliti.
+  >   - Il coordinatore lo committa da solo e lo fa entrare subito, prima di TC-15.
+  >   - Da allora agli ingressi lancia anche il file Vitest del gate, non solo `--check`.
+- [x] ✅ (16/10/2026) G-18: un elemento misto in `BackendTimingBar`, visto a runtime dalla prima galleria completa
+  (`designer-16b`, 2.862 scatti; coordinatore, 17:54). Entra insieme a TC-15 (`a6c79a8f3`) dopo una prova breve.
+  > **Note implementazione** (16/10, 17:55–18:00), sulla base `a6c79a8f3`.
+  > - **Il caso:** il segmento del timing (`pac-planner-timing-segment`) aveva il separatore legacy (`border-r
+  >   border-white … dark:border-gray-800`) e, solo per il tratto «non attribuito», il ruolo `bg-lf-neutral`. La
+  >   classe si compone a runtime (`{segment.colour}`), quindi il gate statico non la vede. Si vedeva in 4 scatti del
+  >   PAC, 40 varianti.
+  > - **⚠️ Fuori pista, errore mio di W5-PAC:** il convertitore aveva portato il colore «non attribuito» (`bg-gray-300
+  >   dark:bg-gray-600`, una stringa a sé) su `bg-lf-neutral`, e aveva lasciato legacy il separatore («i segmenti
+  >   hanno un colore di fase»). Non avevo guardato i valori che entrano nell'elemento a runtime.
+  > - **Perché non `border-lf-card` sul segmento,** come proponeva il coordinatore: i 7 segmenti delle fasi, ancora
+  >   legacy perché categorie (punti 2.1 e 2.5), sarebbero diventati misti al contrario.
+  > - **Fatto:** il separatore passa al contenitore della barra, `divide-x divide-lf-card`, cioè una riga di 1 px fra
+  >   un segmento e l'altro nel colore della card su cui sta la sezione. Il segmento porta solo `h-full
+  >   transition-opacity {segment.colour}`.
+  >   - La geometria non cambia: `divide-x` mette il bordo destro dentro ogni figlio tranne l'ultimo, come faceva
+  >     `border-r … last:border-r-0`.
+  >   - In scuro il separatore passa da `#1f2937` al colore della card (`#151b19`).
+  >   - Un commento nel markup spiega perché il separatore sta sul contenitore.
+  > - **Controllo G3 sulle stringhe composte,** con le regex del gate: contenitore, 8 segmenti e 8 quadratini della
+  >   legenda, 17 stringhe, 0 miste. Nel resto della mia area ho riguardato gli elementi rimasti legacy (le barre
+  >   «dopo il piano», le tracce, la legenda del rischio, le barre dei KPI): la parte fissa della classe non ha colori,
+  >   quindi nessuno si mescola a runtime.
+  > - **`app.css`:** nessuna regola del rimappaggio scuro su `border-white` o `border-gray-800`, quindi C4 non cambia.
+  > - Nessun test legge i segmenti, né unit né E2E.
+  > - Prettier, compilatore (0 avvisi), regola 4 a 0, `git diff --check` puliti.
+  > - `--update`: m1 4.290 → 4.288; `BackendTimingBar` da 16 a 14, restano solo le categorie delle fasi.
+  > - **Vitest** (carico 49,7): `themeRoles` 52/52, `themeTokens` 19/19 (C4 compreso), `ChartSignalsSection` 21/21,
+  >   `SignalTreeSelect` 28/28 (le righe di `SignalOptionContent`, TC-15), `scanColors` 67/67.
+  > - Commit `7f918f075` del coordinatore (18:04). Base merge `1a1dadba2` (con `ce5954329`), poi `baac53f99` (con
+  >   `c179a5144`, il lotto 9 di AF) e `ec3d54ca3` (con `5eaf67ff1`, C-97a della 1.3 e i docs di AF), tutte pulite.
+  >   Su `ec3d54ca3` i gate del coordinatore danno 119/119.
+  > - **Slot breve** (via del coordinatore alle 18:36), su `ec3d54ca3`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
+  >   18:37:11 alle 18:42:22, carico da 20 a 92. Script e log in `files/w6-g18-slot/` della sessione.
+  >
+  >   | Passo | Esito | Tempo |
+  >   |---|---|---|
+  >   | `api sync` | verde, 0 file tracciati cambiati | 15 s |
+  >   | `ChartSignalsSection.test.ts` | 21/21 | 18 s |
+  >   | `SignalTreeSelect.test.ts` | 28/28: le righe di `SignalOptionContent` (TC-15) sulla regola centrale di T per le select | 21 s |
+  >   | `TreeSelect.test.ts` | 28/28 | 20 s |
+  >   | `htmlSink.gate.test.ts` | 7/7: ha un'eccezione su `SignalOptionContent` | 6 s |
+  >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 231 s: il build della base nuova, il popolamento, il test in 6,8 s |
+  >
+  >   - `SignalOptionContent` non ha un test suo; lo coprono i due test delle select.
+  >   - Alla fine la porta 6156 è libera e l'HEAD è `ec3d54ca3`.
+- [x] ✅ (16/10/2026) W6-e, micro-lotto: le ultime 5 classi dell'area dentro stringhe HTML, cioè le tracce e il
+  riempimento delle barre di `DistributionDialog`:102 e `TargetsStep`:63 (coordinatore, 18:44). Base `986c26a0b`,
+  stesso albero del target `81bc305b9`.
+  > **Note implementazione** (16/10, 18:44–19:00).
+  > - **Analisi** (18:47): la traccia di `DistributionDialog` va su `bg-lf-neutral` 1:1. Quella di `TargetsStep` no:
+  >   il riempimento «sconosciuto» di `STATUS_TONES.pacTargetBar` era `bg-lf-neutral`, ΔE00 0 dalla traccia. Il
+  >   commento di T in `toneClasses.ts` lo prevedeva.
+  > - **Decisione del coordinatore** (dopo la conferma della 1.3 che i due file erano liberi, e il controllo dei 31
+  >   rami locali): la (a), tutta mia.
+  >   - `pacTargetBar.unknown` → **`bg-lf-secondary`**, il colore che l'obiettivo ha già nel risultato (`ResultCell`:78,
+  >     legenda di `AssetTable`:148), lo stesso neutro «ideale» di TD-1.
+  >   - Le due tracce su `bg-lf-neutral`.
+  >   - È una scelta provvisoria: il coordinatore la porta alla designer, punto 27 della raccolta.
+  > - **⚠️ Fuori pista, errore mio dell'analisi:** avevo dato solo il ΔE00 e il contrasto sulla card, non quello del
+  >   riempimento sulla traccia. Il coordinatore aveva scelto `bg-lf-input`, che sulla traccia nuova fa 2,69/2,73:1,
+  >   sotto il 3:1 non testuale. L'ho misurato prima di toccare i file e il coordinatore è passato a `secondary`.
+  > - **Fatto:**
+  >   - `TargetsStep`:63, la traccia `bg-gray-100 dark:bg-slate-700` → `bg-lf-neutral`. Il riempimento era già
+  >     interpolato (`${escapeHtml(BAR_CLASS[totalState])}`).
+  >   - `DistributionDialog`: due costanti, `TRACK` (`h-3 overflow-hidden rounded-full bg-lf-neutral`) e `FILL`
+  >     (`h-full rounded-full bg-libre-green`), interpolate nel template. Il gate legge ogni stringa di script per
+  >     intero (G3), quindi un solo template con la traccia sui ruoli e il riempimento legacy sarebbe misto. Il markup
+  >     a runtime resta identico.
+  >   - Il riempimento `bg-libre-green` resta legacy: è il peso attuale di ogni asset, un colore di dato (DV-7).
+  >   - **Fuori area, dichiarato:** `lib/theme/toneClasses.ts` è di T. Cambia solo `pacTargetBar.unknown` col suo
+  >     commento; `pacTargetBar` lo usa solo `TargetsStep`.
+  > - **Misure a mano** (`files/dv_w6e_measure*.py` della sessione, col risolutore del gate). Il gate C3 copre i
+  >   riempimenti sulle superfici (`text-secondary` a 4,5, gli stati a 4,5), non sulla traccia `neutral`:
+  >
+  >   | Sulla traccia `neutral` | Chiaro | Scuro |
+  >   |---|---|---|
+  >   | `secondary` («sconosciuto») | 5,77:1 | 5,84:1 |
+  >   | `success` | 4,02:1 | 7,92:1 |
+  >   | `danger` | 4,09:1 | 5,74:1 |
+  >   | `warning` | 4,01:1 | 6,70:1 |
+  >   | `libre-green` (`DistributionDialog`) | 8,57:1 | 7,50:1 |
+  >   | prima: `neutral` sulla traccia legacy | 1,22:1 | 1,39:1 |
+  >   | scartato: `input` | 2,69:1 | 2,73:1 |
+  >
+  >   - ΔE00 di `secondary` dagli stati: success 20,4/21,8, danger 36,9/34,9, warning 32,6/31,5.
+  >   - La traccia sulla card: 1,30/1,21:1, ΔE00 7,2/5,6. Prima, la traccia legacy: 1,06/1,69:1, ΔE00 2,1/17,9. In
+  >     chiaro si vede di più, in scuro di meno: come le altre tracce su `bg-lf-neutral`.
+  > - **Controllo G3 sulle stringhe composte a runtime,** con le regex del gate: 7 stringhe (2 tracce, il riempimento
+  >   di `DistributionDialog`, i 4 riempimenti di `TargetsStep`), 0 miste.
+  > - Nessun test legge queste barre: niente Vitest dei due componenti. `text.test.ts` legge il sorgente di
+  >   `DistributionDialog` solo per i testi d'aiuto. L'E2E `pac-allocator-real` non asserisce classi. Nessuna pagina
+  >   della documentazione descrive i colori delle barre.
+  > - **Prove leggere** (`files/dv_w6e_light.sh` della sessione, log in `files/w6e-light/`, 18:55, carico
+  >   25–31):
+  >   - Prettier, compilatore (0 avvisi), regola 4 (0), dark-only (0), campi nativi (0 su 412 file), `git diff
+  >     --check` puliti.
+  >   - `--update`: m1 934 → 930. `DistributionDialog` da 3 a 1, resta solo `FILL`; `TargetsStep` da 2 a 0.
+  >     `--check` pulito.
+  >   - Vitest: `themeRoles` 80/80, `themeTokens` 21/21 (C3 e C4), `themeComponentTokens` 18/18, `htmlInterpolation`
+  >     26/26, `htmlSink` 7/7, `text` 95/95.
+  > - Restano, al via del coordinatore: l'E2E `front-utility pac-allocator-real` e lo scatto di galleria
+  >   `tools/pac-step-targets`, se G ha la corsia libera.
+  > - Commit `63880bc8b` del coordinatore (18:58); la punta è ferma a `81bc305b9` e la simulazione dell'ingresso è
+  >   pulita. Lo scatto `tools/pac-step-targets` si salta: entra nella prossima galleria completa, quella del giro
+  >   della designer.
+  > - **Slot breve** (via del coordinatore alle 18:58), su `63880bc8b`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
+  >   18:59:35 alle 19:08:56, carico da 62 a 91 per le altre sessioni. Script e log in `files/w6e-slot/` della
+  >   sessione.
+  >
+  >   | Passo | Esito | Tempo |
+  >   |---|---|---|
+  >   | `api sync` | verde, 0 file tracciati cambiati | 29 s |
+  >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 532 s: build di frontend e documentazione 411 s (la base aveva i docs di AF), il popolamento, il test in 11,5 s |
+  >
+  >   - A fine slot la porta 6156 è libera, l'HEAD è `63880bc8b` e il worktree non ha file tracciati cambiati.
+- [ ] W6-d, dopo l'ingresso di Y.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 

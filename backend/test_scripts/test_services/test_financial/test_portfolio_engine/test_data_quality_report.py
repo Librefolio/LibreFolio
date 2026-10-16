@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 from backend.app.schemas.portfolio import (
     DataQualityStatus,
     IssueCode,
+    IssueDomain,
     IssueSeverity,
     MissingPriceAsset,
     StalePriceAsset,
@@ -461,3 +462,74 @@ class TestTransactionImpliedIssue:
         assert IssueCode.NAV_INCOMPLETE in codes
         assert IssueCode.MWRR_NOT_CALCULABLE in codes
         assert len(report.issues) == 6
+
+
+# =============================================================================
+# VALUED_AT_COST (J-17) — the code; its issue is pinned through PortfolioService.get_summary
+# =============================================================================
+
+
+class TestValuedAtCostIssueCode:
+    def test_valued_at_cost_is_a_portfolio_issue_code(self):
+        """J-17: holdings valued at their book cost on the report's last day (no price observation at all)
+        are listed under their own warning, ``VALUED_AT_COST``. Its shape, grace and manual-asset rule are
+        pinned end to end in ``test_portfolio_service.py::TestValuedAtCostDataQuality``.
+
+        Before J-17: AttributeError — IssueCode had no VALUED_AT_COST.
+        """
+        assert IssueCode.VALUED_AT_COST == "VALUED_AT_COST"
+        assert IssueCode("VALUED_AT_COST") is IssueCode.VALUED_AT_COST
+
+
+class TestValuedAtCostIssue:
+    """J-17: ``build_data_quality_report(valued_at_cost_assets_dto=...)`` turns the assets the caller lists
+    (with a provider, past the grace: ``PortfolioService.get_summary`` decides who) into one warning, shaped
+    like TRANSACTION_IMPLIED: key ``dataQuality.valuedAtCost``, params ``count`` and ``as_of_date`` (the
+    report's last day), the assets by id and name, a ``navigate_asset`` CTA to the first one, group
+    ``valued_at_cost``. It is its own issue: listing assets at cost adds neither TRANSACTION_IMPLIED nor
+    MISSING_PRICE.
+    """
+
+    def test_no_valued_at_cost_assets_produce_no_issue(self):
+        """Guard: nothing listed, no issue (green before and after J-17: today nothing produces the code)."""
+        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report()
+        assert "VALUED_AT_COST" not in {i.code for i in report.issues}
+
+    def test_valued_at_cost_assets_produce_one_warning_with_their_shape(self):
+        """Before J-17: TypeError — build_data_quality_report had no ``valued_at_cost_assets_dto``."""
+        states = [_complete_state("2025-06-29"), _complete_state("2025-06-30")]
+        assets = [_make_missing_asset(7, "Unquoted fund"), _make_missing_asset(9, "Private note")]
+
+        report = _make_views(states).build_data_quality_report(valued_at_cost_assets_dto=assets)
+
+        matching = [i for i in report.issues if i.code == "VALUED_AT_COST"]
+        assert len(matching) == 1, [i.code for i in report.issues]
+        issue = matching[0]
+        assert {
+            "code": issue.code,
+            "domain": issue.domain,
+            "severity": issue.severity,
+            "message_i18n_key": issue.message_i18n_key,
+            "message_params": issue.message_params,
+            "count": issue.count,
+            "affected_asset_ids": issue.affected_asset_ids,
+            "affected_asset_names": issue.affected_asset_names,
+            "cta_action": issue.cta_action,
+            "cta_target": issue.cta_target,
+            "group_key": issue.group_key,
+        } == {
+            "code": IssueCode.VALUED_AT_COST,
+            "domain": IssueDomain.PORTFOLIO,
+            "severity": IssueSeverity.WARNING,
+            "message_i18n_key": "dataQuality.valuedAtCost",
+            "message_params": {"count": 2, "as_of_date": "2025-06-30"},
+            "count": 2,
+            "affected_asset_ids": [7, 9],
+            "affected_asset_names": ["Unquoted fund", "Private note"],
+            "cta_action": "navigate_asset",
+            "cta_target": "7",
+            "group_key": "valued_at_cost",
+        }
+        codes = {i.code for i in report.issues}
+        assert IssueCode.TRANSACTION_IMPLIED not in codes
+        assert IssueCode.MISSING_PRICE not in codes

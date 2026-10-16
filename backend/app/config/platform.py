@@ -13,7 +13,7 @@ secret counts as unset.
 import os
 from datetime import date
 
-from backend.app.config import env_secret, env_secret_origin
+from backend.app.config import env_secret, env_secret_origin, env_url
 
 
 def scheduler_disabled() -> bool:
@@ -100,3 +100,13 @@ def instance_deletion_date() -> date | None:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise ValueError(f"LIBREFOLIO_DELETION_DATE must be an ISO date such as 2026-11-14, not {value!r}") from exc
+
+
+def support_url() -> str | None:
+    """``LIBREFOLIO_SUPPORT_URL``: where the users of the instance ask for help, such as an asset the search does not find.
+
+    A hosting provider sets its own support page. Unset or blank: ``None``, and the app links to the project's issues
+    on GitHub. An address that is not ``http(s)://`` raises ``ValueError`` (``env_url``): the service that publishes
+    it logs the error and leaves the default link.
+    """
+    return env_url("LIBREFOLIO_SUPPORT_URL")

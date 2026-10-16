@@ -45,6 +45,7 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {CurrencySearchSelect} from '$lib/components/ui/select';
@@ -864,7 +865,48 @@
         }
     }
 
-    async function handleSyncAsset(asset: any, linkCreatedAsset = false) {
+    /** The toast of one asset's sync: the points fetched and changed, or the failure with its first error. */
+    function reportSyncResult(asset: any, r: AssetCreateSyncResult | null | undefined, linkCreatedAsset = false) {
+        if (r && (!r.errors || r.errors.length === 0)) {
+            const fetched = r.points_fetched ?? 0;
+            const changed = (r.inserted_count ?? 0) + (r.updated_count ?? 0);
+            toasts.success(
+                $t('assets.sync.toastOk', {
+                    values: {name: linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: asset.id}, asset.display_name) : escapeHtml(asset.display_name), fetched, changed},
+                }),
+            );
+        } else {
+            toasts.error(
+                $t('assets.sync.toastFailed', {
+                    values: {name: asset.display_name},
+                }) + (r?.errors?.[0] ? ': ' + r.errors[0] : ''),
+            );
+        }
+    }
+
+    /** A new asset is listed at once; with a provider, its card shows the one sync AssetModal runs for it (O-20). */
+    async function handleAssetCreated(assetId: number, detail?: {syncing: boolean}) {
+        if (detail?.syncing) syncingAssetIds = new Set([...syncingAssetIds, assetId]);
+        // A reload after the user's own write: it holds the page's Refresh button (Y11). The sync that follows has
+        // the card's indicator, and the reload after it (`handleCreatedAssetSynced`) does not hold the button (P3).
+        await pageBusy.track('assets-reload', () => loadAssets());
+    }
+
+    /** The one sync of a new asset ended (AssetModal, O-20): its toast, then the price data again. */
+    async function handleCreatedAssetSynced(assetId: number, result: AssetCreateSyncResult | null) {
+        try {
+            if (!assets.some((a) => a.id === assetId)) await loadAssets();
+            const created = assets.find((a) => a.id === assetId);
+            if (created) reportSyncResult(created, result, true);
+            invalidateAssetPriceStore(assetId);
+            rearmMaxPendingBeforeReload();
+            await fetchAllPriceData();
+        } finally {
+            syncingAssetIds = new Set([...syncingAssetIds].filter((id) => id !== assetId));
+        }
+    }
+
+    async function handleSyncAsset(asset: any) {
         syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
@@ -873,24 +915,7 @@
                     date_range: {start: syncDateStart, end: dateEnd},
                 },
             ]);
-            const r = (response as any)?.results?.[0];
-            if (r && (!r.errors || r.errors.length === 0)) {
-                const fetched = r.points_fetched ?? 0;
-                const inserted = r.inserted_count ?? 0;
-                const updated = r.updated_count ?? 0;
-                const changed = inserted + updated;
-                toasts.success(
-                    $t('assets.sync.toastOk', {
-                        values: {name: linkCreatedAsset ? entityDetailLinkHtml({kind: 'asset', id: asset.id}, asset.display_name) : escapeHtml(asset.display_name), fetched, changed},
-                    }),
-                );
-            } else {
-                toasts.error(
-                    $t('assets.sync.toastFailed', {
-                        values: {name: asset.display_name},
-                    }) + (r?.errors?.[0] ? ': ' + r.errors[0] : ''),
-                );
-            }
+            reportSyncResult(asset, (response as any)?.results?.[0]);
             invalidateAssetPriceStore(asset.id);
             rearmMaxPendingBeforeReload();
             await fetchAllPriceData();
@@ -1861,14 +1886,8 @@
     editMode={assetModalEditMode}
     editData={assetModalEditData}
     linkCreatedAsset
-    oncreated={async (assetId) => {
-        await pageBusy.track('assets-reload', () => loadAssets());
-        // Auto-sync the newly created asset to fetch initial price data
-        const newAsset = assets.find((a) => a.id === assetId);
-        if (newAsset?.provider_code) {
-            await handleSyncAsset(newAsset, true);
-        }
-    }}
+    oncreated={handleAssetCreated}
+    onsynced={handleCreatedAssetSynced}
     onupdated={() => void pageBusy.track('assets-reload', () => loadAssets())}
     onclose={() => {
         assetModalOpen = false;

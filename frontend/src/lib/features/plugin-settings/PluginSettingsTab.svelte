@@ -1,8 +1,9 @@
 <!--
   Settings › Plugins (workstream X, lot CP11b; plan 03 §4.4, decisions D-X13 to D-X15, N1): the settings the installed
-  plugins declare, grouped by family — the price sources, then the exchange-rate sources. Everyone sees the tab: a
-  personal field is the user's own; an instance field is read-only for a user who is not an administrator, its secret
-  only «set» or «not set». A test-only plugin is never listed here (the API lists one only when named).
+  plugins declare, grouped by family — the price sources, then the exchange-rate sources, each title after the family's
+  icon (`FAMILY_ICONS`, the one of the documentation's home). Everyone sees the tab: a personal field is the user's own;
+  an instance field is read-only for a user who is not an administrator, its secret only «set» or «not set». A
+  test-only plugin is never listed here (the API lists one only when named).
 
   Each plugin is a `PluginSettingsForm`, saved on its own. Colours are roles only (theme-roles skill).
 -->
@@ -13,7 +14,7 @@
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import PluginSettingsForm from './PluginSettingsForm.svelte';
     import {fetchPluginSettings, type PluginSettingsEntry} from './pluginSettingsApi';
-    import {FAMILY_TITLE_KEYS, groupByFamily, NOTE_CLASSES} from './pluginSettingsForm';
+    import {FAMILY_ICONS, FAMILY_TITLE_KEYS, groupByFamily, NOTE_CLASSES} from './pluginSettingsForm';
 
     let entries = $state<PluginSettingsEntry[]>([]);
     let loading = $state(true);
@@ -66,8 +67,12 @@
         <p class="text-sm text-lf-muted" data-testid="plugin-settings-empty">{$_('pluginSettings.tab.empty')}</p>
     {:else}
         {#each groups as group (group.family)}
+            {@const FamilyIcon = FAMILY_ICONS[group.family]}
             <section class="space-y-3" data-family={group.family} data-testid="plugin-settings-family">
-                <h3 class="text-sm font-semibold uppercase tracking-wide text-lf-secondary">{$_(FAMILY_TITLE_KEYS[group.family])}</h3>
+                <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-lf-secondary">
+                    <FamilyIcon aria-hidden="true" class="h-4 w-4 shrink-0" data-testid="plugin-settings-family-icon" />
+                    {$_(FAMILY_TITLE_KEYS[group.family])}
+                </h3>
                 {#each group.entries as entry (entry.plugin_code)}
                     <PluginSettingsForm {entry} onsaved={replace} />
                 {/each}

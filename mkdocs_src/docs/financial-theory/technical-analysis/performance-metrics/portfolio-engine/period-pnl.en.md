@@ -104,7 +104,7 @@ $$
 
 For a mark quoted in $A$, $\mathrm{MV}_A(t) = \frac{q}{qbq} \cdot \mathrm{mark}_A(t) \cdot r_A(t)$, so the asset effect is the assets' own change in their currency, translated at the day's rate: $E^{\text{asset}}_A(t) = \bigl(\frac{q}{qbq} \cdot \mathrm{mark}_A(t) - \mathrm{Cost}^{A}_A(t)\bigr)\, r_A(t)$. The exchange-rate effect is zero on the day of each purchase. For $A = C^*$, $r = 1$ and $\mathrm{Cost}^{A} = \mathrm{Cost}^{*}$: the exchange-rate effect vanishes, and assets already in the report currency have an asset effect only.
 
-A position in a currency $A \neq C^*$ that cannot be split on day $t$ — no market value, no rate $r_A(t)$, or a cost incomplete in either currency — adds its whole $\mathrm{MV} - \mathrm{Cost}^{*}$ (with $\mathrm{MV} = 0$ when it has no market value) to an **unsplit** part $E^{\text{unsplit}}_A(t)$ instead. Positions in $C^*$ always count in the asset effect.
+A position in a currency $A \neq C^*$ that cannot be split on day $t$ — no market value, no rate $r_A(t)$, or a cost incomplete in either currency — adds its whole $\mathrm{MV} - \mathrm{Cost}^{*}$ (with $\mathrm{MV} = 0$ when it has no market value) to an **unsplit** part $E^{\text{unsplit}}_A(t)$ instead. Positions in $C^*$ always count in the asset effect. A position valued at its cost because its asset has no mark at all ([Portfolio Engine — §3](index.md#3-position-state)) has $\mathrm{MV} = \mathrm{Cost}^{*}$ and adds to no part: splitting it would invent an asset effect and an exchange-rate effect of opposite sign.
 
 The period rows are the changes between the period's two boundary states — the last state on or before $t_0$ (zero if there is none) and the state at $t_1$ —, the same two states as $\Delta\mathrm{UGL}$:
 

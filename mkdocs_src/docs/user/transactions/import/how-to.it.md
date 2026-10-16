@@ -290,7 +290,9 @@ le spunte e clicca di nuovo.
 
 Le righe arrivano nel workspace bulk non salvate. Controllale o modificale, poi clicca
 **Salva tutto**: attende le righe elencate in rosso, e chiede prima di salvare i valori elencati in
-ambra che non hai verificato (**Salva comunque**).
+ambra che non hai verificato (**Salva comunque**). Una riga la cui quantità ha più di 10 decimali, il cui
+importo ne ha più di 6, o il cui costo di carico per unità ne ha più di 12, è rifiutata a **Salva tutto**, col
+massimo nel messaggio (*Quantità: Al massimo 10 decimali*): LibreFolio non la arrotonda mai.
 
 ---
 

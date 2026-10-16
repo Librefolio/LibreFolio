@@ -242,7 +242,9 @@
       "pairAssetMismatch": "Both sides of a transfer must be the same asset",
       "wacFxUnavailableSplit": "The units that leave are valued at their average cost, which needs the {pairs} exchange rate: sync the FX rates, then split the pair again.",
       "pairBrokerMismatch": "Both sides of a currency exchange must be on the same broker",
-      "cashNonzero": "{type} requires a non-zero cash amount"
+      "cashNonzero": "{type} requires a non-zero cash amount",
+      "decimalPlacesExceeded": "At most {max} decimal places",
+      "significantDigitsExceeded": "At most {max} significant digits"
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
