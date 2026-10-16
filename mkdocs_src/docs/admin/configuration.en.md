@@ -38,7 +38,9 @@ the same sample as `.env`.
 | `JWT_SECRET` | _not set_ | Key that signs login sessions. Not set, empty or only spaces: a new key at every start, so everyone logs in again after a restart. `JWT_SECRET_FILE` reads it from a file instead: see [Secrets](#secrets). See [Keep users signed in](index.md#session-persistence). |
 | `SESSION_COOKIE_SECURE` | `auto` | When the login session cookie is sent over HTTPS only: `auto` (if the browser uses HTTPS), `always` or `never`. See [HTTPS and reverse proxies](#session-cookie-secure). |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memory, in MB, of the image-preview cache in each server process. |
-| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup, and the archives uploaded for a restore are limited to 500 MB unless `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` says otherwise. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup, and some defaults change unless you set their variables: the archives uploaded for a restore are limited to 500 MB (`LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`), idle risk workers stop after 60 seconds (the risk settings below), and `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` are on. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_FRAME_PROTECTION` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own: dashboards at another address, such as Home Assistant panels, can then show LibreFolio in a frame. `true` lets only LibreFolio's own pages show it in a frame: every response carries `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`, and the browser refuses to show the app in a page at another address. `true` or `false`; `1`/`0`, `yes`/`no` and `on`/`off` work too, in any case; any other value stops the server at startup. A value you set wins over the profile. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `false` (`true` in the `managed` profile) | Leave it unset on an install of your own. `true` adds a report-only Content-Security-Policy to the pages of the web app, not to the documentation or the API: it blocks nothing, and the browser lists in its developer console what the policy would block, without sending a report anywhere. Same values as `LIBREFOLIO_FRAME_PROTECTION`; a value you set wins over the profile. See [Hosting for Others](hosting_providers.md#managed-profile). |
 | `LIBREFOLIO_BLOCKED` | _not set_ | Leave it unset. A hosting provider sets it to block the instance: users can still sign in and out, and see a block page instead of the app. `1`, `true`, `yes` or `on` block; `0`, `false`, `no` or `off` do not, in any case; any other value stops the server at startup. Read from the environment only, in every profile. See [Hosting for Others](hosting_providers.md#instance-block). |
 | `LIBREFOLIO_DELETION_DATE` | _not set_ | Leave it unset. The day the hosting provider will delete a blocked instance and its data, as an ISO date such as `2026-11-14`, shown on the block page. Any other value stops the server at startup. Read from the environment only. See [Hosting for Others](hosting_providers.md#deletion-date). |
 | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` | _not set_ | Leave it unset. A hosting provider sets it so that its hosting panel can back up the instance through `/api/v1/backup/panel/jobs`: at least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`. Not set: those routes answer `404`. A token LibreFolio cannot use does not stop the server: the routes answer `503` and the log has an error. `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE` reads it from a file instead: see [Secrets](#secrets). Read from the environment only. See [Hosting for Others](hosting_providers.md#panel-backups). |
@@ -96,7 +98,7 @@ users start from the **Default Currency** in [Global Settings](settings.md).
     | `RISK_SIMULATION_WORKERS`, `RISK_OPTIMIZATION_WORKERS` | `1` (1–8) | Worker processes per kind of job: more run more jobs at once. |
     | `RISK_SIMULATION_QUEUE_CAPACITY`, `RISK_OPTIMIZATION_QUEUE_CAPACITY` | `2` (0–64) | Jobs that can wait for a worker; beyond that, new requests are turned away. |
     | `RISK_SIMULATION_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_TIMEOUT_SECONDS` | `120` / `60` | Time limit of one job, in seconds. |
-    | `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | `600` | Idle workers stop after this many seconds and restart with the next job; `0` keeps them running. |
+    | `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS`, `RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS` | `600` (`60` in the `managed` profile) | Idle workers stop after this many seconds and restart with the next job; `0` keeps them running. |
 
 ---
 
@@ -224,13 +226,20 @@ the data directory. Give every instance its own key: never share one key between
 ## 🧩 Plugin Settings {: #plugin-settings }
 
 A plugin can ask for settings of its own: the API key of a paid data source, a region, a
-preference. No plugin shipped with LibreFolio asks for one today; a plugin you add may. A setting is
-one of two kinds:
+preference. Of the plugins shipped with LibreFolio, two ask for one, a personal search preference
+each: justETF and Borsa Italiana. None asks for an instance-wide setting; a plugin you add may. A
+setting is one of two kinds:
 
 - **Instance-wide**: one value for the whole instance, which only an administrator can save. Every
   user can read a plain value, and of a secret one, such as an API key, only whether it is set.
 - **Personal**: each user's own value, which only that user can save and read. Administrators never
   see it.
+
+Personal and instance-wide settings are changed in **Settings › Plugins**, a tab every user has:
+each user changes their personal ones there, and administrators the instance-wide ones too, which
+the other users see read-only. In the asset dialog, **Configure**, next to the chosen price
+provider, opens the same form for that provider alone. What the tab shows, setting by setting:
+[Plugin Settings](../user/settings/plugins.md) in the user manual.
 
 An instance-wide setting can also be given by an environment variable, in `.env` or in the
 container's environment like the other options; a personal one cannot. The plugins that have
@@ -260,27 +269,32 @@ LIBREFOLIO_PLUGIN_<KIND>_<PLUGIN CODE>_<SETTING KEY>
 
 While its variable is set, a setting takes its value from there, and nobody can change it from
 inside LibreFolio: a save is refused (`LOCKED_BY_ENV`), and a value saved earlier is ignored until
-you remove the variable and restart.
+you remove the variable and restart. **Settings › Plugins** shows the setting read-only, a secret
+only as *Set*: *Set by the server variable* and the variable's name for administrators, *Set by the
+server* for the other users.
 
 - A wrong value, one the setting does not accept or a `_FILE` that cannot be read, still locks the
   setting, and the plugin is then not configured: LibreFolio refuses every request to it, even when
   the setting is optional, until you fix the variable. It never falls back to the saved value or to
   the plugin's default. The log says why, with a warning once per server process:
   `Plugin setting variable invalid: the plugin is not configured until it is fixed`, with the
-  variable and the reason, never the value. Fix the value, then restart.
+  variable and the reason, never the value. In **Settings › Plugins** the plugin's badge reads
+  **To configure**, and the setting says that its variable is invalid. Fix the value, then restart.
 - In the [managed profile](hosting_providers.md#managed-profile), a setting locked by a variable is
-  not shown at all, and a save to it is refused as if it did not exist: the hosting provider sets it,
-  and the instance's administrators and users never see it.
+  not shown at all, not even in **Settings › Plugins**, and a save to it is refused as if it did not
+  exist: the hosting provider sets it, and the instance's administrators and users never see it.
 
 ### 🔐 Saved Secrets and the Instance Key {: #plugin-secrets }
 
 A setting saved inside LibreFolio is kept in the database. A secret one is first encrypted
 (AES-256-GCM) with a key derived from the [instance key](#instance-key), and is never shown again,
-not even to whoever saved it: LibreFolio only says whether it is set. A value given by a variable,
-secret or not, is never saved in the database.
+not even to whoever saved it: LibreFolio only says whether it is set (in **Settings › Plugins**,
+*Set on* and the date it was saved). A value given by a variable, secret or not, is never saved in
+the database.
 
 If the instance key changes, the saved secrets can no longer be read. LibreFolio keeps them and
-reports them as unreadable, and never uses a wrong value: enter them again.
+reports them as unreadable, and never uses a wrong value: enter them again. The tab says so under
+each one: *Saved, but this instance's key cannot read it: enter it again.*
 
 If `secrets/instance.key` is damaged or out of reach, LibreFolio starts anyway, with an error from
 the [startup checks](#startup-checks); a key you set yourself that cannot be used stops the start
@@ -289,7 +303,8 @@ instead. Until you fix it:
 - every saved secret is reported as unreadable, and the plugins run without them: a plugin that needs
   one answers that it is not configured;
 - secrets given by variables keep working;
-- a new secret cannot be saved;
+- a new secret cannot be saved: the tab answers *Secrets cannot be saved: this instance's key cannot
+  be used (see the configuration checks).*, and nothing of that save is written;
 - the log has one more error, the first time each server process needs a saved secret:
   `Plugin secrets unreadable: the instance key cannot be used (see the configuration checks)`.
 

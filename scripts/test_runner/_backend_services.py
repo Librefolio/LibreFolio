@@ -1036,6 +1036,14 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
 
 
+def services_profile_defaults(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the profile defaults of the settings: PROFILE_DEFAULTS, applied only to the fields nobody set (D5, F27)."""
+    print_section("Services: Profile Defaults")
+    print_info("Testing: backend/app/config/__init__.py (PROFILE_DEFAULTS, its Settings validator, LIBREFOLIO_FRAME_PROTECTION, LIBREFOLIO_CSP_REPORT_ONLY)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_profile_defaults.py", test_names)
+    return run_command(cmd, "Profile defaults tests", verbose=verbose)
+
+
 def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
     """Test what a plugin declares to have settings, the values a field accepts, and what the core binds."""
     print_section("Services: Plugin Settings Contract")
@@ -1114,6 +1122,14 @@ def services_security_headers(verbose: bool = False, test_names: list = None) ->
     print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware), middleware.py (MIDDLEWARE_STACK), the app of backend/app/main.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_security_headers.py", test_names)
     return run_command(cmd, "Security headers tests", verbose=verbose)
+
+
+def services_managed_headers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the headers of the managed profile: frame protection and the report-only CSP, read when the middleware is built (D5)."""
+    print_section("Services: Managed Profile Headers")
+    print_info("Testing: backend/app/services/platform/security_headers.py (SecurityHeadersMiddleware with LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY), on fresh apps with the stack's entries and the static site")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_managed_headers.py", test_names)
+    return run_command(cmd, "Managed profile headers tests", verbose=verbose)
 
 
 def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
@@ -1893,6 +1909,16 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(
+        cat,
+        "profile-defaults",
+        services_profile_defaults,
+        name="Profile Defaults",
+        desc="D5/F27: PROFILE_DEFAULTS has one entry per profile LIBREFOLIO_PROFILE accepts; selfhosted lists nothing, managed lists RISK_SIMULATION_IDLE_TIMEOUT_SECONDS and RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS at 60.0, LIBREFOLIO_FRAME_PROTECTION and LIBREFOLIO_CSP_REPORT_ONLY True (two new booleans, False in the code); managed gives its value to every field nobody set, a value set in the environment or in .env wins (600 the code default, 0, false) and the other fields keep theirs; selfhosted, unset or explicit, keeps the code default of every field any profile lists (parametrised over the union of the tables); every entry a Settings field with a code default and a value valid in strict mode; MANAGED and ' Managed ' read as managed",
+        # Settings built from the environment alone (_env_file=None), the variables set and removed by monkeypatch; the
+        # .env case writes its own file under tmp_path and turns test mode off for that call. No DB, no server, no network.
+        isolation="pure",
+    )
     # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
     # built with create_all, the call boundaries read their rows through a private engine put in place of
     # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
@@ -1924,6 +1950,18 @@ Note: No backend server required.
         # Raw ASGI calls on fresh apps holding the stack's own entries and on the global app (its lifespan never runs);
         # the health route's session dependency, the catch-all's build and frontend_available swapped by monkeypatch.
         # No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "managed-headers",
+        services_managed_headers,
+        name="Managed Profile Headers",
+        desc="F15 (D5, managed): with frame protection on (managed, or LIBREFOLIO_FRAME_PROTECTION=true) every response carries X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' once each, with it off (selfhosted, or false over managed) neither; with the report-only policy on (managed, or LIBREFOLIO_CSP_REPORT_ONLY=true) Content-Security-Policy-Report-Only is on the web app's HTML only (/, a client-side route, also gzipped, /200.html), never on /mkdocs, the API's JSON or HTML (Swagger UI, the HTML 404 of an unknown API path), /_app JavaScript, a text file, a CORS preflight or a 500; its default-src 'self', object-src 'none', base-uri 'self', frame-ancestors 'self', script-src with 'self', each directive once, no report-uri nor report-to; a route's own X-Frame-Options, CSP or report-only CSP kept alone and the others added; the settings read when the middleware is built, never per request; nosniff and Referrer-Policy still on every response",
+        # Fresh FastAPI() apps holding the stack's security_headers, gzip and cors, a few routes and the static site of a
+        # fake build and documentation under tmp_path (FRONTEND_BUILD_DIR and SITE_DIR swapped by monkeypatch); test mode,
+        # a data directory under tmp_path and the profile variables set by monkeypatch before an app is built; raw ASGI
+        # calls. No DB, no server, no network.
         isolation="pure",
     )
     add_test(

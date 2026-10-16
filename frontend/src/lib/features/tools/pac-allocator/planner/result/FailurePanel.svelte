@@ -33,16 +33,16 @@
 </script>
 
 <section class="{CARD} space-y-3" aria-labelledby="pac-planner-failure-title" data-testid="pac-planner-failure" data-state={result.result_state}>
-    <h3 id="pac-planner-failure-title" class="flex flex-wrap items-center gap-2 text-base font-semibold text-gray-900 dark:text-gray-100">
+    <h3 id="pac-planner-failure-title" class="flex flex-wrap items-center gap-2 text-base font-semibold text-lf-primary">
         {#if result.result_state === 'needs_input'}
-            <CircleHelp size={18} class="text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            <CircleHelp size={18} class="text-lf-warning" aria-hidden="true" />
         {:else if result.result_state === 'invalid'}
-            <CircleX size={18} class="text-red-600 dark:text-red-400" aria-hidden="true" />
+            <CircleX size={18} class="text-lf-danger" aria-hidden="true" />
         {:else}
-            <CircleMinus size={18} class="text-gray-500 dark:text-gray-400" aria-hidden="true" />
+            <CircleMinus size={18} class="text-lf-muted" aria-hidden="true" />
         {/if}
         <span>{$t(`${KEY}.titles.${result.result_state}`, {default: HEADINGS[result.result_state]})}</span>
-        <span class="text-sm font-normal text-gray-500 dark:text-gray-400">· {$t(`${KEY}.nothingCalculated`, {default: 'the backend calculated nothing'})}</span>
+        <span class="text-sm font-normal text-lf-muted">· {$t(`${KEY}.nothingCalculated`, {default: 'the backend calculated nothing'})}</span>
     </h3>
     <IssueList {items} {ongoto} {showCodes} testid="pac-planner-failure-issues" />
     <p class={HINT}>{$t(`${KEY}.notes.${result.result_state}`, {default: NOTES[result.result_state]})}</p>

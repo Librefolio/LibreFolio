@@ -304,6 +304,14 @@ The Onboarding category of Preferences with each guide's status and its Replay b
     <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Guide Replay">
 </div>
 
+### 🧩 Plugin Settings
+
+The Plugins tab: the settings the price and exchange-rate sources ask for, each plugin in a form of its own with its badge.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="plugins" alt="🧩 Plugin Settings">
+</div>
+
 ### 🛡️ Global Settings (Admin)
 
 Administrators can configure system-wide settings.
