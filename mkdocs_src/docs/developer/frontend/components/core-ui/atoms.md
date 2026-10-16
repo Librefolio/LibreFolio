@@ -100,19 +100,23 @@ A **password field with visibility toggle** (eye icon).
 
 ---
 
-## 💪 PasswordStrength
+## 💪 PasswordStrength {: #passwordstrength }
 
 *Located in `lib/components/ui/input/`*
 
 A **password strength indicator** powered by `@zxcvbn-ts/core`.
 
-- Color-coded strength bar (red → orange → yellow → lime → green) with a label, from score 0
-  (very weak) to 4 (very strong)
-- With `showRules` (default), a checklist of the five rules: 8 characters, uppercase, lowercase,
-  number, special character
+- Strength bar with a label, from score 0 (very weak) to 4 (very strong), in three colours: danger,
+  warning, success
+- With `showRules` (default), a checklist of the
+  [password rules](../../../architecture/security.md#password-rules) the server publishes
+  (`GET /system/instance`), the five of release 1.3 until it answers; its bindable `valid` tells a
+  form whether they all hold
 - Hidden while the password is empty
 
-**Used by**: [RegisterCard](../features/auth.md) (below password field), `PasswordChangeModal`.
+Details: [PasswordStrength](../features/auth.md#passwordstrength).
+
+**Used by**: [RegisterCard](../features/auth.md) (below password field), `ResetPasswordCard`, `PasswordChangeModal`.
 
 ---
 
