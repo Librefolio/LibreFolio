@@ -237,8 +237,10 @@ This ensures resilience to individual provider outages and supports currency pai
 | `failed` | The pair has no route, or every route failed; `errors` lists the failure of each route |
 
 The scheduler's history-sync job (`run_history_sync()`, `backend/app/services/platform/scheduler/jobs.py`)
-calls the same function for every pair with a route that has no `MANUAL` step, from today minus
-`scheduler_history_sync_horizon_days` (default 14) to today.
+calls the same function once for every pair with a route that has no `MANUAL` step, up to today, from
+today minus `scheduler_history_sync_horizon_days` (default 14), or earlier when a pair's last saved rate
+is older: the day after the oldest of them, at most a year back (see
+[History Sync](../scheduler.md#history-sync)).
 
 ### ⏸️ Paused Providers {: #paused-providers }
 

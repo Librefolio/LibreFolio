@@ -22,9 +22,11 @@ Isolation
 * **scheduler state**: ``jobs.py`` mutates the ``SchedulerState`` object it is handed and
   never calls ``save_state()`` — only ``scheduler.py`` persists. A throwaway
   ``SchedulerState()`` per test is therefore complete isolation, no sandboxing needed.
-* **database**: only the two SELECTs survive, and only in the "live schema" tests at the
-  bottom of this file. Everywhere else ``jobs.AsyncSession`` is replaced, because the
-  zero-active-assets path cannot be produced on a database other units are writing to.
+* **database**: only SELECTs survive, and only in the "live schema" tests at the bottom of
+  this file: the job's two, and the two lookups of the last saved dates (lot Z-5), read
+  inside one explicit read transaction. Everywhere else ``jobs.AsyncSession`` is replaced,
+  because the zero-active-assets path cannot be produced on a database other units are
+  writing to, and so are the two lookups (``_install_fake_session``).
 
 Lot Z7b: items the provider refused for too many requests
 ---------------------------------------------------------
@@ -36,24 +38,47 @@ deferred items), the reset of the failure backoff by a run that ends, and the jo
 written before Z7b pin a run without such items, which must not change; they compare the
 summary without the deferred counters (``_counts``), which a run with nothing deferred
 gains at 0 — pinned exactly by the Z7b cases.
+
+Lot Z-5: the history sync reaches back to the last saved date
+-------------------------------------------------------------
+Each asset's window starts the day after its last saved price; the FX call, one for every
+pair, starts the day after the last saved rate of the pair furthest behind. Never later
+than the horizon's start (``today - horizon_days``), never earlier than
+``HISTORY_CATCH_UP_MAX_DAYS`` (365) days ago; every window ends today. A run that reaches
+back past the horizon says so in one event, "Scheduler: history sync reaches back", and
+nowhere else: its state and its job log entry gain nothing. The section "Lot Z-5" pins
+``_history_sync_start`` on a fixed day, then the job with the dates the two fake lookups of
+``_install_fake_session`` give, the event behind a canary barrier, and the state and entry
+of a run that reaches back; the two lookups meet the live database at the bottom. Those
+lookups answer ``{}`` by default, so the cases written before Z-5 sync the horizon, as they
+did. The job cases count from ``date.today()`` as the job does: the same-day assumption of
+the cases above.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import shutil
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+from structlog.testing import capture_logs
 
 from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
-from backend.app.db.models import FxConversionRoute
+from backend.app.db.models import FxConversionRoute, FxRate, PriceHistory
+from backend.app.db.session import get_async_engine
 from backend.app.schemas.prices import FACurrentPriceItem
 from backend.app.schemas.refresh import (
     FABulkRefreshResponse,
@@ -139,14 +164,50 @@ class _FakeSession:
         return _FakeResult(self._asset_rows, self._routes)
 
 
-def _install_fake_session(monkeypatch, *, asset_rows=(), routes=()):
-    """Replace ``jobs.AsyncSession``; return the list of executed statements."""
+def _install_fake_session(
+    monkeypatch,
+    *,
+    asset_rows=(),
+    routes=(),
+    last_price_dates: dict[int, date] | None = None,
+    last_fx_dates: dict[str, date] | None = None,
+    lookups: dict | None = None,
+):
+    """Replace ``jobs.AsyncSession``; return the list of executed statements.
+
+    Lot Z-5: the two lookups of the last saved dates, ``jobs._last_price_dates`` and
+    ``jobs._last_fx_dates``, are replaced too. Like the real ones they answer, for what they
+    are asked, the ids and slugs that have a date — from ``last_price_dates`` and
+    ``last_fx_dates`` —, nothing by default: a case written before Z-5 syncs the horizon, as
+    it did. ``raising=False``: until the code of Z-5 exists, ``jobs`` has no such attribute.
+    ``lookups``, when given, records what each lookup was asked (``"asset_ids"``, ``"pairs"``).
+    """
     executed: list = []
 
     def _factory(_engine):
         return _FakeSession(asset_rows, routes, executed)
 
     monkeypatch.setattr(jobs, "AsyncSession", _factory)
+
+    saved_prices = dict(last_price_dates or {})
+    saved_rates = dict(last_fx_dates or {})
+
+    async def _fake_last_price_dates(session, asset_ids):
+        assert isinstance(session, _FakeSession), f"_last_price_dates takes a session the job opened, not {session!r}"
+        asked = list(asset_ids)
+        if lookups is not None:
+            lookups.setdefault("asset_ids", []).append(asked)
+        return {asset_id: saved_prices[asset_id] for asset_id in asked if asset_id in saved_prices}
+
+    async def _fake_last_fx_dates(session, pairs):
+        assert isinstance(session, _FakeSession), f"_last_fx_dates takes a session the job opened, not {session!r}"
+        asked = list(pairs)
+        if lookups is not None:
+            lookups.setdefault("pairs", []).append(asked)
+        return {pair: saved_rates[pair] for pair in asked if pair in saved_rates}
+
+    monkeypatch.setattr(jobs, "_last_price_dates", _fake_last_price_dates, raising=False)
+    monkeypatch.setattr(jobs, "_last_fx_dates", _fake_last_fx_dates, raising=False)
     return executed
 
 
@@ -192,12 +253,17 @@ def _install_current_price_double(monkeypatch, *, failing: set[int] | None = Non
 
 
 def _install_refresh_double(monkeypatch, *, failing: set[int] | None = None, recorder: dict | None = None, empty: bool = False):
-    """Replace the bulk history refresh with a double built from the requests it gets."""
+    """Replace the bulk history refresh with a double built from the requests it gets.
+
+    ``recorder`` gets the ids requested, in order (``"asset_ids"``), and each one's window
+    ``(start, end)`` by id (``"date_ranges"``, lot Z-5).
+    """
     failing = failing or set()
 
     async def _fake(requests, session, concurrency=5, semaphore_timeout=60):
         if recorder is not None:
             recorder["asset_ids"] = [item.asset_id for item in requests]
+            recorder["date_ranges"] = {item.asset_id: (item.date_range.start, item.date_range.end) for item in requests}
         results = []
         if not empty:
             for item in requests:
@@ -963,6 +1029,281 @@ async def test_history_sync_that_ends_resets_the_failure_backoff(monkeypatch, is
 
 
 # ============================================================================
+# Lot Z-5: the history sync reaches back to the last saved date
+# ============================================================================
+
+#: The day the cases of ``_history_sync_start`` count from: a fixed one, so they never read the clock.
+FIXED_TODAY = date(2026, 10, 16)
+#: The event of a run whose window reaches back past the horizon, and the event every run ends with.
+REACHES_BACK = "Scheduler: history sync reaches back"
+HISTORY_SYNC_EVENT = "Scheduler: history sync"
+JOBS_CANARY = "scheduler jobs test: canary through the jobs' logger"
+
+
+def _day(offset: int) -> date:
+    """``FIXED_TODAY`` moved by ``offset`` days: negative in the past, positive in the future."""
+    return FIXED_TODAY + timedelta(days=offset)
+
+
+def _assert_asked(lookups: dict, *, asset_ids: Iterable[int] = (), pairs: Iterable[str] = ()) -> None:
+    """Barrier: the job asked for the last saved date of every asset and pair given.
+
+    A window at the horizon then is the saved dates' answer, not a job that never looked.
+    """
+    asked_ids = {asset_id for call in lookups.get("asset_ids", []) for asset_id in call}
+    asked_pairs = {pair for call in lookups.get("pairs", []) for pair in call}
+    assert set(asset_ids) <= asked_ids, f"the job never asked for the last saved price of {sorted(set(asset_ids) - asked_ids)}"
+    assert set(pairs) <= asked_pairs, f"the job never asked for the last saved rate of {sorted(set(pairs) - asked_pairs)}"
+
+
+@contextmanager
+def _captured_job_log() -> Iterator[list[dict]]:
+    """What the jobs log inside the block, behind a barrier: a canary logged through ``jobs.logger``, at the level of the
+    event under test, must arrive first — else an event missing from the capture would prove nothing."""
+    with capture_logs() as events:
+        jobs.logger.info(JOBS_CANARY)
+        assert JOBS_CANARY in {event.get("event") for event in events}, f"barrier: jobs.logger does not reach capture_logs: {events}"
+        yield events
+
+
+def _logged(events: list[dict], name: str) -> list[dict]:
+    """Every captured event named ``name``, in order."""
+    return [event for event in events if event.get("event") == name]
+
+
+def _timeless(record: dict, *keys: str) -> dict:
+    """``record`` without ``keys``: the time a run carries, which two runs never share."""
+    return {key: value for key, value in record.items() if key not in keys}
+
+
+def _timeless_state(job: JobState) -> JobState:
+    """``job`` without the time of its run."""
+    return dataclasses.replace(job, last_run_at=None, last_duration_s=None)
+
+
+@pytest.mark.parametrize(
+    ("horizon_days", "last_saved", "expected"),
+    [
+        pytest.param(14, None, _day(-14), id="never-saved"),
+        pytest.param(14, _day(-1), _day(-14), id="saved-yesterday"),
+        pytest.param(14, FIXED_TODAY, _day(-14), id="saved-today"),
+        pytest.param(14, _day(-14), _day(-14), id="resuming-the-day-after-the-horizon-start"),
+        pytest.param(14, _day(-15), _day(-14), id="resuming-on-the-horizon-start"),
+        pytest.param(14, _day(-16), _day(-15), id="resuming-the-day-before-the-horizon-start"),
+        pytest.param(14, _day(-45), _day(-44), id="a-month-behind"),
+        pytest.param(14, _day(-365), _day(-364), id="resuming-the-day-after-the-floor"),
+        pytest.param(14, _day(-366), _day(-365), id="resuming-on-the-floor"),
+        pytest.param(14, _day(-367), _day(-365), id="resuming-the-day-before-the-floor"),
+        pytest.param(14, _day(-800), _day(-365), id="older-than-the-cap"),
+        pytest.param(14, _day(4), _day(-14), id="saved-in-the-future"),
+        pytest.param(60, _day(-30), _day(-60), id="inside-a-60-day-horizon"),
+        pytest.param(60, _day(-62), _day(-61), id="behind-a-60-day-horizon"),
+        pytest.param(365, None, _day(-365), id="never-saved-with-a-365-day-horizon"),
+        pytest.param(365, _day(-900), _day(-365), id="far-behind-a-365-day-horizon"),
+    ],
+)
+def test_history_sync_start_on_a_fixed_day(horizon_days, last_saved, expected):
+    """Z-5: where a window starts, ``today`` fixed. At the horizon's start (``today - horizon_days``) when nothing is saved
+    or when the day after the last saved date is not before it — a date in the future included —; else the day after the
+    last saved date, but never earlier than 365 days ago. Each boundary from both sides."""
+    assert jobs._history_sync_start(FIXED_TODAY, horizon_days, last_saved) == expected
+
+
+def test_history_catch_up_reaches_back_365_days_at_most():
+    """Z-5: how far back the sync reaches at most, whatever the last saved date: a year."""
+    assert jobs.HISTORY_CATCH_UP_MAX_DAYS == 365
+
+
+@pytest.mark.asyncio
+async def test_history_sync_starts_each_asset_the_day_after_its_last_saved_price(monkeypatch, isolated_joblog_dir):
+    """Z-5: each asset has its own window. 401, last saved 30 days ago, starts 29 days ago; 402, saved yesterday, and 403,
+    never saved, start at the 14-day horizon. Every window ends today."""
+    today = date.today()
+    rows = [_asset_row(401, "A Month Behind"), _asset_row(402, "Saved Yesterday"), _asset_row(403, "Never Saved")]
+    _install_fake_session(monkeypatch, asset_rows=rows, last_price_dates={401: today - timedelta(days=30), 402: today - timedelta(days=1)})
+    recorder: dict = {}
+    _install_refresh_double(monkeypatch, recorder=recorder)
+
+    await jobs.run_history_sync(SchedulerState(), horizon_days=14)
+
+    horizon_start = today - timedelta(days=14)
+    assert recorder["date_ranges"] == {
+        401: (today - timedelta(days=29), today),
+        402: (horizon_start, today),
+        403: (horizon_start, today),
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("days_since_saved", "furthest_behind"),
+    [
+        pytest.param({"EUR-USD": 40, "CHF-EUR": 1}, "EUR-USD", id="eur-usd-40-days-behind"),
+        pytest.param({"EUR-USD": 20, "CHF-EUR": 40}, "CHF-EUR", id="both-behind-chf-eur-further"),
+        pytest.param({"EUR-USD": 1, "CHF-EUR": 0}, None, id="every-pair-up-to-date"),
+        pytest.param({}, None, id="no-rate-ever-saved"),
+    ],
+)
+async def test_history_sync_fx_window_starts_at_the_pair_furthest_behind(monkeypatch, isolated_joblog_dir, days_since_saved, furthest_behind):
+    """Z-5: one FX call, so one window for every pair. It starts the day after the last saved rate of the pair furthest
+    behind — EUR-USD saved 40 days ago: 39 days ago —, at the 14-day horizon when no pair is behind, and ends today. The
+    horizon there is the saved dates' answer: the job asked for them."""
+    today = date.today()
+    saved = {pair: today - timedelta(days=days) for pair, days in days_since_saved.items()}
+    lookups: dict = {}
+    _install_fake_session(monkeypatch, routes=[_route("EUR", "USD"), _route("CHF", "EUR")], last_fx_dates=saved, lookups=lookups)
+    fx_recorder: dict = {}
+    _install_fx_double(monkeypatch, recorder=fx_recorder)
+
+    await jobs.run_history_sync(SchedulerState(), horizon_days=14)
+
+    _assert_asked(lookups, pairs={"CHF-EUR", "EUR-USD"})
+    start = saved[furthest_behind] + timedelta(days=1) if furthest_behind else today - timedelta(days=14)
+    assert fx_recorder["date_range"] == (start, today)
+
+
+@pytest.mark.asyncio
+async def test_history_sync_reaches_back_no_further_than_365_days(monkeypatch, isolated_joblog_dir):
+    """Z-5: an asset and a pair last saved 800 days ago both start 365 days ago, not 799: the catch-up has a cap."""
+    today = date.today()
+    long_ago = today - timedelta(days=800)
+    _install_fake_session(
+        monkeypatch,
+        asset_rows=[_asset_row(461, "Dormant Fund")],
+        routes=[_route("EUR", "USD")],
+        last_price_dates={461: long_ago},
+        last_fx_dates={"EUR-USD": long_ago},
+    )
+    asset_recorder: dict = {}
+    fx_recorder: dict = {}
+    _install_refresh_double(monkeypatch, recorder=asset_recorder)
+    _install_fx_double(monkeypatch, recorder=fx_recorder)
+
+    await jobs.run_history_sync(SchedulerState(), horizon_days=14)
+
+    a_year_ago = today - timedelta(days=365)
+    assert asset_recorder["date_ranges"] == {461: (a_year_ago, today)}
+    assert fx_recorder["date_range"] == (a_year_ago, today)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("price_days", "fx_days", "behind", "earliest_days"),
+    [
+        pytest.param({921: 40, 922: 1}, {"EUR-USD": 25, "CHF-EUR": 1}, (1, 1), 39, id="an-asset-furthest-behind"),
+        pytest.param({921: 25, 922: 1}, {"EUR-USD": 50, "CHF-EUR": 1}, (1, 1), 49, id="a-pair-furthest-behind"),
+        pytest.param({921: 40, 922: 20}, {"EUR-USD": 30, "CHF-EUR": 60}, (2, 2), 59, id="two-of-each-behind"),
+    ],
+)
+async def test_history_sync_logs_how_far_it_reaches_back(monkeypatch, isolated_joblog_dir, price_days, fx_days, behind, earliest_days):
+    """Z-5: a run whose window reaches back past the 14-day horizon logs one INFO event: how many assets and how many pairs
+    are behind — an item saved yesterday, or never, is not —, and the earliest start of all, an asset's or the FX call's."""
+    today = date.today()
+    _install_fake_session(
+        monkeypatch,
+        asset_rows=[_asset_row(921, "First"), _asset_row(922, "Second"), _asset_row(923, "Never Saved")],
+        routes=[_route("EUR", "USD"), _route("CHF", "EUR"), _route("GBP", "USD")],
+        last_price_dates={asset_id: today - timedelta(days=days) for asset_id, days in price_days.items()},
+        last_fx_dates={pair: today - timedelta(days=days) for pair, days in fx_days.items()},
+    )
+    _install_refresh_double(monkeypatch)
+    _install_fx_double(monkeypatch)
+
+    with _captured_job_log() as events:
+        await jobs.run_history_sync(SchedulerState(), horizon_days=14)
+
+    reached = _logged(events, REACHES_BACK)
+    assert len(reached) == 1, f"one {REACHES_BACK!r} event for a run that reaches back, got {reached}"
+    (event,) = reached
+    assert event["log_level"] == "info"
+    expected = {"assets_behind": behind[0], "fx_pairs_behind": behind[1], "earliest_start": (today - timedelta(days=earliest_days)).isoformat()}
+    assert {key: event.get(key) for key in expected} == expected
+
+
+@pytest.mark.asyncio
+async def test_history_sync_with_nothing_behind_logs_no_reaching_back(monkeypatch, isolated_joblog_dir):
+    """Z-5: assets saved yesterday, today, in the future, never, or 15 days ago — resuming on the horizon's start, which is
+    not before it —, pairs saved yesterday, never, or 15 days ago: every window is the 14-day horizon's, and no
+    "reaches back" event. The silence means something because the job did ask for the saved dates and did log its run."""
+    today = date.today()
+    lookups: dict = {}
+    _install_fake_session(
+        monkeypatch,
+        asset_rows=[_asset_row(931, "Yesterday"), _asset_row(932, "Today"), _asset_row(933, "Ahead"), _asset_row(934, "Never"), _asset_row(935, "15 Days")],
+        routes=[_route("EUR", "USD"), _route("CHF", "EUR"), _route("GBP", "USD")],
+        last_price_dates={931: today - timedelta(days=1), 932: today, 933: today + timedelta(days=4), 935: today - timedelta(days=15)},
+        last_fx_dates={"EUR-USD": today - timedelta(days=1), "GBP-USD": today - timedelta(days=15)},
+        lookups=lookups,
+    )
+    asset_recorder: dict = {}
+    fx_recorder: dict = {}
+    _install_refresh_double(monkeypatch, recorder=asset_recorder)
+    _install_fx_double(monkeypatch, recorder=fx_recorder)
+
+    with _captured_job_log() as events:
+        await jobs.run_history_sync(SchedulerState(), horizon_days=14)
+
+    _assert_asked(lookups, asset_ids={931, 932, 933, 934, 935}, pairs={"CHF-EUR", "EUR-USD", "GBP-USD"})
+    assert len(_logged(events, HISTORY_SYNC_EVENT)) == 1, f"the run's own event is missing from the capture: {events}"
+    horizon = (today - timedelta(days=14), today)
+    assert asset_recorder["date_ranges"] == dict.fromkeys((931, 932, 933, 934, 935), horizon)
+    assert fx_recorder["date_range"] == horizon
+    assert _logged(events, REACHES_BACK) == []
+
+
+async def _run_logged(monkeypatch, log_dir: Path, last_price_dates: dict[int, date], last_fx_dates: dict[str, date]) -> dict:
+    """One ``run_history_sync`` of assets 941 and 942 and pairs EUR-USD and CHF-EUR, every item synced, its job log in
+    ``log_dir``: the state it wrote, its entry, its "Scheduler: history sync" events and the windows it asked for."""
+    log_dir.mkdir()
+    monkeypatch.setattr(joblog, "get_data_dir", lambda: log_dir)
+    _install_fake_session(
+        monkeypatch,
+        asset_rows=[_asset_row(941, "Behind Or Not"), _asset_row(942, "Saved Yesterday")],
+        routes=[_route("EUR", "USD"), _route("CHF", "EUR")],
+        last_price_dates=last_price_dates,
+        last_fx_dates=last_fx_dates,
+    )
+    asset_recorder: dict = {}
+    fx_recorder: dict = {}
+    _install_refresh_double(monkeypatch, recorder=asset_recorder)
+    _install_fx_double(monkeypatch, recorder=fx_recorder)
+    state = SchedulerState()
+    with _captured_job_log() as events:
+        await jobs.run_history_sync(state, horizon_days=14)
+    return {
+        "state": state.history_sync,
+        "entry": _sole_entry("history_sync"),
+        "events": _logged(events, HISTORY_SYNC_EVENT),
+        "asset_start": asset_recorder["date_ranges"][941][0],
+        "fx_start": fx_recorder["date_range"][0],
+    }
+
+
+@pytest.mark.asyncio
+async def test_history_sync_reaching_back_changes_neither_the_state_nor_the_entry(monkeypatch, isolated_joblog_dir):
+    """Z-5: the same assets and pairs, the same provider answers, synced once caught up and once from 90 days behind. The
+    ``JobState``, the job log entry and the "Scheduler: history sync" event are the same but for the time they carry:
+    reaching back adds no field and changes no value there. It is told by its own event only."""
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    long_ago = today - timedelta(days=90)
+    up_to_date = {"EUR-USD": yesterday, "CHF-EUR": yesterday}
+    caught_up = await _run_logged(monkeypatch, isolated_joblog_dir / "caught-up", {941: yesterday, 942: yesterday}, up_to_date)
+    behind = await _run_logged(monkeypatch, isolated_joblog_dir / "behind", {941: long_ago, 942: yesterday}, {**up_to_date, "EUR-USD": long_ago})
+
+    # Barrier: the second run did reach back and the first did not, or comparing them would prove nothing.
+    horizon_start = today - timedelta(days=14)
+    resumed = long_ago + timedelta(days=1)
+    assert (caught_up["asset_start"], caught_up["fx_start"]) == (horizon_start, horizon_start)
+    assert (behind["asset_start"], behind["fx_start"]) == (resumed, resumed), "the run 90 days behind did not reach back"
+    assert len(caught_up["events"]) == 1, f"the run's own event is missing from the capture: {caught_up['events']}"
+
+    assert _timeless_state(behind["state"]) == _timeless_state(caught_up["state"])
+    assert _timeless(behind["entry"], "ts", "duration_s") == _timeless(caught_up["entry"], "ts", "duration_s")
+    assert [_timeless(event, "duration_s") for event in behind["events"]] == [_timeless(event, "duration_s") for event in caught_up["events"]]
+
+
+# ============================================================================
 # Live-schema guard — the only tests here that reach the shared database
 # ============================================================================
 
@@ -1015,3 +1356,86 @@ async def test_history_sync_selects_stay_valid_against_live_schema(monkeypatch, 
     # Every pair the job derived from the live routes is a well-formed slug.
     for pair in fx_recorder.get("pairs", []):
         assert len(pair.split("-")) == 2, f"malformed pair slug built from a live route: {pair!r}"
+
+
+#: Lot Z-5, live: an asset id no price can carry, asset ids being autoincremented from 1.
+IMPOSSIBLE_ASSET_ID = -1
+#: A pair no rate is stored for: codes shaped like ISO 4217, unassigned, written by no test. Not "AAA-ZZZ", the pair one
+#: thinks of first: ``test_db/test_numeric_truncation.py`` commits rates for it.
+NEVER_STORED_PAIR = "XQB-XQC"
+#: How many stored assets, and how many stored pairs, a live case asks about.
+LIVE_SAMPLE = 3
+
+
+async def _begin_read_snapshot(session: AsyncSession) -> None:
+    """Open an explicit read transaction: every SELECT of ``session`` from here on sees one snapshot of the database.
+
+    Under pysqlite's legacy transaction control each bare SELECT runs in an implicit transaction of its own, so two
+    SELECTs may see two states of a database other units are writing to, and comparing what they read would fail for a
+    neighbour's commit. In WAL mode a deferred read transaction blocks no writer; closing the session rolls it back.
+    Nothing is written.
+    """
+    await session.execute(text("BEGIN"))
+
+
+def _calendar_day(value: object) -> bool:
+    """A ``date`` and not a ``datetime``, which is one too but cannot be compared with a date."""
+    return isinstance(value, date) and not isinstance(value, datetime)
+
+
+def _reversed_pair(slug: str) -> str:
+    base, quote = slug.split("-")
+    return f"{quote}-{base}"
+
+
+@pytest.mark.asyncio
+async def test_last_price_dates_stays_valid_against_live_schema():
+    """Z-5: ``_last_price_dates`` on a real session against the real database, read only.
+
+    It asserts no count it did not create. Within one snapshot, asked about a few assets that have prices and an id none
+    can have, it answers for each of the first the latest date of its prices — what the test reads itself, row by row —
+    and nothing for the id. With no price stored, only the id is asked about, and it holds too.
+    """
+    async with AsyncSession(get_async_engine()) as session:
+        await _begin_read_snapshot(session)
+        sample = select(PriceHistory.asset_id).distinct().order_by(PriceHistory.asset_id).limit(LIVE_SAMPLE)
+        asked = [*(await session.execute(sample)).scalars().all(), IMPOSSIBLE_ASSET_ID]
+        stored = (await session.execute(select(PriceHistory.asset_id, PriceHistory.date).where(PriceHistory.asset_id.in_(asked)))).all()
+        last = await jobs._last_price_dates(session, asked)
+
+    latest: dict[int, date] = {}
+    for asset_id, day in stored:
+        latest[asset_id] = max(day, latest.get(asset_id, day))
+    assert IMPOSSIBLE_ASSET_ID not in last, f"an id no price can carry got a date: {last}"
+    assert set(last) <= set(asked), f"answered about ids it was not asked about: {set(last) - set(asked)}"
+    assert all(_calendar_day(day) for day in last.values()), f"a last saved date is not a date: {last}"
+    assert last == latest, f"not the latest stored date of each asset asked about, within one snapshot: expected {latest}, got {last}"
+
+
+@pytest.mark.asyncio
+async def test_last_fx_dates_stays_valid_against_live_schema():
+    """Z-5: ``_last_fx_dates`` on a real session against the real database, read only.
+
+    A rate is stored with base and quote in alphabetical order; a pair is asked about as a slug, in either order. Within
+    one snapshot, both orders of a few stored pairs answer the latest date of the pair's rates — what the test reads
+    itself, row by row —, each under the slug it was asked as; a pair with no rate, in either order, answers nothing.
+    With no rate stored, only that pair is asked about, and it holds too.
+    """
+    async with AsyncSession(get_async_engine()) as session:
+        await _begin_read_snapshot(session)
+        sample = select(FxRate.base, FxRate.quote).distinct().order_by(FxRate.base, FxRate.quote).limit(LIVE_SAMPLE)
+        stored_pairs = (await session.execute(sample)).all()
+        latest: dict[str, date] = {}
+        for base, quote in stored_pairs:
+            days = (await session.execute(select(FxRate.date).where(FxRate.base == base, FxRate.quote == quote))).scalars().all()
+            latest[f"{base}-{quote}"] = latest[f"{quote}-{base}"] = max(days)
+        never = [NEVER_STORED_PAIR, _reversed_pair(NEVER_STORED_PAIR)]
+        asked = [*latest, *never]
+        last = await jobs._last_fx_dates(session, asked)
+
+    assert not set(never) & set(last), f"a pair with no rate got a date: {last}"
+    assert set(last) <= set(asked), f"answered about slugs it was not asked about: {set(last) - set(asked)}"
+    assert all(_calendar_day(day) for day in last.values()), f"a last saved date is not a date: {last}"
+    for base, quote in stored_pairs:
+        assert last.get(f"{base}-{quote}") == last.get(f"{quote}-{base}"), f"{base}-{quote} and {quote}-{base} are one stored pair: {last}"
+    assert last == latest, f"not the latest stored date of each pair asked about, within one snapshot: expected {latest}, got {last}"
