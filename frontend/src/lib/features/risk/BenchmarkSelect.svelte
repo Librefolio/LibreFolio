@@ -209,7 +209,7 @@
             onchange={choose}
         />
         {#if loadFailed}
-            <p class="mt-1 text-[10px] text-red-500" data-testid="{testid}-load-error">{$t('signals.comparisonAsset.loadError')}</p>
+            <p class="mt-1 text-[10px] text-lf-danger" data-testid="{testid}-load-error">{$t('signals.comparisonAsset.loadError')}</p>
         {/if}
     </div>
     {#if measuredChoice}
@@ -217,7 +217,7 @@
              Tooltip wrapper adds no button role around it. -->
         <Tooltip text={hint} position="bottom" maxWidth="320px" interactiveChild={true}>
             <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-            <span class="inline-flex text-amber-600 dark:text-amber-400" data-testid="{testid}-measured" role="img" tabindex="0" aria-label={hint}>
+            <span class="inline-flex text-lf-warning" data-testid="{testid}-measured" role="img" tabindex="0" aria-label={hint}>
                 <AlertTriangle size={14} aria-hidden="true" />
             </span>
         </Tooltip>

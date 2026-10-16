@@ -480,23 +480,49 @@ describe('AboutTab — copy for issue', () => {
 
 // =========================================================================
 describe('AboutTab — the installed plugin inventory', () => {
+    // Each section header reads "label (count)", so no element's text equals the bare key, whether the section is there
+    // or not: an exact query for it can never fail. These patterns find the header; each absence check below first
+    // proves, on a render with something installed, that the very same pattern does find it.
+    const assetHeader = /settings\.assetProviders/;
+    const fxHeader = /settings\.fxProviders/;
+    const importHeader = /settings\.importPlugins/;
+
+    /** The positive control: one entry in every list shows all three headers. Unmounted, so the next render is alone. */
+    async function expectHeadersFoundWhenInstalled() {
+        api.asset().mockResolvedValue([{code: 'yf', name: 'Yahoo Finance'}] as never);
+        api.fx().mockResolvedValue([{code: 'ecb', name: 'European Central Bank'}] as never);
+        api.brim().mockResolvedValue([{code: 'degiro', name: 'DEGIRO'}] as never);
+        const installed = await mount();
+        for (const header of [assetHeader, fxHeader, importHeader]) {
+            expect(screen.getByText(header)).toBeInTheDocument();
+        }
+        installed.unmount();
+    }
+
     it('omits a provider section entirely when nothing is installed', async () => {
+        await expectHeadersFoundWhenInstalled();
+        api.asset().mockResolvedValue([] as never);
+        api.fx().mockResolvedValue([] as never);
+        api.brim().mockResolvedValue([] as never);
         await mount();
 
-        expect(screen.queryByText('settings.assetProviders')).toBeNull();
-        expect(screen.queryByText('settings.fxProviders')).toBeNull();
-        expect(screen.queryByText('settings.importPlugins')).toBeNull();
+        expect(screen.queryByText(assetHeader)).toBeNull();
+        expect(screen.queryByText(fxHeader)).toBeNull();
+        expect(screen.queryByText(importHeader)).toBeNull();
     });
 
     it('shows each section only when its own list has something in it', async () => {
+        await expectHeadersFoundWhenInstalled();
+        api.asset().mockResolvedValue([] as never);
         api.fx().mockResolvedValue([{code: 'ecb', name: 'European Central Bank'}] as never);
+        api.brim().mockResolvedValue([] as never);
         await mount();
 
         expect(screen.getByText('European Central Bank')).toBeInTheDocument();
         // The other two are still empty and still absent: the three sections are
         // independent, not one block.
-        expect(screen.queryByText('settings.assetProviders')).toBeNull();
-        expect(screen.queryByText('settings.importPlugins')).toBeNull();
+        expect(screen.queryByText(assetHeader)).toBeNull();
+        expect(screen.queryByText(importHeader)).toBeNull();
     });
 
     it('links an asset provider to its help page when it declares one', async () => {
