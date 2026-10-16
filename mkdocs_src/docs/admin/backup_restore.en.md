@@ -30,7 +30,7 @@ Never in the archive:
 ### 🧭 What Follows {: #what-follows }
 
 - 🔒 **Keep it private.** The archive holds every user's data and is not encrypted: keep it, and every copy, as private as the server itself.
-- 🗝️ **Saved secrets stay behind.** What LibreFolio encrypted with the instance key cannot be read on an installation with another key. There, a secret plugin setting saved in the app, such as the API key of a data source, is reported as set but unreadable: enter it again. No plugin shipped with LibreFolio keeps one today.
+- 🗝️ **Saved secrets stay behind.** What LibreFolio encrypted with the instance key cannot be read on an installation with another key. There, a secret plugin setting saved in the app, such as the API key of a data source, is reported as set but unreadable: enter it again. For the settings of the whole instance, every start also logs the error *Stored plugin secrets that the instance key cannot read: …* with their count, until they are entered again or the old key is back. No plugin shipped with LibreFolio keeps one today.
 - ⚙️ **Bring your configuration.** Keep a copy of your `.env` with the archives: on another installation, set again the options you need, the email ones included ([Where the Configuration Lives](email.md#where-it-lives)).
 - 🏠 **Any installation can take it**, if it runs the same version of LibreFolio or a newer one, whoever made the archive: Settings, the command line or a hosting panel.
 
@@ -57,7 +57,7 @@ Good to know:
 - ⏱️ The archive stays on the server for one hour, then it is deleted: download it within the hour. **Delete from the server** removes it sooner, and **Create a new backup** starts another one.
 - ⚠️ **The backup is complete, with warnings** means that the database failed its integrity check or has broken references, and was archived as it is, or that some files were left out. The archive is written all the same: read the warnings before you rely on it.
 - 🚦 While another backup runs, started from the app, the command line or a hosting panel, the card says so: try again when it ends.
-- 🔒 On an instance its hosting provider has [blocked](hosting_providers.md#instance-block), the app shows the block page instead of Settings, and that page has no backup button yet. The backup itself is still allowed there: for an administrator through the API and for the hosting panel ([What Still Answers](hosting_providers.md#what-still-answers)), and from the command line on the server.
+- 🔒 On an instance its hosting provider has [blocked](hosting_providers.md#instance-block), the app shows the block page instead of Settings. Administrators find on it the same backup card, under **Keep a copy of the data**: make the backup and download it there ([What Users See](hosting_providers.md#what-users-see)). The hosting panel ([What Still Answers](hosting_providers.md#what-still-answers)) and the command line on the server can still make one too.
 
 ### ⌨️ From the Command Line {: #command-line }
 
@@ -254,7 +254,7 @@ With Docker Compose on your server:
 Good to know:
 
 - 🐳 At every start the container gives the whole `LibreFolio-data/` folder to its user: an archive copied in before the first start can be read by the server. One copied in later may need `sudo chown 1000:1000 <archive>` with the official image: see «Back Up with Docker» in [CLI Admin Tools](cli_tools.md).
-- 🔒 If the hosted instance is blocked, its app shows the block page instead of Settings: ask your hosting provider for the archive. A hosting panel can still make one on a blocked instance ([Backups for Your Hosting Panel](hosting_providers.md#panel-backups)).
+- 🔒 If the hosted instance is blocked, its app shows the block page instead of Settings: as an administrator, download the archive from its card **Keep a copy of the data** ([What Users See](hosting_providers.md#what-users-see)). Otherwise ask your hosting provider: a hosting panel can still make one on a blocked instance ([Backups for Your Hosting Panel](hosting_providers.md#panel-backups)).
 - 🖥️ On a host installation, the same steps with `pipenv run ./dev.py backup restore <archive>`, then a restart of the server by hand. From Settings › Backup, the server stops by itself: start it again yourself, unless something supervises it ([Who Starts LibreFolio Again](#supervisors)).
 
 ### ✋ By Hand: Unzip Before the First Start {: #by-hand }
