@@ -3391,3 +3391,73 @@ leggere come al solito. Le due voci erano di B (piano 07, §13 B6a) e il coordin
 > - effetto di H-9 notato dal test-author: le chiamate a `configure_logging()` in (d) e in `test_secret_masking.py`
 >   non svuotano prima la radice, quindi chiudono anche i gestori di pytest. Oggi non fa danno, perché `pytest.ini` non ha
 >   `log_file`; con `pytest --log-file` quel file smetterebbe di ricevere righe dopo il primo test così.
+
+> **Ingresso del lotto 2**: committato (`60f41e18e` fix, `c1ecdc389` test, `1235dd414` wiki, `811ccc4bf` diario), HEAD
+> `811ccc4bf`. `all-backend` per tutti i lotti nello slot 1 dopo A7a, verso le 09:30.
+
+### H-3, il resto: niente chiave nuova in silenzio quando il DB ha segreti — analisi (2026-10-16, mattina) — sola lettura
+
+**Oggi** (HEAD `811ccc4bf`):
+
+- chi chiama `derive_key()`:
+  - le impostazioni dei plugin (`settings_subkey()` e `fingerprint_subkey()` nel resolver, e `plugin_secrets_key_status`
+    di X), con le sole righe cifrate dell'istanza, ognuna col suo `key_id`;
+  - il probe dell'indirizzo di A, che non salva nulla. `verify_probe_nonce` tollera una chiave inutilizzabile e
+    risponde `False`; `issue_probe_nonce` no;
+- gli archivi di B non contengono la chiave (`ManifestInstanceKey.included`, falso). Solo un archivio protetto da password
+  potrà contenerla (B4);
+- lo scenario: dati ripristinati senza `secrets/`, oppure il file della chiave cancellato. Da H-15 la prima derivazione
+  la fa il passo `plugin-secrets-check`, perché la funzione di X deriva quando ci sono righe. La chiave nuova nasce
+  quindi all'avvio, e il log ha l'errore col conteggio;
+- il rischio che resta: se l'amministratore, prima di accorgersene, inserisce di nuovo dei segreti, questi vengono cifrati
+  con la chiave nuova. Rimettere poi la vecchia chiave rende illeggibili proprio quelli. Lo avvisa solo il log.
+
+**Opzione A, la cura vera: nessuna chiave nuova in silenzio se il DB ha segreti.**
+
+- In `plugin-secrets-check`: se `instance_key_status().source == "not_created"` e il DB ha righe con un segreto
+  (contate senza derivare), il passo non chiama la funzione di X. Scrive un errore: «il file della chiave manca, ma N
+  segreti salvati sono cifrati con una chiave: rimetti `secrets/instance.key`, oppure `./dev.py instance-key new` per
+  ripartire con una chiave nuova, e quei segreti vanno inseriti di nuovo». Poi chiama
+  `instance_key.forbid_generation(reason)`: per il resto del processo `_instance_key()` solleva `InstanceKeyError`
+  invece di creare il file.
+- Effetti: le impostazioni dei plugin si comportano come con una chiave inutilizzabile, come X ha già documentato
+  (`unreadable` nel catalogo, chiamate senza segreti, scritture con un segreto a 503, un errore nel log).
+  `POST /users/address-probe` di A darebbe 500: è un buco che c'è già (H-19). A dovrebbe rispondere 503.
+- Il self-hosted resta com'è: cambia solo uno stato già guasto. Un'installazione nuova genera la chiave al primo uso,
+  come oggi. Una chiave configurata non può sparire in silenzio: se è inutilizzabile, l'avvio si ferma.
+- Superfici: `instance_key.py` (il divieto), `plugin_secrets_check.py` (il ramo), un comando CLI `instance-key new`
+  (`dev.py`, superficie condivisa), la doc admin (`configuration`, «The Instance Key» e «Startup Checks», con debito di
+  traduzione) e `security.md`, i test (il divieto, la CLI, l'installazione nuova invariata). Peso: un lotto
+  piccolo-medio.
+
+**Opzione B, solo doc**: si tiene H-15 com'è e si scrive l'ordine giusto, cioè rimettere il file della chiave **prima**
+di inserire di nuovo i segreti, nella riga ❌ di «Startup Checks» e in «The Instance Key». Rischio zero.
+
+**Proposta**: la B adesso, la A come lotto se il developer la vuole nella 1.3, insieme alla piccola correzione di A
+(H-19). Per il cloud cambia poco: le istanze gestite hanno una chiave configurata, e un cambio di chiave lo segnala già
+H-15. È decisione del developer, perché cambia il comportamento di uno stato guasto e aggiunge un comando.
+
+> **Esito**: il coordinatore vuole **l'opzione B subito** (solo doc, commit separato). L'opzione A va nella lista del
+> developer come **P24**; H-19 passa ad A, per il suo backlog, prima di un'eventuale A.
+
+#### H-3, opzione B: l'ordine giusto nella doc ✅ (2026-10-16, mattina)
+
+> **Note implementazione**:
+>
+> - docs-writer, verificando sul codice: salvare un segreto riscrive `secret_ciphertext` e `key_id` della riga
+>   (`plugin_settings/service.py`). In `admin/configuration.en.md`:
+>   - il punto dell'avviso di «🗝️ The Instance Key»;
+>   - la riga ❌ `platform.plugin_secrets` di «Startup Checks», ora in ordine: prima la chiave vecchia, a LibreFolio
+>     fermo, e solo senza una copia i segreti inseriti di nuovo;
+>   - «Saved Secrets and the Instance Key», che diceva «enter them again» senza condizioni.
+>
+>   In `developer/architecture/security.md` una frase nel paragrafo «A lost key file»;
+> - io: il punto ⛔ di `admin/filesystem.en.md` («Never edit, replace or delete `instance.key`») contraddiceva
+>   l'ordine nuovo, cioè rimettere la copia al posto della chiave generata. Ora dice «the `instance.key` in use», e
+>   rimette la copia a LibreFolio fermo, prima di inserire di nuovo un segreto.
+>
+> **Prove** (08:03): `mkdocs build` rigoroso senza avvisi, `check-links` 97. Debito di traduzione: `configuration`
+> (tre punti) e `filesystem` (un punto), senza timbro.
+>
+> **Da girare a X**: dicono ancora «enter it again» senza l'ordine il suggerimento della UI
+> (`frontend/src/lib/i18n/pluginSettings/en.json:31`) e `user/settings/plugins.en.md:117`.

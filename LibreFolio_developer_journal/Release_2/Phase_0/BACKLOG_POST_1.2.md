@@ -2815,6 +2815,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     componente è condiviso: va al proprietario dell'interfaccia comune, con la regola dei colori per i file condivisi.
 
   Dettagli: piano H, §14 «La card del backup nella pagina di blocco».
+- **H-19 · `POST /users/address-probe` risponde 500 se la chiave d'istanza non si può usare** — basso; H (analisi di H-3),
+  16/10.
+  - `issue_probe_nonce()` (`services/accounts/address_probe.py`, di A) chiama `derive_key()` senza gestire
+    `InstanceKeyError`. Con un file della chiave generato e poi rovinato, il server parte con un errore nel log, e la
+    rotta dell'admin dà 500. `verify_probe_nonce()` invece lo tollera e risponde `False`.
+  - Cura proposta: 503 con un codice, per esempio `instance_key_unavailable`, e un caso di test. Il codice è di A: da
+    girare ad A.
+
+  Dettagli: piano H, §14 «H-3, il resto».
 
 ## A · Account e accessi (fase 01)
 
