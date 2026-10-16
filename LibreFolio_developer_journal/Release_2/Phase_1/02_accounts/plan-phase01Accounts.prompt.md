@@ -3748,3 +3748,139 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Bozze pronte**: `/tmp/libreFolio_a6e/apply_a6e_backend.py`, `apply_a6e_frontend.py` (il campo nella colonna
 >   sinistra della riga dell'email, sotto il suggerimento; solo ruoli di colore; due chiavi nuove nelle 4 lingue,
 >   `settings.currentPasswordRequired` e `settings.emailPasswordHint`).
+
+#### A6d.7 — Commit, base aggiornata, prove leggere durante G-13 ⏳ (2026-10-16, 00:00–)
+> - **Commit del coordinatore**: `683b4ff5b` feat, `2ab1d5572` doc, `10cfa4cf2` journal; merge di `dev_release2`
+>   (`de349d4c3`) pulito → HEAD `ce4acff6c`. I 4 file rossi di A6e restano non committati.
+> - **Riletti i file uniti da soli**: `LoginCard.svelte` (le classi di T su L41/L77, la mia condizione su L112),
+>   `security.md` (la sezione «The First-Account Flag» e il paragrafo delle rotte private con il testo di entrambi),
+>   `access_control.md`, `database/index.md` (005–008 in ordine), `_backend_services.py` (`black` pulito).
+> - **Triage del PAC** (skill `test-triage`), evidenza: nel log della mia run le risposte `compute` hanno
+>   `code: worker_crashed`, anche il caso che dovrebbe fermarsi alla validazione (`invalid_parameters`): il processo
+>   isolato esce prima del risultato. Coincide con quanto ha visto G alle 23:05 (carico 80–96, swap; 8 su 8 verdi a
+>   carico basso). Verdetto candidato: **ambiente** (risorse della macchina), da confermare con l'unità da sola dopo
+>   le 01:15, `nice`.
+> - **Durante G-13** (00:00–01:15, il carico sotto 70, una alla volta): `api sync`, `front check`,
+>   `theme-roles --check`, Vitest `LoginCard` e `GlobalSettingsTab`, `services registration`, `db migration-008`,
+>   `mkdocs build` e `check-links`. **Dopo le 01:15**: `api pac-planner-tool` da sola ed E2E `auth`; poi l'ingresso.
+> - **Durante G-13, prove leggere ✅** (00:00–00:03, `/tmp/libreFolio_a6d/logs/g13/`): `api sync`; `front check` 0/0;
+>   `theme-roles --check` pulito; Vitest `LoginCard` e `GlobalSettingsTab` 132; `services registration` 147;
+>   `db migration-008` 23; `mkdocs build` ✅; `check-links` ✅.
+
+#### A6e.2 — Rossi leggeri, implementazione, verdi leggeri ⏳ (2026-10-16, 00:03–)
+> - **Rossi osservati**: Vitest `ProfileTab` ❌ 25 su 77 (i 6 casi aggiornati e 19 dei 21 nuovi; le 2 guardie verdi);
+>   `services user-profile` ❌ 2 su 42; `api profile` ❌ 7, già visti nell'`all-backend` di A6d (PROF-010…013, 016).
+> - **Decisione notturna, da rivedere**: il rosso dell'E2E di A6e non si può vedere prima delle 01:15 (G-13: niente
+>   E2E). Applico lo stesso l'implementazione: gli stessi comportamenti sono coperti dai rossi Vitest e API già visti;
+>   l'E2E si prova verde dopo le 01:15, e il suo punto di rottura previsto («password field visible») l'ho letto.
+> - **Implementazione** (`/tmp/libreFolio_a6e/apply_a6e_backend.py`, `apply_a6e_frontend.py`): `current_password` nella
+>   richiesta; l'endpoint verifica la password prima di tutto e dà il cookie nuovo; `update_profile` mette
+>   `email_verified_at = NULL` e `end_sessions` nello stesso commit dell'email; `ProfileTab` con il campo, il
+>   suggerimento, i bottoni spenti, `describeRefusal` (i due codici tradotti, `data-error-code`, mai «[object
+>   Object]»); due chiavi nuove nelle 4 lingue. `ruff`, `black`, prettier puliti; `api sync`.
+> - **Verdi leggeri**: Vitest `ProfileTab` e i cancelli i18n ✅ 107; `services user-profile` ✅ 42 (ha ricreato il DB
+>   della corsia: prima delle prove API ed E2E serve `db populate --force`).
+> - **Verdi leggeri (seguito)**: `front check` 0/0; `theme-roles --check` pulito; `i18n check` ✅.
+> - **Doc** (`docs-writer`, 8 pagine EN, senza build): utente `settings/profile` (sezione «Changing Your Email»); dev
+>   `security` (sezione `#email-change`, la riga nella tabella della revoca delle sessioni), `access_control`,
+>   `users_and_brokers`, `database/users_access` (corretto anche «nessun codice imposta `email_verified_at`»: E5a lo fa),
+>   `features/settings` (la riga dell'email di `ProfileTab`), `features/auth` (la riga del contratto dei password
+>   manager). **Pagine di E** (`developer/backend/email.md`, `admin/email.en.md`): la ragione della sospensione di
+>   «password dimenticata» diceva che l'email si cambia col solo cookie; corretta, dichiarata a parte (decide il
+>   coordinatore).
+>   - **Fuori pista** (dal rapporto del docs-writer): il campo nuovo non aveva `id`, `name` né un'etichetta, contro il
+>     contratto dei password manager (`auth.md#password-manager-contract`). Aggiunti `id="profile-current-password"`,
+>     `name="current-password"` e un `<label for>` nascosto con la chiave del segnaposto; Vitest `ProfileTab` ✅ 77,
+>     colori puliti.
+>   - `mkdocs build` strict ✅, `check-links` ✅ 96. Debito di traduzione (A-10): `user/settings/profile`, `admin/email`.
+> - **Dopo le 01:15** (`/tmp/libreFolio_a6e/after_g13.sh`): `db populate --force`, `api pac-planner-tool` da sola
+>   (triage A6d), `api profile`, `api auth`, `api instance-block`, E2E `auth` e `settings`.
+
+### A6c — Decisione 37: le regole della password in un posto solo — contratto approvato (2026-10-16, 00:38)
+> **Approvato** dal coordinatore, con la decisione notturna sulle classi Unicode «da rivedere». I rossi adesso, in file
+> separati da A6e; l'implementazione dopo il commit di A6e. Nel CHANGELOG: la UI e la CLI ora accettano gli stessi
+> simboli e le maiuscole non ASCII. Le due frasi nelle pagine di E entrano col commit di doc di A6e, dichiarate.
+> **Decisione notturna, da rivedere**: le chiavi della UI restano quelle di oggi (`minLength`, `hasUppercase`…: testid
+> `password-rule-<chiave>` e chiavi i18n), con una mappa codice del server → chiave in `passwordRules.ts`, perché
+> l'E2E `e2e/layout/theme-roles.spec.ts` dei colori legge quei testid. Un codice che la UI non conosce non blocca
+> (`valid` lo ignora): decide il server.
+>
+> **A6c.1 — Rossi** ⏳: due `test-author`, solo scrittura (backend: `test_password_policy.py` nuovo, `test_auth_api.py`,
+> `test_registration_api.py`, `test_system_api.py`, la CLI; frontend: `passwordRules.test.ts` nuovo,
+> `PasswordStrength.test.ts`, `RegisterCard.test.ts`, `PasswordChangeModal.test.ts`, `ResetPasswordCard.test.ts`,
+> `registrationErrors.test.ts`).
+> **Lo stato** (sola lettura): le stesse cinque regole (8 caratteri, maiuscola, minuscola, cifra, simbolo) sono scritte
+> in `PasswordStrength.svelte` (classi ASCII e un elenco di simboli; usato dalla modale del cambio password, dalla
+> registrazione e dal reset, che legge il suo `valid`) e in `scripts/user_cli.py` `validate_password` (classi Unicode, un
+> altro elenco di simboli): divergono già. L'API chiede solo 8 caratteri (`min_length=8` in `schemas/auth.py`).
+> L'etichetta «At least 8 characters» ha il numero scritto nel testo.
+>
+> **Contratto proposto**:
+> - **C1 · Una fonte**: `services/accounts/password_policy.py`, le cinque regole di oggi (`min_length` 8, `uppercase`,
+>   `lowercase`, `digit`, `special`) e `failed_rules(password) -> list[str]`. **Decisione notturna, da rivedere**: le
+>   classi sono Unicode, uguali in Python e in JS (maiuscola `Lu`, minuscola `Ll`, cifra `Nd`; simbolo: ogni carattere
+>   che non è lettera, numero o spazio). Oggi la UI accetta solo maiuscole ASCII e un elenco fisso di simboli.
+> - **C2 · Dove vale**: ogni password nuova — `POST /auth/register`, `/auth/change-password`, `/auth/password-reset`, la
+>   CLI (`user create`, `user reset`: via `validate_password`), poi il `/setup` di A7. Rifiuto: 400
+>   `{error_code: "PASSWORD_TOO_WEAK", message, rules: [codici mancati]}`; gli schemi tengono solo «non vuota». Le password
+>   già salvate restano valide (il login non controlla le regole).
+> - **C3 · Esposte**: `GET /system/instance` → `accounts.password_rules: [{code, value?}]`, pubblico (le pagine di
+>   registrazione, invito e reset le leggono prima del login).
+> - **C4 · UI**: `PasswordStrength` prende le regole da `instanceConfig` (finché non risponde, le cinque di oggi), le
+>   verifica con le stesse classi, un'etichetta per codice (la lunghezza come ICU `{value}`); registrazione e modale
+>   legano `valid` come il reset, senza copie proprie; `PASSWORD_TOO_WEAK` del server mostra le regole mancate.
+>   L'indicatore di robustezza resta.
+> - **Prove** (rossi prima): la politica; le tre rotte per ogni regola; una password debole già salvata entra ancora;
+>   la CLI; la forma di `/system/instance` (che tocca di nuovo i test a forma esatta: `test_system_api`,
+>   `test_registration_api`); Vitest `PasswordStrength` con un insieme di regole cambiato, registrazione, modale, reset.
+> - **Doc**, CHANGELOG 🔄 (il server applica le stesse regole dell'app; un client dell'API riceve
+>   `PASSWORD_TOO_WEAK`).
+> - **Ordine**: l'implementazione tocca `schemas/auth.py` e `api/v1/auth.py`, come A6e: comincia dopo il commit di A6e.
+>   I rossi stanno in file diversi da quelli di A6e: si possono scrivere prima.
+>
+> **A6c — bozze** (in `/tmp/libreFolio_a6c/`, da applicare dopo il commit di A6e; corsia ferma per la regola delle
+> 00:55–01:40):
+> - `password_policy.py`: le cinque regole, `failed_rules()`, `password_rules_public()` (`value` nullo per le regole
+>   senza valore); `apply_a6c_backend.py` (combacia, a secco): gli schemi tengono solo «non vuota», `PasswordRuleRead` e
+>   `accounts.password_rules`, `_refuse_weak_password()` in testa a register, reset e change-password (prima della
+>   password attuale), `/system/instance` pubblica le regole, la CLI stampa una frase per regola mancata.
+> - **Decisioni notturne, da rivedere**: un elenco di regole vuoto o assente vale come «quelle di oggi» nella UI;
+>   `PasswordStrength` passa ai runes per seguire `instanceConfig` (che è stato reattivo) senza rimontarsi;
+>   `PasswordChangeModal` legge anche un `detail` a oggetto (oggi lo tratta da stringa: con `PASSWORD_TOO_WEAK` si
+>   romperebbe).
+>
+> **A6c.1 — Rossi scritti** ✅ (non ancora lanciati: la corsia è ferma fino al via del coordinatore, ~01:40):
+> - **Backend**: `test_password_policy.py` nuovo (POLICY-000…006, puro; da registrare come `services password-policy`,
+>   isolamento PURE); `test_auth_api.py` (REG-004 e CHPWD-005 da 422 a 400 `PASSWORD_TOO_WEAK`; PWD-001…008; le password di
+>   preparazione rese forti); `test_registration_api.py` (RESET-004 per regola, RESET-006, RESET-007, RULES-001…003, le
+>   forme esatte con `password_rules`); `test_system_api.py` (le due forme); la CLI in
+>   `test_utilities/test_dev_cli_image.py` (IMG-031, 031b/c/d). **File di altri, dichiarati**: `test_brim_api.py`,
+>   `test_brim_scalable_api.py`, `test_e2e/test_brim_e2e.py` registravano con `testpass123`: ora `TestPass123!`, o dopo
+>   A6c fallirebbero alla preparazione. In più una cifra fissa nei modelli `Initial-/Changed-/Invited-{hex12}` dei miei
+>   test (una volta su 130 000 non avrebbero una cifra).
+> - **Frontend**: `passwordRules.test.ts` nuovo (62 casi; da registrare in `core-unit` accanto a
+>   `registrationErrors.test.ts`), `PasswordStrength.test.ts` (14), `RegisterCard.test.ts` (6), `PasswordChangeModal.test.ts`
+>   (7), `ResetPasswordCard.test.ts` (5 e una riga), `registrationErrors.test.ts`.
+> - **Difetto vero trovato** (frontend): `PasswordChangeModal` tratta ogni `detail` come stringa; con un `detail` a oggetto
+>   lancia dentro il `catch` di `trySave` e resta in `isSubmitting`. La cura è nella bozza.
+> - **Per la revisione del mattino** (dalla decisione sulle classi Unicode): una password di sole lettere senza maiuscole
+>   e minuscole (`漢漢漢漢漢漢12!`) non passa le regole del caso; un accento combinante (U+0301) o un carattere di controllo
+>   contano come simboli; nessuna normalizzazione NFC; tab, a capo e U+200B restano non fissati (`isspace` e `\s`
+>   divergono su caratteri rari).
+> - **Bozze aggiornate**: i messaggi della CLI contengono il codice della regola («min_length: …», «digit: …»), come
+>   chiede IMG-031; `password_rules` ha un default vuoto (due test esistenti costruiscono il modello senza), e la UI tratta
+>   un elenco vuoto come «quelle di oggi».
+
+#### A6d/A6e — Prove dopo la ripresa (2026-10-16, 01:33–01:44)
+> - `db populate --force` ✅ (la riga della corsia `open`).
+> - **A6e**: `api profile` ✅ 21 (PROF-001…016); `api instance-block` ✅ 62; `api auth`: 64 ✅ e 24 ❌, **tutti rossi di A6c**
+>   attesi (REG-004, CHPWD-005, PWD-001 ×10, PWD-003 ×10, PWD-004, PWD-007): nessuna regressione da A6e.
+> - **Triage del PAC chiuso**: `api pac-planner-tool` da sola, col carico a 32: ✅ 12 su 12. **Verdetto: ambiente** (il
+>   processo isolato usciva prima del risultato, `worker_crashed`, sotto carico e swap). Nessun cambio di codice.
+> - **E2E** (`auth` per A6d, `auth` e `settings` per A6e): dopo la galleria mobile di Y, al via del coordinatore.
+
+#### A6e.3 — E2E (slot pesante 2) e handoff FROZEN ✅ (2026-10-16, 02:03–02:10)
+> - E2E `auth` ✅ 34 (il caso di A6d compreso) e `settings` ✅ 51 (il caso nuovo di A6e compreso), `--workers 2`, `nice`,
+>   sul worktree con A6e aperto. Porta 6182 libera; `git diff --check` pulito.
+> - **Handoff**: A6d può entrare (`ce4acff6c`); il checkpoint di A6e con i suoi file, i rossi di A6c esclusi. Stato
+>   FROZEN fino al commit; poi A6c (implementazione sulle bozze in `/tmp/libreFolio_a6c/`).
