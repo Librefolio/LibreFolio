@@ -13,6 +13,15 @@
  * that never reaches the network fails by name instead of leaving a button that was never asked to wait. Every hold is
  * released and unrouted in `finally`: no request outlives its test.
  *
+ * And a request the button must not wait for (P3): the Dashboard's reload in background once the server has caught up
+ * on prices (Z5, Z-13: `notifyPricesCaughtUp()` sends `{kind: 'prices'}`, and `reloadAfterPriceCatchUp()` asks the
+ * report again without `pageBusy`). The catch-up is a stub's, on the mechanism of price-refresh-reload.spec.ts: one
+ * route on every API path answers the status route in the browser and gives every other answer back from the real
+ * backend with the header the case sets — or with none, a real one removed too, so that a catch-up the lane really runs
+ * cannot reach the case. Every value the button's `data-busy` takes is recorded in the page meanwhile, so «it never
+ * waited» means never, not «it was not waiting when the test looked»; the period change that follows in the same page is
+ * the control that the button, and the recording, do move.
+ *
  * Busy or idle is read only from `data-busy` and `disabled`: no class (the spin is one), no colour, no text.
  *
  * Read-only on the shared database: TEST_USER, nothing written. «Aggiorna» re-reads and syncs nothing
@@ -20,7 +29,7 @@
  * sessionStorage and localStorage.
  */
 
-import type {Route} from '@playwright/test';
+import type {APIResponse, Route} from '@playwright/test';
 import {expect, test, type Locator, type Page, type Request} from '../fixtures/playwright';
 import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -30,6 +39,14 @@ const API = '/api/v1';
 const REPORT_PATH = `${API}/portfolio/report`;
 const UPLOADS_PATH = `${API}/uploads`;
 const BROKER_REPORTS_PATH = `${API}/brokers/import/files`;
+/**
+ * The price catch-up's status route, header and notice (`lib/features/price-refresh/priceRefresh.ts`), written out as
+ * price-refresh-reload.spec.ts writes them: that module imports `$lib` aliases and runes, which Playwright's loader does
+ * not run, and a spec pins the contract rather than following the code.
+ */
+const CATCH_UP_STATUS_PATH = `${API}/system/price-refresh`;
+const CATCH_UP_HEADER = 'x-librefolio-price-refresh';
+const CATCH_UP_NOTICE = '[data-testid="instance-notice"][data-notice-id="liveUpdates.priceRefresh"]';
 
 /** A page load, or a round trip to the backend (the report is computed on the spot). A deadline, never a delay. */
 const ROUND_TRIP_MS = 30_000;
@@ -67,7 +84,7 @@ interface Hold {
     readonly held: Request[];
     /** How many are held still. */
     pending(): number;
-    /** Lets every held request through; from then on the hold lets everything through. */
+    /** Lets every held request through, on to the page's other routes as if it had never been held; from then on the hold lets everything through. */
     release(): Promise<void>;
     /** `release()`, then the route goes: for `finally`. Safe to call twice. */
     dispose(): Promise<void>;
@@ -91,8 +108,10 @@ async function hold(page: Page, path: string, picks: (request: Request) => boole
     await page.route(matches, handler);
     const release = async (): Promise<void> => {
         open = true;
-        // A request whose page went away cannot be continued any more, and there is nothing left to deliver it to.
-        await Promise.all(waiting.splice(0).map((route) => route.continue().catch(() => undefined)));
+        // `fallback()`, not `continue()`: a released request goes on through the page's other routes (the catch-up stub
+        // below, which decides its header) exactly as if it had never been held. A request whose page went away cannot
+        // be let through any more, and there is nothing left to deliver it to.
+        await Promise.all(waiting.splice(0).map((route) => route.fallback().catch(() => undefined)));
     };
     return {
         held,
@@ -145,6 +164,98 @@ async function openFiles(page: Page, tab: 'static' | 'brim'): Promise<Locator> {
     const refresh = page.getByTestId('files-refresh-button');
     await expectIdle(refresh, 'the Files page settled with its Refresh button still waiting');
     return refresh;
+}
+
+/** `GET /api/v1/system/price-refresh` (backend/app/schemas/sleep_wake.py, PriceRefreshResponse). */
+interface CatchUpStatus {
+    state: 'idle' | 'starting' | 'running';
+    reason: 'startup' | 'return' | 'wake' | null;
+    job: string | null;
+    since: string | null;
+    last_finished_at: string | null;
+    last_refreshed: boolean;
+}
+
+/** What the catch-up stub says — changed by the case as it goes — and the states it has served, in order. */
+interface CatchUp {
+    /** On every other API answer; null: none, a real one removed too. */
+    header: 'running' | null;
+    status: CatchUpStatus;
+    served: Array<CatchUpStatus['state']>;
+}
+
+/** A catch-up running its live-price job. */
+function catchUpRunning(): CatchUpStatus {
+    return {state: 'running', reason: 'return', job: 'current_price', since: new Date().toISOString(), last_finished_at: null, last_refreshed: false};
+}
+
+/** The catch-up is over and updated something: the answer on which the tracker sends `{kind: 'prices'}`. */
+function catchUpOverWithUpdates(): CatchUpStatus {
+    return {state: 'idle', reason: null, job: null, since: null, last_finished_at: new Date().toISOString(), last_refreshed: true};
+}
+
+/** Not passed on: what described the real body in transit (`route.fetch()` hands it over decoded), and any real catch-up header. */
+const NOT_PASSED_ON = new Set(['content-encoding', 'content-length', 'transfer-encoding', CATCH_UP_HEADER]);
+
+/**
+ * A running catch-up as the page sees it, on the mechanism of price-refresh-reload.spec.ts (`simulateCatchUp`): the
+ * status route answered in the browser with `catchUp.status`; every other API request sent to the real backend and given
+ * back with its real body and `catchUp.header`. Install it after the sign-in, before the page under test loads, and
+ * before any hold: a hold registered later sees a request first, and a request it lets through comes on here.
+ */
+async function simulateCatchUp(page: Page): Promise<CatchUp> {
+    const catchUp: CatchUp = {header: 'running', status: catchUpRunning(), served: []};
+    await page.route('**/api/v1/**', async (route) => {
+        if (new URL(route.request().url()).pathname === CATCH_UP_STATUS_PATH) {
+            const status = catchUp.status;
+            // Counted before it leaves: whatever the page sends because of this answer finds it counted already.
+            catchUp.served.push(status.state);
+            await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(status)}).catch(() => undefined);
+            return;
+        }
+        let response: APIResponse;
+        try {
+            response = await route.fetch();
+        } catch {
+            // The page went away with the request in flight: there is nobody to answer.
+            await route.abort().catch(() => undefined);
+            return;
+        }
+        // Read when the answer leaves, not when the request came: an answer that lands after the case switched carries the new value.
+        const headers = Object.fromEntries(Object.entries(response.headers()).filter(([name]) => !NOT_PASSED_ON.has(name.toLowerCase())));
+        if (catchUp.header !== null) headers[CATCH_UP_HEADER] = catchUp.header;
+        await route.fulfill({response, headers}).catch(() => undefined);
+    });
+    return catchUp;
+}
+
+/**
+ * Every value `data-busy` takes on `testId` from now on, kept in the page by a MutationObserver: «it never waited» then
+ * means never in the window, not «it was not waiting when the test looked». Returns a reader of the values seen so far.
+ */
+async function recordBusy(page: Page, testId: string): Promise<() => Promise<string[]>> {
+    const key = `__lfSpecBusy:${testId}`;
+    await page.evaluate(
+        ({key, selector}) => {
+            const seen: string[] = [];
+            Object.defineProperty(window, key, {value: seen, configurable: true});
+            const note = (element: Element): void => {
+                seen.push(element.getAttribute('data-busy') ?? '');
+            };
+            new MutationObserver((mutations) => {
+                for (const mutation of mutations) {
+                    if (mutation.type === 'attributes' && mutation.target instanceof Element && mutation.target.matches(selector)) note(mutation.target);
+                    for (const node of Array.from(mutation.addedNodes)) {
+                        if (!(node instanceof Element)) continue;
+                        if (node.matches(selector)) note(node);
+                        for (const inner of Array.from(node.querySelectorAll(selector))) note(inner);
+                    }
+                }
+            }).observe(document, {subtree: true, childList: true, attributes: true, attributeFilter: ['data-busy']});
+        },
+        {key, selector: `[data-testid="${testId}"]`},
+    );
+    return () => page.evaluate((key) => [...((window as unknown as Record<string, string[] | undefined>)[key] ?? [])], key);
 }
 
 test.describe('Page busy: the Refresh button waits for the big requests of its own page (Y11)', () => {
@@ -253,6 +364,58 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
         } finally {
             await list?.dispose();
             await report.dispose();
+        }
+    });
+
+    test('Dashboard: the reload in background after a price catch-up never makes the Refresh button wait, while a period change in the same page does', async ({page}) => {
+        const reports = recordMainReports(page);
+        // After the sign-in, before the page loads: the document under test hears no catch-up but the stub's.
+        const catchUp = await simulateCatchUp(page);
+        const holds: Hold[] = [];
+        try {
+            const refresh = await openDashboard(page);
+            const dashboard = page.getByTestId('dashboard-page');
+            // The tracker saw the job run (the notice is put up by the call that notes it) and asks the status route: an
+            // idle answer that updated something now sends `{kind: 'prices'}`.
+            await expect(page.locator(CATCH_UP_NOTICE), 'precondition: the running catch-up shows its notice (Z5)').toBeVisible({timeout: ROUND_TRIP_MS});
+            await expect.poll(() => catchUp.served.includes('running'), {message: 'precondition: the tracker never asked the status route', timeout: ROUND_TRIP_MS}).toBe(true);
+            expect(reports.length, 'precondition: the Dashboard asked its main report').toBeGreaterThan(0);
+            const onScreen = reports[reports.length - 1];
+            const busySeen = await recordBusy(page, 'sync-button');
+
+            // 1. The catch-up ends having updated something. Held: a main report sent once the stub has said so — nothing
+            //    else on the settled page asks one.
+            const reload = await hold(page, REPORT_PATH, (request) => isMainReport(request) && catchUp.served.includes('idle'));
+            holds.push(reload);
+            catchUp.header = null;
+            catchUp.status = catchUpOverWithUpdates();
+            const sent = await heldRequest(reload, 'the reload in background after the catch-up');
+            expect(sent.postDataJSON(), 'the held report is not the question on screen asked again').toEqual(onScreen.postDataJSON());
+            await expect(dashboard, 'the page does not say it is loading the held reload').toHaveAttribute('data-busy', 'true');
+            await expect(refresh, 'the Refresh button waits for the reload in background after a price catch-up (P3)').toHaveAttribute('data-busy', 'false');
+            await expect(refresh, 'the Refresh button cannot be pressed during the reload in background after a price catch-up (P3)').toBeEnabled();
+            expect(await busySeen(), 'the Refresh button waited at some moment since the catch-up ended (P3)').not.toContain('true');
+
+            await reload.release();
+            await waitForSettled(dashboard, ROUND_TRIP_MS);
+            expect(await busySeen(), 'the Refresh button waited at some moment of the reload, from its send to its landing (P3)').not.toContain('true');
+
+            // 2. The control, in the same page and under the same recording: a request the page waits for moves the
+            //    button, and the recording sees it move.
+            const asked = new Set(reports.map(periodOf));
+            const sixMonths = page.getByTestId('date-preset-6m');
+            await expect(sixMonths, 'precondition: 6M is a change of period (the Dashboard opens on 3M)').toHaveAttribute('data-active', 'false');
+            const period = await hold(page, REPORT_PATH, (request) => isMainReport(request) && !asked.has(periodOf(request)));
+            holds.push(period);
+            await sixMonths.click();
+            await heldRequest(period, 'the report of the new period');
+            await expectBusy(refresh, 'the control: the report of the new period is pending, and the Refresh button does not wait for it');
+            expect(await busySeen(), 'the control: the recording missed the button waiting, so its silence above proves nothing').toContain('true');
+            await period.release();
+            await expectIdle(refresh, 'the control: the report of the new period is back, and the Refresh button still waits');
+        } finally {
+            for (const gate of holds) await gate.dispose();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
         }
     });
 });
