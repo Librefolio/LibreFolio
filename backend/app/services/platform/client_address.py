@@ -15,8 +15,9 @@ Fly.io sets ``Fly-Client-IP``, decision P17).
   otherwise the connection's address. A malformed header logs one warning per process, which never holds the value.
 - ``client_rate_key(address)``: the key of an address for a per-client limit. An IPv6 client counts by its /64, which
   one subscriber usually holds whole.
-- ``mask_client_address(address)``: the form an address may take in a log, IPv4 by its /24 and IPv6 by its /48. An IP
-  address is personal data, and a log does not need it whole.
+
+No log record LibreFolio writes holds a client's address (decision N58): the warning names the header and its size,
+never its value.
 """
 
 from __future__ import annotations
@@ -39,12 +40,6 @@ _warned: list[bool] = []
 def _configured_header() -> str | None:
     """``LIBREFOLIO_CLIENT_IP_HEADER`` in lower case, ``None`` when unset: read once per process, never per request."""
     return get_settings().LIBREFOLIO_CLIENT_IP_HEADER.lower() or None
-
-
-def reset_client_address_cache() -> None:
-    """Read the variable again at the next call, and re-arm the warning: for the tests."""
-    _configured_header.cache_clear()
-    _warned.clear()
 
 
 def client_address(request: HTTPConnection) -> str | None:
@@ -103,19 +98,3 @@ def client_rate_key(address: str | None) -> str | None:
         return str(ip.ipv4_mapped)
     # From the integer, so a zone (``fe80::1%eth0``) does not get in the way.
     return str(ipaddress.IPv6Network((int(ip) >> 64 << 64, 64)))
-
-
-def mask_client_address(address: str | None) -> str | None:
-    """The form of ``address`` for a log: an IPv4 address by its /24, an IPv6 one by its /48, anything else as written;
-    ``None`` without an address."""
-    if not address:
-        return None
-    try:
-        ip = ipaddress.ip_address(address)
-    except ValueError:
-        return address
-    if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
-        ip = ip.ipv4_mapped
-    if isinstance(ip, ipaddress.IPv4Address):
-        return str(ipaddress.IPv4Network((int(ip) >> 8 << 8, 24)))
-    return str(ipaddress.IPv6Network((int(ip) >> 80 << 80, 48)))
