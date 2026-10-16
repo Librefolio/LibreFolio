@@ -44,6 +44,7 @@ from backend.app.services.signal_runtime import validate_signal_runtime
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.tools.executor import shutdown_tool_executor
 from backend.app.services.tools.registry import ToolPluginRegistry
+from backend.app.services.transactions.lone_transfer_legs import convert_lone_giving_legs_at_startup
 from backend.app.utils.runtime.cache import close_all_caches
 from backend.app.utils.runtime.version import get_git_version
 
@@ -203,6 +204,8 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("database", lambda: ensure_database_exists()),
     # Then the repairs that cannot be migrations, before anything else opens the database
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
+    # Then the lone giving TRANSFER legs older deletions left, at their Auto cost, which the fixes cannot compute (decision 47)
+    Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup()),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),

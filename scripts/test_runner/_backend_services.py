@@ -824,6 +824,16 @@ def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
 
 
+def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
+    print_section("Services: Lone Transfer Legs (decision 47)")
+    print_info("Testing: backend/app/services/transactions/lone_transfer_legs.py, its startup step (app_lifespan) and the offline post-migration script")
+    print_info("Tests: handed over at the leg's own broker's Auto cost, a missing conversion left a TRANSFER, receiving and linked legs untouched, dry run, second run, startup step and wrapper, script lines and exit code")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_lone_transfer_legs.py", test_names)
+    return run_command(cmd, "Lone transfer legs tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -1692,6 +1702,16 @@ Note: No backend server required.
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,
+    )
+    add_test(
+        cat,
+        "lone-transfer-legs",
+        services_lone_transfer_legs,
+        name="Lone Transfer Legs",
+        desc="Decision 47: the lone giving TRANSFER legs a broker deletion left before 1.3, handed over at their own broker's Auto cost — a missing conversion leaves the leg, dry run, second run, the startup step after post-migration-fixes, the offline script's lines and exit code",
+        # The category default (write-scoped), although every database is a private file under tmp_path built by the
+        # real migrations: the startup wrapper's cases make such a file's engine the configured one, and a wrapper that
+        # reached the lane's engine all the same would open a session there — through a double that writes nothing.
     )
     add_test(
         cat,
