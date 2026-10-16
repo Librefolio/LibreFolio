@@ -784,10 +784,45 @@ Dopo ogni passo: ✅ con la data, «Note implementazione», «Fuori pista» per 
        > | `git diff --check` | pulito |
        >
        > Porta 6157 libera: nessun server avviato.
-    4. ⏳ **Slot pesante**, al via del coordinatore, dopo quello di T: `front build --debug`, `front check`,
-       `component-unit`; E2E `front-utility` files, files-destructive, files-uploader, files-pdf-offline, image-crop;
-       `front-broker detail`; `front-asset asset-list`; `front-transaction tx-import-upload`. La galleria: alla prossima
-       completa.
+    4. 🔄 (16/10, 22:04–22:47) **Slot pesante E**, nella 6157 su `943d46378` (codice `4b1b74ab2`, docs `03324bac3`, base
+       merge con la punta `bf2c22791`): la 1.3 ha prestato il suo slot 2; nessun passo nuovo dopo le 22:45. Script
+       `/tmp/libreFolio_af_slotE.sh` (controlla HEAD, albero pulito e porta libera prima di partire), log in
+       `/tmp/libreFolio_af_slotE/`. Tutte le E2E con 1 worker: il carico a 1 minuto era fra 65 e 151 a ogni partenza.
+       > | Passo | Esito |
+       > |---|---|
+       > | `api sync` (la merge cambia 5 file dell'API) | rc 0 |
+       > | `front build --debug` | rc 0 |
+       > | `front check` | 0 errori, 0 avvisi |
+       > | `front-utility component-unit` | 163 file, 4.246/4.246 |
+       > | E2E `front-utility` files | 29/29 |
+       > | image-crop | **41/42**: F1 rosso, sotto |
+       > | files-uploader | 8/8 |
+       > | files-destructive | 6/6 |
+       > | files-pdf-offline | 1/1 |
+       > | `front-broker detail`, `front-asset asset-list`, `front-transaction tx-import-upload` | non partite (taglio) |
+       >
+       > Porta libera alla fine; HEAD `943d46378`, albero pulito.
+       >
+       > **⚠️ Fuori pista — `image-crop` F1 («ImageEditModal renders in dark mode»), triage con lo skill `test-triage`:**
+       > - l'asserzione (`expect(hasDark).toBeTruthy()`, riga 647) fallisce subito, dopo 8,7 s di corpo: non è un timeout;
+       > - lo screenshot mostra la pagina **in chiaro**, con la modale giusta sui ruoli: il `beforeEach` non ha prodotto il
+       >   tema scuro. Decide se cliccare il toggle con due `isVisible()` istantanei: sul toggle, senza attenderlo (carico
+       >   97), e sul primo elemento `[class*="dark"]` della pagina (`.first()` su un locatore non filtrato). F1 accetta come
+       >   prova lo stesso ripiego sulle classi, che la migrazione svuota: le classi `dark:` spariscono;
+       > - il lotto non c'entra: non cambia nessuna classe del DOM (0 righe con «dark» tolte; gli hash di scoping degli 8
+       >   componenti sono uguali prima e dopo), né il toggle, né `themeStore`, né il login;
+       > - **verdetto: assunzione** (§1 e §2 dello skill). La correzione: aspettare il toggle, leggere e asserire
+       >   `html.dark` con `toHaveClass`, togliere il ripiego sulle classi. La spec non è dell'area AF: la scrive test-author
+       >   con l'OK del coordinatore, poi F1 si rilancia da solo (AF-12).
+       >
+       > **⚠️ Fuori pista — una build in più:** `files-uploader` ha rifatto la build del frontend («Frontend sources changed,
+       > rebuilding...», circa 7 minuti col carico a 160), perché macOS ha toccato `frontend/src/.DS_Store` alle 22:29:54.
+       > Il controllo di freschezza del runner (`check_frontend_needs_build` in `scripts/cli_base.py`) confronta l'mtime di
+       > ogni file sotto `src/`, file nascosti compresi. Senza, `front-broker detail` sarebbe probabilmente partita prima
+       > del taglio (AF-13).
+       >
+       > **Restano per uno slot di recupero:** `front-broker detail`, `front-asset asset-list`,
+       > `front-transaction tx-import-upload`, e F1 da solo.
 
 ## 12. Dove guardarlo (per il developer)
 
