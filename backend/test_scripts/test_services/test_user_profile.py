@@ -1322,3 +1322,186 @@ class TestUpdateProfileLogsNoAddress:
         assert outcome == (None, "Email already registered"), f"barrier: {holder.email} is {holder.username}'s, so the change must be refused: {outcome}"
         _assert_no_address(events, records, [account.email, holder.email], "The refused update_profile")
         assert [event for event in events if event.get("event") == USER_PROFILE_UPDATED] == [], f"A refused change updates nothing, so it logs no «{USER_PROFILE_UPDATED}»: {events}"
+
+
+# ============================================================================
+# THE WAITING ADMINISTRATOR'S NEW ADDRESS — lot A7b-2, A-33 (release 1.3, workstream A; N60)
+# ============================================================================
+# These imports and helpers serve TestUpdateProfileSetupLinks only, so they live next to it. A pending administrator
+# never enters the lane's database: there it would be one more administrator account for every unit that shares it.
+# Every test runs on the private database of isolated_engine, the administrator made there by the real bootstrap —
+# run_admin_bootstrap on the empty instance, with a token of the test in its config, so that the test holds the link —,
+# while bootstrap_admin_service.get_async_engine is a tripwire and bcrypt runs at its lowest cost. update_profile reads
+# the clock: the scene is dated from it, the administrator created an hour ago, its link live for 71 hours more.
+# update_profile runs in isolated_session, which never loaded the account, as a request does; every outcome is read in
+# a fresh session.
+
+from datetime import timedelta
+
+from sqlalchemy import text
+
+from backend.app.config.accounts import AdminBootstrapConfig
+from backend.app.db.models import AccountTokenPurpose
+from backend.app.services.accounts import auth_service, bootstrap_admin_service, registration_service, token_service
+from backend.app.services.accounts.auth_service import verify_password
+from backend.app.services.accounts.token_service import TokenStatus
+from backend.app.utils.datetime_utils import utcnow
+
+#: The waiting administrator's setup link, the token its config gives: the test holds it.
+_SETUP_TOKEN = "uprofA7b2-setup-link-0123456789abcdefghijklmn"
+#: What the waiting administrator chooses through its link, and what whoever holds an old link tries to set.
+_SETUP_PASSWORD = "Setup-Pass-2026!"
+_INTRUDER_PASSWORD = "Intruder-Pass-2026!"
+#: The address the waiting administrator is created with, unless a test needs another.
+_ADMIN_ADDRESS = "admin@example.com"
+
+
+def _lane_database_tripwire(*_arguments: object, **_keywords: object) -> AsyncEngine:
+    raise AssertionError("bootstrap_admin_service.get_async_engine() was called: a pending administrator must never reach the lane's database")
+
+
+@pytest.fixture
+def private_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """For the tests of the waiting administrator: bcrypt at its lowest cost, and the bootstrap module's own road to the lane's database closed."""
+    monkeypatch.setattr(auth_service, "BCRYPT_ROUNDS", 4)
+    monkeypatch.setattr(bootstrap_admin_service, "get_async_engine", _lane_database_tripwire)
+
+
+@dataclass(frozen=True)
+class _WaitingAdmin:
+    """The waiting administrator the bootstrap made, as plain values, and the moment its scene is read at."""
+
+    id: int
+    moment: datetime
+
+
+async def _setup_waits(engine: AsyncEngine, user_id: int) -> bool:
+    """Whether the account waits for its F02 setup, as ``registration_service.is_pending_admin`` says, in a fresh session."""
+    async with AsyncSession(engine) as fresh:
+        user = await fresh.get(User, user_id)
+        assert user is not None, f"account {user_id} is not in the database"
+        return await registration_service.is_pending_admin(fresh, user)
+
+
+async def _setup_link(engine: AsyncEngine, token: str, moment: datetime) -> token_service.TokenInspection:
+    """What ``inspect_token`` says of the setup link ``token`` at ``moment``, in a fresh session."""
+    async with AsyncSession(engine, expire_on_commit=False) as fresh:
+        return await token_service.inspect_token(fresh, token, AccountTokenPurpose.ADMIN_SETUP, now=moment)
+
+
+async def _accounts_and_tokens(engine: AsyncEngine) -> dict[str, list[dict[str, Any]]]:
+    """Every row of users and of account_tokens, as a fresh connection reads them: «nothing written», to the letter."""
+    async with engine.connect() as connection:
+        users = (await connection.execute(text("SELECT * FROM users ORDER BY id"))).mappings().all()
+        tokens = (await connection.execute(text("SELECT * FROM account_tokens ORDER BY id"))).mappings().all()
+    return {"users": [dict(row) for row in users], "tokens": [dict(row) for row in tokens]}
+
+
+async def _waiting_admin(engine: AsyncEngine, email: str = _ADMIN_ADDRESS) -> _WaitingAdmin:
+    """The F02 administrator ``admin`` at ``email``, created by the real bootstrap on the empty private instance an hour before now, its link _SETUP_TOKEN.
+
+    Barrier: it waits for its setup, and its link is valid now.
+    """
+    moment = utcnow()
+    config = AdminBootstrapConfig(email=email, username="admin", token=_SETUP_TOKEN)
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        result = await bootstrap_admin_service.run_admin_bootstrap(session, config, now=moment - timedelta(hours=1))
+    assert result.action == bootstrap_admin_service.BootstrapAction.CREATED and result.user_id is not None, f"setup: the empty instance must create its administrator: {result!r}"
+    assert await _setup_waits(engine, result.user_id), "barrier: the administrator waits for its setup"
+    status = (await _setup_link(engine, _SETUP_TOKEN, moment)).status
+    assert status == TokenStatus.VALID, f"barrier: its setup link must be valid: {status}"
+    return _WaitingAdmin(result.user_id, moment)
+
+
+async def _complete_setup(engine: AsyncEngine, token: str, password: str, moment: datetime) -> Optional[User]:
+    """``complete_admin_setup`` in a session of its own, committed afterwards: whatever a refusal left pending would stay."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await bootstrap_admin_service.complete_admin_setup(session, token, password, now=moment)
+        await session.commit()
+    return user
+
+
+@pytest.mark.usefixtures("private_bootstrap")
+class TestUpdateProfileSetupLinks:
+    """Lot A7b-2, A-33: the waiting administrator's setup link went to its address. update_profile to another address —
+    behind ``./dev.py user set-email`` and ``PUT /auth/profile`` — must revoke, in the commit of the change, the account's
+    live setup links: revoked, not retired — the account still waits, and a new link is one ``./dev.py user setup-link``
+    away —, so the link delivered to the old address sets nothing. A change that keeps the address (the same one in other
+    A–Z capitals, P18; the username alone) or that is refused revokes nothing.
+
+    Today update_profile touches no setup link: UPROF-003 is red on its first contract assertion, after a change that
+    succeeds and is committed; UPROF-004 and UPROF-005 are guards, green today and after.
+    """
+
+    # red until A7b-2
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("old", "new"),
+        [
+            pytest.param(_ADMIN_ADDRESS, "admin.elsewhere@example.com", id="another-address"),
+            pytest.param("émile@example.com", "Émile@example.com", id="a-letter-outside-a-z-in-capitals"),
+        ],
+    )
+    async def test_a_new_address_revokes_the_waiting_administrators_setup_link(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine, old: str, new: str):
+        """UPROF-003 — NEW, red until A7b-2 (the link stays valid): update_profile moves the waiting administrator to another address — another mailbox, or the same one with a letter outside A–Z in capitals, which P18 compares as written. The change is committed (the barrier); its commit must revoke the setup link delivered to the old address — ``inspect_token`` says ``revoked`` —, not retire it (``consumed_at`` empty): the account still waits. The old link sets nothing — ``complete_admin_setup`` is ``None``, nothing written —, and ``issue_setup_link`` still gives the account a new link, valid."""
+        admin = await _waiting_admin(isolated_engine, old)
+        assert not user_service.same_email(new, old), f"setup: {new} must be another address than {old}, under P18"
+
+        updated, error = await user_service.update_profile(isolated_session, admin.id, email=new)
+
+        later = admin.moment + timedelta(minutes=5)
+        assert error is None and updated is not None, f"barrier: update_profile must accept {new}: {error!r}"
+        assert (await _stored_profile(isolated_engine, admin.id)).email == new, "barrier: the new address is committed"
+        link = await _setup_link(isolated_engine, _SETUP_TOKEN, later)
+        assert link.status == TokenStatus.REVOKED, f"red until A7b-2: a new address of the waiting administrator must revoke the setup link delivered to the old one: it is {link.status}"
+        assert link.record is not None and link.record.consumed_at is None, "revoked, not retired: the account still waits for its setup"
+        assert await _setup_waits(isolated_engine, admin.id), "the account still waits for its setup"
+        before = await _accounts_and_tokens(isolated_engine)
+        assert await _complete_setup(isolated_engine, _SETUP_TOKEN, _INTRUDER_PASSWORD, later) is None, "the link delivered to the old address must set nothing"
+        assert await _accounts_and_tokens(isolated_engine) == before, "the old link must change nothing"
+        async with AsyncSession(isolated_engine, expire_on_commit=False) as session:
+            issued = await bootstrap_admin_service.issue_setup_link(session, now=later)
+            await session.commit()
+        assert issued is not None and issued.record.user_id == admin.id, f"./dev.py user setup-link must still give the waiting account a new link: {issued!r}"
+        assert (await _setup_link(isolated_engine, issued.token, later)).status == TokenStatus.VALID, "the new link must be valid"
+
+    # guard
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("arguments", "expected"),
+        [
+            pytest.param({"email": "ADMIN@Example.com"}, ("admin", "ADMIN@Example.com"), id="the-own-address-in-other-capitals"),
+            pytest.param({"username": "admin_renamed"}, ("admin_renamed", _ADMIN_ADDRESS), id="the-username-alone"),
+        ],
+    )
+    async def test_a_change_that_keeps_the_address_revokes_no_setup_link(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine, arguments: dict[str, str], expected: tuple[str, str]):
+        """UPROF-004 — GUARD, green today and after: the waiting administrator's own address in other A–Z capitals — the same address (P18), its new form stored — or a new username alone: the change is committed, no token moves, the setup link stays valid, and it still completes the setup."""
+        admin = await _waiting_admin(isolated_engine)
+        tokens_before = (await _accounts_and_tokens(isolated_engine))["tokens"]
+
+        updated, error = await user_service.update_profile(isolated_session, admin.id, **arguments)
+
+        later = admin.moment + timedelta(minutes=5)
+        stored = await _stored_profile(isolated_engine, admin.id)
+        assert error is None and updated is not None, f"barrier: the change must succeed: {error!r}"
+        assert (stored.username, stored.email) == expected, f"barrier: the change is committed: {stored}"
+        assert (await _accounts_and_tokens(isolated_engine))["tokens"] == tokens_before, "no setup link may move: the address is the same one"
+        assert (await _setup_link(isolated_engine, _SETUP_TOKEN, later)).status == TokenStatus.VALID, "the setup link must stay valid"
+        user = await _complete_setup(isolated_engine, _SETUP_TOKEN, _SETUP_PASSWORD, later)
+        assert user is not None and user.id == admin.id and user.is_active, f"the link must still complete the setup: {user!r}"
+        assert verify_password(_SETUP_PASSWORD, user.hashed_password), "the setup must set the password chosen through the link"
+
+    # guard
+    @pytest.mark.asyncio
+    async def test_a_refused_new_address_revokes_no_setup_link(self, isolated_session: AsyncSession, isolated_engine: AsyncEngine):
+        """UPROF-005 — GUARD, green today and after: an address another account already holds is refused («Email already registered»), and nothing is written, even once the caller commits: every account and every token as they were, the setup link valid."""
+        admin = await _waiting_admin(isolated_engine)
+        holder = await _committed_addressed_user(isolated_engine, "holder")
+        before = await _accounts_and_tokens(isolated_engine)
+
+        outcome = await user_service.update_profile(isolated_session, admin.id, email=holder.email)
+        await isolated_session.commit()
+
+        assert outcome == (None, "Email already registered"), f"barrier: {holder.email} is {holder.username}'s, so the change must be refused: {outcome}"
+        assert await _accounts_and_tokens(isolated_engine) == before, "a refused change must write nothing"
+        assert (await _setup_link(isolated_engine, _SETUP_TOKEN, admin.moment + timedelta(minutes=5))).status == TokenStatus.VALID, "the setup link must stay valid"
