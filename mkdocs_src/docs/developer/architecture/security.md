@@ -879,6 +879,45 @@ hand into a query string. `mask_query_credentials()` holds the rule. One mode is
 `--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
 a debugging mode, not meant for a server with real users.
 
+## 🏷️ Response Headers {: #response-headers }
+
+`SecurityHeadersMiddleware` (`backend/app/services/platform/security_headers.py`), the `security_headers` entry of
+`MIDDLEWARE_STACK` (see [Steps and Middleware: the Contract](overview.md#lifecycle-contract)), adds two headers,
+`ALWAYS_HEADERS`, to every HTTP response of the app: API answers, the web app, the documentation and the files,
+compressed or not, errors included.
+
+| Header | Value | Effect |
+|--------|-------|--------|
+| `X-Content-Type-Options` | `nosniff` | The browser uses the type the server sends and never guesses another, so no file, an upload included, is sniffed into a script or a page |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Another site learns at most the origin of a page, never its path or query |
+
+- **A header the route set is kept.** The middleware adds a header only when the response has none of that name, in
+  any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the text preview of an upload
+  (`backend/app/api/v1/uploads.py`) and the download of a broker report (`backend/app/api/v1/brokers.py`) set
+  themselves is not repeated. WebSocket and lifespan scopes pass untouched.
+- **The 500 of an exception.** Starlette answers an unhandled exception from `ServerErrorMiddleware`, which it puts
+  outside every middleware of the stack, so its 500 would go out without the headers. When a request raises before
+  its response has started, the middleware sends the 500 itself (`Internal Server Error`, plain text) with both
+  headers, then re-raises the exception: `ServerErrorMiddleware` finds the response started and sends nothing, and
+  the server still logs the error.
+- **A type for every file served.** With `nosniff`, a script or a style sheet sent with a type that is not its own is
+  refused, so every file the app serves must carry its right type. `FileResponse` (the `/_app` mount, the SPA
+  catch-all, `/mkdocs`) and the plugin-asset route (`/uploads/plugin/…`) take it from `mimetypes`, with
+  `application/octet-stream` for a name it does not know. `mimetypes` reads Python's own table, which has no type
+  for the fonts or `.map`, then the system's `mime.types` files, which a slim image such as the runtime
+  `python:3.13-slim` does not have. `register_served_types()`, which `install_static_site()` calls, adds
+  `SERVED_TYPES` (JavaScript, CSS, JSON and source maps, the web manifest, WebAssembly, SVG, the fonts) to
+  `mimetypes` for the whole process, so these extensions get the same type on every machine.
+
+These two headers are the part of decision D5 that holds for every instance; its part for the
+[managed profile](../../admin/hosting_providers.md#managed-profile) comes with the profile defaults.
+
+Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`: both
+headers exactly once on every kind of response, a route's own kept, the 500 with its exception still re-raised) and
+`./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`: the
+type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
+`mime.types` file).
+
 ## 🌐 HTTPS & Deployment Architecture
 
 **LibreFolio does not handle HTTPS directly.**
