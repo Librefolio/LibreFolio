@@ -206,7 +206,7 @@ Otherwise $\mathrm{CashFromCapital}(t) = \min\bigl(\sum_b K_b(t),\, \mathrm{Cash
 For period $[t_0, t_1]$, per-position $(a,b)$:
 
 $$
-\Delta\mathrm{UGL}(a,b) = \mathrm{UGL}(a,b,t_1) - \mathrm{UGL}(a,b,t_0)
+\Delta\mathrm{UGL}(a,b) = \mathrm{UGL}(a,b,t_1) - \mathrm{UGL}(a,b,t_0) + T(a,b)
 $$
 
 $$
@@ -218,6 +218,34 @@ Contribution position set:
 $$
 \mathcal{P} = \text{positions with BUY/SELL/ADJUSTMENT/TRANSFER activity or boundary quantity}
 $$
+
+$\mathrm{UGL}(a,b,t)$ is the position state of §3 at the end of day $t$, the one the portfolio aggregates (§5): the mark of §2 — a trade-derived mark restated through any later split —, the cost basis when the asset has no mark at all, the exchange rate of $t$ itself. A position not held on $t$ counts 0. A position held on $t$ whose $\mathrm{UGL}(a,b,t)$ is unknown — no rate, an incomplete cost — makes $\Delta\mathrm{UGL}(a,b)$ unknown, never the known side minus zero. When every row is known, the rows add up to the portfolio's change, that of the positions held:
+
+$$
+\sum_{(a,b) \in \mathcal{P}} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL} = \bigl[\mathrm{MV}(t_1) - \mathrm{OCB}(t_1)\bigr] - \bigl[\mathrm{MV}(t_0) - \mathrm{OCB}(t_0)\bigr]
+$$
+
+**Internal transfers.** $T(a,b)$ splits the result of a security moved between two brokers of $S$: each broker answers for its own stretch. For each linked TRANSFER of $a$ from broker $s$ to broker $d$ that departs after $t_0$ and arrives on or before $t_1$, with $V$ the value of the moved units on the arrival day (§3) and $C$ the historical cost the sender's pool gave up for them (§4):
+
+$$
+T(a,s) \mathrel{+}= V - C, \qquad T(a,d) \mathrel{-}= V - C
+$$
+
+The sender answers for the units until they arrive, transit included, the receiver from their arrival; the terms cancel, so the total is unchanged. A transfer already in transit at $t_0$, still in transit at $t_1$, or with $V$ or $C$ unknown adds nothing: the boundary values stand.
+
+??? example "Example: 10 units moved from broker A to broker B"
+
+    A holds 10 units bought at 80 ($C = 800$). The price is 100 at $t_0$, 120 on the day they move to B ($V = 1{,}200$), 150 at $t_1$:
+
+    $$
+    \Delta\mathrm{UGL}(a,A) = 0 - (1{,}000 - 800) + (1{,}200 - 800) = +200
+    $$
+
+    $$
+    \Delta\mathrm{UGL}(a,B) = (1{,}500 - 800) - 0 - (1{,}200 - 800) = +300
+    $$
+
+    A answers for 100 → 120, B for 120 → 150: +500 in all, the portfolio's $\Delta\mathrm{UGL}$ ($700 - 200$). Without $T$, A would show −200 and B +700.
 
 Portfolio-level period P&L also exposes a residual:
 
@@ -233,6 +261,8 @@ $$
 $$
 
 Unallocated fees/income without `asset_id` are grouped per broker as other period effects, and so is $\mathrm{FXonCash}_b$: one row per broker holding foreign cash, shown when its result is not zero. See [Period P&L — FX on Cash](period-pnl.md#fx-on-cash).
+
+When every row is known, the rows and the other period effects together close $\mathrm{PnL}_{period}$. Since the rows are valued as the portfolio is, the residual holds no valuation difference between them, only what no position holds: what travels between two brokers, the cost of a currency exchange, a disposal left out of Realized.
 
 ---
 

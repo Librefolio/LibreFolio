@@ -119,10 +119,12 @@ your users sign in again after each restart. See
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
 - If your hosting panel shows the app inside a frame: `LIBREFOLIO_FRAME_PROTECTION=false`, since the
   managed profile turns frame protection on.
-- Optionally, your own support page or email address, `LIBREFOLIO_SUPPORT_URL` (`https://…` or
-  `mailto:…`): where the users of the instance ask for help, such as an asset the search does not
-  find. Without it, the help links go to LibreFolio's issues on GitHub. See «Main Options» in
-  [Environment Variables](configuration.md).
+- Your own support page or email address, `LIBREFOLIO_SUPPORT_URL` (`https://…` or `mailto:…`):
+  where the users of the instance ask for help, such as an asset the search does not find. Without
+  it, the asset search offers no **Let us know** link: the public GitHub issue a self-hosted
+  instance falls back to would publish the instance's profile, its provider codes and your
+  customer's asset identifiers. Other help links in the app may still point to LibreFolio's
+  GitHub. See «Main Options» in [Environment Variables](configuration.md).
 - A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
   in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
   systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop

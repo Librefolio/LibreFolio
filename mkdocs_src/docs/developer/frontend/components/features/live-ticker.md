@@ -39,7 +39,7 @@ outcome spaces the next poll.
 | Poll | Interval | Runs while | Asks for | Feeds |
 |---|---|---|---|---|
 | Assets list (`routes/(app)/assets/+page.svelte`) | at once, then every 60 s | the date range ends today or later, and the list is not empty | every asset of the list, in one request | `livePriceMap` → `AssetCard`, `AssetTable` |
-| Asset detail (`routes/(app)/assets/[id]/+page.svelte`) | at once, then every 30 s | the date range ends today or later, and the asset is loaded | the asset | `AssetPriceSummary`, then today's point of the price chart |
+| Asset detail (`routes/(app)/assets/[id]/+page.svelte`) | at once, then every 30 s | the date range ends today or later, the asset is loaded, and it has a provider ([below](#asset-detail)) | the asset | `AssetPriceSummary`, then today's point of the price chart |
 
 Both polls run on `startActivePolling()`, so both pause while the tab is hidden and after two
 minutes without input, and resume by themselves — see [Pause and resume](#pause-and-resume). After
@@ -52,8 +52,13 @@ page where a fresh price matters. A fourth constant, `LIVE_UPDATES_MAX_BACKOFF_M
 the wait after failures (decision 34, D-Z7-1).
 
 "The date range ends today or later" is the `isHeadToday` flag of both pages: `dateEnd` compared
-with today's ISO date. When it is false, both pages show the last close of the selected range
-instead, start no poller and ask for nothing.
+with today on the user's calendar, `todayIso()` (`lib/utils/dateOnly.ts`), the calendar `dateEnd` is
+resolved in (`resolveDateSentinel('max')` returns `todayIso()`). Until Z-3 the pages compared it with
+the UTC date, which is a day off for part of every day: in the evening west of Greenwich it is already
+tomorrow, so a range ending today read as past (no live price, and the detail summary showed the
+chart's last close); just after midnight east of Greenwich it is still yesterday, so a range that
+ended yesterday read as live and polled. When the flag is false, both pages show the last close of
+the selected range instead, start no poller and ask for nothing.
 
 ### 📋 Assets list: one poll per set of assets {: #assets-list-polling }
 
@@ -97,11 +102,24 @@ summary every 30 s, the chart head every minute after a 5 s warm-up, so three re
 for an asset with a provider — and the chart-head loop kept asking even on a range that ends in
 the past.
 
-The instance's effect re-runs when `assetInfo`, `displayCurrency`, `fxConversionMissing` or
-`isHeadToday` change, and each run starts a new poller, so one poll at once. An answer that lands after the
-effect re-ran — another asset, another currency — changes nothing on the page: each run hands the
-poll its own `isCurrent()` check, read after the price request, after the conversion and before
-the chart head, and the poll also checks that the asset is still the page's.
+The instance's effect reads `assetInfo`, `displayCurrency`, `fxConversionMissing`, `isHeadToday`
+and, through a `$derived` boolean, `providerAssignment` — nothing else from the page. It re-runs
+when one of the first four changes or when a provider code appears or goes, and each run that finds
+the range reaching today, an asset and a provider code starts a new poller, so one poll at once. An
+answer that lands after the effect re-ran — another asset, another currency, the provider code
+gone — changes nothing on the page: each run hands the poll its own `isCurrent()` check, read after
+the price request, after the conversion and before the chart head, and the poll also checks that
+the asset is still the page's.
+
+Without a provider code (Z-8) — a manual asset, or any asset until its assignment has loaded — no
+poller starts, `updatesState` (the page's `data-live-updates`) is `stopped` and nothing is asked:
+without a provider `POST /assets/prices/current` only echoes the stored price, and every answer
+would still count as a portfolio mutation ([Still a write](#still-a-write)). The effect reads the
+code through `hasProvider` (`!!providerAssignment?.provider_code`), a `$derived` declared in the
+constructor and lazy, so building the instance reads nothing from the page. Through the boolean, the
+assignment reloaded with the same code — `reloadMetadata()` reassigns it with a new object after a
+sync or an edit — or with another one does not re-run the effect: the poll asks the backend, which
+reads the assignment of the moment. That reload also reassigns `assetInfo`, which does re-run the effect.
 
 `#pollLivePriceOnce` returns the poll's [outcome](#backoff): `livePollFailure(error)` when the
 request fails; otherwise `livePollOutcome([toLivePriceResult(item)])` (of an empty list when the
@@ -112,7 +130,8 @@ throw as a failure.
 `#applyLiveSummary` sets `currentPrice`, which the page shows in `AssetPriceSummary` instead of the
 last chart close. When
 the display currency differs from the asset's, the price is converted for today through
-`POST /api/v1/fx/currencies/convert`; if that fails, the native price is shown with the asset's
+`POST /api/v1/fx/currencies/convert` — the UTC date on purpose: the lookup fills backward, so either
+calendar gives the latest stored rate; if that fails, the native price is shown with the asset's
 currency and a ⚠ tooltip (`conversionFailed`, passed as `livePriceConversionFailed`).
 
 The direction compares the **native** values of two consecutive polls, so switching the display
@@ -128,19 +147,22 @@ even on two ticks in the same direction, and applies `.lf-price-flash-up` or
 resting colour in 1.3 s. `LIVE_PRICE_FLASH_DECAY_MS` (1300 ms, exported by the module) then resets
 the direction to
 neutral. Under `prefers-reduced-motion` the colour swaps without the animation and the same timer
-clears it. When the effect re-runs (another asset, display currency or FX gap) or the page goes
-away, its cleanup stops that timer and puts the direction back to neutral too, so a flash cut short
-never stays lit. Test hooks: `data-testid="asset-detail-live-price"` and `data-live-price-direction`.
+clears it. When the effect re-runs (another asset, display currency or FX gap, the range no longer
+reaching today, a provider code that comes or goes) or the page goes away, its cleanup stops that
+timer and puts the direction back to neutral too, so a flash cut short never stays lit. Test hooks:
+`data-testid="asset-detail-live-price"` and `data-live-price-direction`.
 
 #### 📈 Chart head {: #chart-head }
 
 `#applyLiveChartHead` merges the polled close into today's point of the page's `chartData`, through
 the input's setter (`mergeChartPointsIncremental`), when it changed — no reload, no flicker. The fields the answer does
 not carry (`original_close`, `backward_fill_info`…) stay on the point, and the signals, derived
-from `chartData`, recompute. It acts only when the asset has a provider — without one the endpoint
-echoes the last stored close, so there is nothing to merge — and not while the chart, or the
-calendar of returns, is reloading, nor when the answer has an `error` or no `as_of_date`; a close
-equal to the one already charted for that date changes nothing. The comparison is made in the
+from `chartData`, recompute. It does not check the provider: no poll runs for an asset without one
+([above](#asset-detail)) — the endpoint would only echo the last stored close, with nothing to
+merge — and an answer still in flight when the code goes is dropped by `isCurrent()`, so the chart
+head never sees such an answer. It skips the answer while the chart, or the calendar of returns, is
+reloading, and when the answer has an `error` or no `as_of_date`; a close equal to the one already
+charted for that date changes nothing. The comparison is made in the
 asset's own currency, the poll's: the point's native close, `original_close ?? close`, since in a
 converted chart `close` is in the display currency and `original_close` holds the native one. In a
 chart converted to another currency (the polled close is in the asset's own currency) or in
@@ -310,8 +332,9 @@ from `setTimeout` — 0 ms for "at once". The list page used to guard its first 
 
 ### 🏷️ The published state and the pill {: #live-updates-status }
 
-Each page keeps the poller's state in `liveUpdatesState` (through `onstatechange`, and `stopped`
-while it has no poller) and publishes it twice:
+The list keeps the poller's state in `liveUpdatesState`, the detail page in `live.updatesState`
+(`AssetDetailLive`, handed to `AssetDetailHeader` as its `liveUpdatesState` prop) — through
+`onstatechange`, and `stopped` while there is no poller — and each publishes it twice:
 
 - as `data-live-updates` on its root, `data-testid="assets-page"` or
   `data-testid="asset-detail-page"` — what the E2E reads;
@@ -336,11 +359,12 @@ runs only while someone uses the page, it is that user's active update of today'
 `isPortfolioAffectingMutation()` keeps counting it as a portfolio mutation, so the portfolio views
 are marked stale and refreshed in the background ([Domain state](../../state/domain-state.md)).
 What changed is how often it happens: on the detail page, two requests a minute instead of three
-for an asset with a provider; on the list, one instead of two; none on a range in the past, and
-none from a tab nobody uses; fewer still after failed polls, or while every provider asked about
-is paused ([Failures and provider pauses](#backoff)). Today's candle does not depend on an open
-tab: the scheduler's current-price refresh calls the same service on its own schedule
-([Scheduler](../../../backend/scheduler.md)).
+for an asset with a provider, and none for an asset without one, which had two a minute until Z-8,
+each an echo of the stored price counted as a mutation; on the list, one instead of two; none on a
+range in the past, and none from a tab nobody uses; fewer still after failed polls, or while every
+provider asked about is paused ([Failures and provider pauses](#backoff)). Today's candle does not
+depend on an open tab: the scheduler's current-price refresh calls the same service on its own
+schedule ([Scheduler](../../../backend/scheduler.md)).
 
 ## 🔄 Updating prices… {: #price-refresh }
 
@@ -511,14 +535,18 @@ of them only in part, such as the client's own tests, must still load it.
 | `lib/stores/portfolio/portfolioMutation.test.ts`, `lib/stores/portfolio/portfolioStore.test.ts`, `lib/features/brokers/lots/lotsAnalysisStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio store-unit` | The cases of [Updating prices…](#price-refresh): `notifyPricesCaughtUp()` gives every listener exactly `{kind: 'prices'}`, once, kept apart from `refresh` and `mutation`; a listener that throws keeps none of the others from hearing it and is logged; a removed listener hears nothing. The report and lots caches mark their answers stale on it, keep them and ask nothing; the next report fetch without `force` asks the stale one again |
 | `lib/features/risk/riskStore.test.ts` (Vitest, node) | `./dev.py test front-portfolio risk-unit` | The case of [Updating prices…](#price-refresh): the risk answers marked stale on `{kind: 'prices'}`, kept, and nothing asked |
 | `lib/features/live-updates/LiveUpdatesStatus.test.ts` (Vitest, jsdom) | `./dev.py test front-utility component-unit` | The pill only in `paused-idle`, with a label and a hint, and no button |
-| `lib/components/assets/detail/assetDetailLive.svelte.test.ts` (Vitest, jsdom, fake clock around the flash) | `./dev.py test front-utility core-unit` | The [asset detail poll](#asset-detail): what its effect reads, when it starts and stops the poller, the outcome it hands back, the answers it drops, the price summary with its conversion and fallback, the [flash](#price-flash) and its decay, put out by the effect's cleanup too, and the [chart head](#chart-head): the merge, the same-close guard on the native close, and the silent reload |
-| `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden |
+| `lib/components/assets/detail/assetDetailLive.svelte.test.ts` (Vitest, jsdom, fake clock around the flash) | `./dev.py test front-utility core-unit` | The [asset detail poll](#asset-detail): what its effect reads; when it starts and stops the poller: none without a provider code (none assigned, no code, an empty code), one as soon as the code arrives alone, stopped when it goes, and no restart when the assignment is reloaded with the same code or another one (Z-8); the outcome it hands back, the answers it drops, the price summary with its conversion and fallback, the [flash](#price-flash) and its decay, put out by the effect's cleanup too, and the [chart head](#chart-head): the merge, the same-close guard on the native close, and the silent reload |
+| `frontend/e2e/assets/asset-live-pause.spec.ts` (Playwright) | `./dev.py test front-asset live-pause` | The list asks every 60 s and the detail exactly once per 30 s; both pause after 2 minutes without input, show the pill and ask at once on the next pointer move; the list pauses in a hidden tab and asks at once on the return; the detail asks nothing on a range in the past; (g) on the detail page, an endpoint that answers 500 spaces the requests 60, 120, 240, 480, 600 and 600 s apart; (h) on the list, an answer where every asset is `RATE_LIMITED` with `retry_after` 300 holds the next request for 300 s after the answer. In both, the state stays `running` and the pill hidden. (i)–(l), today on the user's calendar (Z-3): (i) on the list and (j) on the detail page, at 21:00 in New York, already the next day in UTC, a range ending today (`end=max`) asks when the page opens and again one interval later, and the detail's summary shows the polled quote, not the chart's last close; (k) on the list and (l) on the detail page, at 00:30 in Rome, still the day before in UTC, a range that ended yesterday asks nothing over the load and 65 s more, and the page is `stopped` |
 | `frontend/e2e/portfolio/price-refresh-reload.spec.ts` (Playwright) | `./dev.py test front-portfolio price-refresh` | [Updating prices…](#price-refresh) on a stubbed catch-up: the notice while a job runs, gone at `idle`. (a) Once a catch-up that updated something is over, the Dashboard asks for its main report again, once, the very question on screen, with no navigation; (b) a broker's page, the same on its overview report; (c) on the Dashboard, no reload after a catch-up whose job the page never saw run (`starting` → `idle`, no notice at any moment, even with `last_refreshed` true), nor after one that updated nothing (the notice comes and goes); then the control in the same page, a catch-up that updated something, reloads it once; (d) on the Dashboard, from the end of a catch-up that updated something to the user's next click, the whole reload in it, neither the root (`dashboard-page`) nor `sync-button` takes `data-busy="true"`, read from a record in the page of every value `data-busy` takes on `dashboard-page`, `sync-button` and `broker-refresh`, while the control, a **Refresh** the user asks for in the same page, makes both say busy, then idle again; (e) a broker's page, the same for `broker-refresh` (its root publishes no `data-busy`), with the same control |
 | `frontend/e2e/portfolio/page-busy.spec.ts` (Playwright) | `./dev.py test front-portfolio page-busy` | Its two cases of [Updating prices…](#price-refresh), on a stubbed catch-up that updated something, the reload held by `page.route` until the case lets it through and every value of the button's `data-busy` recorded in the page. Dashboard: from the reload's send to its landing `sync-button` stays idle and enabled, and the root (`dashboard-page`) keeps `data-busy="false"` while the reload is held; the control, a change of period to 6M in the same page, keeps the button busy until the new report is back. Broker detail: the same for `broker-refresh` and the broker's overview (its root publishes no `data-busy`) |
 
 The live-pause E2E drives time with `page.clock`, since minutes of cadence can be neither waited for nor
 guessed, and answers `POST /assets/prices/current` in the browser with an empty, schema-valid
-result — or, in (g) and (h), with a failure or a provider pause — that it counts: nothing reaches a provider and nothing is written. A hidden tab has no
+result — or, in (g) and (h), with a failure or a provider pause, and in (j) with a provider quote —
+that it counts: nothing reaches a provider and nothing is written. (i)–(l) set the browser's time
+zone (`timezoneId`) and install the clock at a chosen instant of that zone's evening or night, then
+read the page's calendar — its time zone, its local date, its UTC date — before counting anything,
+since the two dates agree for most of the day. A hidden tab has no
 Playwright API, so the spec redefines `document.visibilityState` and dispatches
 `visibilitychange`, which is exactly what the tracker listens to.
 

@@ -28,7 +28,9 @@
  *   - positioning. jsdom returns zeros for every `getBoundingClientRect`, so a
  *     layout assertion would only measure the absence of a layout engine.
  *   - the online-search flow (`AssetSearchAutocomplete`) — covered by its own
- *     component test.
+ *     component test. One exception, at the end of the file: AssetModal hands
+ *     both of its searches the form (`reportContext`), and the report link of a
+ *     search that found nothing must name what the form says (P20).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
@@ -76,6 +78,8 @@ import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {isParametricProvider} from '$lib/utils/providerHelpers';
+import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+import {GITHUB_NEW_ISSUE_URL} from './assetSearchReport';
 
 /** The creation callbacks, typed from the component: the contract under test (O-20). */
 type OnCreated = NonNullable<ComponentProps<typeof AssetModal>['oncreated']>;
@@ -993,5 +997,178 @@ describe('AssetModal — the description placeholder speaks the UI language', ()
             currentLanguage.set('en');
             await setupI18n('en');
         }
+    });
+});
+
+// =========================================================================
+// P20 (workstream X, sub-lot 3): the report of a search carries the form. Both <AssetSearchAutocomplete> calls —
+// with the import's search badges and without — get `reportContext={{currency, assetType, identifiers}}`, the
+// identifiers being the rows with a value. The form is prefilled as the import wizard does, the search it opens
+// with (`initialSearchQuery`) finds nothing, and the report link of that search must name what the form says. The
+// instance is the real `instanceConfig`, answered in `beforeEach` without a request: a self-hosted instance with no
+// support address, the one that falls back to a public GitHub issue (N61). The link is that issue, whose body is
+// decoded from the href.
+//
+// What the form says, never what it merely defaults to (16/10/2026): a blank create form starts at the user's base
+// currency (EUR here: this file has no user settings) and at STOCK, and naming those hands support a hint nobody gave.
+// So the currency is named in edit mode, or when the prefill had one, or the user chose one, or it is not the blank
+// form's; the type in edit mode, or when the prefill had one, or it is not STOCK. Identifiers as before.
+describe('AssetModal — the report of a search carries the form (P20)', () => {
+    type ProviderList = Awaited<ReturnType<typeof zodiosApi.list_providers_api_v1_assets_provider_get>>;
+    const SEARCH_PROVIDER = 'fixture_search_source';
+    const QUERY = 'Owned unfindable fund';
+    const searchable: ProviderList = [
+        {
+            code: SEARCH_PROVIDER,
+            name: 'Owned search source',
+            description: 'Synthetic searchable provider metadata; no network implementation',
+            kind: 'online_scraper',
+            supports_search: true,
+            params_schema: [],
+            accepted_identifier_types: ['ISIN', 'TICKER'],
+        },
+    ];
+
+    // N61: with no support address the report falls back to GitHub only on a self-hosted instance whose configuration
+    // has loaded. The store's own `load`, with an answer instead of the request: no module mock, the store as it runs.
+    beforeEach(async () => {
+        await instanceConfig.load({force: true, fetchConfig: async () => ({profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}, support_url: null})});
+        expect(instanceConfig.loaded, 'precondition: the instance configuration has loaded').toBe(true);
+        expect(instanceConfig.config.profile, 'precondition: a self-hosted instance').toBe('selfhosted');
+    });
+
+    afterEach(async () => {
+        // The defaults again for whatever runs next. `loaded` has no way back to false; no other block of this file reads it.
+        await instanceConfig.load({force: true, fetchConfig: async () => DEFAULT_INSTANCE_CONFIG});
+    });
+
+    /** The streamed search's Response, replaying `events` as SSE `data:` lines (as AssetSearchAutocomplete.test.ts does). */
+    function streamedSearch(events: unknown[]) {
+        const encoder = new TextEncoder();
+        const chunks = events.map((event) => encoder.encode(`data: ${JSON.stringify(event)}\n`));
+        let next = 0;
+        return {
+            ok: true,
+            body: {
+                getReader: () => ({
+                    read: async () => (next < chunks.length ? {done: false, value: chunks[next++]} : {done: true, value: undefined}),
+                    cancel: vi.fn(),
+                }),
+            },
+        };
+    }
+
+    it.each([
+        {call: 'the search without badges', initialSearchBadges: []},
+        {call: 'the search under the import badges', initialSearchBadges: [{label: `Name: ${QUERY}`, value: QUERY}]},
+    ])('$call: the report link names the currency, the type and the identifier of the form', async ({initialSearchBadges}) => {
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(searchable);
+        // The streamed search finds nothing; any other request gets this file's default answer.
+        const search = vi.fn(async (url: string) => (String(url).includes('/assets/provider/search/stream') ? streamedSearch([{event: 'provider_results', provider_code: SEARCH_PROVIDER, results: []}, {event: 'done'}]) : new Response(null, {status: 503})));
+        vi.stubGlobal('fetch', search);
+        render(AssetModal, {
+            open: true,
+            editMode: false,
+            prefillData: {display_name: QUERY, currency: 'CHF', asset_type: 'ETF', identifier_isin: 'IE00BK5BQT80'},
+            initialSearchQuery: QUERY,
+            initialSearchBadges,
+            oncreated: vi.fn(),
+        });
+        await waitForForm();
+
+        // Precondition, verified: the search ran, with the query the modal opened with, and found nothing.
+        await waitFor(() => expect(screen.getByTestId('asset-search-results')).toHaveAttribute('data-state', 'empty'), {timeout: 3_000});
+        const streamed = search.mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/assets/provider/search/stream'));
+        expect(streamed.at(-1)).toContain(`q=${encodeURIComponent(QUERY)}`);
+
+        const link = await waitFor(() => screen.getByTestId('asset-search-report'));
+        const url = new URL(link.getAttribute('href') ?? '');
+        expect(`${url.origin}${url.pathname}`).toBe(GITHUB_NEW_ISSUE_URL);
+        const lines = (url.searchParams.get('body') ?? '').split('\n');
+        expect(lines).toContain(`Search: ${QUERY}`);
+        expect(lines.filter((line) => line.startsWith('In the form:'))).toEqual(['In the form: currency CHF, type ETF, ISIN IE00BK5BQT80']);
+    });
+
+    /** The online search finds nothing; any other request gets this file's default answer. */
+    function searchFindingNothing(): void {
+        vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get).mockResolvedValue(searchable);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn(async (url: string) => (String(url).includes('/assets/provider/search/stream') ? streamedSearch([{event: 'provider_results', provider_code: SEARCH_PROVIDER, results: []}, {event: 'done'}]) : new Response(null, {status: 503}))),
+        );
+    }
+
+    /** Types `query` into the form's online search, as a user does: in edit mode it opens empty and searches nothing. */
+    async function searchFor(query: string): Promise<void> {
+        const box = document.querySelector<HTMLElement>('[data-search-autocomplete]');
+        expect(box, 'the form shows its online search').not.toBeNull();
+        await fireEvent.input(within(box!).getByRole('textbox'), {target: {value: query}});
+    }
+
+    /** The report of the search for `query` once it has found nothing: its body, line by line, decoded from the link. */
+    async function reportOfEmptySearch(query: string): Promise<string[]> {
+        await waitFor(() => expect(screen.getByTestId('asset-search-results')).toHaveAttribute('data-state', 'empty'), {timeout: 3_000});
+        const link = await waitFor(() => screen.getByTestId('asset-search-report'));
+        const url = new URL(link.getAttribute('href') ?? '');
+        expect(`${url.origin}${url.pathname}`).toBe(GITHUB_NEW_ISSUE_URL);
+        const lines = (url.searchParams.get('body') ?? '').split('\n');
+        expect(lines, 'the report of this very search').toContain(`Search: ${query}`);
+        return lines;
+    }
+
+    const formLines = (lines: string[]): string[] => lines.filter((line) => line.startsWith('In the form:'));
+
+    it('(c) a blank create form: no «In the form:» line — no identifier, and a currency and a type nobody chose are no hint', async () => {
+        searchFindingNothing();
+        render(AssetModal, {open: true, editMode: false, initialSearchQuery: QUERY, oncreated: vi.fn()});
+        await waitForForm();
+
+        const lines = await reportOfEmptySearch(QUERY);
+
+        expect(formLines(lines), 'the blank form’s EUR and STOCK are defaults, not what the user said').toEqual([]);
+        // Nothing in its place either: the providers are followed straight by the line of the app.
+        const app = lines.findIndex((line) => line.startsWith('LibreFolio '));
+        expect(app, 'the report names the app that wrote it').toBeGreaterThan(0);
+        expect(lines[app - 1]).toBe(`- ${SEARCH_PROVIDER}: 0 results`);
+    });
+
+    it('(d) edit mode: the asset’s own currency and type are named — STOCK too, the blank default, because the asset has it', async () => {
+        searchFindingNothing();
+        render(AssetModal, {
+            open: true,
+            editMode: true,
+            editData: {id: 7, display_name: 'Tesla Inc.', currency: 'USD', asset_type: 'STOCK', quote_base_quantity: 1, active: true},
+            onupdated: vi.fn(),
+        });
+        await waitForForm();
+        await waitFor(() => expect(nameInput()).toHaveValue('Tesla Inc.'));
+
+        await searchFor(QUERY);
+
+        const lines = await reportOfEmptySearch(QUERY);
+        expect(formLines(lines), 'the asset has no identifier: currency and type only').toEqual(['In the form: currency USD, type STOCK']);
+    });
+
+    it('(e) a blank create form whose type the user changed: that type is named, and still no currency', async () => {
+        searchFindingNothing();
+        render(AssetModal, {open: true, editMode: false, oncreated: vi.fn()});
+        await waitForForm();
+
+        // The type picker, driven as a user does: open it, open the ETF family, pick its generic member.
+        const field = screen.getByTestId('asset-modal-type');
+        const trigger = screen.getByTestId('asset-modal-type-button');
+        await fireEvent.click(trigger);
+        await fireEvent.click(within(field).getByTestId('asset-type-tree-group-ETF'));
+        await fireEvent.click(within(field).getByTestId('asset-type-tree-option-ETF'));
+        await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'false'));
+        // Precondition, verified: the form holds ETF — the closed picker shows that type's picture, and only it.
+        const pictures = trigger.querySelectorAll('img');
+        expect(pictures, 'the closed type select shows exactly one picture, the one of the selected type').toHaveLength(1);
+        expect(pictures[0]).toHaveAttribute('src', '/icons/asset-types/etf.png');
+
+        await searchFor(QUERY);
+
+        const lines = await reportOfEmptySearch(QUERY);
+        expect(formLines(lines), 'the type the user chose; the currency is still the blank form’s').toEqual(['In the form: type ETF']);
     });
 });
