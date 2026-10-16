@@ -2623,6 +2623,29 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - test nuovi `stressBucketLabel.test.ts` e `categoryLabels.test.ts`, 9 e 9, registrati in `core-unit`;
     - il mirror di `L4Shock.test.ts` è allineato, 22.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
+- **DV-7 · W5-PAC e W5-charts: colori rimasti in palette, in attesa di una scelta o di un lotto di T** — minimo; DV,
+  16/10 (W5-PAC, W5-charts).
+  - **La traccia delle barre** di `TargetsStep`:63 e `DistributionDialog`:102 (`bg-gray-100 dark:bg-slate-700`).
+    - Nessun ruolo la distingue dalla barra «sconosciuta», che nel lotto di T è `bg-lf-neutral`: `bg-lf-neutral` dà
+      ΔE00 0, `bg-lf-panel` e `bg-lf-hover` danno 3,4 e 2,5; la palette di oggi dà 6,9 in chiaro e 15,3 in scuro.
+    - Serve un ruolo per la traccia (T) o una scelta della designer.
+  - **Le barre «quota dopo il piano»**, `bg-libre-green`, in `AssetTable`:149, `ResultCell`:79 e
+    `DistributionDialog`:102.
+    - Sono un colore di dato accanto al neutro dell'obiettivo (`bg-lf-secondary`), non il marchio: `bg-lf-action` in
+      scuro è spento sulla traccia.
+    - Aspetta il punto 2.7 della designer o i colori di tipo di GR1.
+  - **Le fasi di `BackendTimingBar`**: punti 2.1 e 2.5 (anche nell'inventario).
+  - **I 4 interruttori di `ChartAestheticsSection`** (W5-charts), 16 classi: traccia e manopola alle righe 111/119,
+    133/141, 155/162 e 176/184.
+    - Il coordinatore (02:50) li vuole nel lotto di T sugli interruttori, tutti insieme con quelli dell'app (riga Q2
+      della skill), così in scuro non ce n'è uno diverso dagli altri.
+  - **Non di DV**, annotati per non perderli:
+    - `INPUT` e `TITLE_INPUT` di `planner/ui.ts` vanno col lotto di T sull'input;
+    - i 6 campi di testo e numerici di `components/charts/` (W5-charts, 42 classi) vanno anche loro col lotto di T
+      sull'input: `ChartSignalsSection`:609 e 798, `ChartAestheticsSection`:221 e 237, `SignalParamControl`:79 e 93;
+    - `ExposureMaps` (4) aspetta Y9.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezioni
+    «W5-PAC» e «W5-charts».
 
 ---
 
@@ -3182,11 +3205,23 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     li genera da sé.
   - Un lotto con un test di regressione su `mockprov`, dopo X1–X8, che toccano lo stesso percorso.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», nota su X-R12.
+  ✅ **Chiusa da X il 16/10**:
+  - la chiamata della storia finisce oggi;
+  - i prezzi della storia dopo ieri restano fuori dalla cache e dai prezzi, così il prezzo di oggi resta il valore
+    corrente;
+  - gli eventi fino a oggi restano;
+  - con un buco nella cache, la chiamata va fino a oggi.
+
+  Sei test di regressione in `test_asset_source_refresh.py`, tre dei quali rossi sul codice di prima. Non su `mockprov`
+  ma su un fornitore finto in processo, che restituisce gli eventi solo dentro l'intervallo chiesto. Commit del
+  coordinatore, lotto X-R12. Decisione notturna N17 sul costo di justETF. Dettagli: piano 03, sezione «X-R12».
 - **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
   colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
   ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
   settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
+  ✅ **Chiusa da X il 16/10**, primo pezzo del FE5c: tolti il campo e l'import, e `front check` passa a 0 errori.
+  Commit del coordinatore, lotto FE5c-1. Dettagli: piano 03, sezione «FE5c-1».
 
 ## W · Import e transazioni (fase 01)
 
@@ -3770,6 +3805,10 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
   esegua i job, con lo stato riletto dentro il lock. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z3 — scheduler».
+- **Z-12 · `admin/filesystem`: il commento di `scheduler_state.json`** — minimo, doc; docs-writer di Z, 16/10 (Z7c-2).
+  Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
+  nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
 
 ## B · Backup e Docker (fase 01)
 

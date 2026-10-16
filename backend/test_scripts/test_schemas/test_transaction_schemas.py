@@ -1143,7 +1143,8 @@ _P6_PENDING: dict[tuple[TransactionType, str], str] = {
 }
 
 # TX-S-108: one violation of each code of rules 5-11 on today's table. The cell, otherwise valid, then the code, the
-# message template (the text ``multipleBusinessRuleErrors`` packs), the rendered message and the params it gets today.
+# message template, the rendered message (the text the user reads, alone or packed in ``multipleBusinessRuleErrors``
+# since W-B38) and the params it gets today.
 VISIBLE_RULE_MESSAGES = [
     pytest.param({"tx_type": TransactionType.BUY, "quantity": Decimal("1"), "cash": CASH_EUR_MINUS_100}, ("assetRequired", "{type} requires asset_id", "BUY requires asset_id", {"type": "BUY"}), id="assetRequired"),
     pytest.param({"tx_type": TransactionType.DEPOSIT}, ("cashRequired", "{type} requires cash (amount + currency)", "DEPOSIT requires cash (amount + currency)", {"type": "DEPOSIT"}), id="cashRequired"),
@@ -1517,18 +1518,21 @@ class TestRules5To11P6Pending:
 
 
 class TestRules5To11VisibleMessages:
-    """What the user reads of rules 5-11: code, message and params, one violation of each code (W-B36).
+    """What the user reads of rules 5-11: code, message and params, one violation of each code (W-B36, W-B38).
 
-    Guard, green before and since W-B36: W-B36 changed where the rules find their types, not what they tell the user
-    (the developer's decision, 2026-10-16: the texts stay identical). The user gets one of two texts. A single violation
-    is raised as it is and rendered, ``message()``; two or more are packed by ``TXCreateItem`` into
-    ``multipleBusinessRuleErrors`` with each one's ``message_template``, unrendered, which batch validation
-    (``TXValidationIssue.error``) and broker import (``BRIMValidationIssue.message``) pass on. TX-S-108 pins both texts
-    of every code, TX-S-109 the packing itself. The four messages written before W-B36 with their type in the text
-    (qtyPositive "BUY requires quantity > 0", qtyNegative "SELL ...", qtyNonzero and cashForbidden "ADJUSTMENT ...")
-    keep it in the template too, a text per type rather than ``{type}``; the other codes keep their ``{type}``
-    templates. A packed ``{type}`` is a known leak, sent to the backlog the same day: its cure, and nothing else, flips
-    these pins.
+    TX-S-108 is a guard, green before and since W-B36: W-B36 changed where the rules find their types, not what they
+    tell the user (the developer's decision, 2026-10-16: the texts stay identical). It pins both texts of every code,
+    ``message_template`` and the rendered ``message()``. The four messages written before W-B36 with their type in the
+    text (qtyPositive "BUY requires quantity > 0", qtyNegative "SELL ...", qtyNonzero and cashForbidden "ADJUSTMENT
+    ...") keep it in the template too, a text per type rather than ``{type}``; the other codes keep their ``{type}``
+    templates.
+
+    TX-S-109 pins the packing (W-B38). The user reads the rendered text however many rules a create breaks. A single
+    violation is raised as it is and rendered, ``message()``; two or more are packed by ``TXCreateItem`` into one
+    ``multipleBusinessRuleErrors``, each with its code, its rendered ``message()`` and its params still in ``ctx``,
+    which batch validation (``TXValidationIssue.error``) and broker import (``BRIMValidationIssue.message``) pass on.
+    Before W-B38 the pack carried each ``message_template``, so a ``{type}`` template reached the user unresolved:
+    "{type} requires asset_id".
     """
 
     @pytest.mark.parametrize(("cell", "violation"), VISIBLE_RULE_MESSAGES)
@@ -1538,14 +1542,15 @@ class TestRules5To11VisibleMessages:
 
         assert returned == [violation], f"Rules 5-11 must keep the code, the message template, the rendered message and the params the user gets: expected {[violation]}, got {returned}"
 
-    def test_packed_templates_unchanged(self):
-        """TX-S-109: two violations on one create reach the user packed, each with its template unrendered, as today.
+    def test_packed_messages_rendered(self):
+        """TX-S-109: two violations on one create reach the user packed, each with its message rendered (W-B38).
 
         A BUY with no asset and quantity 0, otherwise valid: ``TXCreateItem`` raises one ``multipleBusinessRuleErrors``
-        whose ``ctx.errors`` holds the code, the ``message_template`` and the params of each violation, the text batch
-        validation and broker import show. One ``{type}`` template (assetRequired, the known leak) and one text written
-        per type (qtyPositive) must come out as they do today. Guard, green before and since W-B36; the order of the list
-        is not the subject.
+        whose ``ctx.errors`` holds the code, the rendered ``message()`` and the params of each violation, the text batch
+        validation and broker import show. A ``{type}`` template (assetRequired) must come out resolved, exactly as a
+        single violation of it is (TX-S-108), and a text written per type (qtyPositive) unchanged; code and params stay
+        as they were. Red before W-B38, which packed ``message_template`` and leaked "{type} requires asset_id"; the
+        order of the list is not the subject.
         """
         with pytest.raises(ValidationError) as exc_info:
             TXCreateItem(broker_id=1, type=TransactionType.BUY, date=date.today(), quantity=Decimal("0"), cash=CASH_EUR_MINUS_100)
@@ -1553,8 +1558,10 @@ class TestRules5To11VisibleMessages:
         errors = exc_info.value.errors()
         assert [error["type"] for error in errors] == ["multipleBusinessRuleErrors"], f"A BUY with no asset and quantity 0 must fail on two business rules at once, packed in one multipleBusinessRuleErrors; got {errors}"
         packed = sorted(errors[0]["ctx"]["errors"], key=lambda entry: entry["code"])
+        unresolved = [entry["msg"] for entry in packed if "{" in entry["msg"]]
+        assert unresolved == [], f"Each packed text is what the user reads in batch validation and broker import, so it must be rendered (W-B38): the user would read {unresolved}"
         expected = [
-            {"code": "assetRequired", "msg": "{type} requires asset_id", "ctx": {"type": "BUY"}},
+            {"code": "assetRequired", "msg": "BUY requires asset_id", "ctx": {"type": "BUY"}},
             {"code": "qtyPositive", "msg": "BUY requires quantity > 0", "ctx": {"type": "BUY"}},
         ]
-        assert packed == expected, f"The packed texts must stay as they are today (the developer's decision, 2026-10-16): expected {expected}, got {packed}"
+        assert packed == expected, f"Two violations must be packed with the code, the rendered message and the params of each (W-B38): expected {expected}, got {packed}"
