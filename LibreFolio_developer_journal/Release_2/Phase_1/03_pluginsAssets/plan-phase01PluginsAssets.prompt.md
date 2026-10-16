@@ -3764,3 +3764,36 @@ vero, che va ad Aphra su richiesta del developer; nessun commit della doc.
 >   - `core-unit` → 179 file, 6445/6445;
 >   - `git diff --check` pulito.
 >   - Il `component-unit` intero gira dopo il pezzo 8, con le registrazioni di tutti e due i pezzi.
+
+FE5c-7 committed: `086a50005` + journal `f4cd61273`.
+
+#### FE5c-8 · il selettore della modalità e la finestra del calendario ✅ (2026-10-16, 07:26–07:36)
+
+> **Note implementazione**:
+> - Rientrati da `/tmp/libreFolio_x_fe5c_hold/`: `AssetChartModeToggle.svelte` e `AssetCalendarWindowControls.svelte`,
+>   con i loro test. La cartella d'attesa ora è vuota.
+> - `splice.py 8 --apply`:
+>   - il selettore prende il posto delle **due** copie, quella con i dati e quella vuota;
+>   - la finestra prende il posto del suo blocco;
+>   - `calendarDurationOptions` esce dalla pagina e va nel componente;
+>   - l'alias locale `AssetChartPrimaryMode` diventa l'export dello `<script module>` del selettore;
+>   - escono `Percent`, `CompactDurationBadge`, `DocsLink` e `CALENDAR_RETURN_UNIT_LABEL_KEYS`.
+>   - Prettier ha messo su una riga la chiamata della finestra. La pagina passa da 3070 a **2969 righe**.
+> - Registrati i due test in `component-unit`.
+> - **`--split`**: la pagina scende da 198 a 155, il selettore ne prende 20 e la finestra 11, per un totale di 186: 12 in
+>   meno di prima, perché sono le classi della seconda copia del selettore, che non c'è più.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - Vitest dei due test → **15/15**;
+>   - `core-unit` → 179 file, 6445/6445;
+>   - **`component-unit` intero** → **154 file, 4007/4007**, con i 4 test di componente del FE5c;
+>   - `check-orphans` → tutti i test raggiungibili (469 in `frontend/src`);
+>   - `git diff --check` pulito; porta 6183 libera.
+>
+> **Il taglio, finora**: la pagina è passata da 3603 a 2969 righe in otto pezzi, sette commit e la chiusura di X-R13.
+> - **Restano**:
+>   - il pezzo 9, cioè la barra degli strumenti, il caricamento e il polling in uno stato `.svelte.ts`, dopo le righe
+>     di Z nella base;
+>   - l'aggiornamento della base, che porta anche le classi di DV in `components/charts/`;
+>   - lo slot E2E: `asset-detail`, `asset-data-editor`, `asset-event-delete`, `onboarding-guides`, e gli scatti della
+>     galleria della pagina.
