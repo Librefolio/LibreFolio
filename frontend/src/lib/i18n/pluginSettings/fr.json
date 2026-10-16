@@ -28,7 +28,7 @@
       "set": "Défini",
       "setOn": "Défini le {date}",
       "unset": "Non défini",
-      "unreadable": "Enregistré, mais la clé de cette instance ne peut pas le lire : saisissez-le à nouveau.",
+      "unreadable": "Enregistré, mais la clé de cette instance ne peut pas le lire. Si un administrateur peut remettre l'ancienne clé, c'est à faire d'abord ; sinon, saisissez-le à nouveau.",
       "replace": "Remplacer",
       "clear": "Effacer",
       "willClear": "Il sera effacé à l'enregistrement.",
