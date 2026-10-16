@@ -26,6 +26,10 @@
       "logLevel": {
         "ok": "Il livello di log è adatto alla produzione.",
         "verbose": "Il livello di log è {log_level}: il log registra dettagli operativi; in produzione basta INFO."
+      },
+      "pluginSecrets": {
+        "ok": "I segreti dei plugin salvati si possono leggere con la chiave d'istanza.",
+        "unreadable": "{count, plural, one {# segreto dei plugin salvato non si può leggere con la chiave d'istanza: inseriscilo di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui è stato salvato.} other {# segreti dei plugin salvati non si possono leggere con la chiave d'istanza: inseriscili di nuovo in Impostazioni → Plugin, o ripristina la chiave d'istanza con cui sono stati salvati.}}"
       }
     },
     "block": {
@@ -33,7 +37,8 @@
       "adminDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Regolarizza con il fornitore per sbloccarla.",
       "userDescription": "Il fornitore che ospita l'istanza l'ha bloccata, per esempio perché l'abbonamento non è pagato. Chiedi all'amministratore un backup dei tuoi dati.",
       "deletionDate": "L'istanza e i suoi dati verranno cancellati il {date}.",
-      "manageSubscription": "Gestisci abbonamento"
+      "manageSubscription": "Gestisci abbonamento",
+      "backupTitle": "Conserva una copia dei dati"
     }
   }
 }

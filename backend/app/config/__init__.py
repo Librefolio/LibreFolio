@@ -30,6 +30,7 @@ Environment Variables (see .env):
     RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600; managed: 60)
     RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600; managed: 60)
     LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted); a profile's defaults: PROFILE_DEFAULTS
+        for Settings fields, ENVIRONMENT_PROFILE_DEFAULTS (profile_default()) for the variables of the section modules
     LIBREFOLIO_FRAME_PROTECTION: X-Frame-Options and frame-ancestors on every response (default: off; managed: on)
     LIBREFOLIO_CSP_REPORT_ONLY: Report-only Content-Security-Policy on the web app's pages (default: off; managed: on)
 
@@ -39,7 +40,7 @@ env_secret(). Every variable the code reads is listed in .env.example.
 
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -72,6 +73,17 @@ PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
         "RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS": 60.0,
         "LIBREFOLIO_FRAME_PROTECTION": True,
         "LIBREFOLIO_CSP_REPORT_ONLY": True,
+    },
+}
+
+#: The same for the variables a section module of this package reads from the environment, outside ``Settings`` (H-17):
+#: while such a variable is unset, ``profile_default(name, fallback)`` gives the active profile's value, or the code's
+#: own ``fallback`` when the profile lists none. A self-hosted install keeps every fallback.
+ENVIRONMENT_PROFILE_DEFAULTS: dict[str, dict[str, object]] = {
+    "selfhosted": {},
+    "managed": {
+        # The largest archive a restore accepts, in megabytes (decision 43; workstream B, config/backup.py)
+        "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500,
     },
 }
 
@@ -395,7 +407,12 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         production_dirs.append(_resolve_data_dir(configured_prod))
     if any(_paths_overlap(candidate, prod) for prod in production_dirs):
         raise ValueError("Test data directory must not overlap the production data directory")
-    if any((ancestor / PRODUCTION_DATA_MARKER).exists() for ancestor in (candidate, *candidate.parents)):
+    # Path.exists() re-raises EACCES: a folder that cannot be traversed is refused with a message, never let through
+    try:
+        marked = any((ancestor / PRODUCTION_DATA_MARKER).exists() for ancestor in (candidate, *candidate.parents))
+    except OSError as exc:
+        raise ValueError(f"Cannot verify the test data directory: {exc.strerror or type(exc).__name__}") from exc
+    if marked:
         raise ValueError("Test data directory is inside a marked production data directory")
 
     for relative in (
@@ -437,7 +454,11 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         test_target = (candidate / relative).resolve()
         if not test_target.is_relative_to(candidate):
             raise ValueError(f"Test data path escapes its configured root: {relative}")
-        if any(_same_filesystem_location(test_target, (prod / relative).resolve()) for prod in production_dirs):
+        try:
+            aliased = any(_same_filesystem_location(test_target, (prod / relative).resolve()) for prod in production_dirs)
+        except OSError as exc:
+            raise ValueError(f"Cannot verify test data path: {relative} ({exc.strerror or type(exc).__name__})") from exc
+        if aliased:
             raise ValueError(f"Test data path aliases production data: {relative}")
     return candidate
 
@@ -496,6 +517,17 @@ def get_settings() -> Settings:
         settings.LOG_LEVEL = log_level_override.upper()
 
     return settings
+
+
+def profile_default[T](name: str, fallback: T) -> T:
+    """What the active profile gives ``name``, a variable a section module reads from the environment, else ``fallback``.
+
+    ``ENVIRONMENT_PROFILE_DEFAULTS`` holds the profile's values; ``fallback`` is the code's own default, the one a
+    self-hosted install gets. The section module asks only while its variable is unset, and keeps its own rules for a
+    blank or an invalid value. The profile is read at each call, normalised by ``Settings``.
+    """
+    values = ENVIRONMENT_PROFILE_DEFAULTS.get(get_settings().LIBREFOLIO_PROFILE, {})
+    return cast(T, values[name]) if name in values else fallback
 
 
 def ensure_data_dirs() -> None:
