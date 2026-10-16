@@ -76,13 +76,16 @@ import {
     SRC_DIR,
     acceptFile,
     byText,
+    codeOf,
     compareWithBaseline,
     declareSplit,
     formatBaseline,
     grammarOf,
     grammarOfTree,
     isProductionSource,
+    lineAt,
     listSources,
+    markupOf,
     measureSource,
     mergeBaselines,
     parseBaseline,
@@ -90,6 +93,7 @@ import {
     readTokens,
     roleNames,
     scanTree,
+    startTags,
     tightenBaseline,
     totalsOf,
 } from '../scripts/theme/theme-roles.mjs';
@@ -173,6 +177,7 @@ describe('the scanner, on synthetic sources', () => {
             ['a CSS variable', SVELTE, '<style>\n    .brand {\n        color: var(--color-libre-green);\n    }\n</style>'],
             ['script comments', SVELTE, '<script>\n    // bg-white\n    /* bg-white */\n</script>'],
             ['a markup comment', SVELTE, '<!-- <div class="bg-white"></div> -->'],
+            ['comments in a markup expression', SVELTE, '<Panel onpick={() => {\n    // was bg-white\n}} />\n<p>{/* text-gray-500 */ value}</p>'],
             ['comments in a .ts file', TS, '// bg-white\n/* text-gray-500 */\nexport const x = 1;'],
         ];
         expect(ignored.map(([what, rel, source]) => `${what}: ${m1Of(rel, source)}`)).toEqual(ignored.map(([what]) => `${what}: 0`));
@@ -212,6 +217,7 @@ describe('the scanner, on synthetic sources', () => {
     it('m2 ignores comments of every kind', () => {
         expect(m2Of(TS, "// '#ff0000'\n/* rgba(0, 0, 0, 0.5) 'white' */\nexport const x = 1;")).toEqual([]);
         expect(m2Of(SVELTE, "<!-- <div style='color: red'></div> -->\n<script>\n    // const c = 'white';\n    /* const d = '#000'; */\n</script>\n\n<style>\n    /* .x { color: #fff; } */\n</style>")).toEqual([]);
+        expect(m2Of(SVELTE, "<Panel onpick={() => {\n    // was '#ff0000'\n}} />\n<p>{/* rgba(0, 0, 0, 0.5) */ value}</p>"), 'in a markup expression: an attribute value, a text').toEqual([]);
     });
 
     it('m2 sees a colour inside a Tailwind arbitrary value, where `_` stands for a space', () => {
@@ -551,6 +557,85 @@ describe('the grammar of the roles, on synthetic sources', () => {
 
     it('accepts role utilities written right: opacity, variants, any colour utility, and a legacy child under a migrated parent', () => {
         expect(caught(SVELTE, '<div class="bg-lf-card/90 hover:bg-lf-subtle border border-lf-input focus-visible:ring-lf-primary text-lf-muted">\n    <span class="bg-white text-gray-500"></span>\n</div>')).toEqual([]);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C'. Comments inside markup expressions: the AF lot 8 regression
+// ---------------------------------------------------------------------------
+
+/**
+ * The AF lot 8 regression. codeOf blanked the comments of the scripts, of the styles and of the markup, not those inside
+ * the markup's `{…}` expressions. In `routes/(app)/assets/+page.svelte` a line comment inside an attribute expression,
+ * `onfitperiod={(range) => { // the picker's … }}`, kept its apostrophe and its backticks, and the scanner read them as
+ * quotes: the attribute value swallowed the markup after it. G3 fired on the attribute line, which holds no class, and
+ * the swallowed elements were never checked one by one — in four files of the tree the scanner read only part of the
+ * markup, `AssetSetRiskPanel.svelte` 3 start tags of 56. m1 counted the classes such a comment names, too.
+ *
+ * codeOf now blanks the line and block comments of every markup expression as it does a script's, the closing `}` found
+ * past strings and comments; the script and style blocks keep their own handling. A comment becomes spaces and keeps
+ * its newlines: offsets and line numbers do not move.
+ */
+describe('codeOf, the AF lot 8 regression: a comment inside an attribute expression swallowed the markup after it', () => {
+    const SVELTE = 'lib/components/x/Sample.svelte';
+    const NAMES = new Set(['card', 'primary', 'link']);
+    const caught = (text: string): string[] => grammarOf(SVELTE, text, NAMES).map((g) => `${g.rule} ${g.line}  ${g.text}`);
+    /** The one element that mixes a role with a legacy class: line 9 of SOURCE, after the comment. */
+    const MIXED = '<div class="bg-lf-card text-gray-500">mixed</div>';
+    /** The AF shape: a comment with an apostrophe and backticks inside an attribute expression, then markup to check. */
+    const SOURCE = [
+        '<script>',
+        "    let x = 1; // a script comment's `tick`",
+        '</script>',
+        '',
+        '<Panel onfitperiod={(range) => {',
+        "    // the picker's `activePreset` decides, text-gray-500 here is a comment",
+        '    apply(range);',
+        '}} />',
+        MIXED,
+        '<div class="bg-lf-card text-lf-primary">roles</div>',
+        '<a href={\'https://example.com/x\'} class="text-lf-link">a URL with // inside a string</a>',
+        "<p>{/* a block comment's `b` */ value}</p>",
+        '<span class="text-red-500">legacy</span>',
+        '',
+    ].join('\n');
+    /** The lines codeOf changed, as `N: what is left of it`, its blanks collapsed. */
+    const changedLines = (text: string, code: string): string[] => {
+        const lines = text.split('\n');
+        return code.split('\n').flatMap((line, i) => (line === lines[i] ? [] : [`${i + 1}: ${line.replace(/\s+/g, ' ').trim() || '(blank)'}`]));
+    };
+
+    it('G3 fires once, on the mixed element after the comment, never on the attribute that holds the comment; m1 counts the markup, not a class the comment names', () => {
+        expect(caught(SOURCE), 'line 5, the attribute, holds no class: the old scanner reported it, with the markup it had swallowed').toEqual(['G3 9  bg-lf-card text-gray-500']);
+        expect(measureSource(SVELTE, SOURCE), 'text-gray-500 on line 9 and text-red-500 on line 13, not the text-gray-500 of the comment').toEqual({m1: 2, m2: []});
+    });
+
+    it('the blind spot closed: every element after the comment is read on its own, so the mixed one is reported as itself and the others pass', () => {
+        const tags = [...startTags(markupOf(codeOf(SVELTE, SOURCE)))].map(({tag, index}) => `${tag} ${lineAt(SOURCE, index)}`);
+        expect(tags, 'the old scanner read two, the script and the Panel, whose attribute held all the rest').toEqual(['script 1', 'Panel 5', 'div 9', 'div 10', 'a 11', 'p 12', 'span 13']);
+        expect(caught(SOURCE.replace(`${MIXED}\n`, '')), 'without the mixed element, no G3: each element after the comment is right on its own, where the old scanner reported line 5').toEqual([]);
+    });
+
+    it("codeOf blanks a markup expression's comments as it does a script's: the same length and line breaks, the strings and the markup text kept", () => {
+        const code = codeOf(SVELTE, SOURCE);
+        const lineLengths = (text: string): number[] => text.split('\n').map((line) => line.length);
+        expect(code.length, 'the same length').toBe(SOURCE.length);
+        expect(lineLengths(code), 'the same line breaks: offsets and line numbers do not move').toEqual(lineLengths(SOURCE));
+        expect(code, 'the comment of the attribute expression').not.toContain("picker's");
+        expect(code, 'a string of an expression, its // included').toContain("href={'https://example.com/x'}");
+        expect(changedLines(SOURCE, code), "line 2 the script's comment, as before; line 6 the attribute expression's; line 12 the text expression's; nothing else, not the // of the link's text").toEqual(['2: let x = 1;', '6: (blank)', '12: <p>{ value}</p>']);
+    });
+
+    it('codeOf leaves the script and style blocks to their own handling: a brace in a script string or in a CSS rule opens no expression', () => {
+        const blocks = ['<script>', "    const open = '{', home = 'https://example.com'; // it's home", '</script>', '', '<style>', "    .hero { background: url(https://example.com/x.png); } /* it's */", '</style>', ''].join('\n');
+        expect(changedLines(blocks, codeOf(SVELTE, blocks)), 'only the comments go: read as an expression, either block would lose the // of its URL').toEqual(["2: const open = '{', home = 'https://example.com';", '6: .hero { background: url(https://example.com/x.png); }']);
+    });
+
+    it('a block comment inside a text expression is blanked too, and measures nothing', () => {
+        const comment = '/* was text-gray-500 on #ff0000 */';
+        const text = `<p>{${comment} value}</p>`;
+        expect(codeOf(SVELTE, text)).toBe(`<p>{${' '.repeat(comment.length)} value}</p>`);
+        expect(measureSource(SVELTE, text)).toEqual({m1: 0, m2: []});
     });
 });
 
