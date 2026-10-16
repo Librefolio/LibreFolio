@@ -3463,14 +3463,17 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     indice su espressione **non** unico presente da una parte sola, o lo stesso con due nomi, passerebbe.
   - Cura: costruire quella chiave da `_index_list` (origine `'c'`). Oggi nessun indice del genere esiste; per
     `ux_users_email_lower` nome e SQL li fissa MIG009-003.
-- **A-27 · Un cambio dell'indirizzo o della password non revoca i link di reset vivi** — medio (sicurezza); dalla
-  revisione di E (E6.9), tramite il coordinatore (16/10).
+- ✅ **A-27 · Un cambio dell'indirizzo o della password non revoca i link di reset vivi** — medio (sicurezza); chiusa il
+  16/10 (lotto A-27, commit del coordinatore); dalla revisione di E (E6.9), tramite il coordinatore (16/10).
   - `user_service.update_profile` (cambio vero dell'indirizzo: anche `PUT /auth/profile` e `user set-email`) e la rotta
     `POST /auth/change-password` chiudono le sessioni ma lasciano vivi i link `PASSWORD_RESET`: con la «password
     dimenticata» aperta, chi controlla la vecchia casella chiede un link prima del cambio e lo usa dopo, entro 30 minuti.
     Stesso buco in `user_service.reset_password` (CLI `user reset`), trovato da A.
   - Cura: `token_service.revoke_tokens(…, purpose=PASSWORD_RESET)` nella stessa transazione del cambio, come già fanno
     `create_password_reset` e `complete_password_reset`; rossi prima. Lotto a sé dopo l'ingresso di P18.
+  - Fatta così (16/10): i tre punti; rossi nel contratto 7 di `test_session_version.py` e REVOKE-003…007 di
+    `test_session_revocation_api.py`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A-27».
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
