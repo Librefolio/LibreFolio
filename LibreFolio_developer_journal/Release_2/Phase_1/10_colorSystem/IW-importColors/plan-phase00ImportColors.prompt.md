@@ -16,8 +16,9 @@
 >
 > **Stato:** ✅ analisi inviata (16/10, 11:00); ✅ approvata dal developer nella sessione IW (uscita dal plan mode, ~11:05)
 > e dal coordinatore con le decisioni D1–D6 (~11:15); ✅ cinque lotti scritti e rivisti (11:47); ✅ prove leggere verdi
-> (12:05); ✅ checkpoint 1 `48ecea1e2`, base merge `b3162db80`; ✅ passo 5, i pulsanti di D2 (12:21); ⏳ checkpoint 2
-> inviato, FROZEN; slot pesante unico verso le 15:30, dopo TR.
+> (12:05); ✅ checkpoint 1 `48ecea1e2`, base merge `b3162db80`; ✅ passo 5, i pulsanti di D2: checkpoint 2 `9c79d5b35`;
+> ✅ C4 dopo la base merge `b2466931d`: `ec9fec52a`; ✅ slot pesante verde (15:02–15:38); ⏳ consegna finale inviata,
+> FROZEN, pronto per l'ingresso nel target.
 
 ## ✅ Autorizzazione e decisioni (16/10/2026)
 
@@ -326,8 +327,28 @@ duplicati (D1); la timeline della card del set (12).
    > **⚠️ Fuori pista**: `app.css` appartiene a T; questa è l'unica eccezione del kickoff («se il gate C4 ti chiede di
    > togliere un selettore del rimappaggio scuro, perché hai tolto il suo ultimo uso, lo togli e lo dichiari nel
    > checkpoint»).
-8. ⏳ Slot pesante unico (~15:30, dopo TR, sulla base attuale): `front check`, `front-utility core-unit`,
-   `front-utility component-unit`, poi le 13 spec di `front-transaction`.
+8. ✅ Slot pesante unico (16/10, 15:02–15:38, corsia 6151 + `/tmp/librefolio-r2-iw`, HEAD `ec9fec52a`, cioè la base
+   merge `b2466931d` con la punta `e402d3b87` (TR, BK, DV) più il ritocco C4; taglio del coordinatore alle 15:50),
+   script `iw_slot.sh` in sessione, log `slot_*.log`:
+   1. `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py api sync`: uscita 0 in 35 s;
+   2. `… dev.py front build --debug`: uscita 0 in 405 s; `svelte-check` sull'albero intero **0 errori, 0 avvisi**: è il
+      `front check`, non ripetuto;
+   3. `… dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-iw --fresh-run --workers 4 front-transaction all`:
+      uscita 0 in 1.341 s; due corse di Playwright, **381 test verdi, 0 rossi**, 32 saltati per progetto (desktop o
+      mobile): 45 spec desktop, 347 verdi; le due spec dei set di report su tutti i progetti, 34 verdi e 32 saltati.
+      Verdi le 13 spec dell'import del piano (tx-import-flow, tx-import-broker-mismatch, tx-ca-contract,
+      tx-bulk-diagnostics, tx-import-report-set, tx-import-upload, tx-import-file-selection, tx-import-degiro,
+      tx-asset-identity, tx-import-duplicate-precedence, tx-import-resolution, tx-brim-import, tx-import-matching),
+      più tx-bulk-import-handoff, tx-import-asset-inspector e tutte quelle di TR appena entrate;
+   4. `… front-utility core-unit`: **179 file, 6.418 test verdi** (60 s);
+   5. `… front-utility component-unit`: **154 file, 4.042 test verdi** (338 s).
+   Porta 6151 libera alla fine, nessun processo rimasto; solo artefatti ignorati (`.testLog/`, `frontend/build/`,
+   `frontend/test-results/`, `.svelte-kit/`).
+   > **Note implementazione**: `front-transaction all` al posto delle 13 invocazioni separate: un solo populate e un
+   > solo server, e copre anche le spec di TR che incrociano l'import (confronto, Bulk); il coordinatore l'ha saputo
+   > all'avvio dello slot.
+   > **⚠️ Fuori pista**: nessuno. Il carico della macchina è arrivato a 142 durante gli E2E: i test hanno impiegato
+   > 13–20 s l'uno, nessun rosso.
 
 ## Definizione di fatto
 
@@ -337,6 +358,21 @@ duplicati (D1); la timeline della card del set (12).
 - Slot pesante: `front check` 0/0, `core-unit`, `component-unit` e E2E mirati verdi.
 - Baseline stretta con `--update`; nessun `--accept`; nessuna riga allargata.
 - Piano aggiornato a ogni passo; backlog IW-n per i rimasti legacy e le richieste di ruolo; porta 6151 libera alla consegna.
+
+> **✅ Verifica (16/10, 15:40):** tutti i punti sono soddisfatti. Area: m1 1.310 → 14, m2 → 0. I 14 rimasti sono annotati:
+> - badge `KIND_TONES` con anello e 3 stelle (IW-2, IW-3);
+> - l'interruttore, che va nel lotto di T;
+> - il chip viola (IW-5).
+>
+> Prove:
+> - prove leggere verdi a ogni consegna;
+> - slot pesante verde: `svelte-check` 0/0, `core-unit` 6.418, `component-unit` 4.042, E2E 381 verdi;
+> - baseline solo stretta (8.249 → 6.953 per IW), nessun `--accept`;
+> - porta 6151 libera.
+>
+> Resta, fuori dal perimetro 1:1:
+> - la revisione dell'aspetto del developer, dalla galleria o dall'anteprima (D-T21), sulla lista «da rivedere» (IW-7);
+> - le voci IW-2…IW-8.
 
 ## Rischi e dipendenze
 
