@@ -3921,3 +3921,12 @@ da Y il 15/10.
   - Da decidere se mostrarla su `@media (hover: none)`. Cambierebbe gli scatti mobile, e il colore
     `--lf-cmp-datatable-resize-handle-bg` c'è già.
   - Dettagli: piano di Y, §7 «Y7».
+- **Y-11 · Il corpus golden di `timeSeriesAggregation` è rosso dall'ingresso di Y8** — medio, test rosso sul target; Y,
+  16/10 (trovato nelle prove di Y3).
+  - I-01 (Y8, `a25d09a69`) ha cambiato di proposito `aggregateSumSeries`: i punti mancanti non entrano nella somma, e un
+    secchio senza valori diventa un vuoto. Il corpus di `components/charts/__tests__/timeSeriesAggregationGolden.test.ts`
+    registra invece il comportamento di prima (caso `all-missing-values|weekly`, e il digest).
+  - Nelle prove di Y8 mancava `front-asset asset-unit`, e così 2 test sono rossi dal treno di Y8.
+  - Rimedio proposto: `test-author` ricattura il corpus con la procedura del file, annotando che la differenza viene da
+    I-01.
+  - Dettagli: piano di Y, §7 «Y3».

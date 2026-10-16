@@ -2153,3 +2153,90 @@ scrivono qui quando partono.
 >   - Prettier sui due file di codice;
 >   - `mkdocs build` stretto: 3068 URL relativi risolti. `check-links`: 96 link validi;
 >   - `git diff --check` pulito.
+> - **Salvato**: il coordinatore ha committato `26978e101` (codice e documentazione) e `8c762a10f` (journal). Poi ha
+>   aggiornato la base: merge pulito di `dev_release2` (`503dce683`, con il lotto di T e TD-3), HEAD `a1e4e5448`, con
+>   `security.md` fuso da solo.
+
+### Y9 — passo 2, i test di `test-author` ✅ (2026-10-16, 03:09–03:35; non ancora committati, sono il checkpoint Y9-3)
+
+> **Note implementazione**: tutti e tre i file sono verdi da soli, e lo restano dopo il merge della base.
+> - **`chartFont.load.test.ts`**, nuovo, 13 test:
+>   - all'import, `load` è chiamato una sola volta, con un `font` che il parser CSS accetta e che nomina 'LF Flags', e
+>     un campione fatto solo di indicatori regionali;
+>   - la cache: una sola promessa, un solo `load`;
+>   - non rifiuta mai: né dopo un `load` rimandato, né dopo un `load` rifiutato, né senza `document.fonts`;
+>   - `chartFontLoaded()` segue `check`;
+>   - **prima del primo disegno**: monta `SemiDonutChart` con un ECharts finto, e nel registro `fonts.load` viene prima
+>     del primo `setOption`. Il controllo inverso usa con `vi.doMock` una versione che chiede la faccia solo quando un
+>     grafico la chiede, e lì la richiesta arriva dopo: così il test può fallire davvero;
+>   - il ridisegno: un solo `resize` in più quando la faccia arriva dopo; nessuno se c'era già; nessuno su un grafico
+>     già chiuso.
+> - **`PriceChartFull.tooltipEscape.test.ts`**: 17 test (10 di prima e 7 nuovi), sul tipo del marcatore, sulla sua
+>   bandiera e su quella d'origine di un marcatore convertito, più i controlli sul percorso e le guardie sui codici.
+> - **`chartFlagFont.test.ts`**: 16 test. L'alias è ora `chartFont`, e la sezione «Why it is red today» è al passato.
+> - **Reperti di `test-author`**:
+>   - `ScatterChart` chiama la passata di stabilità prima del primo `setOption`. Per K-13 non cambia niente;
+>   - un `load` fallito non viene ritentato, come dice la documentazione;
+>   - un'eccezione sincrona di `document.fonts.load` romperebbe l'import di tutti i grafici. Le specifiche la
+>     escludono, ma una guardia `try` costa poco: la metto nel checkpoint Y9-3.
+
+### Y3 — FE6b, la dashboard in `lib/features/dashboard/` ⏳ (2026-10-16, dalle 03:33; via del coordinatore)
+
+> **Note implementazione**:
+> 1. **Base**: HEAD `a1e4e5448`, con il lotto di T e `AllocationPanel.svelte` nella forma finale. `api sync` non cambia
+>    file tracciati.
+> 2. **Il runner messo da parte**, come per Y4b: la registrazione non committata di `chartFont.load.test.ts` (Y9-3) è
+>    salvata in `files/_frontend_portfolio.y9-3.py` e `files/y9-3_runner.patch`, e `_frontend_portfolio.py` è tornato a
+>    HEAD.
+> 3. **Spostamento**: `files/y3_move.py --apply`, 37 file (i 35 previsti più i 2 rossi di Y10, che seguono la cartella) e
+>    42 specificatori riscritti in 8 file. `components/dashboard/` non esiste più; `dashboardViewStore` e
+>    `dateRangeController` sono ora in `features/dashboard/`.
+> 4. **Percorsi**: `files/y3_paths.py --apply`, 74 sostituzioni in 29 file. Restano fuori di proposito:
+>    - `pickView.test.ts` e `scanColors.test.ts`, di L;
+>    - i commenti di storia in `KpiDivergingFlowBar.test.ts` e `KpiMetricBar.test.ts`;
+>    - le cronache.
+> 5. **Colori**, con lo strumento:
+>    - `--check` pulito;
+>    - `--update`: 11 righe rinominate, conteggi identici a coppie, nessun'altra riga, «m1 10166 → 10166, m2 71 → 71»;
+>    - i totali sono identici prima e dopo: 10166/71, 263 file.
+>    - **Da sapere**: la dichiarazione `~split` di Y1 (`GrowthChart`, riga 272) cita ancora
+>      `lib/components/dashboard/`. `--update` lascia le dichiarazioni come sono, perché sono un registro, e a mano il
+>      baseline non si tocca. `--check` è pulito; lo segnalo ai colori.
+> 6. **devWiki**: tre tabelle «Source files» di `sources/` (`GrowthChart.svelte` due volte, `YieldOnCostCell.svelte`)
+>    portate al percorso nuovo, come in Y4b. `check_source_paths` torna ai 5 percorsi mancanti di prima.
+> 7. **Documentazione**: l'albero di `developer/frontend/index.md` era vecchio, già da Y4b: `stores/risk/`, e
+>    `features/` con solo `auth` e `settings`. Ora è anche stantio per Y3. Lo corregge `docs-writer`.
+>
+> **Prove leggere** (03:37–03:53, una alla volta con `nice`):
+> - `front check`: 0 errori, 0 avvisi;
+> - `component-unit`: 149 file e 3939 test;
+> - `growth-chart-memo` 166, `allocation-unit` 173 (6 file), `utils gate-i18n-usage` 195;
+> - `check-orphans` sullo stato del checkpoint, con messi da parte i 3 file di test non registrati di proposito: pulito;
+> - knip: gli stessi reperti di Y8, a percorsi normalizzati;
+> - `mkdocs build` stretto, 3068 URL; `check-links`, 96;
+> - `git diff --check` pulito, `theme-roles --check` pulito.
+>
+> **⚠️ Fuori pista**:
+> - **`asset-unit`, 5 rossi.**
+>   - 3 rossi in `chartCoreHelpers.test.ts`, colpa di Y3: un `ENOENT` su `components/dashboard/growthChartData.ts`, perché
+>     il test costruisce il percorso con un template, `` new URL(`../dashboard/${file}`, import.meta.url) ``, che lo
+>     script non riconosce. L'ho corretto a mano in `../../features/dashboard/${file}`. Era l'unico template di quella
+>     forma nel frontend: ho controllato anche quelli del rischio.
+>   - 2 rossi in `timeSeriesAggregationGolden.test.ts`, che non vengono da Y3 ma da **Y8** (`a25d09a69`, I-01). Il
+>     verdetto è **difetto**: Y8 ha cambiato di proposito la somma con i punti mancanti e non ha ricatturato il corpus
+>     golden, e nelle prove di Y8 mancava `asset-unit`. Il test è rosso sul target dal treno di Y8. È nel backlog come
+>     Y-11, e lo segnalo al coordinatore con il rimedio.
+>   - Dopo la correzione, `asset-unit` ha solo i 2 rossi di Y8 (874 verdi su 876).
+> - **`core-unit`, 1 rosso**: `themeModeReads.gate.test.ts` (R, W8) confronta un elenco in ordine, e quello ricevuto è
+>   ordinato per percorso. Con `features/dashboard/` le due voci della dashboard (`AllocationHistoryChart` e
+>   `OtherPeriodEffectsTable`) cadono dopo `RiskCardGrid`. Ho spostato quelle due righe dell'elenco atteso, senza altri
+>   cambi: il gate dà 24 verdi su 24.
+> - **Prettier**: l'import di `chartCoreHelpers.test.ts`, riscritto dallo script, era diventato troppo lungo. Prettier
+>   l'ha rimandato a capo (41 righe in più, 28 in meno). Gli altri 41 file erano già puliti.
+>
+> **Checkpoint Y3**: 102 percorsi in `files/y3_stage_code.txt`: 35 cancellazioni, 35 file nuovi in
+> `features/dashboard/` e 32 modifiche. Restano fuori:
+> - i 3 file di Y9-3: `chartFont.load.test.ts`, più i cambi di `test-author` in `PriceChartFull.tooltipEscape.test.ts` e
+>   in `chartFlagFont.test.ts`;
+> - i 2 rossi di Y10, ora in `features/dashboard/`;
+> - il piano e il backlog, che vanno nel commit del journal.
