@@ -111,7 +111,8 @@ lire l'état et le journal.
 </div>
 
 - Chaque entrée correspond à une exécution : tâche, heure, durée et combien d'éléments ont réussi. 🟢 **OK** : tous,
-  ou rien à faire ; 🟡 **Partiel** : certains ont échoué ; 🔴 **Erreur** : aucun n'a réussi.
+  ou rien à faire ; 🟡 **Partiel** : certains ont échoué, ou ont été reportés parce que leur fournisseur est en pause
+  après trop de requêtes ; 🔴 **Erreur** : aucun n'a réussi et aucun n'a été reporté.
 - Cliquez sur une entrée pour voir chaque actif ou paire FX, son fournisseur et les prix modifiés (**Delta**).
   Survolez une erreur pour la lire en entier ; double-cliquez dessus (appui long sur un téléphone) pour la copier.
 - Filtrez par tâche, statut ou période, de la dernière heure aux 30 derniers jours. Seules les exécutions les plus récentes

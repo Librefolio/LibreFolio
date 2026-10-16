@@ -225,13 +225,13 @@
                 <span class="text-base shrink-0 leading-none">{option.icon}</span>
             {/if}
             <div class="min-w-0">
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                <div class="text-sm font-medium text-lf-primary">
                     {option.value || ''}
                     {#if getSymbol(option)}
-                        <span class="text-gray-400 ml-0.5 text-xs">{getSymbol(option)}</span>
+                        <span class="text-lf-muted ml-0.5 text-xs">{getSymbol(option)}</span>
                     {/if}
                 </div>
-                <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
+                <div class="text-xs text-lf-muted truncate" title={option.label}>{option.label}</div>
             </div>
         </div>
     {/snippet}
@@ -242,8 +242,8 @@
                 {#if option.icon}
                     <span class="text-sm shrink-0 leading-none">{option.icon}</span>
                 {/if}
-                <span class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
-                    {option.value || ''}{#if getSymbol(option)}&nbsp;<span class="text-gray-400 text-xs">{getSymbol(option)}</span>{/if}
+                <span class="text-sm font-medium text-lf-primary truncate">
+                    {option.value || ''}{#if getSymbol(option)}&nbsp;<span class="text-lf-muted text-xs">{getSymbol(option)}</span>{/if}
                 </span>
             </div>
         {:else}
@@ -252,13 +252,13 @@
                     <span class="text-base shrink-0 leading-none">{option.icon}</span>
                 {/if}
                 <div class="min-w-0">
-                    <div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    <div class="text-sm font-medium text-lf-primary">
                         {option.value || ''}
                         {#if getSymbol(option)}
-                            <span class="text-gray-400 ml-0.5 text-xs">{getSymbol(option)}</span>
+                            <span class="text-lf-muted ml-0.5 text-xs">{getSymbol(option)}</span>
                         {/if}
                     </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate" title={option.label}>{option.label}</div>
+                    <div class="text-xs text-lf-muted truncate" title={option.label}>{option.label}</div>
                 </div>
             </div>
         {/if}
