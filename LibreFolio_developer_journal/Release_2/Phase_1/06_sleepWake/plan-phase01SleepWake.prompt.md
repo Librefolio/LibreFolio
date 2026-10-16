@@ -29,7 +29,7 @@
 | Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, `8b2d4782d`); **Z2b ✅ entrato** (treno 88, `812ca49cc`); decisioni notturne N-Z2b-1…6 «da rivedere» |
 | Z3 | Scheduler: recupero immediato al ritorno e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ✅ 16/10: commit `a4da204b4` e `70ccbeadc` (diagramma), prove d'ingresso verdi; decisioni D-Z3-1…4 «da rivedere» |
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ✅ entrato (treno 77, `2980e2a00`); decisioni notturne N-Z4-1…6 «da rivedere»; revisione di sicurezza senza problemi |
-| Z5 | «Aggiornamento prezzi…» | ⏳ dal 16/10 07:39 (area avvisi di H dentro): codice, test e doc verdi sul leggero sulla base `a3e8e73f7`; mancano i 2 casi della rotta sul server della corsia, nello slot `api` del coordinatore; N-Z5-1…5 «da rivedere» |
+| Z5 | «Aggiornamento prezzi…» | ✅ entrato con Z-13 (merge in dev `12cd3c2e0`, 16/10): commit `3b016dd4e` (journal `ac52425bc`, `09e490057`), Z-13 `9d19c2093` (journal `9d95afc85`), base aggiornata `41b44fb64`; Z-13b per Y11 nel checkpoint successivo; N-Z5-1…5 «da rivedere» |
 | Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
 | Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | Z7a ✅ entrato; X1–X8 entrati (`da21c48c4`); **Z7b ✅ entrato** (treno 85, `e5e2595e7`; N-Z7b-1…7 «da rivedere»); **Z7c-2 ✅ entrato** (treno 97, `0dfc7cbbe`); **Z7c-1 ✅ entrato** (treno 105, `dd4a97e01`, con Z-9; N-Z7c1-1…5 «da rivedere») |
 
@@ -2349,6 +2349,9 @@ E2E nuovo per Z5 e Z-13 insieme: dashboard aperto, intestazione e stato stubbati
 
 **Decisione notturna proposta**, «da rivedere»: N-Z13-1, solo dashboard e broker, in background e senza force; i
 pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
+> **Rivista il 16/10 ~13:24** (vincolo di Y11, dal coordinatore): la ricarica non tocca `refreshVersion` né chiama
+> `requestPortfolioRefresh()`, i segnali dell'«Aggiorna» dell'utente; i pannelli restano indietro finché non si
+> ricaricano (Z-15). Vedi il passo 6.
 
 **Stima**: 2–3 ore con i test, più uno slot E2E breve.
 
@@ -2408,3 +2411,81 @@ pannelli ricaricano con il loro `refreshVersion`, come per «Aggiorna».
    > `fxStoreRegistry.ts`) che il bus non tocca.
 5. ✅ 16/10 13:05 — Checkpoint FROZEN inviato, con i due `.svelte` dichiarati per i colori (DV, BK) e
    `portfolioMutation.ts` come superficie condivisa.
+6. Z-13b — la ricarica non passa dall'«Aggiorna» dell'utente (vincolo di Y11).
+   > **⚠️ Fuori pista** (coordinatore, 16/10 ~13:24, per conto di Y): con Y11 (P3, l'icona «Aggiorna» che gira mentre
+   > sono in volo le richieste «grandi») i pannelli di rischio e dei lotti si ricaricano sull'`$effect` di
+   > `refreshVersion`, seguito da `pageBusy`. La ricarica in background dopo un recupero non deve quindi usare
+   > `requestPortfolioRefresh()` (`kind: 'refresh'`) né toccare `refreshVersion`: sono i segnali dell'«Aggiorna»
+   > dell'utente, e i pannelli farebbero girare l'icona. Vanno bene le cache stale e `kind: 'mutation'`. Prima ancora,
+   > sempre per Y11: la ricarica non passa da `pageBusy`; le pagine chiamano già `loadAll()` / `loadOverview()`.
+   - ✅ 16/10 13:26 — In bozza, da FROZEN, fuori dal repo: `files/z13-draft/apply_z13b.py` (`check`, `apply`). Nei due
+     `.svelte` toglie `refreshVersion += 1` da `reloadAfterPriceCatchUp()` e ne riscrive il commento, solo righe dentro
+     lo `<script>` (dashboard ~710–719, DV; broker ~435–442, BK); poi i commenti dei due test degli store e i passi di
+     `live-ticker.md#price-refresh` e di `domain-state.md` (il passo 5 del Dashboard, la pagina del broker). Resa su
+     una copia: precondizioni vere, Prettier invariato sui quattro file del frontend; diff in
+     `files/z13-draft/z13b_dryrun.diff`. I quattro `refreshVersion += 1` che restano sono tutti azioni dell'utente
+     (sync FX, sync asset, «Aggiorna», Refresh del broker). Lo spec E2E non guarda né i pannelli né `refreshVersion`.
+   - ✅ 16/10 13:35 — Via del coordinatore: «Z-13b is the right way out»; Z-15 nel backlog, da decidere con Y dopo Y11.
+   - ✅ 16/10 14:15 — Applicato (`apply_z13b.py apply`) dopo il via del developer delle 14:14, sopra il merge aperto:
+     nessuno dei sei file né lo spec sta nell'indice del merge (`files/logs/z_merge_index_1334.txt`), quindi l'indice
+     resta quello del merge. Backlog: Z-13 chiusa (✅, `9d19c2093`), Z-15 aggiunta.
+   - ✅ 16/10 14:15–14:33 — Controlli leggeri sotto carico 50 (`files/z13b_light.sh`, log `files/logs/z_z13b-*`):
+     `git diff --check` pulito; Prettier `--check` pulito sui quattro file del frontend; `front check` 0/0;
+     `store-unit` 58/58 (con `lotsAnalysisStore.test.ts`); `risk-unit` 41/41; `front build --debug` (14:28, nessun
+     file di `src` più nuovo); `check-links` 97 validi. `mkdocs build` stretto **rosso, non per Z**: vedi sotto.
+     > **⚠️ Fuori pista**: il build stretto si ferma su un solo avviso, `developer/backend/transactions/wac.md` →
+     > `split_promote.md#transfer-giving-leg`, un'ancora che `split_promote.md` non ha su nessuno dei due lati del
+     > merge. Il link viene da dev, `54880598b` (16/10, «fix(transactions): emptied manual cost basis is refused, not
+     > kept», cherry-pick di `949da55f8`), già in `bfd33a0f5`: anche dev da solo è rosso in modalità stretta. Le mie
+     > pagine non danno avvisi. Non lo correggo io (fuori dal mio perimetro): segnalato al coordinatore. Il build
+     > fermo ha lasciato nel `site/` della corsia solo EN e IT. Non tocca lo slot: `server --build-only` costruisce la
+     > doc senza `--strict`, e solo se manca `site/index.html` o una pagina è più nuova.
+   - ✅ 16/10 15:01–15:08 — Slot 2 (`files/z_slot2.sh e2e`), solo lo stato B, nessuna ricostruzione (il frontend
+     delle 14:28): `front-portfolio price-refresh` 3/3 (44 s), `front-portfolio dashboard-cache` 6/6 (1,7 min).
+     > **⚠️ Fuori pista**: alle 15:03 il gate del coordinatore su dev (dopo l'ingresso di Z5 e Z-13) ha portato il
+     > carico a ~110, e il mio involucro aspettava il carico sotto 70 prima di `dashboard-cache`. Dentro lo slot e col
+     > cut-off alle 15:15, ho fermato solo quell'involucro in attesa (PID 70268 e il suo `sleep`, nessun test partito:
+     > rc 143 nel riepilogo, nessun log) e ho rilanciato subito il passo con la soglia alzata (15:04:27–15:08:39).
+   - ⏳ Il test dello spinner (Y11: l'icona non gira sul segnale `{kind: 'prices'}`), quando Y11 entra nella mia base.
+
+### Ingresso di Z5 e Z-13: aggiornamento della base (16/10, dalle 13:06)
+
+> **Salvato** (coordinatore, 16/10 ~13:05): Z-13 `9d19c2093` (feat, 14 percorsi) e `9d95afc85` (journal). Poi il
+> coordinatore ha aperto nel worktree `git merge bfd33a0f5` (dev con i lotti di H, W-B30, AF), con un conflitto in
+> `developer/api/index.md`: «Resolve it keeping both sides, stage only that file, don't commit.»
+
+1. ✅ 16/10 13:06 — Conflitto risolto: la riga `/system` di H (pagina di blocco più ricca, la frase su `/system/info` e
+   `/system/ready`, un modulo per risorsa) più la mia frase su `GET /system/price-refresh`, inserita prima della
+   sveglia programmata. La mia parte era esattamente la base `a3e8e73f7` più quella frase. Messo in stage solo quel
+   file. Verificate le altre sovrapposizioni fuse da sole: il backlog (la mia sezione intatta), `overview.md` (la mia
+   frase sulle intestazioni di risposta), `security.md` (`price-refresh` fra gli endpoint privati),
+   `_backend_services.py` (una sola registrazione di `scheduler-price-refresh`; il file si legge).
+2. Validazione combinata, sotto carico 50 (`files/z_combined.sh`), interrotta dalla **pausa del developer** (13:22):
+   - ✅ `api sync`; `front check` 0/0; `core-unit` 180 file, 6470 test; `store-unit` 58;
+     `scheduler-price-refresh` 44; `sleep-wake-activity` 111;
+   - ✅ `db populate --force`, partito alle 13:22:49, prima che fermassi la catena (13:23:01). L'ho lasciato finire
+     (13:23:39, PASSED) per non lasciare a metà la data-dir della corsia;
+   - ✅ 16/10 15:00–15:01, nello slot 2 (`files/z_slot2.sh backend`): `db populate --force` PASSED,
+     `api system-price-refresh` 8/8, `api system` 118/118. `mkdocs build` stretto rosso solo per l'avviso di dev
+     (`54880598b`; corretto su dev in `ed500643f`, che arriva col prossimo aggiornamento della base), ignorato
+     d'accordo col coordinatore; `check-links` 97. «combined green» inviato alle 15:01.
+   Stato alla pausa: HEAD `9d95afc85`, MERGE_HEAD `bfd33a0f5`, nessun file non fuso, tutto in stage, porta 6186 libera.
+3. Pausa del developer 13:22–14:14, FROZEN. Il coordinatore ha chiesto nel frattempo Z-13b (passo 6 di Z-13) e
+   confermato l'ordine: i controlli leggeri sotto carico 50 subito; nello slot 2, dopo TR (cut-off 15:10),
+   `db populate --force`, `api system-price-refresh` e `api system` → «combined green» (il merge non tocca le superfici
+   backend di Z5), poi gli E2E di Z-13b.
+   > **Nota** (16/10 ~13:30, sola lettura, da FROZEN): X ha trovato nello split FE5c-9b due difetti F26 preesistenti
+   > nel prezzo dal vivo della pagina di un asset, e li cura lui. (1) Sul grafico convertito il controllo «stessa
+   > chiusura» confronta la chiusura convertita con il prezzo nella valuta dell'asset, quindi ogni poll ricarica tutto
+   > il grafico. Il controllo viene da `93a88be2c` (I-bis #24), già in `v1.2.1`; Z1 (`74d028ec6`), unendo i due cicli,
+   > l'ha portato da ogni 60 s a ogni 30 s. Niente ciclo stretto: `loadChartData` non riscrive `assetInfo`. (2) Con il
+   > movimento ridotto il flash può restare acceso: il cleanup dell'effetto ferma il timer ma non azzera
+   > `livePriceDirection`. Viene da `52c8d0d70`, già in `v1.2.1`; la lista degli asset non ha il gemello. Segnalato al
+   > coordinatore: i paragrafi «Price flash» e «Chart head» di `live-ticker.md` descrivono i due comportamenti e vanno
+   > ritoccati nel commit di X; `asset-live-pause.spec.ts` non dipende dai due fix.
+4. ✅ 16/10 ~15:05 — Il coordinatore ha creato il merge nel worktree: `41b44fb64` (genitori `9d95afc85` e
+   `bfd33a0f5`), con l'indice com'era; Z5 e Z-13 entrati in dev con il merge `12cd3c2e0` (le pagine Dashboard e broker
+   fuse da sole con il markup di DV e BK). Il suo gate su dev gira dopo l'ingresso. Il fix `ed500643f` dell'avviso
+   mkdocs arriva col prossimo aggiornamento della base.
+5. ✅ 16/10 15:10 — Checkpoint di Z-13b inviato, FROZEN: i sei file di Z-13b più questo piano e il backlog (Z-13 ✅,
+   Z-15). I due `.svelte` sono di DV e BK: cambiano solo righe dentro lo `<script>`; lo SHA va ai colori.
