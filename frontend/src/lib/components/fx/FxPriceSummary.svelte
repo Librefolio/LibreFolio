@@ -38,7 +38,7 @@
 {#if lastRate !== null}
     <div class="flex items-center gap-3 {layoutMode === 'oneRow' ? 'px-3' : filtersStacked ? 'justify-around w-full' : 'justify-center'}" style={filtersStacked && maxWidth ? `max-width: ${maxWidth}px` : ''}>
         <!-- Left half: rate -->
-        <span class="font-mono text-lg font-semibold text-gray-700 dark:text-gray-200">
+        <span class="font-mono text-lg font-semibold text-lf-secondary">
             {formatFixed(lastRate, 4)}
         </span>
 
@@ -51,5 +51,5 @@
         {/if}
     </div>
 {:else}
-    <div class="text-sm text-gray-400 dark:text-gray-500" data-fx-rate-state="missing" data-testid="fx-price-summary-missing">{$t('fx.rateNotAvailable')}</div>
+    <div class="text-sm text-lf-muted" data-fx-rate-state="missing" data-testid="fx-price-summary-missing">{$t('fx.rateNotAvailable')}</div>
 {/if}

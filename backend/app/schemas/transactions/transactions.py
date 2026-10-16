@@ -39,12 +39,14 @@ from backend.app.utils.datetime_utils import UTCDateTime
 # =============================================================================
 
 
-# Decision P6 (developer's list, 2026-10-16): TX_TYPE_METADATA is stricter than rules 5-11 on four points. The CREATE
-# path enforces them with its own rules 2, 3 and 3b; an UPDATE runs only rules 5-12, so until the decision they stay
-# unchecked here, as before W-B36: a TRANSFER's cash (case 1), FX_CONVERSION's zero quantity (case 2), TRANSFER's
-# non-zero quantity (case 3), and the "nonzero" cash sign of FX_CONVERSION and CASH_TRANSFER (case 4, not read at all).
-_P6_CASH_FORBIDDEN_UNCHECKED: frozenset[TransactionType] = frozenset({TransactionType.TRANSFER})
-_P6_QUANTITY_SIGN_UNCHECKED: frozenset[TransactionType] = frozenset({TransactionType.FX_CONVERSION, TransactionType.TRANSFER})
+# Decision P6 (the developer's, 2026-10-16; W-B36b): TX_TYPE_METADATA is stricter than rules 5-11 on four points, which
+# the CREATE path enforces with its own rules 2, 3 and 3b. Rules 5-11 hold them only on a field the operation changed
+# (``changed_fields``), as N2's cost check does, so a row stored outside them stays editable: a TRANSFER's cash (case 1,
+# rule 8) and the "nonzero" cash sign of FX_CONVERSION and CASH_TRANSFER (case 4, rule 11, ``cashNonzero``) when the cash
+# changes; FX_CONVERSION's zero quantity (case 2) and TRANSFER's non-zero quantity (case 3, both rule 10) when the
+# quantity changes. A changed type (a promote) judges every field anew.
+_P6_CASH_FORBIDDEN_WHEN_CHANGED: frozenset[TransactionType] = frozenset({TransactionType.TRANSFER})
+_P6_QUANTITY_SIGN_WHEN_CHANGED: frozenset[TransactionType] = frozenset({TransactionType.FX_CONVERSION, TransactionType.TRANSFER})
 
 
 def validate_tags_list(v) -> Optional[List[str]]:
@@ -84,6 +86,7 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     cash: Optional[Currency],
     asset_event_id: Optional[int],
     cost_basis_mode: Optional[str],
+    changed_fields: Optional[frozenset[str]] = None,
 ) -> List[PydanticCustomError]:
     """Per-type business rules (Rules 5-12) evaluated on the FINAL normalized
     transaction state (type + asset_id + cash + quantity + asset_event_id +
@@ -101,13 +104,19 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     rules 1-4 (link_uuid, TRANSFER/FX_CONVERSION/CASH_TRANSFER shape).
 
     Rules 5-12 read the type's row of ``TX_TYPE_METADATA`` when they run (W-B31, W-B36): the table the frontend reads
-    too (``GET /transactions/types``). The four points where the table is stricter stay unchecked until decision P6
-    (``_P6_CASH_FORBIDDEN_UNCHECKED``, ``_P6_QUANTITY_SIGN_UNCHECKED``, rule 11).
+    too (``GET /transactions/types``). The four points where the table is stricter (decision P6) hold only on the
+    fields ``changed_fields`` names, ``"type"``, ``"quantity"`` and ``"cash"``, a changed type standing for all of
+    them: an update passes the fields it changed, compared by value with the row as stored before the batch
+    (``changed_rule_fields``), a promote ``{"type"}``. ``None``, CREATE's call, leaves them to CREATE's own rules 2, 3
+    and 3b.
     """
     t = tx_type.value  # shorthand for error params
     errors: List[PydanticCustomError] = []
     zero = Decimal("0")
-    meta = get_tx_type_metadata(tx_type)  # read now: rules 5-11 follow the table (W-B36), but for the P6 points
+    meta = get_tx_type_metadata(tx_type)  # read now: rules 5-11 follow the table (W-B36), the P6 points on a change
+    changed = changed_fields or frozenset()  # None, CREATE: no P6 point here
+    cash_changed = bool(changed & {"type", "cash"})  # P6, cases 1 and 4
+    quantity_changed = bool(changed & {"type", "quantity"})  # P6, cases 2 and 3
 
     # Rule 5: asset required where asset_mode is "required". Rule 6, "optional": nothing to check. "forbidden" is
     # enforced at create by rules 3, 3b and 4, and an update cannot add an asset (TXUpdateItem has no asset_id).
@@ -118,8 +127,8 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     if meta is not None and meta.cash_mode == "required" and cash is None:
         errors.append(PydanticCustomError("cashRequired", "{type} requires cash (amount + currency)", {"type": t}))
 
-    # Rule 8: no cash movement where cash_mode is "forbidden", but on a TRANSFER (P6, case 1).
-    cash_forbidden = meta is not None and meta.cash_mode == "forbidden" and tx_type not in _P6_CASH_FORBIDDEN_UNCHECKED
+    # Rule 8: no cash movement where cash_mode is "forbidden"; on a TRANSFER only when the cash changes (P6, case 1).
+    cash_forbidden = meta is not None and meta.cash_mode == "forbidden" and (tx_type not in _P6_CASH_FORBIDDEN_WHEN_CHANGED or cash_changed)
     if cash_forbidden and cash is not None and not cash.is_zero():
         errors.append(PydanticCustomError("cashForbidden", f"{t} should not have cash movement", {"type": t}))
 
@@ -136,10 +145,10 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
         if asset_id is None:
             errors.append(PydanticCustomError("eventRequiresAsset", "asset_event_id requires asset_id", {"type": t}))
 
-    # Rule 10: the quantity sign quantity_sign asks for, but FX_CONVERSION's "zero" and TRANSFER's "nonzero" (P6, cases 2
-    # and 3).
+    # Rule 10: the quantity sign quantity_sign asks for; FX_CONVERSION's "zero" and TRANSFER's "nonzero" only when the
+    # quantity changes (P6, cases 2 and 3).
     # Messages: the texts of before W-B36, literal per type where they were.
-    quantity_sign = meta.quantity_sign if meta is not None and tx_type not in _P6_QUANTITY_SIGN_UNCHECKED else "free"
+    quantity_sign = meta.quantity_sign if meta is not None and (tx_type not in _P6_QUANTITY_SIGN_WHEN_CHANGED or quantity_changed) else "free"
     if quantity_sign == "positive" and quantity <= zero:
         errors.append(PydanticCustomError("qtyPositive", f"{t} requires quantity > 0", {"type": t}))
     elif quantity_sign == "negative" and quantity >= zero:
@@ -149,13 +158,15 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     elif quantity_sign == "nonzero" and quantity == zero:
         errors.append(PydanticCustomError("qtyNonzero", f"{t} requires quantity != 0", {"type": t}))
 
-    # Rule 11: the sign of a non-zero cash amount, from cash_sign. "zero" is rule 8's business; "nonzero"
-    # (FX_CONVERSION, CASH_TRANSFER) is not read, so a zero amount passes here (P6, case 4).
+    # Rule 11: the sign of the cash amount, from cash_sign. "zero" is rule 8's business. "nonzero" (FX_CONVERSION,
+    # CASH_TRANSFER) refuses a zero amount only when the cash changes (P6, case 4).
     if meta is not None and cash is not None and not cash.is_zero():
         if meta.cash_sign == "negative" and cash.amount >= zero:
             errors.append(PydanticCustomError("cashSignNegative", "{type} requires cash.amount < 0", {"type": t}))
         if meta.cash_sign == "positive" and cash.amount <= zero:
             errors.append(PydanticCustomError("cashSignPositive", "{type} requires cash.amount > 0", {"type": t}))
+    if meta is not None and meta.cash_sign == "nonzero" and cash_changed and cash is not None and cash.is_zero():
+        errors.append(PydanticCustomError("cashNonzero", "{type} requires cash.amount != 0", {"type": t}))
 
     # Rule 12: cost_basis_mode only where TX_TYPE_METADATA lets a cost basis in (cost_basis_allowed, W-B31).
     if cost_basis_mode is not None and not cost_basis_allowed(tx_type, quantity):
@@ -502,7 +513,11 @@ class TXUpdateItem(StrictModel):
     # Frozen cost basis override (for TRANSFER_IN) — object {code, amount}
     cost_basis_override: Optional[Currency] = Field(
         default=None,
-        description="Frozen cost basis for TRANSFER_IN. Object {code, amount}.",
+        description=(
+            "Frozen cost basis {code, amount}, where the type and side take one (TRANSFER or ADJUSTMENT received). "
+            "Omitted: unchanged. null: removes the manual cost basis where the type and side take one, refused with "
+            "costBasisRequired where one is required; ignored elsewhere, and with cost_basis_mode auto or auto-detail."
+        ),
     )
 
     # WAC computation mode — session-only instruction (not persisted in DB).

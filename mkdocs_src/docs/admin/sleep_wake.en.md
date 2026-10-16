@@ -11,6 +11,9 @@ instance asks Fly.io to suspend its machine after a few minutes without visitors
 host, leave it off); with the [scheduled wake-up](#wake-sync), whoever wakes the machine brings the
 data up to date at once, and knows when it is done, with one call.
 
+The page also covers the [provider pauses](#provider-pauses), on by default on every install: a
+price provider that answers «too many requests» is left alone until its pause is over.
+
 ---
 
 ## 😴 Idle Suspension {: #idle-suspend }
@@ -362,10 +365,87 @@ rates. Once the block is lifted, the next run catches up the history sync missed
 
 ---
 
+## ⏸️ Provider Pauses {: #provider-pauses }
+
+LibreFolio asks outside services for prices and exchange rates: its price providers, such as Yahoo
+Finance or the European Central Bank. When one of them answers «too many requests» (HTTP 429),
+LibreFolio pauses it: until the pause ends, no request reaches that provider, whether the
+[market data scheduler](settings.md#market-data-scheduler) or a user asks. A pause holds for every
+user and every job of the server.
+
+The pauses are on by default: an exception to the rule that a new option leaves an install as it
+was, by developer decision 34 (15 October 2026). `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS=0`
+turns them off, as before release 1.3.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | The first pause, in seconds, doubled at each refusal in a row: a whole number from `0` to `86400` (one day). `0` turns the pauses off. |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | The longest pause the doubling reaches, in seconds: a whole number from `1` to `86400`, and not below the first pause while the pauses are on. A provider's `Retry-After` may still ask for more, up to one day. |
+
+Set them in `.env` or in the container's environment, then restart LibreFolio: with Docker Compose,
+`docker compose up -d`. A value LibreFolio cannot use does not stop the server: the log has an
+error ([In the Log](#provider-pauses-log)), and both defaults apply, 60 and 3600, so the pauses stay
+on. With the pauses off, every request goes to the provider again; the scheduler still counts a
+refused one as deferred ([below](#provider-pauses-effects)).
+
+### ⏱️ How Long a Pause Lasts {: #provider-pauses-length }
+
+- **The first refusal** pauses the provider for `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`, 60
+  seconds by default.
+- **Each refusal in a row** doubles the pause, up to `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`.
+  With the defaults: 2 minutes, then 4, 8, 16 and 32, then an hour at each further refusal.
+  Requests refused together count as one refusal.
+- **A `Retry-After`**, when the provider sends one, is the shortest pause LibreFolio takes: it is
+  honoured beyond the longest pause, up to one day.
+- **A random extra** of up to 10 % is added to each pause, never past one day.
+- **When a pause ends**, one request goes through to try the provider, and the others still count
+  as paused until it has an outcome, a minute at most. An answer ends the series: the next refusal
+  starts again from the first pause, and so does a refusal that comes more than the longest pause
+  after the previous pause ended.
+- **A pause holds for the whole provider**, except with the CSS Scraper: a site that refuses pauses
+  only the pages of that site, and the other sites are still read.
+
+### 👀 Who Waits, and What You See {: #provider-pauses-effects }
+
+| Where | During a pause |
+| --- | --- |
+| 🕐 [Market data scheduler](settings.md#market-data-scheduler) | The assets and FX pairs of a paused provider are **deferred**: counted neither as updated nor as failed, and their job is **Partial**. The job runs again when the first of those pauses ends, or at its regular time if that comes first. In **Global Settings**, the **Scheduler Status** row reads **Paused items retried at …** for the current price refresh; the **Scheduler Execution Log** counts the deferred items with ⏸, marks each one with a pause icon and **Deferred: provider paused**, and shows **Retry at …** in the entry's header: see «Read the scheduler log» on that page. |
+| ⏰ [Scheduled wake-up](#wake-sync-answer) | Each job of the answer counts its deferred items in `items_deferred`, and says in `retry_at` when it runs again. |
+| 💰 Live prices, on the Assets list and on an asset's page | The last stored price stays, with no new message. When every asset the page asks about has its provider paused, the page asks again by itself only once the first of those pauses is over; while one provider still answers, the refresh goes on, and LibreFolio does not call the paused ones. After a refresh that fails, the next one waits twice as long, and so on up to ten minutes, until one works again. |
+| 🔌 **Test Configuration**, in the asset dialog | ⚠️ *Paused for too many requests until …*, with the time the pause ends; the test still passes. See [Connect a price provider](../user/assets/create-edit.md). |
+| 🔎 Asset search | A paused provider brings no result until its pause ends; the other providers answer as usual. |
+| 💱 Exchange rates | A paused provider counts as a route that failed: a pair with another route gets its rate there, as when a central bank does not answer ([Provider Configuration](../user/fx/detail/provider.md)). Otherwise the scheduler defers the pair, as it does an asset. |
+
+### 💤 In Memory, and During a Suspension {: #provider-pauses-memory }
+
+- **Each server process keeps its pauses in memory.** A restart forgets them, a deploy included.
+  With several server processes (`--workers N`), each one learns a pause from a refusal of its own;
+  the Docker image runs one.
+- **With the [idle suspension](#idle-suspend)**, a pause is not work in progress: the machine may be
+  suspended during one. A pause runs on the wall clock, so one begun before a suspension is over at
+  the wake-up if its time has passed meanwhile. The retry of the deferred items does not wake the
+  machine: the scheduler runs it once the machine is awake again, and the answer of the
+  [scheduled wake-up](#wake-sync-answer) gives its `retry_at`, to plan the next wake-up.
+
+### 📋 In the Log {: #provider-pauses-log }
+
+| Level | The log says | When |
+| --- | --- | --- |
+| ⚠️ `warning` | `Provider refused for too many requests: paused`, with `domain` (`asset` or `fx`), `provider`, `scope` (the site, with the CSS Scraper), `wait_s`, the seconds of pause ahead, and `retry_after`, the wait the provider asked for, if any | A provider refused a request |
+| ℹ️ `info` | `Provider answering again after a pause`, with `refusals`, the refusals in a row before it | The first answer after a pause |
+| ❌ `error` | `Provider pause settings cannot be used: the defaults apply`, with `variable`, `code` (`PROVIDER_COOLDOWN_BASE_INVALID` or `PROVIDER_COOLDOWN_MAX_INVALID`) and `reason` | One of the two variables has a value that cannot be used: once per server process, the first time LibreFolio is about to call a provider |
+
+At `DEBUG` level, `Provider call skipped: paused after too many requests`, with `wait_s`, marks each
+request a pause kept from the provider. The scheduler's own lines, `Scheduler: current-price refresh`
+and `Scheduler: history sync`, give the deferred items in `deferred`, with `retry_at`.
+
+---
+
 ## 🔗 Related
 
 - 📝 **[Environment Variables](configuration.md)** — `LIBREFOLIO_WAKE_TOKEN`, the idle suspension
-  variables, the shutdown budget, and secrets in files such as Docker secrets
+  variables, the provider pause variables, the shutdown budget, and secrets in files such as Docker
+  secrets
 - 🏢 **[Hosting for Others](hosting_providers.md)** — The managed profile, and blocking an instance
 - 🕐 **[Global Settings](settings.md#market-data-scheduler)** — The market data scheduler: its
   schedule and its log
@@ -373,3 +453,8 @@ rates. Once the block is lifted, the next run catches up the history sync missed
   documentation: how a suspension works, and what a machine needs for it
 - 🧑‍💻 For developers: **[Market Data Scheduler](../developer/backend/scheduler.md)** — How a run
   works: its checks, its lock and its report
+- 🧑‍💻 For developers: **[Provider Pauses](../developer/backend/assets/architecture.md#provider-pauses)** —
+  The boundary every call to an asset provider goes through, and what each caller gets during a
+  pause; [Paused Providers](../developer/backend/fx/configuration.md#paused-providers) for the
+  exchange rates, and [Live Prices](../developer/frontend/components/features/live-ticker.md#backoff)
+  for the live refresh of the Assets pages

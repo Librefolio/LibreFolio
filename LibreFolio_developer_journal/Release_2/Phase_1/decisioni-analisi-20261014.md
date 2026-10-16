@@ -1113,6 +1113,38 @@ nota dev: intanto facciamo la cura generale, ho anche altre note di problemi che
 **Decisione (15/10)**: approvata la cura generale delle tabelle sul telefono (C-38, lotto Y7). Il layout da telefono
 apposta per il PAC si decide dopo, se non basta, insieme alle altre note del developer.
 
+### Le domande della notte 15→16/10 (P1–P26), decise il 16/10
+
+Le domande nate di notte dai lotti dei figli. Il testo intero di ogni domanda è nel registro notturno del coordinatore;
+qui resta la decisione.
+
+| Punto | Lotto | Decisione del developer (16/10) |
+|---|---|---|
+| P1 | E4b | Il riquadro con i comandi per l'admin resta sotto il modulo «password dimenticata», **in un pannello chiuso** |
+| P2 | J-17 | Una rettifica **non è mai un prezzo**. **Acquisti e vendite** restano fonti di prezzo. Un asset senza nessuna osservazione, nemmeno un prezzo vecchio, si valuta **al costo, come stima dichiarata** («valutato al costo, nessun prezzo»); con un prezzo vecchio vince quello, segnato come stantio |
+| P3 | Y11, decisione 48 | Approvato. «Aggiorna» gira solo per le domande «grandi» decise nella UI: un componente tiene la lista delle richieste in volo, riceve un segnale all'inizio e uno alla fine (riuscita o no), si ferma quando sono rientrate tutte o dopo un timeout lungo. Non gira per l'aggiornamento dei prezzi |
+| P4 | W-B34 | La lista degli accessi di un broker **resta aperta**, per decisione |
+| P5 | W-B30 | Svuotare un costo manuale **lo cancella** |
+| P6 | W-B36b | Sì: in aggiornamento valgono le regole dei tipi, per i campi che cambiano |
+| P7 | B3 | Con l'istanza bloccata è bloccato anche il ripristino, nella UI e via API; un ripristino confermato prima del blocco **aspetta lo sblocco** |
+| P8 | B5b | Nessun messaggio quando il ripristino riesce; se fallisce, il motivo sulla stessa schermata. Si conferma scrivendo **una parola vera a caso di 6–10 lettere**, senza copia-incolla (controllo solo nella pagina) |
+| P9, P10, P10b, P14 | Y7, colori | Visti sul server di prova: vanno bene |
+| P11 | B3 | Al ripristino si **revocano i link monouso** (inviti, reset, verifiche), con un solo avviso |
+| P12 | B4 | scrypt **`2^15`**; password con le regole e l'indicatore della registrazione, **almeno 12 caratteri** |
+| P13 | barra delle Impostazioni | **(a) + (b)**: la barra scorre con la rotella, con una sfumatura sul bordo quando ci sono schede nascoste; le cinque schede dell'admin raggruppate sotto «Amministrazione» con una seconda barra, i link diretti (`?tab=users`…) restano validi. Cornice di A8 |
+| P15 | E5b | Sì a un pulsante **«Conferma»** nella pagina di verifica. *Da chiarire*: i testi delle email in un file a parte, modificabile, che il codice si limita a riempire |
+| P16 | A7, F02 | Nel cloud **il token lo crea il pannello di controllo** e lo passa per variabile; il self-hosted resta com'è stato costruito; senza email nulla cambia. Con l'istanza bloccata la creazione dell'admin è bloccata anche lei (coordinatore) |
+| P17 | E5b | Sì: nel profilo cloud il limite per client legge `Fly-Client-IP` (contratto ad H) |
+| P18 | A | Le email sono **uniche senza distinzione di maiuscole** (migrazione 009 di A) |
+| P19 | Y, J CP-13a | Sì: il rendimento che recupera una perdita diventa un campo del backend |
+| P20 | X CP13 | Via «Prezzo manuale / import»; «Segnalacelo» ci **manda un'email con i dati** della ricerca |
+| P21 | J-24 | Ogni importo si converte **al cambio del giorno della sua transazione**, e ogni calcolo si fa nella valuta del report. In più: verificare che tutta la matematica stia in `financial_math` e rivedere gli algoritmi troppo contorti (audit del 16/10) |
+| P22 | J CP-3 | Va bene così: **ogni broker risponde del suo tratto**, anche con una perdita dopo il trasferimento |
+| P23 | TS1 | **No** ai test speculari: i test sono già tutti nelle cartelle giuste |
+| P24 | H-3 | *Aperto*: serve più contesto (dove sta la chiave, che cosa protegge, perché nel cloud è più sicuro) |
+| P25 | Y-12 | Sì: il test del selettore «Value presentation» dei lotti si riscrive |
+| P26 | J-26 | La sonda dell'AI Export si fa su **una copia dei dati demo** del developer, utente `alfy`. Procedura nella skill `real-data-copy` |
+
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
 - **Forma comune del riordino**. Perché: sei sessioni spostano file insieme, e serve una regola sola per non
@@ -1168,3 +1200,18 @@ apposta per il PAC si decide dopo, se non basta, insieme alle altre note del dev
   un'altra. Serve anche un'azione «reinvia il link di attivazione» (punto 3).
 - Lato pannello di controllo (repo privato): le macchine con `auto_stop_machines="off"` e `auto_start_machines=true`,
   perché è l'istanza a decidere quando sospendersi.
+
+### Le decisioni del 16/10 dopo l'audit della matematica (MF)
+
+| Punto | Decisione del developer (16/10) |
+|---|---|
+| Lotti dell'audit | **Tutti i 16 lotti (A–P) nella 1.3**, in un workstream dedicato (MF) accanto a J |
+| D-MF2 | La detenzione di una posizione arrivata con un trasferimento parte **dall'arrivo nel broker**; uno split non la azzera più |
+| D-MF3 | Una rettifica negativa di dividendo o interesse **riduce il reddito** anche nei lotti |
+| D-MF4 | La cassa che arriva con un trasferimento interno o un cambio porta con sé **la sua divisione fra capitale e rendimenti** |
+| D-MF5 | Con prelievi netti, se la card MWRR non ha dati **sparisce anche la linea** del grafico |
+| D-MF6 | Variazione del P&L a un giorno, effetto timing, G/L % dei gruppi **dal backend**; le misure interattive (lotti selezionati, intervalli scelti) restano nel browser, dichiarate |
+| D-MF7 | Con NAV ≤ 0 il peso sul NAV mostra **«—»** |
+| D-MF1 | *Aperto*: togliere `holdings` dal sommario del broker via API (il developer ha chiesto chiarimenti) |
+| C-97 | Quantità a **10 decimali**, prezzi a **12**, importi a 6 (issue #43) |
+| C-99 | Manuale admin ristrutturato, variabili d'ambiente **divise per categoria**, a fine 1.3 |
