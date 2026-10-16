@@ -157,6 +157,9 @@ def test_map_asset_type():
     assert bi._map_asset_type("Azione") == AssetType.STOCK
     assert bi._map_asset_type("bond") == AssetType.BOND
     assert bi._map_asset_type("ETF") == AssetType.ETF
+    # ETC/ETN: exchange-traded commodities and notes, almost always on a commodity, not a plain ETF (D-X7).
+    assert bi._map_asset_type("ETC/ETN") == AssetType.ETF_COMMODITY
+    assert bi._map_asset_type(" etc/etn ") == AssetType.ETF_COMMODITY
     assert bi._map_asset_type("Fondi Comuni") == AssetType.FUND
     assert bi._map_asset_type("nonsense") is None
     assert bi._map_asset_type("") is None
