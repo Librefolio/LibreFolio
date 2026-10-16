@@ -6,7 +6,7 @@ steps of ``app_lifespan.py``. Selector: ``services backup-apply``.
 Written RED, before B3. ``apply.py``, ``restart.py`` and the new names of ``paths.py`` are looked up by the test that
 needs them (``apply_module``, ``restart_module``, ``new_path_name``), never imported at the top: the file collects
 without them, and each test fails on its own, saying what is missing ("[new] …"). The tests of (m) were written red the
-same way, before P7 (§11).
+same way, before P7 (§11), and those of (n) before B5c (``instance_backup/outcome.py``, ``outcome_module``).
 
 (a) §1 The layout: ``.restore/restore.json`` (the state), ``.restore/apply.lock``, ``.restore/previous/`` (the data a
     restore replaced), ``.restore/failed/`` (the restored data a rollback set aside); ``SWAPPED_FOLDERS``, the database's
@@ -102,6 +102,17 @@ same way, before P7 (§11).
     own once the block is lifted). Unchanged while blocked: the undo of a restore a dead start applied
     (``first_start_failed``), of a swap a killed start left ``applying`` and of an undo it left ``rolling_back``
     (``swap_interrupted``), the data of before back exactly; the commit of a restore this boot applied.
+(n) Lot B5c, the ticket of a restart's outcome (``instance_backup/outcome.py``, ``.restore/outcome-ticket.json``;
+    ``test_backup_outcome.py`` tests the module itself). ``confirm_restore`` drops a ticket left behind (no restore, or
+    one committed or rolled back): a new confirmation is another restore. ``cancel_restore`` drops it, whether it keeps
+    the checked copy or not. A refused confirmation writes nothing, as (e) says (another copy while one waits, a copy that
+    is not there): the waiting restore keeps its ticket; so does a refused cancel (applied, committed, rolled back), whose
+    outcome the ticket still reads. ``.restore`` is never swapped: the swap, the commit and a rollback (a rename of the
+    swap failing; the first start dying, undone by the next) leave the file byte for byte. Decision N53, one restore, one
+    ticket, not one read: the ticket then reads the final outcome again, the same, its file kept, until it expires; at
+    ``expires_at`` it opens nothing, and its file goes. ``prepare_restart``, the restart's first step, returns the
+    restore waiting and a new ticket for its stage, issued while the restore's lock is held; without a pending restore
+    ``RestoreNotPendingError``, nothing written (without a restore not even the lock), an earlier ticket kept.
 
 How. Real databases and archives come from ``test_backup_staging.py`` (its module fixtures, imported: two databases made
 once by ``alembic upgrade`` in a process of their own, the archives at the head and at ``OLDER``). The head archive is
@@ -3140,3 +3151,232 @@ def test_on_a_blocked_instance_a_restore_this_boot_applied_is_still_committed(tm
     assert left == [], f"previous/, failed/, the copy and its check state removed: {left}"
     assert set(versions_of(instance.root / DATABASE_ENTRY).values()) == {state.session_version}, "every account at the restore's value"
     print_success(f"blocked: committed, session_version {state.session_version}")
+
+
+# =============================================================================
+# (n) Lot B5c: the ticket of a restart's outcome, through a confirmation, a cancel, the commit and a rollback
+# =============================================================================
+
+OUTCOME = "backend.app.services.platform.instance_backup.outcome"
+
+
+def outcome_module() -> Any:
+    """``instance_backup.outcome`` (lot B5c), imported by the test that needs it, as ``apply_module``."""
+    try:
+        return importlib.import_module(OUTCOME)
+    except ModuleNotFoundError as exc:
+        if exc.name != OUTCOME:
+            raise
+        pytest.fail(f"[new] {OUTCOME} does not exist yet: lot B5c brings it")
+
+
+def ticket_file_of(root: Path) -> Path:
+    """``.restore/outcome-ticket.json``, as ``paths.outcome_ticket_path`` gives it (lot B5c)."""
+    path_of = getattr(paths, "outcome_ticket_path", None)
+    assert path_of is not None, "[new] paths.outcome_ticket_path does not exist yet: lot B5c adds it"
+    return path_of(root)
+
+
+def ticket_of(instance: Instance, *, now: datetime | None = None) -> tuple[str, bytes]:
+    """A ticket for the instance's restore, as ``POST /backup/restore/restart`` issues it (by default a minute after the
+    confirmation, an hour to live): the ticket, and the bytes of its file."""
+    ticket = outcome_module().issue_ticket(instance.stage_id, data_dir=instance.root, now=now or instance.confirm_at + timedelta(minutes=1))
+    return ticket, ticket_file_of(instance.root).read_bytes()
+
+
+def outcome_read(ticket: str, state: Any, instance: Instance, *, at: datetime | None = None) -> dict[str, Any] | None:
+    """What ``ticket`` opens for ``state`` at ``at`` (by default the commit's time), as the route answers it."""
+    outcome = outcome_module().read_outcome(ticket, state, data_dir=instance.root, now=at or instance.committed_at)
+    return None if outcome is None else outcome.model_dump()
+
+
+def expiry_of(file: bytes) -> datetime:
+    """The ``expires_at`` the ticket's file ``file`` records."""
+    return datetime.fromisoformat(json.loads(file)["expires_at"])
+
+
+def reads_until_it_expires(ticket: str, state: Any, instance: Instance, file: bytes) -> list[tuple[dict[str, Any] | None, bytes | None]]:
+    """N53: what ``ticket`` opens for ``state`` at the commit's time, a minute later and a microsecond before it expires,
+    each with the bytes of the ticket's file after that read (``None``: gone)."""
+    seen: list[tuple[dict[str, Any] | None, bytes | None]] = []
+    for moment in (instance.committed_at, instance.committed_at + timedelta(minutes=1), expiry_of(file) - timedelta(microseconds=1)):
+        opened = outcome_read(ticket, state, instance, at=moment)
+        path = ticket_file_of(instance.root)
+        seen.append((opened, path.read_bytes() if lexists(path) else None))
+    return seen
+
+
+@pytest.mark.parametrize("before", ["no-restore", "committed", "rolled_back"])
+def test_a_new_confirmation_drops_the_ticket_the_restore_before_left(tmp_path, databases, checked, before):
+    """(n) A ticket names one restart of one restore. A new confirmation (the API's and the command line's) is another
+    restore: the ticket a restart left unread goes, whether that restore committed, rolled back, or left no state."""
+    print_section("(n) B5c: the ticket of a restart's outcome")
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    if before != "no-restore":
+        into_phase(apply, instance, before)
+    ticket_of(instance)
+    add_stage(instance, checked, OTHER_STAGE)
+    state = confirm(apply, instance, OTHER_STAGE)
+    assert (state.status, state.stage_id) == ("pending", OTHER_STAGE), f"precondition: the new restore waits: {state.status}, {state.stage_id}"
+    assert not lexists(ticket_file_of(instance.root)), f"{before}: the ticket left is dropped by the new confirmation"
+    assert_unrelated_kept(instance.root)
+    print_success(f"{before}: dropped by the new confirmation")
+
+
+@pytest.mark.parametrize("refused", ["another-copy-while-one-waits", "a-copy-that-is-not-there"])
+def test_a_refused_confirmation_keeps_the_ticket_of_the_restore_that_waits(tmp_path, databases, checked, refused):
+    """(n) A refused confirmation writes nothing (e): the restore that waits keeps its ticket, and the page that asked for
+    its restart still reads its outcome. Refused because another restore waits (``restore_already_pending``), or before
+    anything (``restore_stage_not_found``)."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    pending = confirm(apply, instance)
+    ticket, file = ticket_of(instance)
+    if refused == "another-copy-while-one-waits":
+        add_stage(instance, checked, OTHER_STAGE)
+        stage_id, refusal = OTHER_STAGE, apply.RestoreAlreadyPendingError
+    else:
+        stage_id, refusal = UNRELATED_CHECK, apply.RestoreStageMissingError
+    with pytest.raises(refusal):
+        confirm(apply, instance, stage_id)
+    assert ticket_file_of(instance.root).read_bytes() == file, f"{refused}: the ticket kept as it was"
+    assert outcome_read(ticket, pending, instance) == {"state": "pending", "reason": None, "waiting": None}, f"{refused}: it still opens the outcome"
+    print_success(f"{refused}: {refusal.__name__}, the ticket kept")
+
+
+@pytest.mark.parametrize("drop_copy", [False, True], ids=["the-copy-kept", "the-copy-dropped"])
+def test_a_cancel_drops_the_ticket_with_the_restore(tmp_path, databases, checked, drop_copy):
+    """(n) The restore no longer waits: its ticket goes with it, whichever way the copy goes (the API's and the command
+    line's cancel both drop the copy since B-17; the service keeps both ways)."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    ticket_of(instance)
+    apply.cancel_restore(data_dir=instance.root, drop_copy=drop_copy)
+    assert lexists(stage_dir(instance.root, instance.stage_id)) is not drop_copy, f"precondition: the copy {'dropped' if drop_copy else 'kept'}"
+    assert not lexists(ticket_file_of(instance.root)), f"drop_copy={drop_copy}: the ticket dropped with the restore"
+    assert_unrelated_kept(instance.root)
+    print_success(f"drop_copy={drop_copy}: the ticket dropped")
+
+
+@pytest.mark.parametrize("phase", ["applied", *TERMINAL_PHASES])
+def test_a_refused_cancel_keeps_the_ticket_whose_outcome_is_coming(tmp_path, databases, checked, phase):
+    """(n) Only a pending restore can be cancelled: a cancel of one being applied or finished is refused, and the ticket
+    stays for the page that waits for the outcome."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    state = into_phase(apply, instance, phase)
+    ticket, file = ticket_of(instance, now=instance.applied_at)
+    with pytest.raises(apply.RestoreNotPendingError):
+        apply.cancel_restore(data_dir=instance.root, drop_copy=True)
+    assert ticket_file_of(instance.root).read_bytes() == file, f"{phase}: the ticket kept as it was"
+    opened = outcome_read(ticket, state, instance)
+    assert opened is not None and opened["state"] == {"applied": "in_progress"}.get(phase, phase), f"{phase}: it still opens the outcome: {opened}"
+    print_success(f"{phase}: refused, the ticket kept")
+
+
+def test_prepare_restart_issues_the_ticket_of_the_pending_restore_under_its_lock(tmp_path, databases, checked, monkeypatch):
+    """(n) ``POST /backup/restore/restart`` prepares itself with ``apply.prepare_restart``: the restore waiting, as on
+    disk, and a new ticket for its stage, issued once while the restore's lock is held — a cancel or a confirmation from
+    another page cannot come in between, and two restart requests take turns on the ticket's file. The lock is free
+    again once it returned; the new ticket replaces an older one and opens ``pending``."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    pending = confirm(apply, instance)
+    older, _file = ticket_of(instance)
+    assert hasattr(apply, "prepare_restart") and hasattr(apply, "issue_ticket"), "[new] apply.prepare_restart issues the ticket through outcome.issue_ticket, imported into apply"
+    real, lock_held = apply.issue_ticket, []
+
+    def issue_ticket(*args: Any, **kwargs: Any) -> str:
+        lock_held.append(not apply_lock_free(instance.root))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(apply, "issue_ticket", issue_ticket)
+    state, ticket = apply.prepare_restart(data_dir=instance.root)
+    assert state == pending == apply.read_restore(instance.root), f"the restore waiting, as it is on disk: {state}"
+    assert lock_held == [True], f"one ticket, issued while the restore's lock is held: {lock_held}"
+    assert apply_lock_free(instance.root), "the restore's lock is free again once prepare_restart returned"
+    assert json.loads(ticket_file_of(instance.root).read_bytes())["stage_id"] == instance.stage_id, "the ticket of the pending restore's stage"
+    now = datetime.now(UTC)
+    assert outcome_read(ticket, state, instance, at=now) == {"state": "pending", "reason": None, "waiting": None}, "the new ticket opens pending"
+    assert outcome_read(older, state, instance, at=now) is None, "the older ticket is replaced"
+    print_success("prepare_restart: pending, one ticket under the lock")
+
+
+@pytest.mark.parametrize("phase", ["none", "applied", *TERMINAL_PHASES])
+def test_prepare_restart_without_a_pending_restore_is_refused_and_writes_nothing(tmp_path, databases, checked, phase):
+    """(n) No restore, or one being applied or finished: ``RestoreNotPendingError`` (the route's 409), and nothing
+    written — without a restore not even the lock; a ticket an earlier restart gave stays as it was, for the outcome its
+    page waits for."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    if phase != "none":
+        into_phase(apply, instance, phase)
+        ticket_of(instance, now=instance.applied_at)
+    data, items = cases.fingerprint(instance.root), restore_items(instance.root)
+    with pytest.raises(apply.RestoreNotPendingError) as raised:
+        apply.prepare_restart(data_dir=instance.root)
+    assert raised.value.code == "restore_not_pending", raised.value.code
+    assert (cases.fingerprint(instance.root), restore_items(instance.root)) == (data, items), f"{phase}: nothing written, the lock and an earlier ticket included: {cases.changed(items, restore_items(instance.root))}"
+    print_success(f"{phase}: restore_not_pending, nothing written")
+
+
+def test_the_swap_and_the_commit_keep_the_ticket_which_reads_committed_until_it_expires(tmp_path, databases, checked):
+    """(n) ``.restore`` is never swapped, and the commit removes the data of before, the copy and its check, never the
+    ticket: issued before the restart, its file is there byte for byte after the start. N53, one restore, one ticket:
+    it opens ``committed`` at every read, its file kept, until it expires; at ``expires_at`` it opens nothing, and its
+    file goes."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    ticket, file = ticket_of(instance)
+    boot = never_ran(apply)
+    applied = apply.apply_pending_restore(instance.root, boot=boot, now=instance.applied_at)
+    assert applied.status == "applied" and ticket_file_of(instance.root).read_bytes() == file, f"the swap leaves the ticket as it was: {applied.status}"
+    state = apply.finish_pending_restore(instance.root, boot=boot, now=instance.committed_at)
+    assert state.status == "committed" and ticket_file_of(instance.root).read_bytes() == file, f"the commit leaves the ticket as it was: {state.status}"
+    expected = {"state": "committed", "reason": None, "waiting": None}
+    seen = reads_until_it_expires(ticket, state, instance, file)
+    assert seen == [(expected, file)] * 3, f"N53: committed at every read, the ticket's file as it was, until it expires: {[(opened, kept is not None) for opened, kept in seen]}"
+    assert outcome_read(ticket, state, instance, at=expiry_of(file)) is None, "at expires_at the ticket opens nothing"
+    assert not lexists(ticket_file_of(instance.root)), "expired, its file goes when its holder presents it"
+    print_success("swapped, committed, the ticket read three times until it expired")
+
+
+def _rolled_back_by_a_rename_failing(apply: Any, instance: Instance) -> Any:
+    with moving(apply, fail_at=frozenset({3})):
+        return apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+
+
+def _rolled_back_after_the_first_start_died(apply: Any, instance: Instance) -> Any:
+    apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+    return apply.apply_pending_restore(instance.root, boot=never_ran(apply, 1), now=instance.committed_at)
+
+
+#: The rollbacks a restart can end in, and the reason they record.
+ROLLBACKS = [
+    pytest.param(_rolled_back_by_a_rename_failing, "swap_failed", id="a-rename-of-the-swap-failing"),
+    pytest.param(_rolled_back_after_the_first_start_died, "first_start_failed", id="the-first-start-dying"),
+]
+
+
+@pytest.mark.parametrize(("roll_back", "reason"), ROLLBACKS)
+def test_a_rollback_keeps_the_ticket_which_reads_rolled_back_until_it_expires(tmp_path, databases, checked, roll_back, reason):
+    """(n) The undo puts the data of before back, and ``restore-commit`` removes what the rollback left: neither touches
+    the ticket. N53: it opens ``rolled_back`` with its reason at every read, its file kept, until it expires; at
+    ``expires_at`` it opens nothing, and its file goes."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    confirm(apply, instance)
+    ticket, file = ticket_of(instance)
+    rolled = roll_back(apply, instance)
+    assert (rolled.status, rolled.reason) == ("rolled_back", reason), f"precondition: rolled back, {reason}: {rolled.status}, {rolled.reason}"
+    state = apply.finish_pending_restore(instance.root, boot=never_ran(apply, 2), now=instance.committed_at)
+    assert state == rolled and ticket_file_of(instance.root).read_bytes() == file, "the rollback and its cleaning leave the ticket as it was"
+    expected = {"state": "rolled_back", "reason": reason, "waiting": None}
+    seen = reads_until_it_expires(ticket, state, instance, file)
+    assert seen == [(expected, file)] * 3, f"N53: rolled_back, {reason}, at every read, the ticket's file as it was, until it expires: {[(opened, kept is not None) for opened, kept in seen]}"
+    assert outcome_read(ticket, state, instance, at=expiry_of(file)) is None, "at expires_at the ticket opens nothing"
+    assert not lexists(ticket_file_of(instance.root)), "expired, its file goes when its holder presents it"
+    print_success(f"{reason}: the ticket read three times until it expired")

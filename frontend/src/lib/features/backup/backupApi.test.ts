@@ -41,6 +41,35 @@
  *     without one, the code outside `detail`, a null body, no body, a page that is not JSON) stays `down`, and so does
  *     the code on any other status, a 200 included.
  *
+ * The outcome of a restart read without a session (lot B5c, the one-time ticket), written red first against the approved
+ * contract. The generated client knows neither `RestoreRestartAccepted` nor `RestoreOutcome` yet: both are written out
+ * below, as `instance_blocked` was.
+ *   - `requestRestart()` hands back the accepted restart untouched — the status and its `outcome_ticket`; replayed on the
+ *     generated client as the app builds it (`validate: 'response'`: Zodios then hands back what the route's schema
+ *     parsed, and a plain zod object drops the keys it does not know), the ticket must survive the schema of the restart
+ *     route — red until the client is generated again from the B5c backend;
+ *   - `RESTORE_TICKET_HEADER` is `X-Restore-Ticket`;
+ *   - `restoreOutcome(ticket)`, with a ticket: first one plain `fetch` of `GET /api/v1/backup/restore/outcome` on this
+ *     origin — `credentials: 'same-origin'`, `cache: 'no-store'`, `Accept: application/json`, the ticket in
+ *     `X-Restore-Ticket` and nowhere in the URL —, never through Zodios. A 200 that is a valid outcome — `state` one of
+ *     `pending`, `in_progress`, `committed`, `rolled_back`; `reason` a rollback reason or null; `waiting` a waiting reason
+ *     (`instance_blocked` included: the route answers on a blocked instance) or null; either may be left out — is
+ *     `status`, holding `{state, reason, waiting}` and nothing else. A 404, a 401 or a 423 says the route cannot be
+ *     reached by this caller — a ticket that does not hold, a server without the route, a blocked instance whose
+ *     allow-list lacks the route, a proxy —, not that the server is starting: it is today's read, a second request, the
+ *     status route, mapped as today (401 `signed_out`, 423 `instance_blocked` `blocked`, 200 `status`, anything else
+ *     `down`). Any other status of the outcome route (a 5xx included: the server may still be starting), a 200 that is
+ *     not a valid outcome, or no answer is `down`, and the status is not read. Without a ticket (`null`, or left out):
+ *     today's read alone, one request.
+ *
+ * Where that contract is silent, the choices of this file, each one place to change: a 404, a 401 or a 423 falls back
+ * whatever its body (a 423 with the code `instance_blocked` or without it, a JSON detail, none, a page that is not
+ * JSON); the status read of the fallback is today's request, so it carries no ticket; an outcome with keys besides its
+ * three is still read, and only its three reach the status; one left out is null or absent in it, never anything else.
+ *
+ * The 401 and the 423 of the outcome route were first written as `down`. The contract was amended at 15:40: read as
+ * `down`, they would keep the overlay waiting for ever with no hint, worse than B5b, so they fall back like a 404.
+ *
  * Node environment: nothing here touches the DOM or a rune.
  */
 import axios, {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosProgressEvent, type InternalAxiosRequestConfig} from 'axios';
@@ -315,6 +344,12 @@ type RestoreStage = z.infer<typeof schemas.RestoreStage>;
 type RestoreUpload = z.infer<typeof schemas.RestoreUpload>;
 type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
 type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
+/** The answer of an accepted restart (B5c): the status, and the one-time ticket that reads its outcome. Not generated yet. */
+type RestoreRestartAccepted = RestoreStatus & {outcome_ticket: string};
+type RollbackReason = NonNullable<RestoreStatus['reason']>;
+type WaitingReason = NonNullable<RestoreStatus['waiting']>;
+/** The answer of `GET /backup/restore/outcome` (B5c): the state, why it rolled back, why it waits; nothing else. Not generated yet. */
+type OutcomeState = 'pending' | 'in_progress' | 'committed' | 'rolled_back';
 
 interface RestoreRequests {
     getRestoreStatus: () => Promise<RestoreStatus>;
@@ -324,9 +359,9 @@ interface RestoreRequests {
     deleteRestoreCheck: (stageId: string) => Promise<void>;
     confirmRestore: (stageId: string) => Promise<RestoreStatus>;
     cancelPendingRestore: () => Promise<void>;
-    requestRestart: () => Promise<RestoreStatus>;
+    requestRestart: () => Promise<RestoreRestartAccepted>;
     probeServer: () => Promise<'up' | 'down'>;
-    restoreOutcome: () => Promise<RestoreOutcomeAnswer>;
+    restoreOutcome: (ticket?: string | null) => Promise<RestoreOutcomeAnswer>;
 }
 
 /** One restore function of backupApi.ts, or a failure that names it: each case fails on its own until it exists. */
@@ -347,10 +382,18 @@ const RESTART: Alias = 'restart_for_restore_api_v1_backup_restore_restart_post';
 
 const UPLOAD_ID = '0123456789abcdef0123456789abcdef';
 const STAGE_ID = 'fedcba9876543210fedcba9876543210';
+/** A ticket as the server makes it (`secrets.token_urlsafe(32)`): URL-safe, so nothing would stop it from riding in a URL. */
+const TICKET = 'kq8Z3vR-wT0yN5mB_xH2cL7pJ4sF9dG1eA6uK0iO3rY';
+
+const ROLLBACK_REASONS: RollbackReason[] = ['first_start_failed', 'swap_interrupted', 'swap_failed', 'stage_missing'];
+const WAITING_REASONS: WaitingReason[] = ['backup_running', 'other_data_directory', 'server_running', 'instance_blocked'];
 
 function restoreStatus(overrides: Partial<RestoreStatus> = {}): RestoreStatus {
     return {state: 'none', stage_id: null, confirmed_at: null, confirmed_by: null, backup_created_at: null, backup_app_version: null, action: null, finished_at: null, reason: null, waiting: null, upload_limit_mb: 500, ...overrides};
 }
+
+/** What an accepted restart answers (B5c): the restore still pending, and its outcome ticket. */
+const acceptedRestart = (): RestoreRestartAccepted => ({...restoreStatus({state: 'pending', stage_id: STAGE_ID, confirmed_at: '2026-10-16T11:20:00Z', confirmed_by: 'admin', action: 'same'}), outcome_ticket: TICKET});
 
 const runningStage = (): RestoreStage => ({stage_id: STAGE_ID, status: 'running', phase: 'checking', done_bytes: 0, total_bytes: 0, created_at: '2026-10-16T09:00:00Z', finished_at: null, error_code: null, report: null});
 
@@ -472,12 +515,14 @@ describe('the restore requests (B5b §1)', () => {
         expect(touchedBesides(CANCEL)).toEqual([]);
     });
 
-    it('requestRestart posts with no body and no parameter, and returns the status', async () => {
-        const answer = restoreStatus({state: 'pending', stage_id: STAGE_ID});
+    it('requestRestart posts with no body and no parameter, and returns the accepted restart untouched — its outcome_ticket with it (B5c)', async () => {
+        const answer = acceptedRestart();
         zodios[RESTART].mockResolvedValue(answer);
 
-        await expect(restore('requestRestart')()).resolves.toBe(answer);
+        const accepted = await restore('requestRestart')();
 
+        expect(accepted).toBe(answer);
+        expect(accepted.outcome_ticket, 'the ticket of the restart was lost on the way').toBe(TICKET);
         expect(zodios[RESTART]).toHaveBeenCalledTimes(1);
         expect(argumentsOf(RESTART).filter((argument) => argument !== undefined)).toEqual([]);
         expect(touchedBesides(RESTART)).toEqual([]);
@@ -565,6 +610,21 @@ describe('the restore requests, replayed on the generated client (B5b §1)', () 
         expect(request.onUploadProgress, 'the progress of the upload is not followed').toBeTypeOf('function');
         expect(request.signal, 'the upload cannot be cancelled').toBe(abort.signal);
     });
+
+    it('requestRestart: on the generated client as the app builds it (its answers validated, then handed back as parsed), the accepted restart keeps its outcome_ticket (B5c)', async () => {
+        zodios[RESTART].mockResolvedValue(undefined);
+        await restore('requestRestart')();
+        const passed = argumentsOf(RESTART);
+        // A JSON answer, as the server's: Zodios checks only those, and replaces the answer with what the route's schema parsed.
+        const adapter: AxiosAdapter = async (config) => ({data: acceptedRestart(), status: 202, statusText: 'Accepted', headers: AxiosHeaders.from({'content-type': 'application/json'}), config, request: {}});
+        // `validate: 'response'`, as zodios-client.ts builds the client of the app.
+        const client = createApiClient('/', {axiosInstance: axios.create({adapter}), validate: 'response'}) as unknown as Replayable;
+
+        const answer = (await client[RESTART](...passed)) as Partial<RestoreRestartAccepted>;
+
+        expect(answer.state, 'precondition: the answer went through the schema of the restart route').toBe('pending');
+        expect(answer.outcome_ticket, "the schema of the restart route drops the ticket: the page could never read the restore's outcome without a session").toBe(TICKET);
+    });
 });
 
 describe('probeServer and restoreOutcome: a plain fetch on this origin, never Zodios (B5b §1)', () => {
@@ -593,7 +653,7 @@ describe('probeServer and restoreOutcome: a plain fetch on this origin, never Zo
         return fetchStub.mock.calls.map(([input, init]) => {
             const href = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
             const url = new URL(href, ORIGIN);
-            return {origin: url.origin, path: url.pathname, init};
+            return {href, origin: url.origin, path: url.pathname, search: url.search, hash: url.hash, init, headers: new Headers(init?.headers)};
         });
     }
 
@@ -716,5 +776,213 @@ describe('probeServer and restoreOutcome: a plain fetch on this origin, never Zo
 
         expect(fetchStub, 'one read, one request').toHaveBeenCalledTimes(1);
         expect(zodiosCalls()).toEqual([]);
+    });
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // B5c — the outcome read with the one-time ticket the restart answered, without a session
+    // -----------------------------------------------------------------------------------------------------------------
+
+    describe('restoreOutcome(ticket): the outcome route first, the ticket in a header; the status read only after a 404, a 401 or a 423 (B5c)', () => {
+        const OUTCOME_PATH = '/api/v1/backup/restore/outcome';
+        const STATUS_PATH = '/api/v1/backup/restore/status';
+        /** The one 404 the outcome route answers for every ticket that does not hold: unknown, expired, used, of another restore. */
+        const NO_OUTCOME = JSON.stringify({detail: {code: 'restore_outcome_not_found', message: 'No outcome for this ticket'}});
+
+        /** The answer of the outcome route: its three fields, and nothing else. */
+        const outcome = (state: OutcomeState, reason: RollbackReason | null = null, waiting: WaitingReason | null = null) => JSON.stringify({state, reason, waiting});
+
+        /** The request a ticket makes first: GET /outcome on this origin, never cached, JSON asked, the ticket in its header and nowhere in the URL. */
+        function expectOutcomeRequest(request: ReturnType<typeof fetched>[number]): void {
+            expect(request.origin, 'the outcome was asked of another origin').toBe(ORIGIN);
+            expect(request.path).toBe(OUTCOME_PATH);
+            expect(request.init).toMatchObject({credentials: 'same-origin', cache: 'no-store'});
+            expect(request.init?.method ?? 'GET').toBe('GET');
+            expect(request.headers.get('Accept')).toBe('application/json');
+            expect(request.headers.get('X-Restore-Ticket'), 'the ticket did not travel in its header').toBe(TICKET);
+            expect(request.search, 'the ticket must never travel in the URL').toBe('');
+            expect(request.hash).toBe('');
+            expect(request.href).not.toContain(TICKET);
+        }
+
+        it('RESTORE_TICKET_HEADER is X-Restore-Ticket, the header the ticket travels in', () => {
+            expect((backupApiModule as unknown as Record<string, unknown>).RESTORE_TICKET_HEADER, 'backupApi.ts exports no RESTORE_TICKET_HEADER (B5c)').toBe('X-Restore-Ticket');
+        });
+
+        it('with a ticket: one GET /api/v1/backup/restore/outcome on this origin — same-origin credentials, never cached, JSON asked, the ticket in X-Restore-Ticket and nowhere in the URL —, nothing through Zodios', async () => {
+            fetchStub.mockResolvedValueOnce(answer(200, outcome('rolled_back', 'swap_failed')));
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            const requests = fetched();
+            expect(
+                requests.map((request) => request.path),
+                'with a ticket the outcome route is asked first, and alone once it answers',
+            ).toEqual([OUTCOME_PATH]);
+            expectOutcomeRequest(requests[0]);
+            expect(read).toStrictEqual({kind: 'status', status: {state: 'rolled_back', reason: 'swap_failed', waiting: null}});
+            expect(zodiosCalls(), 'Zodios navigates to the login on a 401 and turns the block page on for a 423').toEqual([]);
+        });
+
+        it.each<[string, OutcomeState, RollbackReason | null, WaitingReason | null]>([
+            ['committed', 'committed', null, null],
+            ...ROLLBACK_REASONS.map((reason): [string, OutcomeState, RollbackReason, null] => [`rolled back, ${reason}`, 'rolled_back', reason, null]),
+            ['pending, waiting for nothing', 'pending', null, null],
+            ...WAITING_REASONS.map((waiting): [string, OutcomeState, null, WaitingReason] => [`pending, waiting for ${waiting}`, 'pending', null, waiting]),
+            ['in progress', 'in_progress', null, null],
+        ])('with a ticket, a 200 outcome — %s → status, holding {state, reason, waiting} and nothing else; one request', async (_case, state, reason, waiting) => {
+            fetchStub.mockResolvedValueOnce(answer(200, outcome(state, reason, waiting)));
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            const requests = fetched();
+            expect(requests.map((request) => request.path)).toEqual([OUTCOME_PATH]);
+            expectOutcomeRequest(requests[0]);
+            expect(read).toStrictEqual({kind: 'status', status: {state, reason, waiting}});
+        });
+
+        it('with a ticket, an outcome that leaves reason and waiting out → status with its state; neither filled with anything but null', async () => {
+            fetchStub.mockResolvedValueOnce(answer(200, JSON.stringify({state: 'committed'})));
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            expect(fetched().map((request) => request.path)).toEqual([OUTCOME_PATH]);
+            expect(read).toMatchObject({kind: 'status', status: {state: 'committed'}});
+            const {status} = read as Extract<RestoreOutcomeAnswer, {kind: 'status'}>;
+            expect(status.reason ?? null).toBeNull();
+            expect(status.waiting ?? null).toBeNull();
+            expect(
+                Object.keys(status).filter((key) => !['state', 'reason', 'waiting'].includes(key)),
+                'the status holds more than the outcome said',
+            ).toEqual([]);
+        });
+
+        it('with a ticket, an outcome carrying keys besides its three → still read, and only its three reach the status', async () => {
+            fetchStub.mockResolvedValueOnce(answer(200, JSON.stringify({state: 'rolled_back', reason: 'swap_failed', waiting: null, stage_id: STAGE_ID, confirmed_by: 'admin'})));
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            expect(fetched().map((request) => request.path)).toEqual([OUTCOME_PATH]);
+            expect(read).toStrictEqual({kind: 'status', status: {state: 'rolled_back', reason: 'swap_failed', waiting: null}});
+        });
+
+        /**
+         * The answers of the outcome route that say it cannot be reached by this caller, not that the server is starting —
+         * a ticket that does not hold (unknown, expired, used, or a restart asked from the command line), a server without
+         * the route, a blocked instance whose allow-list lacks the route, a proxy in between: each falls back on today's
+         * read. One of each, so that each is followed by every answer that read may get.
+         */
+        const UNREACHABLE: [string, () => Promise<Response>][] = [
+            ['404 restore_outcome_not_found', async () => answer(404, NO_OUTCOME)],
+            ['401', async () => answer(401, JSON.stringify({detail: 'Not authenticated'}))],
+            ['423 instance_blocked', async () => answer(423, BLOCKED)],
+            ['423 without the code instance_blocked', async () => answer(423, JSON.stringify({detail: {code: 'instance_locked', message: 'refused'}}))],
+        ];
+
+        it.each<[string, () => Promise<Response>]>([
+            ...UNREACHABLE,
+            ["404, FastAPI's default: a server without the route", async () => answer(404, JSON.stringify({detail: 'Not Found'}))],
+            ['404 with no body: a proxy', async () => answer(404)],
+            ['404 with a page that is not JSON: a proxy', async () => answer(404, '<html><body>Not Found</body></html>', 'text/html')],
+            ['401 with no body: a proxy', async () => answer(401)],
+            ['401 with a page that is not JSON: the sign-in page of a proxy', async () => answer(401, '<html><body>Sign in</body></html>', 'text/html')],
+            ["423 with a detail that is a string (FastAPI's default)", async () => answer(423, JSON.stringify({detail: 'Locked'}))],
+            ['423 with no body', async () => answer(423)],
+            ['423 with a page that is not JSON: a proxy', async () => answer(423, '<html><body>Locked</body></html>', 'text/html')],
+        ])("with a ticket, the outcome route answers %s → today's read, whatever the body: a second request, GET /api/v1/backup/restore/status, as today, without the ticket", async (_case, first) => {
+            const status = restoreStatus({state: 'rolled_back', stage_id: STAGE_ID, reason: 'first_start_failed', finished_at: '2026-10-16T11:21:00Z'});
+            fetchStub.mockImplementationOnce(first).mockResolvedValueOnce(answer(200, JSON.stringify(status)));
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            const requests = fetched();
+            expect(
+                requests.map((request) => request.path),
+                "the outcome route cannot be reached by this caller: today's read follows, once",
+            ).toEqual([OUTCOME_PATH, STATUS_PATH]);
+            expectOutcomeRequest(requests[0]);
+            expect(requests[1].origin).toBe(ORIGIN);
+            expect(requests[1].init).toMatchObject({credentials: 'same-origin', cache: 'no-store'});
+            expect(requests[1].init?.method ?? 'GET').toBe('GET');
+            expect(requests[1].headers.has('X-Restore-Ticket'), 'the ticket went to the status route too').toBe(false);
+            expect(requests[1].href).not.toContain(TICKET);
+            expect(read).toEqual({kind: 'status', status});
+            expect(zodiosCalls()).toEqual([]);
+        });
+
+        /** What today's read may answer once it follows, and what it gives: the status route's mapping, as today. */
+        const TODAYS_READ: [string, () => Promise<Response>, RestoreOutcomeAnswer][] = [
+            ['401, the session ended → signed_out', async () => answer(401, JSON.stringify({detail: 'Not authenticated'})), {kind: 'signed_out'}],
+            ['423 instance_blocked → blocked', async () => answer(423, BLOCKED), {kind: 'blocked'}],
+            ['423 with another code → down', async () => answer(423, JSON.stringify({detail: {code: 'instance_locked', message: 'refused'}})), {kind: 'down'}],
+            ['404 → down, and no third request', async () => answer(404, NO_OUTCOME), {kind: 'down'}],
+            ['503 → down', async () => answer(503), {kind: 'down'}],
+            ['200 with a page that is not JSON → down', async () => answer(200, '<html><body>Starting…</body></html>', 'text/html'), {kind: 'down'}],
+            ['no answer → down', () => Promise.reject(new TypeError('Failed to fetch')), {kind: 'down'}],
+        ];
+
+        type FallbackRow = [string, string, () => Promise<Response>, () => Promise<Response>, RestoreOutcomeAnswer];
+
+        it.each<FallbackRow>(UNREACHABLE.flatMap(([first, firstAnswer]) => TODAYS_READ.map(([second, secondAnswer, expected]): FallbackRow => [first, second, firstAnswer, secondAnswer, expected])))(
+            'with a ticket, the outcome route answers %s; then the status read as today answers %s',
+            async (_first, _second, firstAnswer, secondAnswer, expected) => {
+                fetchStub.mockImplementationOnce(firstAnswer).mockImplementationOnce(secondAnswer);
+
+                const read = await restore('restoreOutcome')(TICKET);
+
+                expect(
+                    fetched().map((request) => request.path),
+                    "the outcome route cannot be reached by this caller: today's read follows, once, and nothing after it",
+                ).toEqual([OUTCOME_PATH, STATUS_PATH]);
+                expect(read).toEqual(expected);
+                expect(zodiosCalls()).toEqual([]);
+            },
+        );
+
+        it.each<[string, () => Promise<Response>]>([
+            ['403', async () => answer(403, JSON.stringify({detail: 'Forbidden'}))],
+            ['500', async () => answer(500)],
+            ['502, a page of the proxy while the server starts', async () => answer(502, '<html><body>Bad Gateway</body></html>', 'text/html')],
+            ['503', async () => answer(503)],
+            ['504, a proxy that waited for the server to start', async () => answer(504)],
+            ['200, a page that is not JSON', async () => answer(200, '<html><body>Starting…</body></html>', 'text/html')],
+            ['200, JSON null', async () => answer(200, 'null')],
+            ['200, a list', async () => answer(200, '[]')],
+            ['200, no state', async () => answer(200, JSON.stringify({reason: null, waiting: null}))],
+            ['200, the state none: no outcome has it', async () => answer(200, JSON.stringify({state: 'none', reason: null, waiting: null}))],
+            ['200, an unknown state', async () => answer(200, JSON.stringify({state: 'applied', reason: null, waiting: null}))],
+            ['200, a state that is not a string', async () => answer(200, JSON.stringify({state: 3, reason: null, waiting: null}))],
+            ['200, an unknown reason', async () => answer(200, JSON.stringify({state: 'rolled_back', reason: 'exploded', waiting: null}))],
+            ['200, an unknown waiting', async () => answer(200, JSON.stringify({state: 'pending', reason: null, waiting: 'tea_break'}))],
+            ['no answer (fetch rejects)', () => Promise.reject(new TypeError('Failed to fetch'))],
+        ])('with a ticket, the outcome route answers %s → down, and the status is not read', async (_case, first) => {
+            fetchStub.mockImplementationOnce(first);
+
+            const read = await restore('restoreOutcome')(TICKET);
+
+            const requests = fetched();
+            expect(
+                requests.map((request) => request.path),
+                'only a 404, a 401 or a 423 falls back on the status read',
+            ).toEqual([OUTCOME_PATH]);
+            expectOutcomeRequest(requests[0]);
+            expect(read).toEqual({kind: 'down'});
+            expect(zodiosCalls()).toEqual([]);
+        });
+
+        it.each<[string, () => Promise<RestoreOutcomeAnswer>]>([
+            ['null', () => restore('restoreOutcome')(null)],
+            ['left out', () => restore('restoreOutcome')()],
+        ])("without a ticket (%s): today's read alone — one GET /api/v1/backup/restore/status, no X-Restore-Ticket, the outcome route never asked", async (_case, read) => {
+            const status = restoreStatus({state: 'pending', stage_id: STAGE_ID, waiting: 'server_running'});
+            fetchStub.mockResolvedValueOnce(answer(200, JSON.stringify(status)));
+
+            await expect(read()).resolves.toEqual({kind: 'status', status});
+
+            const requests = fetched();
+            expect(requests.map((request) => request.path)).toEqual([STATUS_PATH]);
+            expect(requests[0].headers.has('X-Restore-Ticket')).toBe(false);
+            expect(requests[0].init).toMatchObject({credentials: 'same-origin', cache: 'no-store'});
+            expect(zodiosCalls()).toEqual([]);
+        });
     });
 });

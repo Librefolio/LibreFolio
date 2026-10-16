@@ -1,14 +1,18 @@
 """
 Restoring a backup, the confirmation through the API (workstream B, lot B3, contract §5, §6 and §11): the four new routes
-of ``/api/v1/backup/restore``, and what they change in the two of lot B2b that drop and prune a checked copy.
+of ``/api/v1/backup/restore``, and what they change in the two of lot B2b that drop and prune a checked copy. Lot B5c
+adds the outcome of a restart read with a one-time ticket, without a session (``GET /backup/restore/outcome``, (i)), and
+B-17: a cancel drops the checked copy (d).
 
 Written before the code (red until lot B3 lands): ``apply.py`` and ``restart.py`` do not exist yet. Every name of lot B3
 is imported inside the test that needs it (``product``), so the file collects, and each test fails on its own. The
-``instance_blocked`` cases (§11, P7) were written red the same way, before P7.
+``instance_blocked`` cases (§11, P7) were written red the same way, before P7, and lot B5c's before B5c: ``outcome.py``
+(``outcome_module``) and ``paths.outcome_ticket_path`` (``ticket_path``) are looked up by the test that needs them.
 
 Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_jobs.confirm_check`` / ``remove_check`` /
-``prune``, ``instance_backup/apply.py`` as the routes reach it, ``instance_backup/restart.py`` (``send_signal``) and
-``RestoreStatus`` of ``backend/app/schemas/backup.py``.
+``prune``, ``instance_backup/apply.py`` as the routes reach it, ``instance_backup/restart.py`` (``send_signal``),
+``instance_backup/outcome.py`` as the routes reach it, and ``RestoreStatus``, ``RestoreRestartAccepted`` and
+``RestoreOutcome`` of ``backend/app/schemas/backup.py``.
 
 (a) ``POST /backup/restore/stage/{stage_id}/confirm``: 202 ``RestoreStatus`` ``pending``. On disk,
     ``.restore/restore.json`` (0600): ``pending``, the stage, the data directory resolved, ``confirmed_by`` the
@@ -29,43 +33,77 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     why a start left it waiting, for each of the four reasons (§11, P7: ``instance_blocked``, on an instance not blocked
     itself, since a blocked one answers no restore route); a ``restore.json`` that is a link is never followed, one that
     cannot be read is ``none``.
-(d) ``DELETE /backup/restore/pending``: 204, the state removed, the copy kept, which can be confirmed again. Without a
-    state file, 404 ``restore_not_pending`` and nothing created, not even ``.restore/apply.lock`` (the lock is taken only
-    once a state file is found); a restore being applied or finished, 404 too, its state unchanged.
-(e) ``POST /backup/restore/restart``: 202 ``RestoreStatus`` (pending); after the answer is sent, a SIGTERM to the
-    server's process (``restart.server_pid()``), through ``restart.send_signal`` and nothing else; the state unchanged.
-    409 ``restore_not_pending`` otherwise, and no signal.
+(d) ``DELETE /backup/restore/pending``: 204, the state removed and, since B-17 (lot B5c, as the command line's
+    ``pending --cancel``), the checked copy and its check with it: polling it or confirming it again is 404
+    ``restore_stage_not_found``; another check is not the restore's, and stays. The ticket of a restart goes too (i).
+    Without a state file, 404 ``restore_not_pending`` and nothing created, not even ``.restore/apply.lock`` (the lock is
+    taken only once a state file is found); a restore being applied or finished, 404 too, its state unchanged, and the
+    ticket of its restart kept for its outcome.
+(e) ``POST /backup/restore/restart``: 202 ``RestoreRestartAccepted``: the ``RestoreStatus`` (pending) and, since lot B5c,
+    the ticket of its outcome (i); after the answer is sent, a SIGTERM to the server's process (``restart.server_pid()``),
+    through ``restart.send_signal`` and nothing else; the state unchanged. 409 ``restore_not_pending`` otherwise, no
+    signal, and no ticket written.
 (f) The copy of an ACTIVE restore: ``DELETE /backup/restore/stage/{id}`` is 409 ``restore_pending`` and keeps it;
     another check is dropped as before, and so is the copy of a finished restore. ``prune``, however old everything
     looks, keeps the ACTIVE restore's check and copy, the command line's copy that no check records included; a
     finished restore's old copy is pruned as before.
 (g) Administrators only: a regular user gets 403 from each new route, and nothing changes, no signal. None of the four
-    is allowed on a blocked instance. OpenAPI: the four operations carry ``Backup & Export``, their success and model,
-    and document their refusals with their codes; the drop documents ``restore_pending``; ``RestoreStatus.waiting``
-    lists exactly the four reasons, ``instance_blocked`` included (§11).
+    is allowed on a blocked instance. OpenAPI: the four operations carry ``Backup & Export``, their success and model
+    (the restart's ``RestoreRestartAccepted`` since lot B5c), and document their refusals with their codes; the drop
+    documents ``restore_pending``; ``RestoreStatus.waiting`` lists exactly the four reasons, ``instance_blocked``
+    included (§11).
 (h) ``upload_limit_mb`` (§6), in every ``RestoreStatus`` answer, ``none`` included: the largest archive the upload
     accepts now, in MB, read by ``backup_max_upload_mb()`` when the answer is built: 0 unset and self-hosted, 500 unset
     and managed, the variable's value when set (over the profile), ``null`` when it cannot be read, with one error
     logged naming the variable, as the upload's 503 logs it. The same in the answers of confirm, status and restart; a
     change of the variable between two answers shows in the second. In the ``RestoreStatus`` schema.
+(i) Lot B5c, the outcome of a restart without a session. The restart's answer carries ``outcome_ticket`` (43 URL-safe
+    characters), with ``Cache-Control: no-store``; its file (``.restore/outcome-ticket.json``, 0600: its SHA-256, the
+    stage, ``issued_at``, ``expires_at`` an hour later, never the ticket) is on disk before the answer begins; a 409
+    writes none; a second restart replaces it. ``GET /backup/restore/outcome`` answers a caller without any session or
+    cookie, the ticket in ``X-Restore-Ticket`` only (``?ticket=`` is ignored): 200 ``{state, reason, waiting}`` and
+    nothing more, ``Cache-Control: no-store``, for each phase (applying, applied, rolling back: ``in_progress``) and each
+    reason a start leaves a restore waiting. Every ticket that does not open it — none, empty, malformed, another one,
+    its hash, in the query, replaced, expired, its file gone, unreadable, with a key more or a link, no restore, another
+    stage, dropped by a cancel — gets one and the same 404 ``restore_outcome_not_found``: status, headers and bytes. One
+    restore, one ticket, not one read (decision N53): every outcome, a final one (committed, rolled back) included, is
+    answered again, the same, its file kept, until the ticket expires — an answer lost on the way (a connection reset
+    while the server starts) is asked again instead of the page falling back on a session the restore ended; expired,
+    the one 404, its file removed. A cancel and a new confirmation drop the ticket. Neither the ticket nor its hash is
+    logged. On a blocked instance the outcome still answers — a restore a start left waiting for the unblock reads
+    ``pending``, ``instance_blocked`` — RED until workstream H's line puts it in ``ALLOWED_WHEN_BLOCKED``; every other
+    restore route stays 423 for a signed-in administrator. OpenAPI documents the route, its header, its 404 code,
+    ``RestoreOutcome`` and ``RestoreRestartAccepted``.
 
 Pure, as ``test_backup_restore.py`` (lot B2b), whose fixtures and helpers are imported: an app of each test holds
 ``backup_router``, ``get_current_user`` overridden; the data directory of the routes under ``tmp_path`` (``apply``'s
-``get_data_dir`` as well), the process configured with another folder that must stay absent; ``threading`` as
-``restore_jobs`` sees it replaced. Real archives from the module fixtures of ``test_backup_staging.py``. No signal is
-ever sent: ``restart.send_signal`` records in every test, and ``os.kill`` as ``restart`` sees it records too (it must
-stay unused). States of a restore that only a start can reach (applying, applied, rolling back, committed, rolled back)
-are written as ``apply.RestoreState`` would write them. ``prune`` is called with a ``now`` far ahead: no file is aged,
-no clock waited for.
+and ``outcome``'s ``get_data_dir`` as well), the process configured with another folder that must stay absent;
+``threading`` as ``restore_jobs`` sees it replaced. Real archives from the module fixtures of ``test_backup_staging.py``.
+No signal is ever sent: ``restart.send_signal`` records in every test, and ``os.kill`` as ``restart`` sees it records too
+(it must stay unused). States of a restore that only a start can reach (applying, applied, rolling back, committed,
+rolled back) are written as ``apply.RestoreState`` would write them, and a ticket for them is issued by
+``outcome.issue_ticket``, as the restart before that start issued it. ``prune`` is called with a ``now`` far ahead: no
+file is aged, no clock waited for. The outcome is read as the page reads it once the start ended every session: through
+an app with nobody signed in (``anonymous_app``: the real ``get_current_user``, which answers 401 to a request without a
+cookie before any database) and no cookie at all; the database session of that app is a stand-in that fails the test if
+anything reaches it. A blocked instance is ``backup_router`` behind ``refuse_when_blocked``, as ``router.py`` mounts every
+route of ``/api/v1`` (``blocked_app``), ``LIBREFOLIO_BLOCKED`` set with ``monkeypatch``. ``refuse_when_blocked`` asks
+``auth.get_current_user`` itself, outside FastAPI's overrides: where an administrator must be signed in, it is replaced
+for the test by a stand-in that signs in whoever carries a session cookie and leaves anyone else to the real one.
 """
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
+import logging
 import os
+import re
+import secrets
 import signal
 import stat
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -74,11 +112,16 @@ from typing import Any
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import APIRouter, Depends, FastAPI, Request
 from structlog.testing import capture_logs
 
-from backend.app.api.v1.backup import restore
-from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED
+from backend.app.api.v1 import auth
+from backend.app.api.v1.auth import SESSION_COOKIE_NAME
+from backend.app.api.v1.backup import backup_router, restore
+from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED, refuse_when_blocked
+from backend.app.config.platform import instance_blocked
+from backend.app.db.session import get_session_generator
+from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup import restore_jobs
 from backend.app.services.platform.instance_backup import staging as staging_service
 from backend.app.services.platform.instance_backup.paths import check_state_path, restore_dir, stage_dir
@@ -111,6 +154,35 @@ BACKUP_CREATED_AT = datetime(2026, 10, 14, 9, 0, tzinfo=UTC)
 FINISHED_AT = datetime(2026, 10, 15, 23, 0, tzinfo=UTC)
 #: Everything older than a check's lifetime, as ``prune`` judges it with this ``now``.
 FAR_AHEAD = timedelta(days=30)
+
+# Lot B5c: the outcome of a restart, read with its ticket.
+OUTCOME = f"{api.API}/outcome"
+OUTCOME_MODULE = "backend.app.services.platform.instance_backup.outcome"
+ROUTES_MODULE = "backend.app.api.v1.backup.restore"
+#: Where the page sends the ticket, the only place the route reads it from.
+TICKET_HEADER = "X-Restore-Ticket"
+#: The ticket's file, spelled out here: ``test_backup_outcome.py`` pins the name.
+TICKET_FILE_NAME = "outcome-ticket.json"
+TICKET_TTL = timedelta(hours=1)
+#: What ``secrets.token_urlsafe(32)`` gives: 32 random bytes in URL-safe base64, without padding.
+A_TICKET = re.compile(r"[A-Za-z0-9_-]{43}")
+#: The restart's answer: the restore's status and the ticket of its outcome (``RestoreRestartAccepted``).
+RESTART_FIELDS = STATUS_FIELDS | {"outcome_ticket"}
+TICKET_FIELDS = {"format", "sha256", "stage_id", "issued_at", "expires_at"}
+#: The outcome, and nothing more: no name, no date, no version, no path.
+OUTCOME_FIELDS = {"state", "reason", "waiting"}
+OUTCOME_STATES = {"pending", "in_progress", "committed", "rolled_back"}
+ROLLBACK_REASONS = ["first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"]
+#: The one answer to every ticket that does not open the outcome, whatever the reason.
+NOT_FOUND = {"detail": {"code": "restore_outcome_not_found", "message": "No restore outcome for this ticket"}}
+#: Another stage than the restore's.
+OTHER_STAGE_ID = "fedcba9876543210fedcba9876543210"
+BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
+#: What a signed-in caller gets from a route the block refuses (``instance_block.py``), whole.
+BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instance is blocked by its hosting provider"}}
+#: A session cookie, as the browser of an administrator still signed in sends it.
+SIGNED_IN = {"Cookie": f"{SESSION_COOKIE_NAME}=an-administrator-session"}
+LOG_CANARY = "b5c restore api test: canary through a logger of this name"
 
 
 # =============================================================================
@@ -146,14 +218,19 @@ def optional(module: str) -> ModuleType | None:
 
 
 class Answered:
-    """The app of a test, wrapped: ``done`` turns true once the last byte of the answer has been sent."""
+    """The app of a test, wrapped: ``done`` turns true once the last byte of the answer has been sent. With ``look``,
+    ``seen`` is what it found as the answer began: its status and headers on their way, nothing of its body yet."""
 
-    def __init__(self, app: FastAPI) -> None:
+    def __init__(self, app: FastAPI, look: Callable[[], Any] | None = None) -> None:
         self.app = app
         self.done = False
+        self.look = look
+        self.seen: Any = None
 
     async def __call__(self, scope, receive, send) -> None:
         async def sending(message) -> None:
+            if message.get("type") == "http.response.start" and self.look is not None:
+                self.seen = self.look()
             await send(message)
             if message.get("type") == "http.response.body" and not message.get("more_body", False):
                 self.done = True
@@ -189,11 +266,15 @@ class Signals:
 
 @pytest.fixture(autouse=True)
 def signals(instance, monkeypatch) -> Signals:
-    """Every test: ``apply`` uses the data directory of the routes, and no signal can reach this process."""
+    """Every test: ``apply`` (and ``outcome``, once lot B5c wrote it) use the data directory of the routes, and no signal
+    can reach this process."""
     recorded = Signals()
     apply = optional("services.platform.instance_backup.apply")
     if apply is not None:
         monkeypatch.setattr(apply, "get_data_dir", lambda: instance.root, raising=False)
+    outcome = optional("services.platform.instance_backup.outcome")
+    if outcome is not None:
+        monkeypatch.setattr(outcome, "get_data_dir", lambda: instance.root, raising=False)
     restart = optional("services.platform.instance_backup.restart")
     if restart is not None:
         monkeypatch.setattr(restart, "send_signal", recorded.send, raising=False)
@@ -288,6 +369,130 @@ def rewrite_report(root: Path, stage_id: str, **changes: Any) -> None:
 def no_path_in(response: httpx.Response, root: Path) -> None:
     for form in (str(root), str(root.resolve()), ".restore"):
         assert form not in response.text, f"no path in the answer: {response.text}"
+
+
+# =============================================================================
+# The outcome of a restart (lot B5c), read as the page reads it
+# =============================================================================
+
+
+def outcome_module() -> ModuleType:
+    return product("services.platform.instance_backup.outcome")
+
+
+def ticket_path(root: Path) -> Path:
+    """``.restore/outcome-ticket.json``, as ``paths.outcome_ticket_path`` gives it (lot B5c)."""
+    module = product("services.platform.instance_backup.paths")
+    assert hasattr(module, "outcome_ticket_path"), "[new] paths.outcome_ticket_path does not exist yet: lot B5c adds it"
+    return module.outcome_ticket_path(root)
+
+
+def hash_of(ticket: str) -> str:
+    """What the ticket's file keeps of it: its SHA-256, in hexadecimal."""
+    return hashlib.sha256(ticket.encode("ascii")).hexdigest()
+
+
+def no_store(response: httpx.Response) -> bool:
+    """Whether ``Cache-Control`` says ``no-store``: no cache along the way keeps the answer."""
+    return "no-store" in {directive.strip().lower() for directive in response.headers.get("cache-control", "").split(",")}
+
+
+def same_answer(response: httpx.Response, other: httpx.Response) -> bool:
+    """Whether two answers cannot be told apart: status, headers and bytes."""
+    return (response.status_code, response.headers.multi_items(), response.content) == (other.status_code, other.headers.multi_items(), other.content)
+
+
+class NoDatabase:
+    """The database session of the apps without an administrator: nothing may reach it, and anything that does fails
+    the test (the special names a library may probe are left to Python)."""
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("__"):
+            raise AttributeError(name)
+        raise AssertionError(f"the database was reached: session.{name}")
+
+
+def no_database() -> NoDatabase:
+    return NoDatabase()
+
+
+def anonymous_app() -> FastAPI:
+    """``backup_router`` under ``/api/v1`` with nobody signed in: ``get_current_user`` is the real one, which answers 401
+    to a request without a session cookie before it looks for a database."""
+    app = FastAPI()
+    app.include_router(backup_router, prefix="/api/v1")
+    app.dependency_overrides[get_session_generator] = no_database
+    return app
+
+
+def blocked_app() -> FastAPI:
+    """``backup_router`` behind ``refuse_when_blocked``, as ``router.py`` mounts every route of ``/api/v1``; nobody signed
+    in through FastAPI, no database."""
+    v1 = APIRouter(dependencies=[Depends(refuse_when_blocked)])
+    v1.include_router(backup_router)
+    app = FastAPI()
+    app.include_router(v1, prefix="/api/v1")
+    app.dependency_overrides[get_session_generator] = no_database
+    return app
+
+
+async def send(app: Any, method: str, path: str, **kwargs: Any) -> httpx.Response:
+    """A request to ``app`` (an app of the test, or one wrapped), through the in-process transport."""
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://in-process") as client:
+        return await client.request(method, path, **kwargs)
+
+
+async def get_outcome(ticket: str | None = None, *, params: dict[str, str] | None = None, app: FastAPI | None = None) -> httpx.Response:
+    """``GET /outcome`` as the page sends it after the restart: no cookie at all, the ticket in ``X-Restore-Ticket``
+    (``None``: no header), ``params`` in the query."""
+    headers = {} if ticket is None else {TICKET_HEADER: ticket}
+    return await send(app or anonymous_app(), "GET", OUTCOME, headers=headers, params=params)
+
+
+async def restarted() -> str:
+    """The restart of the restore pending: the ticket its answer carries."""
+    response = await restart()
+    assert response.status_code == 202, f"precondition: the restart is accepted: {api.shown(response)}"
+    body = response.json()
+    assert "outcome_ticket" in body, f"[new] the restart's answer carries the ticket of its outcome (RestoreRestartAccepted, lot B5c): {sorted(body)}"
+    return body["outcome_ticket"]
+
+
+async def restart_requested(root: Path, stage_id: str = api.UNKNOWN_ID) -> str:
+    """A restore of ``stage_id`` waiting (its state as a confirmation writes it; the restart reads nothing else) and its
+    restart requested: the ticket of the answer."""
+    write_state(root, "pending", stage_id)
+    return await restarted()
+
+
+def issued(root: Path, stage_id: str = api.UNKNOWN_ID, *, now: datetime | None = None) -> str:
+    """A ticket issued by ``outcome.issue_ticket``, as the restart before a start issued it: for the phases only a start
+    reaches."""
+    return outcome_module().issue_ticket(stage_id, data_dir=root, now=now)
+
+
+def left_waiting(root: Path, waiting: str) -> None:
+    """The pending restore as a start that did not apply it leaves it: ``waiting`` recorded, as the start writes it."""
+    path = state_path(root)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "waiting": waiting}), encoding="utf-8")
+
+
+def file_bytes(path: Path) -> bytes | None:
+    return path.read_bytes() if os.path.lexists(path) else None
+
+
+def values_of(schema: dict[str, Any], definitions: dict[str, Any]) -> set[Any]:
+    """The values a property of a JSON schema allows, through a ``$ref`` into ``definitions``; ``None`` among them when it
+    is nullable."""
+    values: set[Any] = set()
+    for option in schema.get("anyOf", [schema]):
+        allowed = definitions[option["$ref"].rsplit("/", 1)[-1]] if "$ref" in option else option
+        values |= set(allowed.get("enum", [allowed["const"]] if "const" in allowed else []))
+        if allowed.get("type") == "null":
+            values.add(None)
+    return values
 
 
 # =============================================================================
@@ -664,19 +869,54 @@ async def test_a_state_no_restore_can_hold_reads_as_no_restore(instance, case):
 
 
 @pytest.mark.asyncio
-async def test_a_pending_restore_is_cancelled_and_its_copy_kept_for_another_confirmation(instance, head_archive):
+async def test_a_pending_restore_is_cancelled_with_its_checked_copy(instance, head_archive):
+    """(d) B-17 (lot B5c): the cancel drops the checked copy and its check, as the command line's ``pending --cancel``
+    does (``cancel_restore(drop_copy=True)``): nothing of the restore is left to poll or to confirm again. Another check
+    is not the restore's: it stays as it was."""
     print_section("DELETE /backup/restore/pending")
     root = instance.root
     stage_id = await confirmed(head_archive)
-    copy_before = api.tree(stage_dir(root, stage_id))
+    other = await checked(head_archive)
+    other_before = (api.tree(stage_dir(root, other)), check_state_path(root, other).read_bytes())
     response = await cancel()
     assert (response.status_code, response.content) == (204, b""), f"cancelled: {api.shown(response)}"
     assert not state_path(root).exists(), "the state of the restore is removed"
-    assert api.tree(stage_dir(root, stage_id)) == copy_before and check_state_path(root, stage_id).is_file(), "the copy and its check stay, until they expire"
+    left = [name for name, path in (("the copy", stage_dir(root, stage_id)), ("its check", check_state_path(root, stage_id))) if os.path.lexists(path)]
+    assert left == [], f"B-17: the checked copy and its check are dropped with the restore: {left} left"
+    assert (api.tree(stage_dir(root, other)), check_state_path(root, other).read_bytes()) == other_before, "another check and its copy are kept as they were"
     assert (await restore_status()).json()["state"] == "none", "no restore any more"
-    again = await confirm(stage_id)
-    assert again.status_code == 202, f"the copy can be confirmed again: {api.shown(again)}"
-    print_success("204, copy kept, confirmed again")
+    polled, again = await api.poll(stage_id), await confirm(stage_id)
+    assert (api.code(polled), api.code(again)) == ((404, "restore_stage_not_found"), (404, "restore_stage_not_found")), f"nothing left to poll or to confirm again: {api.shown(polled)} / {api.shown(again)}"
+    print_success("204, the copy and its check dropped; 404 to confirm again")
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_drops_the_ticket_of_the_restart(instance):
+    """(d) Lot B5c: the restore no longer waits, and the ticket of its restart goes with it (``cancel_restore`` drops it):
+    the outcome answers the 404 of a ticket that opens nothing."""
+    root = instance.root
+    ticket = await restart_requested(root)
+    response = await cancel()
+    assert response.status_code == 204, f"cancelled: {api.shown(response)}"
+    assert not os.path.lexists(ticket_path(root)), "the ticket's file is removed"
+    after = await get_outcome(ticket)
+    assert (after.status_code, after.json()) == (404, NOT_FOUND), f"the ticket opens nothing: {api.shown(after)}"
+    print_success("204, the ticket dropped")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["applied", *TERMINAL])
+async def test_a_cancel_refused_keeps_the_ticket_of_the_restart(instance, phase):
+    """(d) A restore being applied or finished cannot be cancelled: 404, and the ticket its restart gave stays for the
+    outcome the page waits for."""
+    root = instance.root
+    write_state(root, phase, api.UNKNOWN_ID)
+    issued(root)
+    before = ticket_path(root).read_bytes()
+    response = await cancel()
+    assert api.code(response) == (404, "restore_not_pending"), f"{phase}: 404 restore_not_pending: {api.shown(response)}"
+    assert ticket_path(root).read_bytes() == before, f"{phase}: the ticket kept as it was"
+    print_success(f"{phase}: 404, the ticket kept")
 
 
 @pytest.mark.asyncio
@@ -722,7 +962,7 @@ async def test_a_restart_answers_then_stops_the_server_with_sigterm(instance, he
     response = await restart(answered=signals)
     assert response.status_code == 202, f"a pending restore: 202: {api.shown(response)}"
     body = response.json()
-    assert set(body) == STATUS_FIELDS and (body["state"], body["stage_id"]) == ("pending", stage_id), f"the pending restore: {body}"
+    assert set(body) == RESTART_FIELDS and (body["state"], body["stage_id"]) == ("pending", stage_id), f"the pending restore, and the ticket of its outcome (RestoreRestartAccepted, lot B5c): {sorted(body)}"
     pid = restart_module().server_pid()
     assert signals.sent == [(pid, signal.SIGTERM, True)], f"one SIGTERM to the server ({pid}), once the answer was sent: {signals.sent}"
     assert signals.around == [], f"no signal outside restart.send_signal: {signals.around}"
@@ -874,7 +1114,8 @@ def test_no_new_restore_route_is_allowed_on_a_blocked_instance():
 
 def test_openapi_documents_the_four_routes_their_answers_and_codes():
     """(g) Each operation under ``Backup & Export``, its success and model, its refusals documented with their codes;
-    the drop of a check documents ``restore_pending``."""
+    the drop of a check documents ``restore_pending``. The restart answers ``RestoreRestartAccepted`` since lot B5c: the
+    status and the ticket of its outcome."""
     document = api.restore_app().openapi()
     paths = {("POST", CONFIRM): "post", ("GET", STATUS): "get", ("DELETE", PENDING): "delete", ("POST", RESTART): "post"}
     missing = sorted(f"{method} {path}" for (method, path), verb in paths.items() if verb not in document["paths"].get(path, {}))
@@ -886,7 +1127,8 @@ def test_openapi_documents_the_four_routes_their_answers_and_codes():
     assert success == {("POST", CONFIRM): "202", ("GET", STATUS): "200", ("DELETE", PENDING): "204", ("POST", RESTART): "202"}, f"the success of each: {success}"
     models = {key: operation["responses"][success[key]].get("content", {}).get("application/json", {}).get("schema") for key, operation in operations.items()}
     status_model = {"$ref": "#/components/schemas/RestoreStatus"}
-    assert models == {("POST", CONFIRM): status_model, ("GET", STATUS): status_model, ("DELETE", PENDING): None, ("POST", RESTART): status_model}, f"the model of each success: {models}"
+    restart_model = {"$ref": "#/components/schemas/RestoreRestartAccepted"}
+    assert models == {("POST", CONFIRM): status_model, ("GET", STATUS): status_model, ("DELETE", PENDING): None, ("POST", RESTART): restart_model}, f"the model of each success: {models}"
     codes = {
         ("POST", CONFIRM): {"404": ["restore_stage_not_found"], "409": ["restore_stage_running", "restore_not_restorable", "restore_stage_outdated", "restore_already_pending"], "410": ["restore_stage_expired"], "500": ["restore_folder_unusable"]},
         ("DELETE", PENDING): {"404": ["restore_not_pending"]},
@@ -973,3 +1215,467 @@ async def test_the_limit_is_read_when_each_answer_is_built(instance, head_archiv
     limits = [(response.status_code, response.json().get("upload_limit_mb")) for response in (first, second, third)]
     assert limits == [(202, 100), (200, 200), (200, 0)], f"each answer reads the variable as it is then: {limits}"
     print_success("100, then 200, then 0")
+
+
+# =============================================================================
+# (i) Lot B5c: the outcome of a restart, read with its ticket, without a session
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_a_restart_gives_the_ticket_of_its_outcome_on_disk_before_the_answer(instance, head_archive, signals):
+    """(i) The restart's answer: the status of the restore and ``outcome_ticket``, 43 URL-safe characters, never kept by
+    a cache (``no-store``). Its file is on disk as the answer begins — the restart is requested only after the answer —
+    holding the ticket's hash for the restore's stage, an hour to live, 0600, never the ticket. The SIGTERM still follows
+    the answer."""
+    print_section("(i) The outcome of a restart (lot B5c)")
+    root = instance.root
+    stage_id = await confirmed(head_archive)
+    path = ticket_path(root)
+    started = datetime.now(UTC)
+    app = Answered(api.restore_app(B3_ADMIN), look=lambda: file_bytes(path))
+    response = await send(app, "POST", RESTART)
+    ended = datetime.now(UTC)
+    assert response.status_code == 202, f"a pending restore: 202: {api.shown(response)}"
+    body = response.json()
+    assert set(body) == RESTART_FIELDS and (body["state"], body["stage_id"]) == ("pending", stage_id), f"the status and the ticket of the outcome: {sorted(body)}"
+    ticket = body["outcome_ticket"]
+    assert isinstance(ticket, str) and A_TICKET.fullmatch(ticket), f"43 URL-safe characters: {len(str(ticket))} characters"
+    assert no_store(response), f"Cache-Control: no-store: {response.headers.get('cache-control')!r}"
+    raw = path.read_bytes()
+    assert app.seen == raw, "the ticket's file was on disk as the answer began, and was not written again after"
+    assert ticket.encode("ascii") not in raw, "the file never holds the ticket"
+    record = json.loads(raw)
+    issued_at = api.moment(record["issued_at"])
+    found = (set(record), record["sha256"], record["stage_id"], api.moment(record["expires_at"]) - issued_at)
+    assert found == (TICKET_FIELDS, hash_of(ticket), stage_id, TICKET_TTL), f"its hash, the restore's stage, an hour: {record}"
+    assert started - timedelta(seconds=1) <= issued_at <= ended, f"issued by this request (a second of slack: the precision of a time is not the contract's): {record['issued_at']}"
+    assert os.name == "nt" or stat.S_IMODE(path.lstat().st_mode) == 0o600, f"a file of its owner only: {oct(stat.S_IMODE(path.lstat().st_mode))}"
+    assert [(pid, sig) for pid, sig, _answered in signals.sent] == [(restart_module().server_pid(), signal.SIGTERM)], f"the restart still follows: {signals.sent}"
+    print_success("202 with its ticket, the file on disk before the answer, no-store")
+
+
+@pytest.mark.asyncio
+async def test_a_second_restart_replaces_the_ticket_of_the_first(instance):
+    """(i) One ticket at a time, the last restart's: the first opens nothing any more."""
+    root = instance.root
+    first = await restart_requested(root)
+    second = await restarted()
+    assert first != second, "each restart gives a new ticket"
+    record = json.loads(ticket_path(root).read_bytes())
+    assert (record["sha256"], record["stage_id"]) == (hash_of(second), api.UNKNOWN_ID), f"the file is the second ticket's: {record}"
+    old, new = await get_outcome(first), await get_outcome(second)
+    assert (old.status_code, old.json()) == (404, NOT_FOUND), f"the first ticket opens nothing: {api.shown(old)}"
+    assert (new.status_code, new.json()) == (200, {"state": "pending", "reason": None, "waiting": None}), f"the second does: {api.shown(new)}"
+    print_success("the second ticket replaces the first")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", [None, *ACTIVE[1:], *TERMINAL])
+async def test_a_restart_refused_writes_no_ticket(instance, signals, phase):
+    """(i) 409 ``restore_not_pending`` as before, and nothing written: no ticket for a restart that does not happen."""
+    root = instance.root
+    if phase:
+        write_state(root, phase, api.UNKNOWN_ID)
+    before = api.tree(root)
+    response = await restart(answered=signals)
+    assert api.code(response) == (409, "restore_not_pending"), f"{phase or 'no restore'}: 409: {api.shown(response)}"
+    assert not os.path.lexists(ticket_path(root)), f"{phase or 'no restore'}: no ticket written"
+    assert api.tree(root) == before and "outcome_ticket" not in response.text, f"{phase or 'no restore'}: nothing written, no ticket in the answer"
+    print_success(f"{phase or 'no restore'}: 409, no ticket")
+
+
+@pytest.mark.asyncio
+async def test_the_outcome_needs_no_session_and_reads_its_ticket_from_the_header_only(instance):
+    """(i) The start ended every session: the page asks with no cookie at all, the ticket in ``X-Restore-Ticket``. Never
+    in the URL, where access logs and histories keep it: ``?ticket=`` is ignored, the 404 of no ticket. The barrier: this
+    app has nobody signed in (``GET /status`` is 401)."""
+    root = instance.root
+    ticket = await restart_requested(root)
+    barrier = await send(anonymous_app(), "GET", STATUS)
+    assert barrier.status_code == 401, f"barrier: nobody is signed in to this app: {api.shown(barrier)}"
+    response = await get_outcome(ticket)
+    assert response.status_code == 200, f"no session, the ticket in its header: 200: {api.shown(response)}"
+    assert response.json() == {"state": "pending", "reason": None, "waiting": None}, f"the outcome, and nothing more: {response.json()}"
+    assert no_store(response), f"Cache-Control: no-store: {response.headers.get('cache-control')!r}"
+    in_the_query = await get_outcome(params={"ticket": ticket})
+    assert (in_the_query.status_code, in_the_query.json()) == (404, NOT_FOUND), f"in the query: ignored: {api.shown(in_the_query)}"
+    assert same_answer(in_the_query, await get_outcome()), "the very answer of no ticket at all"
+    print_success("200 without a session, the header only")
+
+
+@dataclass
+class Presenting:
+    """What a case of a ticket that opens nothing may need: the data directory, the restore's stage, the restart's ticket,
+    a folder outside the data directory."""
+
+    root: Path
+    stage_id: str
+    ticket: str
+    elsewhere: Path
+
+
+@dataclass
+class Presented:
+    """What the client sends: a ticket in ``X-Restore-Ticket`` (``None``: no header), and a query."""
+
+    ticket: str | None = None
+    params: dict[str, str] | None = None
+
+
+async def _no_ticket(s: Presenting) -> Presented:
+    return Presented()
+
+
+async def _an_empty_header(s: Presenting) -> Presented:
+    return Presented("")
+
+
+async def _a_character_short(s: Presenting) -> Presented:
+    return Presented(s.ticket[:-1])
+
+
+async def _a_character_more(s: Presenting) -> Presented:
+    return Presented(s.ticket + "A")
+
+
+async def _standard_base64(s: Presenting) -> Presented:
+    return Presented(s.ticket[:-1] + "+")
+
+
+async def _another_ticket(s: Presenting) -> Presented:
+    return Presented(secrets.token_urlsafe(32))
+
+
+async def _its_hash(s: Presenting) -> Presented:
+    return Presented(hash_of(s.ticket))
+
+
+async def _in_the_query(s: Presenting) -> Presented:
+    return Presented(params={"ticket": s.ticket})
+
+
+async def _replaced_by_another_restart(s: Presenting) -> Presented:
+    await restarted()
+    return Presented(s.ticket)
+
+
+async def _expired(s: Presenting) -> Presented:
+    """A ticket issued two hours ago, as a restart then issued it: an hour past its expiry."""
+    return Presented(issued(s.root, s.stage_id, now=datetime.now(UTC) - 2 * TICKET_TTL))
+
+
+async def _its_file_gone(s: Presenting) -> Presented:
+    ticket_path(s.root).unlink()
+    return Presented(s.ticket)
+
+
+async def _its_file_unreadable(s: Presenting) -> Presented:
+    ticket_path(s.root).write_bytes(b"{not a ticket")
+    return Presented(s.ticket)
+
+
+async def _its_file_with_a_key_more(s: Presenting) -> Presented:
+    path = ticket_path(s.root)
+    path.write_text(json.dumps({**json.loads(path.read_bytes()), "note": "a key more"}), encoding="utf-8")
+    return Presented(s.ticket)
+
+
+async def _its_file_a_link(s: Presenting) -> Presented:
+    """The valid file moved out of ``.restore``, a link to it in its place: followed, it would open."""
+    path, target = ticket_path(s.root), s.elsewhere / TICKET_FILE_NAME
+    path.rename(target)
+    path.symlink_to(target)
+    return Presented(s.ticket)
+
+
+async def _no_restore(s: Presenting) -> Presented:
+    state_path(s.root).unlink()
+    return Presented(s.ticket)
+
+
+async def _a_restore_of_another_stage(s: Presenting) -> Presented:
+    write_state(s.root, "pending", OTHER_STAGE_ID)
+    return Presented(s.ticket)
+
+
+async def _dropped_by_a_cancel(s: Presenting) -> Presented:
+    """The restore cancelled through the API after its restart was asked: no restore, and its ticket gone with it."""
+    response = await cancel()
+    assert response.status_code == 204, f"precondition: the pending restore is cancelled: {api.shown(response)}"
+    return Presented(s.ticket)
+
+
+#: Every ticket that does not open the outcome, and why. A final outcome read before is not among them (N53): its ticket
+#: reads it again until it expires.
+NOT_OPENING = [
+    pytest.param(_no_ticket, id="no-ticket"),
+    pytest.param(_an_empty_header, id="an-empty-header"),
+    pytest.param(_a_character_short, id="a-character-short"),
+    pytest.param(_a_character_more, id="a-character-more"),
+    pytest.param(_standard_base64, id="not-url-safe"),
+    pytest.param(_another_ticket, id="another-ticket"),
+    pytest.param(_its_hash, id="its-hash"),
+    pytest.param(_in_the_query, id="in-the-query"),
+    pytest.param(_replaced_by_another_restart, id="replaced-by-another-restart"),
+    pytest.param(_expired, id="expired"),
+    pytest.param(_its_file_gone, id="its-file-gone"),
+    pytest.param(_its_file_unreadable, id="its-file-unreadable"),
+    pytest.param(_its_file_with_a_key_more, id="its-file-with-a-key-more"),
+    pytest.param(_its_file_a_link, id="its-file-a-link", marks=pytest.mark.skipif(os.name == "nt", reason="symbolic links need a privilege on Windows")),
+    pytest.param(_no_restore, id="no-restore"),
+    pytest.param(_a_restore_of_another_stage, id="a-restore-of-another-stage"),
+    pytest.param(_dropped_by_a_cancel, id="dropped-by-a-cancel"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("present", NOT_OPENING)
+async def test_every_ticket_that_does_not_open_the_outcome_gets_one_and_the_same_404(instance, tmp_path, present):
+    """(i) 404 ``restore_outcome_not_found``, and the very answer of a request without a ticket — status, headers and
+    bytes: nobody learns which ticket was close, replaced, expired or dropped, nor whether a restore exists. No path, no
+    ticket in it."""
+    root = instance.root
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    ticket = await restart_requested(root)
+    presented = await present(Presenting(root, api.UNKNOWN_ID, ticket, elsewhere))
+    response = await get_outcome(presented.ticket, params=presented.params)
+    assert api.code(response) == (404, "restore_outcome_not_found"), f"{present.__name__}: 404 restore_outcome_not_found: {api.shown(response)}"
+    assert response.json() == NOT_FOUND, f"{present.__name__}: the one body: {response.json()}"
+    nothing = await get_outcome()
+    assert same_answer(response, nothing), f"{present.__name__}: the answer of no ticket at all, status, headers and bytes: {response.headers.multi_items()} / {nothing.headers.multi_items()}"
+    assert ticket not in response.text and hash_of(ticket) not in response.text, "no ticket in the answer"
+    no_path_in(response, root)
+    print_success(f"{present.__name__}: the one 404")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ACTIVE + TERMINAL)
+async def test_the_outcome_of_each_phase_is_its_state_its_reason_and_why_it_waits(instance, phase):
+    """(i) Applying, applied and rolling back are ``in_progress``; the reason and the wait as recorded; nothing more."""
+    root = instance.root
+    write_state(root, phase, api.UNKNOWN_ID)
+    record = json.loads(state_path(root).read_text(encoding="utf-8"))
+    response = await get_outcome(issued(root))
+    assert response.status_code == 200, f"{phase}: 200: {api.shown(response)}"
+    assert response.json() == {"state": STATE_OF[phase], "reason": record.get("reason"), "waiting": record.get("waiting")}, f"{phase}: {response.json()}"
+    assert no_store(response), f"{phase}: no-store"
+    print_success(f"{phase} → {response.json()['state']}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("waiting", WAIT_REASONS)
+async def test_the_outcome_of_a_restore_a_start_left_waiting_says_why(instance, waiting):
+    """(i) The restart happened, the restore was not applied: the page says why (§2, §10, §11)."""
+    root = instance.root
+    ticket = await restart_requested(root)
+    left_waiting(root, waiting)
+    response = await get_outcome(ticket)
+    assert (response.status_code, response.json()) == (200, {"state": "pending", "reason": None, "waiting": waiting}), f"pending, {waiting}: {api.shown(response)}"
+    print_success(f"pending, {waiting}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", TERMINAL)
+async def test_a_final_outcome_is_answered_the_same_until_its_ticket_expires(instance, phase):
+    """(i) Decision N53: one restore, one ticket — not one read. Committed or rolled back, the page reads the outcome as
+    often as it asks: the very same answer each time (status, headers and bytes), the ticket's file as it was. An answer
+    lost on the way (a connection reset while the server starts) is asked again, and never turns into the 404 that sent
+    the page back to a session the restore had ended — without ``JWT_SECRET``, «restored» shown after a rollback. Until
+    the ticket expires: a ticket of that restore an hour old gets the one 404, and its file goes."""
+    root = instance.root
+    ticket = await restart_requested(root)
+    write_state(root, phase, api.UNKNOWN_ID)
+    record = json.loads(state_path(root).read_text(encoding="utf-8"))
+    before = ticket_path(root).read_bytes()
+    answers = [await get_outcome(ticket) for _ in range(3)]
+    expected = {"state": phase, "reason": record.get("reason"), "waiting": None}
+    assert [(answer.status_code, answer.json()) for answer in answers] == [(200, expected)] * 3, f"{phase}: the outcome at every read, not once: {[api.shown(answer) for answer in answers]}"
+    assert all(same_answer(answer, answers[0]) for answer in answers[1:]), f"{phase}: the very same answer each time: {[answer.headers.multi_items() for answer in answers]}"
+    assert ticket_path(root).read_bytes() == before, f"{phase}: the ticket's file as it was: a read does not use it up"
+    expired = issued(root, now=datetime.now(UTC) - 2 * TICKET_TTL)
+    late = await get_outcome(expired)
+    assert (late.status_code, late.json()) == (404, NOT_FOUND) and same_answer(late, await get_outcome()), f"{phase}: expired, the one 404: {api.shown(late)}"
+    assert not os.path.lexists(ticket_path(root)), f"{phase}: the expired ticket's file goes when its holder presents it"
+    print_success(f"{phase}: the same answer three times; expired, the one 404")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ACTIVE)
+async def test_an_outcome_not_final_yet_is_answered_again(instance, phase):
+    """(i) Pending or in progress: the page asks again until the end; the file as it was."""
+    root = instance.root
+    ticket = await restart_requested(root)
+    write_state(root, phase, api.UNKNOWN_ID)
+    before = ticket_path(root).read_bytes()
+    answers = [await get_outcome(ticket) for _ in range(2)]
+    assert [(answer.status_code, answer.json().get("state")) for answer in answers] == [(200, STATE_OF[phase])] * 2, f"{phase}: answered twice: {[api.shown(answer) for answer in answers]}"
+    assert ticket_path(root).read_bytes() == before, f"{phase}: the file as it was"
+    print_success(f"{phase}: again")
+
+
+@pytest.mark.asyncio
+async def test_a_new_confirmation_drops_the_ticket_of_the_restore_before(instance, head_archive):
+    """(i) A ticket names one restart of one restore: a restore rolled back, its outcome never read, then another
+    confirmed — the old ticket goes."""
+    root = instance.root
+    write_state(root, "rolled_back", api.UNKNOWN_ID)
+    ticket = issued(root)
+    stage_id = await checked(head_archive)
+    response = await confirm(stage_id)
+    assert response.status_code == 202, f"another restore confirmed: {api.shown(response)}"
+    assert not os.path.lexists(ticket_path(root)), "the ticket of the restore before is dropped"
+    after = await get_outcome(ticket)
+    assert (after.status_code, after.json()) == (404, NOT_FOUND), f"it opens nothing: {api.shown(after)}"
+    print_success("confirmed: the old ticket dropped")
+
+
+@pytest.mark.asyncio
+async def test_the_ticket_is_never_logged(instance, caplog, monkeypatch):
+    """(i) Whoever reads the logs must not be able to read an outcome: neither the ticket nor its hash in a structlog
+    event or a stdlib record — two restarts, the outcome read right, with the replaced ticket, malformed, once committed
+    read twice (N53: the same answer), then a ticket of that restore an hour old, whose file goes. Behind a barrier for
+    each logger and each capture.
+
+    The ticket travels only as the page sends it, in ``X-Restore-Ticket``. Put in a URL, it is the test client's own
+    request line (httpx) that logs it, not the product, which never writes it there: the query, ignored, is pinned on its
+    own (``in-the-query``, and the read without a session)."""
+    root = instance.root
+    loggers = (OUTCOME_MODULE, ROUTES_MODULE)
+    for name in loggers:
+        monkeypatch.setattr(logging.getLogger(name), "disabled", False)
+        caplog.set_level(logging.DEBUG, logger=name)
+    caplog.set_level(logging.DEBUG)
+    write_state(root, "pending", api.UNKNOWN_ID)
+    with capture_logs() as events:
+        for name in loggers:
+            get_logger(name).warning(LOG_CANARY)
+            logging.getLogger(name).warning(LOG_CANARY)
+        replaced = await restarted()
+        ticket = await restarted()
+        for presented in (replaced, ticket, ticket[:-1]):
+            await get_outcome(presented)
+        write_state(root, "committed", api.UNKNOWN_ID)
+        await get_outcome(ticket)
+        await get_outcome(ticket)
+        expired = issued(root, now=datetime.now(UTC) - 2 * TICKET_TTL)
+        await get_outcome(expired)
+    canaries = [event for event in events if event.get("event") == LOG_CANARY]
+    assert len(canaries) == len(loggers), f"barrier: a structlog logger of each name reaches capture_logs: {canaries}"
+    assert {record.name for record in caplog.records if record.getMessage() == LOG_CANARY} == set(loggers), "barrier: a stdlib logger of each name reaches caplog"
+    hidden = [text for value in (replaced, ticket, expired) for text in (value, hash_of(value))]
+    leaked = [repr(event) for event in events if any(text in repr(event) for text in hidden)]
+    leaked += [f"{record.name}: {record.getMessage()}" for record in caplog.records if any(text in record.getMessage() or text in repr(vars(record)) for text in hidden)]
+    assert leaked == [], f"a ticket or its hash in the logs: {leaked}"
+    print_success(f"{len(events)} events and {len(caplog.records)} records: no ticket, no hash")
+
+
+@pytest.mark.asyncio
+async def test_on_a_blocked_instance_the_outcome_answers_its_ticket_without_a_session(instance, monkeypatch):
+    """(i) P7/P8: a restart asked for before the hosting provider blocked the instance; the start that followed did not
+    apply the restore (``pending``, ``instance_blocked``). The page, with no session, still reads why: the outcome only
+    reports a restart already asked for, and starts nothing.
+
+    RED until workstream H's line lands: ``GET /backup/restore/outcome`` in ``ALLOWED_WHEN_BLOCKED``
+    (``api/v1/instance_block.py``, H's list; its pin in ``test_instance_block.py`` is agreed with H). Until then
+    ``refuse_when_blocked`` answers this caller without a session the 401 of ``get_current_user``."""
+    root = instance.root
+    ticket = await restart_requested(root)
+    left_waiting(root, "instance_blocked")
+    monkeypatch.setenv(BLOCKED_VARIABLE, "true")
+    assert instance_blocked() is True, "precondition: the instance is blocked"
+    response = await get_outcome(ticket, app=blocked_app())
+    assert response.status_code == 200, f"blocked: the outcome still answers its ticket: {api.shown(response)} (401: the route is not in ALLOWED_WHEN_BLOCKED yet, workstream H's line)"
+    assert response.json() == {"state": "pending", "reason": None, "waiting": "instance_blocked"}, f"pending, waiting for the unblock: {response.json()}"
+    assert no_store(response), "no-store"
+    print_success("blocked: 200 pending, instance_blocked")
+
+
+def sign_in_whoever_carries_a_cookie(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``auth.get_current_user`` as ``refuse_when_blocked`` calls it (itself, outside FastAPI's overrides), replaced for
+    the test: whoever carries a session cookie is the administrator; anyone else meets the real one, whose 401 comes
+    before any database."""
+    real = auth.get_current_user
+
+    async def get_current_user(request: Request, session: Any) -> SimpleNamespace:
+        if request.cookies.get(SESSION_COOKIE_NAME):
+            return B3_ADMIN
+        return await real(request, session)
+
+    monkeypatch.setattr(auth, "get_current_user", get_current_user)
+
+
+def restore_routes() -> list[tuple[str, str]]:
+    """Every route of ``restore.py``, as (method, path under ``/api/v1``), a stage id where one is asked."""
+    return sorted((method, "/api/v1/backup" + route.path.replace("{stage_id}", api.UNKNOWN_ID)) for route in restore.restore_router.routes for method in getattr(route, "methods", None) or ())
+
+
+#: The restore routes of lots B2b and B3: on a blocked instance, none of them answers.
+REFUSED_WHEN_BLOCKED = {
+    ("PUT", f"{api.API}/upload"),
+    ("POST", api.STAGE),
+    ("GET", f"{api.STAGE}/{api.UNKNOWN_ID}"),
+    ("DELETE", f"{api.STAGE}/{api.UNKNOWN_ID}"),
+    ("POST", f"{api.STAGE}/{api.UNKNOWN_ID}/confirm"),
+    ("GET", STATUS),
+    ("DELETE", PENDING),
+    ("POST", RESTART),
+}
+
+
+@pytest.mark.asyncio
+async def test_on_a_blocked_instance_every_other_restore_route_stays_423(instance, monkeypatch):
+    """(i) The block lets the data leave, never come in, nor the server be stopped: every restore route but the outcome
+    answers a signed-in administrator 423 ``instance_blocked``, and nothing is written — the pending restore is not
+    cancelled, no ticket is issued. What must not change with lot B5c."""
+    root = instance.root
+    write_state(root, "pending", api.UNKNOWN_ID)
+    monkeypatch.setenv(BLOCKED_VARIABLE, "true")
+    assert instance_blocked() is True, "precondition: the instance is blocked"
+    sign_in_whoever_carries_a_cookie(monkeypatch)
+    routes = [(method, path) for method, path in restore_routes() if path != OUTCOME]
+    assert REFUSED_WHEN_BLOCKED <= set(routes), f"precondition: the routes of lots B2b and B3: {sorted(REFUSED_WHEN_BLOCKED - set(routes))} missing"
+    before = api.tree(root)
+    answers = {}
+    for method, path in routes:
+        response = await send(blocked_app(), method, path, headers=SIGNED_IN)
+        answers[f"{method} {path}"] = (response.status_code, response.json() if "json" in response.headers.get("content-type", "") else response.text)
+    assert answers == dict.fromkeys(answers, (423, BLOCKED_ANSWER)), f"423 instance_blocked to a signed-in administrator, each: {answers}"
+    assert api.tree(root) == before, f"nothing written: {cases.changed(before, api.tree(root))}"
+    print_success(f"{len(answers)} restore routes: 423")
+
+
+def test_the_outcome_is_the_one_restore_route_allowed_on_a_blocked_instance():
+    """(i) RED until both lot B5c (the route) and workstream H's line (``ALLOWED_WHEN_BLOCKED``) land: of all the routes of
+    ``restore.py``, the outcome alone, which starts nothing."""
+    endpoints = {(method, route.path): route.endpoint for route in restore.restore_router.routes for method in getattr(route, "methods", None) or ()}
+    assert ("GET", "/restore/outcome") in endpoints, f"[new] GET /backup/restore/outcome is not a route of restore.py yet (lot B5c): {sorted(endpoints)}"
+    allowed = sorted(f"{method} {path}" for (method, path), endpoint in endpoints.items() if endpoint in ALLOWED_WHEN_BLOCKED)
+    assert allowed == ["GET /restore/outcome"], f"the outcome, and no other restore route, in ALLOWED_WHEN_BLOCKED (workstream H's line): {allowed}"
+    print_success("GET /restore/outcome alone")
+
+
+def test_openapi_documents_the_outcome_its_header_its_404_and_the_ticket_of_the_restart():
+    """(i) The generated client sends the ticket in its header and reads ``RestoreOutcome``: the operation under
+    ``Backup & Export``, one parameter (``X-Restore-Ticket``, a header, not required: without it, the one 404), its 404
+    with its code; ``RestoreOutcome`` its three fields and their values; ``RestoreRestartAccepted`` the status and the
+    ticket, required."""
+    document = api.restore_app().openapi()
+    operation = document["paths"].get(OUTCOME, {}).get("get")
+    assert operation is not None, f"[new] GET {OUTCOME} is not documented: lot B5c adds it"
+    assert operation["tags"] == [api.TAG], f"under {api.TAG}: {operation['tags']}"
+    success = operation["responses"].get("200", {}).get("content", {}).get("application/json", {}).get("schema")
+    assert success == {"$ref": "#/components/schemas/RestoreOutcome"}, f"200 RestoreOutcome: {success}"
+    described = operation["responses"].get("404", {}).get("description", "")
+    assert "restore_outcome_not_found" in described, f"the 404 documents its code: {described!r}"
+    parameters = sorted((parameter["in"], parameter["name"].lower(), parameter.get("required", False)) for parameter in operation.get("parameters", []))
+    assert parameters == [("header", TICKET_HEADER.lower(), False)], f"one parameter, the ticket's header, not required; none in the query: {parameters}"
+    schemas = document["components"]["schemas"]
+    outcome = schemas.get("RestoreOutcome", {}).get("properties", {})
+    assert set(outcome) == OUTCOME_FIELDS, f"RestoreOutcome: state, reason, waiting, nothing else: {sorted(outcome)}"
+    allowed = {name: values_of(outcome[name], schemas) for name in sorted(OUTCOME_FIELDS)}
+    assert allowed == {"reason": {*ROLLBACK_REASONS, None}, "state": OUTCOME_STATES, "waiting": {*WAIT_REASONS, None}}, f"the values of each field: {allowed}"
+    accepted = schemas.get("RestoreRestartAccepted", {})
+    assert set(accepted.get("properties", {})) == RESTART_FIELDS and "outcome_ticket" in accepted.get("required", []), f"RestoreRestartAccepted: the status and the ticket, required: {accepted}"
+    print_success("GET /outcome, its header, its 404; RestoreOutcome; RestoreRestartAccepted")

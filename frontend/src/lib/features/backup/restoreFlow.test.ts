@@ -2,7 +2,8 @@
 /**
  * RestoreFlowController — restoring the instance from an archive, from the file chosen to the server started again
  * (restoreFlow.svelte.ts, workstream B, lot B5b). Written red first, against `b5b-contract.md` §0 (the developer's P8 and
- * P7 decisions, which override the rest), §1, §2, §2b and §2c: the module does not exist yet.
+ * P7 decisions, which override the rest), §1, §2, §2b and §2c: the module does not exist yet. Lot B5c (the outcome read
+ * with a one-time ticket, and B-17) was written red first in its turn, against its approved contract.
  *
  * The contract under test:
  *   - the words of the confirmation (§0.4): `confirmationWords(text)` keeps the words of the list matching
@@ -48,25 +49,32 @@
  *     probed, the status read again only by `retry()` (the developer's decision of 11:47); any other refusal →
  *     `pending` with the error (`failure` `restart`): the restore stays confirmed, and nothing is probed;
  *   - a restore found pending at load: `restartNow()` does the same restart, and a refusal ends the same two ways;
- *     `cancelPending()` is `cancelling` (busy) while `DELETE /pending` is out; once it is accepted, the checked copy goes
- *     with the restore, as the command line's `backup pending --cancel` does: `DELETE /stage/{stage_id}` of the status the
- *     controller holds (read at load, or the answer of the confirmation), before the status is read again; a refusal of
- *     that drop (404, 409, no answer) is ignored — no failure, nothing more announced —, and a status without a
- *     `stage_id` drops nothing; then the status read again, `cancelled {what: 'pending'}` once. A `404
- *     restore_not_pending` (the restore became something else, a start applying it maybe) drops no copy and reads the
- *     status again without failing; another refusal drops no copy → `failed` (`cancel`);
+ *     `cancelPending()` is `cancelling` (busy) while `DELETE /pending` is out; once it is accepted, the status read
+ *     again, `cancelled {what: 'pending'}` once. The checked copy goes with the restore on the server, as the command
+ *     line's `backup pending --cancel` does (B-17): the controller never sends a `DELETE /stage` of its own — not after
+ *     an accepted cancel, whatever the status held says of the copy (its `stage_id`, null, or none), and not after any
+ *     refusal. A `404 restore_not_pending` (the restore became something else, a start applying it maybe) reads the
+ *     status again without failing; another refusal → `failed` (`cancel`);
  *   - the probe: `probeServer()` every `pollMs` once the restart is accepted; seen `down` then `up` → `restoreOutcome()`
- *     once: `signed_out`, or a `committed` status → `restored`, `restored {}`, `restoreNavigation.toSignIn()` once (no
- *     message, §0.2); a `rolled_back` status → `rolled_back`, `outcomeStatus`, `rolled_back {reason}`; a `pending`
- *     status → `still_pending`, `outcomeStatus` with its `waiting`, nothing announced (§0.3); `blocked` — the hosting
- *     provider blocked the instance, and the status route answers 423 with every restore route — → `still_pending` as
- *     well (P8: the failure on the same screen, with the reason), `outcomeStatus` exactly `{state: 'pending', waiting:
- *     'instance_blocked'}`, built by the page because the server cannot be read (a blocked instance leaves the restore
- *     waiting for the unblock, P7), nothing announced, no sign-in. Up all along → the outcome is not read before
- *     `fastRestartMs`, then read anyway: `signed_out` → `restored`, `pending` → keep waiting and probing, `rolled_back`
- *     → `rolled_back`, `blocked` → `still_pending` at once (no start applies a restore while the instance is blocked).
- *     Down all along → `slow` only after `slowAfterMs`, and the probing goes on. Once the outcome is known nothing is
- *     probed again and no timer is left; `load()` (back to the tab) clears `outcome` and `slow`;
+ *     once, with the restart's ticket (below): `signed_out`, or a `committed` status → `restored`, `restored {}`,
+ *     `restoreNavigation.toSignIn()` once (no message, §0.2); a `rolled_back` status → `rolled_back`, `outcomeStatus`,
+ *     `rolled_back {reason}`; a `pending` status → `still_pending`, `outcomeStatus` with its `waiting`, nothing
+ *     announced (§0.3); `blocked` — the hosting provider blocked the instance, and the status route answers 423 with
+ *     every restore route — → `still_pending` as well (P8: the failure on the same screen, with the reason),
+ *     `outcomeStatus` exactly `{state: 'pending', waiting: 'instance_blocked'}`, built by the page because the server
+ *     cannot be read (a blocked instance leaves the restore waiting for the unblock, P7), nothing announced, no sign-in.
+ *     Up all along → the outcome is not read before `fastRestartMs`, then read anyway: `signed_out` → `restored`,
+ *     `pending` → keep waiting and probing, `rolled_back` → `rolled_back`, `blocked` → `still_pending` at once (no start
+ *     applies a restore while the instance is blocked). Down all along → `slow` only after `slowAfterMs`, and the
+ *     probing goes on. Once the outcome is known nothing is probed again and no timer is left; `load()` (back to the
+ *     tab) clears `outcome` and `slow`;
+ *   - the outcome ticket (B5c): an accepted restart answers the status and a one-time `outcome_ticket`, which reads its
+ *     outcome without a session (`RestoreApi.restoreOutcome(ticket)`). The controller holds it in memory, for that
+ *     restart only: every `restoreOutcome()` of the restart is called with it — after a stop seen, at the fast read, and
+ *     at every read after that —; a new restart (`restartNow()` after a refusal, or after the tab is back) reads with its
+ *     own ticket, an older one never, and an accepted restart answered after a newer one brings no ticket in; a refused
+ *     restart leaves none, and a read without a ticket passes `null`; `load()` and `dispose()` forget it. It is never
+ *     written to a storage — the one given, `sessionStorage`, `localStorage` — and never in the detail of an event;
  *   - `busy` holds in `loading`, `uploading`, `checking`, `confirming`, `cancelling` and `restarting` only;
  *   - `dispose()` drops every answer still on its way and stops every timer; an answer of an older generation never
  *     changes the state;
@@ -78,30 +86,39 @@
  * drop is `failed` with failure `cancel`; the polling that gets no answer gives up within thirty pauses; a refused
  * `restartNow()` is `pending` with the error, like the restart after a confirm (§0.1: «a restart that failed» shows the
  * pending block), `restore_not_pending` aside, as decided since; the fast read maps a rolled-back status to
- * `rolled_back`; `load()` ends a restart episode; while the copy of a cancelled restore is dropped the state stays
- * `cancelling`: the cancel is not over before the status is read again. Left open
- * on purpose: whether the pick-up of a check already done is announced, whether a status read that fails at mount is
- * announced (B5a's pick-up is silent; a `retry()` that fails must be), the state while the DELETE of `dropCheck()` is
- * out, whether the status is read again after an aborted upload, `outcome` while the restart request is still out, and
- * the state once the outcome is known.
+ * `rolled_back`; `load()` ends a restart episode. Left open on purpose: whether the pick-up of a check already done is
+ * announced, whether a status read that fails at mount is announced (B5a's pick-up is silent; a `retry()` that fails
+ * must be), the state while the DELETE of `dropCheck()` is out, whether the status is read again after an aborted
+ * upload, `outcome` while the restart request is still out, and the state once the outcome is known.
+ *
+ * What of the ticket cannot be seen, and how this file sees the rest. Nothing reads after `dispose()`, so its forgetting
+ * has no case. A read happens only after an accepted restart, which carries its own ticket, and every way from an
+ * accepted restart back to `pending` goes through `load()`: so «a refused restart leaves none» is seen together with
+ * `load()` forgetting, through a restart answered without a ticket (the type requires one; the fake casts), whose reads
+ * pass `null` — never the ticket before. Every absence (no storage, no event) is asserted after its presence barrier:
+ * the reads carried the ticket, so the controller did hold it.
  *
  * The outcome `blocked` and the copy dropped by `cancelPending()` came after the first green, decided by the workstream
- * to honour P7 and P8, and were written red first in their turn.
+ * to honour P7 and P8, and were written red first in their turn. With B5c the copy left the page (B-17): the server
+ * drops it with the cancel, and the cases of B5b that expected `cancelPending()` to drop it now expect no drop at all.
  *
  * Every test injects a fake api — a call it does not expect rejects, naming the call — and an in-memory storage, and runs
  * on fake timers; `pollMs`, `fastRestartMs` and `slowAfterMs` are not the defaults, so a controller that ignored them
- * would be seen, and the defaults have their own cases. The one exception to that net: the controller ignores a refused
- * drop of a cancelled restore's copy, so a `dropCheck()` it should not send would reject unseen; the cases where nothing
- * may be dropped say so with `not.toHaveBeenCalled()`. The server of a restart is a box the test flips between `up` and
- * `down`: `probeServer()` answers what it holds whenever it is asked, so no case depends on when the first probe goes
- * out. `restoreNavigation.toSignIn` is replaced by a spy before every controller is built, so nothing navigates.
- * `$lib/i18n` is a translator that answers `⟦key⟧`, so the fallback word is proven to be the translation of its key
- * without naming a language. `$lib/api` is mocked with the five aliases the default api reaches here, which only the
- * last group (no `api` option) uses.
+ * would be seen, and the defaults have their own cases. One gap in that net: a call the controller sends and swallows
+ * rejects unseen — the best-effort drop of B5b did exactly that —, so every case of `cancelPending()` says
+ * `not.toHaveBeenCalled()` of `dropCheck()`, whatever the fake would have answered. The server of a restart is a box
+ * the test flips between `up` and `down`: `probeServer()` answers what it holds whenever it is asked, so no case depends
+ * on when the first probe goes out. `restoreNavigation.toSignIn` is replaced by a spy before every controller is built,
+ * so nothing navigates. `$lib/i18n` is a translator that answers `⟦key⟧`, so the fallback word is proven to be the
+ * translation of its key without naming a language. `$lib/api` is mocked with the five aliases the default api reaches
+ * here, which only the last group (no `api` option) uses. `sessionStorage` is the environment's own. Not `localStorage`:
+ * Node 26 ships a global one that is unavailable without `--localstorage-file`, and it hides jsdom's (`undefined` here),
+ * so the case that inspects it owns an in-memory one, installed with `vi.stubGlobal` before the controller exists — a
+ * write of the controller lands where the case reads it back —, and every case ends with `vi.unstubAllGlobals()`.
  *
  * The module is loaded through `import.meta.glob`, not imported: while it does not exist each case fails on its own and
  * names it, instead of the whole file failing at collection, and the type check does not wait for it. The types below
- * are the contract's (§2b), written out for the same reason.
+ * are the contract's (§2b, and B5c's), written out for the same reason.
  *
  * jsdom, not node: `busy`, `report` and `limitMb` are `$derived`, which the node environment leaves stale (see
  * `$test/runes.svelte`); `assertEffectsRun()` fails the whole file loudly if the docblock above is ever lost.
@@ -154,6 +171,8 @@ type RestoreFailure = 'status' | 'upload' | 'check' | 'confirm' | 'cancel' | 're
 type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending';
 type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
 type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
+/** The answer of an accepted restart (B5c): the status, and the one-time ticket that reads its outcome. Not generated yet. */
+type RestoreRestartAccepted = RestoreStatus & {outcome_ticket: string};
 
 interface RestoreApi {
     status(): Promise<RestoreStatus>;
@@ -163,9 +182,9 @@ interface RestoreApi {
     dropCheck(stageId: string): Promise<void>;
     confirm(stageId: string): Promise<RestoreStatus>;
     cancelPending(): Promise<void>;
-    restart(): Promise<RestoreStatus>;
+    restart(): Promise<RestoreRestartAccepted>;
     probeServer(): Promise<'up' | 'down'>;
-    restoreOutcome(): Promise<RestoreOutcomeAnswer>;
+    restoreOutcome(ticket: string | null): Promise<RestoreOutcomeAnswer>;
 }
 
 interface RestoreFlowOptions {
@@ -263,6 +282,16 @@ const committed = () => restoreStatus({state: 'committed', ...confirmedFields, f
 
 const rolledBack = (reason: RollbackReason) => restoreStatus({state: 'rolled_back', ...confirmedFields, finished_at: '2026-10-16T11:21:00Z', reason});
 
+/** Tickets as the server makes them (`secrets.token_urlsafe(32)`), one per accepted restart (B5c). */
+const TICKET = 'kq8Z3vR-wT0yN5mB_xH2cL7pJ4sF9dG1eA6uK0iO3rY';
+const OTHER_TICKET = 'Pz4_hW9nQe2bX7-vM1tS8cJ5kD0gR3yL6aU9fN2oEi7';
+
+/** What an accepted restart answers (B5c): the restore still pending, and the ticket that reads its outcome. */
+const accepted = (ticket: string = TICKET): RestoreRestartAccepted => ({...pending(), outcome_ticket: ticket});
+
+/** What the outcome route answers (B5c): its three fields, nothing else — no name, no date, no version. */
+const outcomeOf = (state: RestoreStatus['state'], reason: RollbackReason | null = null, waiting: WaitingReason | null = null) => ({state, reason, waiting}) as RestoreStatus;
+
 function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport {
     return {
         backup_created_at: '2026-10-15T12:00:00Z',
@@ -342,17 +371,24 @@ function deferred<T>(): Deferred<T> {
     return {promise, resolve, reject};
 }
 
-/** A sessionStorage stand-in the test can read back. */
+/** A Web Storage stand-in the test can read back: the storage given to the controller, or a global the case owns (`vi.stubGlobal`). */
 function memoryStorage(initial: Record<string, string> = {}) {
     const items = new Map<string, string>(Object.entries(initial));
     return {
         items,
+        get length() {
+            return items.size;
+        },
+        key: vi.fn((index: number) => [...items.keys()][index] ?? null),
         getItem: vi.fn((key: string) => items.get(key) ?? null),
         setItem: vi.fn((key: string, value: string) => {
             items.set(key, String(value));
         }),
         removeItem: vi.fn((key: string) => {
             items.delete(key);
+        }),
+        clear: vi.fn(() => {
+            items.clear();
         }),
     };
 }
@@ -457,11 +493,11 @@ function serve(context: Context, initial: 'up' | 'down'): Server {
     return server;
 }
 
-/** A restore pending, its restart asked and accepted: `outcome` waiting over a server the test flips, nothing announced so far. */
+/** A restore pending, its restart asked and accepted with `TICKET`: `outcome` waiting over a server the test flips, nothing announced so far. */
 async function restartAccepted(initial: 'up' | 'down', options: RestoreFlowOptions = {}) {
     const context = await pendingRestore({}, options);
     const server = serve(context, initial);
-    context.api.restart.mockResolvedValueOnce(pending());
+    context.api.restart.mockResolvedValueOnce(accepted());
     void context.controller.restartNow();
     await flush();
     expect(context.controller.outcome, 'precondition: the restart was accepted').toBe('waiting');
@@ -490,6 +526,7 @@ beforeEach(() => {
 afterEach(() => {
     for (const controller of controllers.splice(0)) controller.dispose();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
     sessionStorage.clear();
 });
@@ -1245,7 +1282,7 @@ describe('confirm(): the restore confirmed, then the server restarted at once (�
     it('confirming while POST confirm is out; then POST restart at once, restarting; accepted: outcome waiting, confirmed then restart.requested', async () => {
         const {controller, api, storage, events} = await reportShown();
         const confirmation = deferred<RestoreStatus>();
-        const restart = deferred<RestoreStatus>();
+        const restart = deferred<RestoreRestartAccepted>();
         api.confirm.mockReturnValueOnce(confirmation.promise);
         api.restart.mockReturnValueOnce(restart.promise);
         api.probeServer.mockResolvedValue('down');
@@ -1268,7 +1305,7 @@ describe('confirm(): the restore confirmed, then the server restarted at once (�
         expect(storage.items.has(KEY), 'a confirmed check is no longer followed').toBe(false);
         expect(api.probeServer, 'the server is probed only once the restart is accepted').not.toHaveBeenCalled();
 
-        restart.resolve(pending());
+        restart.resolve(accepted());
         await flush();
 
         expect(controller.state).toBe('restarting');
@@ -1363,7 +1400,7 @@ describe('confirm(): the restore confirmed, then the server restarted at once (�
         await controller.confirm();
         await flush();
         expect(controller.failure, 'precondition: the restart was refused').toBe('restart');
-        const restart = deferred<RestoreStatus>();
+        const restart = deferred<RestoreRestartAccepted>();
         api.restart.mockReturnValueOnce(restart.promise);
         api.probeServer.mockResolvedValue('down');
 
@@ -1374,12 +1411,12 @@ describe('confirm(): the restore confirmed, then the server restarted at once (�
         expect(controller.state).toBe('restarting');
         expect(controller.errorCode).toBeNull();
         expect(controller.failure).toBeNull();
-        restart.resolve(pending());
+        restart.resolve(accepted());
         await flush();
         expect(controller.outcome).toBe('waiting');
     });
 
-    it('after a refused restart, cancelPending() cancels the restore just confirmed and drops its checked copy: DELETE /pending, then DELETE /stage/{id} of the status the confirmation answered, then idle', async () => {
+    it('after a refused restart, cancelPending() cancels the restore just confirmed: DELETE /pending, then the status read again, idle — and no DELETE /stage of its own: the server drops the checked copy with the cancel (B-17)', async () => {
         const {controller, api, events} = await reportShown();
         api.confirm.mockResolvedValueOnce(pending());
         api.restart.mockRejectedValueOnce(noAnswer());
@@ -1387,14 +1424,12 @@ describe('confirm(): the restore confirmed, then the server restarted at once (�
         await flush();
         expect(controller.state, 'precondition: the restore stays confirmed after the refused restart').toBe('pending');
         api.cancelPending.mockResolvedValueOnce(undefined);
-        api.dropCheck.mockResolvedValueOnce(undefined);
         api.status.mockResolvedValueOnce(none());
 
         await controller.cancelPending();
         await flush();
 
         expect(api.cancelPending).toHaveBeenCalledTimes(1);
-        expect(api.dropCheck.mock.calls, 'the copy of the cancelled restore was left on disk').toEqual([[STAGE_ID]]);
         expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
         expect(controller.state).toBe('idle');
         expect(controller.errorCode).toBeNull();
@@ -1404,6 +1439,7 @@ describe('confirm(): the restore confirmed, then the server restarted at once (�
             ['backup.restore.failed', {code: 'network', what: 'restart'}],
             ['backup.restore.cancelled', {what: 'pending'}],
         ]);
+        expect(api.dropCheck, 'the copy of the confirmed check was dropped by the page: since B-17 the cancel drops it on the server').not.toHaveBeenCalled();
     });
 
     it.each<[string, () => Promise<Context>]>([
@@ -1427,7 +1463,7 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
     it('restartNow(): restarting and busy while the POST is out; accepted: outcome waiting, restart.requested, the server probed every pollMs', async () => {
         const {controller, api, events} = await pendingRestore({waiting: 'server_running'});
         api.probeServer.mockResolvedValue('down');
-        const answer = deferred<RestoreStatus>();
+        const answer = deferred<RestoreRestartAccepted>();
         api.restart.mockReturnValueOnce(answer.promise);
 
         void controller.restartNow();
@@ -1438,7 +1474,7 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
         expect(controller.busy).toBe(true);
         expect(api.probeServer, 'the server is probed only once the restart is accepted').not.toHaveBeenCalled();
 
-        answer.resolve(pending());
+        answer.resolve(accepted());
         await flush();
 
         expect(controller.state).toBe('restarting');
@@ -1489,62 +1525,57 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
         expect(events()).toEqual([['backup.restore.failed', {code: 'restore_not_pending', what: 'restart'}]]);
     });
 
-    it('cancelPending(): cancelling and busy while DELETE /pending is out; accepted, the checked copy dropped too (DELETE /stage/{stage_id}, as backup pending --cancel does), still cancelling; then the status read again: idle, cancelled {what: pending}', async () => {
+    it('cancelPending(): cancelling and busy while DELETE /pending is out; accepted, the status read again: idle, cancelled {what: pending} once — and no DELETE /stage: the server drops the checked copy with the cancel, as backup pending --cancel does (B-17)', async () => {
         const {controller, api, events} = await pendingRestore();
         const answer = deferred<void>();
-        const drop = deferred<void>();
         api.cancelPending.mockReturnValueOnce(answer.promise);
-        api.dropCheck.mockReturnValueOnce(drop.promise);
         api.status.mockResolvedValueOnce(none());
 
         void controller.cancelPending();
         await flush();
 
         expect(api.cancelPending).toHaveBeenCalledTimes(1);
-        expect(api.dropCheck, 'the copy is dropped only once the restore is cancelled').not.toHaveBeenCalled();
         expect(controller.state).toBe('cancelling');
         expect(controller.busy).toBe(true);
+        expect(api.status, 'the status is read again only once the cancel is accepted').toHaveBeenCalledTimes(1);
+        expect(events()).toEqual([]);
 
         answer.resolve();
         await flush();
 
-        expect(api.dropCheck.mock.calls, 'the copy of the cancelled restore was left on disk').toEqual([[STAGE_ID]]);
-        expect(api.status, 'the status is read again only once the copy is dropped').toHaveBeenCalledTimes(1);
-        expect(controller.state).toBe('cancelling');
-        expect(controller.busy).toBe(true);
-
-        drop.resolve();
-        await flush();
-
         expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
-        expect(api.dropCheck).toHaveBeenCalledTimes(1);
         expect(controller.state).toBe('idle');
         expect(controller.busy).toBe(false);
         expect(controller.status).toEqual(none());
+        expect(controller.errorCode).toBeNull();
+        expect(controller.failure).toBeNull();
         expect(events()).toEqual([['backup.restore.cancelled', {what: 'pending'}]]);
+        expect(api.dropCheck, 'the copy of the cancelled restore was dropped by the page: since B-17 the cancel drops it on the server').not.toHaveBeenCalled();
     });
 
-    it.each<[string, () => unknown]>([
-        ['404 restore_stage_not_found: the copy already gone', () => refusal(404, 'restore_stage_not_found')],
-        ['409 restore_pending: a restore waits to apply it', () => refusal(409, 'restore_pending')],
-        ['no answer', noAnswer],
-        ['an answer without a code', codelessAnswer],
-    ])('cancelPending(): the drop of the copy refused — %s — is ignored: no failure, the status read again, cancelled {what: pending} once', async (_case, refused) => {
+    it.each<[string, (api: Context['api']) => void]>([
+        ['accepted', (api) => api.dropCheck.mockResolvedValue(undefined)],
+        ['refused 404 restore_stage_not_found', (api) => api.dropCheck.mockRejectedValue(refusal(404, 'restore_stage_not_found'))],
+        ['refused 409 restore_pending', (api) => api.dropCheck.mockRejectedValue(refusal(409, 'restore_pending'))],
+        ['with no answer', (api) => api.dropCheck.mockRejectedValue(noAnswer())],
+        ['with an answer without a code', (api) => api.dropCheck.mockRejectedValue(codelessAnswer())],
+    ])('cancelPending() sends no DELETE /stage of its own — the fake would have answered it %s, leaving no trace in the state or the events: only its record tells (B-17)', async (_case, arm) => {
         const {controller, api, events} = await pendingRestore();
+        arm(api);
         api.cancelPending.mockResolvedValueOnce(undefined);
-        api.dropCheck.mockRejectedValueOnce(refused());
         api.status.mockResolvedValueOnce(none());
 
         await controller.cancelPending();
         await flush();
 
-        expect(api.dropCheck.mock.calls, 'the copy of the cancelled restore was left on disk').toEqual([[STAGE_ID]]);
+        expect(api.cancelPending).toHaveBeenCalledTimes(1);
         expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
         expect(controller.state).toBe('idle');
         expect(controller.busy).toBe(false);
         expect(controller.errorCode).toBeNull();
         expect(controller.failure).toBeNull();
         expect(events()).toEqual([['backup.restore.cancelled', {what: 'pending'}]]);
+        expect(api.dropCheck, 'the copy of the cancelled restore was dropped by the page: since B-17 the cancel drops it on the server').not.toHaveBeenCalled();
     });
 
     it.each<[string, () => RestoreStatus]>([
@@ -1557,7 +1588,7 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
                 return status;
             },
         ],
-    ])('cancelPending(): a pending status whose stage_id is %s has no copy to drop — DELETE /pending only, then the status read again, cancelled {what: pending}', async (_case, held) => {
+    ])('cancelPending(): a pending status whose stage_id is %s — DELETE /pending alone, as for any other, then the status read again, cancelled {what: pending}', async (_case, held) => {
         const context = await setup();
         await loaded(context, held());
         const {controller, api, events} = context;
@@ -1569,7 +1600,7 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
         await flush();
 
         expect(api.cancelPending).toHaveBeenCalledTimes(1);
-        expect(api.dropCheck, 'a copy was dropped for a status without a stage_id').not.toHaveBeenCalled();
+        expect(api.dropCheck, 'a copy was dropped by the page').not.toHaveBeenCalled();
         expect(api.status, 'the status is read again').toHaveBeenCalledTimes(2);
         expect(controller.state).toBe('idle');
         expect(events()).toEqual([['backup.restore.cancelled', {what: 'pending'}]]);
@@ -1594,6 +1625,7 @@ describe('a restore found pending at load: restartNow() and cancelPending()', ()
     it.each<[string, () => unknown, string]>([
         ['no answer', noAnswer, 'network'],
         ['an answer without a code', codelessAnswer, 'unexpected'],
+        ['423 instance_blocked: the hosting provider blocked the instance, every restore route with it', () => refusal(423, 'instance_blocked'), 'instance_blocked'],
     ])('cancelPending() refused — %s: failed (cancel), announced, no copy dropped', async (_case, refused, code) => {
         const {controller, api, events} = await pendingRestore();
         api.cancelPending.mockRejectedValueOnce(refused());
@@ -1809,6 +1841,175 @@ describe('the restart: the server probed until the outcome is known (§0.2, §0.
 });
 
 // =====================================================================================================================
+describe('the outcome ticket (B5c): the ticket of the accepted restart goes with every read of its outcome, held in memory only', () => {
+    it('seen down, then up: the outcome read with the ticket the accepted restart answered, and settled as it is answered', async () => {
+        const {controller, api, server, events, toSignIn} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: outcomeOf('rolled_back', 'swap_failed')});
+
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome.mock.calls, 'the outcome was read without the ticket of the restart').toEqual([[TICKET]]);
+        expect(controller.outcome).toBe('rolled_back');
+        expect(controller.outcomeStatus).toEqual(outcomeOf('rolled_back', 'swap_failed'));
+        expect(toSignIn).not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.rolled_back', {reason: 'swap_failed'}]]);
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('up all along: the fast read carries the ticket, and so does every read after it until the outcome', async () => {
+        const {controller, api, toSignIn} = await restartAccepted('up');
+        api.restoreOutcome.mockResolvedValue({kind: 'status', status: outcomeOf('pending')});
+
+        await vi.advanceTimersByTimeAsync(FAST_MS + 3 * POLL_MS);
+        expect(api.restoreOutcome.mock.calls.length, 'precondition: read at the fast read, and again after it').toBeGreaterThanOrEqual(2);
+        expect(controller.outcome, 'pending, waiting for nothing, at the fast read: keep waiting').toBe('waiting');
+
+        api.restoreOutcome.mockResolvedValue({kind: 'status', status: outcomeOf('committed')});
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        expect(controller.outcome).toBe('restored');
+        expect(toSignIn).toHaveBeenCalledTimes(1);
+        const reads = api.restoreOutcome.mock.calls;
+        expect(reads, 'a read of this restart went without its ticket').toEqual(reads.map(() => [TICKET]));
+    });
+
+    it('a new restart reads with its own ticket, never the one before: back to the tab after a restore left pending, then restartNow() again', async () => {
+        const {controller, api, server} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: outcomeOf('pending', null, 'server_running')});
+        await serverRestarts(server);
+        expect(controller.outcome, 'precondition: the first restart left the restore pending').toBe('still_pending');
+
+        api.status.mockResolvedValueOnce(pending({waiting: 'server_running'}));
+        await controller.load();
+        await flush();
+        expect(controller.state, 'precondition: back to the tab, the restore pending').toBe('pending');
+
+        api.restart.mockResolvedValueOnce(accepted(OTHER_TICKET));
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: outcomeOf('rolled_back', 'first_start_failed')});
+        void controller.restartNow();
+        await flush();
+        expect(controller.outcome, 'precondition: the second restart was accepted').toBe('waiting');
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome.mock.calls).toEqual([[TICKET], [OTHER_TICKET]]);
+        expect(controller.outcome).toBe('rolled_back');
+    });
+
+    it('confirmed, the restart refused, then restartNow() accepted: the reads carry the ticket of the restart that was accepted', async () => {
+        const context = await reportShown();
+        const {controller, api} = context;
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockRejectedValueOnce(noAnswer());
+        await controller.confirm();
+        await flush();
+        expect(controller.failure, 'precondition: the restart was refused').toBe('restart');
+
+        const server = serve(context, 'down');
+        api.restart.mockResolvedValueOnce(accepted(OTHER_TICKET));
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: outcomeOf('committed')});
+        void controller.restartNow();
+        await flush();
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome.mock.calls).toEqual([[OTHER_TICKET]]);
+        expect(controller.outcome).toBe('restored');
+    });
+
+    it('no ticket outlives its restart: back to the tab, a restart refused, then one answered without a ticket — its read passes null, never the ticket before', async () => {
+        const {controller, api, server} = await restartAccepted('down');
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: outcomeOf('pending', null, 'backup_running')});
+        await serverRestarts(server);
+        expect(controller.outcome, 'precondition: the first restart left the restore pending').toBe('still_pending');
+
+        api.status.mockResolvedValueOnce(pending({waiting: 'backup_running'}));
+        await controller.load();
+        await flush();
+        api.restart.mockRejectedValueOnce(noAnswer());
+        await controller.restartNow();
+        await flush();
+        expect(controller.failure, 'precondition: the second restart was refused').toBe('restart');
+
+        // Answered without a ticket (the type requires one): nothing the controller held before may stand in for it.
+        api.restart.mockResolvedValueOnce(pending() as RestoreRestartAccepted);
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: outcomeOf('rolled_back', 'stage_missing')});
+        void controller.restartNow();
+        await flush();
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome.mock.calls, 'a read without a ticket passes null, and an older ticket is never reused').toEqual([[TICKET], [null]]);
+        expect(controller.outcome).toBe('rolled_back');
+    });
+
+    it('a restart accepted after a newer one was asked (an answer of an older generation): its ticket is dropped with it — the reads carry the newer ticket', async () => {
+        const context = await pendingRestore();
+        const {controller, api} = context;
+        const server = serve(context, 'down');
+        const first = deferred<RestoreRestartAccepted>();
+        api.restart.mockReturnValueOnce(first.promise);
+        void controller.restartNow();
+        await flush();
+        api.status.mockResolvedValueOnce(pending());
+        await controller.load();
+        await flush();
+        expect(controller.state, 'precondition: back to pending, the first restart request still out').toBe('pending');
+
+        api.restart.mockResolvedValueOnce(accepted(OTHER_TICKET));
+        void controller.restartNow();
+        await flush();
+        expect(controller.outcome, 'precondition: the second restart was accepted').toBe('waiting');
+        first.resolve(accepted(TICKET));
+        await flush();
+
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome.mock.calls).toEqual([[OTHER_TICKET]]);
+        expect(controller.outcome).toBe('restored');
+    });
+
+    it('in memory only: the reads carry the ticket, while no storage — the one given, sessionStorage, localStorage — and no event detail ever holds it', async () => {
+        // Owned by the case, before the controller exists: a write to localStorage lands where it is read back below.
+        const local = memoryStorage();
+        vi.stubGlobal('localStorage', local);
+        const context = await reportShown();
+        const {controller, api, storage, onEvent} = context;
+        const server = serve(context, 'down');
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockResolvedValueOnce(accepted());
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: outcomeOf('rolled_back', 'swap_interrupted')});
+
+        void controller.confirm();
+        await flush();
+        await serverRestarts(server);
+
+        // The presence barrier: the controller held the ticket, and used it.
+        expect(api.restoreOutcome.mock.calls).toEqual([[TICKET]]);
+        expect(controller.outcome).toBe('rolled_back');
+
+        const holding = (values: Iterable<string | null>) => [...values].filter((value) => value?.includes(TICKET));
+        expect(holding(storage.setItem.mock.calls.map(([, value]) => value)), 'the ticket was written to the storage given').toEqual([]);
+        expect(holding(storage.items.values())).toEqual([]);
+        expect(localStorage, 'precondition: the localStorage read back is the one the case owns').toBe(local);
+        expect(holding(local.setItem.mock.calls.flat()), 'the ticket was written to localStorage').toEqual([]);
+        for (const [name, store] of [
+            ['sessionStorage', sessionStorage],
+            ['localStorage', localStorage],
+        ] as const) {
+            const values = Array.from({length: store.length}, (_, index) => store.getItem(store.key(index) ?? ''));
+            expect(holding(values), `the ticket was written to ${name}`).toEqual([]);
+        }
+        expect(
+            onEvent.mock.calls.map(([name]) => name),
+            'precondition: the restart was announced',
+        ).toContain('backup.restore.restart.requested');
+        expect(
+            onEvent.mock.calls.filter(([, detail]) => JSON.stringify(detail).includes(TICKET)),
+            'an event told the ticket',
+        ).toEqual([]);
+    });
+});
+
+// =====================================================================================================================
 describe('the events of the whole flow', () => {
     it('upload, check, confirm, restart, restored: each step announced once, in order, with the details of §2b', async () => {
         const context = await idle();
@@ -1818,7 +2019,7 @@ describe('the events of the whole flow', () => {
         api.startCheck.mockResolvedValueOnce(runningStage());
         api.getCheck.mockResolvedValueOnce(doneStage(report({action: 'upgrade'})));
         api.confirm.mockResolvedValueOnce(pending());
-        api.restart.mockResolvedValueOnce(pending());
+        api.restart.mockResolvedValueOnce(accepted());
         api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
 
         void controller.upload(archive(8192));

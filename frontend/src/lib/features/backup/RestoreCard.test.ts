@@ -2,7 +2,8 @@
 /**
  * RestoreCard — the restore card of Settings › Backup, under the download card (component test, Vitest + jsdom;
  * workstream B, lot B5b). Written red first against `b5b-contract.md` §0 (P8 and P7, which override the rest), §2, §2b,
- * §2c, §3 and §4: the card does not exist yet.
+ * §2c, §3 and §4: the card does not exist yet. Lot B5c (the outcome read with the restart's one-time ticket, and B-17)
+ * was written red first in its turn, against its approved contract.
  *
  * The card is the face of `RestoreFlowController` (pinned on its own in restoreFlow.test.ts). What it adds, and what this
  * file pins, is what the user sees and what the machine reads:
@@ -17,9 +18,12 @@
  *   - the confirmation restarts at once (§0.1): the modal closes and `restart-overlay` waits; a refused restart leaves the
  *     pending block with the error; a restore found pending at load shows `restore-pending` with `data-waiting` (and
  *     `restore-waiting`, worded by `backup.restore.waiting.<waiting>`, `instance_blocked` included, §0.5),
- *     `restore-restart` and `restore-cancel-pending`; the cancel drops the checked copy too, as the command line's
- *     `backup pending --cancel` does: `deleteRestoreCheck(stage_id)` once the restore is cancelled, before the status is
- *     read again;
+ *     `restore-restart` and `restore-cancel-pending`; the cancel is `cancelPendingRestore()` alone, then the status read
+ *     again: the server drops the checked copy with the cancel, as the command line's `backup pending --cancel` does
+ *     (B-17), and the card never calls `deleteRestoreCheck` for it;
+ *   - the restart answers a one-time `outcome_ticket` (B5c), and the outcome of that restart is read with it —
+ *     `restoreOutcome(ticket)`, without a session —: one case from the confirmation to the outcome, `rolled_back` or
+ *     `committed` as answered; the ticket reaches neither `notify()` nor a storage of the browser;
  *   - a success shows no message (§0.2): the overlay keeps waiting as `restored` and `restoreNavigation.toSignIn()` is
  *     called once; a failure shows on the overlay (§0.3), whose `restart-back` reads the status again; `restart-sign-in`
  *     never exists. A restart that comes back on an instance its hosting provider blocked — `restoreOutcome()` answers
@@ -38,11 +42,15 @@
  *
  * The seams. `$lib/i18n` renders every key as itself (with its values, when it has any), answers the word list of the
  * confirmation with one word, so any pick is that word, and records every key asked. `./backupApi` keeps its real
- * helpers and swaps the ten restore functions for `vi.fn`, each rejecting a call the case did not expect — except where
- * the card ignores a refusal by design (the drop of a cancelled restore's copy): there the case asserts the call it
- * expects. `$lib/api` is a client that throws on any request. `notify` is a spy; `restoreNavigation.toSignIn` is a spy on
- * the exported object, so nothing navigates. The clock is fake: the card's controller uses its defaults (`pollMs` 1000,
- * `fastRestartMs` 30 000, `slowAfterMs` 60 000). `sessionStorage` is the real jsdom one, emptied around every case.
+ * helpers and swaps the ten restore functions for `vi.fn`, each rejecting a call the case did not expect. A call the
+ * card would send and swallow rejects unseen — the best-effort drop of a cancelled restore's copy did, until B-17 —, so
+ * the case of the cancel asserts that `deleteRestoreCheck` was never called. `$lib/api` is a client that throws on any
+ * request. `notify` is a spy; `restoreNavigation.toSignIn` is a spy on the exported object, so nothing navigates. The
+ * clock is fake: the card's controller uses its defaults (`pollMs` 1000, `fastRestartMs` 30 000, `slowAfterMs`
+ * 60 000). `sessionStorage` is the environment's own, emptied around every case. Not `localStorage`: Node 26 ships a
+ * global one that is unavailable without `--localstorage-file`, and it hides jsdom's (`undefined` here), so a case that
+ * inspects it owns an in-memory one, installed with `vi.stubGlobal` before the card exists — a write of the card lands
+ * where the case reads it back —, and every case ends with `vi.unstubAllGlobals()`.
  *
  * The components are loaded through `import.meta.glob` in a hook: while the card does not exist, every case fails on its
  * own and names it.
@@ -133,6 +141,8 @@ type RollbackReason = NonNullable<RestoreStatus['reason']>;
 type WaitingReason = NonNullable<RestoreStatus['waiting']> | 'instance_blocked';
 type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
 type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
+/** The answer of an accepted restart (B5c): the status, and the one-time ticket that reads its outcome. Not generated yet. */
+type RestoreRestartAccepted = RestoreStatus & {outcome_ticket: string};
 
 interface RestoreRequests {
     getRestoreStatus: () => Promise<RestoreStatus>;
@@ -142,9 +152,9 @@ interface RestoreRequests {
     deleteRestoreCheck: (stageId: string) => Promise<void>;
     confirmRestore: (stageId: string) => Promise<RestoreStatus>;
     cancelPendingRestore: () => Promise<void>;
-    requestRestart: () => Promise<RestoreStatus>;
+    requestRestart: () => Promise<RestoreRestartAccepted>;
     probeServer: () => Promise<'up' | 'down'>;
-    restoreOutcome: () => Promise<RestoreOutcomeAnswer>;
+    restoreOutcome: (ticket?: string | null) => Promise<RestoreOutcomeAnswer>;
 }
 
 const RESTORE_FUNCTIONS = ['getRestoreStatus', 'uploadRestoreArchive', 'startRestoreCheck', 'getRestoreCheck', 'deleteRestoreCheck', 'confirmRestore', 'cancelPendingRestore', 'requestRestart', 'probeServer', 'restoreOutcome'] as const;
@@ -210,6 +220,11 @@ const pending = (overrides: StatusFields = {}) => restoreStatus({state: 'pending
 const committed = () => restoreStatus({state: 'committed', ...confirmedFields, finished_at: '2026-10-16T11:21:00Z'});
 const rolledBack = (reason: RollbackReason) => restoreStatus({state: 'rolled_back', ...confirmedFields, finished_at: '2026-10-16T11:21:00Z', reason});
 
+/** A ticket as the server makes it (`secrets.token_urlsafe(32)`), one per accepted restart (B5c). */
+const TICKET = 'kq8Z3vR-wT0yN5mB_xH2cL7pJ4sF9dG1eA6uK0iO3rY';
+/** What an accepted restart answers (B5c): the restore still pending, and the ticket that reads its outcome. */
+const accepted = (ticket: string = TICKET): RestoreRestartAccepted => ({...pending(), outcome_ticket: ticket});
+
 function report(overrides: Partial<RestoreStageReport> = {}): RestoreStageReport {
     return {
         backup_created_at: '2026-10-15T12:00:00Z',
@@ -271,6 +286,28 @@ function deferred<T>() {
         reject = rej;
     });
     return {promise, resolve, reject};
+}
+
+/** An in-memory Web Storage the case can read back — what it holds, and every write — for a global the case owns (`vi.stubGlobal`). */
+function memoryStorage() {
+    const items = new Map<string, string>();
+    return {
+        items,
+        get length() {
+            return items.size;
+        },
+        key: vi.fn((index: number) => [...items.keys()][index] ?? null),
+        getItem: vi.fn((key: string) => items.get(key) ?? null),
+        setItem: vi.fn((key: string, value: string) => {
+            items.set(key, String(value));
+        }),
+        removeItem: vi.fn((key: string) => {
+            items.delete(key);
+        }),
+        clear: vi.fn(() => {
+            items.clear();
+        }),
+    };
 }
 
 // --- Helpers ----------------------------------------------------------------------------------------------------------
@@ -349,11 +386,11 @@ function serve(initial: 'up' | 'down') {
     return server;
 }
 
-/** A restore found pending, its restart asked from the pending block and accepted: the overlay waits. */
+/** A restore found pending, its restart asked from the pending block and accepted with `TICKET`: the overlay waits. */
 async function restartFromPending(initial: 'up' | 'down') {
     const view = await mount(pending());
     const server = serve(initial);
-    api.requestRestart.mockResolvedValueOnce(pending());
+    api.requestRestart.mockResolvedValueOnce(accepted());
     await fireEvent.click(screen.getByTestId('restore-restart'));
     await settle();
     expect(screen.getByTestId('restart-overlay'), 'precondition: the overlay waits').toHaveAttribute('data-outcome', 'waiting');
@@ -388,6 +425,7 @@ afterEach(() => {
     // Unmount on the fake clock that scheduled the card's timers, then hand the real one back.
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
     sessionStorage.clear();
 });
@@ -631,7 +669,7 @@ describe('RestoreCard — the report and the confirmation (§0.1)', () => {
         await reportCard();
         const confirmation = deferred<RestoreStatus>();
         api.confirmRestore.mockReturnValueOnce(confirmation.promise);
-        api.requestRestart.mockResolvedValueOnce(pending());
+        api.requestRestart.mockResolvedValueOnce(accepted());
         serve('down');
 
         await typeAndConfirm();
@@ -700,18 +738,16 @@ describe('RestoreCard — a restore found pending (§0.1, §0.5)', () => {
         expect(screen.getByTestId('restore-cancel-pending')).toBeEnabled();
     });
 
-    it('restore-cancel-pending: cancelling, busy, nothing offered while the DELETE is out; then the checked copy dropped too (deleteRestoreCheck), and the status read again: idle; cancelled told silently', async () => {
+    it('restore-cancel-pending: cancelling, busy, nothing offered while the DELETE is out; then the status read again: idle; cancelled told silently — and no deleteRestoreCheck: the server drops the checked copy with the cancel (B-17)', async () => {
         await mount(pending());
         const answer = deferred<void>();
         api.cancelPendingRestore.mockReturnValueOnce(answer.promise);
-        api.deleteRestoreCheck.mockResolvedValueOnce(undefined);
         api.getRestoreStatus.mockResolvedValueOnce(none());
 
         await fireEvent.click(screen.getByTestId('restore-cancel-pending'));
         await settle();
 
         expect(api.cancelPendingRestore).toHaveBeenCalledTimes(1);
-        expect(api.deleteRestoreCheck, 'the copy is dropped only once the restore is cancelled').not.toHaveBeenCalled();
         expect(card()).toHaveAttribute('data-state', 'cancelling');
         expect(card()).toHaveAttribute('data-busy', 'true');
         notOffered('restore-restart', 'while the cancel is out');
@@ -720,13 +756,13 @@ describe('RestoreCard — a restore found pending (§0.1, §0.5)', () => {
         answer.resolve();
         await settle();
 
-        expect(api.deleteRestoreCheck.mock.calls, 'the copy of the cancelled restore was left on disk (backup pending --cancel drops it)').toEqual([[STAGE_ID]]);
-        expect(api.getRestoreStatus).toHaveBeenCalledTimes(2);
-        expect(api.deleteRestoreCheck.mock.invocationCallOrder[0], 'the status was read again before the copy was dropped').toBeLessThan(api.getRestoreStatus.mock.invocationCallOrder[1]);
+        expect(api.getRestoreStatus, 'the status is read again').toHaveBeenCalledTimes(2);
         expect(card()).toHaveAttribute('data-state', 'idle');
+        expect(card()).toHaveAttribute('data-error-code', '');
         expect(screen.queryByTestId('restore-pending')).toBeNull();
         expect(events('backup.restore.cancelled')).toEqual([{name: 'backup.restore.cancelled', detail: {what: 'pending'}}]);
         expect(events('backup.restore.failed')).toEqual([]);
+        expect(api.deleteRestoreCheck, 'the copy of the cancelled restore was dropped by the card: since B-17 the cancel drops it on the server').not.toHaveBeenCalled();
     });
 });
 
@@ -739,6 +775,49 @@ describe('RestoreCard — the restart and its outcome (§0.2, §0.3)', () => {
         expect(card()).toHaveAttribute('data-busy', 'true');
         expect(screen.getByTestId('restart-overlay')).toHaveAttribute('data-slow', 'false');
         expect(events('backup.restore.restart.requested')).toEqual([{name: 'backup.restore.restart.requested', detail: {}}]);
+    });
+
+    it.each<[string, RestoreStatus, string, number]>([
+        ['rolled back: the overlay says why, no sign-in', {state: 'rolled_back', reason: 'swap_failed', waiting: null}, 'rolled_back', 0],
+        ['committed: restored, on to the sign-in page', {state: 'committed', reason: null, waiting: null}, 'restored', 1],
+    ])('confirmed, restarted with the outcome ticket the restart answered, the server down then up: restoreOutcome(ticket), without a session (B5c) — %s', async (_case, answered, outcome, signIns) => {
+        // Owned by the case, before the card exists: a write to localStorage lands where it is read back below.
+        const local = memoryStorage();
+        vi.stubGlobal('localStorage', local);
+        await reportCard();
+        const server = serve('down');
+        api.confirmRestore.mockResolvedValueOnce(pending());
+        api.requestRestart.mockResolvedValueOnce(accepted(TICKET));
+        // What the outcome route answers: its three fields, nothing else.
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'status', status: answered});
+
+        await typeAndConfirm();
+        expect(screen.getByTestId('restart-overlay'), 'precondition: the restart was accepted, the overlay waits').toHaveAttribute('data-outcome', 'waiting');
+        expect(api.restoreOutcome, 'the server has not restarted yet: nothing to read').not.toHaveBeenCalled();
+
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome.mock.calls, 'the outcome was read without the ticket of the restart').toEqual([[TICKET]]);
+        const overlay = screen.getByTestId('restart-overlay');
+        expect(overlay).toHaveAttribute('data-outcome', outcome);
+        expect(overlay).toHaveAttribute('data-reason', answered.reason ?? '');
+        expect(toSignIn).toHaveBeenCalledTimes(signIns);
+        expect(JSON.stringify(vi.mocked(notify).mock.calls), 'notify() was told the ticket').not.toContain(TICKET);
+        expect(localStorage, 'precondition: the localStorage read back is the one the case owns').toBe(local);
+        expect(
+            local.setItem.mock.calls.flat().filter((value) => value.includes(TICKET)),
+            'the ticket was written to localStorage',
+        ).toEqual([]);
+        for (const [name, store] of [
+            ['sessionStorage', sessionStorage],
+            ['localStorage', localStorage],
+        ] as const) {
+            const values = Array.from({length: store.length}, (_, index) => store.getItem(store.key(index) ?? '') ?? '');
+            expect(
+                values.filter((value) => value.includes(TICKET)),
+                `the ticket was written to ${name}`,
+            ).toEqual([]);
+        }
     });
 
     it('a success: no message — the overlay keeps waiting as restored, restoreNavigation.toSignIn() once, no sign-in link', async () => {
@@ -808,7 +887,7 @@ describe('RestoreCard — the restart and its outcome (§0.2, §0.3)', () => {
         await reportCard();
         const server = serve('down');
         api.confirmRestore.mockResolvedValueOnce(pending());
-        api.requestRestart.mockResolvedValueOnce(pending());
+        api.requestRestart.mockResolvedValueOnce(accepted());
         api.restoreOutcome.mockResolvedValueOnce({kind: 'blocked'});
 
         await typeAndConfirm();
@@ -868,7 +947,7 @@ describe('RestoreCard — notify(): every event of the controller, the failures 
         api.startRestoreCheck.mockResolvedValueOnce(runningStage());
         api.getRestoreCheck.mockResolvedValueOnce(doneStage());
         api.confirmRestore.mockResolvedValueOnce(pending());
-        api.requestRestart.mockResolvedValueOnce(pending());
+        api.requestRestart.mockResolvedValueOnce(accepted());
         api.restoreOutcome.mockResolvedValueOnce({kind: 'signed_out'});
 
         await choose(archive());

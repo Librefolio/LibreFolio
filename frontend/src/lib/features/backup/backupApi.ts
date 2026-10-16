@@ -73,6 +73,8 @@ type RestoreTableRows = Unwidened<z.infer<typeof schemas.RestoreTableRows>>;
 export type RestoreStageReport = Omit<Unwidened<z.infer<typeof schemas.RestoreStageReport>>, 'tables'> & {tables: Record<string, RestoreTableRows>};
 export type RestoreStage = Omit<Unwidened<z.infer<typeof schemas.RestoreStage>>, 'report'> & {report?: RestoreStageReport | null};
 export type RestoreUpload = z.infer<typeof schemas.RestoreUpload>;
+/** The restart accepted: the restore waiting, and the one-time ticket of its outcome (lot B5c). */
+export type RestoreRestartAccepted = z.infer<typeof schemas.RestoreRestartAccepted>;
 export type RestorePhase = NonNullable<RestoreStage['phase']>;
 
 export function getRestoreStatus(): Promise<RestoreStatus> {
@@ -114,7 +116,7 @@ export async function cancelPendingRestore(): Promise<void> {
     await zodiosApi.cancel_pending_restore_api_v1_backup_restore_pending_delete(undefined);
 }
 
-export function requestRestart(): Promise<RestoreStatus> {
+export function requestRestart(): Promise<RestoreRestartAccepted> {
     return zodiosApi.restart_for_restore_api_v1_backup_restore_restart_post(undefined);
 }
 
@@ -158,7 +160,39 @@ async function refusedForTheBlock(response: Response): Promise<boolean> {
     }
 }
 
-export async function restoreOutcome(): Promise<RestoreOutcomeRead> {
+/** The header that carries the restart's one-time ticket to `GET /backup/restore/outcome`: never the URL, which access logs keep. */
+export const RESTORE_TICKET_HEADER = 'X-Restore-Ticket';
+
+/**
+ * What the restarted server says of the restore. With the restart's one-time ticket (lot B5c) the outcome route
+ * answers without a session, which a restore ends, and without `JWT_SECRET` every start too. A 404 there (a ticket
+ * expired or used up), or a 401 or a 423 (the route out of reach for this caller), falls back to the status read with
+ * the session, where a 401 means the session ended. Any other answer is the server still on its way: `down`.
+ */
+export async function restoreOutcome(ticket: string | null = null): Promise<RestoreOutcomeRead> {
+    if (ticket !== null) {
+        try {
+            const response = await fetch('/api/v1/backup/restore/outcome', {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {Accept: 'application/json', [RESTORE_TICKET_HEADER]: ticket},
+            });
+            if (response.status === 200) {
+                const parsed = schemas.RestoreOutcome.safeParse(await response.json());
+                if (!parsed.success) return {kind: 'down'};
+                const {state, reason, waiting} = parsed.data;
+                return {kind: 'status', status: {state, reason: reason ?? null, waiting: waiting ?? null}};
+            }
+            if (response.status !== 404 && response.status !== 401 && response.status !== 423) return {kind: 'down'};
+        } catch {
+            return {kind: 'down'};
+        }
+    }
+    return readStatusWithSession();
+}
+
+/** The status read with the session: 401 when it ended (the restore was kept, or LibreFolio runs without `JWT_SECRET`). */
+async function readStatusWithSession(): Promise<RestoreOutcomeRead> {
     try {
         const response = await fetch('/api/v1/backup/restore/status', {credentials: 'same-origin', cache: 'no-store', headers: {Accept: 'application/json'}});
         if (response.status === 401) return {kind: 'signed_out'};
