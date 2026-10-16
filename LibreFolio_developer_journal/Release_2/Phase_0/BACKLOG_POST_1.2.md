@@ -3777,6 +3777,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   Il commento dell'albero dice solo «Last run of the scheduled syncs»: da Z7b il file tiene anche i rimandati, il
   nuovo tentativo e l'attesa dopo i fallimenti. In `filesystem.es.md` lo stesso commento è ancora in inglese. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7c-2», passo 4.
+- **Z-13 · Dopo un recupero dei prezzi la pagina aperta non si ricarica da sola** — basso; docs-writer di Z, 16/10 (Z5).
+  A fine recupero il frontend chiama `requestPortfolioRefresh()`, che segna come stale le cache del portafoglio
+  (`portfolioStore.invalidate()` alza solo un contatore non reattivo): la pagina già sullo schermo mostra le cifre nuove
+  al prossimo caricamento o con «Aggiorna». Cura possibile: le pagine del portafoglio ascoltano il segnale e ricaricano
+  in background se visibili. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
+  «Z5 — codice».
 
 ## B · Backup e Docker (fase 01)
 
