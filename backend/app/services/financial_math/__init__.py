@@ -31,8 +31,8 @@ Modules:
   writes and a restore checks.
 * ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, the
   conversion between cumulative and annualized returns, a period's start (rebasing), the
-  net return of a holding, a gain or loss as a fraction of its base, and the return
-  between two prices.
+  net return of a holding, a gain or loss as a fraction of its base, the gain or loss a
+  disposal realizes, and the return between two prices.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
   same-day trade average, or the last observation carried forward.
@@ -42,7 +42,7 @@ Modules:
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
   and the views derived from it (``models``, ``classifier``, ``daily_state``,
   ``derived_views``, ``data_quality``, ``period``, ``engine``).
-* ``lots`` — the math of the lots analysis: price lookups, conversions, economic events,
-  lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
+* ``lots`` — the math of the lots analysis: price lookups, conversions (a closure's legs,
+  each at its own date), economic events, lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
   ``histories``, ``average_cost_lines``).
 """
