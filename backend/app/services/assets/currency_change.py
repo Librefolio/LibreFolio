@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from typing import Optional
-
 import structlog
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import (
     Asset,
     AssetEvent,
+    AssetProviderAssignment,
     PriceHistory,
     Transaction,
 )
@@ -125,6 +123,10 @@ class CurrencyChangeOperations:
         if dry_run:
             return summary
 
+        # The provider whose cached answers step 4 drops, as plain values: the commit below expires the row's attributes.
+        assignment = (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id))).scalar_one_or_none()
+        cached_by = (assignment.provider_code, assignment.identifier, assignment.identifier_type, assignment.provider_params) if assignment else None
+
         # --- Destructive SQL (single transaction) ---------------------------
         # 1. Disconnect linked transactions first (pre-DELETE to avoid FK RESTRICT).
         if linked_tx_count > 0:
@@ -140,43 +142,21 @@ class CurrencyChangeOperations:
 
         await session.commit()
 
-        # 4. Cache invalidation — history + current. The cache key is
-        # ``(provider_code, identifier, identifier_type, params_hash, settings part)`` so we
-        # rebuild it from the asset's current provider config. If the asset
-        # has no provider assigned the keys simply won't be in the cache;
-        # ``.delete`` is a no-op in that case.
+        # 4. Cache invalidation — history + current, keyed from the asset's provider assignment as a call keys them
+        # (core.asset_cache_key). An asset without a provider has nothing cached.
         try:
-            if asset.provider_code:
-                params_dict: Optional[dict] = None
-                if asset.provider_params:
-                    try:
-                        params_dict = json.loads(asset.provider_params)
-                    except Exception:  # noqa: BLE001 — params may be corrupted; just skip hashing
-                        params_dict = None
-                cache_key = (
-                    asset.provider_code,
-                    asset.identifier or "",
-                    str(asset.identifier_type),
-                    core._provider_params_hash(params_dict),
-                    await core.settings_cache_part_for(asset.provider_code),
-                )
-                core._asset_history_cache.delete(cache_key)
-                core._asset_current_cache.delete(cache_key)
+            if cached_by is not None:
+                await core.drop_asset_cache_entries(*cached_by)
         except Exception as cache_err:  # noqa: BLE001 — non-fatal
-            logger.warning(
-                "wipe_market_data: cache invalidation skipped",
-                extra={"asset_id": asset_id, "error": str(cache_err)},
-            )
+            logger.warning("wipe_market_data: cache invalidation skipped", asset_id=asset_id, error=str(cache_err))
 
         logger.info(
             "Market data wiped for currency change",
-            extra={
-                "asset_id": asset_id,
-                "prices_deleted": prices_count,
-                "events_manual_deleted": events_manual_count,
-                "events_provider_deleted": events_provider_count,
-                "transactions_disconnected": linked_tx_count,
-            },
+            asset_id=asset_id,
+            prices_deleted=prices_count,
+            events_manual_deleted=events_manual_count,
+            events_provider_deleted=events_provider_count,
+            transactions_disconnected=linked_tx_count,
         )
 
         return summary

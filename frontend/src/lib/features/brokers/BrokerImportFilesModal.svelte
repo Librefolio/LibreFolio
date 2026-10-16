@@ -28,7 +28,6 @@
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import type {BrimFile, FilePreviewResponse} from '$lib/types';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
-    import '$lib/theme/components/files.css';
 
     interface Props {
         /** Whether the modal is open */
@@ -440,12 +439,8 @@
 
     .modal-header {
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--lf-cmp-broker-import-files-divider-border);
+        border-bottom: 1px solid var(--lf-border-subtle);
         flex-shrink: 0;
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: var(--lf-cmp-broker-import-files-divider-border-dark);
     }
 
     .modal-header-row {
@@ -467,18 +462,13 @@
     .close-btn {
         padding: 0.5rem;
         border-radius: 0.5rem;
-        color: var(--lf-cmp-broker-import-files-muted-text);
+        color: var(--lf-text-muted);
         transition: all 0.15s;
     }
 
     .close-btn:hover {
-        background-color: var(--lf-cmp-broker-import-files-hover-bg);
-        color: var(--lf-cmp-broker-import-files-hover-text);
-    }
-
-    :global(.dark) .close-btn:hover {
-        background-color: var(--lf-cmp-broker-import-files-hover-bg-dark);
-        color: var(--lf-cmp-broker-import-files-hover-text-dark);
+        background-color: var(--lf-surface-hover);
+        color: var(--lf-text-secondary);
     }
 
     .btn {
@@ -493,35 +483,35 @@
     }
 
     .btn-primary {
-        background-color: var(--lf-cmp-broker-import-files-btn-primary-bg);
-        color: var(--lf-cmp-broker-import-files-on-fill-text);
+        background-color: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover {
-        background-color: var(--lf-cmp-broker-import-files-btn-primary-hover-bg);
+        background-color: var(--lf-action-hover);
     }
 
+    /* The footer is a panel: the secondary button is a card on it, its edge drawn inside so that switching with the
+       primary (same button, `showUploader`) does not move it by the width of a border. */
     .btn-secondary {
-        background-color: var(--lf-cmp-broker-import-files-btn-secondary-bg);
-        color: var(--lf-cmp-broker-import-files-on-fill-text);
+        background-color: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
+        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
     }
 
     .btn-secondary:hover {
-        background-color: var(--lf-cmp-broker-import-files-btn-secondary-hover-bg);
+        background-color: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .btn-ghost {
-        color: var(--lf-cmp-broker-import-files-muted-text);
+        color: var(--lf-text-muted);
     }
 
+    /* On the footer's panel the hover is `neutral` (open question 3), where the muted text falls under 4.5:1. */
     .btn-ghost:hover {
-        background-color: var(--lf-cmp-broker-import-files-hover-bg);
-        color: var(--lf-cmp-broker-import-files-hover-text);
-    }
-
-    :global(.dark) .btn-ghost:hover {
-        background-color: var(--lf-cmp-broker-import-files-hover-bg-dark);
-        color: var(--lf-cmp-broker-import-files-hover-text-dark);
+        background-color: var(--lf-surface-neutral);
+        color: var(--lf-text-secondary);
     }
 
     .btn:disabled {
@@ -531,16 +521,11 @@
 
     .upload-area {
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--lf-cmp-broker-import-files-divider-border);
-        background-color: var(--lf-cmp-broker-import-files-subtle-bg);
+        border-bottom: 1px solid var(--lf-border-subtle);
+        background-color: var(--lf-surface-panel);
         flex-shrink: 0;
         max-height: 250px;
         overflow-y: auto;
-    }
-
-    :global(.dark) .upload-area {
-        background-color: var(--lf-cmp-broker-import-files-subtle-bg-dark);
-        border-bottom-color: var(--lf-cmp-broker-import-files-divider-border-dark);
     }
 
     .modal-body {
@@ -564,14 +549,9 @@
         display: flex;
         justify-content: flex-end;
         padding: 0.75rem 1.5rem;
-        border-top: 1px solid var(--lf-cmp-broker-import-files-divider-border);
-        background-color: var(--lf-cmp-broker-import-files-subtle-bg);
+        border-top: 1px solid var(--lf-border-subtle);
+        background-color: var(--lf-surface-panel);
         flex-shrink: 0;
-    }
-
-    :global(.dark) .modal-footer {
-        background-color: var(--lf-cmp-broker-import-files-subtle-bg-dark);
-        border-top-color: var(--lf-cmp-broker-import-files-divider-border-dark);
     }
 
     .footer-actions {
@@ -585,16 +565,12 @@
         align-items: center;
         gap: 0.375rem;
         font-size: 0.875rem;
-        color: var(--lf-cmp-broker-import-files-manage-link-text);
+        color: var(--lf-link);
         text-decoration: none;
         transition: all 0.15s;
     }
 
     .manage-link:hover {
         text-decoration: underline;
-    }
-
-    :global(.dark) .manage-link {
-        color: var(--lf-cmp-broker-import-files-manage-link-text-dark);
     }
 </style>

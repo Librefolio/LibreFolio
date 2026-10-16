@@ -5,6 +5,10 @@
  * NOT registered in the global signal registry (not in dropdown menus).
  * Managed exclusively by MeasurePanel.
  *
+ * @financial-math-exception The chart measuring tool: Δ, Δ% and the annualized change between the two
+ * points the user pins on the chart, recomputed as the pins move. It measures the series drawn on screen,
+ * not a figure of the portfolio, so it stays in the browser (developer docs, financial_math.md, rule 6).
+ *
  * @module charts/signals/MeasureSignal
  */
 

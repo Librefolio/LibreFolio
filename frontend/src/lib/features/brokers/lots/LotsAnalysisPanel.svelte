@@ -35,6 +35,7 @@
     import {tick, untrack} from 'svelte';
     import {slide} from 'svelte/transition';
     import {goto} from '$app/navigation';
+    import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {_} from '$lib/i18n';
     import {ExternalLink, X} from 'lucide-svelte';
     import {schemas} from '$lib/api';
@@ -122,9 +123,9 @@
     let fetchVersion = 0;
     let selectionFetchVersion = 0;
 
-    /** Shared "Aperti | Chiusi" lot filter (plan §11 + round-3): two independent on/off buckets like
-     * the Aggregato/Per-lotto value toggle — "both on" (default) and "both off" both mean "show every
-     * lot"; a single bucket narrows to just open or just closed. The UI control lives inside
+    /** Shared "Aperti | Chiusi" lot filter (plan §11 + round-3): two independent on/off buckets — "both
+     * on" (default) and "both off" both mean "show every lot"; a single bucket narrows to just open or
+     * just closed. The UI control lives inside
      * LotGanttChart, but the resulting lot set (visibleLots) is shared with UnifiedLotsTable, the
      * WAC/price bubbles and the comparison chart so every consumer stays consistent. "Aperti" mirrors
      * FifoEngineResult's OPEN state tag / open_quantity>0 (includes partially-closed lots); "Chiusi" is
@@ -341,16 +342,18 @@
 
     // The inputs are read here, so they are what the effects track; the loads run untracked,
     // because putting a cached answer on screen reads and writes the selection synchronously.
+    // Each of these loads is one the page asked for (the panel opens, its scope or selection changes, the
+    // page's Refresh), so it holds the page's Refresh button (Y11); a background refresh does not come here.
     $effect(() => {
         if (!(open && assetId != null && ready)) return;
         const [currentAssetId, currentBrokerIds, currentCurrency] = [assetId, brokerIds, currency];
-        untrack(() => void loadMain(currentAssetId, currentBrokerIds, currentCurrency));
+        untrack(() => void pageBusy.track('lots-panel-load', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency)));
     });
 
     $effect(() => {
         if (!(open && assetId != null && ready)) return;
         const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
-        untrack(() => void loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids));
+        untrack(() => void pageBusy.track('lots-selection-load', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids)));
     });
 
     let lastRefreshVersion = untrack(() => refreshVersion);
@@ -360,8 +363,9 @@
         lastRefreshVersion = version;
         untrack(() => {
             if (!(open && assetId != null && ready)) return;
-            void loadMain(assetId, brokerIds, currency, true);
-            void loadSelectionHistories(assetId, brokerIds, currency, effectiveSelectionIds, true);
+            const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+            void pageBusy.track('lots-panel-refresh', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency, true));
+            void pageBusy.track('lots-selection-refresh', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, true));
         });
     });
 

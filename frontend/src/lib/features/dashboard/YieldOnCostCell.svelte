@@ -10,7 +10,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type YieldOnCostStatus = 'available' | 'no_income' | 'unavailable';
-    type YieldOnCostReason = 'insufficient_history' | 'income_without_eligible_quantity' | 'replay_inconsistent' | 'invalid_split' | 'missing_fx' | 'missing_wac' | 'non_positive_wac';
+    type YieldOnCostReason = 'insufficient_history' | 'income_without_eligible_quantity' | 'replay_inconsistent' | 'invalid_split' | 'missing_fx' | 'missing_wac' | 'non_positive_wac' | 'negative_net_income';
 
     interface FxProvenance {
         purpose: 'income' | 'wac';
@@ -68,6 +68,7 @@
             missing_fx: ['dashboard.yieldOnCostReasons.missingFx', 'The exchange rate required for a payment is unavailable.'],
             missing_wac: ['dashboard.yieldOnCostReasons.missingWac', 'The average purchase price (WAC) is unavailable.'],
             non_positive_wac: ['dashboard.yieldOnCostReasons.nonPositiveWac', 'The average purchase price (WAC) is zero or negative.'],
+            negative_net_income: ['dashboard.yieldOnCostReasons.negativeNetIncome', 'Corrections exceed the income of the last year.'],
         };
         const entry = reason ? labels[reason] : undefined;
         return entry ? label(entry[0], entry[1]) : label('dashboard.yieldOnCostUnavailable', 'Yield on Cost is unavailable.');

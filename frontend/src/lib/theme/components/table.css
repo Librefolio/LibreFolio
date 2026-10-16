@@ -243,14 +243,6 @@
     --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text: #b91c1c;
     --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text-dark: #fecaca;
 
-    /* UnifiedLotsTable.svelte */
-    --lf-cmp-lots-table-row-tinted-bg: white;
-    --lf-cmp-lots-table-row-tinted-bg-dark: #0f0f18;
-    --lf-cmp-lots-table-lot-highlight-base: #f3e8ff;
-    --lf-cmp-lots-table-lot-highlight-base-dark: rgba(147, 51, 234, 0.25);
-    --lf-cmp-lots-table-lot-highlight-peak: #e9d5ff;
-    --lf-cmp-lots-table-lot-highlight-peak-dark: rgba(147, 51, 234, 0.4);
-
     /* OtherPeriodEffectsTable.svelte */
     --lf-cmp-period-effects-header-bg: #ffffff80; /* rgb(255 255 255 / 0.5) */
     --lf-cmp-period-effects-header-bg-dark: #1e293b66; /* rgb(30 41 59 / 0.4) */

@@ -68,11 +68,14 @@ Le planificateur maintient les prix et les taux de change à jour tout seul, mê
 - 💰 **Actualisation des Prix Courants** — toutes les quelques minutes, le dernier prix de chaque actif actif qui dispose
   d'un fournisseur de prix.
 - 📊 **Synchronisation Historique** — aux jours et heures que vous choisissez, les prix quotidiens de ces actifs et les
-  taux de chaque paire FX disposant d'un fournisseur, sur l'**Horizon de récupération**, pour combler tout manque. Les paires
-  avec uniquement des taux manuels sont ignorées.
+  taux de chaque paire FX disposant d'un fournisseur, sur au moins l'**Horizon de récupération**, pour combler tout
+  manque. Pour un actif ou une paire dont le dernier prix ou taux enregistré est plus ancien, elle remonte jusqu'à ce
+  jour, d'un an au plus ; un actif sans aucun prix enregistré n'a que l'horizon, car le planificateur ne télécharge
+  jamais un historique complet. Les paires avec uniquement des taux manuels sont ignorées.
 
 Si le serveur est éteint ou en veille à une heure de synchronisation, la synchronisation historique
-manquée s'exécute dès que le serveur revient, sans attendre l'heure de synchronisation suivante.
+manquée s'exécute dès que le serveur revient, sans attendre l'heure de synchronisation suivante : un serveur
+éteint pendant des semaines comble tout son manque.
 
 ### ⚙️ Configurer la planification
 
@@ -89,7 +92,7 @@ La boîte de dialogue possède son propre bouton **Enregistrer**.
 | **Actualiser toutes les** | 10 minutes | La fréquence de rafraîchissement des prix actuels, de 1 à 1440 minutes. |
 | **Heures de synchronisation** | `06:00`, `23:00` | Quand la synchronisation de l'historique s'exécute ; **Ajouter un horaire** ajoute un créneau. |
 | **Jours de synchronisation** | Lun au Sam | Les jours de la synchronisation de l'historique. |
-| **Horizon de récupération** | 14 jours | Combien de jours passés chaque synchronisation de l'historique vérifie, de 1 à 365. |
+| **Horizon de récupération** | 14 jours | Combien de jours passés chaque synchronisation de l'historique vérifie au moins, de 1 à 365. Elle remonte plus loin, jusqu'à un an, quand le dernier prix ou taux enregistré d'un actif ou d'une paire est plus ancien. |
 
 Conservez au moins une heure et un jour. Astuce : une synchronisation de l'historique après la clôture des marchés (par exemple
 `22:00`) obtient les données les plus complètes.

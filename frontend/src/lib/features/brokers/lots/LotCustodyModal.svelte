@@ -15,7 +15,7 @@
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
     import type {z} from 'zod';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {closureValueLabelKey, compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
+    import {closureValueLabelKey, compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
@@ -232,10 +232,8 @@
     });
     let activeTransactionId = $derived(activeHistoryEvent?.transaction_id ?? lot?.opening_transaction_id ?? null);
     let canGotoTransaction = $derived(onGotoTransaction != null && activeTransactionId != null);
-    let lotOpeningValue = $derived.by(() => {
-        if (!lot) return null;
-        return multiplyOrNull(parseNumber(lot.original_quantity), parseNumber(lot.opening_unit_price));
-    });
+    // The backend's cost of the lot at opening (U8): null without the opening-date rate, never rebuilt as quantity × price.
+    let lotOpeningValue = $derived.by(() => (lot ? parseNumber(lot.original_cost) : null));
     let lotCurrentValue = $derived.by(() => (lot ? (parseNumber(lot.total_value) ?? parseNumber(lot.open_value)) : null));
     let lotCumulativeProceeds = $derived.by(() => (lot ? parseNumber(lot.cumulative_proceeds) : null));
     let lotPnl = $derived.by(() => (lot ? parseNumber(lot.pnl) : null));
@@ -311,7 +309,7 @@
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingValue')}</dt>
-                        <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotOpeningValue)}</dd>
+                        <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100" data-testid="lot-custody-modal-opening-value">{formatPrice(lotOpeningValue)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.currentValue')}</dt>
