@@ -32,6 +32,8 @@ DESIGNER_LAB_UNIT_TEST_PATHS = (
     "src/lib/dev/designer-lab/colorValue.test.ts",
     "src/lib/dev/designer-lab/targets.test.ts",
     "src/lib/dev/designer-lab/colorEditor.test.ts",
+    "src/lib/dev/designer-lab/categories.test.ts",
+    "src/lib/dev/designer-lab/chartColorsSignal.test.ts",
 )
 
 DESIGNER_LAB_E2E_SPECS = (

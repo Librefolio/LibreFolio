@@ -17,15 +17,22 @@ password-reset link, and the app learns the mode before anyone signs in. The pub
    event loop), ends every session of the account — a cookie issued before is 401 —, and revokes the account's other
    live reset links, not another account's: 200. A link used, expired, revoked, unknown or of another purpose is 400
    ``TOKEN_INVALID`` and changes nothing. The new password follows the API's rule for now (at least 8 characters: 422).
-4. ``GET /system/instance`` carries ``accounts: {registration_mode, registration_locked}`` — the effective mode, and
-   whether the variable sets it —, public, and nothing about users: no count, no limit, no billing link.
+4. ``GET /system/instance`` carries ``accounts: {registration_mode, registration_locked, first_account_open}`` — the
+   effective mode, whether the variable sets it, and (lot A6d) whether the instance has no account yet, so that its first
+   one may register in any mode —, public, and nothing else about users: no count, no limit, no billing link.
 5. ``PATCH /settings/global/bulk`` writing ``registration_mode`` while ``LIBREFOLIO_REGISTRATION`` sets it: 409
    ``SETTING_LOCKED_BY_ENV``, nothing saved — the other items of the request included. Without the variable the write
    goes through, within the three choices.
-6. Review of 15/10: a new install seeds ``registration_mode`` as ``open`` with ``value_type`` ``str``, the type of every
-   text setting; an invalid ``LIBREFOLIO_PUBLIC_URL`` or ``LIBREFOLIO_BILLING_URL`` costs its link and nothing else, so
-   the instance answers open and registrations go through (what its log says is pinned in
+6. Review of 15/10: a new install seeds ``registration_mode`` with ``value_type`` ``str``, the type of every text setting
+   (as ``invite`` since lot A6d); an invalid ``LIBREFOLIO_PUBLIC_URL`` or ``LIBREFOLIO_BILLING_URL`` costs its link and
+   nothing else, so an open instance still answers open and registrations go through (what its log says is pinned in
    ``test_services/test_registration_service.py``).
+7. Lot A6d (decision 36): a new install registers by invitation. The defaults seed ``registration_mode`` = ``invite``,
+   and the seeding never changes a row already there; the first account stays creatable while the instance has none, in
+   every mode, as the administrator — after it, an anonymous registration without an invitation is 403
+   ``INVITE_REQUIRED``. ``accounts.first_account_open`` is true exactly while the ``users`` table is empty (an inactive
+   account counts, as the backend's first-account rule counts it), whatever the mode and whoever sets it, and whatever
+   cookie comes with the request.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` already gives ``ACCOUNT_DISABLED``.
 
@@ -41,6 +48,11 @@ lane already holds one — the api setup's (``db populate``) —, since on an em
 hence the lane's administrator. The unit is therefore write-scoped, in the parallel pass, with no ``exclusive_because``.
 
 bcrypt runs at its lowest cost in this process (``auth_service.BCRYPT_ROUNDS = 4``); the lane's server keeps its own.
+
+The private instance seeds the defaults as a new install does, hence ``invite`` since A6d: a case that registers an
+account after the first one, without an invitation, sets the mode it needs on the row. Red until A6d: SETTING-001 and the
+barrier of LOCK-001 (the seed says ``open``), INSTANCE-001, INSTANCE-002 and URL-001 (``accounts`` has no
+``first_account_open``), FIRST-001 to FIRST-005.
 """
 
 from __future__ import annotations
@@ -111,7 +123,6 @@ LOGIN = f"{API_V1_PREFIX}/auth/login"
 ME = f"{API_V1_PREFIX}/auth/me"
 INSTANCE = f"{API_V1_PREFIX}/system/instance"
 BULK = f"{API_V1_PREFIX}/settings/global/bulk"
-MODE_SETTING = f"{API_V1_PREFIX}/settings/global/{MODE_KEY}"
 
 
 @pytest.fixture(scope="module")
@@ -194,11 +205,11 @@ async def _put_mode(private: _Private, monkeypatch: pytest.MonkeyPatch, mode: st
     monkeypatch.setenv(REGISTRATION_VARIABLE, mode)
 
 
-async def _add_user(engine: AsyncEngine, username: str, *, password: Optional[str] = None, admin: bool = False) -> int:
-    """An active account written as a row; with ``password``, a real bcrypt hash of it (cost 4), so that it can sign in."""
+async def _add_user(engine: AsyncEngine, username: str, *, password: Optional[str] = None, admin: bool = False, active: bool = True) -> int:
+    """An account written as a row, active unless ``active`` is false; with ``password``, a real bcrypt hash of it (cost 4), so that it can sign in."""
     hashed = auth_service.hash_password(password) if password else "$argon2id$seeded-account"
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        user = User(username=username, email=f"{username}@example.com", hashed_password=hashed, is_superuser=admin)
+        user = User(username=username, email=f"{username}@example.com", hashed_password=hashed, is_superuser=admin, is_active=active)
         session.add(user)
         await session.commit()
     return user.id
@@ -207,6 +218,19 @@ async def _add_user(engine: AsyncEngine, username: str, *, password: Optional[st
 async def _usernames(engine: AsyncEngine) -> set[str]:
     async with AsyncSession(engine) as session:
         return set((await session.execute(select(User.username))).scalars().all())
+
+
+async def _activity(engine: AsyncEngine) -> dict[str, bool]:
+    """``{username: is_active}`` of every account, read fresh."""
+    async with AsyncSession(engine) as session:
+        return {username: bool(active) for username, active in (await session.execute(select(User.username, User.is_active))).all()}
+
+
+async def _stored_value_and_type(engine: AsyncEngine, key: str) -> Optional[tuple[str, str]]:
+    """``(value, value_type)`` of the global setting ``key`` as the database holds it, read fresh; None without the row."""
+    async with AsyncSession(engine) as session:
+        row = await session.get(GlobalSetting, key)
+        return None if row is None else (row.value, row.value_type)
 
 
 async def _account(engine: AsyncEngine, user_id: int) -> tuple[str, int]:
@@ -370,8 +394,9 @@ class TestRegisterByMode:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("invite_field", [pytest.param({}, id="no-field"), pytest.param({"invite_token": None}, id="null")])
     async def test_open_mode_without_an_invitation_registers_a_regular_user(self, private: _Private, invite_field: dict[str, Any]) -> None:
-        """REG-API-005: ``open`` — a new install's default — without an invitation, the field absent or null → 201, a regular user."""
+        """REG-API-005: ``open`` — set on the row: a new install is ``invite`` since A6d (decision 36) — without an invitation, the field absent or null → 201, a regular user."""
         await _add_user(private.engine, "alice")
+        await _set_mode_row(private.engine, "open")
 
         async with _browser(private) as client:
             response = await _register(client, "walkin", **invite_field)
@@ -415,12 +440,13 @@ class TestRegisterByMode:
 
     @pytest.mark.asyncio
     async def test_the_limit_answers_409_to_an_anonymous_caller_without_counts_or_billing_link(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """REG-API-007: open mode, the limit reached, a billing link configured → 409 ``USER_LIMIT_REACHED``, with no ``limit``, ``used``, ``max_users`` nor ``billing_url`` anywhere in the body and the link nowhere in the text; no account.
+        """REG-API-007: open mode (set on the row), the limit reached, a billing link configured → 409 ``USER_LIMIT_REACHED``, with no ``limit``, ``used``, ``max_users`` nor ``billing_url`` anywhere in the body and the link nowhere in the text; no account.
 
         Decision 15: the counts and the subscription are the administrator's business; this caller is anonymous.
         """
         print_section("REG-API-007: the anonymous 409")
         await _add_user(private.engine, "alice")
+        await _set_mode_row(private.engine, "open")
         monkeypatch.setenv(MAX_USERS_VARIABLE, "1")
         monkeypatch.setenv(BILLING_URL_VARIABLE, BILLING_LINK)
 
@@ -663,13 +689,13 @@ class TestPasswordReset:
 
 
 class TestInstanceAccounts:
-    """GET /system/instance: the effective registration mode, public, and nothing about users."""
+    """GET /system/instance: the effective registration mode, public, and nothing about users but whether the first account is still open."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("row", "variable", "mode", "locked"),
         [
-            pytest.param(None, None, "open", False, id="new-install-open"),
+            pytest.param(None, None, "invite", False, id="new-install-invite"),
             pytest.param("invite", None, "invite", False, id="row-invite"),
             pytest.param("open", "disabled", "disabled", True, id="variable-disabled"),
             pytest.param("disabled", "invite", "invite", True, id="variable-invite"),
@@ -677,7 +703,7 @@ class TestInstanceAccounts:
         ],
     )
     async def test_accounts_holds_the_effective_mode_and_whether_the_variable_locks_it(self, private: _Private, monkeypatch: pytest.MonkeyPatch, row: Optional[str], variable: Optional[str], mode: str, locked: bool) -> None:
-        """INSTANCE-001: ``accounts`` is exactly ``{registration_mode, registration_locked}``, the effective mode and whether the variable sets it; no session needed."""
+        """INSTANCE-001: ``accounts`` is exactly ``{registration_mode, registration_locked, first_account_open}``: the effective mode, whether the variable sets it, and — this instance having no account — its first account open; no session needed. A new install is ``invite`` (lot A6d, decision 36)."""
         if row is not None:
             await _set_mode_row(private.engine, row)
         if variable is not None:
@@ -687,11 +713,12 @@ class TestInstanceAccounts:
             response = await client.get(INSTANCE)
 
         assert response.status_code == 200, f"{response.status_code} {response.text}"
-        assert response.json().get("accounts") == {"registration_mode": mode, "registration_locked": locked}, f"row {row!r}, {REGISTRATION_VARIABLE}={variable!r}: {response.text}"
+        expected = {"registration_mode": mode, "registration_locked": locked, "first_account_open": True}
+        assert response.json().get("accounts") == expected, f"row {row!r}, {REGISTRATION_VARIABLE}={variable!r}, no account: expected {expected}, got {response.text}"
 
     @pytest.mark.asyncio
     async def test_the_public_configuration_says_nothing_about_users(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts`` and ``email``, ``accounts`` exactly its two fields, and the link nowhere."""
+        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts`` and ``email``, ``accounts`` exactly its three fields — the mode, the lock, and whether the first account is still open: a yes or no, false here, never a count (lot A6d) —, and the link nowhere."""
         owner = await _add_user(private.engine, "alice", admin=True)
         await _issue(private.engine, created_by_user_id=owner)
         monkeypatch.setenv(MAX_USERS_VARIABLE, "5")
@@ -703,8 +730,105 @@ class TestInstanceAccounts:
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         body = response.json()
         assert set(body) == {"profile", "accounts", "email"}, f"the public configuration holds nothing undeclared: {body}"
-        assert set(body["accounts"]) == {"registration_mode", "registration_locked"}, f"accounts says nothing about users: {body['accounts']}"
+        assert set(body["accounts"]) == {"registration_mode", "registration_locked", "first_account_open"}, f"accounts says nothing about users but whether the first account is still open: {body['accounts']}"
+        assert body["accounts"]["first_account_open"] is False, f"first_account_open is a yes or no, false once an account exists — never a count: {body['accounts']}"
         assert BILLING_LINK not in response.text
+
+
+# ============================================================================
+# 4b. THE FIRST ACCOUNT ON A NEW INSTANCE (DECISION 36) — IN-PROCESS
+# ============================================================================
+
+
+#: ``accounts`` of a new install without any account: registration by invitation, not pinned, the first account open.
+NEW_INSTANCE_ACCOUNTS = {"registration_mode": "invite", "registration_locked": False, "first_account_open": True}
+#: A session cookie no server ever issued.
+FORGED_SESSION = "forged.session.token-not-issued-by-this-instance"
+
+
+async def _instance(private: _Private, *, cookie: Optional[str] = None) -> httpx.Response:
+    """GET /system/instance from a browser of its own: without a session, or sending ``cookie`` as the session cookie."""
+    async with _browser(private) as device:
+        return await device.get(INSTANCE, headers={"Cookie": f"{COOKIE}={cookie}"} if cookie else None)
+
+
+class TestFirstAccountOnANewInstance:
+    """Lot A6d (decision 36): a new install registers by invitation, but its first account may always register — and ``accounts.first_account_open`` says so to whoever opens the login page."""
+
+    @pytest.mark.asyncio
+    async def test_a_new_install_answers_invite_with_its_first_account_open(self, private: _Private) -> None:
+        """FIRST-001: a new install — the defaults seeded, no account, no variable —: GET /system/instance without a session → 200, ``accounts`` exactly ``{registration_mode: invite, registration_locked: false, first_account_open: true}``."""
+        print_section("FIRST-001: a new install, by invitation, its first account open")
+        assert await _usernames(private.engine) == set(), "setup: the new install has no account"
+
+        response = await _instance(private)
+
+        assert response.status_code == 200, f"the public configuration needs no session: {response.status_code} {response.text}"
+        assert response.json().get("accounts") == NEW_INSTANCE_ACCOUNTS, f"a new install registers by invitation, and its first account is open: expected {NEW_INSTANCE_ACCOUNTS}, got {response.text}"
+        print_success("invite, not locked, the first account open")
+
+    @pytest.mark.asyncio
+    async def test_the_first_account_registers_without_an_invitation_and_the_next_one_needs_one(self, private: _Private) -> None:
+        """FIRST-002: a new install at the default: an anonymous POST /auth/register without an invitation → 201, the administrator; GET /system/instance then answers ``first_account_open`` false, the mode still ``invite``; a second anonymous registration without an invitation → 403 ``INVITE_REQUIRED``, and no second account."""
+        print_section("FIRST-002: the first account, then an invitation required")
+        assert await _usernames(private.engine) == set(), "setup: the new install has no account"
+
+        async with _browser(private) as founder_device:
+            founder = await _register(founder_device, "founder")
+        after = await _instance(private)
+        async with _browser(private) as stranger:
+            walkin = await _register(stranger, "walkin")
+
+        assert founder.status_code == 201 and founder.json()["user"]["is_superuser"] is True, f"the first account must register without an invitation, as the administrator, whatever the mode: {founder.status_code} {founder.text}"
+        closed = {**NEW_INSTANCE_ACCOUNTS, "first_account_open": False}
+        assert after.status_code == 200 and after.json().get("accounts") == closed, f"once the first account exists it is no longer open: expected {closed}, got {after.status_code} {after.text}"
+        assert (walkin.status_code, _error_code(walkin)) == (403, "INVITE_REQUIRED"), f"after its first account a new install wants an invitation: {walkin.status_code} {walkin.text}"
+        assert await _usernames(private.engine) == {"founder"}, "the refused registration must create no account"
+        print_success("201 administrator; then first_account_open false and 403 INVITE_REQUIRED, no second account")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("source", ["row", "env"])
+    @pytest.mark.parametrize("mode", ["open", "invite", "disabled"])
+    async def test_the_first_account_is_open_on_an_empty_instance_in_every_mode(self, private: _Private, monkeypatch: pytest.MonkeyPatch, mode: str, source: str) -> None:
+        """FIRST-003: no account, registration ``mode`` — said by the row, or by ``LIBREFOLIO_REGISTRATION`` over a row that says otherwise —: ``accounts`` is the mode in force, locked by the variable only, and ``first_account_open`` true; the first registration then goes through as the administrator, without an invitation: the flag mirrors the backend's first-account rule, in every mode."""
+        await _put_mode(private, monkeypatch, mode, source)
+        assert await _usernames(private.engine) == set(), "setup: the instance has no account"
+
+        response = await _instance(private)
+        async with _browser(private) as founder_device:
+            founder = await _register(founder_device, "founder")
+
+        expected = {"registration_mode": mode, "registration_locked": source == "env", "first_account_open": True}
+        assert response.status_code == 200 and response.json().get("accounts") == expected, f"registration {mode} by the {source}, no account: expected {expected}, got {response.status_code} {response.text}"
+        assert founder.status_code == 201 and founder.json()["user"]["is_superuser"] is True, f"the flag promised the first account: registration {mode} by the {source} must let it in, as the administrator: {founder.status_code} {founder.text}"
+
+    @pytest.mark.asyncio
+    async def test_an_inactive_account_is_an_account_so_the_first_one_is_taken(self, private: _Private) -> None:
+        """FIRST-004: the only account is inactive: ``first_account_open`` false — an inactive account counts, as the backend counts it: the next registration is not the first one, so in ``invite`` mode (the row) it is 403 ``INVITE_REQUIRED`` without an invitation."""
+        print_section("FIRST-004: an inactive account is an account")
+        await _add_user(private.engine, "dormant", admin=True, active=False)
+        await _set_mode_row(private.engine, "invite")
+        assert await _activity(private.engine) == {"dormant": False}, "setup: the instance holds one account, inactive"
+
+        response = await _instance(private)
+        async with _browser(private) as stranger:
+            walkin = await _register(stranger, "walkin")
+
+        expected = {"registration_mode": "invite", "registration_locked": False, "first_account_open": False}
+        assert response.status_code == 200 and response.json().get("accounts") == expected, f"an inactive account is an account, so the first one is taken: expected {expected}, got {response.status_code} {response.text}"
+        assert (walkin.status_code, _error_code(walkin)) == (403, "INVITE_REQUIRED"), f"the backend agrees with the flag: the next registration is not the first one: {walkin.status_code} {walkin.text}"
+        assert await _usernames(private.engine) == {"dormant"}, "the refused registration must create no account"
+        print_success("first_account_open false beside an inactive account; 403 INVITE_REQUIRED")
+
+    @pytest.mark.asyncio
+    async def test_a_forged_session_cookie_does_not_change_the_answer(self, private: _Private) -> None:
+        """FIRST-005: GET /system/instance with a session cookie no server issued answers as without one — 200, the same body, the first account open —: the public configuration reads no session, and refuses none."""
+        anonymous = await _instance(private)
+        forged = await _instance(private, cookie=FORGED_SESSION)
+
+        assert (anonymous.status_code, forged.status_code) == (200, 200), f"a forged session cookie must not change the answer: without one {anonymous.status_code} {anonymous.text}; forged {forged.status_code} {forged.text}"
+        assert forged.json() == anonymous.json(), f"the same body with a forged cookie as without one: forged {forged.text}, without {anonymous.text}"
+        assert forged.json().get("accounts") == NEW_INSTANCE_ACCOUNTS, f"a new install, its first account open, whatever cookie comes with the request: {forged.text}"
 
 
 # ============================================================================
@@ -743,7 +867,7 @@ class TestRegistrationModeLockedByTheVariable:
         """LOCK-001: ``LIBREFOLIO_REGISTRATION`` set — valid, or invalid and therefore closing — → 409 ``SETTING_LOCKED_BY_ENV``; the row's value, time and author as they were."""
         cookie = await _admin_browser_cookie(private)
         before = await _stored_settings(private.engine, MODE_KEY)
-        assert before.get(MODE_KEY, ("",))[0] == "open", f"barrier: a new install's registration_mode row is seeded open: {before}"
+        assert before.get(MODE_KEY, ("",))[0] == "invite", f"barrier: a new install's registration_mode row is seeded invite (lot A6d, decision 36): {before}"
         monkeypatch.setenv(REGISTRATION_VARIABLE, variable)
 
         response = await _bulk(private, cookie, [(MODE_KEY, "disabled")])
@@ -766,8 +890,14 @@ class TestRegistrationModeLockedByTheVariable:
 
     @pytest.mark.asyncio
     async def test_without_the_variable_the_mode_is_saved_within_its_choices(self, private: _Private) -> None:
-        """LOCK-003: no variable: ``invite`` → 200 and saved, by the administrator; ``closed`` → 422, nothing saved."""
+        """LOCK-003: no variable, the row saying ``open``: ``invite`` → 200 and saved, by the administrator; ``closed`` → 422, nothing saved.
+
+        The row is set ``open`` first: a new install already says ``invite`` (A6d), and a save that changes nothing
+        would prove nothing.
+        """
         cookie = await _admin_browser_cookie(private)
+        await _set_mode_row(private.engine, "open")
+        assert (await _stored_settings(private.engine, MODE_KEY))[MODE_KEY][0] == "open", "barrier: the row says open before the save"
 
         saved = await _bulk(private, cookie, [(MODE_KEY, "invite")])
         after_save = await _stored_settings(private.engine, MODE_KEY)
@@ -788,31 +918,49 @@ class TestReviewOfTheSettingAndTheUrls:
     """The ``registration_mode`` row a new install seeds, and what an invalid URL variable does to registration: nothing."""
 
     @pytest.mark.asyncio
-    async def test_a_new_install_seeds_registration_mode_open_as_a_str_setting(self, private: _Private) -> None:
-        """SETTING-001: on a new install, the public ``GET /settings/global/registration_mode`` answers ``open`` with ``value_type`` ``str`` — the documented type of every text setting ("str", "int", "bool", "json"), and the one migration 006 writes on an upgraded install."""
-        async with _browser(private) as client:
-            response = await client.get(MODE_SETTING)
+    async def test_a_new_install_seeds_registration_mode_invite_as_a_str_setting(self, private: _Private) -> None:
+        """SETTING-001: a new install — the defaults seeded as startup seeds them (``initialize_global_settings``) — holds the ``registration_mode`` row ``invite``, with ``value_type`` ``str``: new installs register by invitation (lot A6d, decision 36), and ``str`` is the documented type of every text setting ("str", "int", "bool", "json") and the one migration 006 writes on an upgraded install.
 
-        assert response.status_code == 200, f"{response.status_code} {response.text}"
-        body = response.json()
-        assert (body.get("key"), body.get("value"), body.get("value_type")) == (MODE_KEY, "open", "str"), f"a new install seeds {MODE_KEY} open, as a 'str' setting: {body}"
+        Read from the database: the seed is the subject here, and ``GET /settings/global/{key}`` wants a session since A6d.
+        """
+        stored = await _stored_value_and_type(private.engine, MODE_KEY)
+
+        assert stored == ("invite", "str"), f"a new install seeds {MODE_KEY} invite, as a 'str' setting: (value, value_type) is {stored}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("kept", ["open", "disabled"])
+    async def test_the_seeding_never_changes_a_row_already_there(self, private: _Private, kept: str) -> None:
+        """SETTING-002 — GUARD, green before and after A6d: the seeding every startup runs creates only the settings that are missing. A ``registration_mode`` row that says ``open`` or ``disabled`` keeps it: an instance keeps its choice when the default becomes ``invite``."""
+        await _set_mode_row(private.engine, kept)
+        assert await _stored_value_and_type(private.engine, MODE_KEY) == (kept, "str"), f"setup: the row must say {kept}"
+
+        async with AsyncSession(private.engine) as session:
+            created = await initialize_global_settings(session)
+        after = await _stored_value_and_type(private.engine, MODE_KEY)
+
+        assert created == 0, f"every default of this instance is seeded already: the seeding must create nothing, it created {created}"
+        assert after == (kept, "str"), f"the seeding must leave the {MODE_KEY} row as it was, ({kept!r}, 'str'): (value, value_type) is {after}"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("variable", [PUBLIC_URL_VARIABLE, BILLING_URL_VARIABLE])
     async def test_an_invalid_url_variable_leaves_registration_open(self, private: _Private, monkeypatch: pytest.MonkeyPatch, variable: str) -> None:
-        """URL-001 — GUARD: an invalid ``LIBREFOLIO_PUBLIC_URL`` or ``LIBREFOLIO_BILLING_URL`` closes nothing: ``GET /system/instance`` still answers open, not locked, and an open ``POST /auth/register`` still creates a regular account.
+        """URL-001 — GUARD: on an instance whose row says open, an invalid ``LIBREFOLIO_PUBLIC_URL`` or ``LIBREFOLIO_BILLING_URL`` closes nothing: ``GET /system/instance`` still answers open, not locked — alice holds the first account —, and an open ``POST /auth/register`` still creates a regular account.
 
         A guard: these endpoints do not read the URL variables today. It keeps a later "invalid account configuration →
-        closed" from catching a mistyped link along with the settings that really close registration.
+        closed" from catching a mistyped link along with the settings that really close registration. The row is set
+        ``open`` (a new install is ``invite`` since A6d); red until A6d only for the ``first_account_open`` the exact
+        ``accounts`` now carries.
         """
         await _add_user(private.engine, "alice")
+        await _set_mode_row(private.engine, "open")
         monkeypatch.setenv(variable, "www.example.com/folio")
 
         async with _browser(private) as client:
             instance = await client.get(INSTANCE)
             registered = await _register(client, "walkin")
 
-        assert instance.status_code == 200 and instance.json().get("accounts") == {"registration_mode": "open", "registration_locked": False}, f"an invalid {variable} must leave the instance open: {instance.status_code} {instance.text}"
+        expected = {"registration_mode": "open", "registration_locked": False, "first_account_open": False}
+        assert instance.status_code == 200 and instance.json().get("accounts") == expected, f"an invalid {variable} must leave the instance open: expected {expected}, got {instance.status_code} {instance.text}"
         assert registered.status_code == 201, f"an invalid {variable} must not stop an open registration: {registered.status_code} {registered.text}"
         assert registered.json()["user"]["is_superuser"] is False
 

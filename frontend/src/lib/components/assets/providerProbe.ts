@@ -108,7 +108,7 @@ export interface ProbeTooltipLabels {
 export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeTooltipLabels): string {
     if (!result.success) return result.detail ?? 'Error';
 
-    const thStyle = 'text-align:left;padding:2px 8px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.2);';
+    const thStyle = 'text-align:left;padding:2px 8px;font-weight:600;border-bottom:1px solid color-mix(in oklab, var(--lf-text-on-inverse) 20%, transparent);';
     const tdStyle = 'padding:2px 8px;';
     const tdRight = 'padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums;';
 

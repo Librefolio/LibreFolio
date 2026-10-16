@@ -214,7 +214,7 @@
                     const price = live?.value ?? row.lastPrice;
                     if (price == null) return '—';
                     const dir = live?.direction ?? 'neutral';
-                    const colorCls = dir === 'up' ? 'text-emerald-600 dark:text-emerald-400' : dir === 'down' ? 'text-red-500 dark:text-red-400' : '';
+                    const colorCls = dir === 'up' ? SIGN_TEXT.market.gain : dir === 'down' ? SIGN_TEXT.market.loss : '';
                     // A market quote is the same figure for every user and reveals
                     // nothing about this one's holdings. No masked amount shares the
                     // row, so nothing can be reconstructed from it here.
