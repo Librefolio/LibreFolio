@@ -153,8 +153,9 @@ The holding's valuation hierarchy is therefore `MARKET_PRICE` (a quote, exact or
 Dashboard warns about the at-cost positions of assets with a provider with `VALUED_AT_COST`, more
 than 14 days after the asset's first acquisition
 (see [Data Quality Banner](../../frontend/data-quality-banner.md#active-issuecodes)). The lots
-analysis has its own at-cost branch, for an asset with no quote at all — see
-[Lots Analysis Service](lots_analysis_service.md#estimated-at-cost-fallback).
+analysis follows the same day-by-day rule: it values an open LONG lot at its cost on every day
+with no observation on or before it, and its own warning, `CURRENT_PRICE_ASSUMED_AT_COST`, names
+those days — see [Lots Analysis Service](lots_analysis_service.md#estimated-at-cost-fallback).
 
 ## 🔌 Who consumes it
 
@@ -163,7 +164,7 @@ Two consumers use the resolver today:
 | Consumer | What it uses it for |
 |----------|---------------------|
 | Portfolio engine (`financial_math/portfolio/`) | The daily valuation brain: `engine.py` builds one `AssetPriceSeries` per held asset, and `DailyStateBuilder` (`daily_state.py`) reads it to build the daily portfolio states → NAV snapshots → ROI/TWRR/MWRR (`financial_math/returns.py`) and the value/P&L history lines; on request, also the synthetic P&L candles (with `ohlc_by_date`) |
-| `lots_analysis_service.py` | qbq-aware lot valuations, `market_prices` / `estimated_market_prices` maps, performance NAV — see [Lots Analysis Service](lots_analysis_service.md) |
+| `lots_analysis_service.py` | One series per analysis, built before the FIFO engine runs: the reference price of a lot opened by an `ADJUSTMENT` (its mark on the opening day), the days valued at cost (`last_day_without_observation()`), then the qbq-aware lot valuations, the `market_prices` / `estimated_market_prices` maps and the performance NAV — see [Lots Analysis Service](lots_analysis_service.md#unified-price-resolver) |
 
 Everything downstream (dashboard KPIs, portfolio/broker reports, AI Export valuation sections)
 reads numbers these two produced, which is what makes the resolver the single source: a change
