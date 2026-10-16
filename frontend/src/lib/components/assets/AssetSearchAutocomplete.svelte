@@ -6,6 +6,8 @@
   - Provider checkbox row (from GET /assets/provider, only supports_search=true)
   - Dropdown results with provider_url link
   - Loading, empty, error states
+  - A provider that must be configured first (NOT_CONFIGURED) says so, with «Configure» (CP11)
+  - The legend of 👑 (the fund's own currency) when a result shows it
   - Event onselect(result)
   Svelte 5 runes.
 -->
@@ -18,6 +20,7 @@
     import {ensureAssetProvidersCached, getAssetProviderIconUrl} from '$lib/utils/providerHelpers';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
+    import PluginSettingsModal from '$lib/features/plugin-settings/PluginSettingsModal.svelte';
 
     // =========================================================================
     // Types
@@ -89,6 +92,10 @@
     let pendingQuery = $state<string | null>(null);
     /** Controller of the in-flight streamed request, aborted when a newer search starts */
     let activeController: AbortController | null = null;
+    /** The providers of the last search that did not search because a required setting has no value (NOT_CONFIGURED). */
+    let notConfigured = $state<string[]>([]);
+    /** The provider whose settings «Configure» opened; null when the dialog is closed. */
+    let configuring = $state<string | null>(null);
 
     // =========================================================================
     // Derived
@@ -96,6 +103,8 @@
 
     let searchableProviders = $derived(providers.filter((p) => p.supports_search));
     let hasResults = $derived(results.length > 0);
+    // 👑 marks a fund's own currency among its currency rows (justETF): a legend says so when a result shows it.
+    let crownShown = $derived(results.some((r) => r.display_name.includes('👑')));
     // Rank among web-resolved (link-finder) results only, in display order. 0 = native result
     // (no badge). Web results are ordered best-first by the finder, so #1 is the most likely match.
     let webRanks = $derived.by(() => {
@@ -204,6 +213,7 @@
         error = null;
         showResults = true;
         results = [];
+        notConfigured = [];
         providersDone = 0;
         providersTotal = selectedProviders.size;
 
@@ -278,6 +288,9 @@
                             results = [...results, ...newItems];
                         } else if (event.event === 'provider_error') {
                             providersDone++;
+                            if (event.error_code === 'NOT_CONFIGURED' && typeof event.provider_code === 'string' && !notConfigured.includes(event.provider_code)) {
+                                notConfigured = [...notConfigured, event.provider_code];
+                            }
                         } else if (event.event === 'done') {
                             // Terminal event: stop now instead of waiting for the HTTP
                             // stream to physically close (a slow provider or a buffering
@@ -318,6 +331,7 @@
 
                 if (mySearchId !== searchId) return;
 
+                notConfigured = Array.isArray(response?.providers_not_configured) ? [...new Set<string>(response.providers_not_configured.filter((code: unknown) => typeof code === 'string'))] : [];
                 results = (response?.results ?? []).map((r: any) => ({
                     identifier: r.identifier,
                     identifier_type: r.identifier_type,
@@ -343,6 +357,15 @@
             clearTimeout(timeoutId);
             if (activeController === controller) activeController = null;
         }
+    }
+
+    function providerName(code: string): string {
+        return providers.find((p) => p.code === code)?.name ?? code;
+    }
+
+    /** After a save in «Configure»: search again, so the provider now configured answers. */
+    function configured() {
+        if (query.trim().length > 0) executeSearch(query);
     }
 
     function selectResult(result: SearchResult) {
@@ -446,6 +469,14 @@
             class="border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800
                     shadow-lg max-h-60 overflow-y-auto"
         >
+            {#each notConfigured as code (code)}
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-provider={code} data-testid="asset-search-not-configured">
+                    <span>{$t('assets.search.notConfigured', {values: {provider: providerName(code)}})}</span>
+                    <button class="rounded-md border border-lf-warning-line bg-lf-card px-2 py-0.5 text-xs font-medium text-lf-primary hover:bg-lf-hover" data-testid="asset-search-configure" onclick={() => (configuring = code)} type="button">
+                        {$t('pluginSettings.configure')}
+                    </button>
+                </div>
+            {/each}
             {#if loading && results.length === 0}
                 <div class="flex items-center justify-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
                     <Loader2 size={16} class="animate-spin" />
@@ -522,7 +553,15 @@
                         {/if}
                     </button>
                 {/each}
+                {#if crownShown}
+                    <p class="border-t border-lf-subtle px-3 py-1.5 text-xs text-lf-muted" data-testid="asset-search-crown-legend">{$t('assets.search.crownLegend')}</p>
+                {/if}
             {/if}
         </div>
     {/if}
 </div>
+
+{#if configuring !== null}
+    <!-- «Configure» (CP11): the provider's settings; a save searches again. -->
+    <PluginSettingsModal family="asset" onClose={() => (configuring = null)} onSaved={configured} open={true} pluginCode={configuring} pluginName={providerName(configuring)} />
+{/if}
