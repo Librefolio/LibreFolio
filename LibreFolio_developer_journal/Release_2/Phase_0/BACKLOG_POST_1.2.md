@@ -3008,6 +3008,14 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
     inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
     password (decisione 37).
+- **A-22 · I login falliti scrivono nel log l'identificativo digitato, anche un indirizzo email** — basso; dal
+  `test-author` di A7c (16/10).
+  - `api/v1/auth.py` ~160–167: «Login failed: user not found», «…wrong password», «…user inactive» con
+    `username=request.username`; il login accetta anche l'email in quel campo, quindi un tentativo fallito con l'email
+    la scrive nel log, contro la regola di E (nessun indirizzo nei log).
+  - Cura proposta: `user_id` quando l'account esiste (password sbagliata, account disattivo), niente dell'identificativo
+    quando non esiste; un rosso in-process come PROF-017. Da fare subito dopo A7c o in A8, che riscrive quel percorso.
+    Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7c».
 - **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
   verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
