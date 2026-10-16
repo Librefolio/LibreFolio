@@ -92,6 +92,7 @@
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, extractCalendarReturnViewsByAsset, isCalendarReturnSignalResult, type CalendarReturnView, type CalendarReturnViewState} from '$lib/components/charts/priceChartHelpers';
     import {calendarComparisonFxFailuresFromResponse, calendarComparisonProblemsFromResponse, parseAssetPriceQueryWithSignalIsolation, preserveFactualCalendarPeersForCurrentUnavailable} from '$lib/components/assets/detail/assetDetailPriceQuery';
     import {mergeChartPointsIncremental} from '$lib/components/assets/detail/assetDetailChartPoints';
+    import {displayCurrencyAfterFxPairCreated, fxPairCreateDefaults} from '$lib/components/assets/detail/assetDetailFxPair';
     import {
         CALENDAR_RETURN_PRESETS,
         CALENDAR_RETURN_UNIT_LABEL_KEYS,
@@ -2046,9 +2047,9 @@
         invalidateFxRoutes();
         // Only update display currency when creating the main asset's FX pair
         if (!wasForComparison) {
-            const newQuote = assetCurrency === base ? quote : base;
-            if (newQuote !== assetCurrency) {
-                displayCurrency = newQuote;
+            const nextDisplayCurrency = displayCurrencyAfterFxPairCreated({base, quote}, assetCurrency);
+            if (nextDisplayCurrency !== null) {
+                displayCurrency = nextDisplayCurrency;
             }
         }
         await loadFxPairSlugs(true);
@@ -3294,11 +3295,9 @@
         <AssetModal bind:open={editModalOpen} editMode={true} editData={editDataForModal} onupdated={handleAssetUpdated} onclose={() => (editModalOpen = false)} />
 
         <!-- FX Pair Add Modal (opened from FX warning or banner) -->
-        {@const createParts = fxPairCreateSlug ? fxPairCreateSlug.split('-') : []}
-        {@const createBase = createParts.length === 2 ? createParts[0] : assetInfo.currency}
-        {@const createQuote = createParts.length === 2 ? createParts[1] : displayCurrency !== assetInfo.currency ? displayCurrency : ''}
+        {@const fxCreateDefaults = fxPairCreateDefaults(fxPairCreateSlug, assetInfo.currency, displayCurrency)}
         {@const fxCreationCallbacks = createFxPairCallbacks(data.assetId, !!fxPairCreateSlug, assetInfo.currency)}
-        <FxPairAddModal bind:open={showFxPairAddModal} readonlyBase={!fxPairCreateSlug} initialBase={createBase} initialQuote={createQuote} oncreated={fxCreationCallbacks.oncreated} onsynced={fxCreationCallbacks.onsynced} onclose={fxCreationCallbacks.onclose} />
+        <FxPairAddModal bind:open={showFxPairAddModal} readonlyBase={!fxPairCreateSlug} initialBase={fxCreateDefaults.base} initialQuote={fxCreateDefaults.quote} oncreated={fxCreationCallbacks.oncreated} onsynced={fxCreationCallbacks.onsynced} onclose={fxCreationCallbacks.onclose} />
     {/if}
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
