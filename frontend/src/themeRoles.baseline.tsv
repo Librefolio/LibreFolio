@@ -15,61 +15,29 @@ lib/components/charts/ChartAestheticsSection.svelte	16
 lib/components/table/ColumnVisibilityToggle.svelte	27
 lib/components/table/DataTableCellContent.svelte	4
 lib/components/table/SelectionBar.svelte	23
-lib/components/transactions/TransactionsTable.svelte	6	#0f0f18×2	#1e293b	#334155×3	#475569×2	#cbd5e1	#e2e8f0×5	rgb(0 0 0/0.05)	rgb(139 92 246)	rgb(139 92 246/0.18)	rgb(196 181 253)	rgb(196 181 253/0.22)	rgb(255 255 255/0.08)	rgb(99 102 241/0)×2	rgb(99 102 241/0.25)	white×2
-lib/components/transactions/bulk/TxBulkBanners.svelte	54
-lib/components/transactions/bulk/TxBulkToolbar.svelte	48
-lib/components/transactions/events/AssetEventPicker.svelte	72
-lib/components/transactions/events/EventCreateMiniModal.svelte	42
-lib/components/transactions/form/TxFormBanners.svelte	6
-lib/components/transactions/form/TxFormOptionalSection.svelte	25
-lib/components/transactions/form/TxFormPairSection.svelte	93
-lib/components/transactions/form/TxFormSingleSection.svelte	50
-lib/components/transactions/import/AssetGroupStep.svelte	108
-lib/components/transactions/import/BrimEvidenceTable.svelte	52
-lib/components/transactions/import/BrimNoticeList.svelte	8
-lib/components/transactions/import/FixFlaggedStep.svelte	205
-lib/components/transactions/import/GapFixStep.svelte	95
+lib/components/transactions/TransactionsTable.svelte	0	#0f0f18×2	rgb(0 0 0/0.05)	rgb(139 92 246)	rgb(139 92 246/0.18)	rgb(196 181 253)	rgb(196 181 253/0.22)	rgb(255 255 255/0.08)	rgb(99 102 241/0)×2	rgb(99 102 241/0.25)	white×2
+lib/components/transactions/bulk/TxBulkBanners.svelte	2
+lib/components/transactions/bulk/TxBulkToolbar.svelte	4
+lib/components/transactions/events/AssetEventPicker.svelte	12
+lib/components/transactions/form/TxFormOptionalSection.svelte	6
+lib/components/transactions/form/TxFormPairSection.svelte	4
+lib/components/transactions/import/AssetGroupStep.svelte	8
 lib/components/transactions/import/GapFixToggle.svelte	4
-lib/components/transactions/import/ImportAssetPicker.svelte	20
-lib/components/transactions/import/ReportSetCard.svelte	75
-lib/components/transactions/modals/ImportBrokerMismatchModal.svelte	1
-lib/components/transactions/modals/ImportWizardModal.svelte	222	#dc2626
-lib/components/transactions/modals/ParseDetailModal.svelte	141
-lib/components/transactions/modals/PromoteAllModal.svelte	32
-lib/components/transactions/modals/PromoteMergeModal.svelte	100	#334155×2	#e2e8f0×2
-lib/components/transactions/modals/TransactionActionModal.svelte	146	#334155×2	#e2e8f0×2
-lib/components/transactions/modals/TransactionBulkModal.svelte	88
-lib/components/transactions/modals/TransactionCompareModal.svelte	82
-lib/components/transactions/modals/TransactionFormModal.svelte	35
-lib/components/transactions/modals/TransactionPickerModal.svelte	20
-lib/components/transactions/shared/TransactionResultBanner.svelte	18
-lib/components/transactions/shared/TransactionTypeSearchSelect.svelte	4
-lib/components/transactions/wac/WacPreviewSection.svelte	94
-lib/components/transactions/wizard/AnalyzeStep.svelte	67
-lib/components/transactions/wizard/DuplicatesStep.svelte	77
-lib/components/transactions/wizard/ReviewStep.svelte	86
-lib/components/transactions/wizard/SelectFilesStep.svelte	22
-lib/components/transactions/wizard/UploadStep.svelte	20
-lib/components/transactions/wizard/WizardFooter.svelte	101
+lib/components/transactions/modals/PromoteMergeModal.svelte	62
+lib/components/transactions/modals/TransactionBulkModal.svelte	9
+lib/components/transactions/modals/TransactionCompareModal.svelte	4
+lib/components/transactions/wac/WacPreviewSection.svelte	21
 lib/components/ui/data-editor/DataEditor.svelte	5
 lib/components/ui/display/BrokerIcon.svelte	4
 lib/components/ui/feedback/LoadingSpinner.svelte	0	#10b981	#1a4031	#374151	#6b7280	#9ca3af	#e5e7eb
 lib/components/ui/modals/ConfirmModal.svelte	4
-lib/features/brokers/BrokerCard.svelte	64
-lib/features/brokers/BrokerDiscoveryCard.svelte	9
-lib/features/brokers/BrokerForm.svelte	72
-lib/features/brokers/BrokerImportFilesModal.svelte	12
-lib/features/brokers/BrokerModal.svelte	23
-lib/features/brokers/BrokerSharingModal.svelte	10
-lib/features/brokers/BrokerSharingPanel.svelte	223
-lib/features/brokers/DeleteBrokerDialog.svelte	30
-lib/features/brokers/lots/LotComparisonChart.svelte	96
+lib/features/brokers/BrokerCard.svelte	12
+lib/features/brokers/BrokerForm.svelte	4
+lib/features/brokers/BrokerSharingPanel.svelte	45
+lib/features/brokers/lots/LotComparisonChart.svelte	2
 lib/features/brokers/lots/LotCustodyModal.svelte	205
-lib/features/brokers/lots/LotDataQualityBanner.svelte	20
-lib/features/brokers/lots/LotGanttChart.svelte	36
-lib/features/brokers/lots/LotWacPriceChart.svelte	48
-lib/features/brokers/lots/LotsAnalysisPanel.svelte	42
-lib/features/brokers/lots/UnifiedLotsTable.svelte	84
+lib/features/brokers/lots/LotGanttChart.svelte	4
+lib/features/brokers/lots/UnifiedLotsTable.svelte	60
 lib/features/dashboard/ExposureTable.svelte	2
 lib/features/dashboard/KpiSection.svelte	4
 lib/features/dashboard/PositionsPanel.svelte	46
@@ -89,14 +57,12 @@ lib/theme/toneClasses.ts	22
 lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/providerHelpers.ts	20
-lib/utils/transactions/pairCellHtml.ts	6
+lib/utils/transactions/pairCellHtml.ts	2
 routes/(app)/assets/+page.svelte	4
 routes/(app)/assets/[id]/+page.svelte	312
-routes/(app)/brokers/+page.svelte	38
-routes/(app)/brokers/[id]/+page.svelte	141
+routes/(app)/brokers/[id]/+page.svelte	12
 routes/(app)/fx/+page.svelte	4
 routes/(app)/fx/[pair]/+page.svelte	54
-routes/(app)/transactions/+page.svelte	37
 routes/+page.svelte	1
 ~accept	lib/stores/app/themeStore.ts	D-T17 (developer, 15/10): theme-color #1b4334 in both themes, the green bars' --lf-surface-bar (N2); pair checked by themeColorMeta
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta

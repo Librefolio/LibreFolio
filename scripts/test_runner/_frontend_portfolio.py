@@ -37,6 +37,18 @@ def front_portfolio_page_busy(verbose: bool = False, ui: bool = False, headed: b
     return _run_playwright("portfolio/page-busy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_price_refresh(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the «Updating prices…» E2E (workstream Z, lots Z5 and Z-13): the notice while a stubbed catch-up runs, then the open page asking for its report again."""
+    print_section("Frontend Portfolio Price Refresh Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/price-refresh-reload.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_allocation_negative_cash(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the negative-cash allocation E2E tests (Y10, decision 49)."""
     print_section("Frontend Portfolio Negative Cash Allocation Tests")
@@ -505,6 +517,14 @@ def populate_registry(registry: dict) -> None:
         name="Page Busy Tests",
         desc="Y11, decision 48 / P3: a page's Refresh button waits for the big requests of its own page, read only from data-busy and disabled, with each request held by page.route until the test lets it through. Dashboard: a period change (the 6M preset, no click on the button) and Refresh keep sync-button busy and disabled until their report is back. Files: Refresh and a tab change keep files-refresh-button busy until the list of the tab is back. A client-side route change leaves the old page's requests behind: with the Dashboard's report still held, the Files button waits for its own first load and is idle once that load is in",
         tests="portfolio/page-busy.spec.ts",
+    )
+    add_test(
+        cat,
+        "price-refresh",
+        front_portfolio_price_refresh,
+        name="Price Refresh E2E",
+        desc="Lots Z5 and Z-13, desktop: a stubbed catch-up (the status route answered in the browser, the header set on real answers) shows the instance notice while a job runs and hides it at idle; once a catch-up that updated something is over, the open Dashboard and a broker's page ask for their report again, once, with no navigation; none when no job was seen running or nothing was updated",
+        tests="portfolio/price-refresh-reload.spec.ts",
     )
     add_test(cat, "allocation-negative-cash", front_portfolio_allocation_negative_cash, name="Negative Cash Allocation", desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note", tests="portfolio/allocation-negative-cash.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")

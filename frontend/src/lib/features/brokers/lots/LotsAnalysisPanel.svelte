@@ -449,9 +449,9 @@
 </script>
 
 {#if open && assetId != null}
-    <div bind:this={panelEl} class="mt-4 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden" data-testid="lots-analysis-panel" transition:slide={{duration: 200}}>
-        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100 dark:border-slate-700">
-            <h3 class="min-w-0 font-semibold text-gray-700 dark:text-gray-200" data-testid="lots-analysis-panel-title">
+    <div bind:this={panelEl} class="mt-4 bg-lf-card text-lf-primary rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle overflow-hidden" data-testid="lots-analysis-panel" transition:slide={{duration: 200}}>
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-lf-subtle">
+            <h3 class="min-w-0 font-semibold text-lf-secondary" data-testid="lots-analysis-panel-title">
                 {$_('brokers.lots.detailTitle')}
                 {#if assetName}
                     —
@@ -459,16 +459,10 @@
                 {/if}
             </h3>
             <div class="flex shrink-0 items-center gap-1">
-                <button
-                    aria-label={$_('brokers.lots.viewAsset')}
-                    class="p-1.5 rounded-lg text-gray-400 hover:text-libre-green hover:bg-gray-100 dark:hover:text-emerald-400 dark:hover:bg-slate-700 transition-colors"
-                    onclick={() => goto(`/assets/${assetId}`)}
-                    data-testid="lots-analysis-panel-asset-link"
-                    title={$_('brokers.lots.viewAsset')}
-                >
+                <button aria-label={$_('brokers.lots.viewAsset')} class="p-1.5 rounded-lg text-lf-muted hover:text-lf-link hover:bg-lf-hover transition-colors" onclick={() => goto(`/assets/${assetId}`)} data-testid="lots-analysis-panel-asset-link" title={$_('brokers.lots.viewAsset')}>
                     <ExternalLink size={16} />
                 </button>
-                <button class="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-slate-700 transition-colors" onclick={onClose} data-testid="lots-analysis-panel-close" title={$_('common.close')}>
+                <button class="p-1.5 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={onClose} data-testid="lots-analysis-panel-close" title={$_('common.close')}>
                     <X size={18} />
                 </button>
             </div>
@@ -480,22 +474,22 @@
             {/if}
 
             {#if calculationStatus === 'FAILED'}
-                <div class="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300" role="alert" data-testid="lots-analysis-panel-failed">
+                <div class="rounded-lg border border-lf-danger-line bg-lf-danger-soft px-4 py-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="lots-analysis-panel-failed">
                     {$_('brokers.lots.analysisFailed')}
                 </div>
             {/if}
 
             {#if error}
-                <div class="py-8 text-center text-red-500 dark:text-red-400 text-sm" data-testid="lots-analysis-panel-error">{error}</div>
+                <div class="py-8 text-center text-lf-danger text-sm" data-testid="lots-analysis-panel-error">{error}</div>
             {:else if loading}
                 <div class="flex flex-col gap-4" aria-hidden="true" data-testid="lots-analysis-panel-loading">
-                    <div class="rounded-lg border border-gray-200/80 bg-gray-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/30">
-                        <div class="mb-3 h-5 w-40 animate-pulse rounded bg-gray-200 dark:bg-slate-700"></div>
-                        <div class="h-72 w-full animate-pulse rounded bg-gray-200 dark:bg-slate-700"></div>
+                    <div class="rounded-lg border border-lf-subtle/80 bg-lf-panel/80 p-4">
+                        <div class="mb-3 h-5 w-40 animate-pulse rounded bg-lf-neutral"></div>
+                        <div class="h-72 w-full animate-pulse rounded bg-lf-neutral"></div>
                     </div>
-                    <div class="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                        <div class="mx-auto mb-3 h-5 w-24 animate-pulse rounded bg-gray-200 dark:bg-slate-700"></div>
-                        <div class="h-80 w-full animate-pulse rounded bg-gray-100 dark:bg-slate-700"></div>
+                    <div class="rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card">
+                        <div class="mx-auto mb-3 h-5 w-24 animate-pulse rounded bg-lf-neutral"></div>
+                        <div class="h-80 w-full animate-pulse rounded bg-lf-panel"></div>
                     </div>
                 </div>
             {:else}
