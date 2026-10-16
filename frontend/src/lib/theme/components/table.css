@@ -243,14 +243,6 @@
     --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text: #b91c1c;
     --lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text-dark: #fecaca;
 
-    /* UnifiedLotsTable.svelte */
-    --lf-cmp-lots-table-row-tinted-bg: white;
-    --lf-cmp-lots-table-row-tinted-bg-dark: #0f0f18;
-    --lf-cmp-lots-table-lot-highlight-base: #f3e8ff;
-    --lf-cmp-lots-table-lot-highlight-base-dark: rgba(147, 51, 234, 0.25);
-    --lf-cmp-lots-table-lot-highlight-peak: #e9d5ff;
-    --lf-cmp-lots-table-lot-highlight-peak-dark: rgba(147, 51, 234, 0.4);
-
     /* OtherPeriodEffectsTable.svelte */
     --lf-cmp-period-effects-header-bg: #ffffff80; /* rgb(255 255 255 / 0.5) */
     --lf-cmp-period-effects-header-bg-dark: #1e293b66; /* rgb(30 41 59 / 0.4) */
@@ -275,8 +267,6 @@
     --lf-cmp-compact-cash-cell-input-hover-border-dark: #64748b; /* rgb(100 116 139) */
     --lf-cmp-compact-cash-cell-input-focus-border: #10b981; /* rgb(16 185 129) */
     --lf-cmp-compact-cash-cell-input-focus-shadow: #10b98140; /* rgb(16 185 129 / 0.25) */
-    --lf-cmp-compact-cash-cell-sign-ok-border: #10b981b3; /* rgb(16 185 129 / 0.7) */
-    --lf-cmp-compact-cash-cell-sign-bad-border: #ef4444b3; /* rgb(239 68 68 / 0.7) */
     --lf-cmp-compact-cash-cell-input-disabled-text: #9ca3af; /* rgb(156 163 175) */
     --lf-cmp-compact-cash-cell-input-disabled-bg: #f3f4f6; /* rgb(243 244 246) */
     --lf-cmp-compact-cash-cell-input-disabled-bg-dark: #0f172a; /* rgb(15 23 42) */

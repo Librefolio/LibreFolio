@@ -120,16 +120,19 @@ Migration `005_accounts_invites` added three columns:
   [restore](../security.md#backup-restore) gives every account the restore time in milliseconds instead (or one more
   than the largest version either database held, when the clock is behind it): a time, not a counter, which a later
   `end_sessions()` still raises by one.
-- ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified. The accounts that
-  existed before the migration stay `NULL` — not verified, which is true — with no backfill: how they are
-  treated once email verification is required is decided in the logic, not in the data (coordinator decision,
-  15/10/2026). An email change sets it back to `NULL`, in the commit of the new address
-  (`user_service.update_profile()`): the verification was of the old address
-  ([Changing the Email](../security.md#email-change)).
+- ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified, set by `confirm_email()`
+  when an account opens its verification link ([Email Verification](../../backend/email.md#verification)). It is a
+  record, not a gate: nothing reads it to let an account in. The accounts that existed before the migration stay
+  `NULL` — not verified, which is true — with no backfill, and so do the first account, the accounts created from
+  the command line or while the option was off, and an account an administrator activated by hand: the wait is
+  decided in the logic (an inactive account holding an unspent verification token), not in this column (coordinator
+  decision, 15/10/2026).
+  An email change sets it back to `NULL`, in the commit of the new address (`user_service.update_profile()`): the
+  verification was of the old address ([Changing the Email](../security.md#email-change)).
 - 📰 **`last_seen_version`** (`VARCHAR(40)`, nullable): the release whose changelog the user last saw.
 
-Only `confirm_email()` of [Email Verification](../../backend/email.md#verification) gives `email_verified_at` a date,
-and registration does not use it yet; nothing sets `last_seen_version`: every account holds `NULL` in both. The
+Only `confirm_email()` gives `email_verified_at` a date; nothing sets `last_seen_version`, which every account holds
+`NULL`. The
 migration adds the three columns with plain `ALTER TABLE users ADD COLUMN`, never with a
 batch: a batch rebuilds `users` — copy, drop the original, rename — and with `foreign_keys=ON` dropping the
 original fires the `ON DELETE` actions of every table that references it (the same trap as in

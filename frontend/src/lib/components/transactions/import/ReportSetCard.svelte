@@ -310,7 +310,7 @@
 </script>
 
 <div
-    class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-slate-900"
+    class="rounded-lg border border-lf-subtle bg-lf-card"
     data-testid="report-set-card"
     data-set-key={set.key}
     data-batch-id={set.batchId}
@@ -323,18 +323,18 @@
     <!-- On a phone the header takes two rows: the checkbox and the whole toggle on the first, so the title stays
          tappable; «Read as» and the chips wrap onto the second, on the right. From sm up it is one row. -->
     <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-2">
-        <input type="checkbox" class="h-4 w-4 shrink-0 rounded border-gray-300 text-libre-green focus:ring-libre-green dark:border-gray-600" use:selectionState={selection} onchange={onToggleSelected} aria-label={$t('importWizard.reportSet.selectSet')} data-testid="report-set-select" />
+        <input type="checkbox" class="h-4 w-4 shrink-0 rounded border-lf-input text-lf-link focus:ring-lf-focus" use:selectionState={selection} onchange={onToggleSelected} aria-label={$t('importWizard.reportSet.selectSet')} data-testid="report-set-select" />
         <button type="button" class="flex min-w-0 grow basis-[calc(100%_-_2rem)] items-center gap-2 text-left sm:basis-0" onclick={onToggleExpanded} aria-expanded={expanded} data-testid="report-set-toggle">
             {#if expanded}
-                <ChevronDown size={14} class="shrink-0 text-gray-400" />
+                <ChevronDown size={14} class="shrink-0 text-lf-muted" />
             {:else}
-                <ChevronRight size={14} class="shrink-0 text-gray-400" />
+                <ChevronRight size={14} class="shrink-0 text-lf-muted" />
             {/if}
-            <Layers size={14} class="shrink-0 text-libre-green" />
-            <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{$t('importWizard.reportSet.setLabel', {values: {date: formatDay(set.uploadedAt), plugin: plugin ? brimPluginName(plugin, $t) : set.pluginCode}})}</span>
-            <span class="shrink-0 text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.reportSet.fileCount', {values: {n: set.files.length}})}</span>
+            <Layers size={14} class="shrink-0 text-lf-link" />
+            <span class="truncate text-sm font-medium text-lf-primary">{$t('importWizard.reportSet.setLabel', {values: {date: formatDay(set.uploadedAt), plugin: plugin ? brimPluginName(plugin, $t) : set.pluginCode}})}</span>
+            <span class="shrink-0 text-xs text-lf-muted">{$t('importWizard.reportSet.fileCount', {values: {n: set.files.length}})}</span>
         </button>
-        <div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+        <div class="ml-auto flex shrink-0 items-center gap-1 text-xs text-lf-muted">
             <span class="hidden sm:inline">{$t('importWizard.reportSet.readAs')}</span>
             <SimpleSelect
                 class="max-w-52"
@@ -348,7 +348,7 @@
             />
         </div>
         {#if analysed}
-            <span class="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">{$t('importWizard.reportSet.status.analysed')}</span>
+            <span class="shrink-0 rounded-full bg-lf-info-soft px-2 py-0.5 text-xs font-medium text-lf-info-on-soft">{$t('importWizard.reportSet.status.analysed')}</span>
         {/if}
         <span class="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium {statusClass[status]}" data-testid="report-set-status">
             {#if status === 'loading'}
@@ -367,19 +367,19 @@
     </div>
 
     {#if expanded}
-        <div class="space-y-3 border-t border-gray-100 px-4 py-3 text-sm dark:border-gray-800">
+        <div class="space-y-3 border-t border-lf-subtle px-4 py-3 text-sm">
             {#if status === 'error'}
-                <p class="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400"><AlertTriangle size={14} />{previewState?.error ?? $t('common.error')}</p>
+                <p class="flex items-center gap-1.5 text-xs text-lf-danger"><AlertTriangle size={14} />{previewState?.error ?? $t('common.error')}</p>
             {/if}
 
             {#if defaultNote}
-                <p class="flex items-start gap-1.5 text-xs text-sky-700 dark:text-sky-300" data-testid="report-set-default-note" data-default-plugin={defaultNote.code}>
+                <p class="flex items-start gap-1.5 text-xs text-lf-info" data-testid="report-set-default-note" data-default-plugin={defaultNote.code}>
                     <Info size={12} class="mt-0.5 shrink-0" />
                     <span>{$t('importWizard.reportSet.defaultPluginNote', {values: {plugin: plugin ? brimPluginName(plugin, $t) : set.pluginCode, defaultPlugin: brimPluginName(defaultNote, $t)}})}</span>
                 </p>
             {/if}
             {#each alsoRecognised as entry (entry.file.file_id)}
-                <p class="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300" data-testid="report-set-also-recognised" data-file-id={entry.file.file_id} data-plugins={entry.others.map((other) => other.code).join(',')}>
+                <p class="flex items-start gap-1.5 text-xs text-lf-warning" data-testid="report-set-also-recognised" data-file-id={entry.file.file_id} data-plugins={entry.others.map((other) => other.code).join(',')}>
                     <AlertTriangle size={12} class="mt-0.5 shrink-0" />
                     <span>{$t('importWizard.reportSet.alsoRecognisedBy', {values: {file: entry.file.filename, plugins: entry.others.map((other) => brimPluginName(other, $t)).join(', ')}})}</span>
                 </p>
@@ -388,15 +388,15 @@
             {#each roles as role (role.code)}
                 {@const missing = missingByRole.get(role.code)}
                 <div class="space-y-1">
-                    <div class="flex flex-wrap items-baseline gap-x-2 text-xs font-medium text-gray-600 dark:text-gray-300">
+                    <div class="flex flex-wrap items-baseline gap-x-2 text-xs font-medium text-lf-secondary">
                         <span>{roleName(role, role.code)}</span>
-                        <span class="text-gray-400">· {extensionsLabel(role)}</span>
+                        <span class="text-lf-muted">· {extensionsLabel(role)}</span>
                         {#if maxHistoryLabel(role)}
-                            <span class="font-normal text-gray-400">· {maxHistoryLabel(role)}</span>
+                            <span class="font-normal text-lf-muted">· {maxHistoryLabel(role)}</span>
                         {/if}
                     </div>
                     {#if membersOf(role.code).length > 0}
-                        <div class="overflow-hidden rounded-md border border-gray-100 dark:border-gray-800" data-testid="report-set-role-table" data-role={role.code}>
+                        <div class="overflow-hidden rounded-md border border-lf-subtle" data-testid="report-set-role-table" data-role={role.code}>
                             <DataTable
                                 data={memberRows(role.code)}
                                 columns={memberColumns}
@@ -419,7 +419,7 @@
                         </div>
                     {/if}
                     {#if missing}
-                        <div class="ml-3 space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200" data-testid="report-set-missing" data-role={role.code}>
+                        <div class="ml-3 space-y-1.5 rounded-md border border-lf-warning-line bg-lf-warning-soft p-2 text-xs text-lf-warning-on-soft" data-testid="report-set-missing" data-role={role.code}>
                             <p class="font-medium">{$t('importWizard.reportSet.missingRole', {values: {role: roleName(role, role.code), ext: extensionsLabel(role)}})}</p>
                             {#if missing.start && missing.end}
                                 <p>{$t('importWizard.reportSet.missingPeriod', {values: {start: formatDay(String(missing.start)), end: formatDay(String(missing.end))}})}</p>
@@ -427,7 +427,7 @@
                             <div class="flex flex-wrap items-center gap-3">
                                 <button
                                     type="button"
-                                    class="inline-flex items-center gap-1.5 rounded-md bg-libre-green px-2.5 py-1 font-medium text-white hover:bg-libre-green/90 disabled:cursor-not-allowed disabled:opacity-50"
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-lf-action px-2.5 py-1 font-medium text-lf-on-action hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50"
                                     onclick={() => inputs[role.code]?.click()}
                                     disabled={uploadingRole !== null}
                                     data-testid="report-set-upload-missing"
@@ -441,7 +441,7 @@
                                 </button>
                                 <input bind:this={inputs[role.code]} type="file" class="hidden" accept={role.extensions.join(',')} onchange={(event) => pickFile(role.code, event)} data-testid="report-set-upload-input" />
                                 {#if plugin?.docs_url}
-                                    <a class="inline-flex items-center gap-1 text-libre-green hover:underline" href={plugin.docs_url} target="_blank" rel="noopener noreferrer">
+                                    <a class="inline-flex items-center gap-1 text-lf-link hover:underline" href={plugin.docs_url} target="_blank" rel="noopener noreferrer">
                                         <ExternalLink size={12} />{$t('importWizard.reportSet.howToExport')}
                                     </a>
                                 {/if}
@@ -453,9 +453,9 @@
 
             {#if unrecognised.length > 0}
                 <div class="space-y-1">
-                    <div class="text-xs font-medium text-gray-600 dark:text-gray-300">{$t('importWizard.reportSet.unrecognised')}</div>
+                    <div class="text-xs font-medium text-lf-secondary">{$t('importWizard.reportSet.unrecognised')}</div>
                     {#each unrecognised as member (member.file_id)}
-                        <div class="flex items-center gap-2 pl-3 text-xs text-gray-500" data-testid="report-set-unrecognised" data-file-id={member.file_id}>
+                        <div class="flex items-center gap-2 pl-3 text-xs text-lf-muted" data-testid="report-set-unrecognised" data-file-id={member.file_id}>
                             <FileText size={12} class="shrink-0" />
                             <span class="min-w-0 flex-1 truncate">{member.filename}</span>
                         </div>
@@ -468,56 +468,55 @@
                      40% of the card), so every row's bars start and end at the same point. On a phone the third
                      column, each row's period, gives way to the bars: the axis and each bar's infobox still date them. -->
                 <div class="grid grid-cols-[fit-content(40%)_minmax(0,1fr)] items-center gap-x-2 gap-y-1.5 sm:grid-cols-[fit-content(40%)_minmax(0,1fr)_max-content]" data-testid="report-set-timeline">
-                    <div class="col-start-2 flex flex-wrap justify-between gap-x-2 text-[10px] tabular-nums text-gray-400">
+                    <div class="col-start-2 flex flex-wrap justify-between gap-x-2 text-[10px] tabular-nums text-lf-muted">
                         <span data-testid="report-set-timeline-start">{formatDay(timeline.start)}</span>
                         <span class="ml-auto" data-testid="report-set-timeline-end">{formatDay(timeline.end)}</span>
                     </div>
                     <span class="hidden sm:block" aria-hidden="true"></span>
                     {#each timeline.rows as row (row.role)}
-                        <span class="text-xs text-gray-500" data-testid="report-set-timeline-label" data-role={row.role}
+                        <span class="text-xs text-lf-muted" data-testid="report-set-timeline-label" data-role={row.role}
                             >{roleName(
                                 roles.find((role) => role.code === row.role),
                                 row.role,
                             )}</span
                         >
-                        <div class="relative h-3 rounded bg-gray-100 dark:bg-slate-800" data-testid="report-set-timeline-track" data-role={row.role}>
+                        <div class="relative h-3 rounded bg-lf-neutral" data-testid="report-set-timeline-track" data-role={row.role}>
                             {#each row.gaps as gap, index (index)}
                                 <div class="absolute inset-y-0" style="left: {gap.leftPct}%; width: {Math.max(gap.widthPct, 1)}%">
                                     <Tooltip text={gapInfo(gap)} wrapperClass="h-full w-full" showDelayMs={200}>
-                                        <div class="h-full w-full rounded border border-dashed border-amber-500 bg-amber-50/60 dark:border-amber-400 dark:bg-amber-900/20" data-testid="report-set-timeline-gap" data-role={row.role} data-start={gap.start} data-end={gap.end}></div>
+                                        <div class="h-full w-full rounded border border-dashed border-lf-warning bg-lf-warning-soft/60" data-testid="report-set-timeline-gap" data-role={row.role} data-start={gap.start} data-end={gap.end}></div>
                                     </Tooltip>
                                 </div>
                             {/each}
                             {#each row.bars as bar, index (index)}
                                 <div class="absolute inset-y-0" style="left: {bar.leftPct}%; width: {Math.max(bar.widthPct, 1)}%">
                                     <Tooltip text={barInfo(row.role, bar)} wrapperClass="h-full w-full" showDelayMs={200}>
-                                        <div class="h-full w-full rounded bg-libre-green/70 hover:bg-libre-green" data-testid="report-set-timeline-bar" data-role={row.role} data-file-id={bar.fileId} data-start={bar.start} data-end={bar.end} data-rows={bar.rows ?? ''}></div>
+                                        <div class="h-full w-full rounded bg-lf-checked/70 hover:bg-lf-checked" data-testid="report-set-timeline-bar" data-role={row.role} data-file-id={bar.fileId} data-start={bar.start} data-end={bar.end} data-rows={bar.rows ?? ''}></div>
                                     </Tooltip>
                                 </div>
                             {/each}
                         </div>
-                        <span class="hidden text-right text-[10px] tabular-nums text-gray-500 sm:block" data-testid="report-set-timeline-span" data-role={row.role}>{rowSpan(row.bars)}</span>
+                        <span class="hidden text-right text-[10px] tabular-nums text-lf-muted sm:block" data-testid="report-set-timeline-span" data-role={row.role}>{rowSpan(row.bars)}</span>
                     {/each}
                     {#if timeline.history}
                         {@const history = timeline.history}
-                        <span class="text-xs text-gray-500" data-testid="report-set-timeline-label" data-role="history">LibreFolio</span>
-                        <div class="relative h-3 rounded bg-gray-100 dark:bg-slate-800" data-testid="report-set-timeline-track" data-role="history">
+                        <span class="text-xs text-lf-muted" data-testid="report-set-timeline-label" data-role="history">LibreFolio</span>
+                        <div class="relative h-3 rounded bg-lf-neutral" data-testid="report-set-timeline-track" data-role="history">
                             <div class="absolute inset-y-0" style="left: {history.leftPct}%; width: {Math.max(history.widthPct, 1)}%">
                                 <Tooltip text={historyInfo(history)} wrapperClass="h-full w-full" showDelayMs={200}>
-                                    <div class="h-full w-full rounded bg-gray-400/80 hover:bg-gray-500 dark:bg-gray-500/80" data-testid="report-set-timeline-history" data-start={history.start} data-end={history.end} data-count={history.count}></div>
+                                    <div class="h-full w-full rounded bg-lf-muted/80 hover:bg-lf-muted" data-testid="report-set-timeline-history" data-start={history.start} data-end={history.end} data-count={history.count}></div>
                                 </Tooltip>
                             </div>
                         </div>
-                        <span class="hidden text-right text-[10px] tabular-nums text-gray-500 sm:block" data-testid="report-set-timeline-span" data-role="history">{period(history.start, history.end)}</span>
+                        <span class="hidden text-right text-[10px] tabular-nums text-lf-muted sm:block" data-testid="report-set-timeline-span" data-role="history">{period(history.start, history.end)}</span>
                     {/if}
-                    <div class="col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-gray-500 sm:col-span-2" data-testid="report-set-timeline-legend">
-                        <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="file"><span class="inline-block h-2 w-4 rounded bg-libre-green/70"></span>{$t('importWizard.reportSet.timeline.legendFile')}</span>
+                    <div class="col-start-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-lf-muted sm:col-span-2" data-testid="report-set-timeline-legend">
+                        <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="file"><span class="inline-block h-2 w-4 rounded bg-lf-checked/70"></span>{$t('importWizard.reportSet.timeline.legendFile')}</span>
                         {#if timeline.history}
-                            <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="history"><span class="inline-block h-2 w-4 rounded bg-gray-400/80 dark:bg-gray-500/80"></span>{$t('importWizard.reportSet.timeline.legendHistory')}</span>
+                            <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="history"><span class="inline-block h-2 w-4 rounded bg-lf-muted/80"></span>{$t('importWizard.reportSet.timeline.legendHistory')}</span>
                         {/if}
                         {#if hasTimelineGaps}
-                            <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="gap"><span class="inline-block h-2 w-4 rounded border border-dashed border-amber-500 dark:border-amber-400"></span>{$t('importWizard.reportSet.timeline.legendGap')}</span
-                            >
+                            <span class="inline-flex items-center gap-1" data-testid="report-set-timeline-legend-item" data-kind="gap"><span class="inline-block h-2 w-4 rounded border border-dashed border-lf-warning"></span>{$t('importWizard.reportSet.timeline.legendGap')}</span>
                         {/if}
                     </div>
                 </div>
@@ -526,7 +525,7 @@
             {#if (preview?.warnings ?? []).length > 0}
                 <ul class="space-y-1">
                     {#each preview?.warnings ?? [] as notice, index (index)}
-                        <li class="flex items-start gap-1.5 text-xs {notice.severity === 'info' ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300'}" data-testid="report-set-warning" data-code={notice.code}>
+                        <li class="flex items-start gap-1.5 text-xs {notice.severity === 'info' ? 'text-lf-info' : 'text-lf-warning'}" data-testid="report-set-warning" data-code={notice.code}>
                             {#if notice.severity === 'info'}
                                 <Info size={12} class="mt-0.5 shrink-0" />
                             {:else}
@@ -539,10 +538,10 @@
             {/if}
 
             {#if history}
-                <p class="text-xs text-gray-600 dark:text-gray-400" data-testid="report-set-history" data-kind={history.kind}>
+                <p class="text-xs text-lf-secondary" data-testid="report-set-history" data-kind={history.kind}>
                     {history.kind === 'first' ? $t('importWizard.reportSet.historyFirst', {values: {date: formatDay(history.date)}}) : $t('importWizard.reportSet.historyLater', {values: {date: formatDay(history.date)}})}
                     {#if plugin?.docs_url}
-                        <a class="ml-1 text-libre-green hover:underline" href={plugin.docs_url} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExportBoth')}</a>
+                        <a class="ml-1 text-lf-link hover:underline" href={plugin.docs_url} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExportBoth')}</a>
                     {/if}
                 </p>
             {/if}

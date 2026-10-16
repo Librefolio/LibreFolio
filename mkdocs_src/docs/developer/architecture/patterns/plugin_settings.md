@@ -8,14 +8,19 @@ core resolves them, stores them, protects the secret ones and hands them to the 
   `BoundSettings`, in `backend/app/services/plugin_settings/contract.py`
 - **Families**: asset providers (`AssetSourceProvider`) and FX providers (`FXRateProvider`)
 - **API**: `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk`
+- **Interface**: the **Plugins** tab of Settings, and **Configure** in the asset dialog and in the
+  asset search, in `frontend/src/lib/features/plugin-settings/` ([The Interface](#interface))
+- **Shipped plugins with settings**: justETF (`preferred_currency`) and Borsa Italiana
+  (`preferred_language`), a personal search preference each ([Shipped Plugins](#shipped-plugins))
 - **Reference plugin**: `backend/app/services/asset_source_providers/mockprov/plugin.py`, test-only,
   with one field of every kind
 
-!!! info "Backend only"
+!!! info "Where the values are written"
 
-    No screen edits plugin settings yet: values are written through the [API](#api) or set by
-    [environment variables](#environment). No plugin shipped with LibreFolio declares settings
-    today, apart from the test-only `mockprov` and `MOCKFX`.
+    Users and administrators write the values in **Settings › Plugins**, or for one price provider
+    with **Configure** ([The Interface](#interface)); scripts and tests use the [API](#api). An
+    [environment variable](#environment) sets a `system` field instead, and locks it. What the user
+    sees is described in the user manual: [Plugin Settings](../../../user/settings/plugins.md).
 
 ---
 
@@ -27,16 +32,21 @@ Paths are relative to `backend/`.
 |--------|----------------|
 | `app/services/plugin_settings/fields.py` | `PluginSettingField` and `SettingOption`, the rules of each family (`FAMILY_RULES`), the checks of a declaration and of a value, the variables of a field (`env_name()`, `env_variables()`) and their single owner (`claim_env_variables()`) |
 | `app/services/plugin_settings/contract.py` | `PluginSettingsMixin`, inherited by the family bases, and `BoundSettings`, the values bound to one instance |
-| `app/services/plugin_settings/resolver.py` | The value each field takes (variable, saved row, default), its problems, and the fingerprint of the cache keys |
+| `app/services/plugin_settings/resolver.py` | The value each field takes (variable, saved row, default), its problems, the fields that leave a plugin not configured (`missing_field_keys()`, one rule for a call and for the catalogue), and the fingerprint of the cache keys |
 | `app/services/plugin_settings/runtime.py` | `configure_instance()`: reads the plugin's rows and binds the values to a new instance |
 | `app/services/plugin_settings/crypto.py` | The encryption of the secret values, and `plugin_secrets_key_status()` |
-| `app/services/plugin_settings/service.py` | The catalogue and the all-or-nothing writes behind the API |
+| `app/services/plugin_settings/service.py` | The catalogue (`configured` and the plugin's icon included) and the all-or-nothing writes behind the API |
 | `app/api/v1/plugin_settings.py`, `app/schemas/plugin_settings.py` | The two endpoints and their schemas |
-| `app/services/assets/core.py` | `configured_provider()`, `call_provider()` (the boundary of every asset provider call), `settings_cache_part()`, `settings_cache_part_for()` |
+| `app/services/assets/core.py` | `configured_provider()`, `call_provider()` (the boundary of every asset provider call), `public_asset_url()` (an asset URL withheld when it shows a secret), `settings_cache_part()`, `settings_cache_part_for()` |
+| `app/services/assets/search.py` | Search for a user: `providers_not_configured`, and the stream's `provider_error` with its `error_code` ([NOT_CONFIGURED](#not-configured)) |
 | `app/services/fx/runtime.py` | `configured_fx_provider()`, `call_fx_provider()` (the boundary of every FX provider call), `settings_cache_part()` |
-| `app/utils/runtime/secret_masking.py` | The masking of the secrets in flight, in log lines and in exceptions, and the check that an error still shows one |
+| `app/utils/runtime/secret_masking.py` | The masking of the secrets in flight, in log lines and in exceptions, each text either masked in place or, with `whole`, hidden entirely; and the check that an error still shows one |
 | `app/config/plugins.py` | `plugin_setting_env()` and `plugin_setting_env_origin()`: the environment variables of the fields |
 | `app/db/models.py`, `alembic/versions/007_plugin_settings.py` | The tables `plugin_system_settings` and `plugin_user_settings` |
+
+The interface is in `frontend/src/lib/features/plugin-settings/` ([The Interface](#interface)), its
+texts in the `pluginSettings` subsystem of the catalogue and, for each plugin's fields, in the
+plugin's own `i18n/` fragment ([Labels and Translations](#translations)).
 
 ---
 
@@ -51,7 +61,7 @@ flowchart TD
     BIND --> CALL["call_provider() / call_fx_provider()"]
     CALL -->|"a required field has no value"| NC["NOT_CONFIGURED<br/>before any I/O"]
     CALL -->|"secrets in flight"| OP["Plugin operation"]
-    OP -->|"raises"| MASK["Exception masked in place<br/>(replaced if it still shows a secret)"]
+    OP -->|"raises"| MASK["Exception masked in place<br/>(hidden whole with a personal secret;<br/>replaced if it still shows a secret)"]
 ```
 
 1. Service code asks for a configured instance: `configured_provider(code, user_id=…)` for an asset
@@ -69,7 +79,8 @@ flowchart TD
    ([`NOT_CONFIGURED`](#not-configured)), and so does a pause after «too many requests»
    (`RATE_LIMITED`, [Provider Pauses](../../backend/assets/architecture.md#provider-pauses));
    otherwise the operation runs with the plugin's secrets in flight, masked in the log lines and in
-   the exception it raises ([Secrets](#secrets)).
+   the exception it raises, whose texts are hidden whole when the call carries a personal secret
+   ([Secrets](#secrets)).
 
 Every use gets a new instance and values resolved again: nothing is kept between uses, so one user's
 values never reach another user's call. A use is one search, one probe, the refresh of one asset,
@@ -144,11 +155,11 @@ class MyProvider(AssetSourceProvider):
 | `scope` | — | `SettingScope.SYSTEM` (one value for the instance) or `SettingScope.USER` (each user's own): see [Scopes and Families](#scopes) |
 | `label` | — | English label, required: the fallback when the interface has no translation |
 | `description` | `""` | English help text |
-| `label_key`, `description_key` | `None` | The i18n keys of the label and of the description, returned by the API, so that a client never builds a key |
+| `label_key`, `description_key` | `None` | The i18n keys of the label and of the description, `pluginSettings.<family>.<code>.label.<key>` and `.description.<key>`, returned by the API so that a client never builds a key: see [Labels and Translations](#translations) |
 | `secret` | `False` | Write-only, encrypted at rest, never returned: see [Secrets](#secrets) |
 | `required` | `False` | The plugin cannot work without a value: the core refuses the call with [`NOT_CONFIGURED`](#not-configured) |
 | `default` | `None` | The value when nothing else sets the field; a secret has none |
-| `options` | `()` | The choices of a `select`: `SettingOption(value, label, label_key=None)` |
+| `options` | `()` | The choices of a `select`: `SettingOption(value, label, label_key=None)`, the key being `pluginSettings.<family>.<code>.option.<key>.<value>` |
 | `min_length`, `max_length` | `None` | The bounds of a `string` |
 | `minimum`, `maximum` | `None` | The bounds of a `number` or an `integer` |
 | `env` | `None` | For a secret `system` field only: the older variable name a provider read the value from, accepted after the derived one. See [Environment Variables and Locking](#environment) |
@@ -160,6 +171,60 @@ declaration, or a variable another plugin already reads, raises `SettingsDeclara
 plugin's module fails to import and the plugin is not registered, like any import failure. The error
 is logged and listed by `GET /api/v1/system/plugin-diagnostics`
 ([Registry Pattern](registry_pattern.md#registry-specializations)).
+
+### 🌐 Labels and Translations {: #translations }
+
+`label`, `description` and an option's `label` are English: the text the interface shows when it has
+no translation, for example for a plugin mounted at runtime, whose fragment is not merged
+([A Plugin's Translations](registry_pattern.md#plugin-translations)). To translate them, the plugin
+declares their keys, never built by the interface, and holds the texts in its own `i18n/` fragment,
+under the branch of its settings:
+
+| Key | Declared as |
+|-----|-------------|
+| `pluginSettings.<family>.<code>.label.<key>` | the field's `label_key` |
+| `pluginSettings.<family>.<code>.description.<key>` | the field's `description_key` |
+| `pluginSettings.<family>.<code>.option.<key>.<value>` | an option's `label_key` |
+
+`<family>` is `asset` or `fx`, and `<code>` the code as the registry has it: the `provider_code` of
+an asset provider (`justetf`, `borsa_italiana`), the FX code with its case (`pluginSettings.fx.ECB`).
+justETF's field, for example:
+
+```python
+# backend/app/services/asset_source_providers/justetf/plugin.py (excerpt)
+settings_fields = (
+    PluginSettingField(
+        key="preferred_currency",
+        type=SettingType.SELECT,
+        scope=SettingScope.USER,
+        label="Preferred currency",
+        description="Search shows each fund only in this currency. …",
+        default="all",
+        options=(
+            SettingOption("all", "All currencies", label_key="pluginSettings.asset.justetf.option.preferred_currency.all"),
+            *(SettingOption(currency, f"{_CURRENCY_FLAGS[currency]} {currency}") for currency in _SUPPORTED_CURRENCIES),
+        ),
+        label_key="pluginSettings.asset.justetf.label.preferred_currency",
+        description_key="pluginSettings.asset.justetf.description.preferred_currency",
+    ),
+)
+```
+
+Its currency options declare no key: `🇪🇺 EUR` reads the same in every language. Add the texts in the
+four languages, naming the plugin's folder:
+
+```bash
+./dev.py i18n add "pluginSettings.asset.my_provider.label.region" --en "Region" --it "Regione" --fr "Région" --es "Región" --into asset_source_providers/my_provider
+```
+
+Always pass `--into`. Without it, `add` refuses the first key of a new asset plugin, because the keys
+under `pluginSettings.asset` belong to plugins, and refuses any key of a plugin whose keys lie under
+two branches, as Borsa Italiana's do (`assets.providerParams.borsa_italiana` and
+`pluginSettings.asset.borsa_italiana`); an FX plugin's first key would land in the `pluginSettings`
+subsystem instead of the fragment. `./dev.py test utils gate-plugin-i18n-ownership` reads the
+declared keys (each field's `label_key` and `description_key`, each option's `label_key`) and fails
+when one is not in the plugin's fragment, or when a fragment key lies outside the plugin's branches
+([The Ownership Gate](registry_pattern.md#plugin-i18n-gate)).
 
 ---
 
@@ -192,6 +257,11 @@ for nobody in particular, so they never depend on one user's values:
 | Asset probe (`POST /api/v1/assets/provider/probe`): current value, history, metadata | The instance's values | The caller's values |
 | Asset current value, history, metadata and their refreshes, scheduled jobs included | The instance's values | Their defaults |
 | FX `fetch_rates()` and `get_supported_currencies()` | The instance's values | — (none declared) |
+
+So give a required `user` field a default. Without one, every call made for nobody, prices and
+scheduled jobs included, finds the field empty and answers [`NOT_CONFIGURED`](#not-configured), while
+the catalogue of a user who saved a value says `configured: true`: the catalogue judges the caller's
+own values.
 
 ---
 
@@ -307,6 +377,7 @@ and users never see it ([Hosting for Others](../../../admin/hosting_providers.md
 | `secret(key)` | The value of the secret field `key`, or `None` when it has none |
 | `missing` | The fields that leave the plugin not configured: required ones without a usable value, and any field whose variable is set but invalid |
 | `fingerprint` | The identity of these values in the cache keys: see [Caching](#caching) |
+| `carries_user_secrets` | Whether a `user` secret with a value is bound: a value the caller chose. The core then hides the call's error texts whole ([Secrets](#user-secret-errors)) |
 
 `get()` on a secret, `secret()` on a plain field, and either on a key the plugin does not declare
 raise `KeyError`: a typo fails loudly. The `repr` of a `BoundSettings` names the secret fields set,
@@ -375,7 +446,9 @@ call gets no value for the field, so a required one makes the plugin
 `Plugin setting unreadable: it must be entered again`. `plugin_secrets_key_status(session)` counts
 by `key_id`, without decrypting, the stored secrets of each scope that the current key did not
 encrypt, or all of them when the key cannot be used; without stored secrets it reads no key, so it
-never creates the key file. No startup check calls it yet.
+never creates the key file. At every start, the step `plugin-secrets-check` (workstream H) calls it
+and logs an error when stored `system` secrets are unreadable, with their count alone: the `user`
+secrets are left to their users ([Plugin Secrets Check](../security.md#plugin-secrets-check)).
 
 **An unusable instance key.** A configured key (`LIBREFOLIO_INSTANCE_KEY`,
 `LIBREFOLIO_INSTANCE_KEY_FILE`) that cannot be used stops the server at startup. A generated key file
@@ -397,6 +470,21 @@ key leaves them `unreadable`: they must be entered again.
 - Never return a secret in a result: return values are not masked, and results are cached, stored
   and sent to clients.
 - Never log a secret, never put it in a URL you log, never put it in an exception message.
+- Never put a secret in `get_asset_url()` or in `cooldown_scope()`, and never send one in a request
+  whose host comes from the `identifier` or the `provider_params`. Any signed-in user can probe a
+  provider with any identifier and any parameters (`POST /api/v1/assets/provider/probe`), on an
+  instance that carries the instance's secrets: a host taken from them is the caller's to choose,
+  and the secret would travel there. An asset URL is shown to the user (the **Provider URL** of the
+  asset dialog comes from the probe), and a pause scope is computed before the call, outside the
+  masking, then keys the pause registry and appears in its log lines.
+
+For the asset URL the core also checks, as a last line of defence: the probe passes the plugin's URL
+through `core.public_asset_url()`, which withholds a URL that shows one of the provider's secrets.
+The probe then answers `provider_url: null`, and the log has a warning naming the provider,
+`Provider asset URL withheld: it shows a secret`. The URL is hidden whole, never masked: a masked URL
+would tell the caller where a value they chose occurs. The other paths that compute an asset URL
+(search results, the assignments read) call `get_asset_url()` on an instance the core did not
+configure, which holds no secret.
 
 **Masking, the safety net.** Masking catches mistakes; it is not a feature to rely on. During a call
 through the boundary, the plugin's secrets are in flight (`secrets_in_flight()`, a `ContextVar`):
@@ -412,15 +500,32 @@ through the boundary, the plugin's secrets are in flight (`secrets_in_flight()`,
 - a value is judged by the text it shows: strings are masked, dicts, lists, tuples and sets are
   copied with their keys and items masked, and any other value whose `str()` or `repr()` shows a
   secret (a URL object, bytes, an exception kept in `details`) becomes its masked text;
-- a secret, and its URL-encoded forms, become `***`.
+- a secret, and its URL-encoded forms, become `***`. `mask_text()` finds every occurrence of every
+  form in the original text at once, then turns each run of occurrences that overlap or touch into a
+  single `***`: no part of a secret survives beside another one that overlaps it.
+
+**A secret the caller chose.** A `user` secret holds whatever its user typed. When a call carries one
+(`settings.carries_user_secrets`), `call_provider()` hides whole every text of the exception that
+shows any secret, the caller's or the instance's: each argument, attribute, note or `details` item
+that shows one becomes `***` entirely, along the cause and context chain
+(`mask_exception(..., whole=True)`). The exception's type and its `error_code` stay, so the callers
+and the localized messages still work. Masked in place, the text would tell whether the value the
+caller chose occurs in it, and where: next to an instance secret, guess after guess, that is enough
+to read the instance secret. Hidden whole, a wrong guess and the right one raise the same error. The
+log lines keep the precise masking, and so does every call that carries only instance secrets, as an
+FX call always does: an FX provider has no `user` fields.
+{: #user-secret-errors }
 
 An error that still shows a secret after masking, because its own `__str__` builds the text from
 state that masking cannot reach, is replaced at the boundary: by an `AssetSourceError` with
 `error_code="PROVIDER_ERROR"` for an asset provider, by an `FXServiceError` for an FX provider. Its
-message is `Provider <code> failed: <type>: <masked text>`, and it is raised with no link to the
-original error. A refusal for too many requests is replaced the same way by an
-`AssetRateLimitedError` or an `FXRateLimitedError`, `Provider <code> refused for too many requests: …`,
-which keeps its `retry_after`.
+message is `Provider <code> failed: <type>: <masked text>` (`<type>: ***` when the call carries a
+`user` secret), and it is raised with no link to the original error. The asset one also carries that
+description, `<type>: …`, in `details["detail"]`: the probe returns it in `error_details.detail`, and
+**Test Configuration** shows it through `providerErrors.PROVIDER_ERROR`, *The provider failed:
+{detail}*, so the cause (a 401 on a wrong key, say) stays visible. A refusal for too many requests is
+replaced the same way by an `AssetRateLimitedError` or an `FXRateLimitedError`,
+`Provider <code> refused for too many requests: …`, which keeps its `retry_after`.
 
 Masking does not reach threads a library starts by itself (they do not inherit the `ContextVar`),
 nor return values, nor a secret transformed in another way: in base64 in a Basic `Authorization`
@@ -430,20 +535,44 @@ header, hashed, or cut.
 
 ## 🚫 NOT_CONFIGURED {: #not-configured }
 
-A required field without a usable value (never set, an unreadable secret) is listed in
-`settings.missing`, and so is any field, required or optional, whose variable is set but invalid
-([Environment Variables and Locking](#environment)). While the list is not empty, the boundary
-refuses the call before the plugin runs, so before any network access:
+`missing_field_keys(states)` in `resolver.py` is the one rule of «not configured»: a required field
+without a usable value (never set, an unreadable secret), and any field, required or optional, whose
+variable is set but invalid ([Environment Variables and Locking](#environment)). A secret resolved
+without decrypting it, as the catalogue resolves it, is usable when it is set and readable by the
+current key. The same rule serves both sides:
+
+- **A call**: `build_bound_settings()` puts the result in `settings.missing`. While the list is not
+  empty, the boundary refuses the call before the plugin runs, so before any network access.
+- **The catalogue**: `configured` is `not missing_field_keys(states)`, judged on every field of the
+  plugin, the ones the managed profile hides included: a yes or a no, which names none of them. The
+  interface shows it as the badge **Configured** or **To configure** ([The Interface](#interface)).
+
+What the refusal looks like:
 
 - **Asset providers**: `call_provider()` raises `AssetSourceError` with `error_code="NOT_CONFIGURED"`
   and the missing keys in `details["missing"]`; the message is
-  `Provider <code> is not configured: <keys> missing`. A search skips the provider and lists it in
-  `providers_with_errors`; every operation of a probe answers `NOT_CONFIGURED`, with the keys in
-  `error_details.missing`.
+  `Provider <code> is not configured: <keys> missing`.
+    - Search: the standard endpoint lists the provider in `providers_with_errors` and in
+      `providers_not_configured`, and the stream sends `provider_error` with
+      `error_code: "NOT_CONFIGURED"`. Both log it at info level with the missing keys
+      (`Search skipped: provider not configured`, `Search stream: provider not configured`), not as a
+      warning. The search box shows the provider a row of its own, with **Configure**.
+    - Probe: every operation answers `NOT_CONFIGURED`, with the keys in `error_details.missing`.
+      **Test Configuration** counts it as a failure (❌, *This provider must be configured before
+      use*, `providerErrors.NOT_CONFIGURED`), never as a soft ⚠️.
 - **FX providers**: `call_fx_provider()` raises `FXNotConfiguredError`, an `FXServiceError` that
   carries `provider_code` and `missing`, with the same message.
 
 A field with a default is missing only when its variable is set but invalid.
+
+!!! note "One divergence, by design: a blob the key id vouches for"
+
+    The catalogue never decrypts: it trusts a stored secret whose `key_id` is the current key's. A
+    blob that still does not decrypt under that key, damaged or copied from another row, counts as
+    set in the catalogue (`configured: true`), while a call finds it unreadable and answers
+    `NOT_CONFIGURED`. The API never writes such a row;
+    `test_the_catalogue_cannot_see_a_blob_its_key_id_vouches_for_but_a_call_cannot_decrypt` pins the
+    behaviour (`./dev.py test services plugin-settings-runtime`).
 
 ---
 
@@ -464,8 +593,9 @@ by the code alone for a provider without fields). Different settings never share
 users with the same values do.
 
 - Code that deletes entries by key rebuilds the settings part with `settings_cache_part_for(code)`, as
-  a call would compute it now. An entry stored under other settings has another key: no lookup reaches
-  it, and it expires with its TTL.
+  a call would compute it now (for the asset history and current values, through
+  `drop_asset_cache_entries()` in `assets/core.py`). An entry stored under other settings has another
+  key: no lookup reaches it, and it expires with its TTL.
 - The FX catalogue's fallback, the last list a provider returned, served for a few minutes when the
   provider fails, is kept by provider code, not by settings.
 - The fingerprint covers the core's caches only. A cache the plugin keeps itself must not mix results
@@ -484,11 +614,31 @@ the hand-entered FX rates, stays hidden from the FX list by its code.
 
 ---
 
+## 🔎 Shipped Plugins with Settings {: #shipped-plugins }
+
+Two plugins shipped with LibreFolio declare a field, a personal `select` each, read in `search()`
+only. Neither is required and both default to `all`, so both plugins are always configured; prices,
+history and metadata never see the field ([Scopes and Families](#scopes)).
+
+| Plugin | Field | Options | What `search()` does with it |
+|--------|-------|---------|------------------------------|
+| justETF (`justetf`) | `preferred_currency` | `all`, then `EUR`, `USD`, `CHF`, `GBP`, built from `_SUPPORTED_CURRENCIES` and `_CURRENCY_FLAGS` | Emits each fund's row in that currency only, instead of one per currency. 👑 still marks the fund's own currency, so it shows only when the two are the same |
+| Borsa Italiana (`borsa_italiana`) | `preferred_language` | `all`, `it`, `en` | Emits each instrument's row in that language only (`_emitted_languages()`), in `search()` and in the rows `resolve_url()` returns. The site is searched in Italian whatever the preference, the first language of `_languages_in_order()`, never once per language |
+
+Every instrument has a row in every currency or language, so a preference never drops an
+instrument. justETF filters after its cached ETF list, and the core's search cache keys carry the
+settings' fingerprint ([Caching](#caching)), so two users with different preferences never share a
+cached answer. The texts are in the plugins' fragments, under `pluginSettings.asset.justetf` (a
+fragment of its own, new with this field) and `pluginSettings.asset.borsa_italiana`. What the user
+sees: [Search Preferences](../../../user/settings/plugins.md#search-preferences).
+
+---
+
 ## 🌐 API {: #api }
 
 | Endpoint | Caller | What it does |
 |----------|--------|--------------|
-| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
+| `GET /api/v1/settings/plugins` | Any signed-in user | Every plugin that declares settings, with `configured` (see [NOT_CONFIGURED](#not-configured)), its `icon_url` (the icon its family's provider list publishes: the `get_icon` property of a price provider, `icon` of an exchange-rate provider; null without one) and each field as the caller sees it: its declaration (type, scope, labels and i18n keys, bounds, options, default) and its state (`value` for a plain field, `is_set`, `source`: `env`, `db`, `default` or `none`, `locked`, `editable`, `problem`, `updated_at`; `env_variable` for administrators). Filters: `family`, `plugin_code`. |
 | `PATCH /api/v1/settings/plugins/bulk` | Any signed-in user; `system` fields need an administrator | Writes 1 to 100 items, all or nothing. Each item names `family`, `plugin_code`, `field_key` and `scope`, and gives exactly one of `value` (a plain field), `secret_value` (a secret field) and `clear: true` (deletes the saved value, so the default applies again). |
 
 A write checks every item before writing anything, then writes them all in one transaction:
@@ -506,6 +656,66 @@ A write checks every item before writing anything, then writes them all in one t
 - `503`: a secret cannot be encrypted, because the instance key cannot be used.
 
 The rules live in `backend/app/services/plugin_settings/service.py`.
+
+---
+
+## 🖥️ The Interface {: #interface }
+
+The interface reads and writes through the [API](#api) only. What the user sees is in the user
+manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
+`frontend/src/lib/features/plugin-settings/`:
+
+| Source | Role |
+|--------|------|
+| `pluginSettingsApi.ts` | Thin wrappers over the generated client: `fetchPluginSettings(filter)`, `fetchPluginEntry(family, code)`, and `savePluginSettings(items)`, which never throws and answers `saved`, `refused` (422, each item with its `error_code`), `conflict` (409), `keyUnavailable` (503) or `failed`. `fieldOf()` and `entryOf()` narrow the answer to what the components trust: a secret never carries a `value` or a `default` |
+| `pluginSettingsForm.ts` | The rules, without the DOM: the groups by family, with their titles and icons (`FAMILY_TITLE_KEYS`, `FAMILY_ICONS`), the texts with their English fallback, the read-only reasons, the state of a secret, the unsaved edits (`draftOf()`), the checks before the server's (`draftProblems()`, lengths counted in code points as `len()` counts them), the write items (`writeItems()`) and the refusals by field |
+| `PluginSettingsForm.svelte` | One plugin's form: its icon (`icon_url`, or a neutral `Puzzle` when it has none or the image does not load) and name, a control per field type, saved all or nothing |
+| `PluginSettingsTab.svelte` | The **Plugins** tab of Settings |
+| `PluginSettingsModal.svelte` | **Configure**: the same form for one plugin, in a dialog |
+
+- **The tab.** The `plugins` entry of `SETTINGS_TABS` (label `pluginSettings.tab.label`, icon
+  `Puzzle`, order 25, visible to everyone; `?tab=plugins` opens it: see
+  [Tab registry](../../frontend/components/features/settings.md#tab-registry)). It reads the whole
+  catalogue once, unfiltered, so a test-only plugin is never listed, and groups it under **Prices**
+  (`asset`) then **Exchange rates** (`fx`), leaving out a family without entries. Each title follows
+  its family's icon from `FAMILY_ICONS` (`ChartColumn`, `Coins`: the icons the families have on the
+  documentation's home), so a new family adds one row there. Each plugin is a
+  `PluginSettingsForm`, saved on its own; an empty catalogue and a failed read have their own message.
+  Its book icon (`DocsLink`) opens the user page.
+- **The form.** A control per type: a text or number input, a `SimpleSelect`, a checkbox, and a
+  `PasswordInput` for a secret. A field the caller cannot change (`editable: false`) is read-only,
+  with its reason: `locked`, *Set by the server*, the variable named for administrators
+  (`env_variable`); or `adminOnly`, a `system` field for a user who is not an administrator.
+  The problems the catalogue reports get a note each (`invalid_env`, `invalid_stored`,
+  `unreadable`), and a field whose saved value is in force (`source: db`) offers **Use the default**,
+  a `clear` item. **Save** sends the plugin's edits in one `PATCH`, then reads the plugin again with
+  `fetchPluginEntry()` and hands the fresh entry to its parent; a refusal marks each refused field
+  with its `error_code`. A save that succeeds raises no toast, only the app event
+  `pluginSettings.saved`; a refusal or a failure raises one. The events name fields, never a value.
+- **Secrets are never kept in the page.** The input is `autocomplete="new-password"`; what was typed
+  is sent once, as `secret_value`, and dropped after the save whatever its outcome. A saved secret
+  shows *Set on* with its `updated_at`, then **Replace** or **Clear**.
+- **Configure** is `PluginSettingsModal`, on `ModalBase`, at layer 80 by default: above the asset
+  dialog (50) and its prompts (70). Every opening reads the plugin afresh with
+  `fetchPluginEntry(family, code)`, which names the plugin, so a test-only plugin is listed there too.
+  Two components open it, for asset providers:
+    - `ProviderAssignmentSection.svelte` reads `fetchPluginEntry('asset', code)` whenever the chosen
+      provider changes, with no module-level cache: a cache would outlive a logout and show the next
+      user the personal values of the previous one. With an entry, row 1 shows **Configure** next to
+      the help link (unless the panel is read-only), and the badge **To configure** while
+      `configured` is false; a save replaces the entry, so the badge follows.
+    - `AssetSearchAutocomplete.svelte` collects the providers that could not search: from the
+      stream's `provider_error` events with `error_code: "NOT_CONFIGURED"`, or from
+      `providers_not_configured` when it falls back to the standard endpoint. Each gets a row at the
+      top of the results, *{provider} must be configured before it can search*
+      (`assets.search.notConfigured`), with **Configure**; a save starts the search again. When a
+      result's `display_name` contains 👑, a legend closes the list (`assets.search.crownLegend`).
+- **Texts.** The interface's own are in the `pluginSettings` subsystem of the catalogue
+  (`frontend/src/lib/i18n/pluginSettings/`), the two search texts in `assets.search`, and the probe's
+  `providerErrors.NOT_CONFIGURED` and `providerErrors.PROVIDER_ERROR` in the `assets` subsystem. A
+  field's texts come from its declaration: `fieldLabel()`, `fieldDescription()` and `optionLabel()`
+  translate the declared key, and fall back to the English text ([Labels and Translations](#translations)).
+- **Colours** are roles only (`bg-lf-*`, `text-lf-*`, `border-lf-*`), each class a whole literal.
 
 ---
 
@@ -537,8 +747,12 @@ What the code does about it:
 - Encryption under a subkey of its own, bound to the row; a `key_id` on every row, so a changed key
   shows as `unreadable`, never as a wrong value.
 - Values resolved again for every use on a new instance, never cached in clear.
-- Masking by value in log lines and exceptions while a call runs, and an error that would still show
-  a secret replaced at the boundary.
+- Masking by value in log lines and exceptions while a call runs, overlapping occurrences masked as
+  one, and an error that would still show a secret replaced at the boundary.
+- When a call carries a secret its caller chose (a `user` secret), every error text that shows a
+  secret is hidden whole, so that no guess of a value placed next to an instance secret can be
+  tested against the masking.
+- The probe withholds an asset URL that shows a secret (`core.public_asset_url()`).
 - Cache keys with fingerprints, HMAC-keyed when secrets are bound.
 - AI Export never reads the plugin settings: no module under `services/ai_export/` may import them or
   name their tables, and a guard test keeps it so.
@@ -556,6 +770,10 @@ Residual risks:
   nothing away.
 - **Masking has limits**: threads a library starts, return values, transformed values
   ([Secrets](#secrets)). Never put a secret in a result, in a URL you log, or in a message.
+- **A secret sent where the caller points.** A plugin that sends a secret in a request whose host
+  comes from the `identifier` or the `provider_params` hands it to whoever probes with a host of
+  their own: the secret leaves over the network, where no masking reaches. Only the plugin can avoid
+  it ([Rules for plugin authors](#secrets)).
 - **Plugins are trusted code.** Each one receives only its own settings, but it runs in the LibreFolio
   process.
 
@@ -569,10 +787,24 @@ All six run without a server or the lane's database (`isolation="pure"`):
 |----------|--------|
 | `./dev.py test services plugin-settings-contract` | Declarations per family, refusal at registration, values per type, derived variable names, `BoundSettings` |
 | `./dev.py test services plugin-settings-crypto` | The encrypted blob, the associated data, `key_id`, re-encryption on a copy, the key status |
-| `./dev.py test services plugin-settings-runtime` | Resolution and locking, fingerprints, `configure_instance()`, `NOT_CONFIGURED` and masking at both boundaries |
-| `./dev.py test services plugin-settings-service` | The catalogue and the all-or-nothing writes |
-| `./dev.py test services secret-masking` | Masking in exceptions and log lines, across threads and tasks |
+| `./dev.py test services plugin-settings-runtime` | Resolution and locking, fingerprints, `configure_instance()`, `NOT_CONFIGURED` and masking at both boundaries; `missing_field_keys()`, the same for a call and for the catalogue; `PROVIDER_ERROR` and its `details["detail"]`; a secret the caller chose, the errors hidden whole so that a wrong guess and the right one raise the same error; `public_asset_url()`, in the probe too; the search's `providers_not_configured` and the stream's `provider_error` event |
+| `./dev.py test services plugin-settings-service` | The catalogue, `configured` and each plugin's icon included (an icon that cannot be read, or an empty one, is null; a name that cannot be read falls back to the code), and the all-or-nothing writes |
+| `./dev.py test services secret-masking` | Masking in exceptions and log lines, across threads and tasks; overlapping or touching occurrences masked as one, against the overlap attack of the security review; `whole` |
 | `./dev.py test services plugin-settings-guards` | Shipped variables documented in `.env.example`, one owner per variable, no alias on a variable LibreFolio reads, AI Export kept away from the settings |
+
+The other units that touch the plugin settings:
+
+| Selector | Covers |
+|----------|--------|
+| `./dev.py test api plugin-settings` | The two endpoints on the lane's server: roles, write-only secrets, the 422 with every item and no input echo, user isolation, delivery to `mockprov`, CASCADE and SET NULL; justETF and Borsa Italiana in the full catalogue, each entry with its plugin's icon. It runs alone: it writes `mockprov`'s instance-wide fields |
+| `./dev.py test db migration-007` | Migration `007_plugin_settings`, up and down, on temporary databases |
+| `./dev.py test utils gate-plugin-i18n-ownership` | The settings' keys in each plugin's fragment ([Labels and Translations](#translations)) |
+| `./dev.py test services provider-errors` | Among the provider error paths, justETF's `preferred_currency` declaration and the rows its search keeps |
+| `./dev.py test services borsa-italiana-search` | Borsa Italiana's `preferred_language` on a fund and on a share, the site searched in Italian whatever the preference |
+| `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
+| `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
+| `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…30, the plugin's icon and its fallback in PSF-26…30), `PluginSettingsTab.test.ts` (PST-01…09, the families' icons in PST-07…09) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
+| `./dev.py test front-utility plugin-settings` | End to end, on desktop (`frontend/e2e/settings/plugin-settings.spec.ts`): the tab as a member and as an administrator, **Configure** on `mockprov` from an asset's edit dialog, the search's row and the 👑 legend on a simulated stream ([Front-Utility Tests](../../test-walkthrough/front-utility.md#plugin-settings)) |
 
 ---
 
@@ -587,3 +819,7 @@ All six run without a server or the lane's database (`isolation="pure"`):
 - ⚙️ [Settings System](../settings.md) — User and global settings, a separate system
 - 🛠️ [Configuration](../../../admin/configuration.md), section «Plugin Settings» — What the
   administrator sees and does
+- 👤 [Plugin Settings](../../../user/settings/plugins.md), in the user manual — The **Plugins** tab
+  and **Configure**, as the user sees them
+- ⚙️ [Settings Components](../../frontend/components/features/settings.md#tab-registry) — The tab
+  registry the **Plugins** tab is an entry of

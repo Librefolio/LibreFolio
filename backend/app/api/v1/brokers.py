@@ -452,8 +452,8 @@ async def list_broker_access(
     """
     List all users with access to a broker.
 
-    Any user with access to the broker can view the access list.
-    Superusers can view any broker's access list.
+    Any authenticated user can read the access list of any existing broker, email addresses included; a broker that
+    does not exist answers 404.
     """
     service = BrokerService(session)
     broker = await service.get_by_id(
@@ -490,10 +490,10 @@ async def bulk_update_broker_access(
 
     Rules:
     - Only OWNERs (or superusers) can call this endpoint.
-    - At least one OWNER must remain after the operation.
+    - At least one OWNER must remain after the operation: nobody, the caller included, can remove or downgrade the
+      last one.
     - Only OWNERs can have share_percentage > 0.
     - Sum of all share_percentage values must be ≤ 1.0 (fraction, not percent).
-    - The calling user cannot remove themselves as the last OWNER.
     """
     if not items:
         raise HTTPException(status_code=422, detail="At least one access item is required")
@@ -682,10 +682,11 @@ async def list_files(
     """
     List all uploaded broker report files.
 
-    Optionally filter by status and/or broker IDs.
-    Non-superusers see the files of the brokers they have a role on, and the files with no broker (uploaded by an
-    older version) they uploaded themselves (decision 36). Each item says whether the user may delete it
-    (``can_delete``). Results are sorted by upload time (newest first).
+    Optionally filter by status and/or broker IDs. With ``broker_ids`` the list holds only those brokers' files: the
+    files with no broker (uploaded by an older version) are listed only without that filter, on the Files page (W-B32).
+    Non-superusers see the files of the brokers they have a role on, and the files with no broker they uploaded
+    themselves (decision 36). Each item says whether the user may delete it (``can_delete``). Results are sorted by
+    upload time (newest first).
     """
     # Determine accessible broker IDs
     if current_user.is_superuser:
@@ -705,6 +706,9 @@ async def list_files(
 
     # Off the event loop: listing reads every sidecar and may detect old files' plugins again (item 8).
     files = await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
+    if broker_ids:
+        # A broker's list holds that broker's files only; list_files also keeps the ones with no broker (W-B32).
+        files = [file for file in files if file.target_broker_id is not None]
     if current_user.is_superuser:
         return [BRIMFileListItem(**file.model_dump(), can_delete=True) for file in files]
 

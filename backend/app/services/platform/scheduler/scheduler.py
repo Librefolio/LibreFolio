@@ -13,12 +13,18 @@ workers only one runs the jobs, and another answers ``not_leader``.
 After a Fly resume the wall clock is corrected within a few hundred milliseconds, and a request may be served before:
 a run for ``"return"`` or ``"wake"`` waits ``CLOCK_SETTLE_SECONDS`` before it reads the time. A history-sync slot missed
 while the machine slept or the server was off is due at the next run (``due_history_sync``), not at the next slot.
+
+A catch-up — a run at startup, on a return or for a wake-up — is what a user waits for: ``PRICE_REFRESH`` follows it,
+from the moment it is announced to the end of its run, and every ``/api/`` response says so in
+``X-LibreFolio-Price-Refresh`` while it lasts. The web app then shows «Updating prices…» while one of its jobs runs
+(``GET /system/price-refresh``, lot Z5). A regular tick is not followed.
 """
 
 import asyncio
+import threading
 import time as time_module
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal, get_args
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -47,8 +53,17 @@ MISSED_SLOT_LOOKBACK_DAYS = 7
 #: The name of the loop's return listener, and the reason it gives while a run is in progress.
 CATCH_UP_LISTENER = "scheduler-catch-up"
 BUSY_REASON = "scheduler"
+#: The wait before a job that raised runs again, doubled at each failure in a row (release 1.3, Z7b).
+FAILURE_BACKOFF_BASE_SECONDS = 60
+#: The longest such wait for the history sync; the current price waits at most its own frequency.
+FAILURE_BACKOFF_MAX_SECONDS = 3600
 
 RunReason = Literal["startup", "tick", "return", "wake"]
+#: The runs a user waits for (lot Z5): a startup, a return after a silence, a scheduled wake-up. A tick is not one.
+CATCH_UP_REASONS: frozenset[str] = frozenset({"startup", "return", "wake"})
+#: The response header that tells the web app a catch-up is about to run or runs.
+PRICE_REFRESH_HEADER = "X-LibreFolio-Price-Refresh"
+PriceRefreshState = Literal["idle", "starting", "running"]
 _SETTLING_REASONS = frozenset({"return", "wake"})
 _DAY_CODES = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
@@ -58,7 +73,12 @@ _run_lock_of_loop: tuple[asyncio.AbstractEventLoop, asyncio.Lock] | None = None
 
 @dataclass(frozen=True)
 class JobOutcome:
-    """How one job ended in a run: ``ok``, ``partial``, ``error`` or ``not_due``; ``error`` is a class name, if any."""
+    """How one job ended in a run: ``ok``, ``partial``, ``error`` or ``not_due``; ``error`` is a class name, if any.
+
+    ``items_deferred`` counts the items a provider's pause deferred. ``retry_at`` is when the job runs again before its
+    regular round: the end of the shortest pause, the end of the wait after a failure, or, for a job not due, the one
+    of them still ahead.
+    """
 
     name: str
     status: str
@@ -67,6 +87,8 @@ class JobOutcome:
     items_ok: int = 0
     items_err: int = 0
     error: str | None = None
+    items_deferred: int = 0
+    retry_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +108,7 @@ class _Job:
     due: Callable[[datetime, SchedulerSettings, SchedulerState], bool]
     run: Callable[[SchedulerState, SchedulerSettings], Awaitable[None]]
     state_of: Callable[[SchedulerState], JobState]
+    max_backoff_seconds: Callable[[SchedulerSettings], float]
 
 
 def utc_now() -> datetime:
@@ -96,6 +119,136 @@ def utc_now() -> datetime:
 async def settle_clock() -> None:
     """Give the wall clock ``CLOCK_SETTLE_SECONDS`` to be corrected after a resume."""
     await asyncio.sleep(CLOCK_SETTLE_SECONDS)
+
+
+@dataclass(frozen=True)
+class PriceRefreshProgress:
+    """The catch-up of the prices as the web app sees it: ``starting`` from its announcement, ``running`` while a job
+    runs, ``idle`` otherwise; and how the last catch-up that ran a job ended (``last_refreshed``: it updated an item)."""
+
+    state: PriceRefreshState
+    reason: str | None = None
+    job: str | None = None
+    since: datetime | None = None
+    last_finished_at: datetime | None = None
+    last_refreshed: bool = False
+
+
+class PriceRefreshTracker:
+    """The catch-up in progress in this process (lot Z5); thread-safe, in memory.
+
+    A catch-up is pending from ``announce()`` (the loop's start, a return) or ``run_started()`` until the last run
+    counted by ``run_started()`` ends. A job that finishes meanwhile counts for it, a tick's included: the user waits
+    for the prices, whatever run brings them.
+    """
+
+    def __init__(self, *, clock: Callable[[], datetime] = utc_now) -> None:
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._reason: str | None = None
+        self._since: datetime | None = None
+        self._runs = 0
+        self._job: str | None = None
+        self._ran = False
+        self._refreshed = False
+        self._last_finished_at: datetime | None = None
+        self._last_refreshed = False
+
+    @staticmethod
+    def _require_catch_up(reason: str) -> None:
+        if reason not in CATCH_UP_REASONS:
+            raise ValueError(f"not a catch-up reason: {reason!r}")
+
+    def _begin_locked(self, reason: str) -> None:
+        if self._reason is None:
+            self._reason = reason
+            self._since = self._clock()
+            self._ran = False
+            self._refreshed = False
+
+    def announce(self, reason: str) -> None:
+        """A catch-up is about to run: idle turns ``starting``; a pending catch-up keeps its reason and its start."""
+        self._require_catch_up(reason)
+        with self._lock:
+            self._begin_locked(reason)
+
+    def run_started(self, reason: str) -> None:
+        """A catch-up run starts: it is counted until ``run_finished()``, and begins a catch-up if none is pending."""
+        self._require_catch_up(reason)
+        with self._lock:
+            self._runs += 1
+            self._begin_locked(reason)
+
+    def run_finished(self) -> None:
+        """A counted run ended; at the last one the catch-up is over, and remembered if a job ran during it."""
+        with self._lock:
+            if self._runs == 0:
+                return
+            self._runs -= 1
+            if self._runs > 0:
+                return
+            if self._reason is not None and self._ran:
+                self._last_finished_at = self._clock()
+                self._last_refreshed = self._refreshed
+            self._reason = None
+            self._since = None
+            self._ran = False
+            self._refreshed = False
+
+    def job_started(self, name: str) -> None:
+        """A job of any run starts: it is the current job until it finishes."""
+        with self._lock:
+            self._job = name
+
+    def job_finished(self, items_ok: int | None) -> None:
+        """The current job finished (``items_ok`` None: cancelled); while a catch-up is pending, it ran for it."""
+        with self._lock:
+            self._job = None
+            if self._reason is not None:
+                self._ran = True
+                if items_ok is not None and items_ok > 0:
+                    self._refreshed = True
+
+    def snapshot(self) -> PriceRefreshProgress:
+        """The state now: ``running`` while a catch-up is pending and a job runs, ``starting`` while it is pending."""
+        with self._lock:
+            if self._reason is None:
+                return PriceRefreshProgress("idle", last_finished_at=self._last_finished_at, last_refreshed=self._last_refreshed)
+            running = self._job is not None
+            return PriceRefreshProgress(
+                "running" if running else "starting",
+                self._reason,
+                self._job if running else None,
+                self._since,
+                self._last_finished_at,
+                self._last_refreshed,
+            )
+
+    def header_value(self) -> str | None:
+        """``starting`` or ``running`` for ``X-LibreFolio-Price-Refresh``; None while idle."""
+        state = self.snapshot().state
+        return None if state == "idle" else state
+
+    def reset(self) -> None:
+        """Back to idle, with no catch-up remembered, no run counted and no current job."""
+        with self._lock:
+            self._reason = None
+            self._since = None
+            self._runs = 0
+            self._job = None
+            self._ran = False
+            self._refreshed = False
+            self._last_finished_at = None
+            self._last_refreshed = False
+
+
+#: The process's catch-up, read by ``GET /system/price-refresh`` and by the response header.
+PRICE_REFRESH = PriceRefreshTracker()
+
+
+def price_refresh_progress() -> PriceRefreshProgress:
+    """The process's catch-up, now."""
+    return PRICE_REFRESH.snapshot()
 
 
 def _scheduler_zoneinfo(tz_name: str) -> ZoneInfo:
@@ -131,8 +284,36 @@ def get_shutdown_event() -> asyncio.Event:
     return _shutdown_event
 
 
+def _retry_rule(job: JobState, now: datetime) -> bool | None:
+    """The retry rules, before the regular one: a failure's wait holds the job back, a provider's pause brings it forward.
+
+    False while ``next_attempt_at`` is ahead; True once ``retry_at`` has come; None when the regular rule decides.
+    """
+    now_utc = _as_utc(now)
+    next_attempt = _parse_last_run(job.next_attempt_at)
+    if next_attempt is not None and now_utc < next_attempt:
+        return False
+    retry_at = _parse_last_run(job.retry_at)
+    if retry_at is not None and now_utc >= retry_at:
+        return True
+    return None
+
+
+def _pending_retry_at(job: JobState, now: datetime) -> datetime | None:
+    """For a job not due: the wait after a failure if still ahead, else a deferred retry still ahead, else None."""
+    now_utc = _as_utc(now)
+    for value in (job.next_attempt_at, job.retry_at):
+        moment = _parse_last_run(value)
+        if moment is not None and moment > now_utc:
+            return moment
+    return None
+
+
 def due_current_price(now: datetime, settings: SchedulerSettings, state: SchedulerState) -> bool:
-    """Check if current-price refresh is due."""
+    """Check if current-price refresh is due: the retry rules first (``_retry_rule``), then its frequency."""
+    retry = _retry_rule(state.current_price, now)
+    if retry is not None:
+        return retry
     last = state.current_price.last_run_at
     if last is None:
         return True
@@ -166,8 +347,11 @@ def due_history_sync(now: datetime, settings: SchedulerSettings, state: Schedule
 
     After a run, the most recent slot of a configured day, today or in the week before, is due when it fell after that
     run: a slot missed while the server was off or asleep is caught up at the next run (decision D-Z3-1). Before any
-    run, or with an unreadable one, only today's slots count.
+    run, or with an unreadable one, only today's slots count. The retry rules (``_retry_rule``) come first.
     """
+    retry = _retry_rule(state.history_sync, now)
+    if retry is not None:
+        return retry
     now_utc = _as_utc(now)
     last_dt = _parse_last_run(state.history_sync.last_run_at)
     if last_dt is None:
@@ -179,8 +363,20 @@ def due_history_sync(now: datetime, settings: SchedulerSettings, state: Schedule
 
 
 JOBS: tuple[_Job, ...] = (
-    _Job("current_price", lambda now, settings, state: due_current_price(now, settings, state), lambda state, settings: run_current_price_refresh(state), lambda state: state.current_price),
-    _Job("history_sync", lambda now, settings, state: due_history_sync(now, settings, state), lambda state, settings: run_history_sync(state, horizon_days=settings.history_sync_horizon_days), lambda state: state.history_sync),
+    _Job(
+        "current_price",
+        lambda now, settings, state: due_current_price(now, settings, state),
+        lambda state, settings: run_current_price_refresh(state),
+        lambda state: state.current_price,
+        lambda settings: settings.current_price_frequency_minutes * 60,
+    ),
+    _Job(
+        "history_sync",
+        lambda now, settings, state: due_history_sync(now, settings, state),
+        lambda state, settings: run_history_sync(state, horizon_days=settings.history_sync_horizon_days),
+        lambda state: state.history_sync,
+        lambda settings: FAILURE_BACKOFF_MAX_SECONDS,
+    ),
 )
 JOB_NAMES = tuple(job.name for job in JOBS)
 
@@ -204,6 +400,16 @@ def _overall_status(outcomes: tuple[JobOutcome, ...]) -> str:
 
 
 async def _run_job(job: _Job, reason: str, state: SchedulerState, settings: SchedulerSettings) -> JobOutcome:
+    PRICE_REFRESH.job_started(job.name)
+    outcome: JobOutcome | None = None
+    try:
+        outcome = await _run_job_body(job, reason, state, settings)
+        return outcome
+    finally:
+        PRICE_REFRESH.job_finished(outcome.items_ok if outcome is not None else None)
+
+
+async def _run_job_body(job: _Job, reason: str, state: SchedulerState, settings: SchedulerSettings) -> JobOutcome:
     started_at = utc_now()
     started = time_module.monotonic()
     try:
@@ -212,9 +418,46 @@ async def _run_job(job: _Job, reason: str, state: SchedulerState, settings: Sche
     except Exception as exc:
         # The message stays in the log (secrets masked there), never in the outcome a caller may pass on.
         logger.exception("Scheduler job failed", job=job.name, reason=reason)
-        return JobOutcome(job.name, "error", started_at, round(time_module.monotonic() - started, 2), error=type(exc).__name__)
+        duration_s = round(time_module.monotonic() - started, 2)
+        failed = await _record_failure(job, state, settings, type(exc).__name__)
+        return JobOutcome(job.name, "error", started_at, duration_s, error=type(exc).__name__, retry_at=_parse_last_run(failed.next_attempt_at))
     job_state = job.state_of(state)
-    return JobOutcome(job.name, job_state.last_status or "ok", started_at, job_state.last_duration_s, job_state.last_items_ok, job_state.last_items_err, job_state.last_error)
+    return JobOutcome(
+        job.name,
+        job_state.last_status or "ok",
+        started_at,
+        job_state.last_duration_s,
+        job_state.last_items_ok,
+        job_state.last_items_err,
+        job_state.last_error,
+        job_state.last_items_deferred,
+        _parse_last_run(job_state.retry_at),
+    )
+
+
+async def _record_failure(job: _Job, state: SchedulerState, settings: SchedulerSettings, error: str) -> JobState:
+    """Record a job that raised: one more failure in a row, and no new attempt before a doubling wait.
+
+    ``last_run_at`` and ``last_duration_s`` stay those of the last run that ended, so a missed slot stays due; the wait
+    starts at ``FAILURE_BACKOFF_BASE_SECONDS`` and stops at the job's ceiling. The state is saved; a save that fails
+    again is only logged.
+    """
+    previous = job.state_of(state)
+    failures = previous.consecutive_failures + 1
+    wait = min(FAILURE_BACKOFF_BASE_SECONDS * 2 ** (failures - 1), job.max_backoff_seconds(settings))
+    failed = replace(
+        previous,
+        last_status="error",
+        last_error=error,
+        consecutive_failures=failures,
+        next_attempt_at=(utc_now() + timedelta(seconds=wait)).isoformat(),
+    )
+    setattr(state, job.name, failed)
+    try:
+        await asyncio.to_thread(save_state, state)
+    except Exception:
+        logger.exception("Scheduler state not saved after a failed job", job=job.name)
+    return failed
 
 
 async def _run_locked(reason: str) -> RunReport:
@@ -239,7 +482,7 @@ async def _run_locked(reason: str) -> RunReport:
         if job.due(now, settings, state):
             outcomes.append(await _run_job(job, reason, state, settings))
         else:
-            outcomes.append(JobOutcome(job.name, "not_due"))
+            outcomes.append(JobOutcome(job.name, "not_due", retry_at=_pending_retry_at(job.state_of(state), now)))
     jobs = tuple(outcomes)
     return report(_overall_status(jobs), jobs)
 
@@ -253,11 +496,18 @@ async def run_due_jobs(reason: RunReason) -> RunReport:
     """
     if reason not in get_args(RunReason):
         raise ValueError(f"unknown scheduler run reason {reason!r}")
-    with current_activity().busy(BUSY_REASON):
-        if reason in _SETTLING_REASONS:
-            await settle_clock()
-        async with _run_lock():
-            result = await _run_locked(reason)
+    catch_up = reason in CATCH_UP_REASONS
+    if catch_up:
+        PRICE_REFRESH.run_started(reason)
+    try:
+        with current_activity().busy(BUSY_REASON):
+            if reason in _SETTLING_REASONS:
+                await settle_clock()
+            async with _run_lock():
+                result = await _run_locked(reason)
+    finally:
+        if catch_up:
+            PRICE_REFRESH.run_finished()
     ran = [outcome.name for outcome in result.jobs if outcome.status != "not_due"]
     log = logger.info if ran else logger.debug
     log("Scheduler run finished", reason=reason, status=result.status, jobs=ran)
@@ -292,10 +542,13 @@ async def scheduler_loop(shutdown_event: asyncio.Event) -> None:
     nudge = asyncio.Event()
 
     def on_return(_silence: float) -> None:
+        PRICE_REFRESH.announce("return")
         loop.call_soon_threadsafe(nudge.set)
 
     activity = current_activity()
     activity.register_return_listener(CATCH_UP_LISTENER, CATCH_UP_AFTER_SECONDS, on_return)
+    activity.register_response_header(PRICE_REFRESH_HEADER, PRICE_REFRESH.header_value)
+    PRICE_REFRESH.announce("startup")
     logger.info("Scheduler loop started")
     try:
         await _wait(shutdown_event, nudge, FIRST_RUN_DELAY_SECONDS)
@@ -309,4 +562,6 @@ async def scheduler_loop(shutdown_event: asyncio.Event) -> None:
             reason = "return" if await _wait(shutdown_event, nudge, TICK_SECONDS) else "tick"
     finally:
         activity.remove_return_listener(CATCH_UP_LISTENER)
+        activity.remove_response_header(PRICE_REFRESH_HEADER)
+        PRICE_REFRESH.reset()
         logger.info("Scheduler loop stopped")

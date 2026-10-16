@@ -19,11 +19,15 @@
 # The app version is pinned, so that snapshots of different commits compare: the sidebar, the changelog and the
 # About tab show LF_APP_VERSION (default v0.0.0-review) instead of `git describe`. When the checkout's frontend
 # build is not a debug build carrying it, the script rebuilds it first (dev.py front build --debug, build.log).
+# Every shot is also scanned for mixed elements (role and legacy colour classes on one element, the runtime twin of
+# the colour gate G3): LF_GALLERY_MIXED_DIR=<snapshot>/mixed, merged into mixed_elements.json at the end; read it with
+# `gallery_tool mixed <snapshot>`. Report only: it never fails the run.
 set -euo pipefail
 
-usage() { sed -n '2,22p' "$0"; exit 2; }
+usage() { sed -n '2,24p' "$0"; exit 2; }
 [[ $# -ge 1 && "$1" != -* ]] || usage
 LABEL=$1; shift
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd -P)
 CHECKOUT=$(cd "$(dirname "$0")/../.." && pwd)
 PORT=6150
 DATA_DIR=/tmp/librefolio-r2-main
@@ -72,6 +76,9 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 mkdir -p "$DEST/png"
+# The gallery's mixed-element records, one file per Playwright worker (frontend/e2e/fixtures/galleryMixed.ts).
+MIXED_PARTS="$DEST/mixed"
+mkdir -p "$MIXED_PARTS"
 BUILD="$CHECKOUT/frontend/build"
 if [[ "$(cat "$BUILD/.build-debug" 2>/dev/null)" != "1" ]] || ! grep -rqF --include='*.js' -- "$APP_VERSION" "$BUILD" 2>/dev/null; then
     echo "the frontend build is not a debug build showing $APP_VERSION: rebuilding it (log: $DEST/build.log)"
@@ -92,7 +99,7 @@ echo "snapshot=$LABEL sha=$SHA dirty_files=$DIRTY app_version=$APP_VERSION port=
 set +e
 (
     cd "$CHECKOUT" &&
-    LIBREFOLIO_TEST_DATA_DIR="$DATA_DIR" pipenv run python dev.py mkdocs gallery --test-port "$PORT" ${EXTRA[@]+"${EXTRA[@]}"}
+    LF_GALLERY_MIXED_DIR="$MIXED_PARTS" LIBREFOLIO_TEST_DATA_DIR="$DATA_DIR" pipenv run python dev.py mkdocs gallery --test-port "$PORT" ${EXTRA[@]+"${EXTRA[@]}"}
 ) 2>&1 | tee "$DEST/gallery.log"
 RC=${PIPESTATUS[0]}
 set -e
@@ -135,6 +142,10 @@ with open(e["LF_META_PATH"], "w", encoding="utf-8") as f:
     f.write("\n")
 '
 )
+# After meta.json, which gives the table its commit. A failed merge leaves the records in place and the run's result alone.
+if ! (cd "$CHECKOUT" && pipenv run python "$SCRIPT_DIR/gallery_tool.py" mixed "$DEST" --collect); then
+    echo "WARNING: the mixed-element records could not be merged: they stay in $MIXED_PARTS" >&2
+fi
 rm -f "$STAMP"
 echo "---"
 cat "$DEST/meta.json"

@@ -6,12 +6,13 @@ probe is *in flight* until the app has finished with it: the last chunk of a str
 the response included. The probes (``PROBE_PATHS``: health, readiness, the test lane's health) are not counted at all,
 so an orchestrator calling them every few seconds never keeps a machine awake. ``wake-sync`` (``WAKE_PATHS``) is in
 flight but it is not the user: a scheduled wake-up must not look like a visit. Any other request is the user, the
-frontend's polling included: the frontend stops polling in a hidden tab and after ten minutes without input.
+frontend's polling included: the frontend stops polling in a hidden tab and after two minutes without input.
 
 Work that runs outside a request says so with ``busy(reason)``; a source the process cannot wrap, such as a backup run
 by another process, is read through ``register_busy_check``. The idle monitor suspends only when ``busy_reasons()`` is
 empty and ``idle_seconds()`` has reached its threshold; a return listener lets the scheduler catch up on the first
-request after a silence.
+request after a silence. A feature that must tell the web app something on every ``/api/`` response registers a
+response header (``register_response_header``): the scheduler says so while prices catch up (Z5).
 
 The clock is the wall clock: the time a machine spends suspended must count as silence, and a monotonic clock stops
 with the machine. ``ACTIVITY`` is read at call time (``current_activity()``), so a test can replace it.
@@ -26,7 +27,7 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from typing import Literal
 
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.app.config import API_V1_PREFIX
 from backend.app.logging_config import get_logger
@@ -40,6 +41,9 @@ WAKE_PATHS: frozenset[str] = frozenset({f"{API_V1_PREFIX}/system/wake-sync"})
 
 RequestKind = Literal["probe", "wake", "user"]
 
+#: The paths whose responses get the registered response headers.
+API_PATH_PREFIX = "/api/"
+
 #: The reason ``busy_reasons()`` gives while at least one request is in flight.
 REQUESTS_REASON = "requests"
 
@@ -52,6 +56,10 @@ def request_kind(path: str) -> RequestKind:
     if normalized in WAKE_PATHS:
         return "wake"
     return "user"
+
+
+def _header_safe(value: object) -> bool:
+    return isinstance(value, str) and "\r" not in value and "\n" not in value and all(ord(char) < 256 for char in value)
 
 
 def _require_name(value: object, what: str) -> str:
@@ -73,6 +81,8 @@ class Activity:
         self._checks: dict[str, Callable[[], object]] = {}
         self._failing_checks: set[str] = set()
         self._listeners: dict[str, tuple[float, Callable[[float], object]]] = {}
+        self._headers: dict[str, tuple[str, Callable[[], str | None]]] = {}
+        self._failing_headers: set[str] = set()
 
     @property
     def in_flight(self) -> int:
@@ -144,6 +154,51 @@ class Activity:
         with self._lock:
             self._listeners.pop(name, None)
 
+    def register_response_header(self, name: str, provider: Callable[[], str | None]) -> None:
+        """Add the header ``name`` to each ``/api/`` response, with the value ``provider()`` gives at its start.
+
+        A provider that returns None or an empty string adds nothing. It is called outside any lock, at the start of
+        each response: it must be quick. A provider under the same name, in any case, is replaced.
+        """
+        _require_name(name, "a response header's name")
+        with self._lock:
+            self._headers[name.lower()] = (name, provider)
+            self._failing_headers.discard(name.lower())
+
+    def remove_response_header(self, name: str) -> None:
+        """Stop adding the header ``name``; an unknown name is not an error."""
+        _require_name(name, "a response header's name")
+        with self._lock:
+            self._headers.pop(name.lower(), None)
+            self._failing_headers.discard(name.lower())
+
+    def response_headers(self) -> tuple[tuple[str, str], ...]:
+        """The ``(name, value)`` pairs to add now, in registration order: each provider that returns a non-empty value.
+
+        A provider that raises, or returns a value a header cannot carry (a line break, a character beyond Latin-1),
+        is skipped; its first failure in a row is logged as a warning.
+        """
+        with self._lock:
+            providers = list(self._headers.items())
+        pairs: list[tuple[str, str]] = []
+        for key, (name, provider) in providers:
+            try:
+                value = provider()
+                if value is not None and not _header_safe(value):
+                    raise ValueError(f"a header cannot carry {value!r}")
+            except Exception as exc:
+                with self._lock:
+                    first = key not in self._failing_headers
+                    self._failing_headers.add(key)
+                if first:
+                    logger.warning("Response header provider failed", header=name, error=repr(exc), exc_info=True)
+                continue
+            with self._lock:
+                self._failing_headers.discard(key)
+            if value:
+                pairs.append((name, value))
+        return tuple(pairs)
+
     @contextmanager
     def _busy_block(self, reason: str) -> Iterator[None]:
         with self._lock:
@@ -213,7 +268,8 @@ class ActivityMiddleware:
 
     Pure ASGI, the outermost middleware: a request is in flight from its first byte until the app returns, so until the
     last chunk of a streamed body and the background tasks of its response. Without ``activity``, the process's record
-    is read at each request.
+    is read at each request. An ``/api/`` response that is not a probe's gets the registered response headers, read at
+    its start; a header the app already set is kept.
     """
 
     def __init__(self, app: ASGIApp, *, activity: Activity | None = None) -> None:
@@ -229,5 +285,27 @@ class ActivityMiddleware:
             await self.app(scope, receive, send)
             return
         activity = self._activity if self._activity is not None else current_activity()
+        if scope["path"].startswith(API_PATH_PREFIX):
+            send = _with_response_headers(send, activity)
         with activity.request(presence=kind == "user"):
             await self.app(scope, receive, send)
+
+
+def _with_response_headers(send: Send, activity: Activity) -> Send:
+    """``send``, with the registered response headers added to the response's start."""
+
+    async def send_with_headers(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            extra = activity.response_headers()
+            if extra:
+                headers = list(message.get("headers", []))
+                present = {raw_name.lower() for raw_name, _ in headers}
+                for name, value in extra:
+                    raw_name = name.lower().encode("latin-1")
+                    if raw_name not in present:
+                        headers.append((raw_name, value.encode("latin-1")))
+                        present.add(raw_name)
+                message = {**message, "headers": headers}
+        await send(message)
+
+    return send_with_headers

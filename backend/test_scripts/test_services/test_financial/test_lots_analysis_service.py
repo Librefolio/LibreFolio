@@ -16,7 +16,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import delete, event
+from sqlalchemy import delete, event, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
@@ -24,6 +24,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode
 from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
 
 
@@ -208,7 +209,9 @@ async def test_buy_sell_summary_converts_to_target_currency(session, test_user, 
     assert lot.open_quantity == Decimal("6")
     assert lot.original_cost == Decimal("1200")
     assert lot.realized_quantity == Decimal("4")
-    assert lot.realized_pnl == Decimal("156")
+    # CP-7a (developer's decision 26): each leg at its own date, 4 × 130 EUR at 1.3 − 4 × 100 EUR at 1.2 = 676 − 480.
+    # Before CP-7a: 156 = (520 − 400) EUR × 1.3, the cost converted at the sale's rate.
+    assert lot.realized_pnl == Decimal("196")
     assert lot.cumulative_proceeds == Decimal("676")
     assert lot.open_value == Decimal("1014")
     assert lot.total_value == Decimal("1690")
@@ -596,6 +599,12 @@ async def test_adjustment_return_history_keeps_reference_and_zero_cost_guard(ses
 
 @pytest.mark.asyncio
 async def test_short_lot_return_history_computes_total_return(session, test_user, asset):
+    """A short's total return is its P&L over the notional it sold: 5 sold short at 120 EUR, a notional of 600.
+
+    Quoted 120, 110 and 100 from 10 to 12 Jan: break-even, then 5 × 10 = 50 and 5 × 20 = 100 of P&L, so 0, 50 / 600 and
+    100 / 600 — the lot summary's total P&L / opening value. Compared to 12 places: the last digit of a Decimal division is
+    the context's rounding, not the contract. Before CP-7a: −1, −0.92 and −0.83, a short read like a long.
+    """
     short_broker = Broker(name=f"LotsShortBroker_{utcnow().timestamp()}", allow_asset_shorting=True)
     session.add(short_broker)
     await session.flush()
@@ -607,17 +616,18 @@ async def test_short_lot_return_history_computes_total_return(session, test_user
             share_percentage=Decimal("1"),
         )
     )
+    sell = Transaction(
+        broker_id=short_broker.id,
+        asset_id=asset.id,
+        type=TransactionType.SELL,
+        date=date(2025, 1, 10),
+        quantity=Decimal("-5"),
+        amount=Decimal("600"),
+        currency="EUR",
+    )
     session.add_all(
         [
-            Transaction(
-                broker_id=short_broker.id,
-                asset_id=asset.id,
-                type=TransactionType.SELL,
-                date=date(2025, 1, 10),
-                quantity=Decimal("-5"),
-                amount=Decimal("600"),
-                currency="EUR",
-            ),
+            sell,
             PriceHistory(
                 asset_id=asset.id,
                 date=date(2025, 1, 10),
@@ -656,9 +666,14 @@ async def test_short_lot_return_history_computes_total_return(session, test_user
     )
 
     assert result.return_history is not None
-    assert len(result.return_history) == 3
-    assert all(point.total_return is not None for point in result.return_history)
-    assert result.return_history[0].total_return == Decimal("-1")
+    returns = {point.date: point.total_return for point in result.return_history if point.lot_id == sell.id}
+    twelve_places = Decimal("1E-12")
+    observed = {day: None if value is None else value.quantize(twelve_places) for day, value in returns.items()}
+    assert observed == {
+        date(2025, 1, 10): Decimal("0"),
+        date(2025, 1, 11): (Decimal("50") / Decimal("600")).quantize(twelve_places),
+        date(2025, 1, 12): (Decimal("100") / Decimal("600")).quantize(twelve_places),
+    }
 
 
 @pytest.mark.asyncio
@@ -1224,6 +1239,106 @@ async def test_estimated_at_cost_when_no_price_history(session, test_user, asset
     assert last_value.income == Decimal("1250")
     last_return = _points_by_date(result.return_history)[date(2025, 3, 1)]
     assert abs(last_return.total_return - Decimal("1250") / Decimal("15000")) < Decimal("1e-9")
+
+
+@pytest.mark.asyncio
+async def test_adjustment_only_asset_is_estimated_at_cost_not_priced_by_its_adjustment(session, test_user, asset, broker):
+    """J-17: an ADJUSTMENT is never a price. An asset received only by an ADJUSTMENT-in (10 units at a
+    3000 NPR cost basis on 2025-01-10, when 1 EUR = 150 NPR) and never quoted, bought or sold has no
+    market price at all: its lot is ESTIMATED_AT_COST, open value = its cost converted at the opening
+    date (30000 / 150 = 200 EUR) on every day, market P&L 0, and the chart has no price line.
+
+    FX: EUR/NPR, a pair no other test stores (checked first, never committed).
+
+    Before J-17: MARKET_PRICE with the adjustment's 3000 NPR as the price, converted at each day's
+    rate — open value 250 EUR on 2025-03-01 (1 EUR = 120 NPR), market P&L +50, and a price line at the
+    adjustment's cost (estimated).
+    """
+    stored = (await session.execute(select(FxRate.id).where(FxRate.base == "EUR", FxRate.quote == "NPR"))).all()
+    assert stored == [], f"precondition broken: {len(stored)} EUR/NPR rate(s) stored by someone else — this case needs a pair nobody stores"
+    session.add_all(
+        [
+            FxRate(date=date(2025, 1, 10), base="EUR", quote="NPR", rate=Decimal("150"), source="TEST_J17"),
+            FxRate(date=date(2025, 3, 1), base="EUR", quote="NPR", rate=Decimal("120"), source="TEST_J17"),
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("0"),
+                currency=None,
+                cost_basis_override=Decimal("3000"),
+                cost_basis_currency="NPR",
+            ),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 3, 1),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "PRICE_HISTORY"],
+    )
+
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    assert (lot.value_source, lot.original_cost, lot.open_value, lot.market_pnl) == ("ESTIMATED_AT_COST", Decimal("200"), Decimal("200"), Decimal("0"))
+    assert result.value_history
+    off_cost = sorted((point.date, point.open_value) for point in result.value_history if point.open_value != Decimal("200"))
+    assert off_cost == [], f"days whose open value is not the 200 EUR cost: {off_cost}"
+    assert not result.price_history, f"an adjustment-only asset has no price line, got {result.price_history}"
+
+
+@pytest.mark.asyncio
+async def test_adjustment_before_the_first_quote_has_no_value_point(session, test_user, asset, broker):
+    """J-17: an asset received by an ADJUSTMENT-in (10 units at 20 EUR) on 2025-01-10 and first quoted on
+    2025-01-15 (25 EUR). Before the first quote nothing prices it (the asset has quotes, so it is not
+    estimated at cost either): the lot's value history starts on 2025-01-15, at 250.
+
+    Before J-17: the adjustment's 20 EUR priced it from 2025-01-10, so the history had points on
+    01-10..01-14 at an open value of 200.
+    """
+    session.add_all(
+        [
+            Transaction(
+                broker_id=broker.id,
+                asset_id=asset.id,
+                type=TransactionType.ADJUSTMENT,
+                date=date(2025, 1, 10),
+                quantity=Decimal("10"),
+                amount=Decimal("0"),
+                currency=None,
+                cost_basis_override=Decimal("20"),
+                cost_basis_currency="EUR",
+            ),
+            PriceHistory(asset_id=asset.id, date=date(2025, 1, 15), close=Decimal("25"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2025, 1, 20),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["VALUE_HISTORY"],
+    )
+
+    assert result.value_history is not None
+    points = _points_by_date(result.value_history)
+    assert sorted(points) == [date(2025, 1, 15) + timedelta(days=offset) for offset in range(6)], f"value points on {sorted(points)}"
+    assert points[date(2025, 1, 15)].open_value == Decimal("250")
 
 
 @pytest.mark.asyncio
@@ -2507,3 +2622,57 @@ async def test_an_orphan_pool_issue_states_its_amount_in_a_currency_it_is_known_
     assert len(issues) == 1, f"issues={result.data_quality.issues}"
     params = issues[0].message_params
     assert (params["economic_type"], params["as_of_date"], params["target_amount"], params["target_currency"]) == (event_type.value, orphan_date.isoformat(), *stated)
+
+
+# --------------------------------------------------------------------------- #
+# CP-7a — developer's decision 26 (D-J1, option B): a lot realizes what the Dashboard realizes
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_a_foreign_lot_sold_whole_realizes_what_the_dashboard_realizes(session, test_user, broker):
+    """R7: a USD asset, report EUR; 10 bought for 1000 USD on 2 Jan (0.8 EUR a dollar), all sold for 1100 USD on 2 Jun (0.78125).
+
+    Each leg at its own date, as the Dashboard's average cost already does: 1100 × 0.78125 − 1000 × 0.8 = 859.375 − 800 =
+    59.375 EUR, for the lot (LOT_SUMMARY) and for the Dashboard's position (get_positions_contribution) alike. Before CP-7a
+    the lot realized its native gain at the sale's rate, 100 × 0.78125 = 78.125, against the Dashboard's 59.375.
+
+    The rates are owned for both days (_own_fx_rate, 1.25 and 1.28 USD a euro: exact inverses), the asset and its prices are
+    this test's own, and the session fixture rolls everything back.
+    """
+    stamp = str(utcnow().timestamp()).replace(".", "")
+    usd_asset = Asset(display_name=f"LotsParity_{stamp}", identifier_ticker=f"LPAR{stamp[-4:]}", currency="USD", asset_type=AssetType.STOCK)
+    session.add(usd_asset)
+    await session.flush()
+    purchase_day, sale_day = date(2025, 1, 2), date(2025, 6, 2)
+    await _own_fx_rate(session, on=purchase_day, base="EUR", quote="USD", rate=Decimal("1.25"))
+    await _own_fx_rate(session, on=sale_day, base="EUR", quote="USD", rate=Decimal("1.28"))
+    buy = Transaction(broker_id=broker.id, asset_id=usd_asset.id, type=TransactionType.BUY, date=purchase_day, quantity=Decimal("10"), amount=Decimal("-1000"), currency="USD")
+    sell = Transaction(broker_id=broker.id, asset_id=usd_asset.id, type=TransactionType.SELL, date=sale_day, quantity=Decimal("-10"), amount=Decimal("1100"), currency="USD")
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=purchase_day, amount=Decimal("1000"), currency="USD"),
+            buy,
+            sell,
+            PriceHistory(asset_id=usd_asset.id, date=purchase_day, close=Decimal("100"), currency="USD", source_plugin_key="TEST"),
+            PriceHistory(asset_id=usd_asset.id, date=sale_day, close=Decimal("110"), currency="USD", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    lots = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=usd_asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=sale_day,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY"],
+    )
+    contribution = await PortfolioService(session).get_positions_contribution(user_id=test_user.id, broker_ids=[broker.id], date_from=None, date_to=sale_day, target_currency_override="EUR")
+
+    lot_realized = [lot.realized_pnl for lot in lots.lots or [] if lot.lot_id == buy.id]
+    dashboard_realized = [row.period_realized_gain_loss for row in contribution.positions if row.asset_id == usd_asset.id and row.broker_id == broker.id]
+    assert {"lot": lot_realized, "dashboard": dashboard_realized} == {"lot": [Decimal("59.375")], "dashboard": [Decimal("59.375")]}

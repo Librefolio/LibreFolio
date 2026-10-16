@@ -30,6 +30,12 @@
     let {draft, accountGeneration, onclose}: Props = $props();
 
     const testid = 'pac-planner-distribution';
+    /**
+     * The weight bar. The track is on the role of the tracks; the fill, the asset's current weight, is a data colour
+     * and stays a palette class (DV-7). Two constants, not one template: the gate reads each script string whole (G3).
+     */
+    const TRACK = 'h-3 overflow-hidden rounded-full bg-lf-neutral';
+    const FILL = 'h-full rounded-full bg-libre-green';
     const load = new SourceLoad();
     let scope = $state<ScopeBroker[] | null>(null);
     let scopeFailed = $state(false);
@@ -99,7 +105,7 @@
                         ? ''
                         : {
                               type: 'html',
-                              html: `<div data-testid="${testid}-bar" data-asset-key="${escapeHtml(row.assetKey)}" aria-hidden="true" class="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-700"><div class="h-full rounded-full bg-libre-green" style="width: ${Math.min(100, (percentNumber(row.weightPercent) / maxWeight) * 100)}%"></div></div>`,
+                              html: `<div data-testid="${testid}-bar" data-asset-key="${escapeHtml(row.assetKey)}" aria-hidden="true" class="${TRACK}"><div class="${FILL}" style="width: ${Math.min(100, (percentNumber(row.weightPercent) / maxWeight) * 100)}%"></div></div>`,
                           },
             },
             {
@@ -164,6 +170,7 @@
         if (!row.held) return $t('tools.pacAllocator.planner.distribution.notHeld', {default: 'not held'});
         if (row.valuation === 'MARKET_PRICE') return $t('tools.pacAllocator.planner.distribution.marketPrice', {default: 'market price {date}', values: {date: formatPlannerDate(row.referenceDate)}});
         if (row.valuation === 'LAST_TRADE_PRICE') return $t('tools.pacAllocator.planner.distribution.lastTrade', {default: 'last trade price {date}', values: {date: formatPlannerDate(row.referenceDate)}});
+        if (row.valuation === 'ESTIMATED_AT_COST') return $t('tools.pacAllocator.planner.distribution.valuedAtCost', {default: 'valued at cost · no price'});
         return $t('tools.pacAllocator.planner.distribution.missing', {default: 'no price or rate: no weight'});
     }
 
@@ -186,7 +193,7 @@
 
 <PlannerDialog open title={$t('tools.pacAllocator.planner.distribution.title', {default: 'Copy current distribution'})} {testid} {onclose} maxWidth="3xl">
     <div class="space-y-3" data-testid="{testid}-body" data-state={load.status} data-status={proposal?.status ?? ''} aria-busy={reading}>
-        <p class="flex items-start gap-0.5 text-sm text-gray-700 dark:text-gray-300" data-testid="{testid}-subtitle">
+        <p class="flex items-start gap-0.5 text-sm text-lf-secondary" data-testid="{testid}-subtitle">
             <span>{$t('tools.pacAllocator.planner.distribution.subtitle', {default: 'How much each of these Assets weighs today in the ticked Brokers, counting only these Assets: together they make 100%. Cash and the other Assets you hold do not count.'})}</span>
             <HelpTip
                 label={$t('tools.pacAllocator.planner.distribution.title', {default: 'Copy current distribution'})}
@@ -254,24 +261,24 @@
 <!-- R13.1: a two-column table (name | before → after), not a list of «name: x% → y%» lines. -->
 <PlannerDialog open={confirming} title={$t('tools.pacAllocator.planner.distribution.confirmTitle', {default: 'Replace the targets you set?'})} testid="{testid}-confirm" onclose={() => (confirming = false)} maxWidth="lg" zIndex={70}>
     <p data-testid="{testid}-confirm-message">{$t('tools.pacAllocator.planner.distribution.confirmMessage', {default: 'These targets change:'})}</p>
-    <div class="max-h-80 overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
+    <div class="max-h-80 overflow-auto rounded-lg border border-lf-subtle">
         <table class="{TABLE} w-full table-fixed" data-testid="{testid}-confirm-table">
-            <thead class="sticky top-0 bg-gray-50 dark:bg-gray-900">
+            <thead class="sticky top-0 bg-lf-panel">
                 <tr>
                     <th scope="col" class={TH}>{$t('tools.pacAllocator.planner.routing.asset', {default: 'Asset'})}</th>
                     <th scope="col" class="{TH} w-48 text-right">{$t('tools.pacAllocator.planner.distribution.changeColumn', {default: 'Target'})}</th>
                 </tr>
             </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60">
+            <tbody class="divide-y divide-lf-subtle">
                 {#each proposal?.changes ?? [] as change (change.assetKey)}
                     {@const asset = draft.asset(change.assetKey)}
                     <tr data-testid="{testid}-confirm-change" data-asset-key={change.assetKey}>
-                        <td class="px-3 py-2 align-middle text-gray-800 dark:text-gray-200">
+                        <td class="px-3 py-2 align-middle text-lf-primary">
                             <AssetNameCell label={change.label} iconUrl={asset?.iconUrl ?? null} assetType={asset?.assetClass.toUpperCase() ?? null} />
                         </td>
-                        <td class="whitespace-nowrap px-3 py-2 text-right align-middle tabular-nums text-gray-800 dark:text-gray-200">
-                            <span class="text-gray-500 dark:text-gray-400" data-testid="{testid}-confirm-from">{formatPlannerPercentUnits(change.from)}</span>
-                            <span class="px-1 text-gray-400" aria-hidden="true">→</span>
+                        <td class="whitespace-nowrap px-3 py-2 text-right align-middle tabular-nums text-lf-primary">
+                            <span class="text-lf-muted" data-testid="{testid}-confirm-from">{formatPlannerPercentUnits(change.from)}</span>
+                            <span class="px-1 text-lf-muted" aria-hidden="true">→</span>
                             <span class="font-semibold" data-testid="{testid}-confirm-to">{formatPlannerPercentUnits(change.to)}</span>
                         </td>
                     </tr>

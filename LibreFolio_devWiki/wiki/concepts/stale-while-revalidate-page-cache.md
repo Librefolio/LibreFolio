@@ -53,9 +53,9 @@ Page Cache") but not in the frontend instructions, and the broker contribution i
 |------|------|
 | Report cache, `invalidate`, `peekReport`, `resetPortfolioCache` | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | Mutation bus, "a write only when it wrote" | `frontend/src/lib/stores/portfolio/portfolioMutation.ts` |
-| Lots analysis cache | `frontend/src/lib/stores/portfolio/lotsAnalysisStore.svelte.ts` |
-| Dashboard currency/broker per session | `frontend/src/lib/stores/portfolio/dashboardViewStore.ts` |
-| Risk answers, `markRiskStale` | `frontend/src/lib/stores/risk/riskStore.svelte.ts` |
+| Lots analysis cache | `frontend/src/lib/features/brokers/lots/lotsAnalysisStore.svelte.ts` |
+| Dashboard currency/broker per session | `frontend/src/lib/features/dashboard/dashboardViewStore.ts` |
+| Risk answers, `markRiskStale` | `frontend/src/lib/features/risk/riskStore.svelte.ts` |
 | Still clearing (phase 2, N-1) | `frontend/src/lib/stores/core/TimeSeriesStore.ts` |
 | Developer doc (the rule) | `mkdocs_src/docs/developer/frontend/state/domain-state.md` |
 | Plan (E1, §3.1-ter/quater) | `LibreFolio_developer_journal/Release_2/phases/28_fxDashboardSync/plan-phase00FxDashboardSyncStep2PageCache.prompt.md` |

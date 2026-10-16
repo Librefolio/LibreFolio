@@ -92,13 +92,13 @@
                         <Icon size={15} class="shrink-0 mt-0.5" />
                         <span class="flex-1 whitespace-pre-line text-left">{@html sanitizeHtml(toast.message)}</span>
                     </div>
-                    <button class="shrink-0 p-0.5 rounded hover:bg-white/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
+                    <button class="shrink-0 p-0.5 rounded hover:bg-lf-on-status/20 transition-colors absolute top-1.5 right-1.5" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
                         <X size={12} />
                     </button>
                 </div>
                 {#if toast.duration > 0}
-                    <div class="h-0.5 w-full bg-white/15">
-                        <div class="h-full bg-white/40 toast-countdown-bar" style="animation-duration: {toast.duration}ms"></div>
+                    <div class="h-0.5 w-full bg-lf-on-status/15">
+                        <div class="h-full bg-lf-on-status/40 toast-countdown-bar" style="animation-duration: {toast.duration}ms"></div>
                     </div>
                 {/if}
             </div>

@@ -6522,7 +6522,7 @@
     }
   },
   "user/transactions/import/how-to.en.md": {
-    "md5": "6477f1244645483cf479781e57db014d",
+    "md5": "5b0c1e75d7114fa7d925e91e276f37d3",
     "langs_done": [
       "es",
       "fr",
@@ -6542,7 +6542,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 167.7,
-        "stamped_at": "2026-10-12T20:06:19.905304+00:00",
+        "stamped_at": "2026-10-16T15:18:34.705437+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6557,7 +6557,7 @@
         "elapsed_s": 173.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=114, translated=115 (Δ+1)\n  L3: src=1 trn=2\n    EN: The **Import Wizard** turns the reports you download from your broker into transactions. You check\n    TR: L'**Assistant d'importation** transforme les rapports que vous téléchargez depuis votre courtier en transactions. Vous v\n  L4: src=1 trn=0\n    EN: what it read and settle its doubts; nothing is saved until you press **Save All**.\n    TR: \n  L9: src=0 trn=1\n    EN: \n    TR: 1. Exportez un rapport de transactions depuis votre courtier : sa page dans les **[Courtiers pris en charge](index.md)**\n  L10: src=1 trn=2\n    EN: 1. Export a transaction report from your broker: its page in **[Supported Brokers](index.md)** says\n    TR: 2. Sur la page **[Transactions](../index.md)**, cliquez sur **Importer** (:material-file-upload:).\n  L12: src=2 trn=1\n    EN: 2. On the **[Transactions](../index.md)** page, click **Import** (:material-file-upload:).\n    TR: 4. Cliquez sur **Importer N transactions** : les lignes s'ouvrent dans l'espace de travail groupé, pas encore enregistré\n  L13: src=0 trn=1\n    EN: 3. Drop the report into the wizard, assign it to its broker and follow the steps below.\n    TR: 5. Jetez-y un dernier coup d'œil et cliquez sur **Tout enregistrer**.\n  L14: src=1 trn=0\n    EN: 4. Click **Import N transactions**: the rows open in the bulk workspace, not saved yet.\n    TR: \n  L15: src=1 trn=0\n    EN: 5. Give them a last look and click **Save All**.\n    TR: <div class=\"lf-screenshot-carousel\" data-carousel=\"carousel-import-wizard\" data-carousel-interval=\"6000\" data-show-title\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🧙 How to Import Transactions\n    ## 🚀 Step-by-Step Guide\n    ## 🧙 The Import Wizard Steps\n      ### 📤 Step 1: Upload\n        #### 🧭 A file in the wrong broker {: #wrong-broker }\n      ### 🗂️ Step 2: Select Files\n      ### 🧠 Step 3: Parse\n      ### 🧩 Steps that appear only when needed {: #only-when-needed }\n      ### 📦 Step 4: Review {: #review }\n        #### 🗂️ Match each security\n        #### 🚦 Read the status badges\n        #### ⛔ Rows before the broker's opening date {: #opening-date }\n        #### 📥 Import the rows\n      ### 💾 Save in the bulk workspace\n    ## 🧭 Guided First Import {: #guided-first-import }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-12T20:06:19.905304+00:00",
+        "stamped_at": "2026-10-16T15:18:34.705437+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6570,13 +6570,13 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 161.9,
-        "stamped_at": "2026-10-12T20:06:19.905304+00:00",
+        "stamped_at": "2026-10-16T15:18:34.705437+00:00",
         "stamped_by": "translate-stamp"
       }
     }
   },
   "user/brokers/import.en.md": {
-    "md5": "2fb763ba0c961ce0566b7ad8fc2457b4",
+    "md5": "6327ae7e8e22b0ed577f885c09bd47fc",
     "langs_done": [
       "es",
       "fr",
@@ -6595,7 +6595,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Mandatory glossary deviation — “bulk workspace”**: The translation uses “Lo spazio di lavoro in blocco” in the link text `[Lo spazio di lavoro in blocco](../transactions/index.md#bulk-workspace)`. The glossary requires **bulk workspace → workspace bulk**. Correct this to: `[Il workspace bulk](../transactions/index.md#bulk-workspace)`.\n- **Mandatory glossary deviation — “broker report”**: In `(BRIM, il modulo di importazione dei report dei broker)`, the glossary requires **broker report → report del broker**. Change to `(BRIM, il modulo di importazione dei report del broker)` or, if treating it as a module name, `Modulo di importazione dei report del broker`.\n- **Grammar/syntax error**: `e [Contribuisci](../../community/contribute.md) il flusso di lavoro` is missing a verb in Italian and does not correctly render the English ellipsis “and [Contribute] the workflow”. Correct to: `e [Contribuisci](../../community/contribute.md) descrive il flusso di lavoro` (or `spiega il flusso di lavoro`).\n- **Terminology consistency — “workspace”**: Since the glossary mandates **workspace bulk**, the translation should not mix in “spazio di lavoro” for the product term “workspace”. Prefer consistent use of “workspace” throughout: `Lo spazio di lavoro delle transazioni` → `Il workspace delle transazioni`; `nello spazio di lavoro` → `nel workspace`; `allo spazio di lavoro` → `al workspace`.\n- **Semantic precision — “newest first”**: `dalla più recente` is understandable but incomplete. Better render the sorting explicitly: `dalla più recente alla più vecchia`.\n- **Natural Italian / article use**: `Caricare ed eliminare report richiede accesso come Proprietario o Editor al broker` should be `Caricare ed eliminare report richiede l'accesso come Proprietario o Editor al broker` or `richiede l'accesso al broker come Proprietario o Editor`.\n- **Minor fluency**: `La stessa procedura guidata si apre da **Importa** nella pagina [Transazioni]` is slightly awkward. Better: `La stessa procedura guidata si apre dalla voce **Importa** nella pagina [Transazioni]` or `dal pulsante **Importa**`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 196.4
+        "elapsed_s": 196.4,
+        "stamped_at": "2026-10-16T05:55:24.763389+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-09T23:59:57.795830+00:00",
@@ -6606,7 +6608,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminology (mandatory glossary)**: `l'**Assistant d'import**` should be `l'**Assistant d'importation**`. The glossary explicitly maps “import wizard” → “assistant d’importation”. Also adjust the expansion for consistency: `le module d'import des rapports de courtier` → `le module d'importation des rapports de courtier`.\n- **Terminology (mandatory glossary)**: `**Ensemble de rapports**` and `[Ensembles de rapports]` must use the glossary mapping “report set” → “lot de rapports”. Replace with `**Lot de rapports**` and `[Lots de rapports]`.\n- **Terminology (mandatory glossary)**: `[L'espace de travail en masse]` should be `[L'espace de travail groupé]`. The glossary maps “bulk workspace” → “espace de travail groupé”.\n- **Grammar**: `c'est ainsi que sont importés les banques` is incorrect because `banques` is feminine plural. Correct to `c'est ainsi que sont importées les banques` or rephrase as `c'est ainsi que l'on importe les banques`.\n- **Terminology consistency (recommended)**: If `form one set` refers to the report-set concept, use `forment un lot` instead of `forment un ensemble` to align with the mandatory `report set` → `lot de rapports` mapping.\n- **Minor consistency**: `Les propriétaires et les éditeurs` could be capitalized as `Les Propriétaires et les Éditeurs` when referring to role labels, matching the later `Propriétaire ou Éditeur`. This is not a glossary violation, but it improves UI-label consistency.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 263.2
+        "elapsed_s": 263.2,
+        "stamped_at": "2026-10-16T05:55:24.763389+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-09T23:59:57.795898+00:00",
@@ -6617,7 +6621,9 @@
         "critique": "<translation_critique>\n<improvements>\n\n1. **Pronombre ambiguo en la descripción del filtro de fechas**\n   - Texto actual: «Siempre muestra todo el historial del bróker: el rango de fechas de la barra de herramientas no lo filtra.»\n   - Problema: En el original, «it» remite a la lista/pestaña («does not filter it»), mientras que «lo» en español remite a «historial» (masculino), lo que cambia ligeramente el referente.\n   - Corrección sugerida: «Siempre muestra todo el historial del bróker: el rango de fechas de la barra de herramientas no la filtra.» (o reformular: «…no filtra la lista.»).\n\n2. **Inconsistencia en la capitalización de los roles**\n   - Texto actual (dos usos distintos): «Los propietarios y editores también disponen de…» y «…requiere acceso de Propietario o Editor al bróker.»\n   - Problema: El glosario fija `owner → propietario` y `editor → editor` en minúscula. La segunda aparición capitaliza los roles de forma injustificada.\n   - Corrección sugerida: «…requiere acceso de propietario o editor al bróker.»\n\n3. **Desviación del glosario en «broker report»**\n   - Texto actual: «(BRIM, el módulo de importación de informes de bróker)»\n   - Problema: El glosario especifica `broker report → informe del bróker`, no «informe de bróker».\n   - Corrección sugerida: «(BRIM, el módulo de importación de informes del bróker)».\n\n4. **Elipsis verbal poco clara en la lista de recursos**\n   - Texto actual: «la [Guía de plugins de BRIM](…) explica el contrato de plugins, y [Contribuir](…) el flujo de trabajo.»\n   - Problema: La elipsis de «explica/enlaza a» funciona en inglés, pero en español deja la segunda oración sin verbo y se lee forzada; puede interpretarse como si faltara texto.\n   - Corrección sugerida: «la [Guía de plugins de BRIM](…) explica el contrato de plugins, y en [Contribuir](…) se describe el flujo de trabajo.» (mismo contenido, sin notas añadidas).\n\n5. **«Encima de la lista» puede leerse como «sobre/en lo alto de»**\n   - Texto actual: «Encima de la lista encontrarás…»\n   - Problema: En español, «encima de» tiene un matiz físico que aquí induce a confusión; la colocación de los controles es inmediatamente superior en la interfaz.\n   - Corrección sugerida: «Por encima de la lista encontrarás…» o «Arriba de la lista encontrarás…».\n\n6. **Verbo «lista» como transitivo directo (estilístico, menor)**\n   - Texto actual: «La pestaña **Transacciones** de un bróker lista todas sus transacciones…»\n   - Problema: Es aceptable, pero menos idiomático que otras opciones en documentación técnica.\n   - Corrección sugerida: «…enumera todas sus transacciones…» o «…muestra todas sus transacciones…».\n\nNota positiva: se preservan correctamente los encabezados, los emoji (📥, ➕, 🔎, 🧙, 🧩, 🗂️), el bloque HTML con sus atributos, los enlaces relativos y el bloque `??? tip`, así como las negritas de las etiquetas de interfaz; además se respetan las correspondencias del glosario para `transaction`, `broker`, `import wizard`, `report set`, `bulk workspace` y `broker report` (salvo el punto 3).\n\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 191.3
+        "elapsed_s": 191.3,
+        "stamped_at": "2026-10-16T05:55:24.763389+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },

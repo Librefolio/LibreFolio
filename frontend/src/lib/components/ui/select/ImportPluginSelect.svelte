@@ -26,7 +26,7 @@
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {SearchSelect, type SelectOption} from '$lib/components/ui/select';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {brimPluginDescription, brimPluginName} from '$lib/utils/brim/pluginText';
 
     interface Props {
@@ -114,7 +114,7 @@
     }
 </script>
 
-<div class="import-plugin-select" data-testid="import-plugin-select">
+<div class="import-plugin-select text-lf-primary" data-testid="import-plugin-select">
     <SearchSelect bind:value {disabled} inlineSearch={true} {loading} onchange={handleChange} options={pluginOptions} placeholder={placeholder || $_('brokers.selectPlugin')}>
         {#snippet item(option)}
             <div class="flex items-center gap-2">
@@ -122,7 +122,7 @@
                 <div class="min-w-0 flex-1">
                     <div class="text-sm font-medium">{option.label}</div>
                     {#if getDescription(option)}
-                        <div class="text-xs text-gray-500 truncate">{getDescription(option)}</div>
+                        <div class="text-xs text-lf-muted truncate">{getDescription(option)}</div>
                     {/if}
                 </div>
             </div>
@@ -137,11 +137,11 @@
 
     {#if !compact}
         {#if loading}
-            <p class="text-xs text-gray-400 mt-1">{$_('common.loading')}</p>
+            <p class="text-xs text-lf-muted mt-1">{$_('common.loading')}</p>
         {:else if error}
-            <p class="text-xs text-red-500 mt-1">{error}</p>
+            <p class="text-xs text-lf-danger mt-1">{error}</p>
         {:else if selectedDescription}
-            <p class="text-xs text-gray-500 mt-1">{selectedDescription}</p>
+            <p class="text-xs text-lf-muted mt-1">{selectedDescription}</p>
         {/if}
     {/if}
 </div>

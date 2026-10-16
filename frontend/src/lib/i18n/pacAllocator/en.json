@@ -196,7 +196,8 @@
           "weight": "Weight",
           "subtitle": "How much each of these Assets weighs today in the ticked Brokers, counting only these Assets: together they make 100%. Cash and the other Assets you hold do not count.",
           "changeColumn": "Target",
-          "confirmApply": "Replace"
+          "confirmApply": "Replace",
+          "valuedAtCost": "valued at cost · no price"
         },
         "fx": {
           "intro": "The rates the calculation needs, one for each pair of currencies in play. «Auto» uses the rate stored in LibreFolio, «Manual» a rate of your own.",

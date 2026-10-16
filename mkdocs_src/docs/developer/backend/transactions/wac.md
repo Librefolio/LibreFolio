@@ -270,8 +270,15 @@ Windows are `(date_from, date_to]`; `None` leaves that side open.
 | `sums_by_date(date_from, date_to, transaction_types)` | Counted movements summed by date and type, dates ascending |
 | `missing_conversions(date_from, date_to, transaction_types)` | One `MissingCashConversion` per pair |
 | `exchange_results(date_from, date_to)` | Each foreign-cash broker's exchange result on cash, ascending by broker, zeros included; `{}` for an empty window |
-| `rate_change_days(date_from, date_to)` | The days in `[date_from, date_to]` on which the rate of a held foreign currency changes; a currency's first rate counts |
+| `rate_change_days(date_from, date_to)` | The days in `[date_from, date_to]` on which the rate of a held foreign currency changes; a currency's first rate counts. Found by `change_days()`, below |
 | `foreign_cash_broker_ids` | Brokers with a counted movement outside T |
+
+`rate_change_days()` takes its days from the module's pure function
+`change_days(read, currencies, days)`, the one home of «the day a rate changes», which the
+portfolio engine calls too, each with its own reading: the native cash the last rate known on or
+before the day, on the calendar of its rate points, and the engine the exact day's rate in
+`fx_rate_map`, on every day of its frame (see
+[The Days the Engine Recomputes](../financial_math.md#recomputed-days)).
 
 The exchange result is what the rates did to the cash a broker held: the change in
 value of its foreign balances, each at its day's rate, less the window's foreign
@@ -293,6 +300,7 @@ result leaves out anything smaller.
 |--------|-----|
 | `PortfolioCalculationEngine.calculate()` (`financial_math/portfolio/engine.py`, step 10c) | Builds it once per run from the classified transactions dated up to the run's end, each at its broker's `effective_share()`, with `rates_until` = the run's end; hands it to `DailyStateBuilder(native_cash=...)` and exposes it as `PortfolioCalculationResult.native_cash` |
 | `DailyStateBuilder._revalue_foreign_cash()` (`financial_math/portfolio/daily_state.py`) | On every `rate_change_days()` day, pre-frame included, after the day's cash movements and before its transactions: books `value_at(day)` minus the replayed cash of each `foreign_cash_broker_ids` broker into that broker's cash and `R_b` (a negative `R_b` drains into `K_b`, like a FEE), never into the capital baseline → [Portfolio Engine — §6 Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w) |
+| `DailyStateBuilder._valuation_rate_change_days()` (`financial_math/portfolio/daily_state.py`) | `change_days()` with `_read_rate()`, the exact day's rate in `fx_rate_map`: for the non-report currencies of the assets and their quotes on every frame day, and for the departure currency of cash in transit on the days of its transit. The days it returns are dirty days of the frame, like the `rate_change_days()` days → [The Days the Engine Recomputes](../financial_math.md#recomputed-days) |
 | `PortfolioService.get_summary()` | Reads the engine's: broker card cash = `value_at(end)`, per-currency chips = `balances(end)`, summed over the cards for the headline chips; period and lifetime deposits, withdrawals, income, fees and taxes = `flows()`; missing pairs = `missing_conversions(None, end)`. The headline cash is the engine's, revalued on the same days, so it matches the sum of the cards |
 | `PortfolioService._signed_transaction_sums_by_date()`, behind `get_income_history()`, `get_cost_history()` and `get_deposit_history()` | `sums_by_date()` and `missing_conversions()`; the report passes the engine's native cash, a standalone call builds its own with `rates_until` = `date_to`, or today |
 | `PortfolioService.get_positions_contribution()` | Reads the engine's: period income and costs by position and broker = `flows()`. When the period's Other can be computed, one **FX on cash** row per broker = `exchange_results(date_from, end)`, in broker access order, and the reconciliation residual drops by the same amount. With foreign cash in scope, neither a row nor the residual is shown below `CONVERSION_DUST`; a scope with cash only in T shows any non-zero residual |
@@ -339,9 +347,11 @@ What the replay takes from the steps:
 | Output | Source |
 |--------|--------|
 | `DailyPortfolioState.open_cost_basis` | Σ `cost_report_for(qty)` over the held positions: historical cost in the target currency (its known part) |
-| `DailyPositionState` | `wac` per unit in the target currency (`None` while the cost is incomplete), `wac_currency` (the target currency), `cost_basis`, `unrealized_pnl` (`None` without a market value or with an incomplete cost), `asset_currency`, `wac_asset`, `cost_complete` |
+| `DailyPositionState` | `wac` per unit in the target currency (`None` while the cost is incomplete), `wac_currency` (the target currency), `cost_basis`, `unrealized_pnl` (`None` without a market value or with an incomplete cost; 0 for a position valued at cost), `asset_currency`, `wac_asset`, `cost_complete` |
+| Value of a held position the price resolver cannot mark (`ESTIMATED_AT_COST`) | `cost_report_for(qty)` of a pool complete on the report leg; an incomplete pool leaves it `MISSING` (see [Price Resolver](price_resolver.md#valued-at-cost)) |
 | `PortfolioCalculationResult.realized_sales` | One `RealizedSale` per SELL: `proceeds` converted at the sale date and scaled by the share (`None` when they cannot be converted), `cost` = the historical cost the step removed, `cost_complete` = completeness of the pool before the sale |
 | Capital baseline of priced in-kind `ADJUSTMENT`s | In: the cost the step added (`ADD` steps only). Out: the cost the step removed |
+| Capital of a `TRANSFER` of a security with no price at all | An orphan leg: the cost its own step moved (`cost_report_change`), in or out of the scope's capital, like an in-kind `ADJUSTMENT`. An unknown cost counts as zero, the pool's convention, so a leg out of a pool of incomplete cost (a `MISSING` holding) still takes its known cost out, and nothing is left in capital once the units are gone. An internal pair between two brokers: the per-broker flow is the cost the receiving leg's step added (`_movement_cost_step()` on the receiving leg), rescaled from the receiver's share to the sender's, whether or not the receiver's pool is complete; an arrival of unknown cost adds 0, so there is no flow |
 | `DailyPortfolioState.unrealized_by_currency` | `UnrealizedSplit(asset, fx, unsplit)` per asset currency, see below |
 | `EngineEndState.wac_pool_qty` / `wac_pool_cost` | Quantity and historical cost of the last replayed step |
 | `PortfolioCalculationResult.average_costs` | The whole `AverageCost` map, for the services that read it |
@@ -362,8 +372,12 @@ daily state holds in `unrealized_by_currency[A]` the sum over those positions of
 | `fx` | `C_A × r(t) − C_T` | What the exchange rate did to their cost |
 | `unsplit` | `MV − C_T` | Positions that cannot be split that day: no market value, no rate, or a cost incomplete on either leg |
 
-For A = T the whole `MV − C_T` goes to `asset`: `fx` is always zero. Summed over
-the currencies, the parts equal `market_value − open_cost_basis` exactly.
+For A = T the whole `MV − C_T` goes to `asset`: `fx` is always zero. A position valued at its
+book cost (`ESTIMATED_AT_COST`, no price at all) adds to no part
+(`_add_unrealized_part(..., at_cost=True)`): its `MV − C_T` is zero by construction, and
+splitting it would invent an asset part and an exchange-rate part of opposite sign; its currency
+keeps its entry. Summed over the currencies, the parts equal `market_value − open_cost_basis`
+exactly.
 
 `PortfolioService` turns two of these states into
 `PortfolioSummary.period_unrealized_breakdown` (`_unrealized_breakdown_rows()`):
@@ -568,6 +582,26 @@ unknown cost therefore comes from:
   event is no longer a `SPLIT` its units have an unknown cost
   (`test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition`
   in `backend/test_scripts/test_api/test_portfolio_wac.py`).
+
+**An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
+An update that leaves out `cost_basis_override` changes nothing. One that sends it
+as `null` removes the cost basis stored on the row — `cost_basis_override` and
+`cost_basis_currency` together — where the row, with the update's type and
+quantity applied, takes one (`cost_basis_allowed()`): `_apply_update_values()`
+(`batch_edits.py`) tells the `null` from a missing key by `model_fields_set`.
+Where a cost basis is required — on today's table, every side that takes one: a
+received `TRANSFER`, an `ADJUSTMENT` adding quantity — the removal changes the
+row's `cost_fields()`, so the update check above refuses it with
+`costBasisRequired` (operation `update`, `field` `cost_basis_override`), and the
+stored cost stays. Elsewhere the `null` is ignored, so the giving leg of a split
+`TRANSFER` keeps the cost decision 47 gives it (see
+[Split & Promote](split_promote.md)). It is ignored too when
+the update names `cost_basis_mode` `auto` or `auto-detail`, which compute their
+own (see [Inline Batch Auto Modes](#inline-batch-auto-modes)): the frontend sends a
+`null` with an Auto row that has no currency hint yet (`buildUpdateDiff()` in
+`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`). Tests:
+`./dev.py test services transaction-cost-basis-rule`
+(`TestDecisionP5AnExplicitNullEmptiesTheCost`).
 
 ---
 

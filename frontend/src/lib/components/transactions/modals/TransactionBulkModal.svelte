@@ -1518,9 +1518,9 @@
         const toLabel = $t('common.to');
         // Pad to the longer label + colon + 1ch spacing
         const maxCh = Math.max(fromLabel.length, toLabel.length) + 2;
-        const labelCls = `inline-block text-gray-400 dark:text-gray-500 font-medium`;
+        const labelCls = `inline-block text-lf-muted font-medium`;
         const labelStyle = `min-width:${maxCh}ch`;
-        return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="${labelCls}" style="${labelStyle}">${fromLabel}:</span> ${fromText}</span><hr class="border-gray-200 dark:border-gray-600 my-0.5"/><span><span class="${labelCls}" style="${labelStyle}">${toLabel}:</span> ${toText}</span></div>`;
+        return `<div class="flex flex-col gap-0.5 text-xs leading-tight min-h-[2.5rem] justify-center"><span><span class="${labelCls}" style="${labelStyle}">${fromLabel}:</span> ${fromText}</span><hr class="border-lf-subtle my-0.5"/><span><span class="${labelCls}" style="${labelStyle}">${toLabel}:</span> ${toText}</span></div>`;
     }
 
     /** Readonly type badge with icon. */
@@ -1542,7 +1542,7 @@
 
     /** H1-fix: Asset name with icon for readonly cells. */
     function renderAssetHtml(assetId: number | null | undefined): string {
-        if (assetId == null) return '<span class="text-gray-400 italic">—</span>';
+        if (assetId == null) return '<span class="text-lf-muted italic">—</span>';
         const info = getAssetInfo(assetId);
         const name = info?.display_name ?? `#${assetId}`;
         // Bug11-fix: use asset type icon as fallback when icon_url is null
@@ -1600,12 +1600,12 @@
                         type: 'html',
                         html:
                             st === 'new'
-                                ? '<span data-testid="tx-bulk-row-status" data-status="new" class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
+                                ? '<span data-testid="tx-bulk-row-status" data-status="new" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-success-soft text-lf-success-on-soft">new</span>'
                                 : st === 'edited'
-                                  ? '<span data-testid="tx-bulk-row-status" data-status="edited" class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
+                                  ? '<span data-testid="tx-bulk-row-status" data-status="edited" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-warning-soft text-lf-warning-on-soft">edit</span>'
                                   : st === 'delete'
-                                    ? '<span data-testid="tx-bulk-row-status" data-status="delete" class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
-                                    : '<span data-testid="tx-bulk-row-status" data-status="original" class="text-gray-300 dark:text-gray-600">·</span>',
+                                    ? '<span data-testid="tx-bulk-row-status" data-status="delete" class="px-1.5 py-0.5 text-[10px] rounded bg-lf-danger-soft text-lf-danger-on-soft">🔴 del</span>'
+                                    : '<span data-testid="tx-bulk-row-status" data-status="original" class="text-lf-muted">·</span>',
                     };
                 },
             },
@@ -1640,7 +1640,7 @@
                 cell: (row): CellContent => {
                     // Paired rows with different dates → Da:/A:
                     const pOp = getPartnerOp(row.tempId);
-                    const content = pOp && pOp.fields.date !== row.fields.date ? renderDualHtml(row.fields.date, pOp.fields.date) : `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${escapeHtml(row.fields.date)}</span>`;
+                    const content = pOp && pOp.fields.date !== row.fields.date ? renderDualHtml(row.fields.date, pOp.fields.date) : `<span class="font-mono text-sm text-lf-secondary">${escapeHtml(row.fields.date)}</span>`;
                     return {type: 'html', html: `<div data-testid="tx-bulk-date" data-row-id="${row.tempId}" data-date="${escapeHtml(row.fields.date)}" data-partner-date="${escapeHtml(pOp?.fields.date ?? '')}">${content}</div>`};
                 },
             },
@@ -1666,7 +1666,7 @@
                             const origSlug = origType.toLowerCase().replace(/_/g, '-');
                             return {
                                 type: 'html',
-                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/> <span class="text-gray-400">→</span> ${renderTypeHtml(targetType)}</span>`,
+                                html: `<span class="inline-flex items-center gap-1 text-[11px]"><img src="/icons/transactions/${origSlug}.png" alt="" style="width:1.5rem;height:1.5rem" class="object-contain shrink-0" onerror="this.style.display='none'"/> <span class="text-lf-muted">→</span> ${renderTypeHtml(targetType)}</span>`,
                             };
                         }
                         return {type: 'html', html: `<span class="text-[11px]">${renderTypeHtml(row.fields.type)} → <span class="text-purple-600 dark:text-purple-400">✂️ ADJUSTMENT</span></span>`};
@@ -1683,7 +1683,7 @@
                 filterable: false,
                 cell: (row): CellContent => {
                     if (getTypeRule(row.fields.type).assetField === 'forbidden') {
-                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                        return {type: 'html', html: '<span class="text-lf-muted italic">—</span>'};
                     }
                     return {type: 'html', html: renderAssetHtml(row.fields.asset_id)};
                 },
@@ -1697,7 +1697,7 @@
                 filterable: false,
                 cell: (row): CellContent => {
                     if (getTypeRule(row.fields.type).quantityMode === 'forbidden') {
-                        return {type: 'html', html: '<span class="text-gray-400 italic">n/a</span>'};
+                        return {type: 'html', html: '<span class="text-lf-muted italic">n/a</span>'};
                     }
                     const qty = row.fields.quantity ?? '0';
                     // H2-fix: paired rows with non-zero qty → show Da:/A: with signed values + emoji
@@ -1727,7 +1727,7 @@
                 cell: (row): CellContent => {
                     const rule = getTypeRule(row.fields.type);
                     if (rule.cashField === 'forbidden') {
-                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                        return {type: 'html', html: '<span class="text-lf-muted italic">—</span>'};
                     }
                     // Reconstruct display sign: form stores abs, column shows actual sign
                     let displayCash = row.fields.cash;
@@ -1757,7 +1757,7 @@
                     if (rule.requiresPair && pOp) {
                         if (pOp.inaccessible) {
                             // W4b: partner on inaccessible broker → show lock
-                            const lockHtml = `<span class="text-red-500 dark:text-red-400" data-testid="tx-bulk-partner-lock" title="${$t('transactions.bulk.partnerInaccessible')}">🔒</span>`;
+                            const lockHtml = `<span class="text-lf-danger" data-testid="tx-bulk-partner-lock" title="${$t('transactions.bulk.partnerInaccessible')}">🔒</span>`;
                             return {type: 'html', html: renderDualHtml(renderBrokerHtml(row.fields.broker_id), lockHtml)};
                         }
                         if (pOp.fields.broker_id !== row.fields.broker_id) {
@@ -1784,7 +1784,7 @@
 
                     // mode null → field not applicable for this type
                     if (mode === null) {
-                        return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                        return {type: 'html', html: '<span class="text-lf-muted italic">—</span>'};
                     }
 
                     // Read-only mirror of WacPreviewSection's Total/Per-unit toggle (same
@@ -1795,7 +1795,7 @@
                     const qtyAbs = Math.abs(Number(source.fields.quantity ?? '0'));
                     const showAsTotal = unitModeStored === 'total' && qtyAbs > 0;
                     const displayAmount = (amount: number) => (showAsTotal ? amount * qtyAbs : amount);
-                    const modeSuffix = `<span class="text-[9px] text-gray-400 ml-1">${showAsTotal ? ($t('transactions.wacPreview.unitModeTotal') ?? 'Total') : ($t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit')}</span>`;
+                    const modeSuffix = `<span class="text-[9px] text-lf-muted ml-1">${showAsTotal ? ($t('transactions.wacPreview.unitModeTotal') ?? 'Total') : ($t('transactions.wacPreview.unitModePerUnit') ?? 'Per unit')}</span>`;
 
                     // mode 'auto'
                     if (mode === 'auto') {
@@ -1803,7 +1803,7 @@
                             // Auto-calculated value present
                             return {
                                 type: 'html',
-                                html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto" data-state="ready">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
+                                html: `<span class="text-lf-muted italic" data-testid="tx-bulk-cost-basis-auto" data-state="ready">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
                             };
                         }
                         // No amount. Two different facts used to share one glyph: the value is
@@ -1818,7 +1818,7 @@
                         const unknown = scheduler.state.isPending || scheduler.state.isValidating || scheduler.state.validateRuns === 0;
                         return {
                             type: 'html',
-                            html: `<span class="text-gray-400 italic" data-testid="tx-bulk-cost-basis-auto" data-state="${unknown ? 'pending' : 'empty'}">💡 ${unknown ? '…' : '—'}</span>`,
+                            html: `<span class="text-lf-muted italic" data-testid="tx-bulk-cost-basis-auto" data-state="${unknown ? 'pending' : 'empty'}">💡 ${unknown ? '…' : '—'}</span>`,
                         };
                     }
 
@@ -1827,7 +1827,7 @@
                         return {type: 'html', html: `<span class="font-mono text-xs" data-testid="tx-bulk-cost-basis-manual">${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`};
                     }
                     // User explicitly cleared the value
-                    return {type: 'html', html: '<span class="text-gray-400 italic">—</span>'};
+                    return {type: 'html', html: '<span class="text-lf-muted italic">—</span>'};
                 },
             },
             {
@@ -1839,7 +1839,7 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    if (row.fields.asset_event_id == null) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    if (row.fields.asset_event_id == null) return {type: 'html', html: '<span class="text-lf-muted">—</span>'};
                     const ev = eventCache.get(row.fields.asset_event_id);
                     if (!ev) return {type: 'html', html: `<span class="font-mono text-xs">#${row.fields.asset_event_id}</span>`};
                     const emojiMap: Record<string, string> = {DIVIDEND: '💰', INTEREST: '🏦', SPLIT: '✂️', PRICE_ADJUSTMENT: '📊', MATURITY_SETTLEMENT: '📅'};
@@ -1861,7 +1861,7 @@
                     if (ev.notes) tooltipHtml += `<br>📝 ${$t('common.notes')}: ${escapeHtml(ev.notes)}`;
                     return {
                         type: 'html',
-                        html: `<span class="inline-flex items-center gap-1 text-xs"><span class="text-sm">${emoji}</span><span class="text-gray-600 dark:text-gray-400">${shortDate}</span>${fmtAmt ? `<span class="font-mono text-gray-500">${fmtAmt}</span>` : ''}</span>`,
+                        html: `<span class="inline-flex items-center gap-1 text-xs"><span class="text-sm">${emoji}</span><span class="text-lf-secondary">${shortDate}</span>${fmtAmt ? `<span class="font-mono text-lf-muted">${fmtAmt}</span>` : ''}</span>`,
                         tooltip: {html: tooltipHtml, position: 'top'},
                     };
                 },
@@ -1875,11 +1875,11 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    if (!row.fields.description) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
-                    const escaped = row.fields.description.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    if (!row.fields.description) return {type: 'html', html: '<span class="text-lf-muted">—</span>'};
+                    const escaped = escapeHtml(row.fields.description);
                     return {
                         type: 'html',
-                        html: `<span class="text-xs text-gray-600 dark:text-gray-300 truncate block leading-tight">${escaped}</span>`,
+                        html: `<span class="text-xs text-lf-secondary truncate block leading-tight">${escaped}</span>`,
                         tooltip: {text: row.fields.description, position: 'top', maxWidth: '400px'},
                     };
                 },
@@ -1893,7 +1893,7 @@
                 filterable: false,
                 hiddenByDefault: false,
                 cell: (row): CellContent => {
-                    if (row.fields.tags.length === 0) return {type: 'html', html: '<span class="text-gray-400">—</span>'};
+                    if (row.fields.tags.length === 0) return {type: 'html', html: '<span class="text-lf-muted">—</span>'};
                     const html = row.fields.tags
                         .map((tag) => {
                             const escaped = tag.replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -1916,10 +1916,10 @@
                     const pOp = getPartnerOp(row.tempId);
                     if (pOp && pOp.op === 'edit') {
                         const selfId = opTxId(row) ?? '?';
-                        return {type: 'html', html: `<code class="text-xs font-mono text-gray-400">#${selfId} <span class="text-base">⇄</span> #${pOp.txId}</code>`};
+                        return {type: 'html', html: `<code class="text-xs font-mono text-lf-muted">#${selfId} <span class="text-base">⇄</span> #${pOp.txId}</code>`};
                     }
                     if (pOp && pOp.op === 'create') return {type: 'html', html: '<code class="text-xs font-mono text-indigo-400">new <span class="text-base">⇄</span> new</code>'};
-                    if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-xs font-mono text-gray-400">${row.link_uuid.slice(0, 8)}…</code>`};
+                    if (row.op === 'create' && row.link_uuid) return {type: 'html', html: `<code class="text-xs font-mono text-lf-muted">${row.link_uuid.slice(0, 8)}…</code>`};
                     return {type: 'html', html: '—'};
                 },
             },
@@ -2019,8 +2019,8 @@
                     const banner = document.querySelector('[data-testid="promote-suggest-banner"]');
                     if (banner) {
                         banner.scrollIntoView({behavior: 'smooth', block: 'center'});
-                        banner.classList.add('ring-2', 'ring-green-400');
-                        setTimeout(() => banner.classList.remove('ring-2', 'ring-green-400'), 1500);
+                        banner.classList.add('ring-2', 'ring-lf-success');
+                        setTimeout(() => banner.classList.remove('ring-2', 'ring-lf-success'), 1500);
                     }
                 }
             },
@@ -3109,21 +3109,21 @@
 <ModalBase {open} maxWidth="none" onRequestClose={requestClose} testId="tx-bulk-modal" allowOverflow={true} contentClass="max-w-[95vw] w-[95vw]">
     <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-bulk-modal-root" data-busy={scheduler.state.isPending || scheduler.state.isValidating || committing} data-validate-runs={scheduler.state.validateRuns}>
         <!-- Header -->
-        <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title" use:guideAnchor={'transaction.bulk.workspace'}>
+        <div class="flex items-center justify-between p-5 pb-4 border-b border-lf-subtle shrink-0">
+            <h2 class="text-lg font-semibold text-lf-primary" data-testid="tx-bulk-title" use:guideAnchor={'transaction.bulk.workspace'}>
                 📋 {$t('transactions.bulk.title', {values: {total: visibleOps.length}})}
                 {#if actionCount > 0}
-                    <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
-                        ({#if newCount > 0}<span class="text-emerald-600 dark:text-emerald-400">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)}
+                    <span class="text-sm font-normal text-lf-muted">
+                        ({#if newCount > 0}<span class="text-lf-success">{newCount} {$t('transactions.bulk.stateNew')}</span>{/if}{#if newCount > 0 && (editedCount > 0 || deleteCount > 0)}
                             ·
-                        {/if}{#if editedCount > 0}<span class="text-amber-600 dark:text-amber-400">{editedCount} {$t('transactions.bulk.stateEdit')}</span>{/if}{#if editedCount > 0 && deleteCount > 0}
+                        {/if}{#if editedCount > 0}<span class="text-lf-warning">{editedCount} {$t('transactions.bulk.stateEdit')}</span>{/if}{#if editedCount > 0 && deleteCount > 0}
                             ·
-                        {/if}{#if deleteCount > 0}<span class="text-red-600 dark:text-red-400">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if}{#if pendingSplits.length > 0}
+                        {/if}{#if deleteCount > 0}<span class="text-lf-danger">{deleteCount} {$t('transactions.bulk.stateDel')}</span>{/if}{#if pendingSplits.length > 0}
                             · <span class="text-purple-600 dark:text-purple-400" data-testid="split-queued-badge">⚡ {$t('transactions.bulk.splitQueued', {values: {n: pendingSplits.length}})}</span>{/if})
                     </span>
                 {/if}
             </h2>
-            <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={requestClose} data-testid="tx-bulk-close" aria-label="Close">
+            <button class="p-2 text-lf-muted hover:text-lf-secondary hover:bg-lf-hover rounded-lg transition-colors" onclick={requestClose} data-testid="tx-bulk-close" aria-label="Close">
                 <X size={20} />
             </button>
         </div>
@@ -3225,27 +3225,27 @@
         <!-- Footer (Bugfix-4 §U16: validate-now on the left, no duplicate chip
              /issue-count — the green/warning banners above are the single
              source of truth for validate state). -->
-        <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
+        <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-lf-subtle shrink-0 text-xs">
             <div class="flex items-center gap-2 flex-wrap" use:guideAnchor={'transaction.bulk.validation'}>
-                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now" title={$t('transactions.validate.now')}>
+                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-lf-secondary hover:bg-lf-hover" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now" title={$t('transactions.validate.now')}>
                     ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                 </button>
                 {#if scheduler.state.isValidating || scheduler.state.isPending}
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
+                    <span class="text-[11px] text-lf-muted" data-testid="tx-bulk-validating">{$t('transactions.validate.validating')}</span>
                 {:else if isFreshlyValid && !formError && !commitFailed}
-                    <span class="text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-1" data-testid="tx-bulk-valid">
+                    <span class="text-lf-success text-xs flex items-center gap-1" data-testid="tx-bulk-valid">
                         <Check size={14} />
                         {$t('transactions.validate.ok')}
                     </span>
                 {/if}
             </div>
             <div class="flex items-center gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-bulk-cancel" title={$t('common.cancel')}
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary bg-lf-panel hover:bg-lf-neutral inline-flex items-center gap-1.5" onclick={requestClose} data-testid="tx-bulk-cancel" title={$t('common.cancel')}
                     ><X size={15} /> <span class="hidden sm:inline">{$t('common.cancel')}</span></button
                 >
                 <button
                     type="button"
-                    class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                    class="px-4 py-2 text-sm rounded-lg text-lf-on-action bg-lf-action hover:bg-lf-action-hover disabled:opacity-50 inline-flex items-center gap-1.5"
                     disabled={commitDisabled}
                     onclick={requestCommit}
                     use:guideAnchor={['import.bulk.save-all', 'transaction.bulk.save']}

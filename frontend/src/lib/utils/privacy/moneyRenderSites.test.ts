@@ -172,13 +172,13 @@ function scan(): Hit[] {
  */
 const REGISTRY: Site[] = [
     {
-        file: 'lib/components/risk/riskAnalysisHelpers.ts',
+        file: 'lib/features/risk/riskAnalysisHelpers.ts',
         snippet: "return maskCurrencyParts(new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2}).formatToParts(amount));",
         status: 'masked',
         why: 'The fifth currency formatter. Masked in the same expression by maskCurrencyParts, which hides the digits and keeps the currency and the sign; the two em-dash absence checks run before it.',
     },
     {
-        file: 'lib/components/brokers/lots/lotComparisonChartHelpers.ts',
+        file: 'lib/features/brokers/lots/lotComparisonChartHelpers.ts',
         snippet: "style: 'currency',",
         status: 'masked',
         why: 'formatAxisCurrency, the absolute-return axis of the lot comparison chart, extracted from the component. Its Intl exit goes through maskCurrencyParts; its fallback exit masks with maskFormattedNumber( and so is not a hit at all.',
@@ -190,7 +190,7 @@ const REGISTRY: Site[] = [
         why: 'Reads resolvedOptions().maximumFractionDigits and renders nothing. The known false positive of form A, kept registered so the next reader does not re-derive it.',
     },
     {
-        file: 'lib/components/dashboard/growthChartTooltip.ts',
+        file: 'lib/features/dashboard/growthChartTooltip.ts',
         snippet: '`<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${t(\'dashboard.totalPnl\')}</b></span><b>${fmtCurrency(totalPnlVal, true)}</b></div>`',
         status: 'masked',
         why: "The P&L-total row of the Abs tooltip, in buildGrowthTooltip (moved out of GrowthChart.svelte with the rest of the tooltip in FE6a), a consumer of fmtCurrency that §1.8 did not list. fmtCurrency is masked at its definition in that same function, through maskFormattedNumber, which keeps the locale's sign outside the mask and masks the digits only (D8, D23b); the gate cannot follow a call into a local closure, so this row still matches through its totalPnlVal/pnlColor tokens. Unmasking the definition would bring the definition line back as an unregistered hit: the boundary is guarded by this gate, as for LotComparisonChart.formatAxisCurrency. The masking of this row is pinned behaviourally by GrowthChart.test.ts «masks every tooltip amount in the Abs, P&L-total and candle rows, keeping the currency and the sign readable».",
@@ -237,7 +237,7 @@ describe('money rendered outside the masking channel (analysis §1.8 gate)', () 
         expect(hits.length).toBeGreaterThanOrEqual(REGISTRY.length);
         expect(hits.filter((h) => h.form === 'A').length).toBeGreaterThan(0);
         expect(hits.filter((h) => h.form === 'B').length).toBeGreaterThan(0);
-        expect(hits.map((h) => h.file)).toContain('lib/components/risk/riskAnalysisHelpers.ts');
+        expect(hits.map((h) => h.file)).toContain('lib/features/risk/riskAnalysisHelpers.ts');
     });
 
     it('registers every site that renders money outside the channel', () => {

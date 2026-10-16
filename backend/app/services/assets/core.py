@@ -46,7 +46,7 @@ from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.runtime import configure_instance
 from backend.app.utils.runtime.cache import get_ttl_cache
 from backend.app.utils.runtime.cooldown import RateLimitedError
-from backend.app.utils.runtime.secret_masking import exception_renders_secret, mask_exception, masked_description, secrets_in_flight
+from backend.app.utils.runtime.secret_masking import exception_renders_secret, mask_exception, mask_text, masked_description, secrets_in_flight
 
 # Initialize structured logger
 logger = get_logger(__name__)
@@ -117,6 +117,19 @@ def settings_cache_part(provider: AssetSourceProvider) -> str:
     return provider.settings.fingerprint if isinstance(provider, PluginSettingsMixin) else ""
 
 
+def public_asset_url(provider: AssetSourceProvider, url: str | None) -> str | None:
+    """``url``, unless it shows one of the provider's secrets: an asset URL is shown to the user, so a plugin never puts
+    a secret in it; one that does gets no URL, and the log says which provider (security review of CP10–CP11). Hidden
+    whole, never masked: a masked URL would tell a caller where a value they chose occurs."""
+    if not url or not isinstance(provider, PluginSettingsMixin):
+        return url
+    secrets = provider.settings.secret_values()
+    if secrets and mask_text(url, secrets) != url:
+        logger.warning("Provider asset URL withheld: it shows a secret", provider=provider.provider_code)
+        return None
+    return url
+
+
 async def settings_cache_part_for(code: str) -> str:
     """The settings part of the cache keys of the provider ``code``, as a call would compute it now.
 
@@ -125,6 +138,24 @@ async def settings_cache_part_for(code: str) -> str:
     """
     provider = await configured_provider(code)
     return settings_cache_part(provider) if provider is not None else ""
+
+
+def asset_cache_key(provider_code: str, identifier: str | None, identifier_type: object, provider_params: dict | str | None, settings_part: str) -> tuple[str, str, str, str, str]:
+    """The key of a provider's answers in `_asset_history_cache` and `_asset_current_cache`: the inputs of the call.
+
+    The one function for every reader, writer and drop of those entries (X-R27, X-R28): the provider, the identifier as
+    the assignment stores it (none as ""), its stored input type, the hash of the parameters (#R3-4) and the provider's
+    settings (`settings_cache_part`). A provider sees nothing else, so equal keys always mean equal answers, and other
+    parameters or settings never share one.
+    """
+    return (provider_code, identifier or "", str(identifier_type), _provider_params_hash(_parse_provider_params(provider_params)), settings_part)
+
+
+async def drop_asset_cache_entries(provider_code: str, identifier: str | None, identifier_type: object, provider_params: dict | str | None) -> None:
+    """Drop the cached history and current value of one provider assignment, keyed as a call would key them now."""
+    key = asset_cache_key(provider_code, identifier, identifier_type, provider_params, await settings_cache_part_for(provider_code))
+    _asset_history_cache.delete(key)
+    _asset_current_cache.delete(key)
 
 
 def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifier_type=None, provider_params: dict | None = None) -> str | None:
@@ -163,6 +194,10 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
       ``AssetSourceError`` with ``PROVIDER_ERROR`` (``RATE_LIMITED`` for a refusal), its masked description and no link
       to the original. ``PROVIDER_ERROR`` also carries the masked description in ``details["detail"]``, for the
       localized message (``providerErrors.PROVIDER_ERROR``).
+    - When the call carries a secret the caller chose (a personal field), a text that shows any secret is hidden whole
+      (``***``), not masked in place: masking a chosen value would tell whether it occurs in the text, and so, by
+      guesses, what stands beside it — an instance secret (security review of CP10–CP11, decision N15). The log lines
+      keep the precise masking.
 
     A test double that is not a plugin has no settings and no pause: it is called as it is.
     """
@@ -177,11 +212,14 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
     if wait > 0:
         raise AssetRateLimitedError(f"Provider {code} is paused after too many requests: {math.ceil(wait)} s left", retry_after=wait, scope=scope)
     secrets = settings.secret_values()
+    # A secret the caller chose (a personal field) is in this call: hide whole every text that shows a secret, since
+    # masking it in place would tell whether that value occurs beside an instance secret (decision N15).
+    whole = settings.carries_user_secrets
     with secrets_in_flight(secrets):
         try:
             result = await _run_provider_in_thread(fn, timeout=timeout)
         except BaseException as error:
-            mask_exception(error, secrets)
+            mask_exception(error, secrets, whole=whole)
             refused = isinstance(error, RateLimitedError)
             if refused:
                 error_scope = error.scope if error.scope is not None else scope
@@ -192,7 +230,7 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
                 record_no_verdict("asset", code, scope)
             if not isinstance(error, Exception) or (not exception_renders_secret(error, secrets) and (not refused or isinstance(error, AssetSourceError))):
                 raise
-            description = masked_description(error, secrets)
+            description = masked_description(error, secrets, whole=whole)
             retry_after, error_scope = (error.retry_after, error.scope) if refused else (None, None)
         else:
             record_success("asset", code, scope)

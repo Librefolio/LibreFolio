@@ -7,8 +7,9 @@ on 127.0.0.1, on a port the OS picks: nothing reaches the network. The contract 
 
 1. The fake server first: it speaks SMTP to ``smtplib`` — envelope, dot-unstuffing, every form of ``AUTH PLAIN`` and
    ``AUTH LOGIN``, ``530`` before authentication, the refusals it is told to give (a refused recipient quoted in the
-   reply, as real servers quote it), its ``QUIT`` code, ``STARTTLS`` only with a context — and it stops without leaving
-   a thread behind. A red here is the fake's, not the implementation's.
+   reply, as real servers quote it), its ``QUIT`` code, ``STARTTLS`` only with a context, ``8BITMIME`` and ``SMTPUTF8``
+   unless told not to — and it stops without leaving a thread behind. A red here is the fake's, not the
+   implementation's.
 2. ``smtp``'s vocabulary: ``SMTP_TIMEOUT_SECONDS`` 20.0; ``SmtpErrorCode``, seven codes whose value is their name;
    ``SmtpServer``, frozen, its password out of ``repr``; ``SmtpDeliveryError`` and the ``EmailError`` family.
 3. ``deliver``: plain mode delivers, the From address as envelope sender and the To address as recipient; with a user it
@@ -18,8 +19,12 @@ on 127.0.0.1, on a port the OS picks: nothing reaches the network. The contract 
    is ``TIMEOUT``;
    ``550`` to ``RCPT`` / ``MAIL`` and ``554`` to ``DATA`` are ``RECIPIENT_REFUSED`` / ``SENDER_REFUSED`` /
    ``SEND_FAILED``; ``str()`` of the error is its code alone, ``detail`` holds the server's text; a ``QUIT`` answered
-   with anything but ``221`` after the message was accepted is a success. With ``cryptography`` installed (it is not a
-   dependency), ``STARTTLS`` succeeds against a certificate the client trusts, before authenticating.
+   with anything but ``221`` after the message was accepted is a success. An address beyond ASCII (RFC 6531) goes out
+   through a server that advertises ``SMTPUTF8``, with ``SMTPUTF8 BODY=8BITMIME`` on ``MAIL`` and its ``To`` line in
+   UTF-8; towards one that does not, ``smtplib`` refuses it on its own side, before ``MAIL``: ``SEND_FAILED``, nothing
+   sent. An all-ASCII address goes with no parameter on ``MAIL``, even towards a server that advertises the extension:
+   the client of every other test sends what it sent before. With ``cryptography`` installed (it is not a dependency),
+   ``STARTTLS`` succeeds against a certificate the client trusts, before authenticating.
 4. ``email_config_state`` never raises: off without a host — whatever else is set —; usable, with the server built
    from the accessors and ``smtp.SMTP_TIMEOUT_SECONDS`` read at call time; or configured with one ``problem`` and the
    ``variable`` at fault, for each fault alone.
@@ -129,6 +134,11 @@ REPLY_TO_MAILBOX = ("LibreFolio Support", "support@example.org")
 #: The recipient's domain differs from the sender's, so that a domain found in a log is the recipient's.
 RECIPIENT = "alice@example.com"
 REFUSED_RECIPIENT = "refused@example.com"
+#: A local part beyond ASCII (RFC 6531), in NFC — ``ä`` and ``ö`` one code point each: ``smtplib`` sends it only to a
+#: server that advertises ``SMTPUTF8``.
+INTERNATIONAL_RECIPIENT = "zq-sh\u00e4r\u00f6d@example.com"
+#: What ``smtplib`` adds after the sender's address on ``MAIL`` for such an address, towards such a server.
+SMTPUTF8_MAIL_OPTIONS = ("SMTPUTF8", "BODY=8BITMIME")
 TOKEN = "Zm9v_YmFy-0123456789abcdefghijklmnopqrstuv"
 LINK = f"https://folio.example.com/reset-password#token={TOKEN}"
 #: Built by hand, so that delivery is tested apart from the builders.
@@ -254,10 +264,10 @@ def _message(to: str = RECIPIENT) -> EmailMessage:
     return message
 
 
-def _delivery_error(server: SmtpServer) -> SmtpDeliveryError:
-    """The ``SmtpDeliveryError`` ``deliver`` raises for ``server``; failing if it delivers, or raises anything else."""
+def _delivery_error(server: SmtpServer, to: str = RECIPIENT) -> SmtpDeliveryError:
+    """The ``SmtpDeliveryError`` ``deliver`` raises for ``server`` and a message to ``to``; failing if it delivers, or raises anything else."""
     with pytest.raises(SmtpDeliveryError) as caught:
-        deliver(server, _message())
+        deliver(server, _message(to))
     return caught.value
 
 
@@ -476,6 +486,25 @@ def test_the_fake_server_answers_quit_with_its_code_and_offers_starttls_only_wit
     print_success("QUIT 421 after a message; STARTTLS offered with a context")
 
 
+def test_the_fake_server_advertises_smtputf8_and_8bitmime_unless_told_not_to() -> None:
+    """EMD-049 — contract 1: ``EHLO`` advertises ``8BITMIME`` and ``SMTPUTF8`` by default, as Postfix does, and neither with ``smtputf8=False``; ``AUTH`` in both answers — the sibling that proves the second answer was read, not merely empty."""
+    print_section("EMD-049: 8BITMIME and SMTPUTF8 in the EHLO")
+
+    def advertised(fake: FakeSmtpServer) -> dict[str, bool]:
+        with smtplib.SMTP(fake.host, fake.port, timeout=5) as client:
+            client.ehlo()
+            return {extension: client.has_extn(extension) for extension in ("auth", "8bitmime", "smtputf8")}
+
+    with FakeSmtpServer() as by_default:
+        offered_by_default = advertised(by_default)
+    with FakeSmtpServer(smtputf8=False) as told_not_to:
+        offered_without = advertised(told_not_to)
+
+    assert offered_by_default == {"auth": True, "8bitmime": True, "smtputf8": True}
+    assert offered_without == {"auth": True, "8bitmime": False, "smtputf8": False}
+    print_success("8BITMIME and SMTPUTF8 by default, neither with smtputf8=False, AUTH in both")
+
+
 # =============================================================================
 # 2. THE VOCABULARY OF smtp AND delivery
 # =============================================================================
@@ -641,6 +670,61 @@ def test_a_failed_quit_after_the_message_was_accepted_is_a_success(quit_code: in
 
     assert len(fake.messages) == 1
     print_success("sent")
+
+
+def test_an_address_beyond_ascii_goes_out_with_smtputf8() -> None:
+    """EMD-046 — contract 3: ``zq-shäröd@example.com``, a local part beyond ASCII (RFC 6531), through the fake as it comes — it advertises ``SMTPUTF8`` —: one message; the envelope recipient exactly that address, the sender still the From address; ``SMTPUTF8`` and ``BODY=8BITMIME`` after it on ``MAIL``; the ``To`` line in UTF-8.
+
+    The ``To`` line is read in ``data``, not in the parsed ``message``: ``BytesParser`` reads every byte beyond ASCII as a
+    surrogate escape, so ``message["To"].addresses`` would hold escapes where ``ä`` and ``ö`` stand, and
+    ``email.policy`` documents the header's text as turning them into U+FFFD. The raw bytes also prove that the header
+    went as UTF-8 (``smtplib`` serializes with ``utf8=True``), not as an RFC 2047 encoded word.
+    """
+    print_section("EMD-046: an address beyond ASCII, with SMTPUTF8")
+
+    with FakeSmtpServer() as fake:
+        assert deliver(_server(fake), _message(INTERNATIONAL_RECIPIENT)) is None
+
+    assert len(fake.messages) == 1
+    received = fake.messages[0]
+    assert (received.mail_from, received.rcpt_tos) == (SENDER[1], [INTERNATIONAL_RECIPIENT])
+    assert set(SMTPUTF8_MAIL_OPTIONS) <= set(received.mail_options), received.mail_options
+    assert f"\r\nTo: {INTERNATIONAL_RECIPIENT}\r\n".encode() in received.data
+    print_success(f"{SENDER[1]} → {INTERNATIONAL_RECIPIENT}, MAIL with {' '.join(received.mail_options)}")
+
+
+def test_an_address_beyond_ascii_towards_a_server_without_smtputf8_is_send_failed() -> None:
+    """EMD-047 — contract 3: the same message through ``FakeSmtpServer(smtputf8=False)``, a server without the extension: ``SEND_FAILED``, its ``detail`` naming ``SMTPNotSupportedError`` and ``SMTPUTF8``, and no message. ``smtplib`` refuses on its own side — ``SMTPNotSupportedError``, raised in ``send_message`` once the ``EHLO`` answer lacks ``SMTPUTF8``, before ``MAIL`` is written —: one connection is opened, since it connects and says ``EHLO`` first, and nothing reaches ``MAIL``. The fake never names the extension in its replies: the words in ``detail`` are ``smtplib``'s, not the server's."""
+    print_section("EMD-047: an address beyond ASCII, no SMTPUTF8")
+
+    with FakeSmtpServer(smtputf8=False) as fake:
+        error = _delivery_error(_server(fake), to=INTERNATIONAL_RECIPIENT)
+
+    assert error.code == SmtpErrorCode.SEND_FAILED
+    assert str(error) == "SEND_FAILED"
+    assert "SMTPNotSupportedError" in error.detail and "SMTPUTF8" in error.detail, error.detail
+    assert (fake.connections, fake.messages) == (1, [])
+    print_success(f"SEND_FAILED: {error.detail!r}; one connection, nothing sent")
+
+
+def test_an_ascii_address_goes_without_smtputf8_even_when_the_server_advertises_it() -> None:
+    """EMD-048 — contract 3: through the fake as it comes, which advertises ``SMTPUTF8``, an all-ASCII recipient is delivered with no parameter on ``MAIL``: ``smtplib`` asks for the extension only for an address beyond ASCII, so the client of every other test sends what it sent before the fake advertised it — only the ``EHLO`` answer grew.
+
+    Control first: a message to ``zq-shäröd@example.com`` through the same fake goes with ``SMTPUTF8`` and
+    ``BODY=8BITMIME``: the fake advertises the extension and records what follows the address on ``MAIL``. Otherwise an
+    empty ``mail_options`` would prove nothing.
+    """
+    print_section("EMD-048: an ASCII address, no SMTPUTF8")
+
+    with FakeSmtpServer() as fake:
+        deliver(_server(fake), _message(INTERNATIONAL_RECIPIENT))
+        deliver(_server(fake), _message())
+
+    assert [message.rcpt_tos for message in fake.messages] == [[INTERNATIONAL_RECIPIENT], [RECIPIENT]]
+    control, received = fake.messages
+    assert set(SMTPUTF8_MAIL_OPTIONS) <= set(control.mail_options), f"control: the message beyond ASCII went with {control.mail_options}"
+    assert received.mail_options == ()
+    print_success(f"{RECIPIENT}: MAIL with no parameter; the control went with {' '.join(control.mail_options)}")
 
 
 def test_starttls_upgrades_before_authenticating(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

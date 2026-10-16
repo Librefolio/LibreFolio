@@ -13,12 +13,15 @@ Covers:
 - GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
-- GET /api/v1/system/instance: public, no session; {profile, accounts, email} live (the lane's default profile) and in-process
-  (a profile set); accounts.first_account_open a boolean, optional and false unless set (A6d)
+- GET /api/v1/system/instance: public, no session; {profile, accounts, email, support_url} live (the lane's default profile,
+  no support address) and in-process (a profile set, a support address set); accounts.first_account_open a boolean,
+  optional and false unless set (A6d); accounts.password_rules the backend's password rules, the same on every instance
+  (A6c, decision 37); support_url what support_link() publishes, null unless LIBREFOLIO_SUPPORT_URL is a valid address (CP13)
 - GET /api/v1/system/ready: public, no session; ready live (the lane's migrated database), 503 with the same body
   in-process, 200 and 503 in OpenAPI
 """
 
+import os
 from collections.abc import AsyncIterator
 from typing import Optional
 from uuid import uuid4
@@ -53,6 +56,7 @@ from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import PluginDiagnosticsResponse, ReadinessChecks, ReadinessResponse, SystemInfoPublicResponse, SystemInfoResponse
+from backend.app.services.platform import instance_links
 from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
@@ -819,16 +823,36 @@ class TestConnectionSecurityInProcess:
 # ============================================================================
 #
 # What the app reads at startup, before anyone signs in: public by design, the same for
-# whoever asks, so behind no session. Three fields today: the profile from LIBREFOLIO_PROFILE
-# (selfhosted unless set), accounts, the registration mode, whether a variable locks it and whether the instance has
+# whoever asks, so behind no session. Four fields today: the profile from LIBREFOLIO_PROFILE
+# (selfhosted unless set); accounts — the registration mode, whether a variable locks it, whether the instance has
 # no account yet (first_account_open, A6d: what the login page reads instead of the global settings, which now want a
-# session), and email, whether the instance can send emails (workstream E).
-# Live on the lane's backend for the lane's default, in-process for
-# a profile set through the environment, which the lane's server cannot be given from here. The lane's database is
-# shared: the registration mode and first_account_open are typed there, never pinned.
-# The Settings field itself (default, normalisation, refusal) is in test_config_misc.py.
+# session) and the password rules (password_rules, A6c: what the registration, invitation and reset pages show before
+# anyone signs in) —; email, whether the instance can send emails (workstream E); and support_url, where users ask for
+# help (LIBREFOLIO_SUPPORT_URL, workstream H, CP13), null unless set to a valid http(s) address.
+# Live on the lane's backend for the lane's default — the runner drops every LIBREFOLIO_* setting from a lane, so no
+# support address —, in-process for a profile or a support address set through the environment, which the lane's
+# server cannot be given from here. The lane's database is
+# shared: the registration mode and first_account_open are typed there, never pinned. The password rules are not lane
+# state — the backend's, the same on every instance —: pinned exactly.
+# The Settings field itself (default, normalisation, refusal) is in test_config_misc.py; env_url, support_url() and
+# support_link() are in test_config_package.py.
 
 INSTANCE_URL = f"{API_BASE}/system/instance"
+#: The public configuration, exactly these fields.
+INSTANCE_KEYS = {"profile", "accounts", "email", "support_url"}
+#: accounts, exactly these fields.
+ACCOUNTS_KEYS = {"registration_mode", "registration_locked", "first_account_open", "password_rules"}
+#: Decision 37 (lot A6c): accounts.password_rules as (code, value) — a value left out and a null one read alike.
+PASSWORD_RULES = [("min_length", 8), ("uppercase", None), ("lowercase", None), ("digit", None), ("special", None)]
+#: Where users ask for help (CP13): never set on a lane, set in this process only.
+SUPPORT_URL_VARIABLE = "LIBREFOLIO_SUPPORT_URL"
+
+
+def _password_rule_pairs(rules: object) -> object:
+    """``(code, value)`` of every published rule; the rules as they are when they are not a list of mappings of code and value alone, so that the comparison fails and shows them."""
+    if not isinstance(rules, list) or not all(isinstance(rule, dict) and set(rule) <= {"code", "value"} for rule in rules):
+        return rules
+    return [(rule.get("code"), rule.get("value")) for rule in rules]
 
 
 class TestInstanceConfigIsPublic:
@@ -865,10 +889,16 @@ class TestInstanceConfigLive:
         profile = get_settings().LIBREFOLIO_PROFILE
         assert profile == "selfhosted", f"Precondition: these tests read the default profile; this lane runs {profile!r} (LIBREFOLIO_PROFILE set in .env or in the environment)"
 
+    @pytest.fixture(autouse=True)
+    def lane_sets_no_support_address(self):
+        """Precondition: no support address. The runner drops every LIBREFOLIO_* setting from a lane, and the server reads the same environment as this process."""
+        configured = os.environ.get(SUPPORT_URL_VARIABLE)
+        assert not (configured or "").strip(), f"Precondition: these tests read a lane without a support address; this lane runs {SUPPORT_URL_VARIABLE}={configured!r} (the runner drops every LIBREFOLIO_* setting from a lane: was this run started outside ./dev.py test?)"
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize("forged_cookie", [False, True], ids=["no-cookie", "forged-session-cookie"])
     async def test_anyone_gets_the_public_configuration(self, test_server, forged_cookie):
-        """No session, or a session cookie the server never issued: 200 and exactly the declared fields, the default profile beside accounts and email."""
+        """No session, or a session cookie the server never issued: 200 and exactly the declared fields, the default profile beside accounts and email, and support_url null: the lane sets no support address."""
         async with httpx.AsyncClient() as client:
             if forged_cookie:
                 client.cookies.set(SESSION_COOKIE_NAME, f"forged-{uuid4().hex}")
@@ -876,12 +906,14 @@ class TestInstanceConfigLive:
 
         assert response.status_code == 200, f"GET /system/instance is public: expected 200 without a valid session, got {response.status_code}: {response.text}"
         body = response.json()
-        assert set(body) == {"profile", "accounts", "email"} and body["profile"] == "selfhosted", f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
+        assert set(body) == INSTANCE_KEYS and body["profile"] == "selfhosted", f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
         accounts = body["accounts"]
         assert (
-            set(accounts) == {"registration_mode", "registration_locked", "first_account_open"} and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
-        ), f"accounts must be exactly the registration mode, whether it is locked and whether the instance has no account yet, the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here): {response.text}"
+            set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
+        ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here) — and the password rules: {response.text}"
+        assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
+        assert body["support_url"] is None, f"support_url must be null on a lane that sets no {SUPPORT_URL_VARIABLE}, and the app then links to the project's GitHub issues: {response.text}"
 
 
 def _instance_app() -> FastAPI:
@@ -891,8 +923,16 @@ def _instance_app() -> FastAPI:
     return app
 
 
+@pytest.fixture
+def fresh_link_reports():
+    """The once-per-process log of an invalid instance link empty before and after the test: an invalid address set here leaves no report behind."""
+    instance_links._report_invalid.cache_clear()
+    yield
+    instance_links._report_invalid.cache_clear()
+
+
 class TestInstanceConfigInProcess:
-    """GET /system/instance answers the profile LIBREFOLIO_PROFILE sets, as get_settings() reads it at each request."""
+    """GET /system/instance answers the profile LIBREFOLIO_PROFILE sets, as get_settings() reads it at each request, and the support address LIBREFOLIO_SUPPORT_URL sets, as support_link() publishes it."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -910,12 +950,32 @@ class TestInstanceConfigInProcess:
 
         assert response.status_code == 200, f"GET /system/instance with LIBREFOLIO_PROFILE={configured!r}: expected 200, got {response.status_code}: {response.text}"
         body = response.json()
-        assert set(body) == {"profile", "accounts", "email"} and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts and email and nothing else: {response.text}"
+        assert set(body) == INSTANCE_KEYS and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts, email and support_url and nothing else: {response.text}"
         accounts = body["accounts"]
         assert (
-            set(accounts) == {"registration_mode", "registration_locked", "first_account_open"} and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
-        ), f"accounts must be exactly the registration mode, whether it is locked and whether the instance has no account yet, the last two booleans (read from the lane's shared database: not pinned here): {response.text}"
+            set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
+        ), f"accounts must be exactly the registration mode, whether it is locked, whether the instance has no account yet — the last two booleans (read from the lane's shared database: not pinned here) — and the password rules: {response.text}"
+        assert _password_rule_pairs(accounts["password_rules"]) == PASSWORD_RULES, f"accounts.password_rules must be the backend's rules, the same on every instance (decision 37): expected {PASSWORD_RULES} as (code, value), got {accounts['password_rules']}"
         assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link: {response.text}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("fresh_link_reports")
+    @pytest.mark.parametrize(
+        ("configured", "published"),
+        [
+            pytest.param("https://help.example/", "https://help.example", id="set-without-its-trailing-slash"),
+            pytest.param("ftp://help.example", None, id="invalid-is-null"),
+        ],
+    )
+    async def test_the_configured_support_address_is_answered(self, monkeypatch, configured, published):
+        """CP13: support_url is what support_link() publishes for this process's LIBREFOLIO_SUPPORT_URL: the address without its trailing slash, or null for one that is not http(s), the answer still 200 — an invalid address never breaks what the app reads at startup."""
+        monkeypatch.setenv(SUPPORT_URL_VARIABLE, configured)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_instance_app()), base_url="http://test") as client:
+            response = await client.get("/api/v1/system/instance")
+
+        assert response.status_code == 200, f"GET /system/instance with {SUPPORT_URL_VARIABLE}={configured!r}: expected 200, got {response.status_code}: {response.text}"
+        body = response.json()
+        assert set(body) == INSTANCE_KEYS and body["support_url"] == published, f"{SUPPORT_URL_VARIABLE}={configured!r} must be answered as support_url {published!r}, beside the other declared fields and nothing else: {response.text}"
 
 
 def _schema_component(document: dict, schema: dict) -> dict:

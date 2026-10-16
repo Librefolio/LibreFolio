@@ -463,7 +463,7 @@
         const desc = getProviderDescription(prov);
         const warning = getProviderWarning(prov.code);
         let h = `<strong>${escapeHtml(prov.name)}</strong><br/>${escapeHtml(desc)}`;
-        if (warning) h += `<br/><br/><span style="color:#fbbf24">⚠️ ${escapeHtml(warning)}</span>`;
+        if (warning) h += `<br/><br/><span class="text-lf-warning-on-inverse">⚠️ ${escapeHtml(warning)}</span>`;
         return h;
     }
 </script>
@@ -473,14 +473,14 @@
 <!-- ===================================================================== -->
 
 {#if loading}
-    <div class="flex items-center justify-center gap-2 py-4 text-xs text-gray-400 dark:text-gray-500" data-testid="fx-route-loading">
+    <div class="flex items-center justify-center gap-2 py-4 text-xs text-lf-muted" data-testid="fx-route-loading">
         <Loader2 size={14} class="animate-spin" />
         <span>{$_('fx.route.loading')}</span>
     </div>
 {:else if error}
-    <div class="text-xs text-red-500 dark:text-red-400 py-2" data-testid="fx-route-error">{error}</div>
+    <div class="text-xs text-lf-danger py-2" data-testid="fx-route-error">{error}</div>
 {:else if hasCurrencies}
-    <div class="space-y-3 {disabled ? 'opacity-50 pointer-events-none' : ''}" data-testid="fx-route-select">
+    <div class="space-y-3 text-lf-primary {disabled ? 'opacity-50 pointer-events-none' : ''}" data-testid="fx-route-select">
         <!-- ============================================================= -->
         <!-- SELECTED ROUTES — OrderableList with priority                 -->
         <!-- ============================================================= -->
@@ -496,20 +496,20 @@
                             {@const iconUrl = getFxProviderIconUrl(step.provider)}
                             {@const provColor = getProviderColor(step.provider)}
                             <span class="text-sm flex-shrink-0 emoji-flag">{fromInfo.flag_emoji}</span>
-                            <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
+                            <span class="font-medium text-[11px] text-lf-secondary">{step.from}</span>
                             <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                 <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}">
-                                    <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
+                                    <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                     {#if iconUrl}
                                         <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
                                     {:else}
                                         <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                     {/if}
-                                    <ArrowLeftRight size={10} class="text-gray-400 flex-shrink-0" />
+                                    <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                 </span>
                             </Tooltip>
                             <span class="text-sm flex-shrink-0 emoji-flag">{toInfo.flag_emoji}</span>
-                            <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
+                            <span class="font-medium text-[11px] text-lf-secondary">{step.to}</span>
                         {:else}
                             <!-- Chain route -->
                             <span class="flex items-center gap-0.5 flex-wrap flex-1 min-w-0">
@@ -520,21 +520,21 @@
                                     {@const provColor = getProviderColor(step.provider)}
                                     {#if i === 0}
                                         <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
-                                        <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
+                                        <span class="font-medium text-[11px] text-lf-secondary">{step.from}</span>
                                     {/if}
                                     <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                         <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: var(--prov-bg); border-color: var(--prov-border); --prov-bg: {provColor.bg}; --prov-border: {provColor.border}">
-                                            <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
+                                            <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                             {#if iconUrl}
                                                 <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
                                             {:else}
                                                 <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                             {/if}
-                                            <ArrowLeftRight size={8} class="text-gray-400 flex-shrink-0" />
+                                            <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                         </span>
                                     </Tooltip>
                                     <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
-                                    <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
+                                    <span class="font-medium text-[11px] text-lf-secondary">{step.to}</span>
                                 {/each}
                             </span>
                         {/if}
@@ -545,12 +545,12 @@
                         <!-- Provider warnings triangle -->
                         {#if getRouteWarnings(route).length > 0}
                             <Tooltip html={warningsTooltipHtml(getRouteWarnings(route))} position="top">
-                                <AlertTriangle size={13} class="text-amber-500" />
+                                <AlertTriangle size={13} class="text-lf-warning" />
                             </Tooltip>
                         {/if}
                         <!-- Remove button -->
                         {#if !disabled}
-                            <button type="button" class="p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-all flex-shrink-0" onclick={() => removeRoute(route.key)} title="Remove" data-testid="fx-route-remove">
+                            <button type="button" class="p-1 rounded-md hover:bg-lf-danger-soft text-lf-muted hover:text-lf-danger-on-soft transition-all flex-shrink-0" onclick={() => removeRoute(route.key)} title="Remove" data-testid="fx-route-remove">
                                 <Trash2 size={13} />
                             </button>
                         {/if}
@@ -566,7 +566,7 @@
             <button
                 type="button"
                 class="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border border-dashed transition-colors
-                    {pickerOpen ? 'border-libre-green bg-libre-green/5 text-libre-green' : 'border-gray-300 dark:border-slate-600 text-gray-500 dark:text-gray-400 hover:border-libre-green hover:text-libre-green'}"
+                    {pickerOpen ? 'border-lf-focus bg-lf-selected text-lf-link' : 'border-lf-input text-lf-muted hover:border-lf-focus hover:text-lf-link'}"
                 onclick={() => {
                     pickerOpen = !pickerOpen;
                 }}
@@ -584,13 +584,13 @@
         {/if}
 
         {#if pickerOpen && hasUnselectedRoutes}
-            <div class="space-y-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700" data-testid="fx-route-picker">
+            <div class="space-y-2 p-3 bg-lf-panel rounded-lg border border-lf-subtle" data-testid="fx-route-picker">
                 <!-- ========================================================= -->
                 <!-- PROVIDER INFO BAR — Icons with tooltips + docs links      -->
                 <!-- ========================================================= -->
                 {#if usedProviders.length > 0}
-                    <div class="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-slate-700">
-                        <span class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex-shrink-0">
+                    <div class="flex items-center gap-2 pb-2 border-b border-lf-subtle">
+                        <span class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider flex-shrink-0">
                             {$_('common.providers')}
                         </span>
                         <div class="flex items-center gap-1.5 flex-wrap">
@@ -606,9 +606,9 @@
                                         style="background: {provColor.bg}; border-color: {provColor.border}"
                                     >
                                         <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(prov.code)}</span>
-                                        <span class="text-[10px] font-semibold text-gray-600 dark:text-gray-300">{prov.code}</span>
+                                        <span class="text-[10px] font-semibold text-lf-secondary">{prov.code}</span>
                                         {#if provWarning}
-                                            <AlertTriangle size={10} class="text-amber-500 flex-shrink-0" />
+                                            <AlertTriangle size={10} class="text-lf-warning flex-shrink-0" />
                                         {/if}
                                     </a>
                                 </Tooltip>
@@ -619,16 +619,16 @@
 
                 <!-- Search input -->
                 <div class="relative">
-                    <Search size={13} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none" />
+                    <Search size={13} class="absolute left-2.5 top-1/2 -translate-y-1/2 text-lf-muted pointer-events-none" />
                     <input
                         type="text"
                         bind:value={searchQuery}
                         placeholder={$_('fx.route.searchPlaceholder')}
-                        class="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-gray-700 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-1 focus:ring-libre-green focus:border-libre-green outline-none transition-colors"
+                        class="w-full pl-8 pr-8 py-1.5 text-xs rounded-lg border border-lf-input bg-lf-field text-lf-primary placeholder:text-lf-placeholder hover:border-lf-input-hover focus:ring-1 focus:ring-lf-focus focus:border-lf-focus outline-none transition-colors"
                         data-testid="fx-route-search"
                     />
                     {#if searchQuery}
-                        <button class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors" onclick={clearSearch} data-testid="fx-route-search-clear">
+                        <button class="absolute right-2 top-1/2 -translate-y-1/2 text-lf-muted hover:text-lf-secondary transition-colors" onclick={clearSearch} data-testid="fx-route-search-clear">
                             <X size={13} />
                         </button>
                     {/if}
@@ -637,10 +637,10 @@
                 <!-- Direct routes -->
                 {#if filteredDirect.length > 0}
                     <div class="space-y-1" data-testid="fx-route-direct-section">
-                        <h4 class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <Check size={10} class="text-emerald-500" />
+                        <h4 class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider flex items-center gap-1.5">
+                            <Check size={10} class="text-lf-success" />
                             {$_('fx.route.directSection')}
-                            <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">{filteredDirect.length}</span>
+                            <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-lf-success-soft text-lf-success-on-soft">{filteredDirect.length}</span>
                         </h4>
                         {#each filteredDirect as route (route.key)}
                             {@const step = route.chainSteps[0]}
@@ -653,32 +653,32 @@
                                 type="button"
                                 data-testid="fx-route-direct-{route.providers[0]}"
                                 data-warnings={warnings.length}
-                                class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10"
+                                class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-success-line hover:bg-lf-success-soft/50"
                                 onclick={() => addRoute(route)}
                             >
                                 <span class="flex items-center gap-1.5">
-                                    <Plus size={12} class="text-emerald-500 flex-shrink-0" />
+                                    <Plus size={12} class="text-lf-success flex-shrink-0" />
                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
-                                    <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.from}</span>
+                                    <span class="font-medium text-lf-secondary text-[11px]">{step.from}</span>
                                     <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                         <span class="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
-                                            <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                            <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                             {#if iconUrl}
                                                 <img src={iconUrl} alt={step.provider} class="w-5 h-5 rounded object-contain p-0.5 flex-shrink-0" />
                                             {:else}
                                                 <span class="w-5 h-5 flex items-center justify-center rounded text-[8px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                             {/if}
-                                            <ArrowLeftRight size={10} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                            <ArrowLeftRight size={10} class="text-lf-muted flex-shrink-0" />
                                         </span>
                                     </Tooltip>
                                     <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
-                                    <span class="font-medium text-gray-600 dark:text-gray-300 text-[11px]">{step.to}</span>
+                                    <span class="font-medium text-lf-secondary text-[11px]">{step.to}</span>
                                     {#if warnings.length > 0}
                                         <Tooltip html={warningsTooltipHtml(warnings)} position="top">
-                                            <AlertTriangle size={11} class="text-amber-500" />
+                                            <AlertTriangle size={11} class="text-lf-warning" />
                                         </Tooltip>
                                     {/if}
-                                    <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 flex-shrink-0">1 step</span>
+                                    <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-lf-success-soft text-lf-success-on-soft flex-shrink-0">1 step</span>
                                 </span>
                             </button>
                         {/each}
@@ -692,23 +692,23 @@
                         <!-- Collapsible header -->
                         <button
                             type="button"
-                            class="w-full flex items-center gap-1.5 text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                            class="w-full flex items-center gap-1.5 text-[10px] font-semibold text-lf-muted uppercase tracking-wider hover:text-lf-secondary transition-colors"
                             onclick={() => toggleChainGroup(group.stepCount)}
                             data-testid="fx-route-chain-toggle-{group.stepCount}"
                             data-expanded={isExpanded}
                         >
                             {#if isExpanded}
-                                <ChevronUp size={10} class="text-blue-500 flex-shrink-0" />
+                                <ChevronUp size={10} class="text-lf-info flex-shrink-0" />
                             {:else}
-                                <ChevronDown size={10} class="text-blue-500 flex-shrink-0" />
+                                <ChevronDown size={10} class="text-lf-info flex-shrink-0" />
                             {/if}
-                            <Link size={10} class="text-blue-500" />
+                            <Link size={10} class="text-lf-info" />
                             {$_('fx.route.chainSection')} — {group.stepCount}
                             {$_('fx.route.steps')}
-                            <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">{group.routes.length}</span>
+                            <span class="ml-1 text-[9px] font-mono px-1 py-0.5 rounded bg-lf-info-soft text-lf-info-on-soft">{group.routes.length}</span>
                             <!-- Chain risk info icon -->
                             <Tooltip text={$_('fx.route.chainWarning')} position="top">
-                                <Info size={10} class="text-blue-400 dark:text-blue-500" />
+                                <Info size={10} class="text-lf-info" />
                             </Tooltip>
                         </button>
 
@@ -719,11 +719,11 @@
                                 <button
                                     type="button"
                                     data-testid="fx-route-chain-{route.stepCount}step-{route.providers.join('-')}"
-                                    class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/10"
+                                    class="w-full text-left px-2.5 py-1.5 rounded-lg border transition-all text-xs border-lf-subtle bg-lf-card hover:border-lf-info-line hover:bg-lf-info-soft/50"
                                     onclick={() => addRoute(route)}
                                 >
                                     <span class="flex items-center gap-1.5">
-                                        <Plus size={12} class="text-blue-500 flex-shrink-0" />
+                                        <Plus size={12} class="text-lf-info flex-shrink-0" />
                                         <span class="flex items-center gap-0.5 flex-wrap flex-1 min-w-0">
                                             {#each route.chainSteps as step, i}
                                                 {@const fromInfo = getCurrencyInfo(step.from)}
@@ -732,29 +732,29 @@
                                                 {@const provColor = getProviderColor(step.provider)}
                                                 {#if i === 0}
                                                     <span class="text-sm emoji-flag">{fromInfo.flag_emoji}</span>
-                                                    <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.from}</span>
+                                                    <span class="font-medium text-[11px] text-lf-secondary">{step.from}</span>
                                                 {/if}
                                                 <Tooltip html={providerTooltipHtml(step.provider)} position="top">
                                                     <span class="inline-flex items-center gap-0.5 px-0.5 py-0.5 rounded border flex-shrink-0" style="background: {provColor.bg}; border-color: {provColor.border}">
-                                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                                        <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                                         {#if iconUrl}
                                                             <img src={iconUrl} alt={step.provider} class="w-4 h-4 rounded object-contain p-0.5 flex-shrink-0" />
                                                         {:else}
                                                             <span class="w-4 h-4 flex items-center justify-center rounded text-[7px] font-bold flex-shrink-0">{getProviderInitials(step.provider)}</span>
                                                         {/if}
-                                                        <ArrowLeftRight size={8} class="text-gray-400 dark:text-gray-500 flex-shrink-0" />
+                                                        <ArrowLeftRight size={8} class="text-lf-muted flex-shrink-0" />
                                                     </span>
                                                 </Tooltip>
                                                 <span class="text-sm emoji-flag">{toInfo.flag_emoji}</span>
-                                                <span class="font-medium text-[11px] text-gray-600 dark:text-gray-300">{step.to}</span>
+                                                <span class="font-medium text-[11px] text-lf-secondary">{step.to}</span>
                                             {/each}
                                         </span>
                                         {#if warnings.length > 0}
                                             <Tooltip html={warningsTooltipHtml(warnings)} position="top">
-                                                <AlertTriangle size={11} class="text-amber-500" />
+                                                <AlertTriangle size={11} class="text-lf-warning" />
                                             </Tooltip>
                                         {/if}
-                                        <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0 whitespace-nowrap">
+                                        <span class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-lf-info-soft text-lf-info-on-soft flex-shrink-0 whitespace-nowrap">
                                             {route.stepCount}
                                             {$_('fx.route.steps')}
                                         </span>
@@ -768,19 +768,19 @@
                 <!-- Unusable providers -->
                 {#if filteredUnusable.length > 0}
                     <div class="space-y-1" data-testid="fx-route-unusable">
-                        <h4 class="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                            <AlertTriangle size={10} class="text-gray-400 dark:text-gray-500" />
+                        <h4 class="text-[10px] font-semibold text-lf-muted uppercase tracking-wider flex items-center gap-1.5">
+                            <AlertTriangle size={10} class="text-lf-muted" />
                             {$_('fx.route.unusableSection')}
                         </h4>
-                        <div class="px-2.5 py-1.5 rounded-lg border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
+                        <div class="px-2.5 py-1.5 rounded-lg border border-dashed border-lf-subtle bg-lf-panel/50">
                             <div class="flex flex-wrap gap-1.5">
                                 {#each filteredUnusable as prov}
-                                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-400 dark:text-gray-500 line-through">
+                                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-lf-neutral text-lf-muted line-through">
                                         {prov.code}
                                     </span>
                                 {/each}
                             </div>
-                            <p class="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
+                            <p class="text-[10px] text-lf-muted mt-1">
                                 {$_('fx.route.unusableHint')}
                             </p>
                         </div>
@@ -789,7 +789,7 @@
 
                 <!-- No search results -->
                 {#if !hasFilteredRoutes && searchTokens.length > 0}
-                    <div class="text-xs text-gray-400 dark:text-gray-500 text-center py-2" data-testid="fx-route-no-results">
+                    <div class="text-xs text-lf-muted text-center py-2" data-testid="fx-route-no-results">
                         {$_('fx.route.noSearchResults')}
                     </div>
                 {/if}
@@ -798,8 +798,8 @@
 
         <!-- No routes available at all -->
         {#if !hasAnyRoutes && !loading}
-            <div class="px-3 py-3 rounded-lg border border-dashed border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10" data-testid="fx-route-none">
-                <div class="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
+            <div class="px-3 py-3 rounded-lg border border-dashed border-lf-warning-line bg-lf-warning-soft/50" data-testid="fx-route-none">
+                <div class="flex items-center gap-2 text-xs text-lf-warning-on-soft">
                     <AlertTriangle size={12} />
                     <span>{$_('fx.route.noRoutesAvailable')}</span>
                 </div>
@@ -808,7 +808,7 @@
 
         <!-- Chain warning banner -->
         {#if orderedSelected.some((r) => !r.isDirect)}
-            <div class="px-2.5 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 text-[10px] text-blue-600 dark:text-blue-400 flex items-start gap-2">
+            <div class="px-2.5 py-2 rounded-lg bg-lf-info-soft border border-lf-info-line text-[10px] text-lf-info-on-soft flex items-start gap-2">
                 <Link size={10} class="flex-shrink-0 mt-0.5" />
                 <span>{$_('fx.route.chainWarning')}</span>
             </div>

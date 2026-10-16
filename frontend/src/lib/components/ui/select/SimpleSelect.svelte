@@ -278,15 +278,13 @@
     }
 </script>
 
-<div bind:this={containerRef} class="relative {className}" data-testid={testId}>
+<div bind:this={containerRef} class="relative text-lf-primary {className}" data-testid={testId}>
     <!-- Trigger Button -->
     <button
         bind:this={triggerRef}
         class="w-full flex items-center justify-between {compact ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-2 text-sm'} border rounded-lg transition-all text-left
-               {disabled || loading
-            ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 cursor-not-allowed border-gray-200 dark:border-slate-700'
-            : 'bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'}
-               {isOpen ? 'ring-2 ring-libre-green border-libre-green' : ''} {triggerClass}"
+               {disabled || loading ? 'bg-lf-panel text-lf-muted cursor-not-allowed' : 'bg-lf-field text-lf-primary'}
+               {isOpen ? 'ring-2 ring-lf-focus border-lf-focus' : disabled || loading ? 'border-lf-subtle' : 'border-lf-input hover:border-lf-input-hover'} {triggerClass}"
         data-testid={testId ? `${testId}-button` : undefined}
         role="combobox"
         aria-label={triggerAccessibleName}
@@ -309,10 +307,10 @@
                 <span class="truncate">{selectedOption.label}</span>
             {/if}
         {:else}
-            <span class="text-gray-400">{placeholder || $_('common.select')}</span>
+            <span class="text-lf-placeholder">{placeholder || $_('common.select')}</span>
         {/if}
         {#if showChevron}
-            <ChevronDown class="ml-2 flex-shrink-0 text-gray-400 transition-transform {isOpen ? 'rotate-180' : ''}" size={compact ? 12 : 16} />
+            <ChevronDown class="ml-2 flex-shrink-0 text-lf-muted transition-transform {isOpen ? 'rotate-180' : ''}" size={compact ? 12 : 16} />
         {/if}
     </button>
 
@@ -325,19 +323,19 @@
             aria-label={listboxAccessibleLabel}
             data-simpleselect-dropdown={listboxId}
             data-testid={testId ? `${testId}-dropdown` : undefined}
-            class="fixed z-[9999] bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
-                   rounded-lg shadow-lg overflow-y-auto"
+            class="fixed z-[9999] bg-lf-card border border-lf-raised
+                   rounded-lg shadow-lg shadow-lf-shadow overflow-y-auto"
             style="top: {fixedTop}px; left: {fixedLeft}px; min-width: {fixedWidth}px; width: {dropdownWidth}; max-width: calc(100vw - 40px); max-height: {dropdownMaxHeight};"
             onwheel={(e) => e.stopPropagation()}
             ontouchmove={(e) => e.stopPropagation()}
             use:adjustFixedPositionAction
         >
             {#if loading}
-                <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" data-testid={testId ? `${testId}-loading` : undefined}>
+                <div class="px-4 py-8 text-center text-lf-muted" data-testid={testId ? `${testId}-loading` : undefined}>
                     {$_('common.loading')}
                 </div>
             {:else if options.length === 0}
-                <div class="px-4 py-8 text-center text-gray-500 dark:text-gray-400" data-testid={testId ? `${testId}-empty` : undefined}>
+                <div class="px-4 py-8 text-center text-lf-muted" data-testid={testId ? `${testId}-empty` : undefined}>
                     {$_('common.noData')}
                 </div>
             {:else}
@@ -349,7 +347,7 @@
                           SearchSelect renders `header` rows. The keyboard skips it via the shared
                           `optionFilter` helpers above.
                         -->
-                        <div class="px-3 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-gray-400 uppercase select-none dark:text-gray-500" role="presentation" data-testid={testId ? `${testId}-header-${option.value}` : undefined}>
+                        <div class="px-3 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-lf-muted uppercase select-none" role="presentation" data-testid={testId ? `${testId}-header-${option.value}` : undefined}>
                             {option.label}
                         </div>
                     {:else}
@@ -360,6 +358,7 @@
                             tabindex="-1"
                             aria-selected={value === option.value}
                             aria-disabled={option.disabled ?? false}
+                            data-highlighted={index === highlightedIndex}
                             data-testid={optionTestId?.(option)}
                             onclick={() => selectOption(option)}
                             onmousedown={(event) => event.preventDefault()}
@@ -369,8 +368,8 @@
                             disabled={option.disabled}
                             class="w-full flex items-center justify-between px-3 py-2 text-sm text-left transition-colors
                                {option.disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                               {index === highlightedIndex ? 'bg-libre-green/10 dark:bg-libre-green/20' : 'hover:bg-gray-50 dark:hover:bg-slate-700'}
-                               {value === option.value ? 'bg-libre-green/5 dark:bg-libre-green/10 text-libre-green dark:text-green-400' : 'text-gray-900 dark:text-gray-100'}"
+                               {index === highlightedIndex ? 'bg-lf-selected' : value === option.value ? 'bg-lf-selected/50' : 'hover:bg-lf-hover'}
+                               {value === option.value ? 'text-lf-link' : 'text-lf-primary'}"
                         >
                             {#if item}
                                 <div class="flex-1 min-w-0">
@@ -382,7 +381,7 @@
                                 <span class="truncate">{option.label}</span>
                             {/if}
                             {#if value === option.value}
-                                <Check size={16} class="ml-2 flex-shrink-0 text-libre-green dark:text-green-400" />
+                                <Check size={16} class="ml-2 flex-shrink-0 text-lf-link" />
                             {/if}
                         </button>
                     {/if}
@@ -391,3 +390,11 @@
         </div>
     {/if}
 </div>
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the highlighted
+       option a muted caption, this component's own or a caller's snippet's, turns secondary. */
+    [data-highlighted='true'] :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>
