@@ -20,7 +20,7 @@ const DATA_TABLE = 'src/lib/components/table/DataTable.svelte';
 const TX_TABLE = 'src/lib/components/transactions/TransactionsTable.svelte';
 const APP_CSS = 'src/app.css';
 const ELSEWHERE = 'src/lib/components/other/Elsewhere.svelte';
-const GROWTH = 'src/lib/components/dashboard/GrowthChart.svelte';
+const GROWTH = 'src/lib/features/dashboard/GrowthChart.svelte';
 const FILES = [DATA_TABLE, TX_TABLE, APP_CSS, ELSEWHERE, GROWTH];
 const [F_DATA_TABLE, F_TX_TABLE, F_APP_CSS, F_ELSEWHERE, F_GROWTH] = [0, 1, 2, 3, 4];
 

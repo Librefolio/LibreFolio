@@ -52,19 +52,19 @@
 
 <section class="space-y-1" data-testid="risk-l1-underwater">
     <div class="flex items-center gap-1">
-        <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200">{$t('risk.levels.l1.underwater.title')}</h4>
+        <h4 class="text-sm font-medium text-lf-secondary">{$t('risk.levels.l1.underwater.title')}</h4>
         <DocsLink path="financial-theory/technical-analysis/risk-metrics/current-drawdown/" label={$t('risk.levels.l1.underwater.title')} testId="risk-l1-underwater-docs" />
     </div>
 
     {#if points.length === 0}
-        <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l1-underwater-empty">{$t('risk.levels.l1.underwater.empty')}</p>
+        <p class="text-xs text-lf-muted" data-testid="risk-l1-underwater-empty">{$t('risk.levels.l1.underwater.empty')}</p>
     {:else}
         <div data-testid="risk-l1-underwater-chart" data-point-count={points.length}>
             <LineChart data={points} currency="%" viewMode="percentage" yAxisMode="include0" colorByBaseline={false} showGradient={false} {height} />
         </div>
         {#if ulcerCaption}
-            <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l1-ulcer">
-                <span class="tabular-nums font-medium text-gray-700 dark:text-gray-300">{ulcerCaption}</span>
+            <p class="text-xs text-lf-muted" data-testid="risk-l1-ulcer">
+                <span class="tabular-nums font-medium text-lf-secondary">{ulcerCaption}</span>
                 <span class="ml-1">— {$t('risk.levels.l1.tails.ulcerIndexHint')}</span>
                 <DocsLink path="financial-theory/technical-analysis/risk-metrics/ulcer-index/" label={$t('risk.levels.l1.tails.ulcerIndexHint')} testId="risk-l1-ulcer-docs" />
             </p>

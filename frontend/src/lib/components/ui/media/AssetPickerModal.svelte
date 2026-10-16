@@ -19,7 +19,7 @@
     import {setUploadScope} from '$lib/utils/files/upload';
     import {File as FileIcon, FolderOpen, Image as ImageIcon, LayoutGrid, Link, List, Search, Upload, X} from 'lucide-svelte';
     import LazyImage from './LazyImage.svelte';
-    import FileGrid from '$lib/components/files/FileGrid.svelte';
+    import FileGrid from '$lib/features/files/FileGrid.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import type {ColumnDef} from '$lib/components/table';
     import {DataTable} from '$lib/components/table';

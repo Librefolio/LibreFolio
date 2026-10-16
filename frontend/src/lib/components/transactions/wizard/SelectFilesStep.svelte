@@ -8,7 +8,7 @@
     import {_ as t} from '$lib/i18n';
     import {Trash2, Eye, ChevronDown, ChevronRight} from 'lucide-svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
-    import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
+    import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import ReportSetCard from '$lib/components/transactions/import/ReportSetCard.svelte';

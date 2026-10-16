@@ -46,6 +46,7 @@ from backend.app.services.accounts.global_settings_service import get_session_tt
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
+from backend.app.services.platform.client_address import client_address
 
 logger = structlog.get_logger(__name__)
 
@@ -272,7 +273,7 @@ async def register(request: AuthRegisterRequest, background: BackgroundTasks, ht
 
     verification_required = not user.is_active
     if verification_required:
-        if email_verification.registration_email_allowed(http_request.client.host if http_request.client else None):
+        if email_verification.registration_email_allowed(client_address(http_request)):
             # The session of this request ends with it: the work opens its own, on the same database.
             background.add_task(email_verification.registration_email_work, user.id, engine=session.bind)
         else:

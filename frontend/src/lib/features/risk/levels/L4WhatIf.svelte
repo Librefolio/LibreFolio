@@ -120,12 +120,12 @@
     {#if addable.length > 0}
         <div class="space-y-2" data-testid="risk-l4-tools">
             {#if openTools.length === 0}
-                <p class="text-xs text-gray-500 dark:text-gray-400" data-testid="risk-l4-empty">{$t('risk.levels.l4.tools.empty')}</p>
+                <p class="text-xs text-lf-muted" data-testid="risk-l4-empty">{$t('risk.levels.l4.tools.empty')}</p>
             {/if}
             <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs text-gray-500 dark:text-gray-400">{$t('risk.levels.l4.tools.add')}</span>
+                <span class="text-xs text-lf-muted">{$t('risk.levels.l4.tools.add')}</span>
                 {#each addable as tool (tool)}
-                    <button type="button" class="inline-flex items-center gap-1 rounded-full border border-gray-300 px-2.5 py-1 text-xs text-gray-700 hover:border-libre-green hover:text-libre-green dark:border-slate-600 dark:text-gray-200" data-testid="risk-l4-add-{tool}" onclick={() => add(tool)}>
+                    <button type="button" class="inline-flex items-center gap-1 rounded-full border border-lf-input px-2.5 py-1 text-xs text-lf-secondary hover:border-lf-link hover:text-lf-link" data-testid="risk-l4-add-{tool}" onclick={() => add(tool)}>
                         <Plus size={12} />
                         {$t(TITLE_KEYS[tool])}
                     </button>
@@ -135,20 +135,14 @@
     {/if}
 
     {#each shown as tool (tool)}
-        <div class={selectable ? 'rounded-lg border border-gray-200 p-3 dark:border-slate-700' : ''} data-testid="risk-l4-{tool}" data-distance={DISTANCE[tool]}>
+        <div class={selectable ? 'rounded-lg border border-lf-subtle p-3' : ''} data-testid="risk-l4-{tool}" data-distance={DISTANCE[tool]}>
             <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
-                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-200">{$t(TITLE_KEYS[tool])}</h4>
-                    <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{$t(HINT_KEYS[tool])}</p>
+                    <h4 class="text-sm font-medium text-lf-secondary">{$t(TITLE_KEYS[tool])}</h4>
+                    <p class="mb-2 text-xs text-lf-muted">{$t(HINT_KEYS[tool])}</p>
                 </div>
                 {#if selectable}
-                    <button
-                        type="button"
-                        class="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-200"
-                        aria-label={$t('risk.levels.l4.tools.close', {values: {tool: $t(TITLE_KEYS[tool])}})}
-                        data-testid="risk-l4-{tool}-close"
-                        onclick={() => close(tool)}
-                    >
+                    <button type="button" class="shrink-0 rounded p-1 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary" aria-label={$t('risk.levels.l4.tools.close', {values: {tool: $t(TITLE_KEYS[tool])}})} data-testid="risk-l4-{tool}-close" onclick={() => close(tool)}>
                         <X size={14} />
                     </button>
                 {/if}
@@ -157,9 +151,9 @@
                 <div class="mb-2">
                     <RiskBetaBanner scope="simulation" />
                 </div>
-                <div class="mb-2 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-900/20" data-testid="risk-l4-model-warning">
-                    <AlertTriangle size={14} class="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                    <p class="text-xs text-amber-800 dark:text-amber-200">{$t('risk.levels.l4.modelWarning')}</p>
+                <div class="mb-2 flex items-start gap-2 rounded-lg bg-lf-warning-soft px-3 py-2" data-testid="risk-l4-model-warning">
+                    <AlertTriangle size={14} class="mt-0.5 shrink-0 text-lf-warning" />
+                    <p class="text-xs text-lf-warning-on-soft">{$t('risk.levels.l4.modelWarning')}</p>
                 </div>
             {/if}
             {@render snippets[tool]?.()}
