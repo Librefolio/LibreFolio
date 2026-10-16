@@ -6,18 +6,28 @@ Module under test: ``backend/app/services/financial_math/returns.py``. Two new f
 
 * ``period_mwrr(nav_snapshots, cash_flows, end_date, end_nav) -> MWRRPoint``: the card's MWRR. No
   value (``MWRRPoint(end_date, None)``) without snapshots, without cash flows, with an end NAV ≤ 0,
-  or with a net invested ≤ 0, the net invested being −Σ amount over the flows dated on or before
-  ``end_date`` (deposits are negative). Otherwise ``calculate_mwrr(cash_flows, first.nav, end_nav,
-  first.date, end_date)``, ``first`` being the first snapshot by date.
+  or with a net invested ≤ 0. Otherwise ``calculate_mwrr(cash_flows, first.nav, end_nav,
+  first.date, end_date)``, ``first`` being the first snapshot by date. The net invested is the
+  capital that solve sees: ``first.nav + Σ −amount`` over the flows with ``first.date < date ≤
+  end_date`` (deposits are negative). A flow of the first date is inside ``first.nav``, and a flow
+  before it is outside the window, so neither counts — for the solve as for the guard.
 * ``period_mwrr_series(nav_snapshots, cash_flows) -> list[MWRRPoint]``: the line. ``[]`` with fewer
   than two snapshots or without cash flows; otherwise one point per snapshot after the first (by
   date), each ``period_mwrr`` of the snapshots up to and including it, on its date and NAV. Its last
   point is the card.
 
-The rule as the Dashboard writes it (``portfolio_service.py``, the summary's performance block): an
+The rule as the Dashboard wrote it (``portfolio_service.py``, the summary's performance block): an
 MWRR only with snapshots and flows in the period, an end NAV > 0 and a net invested > 0, the start
 NAV being the first snapshot's. The history (``calculate_mwrr_series``) had no such guard: on a
 period where more came out than went in, the line had values the card does not show.
+
+MF-K1 follow-up, the capital the solve sees. The first version of the guard took the net invested as
+−Σ amount over every flow dated on or before ``end_date``. A period that ``rebase_to_period`` opens
+before the portfolio's first day starts at NAV 0 and drops the first day's deposit (it is inside the
+first snapshot's NAV), so that guard saw no capital and took the value away from a portfolio with a
+single deposit — the card, and with D-MF5 the whole line. Section 7 pins the new rule: the young
+portfolio, flows before the first snapshot ignored in both directions, the first NAV rather than the
+first day's flows, and a rebase inside the history, where both rules agree.
 
 Also from MF-K1, checked here through both functions:
 
@@ -121,8 +131,8 @@ def _summed_per_date(cash_flows: Sequence[CashFlowInput]) -> list[CashFlowInput]
 
 class TestNetWithdrawals:
     """1000 in on 1 January 2025 (inside the first NAV), 1200 on 1 April, then a withdrawal on 1 July
-    that takes the net invested to zero or below while the NAV stays positive. The card has no value;
-    the line has its value on 1 April and none from 1 July on."""
+    that takes the net invested (the first NAV, 1000, less the withdrawal) to zero or below while the
+    NAV stays positive. The card has no value; the line has its value on 1 April and none from 1 July on."""
 
     @pytest.mark.parametrize("withdrawal", [Decimal("1500"), Decimal("1000")], ids=["more-out-than-in", "as-much-out-as-in"])
     def test_no_value_from_the_withdrawal_on(self, withdrawal):
@@ -388,3 +398,187 @@ class TestOneFlowBuilder:
         assert [x0 for _solved, x0 in single_calls + series_calls] == [0.1] * 4
         assert [point.mwrr for point in series] == [Decimal("0.050000")] * 2
         assert series == singles
+
+
+# =============================================================================
+# 7. The capital the solve sees (MF-K1 follow-up)
+# =============================================================================
+
+
+def _capital_first_guard(cash_flows: Sequence[CashFlowInput], end_date: date) -> Decimal:
+    """The net invested as the first version of the guard read it: −Σ amount over the flows dated up to ``end_date``."""
+    return -sum((cf.amount for cf in cash_flows if cf.date <= end_date), Decimal("0"))
+
+
+def _capital_the_solve_sees(first: NAVSnapshot, cash_flows: Sequence[CashFlowInput], end_date: date) -> Decimal:
+    """The net invested as the guard reads it now: the first NAV plus −Σ amount over the flows after it, up to ``end_date``."""
+    return first.nav - sum((cf.amount for cf in cash_flows if first.date < cf.date <= end_date), Decimal("0"))
+
+
+def _expected_line(navs: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput], has_value: list[bool]) -> list[MWRRPoint]:
+    """The single solve on each prefix where the point has a value, None on its date where it has none."""
+    singles = [_single_on_prefix(navs, cash_flows, index) for index in range(1, len(navs))]
+    assert len(singles) == len(has_value), "one flag per point"
+    return [single if keep else MWRRPoint(date=single.date, mwrr=None) for single, keep in zip(singles, has_value, strict=True)]
+
+
+# 1000 deposited on 1 January 2025, the portfolio's first day, and nothing after; the NAV moves above
+# and below the deposit.
+YOUNG_NAVS = "2025-01-01 1000  2025-04-01 1050  2025-07-02 980  2026-01-01 1080"
+YOUNG_FLOWS = "2025-01-01 -1000"
+
+# A history with two deposits (1000, then 900), then two withdrawals inside the year that starts on
+# 1 January 2025 (1800 on 1 July, 300 on 1 October) that take more out than the period opened with.
+HISTORY_NAVS = "2024-07-01 1000  2024-10-01 1950  2025-01-01 2000  2025-04-01 2100  2025-07-01 350  2025-10-01 70  2026-01-01 75"
+HISTORY_FLOWS = "2024-07-01 -1000  2024-10-01 -900  2025-07-01 1800  2025-10-01 300"
+
+
+class TestTheCapitalTheSolveSees:
+    """The guard's net invested is the capital the solve sees: the first snapshot's NAV (what the
+    investor "buys" at the start, a deposit of that day included) plus the flows after it, up to the
+    end date. Red against the first guard, −Σ amount over every flow up to the end date, except
+    ``test_a_rebase_inside_the_history_is_unchanged``, where the two coincide."""
+
+    @pytest.mark.parametrize("date_from", [date(2024, 12, 31), date(2024, 6, 1)], ids=["the-day-before", "months-before"])
+    def test_a_young_portfolio_rebased_from_before_its_first_day_has_its_capital(self, date_from):
+        """A period chosen before the portfolio existed: ``rebase_to_period`` opens it empty on the
+        first day and drops that day's deposit, which is inside the first NAV. The solve still starts
+        from the first NAV, 1000: the card has the solve's value (1080 a year later, 8 %), and every
+        point of the line has one."""
+        navs, flows = _navs(YOUNG_NAVS), _flows(YOUNG_FLOWS)
+
+        period = returns.rebase_to_period(navs, flows, date_from)
+
+        # On the test's own data: the period opens at NAV 0 on the first day, with a synthetic deposit
+        # of 0 in place of the dropped 1000 and nothing after. The first guard saw no capital there;
+        # the solve sees 1000.
+        assert (period.start_date, period.start_nav) == (date(2025, 1, 1), Decimal("0"))
+        assert period.nav_snapshots == tuple(navs)
+        assert period.cash_flows == (CashFlowInput(date(2025, 1, 1), Decimal("0")),)
+        assert _capital_first_guard(period.cash_flows, date(2026, 1, 1)) == 0
+        assert _capital_the_solve_sees(period.nav_snapshots[0], period.cash_flows, date(2026, 1, 1)) == Decimal("1000")
+
+        card = returns.period_mwrr(period.nav_snapshots, period.cash_flows, date(2026, 1, 1), Decimal("1080"))
+
+        assert card == calculate_mwrr(list(period.cash_flows), Decimal("1000"), Decimal("1080"), date(2025, 1, 1), date(2026, 1, 1))
+        assert card == MWRRPoint(date=date(2026, 1, 1), mwrr=Decimal("0.080000"))
+
+        line = _line(period.nav_snapshots, period.cash_flows)
+        assert all(point.mwrr is not None for point in line), line
+        assert line == _expected_line(period.nav_snapshots, period.cash_flows, [True, True, True])
+        # 1 April is day 90 (1000 in, 1050 out), 2 July day 182 (1000 in, 980 out).
+        assert _close_to(line[0].mwrr, _closed_form(1000, 1050, 90)), line[0]
+        assert _close_to(line[1].mwrr, _closed_form(1000, 980, 182)), line[1]
+        assert line[2] == card
+
+    def test_an_earlier_withdrawal_does_not_take_the_capital_away(self):
+        """5000 taken out on 1 October 2024, before the first snapshot: outside the window, for the solve
+        as for the guard. Without it or with it, 1000 in on 1 January 2025 and 1080 a year later: 8 %."""
+        navs = _navs("2025-01-01 1000  2025-07-02 1040  2026-01-01 1080")
+        later = _flows("2025-01-01 -1000")
+        flows = _flows("2024-10-01 5000") + later
+
+        # On the test's own data: the first guard counted the earlier withdrawal, −(5000 − 1000) < 0;
+        # the solve never sees it.
+        assert _capital_first_guard(flows, date(2026, 1, 1)) < 0
+        assert [_single_on_prefix(navs, flows, index) for index in (1, 2)] == [_single_on_prefix(navs, later, index) for index in (1, 2)]
+
+        card = returns.period_mwrr(navs, flows, date(2026, 1, 1), Decimal("1080"))
+
+        assert card == MWRRPoint(date=date(2026, 1, 1), mwrr=Decimal("0.080000"))
+        assert card == returns.period_mwrr(navs, later, date(2026, 1, 1), Decimal("1080"))
+        line = _line(navs, flows)
+        assert line == _line(navs, later)
+        # 2 July 2025 is day 182: 1000 in, 1040 out.
+        assert _close_to(line[0].mwrr, _closed_form(1000, 1040, 182)), line[0]
+        assert line[1] == card
+
+    def test_an_earlier_deposit_does_not_add_capital(self):
+        """5000 put in on 1 October 2024, before the first snapshot, does not count either: the window
+        opens with the first NAV, 1000, and the 1500 taken out on 1 July leaves no capital from that day
+        on (1000 − 1500). The first guard counted the 5000 and kept a value to the end."""
+        navs = _navs("2025-01-01 1000  2025-04-01 1200  2025-07-01 200  2026-01-01 300")
+        later = _flows("2025-01-01 -1000  2025-07-01 1500")
+        flows = _flows("2024-10-01 -5000") + later
+
+        # On the test's own data: the first guard's capital stays positive (5000 + 1000 − 1500); the
+        # solve never sees the 5000 and has a root at every point. The None below is the rule's.
+        assert _capital_first_guard(flows, date(2026, 1, 1)) > 0
+        assert [_single_on_prefix(navs, flows, index) for index in (1, 2, 3)] == [_single_on_prefix(navs, later, index) for index in (1, 2, 3)]
+        assert all(_single_on_prefix(navs, flows, index).mwrr is not None for index in (1, 2, 3))
+
+        card = returns.period_mwrr(navs, flows, date(2026, 1, 1), Decimal("300"))
+
+        assert card == MWRRPoint(date=date(2026, 1, 1), mwrr=None)
+        assert card == returns.period_mwrr(navs, later, date(2026, 1, 1), Decimal("300"))
+        line = _line(navs, flows)
+        assert line == _line(navs, later)
+        assert line == _expected_line(navs, flows, [True, False, False])
+        # 1 April is day 90: 1000 in, 1200 out.
+        assert _close_to(line[0].mwrr, _closed_form(1000, 1200, 90)), line[0]
+
+    @pytest.mark.parametrize(
+        ("navs_text", "withdrawal", "has_value"),
+        [
+            # 1000 in, worth 1010 at the end of the day; 1005 out on 1 July leaves 5 of capital.
+            ("2025-01-01 1010  2025-04-01 1050  2025-07-01 55  2026-01-01 60", "1005", [True, True, True]),
+            # 1000 in, worth 990 at the end of the day; 995 out on 1 July leaves −5.
+            ("2025-01-01 990  2025-04-01 1030  2025-07-01 45  2026-01-01 50", "995", [True, False, False]),
+        ],
+        ids=["a-gain-on-the-first-day", "a-loss-on-the-first-day"],
+    )
+    def test_the_capital_is_the_first_nav_not_the_first_day_flows(self, navs_text, withdrawal, has_value):
+        """The first day's deposit is inside the first NAV, and the guard reads the NAV: where the two
+        differ by a first day's move, the NAV decides. Each case is the other's mirror: the first guard
+        read 1000 − withdrawal, and so gave the other answer from 1 July on."""
+        navs = _navs(navs_text)
+        flows = [CashFlowInput(date(2025, 1, 1), Decimal("-1000")), CashFlowInput(date(2025, 7, 1), Decimal(withdrawal))]
+
+        # On the test's own data: the XIRR has a root at every point, and the two readings of the
+        # capital have opposite signs from 1 July on. The None below is the rule's.
+        assert all(_single_on_prefix(navs, flows, index).mwrr is not None for index in range(1, len(navs)))
+        first_guard = _capital_first_guard(flows, date(2025, 7, 1))
+        capital = _capital_the_solve_sees(navs[0], flows, date(2025, 7, 1))
+        assert abs(first_guard) == abs(capital) == Decimal("5")
+        assert (first_guard > 0) != (capital > 0)
+        assert (capital > 0) == has_value[-1]
+
+        line = _line(navs, flows)
+
+        assert line == _expected_line(navs, flows, has_value)
+        assert (returns.period_mwrr(navs, flows, date(2026, 1, 1), navs[-1].nav).mwrr is not None) == has_value[-1]
+
+    @pytest.mark.parametrize(
+        ("date_from", "has_value"),
+        [
+            (date(2025, 1, 1), [True, True, False, False]),
+            (date(2025, 2, 15), [True, True, False, False]),
+            (date(2025, 4, 1), [True, False, False]),
+        ],
+        ids=["on-a-snapshot", "between-snapshots", "on-a-later-snapshot"],
+    )
+    def test_a_rebase_inside_the_history_is_unchanged(self, date_from, has_value):
+        """A period opened inside the history starts with a synthetic deposit of the opening NAV on its
+        first date and keeps only the flows after it: there the capital the solve sees and the first
+        guard's are the same number at every point, and so are the card and the line. Opened on
+        1 January (or between snapshots, which opens it there too) the capital is 2000, 200 after the
+        1800 out, −100 after the 300 out; opened on 1 April it is 2100, 300, then 0. Green against both
+        guards."""
+        period = returns.rebase_to_period(_navs(HISTORY_NAVS), _flows(HISTORY_FLOWS), date_from)
+        first = period.nav_snapshots[0]
+
+        # On the test's own data: the opening flow is −(the first NAV) on the first date, the earlier
+        # flows are gone, and the two readings of the capital agree at every snapshot; the XIRR has a
+        # root at every point and every NAV is positive, so the None below is the rule's.
+        assert period.cash_flows[0] == CashFlowInput(first.date, -first.nav)
+        assert period.start_nav == first.nav > 0
+        assert all(flow.date > first.date for flow in period.cash_flows[1:])
+        for snapshot in period.nav_snapshots[1:]:
+            assert _capital_first_guard(period.cash_flows, snapshot.date) == _capital_the_solve_sees(first, period.cash_flows, snapshot.date), snapshot.date
+        assert has_value == [snapshot.nav > 0 and _capital_first_guard(period.cash_flows, snapshot.date) > 0 for snapshot in period.nav_snapshots[1:]]
+        assert all(_single_on_prefix(period.nav_snapshots, period.cash_flows, index).mwrr is not None for index in range(1, len(period.nav_snapshots)))
+
+        line = _line(period.nav_snapshots, period.cash_flows)
+
+        assert line == _expected_line(period.nav_snapshots, period.cash_flows, has_value)
+        assert returns.period_mwrr(period.nav_snapshots, period.cash_flows, date(2026, 1, 1), Decimal("75")) == MWRRPoint(date=date(2026, 1, 1), mwrr=None)

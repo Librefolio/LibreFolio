@@ -531,20 +531,27 @@ def period_mwrr(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashF
     """The MWRR of a period as the Dashboard shows it: from the first snapshot to ``end_date``.
 
     A rate exists only for a period with snapshots and flows, a positive value at the end, and capital in it: the net
-    invested, −Σ of the flows dated up to ``end_date`` (a rebased period's opening NAV is its first flow), must be
-    positive. Otherwise ``mwrr`` is None — the card shows «—», and so does :func:`period_mwrr_series` on that day.
+    invested must be positive. It is the capital the solve itself sees — the first snapshot's value (what the investor
+    "buys" at the start, a deposit of that day included) plus the flows after it up to ``end_date`` — so a period that
+    opens before the portfolio's first day, with its deposit inside the opening value, still has its capital.
+    Otherwise ``mwrr`` is None — the card shows «—», and so does :func:`period_mwrr_series` on that day.
     """
     snapshots = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
-    if not snapshots or not cash_flows or end_nav <= 0 or -sum((cf.amount for cf in cash_flows if cf.date <= end_date), Decimal("0")) <= 0:
+    if not snapshots or not cash_flows or end_nav <= 0 or _net_invested(snapshots[0], cash_flows, end_date) <= 0:
         return MWRRPoint(date=end_date, mwrr=None)
     return calculate_mwrr(list(cash_flows), snapshots[0].nav, end_nav, snapshots[0].date, end_date)
+
+
+def _net_invested(start: NAVSnapshot, cash_flows: Iterable[CashFlowInput], end_date: date) -> Decimal:
+    """The capital an MWRR solve from ``start`` to ``end_date`` sees: the opening value plus the flows after it."""
+    return start.nav - sum((cf.amount for cf in cash_flows if start.date < cf.date <= end_date), Decimal("0"))
 
 
 def period_mwrr_series(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput]) -> list[MWRRPoint]:
     """The Dashboard's MWRR line: at every snapshot after the first, :func:`period_mwrr` of the period ending there.
 
-    A point is None where the card of that period would be: a value ≤ 0, or no net invested capital up to that day.
-    The last point is the card of the whole period.
+    A point is None where the card of that period would be: a value ≤ 0, or no net invested capital up to that day
+    (see :func:`period_mwrr`). The last point is the card of the whole period.
     """
     snapshots = sorted(nav_snapshots, key=lambda snapshot: snapshot.date)
     if len(snapshots) < 2 or not cash_flows:
@@ -553,8 +560,10 @@ def period_mwrr_series(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequenc
     dated_flows = sorted(flows_by_date.items())
     start = snapshots[0]
     points: list[MWRRPoint] = []
-    net_invested = Decimal("0")
+    net_invested = start.nav
     next_flow = 0
+    while next_flow < len(dated_flows) and dated_flows[next_flow][0] <= start.date:
+        next_flow += 1
     for snapshot in snapshots[1:]:
         while next_flow < len(dated_flows) and dated_flows[next_flow][0] <= snapshot.date:
             net_invested -= dated_flows[next_flow][1]

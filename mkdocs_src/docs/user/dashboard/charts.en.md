@@ -51,7 +51,7 @@ Each line is the return accumulated since the start of the selected period:
 | **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | Pure asset strategy return, ignoring when you deposited |
 | **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | Raw return on net invested capital |
 
-The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). If the [Data Quality banner](index.md#data-quality-banner) says **MWRR chart unavailable**, the MWRR line is hidden; TWRR and ROI stay.
+The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). The MWRR line has a gap on the days that have no MWRR — a value of zero or less, or net withdrawals that leave no invested capital — by the same rule as the MWRR cards ([MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)); TWRR and ROI stay. When the last day of the period has none, the [Data Quality banner](index.md#data-quality-banner) says *MWRR cannot be calculated for this period*.
 
 ### 💰 P&L — the money you made {: #pnl-mode }
 
