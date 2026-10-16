@@ -280,7 +280,9 @@ de nuevo.
 
 Las filas llegan al espacio de trabajo masivo sin guardar. Compruébalas o edítalas y luego haz clic en **Guardar todo**: espera
 a las filas listadas en rojo, y pregunta antes de guardar los valores listados en ámbar que no hayas
-verificado (**Guardar de todos modos**).
+verificado (**Guardar de todos modos**). Una fila cuya cantidad tiene más de 10 decimales, cuyo importe tiene
+más de 6, o cuyo coste base por unidad tiene más de 12, se rechaza en **Guardar todo**, con el máximo en el
+mensaje (*Cantidad: Como máximo 10 decimales*): LibreFolio nunca la redondea.
 
 ---
 
