@@ -281,6 +281,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/assets/AssetBrowseNav.test.ts",
             "src/lib/components/assets/detail/AssetDetailSignalsPanel.test.ts",
             "src/lib/components/assets/detail/AssetDetailMeasuresSection.test.ts",
+            "src/lib/components/assets/detail/AssetChartModeToggle.test.ts",
+            "src/lib/components/assets/detail/AssetCalendarWindowControls.test.ts",
             "src/lib/components/fx/FxSyncModal.test.ts",
             "src/lib/components/fx/FxMissingRate.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
