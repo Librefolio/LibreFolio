@@ -5,6 +5,8 @@ association for its members, or a friend who hosts an instance for the family. O
 them are the **hosting provider**. A few settings exist for them:
 
 - the **managed profile** says that the instance is run for others;
+- the **initial administrator** is created by the instance at its first start, for the customer
+  you name, who activates it with a single-use link;
 - the **instance block** closes the app but keeps the data, for example when a subscription is not
   paid;
 - the **panel token** lets your hosting panel take backups of the instance;
@@ -74,6 +76,8 @@ your users sign in again after each restart. See
 ### 📋 For Each Instance
 
 - `LIBREFOLIO_PROFILE=managed`.
+- Its administrator, from `LIBREFOLIO_ADMIN_EMAIL`, with a setup link your panel delivers: see
+  [The Initial Administrator](#initial-admin).
 - A `JWT_SECRET` of at least 32 random characters, so that sessions survive restarts. To keep it out
   of `.env`, use `JWT_SECRET_FILE`: see «Secrets» in [Environment Variables](configuration.md).
 - Its own instance key: never share one key between instances. See «The Instance Key» in
@@ -87,6 +91,94 @@ your users sign in again after each restart. See
 - Optionally, a wake-up token of its own, `LIBREFOLIO_WAKE_TOKEN`, if your panel brings the
   instance's prices and exchange rates up to date on its own schedule, for example right after it
   wakes the instance: see [Scheduled Wake-up](sleep_wake.md#wake-sync).
+
+---
+
+## 👑 The Initial Administrator {: #initial-admin }
+
+Give each new instance its administrator from the environment. At its first start, the instance
+creates the account for the address you name, not yet active, and a setup link that works once, for
+72 hours. The link opens the instance's setup page, where your customer chooses the password and is
+signed in. Nobody can register first and take the administrator's place, even on an instance that
+is reachable from the internet from its first minute.
+
+### ⚙️ The Variables {: #initial-admin-variables }
+
+| Variable | What it does |
+| --- | --- |
+| `LIBREFOLIO_ADMIN_EMAIL` | Your customer's email address, the administrator's. Setting it turns the initial administrator on |
+| `LIBREFOLIO_ADMIN_USERNAME` | The administrator's username, `admin` when not set: 3 to 50 characters |
+| `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | The token of the setup link, chosen by your panel: 32 to 200 characters, only letters, digits and `-` `.` `_` `~`. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead, as Docker mounts its secrets |
+
+- Set them in the container's environment, or in `.env`, like the other variables of this page.
+- A value LibreFolio cannot use stops the server at startup, with an error that names the variable,
+  never the token. They are checked at every start, after the setup too.
+- Every detail, the case without a token included, is in «The Initial Administrator» in
+  [Environment Variables](configuration.md).
+
+### 🧾 Create the Administrator {: #initial-admin-create }
+
+1. Generate the token:
+
+    ```bash
+    openssl rand -hex 32
+    ```
+
+2. Before you start the new instance, give it the three variables:
+
+    ```bash
+    LIBREFOLIO_ADMIN_EMAIL=anna@example.com
+    LIBREFOLIO_ADMIN_USERNAME=anna
+    LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN=<the 64 characters printed by openssl>
+    ```
+
+3. Start the instance. Its log says `Initial administrator created, waiting for its setup link`.
+4. Send your customer the link: the instance's address, then `/setup#token=` and the token, such as
+   `https://librefolio.example.com/setup#token=<the token>`. LibreFolio neither logs nor emails
+   this link: delivering it is up to you, for example in your own «set your password» email.
+
+- ⏱️ The link works once, for 72 hours from that first start. A restart changes nothing: the link
+  you sent keeps working until it is used or expires.
+- 🔒 The token travels after the `#` of the link, a part that browsers never send to the server, so
+  it stays out of the access logs of the server and of every proxy on the way. Keep it as private as
+  a password until your customer has used it.
+- 🚪 The first start also sets **Registration** to **By invitation**: after the administrator,
+  people join with an invitation link. `LIBREFOLIO_REGISTRATION`, if you set it, still decides.
+- 📏 With `LIBREFOLIO_MAX_USERS`, the administrator takes a place from the first start, while it
+  waits too.
+- 🔑 Without `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, the instance generates the token: it writes the
+  link once in its log, and emails it to `LIBREFOLIO_ADMIN_EMAIL` when its [email](email.md) works
+  and `LIBREFOLIO_PUBLIC_URL` is set. A token of your own lets your panel know the link before the
+  instance starts, without reading its log.
+
+### 🔁 A New Link {: #initial-admin-new-link }
+
+If your customer has not used the link within 72 hours, each start of the instance logs a warning:
+`The initial administrator's setup link has expired: run ./dev.py user setup-link, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`.
+Either way gives a new link, which works for 72 hours, and ends the earlier ones:
+
+- **A new token**: generate one, put it in `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` and restart the
+  instance (with Docker Compose, `docker compose up -d`: `docker compose restart` keeps the old
+  values), then send the new link. Generate a new token each time: a value the instance has already
+  seen never gives a new link.
+- **The command line**, from a shell on the server:
+  `docker compose exec librefolio python dev.py user setup-link` prints a new link, with a token the
+  instance generates. See «A New Setup Link for the Initial Administrator» in
+  [CLI Admin Tools](cli_tools.md).
+
+Both work before the link expires too, to replace a link that went astray.
+
+To change the address or the username before your customer activates the account, change
+`LIBREFOLIO_ADMIN_EMAIL` or `LIBREFOLIO_ADMIN_USERNAME` and restart: the waiting account takes the
+new value. If another account already holds it, the log has an error, and the account keeps its
+own.
+
+### ✅ Once the Account Is Active {: #initial-admin-active }
+
+Once your customer has chosen the password, the variables have done their work: every later start
+creates nothing and logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts`. You can
+leave them set, or remove them. On an instance that already has accounts, they create nothing
+either.
 
 ---
 
@@ -357,3 +449,5 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
 - 🐳 **[Advanced Docker](docker_advanced.md)** — Compose file, health check and monitoring
 - 🔒 For developers: **[Instance Block](../developer/architecture/security.md#instance-block)** —
   The guard on the API and its list
+- 👑 For developers: **[The Initial Administrator](../developer/architecture/access_control.md#initial-admin)** —
+  The startup step, the setup link and its route
