@@ -100,6 +100,31 @@ promise that every possible error is collected:
 - balance replay catches the first balance exception and does not continue through
   the remaining broker/date replays.
 
+### 📏 Per-type rules {: #per-type-rules }
+
+`validate_transaction_business_rules()` (`backend/app/schemas/transactions/transactions.py`)
+checks the final state of each created, updated and promoted row. Its callers are
+`TXCreateItem.validate_transaction_rules` (after the create-only rules 1–4),
+`_validate_updated_final_state()` (`batch_edits.py`) and `_promoted_state_issues()`
+(`batch_creates.py`). Rules 5–12 read the type's row of `TX_TYPE_METADATA`
+(`get_tx_type_metadata()`), the table `GET /transactions/types` serves to the
+frontend, each time they run, so they follow any change to it:
+
+| Rule | Reads | Refuses |
+|------|-------|---------|
+| 5 | `asset_mode`: `required` | A missing asset (`assetRequired`); `optional` (rule 6) checks nothing, and `forbidden` is left to a create's rules 3, 3b and 4 (an update or a promote cannot set an asset) |
+| 7, 8 | `cash_mode`: `required`, `forbidden` | Missing cash (`cashRequired`); a cash movement (`cashForbidden`) |
+| 9 | `event_compatible()` | An asset event link on another type (`eventTypeIncompatible`, its `allowed` param from `event_compatible_types()`) or without an asset (`eventRequiresAsset`) |
+| 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`) |
+| 12 | `cost_basis_allowed()` | A `cost_basis_mode` where the type and side take no cost basis (`costBasisModeIncompatible`; see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
+
+Until the developer's pending decision P6 (2026-10-16), rules 5–11 leave unchecked four
+points where the table is stricter: a `TRANSFER`'s cash, `FX_CONVERSION`'s zero quantity,
+`TRANSFER`'s non-zero quantity, and the non-zero cash of `FX_CONVERSION` and
+`CASH_TRANSFER` (`_P6_CASH_FORBIDDEN_UNCHECKED`, `_P6_QUANTITY_SIGN_UNCHECKED`; rule 11
+does not read `nonzero`). Only a create refuses them, with its rules 2, 3 and 3b; an
+update or a promote does not.
+
 ---
 
 ## 🔁 Session and Response Semantics
