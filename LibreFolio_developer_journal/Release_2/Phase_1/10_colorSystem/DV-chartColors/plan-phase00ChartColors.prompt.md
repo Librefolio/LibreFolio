@@ -542,7 +542,7 @@ Prove leggere dopo i ritocchi:
 
 **49 path**, nessuno in stage. Stato FROZEN.
 
-### TD-1 — Barre «Esposizioni — ideale vs reale» del PAC ⏳ (dal 15/10/2026)
+### TD-1 — Barre «Esposizioni — ideale vs reale» del PAC, con TD-1b ✅ (16/10/2026, validato su `d3ba25ae9`)
 
 **Origine.** Dalla review unica del developer sull'anteprima `ec1ddba96` (15/10, 22:08–22:20), il coordinatore ha
 assegnato a DV un compito tecnico: il PAC usava ancora `PAC_EXPOSURE_BAR_COLORS`, cioè il verde vecchio `#1a4031` e, in
@@ -611,10 +611,27 @@ DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` 
     `designerLabImports` 27, e `scanColors` 54.
   - Statici: compilatore Svelte 0 avvisi su `ExposureBars` e `GrowthChart`; Prettier; `theme-roles --check`;
     `git diff --check`; ruff e black sul catalogo, uguali a HEAD.
-- [ ] Prove pesanti, al via del coordinatore (chiesto il 15/10): `front check`, `core-unit`, `component-unit`, poi gli
-  E2E `front-utility pac-allocator-real` e `front-portfolio dashboard`.
-- [ ] Dopo G-16: galleria filtrata su `tools/pac-result-exposures`, nei due temi. Poi il checkpoint, con le righe «dove
-  guardarlo» per il developer.
+- [x] **Checkpoint e base merge** (coordinatore): checkpoint `ada4742b7` con TD-1 + TD-1b (16 path); poi le base merge
+  `cec865899`, `dad643109` e `d3ba25ae9`, sopra il target `c7dea8be6` (J CP-15/16, X CP11a, Z3, il lotto di doc di W,
+  E4a). Tutte uguali alla simulazione. `tokens.css` non è cambiato, quindi ripieghi e controllo ΔE restano validi.
+  `api sync` rifatto su ogni base: rc 0, nessun file tracciato cambiato.
+- [x] **Prove pesanti su `d3ba25ae9`** (16/10, via del coordinatore alle 01:48; load 35 / 31 / 35), una alla volta
+  nella 6156: tutto verde.
+  - `front check`: 0 errori, 0 avvisi.
+  - `front-utility core-unit`: 171 file, 5900 test.
+  - `front-utility component-unit`: 145 file, 3806 test.
+  - E2E `front-utility pac-allocator-real`: 1; E2E `front-portfolio dashboard`: 27.
+  - Script `/tmp/libreFolio_dv_td1_heavy.sh`, riepilogo in `/tmp/libreFolio_dv_td1_heavy.summary`. Porta 6156 libera,
+    nessun file tracciato cambiato.
+- [x] **Galleria filtrata prima dell'ingresso: saltata** (coordinatore, 15/10 alle 23:37). Y3 aspetta l'ingresso di DV
+  per spostare `GrowthChart`. Gli scatti PAC (`tools/pac-result-exposures`, G-16) e P&L li copre la galleria di fine
+  notte, confrontata con G-13.
+
+**Dove guardarlo, per il developer:**
+- **Strumenti › PAC › risultato › «Esposizioni»:** la barra «reale» è nel colore della categoria, con i sottotipi in
+  sfumatura della famiglia; quella «ideale» è grigia (`--lf-text-secondary`). In chiaro e in scuro.
+- **Dashboard › Crescita del portafoglio › P&L:** le linee dei broker hanno i colori dei primi 8 tipi. Nel Designer
+  Lab, una modifica a un colore di categoria le ridisegna subito.
 
 > **⚠️ Fuori pista:**
 > - **Il ruolo si legge con una chiamata letterale.** Il controllo di TA-1 sui ruoli cerca
