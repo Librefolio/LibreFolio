@@ -351,7 +351,7 @@ It shows the steps as it goes (`… checking`, `… unpacking`, `… upgrading`,
     - `Ledger totals: not recorded in this archive`: an archive made by an earlier LibreFolio, from before the totals, records none, nor does one whose totals could not be read when it was made;
     - `Ledger totals: recorded by another version of the method, not compared`;
     - `⚠️ Ledger totals: could not be read on the copy`.
-- 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.`, `The backup's invitation, password-reset and email-verification links stop working: send new ones after the restore.` and `An account still waiting for its email verification loses its link, and the sign-in page cannot send it another: an administrator activates it, or deletes it so that its owner signs up again.`
+- 👑 The administrators, and what a restore will mean for everyone: `After a restore you sign in with one of them, with the password of then; every session open now ends.` and `Invitations and links sent before the restore will have expired: send them again if needed.`
 - ⚠️ The warnings, which let a restore go on: `The upgrade changed the rows of some tables (listed above)`, `The backup's database has broken references: they are kept as they are`, `The upgrade added broken references to the copy`, `The ledger's totals differ from those the backup recorded (listed above)` or `The ledger's totals could not be read on the copy`.
 - ⛔ The blocker, which forbids it: `❌ The backup has no active administrator: after a restore nobody could manage the instance`.
 

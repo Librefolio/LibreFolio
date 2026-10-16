@@ -1174,11 +1174,8 @@ WITHOUT_ADMINISTRATOR = (("bob_user", 1, 0), ("olga_former_admin", 0, 1))
 CREATED = "2026-10-15 10:15:00.000000"
 #: The last line of a dry run that found the archive restorable.
 RESTORABLE_LINE = "✅ The archive can be restored. Dry run: the instance was left as it is, and the copy removed."
-#: What the report says, under the administrators, of the accounts' links after a restore: verbatim.
-ACCOUNT_LINK_LINES = (
-    "   The backup's invitation, password-reset and email-verification links stop working: send new ones after the restore.",
-    "   An account still waiting for its email verification loses its link, and the sign-in page cannot send it another: an administrator activates it, or deletes it so that its owner signs up again.",
-)
+#: The one notice the report gives, under the administrators, of the invitations and links after a restore (developer decision P11): verbatim.
+ACCOUNT_LINK_LINES = ("   Invitations and links sent before the restore will have expired: send them again if needed.",)
 #: What the report says of the ledger's totals, right after «Files: …» (lot B-13, contract §5 and §7.5): verbatim.
 LEDGER_SAME = "   Ledger totals: the same as when the backup was made"
 LEDGER_ABSENT = "   Ledger totals: not recorded in this archive"
@@ -1292,7 +1289,9 @@ def test_a_dry_run_reports_what_a_restore_would_do_and_removes_its_copy(tmp_path
         RESTORABLE_LINE,
     ]
     assert [line for line in said if line not in out] == [], f"the dry run says what a restore would do: {out}"
-    assert [line for line in ACCOUNT_LINK_LINES if line not in out.splitlines()] == [], f"what becomes of the accounts' links, each a whole line, verbatim: {out}"
+    assert [line for line in ACCOUNT_LINK_LINES if line not in out.splitlines()] == [], f"the notice on the invitations and links, a whole line, verbatim: {out}"
+    former_lines = [line for line in out.splitlines() if any(word in line.lower() for word in ("email verification", "waiting", "activates it", "send new ones", "stop working"))]
+    assert former_lines == [], f"that one notice and nothing more (P11): neither the line on the links that stop working nor the one on the accounts waiting for their email verification comes back: {former_lines}"
     assert "… upgrading" not in out and "⚠️" not in out and "❌" not in out, f"at the head: no upgrade, nothing to warn: {out}"
     assert stages_left(root) == [], f"the copy is removed: {stages_left(root)}"
     assert (outside_restore(root), sha256_of(root / DATABASE_ENTRY)) == (before, database), "the data directory is as it was"

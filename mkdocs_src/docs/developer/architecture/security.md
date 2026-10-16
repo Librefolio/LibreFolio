@@ -715,8 +715,9 @@ An account the backup held waiting for its email verification (inactive, with an
 `verification.awaiting_verification()`) loses its token with the others, the hold included, and so stops waiting. The
 sign-in page's resend then answers `403` `ACCOUNT_DISABLED`, and nothing sends it a new link: an administrator activates
 it (`PATCH /users/{user_id}`, `email_verified_at` stays `NULL`), or deletes it so that its owner signs up again. Such an
-account never signed in, so it holds no data. The report of the check says so (`scripts/backup_cli.py`), whether or not
-the backup holds one.
+account never signed in, so it holds no data. Towards the administrator, the report of the check gives one notice only
+(developer decision P11, `scripts/backup_cli.py`): the invitations and links sent before the restore will have expired,
+and can be sent again.
 
 ### 🧾 Transactions and Logs
 
