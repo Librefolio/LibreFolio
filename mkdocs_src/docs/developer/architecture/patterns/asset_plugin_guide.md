@@ -609,8 +609,9 @@ The test-only `mockprov` refuses for too many requests on demand:
 - the search query `lf-rate-limited` is refused, with a `Retry-After` of 30 s.
 
 The pause that follows is real and holds for the whole process. Use these modes in in-process tests
-only, where `reset_provider_cooldowns()` (`backend/app/services/platform/provider_cooldown.py`)
-forgets every pause; never on a lane's shared test backend, where the pause would outlive the test.
+only, where the test replaces `PROVIDER_COOLDOWNS` (`backend/app/services/platform/provider_cooldown.py`)
+with a fresh `Cooldowns`, so no pause outlives it; never on a lane's shared test backend, where the
+pause would outlive the test.
 
 ---
 
