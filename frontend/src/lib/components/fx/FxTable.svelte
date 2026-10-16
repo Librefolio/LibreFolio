@@ -144,9 +144,9 @@
                 if (i === 0) {
                     parts.push(`<span class="emoji-flag text-[10px]">${fromFlag}</span>`);
                 }
-                parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
+                parts.push(`<span class="text-lf-muted text-[8px]">⇆</span>`);
                 parts.push(fxProviderBadgeHtml(step.provider));
-                parts.push(`<span class="text-gray-400 text-[8px]">⇆</span>`);
+                parts.push(`<span class="text-lf-muted text-[8px]">⇆</span>`);
                 parts.push(`<span class="emoji-flag text-[10px]">${toFlag}</span>`);
             }
             return `<div class="flex items-center gap-0.5 flex-wrap">${parts.join('')}</div>`;
@@ -170,10 +170,10 @@
                     const dq = getDisplayQuote(row);
                     const bFlag = getCurrencyInfo(db).flag_emoji;
                     const qFlag = getCurrencyInfo(dq).flag_emoji;
-                    const manualBadge = row.manualOnly ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 ml-1">✏️</span>' : '';
+                    const manualBadge = row.manualOnly ? ' <span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded bg-lf-warning-soft text-lf-warning-on-soft ml-1">✏️</span>' : '';
                     return {
                         type: 'html',
-                        html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-gray-400">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`,
+                        html: `<span class="emoji-flag">${bFlag}</span> <span class="font-semibold">${db}</span> <span class="text-lf-muted">→</span> <span class="emoji-flag">${qFlag}</span> <span class="font-semibold">${dq}</span>${manualBadge}`,
                     };
                 },
                 type: 'text',
@@ -186,7 +186,7 @@
                 header: $t('fx.rate'),
                 cell: (row) => {
                     const r = getRate(row);
-                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${formatFixed(r, 4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-gray-400 dark:text-gray-500">${$t('fx.rateNotAvailable')}</span>`};
+                    return r !== null ? {type: 'html', html: `<span class="font-mono font-bold">${formatFixed(r, 4)}</span>`} : {type: 'html', html: `<span data-fx-rate-state="missing" class="text-lf-muted">${$t('fx.rateNotAvailable')}</span>`};
                 },
                 type: 'number',
                 getValue: (row) => getRate(row),

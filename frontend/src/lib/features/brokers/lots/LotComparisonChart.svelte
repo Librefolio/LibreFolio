@@ -1338,19 +1338,19 @@
     });
 </script>
 
-<div class="flex w-full flex-col gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800" data-testid="lot-comparison-chart">
+<div class="flex w-full flex-col gap-3 rounded-xl border border-lf-subtle bg-lf-card text-lf-primary p-4 shadow-sm shadow-lf-shadow-card" data-testid="lot-comparison-chart">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+        <h3 class="text-sm font-semibold text-lf-secondary">
             {chartTitle}
         </h3>
 
         <div class="ml-auto flex w-full flex-col items-end gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             <div class="order-last flex flex-wrap items-center justify-end gap-2 sm:order-none">
                 {#if mode === 'value'}
-                    <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-value-yaxis-toggle">
+                    <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-comparison-value-yaxis-toggle">
                         <button
                             type="button"
-                            class="px-3 py-1 transition-colors {!valueYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            class="px-3 py-1 transition-colors {!valueYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             onclick={() => (valueYFromZero = false)}
                             aria-pressed={!valueYFromZero}
                             data-testid="lot-comparison-value-yaxis-auto"
@@ -1359,7 +1359,7 @@
                         </button>
                         <button
                             type="button"
-                            class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {valueYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            class="border-l border-lf-subtle px-3 py-1 transition-colors {valueYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             onclick={() => (valueYFromZero = true)}
                             aria-pressed={valueYFromZero}
                             data-testid="lot-comparison-value-yaxis-zero"
@@ -1368,10 +1368,10 @@
                         </button>
                     </div>
                 {:else}
-                    <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-return-abs-pct-toggle">
+                    <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-comparison-return-abs-pct-toggle">
                         <button
                             type="button"
-                            class="px-3 py-1 transition-colors {returnUnit === 'abs' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            class="px-3 py-1 transition-colors {returnUnit === 'abs' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             onclick={() => (returnUnit = 'abs')}
                             aria-pressed={returnUnit === 'abs'}
                             data-testid="lot-comparison-return-abs"
@@ -1380,7 +1380,7 @@
                         </button>
                         <button
                             type="button"
-                            class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {returnUnit === 'pct' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            class="border-l border-lf-subtle px-3 py-1 transition-colors {returnUnit === 'pct' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             onclick={() => (returnUnit = 'pct')}
                             aria-pressed={returnUnit === 'pct'}
                             data-testid="lot-comparison-return-pct"
@@ -1389,10 +1389,10 @@
                         </button>
                     </div>
 
-                    <div class="flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600" data-testid="lot-comparison-return-yaxis-toggle">
+                    <div class="flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium" data-testid="lot-comparison-return-yaxis-toggle">
                         <button
                             type="button"
-                            class="px-3 py-1 transition-colors {!returnYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            class="px-3 py-1 transition-colors {!returnYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             onclick={() => (returnYFromZero = false)}
                             aria-pressed={!returnYFromZero}
                             data-testid="lot-comparison-return-yaxis-auto"
@@ -1401,7 +1401,7 @@
                         </button>
                         <button
                             type="button"
-                            class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {returnYFromZero ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                            class="border-l border-lf-subtle px-3 py-1 transition-colors {returnYFromZero ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             onclick={() => (returnYFromZero = true)}
                             aria-pressed={returnYFromZero}
                             data-testid="lot-comparison-return-yaxis-zero"
@@ -1412,19 +1412,13 @@
                 {/if}
             </div>
 
-            <div class="order-first flex overflow-hidden rounded-lg border border-gray-200 text-xs font-medium dark:border-slate-600 sm:order-none" data-testid="lot-comparison-mode-toggle">
-                <button
-                    type="button"
-                    class="px-3 py-1 transition-colors {mode === 'value' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
-                    onclick={() => (mode = 'value')}
-                    aria-pressed={mode === 'value'}
-                    data-testid="lot-comparison-mode-value"
-                >
+            <div class="order-first flex overflow-hidden rounded-lg border border-lf-subtle text-xs font-medium sm:order-none" data-testid="lot-comparison-mode-toggle">
+                <button type="button" class="px-3 py-1 transition-colors {mode === 'value' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}" onclick={() => (mode = 'value')} aria-pressed={mode === 'value'} data-testid="lot-comparison-mode-value">
                     {modeLabels.value}
                 </button>
                 <button
                     type="button"
-                    class="border-l border-gray-200 px-3 py-1 transition-colors dark:border-slate-600 {mode === 'return' ? 'bg-libre-green text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-slate-800 dark:text-gray-400 dark:hover:bg-slate-700'}"
+                    class="border-l border-lf-subtle px-3 py-1 transition-colors {mode === 'return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                     onclick={() => (mode = 'return')}
                     aria-pressed={mode === 'return'}
                     data-testid="lot-comparison-mode-return"
@@ -1436,7 +1430,7 @@
     </div>
 
     {#if selectedLots.length === 0}
-        <div class="flex h-80 items-center justify-center rounded-lg border border-dashed border-gray-200 px-6 text-center text-sm text-gray-500 dark:border-slate-600 dark:text-gray-400" data-testid="lot-comparison-empty">
+        <div class="flex h-80 items-center justify-center rounded-lg border border-dashed border-lf-subtle px-6 text-center text-sm text-lf-muted" data-testid="lot-comparison-empty">
             {modeLabels.selectLots}
         </div>
     {:else}
@@ -1445,7 +1439,7 @@
                 <ResolutionBadge resolution={currentResolution} />
             </div>
             {#if emptyMessage}
-                <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-gray-400 dark:text-gray-500">
+                <div class="absolute inset-0 z-10 flex items-center justify-center text-center text-sm text-lf-muted">
                     {emptyMessage}
                 </div>
             {/if}
@@ -1453,7 +1447,7 @@
             <div bind:this={chartContainer} class="h-full w-full" class:invisible={!!emptyMessage} data-testid="lot-comparison-echart"></div>
         </div>
         {#if mode === 'value' && hasEstimatedAtCostLots}
-            <p class="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400" data-testid="lot-comparison-estimated-at-cost-legend">
+            <p class="flex items-center gap-2 text-[11px] text-lf-muted" data-testid="lot-comparison-estimated-at-cost-legend">
                 <span class="h-0 w-8 border-t border-dashed border-slate-500 dark:border-slate-400"></span>
                 <span>{modeLabels.estimatedAtCostLegend}</span>
             </p>

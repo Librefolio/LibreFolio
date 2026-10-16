@@ -17,6 +17,7 @@ from backend.app.services.transactions.transaction_batch_context import (
     BalanceValidationError,
     TransactionBatchContext,
     cost_fields,
+    rule_values,
 )
 
 if TYPE_CHECKING:
@@ -124,6 +125,7 @@ async def _load_existing_transactions(
         existing_txs = await service.get_by_ids(list(ids_to_lookup))
         context.existing_by_id = {tx.id: tx for tx in existing_txs}
         context.stored_cost_fields = {tx.id: cost_fields(tx) for tx in existing_txs}
+        context.stored_rule_values = {tx.id: rule_values(tx) for tx in existing_txs}
         context.touched_brokers.update(tx.broker_id for tx in existing_txs)
 
 
