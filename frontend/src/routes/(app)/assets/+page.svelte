@@ -23,7 +23,7 @@
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
     import AssetBrowseOrder from '$lib/components/assets/AssetBrowseOrder.svelte';
-    import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
+    import {fetchCurrentPrices, computeDirection, livePollFailure, livePollOutcome} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {startActivePolling, type ActivePolling, type ActivePollingState} from '$lib/features/live-updates/activePolling';
     import {ASSET_LIST_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
@@ -796,7 +796,7 @@
         fetchAllPriceData();
     }
 
-    /** Fetch live current prices for all assets (fire-and-forget, non-blocking). */
+    /** Fetch live current prices for all assets (fire-and-forget, non-blocking); the outcome spaces the next poll (Z7). */
     async function fetchLivePrices() {
         if (assets.length === 0) return;
         try {
@@ -813,8 +813,10 @@
                 }
             }
             livePriceMap = newMap;
+            return livePollOutcome(results);
         } catch (e: any) {
             console.warn('[Assets] fetchLivePrices error (non-critical):', e?.message);
+            return livePollFailure(e);
         }
     }
 
