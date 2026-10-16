@@ -80,7 +80,7 @@
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, getComparisonEventFxDependency, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {computeDirection} from '$lib/services/livePriceService';
+    import {computeDirection, livePollFailure, livePollOutcome, toLivePriceResult} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {startActivePolling, type ActivePollingState} from '$lib/features/live-updates/activePolling';
     import {ASSET_DETAIL_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
@@ -1534,17 +1534,20 @@
         try {
             const response = await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetId]);
             item = (response as any)?.results?.[0];
-        } catch {
-            // Non-blocking: keep the last known value; the next poll retries.
-            return;
+        } catch (error) {
+            // Non-blocking: keep the last known value; the poller waits longer before the next try (Z7).
+            return livePollFailure(error);
         }
+        // A paused provider still answers with the last saved price, shown as usual; the next poll waits for the pause.
+        const outcome = livePollOutcome(item ? [toLivePriceResult(item)] : []);
         // Route or currency changed mid-request: drop the result.
-        if (!isCurrent() || assetId !== data.assetId) return;
-        if (!item || item.value == null) return;
+        if (!isCurrent() || assetId !== data.assetId) return outcome;
+        if (!item || item.value == null) return outcome;
         const nativeValue = Number(item.value);
-        if (!Number.isFinite(nativeValue)) return;
+        if (!Number.isFinite(nativeValue)) return outcome;
         await applyLiveSummary(nativeValue, nativeCurrency, targetCurrency, fxMissing, isCurrent);
         if (isCurrent()) await applyLiveChartHead(item, nativeValue);
+        return outcome;
     }
 
     /** The price summary's share of a live poll: the price, converted when the page shows another currency, and the flash of a tick. */

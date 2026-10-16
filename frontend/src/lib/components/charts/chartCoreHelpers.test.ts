@@ -27,9 +27,22 @@ import {axisLabelFont, axisLabelMeasure, buildResponsiveXAxisPolicy, categoryAxi
 import * as responsiveXAxis from './responsiveXAxis';
 import {buildOhlcQuad} from './candlestickChartHelpers';
 import {buildTooltipDivider, type TooltipTheme} from './echartsTooltipHelpers';
-import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../brokers/lots/lotComparisonChartHelpers';
-import {clampGrowthLogicalRange, type GrowthLogicalRange} from '../dashboard/growthChartRange';
-import {aggregateFlowMetric, aggregateMetric, alignFlowToDates, buildLadderData, buildResolutionData, type AggregatedMetric, type AggregatedResolutionData, type AggregationInputs, type BucketInfo, type CandleSeriesPoint, type DailyCandle, type SeriesPoint} from '../dashboard/growthChartData';
+import {buildBucketInfos, buildZoomWindowForRange, computeBucketCounts, logicalRangeFromBuckets} from '../../features/brokers/lots/lotComparisonChartHelpers';
+import {clampGrowthLogicalRange, type GrowthLogicalRange} from '../../features/dashboard/growthChartRange';
+import {
+    aggregateFlowMetric,
+    aggregateMetric,
+    alignFlowToDates,
+    buildLadderData,
+    buildResolutionData,
+    type AggregatedMetric,
+    type AggregatedResolutionData,
+    type AggregationInputs,
+    type BucketInfo,
+    type CandleSeriesPoint,
+    type DailyCandle,
+    type SeriesPoint,
+} from '../../features/dashboard/growthChartData';
 import {
     ECHARTS_EMPTY_VALUE,
     PARTIAL_BUCKET_OPACITY,
@@ -45,8 +58,8 @@ import {
     type GrowthSeriesContext,
     type PnlLabels,
     type PnlSubmode,
-} from '../dashboard/growthChartSeries';
-import {buildGrowthTooltip, type GrowthTooltipView} from '../dashboard/growthChartTooltip';
+} from '../../features/dashboard/growthChartSeries';
+import {buildGrowthTooltip, type GrowthTooltipView} from '../../features/dashboard/growthChartTooltip';
 import {chooseInitialResolution, type ChartResolution} from './timeSeriesAggregation';
 
 function signal(overrides: Partial<RenderedSignal>): RenderedSignal {
@@ -1995,17 +2008,17 @@ describe('canonical overlay axis and reference helpers', () => {
         ['LineChart', new URL('./LineChart.svelte', import.meta.url)],
         ['CandlestickChart', new URL('./CandlestickChart.svelte', import.meta.url)],
         ['PriceChartFull', new URL('./PriceChartFull.svelte', import.meta.url)],
-        ['GrowthChart', new URL('../dashboard/GrowthChart.svelte', import.meta.url)],
-        ['AllocationHistoryChart', new URL('../dashboard/AllocationHistoryChart.svelte', import.meta.url)],
-        ['LotGanttChart', new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url)],
-        ['LotComparisonChart', new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url)],
-        ['LotWacPriceChart', new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
+        ['GrowthChart', new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url)],
+        ['AllocationHistoryChart', new URL('../../features/dashboard/AllocationHistoryChart.svelte', import.meta.url)],
+        ['LotGanttChart', new URL('../../features/brokers/lots/LotGanttChart.svelte', import.meta.url)],
+        ['LotComparisonChart', new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url)],
+        ['LotWacPriceChart', new URL('../../features/brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
     ] as const;
 
     const LOT_RESPONSIVE_X_AXIS_CHARTS = [
-        ['LotGanttChart', new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url)],
-        ['LotComparisonChart', new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url)],
-        ['LotWacPriceChart', new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
+        ['LotGanttChart', new URL('../../features/brokers/lots/LotGanttChart.svelte', import.meta.url)],
+        ['LotComparisonChart', new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url)],
+        ['LotWacPriceChart', new URL('../../features/brokers/lots/LotWacPriceChart.svelte', import.meta.url)],
     ] as const;
 
     /** The zoomable category charts (47-1): their labels follow the zoomed window, and their resize merges `categoryAxisLabelPatch(policy)`. */
@@ -2119,7 +2132,7 @@ describe('canonical overlay axis and reference helpers', () => {
             }
 
             it('falls back to the new full domain after empty history invalidates stale ECharts zoom percentages', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const rangeReaderStart = source.indexOf('function getLogicalRangeFromChart()');
                 // Why (re-pin, FE6a): buildZoomWindow, which followed the reader, moved to growthChartData.ts with the
                 // derived data. The reader stayed, so the slice now ends at the declaration that follows it.
@@ -2279,7 +2292,7 @@ describe('canonical overlay axis and reference helpers', () => {
             });
 
             it('does not reuse history A bounds when history B arrives before the deferred Growth render', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const historyChangeStart = source.indexOf('if (history !== lastHistoryRef) {');
                 const effectStart = source.lastIndexOf('$effect(() => {', historyChangeStart);
                 const effectEnd = source.indexOf('\n    // =========================================================================\n    // Helpers', historyChangeStart);
@@ -2481,7 +2494,7 @@ describe('canonical overlay axis and reference helpers', () => {
             });
 
             it('chooses the first post-reset resolution from the clamped restored range instead of the full history domain', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const resetStart = source.indexOf('function resetResolutionState(');
                 const resetEnd = source.indexOf('\n    function ensureLogicalRange()', resetStart);
                 const renderStart = source.indexOf('function renderChart(forceFullXAxisRebuild = false)');
@@ -2558,7 +2571,7 @@ describe('canonical overlay axis and reference helpers', () => {
             });
 
             it('uses the latest live zoom for an immediate full rebuild and clears compact-only x-axis state', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const renderStart = source.indexOf('function renderChart(forceFullXAxisRebuild = false)');
                 const renderEnd = source.indexOf('\n    function applyFullOption(', renderStart);
                 expect(renderStart).toBeGreaterThan(-1);
@@ -2915,7 +2928,7 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         it('routes every GrowthChart compact-to-desktop data update through a full x-axis replacement with the current zoom window', () => {
-            const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+            const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
             const updateStart = source.indexOf('function updateChartData(');
             const updateEnd = source.indexOf('\n    function syncResolutionToViewport()', updateStart);
             const fullOptionStart = source.indexOf('function applyFullOption(', updateEnd);
@@ -3147,7 +3160,7 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         it('forces GrowthChart compact-to-desktop resize through the full x-axis path with the current zoom window', () => {
-            const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+            const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
             const resizeStart = source.indexOf('const resizeWatcher = createResizeWatcher(() => {');
             const resizeEnd = source.indexOf('\n    let darkModeObserver', resizeStart);
             const renderStart = source.indexOf('function renderChart(forceFullXAxisRebuild = false)');
@@ -3284,7 +3297,7 @@ describe('canonical overlay axis and reference helpers', () => {
         const LOT_X_AXIS_PATCH_GUARDS = [
             {
                 chart: 'LotGanttChart',
-                path: new URL('../brokers/lots/LotGanttChart.svelte', import.meta.url),
+                path: new URL('../../features/brokers/lots/LotGanttChart.svelte', import.meta.url),
                 watcher: 'const axisResizeWatcher = createResizeWatcher(',
                 // Only the sticky axis instance is patched on resize; the lanes instance never is.
                 instance: 'axisInstance',
@@ -3299,7 +3312,7 @@ describe('canonical overlay axis and reference helpers', () => {
             },
             {
                 chart: 'LotComparisonChart',
-                path: new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url),
+                path: new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url),
                 watcher: 'const resizeWatcher = createResizeWatcher(',
                 instance: 'chartInstance',
                 flag: 'chartOptionSet',
@@ -3311,7 +3324,7 @@ describe('canonical overlay axis and reference helpers', () => {
             },
             {
                 chart: 'LotWacPriceChart',
-                path: new URL('../brokers/lots/LotWacPriceChart.svelte', import.meta.url),
+                path: new URL('../../features/brokers/lots/LotWacPriceChart.svelte', import.meta.url),
                 watcher: 'const resizeWatcher = createResizeWatcher(',
                 instance: 'chartInstance',
                 flag: 'chartOptionSet',
@@ -3406,7 +3419,7 @@ describe('canonical overlay axis and reference helpers', () => {
         });
 
         it('keeps PerformanceChart outside the date-axis policy', () => {
-            const source = readFileSync(new URL('../dashboard/PerformanceChart.svelte', import.meta.url), 'utf8');
+            const source = readFileSync(new URL('../../features/dashboard/PerformanceChart.svelte', import.meta.url), 'utf8');
 
             expect(source).not.toContain('responsiveXAxis');
             expect(source).not.toContain('buildResponsiveXAxisPolicy');
@@ -3419,9 +3432,9 @@ describe('canonical overlay axis and reference helpers', () => {
 
             /** The three charts the defect touched, with the base inset and the label size each one draws its time axis with. */
             const INSET_CHARTS = [
-                {chart: 'GrowthChart', path: new URL('../dashboard/GrowthChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
-                {chart: 'AllocationHistoryChart', path: new URL('../dashboard/AllocationHistoryChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
-                {chart: 'LotComparisonChart', path: new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), base: '18', fontSize: 12},
+                {chart: 'GrowthChart', path: new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
+                {chart: 'AllocationHistoryChart', path: new URL('../../features/dashboard/AllocationHistoryChart.svelte', import.meta.url), base: "'4%'", fontSize: 14},
+                {chart: 'LotComparisonChart', path: new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url), base: '18', fontSize: 12},
             ] as const;
 
             /** The argument text of every `timeAxisGridRight(…)` call in `source`, parentheses balanced: one entry per call site. */
@@ -3461,7 +3474,7 @@ describe('canonical overlay axis and reference helpers', () => {
             it.each([
                 {
                     chart: 'GrowthChart',
-                    path: new URL('../dashboard/GrowthChart.svelte', import.meta.url),
+                    path: new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url),
                     // The applyFullOption slice of the existing GrowthChart pins: from the function to the end of the script.
                     body: (source: string) => {
                         const start = source.indexOf('function applyFullOption(');
@@ -3471,7 +3484,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 },
                 {
                     chart: 'AllocationHistoryChart',
-                    path: new URL('../dashboard/AllocationHistoryChart.svelte', import.meta.url),
+                    path: new URL('../../features/dashboard/AllocationHistoryChart.svelte', import.meta.url),
                     body: (source: string) => blockAfter(source, 'function buildChartOption(', '): echarts.EChartsOption {'),
                 },
             ])('$chart lays its full option out on the computed gridRight and records it as the applied inset (E2)', ({chart, path, body}) => {
@@ -3488,7 +3501,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('LotComparisonChart computes its grid right in buildOption in place of the 18 px literal (E2)', () => {
                 // Why: the lots chart has no other grid write, so the inset must be computed where the option is built.
-                const source = readFileSync(new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
                 const buildOption = blockAfter(source, 'function buildOption(', '{');
                 if (!buildOption) throw new Error('LotComparisonChart: buildOption() not found');
 
@@ -3498,7 +3511,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('GrowthChart re-lays its grid on resize only off the ladder and only when the inset changes, eagerly, then re-reads the plot (E3)', () => {
                 // Why: a resize moves the px a 4% base stands for; syncPlotGeometry() reads the grid this write lays out, so it cannot be lazy.
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const resizeStart = source.indexOf('const resizeWatcher = createResizeWatcher(() => {');
                 const resizeEnd = source.indexOf('\n    let darkModeObserver', resizeStart);
                 if (resizeStart < 0 || resizeEnd <= resizeStart) throw new Error('GrowthChart resize watcher contract not found');
@@ -3516,7 +3529,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('AllocationHistoryChart re-lays its grid on resize only when the inset changes, lazily (E4)', () => {
                 // Why: the same width-dependent inset; this chart reads no plot geometry back, so its lazy axis write is enough.
-                const source = readFileSync(new URL('../dashboard/AllocationHistoryChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/AllocationHistoryChart.svelte', import.meta.url), 'utf8');
                 const callback = blockAfter(source, 'resizeObserver = new ResizeObserver(', '=> {');
                 if (!callback) throw new Error('AllocationHistoryChart: the ResizeObserver callback not found');
 
@@ -3527,7 +3540,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('LotComparisonChart leaves the inset out of its resize callback: a px base does not depend on the width (E5)', () => {
                 // Why: with base 18 the inset follows the labels alone, so the resize keeps the single axis write LOT_X_AXIS_PATCH_GUARDS counts.
-                const source = readFileSync(new URL('../brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/brokers/lots/LotComparisonChart.svelte', import.meta.url), 'utf8');
                 const callback = blockAfter(source, 'const resizeWatcher = createResizeWatcher(', '=> {');
                 if (!callback) throw new Error('LotComparisonChart: resize callback not found');
 
@@ -3537,7 +3550,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
             it('GrowthChart sends the inset with every time-axis data update and none from the ladder (E6)', () => {
                 // Why: a data update brings new dates, hence new labels; the ladder category axis keeps the 4% the full option gave it.
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const updateStart = source.indexOf('function updateChartData(');
                 const updateEnd = source.indexOf('\n    function syncResolutionToViewport()', updateStart);
                 if (updateStart < 0 || updateEnd <= updateStart) throw new Error('GrowthChart updateChartData contract not found');
@@ -3767,7 +3780,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
         describe('resize watcher keeps the splitNumber/axisLabel update unconditional off the ladder', () => {
             it('keeps the ladder out of buildResponsiveXAxisPolicy (time axis only), but does not fork the actual setOption call on the submode', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const resizeStart = source.indexOf('const resizeWatcher = createResizeWatcher(() => {');
                 const resizeEnd = source.indexOf('\n    let darkModeObserver', resizeStart);
                 expect(resizeStart).toBeGreaterThan(-1);
@@ -3801,7 +3814,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
         describe('applyFullOption completes the category-vs-time xAxis ternary on both branches', () => {
             it('sets category type/data/boundaryGap and time type/splitNumber, merging one axisLabel source per branch, sharing the axisLine and declaring splitLine exactly once per branch', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const fullOptionStart = source.indexOf('function applyFullOption(');
                 const fullOptionEnd = source.indexOf('\n</script>', fullOptionStart);
                 expect(fullOptionStart).toBeGreaterThan(-1);
@@ -4202,7 +4215,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 // legend in the first place. Why (FE6a): the constant and the two builders moved to
                 // growthChartSeries.ts (the slot tests above use them); the legend stayed in the
                 // component, which must reach the sentinel through the same import and never by value.
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
 
                 expect(PNL_REFERENCE_SERIES_NAME).toBe('__pnlReference__');
                 expect(source).toMatch(/import \{[^}]*\bPNL_REFERENCE_SERIES_NAME\b[^}]*\} from '\.\/growthChartSeries';/);
@@ -4568,7 +4581,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 // Why (re-pin, FE6a): the six identical "absent date -> 0" bodies became one export,
                 // alignFlowToDates, run for real above. What stayed in the component is the wiring —
                 // which prop each dimension aligns and which Currency field it reads — pinned here.
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
 
                 const alignments: Array<[string, string, string]> = [
                     ['dividendValues', 'incomeHistory', 'p.dividend.amount'],
@@ -4780,7 +4793,7 @@ describe('canonical overlay axis and reference helpers', () => {
             });
 
             it('reuses existing i18n keys for costs and deposit — batch 2 adds ZERO new keys for those two', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 const storeReference = importedTranslationStoreReference(source);
 
                 expect(source).toMatch(translationCallPattern(storeReference, 'dashboard.feesAndTaxes'));
@@ -4806,7 +4819,7 @@ describe('canonical overlay axis and reference helpers', () => {
             const LOCALES = ['en', 'it', 'fr', 'es'] as const;
 
             function growthChartSource(): string {
-                return readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                return readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
             }
 
             function localeBundle(locale: (typeof LOCALES)[number]): Record<string, unknown> {
@@ -4835,7 +4848,7 @@ describe('canonical overlay axis and reference helpers', () => {
             const TRANSLATE_LITERAL_CALL = /\bt\(\s*'([^']+)'/g;
 
             function moduleSource(file: (typeof GROWTH_CHART_MODULES)[number]): string {
-                return readFileSync(new URL(`../dashboard/${file}`, import.meta.url), 'utf8');
+                return readFileSync(new URL(`../../features/dashboard/${file}`, import.meta.url), 'utf8');
             }
 
             /** Every key a module passes to its translator `t`, interpolated calls included. */
@@ -4955,7 +4968,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
         describe('P&L candle-width ladder markup', () => {
             it('renders one button per available rung of the eight-rung CANDLE_WIDTH_ORDER, with testid, selectCandleWidth handler and aria-pressed bound to the same width, and no zoom-window selector left', () => {
-                const source = readFileSync(new URL('../dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
                 // Why (re-pin, S10): round 3 removed the 1W/1M/1Y/All visible-range selector
                 // (selectZoomWindow). The control in that place is now the candle-width ladder: it
                 // picks how many days one body covers and keeps the whole history on the axis.

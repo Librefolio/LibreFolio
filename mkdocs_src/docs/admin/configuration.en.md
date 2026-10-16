@@ -48,6 +48,8 @@ the same sample as `.env`.
 | `LIBREFOLIO_WAKE_TOKEN` | _not set_ | Optional. The token of the [scheduled wake-up](sleep_wake.md#wake-sync), which a hosting panel or a cron job of yours calls to bring prices and exchange rates up to date without a user. Not set: the route answers `404`, as if it did not exist. At least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`: a token of its own, not another secret. `LIBREFOLIO_WAKE_TOKEN_FILE` reads it from a file instead: see [Secrets in Files](#secret-files). A token that cannot be used does not stop the server: the route answers `503`, and the log says why. |
 | `LIBREFOLIO_IDLE_SUSPEND_MODE` | `none` | Optional, for Fly.io. `fly`: the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` without a user's request and with no work in progress, and Fly resumes it at the next request. `none` never suspends: on any other host, leave it unset. Case and spaces around the value do not matter. Any other value does not stop the server, unlike the main options: the log has an error at startup, and the machine is never suspended. See [Idle Suspension](sleep_wake.md#idle-suspend). |
 | `LIBREFOLIO_IDLE_SUSPEND_MINUTES` | `5` | Read only with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`: the minutes without a user's request before the machine is suspended, a whole number from `1` to `1440`. A value that cannot be used does not stop the server either: the log has an error at startup, and 5 minutes apply. See [Idle Suspension](sleep_wake.md#idle-suspend). |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | The first pause of a price provider that answers «too many requests» (HTTP 429): no request reaches it until the pause ends, and each refusal in a row doubles the next one. A whole number of seconds from `0` to `86400`; `0` turns the pauses off, as before release 1.3. On by default, by developer decision 34: an exception to the rule that a new option leaves an install as it was. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | The longest pause the doubling reaches: a whole number of seconds from `1` to `86400`, not below the first pause while the pauses are on. A provider's `Retry-After` may still ask for more, up to one day. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
 users start from the **Default Currency** in [Global Settings](settings.md).
@@ -427,7 +429,7 @@ decides who may sign up, and there is no limit. All four are optional: uncomment
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **By invitation** on a new instance unless an administrator changed it (an instance upgraded from an earlier version keeps the mode it had). Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. Whatever the value, the first account of a new instance can be created from the login page, with **Register here**, and becomes the administrator: see [Who Can Sign Up](settings.md#registration). |
-| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
+| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires, and each account waiting for its email verification while its link is live; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
 | `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link or forgotten-password email goes out ([Email](email.md)). |
 | `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. |
 
@@ -445,7 +447,8 @@ process needs the value: `Invalid account configuration`, with the variable and 
 
 ### 📏 When the Instance Is Full {: #user-limit }
 
-When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS`:
+When the active accounts, the pending invitations and the accounts waiting for their email
+verification reach `LIBREFOLIO_MAX_USERS`:
 
 - nobody can sign up without an invitation, whatever the [Registration](settings.md#registration)
   mode;
@@ -454,8 +457,10 @@ When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS
   [command line](cli_tools.md): `user create`, `user invite` and `user activate` print a warning,
   then go ahead.
 
-A place frees up when an account is deactivated or deleted, or when an invitation is revoked or
-expires. The first account of a new instance can always be created.
+A place frees up when an account is deactivated or deleted, when an invitation is revoked or
+expires, or when the link of an account waiting for its email verification expires (see
+*Email Verification* in [Email](email.md)). The first account of a new instance can always be
+created.
 
 ---
 
