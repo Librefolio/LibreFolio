@@ -118,15 +118,20 @@ frontend, each time they run, so they follow any change to it:
 | 5 | `asset_mode`: `required` | A missing asset (`assetRequired`); `optional` (rule 6) checks nothing, and `forbidden` is left to a create's rules 3, 3b and 4 (an update or a promote cannot set an asset) |
 | 7, 8 | `cash_mode`: `required`, `forbidden` | Missing cash (`cashRequired`); a cash movement (`cashForbidden`) |
 | 9 | `event_compatible()` | An asset event link on another type (`eventTypeIncompatible`, its `allowed` param from `event_compatible_types()`) or without an asset (`eventRequiresAsset`) |
-| 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`) |
+| 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`); a zero cash amount where `cash_sign` is `nonzero` (`cashNonzero`; see below for when) |
 | 12 | `cost_basis_allowed()` | A `cost_basis_mode` where the type and side take no cost basis (`costBasisModeIncompatible`; see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
 
-Until the developer's pending decision P6 (2026-10-16), rules 5–11 leave unchecked four
-points where the table is stricter: a `TRANSFER`'s cash, `FX_CONVERSION`'s zero quantity,
-`TRANSFER`'s non-zero quantity, and the non-zero cash of `FX_CONVERSION` and
-`CASH_TRANSFER` (`_P6_CASH_FORBIDDEN_UNCHECKED`, `_P6_QUANTITY_SIGN_UNCHECKED`; rule 11
-does not read `nonzero`). Only a create refuses them, with its rules 2, 3 and 3b; an
-update or a promote does not.
+Decision P6 (the developer's, 2026-10-16) sets when four of these refusals hold: a
+`TRANSFER`'s cash (`cashForbidden`), `FX_CONVERSION`'s non-zero quantity (`qtyZero`),
+`TRANSFER`'s zero quantity (`qtyNonzero`), and the zero cash of `FX_CONVERSION` and
+`CASH_TRANSFER` (`cashNonzero`). In an update, each holds only when its field changes:
+the cash for the first and the last, the quantity for the middle two.
+`changed_rule_fields()` compares the row by value with `stored_rule_values`, the row as
+stored before the batch, so a row stored outside the table stays editable: its notes,
+tags or date, or the field re-sent as stored. A promote changes the type, which counts as
+a changed cash and quantity, so it checks all four. A create (`changed_fields=None`)
+keeps them in its own rules 2, 3 and 3b. This mirrors N2's cost check, which judges only
+an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cost-basis)).
 
 ---
 
