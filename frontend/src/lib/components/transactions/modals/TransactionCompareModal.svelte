@@ -154,14 +154,14 @@
 
 <ModalBase {open} {zIndex} maxWidth="5xl" onRequestClose={onClose} testId="import-wizard-compare-modal" closeOnBackdropClick={true}>
     <div class="flex max-h-[85vh] flex-col">
-        <div class="flex shrink-0 items-center justify-between border-b border-gray-100 p-5 pb-4 dark:border-slate-700">
-            <h2 class="text-base font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
-            <button type="button" class="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-slate-700 dark:hover:text-gray-200" onclick={onClose} aria-label="Close" data-testid="import-wizard-compare-close"> ✕ </button>
+        <div class="flex shrink-0 items-center justify-between border-b border-lf-subtle p-5 pb-4">
+            <h2 class="text-base font-semibold text-lf-primary">{title}</h2>
+            <button type="button" class="rounded-lg p-1 text-lf-muted hover:bg-lf-hover hover:text-lf-secondary" onclick={onClose} aria-label="Close" data-testid="import-wizard-compare-close"> ✕ </button>
         </div>
 
         <div class="min-h-0 flex-1 overflow-auto p-5">
             {#if hint}
-                <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">{hint}</p>
+                <p class="mb-3 text-xs text-lf-muted">{hint}</p>
             {/if}
 
             <div class="overflow-x-auto">
@@ -171,11 +171,11 @@
                 <table class="w-full table-fixed border-collapse text-sm" style="min-width: {8 + columns.length * 10}rem" data-testid="import-wizard-compare-table">
                     <thead>
                         <tr>
-                            <th class="sticky left-0 z-10 w-32 border-b border-gray-200 bg-white px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:bg-slate-900 dark:text-gray-400">
+                            <th class="sticky left-0 z-10 w-32 border-b border-lf-subtle bg-lf-card px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide text-lf-muted">
                                 {$t('importWizard.compareModal.field')}
                             </th>
                             {#each columns as col, i (col.id)}
-                                <th class="border-b border-l border-gray-200 px-2 py-2 text-left align-top dark:border-slate-700" data-testid="import-wizard-compare-col-{col.id}">
+                                <th class="border-b border-l border-lf-subtle px-2 py-2 text-left align-top" data-testid="import-wizard-compare-col-{col.id}">
                                     <div class="flex items-center gap-1.5">
                                         {#if showKeep && col.selectable}
                                             <button
@@ -191,12 +191,12 @@
                                                 <span class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform {kept.has(col.id) ? 'translate-x-5' : 'translate-x-1'}"></span>
                                             </button>
                                         {:else}
-                                            <span class="shrink-0 text-xs text-gray-400">{colBadge(i)}</span>
+                                            <span class="shrink-0 text-xs text-lf-muted">{colBadge(i)}</span>
                                         {/if}
-                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs font-semibold text-gray-700 dark:text-gray-200" title={col.title}>{col.title}</span>
+                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} text-xs font-semibold text-lf-secondary" title={col.title}>{col.title}</span>
                                     </div>
                                     {#if col.subtitle}
-                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} mt-0.5 text-[11px] font-normal text-gray-400 dark:text-gray-500" title={col.subtitle}>{col.subtitle}</span>
+                                        <span use:scrollOnOverflow class="{overflowScrollTextClass} mt-0.5 text-[11px] font-normal text-lf-muted" title={col.subtitle}>{col.subtitle}</span>
                                     {/if}
                                 </th>
                             {/each}
@@ -205,8 +205,8 @@
                     <tbody>
                         {#each fields as field (field.key)}
                             {@const differs = fieldDiffers(field.key)}
-                            <tr class={differs ? 'bg-amber-50/40 dark:bg-amber-900/10' : ''} data-differs={differs ? 'true' : 'false'} data-field={field.key} data-testid="import-wizard-compare-row">
-                                <th class="sticky left-0 z-10 border-b border-gray-100 bg-white px-2 py-1.5 text-left align-top text-xs font-medium dark:border-slate-800 dark:bg-slate-900 {differs ? 'text-amber-700 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'}">
+                            <tr class={differs ? 'bg-lf-warning-soft/40' : ''} data-differs={differs ? 'true' : 'false'} data-field={field.key} data-testid="import-wizard-compare-row">
+                                <th class="sticky left-0 z-10 border-b border-lf-subtle bg-lf-card px-2 py-1.5 text-left align-top text-xs font-medium {differs ? 'text-lf-warning' : 'text-lf-muted'}">
                                     <span class="inline-flex items-center gap-1">
                                         {#if differs}<span aria-hidden="true">≠</span>{/if}
                                         {field.label}
@@ -220,7 +220,7 @@
                                         data-col={col.id}
                                         data-outlier={outlier ? 'true' : 'false'}
                                         data-testid="import-wizard-compare-cell"
-                                        class="border-b border-l border-gray-100 px-2 py-1.5 align-top text-xs dark:border-slate-800 {outlier ? 'bg-amber-100 font-medium text-amber-900 dark:bg-amber-900/30 dark:text-amber-200' : 'text-gray-700 dark:text-gray-200'} {field.align === 'right'
+                                        class="border-b border-l border-lf-subtle px-2 py-1.5 align-top text-xs {outlier ? 'bg-lf-warning-soft font-medium text-lf-warning-on-soft' : 'text-lf-secondary'} {field.align === 'right'
                                             ? 'text-right'
                                             : field.align === 'center'
                                               ? 'text-center'
@@ -231,13 +231,13 @@
                                                 <span use:scrollOnOverflow class={overflowScrollTextClass}>{@html cell.display}</span>
                                             {:else if parts && parts.mid !== ''}
                                                 <span use:scrollOnOverflow class={overflowScrollTextClass} title={cell.display} data-testid="import-wizard-compare-diff"
-                                                    >{parts.head}<mark class="rounded-sm bg-amber-300 px-0.5 text-amber-950 dark:bg-amber-500/70 dark:text-amber-50">{parts.mid}</mark>{parts.tail}</span
+                                                    >{parts.head}<mark class="rounded-sm bg-lf-mark px-0.5 text-lf-on-mark inset-ring inset-ring-lf-mark-line">{parts.mid}</mark>{parts.tail}</span
                                                 >
                                             {:else}
                                                 <span use:scrollOnOverflow class={overflowScrollTextClass} title={cell.display}>{cell.display}</span>
                                             {/if}
                                         {:else}
-                                            <span class="text-gray-300">—</span>
+                                            <span class="text-lf-muted">—</span>
                                         {/if}
                                     </td>
                                 {/each}
@@ -248,35 +248,30 @@
             </div>
         </div>
 
-        <div class="flex shrink-0 items-center justify-between gap-3 border-t border-gray-100 p-4 dark:border-slate-700">
+        <div class="flex shrink-0 items-center justify-between gap-3 border-t border-lf-subtle p-4">
             {#if showKeep}
                 <div class="flex flex-wrap items-center gap-2 text-xs">
-                    <span class="font-medium text-gray-600 dark:text-gray-300">{$t('importWizard.compareModal.keptCount', {values: {n: kept.size, total: selectableColumns.length}})}</span>
-                    <button
-                        type="button"
-                        class="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700"
-                        onclick={() => (kept = new Set(selectableColumns.map((c) => c.id)))}
-                        data-testid="import-wizard-compare-keep-all"
-                    >
+                    <span class="font-medium text-lf-secondary">{$t('importWizard.compareModal.keptCount', {values: {n: kept.size, total: selectableColumns.length}})}</span>
+                    <button type="button" class="rounded-md border border-lf-subtle px-2 py-1 text-xs text-lf-secondary hover:bg-lf-hover" onclick={() => (kept = new Set(selectableColumns.map((c) => c.id)))} data-testid="import-wizard-compare-keep-all">
                         {$t('importWizard.compareModal.keepAll')}
                     </button>
                     {#if resetKept}
-                        <button type="button" class="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700" onclick={() => (kept = new Set(resetKept))} data-testid="import-wizard-compare-reset">
+                        <button type="button" class="rounded-md border border-lf-subtle px-2 py-1 text-xs text-lf-secondary hover:bg-lf-hover" onclick={() => (kept = new Set(resetKept))} data-testid="import-wizard-compare-reset">
                             {$t('importWizard.resolver.resetDefault')}
                         </button>
                     {/if}
                 </div>
                 <div class="flex items-center gap-2">
-                    <button type="button" class="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700" onclick={onClose}>
+                    <button type="button" class="rounded-lg border border-lf-subtle px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={onClose}>
                         {$t('common.cancel')}
                     </button>
-                    <button type="button" class="rounded-lg bg-libre-green px-3 py-1.5 text-sm text-white hover:bg-libre-green/90" onclick={apply} data-testid="import-wizard-compare-apply">
+                    <button type="button" class="rounded-lg bg-lf-action px-3 py-1.5 text-sm text-lf-on-action hover:bg-lf-action-hover" onclick={apply} data-testid="import-wizard-compare-apply">
                         {$t('common.apply')}
                     </button>
                 </div>
             {:else}
                 <span></span>
-                <button type="button" class="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-600 dark:text-gray-300 dark:hover:bg-slate-700" onclick={onClose}>
+                <button type="button" class="rounded-lg border border-lf-subtle px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover" onclick={onClose}>
                     {$t('common.close')}
                 </button>
             {/if}
