@@ -25,12 +25,16 @@ Under test: ``backend/app/logging_config.py``. uvicorn logs each HTTP request on
     messages, ``[accepted]`` and a status of the app's own, are checked on records built as uvicorn builds them.
 (d) ``configure_logging()`` adds that one filter object to ``uvicorn.access`` and ``uvicorn.error``: called twice, each
     logger holds it once, and the lines uvicorn then logs on the two loggers it picks itself come out masked.
+(e) ``configure_logging()`` closes every handler it takes off the root logger (H-9): called twice, the log file the first
+    call opened is closed and the second call's handlers are on the root, their log file open; a file handler it finds
+    on the root is closed too.
 
 A limit, not tested: with uvicorn at ``--log-level trace``, its ``MessageLoggerMiddleware`` logs the whole ASGI scope on
 ``uvicorn.asgi``, the query string in clear. That logger has no filter, and the scope is a dict argument, which the filter
 does not read. Neither ``dev.py`` nor the image passes ``--log-level``.
 
-Pure: no server, no socket, no database, no network, no file written. A request is fed to uvicorn's protocol objects in
+Pure: no server, no socket, no database, no network, and no file written outside a test's own ``tmp_path``, where the
+tests of (e) open their log files: the lane's ``logs/`` is never opened. A request is fed to uvicorn's protocol objects in
 memory, through a transport that only collects what is written to it. The tests of (b) and the HTTP tests of (c) log on
 private ``logging.Logger`` objects, outside the logging tree; the tests that use the real ``uvicorn.error`` or call
 ``configure_logging()`` put every logger, the root handlers pytest attached for the test and structlog's configuration
@@ -47,6 +51,7 @@ import inspect
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
@@ -60,7 +65,8 @@ from uvicorn.protocols.http.httptools_impl import HttpToolsProtocol
 from uvicorn.protocols.websockets.auto import AutoWebSocketsProtocol
 from uvicorn.server import ServerState
 
-from backend.app.logging_config import _QUERY_CREDENTIAL_FILTER, _QueryCredentialFilter, configure_logging, mask_query_credentials
+from backend.app.config import get_data_dir
+from backend.app.logging_config import _QUERY_CREDENTIAL_FILTER, _QueryCredentialFilter, configure_logging, get_log_directory, mask_query_credentials
 from backend.test_scripts.test_utils import print_section, print_success
 
 #: Stands for every credential value in this file: obviously not one.
@@ -638,3 +644,74 @@ def test_configure_logging_twice_installs_one_filter_on_each_logger_and_masks_uv
         assert logger.filters == filters_before[name], f"the test left {name} with other filters than it found"
     assert structlog.get_config()["processors"] is processors_before, "the test left structlog another processor list: loggers cached on the old one would no longer reach capture_logs"
     print_success("✓ One filter on each logger after two calls; uvicorn's own lines masked on both; logging state put back")
+
+
+# ── (e) configure_logging closes the handlers it takes off the root ──────────
+
+
+@pytest.fixture
+def private_log_directory(tmp_path, monkeypatch) -> Path:
+    """The folder ``configure_logging(enable_file_logging=True)`` opens its log file in, moved under ``tmp_path``.
+
+    The file is ``get_log_directory() / "librefolio.log"``, and ``get_log_directory()`` is ``get_data_dir() / "logs"``:
+    in test mode the data directory is ``LIBREFOLIO_TEST_DATA_DIR``, read at each call. The lane's ``logs/`` is shared by
+    every unit of the lane and is never opened here; pytest removes ``tmp_path``.
+    """
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
+    data_dir = get_data_dir()
+    assert data_dir.is_relative_to(tmp_path.resolve()), f"the data directory must be this test's own, under {tmp_path}, not {data_dir}"
+    return get_log_directory()
+
+
+def _log_files(handlers: list[logging.Handler]) -> list[logging.FileHandler]:
+    """The handlers among ``handlers`` that write to a file."""
+    return [handler for handler in handlers if isinstance(handler, logging.FileHandler)]
+
+
+def test_a_second_configure_logging_closes_the_handlers_of_the_first(private_log_directory):
+    print_section("configure_logging() twice: the first call's log file closed, the second call's on the root and open")
+    root = logging.getLogger()
+    first: list[logging.Handler] = []
+    try:
+        with _logging_state_restored():
+            # Only handlers configure_logging() installs: the block puts pytest's back, never closed by the calls below.
+            root.handlers[:] = []
+            configure_logging(enable_file_logging=True)
+            first = list(root.handlers)
+            first_files = _log_files(first)
+            assert [Path(handler.baseFilename) for handler in first_files] == [private_log_directory / "librefolio.log"], f"precondition: the first call must open one log file, in {private_log_directory}: {first}"
+            first_stream = first_files[0].stream
+            assert first_stream is not None and not first_stream.closed, "precondition: the first call's log file must be open, or its closing proves nothing"
+
+            configure_logging(enable_file_logging=True)
+            second = list(root.handlers)
+
+            assert first_stream.closed, "the first call's log file is still open after the second call: configure_logging() took its handler off the root without closing it"
+            assert not set(first) & set(second), f"the second call must leave on the root handlers of its own, none of the first call's: {second}"
+            second_files = _log_files(second)
+            assert len(second_files) == 1 and second_files[0].stream is not None and not second_files[0].stream.closed, f"the second call's log file must be on the root and open: {second}"
+    finally:
+        for handler in first:
+            handler.close()  # a no-op once configure_logging() closes them itself: today it leaves them open
+    print_success("✓ The first call's log file closed by the second call; the second call's handlers on the root, open")
+
+
+def test_configure_logging_closes_a_file_handler_it_finds_on_the_root(tmp_path):
+    print_section("configure_logging(): a file handler found on the root is taken off and closed")
+    own = logging.FileHandler(tmp_path / "own.log", encoding="utf-8")
+    own_stream = own.stream
+    try:
+        with _logging_state_restored():
+            root = logging.getLogger()
+            # This handler alone: the block puts pytest's back, never closed by the call below.
+            root.handlers[:] = [own]
+            assert own_stream is not None and not own_stream.closed, "precondition: the handler's file must be open before the call, or its closing proves nothing"
+
+            configure_logging(enable_file_logging=False)
+
+            assert own not in root.handlers, f"configure_logging() must take every handler it finds off the root: {root.handlers}"
+            assert own_stream.closed, "a file handler found on the root is still open after configure_logging(): taken off without being closed"
+    finally:
+        own.close()  # a no-op once configure_logging() closes it itself: today it leaves it open
+    print_success("✓ The file handler found on the root taken off and closed")

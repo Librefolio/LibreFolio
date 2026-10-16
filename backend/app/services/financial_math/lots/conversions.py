@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -18,6 +19,7 @@ from backend.app.schemas.portfolio import (
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
+from backend.app.services.financial_math.returns import realized_gain
 from backend.app.services.fx.conversion import convert_bulk
 
 
@@ -69,6 +71,51 @@ class FxRateResolver:
         return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(self._missing.items())]
 
 
+@dataclass(frozen=True, slots=True)
+class ConvertedClosure:
+    """One closure in the target currency, each leg at its own date; None where a rate is missing.
+
+    ``cost`` is the leg a closure gives up: a long lot's purchase cost of the units sold, a short lot's cost of
+    the purchase that closes it.
+    """
+
+    open_unit_price: Decimal | None
+    close_unit_price: Decimal | None
+    proceeds: Decimal | None
+    cost: Decimal | None
+    realized_pnl: Decimal | None
+
+
+def convert_closure(closure: LotClosure, lot: FifoLot, fx_resolver: FxRateResolver) -> ConvertedClosure:
+    """A closure's prices, proceeds, cost and realized P&L in the target currency (decision 26).
+
+    The lot's side converts from the lot's currency at the lot's opening date — the purchase rate — and the
+    closing side from the closure's currency at the close date — the sale rate. A long lot realizes its proceeds
+    minus the cost of the units it gives up; a short lot the proceeds of its opening sale minus the cost of the
+    purchase that closes it. A fully closed lot so keeps no market P&L, and its realized P&L is the Dashboard's.
+    The engine's native realized P&L is never read: it is unknown when the two currencies differ.
+    """
+    opening_leg = fx_resolver.convert(closure.quantity * closure.open_unit_price, lot.currency, lot.opening_date)
+    closing_leg = fx_resolver.convert(closure.quantity * closure.close_unit_price, closure.close_currency, closure.close_date)
+    if lot.direction == "LONG":
+        cost, realized_pnl = opening_leg, realized_gain(closing_leg, opening_leg)
+    else:
+        cost, realized_pnl = closing_leg, realized_gain(opening_leg, closing_leg)
+    return ConvertedClosure(
+        open_unit_price=fx_resolver.convert(closure.open_unit_price, lot.currency, lot.opening_date),
+        close_unit_price=fx_resolver.convert(closure.close_unit_price, closure.close_currency, closure.close_date),
+        proceeds=fx_resolver.convert(closure.proceeds, closure.close_currency, closure.close_date),
+        cost=cost,
+        realized_pnl=realized_pnl,
+    )
+
+
+def need_closure_rates(fx_resolver: FxRateResolver, closure: LotClosure, lot: FifoLot) -> None:
+    """Ask for the two rates ``convert_closure`` reads: the closure's currency at its date, the lot's at its opening."""
+    fx_resolver.need(closure.close_currency, closure.close_date)
+    fx_resolver.need(lot.currency, lot.opening_date)
+
+
 def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collection blocks, no decision tree
     *,
     fx_resolver: FxRateResolver,
@@ -95,7 +142,7 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
             if raw_reference_price is not None and raw_reference_currency is not None:
                 fx_resolver.need(raw_reference_currency, reference_date)
             for closure in [c for c in closures if c.lot_id == lot_id]:
-                fx_resolver.need(lot.currency, closure.close_date)
+                need_closure_rates(fx_resolver, closure, lot)
 
     if LotAnalysisType.GANTT_TOPOLOGY in analyses:
         for fragment in fragments:
@@ -113,8 +160,7 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
                 fx_resolver.need(lots_by_id[event.transaction_id].currency, event.date)
         for closure in closures:
             if closure.lot_id in selected_ids:
-                lot = lots_by_id[closure.lot_id]
-                fx_resolver.need(lot.currency, closure.close_date)
+                need_closure_rates(fx_resolver, closure, lots_by_id[closure.lot_id])
 
     if needs_market_series(analyses):
         current = computed_from
@@ -178,7 +224,7 @@ def collect_performance_fx_needs(
     for closure in closures:
         lot = lots_by_id.get(closure.lot_id)
         if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":
-            fx_resolver.need(lot.currency or asset_currency, closure.close_date)
+            need_closure_rates(fx_resolver, closure, lot)
 
 
 def unconvertible_ids(transactions: Sequence[Transaction], fx_resolver: FxRateResolver, asset_currency: str) -> set[int]:

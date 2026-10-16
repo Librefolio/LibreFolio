@@ -32,6 +32,7 @@ from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
+from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
 from backend.app.services.platform.sleep_wake.idle_monitor import start_idle_monitor, stop_idle_monitor
@@ -206,6 +207,8 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
+    # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
+    Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     Step("provider-prewarm", lambda: _start_provider_prewarm()),
     Step("market-holidays", lambda: _start_market_holiday_prewarm()),
     Step("scheduler", lambda: _start_scheduler()),
