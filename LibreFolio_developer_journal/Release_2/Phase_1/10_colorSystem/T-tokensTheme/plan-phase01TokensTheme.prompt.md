@@ -611,7 +611,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | ✅ integrato `be911db7e` (commit `18824449c` e `a317392d4`) |
 | 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | ✅ commit `e5e427f8e`; lo slot (`slot5.sh`, 45 minuti al massimo) verso le 17:00 |
 | 23 | Il lotto del gate: G5 (una proprietà, un ternario) e G6 (i campi nativi) nel motore; il fondale uguale nei due temi; le coppie del ruolo `selected`; gli skill; TC-15 nel backlog | ✅ commit `8fb80d3b8`; entra col resto della UI dopo lo slot |
-| 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | 🔄 checkpoint consegnato: 978/979 col rosso dichiarato, `front check` 0 e 0; TC-16 registrato (orologio, non mio) |
+| 24 | I component tokens, parte 1: `ModalBase` con `tone`, `ConfirmModal` e `FileGrid` sui ruoli, 72 token tolti; `brokers-detail.spec.ts` su `data-selected` | ✅ commit `4a7ba1d7e`; base merge `1427d5ea1` (DV e BK), gate 119/119 |
+| 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | 🔄 prove leggere verdi (312/312, `--check` pulito) |
 
 ## Avanzamento
 
@@ -2674,3 +2675,38 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > verde al primo giro, da solo due volte (37/37) e al terzo giro dell'insieme (978/979); fra i giri `ModalBase` era
 > cambiato solo nella formattazione. Ipotesi 2 dello skill di triage, l'orologio: `waitFor` col budget predefinito di 1 s
 > su una catena asincrona. Verdetto: assunzione del test. Registrato **TC-16** per il proprietario dell'area dei file.
+
+> ✅ **Committato** dal coordinatore: `4a7ba1d7e` (14:48); poi la base merge con la punta `939e4998a` (DV e BK):
+> **`1427d5ea1`**, baseline risolto, gate sull'albero unito 119/119: il rosso dichiarato dei G6 di DV non c'è più. Lo
+> slot verso le 16:15, dopo IW, copre tutto il ramo (resto della UI, gate, component tokens): nell'elenco
+> `front-broker detail`, `files`, `files-destructive` e le spec distruttive di fx e asset, per `ConfirmModal`.
+
+### I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, 14:48): BK è entrato, i suoi due file si sbloccano; `TransactionsTable` dopo TR (verso le
+> 15:25), `ImportBrokerMismatchModal` dopo IW. Tocco solo lo `<style>` e i token, non le classi del markup.
+
+> ✅ **1 · I due file sui ruoli** (`files/T-r2/ct_transform2.py`, che verifica il testo di partenza):
+> - `BrokerImportFilesModal`: le 6 regole `.dark` tolte, l'import di `files.css` tolto. Divisori `border-subtle`; la
+>   chiusura `text-muted`, al passaggio `surface-hover` con `text-secondary`; il pulsante primario `action`/
+>   `action-hover` con `on-action`; l'area di caricamento e il piede `surface-panel`; il link di gestione `link`.
+>   **Due scelte, «da rivedere»:** il pulsante secondario era un grigio pieno (`#6b7280` col testo bianco), che nessun
+>   ruolo copre: ora è una card sul pannello del piede (`surface-card`, testo `secondary`, al passaggio `surface-hover` e
+>   `primary`), col bordo `border-subtle` disegnato dentro (`box-shadow: inset`), perché lo stesso pulsante si scambia
+>   col primario (`showUploader`) e un bordo vero lo sposterebbe di 2 px; il pulsante fantasma sul pannello passa al
+>   passaggio a `surface-neutral` col testo `secondary` (domanda aperta 3; muted su neutral 4,01:1).
+> - `UnifiedLotsTable`: la base della tinta del broker (`white`/`#0f0f18`) → `surface-card` nelle 4 regole (i colori dei
+>   broker restano categoriali, per tema); l'evidenza del lotto, viola (`#f3e8ff`, al picco `#e9d5ff`), → la tinta della
+>   selezione, che la palette assegna alla «riga evidenziata» (`--lf-selected`, al picco `color-mix` di `checked` al
+>   20 %), e la regola `.dark` dell'evidenza tolta. L'evidenza resta finché l'utente non clicca o preme un tasto, quindi
+>   conta il contrasto (`files/T-r2/lot_highlight.mjs`, sopra la card): primary 12,89/13,14, secondary 6,30/6,03 a
+>   riposo, 11,42/11,57 e 5,58/5,31 al picco; il muted 4,38/4,25 (col viola di prima 4,57/4,41, già sotto in scuro),
+>   quindi **dentro la riga evidenziata il muted passa a secondary** (regola 5, TC-15): l'unico muted delle righe è il
+>   trattino di un valore mancante. Divergenza temporanea: l'evidenza generica di `DataTable` resta viola finché
+>   `DataTable` non migra.
+> - Le aree: 16 token `--lf-cmp-broker-import-files-*` tolti da `files.css` (con l'intestazione), 6
+>   `--lf-cmp-lots-table-*` da `table.css`; nessun altro li nominava, nessun E2E asserisce quei colori o quelle classi.
+
+> ✅ **2 · Prove leggere** (sotto `nice`): Prettier verde (`files.css` riformattato: una riga vuota prima della graffa);
+> `--check` pulito (0 file sotto il record); i quattro gate dei colori e i 5 file di unità che nominano questi componenti
+> **312/312**. `front check` non lanciato: solo `<style>` e CSS, nessun tipo.
