@@ -154,7 +154,7 @@ def extract_income_outputs(
 
     Returns ``(income_by_lot, income_prefix_by_lot, income_events_payload)``: cumulative income
     per lot (from the engine accumulators); a per-lot cumulative-by-date map for histories (from
-    the audit groups, same shape as ``_closure_proceeds_prefix``); and one
+    the audit groups, the shape of the closures' map in ``histories._closure_prefix``); and one
     ``LotIncomeEventSchema`` per income transaction carrying the shared eligible lot ids (plan
     v3 §11 chart markers), its amount None when it has no rate.
     """

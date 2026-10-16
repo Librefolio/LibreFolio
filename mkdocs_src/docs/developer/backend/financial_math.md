@@ -70,7 +70,7 @@ backend/app/services/financial_math/
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
-    ├── prices.py            PriceHistoryLookup, opening_reference_price()
+    ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price and performance histories

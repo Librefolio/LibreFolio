@@ -182,7 +182,7 @@ What are the selected lots worth, and what have they earned since opening? With 
 
 - **Comprehensive value above Opening value**: the lots gained, sales and income included.
 - **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, and no purchase or sale up to the end date.
-- **A line that starts after its lot opened**: the asset had no price yet on those days — no market price, no purchase or sale — so they are not valued. An asset with no market price at all up to the end date is valued at cost on those days instead.
+- **A flat start**: until the asset's first price — market price, purchase or sale — a lot, for example one you received through an adjustment, is valued at what it cost you, with no gain or loss. A day whose price has no exchange rate is left out instead.
 
 ### 🧾 5. Lot Detail
 
@@ -203,7 +203,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 
     - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner).
     - **A red message** means quantities or transfers do not add up: the figures may be incomplete, so check the asset's transactions.
-    - **A lot valued at cost** has no market price: dashed bubble border, no market gain or loss.
+    - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 
 ---
 
