@@ -1,6 +1,7 @@
 /**
  * The registration mode of this instance as one page sees it: `GET /api/v1/system/instance` answered with the real
- * response and `accounts.registration_mode` replaced, or observed untouched.
+ * response and `accounts.registration_mode` replaced (and, on request, `accounts.first_account_open`: lot A6d), or
+ * observed untouched.
  *
  * The lane runs `registration_mode` = 'open', a global setting shared by every user and every worker, and no E2E spec
  * changes it. A spec that needs another mode stubs the read its own page makes instead: `page.route()` binds the browser
@@ -12,9 +13,10 @@
  * The one hand-built body, `plainInstanceConfig()`, is for specs whose data is entirely synthetic: they let no request
  * reach the shared backend, so there is no real response to change, and nothing they assert depends on this read.
  *
- * Users: auth.spec.ts («Register link and the registration setting») and auth-links.spec.ts (valid invitations on an
- * instance by invitation only, and on one whose registration is disabled); `plainInstanceConfig()`:
- * files-uploader.spec.ts and layout/header-scroll.spec.ts.
+ * Users: auth.spec.ts («Register link and the registration setting», whose A6d case also sets
+ * `accounts.first_account_open` with `firstAccountOpen`) and auth-links.spec.ts (valid invitations on an instance by
+ * invitation only, and on one whose registration is disabled); `plainInstanceConfig()`: files-uploader.spec.ts and
+ * layout/header-scroll.spec.ts.
  */
 import type {APIResponse} from '@playwright/test';
 import {schemas} from '../../src/lib/api/generated';
@@ -37,7 +39,13 @@ export type RegistrationModeStub = {
     readonly answered: number;
     /** The registration mode each answer carried, in order. */
     readonly served: readonly string[];
-    /** Why a read was not answered with the mode asked for: a broken precondition, reported by name. */
+    /**
+     * The `accounts.first_account_open` each answer carried, in order, beside `served`: the value asked for with
+     * `firstAccountOpen`, else the real one passed through — `undefined` where the real answer has none (a backend from
+     * before lot A6d).
+     */
+    readonly servedFirstAccountOpen: readonly (boolean | undefined)[];
+    /** Why a read was not answered with the mode — or the flag — asked for: a broken precondition, reported by name. */
     readonly problems: readonly string[];
     /** Deliver the held answers; without `hold` there is nothing to deliver. */
     release(): void;
@@ -63,17 +71,24 @@ function servableHeaders(response: APIResponse): Record<string, string> {
 /**
  * Answer this page's `GET /api/v1/system/instance` — that path only — with the real response and
  * `accounts.registration_mode` set to `mode`; with `mode` null, pass the real answer through untouched and record the
- * mode it carried. With `hold`, every answer waits for `release()`: the page meanwhile runs on its defaults, which a
- * test can observe before the answer changes them. The real request leaves at once; only its answer is held.
+ * mode it carried. With `firstAccountOpen` (accounts lot A6d), `accounts.first_account_open` is set to it too, in the
+ * same real response — with `mode` null it is then the one field changed; without it the real flag passes through as
+ * it came, so a caller that does not ask for it sees the stub exactly as before. With `hold`, every answer waits for
+ * `release()`: the page meanwhile runs on its defaults, which a test can observe before the answer changes them. The
+ * real request leaves at once; only its answer is held.
  *
  * Any other method falls through: nothing here writes. A real response without `accounts.registration_mode` is a broken
- * precondition — the backend of lot A5a is missing — and is passed through as it is, with the reason in `problems`.
+ * precondition — the backend of lot A5a is missing — and is passed through as it is, with the reason in `problems`. So
+ * is one without a boolean `accounts.first_account_open` when `firstAccountOpen` is asked for — the backend of lot A6d
+ * is missing: the flag is changed in the real answer, never added to one that lacks it.
  */
-export async function serveRegistrationMode(page: Page, mode: RegistrationMode | null, options: {hold?: boolean} = {}): Promise<RegistrationModeStub> {
+export async function serveRegistrationMode(page: Page, mode: RegistrationMode | null, options: {hold?: boolean; firstAccountOpen?: boolean} = {}): Promise<RegistrationModeStub> {
     let requested = 0;
     let answered = 0;
     const served: string[] = [];
+    const servedFirstAccountOpen: (boolean | undefined)[] = [];
     const problems: string[] = [];
+    const flag = options.firstAccountOpen;
     let deliver = () => {};
     const delivered = options.hold
         ? new Promise<void>((resolve) => {
@@ -103,13 +118,22 @@ export async function serveRegistrationMode(page: Page, mode: RegistrationMode |
                 await asItCame();
                 return;
             }
-            if (mode === null) {
+            const carried = body.accounts?.first_account_open;
+            const realFlag = typeof carried === 'boolean' ? carried : undefined;
+            if (flag !== undefined && realFlag === undefined) {
+                problems.push(`the real GET ${INSTANCE_CONFIG_PATH} has no boolean accounts.first_account_open (accounts keys: ${Object.keys(body.accounts ?? {}).join(', ') || 'none'}): the backend of lot A6d is missing`);
+                await asItCame();
+                return;
+            }
+            if (mode === null && flag === undefined) {
                 await asItCame();
                 served.push(real);
             } else {
-                await route.fulfill({status: response.status(), headers: servableHeaders(response), json: {...body, accounts: {...body.accounts, registration_mode: mode}}});
-                served.push(mode);
+                const accounts = {...body.accounts, registration_mode: mode ?? real, ...(flag === undefined ? {} : {first_account_open: flag})};
+                await route.fulfill({status: response.status(), headers: servableHeaders(response), json: {...body, accounts}});
+                served.push(mode ?? real);
             }
+            servedFirstAccountOpen.push(flag ?? realFlag);
         } catch (error) {
             // Nobody awaits a route callback: what it throws would surface as an unhandled rejection on whatever the
             // worker runs next. Recorded instead, and asserted by the test that needed the read.
@@ -129,6 +153,9 @@ export async function serveRegistrationMode(page: Page, mode: RegistrationMode |
         },
         get served() {
             return served;
+        },
+        get servedFirstAccountOpen() {
+            return servedFirstAccountOpen;
         },
         get problems() {
             return problems;

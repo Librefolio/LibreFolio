@@ -1141,6 +1141,7 @@ Systematically read all 68 mkdocs developer pages and mapped them to 36 features
 - Log format: all entries well-formed
 - Thin pages: all under-25-line pages are planned/idea features (appropriate)
 - Concept pages (daily-point-policy, backend-only-calculations, fifo-runtime-decision): substantive and accurate
+
 ## [2026-04-24] file | I-bis #24 v4 — `/prices/current` has a persistence side-effect
 Filed lesson learned from final iteration of I-bis #24 (Auto-refresh mirato post-sync).
 Root cause: `AssetSourceManager.get_current_prices_bulk` upserts today's OHLC to
@@ -3602,4 +3603,18 @@ the `lone-transfer-legs` startup step after the post-migration fixes (the sync f
 dry run in the offline CLI. Entry after J-17 (price marks from adjustments). The status's stale «not in the code yet» and
 «waits for point 46/47» lines are gone.
 Updated: [[decisions/orphan-transfer-becomes-an-adjustment]].
+
+## [2026-10-16] update | Days that only move an exchange rate, or a price's source or age, were skipped
+J CP-6 (release 1.3, decision 28) closes B11's securities half: a frame day is dirty when a rate the day reads to value
+it changes (securities, the unrealized split, cash in transit), on every market-quote day, and on the first day a
+carried price turns stale; `native_cash.change_days` is the one home for «the day a rate changes». The page moves to
+resolved, with the test lesson (buy in the report currency, or the cash leg hides the defect) and its source files.
+Updated: [[problems/dirty-days-ignore-fx-only-moves]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | Three pages that still said B11's securities half was open
+After J CP-6 the docs-writer found three statements left behind: the pre-frame/frame concept («still skipped»), the
+native-cash revaluation decision («stays open») and the native-cash entity (no `change_days` in its API). Brought in
+line with the resolved problem page.
+Updated: [[concepts/pre-frame-frame-separation]], [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]].
 Graph: not updated; graphify is not available in this worktree.

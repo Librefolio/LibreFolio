@@ -157,10 +157,20 @@ const SCAN = scanTables(MODULES);
 
 describe('the chart colour tables — every export of chartTheme.ts and chartPalettes.ts, at any depth', () => {
     it('positive control: the walk reaches tables known to exist, at every depth', () => {
-        // A pair of lists, a pair inside a list, a pair inside a table.
-        expect(SCAN.pairs.map(({path}) => path)).toEqual(expect.arrayContaining(['chartPalettes.GEO_CHOROPLETH_SCALE', 'chartPalettes.GROWTH_BROKER_PALETTE[0]', 'chartTheme.CHART_TOOLTIP_COLORS.box.background']));
-        // The last entry of a theme's list, an entry of a plain list, a theme of a pair inside a list, a theme of a pair inside a table, a plain string.
-        expect(SCAN.colours).toEqual(expect.arrayContaining(['chartPalettes.GEO_CHOROPLETH_SCALE.dark[5]', 'chartPalettes.SIGNAL_DEFAULT_PALETTE[0]', 'chartPalettes.GROWTH_BROKER_PALETTE[7].dark', 'chartTheme.CHART_TOOLTIP_COLORS.box.background.light', 'chartTheme.CHART_TOOLTIP_COLORS.aside']));
+        // A pair exported as it is (a pair of lists), a pair inside a table, a pair two tables down. No list of pairs is left.
+        const pairs = ['chartPalettes.GEO_CHOROPLETH_SCALE', 'chartTheme.PRICE_SERIES.line', 'chartTheme.CHART_TOOLTIP_COLORS.box.background'];
+        // The last entry of a theme's list, an entry of a plain list, a theme of a pair inside a table, a theme of a pair two tables down (an rgba()), a plain string.
+        const colours = ['chartPalettes.GEO_CHOROPLETH_SCALE.dark[5]', 'chartPalettes.SIGNAL_DEFAULT_PALETTE[0]', 'chartTheme.PRICE_SERIES.line.light', 'chartTheme.LOT_GANTT_COLORS.highlightBand.fill.dark', 'chartTheme.CHART_TOOLTIP_COLORS.aside'];
+
+        expect(SCAN.pairs.map(({path}) => path)).toEqual(expect.arrayContaining(pairs));
+        expect(SCAN.colours).toEqual(expect.arrayContaining(colours));
+    });
+
+    it('skips a function export: growthBrokerColor is behaviour, read at each draw, not a table', () => {
+        expect(typeof MODULES.chartPalettes.growthBrokerColor, 'barrier: the export exists, so the skip is about something').toBe('function');
+
+        const reached = [...SCAN.pairs.map(({path}) => path), ...SCAN.colours, ...SCAN.defects].filter((entry) => entry.includes('growthBrokerColor'));
+        expect(reached).toEqual([]);
     });
 
     it('breaks no rule: every pair whole and of one kind, every string a colour, no list repeating an entry, the two lists of a pair of one length', () => {

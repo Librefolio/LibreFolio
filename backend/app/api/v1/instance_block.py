@@ -17,8 +17,8 @@ FastAPI hands a dependency the endpoint function of the matched route (``scope["
 the list holds endpoint functions. The refusal is ``423 Locked`` with the code ``instance_blocked``, and only a
 signed-in user gets it: anyone else gets the 401 of ``get_current_user``, so a protected route answers a caller without
 a session the same way whether or not the instance is blocked. A public route outside the list (registration, the
-address probe ``GET /auth/address-probe``, the reference lists of ``utilities``, the global settings, the AI Export
-catalogue) answers that 401 only while the instance is blocked: from those, a caller without a session can tell that it
+address probe ``GET /auth/address-probe``, the reference lists of ``utilities``, the AI Export catalogue) answers
+that 401 only while the instance is blocked: from those, a caller without a session can tell that it
 is blocked, and nothing more. The address probe's 401 carries no CORS header, so an administrator's check from another
 address reads it as not verifiable: intended (A6a). The web app tells 423
 from a permission refusal (403) and shows the block page.

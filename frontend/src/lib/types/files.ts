@@ -19,6 +19,11 @@ import {schemas} from '$lib/api/generated';
 export type UploadedFile = z.infer<typeof schemas.UploadFileInfo>;
 
 /**
+ * Who sees an uploaded file (decision 36): `common`, every signed-in user; `personal`, its uploader and the admins.
+ */
+export type UploadScope = UploadedFile['scope'];
+
+/**
  * Structured preview payload returned by preview endpoints.
  */
 export type FilePreviewResponse = z.infer<typeof schemas.FilePreviewResponse>;

@@ -1822,12 +1822,17 @@ class TestPasswordWorkLeavesTheEventLoopFree:
         Whichever service computes the hash — user_service.create_user until 1.2, the registration
         service from 1.3, under whatever name it imports the function — the call ends in bcrypt's own
         hashpw: the stand-in replaces that one, answering bytes as bcrypt does, and the new user must be
-        stored with the stand-in's hash. The accounts variables are removed from this process, so that
-        open registration on the private database (no mode row, no limit) is what register meets.
+        stored with the stand-in's hash. The accounts variables are removed from this process, and the
+        private database's registration_mode row is written ``open`` (no limit): an open registration is
+        what register meets. Since lot A6d a database without that row is ``invite`` (decision 36), and the
+        private account makes this registration a second one, which would then need an invitation.
         """
         print_section("LOOP-002: register hashes the password off the event loop")
         for variable in ("LIBREFOLIO_REGISTRATION", "LIBREFOLIO_MAX_USERS"):
             monkeypatch.delenv(variable, raising=False)
+        async with AsyncSession(private_account.engine) as session:
+            session.add(GlobalSetting(key=REGISTRATION_MODE_KEY, value="open", value_type="str"))
+            await session.commit()
         stand_in_hash = b"stand-in-hash-of-loop_newcomer"
         hashing = _block(monkeypatch, auth_service.bcrypt, "hashpw", result=stand_in_hash)
         username, password = "loop_newcomer", "NewcomerPass123!"

@@ -37,7 +37,7 @@
     // Default values for global settings
     const SETTING_DEFAULTS: Record<string, string> = {
         session_ttl_hours: '24',
-        registration_mode: 'open',
+        registration_mode: 'invite',
         require_email_verification: 'false',
         max_file_upload_mb: '10',
         scheduler_enabled: 'true',

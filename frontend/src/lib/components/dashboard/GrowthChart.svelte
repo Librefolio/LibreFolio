@@ -45,7 +45,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
     import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS, GROWTH_CHART_COLORS} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {
         alignFlowToDates,
         buildLadderData,
@@ -950,12 +950,15 @@
 
     onMount(() => {
         darkModeObserver = onThemeClassChange(() => renderChart());
+        // C4: a Designer Lab edit of a category colour rebuilds the whole option, the broker lines included (TD-1b).
+        const chartColours = onChartColorsChange(() => renderChart(true));
 
         return () => {
             if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
             dataZoomCleanup?.();
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
+            chartColours.disconnect();
             resizeWatcher.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;

@@ -18,7 +18,7 @@ while the machine slept or the server was off is due at the next run (``due_hist
 import asyncio
 import time as time_module
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal, get_args
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -47,6 +47,10 @@ MISSED_SLOT_LOOKBACK_DAYS = 7
 #: The name of the loop's return listener, and the reason it gives while a run is in progress.
 CATCH_UP_LISTENER = "scheduler-catch-up"
 BUSY_REASON = "scheduler"
+#: The wait before a job that raised runs again, doubled at each failure in a row (release 1.3, Z7b).
+FAILURE_BACKOFF_BASE_SECONDS = 60
+#: The longest such wait for the history sync; the current price waits at most its own frequency.
+FAILURE_BACKOFF_MAX_SECONDS = 3600
 
 RunReason = Literal["startup", "tick", "return", "wake"]
 _SETTLING_REASONS = frozenset({"return", "wake"})
@@ -58,7 +62,12 @@ _run_lock_of_loop: tuple[asyncio.AbstractEventLoop, asyncio.Lock] | None = None
 
 @dataclass(frozen=True)
 class JobOutcome:
-    """How one job ended in a run: ``ok``, ``partial``, ``error`` or ``not_due``; ``error`` is a class name, if any."""
+    """How one job ended in a run: ``ok``, ``partial``, ``error`` or ``not_due``; ``error`` is a class name, if any.
+
+    ``items_deferred`` counts the items a provider's pause deferred. ``retry_at`` is when the job runs again before its
+    regular round: the end of the shortest pause, the end of the wait after a failure, or, for a job not due, the one
+    of them still ahead.
+    """
 
     name: str
     status: str
@@ -67,6 +76,8 @@ class JobOutcome:
     items_ok: int = 0
     items_err: int = 0
     error: str | None = None
+    items_deferred: int = 0
+    retry_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -86,6 +97,7 @@ class _Job:
     due: Callable[[datetime, SchedulerSettings, SchedulerState], bool]
     run: Callable[[SchedulerState, SchedulerSettings], Awaitable[None]]
     state_of: Callable[[SchedulerState], JobState]
+    max_backoff_seconds: Callable[[SchedulerSettings], float]
 
 
 def utc_now() -> datetime:
@@ -131,8 +143,36 @@ def get_shutdown_event() -> asyncio.Event:
     return _shutdown_event
 
 
+def _retry_rule(job: JobState, now: datetime) -> bool | None:
+    """The retry rules, before the regular one: a failure's wait holds the job back, a provider's pause brings it forward.
+
+    False while ``next_attempt_at`` is ahead; True once ``retry_at`` has come; None when the regular rule decides.
+    """
+    now_utc = _as_utc(now)
+    next_attempt = _parse_last_run(job.next_attempt_at)
+    if next_attempt is not None and now_utc < next_attempt:
+        return False
+    retry_at = _parse_last_run(job.retry_at)
+    if retry_at is not None and now_utc >= retry_at:
+        return True
+    return None
+
+
+def _pending_retry_at(job: JobState, now: datetime) -> datetime | None:
+    """For a job not due: the wait after a failure if still ahead, else a deferred retry still ahead, else None."""
+    now_utc = _as_utc(now)
+    for value in (job.next_attempt_at, job.retry_at):
+        moment = _parse_last_run(value)
+        if moment is not None and moment > now_utc:
+            return moment
+    return None
+
+
 def due_current_price(now: datetime, settings: SchedulerSettings, state: SchedulerState) -> bool:
-    """Check if current-price refresh is due."""
+    """Check if current-price refresh is due: the retry rules first (``_retry_rule``), then its frequency."""
+    retry = _retry_rule(state.current_price, now)
+    if retry is not None:
+        return retry
     last = state.current_price.last_run_at
     if last is None:
         return True
@@ -166,8 +206,11 @@ def due_history_sync(now: datetime, settings: SchedulerSettings, state: Schedule
 
     After a run, the most recent slot of a configured day, today or in the week before, is due when it fell after that
     run: a slot missed while the server was off or asleep is caught up at the next run (decision D-Z3-1). Before any
-    run, or with an unreadable one, only today's slots count.
+    run, or with an unreadable one, only today's slots count. The retry rules (``_retry_rule``) come first.
     """
+    retry = _retry_rule(state.history_sync, now)
+    if retry is not None:
+        return retry
     now_utc = _as_utc(now)
     last_dt = _parse_last_run(state.history_sync.last_run_at)
     if last_dt is None:
@@ -179,8 +222,20 @@ def due_history_sync(now: datetime, settings: SchedulerSettings, state: Schedule
 
 
 JOBS: tuple[_Job, ...] = (
-    _Job("current_price", lambda now, settings, state: due_current_price(now, settings, state), lambda state, settings: run_current_price_refresh(state), lambda state: state.current_price),
-    _Job("history_sync", lambda now, settings, state: due_history_sync(now, settings, state), lambda state, settings: run_history_sync(state, horizon_days=settings.history_sync_horizon_days), lambda state: state.history_sync),
+    _Job(
+        "current_price",
+        lambda now, settings, state: due_current_price(now, settings, state),
+        lambda state, settings: run_current_price_refresh(state),
+        lambda state: state.current_price,
+        lambda settings: settings.current_price_frequency_minutes * 60,
+    ),
+    _Job(
+        "history_sync",
+        lambda now, settings, state: due_history_sync(now, settings, state),
+        lambda state, settings: run_history_sync(state, horizon_days=settings.history_sync_horizon_days),
+        lambda state: state.history_sync,
+        lambda settings: FAILURE_BACKOFF_MAX_SECONDS,
+    ),
 )
 JOB_NAMES = tuple(job.name for job in JOBS)
 
@@ -212,9 +267,46 @@ async def _run_job(job: _Job, reason: str, state: SchedulerState, settings: Sche
     except Exception as exc:
         # The message stays in the log (secrets masked there), never in the outcome a caller may pass on.
         logger.exception("Scheduler job failed", job=job.name, reason=reason)
-        return JobOutcome(job.name, "error", started_at, round(time_module.monotonic() - started, 2), error=type(exc).__name__)
+        duration_s = round(time_module.monotonic() - started, 2)
+        failed = await _record_failure(job, state, settings, type(exc).__name__)
+        return JobOutcome(job.name, "error", started_at, duration_s, error=type(exc).__name__, retry_at=_parse_last_run(failed.next_attempt_at))
     job_state = job.state_of(state)
-    return JobOutcome(job.name, job_state.last_status or "ok", started_at, job_state.last_duration_s, job_state.last_items_ok, job_state.last_items_err, job_state.last_error)
+    return JobOutcome(
+        job.name,
+        job_state.last_status or "ok",
+        started_at,
+        job_state.last_duration_s,
+        job_state.last_items_ok,
+        job_state.last_items_err,
+        job_state.last_error,
+        job_state.last_items_deferred,
+        _parse_last_run(job_state.retry_at),
+    )
+
+
+async def _record_failure(job: _Job, state: SchedulerState, settings: SchedulerSettings, error: str) -> JobState:
+    """Record a job that raised: one more failure in a row, and no new attempt before a doubling wait.
+
+    ``last_run_at`` and ``last_duration_s`` stay those of the last run that ended, so a missed slot stays due; the wait
+    starts at ``FAILURE_BACKOFF_BASE_SECONDS`` and stops at the job's ceiling. The state is saved; a save that fails
+    again is only logged.
+    """
+    previous = job.state_of(state)
+    failures = previous.consecutive_failures + 1
+    wait = min(FAILURE_BACKOFF_BASE_SECONDS * 2 ** (failures - 1), job.max_backoff_seconds(settings))
+    failed = replace(
+        previous,
+        last_status="error",
+        last_error=error,
+        consecutive_failures=failures,
+        next_attempt_at=(utc_now() + timedelta(seconds=wait)).isoformat(),
+    )
+    setattr(state, job.name, failed)
+    try:
+        await asyncio.to_thread(save_state, state)
+    except Exception:
+        logger.exception("Scheduler state not saved after a failed job", job=job.name)
+    return failed
 
 
 async def _run_locked(reason: str) -> RunReport:
@@ -239,7 +331,7 @@ async def _run_locked(reason: str) -> RunReport:
         if job.due(now, settings, state):
             outcomes.append(await _run_job(job, reason, state, settings))
         else:
-            outcomes.append(JobOutcome(job.name, "not_due"))
+            outcomes.append(JobOutcome(job.name, "not_due", retry_at=_pending_retry_at(job.state_of(state), now)))
     jobs = tuple(outcomes)
     return report(_overall_status(jobs), jobs)
 

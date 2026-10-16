@@ -2,7 +2,7 @@
 
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Optional
 
@@ -17,6 +17,10 @@ class JobState:
     last_items_ok: int = 0
     last_items_err: int = 0
     last_error: Optional[str] = None
+    last_items_deferred: int = 0  # items a provider's pause deferred (RATE_LIMITED): neither ok nor failed
+    retry_at: Optional[str] = None  # ISO datetime (UTC): the deferred items are retried then, before the regular round
+    consecutive_failures: int = 0  # runs in a row that raised
+    next_attempt_at: Optional[str] = None  # ISO datetime (UTC): after a run that raised, none before it
 
 
 @dataclass
@@ -29,6 +33,16 @@ def _state_path() -> Path:
     return Path(get_data_dir()) / "scheduler_state.json"
 
 
+_JOB_STATE_FIELDS = frozenset(item.name for item in fields(JobState))
+
+
+def _job_state(data: object) -> JobState:
+    """A job's state from its JSON: the keys it does not know are ignored, so a newer file does not reset it."""
+    if not isinstance(data, dict):
+        raise TypeError(f"a job state is a JSON object, not {type(data).__name__}")
+    return JobState(**{key: value for key, value in data.items() if key in _JOB_STATE_FIELDS})
+
+
 def load_state() -> SchedulerState:
     """Load scheduler state from JSON file. Returns fresh state if missing/corrupt."""
     path = _state_path()
@@ -37,8 +51,8 @@ def load_state() -> SchedulerState:
     try:
         data = json.loads(path.read_text())
         return SchedulerState(
-            current_price=JobState(**data.get("current_price", {})),
-            history_sync=JobState(**data.get("history_sync", {})),
+            current_price=_job_state(data.get("current_price", {})),
+            history_sync=_job_state(data.get("history_sync", {})),
         )
     except (json.JSONDecodeError, TypeError, KeyError):
         return SchedulerState()

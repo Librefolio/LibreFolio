@@ -66,6 +66,18 @@
  * settings are still mocked, with the old «closed» value in them: the card must
  * not read them any more.
  *
+ * Accounts lot A6d (decision 36) adds one flag to that contract. A new install
+ * now defaults to `invite`, and the first account of an empty instance can
+ * always be created — it becomes the administrator — so `GET /system/instance`
+ * answers `accounts.first_account_open`, true exactly while the instance has no
+ * account at all. The card offers the link while the mode is `open` OR that flag
+ * is true. Before the server answers nothing changes: the defaults carry no flag
+ * and their mode is `open`, so the link is there. The flag is optional in the
+ * schema — absent reads as false — and reaches the generated `InstanceConfig`
+ * only with the `api sync` that follows the backend: `AccountsAnswer` types it
+ * here, so the file compiles before that sync and after it. The A6d cases say
+ * the flag, true or false; the A5b cases above them still leave it out.
+ *
  * The third describe gives the success message a handle (A5b): `login-success`,
  * the box the login page fills from a registration or from the flash a link
  * page left (`authFlash.ts`). Its text is a prop this file passes in.
@@ -99,6 +111,12 @@ vi.mock('$lib/stores/app/auth', () => ({
     isAuthLoading: readable(false),
 }));
 vi.mock('$app/navigation', () => ({goto: vi.fn()}));
+/**
+ * The accounts part of an answer, with the flag of A6d: `first_account_open`, true while the instance has no account.
+ * Optional in the schema (absent reads as false), and part of the generated `InstanceConfig` only after the `api sync`
+ * that follows the backend: the intersection names it both before that sync and after it.
+ */
+type AccountsAnswer = InstanceConfig['accounts'] & {first_account_open?: boolean};
 // The instance configuration held by the test: a fake with the real store's shape — enumerable getters over `$state`
 // (`reactiveBox`), so a template reading `instanceConfig.config` re-renders when the test changes it, as it would when
 // the server answers — and a `load` spy that resolves at once. Open before every test (`beforeEach`), like
@@ -106,12 +124,16 @@ vi.mock('$app/navigation', () => ({goto: vi.fn()}));
 // follow it nor load it any more.
 const mocks = await vi.hoisted(async () => {
     const {reactiveBox} = await import('$test/runes.svelte');
-    const accounts = (registration_mode: 'open' | 'invite' | 'disabled', registration_locked = false) => ({registration_mode, registration_locked});
+    type Mode = 'open' | 'invite' | 'disabled';
+    /** `first_account_open` is in the answer only when given: left out, the answer reads as one from before A6d. */
+    const accounts = (registration_mode: Mode, registration_locked = false, first_account_open?: boolean): AccountsAnswer => (first_account_open === undefined ? {registration_mode, registration_locked} : {registration_mode, registration_locked, first_account_open});
     const OPEN: InstanceConfig = {profile: 'selfhosted', accounts: accounts('open')};
     return {
         OPEN,
         INVITE: {profile: 'selfhosted', accounts: accounts('invite')} as InstanceConfig,
         DISABLED: {profile: 'selfhosted', accounts: accounts('disabled')} as InstanceConfig,
+        /** The answer of a self-hosted instance in `mode` that says `first_account_open` (A6d). */
+        answer: (mode: Mode, first_account_open: boolean): InstanceConfig => ({profile: 'selfhosted', accounts: accounts(mode, false, first_account_open)}),
         instance: reactiveBox<{config: InstanceConfig}>({config: OPEN}),
         instanceLoad: vi.fn<(options?: {force?: boolean}) => Promise<void>>().mockName('instanceConfig.load'),
         settingsLoad: vi.fn<() => Promise<void>>().mockResolvedValue(undefined).mockName('globalSettings.load'),
@@ -292,6 +314,8 @@ describe('LoginCard — «Register here» follows the registration mode of the i
         ['invite', mocks.INVITE],
         ['disabled', mocks.DISABLED],
     ])('offers no registration on an instance whose mode is %s', async (_mode, config) => {
+        // No `first_account_open` in this answer, as in one from before A6d: absent reads as false, an instance that
+        // has an account. The A6d cases below say the flag.
         mocks.instance.config = config;
         mount();
         await tick();
@@ -326,6 +350,59 @@ describe('LoginCard — «Register here» follows the registration mode of the i
         mocks.instance.config = mocks.OPEN;
         await tick();
         expect(registerOffer(), 'a later answer says open again').toEqual(OFFERED);
+    });
+
+    // A6d (decision 36): the first account of an empty instance can always be created, and becomes its administrator.
+    // So while the answer says `first_account_open: true` the link is offered whatever the mode — a new install defaults
+    // to invite, and its very first visitor must still find the way to the account that will run it.
+    it.each(['invite', 'disabled'] as const)('offers registration on an instance in mode %s that has no account yet: first_account_open true (A6d)', async (mode) => {
+        mocks.instance.config = mocks.answer(mode, true);
+        mount();
+        await tick();
+
+        expect(registerOffer(), `mode ${mode}, first_account_open true: the first account can always be created`).toEqual(OFFERED);
+    });
+
+    it.each(['invite', 'disabled'] as const)('offers no registration in mode %s once the instance has an account: first_account_open false, said (A6d)', async (mode) => {
+        // The flag said false, beside the cases above that leave it out: the mode alone decides again.
+        mocks.instance.config = mocks.answer(mode, false);
+        mount();
+        await tick();
+
+        // The card is there: only the way to an account the backend would refuse goes.
+        expect(screen.getByTestId('login-form')).toBeInTheDocument();
+        expect(screen.getByTestId('goto-forgot')).toBeInTheDocument();
+        expect(registerOffer(), `mode ${mode}, first_account_open false`).toEqual(WITHDRAWN);
+    });
+
+    it('offers registration on an open instance that already has an account: first_account_open false (A6d)', async () => {
+        // The flag only adds the first account: it never takes the link away from an instance where anyone may register.
+        mocks.instance.config = mocks.answer('open', false);
+        mount();
+        await tick();
+
+        expect(registerOffer(), 'mode open, first_account_open false').toEqual(OFFERED);
+    });
+
+    it('follows first_account_open as soon as an answer changes it, both ways, without a remount (A6d)', async () => {
+        mount();
+        await tick();
+        expect(registerOffer(), 'open at mount: the defaults').toEqual(OFFERED);
+
+        // The answer of a new install: invitation only, and no account yet.
+        mocks.instance.config = mocks.answer('invite', true);
+        await tick();
+        expect(registerOffer(), 'invite, first_account_open true: the first account can always be created').toEqual(OFFERED);
+
+        // A later answer, once the first account exists: the same mode, only the flag changed.
+        mocks.instance.config = mocks.answer('invite', false);
+        await tick();
+        expect(screen.getByTestId('goto-forgot')).toBeInTheDocument();
+        expect(registerOffer(), 'invite, first_account_open false: the instance has an account now').toEqual(WITHDRAWN);
+
+        mocks.instance.config = mocks.answer('invite', true);
+        await tick();
+        expect(registerOffer(), 'and back: the card draws whatever the latest answer says').toEqual(OFFERED);
     });
 
     it('asks for the instance configuration once, on mount, not forced — and no longer for the global settings', async () => {
