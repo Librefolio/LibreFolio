@@ -19,7 +19,7 @@
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
-    import {ChartLine, ChevronDown, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
+    import {ChartLine, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -30,6 +30,8 @@
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
+    import AssetDetailSignalsPanel from '$lib/components/assets/detail/AssetDetailSignalsPanel.svelte';
+    import AssetDetailMeasuresSection from '$lib/components/assets/detail/AssetDetailMeasuresSection.svelte';
     import AssetDetailHeader from '$lib/components/assets/detail/AssetDetailHeader.svelte';
     import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
@@ -2507,51 +2509,34 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Signals (ABOVE chart, replaces old Aesthetics position) -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-            <div class="relative">
-                <button type="button" class="absolute inset-0 z-0 w-full rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700/50" data-testid="asset-detail-signals-toggle" aria-expanded={showSignals} aria-label={$t('common.signals')} onclick={() => (showSignals = !showSignals)}></button>
-                <div class="relative z-10 pointer-events-none w-full flex items-center gap-1 px-2 py-1.5" data-testid="asset-detail-signals-header">
-                    <span class="flex items-center gap-2 px-2 py-1 text-sm font-medium text-gray-700 dark:text-gray-200">
-                        <TrendingUp class="text-blue-500" size={15} />
-                        {$t('common.signals')}
-                    </span>
-                    <div class="flex-1"></div>
-                    <span class="flex items-center px-1 py-1 text-gray-700 dark:text-gray-200" data-testid="asset-detail-signals-chevron">
-                        <ChevronDown class="transition-transform {showSignals ? 'rotate-180' : ''}" size={15} />
-                    </span>
-                </div>
-            </div>
-            {#if showSignals}
-                <div data-testid="asset-detail-signals-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3">
-                    <ChartSignalsSection
-                        signals={signalPanelConfigs}
-                        definitions={signalDefinitions}
-                        allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison'] : undefined}
-                        backendError={primaryMode === 'price' ? signalBackendError : null}
-                        {signalsLoading}
-                        onretrybackend={retryBackendSignals}
-                        availablePairs={allConfiguredFxSlugs}
-                        availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
-                        mainPairSlug={`asset-${data.assetId}`}
-                        onchange={handleSignalsChange}
-                        onsyncpair={handleSyncPair}
-                        ondetailpair={handleDetailPair}
-                        onsyncasset={handleSyncAsset}
-                        syncingAssetIds={syncingComparisonAssetIds}
-                        ondetailasset={handleDetailAsset}
-                        {signalSummaries}
-                        {dateStart}
-                        {displayCurrency}
-                        configuredFxSlugs={allConfiguredFxSlugs}
-                        oncreatefxpair={(slug) => {
-                            fxPairCreateSlug = slug;
-                            showFxPairAddModal = true;
-                        }}
-                        onsyncfxpair={handleSyncPair}
-                    />
-                </div>
-            {/if}
-        </div>
+        <AssetDetailSignalsPanel bind:open={showSignals}>
+            <ChartSignalsSection
+                signals={signalPanelConfigs}
+                definitions={signalDefinitions}
+                allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison'] : undefined}
+                backendError={primaryMode === 'price' ? signalBackendError : null}
+                {signalsLoading}
+                onretrybackend={retryBackendSignals}
+                availablePairs={allConfiguredFxSlugs}
+                availableAssets={allAssets.filter((a) => a.id !== data.assetId)}
+                mainPairSlug={`asset-${data.assetId}`}
+                onchange={handleSignalsChange}
+                onsyncpair={handleSyncPair}
+                ondetailpair={handleDetailPair}
+                onsyncasset={handleSyncAsset}
+                syncingAssetIds={syncingComparisonAssetIds}
+                ondetailasset={handleDetailAsset}
+                {signalSummaries}
+                {dateStart}
+                {displayCurrency}
+                configuredFxSlugs={allConfiguredFxSlugs}
+                oncreatefxpair={(slug) => {
+                    fxPairCreateSlug = slug;
+                    showFxPairAddModal = true;
+                }}
+                onsyncfxpair={handleSyncPair}
+            />
+        </AssetDetailSignalsPanel>
 
         <!-- ======================================================================= -->
         <!-- Chart with left toolbar -->
@@ -2975,49 +2960,17 @@
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Measures -->
         <!-- ======================================================================= -->
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700" data-testid="asset-detail-measures-section" data-mode={primaryMode}>
-            <div
-                class="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors rounded-t-xl"
-                role="button"
-                tabindex="0"
-                data-testid="asset-detail-measures-toggle"
-                onclick={() => setActiveMeasuresOpen(!activeMeasuresOpen())}
-                onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setActiveMeasuresOpen(!activeMeasuresOpen());
-                    }
-                }}
-            >
-                <div class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-200">
-                    <Ruler class="text-violet-500" size={15} />
-                    {$t('common.measures')}
-                    {#if activeMeasureMode()}
-                        <span class="text-[10px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400 rounded-full">{$t('measure.active')}</span>
-                    {/if}
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md
-                                   bg-violet-50 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400
-                                   hover:bg-violet-100 dark:hover:bg-violet-900/50
-                                   transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={activeChartData.filter((point) => !point.missing).length < 2}
-                        data-testid="asset-detail-add-measure-btn"
-                        onclick={(e) => {
-                            e.stopPropagation();
-                            setActiveMeasuresOpen(true);
-                            activeMeasurePanel()?.addMeasureFromChartData();
-                        }}
-                        title={$t('common.addMeasure')}
-                    >
-                        <span class="text-sm leading-none">+</span>
-                        <span class="hidden sm:inline">{$t('common.addMeasure')}</span>
-                    </button>
-                    <ChevronDown class="transition-transform text-gray-400 {activeMeasuresOpen() ? 'rotate-180' : ''}" size={15} />
-                </div>
-            </div>
+        <AssetDetailMeasuresSection
+            mode={primaryMode}
+            open={activeMeasuresOpen()}
+            measureModeActive={activeMeasureMode()}
+            canAddMeasure={activeChartData.filter((point) => !point.missing).length >= 2}
+            ontoggle={() => setActiveMeasuresOpen(!activeMeasuresOpen())}
+            onaddmeasure={() => {
+                setActiveMeasuresOpen(true);
+                activeMeasurePanel()?.addMeasureFromChartData();
+            }}
+        >
             <div class={primaryMode === 'price' && showMeasures ? 'px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3' : 'hidden'} data-testid="asset-detail-measures-panel" aria-hidden={primaryMode !== 'price' || !showMeasures} inert={primaryMode !== 'price' || !showMeasures}>
                 <MeasurePanel
                     bind:this={measurePanel}
@@ -3053,7 +3006,7 @@
                     storageKeyPrefix="asset-calendar-measure-summary"
                 />
             </div>
-        </div>
+        </AssetDetailMeasuresSection>
 
         <!-- ======================================================================= -->
         <!-- Foldable Panel: Metadata & Classification -->
