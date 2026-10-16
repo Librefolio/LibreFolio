@@ -66,12 +66,12 @@ flowchart TB
 
 | Component | Responsibility |
 |---|---|
-| `signal_runtime.py` | Verify the locked `pandas-ta-classic` + TA-Lib stack at startup and reject silent fallback. |
-| `signal_plugins/base.py` | Define the plugin contract and build static catalog metadata. |
+| `signals/runtime.py` | Verify the locked `pandas-ta-classic` + TA-Lib stack at startup and reject silent fallback. |
+| `signals/base.py` | Define the plugin contract and build static catalog metadata. |
 | `signals/registry.py` | `SignalPluginRegistry`: validate definitions and reject duplicate codes. |
 | `provider_registry.py` | Discover plugin folders (shared by every plugin registry). |
-| `signal_service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
-| `signal_annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
+| `signals/service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
+| `signals/annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
 | AI Export runtime/components | Compose selected datasets, share request-scoped resources, and call the same `SignalService` for curated technical components. |
 
@@ -191,7 +191,7 @@ The chart Asset/FX adapter or AI Export domain assembler uses that plan to load 
 extended input range. For the plain price input, the warm-up in calendar days is
 `SignalExecutionPlan.max_history_days_before_visible`: the larger of the session
 warm-up times `SESSION_WARMUP_DAY_MULTIPLIER` and the calendar warm-up. The multiplier
-is 2 (`signal_series_preparation.py`): a year holds about 252 sessions in 365 days, and
+is 2 (`signals/series.py`): a year holds about 252 sessions in 365 days, and
 long holiday windows lower that further. The Asset price query, the FX endpoint, and
 the AI Export FX loader all size their load with it.
 
@@ -296,7 +296,7 @@ input, the sessions, so a period of N means N sessions, as the standard definiti
 count them: SMA 200 is 200 sessions, not 200 calendar days.
 
 A quote day is a point whose **price** was quoted on its own date: `backward_fill_info`
-is `None` or `days_back == 0` (`is_quote_day()` in `signal_series_preparation.py`). The
+is `None` or `days_back == 0` (`is_quote_day()` in `signals/series.py`). The
 exchange rate does not decide it: a quote converted with a rate carried from an earlier
 day is still a session of the instrument. On the Asset path, a stored weekend or
 market-holiday row that exactly repeats the previous close is marked as carried before
@@ -410,7 +410,7 @@ An error or a warning also tints the card red or amber; a notice leaves it plain
 ### 🚦 Enforced Status Matrix
 
 A plugin never sets the status itself. `compute()` returns a `SignalComputation`, or raises
-`SignalUnavailableError` (`backend/app/services/signal_plugins/base.py`) with an
+`SignalUnavailableError` (`backend/app/services/signals/base.py`) with an
 *unavailable* `reason_code`, such as `undefined_metric` or `insufficient_history`, when the
 result is mathematically undefined. The service then assigns the status of a computed result —
 `partial` when the warm-up is incomplete, partial coverage was used, or the availability
@@ -493,7 +493,7 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services.provider_registry import register_plugin
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.base import SignalPlugin
 from backend.app.services.signals.registry import SignalPluginRegistry
 
 

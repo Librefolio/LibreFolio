@@ -14,7 +14,6 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {CellContent} from './types';
     import {formatCellDate} from './dataTableLogic';
-    import '$lib/theme/components/table.css';
 
     let {cellContent}: {cellContent: CellContent} = $props();
 
@@ -227,7 +226,7 @@
         justify-content: center;
         overflow: hidden;
         border-radius: 0.25rem;
-        background: var(--lf-cmp-datatable-cell-image-bg);
+        background: var(--lf-surface-neutral);
         flex-shrink: 0;
         min-width: 0;
     }
@@ -245,19 +244,11 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: var(--lf-cmp-datatable-icon-text);
+        color: var(--lf-text-muted);
     }
 
     .cell-image :global(.hidden) {
         display: none !important;
-    }
-
-    :global(.dark) .cell-image {
-        background: var(--lf-cmp-datatable-cell-image-bg-dark);
-    }
-
-    :global(.dark) .cell-image .image-fallback {
-        color: var(--lf-cmp-datatable-icon-text-dark);
     }
 
     /* Cell content types */
@@ -281,11 +272,7 @@
         width: 32px;
         height: 32px;
         min-width: 32px;
-        color: var(--lf-cmp-datatable-icon-text);
-    }
-
-    :global(.dark) .cell-icon-box {
-        color: var(--lf-cmp-datatable-icon-text-dark);
+        color: var(--lf-text-muted);
     }
 
     .cell-icon-text span {
@@ -305,80 +292,51 @@
     }
 
     .cell-badge.default {
-        background: var(--lf-cmp-datatable-badge-default-bg);
-        color: var(--lf-cmp-datatable-badge-default-text);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-secondary);
     }
 
     .cell-badge.success {
-        background: var(--lf-cmp-datatable-badge-success-bg);
-        color: var(--lf-cmp-datatable-badge-success-text);
+        background: var(--lf-success-soft);
+        color: var(--lf-success-on-soft);
     }
 
     .cell-badge.warning {
-        background: var(--lf-cmp-datatable-badge-warning-bg);
-        color: var(--lf-cmp-datatable-badge-warning-text);
+        background: var(--lf-warning-soft);
+        color: var(--lf-warning-on-soft);
     }
 
     .cell-badge.error {
-        background: var(--lf-cmp-datatable-badge-error-bg);
-        color: var(--lf-cmp-datatable-badge-error-text);
+        background: var(--lf-danger-soft);
+        color: var(--lf-danger-on-soft);
     }
 
     .cell-badge.info {
-        background: var(--lf-cmp-datatable-badge-info-bg);
-        color: var(--lf-cmp-datatable-badge-info-text);
-    }
-
-    :global(.dark) .cell-badge.default {
-        background: var(--lf-cmp-datatable-badge-default-bg-dark);
-        color: var(--lf-cmp-datatable-badge-default-text-dark);
-    }
-
-    :global(.dark) .cell-badge.success {
-        background: var(--lf-cmp-datatable-badge-success-bg-dark);
-        color: var(--lf-cmp-datatable-badge-success-text-dark);
-    }
-
-    :global(.dark) .cell-badge.warning {
-        background: var(--lf-cmp-datatable-badge-warning-bg-dark);
-        color: var(--lf-cmp-datatable-badge-warning-text-dark);
-    }
-
-    :global(.dark) .cell-badge.error {
-        background: var(--lf-cmp-datatable-badge-error-bg-dark);
-        color: var(--lf-cmp-datatable-badge-error-text-dark);
-    }
-
-    :global(.dark) .cell-badge.info {
-        background: var(--lf-cmp-datatable-badge-info-bg-dark);
-        color: var(--lf-cmp-datatable-badge-info-text-dark);
+        background: var(--lf-info-soft);
+        color: var(--lf-info-on-soft);
     }
 
     /* Custom styled badge (e.g., broker colors) */
     .cell-badge.custom-style {
-        background: var(--broker-bg, var(--lf-cmp-datatable-badge-default-bg));
-        color: var(--broker-text, var(--lf-cmp-datatable-badge-default-text));
+        background: var(--broker-bg, var(--lf-surface-neutral));
+        color: var(--broker-text, var(--lf-text-secondary));
     }
 
     :global(.dark) .cell-badge.custom-style {
-        background: var(--broker-dark-bg, var(--lf-cmp-datatable-badge-default-bg-dark));
-        color: var(--broker-dark-text, var(--lf-cmp-datatable-badge-default-text-dark));
+        background: var(--broker-dark-bg, var(--lf-surface-neutral));
+        color: var(--broker-dark-text, var(--lf-text-secondary));
     }
 
     .cell-link {
         display: inline-flex;
         align-items: center;
         gap: 0.25rem;
-        color: var(--lf-cmp-datatable-accent-text);
+        color: var(--lf-link);
         text-decoration: none;
     }
 
     .cell-link:hover {
         text-decoration: underline;
-    }
-
-    :global(.dark) .cell-link {
-        color: var(--lf-cmp-datatable-accent-text-dark);
     }
 
     /* Editable number cell */
@@ -388,28 +346,17 @@
         padding: 0.25rem 0.375rem;
         font-size: 0.8125rem;
         font-family: ui-monospace, monospace;
-        border: 1px solid var(--lf-cmp-datatable-editable-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 4px;
-        background: var(--lf-cmp-datatable-surface-bg);
-        color: var(--lf-cmp-datatable-editable-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         outline: none;
         transition: border-color 0.15s;
     }
 
     .cell-editable-number:focus {
-        border-color: var(--lf-cmp-datatable-editable-focus-border);
-        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow);
-    }
-
-    :global(.dark) .cell-editable-number {
-        background: var(--lf-cmp-datatable-surface-bg-dark);
-        border-color: var(--lf-cmp-datatable-editable-border-dark);
-        color: var(--lf-cmp-datatable-editable-text-dark);
-    }
-
-    :global(.dark) .cell-editable-number:focus {
-        border-color: var(--lf-cmp-datatable-editable-focus-border-dark);
-        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow-dark);
+        border-color: var(--lf-focus);
+        box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-focus) 25%, transparent);
     }
 
     /* Editable text cell */
@@ -417,28 +364,22 @@
         width: 100%;
         padding: 0.25rem 0.375rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-datatable-editable-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 4px;
-        background: var(--lf-cmp-datatable-surface-bg);
-        color: var(--lf-cmp-datatable-editable-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         outline: none;
         transition: border-color 0.15s;
     }
 
     .cell-editable-text:focus {
-        border-color: var(--lf-cmp-datatable-editable-focus-border);
-        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow);
+        border-color: var(--lf-focus);
+        box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-focus) 25%, transparent);
     }
 
-    :global(.dark) .cell-editable-text {
-        background: var(--lf-cmp-datatable-surface-bg-dark);
-        border-color: var(--lf-cmp-datatable-editable-border-dark);
-        color: var(--lf-cmp-datatable-editable-text-dark);
-    }
-
-    :global(.dark) .cell-editable-text:focus {
-        border-color: var(--lf-cmp-datatable-editable-focus-border-dark);
-        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow-dark);
+    .cell-editable-number::placeholder,
+    .cell-editable-text::placeholder {
+        color: var(--lf-text-placeholder);
     }
 
     /* Editable select cell (SimpleSelect wrapper) */

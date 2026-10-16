@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Type
 
 from backend.app.services.provider_registry import AbstractPluginRegistry
-from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.base import SignalPlugin
 
 
 class SignalPluginRegistry(AbstractPluginRegistry):

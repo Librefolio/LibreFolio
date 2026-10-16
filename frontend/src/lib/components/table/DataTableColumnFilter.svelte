@@ -26,7 +26,6 @@
 
     import {numericArrows} from '$lib/actions/numericArrows';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import '$lib/theme/components/table.css';
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
 
@@ -1121,18 +1120,13 @@
         margin-top: 0.25rem;
         min-width: 240px;
         box-sizing: border-box;
-        background: var(--lf-cmp-datatable-filter-surface-bg);
-        border: 1px solid var(--lf-cmp-datatable-filter-border);
+        background: var(--lf-surface-card);
+        border: 1px solid var(--lf-border-raised);
         border-radius: 8px;
         box-shadow:
-            0 10px 15px -3px var(--lf-cmp-datatable-filter-shadow),
-            0 4px 6px -4px var(--lf-cmp-datatable-filter-shadow);
+            0 10px 15px -3px var(--lf-shadow-raised),
+            0 4px 6px -4px var(--lf-shadow-raised);
         z-index: 9999;
-    }
-
-    :global(.dark) .filter-popover {
-        background: var(--lf-cmp-datatable-filter-surface-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-border-dark);
     }
 
     .filter-header {
@@ -1140,22 +1134,14 @@
         justify-content: space-between;
         align-items: center;
         padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid var(--lf-cmp-datatable-filter-border);
-    }
-
-    :global(.dark) .filter-header {
-        border-bottom-color: var(--lf-cmp-datatable-filter-border-dark);
+        border-bottom: 1px solid var(--lf-border-subtle);
     }
 
     .filter-title {
         font-size: 0.75rem;
         font-weight: 600;
-        color: var(--lf-cmp-datatable-filter-muted-text);
+        color: var(--lf-text-muted);
         text-transform: uppercase;
-    }
-
-    :global(.dark) .filter-title {
-        color: var(--lf-cmp-datatable-filter-muted-text-dark);
     }
 
     .reset-btn {
@@ -1167,19 +1153,14 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: var(--lf-cmp-datatable-filter-btn-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .reset-btn:hover {
-        background: var(--lf-cmp-datatable-filter-hover-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
-    }
-
-    :global(.dark) .reset-btn:hover {
-        background: var(--lf-cmp-datatable-filter-hover-bg-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     .filter-body {
@@ -1197,7 +1178,7 @@
     .search-input-wrapper :global(.search-icon) {
         position: absolute;
         left: 0.5rem;
-        color: var(--lf-cmp-datatable-filter-faint-text);
+        color: var(--lf-text-muted);
         pointer-events: none;
     }
 
@@ -1205,25 +1186,19 @@
         width: 100%;
         padding: 0.375rem 1.75rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-filter-field-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
-    }
-
-    :global(.dark) .filter-input {
-        background: var(--lf-cmp-datatable-filter-field-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
     }
 
     .filter-input:focus {
         outline: none;
-        border-color: var(--lf-cmp-datatable-filter-accent-border);
+        border-color: var(--lf-focus);
     }
 
-    :global(.dark) .filter-input:focus {
-        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
+    .filter-input::placeholder {
+        color: var(--lf-text-placeholder);
     }
 
     .clear-input-btn {
@@ -1236,41 +1211,25 @@
         height: 18px;
         border: none;
         border-radius: 50%;
-        background: var(--lf-cmp-datatable-filter-clear-btn-bg);
-        color: var(--lf-cmp-datatable-filter-muted-text);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-muted);
         cursor: pointer;
     }
 
     .clear-input-btn:hover {
-        background: var(--lf-cmp-datatable-filter-clear-btn-hover-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
-    }
-
-    :global(.dark) .clear-input-btn {
-        background: var(--lf-cmp-datatable-filter-clear-btn-bg-dark);
-        color: var(--lf-cmp-datatable-filter-muted-text-dark);
-    }
-
-    :global(.dark) .clear-input-btn:hover {
-        background: var(--lf-cmp-datatable-filter-clear-btn-hover-bg-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
 
     .match-mode-select {
         width: 100%;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-filter-field-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         cursor: pointer;
-    }
-
-    :global(.dark) .match-mode-select {
-        background: var(--lf-cmp-datatable-filter-field-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     /* Number/Date filter */
@@ -1290,36 +1249,22 @@
     .range-label {
         min-width: 35px;
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-filter-muted-text);
-    }
-
-    :global(.dark) .range-label {
-        color: var(--lf-cmp-datatable-filter-muted-text-dark);
+        color: var(--lf-text-muted);
     }
 
     .range-input {
         flex: 1;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-filter-field-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
-    }
-
-    :global(.dark) .range-input {
-        background: var(--lf-cmp-datatable-filter-field-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
     }
 
     .range-input:focus {
         outline: none;
-        border-color: var(--lf-cmp-datatable-filter-accent-border);
-    }
-
-    :global(.dark) .range-input:focus {
-        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
+        border-color: var(--lf-focus);
     }
 
     /* Size filter */
@@ -1338,11 +1283,7 @@
     .size-label {
         min-width: 30px;
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-filter-muted-text);
-    }
-
-    :global(.dark) .size-label {
-        color: var(--lf-cmp-datatable-filter-muted-text-dark);
+        color: var(--lf-text-muted);
     }
 
     .size-input-group {
@@ -1356,43 +1297,27 @@
         min-width: 60px;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 6px 0 0 6px;
-        background: var(--lf-cmp-datatable-filter-field-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
-    }
-
-    :global(.dark) .size-input {
-        background: var(--lf-cmp-datatable-filter-field-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
     }
 
     .size-input:focus {
         outline: none;
-        border-color: var(--lf-cmp-datatable-filter-accent-border);
-    }
-
-    :global(.dark) .size-input:focus {
-        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
+        border-color: var(--lf-focus);
     }
 
     .size-unit-select {
         width: 55px;
         padding: 0.375rem 0.25rem;
         font-size: 0.75rem;
-        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
+        border: 1px solid var(--lf-border-input);
         border-left: none;
         border-radius: 0 6px 6px 0;
-        background: var(--lf-cmp-datatable-filter-size-unit-select-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-primary);
         cursor: pointer;
-    }
-
-    :global(.dark) .size-unit-select {
-        background: var(--lf-cmp-datatable-filter-size-unit-select-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     /* Dual range slider */
@@ -1408,26 +1333,18 @@
         left: 0;
         right: 0;
         height: 4px;
-        background: var(--lf-cmp-datatable-filter-slider-track-bg);
+        background: var(--lf-surface-neutral);
         border-radius: 2px;
         transform: translateY(-50%);
         overflow: visible;
-    }
-
-    :global(.dark) .size-slider-track {
-        background: var(--lf-cmp-datatable-filter-slider-track-bg-dark);
     }
 
     .size-slider-range {
         position: absolute;
         top: 0;
         bottom: 0;
-        background: var(--lf-cmp-datatable-filter-accent-bg);
+        background: var(--lf-checked);
         border-radius: 2px;
-    }
-
-    :global(.dark) .size-slider-range {
-        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
     }
 
     .slider-tick {
@@ -1435,14 +1352,10 @@
         top: -4px;
         width: 2px;
         height: 12px;
-        background: var(--lf-cmp-datatable-filter-slider-tick-bg);
+        background: var(--lf-text-muted);
         transform: translateX(-50%);
         z-index: 1;
         border-radius: 1px;
-    }
-
-    :global(.dark) .slider-tick {
-        background: var(--lf-cmp-datatable-filter-slider-tick-bg-dark);
     }
 
     .size-slider {
@@ -1462,40 +1375,30 @@
         appearance: none;
         width: 16px;
         height: 16px;
-        background: var(--lf-cmp-datatable-filter-accent-bg);
-        border: 2px solid var(--lf-cmp-datatable-filter-slider-thumb-border);
+        background: var(--lf-checked);
+        border: 2px solid var(--lf-surface-card);
         border-radius: 50%;
         cursor: pointer;
         pointer-events: auto;
-        box-shadow: 0 1px 3px var(--lf-cmp-datatable-filter-slider-thumb-shadow);
-    }
-
-    :global(.dark) .size-slider::-webkit-slider-thumb {
-        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-slider-thumb-border-dark);
+        box-shadow: 0 1px 3px var(--lf-shadow-raised);
     }
 
     .size-slider::-moz-range-thumb {
         width: 16px;
         height: 16px;
-        background: var(--lf-cmp-datatable-filter-accent-bg);
-        border: 2px solid var(--lf-cmp-datatable-filter-slider-thumb-border);
+        background: var(--lf-checked);
+        border: 2px solid var(--lf-surface-card);
         border-radius: 50%;
         cursor: pointer;
         pointer-events: auto;
-        box-shadow: 0 1px 3px var(--lf-cmp-datatable-filter-slider-thumb-shadow);
-    }
-
-    :global(.dark) .size-slider::-moz-range-thumb {
-        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-slider-thumb-border-dark);
+        box-shadow: 0 1px 3px var(--lf-shadow-raised);
     }
 
     .size-slider-labels {
         display: flex;
         justify-content: space-between;
         font-size: 0.5625rem;
-        color: var(--lf-cmp-datatable-filter-faint-text);
+        color: var(--lf-text-muted);
         margin-top: 0.25rem;
     }
 
@@ -1514,39 +1417,24 @@
         flex: 1;
         padding: 0.25rem 0.5rem;
         font-size: 0.6875rem;
-        border: 1px solid var(--lf-cmp-datatable-filter-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 4px;
-        background: var(--lf-cmp-datatable-filter-enum-action-btn-bg);
-        color: var(--lf-cmp-datatable-filter-muted-text);
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .enum-action-btn:hover {
-        background: var(--lf-cmp-datatable-filter-enum-action-btn-hover-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
-    }
-
-    :global(.dark) .enum-action-btn {
-        background: var(--lf-cmp-datatable-filter-enum-action-btn-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-border-dark);
-        color: var(--lf-cmp-datatable-filter-muted-text-dark);
-    }
-
-    :global(.dark) .enum-action-btn:hover {
-        background: var(--lf-cmp-datatable-filter-enum-action-btn-hover-bg-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
 
     .enum-list {
         max-height: 180px;
         overflow-y: auto;
-        border: 1px solid var(--lf-cmp-datatable-filter-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 6px;
-    }
-
-    :global(.dark) .enum-list {
-        border-color: var(--lf-cmp-datatable-filter-border-dark);
     }
 
     .enum-option {
@@ -1557,7 +1445,7 @@
         padding: 0.375rem 0.5rem;
         border: none;
         background: transparent;
-        color: var(--lf-cmp-datatable-filter-enum-option-text);
+        color: var(--lf-text-secondary);
         font-size: 0.8125rem;
         text-align: left;
         cursor: pointer;
@@ -1565,15 +1453,7 @@
     }
 
     .enum-option:hover {
-        background: var(--lf-cmp-datatable-filter-enum-option-hover-bg);
-    }
-
-    :global(.dark) .enum-option {
-        color: var(--lf-cmp-datatable-filter-enum-option-text-dark);
-    }
-
-    :global(.dark) .enum-option:hover {
-        background: var(--lf-cmp-datatable-filter-enum-option-hover-bg-dark);
+        background: var(--lf-surface-hover);
     }
 
     .enum-checkbox {
@@ -1582,33 +1462,22 @@
         justify-content: center;
         width: 16px;
         height: 16px;
-        border: 1px solid var(--lf-cmp-datatable-filter-enum-checkbox-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 3px;
-        background: var(--lf-cmp-datatable-filter-field-bg);
+        background: var(--lf-surface-field);
         transition: all 0.15s;
     }
 
     .enum-checkbox.checked {
-        background: var(--lf-cmp-datatable-filter-accent-bg);
-        border-color: var(--lf-cmp-datatable-filter-accent-border);
-        color: var(--lf-cmp-datatable-filter-on-accent-text);
-    }
-
-    :global(.dark) .enum-checkbox {
-        background: var(--lf-cmp-datatable-filter-field-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-enum-checkbox-border-dark);
-    }
-
-    :global(.dark) .enum-checkbox.checked {
-        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
-        color: var(--lf-cmp-datatable-filter-on-accent-text-dark);
+        background: var(--lf-checked);
+        border-color: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     .enum-empty {
         padding: 0.5rem;
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-filter-faint-text);
+        color: var(--lf-text-muted);
         text-align: center;
         max-width: 200px;
         margin: 0 auto;
@@ -1663,29 +1532,20 @@
         height: 0.625rem;
         border-radius: 9999px;
         flex-shrink: 0;
-        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-filter-enum-option-dot-shadow);
-    }
-
-    :global(.dark) .enum-option-dot {
-        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-filter-enum-option-dot-shadow-dark);
+        box-shadow: 0 0 0 1px color-mix(in oklab, var(--lf-text-primary) 8%, transparent);
     }
 
     .enum-count {
         margin-left: auto;
         font-size: 0.6875rem;
         font-variant-numeric: tabular-nums;
-        color: var(--lf-cmp-datatable-filter-enum-count-text);
-        background: var(--lf-cmp-datatable-filter-enum-count-bg);
+        color: var(--lf-text-secondary);
+        background: var(--lf-surface-neutral);
         padding: 0 0.35rem;
         border-radius: 9999px;
         min-width: 1.25rem;
         text-align: center;
         line-height: 1.4;
-    }
-
-    :global(.dark) .enum-count {
-        color: var(--lf-cmp-datatable-filter-enum-count-text-dark);
-        background: var(--lf-cmp-datatable-filter-enum-count-bg-dark);
     }
 
     /* Currency-stack filter */
@@ -1701,7 +1561,7 @@
     }
     .currency-stack-empty {
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-filter-faint-text);
+        color: var(--lf-text-muted);
         text-align: center;
         padding: 0.5rem;
         max-width: 200px;
@@ -1724,35 +1584,28 @@
         align-items: center;
         gap: 0.4rem;
         padding: 0.3rem 0.5rem;
-        border: 1px solid var(--lf-cmp-datatable-filter-border);
+        border: 1px solid var(--lf-border-subtle);
         border-radius: 6px;
-        background: var(--lf-cmp-datatable-filter-currency-stack-row-bg);
+        background: var(--lf-surface-panel);
     }
-    :global(.dark) .currency-stack-row {
-        background: var(--lf-cmp-datatable-filter-currency-stack-row-bg-dark);
-        border-color: var(--lf-cmp-datatable-filter-border-dark);
-    }
+
     .currency-stack-code {
         font-weight: 600;
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-filter-currency-stack-code-text);
+        color: var(--lf-link);
     }
-    :global(.dark) .currency-stack-code {
-        color: var(--lf-cmp-datatable-filter-currency-stack-code-text-dark);
-    }
+
     .currency-stack-range {
         font-size: 0.75rem;
-        color: var(--lf-cmp-datatable-filter-currency-stack-range-text);
+        color: var(--lf-text-secondary);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         max-width: 120px;
     }
-    :global(.dark) .currency-stack-range {
-        color: var(--lf-cmp-datatable-filter-currency-stack-range-text-dark);
-    }
+
     .currency-stack-any {
-        color: var(--lf-cmp-datatable-filter-faint-text);
+        color: var(--lf-text-muted);
         font-style: italic;
     }
     .currency-stack-btn {
@@ -1764,36 +1617,27 @@
         border: 1px solid transparent;
         border-radius: 4px;
         background: transparent;
-        color: var(--lf-cmp-datatable-filter-btn-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
     .currency-stack-btn:hover {
-        background: var(--lf-cmp-datatable-filter-currency-stack-btn-hover-bg);
-        color: var(--lf-cmp-datatable-filter-strong-text);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
-    :global(.dark) .currency-stack-btn:hover {
-        background: var(--lf-cmp-datatable-filter-currency-stack-btn-hover-bg-dark);
-        color: var(--lf-cmp-datatable-filter-strong-text-dark);
-    }
+
     .currency-stack-btn.danger:hover {
-        background: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-bg);
-        color: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-text);
+        background: var(--lf-danger-soft);
+        color: var(--lf-danger-on-soft);
     }
-    :global(.dark) .currency-stack-btn.danger:hover {
-        background: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-bg-dark);
-        color: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-text-dark);
-    }
+
     .currency-stack-range-editor {
         grid-column: 1 / -1;
         margin-top: 0.4rem;
         padding-top: 0.4rem;
-        border-top: 1px dashed var(--lf-cmp-datatable-filter-border);
+        border-top: 1px dashed var(--lf-border-subtle);
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
-    }
-    :global(.dark) .currency-stack-range-editor {
-        border-top-color: var(--lf-cmp-datatable-filter-border-dark);
     }
 </style>
