@@ -3601,6 +3601,16 @@ il FE5c, quindi un commit separato.
    o da un file». Niente salto all'import wizard da dentro la modale.
 
 **Peso**: backend piccolo; frontend medio (ricerca, i18n, Vitest, E2E, galleria). C-66 dopo il lotto di T.
+
+**Risposte del coordinatore (16/10, 07:07)**:
+1. **`LIBREFOLIO_SUPPORT_URL`**:
+   - è di **H** (configurazione d'istanza, `GET /system/instance`, pagina dei provider di hosting), ma la **scrivo io**
+     nel CP13, sul modello di `LIBREFOLIO_BILLING_URL`;
+   - va in un modulo `config/` della piattaforma, non in `accounts.py`, con la riga in `.env.example` e nella doc dei
+     provider di hosting;
+   - `HelpMenu` la adotta più tardi, in un lotto a parte; il coordinatore avvisa H.
+2. **«Continua senza fonte»**: è una scelta di UX visibile, quindi va nella lista del mattino per il developer, con la
+   mia proposta. Se il CP13 parte prima della risposta, la costruisco così, marcata «Decisione notturna, da rivedere».
 - **Il secondo giro di test** (test-author, 06:05, scritti e non lanciati), 130 test:
   - `assetDetailFxPair.test.ts` 24, con ogni caso confrontato con una copia alla lettera delle righe di prima;
   - `assetDetailFxRequirements.test.ts` 78: ordine, slug canonici, ogni stato, salti dei pari, eventi con forme vere
@@ -3660,4 +3670,23 @@ FE5c-3 committed: `7c27785ae` + journal `89ef3e1e9`.
 >   - `front check` → 0/0;
 >   - `core-unit` → **178 file, 6367/6367**, cioè +1 file e +24 test, quelli del modulo.
 >   - Il wrapper ha aspettato che il carico scendesse da 113 a 55 prima di partire.
+>   - `git diff --check` pulito.
+
+FE5c-4 committed: `4c03a0e7b` + journal `3f220dbc5`.
+
+#### FE5c-5 · l'intestazione ✅ (2026-10-16, 07:07–07:11)
+
+> **Note implementazione**:
+> - `AssetDetailHeader.svelte` è rientrato da `/tmp/libreFolio_x_fe5c_hold/` e innestato con `splice.py 5 --apply`. La
+>   pagina passa da 3308 a 3247 righe.
+> - Prettier ha messo la chiamata su una riga sola, perché ci sta nei 300 caratteri.
+> - **Dagli import della pagina escono** `goBack`, `ArrowLeft`, `ExternalLink`, `AssetIcon`, `AssetBrowseNav`,
+>   `getAssetTypeIconUrl`, `LiveUpdatesStatus`, `overflowScrollTextClass` e `scrollOnOverflow`.
+> - **Restano nella pagina** `buildTransactionsFiltersUrl`, che calcola `transactionsHref`, e il tipo
+>   `ActivePollingState`, che tipizza `liveUpdatesState`.
+> - `use:guideAnchor={'asset.detail.header'}` resta sulla radice del componente.
+> - **`--split`**: la pagina scende da 258 a 230, e l'intestazione ne prende 28. La somma resta 258.
+> - **Prove**:
+>   - `front check` → 0/0;
+>   - `core-unit` → 178 file, 6367/6367;
 >   - `git diff --check` pulito.
