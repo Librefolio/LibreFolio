@@ -129,6 +129,7 @@
         "EMAIL_RECIPIENT_NOT_ALLOWED": "Un lien de réinitialisation part seulement vers l'adresse de son compte.",
         "EMAIL_RECIPIENT_INVALID": "Ce n'est pas une seule adresse e-mail valide.",
         "EMAIL_RATE_LIMITED": "La limite horaire d'e-mails est atteinte : réessayez dans {minutes} min.",
+        "RECIPIENT_REFUSED": "Le serveur SMTP a refusé l'adresse du destinataire.",
         "generic": "L'e-mail n'a pas pu être envoyé."
       }
     },
