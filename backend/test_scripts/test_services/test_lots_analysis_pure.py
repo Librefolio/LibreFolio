@@ -21,6 +21,7 @@ than by running the engine, so each test states exactly the one situation it is
 about and nothing else can drift into it.
 """
 
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -56,6 +57,7 @@ from backend.app.services.financial_math.lots.histories import (
     group_closures,
     group_fragments,
     known_cumulative_proceeds,
+    known_realized_pnl,
     lot_history_end_date,
 )
 from backend.app.services.financial_math.lots.prices import PriceHistoryLookup, opening_reference_price
@@ -153,8 +155,13 @@ def _closure(
     close_unit_price: Decimal = D("12"),
     realized_pnl: Decimal = D("80"),
     proceeds: Decimal = D("480"),
+    close_currency: str | None = None,
 ) -> LotClosure:
-    return LotClosure(
+    """A closure double; ``close_currency`` (CP-7a) is the currency of its close leg, None for the report currency.
+
+    It is set only when named, so a double in the report currency builds the same LotClosure as before CP-7a.
+    """
+    closure = LotClosure(
         lot_id=lot_id,
         transaction_id=transaction_id,
         quantity=quantity,
@@ -166,6 +173,7 @@ def _closure(
         realized_pnl=realized_pnl,
         proceeds=proceeds,
     )
+    return closure if close_currency is None else replace(closure, close_currency=close_currency)
 
 
 def _tx(
@@ -571,10 +579,14 @@ class TestCollectPerformanceFxNeeds:
         self._call(resolver, closures=[_closure(99)], lots_by_id={1: _lot(1, currency="USD")})
         assert resolver._needs == []
 
-    def test_a_long_sell_closure_needs_the_lot_currency_on_the_close_date(self):
+    def test_a_long_sell_closure_needs_its_currency_on_the_close_date_and_the_lots_on_its_opening_date(self):
+        """CP-7a: a USD lot sold in USD asks for USD on the sale's date (its proceeds) and on the lot's opening date (its cost).
+
+        Before CP-7a it asked for the lot's currency on the close date only: [("USD", 1 Feb)].
+        """
         resolver = _resolver("EUR")
-        self._call(resolver, closures=[_closure(1)], lots_by_id={1: _lot(1, currency="USD")})
-        assert resolver._needs == [("USD", date(2024, 2, 1))]
+        self._call(resolver, closures=[_closure(1, close_currency="USD")], lots_by_id={1: _lot(1, currency="USD")})
+        assert sorted(resolver._needs) == [("USD", date(2024, 1, 10)), ("USD", date(2024, 2, 1))]
 
 
 # --------------------------------------------------------------------------- #
@@ -1024,7 +1036,8 @@ class TestBuildPerformanceHistory:
         """B3a: a USD lot bought for 2000 USD at 0.5 (1000 EUR); 40 sold on the 12th for 960 USD, no USD rate that day.
 
         The cash that left on the 12th is unknown in EUR. The native fallback counted 960 USD as
-        960 EUR and reported an ROI of 1700% on the 12th.
+        960 EUR and reported an ROI of 1700% on the 12th. Since CP-7a the sale's proceeds convert from
+        its own currency (the closure's close_currency, USD), no longer from the lot's: the same here.
         """
         sell = _tx(2, tx_type=TransactionType.SELL, tx_date=date(2024, 1, 12), quantity=D("-40"), amount=D("960"), currency="USD")
         points = self._call(
@@ -1034,7 +1047,7 @@ class TestBuildPerformanceHistory:
                 transactions=[_tx(1, amount=D("-2000"), currency="USD"), sell],
                 fragments_by_lot={1: [_fragment(1, end_date=date(2024, 1, 12)), _fragment(1, fragment_id="frag-1b", quantity=D("60"), start_date=date(2024, 1, 12))]},
                 lots_by_id={1: _lot(1, currency="USD", original_cost=D("2000"), opening_unit_price=D("20"), open_quantity=D("60"))},
-                engine_result=_engine_result(closures=[_closure(1, transaction_id=2, quantity=D("40"), close_date=date(2024, 1, 12), proceeds=D("960"))]),
+                engine_result=_engine_result(closures=[_closure(1, transaction_id=2, quantity=D("40"), close_date=date(2024, 1, 12), proceeds=D("960"), close_currency="USD")]),
             ),
         )
 
@@ -1067,16 +1080,20 @@ class TestBuildLotSummaries:
         kwargs.update(overrides)
         return _svc()._build_lot_summaries(**kwargs)[0]
 
-    def test_a_short_lot_values_proceeds_minus_the_open_position(self):
-        """Shorting: the money came in first, and the open leg is a liability.
+    def test_a_short_lot_values_its_proceeds_less_its_buy_backs_and_its_open_position(self):
+        """Shorting: the money came in first, the buy-backs paid part of it out, and the open leg is a liability.
 
-        A SHORT lot reports cumulative_proceeds from the lot itself (the sale
-        happened at opening), not from its closures, which are the covers.
+        100 sold short at 15: 1500 of proceeds, the lot's own (the sale happened at opening). 40 bought back at 12: 480,
+        the cover's cost — its proceeds field, 900 here, is never read. 60 still open at 12: 720. Total value = pnl =
+        1500 − 480 − 720 = 300, i.e. 100 × (15 − 12). R10 (CP-7a). Before it the buy-back was never subtracted: total
+        value and pnl 1500 − 720 = 780. (The double used to keep its open quantity at 100 beside a cover of 40, which
+        that formula could not see.)
         """
-        lot = _lot(1, direction="SHORT", open_quantity=D("100"), original_cost=D("1000"), cumulative_proceeds=D("1500"))
-        row = self._call(lot=lot, closures_by_lot={1: [_closure(1, close_reason="BUY", proceeds=D("900"))]})
-        # open_value = 100 * 12 = 1200; proceeds = 1500 -> total 300, and pnl == total.
-        assert (row.open_value, row.total_value, row.pnl) == (D("1200"), D("300"), D("300"))
+        lot = _lot(1, direction="SHORT", opening_unit_price=D("15"), original_cost=D("1500"), open_quantity=D("60"), cumulative_proceeds=D("1500"))
+        cover = _closure(1, quantity=D("40"), close_reason="BUY", open_unit_price=D("15"), close_unit_price=D("12"), realized_pnl=D("120"), proceeds=D("900"))
+        row = self._call(lot=lot, closures_by_lot={1: [cover]})
+        # open_value = 60 * 12 = 720; 1500 of proceeds less 480 paid for the cover -> total 300, and pnl == total.
+        assert (row.open_value, row.total_value, row.pnl) == (D("720"), D("300"), D("300"))
 
     def test_a_lot_opened_at_zero_reports_no_relative_return(self):
         """A free grant has no reference price, so "x% versus entry" is undefined."""
@@ -1157,22 +1174,24 @@ class TestBuildLotSummaries:
 
     @staticmethod
     def _sold_twice() -> list[LotClosure]:
-        """40 of the 100 units sold in two halves, 20 on 20 Jan and 20 on 1 Feb: 240 of proceeds and 40 of gain each."""
+        """40 of the 100 units sold in two halves, in USD, 20 on 20 Jan and 20 on 1 Feb: 240 USD of proceeds and 40 of native gain each."""
         return [
-            _closure(1, transaction_id=500, quantity=D("20"), close_date=date(2024, 1, 20), realized_pnl=D("40"), proceeds=D("240")),
-            _closure(1, transaction_id=501, quantity=D("20"), close_date=date(2024, 2, 1), realized_pnl=D("40"), proceeds=D("240")),
+            _closure(1, transaction_id=500, quantity=D("20"), close_date=date(2024, 1, 20), realized_pnl=D("40"), proceeds=D("240"), close_currency="USD"),
+            _closure(1, transaction_id=501, quantity=D("20"), close_date=date(2024, 2, 1), realized_pnl=D("40"), proceeds=D("240"), close_currency="USD"),
         ]
 
     def test_with_every_rate_the_base_fields_are_the_converted_amounts(self):
         """B3b control: a USD lot whose opening and both sales have a USD rate (0.5, 0.5, 0.6).
 
-        The four base fields are what B3b keeps unchanged: the cost and unit price at the opening rate,
-        each sale at its own rate. 1000 × 0.5, 10 × 0.5, 40 × 0.5 + 40 × 0.6, 240 × 0.5 + 240 × 0.6.
+        The cost and unit price at the opening rate (1000 × 0.5, 10 × 0.5), the proceeds each at their sale's rate
+        (240 × 0.5 + 240 × 0.6). The realized P&L since CP-7a (decision 26): each sale's proceeds at its rate less the cost
+        of its 20 units at the opening rate, (120 − 100) + (144 − 100) = 64. Before CP-7a: 44 = 40 × 0.5 + 40 × 0.6, each
+        sale's native gain at the sale's rate.
         """
         rates = {("USD", date(2024, 1, 10)): D("0.5"), ("USD", date(2024, 1, 20)): D("0.5"), ("USD", date(2024, 2, 1)): D("0.6")}
         row = self._call(lot=_lot(1, currency="USD", open_quantity=D("60")), closures_by_lot={1: self._sold_twice()}, fx_resolver=_resolver("EUR", rates))
 
-        assert (row.original_cost, row.opening_unit_price, row.realized_pnl, row.cumulative_proceeds) == (D("500"), D("5"), D("44"), D("264"))
+        assert (row.original_cost, row.opening_unit_price, row.realized_pnl, row.cumulative_proceeds) == (D("500"), D("5"), D("64"), D("264"))
 
     def test_the_cost_of_a_lot_without_a_rate_at_its_opening_is_unknown(self):
         """B3b: a USD lot with no USD rate at its opening date, analysed in EUR.
@@ -1197,17 +1216,44 @@ class TestBuildLotSummaries:
         assert (row.realized_pnl, row.cumulative_proceeds) == (None, None)
 
     def test_the_proceeds_of_a_short_lot_without_a_rate_at_its_opening_are_unknown(self):
-        """B3b: a USD short that sold 1500 USD at its opening, a day without a USD rate; its cover (1 Feb) has one.
+        """B3b: a USD short that sold 1500 USD at its opening, a day without a USD rate; its cover (1 Feb, in USD) has one.
 
-        A short's proceeds arrived at its opening, so they are converted there: unknown, never 1500 "EUR"
-        as today. Its realized P&L only needs the cover's rate and stays known: -80 × 0.5.
+        A short's proceeds arrived at its opening, so they are converted there: unknown, never 1500 "EUR".
+        Its realized P&L is unknown too since CP-7a: the opening sale is one of its legs (40 × 10 at the opening
+        rate, less the cover's 40 × 12 at 0.5). Before CP-7a: −40 = −80 × 0.5, the cover's rate only.
         """
         lot = _lot(1, direction="SHORT", currency="USD", open_quantity=D("60"), cumulative_proceeds=D("1500"))
-        cover = _closure(1, quantity=D("40"), close_reason="BUY", realized_pnl=D("-80"), proceeds=D("0"))
+        cover = _closure(1, quantity=D("40"), close_reason="BUY", realized_pnl=D("-80"), proceeds=D("0"), close_currency="USD")
         row = self._call(lot=lot, closures_by_lot={1: [cover]}, fx_resolver=_resolver("EUR", {("USD", date(2024, 2, 1)): D("0.5")}))
 
-        assert row.realized_pnl == D("-40")
-        assert row.cumulative_proceeds is None
+        assert (row.realized_pnl, row.cumulative_proceeds) == (None, None)
+
+    # -- CP-7a, T-B6: a reference price that cannot be converted has no source -- #
+
+    @pytest.mark.parametrize(
+        ("lot_currency", "quote", "expected"),
+        [
+            pytest.param("USD", None, (None, None), id="its-own-price-in-USD-without-a-rate"),
+            pytest.param("EUR", ("9", "USD"), (None, None), id="a-quote-in-USD-without-a-rate"),
+            pytest.param("EUR", None, (D("10"), "exact"), id="GUARD-its-own-price-in-EUR"),
+        ],
+    )
+    def test_a_reference_price_without_a_rate_has_no_source(self, lot_currency, quote, expected):
+        """R8, T-B6: (reference_unit_price, reference_price_source) of the summary, no USD rate anywhere: no price, no source.
+
+        The return history already reads it so (histories.py, build_return_history). Before CP-7a the source stayed beside
+        the missing price: (None, "exact") for the lot's own USD price, (None, "fallback") for a quote in USD found on 8 Jan.
+        GUARD: a reference that converts keeps its source.
+        """
+        if quote is None:
+            lot, lookup = _lot(1, currency=lot_currency), PriceHistoryLookup([])
+        else:
+            lot = _lot(1, currency=lot_currency, reference_unit_price=D(quote[0]), reference_price_source="fallback")
+            lookup = PriceHistoryLookup([_price(date(2024, 1, 8), D(quote[0]), quote[1])])
+
+        row = self._call(lot=lot, price_lookup=lookup)
+
+        assert (row.reference_unit_price, row.reference_price_source) == expected
 
 
 # --------------------------------------------------------------------------- #
@@ -1271,16 +1317,22 @@ class TestBuildValueAndReturnHistory:
         last = next(point for point in points if point.date == date(2024, 1, 12))
         assert (last.open_value, last.proceeds, last.total_value, last.pnl) == (D("0"), D("1200"), D("1200"), D("200"))
 
-    def test_value_of_a_closed_short_lot_on_an_unpriced_day_uses_cumulative_proceeds(self):
-        """A covered short is worth the money it took in, whatever the market does next."""
+    def test_value_of_a_closed_short_lot_on_an_unpriced_day_is_its_proceeds_less_its_buy_backs(self):
+        """A covered short is worth the money it took in less what buying it back cost, whatever the market does next.
+
+        100 sold short for 1500 and all bought back at 12 on 10 Jan (1200, the cover's cost — its proceeds field, 900 here,
+        is never read): 300 on the unpriced 12th, total value and pnl alike. The proceeds field stays the opening sale's,
+        1500 (GUARD). R10 (CP-7a). Before it the buy-back was never subtracted: total value and pnl 1500. (The cover used to
+        be of 40 units only, on a lot closed whole.)
+        """
         lot = _lot(1, direction="SHORT", open_quantity=D("0"), cumulative_proceeds=D("1500"))
         points = self._value(
             lot=lot,
             fragments_by_lot={1: [_fragment(1, direction="SHORT", end_date=date(2024, 1, 10))]},
-            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 10), close_reason="BUY", proceeds=D("900"))]},
+            closures_by_lot={1: [_closure(1, quantity=D("100"), close_date=date(2024, 1, 10), close_reason="BUY", proceeds=D("900"))]},
         )
         last = next(point for point in points if point.date == date(2024, 1, 12))
-        assert (last.open_value, last.proceeds, last.total_value, last.pnl) == (D("0"), D("1500"), D("1500"), D("1500"))
+        assert (last.open_value, last.proceeds, last.total_value, last.pnl) == (D("0"), D("1500"), D("300"), D("300"))
 
     def test_return_of_a_closed_long_lot_on_an_unpriced_day_is_computed(self):
         lot = _lot(1, open_quantity=D("0"))
@@ -1293,14 +1345,22 @@ class TestBuildValueAndReturnHistory:
         assert last.total_return == D("0.2")
 
     def test_return_of_a_closed_short_lot_on_an_unpriced_day_is_computed(self):
-        lot = _lot(1, direction="SHORT", open_quantity=D("0"), cumulative_proceeds=D("1500"))
+        """A covered short's return is its P&L after its buy-backs over its notional, on an unpriced day too: 0.2.
+
+        100 sold short at 15 — a notional of 1500, its proceeds — and all bought back at 12 on 10 Jan, 1200: P&L 300, so
+        (1500 + 300) / 1500 − 1 = 0.2, the lot summary's total P&L / opening value (CP-7a: R10 subtracts the buy-back, and a
+        short's return reads against its notional). Before CP-7a: 0 = 1500 / 1500 − 1, a short read like a long — its
+        proceeds taken for its value, its buy-back never subtracted.
+        """
+        lot = _lot(1, direction="SHORT", opening_unit_price=D("15"), original_cost=D("1500"), open_quantity=D("0"), cumulative_proceeds=D("1500"))
+        cover = _closure(1, quantity=D("100"), close_date=date(2024, 1, 10), close_reason="BUY", open_unit_price=D("15"), close_unit_price=D("12"), realized_pnl=D("300"), proceeds=D("0"))
         points = self._returns(
             lot=lot,
-            fragments_by_lot={1: [_fragment(1, direction="SHORT", end_date=date(2024, 1, 10))]},
-            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 10), close_reason="BUY")]},
+            fragments_by_lot={1: [_fragment(1, direction="SHORT", unit_price=D("15"), end_date=date(2024, 1, 10))]},
+            closures_by_lot={1: [cover]},
         )
         last = next(point for point in points if point.date == date(2024, 1, 12))
-        assert last.total_return == D("0.5")
+        assert last.total_return == D("0.2")
 
     # -- market price missing, position still open --------------------------- #
 
@@ -1378,13 +1438,14 @@ class TestBuildValueAndReturnHistory:
 
         The 10th and the 11th are fully known (100 × 12 EUR against a cost of 500 EUR) and stay.
         From the sale on its proceeds are unknown in EUR, so there is no point -- the native
-        fallback added 960 USD to the EUR value.
+        fallback added 960 USD to the EUR value. Since CP-7a the proceeds convert from the sale's
+        own currency (close_currency, USD), no longer from the lot's: the same here.
         """
         days = _days(date(2024, 1, 10), 5)
         points = self._value(
             lot=_lot(1, currency="USD", open_quantity=D("60")),
             fragments_by_lot={1: [_fragment(1, end_date=date(2024, 1, 12)), _fragment(1, fragment_id="frag-1b", quantity=D("60"), start_date=date(2024, 1, 12))]},
-            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 12), quantity=D("40"), proceeds=D("960"))]},
+            closures_by_lot={1: [_closure(1, close_date=date(2024, 1, 12), quantity=D("40"), proceeds=D("960"), close_currency="USD")]},
             market_prices=dict.fromkeys(days, D("12")),
             history_dates=days,
             fx_resolver=_resolver("EUR", {("USD", date(2024, 1, 10)): D("0.5")}),
@@ -1716,9 +1777,9 @@ class TestParseTransferPairId:
 # Each docstring keeps the values its test read before CP-16; GUARD marks a test whose values CP-16 left as they were.
 
 
-def _engine_run(*transactions: Transaction) -> FifoEngineResult:
-    """The engine as the service runs it on these in-memory rows: report currency EUR, broker 1 without shorting."""
-    return run_fifo_lot_engine(list(transactions), {1: False}, target_currency="EUR")
+def _engine_run(*transactions: Transaction, shorting: bool = False) -> FifoEngineResult:
+    """The engine as the service runs it on these in-memory rows: report currency EUR, broker 1 without shorting unless asked."""
+    return run_fifo_lot_engine(list(transactions), {1: shorting}, target_currency="EUR")
 
 
 class TestHandoverAtCostPerformanceHistory:
@@ -1951,3 +2012,454 @@ class TestPricedAdjustmentInLotCurrency:
         )
 
         assert resolver._needs == [("USD", self._OPENED)]
+
+
+# =========================================================================== #
+# CP-7a — developer's decision 26 (D-J1, option B): each leg of a closure at its own date
+# =========================================================================== #
+#
+# Workstream J «Numeri e analisi», release 1.3. A FIFO lot's legs convert to the report currency each in its own currency
+# at its own date: the cost in the lot's currency at the lot's opening date (the purchase rate), the proceeds in the
+# closing transaction's currency (LotClosure.close_currency) at the close date (the sale rate). One conversion point,
+# lots/conversions.py convert_closure; need_closure_rates asks for both rates. So a fully closed lot keeps no market P&L,
+# its realized P&L is the Dashboard's, and a lot sold in another currency than it was bought in gets its proceeds in the
+# right one. Before CP-7a every reader converted every figure in the lot's currency at the close date — the cost
+# included — and the engine subtracted a sale's USD from a lot's EUR.
+#
+# The D-J1 example, R1: 1 unit bought at 100 USD on 2 Jan 2025 (USD→EUR 1.00), sold at 110 USD on 2 Jun 2025 (0.90).
+# Proceeds 110 × 0.90 = 99 EUR, cost 100 × 1.00 = 100 EUR: realized −1 and, the lot being closed, market 0 — where the
+# native gain of 10 USD at the sale's rate read +9 of realized P&L and −10 of market P&L.
+#
+# R10, in the same lot: a short lot's P&L — its total value — is its opening proceeds (at the opening rate) less the cost
+# of every buy-back to date (ConvertedClosure.cost, in the BUY's currency at its date) less its open value. Before it a
+# buy-back paid money out and nothing subtracted it.
+#
+# As in the CP-16 section, lots and closures come from the real engine (broker 1 allowing shorting, which only the short
+# books use): what changed is what the engine hands over (close_currency; no native realized P&L across two currencies)
+# and how the builders convert it. The two new names are read through the module while a test runs
+# (conversions_module.convert_closure, conversions_module.need_closure_rates), never imported at module level: before
+# CP-7a only the tests that call them fail, on the missing attribute, and the rest of the file still collects. Every
+# other test here fails before CP-7a on its values. Each docstring says what its test read before CP-7a; GUARD marks a
+# value CP-7a leaves as it was.
+
+_JAN_2 = date(2025, 1, 2)  # every book opens on 2 Jan 2025...
+_JUN_2 = date(2025, 6, 2)  # ...and closes, wholly or in part, on 2 Jun 2025
+_SEP_1 = date(2025, 9, 1)  # the reading day of the summaries
+_USD_1_THEN_090 = {("USD", _JAN_2): D("1.00"), ("USD", _JUN_2): D("0.90")}  # the D-J1 example's rates (R1, R2)
+_USD_110_THEN_090 = {("USD", _JAN_2): D("1.10"), ("USD", _JUN_2): D("0.90")}  # the USD short's
+_USD_090_ON_JUN_2 = {("USD", _JUN_2): D("0.90")}  # R3's: its lot is in EUR
+_CONVERTED_FIGURES = ("open_unit_price", "close_unit_price", "proceeds", "cost", "realized_pnl")
+
+
+def _cp7a_run(rows: list[Transaction]) -> FifoEngineResult:
+    """The engine on a CP-7a book: report currency EUR, broker 1 allowing shorting (only the short books sell what they do not hold)."""
+    return _engine_run(*rows, shorting=True)
+
+
+def _bought_on_jan_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 1: ``quantity`` bought at ``unit_price`` on 2 Jan."""
+    return _tx(1, tx_date=_JAN_2, quantity=D(quantity), amount=-D(quantity) * D(unit_price), currency=currency)
+
+
+def _sold_on_jun_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 2: ``quantity`` sold at ``unit_price`` on 2 Jun."""
+    return _tx(2, tx_type=TransactionType.SELL, tx_date=_JUN_2, quantity=-D(quantity), amount=D(quantity) * D(unit_price), currency=currency)
+
+
+def _shorted_on_jan_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 1: ``quantity`` sold short at ``unit_price`` on 2 Jan."""
+    return _tx(1, tx_type=TransactionType.SELL, tx_date=_JAN_2, quantity=-D(quantity), amount=D(quantity) * D(unit_price), currency=currency)
+
+
+def _bought_back_on_jun_2(quantity: str, unit_price: str, currency: str) -> Transaction:
+    """Transaction 2: ``quantity`` bought back at ``unit_price`` on 2 Jun."""
+    return _tx(2, tx_date=_JUN_2, quantity=D(quantity), amount=-D(quantity) * D(unit_price), currency=currency)
+
+
+def _r1() -> list[Transaction]:
+    """R1, the D-J1 example: 1 bought at 100 USD, sold at 110 USD."""
+    return [_bought_on_jan_2("1", "100", "USD"), _sold_on_jun_2("1", "110", "USD")]
+
+
+def _r2() -> list[Transaction]:
+    """R2: 10 bought at 100 USD, 4 of them sold at 110 USD."""
+    return [_bought_on_jan_2("10", "100", "USD"), _sold_on_jun_2("4", "110", "USD")]
+
+
+def _r3() -> list[Transaction]:
+    """R3: 1 bought at 100 EUR, sold at 110 USD — in another currency than it was bought in; the engine never asks which a broker trades in."""
+    return [_bought_on_jan_2("1", "100", "EUR"), _sold_on_jun_2("1", "110", "USD")]
+
+
+def _usd_short() -> list[Transaction]:
+    """A short in USD: 1 sold at 50 USD (USD→EUR 1.10 on 2 Jan), bought back at 40 USD (0.90 on 2 Jun)."""
+    return [_shorted_on_jan_2("1", "50", "USD"), _bought_back_on_jun_2("1", "40", "USD")]
+
+
+def _short_half_bought_back() -> list[Transaction]:
+    """R10: 10 sold short at 100 EUR, 5 of them bought back at 90 EUR."""
+    return [_shorted_on_jan_2("10", "100", "EUR"), _bought_back_on_jun_2("5", "90", "EUR")]
+
+
+def _short_bought_back_whole() -> list[Transaction]:
+    """R10: the same short bought back whole, 10 at 90 EUR."""
+    return [_shorted_on_jan_2("10", "100", "EUR"), _bought_back_on_jun_2("10", "90", "EUR")]
+
+
+def _gbp_lot_sold_in_usd() -> list[Transaction]:
+    """1 bought at 100 GBP, sold at 110 USD: each leg needs a rate of its own."""
+    return [_bought_on_jan_2("1", "100", "GBP"), _sold_on_jun_2("1", "110", "USD")]
+
+
+def _gbp_lot_handed_over_at_a_usd_cost() -> list[Transaction]:
+    """10 bought at 20 GBP; on 2 Jun an ADJUSTMENT −4 hands 4 over at 18 USD a unit (decision 47), its own currency None."""
+    handover = _tx(2, tx_type=TransactionType.ADJUSTMENT, tx_date=_JUN_2, quantity=D("-4"), amount=D("0"), currency=None, cost_basis_override=D("18"), cost_basis_currency="USD")
+    return [_bought_on_jan_2("10", "20", "GBP"), handover]
+
+
+def _lot_1_and_the_closure_of_transaction_2(result: FifoEngineResult) -> tuple[FifoLot, LotClosure]:
+    """Lot 1 — every book opens one — and the closure transaction 2 made of it, both found by their ids."""
+    closures = [closure for closure in result.closures if closure.lot_id == 1 and closure.transaction_id == 2]
+    assert len(closures) == 1, f"precondition: transaction 2 closes lot 1 once, got {result.closures}"
+    return result.get_lot(1), closures[0]
+
+
+def _converted(rows: list[Transaction], resolver: FxRateResolver) -> dict:
+    """``convert_closure`` (CP-7a, read through the module) of lot 1's closure by transaction 2, figure by figure."""
+    lot, closure = _lot_1_and_the_closure_of_transaction_2(_cp7a_run(rows))
+    converted = conversions_module.convert_closure(closure, lot, resolver)
+    return {name: getattr(converted, name) for name in _CONVERTED_FIGURES}
+
+
+def _summary_row(rows: list[Transaction], rates: dict, market_price: Decimal):
+    """Lot 1's summary row (``_build_lot_summaries``) in EUR, X quoted ``market_price`` EUR on 1 Sep, the reading day."""
+    result = _cp7a_run(rows)
+    summaries = _svc()._build_lot_summaries(
+        engine_result=result,
+        lots_by_id={lot.lot_id: lot for lot in result.lots},
+        selected_ids=[1],
+        fx_resolver=_resolver("EUR", rates),
+        market_prices={_SEP_1: market_price},
+        price_lookup=PriceHistoryLookup([]),
+        closures_by_lot=group_closures(result.closures),
+        income_by_lot={},
+        fees_by_lot={},
+        taxes_by_lot={},
+        estimated_mode=False,
+        quote_base_quantity=1,
+        analysis_end=_SEP_1,
+    )
+    return next(summary for summary in summaries if summary.lot_id == 1)
+
+
+def _needs_of_the_lot_analysis(analysis: LotAnalysisType, rows: list[Transaction]) -> set[tuple[str, date]]:
+    """What ``collect_fx_needs`` asks for lot 1, the window reduced to 1 Sep: no market day asks for 2 Jan or 2 Jun."""
+    result = _cp7a_run(rows)
+    resolver = _resolver("EUR")
+    collect_fx_needs(
+        fx_resolver=resolver,
+        analyses=[analysis],
+        lots_by_id={lot.lot_id: lot for lot in result.lots},
+        selected_ids=[1],
+        transactions=rows,
+        price_lookup=PriceHistoryLookup([]),
+        prices=[],
+        fragments=result.fragment_intervals,
+        events=result.classified_events,
+        closures=result.closures,
+        split_ratios_by_tx_id={},
+        actual_to=_SEP_1,
+        computed_from=_SEP_1,
+        asset_currency="EUR",
+    )
+    return set(resolver._needs)
+
+
+class TestConvertClosure:
+    """``convert_closure`` (lots/conversions.py), the one conversion point of a closure: each leg in its currency at its date."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, ("100", "99", "99", "100", "-1"), id="R1-the-D-J1-example"),
+            pytest.param(_r2, _USD_1_THEN_090, ("100", "99", "396", "400", "-4"), id="R2-four-of-ten-sold"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, ("100", "99", "99", "100", "-1"), id="R3-bought-in-EUR-sold-in-USD"),
+            pytest.param(_usd_short, _USD_110_THEN_090, ("55", "36", "0", "36", "19"), id="a-USD-short-bought-back"),
+        ],
+    )
+    def test_each_leg_converts_in_its_own_currency_at_its_own_date(self, book, rates, expected):
+        """(open price, close price, proceeds, cost, realized) in EUR: the lot's leg at its opening rate, the closing leg at the close's.
+
+        R1: 110 × 0.90 − 100 × 1.00 = −1. R2: 4 × 110 × 0.90 − 4 × 100 × 1.00 = 396 − 400 = −4. R3: 110 USD × 0.90 − 100 EUR = −1.
+        The short: its opening sale, 50 × 1.10 = 55, less its buy-back, 40 × 0.90 = 36, which is its cost: 19; a short's
+        closure has no proceeds. Before CP-7a: no convert_closure (AttributeError); the readers converted every figure in the
+        lot's currency at the close date — R1 open price 90, realized +9; R2 +36; R3 close price and proceeds 110, realized +10;
+        the short open price 45, realized +9.
+        """
+        assert _converted(book(), _resolver("EUR", rates)) == dict(zip(_CONVERTED_FIGURES, map(D, expected), strict=True))
+
+    def test_without_the_sales_rate_the_closing_leg_and_the_realized_pnl_are_unknown(self):
+        """R6: R1 without a USD rate on 2 Jun — close price, proceeds and realized None, never the native 110; USD/EUR on 2 Jun reported.
+
+        The lot's leg keeps its purchase rate: open price and cost 100. Before CP-7a: no convert_closure (AttributeError); the
+        readers already read this realized P&L as None, the sale's rate being the only one it needed.
+        """
+        resolver = _resolver("EUR", {("USD", _JAN_2): D("1.00")})
+
+        assert _converted(_r1(), resolver) == {"open_unit_price": D("100"), "close_unit_price": None, "proceeds": None, "cost": D("100"), "realized_pnl": None}
+        assert resolver.missing_pairs() == [WACMissingPairInfo(pair="USD/EUR", dates=[_JUN_2])]
+
+    def test_without_the_purchase_rate_the_lots_leg_and_the_realized_pnl_are_unknown(self):
+        """R6: R1 without a USD rate on 2 Jan — open price, cost and realized None; the proceeds, 99, stay known; USD/EUR on 2 Jan reported.
+
+        Before CP-7a: no convert_closure (AttributeError); the realized P&L read +9 without ever asking for the purchase rate.
+        """
+        resolver = _resolver("EUR", {("USD", _JUN_2): D("0.90")})
+
+        assert _converted(_r1(), resolver) == {"open_unit_price": None, "close_unit_price": D("99"), "proceeds": D("99"), "cost": None, "realized_pnl": None}
+        assert resolver.missing_pairs() == [WACMissingPairInfo(pair="USD/EUR", dates=[_JAN_2])]
+
+
+class TestTheLotsRealizedPnlAndProceeds:
+    """``known_realized_pnl`` and ``known_cumulative_proceeds`` (lots/histories.py): the lot summary's sums, through convert_closure."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, (D("-1"), D("99")), id="R1"),
+            pytest.param(_r2, _USD_1_THEN_090, (D("-4"), D("396")), id="R2"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, (D("-1"), D("99")), id="R3"),
+            pytest.param(_usd_short, _USD_110_THEN_090, (D("19"), D("55")), id="USD-short"),
+            pytest.param(_r1, {("USD", _JUN_2): D("0.90")}, (None, D("99")), id="R6-R1-without-the-purchase-rate"),
+            pytest.param(_r1, {("USD", _JAN_2): D("1.00")}, (None, None), id="GUARD-R6-R1-without-the-sales-rate"),
+        ],
+    )
+    def test_each_closure_counts_its_legs_at_their_own_dates(self, book, rates, expected):
+        """(known_realized_pnl, known_cumulative_proceeds) of lot 1, in EUR.
+
+        Before CP-7a: R1 (+9, 99), R2 (+36, 396), R3 (+10, 110 — the USD read as EUR), the USD short (+9, 55) and R1 without
+        the purchase rate (+9, 99): the realized P&L was the native gain at the sale's rate. GUARDs: the proceeds of R1, R2, the
+        short (its opening sale, 50 × 1.10) and R6, and R1 without the sale's rate, unknown before as after.
+        """
+        result = _cp7a_run(book())
+        lot = result.get_lot(1)
+        closures = [closure for closure in result.closures if closure.lot_id == 1]
+        resolver = _resolver("EUR", rates)
+
+        assert (known_realized_pnl(lot, closures, resolver), known_cumulative_proceeds(lot, closures, resolver)) == expected
+
+
+class TestTheLotSummaryOfASoldLot:
+    """``_build_lot_summaries``: market P&L = pnl − realized, the realized P&L now each leg at its own date."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, ("99", "-1", "-1", "0", "-1"), id="R1-closed"),
+            pytest.param(_r2, _USD_1_THEN_090, ("396", "80", "-4", "84", "80"), id="R2-partly-sold"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, ("99", "-1", "-1", "0", "-1"), id="R3-closed-sold-in-USD"),
+        ],
+    )
+    def test_the_split_between_realized_and_market_pnl(self, book, rates, expected):
+        """(cumulative proceeds, pnl, realized, market, total P&L) in EUR, X quoted 114 EUR on 1 Sep (120 USD at 0.95).
+
+        R1: closed, so market 0 and realized = pnl = 99 − 100 = −1. R2: 6 open worth 6 × 114 = 684, proceeds 396, cost 1000:
+        pnl 80, realized −4, market 84 = 6 × 114 − 6 × 100 × 1.00, the open part's gain at today's price. R3: 99 − 100 = −1.
+        Before CP-7a: R1 (99, −1, +9, −10, −1) and R2 (396, 80, +36, +44, 80) — the same total, split otherwise — and R3
+        (110, +10, +10, 0, +10), the sale's 110 USD read as euros.
+        """
+        row = _summary_row(book(), rates, D("114"))
+
+        assert (row.cumulative_proceeds, row.pnl, row.realized_pnl, row.market_pnl, row.total_pnl) == tuple(map(D, expected))
+
+
+class TestShortLotsSubtractTheirBuyBacks:
+    """R10 (CP-7a): a short lot's P&L — its total value — is its opening proceeds less every buy-back's cost to date less its open value.
+
+    Each buy-back costs its ConvertedClosure.cost: the BUY's price, in its currency at its date. Before R10 a short read its
+    opening proceeds less its open value only: what a buy-back paid out was never subtracted, so covering a short at the
+    market price added the price paid to its P&L.
+    """
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_short_half_bought_back, {}, ("450", "100", "100", "50", "50"), id="half-bought-back"),
+            pytest.param(_short_bought_back_whole, {}, ("0", "100", "100", "100", "0"), id="bought-back-whole"),
+            pytest.param(_usd_short, _USD_110_THEN_090, ("0", "19", "19", "19", "0"), id="a-USD-short-bought-back-whole"),
+        ],
+    )
+    def test_the_summary_subtracts_the_buy_backs(self, book, rates, expected):
+        """(open value, total value, pnl, realized, market) of the short in EUR, X quoted 90 EUR on 1 Sep.
+
+        Half bought back: 1000 − 5 × 90 paid − 5 × 90 still owed = 100; realized 5 × (100 − 90) = 50, market 50 on the 5 still
+        open. Whole: 1000 − 900 = 100, all of it realized, market 0. The USD short: 55 − 36 = 19, all realized, market 0 —
+        each leg at its own date. Before R10 (and CP-7a): (450, 550, 550, 50, 500), (0, 1000, 1000, 100, 900) and
+        (0, 55, 55, +9, 46).
+        """
+        row = _summary_row(book(), rates, D("90"))
+
+        assert (row.open_value, row.total_value, row.pnl, row.realized_pnl, row.market_pnl) == tuple(map(D, expected))
+
+    def test_a_buy_back_at_the_market_price_does_not_move_the_value_history(self):
+        """R10 on the value history of the half-bought-back short, X at 90 EUR from 1 to 3 Jun: (date, open value, total value, pnl).
+
+        At 90 the short is worth 10 × (100 − 90) = 100 before the buy-back and after it: buying 5 back at 90 on 2 Jun pays 450
+        out and removes 450 of liability. Before R10 the 450 paid out was never subtracted: 100 on 1 Jun (GUARD), then 550.
+        """
+        result = _cp7a_run(_short_half_bought_back())
+        days = _days(date(2025, 6, 1), 3)
+
+        points = build_value_history(
+            selected_ids=[1],
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            market_prices=dict.fromkeys(days, D("90")),
+            history_dates=days,
+            fx_resolver=_resolver("EUR"),
+            income_prefix_by_lot={},
+            fees_prefix_by_lot={},
+            taxes_prefix_by_lot={},
+            estimated_mode=False,
+            quote_base_quantity=1,
+        )
+
+        assert [(point.date, point.open_value, point.total_value, point.pnl) for point in points if point.lot_id == 1] == [
+            (date(2025, 6, 1), D("900"), D("100"), D("100")),
+            (date(2025, 6, 2), D("450"), D("100"), D("100")),
+            (date(2025, 6, 3), D("450"), D("100"), D("100")),
+        ]
+
+
+class TestTheClosureRowsOfTheLotHistory:
+    """``_build_closure_rows``: a closure row's open price at the lot's opening rate, its close price and proceeds at the close's."""
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected"),
+        [
+            pytest.param(_r1, _USD_1_THEN_090, (LotTimelineEventKind.SELL, D("100"), D("99"), D("-1"), D("99")), id="R1"),
+            pytest.param(_r3, _USD_090_ON_JUN_2, (LotTimelineEventKind.SELL, D("100"), D("99"), D("-1"), D("99")), id="R3-sold-in-USD"),
+            pytest.param(_usd_short, _USD_110_THEN_090, (LotTimelineEventKind.BUY, D("55"), D("36"), D("19"), D("0")), id="USD-short-bought-back"),
+        ],
+    )
+    def test_a_closure_row_converts_each_leg_at_its_own_date(self, book, rates, expected):
+        """(kind, open price, close price, realized, proceeds) of transaction 2's row, in EUR.
+
+        Before CP-7a every figure converted in the lot's currency at the close date: R1 (SELL, 90, 99, +9, 99), R3 (SELL, 100,
+        110, +10, 110), the USD short (BUY, 45, 36, +9, 0).
+        """
+        result = _cp7a_run(book())
+        rows = _svc()._build_closure_rows(result.closures, {1}, {lot.lot_id: lot for lot in result.lots}, _resolver("EUR", rates))
+
+        assert [(row.kind, row.open_unit_price, row.close_unit_price, row.realized_pnl, row.proceeds) for row in rows if row.transaction_id == 2] == [expected]
+
+
+class TestTheRatesAClosureNeeds:
+    """The rates a closure needs: its own currency at its close date, its lot's at the lot's opening — need_closure_rates."""
+
+    def test_need_closure_rates_asks_for_both_legs(self):
+        """need_closure_rates (CP-7a, read through the module) alone: R1 asks for USD on 2 Jan and on 2 Jun; R3, whose lot is in EUR, on 2 Jun only.
+
+        Before CP-7a: no need_closure_rates (AttributeError).
+        """
+        needs = {}
+        for name, book in (("R1", _r1), ("R3", _r3)):
+            lot, closure = _lot_1_and_the_closure_of_transaction_2(_cp7a_run(book()))
+            resolver = _resolver("EUR")
+            conversions_module.need_closure_rates(resolver, closure, lot)
+            needs[name] = sorted(resolver._needs)
+
+        assert needs == {"R1": [("USD", _JAN_2), ("USD", _JUN_2)], "R3": [("USD", _JUN_2)]}
+
+    @pytest.mark.parametrize("analysis", [LotAnalysisType.LOT_SUMMARY, LotAnalysisType.RETURN_HISTORY])
+    def test_the_lot_summary_asks_for_the_sales_currency_on_the_sales_date(self, analysis):
+        """collect_fx_needs for 1 bought in GBP and sold in USD, read from 1 Sep: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
+
+        The window starts after the sale, so no market day asks for 2 Jun: the closure must. Before CP-7a it asked for the lot's
+        GBP on 2 Jun instead, and the sale's USD was never loaded.
+        """
+        assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= _needs_of_the_lot_analysis(analysis, _gbp_lot_sold_in_usd())
+
+    @pytest.mark.parametrize("analysis", [LotAnalysisType.EVENT_HISTORY, LotAnalysisType.CUSTODY_HISTORY])
+    def test_the_lot_history_asks_for_a_handovers_cost_currency_on_its_date(self, analysis):
+        """collect_fx_needs for 10 bought in GBP, 4 handed over at 18 USD on 2 Jun: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
+
+        No row is in USD — the ADJUSTMENT's own currency is None — so only its closure can ask. Before CP-7a: ("GBP", 2 Jan) and
+        ("GBP", 2 Jun) only; the units left at their own GBP cost (CP-16's fallback) and USD was never asked for.
+        """
+        assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= _needs_of_the_lot_analysis(analysis, _gbp_lot_handed_over_at_a_usd_cost())
+
+    def test_the_performance_history_asks_for_the_sales_currency_on_the_sales_date(self):
+        """collect_performance_fx_needs for 1 bought in GBP and sold in USD: ("USD", 2 Jun) and ("GBP", 2 Jan) among the needs.
+
+        Before CP-7a: ("GBP", 2 Jan) for the BUY and ("GBP", 2 Jun) for the sale, whose 110 USD were then read as GBP.
+        """
+        rows = _gbp_lot_sold_in_usd()
+        result = _cp7a_run(rows)
+        resolver = _resolver("EUR")
+
+        collect_performance_fx_needs(
+            fx_resolver=resolver,
+            analyses=[LotAnalysisType.PERFORMANCE_HISTORY],
+            transactions=rows,
+            closures=result.closures,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            asset_currency="EUR",
+        )
+
+        assert {("USD", _JUN_2), ("GBP", _JAN_2)} <= set(resolver._needs)
+
+
+class TestTheCashFlowOfASale:
+    """``build_performance_history``: a SELL enters the cash flows at its proceeds, converted from its own currency at its date."""
+
+    _DAYS = _days(date(2025, 6, 1), 3)
+
+    @pytest.mark.parametrize(
+        ("book", "rates", "expected_sale_flow"),
+        [
+            pytest.param(_r3, _USD_090_ON_JUN_2, D("99"), id="R3-a-lot-bought-in-EUR-sold-in-USD"),
+            pytest.param(_r1, _USD_1_THEN_090, D("99"), id="GUARD-R1-a-USD-lot-sold-in-USD"),
+        ],
+    )
+    def test_a_sale_enters_the_cash_flows_at_its_converted_proceeds(self, monkeypatch, book, rates, expected_sale_flow):
+        """The flows, net by date: −100 for the purchase, carried onto 1 Jun (the first priced day), then the sale's 110 USD at 0.90 on 2 Jun.
+
+        Read where build_performance_history hands them on — calculate_simple_roi_series, as histories imports it. Before CP-7a
+        R3's sale entered at +110, its USD read as the lot's EUR; R1's at +99 (GUARD: lot and sale in USD).
+        """
+        received: list[list] = []
+        original = histories_module.calculate_simple_roi_series
+
+        def spy(nav_snapshots, cash_flows):
+            received.append(list(cash_flows))
+            return original(nav_snapshots, cash_flows)
+
+        monkeypatch.setattr(histories_module, "calculate_simple_roi_series", spy)
+        rows = book()
+        result = _cp7a_run(rows)
+        context = PerformanceSourceContext(
+            transactions=rows,
+            engine_result=result,
+            lots_by_id={lot.lot_id: lot for lot in result.lots},
+            fragments_by_lot=group_fragments(result.fragment_intervals),
+            closures_by_lot=group_closures(result.closures),
+            tx_by_id={row.id: row for row in rows},
+        )
+
+        build_performance_history(
+            scope_broker_ids=[1],
+            history_dates=self._DAYS,
+            market_prices=dict.fromkeys(self._DAYS, D("100")),
+            asset_currency="EUR",
+            fx_resolver=_resolver("EUR", rates),
+            context=context,
+            quote_base_quantity=1,
+        )
+
+        assert len(received) == 1, "precondition: the series is computed once, the purchase being a flow"
+        net_by_date: dict[date, Decimal] = {}
+        for flow in received[0]:
+            net_by_date[flow.date] = net_by_date.get(flow.date, D("0")) + flow.amount
+        assert net_by_date == {date(2025, 6, 1): D("-100"), _JUN_2: expected_sale_flow}

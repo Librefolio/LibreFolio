@@ -168,6 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flags in chart legends, labels, axes and tooltips are drawn with the app's flag font on every system; Windows showed two letters.
 - Chart tooltips show names, captions, currency codes and flags as plain text, so a name with HTML in it stays text.
 - API: a **Currency Exchange** whose two legs are on different brokers is refused (`pairBrokerMismatch`): the app always writes both legs on one broker, but the API accepted such a pair.
+- Lots in a foreign currency: realized P&L now converts the cost at the purchase rate and the proceeds at the sale rate, as the Dashboard does. A closed lot keeps no market P&L, and a lot sold in a currency other than the one it was bought in shows the right proceeds.
+- Short lots: P&L now subtracts the buy-backs, and the return reads against the amount sold (a short at break-even shows 0%, not −100%).
 
 #### 🔒 Security
 
