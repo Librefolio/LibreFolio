@@ -7,7 +7,7 @@
  * - CSV import modals for both prices and events
  * - Save/Cancel bar visibility
  * - CSV import with valid/invalid data
- * - Stale rows toggle
+ * - Stale rows toggle, on an asset of the test's own with a gap in its prices
  * - Event writes: a retyped event is updated in place, the events export imports
  *   back, a new row deleted before saving sends no delete
  *
@@ -17,7 +17,7 @@
  */
 
 import type {Route} from '@playwright/test';
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {TEST_USER} from '../fixtures/test-users';
@@ -25,10 +25,20 @@ import {waitForChart, waitForSettled} from '../fixtures/app-events';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {uniqueSuffix} from '../fixtures/unique';
 import {API_BASE, goToAssetsPage, navigateToAssetByName} from './assets-helpers';
+import {createOwnedAsset, deleteOwned, type Owned} from './asset-events-owned';
 
 test.describe('Asset Data Editor', () => {
+    /** What the running test created through the API (test 21's asset); deleted after it, whatever its outcome. */
+    let owned: Owned = {assetIds: [], brokerIds: []};
+
     test.beforeEach(async ({page}) => {
+        owned = {assetIds: [], brokerIds: []};
         await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        // A no-op for the tests that create nothing; the asset goes with its prices.
+        await deleteOwned(page, owned);
     });
 
     // ========================================================================
@@ -84,6 +94,31 @@ test.describe('Asset Data Editor', () => {
     // ========================================================================
     async function getCsvText(modal: import('@playwright/test').Locator) {
         return modal.locator('textarea').inputValue();
+    }
+
+    // ========================================================================
+    // Helper: Open the price editor of an asset of the test's own, on [start, end]
+    // ========================================================================
+    async function openOwnPricesEditor(page: Page, assetId: number, start: string, end: string): Promise<Locator> {
+        // A full page load: the range in the URL is read once, when the app starts.
+        await navigateTo(page, `/assets/${assetId}?start=${start}&end=${end}`);
+        // The editor is handed the prices the page loaded: it is only as ready as the page.
+        await waitForSettled(page.getByTestId('asset-detail-page'), 30_000);
+        const editButton = page.getByTestId('asset-detail-editdata-btn');
+        await expect(editButton).toBeVisible({timeout: 10_000});
+        await editButton.click();
+        const panel = page.getByTestId('asset-detail-editor-panel');
+        await expect(panel).toBeVisible();
+        await expect(panel.getByTestId('asset-editor-prices-tab')).toHaveAttribute('aria-selected', 'true');
+        return panel;
+    }
+
+    // ========================================================================
+    // Helper: The rows the price editor lists, by id (a price row is keyed by its date), sorted
+    // ========================================================================
+    async function priceRowIds(panel: Locator): Promise<string[]> {
+        const ids = await panel.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+        return ids.sort();
     }
 
     // ========================================================================
@@ -283,9 +318,13 @@ test.describe('Asset Data Editor', () => {
         // Missing close price (required), bad date, non-numeric close
         await textarea.fill('date;currency;close;open;high;low;volume\n2020-06-10;USD;;;;;\nnot-a-date;USD;100;;;;\n2020-06-11;USD;abc;;;;');
 
-        // Error indicators (✗) should be visible
-        const errorIndicators = modal.locator('[data-state="invalid"]');
-        await expect(errorIndicators.first()).toBeVisible();
+        // Each of the three data lines is marked ✗ in the gutter: a glyph and a state, no words.
+        // The status-bar badge carries data-state="invalid" too, so a row mark is told by its ✗.
+        const rowMarks = modal.locator('[data-state="invalid"]', {hasText: '✗'});
+        await expect(rowMarks).toHaveCount(3);
+        for (const mark of await rowMarks.all()) await expect(mark).toBeVisible();
+        // ...and the error badge is the one invalid mark without a ✗.
+        await expect(modal.locator('[data-state="invalid"]', {hasNotText: '✗'})).toBeVisible();
 
         // Import button should NOT show 3 valid rows (some are invalid)
         const importBtnAll = modal.locator('button', {hasText: /Import \(3\)/});
@@ -371,19 +410,43 @@ test.describe('Asset Data Editor', () => {
     });
 
     // ========================================================================
-    // Test 21: Stale toggle is visible when stale rows exist
+    // Test 21: Stale toggle is visible when stale rows exist — and only then
     // ========================================================================
     test('stale toggle is visible in toolbar', async ({page}) => {
-        await openDataEditor(page);
-        // The stale toggle (switch) should be visible if there are stale rows
-        const staleToggle = page.getByTestId('data-editor-stale-toggle');
-        // It may or may not be visible depending on data — check it doesn't crash
-        if (await staleToggle.isVisible({timeout: 3000}).catch(() => false)) {
-            await expect(staleToggle).toBeVisible();
-            // Toggle should contain the stale-row counter
-            const counter = staleToggle.getByTestId('data-editor-stale-count');
-            await expect(counter).toBeVisible();
-        }
+        // Two page loads: the range is read from the URL once, when the app starts.
+        test.setTimeout(60_000);
+        // An asset of this test's own, with closes on D and D+3 only. The price query answers one
+        // row per calendar day of the range: a day without a close after the first one carries the
+        // last close forward, with backward_fill_info.days_back = the days it reaches back, which
+        // the editor reads as the row's staleDays (days before the first close are skipped). So on
+        // [D, D+3] the rows are D, D+1 (1 day back), D+2 (2 days back) and D+3: two stale rows.
+        // Signals may load earlier days to warm up, but the answer is sliced back to the range.
+        const [d0, d1, d2, d3] = [daysAgoIso(20), daysAgoIso(19), daysAgoIso(18), daysAgoIso(17)];
+        const asset = await createOwnedAsset(page, owned, {
+            label: 'E2E stale rows',
+            closes: [
+                {date: d0, close: 10},
+                {date: d3, close: 11},
+            ],
+        });
+        // The page polls POST /assets/prices/current, which may ask live providers and write
+        // today's price into the shared database. Nothing here is about live prices.
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+
+        const panel = await openOwnPricesEditor(page, asset.id, d0, d3);
+        await expect.poll(() => priceRowIds(panel), {message: 'one editor row per calendar day of [D, D+3]', timeout: 10_000}).toEqual([d0, d1, d2, d3]);
+        const staleToggle = panel.getByTestId('data-editor-stale-toggle');
+        await expect(staleToggle).toBeVisible();
+        // The counter reads "⚠️ {staleCount}": the only number in it is the count, no words.
+        await expect(staleToggle.getByTestId('data-editor-stale-count')).toHaveText(/^\D*2\D*$/);
+
+        // The guard, same asset: on [D+3, D+3] the only row is a stored close, nothing is stale,
+        // and the toggle is not drawn. Its absence is read once the editor holds its row and its
+        // toolbar is drawn, so a slow editor cannot pass for one without stale rows.
+        const guard = await openOwnPricesEditor(page, asset.id, d3, d3);
+        await expect.poll(() => priceRowIds(guard), {message: 'the only editor row of [D+3, D+3]', timeout: 10_000}).toEqual([d3]);
+        await expect(guard.getByTestId('fx-data-import-btn')).toBeVisible();
+        await expect(guard.getByTestId('data-editor-stale-toggle')).toHaveCount(0);
     });
 
     // ========================================================================

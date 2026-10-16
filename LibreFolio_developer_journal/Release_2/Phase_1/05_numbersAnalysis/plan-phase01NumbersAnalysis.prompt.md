@@ -3256,3 +3256,42 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
     passed, 4 skipped**, 0 failed, più la consolidata verde. Il «❌ Provider metadata test failed» nel log è l'uscita
     rumorosa di `test_provider_metadata[MANUAL]`, che passa (già prima).
   - Porta 6185 libera. Slot liberato.
+- ✅ **Handoff finale di CP-10a** mandato (07:59), testo del CHANGELOG compreso.
+- **Aggiornamento di base 10** (coordinatore, ~08:00): giornale committato `2fb7b44af`; merge di `dev_release2`
+  `d7a74e5de` senza conflitti → **HEAD `30fe04581`**. I 6 file di test di CP-7a, già rimessi, restano sporchi e intatti.
+- ✅ **Prove mirate di CP-10a sulla revisione fusa** (08:02–08:16, `nice -n 10`, carico 32–48, senza CP-7a: i test
+  tolti di nuovo con `git apply -R`, `/tmp/libreFolio_j/cp10a/merged.sh`): `api sync` senza file tracciati cambiati;
+  `front check` 0 e 0; Vitest di store, renderer, mapper e aiuti 229/229; `core-unit` 176 file, 6 247 test;
+  `signal-plugin-matrix` 91, `financial-math` 405, `asset-signals` 30, `risk-all -k test_risk_signal_plugins` 45;
+  `api signal-catalogs` 5. Porta 6185 libera. CP-10a pronto a entrare.
+
+#### CP-7a — rossi rossi, poi la cura (16/10 08:00–)
+
+- ✅ **Rossi sul codice vecchio** (07:59–08:02, solo la patch dei test, `/tmp/libreFolio_j/cp7a/reds.sh red`):
+  `financial-math -k TestRealizedGain` 10 failed (AttributeError: `realized_gain` non c'è); `roi-fifo-utils` **17
+  failed**, 719 passed (`TestCloseCurrency` 9, `TestCurrencyOfTheHandover` 5, R7 parità, il realizzato 156 → 196, il
+  rendimento del corto); `lots-analysis-pure` **39 failed**, 123 passed (le classi nuove e i test esistenti allineati
+  al contratto); `broker -k …any_non_zero_cost` 3 passed (il perno, verde prima e dopo). In tutto **66 rossi**, ognuno
+  per la ragione dichiarata; il resto dei file verde.
+- ✅ **Cura rimessa** (08:16): patch dei test e del codice riapplicate sulla base nuova (`git apply --check` verde, stessi
+  sha256 del backup); 23 file.
+- ✅ **Verdi e cancelli** (08:19–08:29, `nice -n 10`, carico 29–49, `/tmp/libreFolio_j/cp7a/greens.sh`):
+  `services financial-math` 415; `services roi-fifo-utils` **736** (motore FIFO, CP-16, servizio dei lotti, servizio del
+  portafoglio, golden); `services lots-analysis-pure` **162**; `services broker` 73; `api portfolio` 51; `api brokers` 34;
+  `check-orphans` verde (nessun file nuovo); `mkdocs build` stretto verde (66,9 s); `check-links` verde. Porta libera.
+- **⚠️ Fuori pista**: ruff (I001) e black chiedevano di andare a capo nell'import di `histories` in
+  `lots_analysis_service.py`: con `known_buyback_cost` la riga passava i 300 caratteri. `black` sul file, poi ruff e
+  black puliti su 15 file; `lots-analysis-pure` di nuovo 162.
+- ✅ **AI Export** (08:33): nessun builder toccato, quindi nessuna versione. `services ai-export -k "components_asset or
+  portfolio_broker_financial or portfolio_broker_integration"` **302 passed**: le righe dei lotti di asset e broker si
+  costruiscono coi valori nuovi.
+- **Sonda reale non eseguibile nella corsia**: `ai_export_real_prompt_probe.py` lavora sugli utenti reali del developer
+  (`--user {alfy,marco}`) e sulle loro credenziali dall'ambiente; la corsia non ha né l'uno né l'altro, e le regole
+  vietano i dati di produzione. → J-26 nel backlog: la sonda mirata la fa il developer (un lotto USD chiuso in un Asset
+  e nel suo Broker: realizzato nuovo, non realizzato 0).
+- **Debito di traduzione di CP-7a** (`translate-validate`, 08:31): `fifo-engine/fifo-lot-analysis` (sezione nuova
+  `#lots-in-another-currency`, titoli spostati), `fifo-engine/index` (due link: `#lots-in-another-currency` e
+  `adjustment.md#outgoing-adjustments`), `instruments/transaction-types/adjustment` (la nota rovesciata) → J-25.
+- **Handoff FROZEN di CP-7a** mandato (16/10 08:37) su `30fe04581`: 25 file (23 di codice, test e doc, 2 di giornale).
+  Poi il coordinatore committa e aggiorna la base con `dev_release2` (`d5c3c3ae3`); `all-backend --workers 2` nello slot 2
+  alle 08:45, sulla HEAD nuova. J-26 (la sonda reale) nella lista del developer.

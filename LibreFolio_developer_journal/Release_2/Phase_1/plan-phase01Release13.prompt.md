@@ -160,8 +160,9 @@ che usa 6150–6154 e 6160). Piani in `Release_2/Phase_1/<NN_nome>/plan-phase01<
 | B | B - Backup e Docker | 6187 | `07_backupDocker/plan-phase01BackupDocker.prompt.md` | dopo il primo checkpoint di H (configurazione e segreti) |
 | E | E - Email | 6188 | `08_email/plan-phase01Email.prompt.md` | dopo il checkpoint di A con token e inviti |
 | Y | Y - Cruscotto e grafici | 6189 | `09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` | dopo il lotto B del programma colori |
+| MF | MF - Matematica finanziaria | 6190 | `11_financialMath/plan-phase01FinancialMath.prompt.md` | 16/10, dopo l'audit (decisione del developer su P21) |
 
-Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
+Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9; il 16/10 la decima, MF.
 
 ### H · Piattaforma
 
@@ -335,6 +336,19 @@ conversione dei colori sì** (W5 e W6 di T, §1):
   «chi parte prima» (§7);
 - gli spostamenti puri (FE2, FE3, FE7) si fondono con la conversione in qualunque ordine;
 - se al tag il riordino di Y non è finito, il resto passa dopo la 1.3.
+
+### MF · Matematica finanziaria
+
+Nasce il 16/10 dalla decisione del developer su P21: «verifica che tutta la matematica sia fattorizzata in
+`financial_math` e rivedi gli algoritmi troppo contorti». L'audit in sola lettura
+(`11_financialMath/audit-matematica-finanziaria-20261016.md`) ha trovato circa 15 duplicati che possono dare numeri
+diversi e propone 16 lotti (A–P). **Il developer li vuole tutti nella 1.3**, in un workstream dedicato accanto a J.
+- Il più grosso è A: il contributo per posizione (tabella Performance della Dashboard, pesi tecnici dell'AI Export)
+  letto dal motore invece che ricalcolato.
+- J il più contorto: `DailyStateBuilder.build`, con le regole dei pool scritte due volte.
+- Il lotto C prende da J i due difetti dei pesi segnalati da Y (`portfolio_service.py:852/856`).
+- La parte frontend del lotto P la consuma Y; MF prepara i campi del backend.
+- MF non tocca i file aperti di J finché i lotti di J non sono entrati.
 
 ## 5. Schede delle funzioni per il cloud
 

@@ -8,19 +8,23 @@ of 15/10, in ``backend/app/services/financial_math/fifo/engine.py``:
 
 1. A negative ADJUSTMENT with ``cost_basis_override`` (per unit, in ``cost_basis_currency``) hands its units
    over at that cost. READING (b): every consumed fragment closes at the override — the ROW's average cost,
-   not the fragment's own FIFO cost (``_handover_unit_price``) — so ``realized_pnl = q × (override − fragment
+   not the fragment's own FIFO cost (``_apply_adjustment_out``) — so ``realized_pnl = q × (override − fragment
    unit price)`` and ``proceeds = q × override``: the value handed over at cost counts as proceeds
    (``_close_position_piece``). That keeps the lot summary's ``pnl = open value + Σ proceeds − cost`` equal to
    the Dashboard's, which reads the same row as a capital distribution at the pool's average cost
    (``DailyStateBuilder._is_capital_adjustment``). With one lot readings (a) and (b) coincide (the decision's
    example); with several, only (b) keeps lots = Dashboard and a split pair neutral (pair test).
 2. Without an override the units leave at 0 — proceeds 0, realized −cost — as a quantity correction.
-3. Currency: the override applies to a fragment only when the override's currency equals the lot's. A lot
-   whose ``currency`` is None counts as the engine's ``target_currency`` (that is how the lots FX resolver
-   reads None); an override whose ``cost_basis_currency`` is None counts as the lot's currency. When they
-   differ (rare) the fragment leaves at its OWN FIFO cost — close price = fragment unit price, realized 0,
-   proceeds = q × that cost — never mixing currencies: a declared fallback until CP-7 (D-J1, decision 26)
-   closes a fragment in its own currency.
+3. Currency — CP-7a, developer's decision 26 (D-J1, option B): the override always applies, in its own
+   currency. Every consumed fragment closes at the override, and the closure carries the currency of that price
+   as ``close_currency``: ``cost_basis_currency``, or the lot's currency when it is None; without an override
+   (rule 2) the lot's currency. A lot whose ``currency`` is None counts as the engine's ``target_currency``
+   (that is how the lots FX resolver reads None). When the closure's currency differs from the lot's the
+   closure is mixed: the engine has no rates, so its native ``realized_pnl`` is None, and so are the lot's
+   ``realized_pnl`` and ``cumulative_proceeds`` from then on, while ``proceeds = q × override`` stay, native in
+   ``close_currency``. The lots analysis converts each leg at its own date (``lots/conversions.py``,
+   ``convert_closure``). Before CP-7a such a fragment left at its OWN FIFO cost — close price = fragment unit
+   price, realized 0, proceeds = q × that cost: CP-16's declared fallback, which CP-7a removed.
 4. J-9: a lot opened by a positive ADJUSTMENT whose price comes from ``cost_basis_override`` is in
    ``cost_basis_currency``; without an override it keeps the row's ``currency``.
 
@@ -28,7 +32,8 @@ Before CP-16 every negative ADJUSTMENT closed at price 0, with or without an ove
 proceeds: units leaving with a cost read as destroyed (realized −cost, proceeds 0) while the Dashboard read them
 as handed over at cost; and a priced ADJUSTMENT-in opened its lot in the row's ``currency``, often None. Each
 docstring keeps the values its test read then. GUARD (in a docstring or a parameter id) marks a test whose values
-CP-16 left as they were.
+CP-16 left as they were. CP-7a rewrote rule 3: the docstrings of ``TestCurrencyOfTheHandover`` say what each test
+read before it, when a closure had no ``close_currency``.
 """
 
 from datetime import date
@@ -174,25 +179,35 @@ def _lots_total(lots: list[FifoLot], price: Decimal) -> Decimal:
     return sum((lot.open_quantity * price + lot.cumulative_proceeds - lot.original_cost for lot in lots), D("0"))
 
 
-def _closure(close_reason: str, quantity: str, open_unit_price: str, close_unit_price: str, realized_pnl: str, proceeds: str) -> dict:
+def _close_currencies(result: FifoEngineResult, transaction_id: int) -> dict[int, str | None]:
+    """The currency each closure of one transaction carries, lot by lot: CP-7a's ``LotClosure.close_currency``."""
+    return {closure.lot_id: closure.close_currency for closure in result.closures if closure.transaction_id == transaction_id}
+
+
+def _money(value: str | None) -> Decimal | None:
+    """An expected amount; None where CP-7a leaves a native figure unknown, its two currencies having no rate in the engine."""
+    return None if value is None else D(value)
+
+
+def _closure(close_reason: str, quantity: str, open_unit_price: str, close_unit_price: str, realized_pnl: str | None, proceeds: str) -> dict:
     """An expected closure, in the shape of ``_closure_view``."""
     return {
         "close_reason": close_reason,
         "quantity": D(quantity),
         "open_unit_price": D(open_unit_price),
         "close_unit_price": D(close_unit_price),
-        "realized_pnl": D(realized_pnl),
+        "realized_pnl": _money(realized_pnl),
         "proceeds": D(proceeds),
     }
 
 
-def _lot(open_quantity: str, realized_quantity: str, realized_pnl: str, cumulative_proceeds: str) -> dict:
+def _lot(open_quantity: str, realized_quantity: str, realized_pnl: str | None, cumulative_proceeds: str | None) -> dict:
     """An expected lot, in the shape of ``_lot_view``."""
     return {
         "open_quantity": D(open_quantity),
         "realized_quantity": D(realized_quantity),
-        "realized_pnl": D(realized_pnl),
-        "cumulative_proceeds": D(cumulative_proceeds),
+        "realized_pnl": _money(realized_pnl),
+        "cumulative_proceeds": _money(cumulative_proceeds),
     }
 
 
@@ -383,18 +398,25 @@ class TestSplitPairInvariance:
 
 
 # --------------------------------------------------------------------------- #
-# Currency: the override applies to a fragment of the same currency only (fallback until CP-7)
+# Currency: the units leave at the override, in the override's currency (CP-7a)
 # --------------------------------------------------------------------------- #
 
 
 class TestCurrencyOfTheHandover:
-    def test_an_override_in_another_currency_leaves_the_fragment_at_its_own_cost(self):
-        """Rule 3, until CP-7: a lot bought in USD (10 at 20 USD) and an ADJUSTMENT −4 costed at 18 EUR, target EUR.
+    """Rule 3 since CP-7a (developer's decision 26, D-J1 option B): every fragment leaves at the override, in its currency.
 
-        Without a rate the engine cannot compare 18 EUR with a USD lot, so the 4 units leave at their own FIFO
-        cost: close price 20, realized 0, proceeds 80 (in the lot's USD) — and the 18 EUR appears nowhere in the
-        closure, never mixed with USD. CP-7 (D-J1, decision 26) will close the fragment in its own currency.
-        Before CP-16: close price 0, realized −80, proceeds 0.
+    The closure carries that currency as ``close_currency``; when it is not the lot's the closure is mixed and the engine
+    states no native realized P&L. Before CP-7a an override in another currency than the lot's left the fragment at its
+    own FIFO cost (CP-16's declared fallback) and no closure had a currency: each docstring says what its test read then.
+    """
+
+    def test_an_override_in_another_currency_hands_the_units_over_at_the_override_in_that_currency(self):
+        """10 bought at 20 USD, an ADJUSTMENT −4 costed at 18 EUR, report EUR: the 4 close at 18 in EUR, proceeds 72, no native realized P&L.
+
+        18 EUR less a 20 USD cost has no meaning in the engine, which has no rates: the closure's realized P&L is None, and
+        the lot's realized P&L and cumulative proceeds are None from then on. The lots analysis converts each leg at its own
+        date (convert_closure). Before CP-7a (CP-16's fallback): close price 20 — the fragment's own FIFO cost — realized 0,
+        proceeds 80 in the lot's USD, the 18 EUR nowhere; lot 1 realized 0, cumulative proceeds 80.
         """
         result = _run(
             [
@@ -403,23 +425,21 @@ class TestCurrencyOfTheHandover:
             ],
             target_currency="EUR",
         )
-        closures = _closures_by_lot(result, 2)
 
-        observed = {"closures of the ADJUSTMENT": closures, "lot 1": _lot_view(result.get_lot(1))}
+        observed = {"closures of the ADJUSTMENT": _closures_by_lot(result, 2), "lot 1": _lot_view(result.get_lot(1))}
 
         assert observed == {
-            "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "4", "20", "20", "0", "80")},
-            "lot 1": _lot("6", "4", "0", "80"),
+            "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "4", "20", "18", None, "72")},
+            "lot 1": _lot("6", "4", None, None),
         }
-        money = {value for name, value in closures[1].items() if name not in ("close_reason", "quantity")}
-        assert not money & {D("18"), D("72")}, f"the EUR override leaked into the USD closure: {closures[1]}"
+        assert _close_currencies(result, 2) == {1: "EUR"}
 
     def test_an_override_without_a_currency_counts_in_the_lots_currency(self):
-        """Rule 3: an override whose cost_basis_currency is None counts in the lot's currency (USD here), so it applies.
+        """An override whose cost_basis_currency is None counts in the lot's currency: 10 at 20 USD, −4 at 25, report EUR.
 
-        10 bought at 20 USD, an ADJUSTMENT −4 at 25 with no currency, target EUR: the 4 units close at 25 —
-        realized 4 × (25 − 20) = +20, proceeds 100. Reading the missing currency as the report's EUR instead would
-        leave them at their own 20 (realized 0, proceeds 80). Before CP-16: close price 0, realized −80, proceeds 0.
+        The 4 units close at 25 in USD, the lot's currency — one currency, so a native realized P&L: 4 × (25 − 20) = +20,
+        proceeds 100. Before CP-7a: the same values, and no close_currency. (Before CP-16: close price 0, realized −80,
+        proceeds 0.)
         """
         result = _run(
             [
@@ -435,23 +455,48 @@ class TestCurrencyOfTheHandover:
             "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "4", "20", "25", "20", "100")},
             "lot 1": _lot("6", "4", "20", "100"),
         }
+        assert _close_currencies(result, 2) == {1: "USD"}
+
+    def test_without_an_override_a_foreign_lot_hands_over_in_its_own_currency(self):
+        """Rule 2 on a lot in USD, report EUR: an ADJUSTMENT −4 without a cost closes at 0 in the lot's currency, USD — never mixed.
+
+        So its native realized P&L stays −80 and the lot's too, proceeds 0: GUARD values, as before CP-7a. Read in the row's
+        currency instead (None, the report's EUR) the zero-price correction would be mixed and lose its realized P&L.
+        Before CP-7a: the same values, and no close_currency.
+        """
+        result = _run(
+            [
+                _buy(1, "10", "20", on="2025-01-01", currency="USD"),
+                _adjustment(2, "-4", on="2025-01-03"),
+            ],
+            target_currency="EUR",
+        )
+
+        observed = {"closures of the ADJUSTMENT": _closures_by_lot(result, 2), "lot 1": _lot_view(result.get_lot(1))}
+
+        assert observed == {
+            "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "4", "20", "0", "-80", "0")},
+            "lot 1": _lot("6", "4", "-80", "0"),
+        }
+        assert _close_currencies(result, 2) == {1: "USD"}
 
     @pytest.mark.parametrize(
-        ("target_currency", "expected_close_price", "expected_realized", "expected_proceeds"),
+        ("target_currency", "expected_realized", "expected_lot_realized", "expected_lot_proceeds"),
         [
-            pytest.param("EUR", "10", "100", "100", id="report-EUR-equals-the-override-currency"),
-            pytest.param("USD", "0", "0", "0", id="GUARD-report-USD-differs-from-the-override-currency"),
+            pytest.param("EUR", "100", "100", "100", id="report-EUR-the-override-is-in-the-lots-currency"),
+            pytest.param("USD", None, None, None, id="report-USD-the-override-is-in-another-currency"),
         ],
     )
-    def test_a_lot_without_a_currency_counts_in_the_report_currency(self, target_currency, expected_close_price, expected_realized, expected_proceeds):
-        """Rule 3: a lot whose currency is None counts as the report currency, as the lots FX resolver reads it.
+    def test_a_lot_without_a_currency_counts_in_the_report_currency(self, target_currency, expected_realized, expected_lot_realized, expected_lot_proceeds):
+        """A lot whose currency is None counts as the report currency, as the lots FX resolver reads it.
 
         Lot 1: ADJUSTMENT +10 without a cost (currency None, unit price 0); lot 2: 10 bought at 20 EUR; then an
-        ADJUSTMENT −10 costed at 10 EUR (the Auto average of 0 and 20), which consumes lot 1 whole.
-        - Report EUR: lot 1 counts as EUR, the override's currency → it closes at 10: realized 10 × (10 − 0) = +100,
-          proceeds 100. Before CP-16: close price 0, realized 0, proceeds 0.
-        - Report USD: lot 1 counts as USD ≠ EUR → it leaves at its own cost, 0: realized 0, proceeds 0. GUARD: the
-          values of before CP-16, since that own cost is 0.
+        ADJUSTMENT −10 costed at 10 EUR (the Auto average of 0 and 20), which consumes lot 1 whole at the override:
+        close price 10 in EUR, proceeds 100, whatever the report currency.
+        - Report EUR: lot 1 counts as EUR, the override's currency — one currency: realized 10 × (10 − 0) = +100. The
+          values of before CP-7a, which had no close_currency.
+        - Report USD: lot 1 counts as USD ≠ EUR — mixed: no native realized P&L, and lot 1's realized P&L and cumulative
+          proceeds are None. Before CP-7a (CP-16's fallback): close price 0, its own cost, realized 0, proceeds 0.
         Lot 2 is untouched either way.
         """
         result = _run(
@@ -470,10 +515,11 @@ class TestCurrencyOfTheHandover:
         }
 
         assert observed == {
-            "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "10", "0", expected_close_price, expected_realized, expected_proceeds)},
-            "lot 1": _lot("0", "10", expected_realized, expected_proceeds),
+            "closures of the ADJUSTMENT": {1: _closure("ADJUSTMENT_OUT", "10", "0", "10", expected_realized, "100")},
+            "lot 1": _lot("0", "10", expected_lot_realized, expected_lot_proceeds),
             "lot 2": _lot("10", "0", "0", "0"),
         }
+        assert _close_currencies(result, 3) == {1: "EUR"}
 
 
 # --------------------------------------------------------------------------- #
