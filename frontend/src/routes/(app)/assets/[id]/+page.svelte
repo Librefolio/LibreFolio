@@ -20,7 +20,7 @@
     import {get} from 'svelte/store';
     import {axiosInstance, zodiosApi} from '$lib/api';
     import {goBack} from '$lib/stores/app/navigationStore';
-    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Info, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
+    import {ArrowLeft, ChartLine, ChevronDown, ExternalLink, Pencil, Percent, RefreshCw, RotateCw, Ruler, Settings, Shield, TrendingUp, X} from 'lucide-svelte';
     import AssetDataEditorSection from '$lib/components/assets/AssetDataEditorSection.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import PriceChartFull from '$lib/components/charts/PriceChartFull.svelte';
@@ -29,12 +29,11 @@
     import ChartSignalsSection from '$lib/components/charts/ChartSignalsSection.svelte';
     import type {SignalDataSummary} from '$lib/components/charts/ChartSignalsSection.svelte';
     import MeasurePanel from '$lib/components/charts/MeasurePanel.svelte';
-    import AllocationPieChart from '$lib/components/charts/AllocationPieChart.svelte';
-    import GeographyMap from '$lib/components/charts/GeographyMap.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
     import AssetBrowseNav from '$lib/components/assets/AssetBrowseNav.svelte';
     import AssetPriceSummary from '$lib/components/assets/AssetPriceSummary.svelte';
+    import AssetDetailMetadataPanel from '$lib/components/assets/detail/AssetDetailMetadataPanel.svelte';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -116,7 +115,6 @@
     import {buildTransactionsFiltersUrl} from '../../transactions/filterState';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
-    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -3250,119 +3248,22 @@
         <!-- Foldable Panel: Metadata & Classification -->
         <!-- ======================================================================= -->
         {#if assetInfo}
-            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
-                <button
-                    class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors rounded-xl"
-                    data-testid="asset-detail-metadata-toggle"
-                    use:guideAnchor={'asset.detail.metadata'}
-                    onclick={() => (showMetadata = !showMetadata)}
-                >
-                    <span class="flex items-center gap-2">
-                        <Info class="text-sky-500" size={15} />
-                        {$t('assetDetail.metadata')}
-                    </span>
-                    <ChevronDown class="transition-transform {showMetadata ? 'rotate-180' : ''}" size={15} />
-                </button>
-                {#if showMetadata}
-                    <div data-testid="asset-detail-metadata-panel" class="px-4 pb-4 border-t border-gray-100 dark:border-slate-700 pt-3 space-y-4">
-                        <!-- Description (from classification_params.short_description) — always first if set -->
-                        {#if shortDescription}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.description')}</h4>
-                                <p class="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{shortDescription}</p>
-                            </div>
-                        {/if}
-
-                        <!-- External URLs (provider URL only — user URL is in header) -->
-                        {#if providerExternalUrl}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('assets.provider.providerUrl')}</h4>
-                                <a href={providerExternalUrl} target="_blank" rel="noopener noreferrer" class="text-sm text-libre-green hover:underline break-all">{providerExternalUrl}</a>
-                            </div>
-                        {/if}
-
-                        <!-- Classification Charts -->
-                        {#if classificationLoaded && (sectorDistribution || geographicDistribution)}
-                            <div class="space-y-3">
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">{$t('common.classification')}</h4>
-
-                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    {#if geographicDistribution && Object.keys(geographicDistribution).length > 0}
-                                        <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                            <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.geoDistribution')}</h5>
-                                            <GeographyMap data={geographicDistribution} height="280px" language={$currentLanguage} />
-                                        </div>
-                                    {/if}
-
-                                    {#if sectorDistribution && Object.keys(sectorDistribution).length > 0}
-                                        <div class="bg-gray-50 dark:bg-slate-700/30 rounded-lg p-3">
-                                            <h5 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">{$t('common.sectorDistribution')}</h5>
-                                            <AllocationPieChart data={Object.entries(sectorDistribution).map(([name, w]) => ({name, value: w * 100, amount: 0}))} height="280px" />
-                                        </div>
-                                    {/if}
-                                </div>
-                            </div>
-                        {:else if !classificationLoaded}
-                            <div class="text-sm text-gray-500 dark:text-gray-400 italic">
-                                {$t('common.classification')} — {$t('common.loading')}...
-                            </div>
-                        {:else}
-                            <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noClassification')}</p>
-                        {/if}
-
-                        <!-- Identifiers -->
-                        {#if identifiersList.length > 0}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">{$t('common.identifiers')}</h4>
-                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                    {#each identifiersList as [label, value]}
-                                        <div class="bg-gray-50 dark:bg-slate-700/50 rounded-lg px-3 py-2">
-                                            <span class="text-[10px] uppercase text-gray-400 dark:text-gray-500">{label}</span>
-                                            <p class="text-sm font-mono text-gray-700 dark:text-gray-200">{value}</p>
-                                        </div>
-                                    {/each}
-                                </div>
-                            </div>
-                        {:else}
-                            <p class="text-sm text-gray-400 dark:text-gray-500">{$t('assetDetail.noIdentifiers')}</p>
-                        {/if}
-
-                        {#if providerAssignment}
-                            <div>
-                                <h4 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-2">Provider</h4>
-                                <div class="flex items-center gap-3 text-sm flex-wrap">
-                                    <span class="inline-flex items-center gap-1.5 font-medium text-gray-700 dark:text-gray-200">
-                                        {#if providerIconUrl}
-                                            <img src={providerIconUrl} alt="" class="w-4 h-4 rounded-sm object-contain" />
-                                        {/if}
-                                        {assignmentProviderName}
-                                    </span>
-                                    <span class="text-gray-400">→</span>
-                                    <span class="font-mono text-gray-500 dark:text-gray-400">{providerAssignment.identifier} ({providerAssignment.identifier_type})</span>
-                                    {#if providerAssignment.last_fetch_at}
-                                        <span class="text-xs text-gray-400 dark:text-gray-500">
-                                            {$t('assets.provider.lastFetch')}: {new Date(String(providerAssignment.last_fetch_at)).toLocaleDateString(uiLocale())}
-                                        </span>
-                                    {:else}
-                                        <span class="text-xs text-gray-400 dark:text-gray-500">{$t('assets.provider.neverFetched')}</span>
-                                    {/if}
-                                </div>
-                            </div>
-                        {/if}
-
-                        <button
-                            class="text-xs text-libre-green hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={!assetInfo}
-                            onclick={() => {
-                                editDataForModal = buildEditData();
-                                editModalOpen = true;
-                            }}
-                        >
-                            {$t('assetDetail.editViaModal')} →
-                        </button>
-                    </div>
-                {/if}
-            </div>
+            <AssetDetailMetadataPanel
+                bind:open={showMetadata}
+                {shortDescription}
+                {providerExternalUrl}
+                {classificationLoaded}
+                {sectorDistribution}
+                {geographicDistribution}
+                {identifiersList}
+                {providerAssignment}
+                {providerIconUrl}
+                {assignmentProviderName}
+                onedit={() => {
+                    editDataForModal = buildEditData();
+                    editModalOpen = true;
+                }}
+            />
         {/if}
     {:else if assetInfo && displayCurrency}
         <div data-testid="asset-detail-risk-panel">
