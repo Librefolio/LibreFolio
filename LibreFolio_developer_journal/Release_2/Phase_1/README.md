@@ -177,3 +177,12 @@ Sono tutti locali: la push la fa il developer.
 | 88 | 16/10 04:24 | Z: Z2b (sospensione dopo l'inattività su Fly: `idle_monitor`, `FlySuspender`, attesa crescente fino a 10 min; spento di default) | `812ca49cc` |
 | 89 | 16/10 04:42 | W: coda della notte per cherry-pick, senza la 47 (W-B37 cancellazione multipla dei report che salta i file bloccati; C-34 `escapeHtml` nel Bulk; W-B35 docstring dell'accesso; W-B12 MULTI-008d pulisce i suoi broker) | `8129f8176` |
 | 90 | 16/10 04:48 | A: A6c (decisione 37: regole della password in `password_policy.py`, classi Unicode, `PASSWORD_TOO_WEAK` su register/change/reset e CLI, `accounts.password_rules`; all-backend 0 rossi, E2E 129) | `3b3f6a1f0` |
+| 91 | 16/10 04:49 | X: CP11c (mascheramento N15 e campo personale N16, sonda senza URL col segreto, E2E `front-utility plugin-settings` 5/5, pagina `user/settings/plugins`, scatto `settings/plugins`) + escape del tooltip della sonda (ultimo LOW della revisione CP10–CP11) | `2f1d77a23` |
+| 92 | 16/10 04:52 | H: CP7b-2 (`PROFILE_DEFAULTS` del profilo gestito, `LIBREFOLIO_FRAME_PROTECTION` e `LIBREFOLIO_CSP_REPORT_ONLY`; all-backend 17 792/0) | `d8549c69a` |
+| 93 | 16/10 04:56 | Z: cura del rosso `services config-package` (1/693 da Z2b): `fly_machine_identity()` in `config/sleep_wake.py`, `suspend.py` senza `os.environ`; trovato da H | `3648a6155` |
+| 94 | 16/10 06:47 | X: X-R12 (eventi del fornitore datati oggi arrivano lo stesso giorno) + X-R13 (emoji morta dei settori nella pagina asset, primo pezzo di FE5c) | `92a0d4daf` |
+| 95 | 16/10 06:47 | W per cherry-pick: W-B41 (test multiutente puliscono i broker), W-B29 (E2E eventi con asset propri), W-B38 (messaggi delle regole impacchettate col tipo) | `5eb8e4103` `09e7d5a4e` `b89ddbba9` |
+| 96 | 16/10 06:54 | X per cherry-pick: K-16 (ETC/ETN di Borsa Italiana come `ETF_COMMODITY`) + O-9 (etichette dei parametri di justETF e css_scraper in 4 lingue) | `bfc0db8aa` |
+| 97 | 16/10 07:09 | Z: Z7c-2 (pannello dello scheduler: elementi rinviati ⏸, `retry_at`, riga di stato del nuovo tentativo; api scheduler 16, component-unit 4006) | `0dfc7cbbe` |
+| 98 | 16/10 07:27 | W per cherry-pick: W-B39 (split/promozione rifiutati con toast d'errore e i problemi tradotti; E2E `tx-split-refusal` 2/2) + W-B42 (scenari 3–4 di `asset-event-delete` con dati propri, 4/4) | `c881237a9` `9df17ef20` |
+| 99 | 16/10 07:43 | W per cherry-pick: W-B44 (test id unici in `PromoteMergeModal`; Vitest 4/4) | `df6e2df10` |

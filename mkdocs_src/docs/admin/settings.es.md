@@ -103,6 +103,9 @@ Mantén al menos una hora y un día. Consejo: una sincronización del historial 
 ### 📜 Leer el registro del planificador
 
 La fila **Estado del planificador** muestra la última actualización del precio actual, con un punto para su resultado.
+Mientras haya un reintento pendiente, una línea más indica su hora: **Fallido: nuevo intento a las …** tras una
+actualización que no pudo terminar; si no, **Elementos en pausa reintentados a las …** para los precios aplazados
+porque su proveedor está en pausa.
 Haz clic en la fila (o en **Detalles…**) para abrir el **Registro de ejecución del planificador**. Solo los administradores pueden
 leer el estado y el registro.
 
@@ -115,6 +118,9 @@ leer el estado y el registro.
   solicitudes; 🔴 **Error**: ninguno se completó correctamente y ninguno se aplazó.
 - Haz clic en una entrada para ver cada activo o par FX, su proveedor y los precios modificados (**Delta**).
   Pasa el cursor sobre un error para leerlo completo; haz doble clic en él (mantén pulsado en un teléfono) para copiarlo.
+- Un elemento aplazado muestra un icono de pausa y **Aplazado: proveedor en pausa**: pasa el cursor sobre la etiqueta
+  para leer el mensaje del proveedor. La entrada cuenta los elementos aplazados con ⏸, junto a ✓ y ✗ (por ejemplo
+  `3/5 ✓ · 1 ⏸ · 1 ✗`), y **Reintento a las …** en su encabezado indica la hora fijada para reintentarlos.
 - Filtra por tarea, estado o periodo, desde la última hora hasta los últimos 30 días. Solo se conservan las ejecuciones
   más recientes.
 
