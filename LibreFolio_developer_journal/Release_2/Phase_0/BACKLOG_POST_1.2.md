@@ -426,7 +426,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`; le righe di
   `assets/` e `transactions/` le hanno già aggiornate X (CP4) e W (K2a). Da fare in una passata sola a fine
   riordino. Dettagli: piano 04, §12, K2a.
-- **C-96 · Le corsie dei test prendono la configurazione dell'istanza dal `.env` del developer** — medio, sicurezza dei
+- ✅ **C-96 · Le corsie dei test prendono la configurazione dell'istanza dal `.env` del developer** (chiusa 16/10 dal coordinatore: H `901fa33f6`, «test lanes ignore the instance's configuration») — medio, sicurezza dei
   test; E, 15/10 (analisi). `scripts/cli_base.py:configure_test_runtime()` carica il `.env` e toglie solo
   `INSTANCE_TRUST_SECRETS` (S2 di H): ogni altra `LIBREFOLIO_*` arriva alle corsie. Con la configurazione SMTP di E i
   test spedirebbero email vere; con `LIBREFOLIO_BLOCKED` o il profilo gestito tutte le corsie cambierebbero
@@ -3055,7 +3055,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È lo stesso caso di T-W1.
 
   Dettagli: [piano H](../Phase_1/01_platform/plan-phase01Platform.prompt.md), §14 «CP1 passo 1».
-- **H-2 · I test del backend costruiscono frontend e MkDocs dentro i 300 s d'avvio del server condiviso** — basso; H,
+- ✅ **H-2 · I test del backend costruiscono frontend e MkDocs dentro i 300 s d'avvio del server condiviso** (chiusa 16/10 dal coordinatore: `1c67dd5d9`, il `--build-only` del runner) — basso; H,
   14/10.
   - `dev.py server --test` ricostruisce il frontend se un file di `frontend/src` è più recente della build: basta un
     `.test.ts`.
