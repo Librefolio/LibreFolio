@@ -49,16 +49,7 @@ const OPAQUE = 1 - 1e-9;
  * them as read until then. The list only shrinks — once production code reads a role, the check of the pending roles
  * goes red until the reading batch removes its line.
  */
-const PENDING_READERS: Readonly<Record<string, string>> = {
-    '--lf-surface-field': 'AF, lib/theme/drawnColors.ts',
-    '--lf-surface-hover': 'AF, lib/theme/drawnColors.ts',
-    '--lf-focus': 'AF, lib/theme/drawnColors.ts',
-    '--lf-selected': 'AF, lib/theme/drawnColors.ts',
-    '--lf-checked': 'AF, lib/theme/drawnColors.ts',
-    '--lf-action': 'AF, lib/theme/drawnColors.ts',
-    '--lf-on-action': 'AF, lib/theme/drawnColors.ts',
-    '--lf-mark-bg': 'AF, lib/theme/drawnColors.ts',
-};
+const PENDING_READERS: Readonly<Record<string, string>> = {};
 const PENDING = new Set(Object.keys(PENDING_READERS));
 
 afterEach(() => {
