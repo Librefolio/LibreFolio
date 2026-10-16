@@ -128,7 +128,7 @@
 {#snippet pair(action: PacConversion)}
     <span class="flex items-center gap-1.5">
         <CurrencyCode code={action.source_debit.currency} />
-        <ArrowRight class="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+        <ArrowRight class="h-4 w-4 shrink-0 text-lf-muted" aria-hidden="true" />
         <CurrencyCode code={action.destination_credit.currency} />
     </span>
 {/snippet}
@@ -184,7 +184,7 @@
     <p class={HINT}>{$t(`${KEY}.sequenceHint`, {default: 'Follow the numbers: first the cash, then the currency exchanges, then the orders.'})}</p>
 
     {#if steps.length > 0}
-        <ol class="divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
+        <ol class="divide-y divide-lf-subtle rounded-lg border border-lf-subtle">
             {#each steps as step (step.kind === 'funding' ? step.action.action_id : step.action.conversion_id)}
                 <li class="flex items-start gap-3 p-3 text-sm" data-testid="pac-planner-plan-step" data-kind={step.kind} data-sequence={step.sequence}>
                     <span class={STEP_NUMBER}>{step.sequence}</span>
@@ -198,11 +198,11 @@
                                     <span class={FUNDING_BADGES[kind]}>{$t(`${KEY}.kind.${kind}`, {default: FUNDING_FALLBACKS[kind]})}</span>
                                     <ResultCell cell={sourceCell(source)} />
                                     {#if kind !== 'cash'}
-                                        <ArrowRight class="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
+                                        <ArrowRight class="h-4 w-4 shrink-0 text-lf-muted" aria-hidden="true" />
                                         <ResultCell cell={brokerCell(action.destination_broker_id, action.amount.currency)} />
                                     {/if}
                                 </div>
-                                <span class="font-medium tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-plan-amount">{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>
+                                <span class="font-medium tabular-nums text-lf-primary" data-testid="pac-planner-plan-amount">{formatPlannerMoneyPlain(action.amount.amount, action.amount.currency, {digits})}</span>
                             </div>
                             <p class="{HINT} first-letter:uppercase">{fundingDetail(action)}</p>
                         </div>
@@ -216,7 +216,7 @@
                                     {@render pair(action)}
                                 </div>
                                 <span class="flex items-center gap-1.5">
-                                    <span class="font-medium tabular-nums text-gray-900 dark:text-gray-100" data-testid="pac-planner-plan-fx-amounts">
+                                    <span class="font-medium tabular-nums text-lf-primary" data-testid="pac-planner-plan-fx-amounts">
                                         {$t(`${KEY}.fxAmounts`, {
                                             default: '{debit} → about {credit}',
                                             values: {
@@ -247,7 +247,7 @@
     {#each groups as group (group.brokerId)}
         <section class="space-y-2" data-testid="pac-planner-plan-orders" data-broker={group.brokerId}>
             <div class="flex flex-wrap items-center gap-2">
-                <h4 class="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                <h4 class="flex items-center gap-2 text-sm font-semibold text-lf-primary">
                     <PlannerBrokerIcon broker={draft.broker(group.brokerId)} size={24} />
                     {$t(`${KEY}.ordersAt`, {default: 'Orders on {broker}', values: {broker: names.broker(group.brokerId)}})}
                 </h4>

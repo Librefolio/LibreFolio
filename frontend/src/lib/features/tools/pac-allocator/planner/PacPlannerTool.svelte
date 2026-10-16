@@ -296,7 +296,7 @@
     });
 </script>
 
-<div class="min-w-0 space-y-4" data-testid="pac-planner" data-view={view} data-step={step} data-state={runState} data-busy={working ? 'true' : 'false'} aria-busy={working}>
+<div class="min-w-0 space-y-4 text-lf-primary" data-testid="pac-planner" data-view={view} data-step={step} data-state={runState} data-busy={working ? 'true' : 'false'} aria-busy={working}>
     {#if view === 'result'}
         {#if refreshing}
             <BusyPanel phase="refresh" onstop={stopRefresh} />
@@ -336,12 +336,12 @@
             <!-- R9.2: one column for the steps and, below them, the summary on request, at every width. -->
             <div class="space-y-2 {CARD} {desktop.current ? 'sticky top-4' : ''}">
                 <StepNav current={step} {steps} {visited} {problemSteps} variant={navVariant} onselect={go} />
-                <button type="button" class="inline-flex items-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-200" aria-expanded={summaryOpen} aria-controls={SUMMARY_ID} data-testid="pac-planner-summary-toggle" onclick={() => (summaryOpen = !summaryOpen)}>
+                <button type="button" class="inline-flex items-center gap-1 text-sm font-medium text-lf-secondary" aria-expanded={summaryOpen} aria-controls={SUMMARY_ID} data-testid="pac-planner-summary-toggle" onclick={() => (summaryOpen = !summaryOpen)}>
                     {$t(`${PLANNER_KEY}.summary.toggle`, {default: 'Summary'})}
                     {#if summaryOpen}<ChevronUp class="h-4 w-4" aria-hidden="true" />{:else}<ChevronDown class="h-4 w-4" aria-hidden="true" />{/if}
                 </button>
                 {#if summaryOpen}
-                    <div id={SUMMARY_ID} class="border-t border-gray-200 pt-3 dark:border-gray-700">
+                    <div id={SUMMARY_ID} class="border-t border-lf-subtle pt-3">
                         <SummaryPanel {draft} {step} {apiVersion} {uiVersion} />
                     </div>
                 {/if}
@@ -398,7 +398,7 @@
                     <ReviewStep {draft} problems={reviewProblems} busy={working} hasResult={run.outcome !== null} ongoto={go} oncalculate={() => void calculate()} onshowresult={showResult} />
                 {/if}
 
-                <div class="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-gray-200 bg-white/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur dark:border-gray-700 dark:bg-gray-800/95" data-testid="pac-planner-footer">
+                <div class="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t border-lf-subtle bg-lf-card/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur" data-testid="pac-planner-footer">
                     {#if index > 0}
                         <button type="button" class={BUTTON_SECONDARY} data-testid="pac-planner-back" onclick={back}>
                             <ArrowLeft class="h-4 w-4" aria-hidden="true" />
