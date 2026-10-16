@@ -37,6 +37,19 @@
  * The pure probe classifiers/formatters (`isSoftProbeFailure`,
  * `summarizeProbeError`, `buildProbeTooltipHtml`, …) are covered exhaustively in
  * `providerProbe.test.ts`; here we only prove the component wires them up.
+ *
+ * The provider's plugin settings (workstream X, lot CP11b) are the last block:
+ * on a provider change the panel reads that provider's settings
+ * (`GET /settings/plugins`, `family=asset`, `plugin_code`), ignoring an answer
+ * overtaken by a newer change and a read that fails; with an entry it shows
+ * `provider-settings-status` (`data-configured="false"`) only while the
+ * provider still needs settings, and `provider-configure` (`data-configured`,
+ * hidden when `readonly`, disabled with the panel), which opens
+ * `PluginSettingsModal`; a save there refreshes the badge, and the dialog keeps
+ * its form: it does not read the plugin again (PAS-S8). A case that does not
+ * program the read gets the Proxy's `undefined`: the read fails on it, and the
+ * panel takes a failed read as «no settings». The lifecycle cases route it
+ * explicitly, answering no settings.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
@@ -58,6 +71,9 @@ const lifecycleApi = vi.hoisted(() => ({
     unexpected: [] as string[],
     list: vi.fn<() => Promise<LifecycleProvider[]>>(),
     probe: vi.fn<(request: LifecycleProbeRequest) => Promise<LifecycleProbeResponse>>(),
+    // The panel reads the selected provider's plugin settings (workstream X, CP11): a planned request of its own,
+    // answered «no settings» so that these cases keep proving the probe's lifecycle and nothing else.
+    settings: vi.fn<(request: {queries: Record<string, string>}) => Promise<{plugins: unknown[]}>>(),
 }));
 
 // --- Mocks --------------------------------------------------------------
@@ -72,6 +88,7 @@ vi.mock('$lib/api', () => {
                 if (lifecycleApi.enabled) {
                     if (prop === 'list_providers_api_v1_assets_provider_get') return lifecycleApi.list;
                     if (prop === 'probe_provider_config_api_v1_assets_provider_probe_post') return lifecycleApi.probe;
+                    if (prop === 'get_plugin_settings_api_v1_settings_plugins_get') return lifecycleApi.settings;
                     lifecycleApi.unexpected.push(prop);
                     throw new Error(`Unexpected provider lifecycle API method: ${prop}`);
                 }
@@ -926,6 +943,7 @@ describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
         pending.length = 0;
         lifecycleApi.list.mockReset().mockImplementation(() => unexpected('provider catalogue'));
         lifecycleApi.probe.mockReset().mockImplementation(() => unexpected('provider probe'));
+        lifecycleApi.settings.mockReset().mockResolvedValue({plugins: []});
     });
 
     afterEach(async () => {
@@ -939,6 +957,7 @@ describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
             lifecycleApi.enabled = false;
             lifecycleApi.list.mockReset();
             lifecycleApi.probe.mockReset();
+            lifecycleApi.settings.mockReset();
             pending.length = 0;
         }
     });
@@ -1181,5 +1200,231 @@ describe('ProviderAssignmentSection — probe ownership lifecycle', () => {
         expectManualResults(container);
         expect(lifecycleApi.probe.mock.calls).toStrictEqual([[request], [request]]);
         expect(lifecycleApi.list.mock.calls).toStrictEqual([[]]);
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the provider’s plugin settings (workstream X, CP11b)', () => {
+    const settingsFn = () => vi.mocked(zodiosApi.get_plugin_settings_api_v1_settings_plugins_get as never) as ReturnType<typeof vi.fn>;
+    const writeFn = () => vi.mocked(zodiosApi.update_plugin_settings_api_v1_settings_plugins_bulk_patch as never) as ReturnType<typeof vi.fn>;
+
+    /** A provider's entry as `GET /settings/plugins` answers it: one user API key, saved once the provider is configured. */
+    function pluginEntry(code: string, configured: boolean) {
+        return {
+            family: 'asset',
+            plugin_code: code,
+            plugin_name: code,
+            configured,
+            fields: [
+                {
+                    key: 'api_key',
+                    type: 'string',
+                    scope: 'user',
+                    secret: true,
+                    required: true,
+                    label: 'API key',
+                    description: '',
+                    options: [],
+                    is_set: configured,
+                    source: configured ? 'db' : 'none',
+                    locked: false,
+                    editable: true,
+                    problem: null,
+                    updated_at: null,
+                },
+            ],
+        };
+    }
+
+    const answer = (...plugins: unknown[]) => ({plugins});
+    /** The read of one provider's settings, as the panel asks for it. */
+    const readOf = (code: string) => ({queries: {family: 'asset', plugin_code: code}});
+
+    /**
+     * Lets every answer already given reach the panel — one real macrotask, so every pending microtask runs first —
+     * then flushes Svelte. Waits for no time to pass: used only before asserting that something did not appear, after
+     * a positive barrier.
+     */
+    async function drain(): Promise<void> {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        await tick();
+        flushSync();
+    }
+
+    /**
+     * Starts recording the values `data-busy` takes on `element`, from the DOM's own record of its changes, and returns
+     * the reader: the values in order, the current one last, repeats folded (as in `EmailSettingsTab.test.ts`). Nothing
+     * is sampled, so a flash is not missed.
+     */
+    function recordBusy(element: HTMLElement): () => Array<string | null> {
+        const records: MutationRecord[] = [];
+        const observer = new MutationObserver((batch) => {
+            records.push(...batch);
+        });
+        observer.observe(element, {attributes: true, attributeFilter: ['data-busy'], attributeOldValue: true});
+        return () => {
+            records.push(...observer.takeRecords());
+            observer.disconnect();
+            const values = [...records.map((record) => record.oldValue), element.getAttribute('data-busy')];
+            return values.filter((value, index) => index === 0 || value !== values[index - 1]);
+        };
+    }
+
+    afterEach(() => {
+        settingsFn().mockReset();
+        writeFn().mockReset();
+    });
+
+    it('PAS-S1: reads the selected provider’s settings; a provider still to configure shows the badge and «Configure»', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
+
+        mount({providerCode: 'yahoo'});
+
+        expect(await screen.findByTestId('provider-settings-status')).toHaveAttribute('data-configured', 'false');
+        const configure = screen.getByTestId('provider-configure');
+        expect(configure).toHaveAttribute('data-configured', 'false');
+        expect(configure).toBeEnabled();
+        expect(settingsFn()).toHaveBeenCalledTimes(1);
+        expect(settingsFn()).toHaveBeenCalledWith(readOf('yahoo'));
+        expect(screen.queryByTestId('plugin-settings-modal'), 'the dialog opens on a click, not before').toBeNull();
+    });
+
+    it('PAS-S2: a configured provider shows «Configure» and no badge', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', true)));
+
+        mount({providerCode: 'yahoo'});
+
+        expect(await screen.findByTestId('provider-configure')).toHaveAttribute('data-configured', 'true');
+        expect(screen.queryByTestId('provider-settings-status'), 'drawn with the button, from the same answer').toBeNull();
+    });
+
+    it.each([
+        ['declares none', () => Promise.resolve(answer())],
+        ['come back without its entry', () => Promise.resolve(answer(pluginEntry('justetf', false)))],
+        ['cannot be read', () => Promise.reject(new Error('settings unavailable'))],
+    ])('PAS-S3: a provider whose settings %s gets no badge and no «Configure», and the panel works as before', async (_label, reply) => {
+        settingsFn().mockImplementation(reply);
+
+        mount({providerCode: 'yahoo'});
+
+        await waitLoaded('Yahoo');
+        await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('yahoo')));
+        await drain();
+        expect(screen.queryByTestId('provider-settings-status')).toBeNull();
+        expect(screen.queryByTestId('provider-configure')).toBeNull();
+        expect(screen.getByTestId('provider-code-select')).toBeInTheDocument();
+        expect(idInput()).toBeEnabled();
+    });
+
+    it('PAS-S4: a read-only panel shows the badge, and offers no «Configure»', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
+
+        mount({providerCode: 'yahoo', readonly: true});
+
+        expect(await screen.findByTestId('provider-settings-status')).toHaveAttribute('data-configured', 'false');
+        expect(screen.queryByTestId('provider-configure')).toBeNull();
+    });
+
+    it('PAS-S5: a disabled panel disables «Configure»', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', true)));
+
+        mount({providerCode: 'yahoo', disabled: true});
+
+        expect(await screen.findByTestId('provider-configure')).toBeDisabled();
+    });
+
+    it('PAS-S6: «No provider» reads no settings at all', async () => {
+        settingsFn().mockResolvedValue(answer(pluginEntry('yahoo', false)));
+
+        mount({providerCode: 'yahoo', noProvider: true});
+
+        // The catalogue is read with or without a provider, by an effect declared after the settings one.
+        await waitFor(() => expect(listFn()).toHaveBeenCalled());
+        await drain();
+        expect(settingsFn()).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('provider-settings-status')).toBeNull();
+        expect(screen.queryByTestId('provider-configure')).toBeNull();
+    });
+
+    it('PAS-S7: on a provider change, an answer about the previous provider that lands last changes nothing', async () => {
+        let answerYahoo!: (value: unknown) => void;
+        settingsFn().mockImplementation(({queries}: {queries: {plugin_code: string}}) =>
+            queries.plugin_code === 'yahoo'
+                ? new Promise((resolve) => {
+                      answerYahoo = resolve;
+                  })
+                : Promise.resolve(answer(pluginEntry(queries.plugin_code, true))),
+        );
+        mount({providerCode: 'yahoo'});
+        await waitLoaded('Yahoo');
+        await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('yahoo')));
+
+        await fireEvent.click(screen.getByTestId('provider-code-select-button'));
+        await fireEvent.click(await screen.findByTestId('provider-option-justetf'));
+
+        expect(await screen.findByTestId('provider-configure')).toHaveAttribute('data-configured', 'true');
+        expect(settingsFn()).toHaveBeenLastCalledWith(readOf('justetf'));
+
+        answerYahoo(answer(pluginEntry('yahoo', false)));
+        await drain();
+
+        expect(screen.queryByTestId('provider-settings-status'), 'yahoo needed settings, but yahoo is no longer the provider').toBeNull();
+        expect(screen.getByTestId('provider-configure')).toHaveAttribute('data-configured', 'true');
+    });
+
+    it('PAS-S8: «Configure» opens the dialog on that provider; a save there refreshes the badge, and the dialog keeps its form — no read of its own again, no flash back to «loading»', async () => {
+        let saved = false;
+        settingsFn().mockImplementation(async ({queries}: {queries: {plugin_code: string}}) => answer(pluginEntry(queries.plugin_code, saved)));
+        writeFn().mockImplementation(async () => {
+            saved = true;
+            return {results: [{family: 'asset', plugin_code: 'yahoo', field_key: 'api_key', scope: 'user', success: true, error_code: null, message: null}], success_count: 1};
+        });
+        mount({providerCode: 'yahoo'});
+        expect(await screen.findByTestId('provider-settings-status'), 'premise: yahoo needs settings').toHaveAttribute('data-configured', 'false');
+        expect(settingsFn().mock.calls, 'the panel’s read').toStrictEqual([[readOf('yahoo')]]);
+
+        await fireEvent.click(screen.getByTestId('provider-configure'));
+
+        const dialog = await screen.findByTestId('plugin-settings-modal');
+        const form = await within(dialog).findByTestId('plugin-settings-form-yahoo');
+        expect(form).toHaveAttribute('data-configured', 'false');
+        expect(settingsFn().mock.calls, 'and the dialog’s, on opening').toStrictEqual([[readOf('yahoo')], [readOf('yahoo')]]);
+        const content = dialog.querySelector<HTMLElement>('[data-plugin="yahoo"]');
+        expect(content, 'the dialog’s content, about yahoo').not.toBeNull();
+        expect(content).toHaveAttribute('data-busy', 'false');
+        const dialogBusy = recordBusy(content as HTMLElement);
+
+        await fireEvent.input(within(form).getByTestId('plugin-setting-secret-input'), {target: {value: 'sk-yahoo-00000001'}});
+        await fireEvent.click(within(form).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(screen.getByTestId('provider-configure')).toHaveAttribute('data-configured', 'true'));
+        expect(screen.queryByTestId('provider-settings-status'), 'configured now: the badge goes').toBeNull();
+        const currentForm = () => within(screen.getByTestId('plugin-settings-modal')).getByTestId('plugin-settings-form-yahoo');
+        await waitFor(() => expect(currentForm(), 'the save, and the read after it, are over').toHaveAttribute('data-busy', 'false'));
+        await drain();
+        expect(currentForm(), 'the form the save was made in, refreshed in place: the dialog did not load again').toBe(form);
+        expect(form).toHaveAttribute('data-configured', 'true');
+        expect(dialogBusy(), 'the dialog never went back to «loading»').toEqual(['false']);
+        expect(settingsFn().mock.calls, 'the panel’s read, the dialog’s on opening and the form’s after its save: no third read of the dialog’s own').toStrictEqual([[readOf('yahoo')], [readOf('yahoo')], [readOf('yahoo')]]);
+        expect(writeFn().mock.calls).toStrictEqual([[{items: [{family: 'asset', plugin_code: 'yahoo', field_key: 'api_key', scope: 'user', secret_value: 'sk-yahoo-00000001'}]}]]);
+
+        await fireEvent.click(within(screen.getByTestId('plugin-settings-modal')).getByTestId('plugin-settings-modal-close'));
+
+        await waitFor(() => expect(screen.queryByTestId('plugin-settings-modal')).toBeNull());
+        expect(screen.getByTestId('provider-configure'), '«Configure» stays, for the next change').toHaveAttribute('data-configured', 'true');
+    });
+
+    it('PAS-S9: a provider change closes «Configure», and the next provider’s state comes in with the dialog closed', async () => {
+        settingsFn().mockImplementation(async ({queries}: {queries: {plugin_code: string}}) => answer(pluginEntry(queries.plugin_code, false)));
+        const {rerender} = mount({providerCode: 'yahoo'});
+        await fireEvent.click(await screen.findByTestId('provider-configure'));
+        expect(await screen.findByTestId('plugin-settings-modal'), 'premise: the dialog is open on yahoo').toBeVisible();
+
+        await rerender({providerCode: 'justetf'});
+
+        await waitFor(() => expect(screen.queryByTestId('plugin-settings-modal')).toBeNull());
+        await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('justetf')));
+        expect(await screen.findByTestId('provider-settings-status'), 'justetf’s own state').toHaveAttribute('data-configured', 'false');
+        expect(screen.queryByTestId('plugin-settings-modal'), 'and the dialog stays closed').toBeNull();
     });
 });

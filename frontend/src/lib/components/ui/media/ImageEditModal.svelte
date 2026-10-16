@@ -17,6 +17,7 @@
     import ImageCropper from './ImageCropper.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {blobToFile, getCroppedImageFromCropper, IMAGE_PRESETS, type PresetName} from '$lib/utils/files/imageCrop';
+    import type {UploadScope} from '$lib/types';
 
     import {numericArrows} from '$lib/actions/numericArrows';
     import '$lib/theme/components/media.css';
@@ -28,6 +29,8 @@
     export let customConfig: Partial<{aspectRatio: number; outputWidth: number | null; outputHeight: number | null; outputQuality: number}> | null = null;
     export let allowPresetChange: boolean = true;
     export let uploadOnComplete: boolean = true;
+    /** Who sees the uploaded image: common for the image pickers (icons, logos, photos, avatars); the Files page passes personal */
+    export let scope: UploadScope = 'common';
 
     type _DispatchEvents = {
         complete: {url: string | null; file: File};
@@ -307,7 +310,7 @@
                 return;
             }
 
-            const uploadedUrl = await uploadFile(croppedFile, `Cropped image (${currentPreset})`);
+            const uploadedUrl = await uploadFile(croppedFile, `Cropped image (${currentPreset})`, scope);
             cleanup();
             dispatch('complete', {url: uploadedUrl, file: croppedFile});
         } catch (err) {

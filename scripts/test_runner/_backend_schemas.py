@@ -116,6 +116,15 @@ def schemas_tools(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Tool schemas tests", verbose=verbose)
 
 
+def schemas_openapi_client_text(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the texts the API client generator pastes unescaped into the TypeScript client (backlog E-5)."""
+    print_section("Schemas: OpenAPI Client Text")
+    print_info("Testing: app.openapi() texts openapi-zod-client 1.18.3 writes unescaped into frontend/src/lib/api/generated.ts")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_openapi_client_text.py", test_names)
+    return run_command(cmd, "OpenAPI client text tests", verbose=verbose)
+
+
 def schemas_all(verbose: bool = False) -> bool:
     """Run all schema validation tests."""
     if _common.nothing_left_to_run("schemas"):
@@ -169,6 +178,16 @@ Tests for Pydantic/SQLModel schema validation:
         name="Tool Schemas",
         desc="Strict transport, required metadata, correlation IDs, resource policies and platform outcomes",
         isolation="pure",
+    )
+    add_test(
+        cat,
+        "openapi-client-text",
+        schemas_openapi_client_text,
+        name="OpenAPI Client Text",
+        desc="Text the API client generator writes unescaped: describe(), endpoint descriptions, JSDoc",
+        # No isolation= on purpose, so the category's write-scoped holds: no row, no server, no network, but importing
+        # backend.app.main (the real document, read as api sync reads it) runs configure_logging, which creates
+        # <data dir>/logs/ and opens librefolio.log there, the lane's log that the shared backend writes too.
     )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")
     registry["schemas"] = cat
