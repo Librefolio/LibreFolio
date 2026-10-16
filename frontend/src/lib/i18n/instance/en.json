@@ -26,6 +26,10 @@
       "logLevel": {
         "ok": "The log level suits production.",
         "verbose": "The log level is {log_level}: the log records operational detail; INFO is enough in production."
+      },
+      "pluginSecrets": {
+        "ok": "The stored plugin secrets can be read with the instance key.",
+        "unreadable": "{count, plural, one {# stored plugin secret cannot be read with the instance key: enter it again in Settings → Plugins, or restore the instance key it was saved with.} other {# stored plugin secrets cannot be read with the instance key: enter them again in Settings → Plugins, or restore the instance key they were saved with.}}"
       }
     },
     "block": {
