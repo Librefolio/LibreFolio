@@ -48,6 +48,8 @@ the same sample as `.env`.
 | `LIBREFOLIO_WAKE_TOKEN` | _not set_ | Optional. The token of the [scheduled wake-up](sleep_wake.md#wake-sync), which a hosting panel or a cron job of yours calls to bring prices and exchange rates up to date without a user. Not set: the route answers `404`, as if it did not exist. At least 32 visible ASCII characters, without spaces, such as the output of `openssl rand -hex 32`: a token of its own, not another secret. `LIBREFOLIO_WAKE_TOKEN_FILE` reads it from a file instead: see [Secrets in Files](#secret-files). A token that cannot be used does not stop the server: the route answers `503`, and the log says why. |
 | `LIBREFOLIO_IDLE_SUSPEND_MODE` | `none` | Optional, for Fly.io. `fly`: the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` without a user's request and with no work in progress, and Fly resumes it at the next request. `none` never suspends: on any other host, leave it unset. Case and spaces around the value do not matter. Any other value does not stop the server, unlike the main options: the log has an error at startup, and the machine is never suspended. See [Idle Suspension](sleep_wake.md#idle-suspend). |
 | `LIBREFOLIO_IDLE_SUSPEND_MINUTES` | `5` | Read only with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`: the minutes without a user's request before the machine is suspended, a whole number from `1` to `1440`. A value that cannot be used does not stop the server either: the log has an error at startup, and 5 minutes apply. See [Idle Suspension](sleep_wake.md#idle-suspend). |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS` | `60` | The first pause of a price provider that answers «too many requests» (HTTP 429): no request reaches it until the pause ends, and each refusal in a row doubles the next one. A whole number of seconds from `0` to `86400`; `0` turns the pauses off, as before release 1.3. On by default, by developer decision 34: an exception to the rule that a new option leaves an install as it was. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
+| `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS` | `3600` | The longest pause the doubling reaches: a whole number of seconds from `1` to `86400`, not below the first pause while the pauses are on. A provider's `Retry-After` may still ask for more, up to one day. A value that cannot be used does not stop the server either: the log has an error, and both defaults apply. See [Provider Pauses](sleep_wake.md#provider-pauses). |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
 users start from the **Default Currency** in [Global Settings](settings.md).
@@ -214,7 +216,10 @@ the data directory. Give every instance its own key: never share one key between
     - Once the key exists, LibreFolio cannot tell a lost `instance.key` from a first use: it creates a
       new key, and what the old one encrypted can no longer be read. When you restore the data, put
       `secrets/` back with it before you start LibreFolio again. Never start LibreFolio on restored
-      data without its `secrets/`.
+      data without its `secrets/`. If LibreFolio has already created a new key, stop it, put your
+      copy of `instance.key` in place of the new one and start it again, before anyone enters a
+      [plugin secret](#plugin-secrets) again: a secret entered under the new key would become
+      unreadable once the old key is back.
     - If `instance.key` is there but damaged or out of reach, LibreFolio logs an error and never
       replaces it: see what to do in [Startup Checks](#startup-checks).
     - Setting `LIBREFOLIO_INSTANCE_KEY` where `secrets/instance.key` already exists changes the key. To
@@ -293,8 +298,12 @@ not even to whoever saved it: LibreFolio only says whether it is set (in **Setti
 the database.
 
 If the instance key changes, the saved secrets can no longer be read. LibreFolio keeps them and
-reports them as unreadable, and never uses a wrong value: enter them again. The tab says so under
-each one: *Saved, but this instance's key cannot read it: enter it again.*
+reports them as unreadable, and never uses a wrong value. The tab says so under each
+one: *Saved, but this instance's key cannot read it: enter it again.* If you still have the old
+key, put it back before anyone enters them again: a secret entered under the new key would become
+unreadable once the old one is back. From the first start after the change, and at every start
+until they are entered again or the old key is back, the log has an error that counts the
+instance-wide ones, if there are any: see [Startup Checks](#startup-checks).
 
 If `secrets/instance.key` is damaged or out of reach, LibreFolio starts anyway, with an error from
 the [startup checks](#startup-checks); a key you set yourself that cannot be used stops the start
@@ -346,6 +355,7 @@ each finding is one line of the log, at its level, with the name of the check in
 | ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
 | ℹ️ `info` | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Nothing, if no link has to go out by email. Otherwise set `LIBREFOLIO_PUBLIC_URL` to the address your users open LibreFolio at ([Accounts and Sign-ups](#accounts)), then restart: see [Email](email.md). |
 | ⚠️ `warning` | `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Write the address with `http://` or `https://` and a host name, without user name, password, `?` or `#`, such as `https://librefolio.example.com`, then restart: see [Email](email.md). |
+| ❌ `error` | `Stored plugin secrets that the instance key cannot read: <N>. Enter them again in the plugin settings, or restore the instance key they were saved with` (`check` is `platform.plugin_secrets`; this one comes later in the start, once the database is ready) | The instance key changed after these instance-wide [plugin secrets](#plugin-secrets) were saved: a lost `secrets/instance.key` that LibreFolio replaced with a new one, data restored without its `secrets/`, or another `LIBREFOLIO_INSTANCE_KEY`. If you still have the old key (your copy of `secrets/instance.key`, backed up with the data directory as [The Instance Key](#instance-key) says, since the archives of **Back up the instance** leave the key out; or the old value of the variable), stop LibreFolio, put it in place of the new one and start again. Do it before anyone enters a secret again: a secret entered again is saved under the new key, and becomes unreadable once the old one is back. Only if the old key is lost, enter the secrets again in **Settings › Plugins**: from then on, the new key is the one to back up. If the log also says `The instance key cannot be used: …`, fix that first: see above. Personal secrets are not counted: each user sees theirs in their own tab. The server starts anyway. |
 
 Some secrets you configured stop the start instead when they cannot be used: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),

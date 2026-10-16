@@ -466,7 +466,7 @@
 <div class="space-y-3">
     <!-- Error banner -->
     {#if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2 text-sm text-red-600 dark:text-red-400">
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft">
             {error}
         </div>
     {/if}
@@ -496,7 +496,7 @@
 
         <!-- I-bis #3 — Currency label aligned right: "Prices in USD 🇺🇸" / "Events in USD 🇺🇸" -->
         {#if currency}
-            <div class="ml-auto flex items-center gap-1 px-3 py-2 text-xs text-gray-500 dark:text-gray-400" data-testid="asset-editor-currency-label">
+            <div class="ml-auto flex items-center gap-1 px-3 py-2 text-xs text-lf-muted" data-testid="asset-editor-currency-label">
                 {#if activeTab === 'prices'}
                     {$t('assetDetail.pricesInCurrency', {values: {currency}})}
                 {:else}
@@ -527,11 +527,11 @@
 
     <!-- Save / Cancel bar -->
     <div class="flex items-center justify-end gap-2 px-1">
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave} data-testid="asset-editor-save-btn">
+        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover disabled:opacity-50 transition-colors" disabled={saving || _dirtyCount === 0} onclick={handleSave} data-testid="asset-editor-save-btn">
             <Save size={15} />
             {saving ? $t('dataEditor.saving') : $t('dataEditor.save', {values: {n: _dirtyCount}})}
         </button>
-        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors" onclick={handleCancel} data-testid="asset-editor-cancel-btn">
+        <button class="flex items-center gap-1.5 px-4 py-2 text-sm bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-colors" onclick={handleCancel} data-testid="asset-editor-cancel-btn">
             <X size={15} />
             {$t('common.cancel')}
         </button>
