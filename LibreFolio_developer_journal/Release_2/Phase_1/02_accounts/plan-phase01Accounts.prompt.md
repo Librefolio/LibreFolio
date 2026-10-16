@@ -4100,3 +4100,48 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > their average cost» (EN; IT «quelli mandati a questi broker escono al loro costo medio»; FR «ceux envoyés à ces brokers
 > sortent à leur coût moyen»; ES «los enviados a estos brókers salen a su coste medio»). Il testo completo in FR ed ES lo
 > chiedo a W.
+
+#### A7a.2 — Rossi osservati, implementazione, verdi ✅ (2026-10-16, 06:48–07:42)
+> - **Base**: il coordinatore ha salvato i rossi, la doc e il journal (`4f537ab0f`, `8b9ddee11`, `836f0d1a6`) e fuso
+>   `dev_release2` (`72e66d1a6`) → `eb1990f31`. Tre conflitti di doc risolti per unione durante la sosta, solo scrivendo:
+>   `admin/hosting_providers` (i due punti «For developers»), `admin/index` (la mia riga Hosting, la Sleep and Wake di
+>   dev), `developer/architecture/overview` (`admin-bootstrap` al 12, i passi di dev rinumerati 13–16, `idle-monitor` di
+>   Z compreso). Rilette le fusioni automatiche (`configuration`, `security`, `settings`): sezioni diverse da F02. Gli
+>   script `apply` combaciavano ancora sull'albero fuso.
+> - **Registrazioni nel runner** applicate (`apply_a7a_runner.py`): `services admin-bootstrap` (pure), `api admin-setup`.
+> - **Rossi osservati** (06:48–07:01, `nice`, log in `/tmp/libreFolio_a7a/logs/`), tutti per ragioni di A7a:
+>   - `services admin-bootstrap`: 12 ❌ e 144 errori di preparazione. Errori: 90 «No module named
+>     `bootstrap_admin_service`», 54 «`config.accounts` has no ADMIN_…». Fallimenti: 8 su `issue_token(token=)`, 2 su
+>     `cmd_setup_link`, 1 `setup-link` non è un sottocomando, 1 il passo `admin-bootstrap` manca;
+>   - `api admin-setup`: 7 ❌ e 35 errori: 37 «cannot import `AdminBootstrapConfig`», la rotta manca (404 in-process,
+>     405 sul server della corsia, 4 casi), `inspect` rifiuta `admin_setup` (422).
+>   - Lo start del server della corsia ha ricostruito la doc (138 s), vecchia dopo il merge: non un difetto.
+> - **Decisione tecnica, da rivedere**: su un'istanza vuota, un token della variabile già salvato in passato (un'istanza
+>   svuotata dopo un primo setup) non si riusa: si genera un link nuovo, con un avviso che nomina la variabile. Senza
+>   questo, il vincolo d'unicità dell'hash fermerebbe l'avvio.
+> - **Bozze applicate** (`apply_a7a_backend.py`, `apply_a7a_shared.py`; combaciavano): `config/accounts.py` (le tre
+>   variabili, `AdminBootstrapConfig`, `AdminBootstrapConfigError`), `token_service.issue_token(token=)`,
+>   `registration_service.pending_admin_filter()` e `user_usage`, `schemas/auth.py` (`AdminSetupRequest`, `admin_setup`
+>   nei due `purpose`), `POST /auth/setup` in fondo ad `auth.py`, una riga ciascuno in `config_audit.py` e
+>   `app_lifespan.py` (file di H, assegnati), `setup-link` in `user_cli.py`, `bootstrap_admin_service.py` nuovo;
+>   `.env.example` (sezione Accounts: F02, e la riga «open by default» di A5 corretta) e `backend.instructions.md`.
+>   `ruff` e `black` puliti su 13 file. Dopo i verdi: tolta `wait_for_deliveries()`, senza chiamanti (resta `_DELIVERIES`,
+>   che tiene un riferimento ai task in background); una frase in `access_control.md` sul token della variabile già
+>   usato.
+> - **Verdi** (una alla volta, `nice`, carico sotto 70; log in `/tmp/libreFolio_a7a/logs/greens/` e `final/`):
+>   `api sync` ✅; `services admin-bootstrap` ✅ 156 (anche dopo la pulizia); `services registration` ✅ 147;
+>   `services account-tokens` ✅ 65; `services config-audit` ✅ 90; `schemas openapi-client-text` ✅ 78; `api
+>   admin-setup` ✅ 42; `api registration` ✅ 96; `api auth` ✅ 88; `api system` ✅ 118; `api instance-block` ✅ 62;
+>   `api users-admin` ✅ 64; `utils dev-cli-image` ✅ 85; `front check` ✅ 0 errori; `mkdocs build` ✅;
+>   `check-links` ✅; `lint --dead-code`: 53 reperti, nessuno nei file di A7a (tutti preesistenti, in altri moduli);
+>   `git diff --check` pulito; porta 6182 libera.
+> - Le frasi della doc citate fra virgolette (righe di log, errore della CLI) combaciano col codice applicato.
+
+#### A7a.3 — Handoff FROZEN 🧊 (2026-10-16, 07:45)
+> - Delta su `eb1990f31`: 14 file modificati e 1 nuovo. Manca solo `all-backend`, primo nella coda degli slot pesanti.
+> - **Il link non ha ancora la sua pagina**: `/setup` arriva con A7b (dopo l'ingresso di E5b). Fino ad allora il link
+>   apre la pagina d'errore dell'app; l'API e la CLI funzionano. Proposta: le righe del CHANGELOG entrano con A7b, che
+>   completa la funzione.
+> - **Per A7b** (in più rispetto a C6–C8, dal `docs-writer`): nella scheda Utenti l'admin in attesa compare come
+>   «Disattivato», che «non occupa posti»; va mostrato «in attesa del setup», senza «Riattiva» (attiverebbe un account
+>   senza una password nota) e con «Nuovo link di setup» al posto del link di reset.
