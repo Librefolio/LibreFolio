@@ -9,7 +9,8 @@
   - mode: 'browse' (files page) | 'select' (asset picker)
   - cardSize: 'compact' (100px, for picker) | 'full' (200px, for files page)
   - showSearch: whether to show the search bar at the top
-  - showActions: show download/copy/delete actions on each card
+  - showActions: show download/copy/delete actions on each card (delete and the scope switch only for a file the user
+    may manage, can_delete)
   - selectedFileId: for single-selection highlight
 -->
 <script lang="ts">
@@ -17,8 +18,8 @@
     import {formatBytes} from '$lib/utils/files/upload';
     import {formatDateTime} from '$lib/utils/core/formatDateTime';
     import LazyImage from '$lib/components/ui/media/LazyImage.svelte';
-    import {Check, Download, Eye, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Search, Trash2, X} from 'lucide-svelte';
-    import type {UploadedFile} from '$lib/types';
+    import {Check, Download, Eye, File as FileIcon, FileSpreadsheet, FileText, Image as ImageIcon, Link2, Lock, Search, Trash2, Users, X} from 'lucide-svelte';
+    import type {UploadedFile, UploadScope} from '$lib/types';
     import {getPreviewTypeForUploadedFile} from '$lib/utils/files/filePreview';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import '$lib/theme/components/files.css';
@@ -48,9 +49,11 @@
         oncopyLink?: (data: {file: UploadedFile}) => void;
         /** Called when preview is requested */
         onpreview?: (data: {file: UploadedFile}) => void;
+        /** Called with the scope a file should get: share with everyone, or make personal */
+        onscopechange?: (data: {file: UploadedFile; scope: UploadScope}) => void;
     }
 
-    let {files = [], mode = 'browse', cardSize = 'full', showSearch = true, showActions = true, selectedFileId = null, previewSize = '240x240', onselect, ondblselect, ondelete, oncopyLink, onpreview}: Props = $props();
+    let {files = [], mode = 'browse', cardSize = 'full', showSearch = true, showActions = true, selectedFileId = null, previewSize = '240x240', onselect, ondblselect, ondelete, oncopyLink, onpreview, onscopechange}: Props = $props();
 
     // Internal state
     let searchQuery = $state('');
@@ -111,6 +114,11 @@
 
     function handleDelete(file: UploadedFile) {
         ondelete?.({id: file.id});
+    }
+
+    /** Whether the user may delete the file and change its scope; a file without the field keeps today's actions. */
+    function canManage(file: UploadedFile): boolean {
+        return file.can_delete !== false;
     }
 </script>
 
@@ -202,16 +210,38 @@
                                 <Link2 size={14} />
                             {/if}
                         </button>
-                        <button
-                            class="action-btn danger"
-                            onclick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(file);
-                            }}
-                            title={$t('common.delete') || 'Delete'}
-                        >
-                            <Trash2 size={14} />
-                        </button>
+                        {#if onscopechange && canManage(file)}
+                            <button
+                                class="action-btn"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    onscopechange?.({file, scope: file.scope === 'common' ? 'personal' : 'common'});
+                                }}
+                                title={file.scope === 'common' ? $t('uploads.scope.makePersonal') : $t('uploads.scope.share')}
+                                aria-label={file.scope === 'common' ? $t('uploads.scope.makePersonal') : $t('uploads.scope.share')}
+                                data-testid={`file-grid-scope-${file.id}`}
+                                data-scope={file.scope}
+                            >
+                                {#if file.scope === 'common'}
+                                    <Lock size={14} />
+                                {:else}
+                                    <Users size={14} />
+                                {/if}
+                            </button>
+                        {/if}
+                        {#if canManage(file)}
+                            <button
+                                class="action-btn danger"
+                                onclick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(file);
+                                }}
+                                title={$t('common.delete') || 'Delete'}
+                                data-testid={`file-grid-delete-${file.id}`}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        {/if}
                     </div>
                 {/if}
             </div>
