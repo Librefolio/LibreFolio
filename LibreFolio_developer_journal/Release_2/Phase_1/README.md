@@ -212,3 +212,6 @@ Sono tutti locali: la push la fa il developer.
 | 123 | 16/10 18:32 | W: C-97a (issue #43: quantità a 10 decimali, prezzi e costo per unità a 12, oltre il limite rifiutato; somme in Python; D5/D6 = N51/N52), cherry-pick di `5c4426e75` | `bab52635d` |
 | 124 | 16/10 18:41 | H: H-12 (l'output del backend di test condiviso va in `shared-backend.log`; un avvio fallito ne mostra la coda); all-backend 18 487/0 | `7ac8b17de` |
 | 125 | 16/10 18:41 | J: CP-13a (P19: il guadagno che recupera un drawdown calcolato in `financial_math`, campo `maximum_drawdown_trough_to_peak_ratio`; perdita totale = null con avviso) | `0452e592c` |
+| 126 | 16/10 19:26 | H: H-21 (= W-B54: un'azione `api` da sola rifà il seed se il DB della corsia non ha gli utenti di fixture); gate su dev: reseed una volta, poi no | `946e02d55` |
+| 127 | 16/10 19:29 | X: O-20 (una sola sincronizzazione dei prezzi alla creazione di un asset, `onsynced` della modale; i piani programmati creati da modulo o wizard hanno subito lo storico) | `967ddbda4` |
+| 128 | 16/10 19:42 | MF: ondata 1b (M, G1 somme del PAC in Python; N + F2 AI Export v2 di `broker.cost_efficiency` e `portfolio.income_timeline`; K2 + N54 una regola MWRR per card e linea; O2 Yield on Cost negativo); all-backend 6/7, 2 rossi External di Crédit Agricole a W (C-97a) | `8d244d1c6` |
