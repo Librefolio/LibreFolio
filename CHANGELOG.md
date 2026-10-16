@@ -95,6 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Signing in and «Forgot password» with your email address work whatever capitals you type.
 - Rewriting your own address with other capitals is not an address change: no device is signed out and the address stays verified.
 - API: `PUT /api/v1/auth/profile` with your own address in other capitals needs no `current_password`.
+- Settings › Profile no longer asks for your password when you only change the capitals of your email address: it is the same address, saved as you typed it.
 
 #### 🎨 A new colour palette
 
