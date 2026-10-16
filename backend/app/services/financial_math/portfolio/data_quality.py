@@ -76,6 +76,7 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     missing_fx_pairs_dto: list | None = None,
     transaction_implied_assets_dto: list | None = None,
     missing_cost_basis_assets: list[tuple[int, str]] | None = None,
+    valued_at_cost_assets_dto: list | None = None,
     classifier_warnings: list[str] | None = None,
     mwrr_available: bool = True,
     configured_fx_pairs: set[str] | None = None,
@@ -87,7 +88,8 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
 
     missing_price_assets_dto / stale_prices_dto / missing_fx_pairs_dto are
     pre-built DTO lists (caller constructs them with full asset/broker info).
-    transaction_implied_assets_dto: assets valued at cost (no market price but WAC present).
+    transaction_implied_assets_dto: assets valued at their last BUY or SELL price (no market price yet).
+    valued_at_cost_assets_dto: assets with no price at all, valued at their book cost (J-17).
     missing_cost_basis_assets: (asset_id, name) of the assets with an acquisition whose cost
     is not known (a TRANSFER or ADJUSTMENT adding quantity without cost_basis_override): it
     counts at zero cost, so their purchase cost and P&L are incomplete.
@@ -152,6 +154,27 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
                 cta_action="navigate_asset",
                 cta_target=str(transaction_implied_assets_dto[0].asset_id),
                 group_key="transaction_implied",
+            )
+        )
+
+    # VALUED_AT_COST — warning: assets with no price at all (no quote, no BUY or SELL), counted at their
+    # book cost as a declared estimate (developer's decision, J-17). The caller lists only assets with a
+    # provider, past the grace: for a manual asset the cost is its intended value.
+    if valued_at_cost_assets_dto:
+        as_of_date = daily_states[-1].date.isoformat() if daily_states else None
+        issues.append(
+            DataQualityIssue(
+                domain=IssueDomain.PORTFOLIO,
+                code=IssueCode.VALUED_AT_COST,
+                severity=IssueSeverity.WARNING,
+                message_i18n_key="dataQuality.valuedAtCost",
+                message_params={"count": len(valued_at_cost_assets_dto), "as_of_date": as_of_date},
+                count=len(valued_at_cost_assets_dto),
+                affected_asset_ids=[a.asset_id for a in valued_at_cost_assets_dto],
+                affected_asset_names=[a.name for a in valued_at_cost_assets_dto],
+                cta_action="navigate_asset",
+                cta_target=str(valued_at_cost_assets_dto[0].asset_id),
+                group_key="valued_at_cost",
             )
         )
 

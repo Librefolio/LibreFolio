@@ -160,6 +160,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/categoryLabels.test.ts",
             "src/lib/features/tools/pac-allocator/planner/result/exposureBarColours.test.ts",
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/source.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/riskGlossary.test.ts",
             "src/lib/i18n/importWizardAssetsCount.test.ts",

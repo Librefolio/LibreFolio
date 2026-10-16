@@ -3295,3 +3295,249 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
 - **Handoff FROZEN di CP-7a** mandato (16/10 08:37) su `30fe04581`: 25 file (23 di codice, test e doc, 2 di giornale).
   Poi il coordinatore committa e aggiorna la base con `dev_release2` (`d5c3c3ae3`); `all-backend --workers 2` nello slot 2
   alle 08:45, sulla HEAD nuova. J-26 (la sonda reale) nella lista del developer.
+- ✅ **Commit e base** (coordinatore, 08:36; SHA corretti dal coordinatore): codice `abcfef29c`, giornale `7e5ac5f75`;
+  merge di `dev_release2` `d5c3c3ae3` senza conflitti → **HEAD `16e039282`**, worktree pulito.
+- **⚠️ Fuori pista**:
+  - il primo `all-backend` sulla HEAD nuova (08:36) è stato interrotto alle 08:46 (exit 130), poi il fermo chiesto dal
+    developer; nulla di mio in corso alla ripresa, porta libera;
+  - il riavvio della macchina delle 10:03 ha svuotato `/tmp`: persi script, log e patch di riserva di CP-7a (già
+    committato) e la cartella della corsia, che il runner ricrea. **Regola nuova del coordinatore**: patch, lavoro
+    parcheggiato, script e log da riusare vanno nella cartella di sessione
+    (`~/.copilot/session-state/4c677a01-…/files/j/`); in `/tmp` resta solo `--data-dir`;
+  - **regola nuova dei colori**: prima di scrivere un `.svelte` delle aree IW, TR, AF, BK, IM, DV o T, avvisare il
+    coordinatore (backend, test fuori da quelle cartelle e doc no).
+- ✅ **Ingresso di CP-7a** (ripresa 10:32, slot 2, `nice -n 10`, `files/j/scripts/slot2b.sh`, log in `files/j/cp7a/`):
+  - `all-backend --workers 2` (10:37–11:12, carico all'avvio 34): 6/7 categorie verdi; passate parallele **17 898
+    passed, 7 skipped**; **un rosso**: `e2e search-to-prices::test_complete_e2e_flow_justetf`, `httpx.ReadTimeout` al
+    passo 1 (la ricerca fra i provider), prima di qualunque codice dei lotti;
+  - triage (skill `test-triage`): il test aspetta 30 s (`TIMEOUT = 30.0`), lo stesso tetto che il server dà a ogni
+    provider (`services/assets/search.py:252`, `timeout=30.0`), quindi un provider esterno lento in quel momento lo fa
+    cadere anche se il prodotto si comporta come scritto. Rilanciato solo (11:14, carico 47): **3/3 in 18 s**.
+    **Verdetto: assumption** (budget del test uguale al limite del prodotto), area dei provider, non di J né di CP-7a:
+    al coordinatore, con la proposta (budget della ricerca oltre il limite del server, o un provider solo);
+  - `front check` (11:12): 0 errori, 0 avvisi. Porta 6185 libera, worktree pulito.
+- **Y su `LotCustodyModal.svelte`** (Y12a, 10:3x): il «Valore d'apertura» legge `original_cost` dal backend invece di
+  `quantità × prezzo d'apertura`; nessuno scontro col mio lavoro, stesso numero (invariante del motore, stessa
+  conversione), avvisato che CP-7a cambia le righe di chiusura della cronologia: Y fissa solo la cella.
+#### J-24 — analisi sulla regola del developer (P21, 16/10 ~10:45, sola lettura)
+
+Regola (P21, alla lettera): «convertire nella valuta di destinazione al cambio del giorno della transazione, e fare ogni
+calcolo nella valuta di destinazione, come nel fix appena prima della 1.2» (#32: ogni acquisto al cambio della sua data,
+le vendite misurate contro quel costo).
+1. **Lotti: la seguono già** (da CP-7a): la rettifica in uscita col costo consegna `q × costo della riga` al cambio del
+   giorno della rettifica (`convert_closure`, gamba di chiusura); il costo dei lotti al cambio di ogni acquisto; il
+   realizzato è la differenza, nella valuta di destinazione.
+2. **Dashboard: se ne discosta.** Toglie le unità e registra la distribuzione di capitale al costo storico del pool nella
+   valuta di destinazione (`portfolio/daily_state.py`, `cumulative_ecf -= sell_cb_target`): l'importo della riga non è
+   mai convertito al cambio del suo giorno, e nessun realizzato (`_realized_sale` solo per le SELL). Gli ingressi
+   invece la seguono già (il pool converte ogni acquisizione, rettifiche col costo comprese, alla sua data).
+3. **Cosa cambia allineandola**: la distribuzione vale `q × costo della riga × cambio del giorno`; la differenza col costo
+   storico tolto dal pool diventa realizzato, come una vendita il cui incasso è il valore ceduto. Cambiano realizzato,
+   base di capitale, P&L totale, flussi di TWRR e MWRR del giorno e la vista Periodo; il NAV no. Lo scarto è
+   `q × costo × (cambio della rettifica − cambio storico)`, e chiude J-24 (lotti = Dashboard).
+4. **Per chi**: chi sposta fuori con un costo (trasferimento a un broker non seguito, donazione, successione) titoli in
+   una valuta diversa da quella del report. Raro; nessun effetto in una sola valuta, se il costo della riga è il WAC
+   (il modo «auto» di W lo scrive così).
+5. **Lotto proposto**: in J (motore del portafoglio, `financial_math/portfolio/`), rossi prima, valori dichiarati;
+   la proposta (A) di J-24 (lotti al costo storico) cade: la regola del developer va nell'altro verso.
+- **Decisione** (coordinatore, 10:4x, sulla regola del developer): **allineare la Dashboard**, lotto proprio dopo
+  CP-7a, rossi prima, valori dichiarati; la proposta (A) di J-24 cade.
+
+#### J-17 — una rettifica non è mai un'osservazione di prezzo (P2 del developer; analisi, 16/10 ~10:50, sola lettura)
+
+- **Decisioni del developer** (via coordinatore): P2 «le rettifiche sono transazioni; portano un WAC, che può voler dire
+  molte cose e non è il prezzo dell'asset in quel momento; i prezzi si deducono solo da un acquisto» → via il ramo
+  `ADJUSTMENT` di `price_marks.py:307-309`, in entrata e in uscita (BUY e SELL restano; per la SELL decide il developer).
+  Caso senza prezzo (10:44): **opzione A**, una posizione senza alcuna osservazione vale il suo costo storico, come stima
+  dichiarata («valutato al costo, nessun prezzo»), come fanno i lotti; non è un prezzo.
+- **Stato reale** (`16e039282`): la serie dei segni (`build_asset_price_series`) prende ogni rettifica col costo come
+  osservazione TRADE nella valuta del costo; la usano il motore del portafoglio (`portfolio/engine.py:380`) e i lotti
+  (`lots_analysis_service.py:312`); `lots/conversions.py:179` registra il cambio della valuta del costo per quei segni.
+  Il motore ha già un ripiego al costo, ma solo per i titoli in viaggio (`daily_state.py:1144-1148`: MISSING e costo
+  noto → valore al costo).
+- **Disegno** (scelte tecniche, da rivedere):
+  1. `price_marks`: via il ramo; via il fabbisogno di cambio di `conversions.py:179` (restano quelli del costo, :222).
+  2. **Valore al costo**: nuova `ValuationSource.ESTIMATED_AT_COST` (nome dei lotti). Quando il segno è MISSING e il costo
+     della posizione nel pool è completo, il valore è il costo storico nella valuta del report (cambi d'acquisto, la
+     regola P21), senza prezzo effettivo (`effective_unit_price`/`currency` vuoti: «nessun prezzo»), non realizzato 0.
+     Un solo metodo usato dai cinque punti di valutazione: giorno (:603), istantanea (:825), viaggio (:1139, che già lo
+     fa), coppie interne (:1221) e capitale del trasferimento orfano (:1244), così un trasferimento d'un titolo senza
+     prezzo non crea un guadagno finto. Costo ignoto → resta MISSING come oggi.
+  3. **Qualità dei dati**: un problema nuovo `VALUED_AT_COST` (avviso, chiave `dataQuality.valuedAtCost`, 4 lingue; il
+     banner è generico, nessun `.svelte`), con la stessa grazia di TRANSACTION_IMPLIED (decisione 30) e la stessa regola
+     per gli asset manuali: senza provider il costo è il loro valore voluto e il banner tace
+     (`portfolio_service.py:990-1001`); con un provider l'avviso chiede una sincronizzazione.
+  4. **PAC**: il peso al costo; `source.ts`/`copies.ts` accettano il codice; `DistributionDialog.svelte` gli dà
+     l'etichetta (`tools.pacAllocator.planner.distribution.valuedAtCost`): **file dell'area DV, da annunciare**.
+  5. **AI Export**: `asset.provenance` v1 → v2 (LAST_TRADE_PRICE senza «priced ADJUSTMENT»; semantica nuova
+     ESTIMATED_AT_COST); `asset.positions_by_broker` v1 → v2 (il codice nuovo); FX: senza prezzo effettivo la
+     posizione si lega per valuta di negoziazione, senza importo nativo (comportamento già scritto). Sonda col developer.
+- **Valori che cambiano** (dichiarati prima):
+  - i giorni in cui una rettifica col costo era l'osservazione più recente (il suo giorno e i seguenti fino alla
+    quotazione o allo scambio dopo): ora vale la quotazione o lo scambio precedente; NAV, valore, non realizzato, P&L,
+    candele, ripartizioni; nei lotti i prezzi di mercato di quei giorni;
+  - gli asset prezzati solo da rettifiche: LAST_TRADE_PRICE → ESTIMATED_AT_COST, valore piatto al costo storico (prima
+    il costo della rettifica al cambio d'ogni giorno), non realizzato 0, prezzo vuoto; dal banner «prezzo di
+    transazione» al nuovo «valutato al costo»; nei lotti `value_source` MARKET_PRICE → ESTIMATED_AT_COST;
+  - lotti aperti da una rettifica su un asset quotato più tardi: niente punto di valore prima della prima quotazione
+    (prima: al costo della rettifica);
+  - AI Export: le versioni sopra.
+- **Rossi** (test-author): segni (rettifica in/out nessuna osservazione; BUY/SELL sì); asset solo da rettifica →
+  ESTIMATED_AT_COST, NAV e P&L neutri su un movimento di cambio; rettifica poi quotazioni; quotazione il venerdì,
+  rettifica il sabato → la domenica vale la quotazione; trasferimento orfano col costo d'un titolo senza prezzo →
+  capitale al costo; qualità dei dati; holdings API; lotti; PAC; AI Export. Il perno di oggi
+  `test_price_resolver.py:203` si riscrive alla regola nuova.
+- **Superfici**: `financial_math/{price_marks,lots/conversions}.py`, `portfolio/{daily_state,models,data_quality}.py`,
+  `portfolio_service.py`, `schemas/portfolio.py` (2 letterali, `IssueCode`) e `api sync`, `pac_allocator/source/`,
+  AI Export (`asset_core`, `asset_payloads`), frontend PAC (`source.ts`, `copies.ts`, `DistributionDialog.svelte`: DV),
+  i18n (`dataQuality`, `pacAllocator`). Doc EN: `price_resolver.md`, teoria `price-resolution`, `nav`, `index`,
+  `deposited-capital` del motore, `data-quality-banner.md`, `transactions/service.md`, `assets/architecture.md`,
+  `lots_analysis_service.md` (debito di traduzione sulle pagine di teoria).
+- **Peso**: medio-alto. Ordine proposto: J-17, poi J-24 (stesso file `daily_state.py`), poi CP-7b (V1, sopra J-17).
+- ✅ **Disegno approvato** (coordinatore, 10:51): `ESTIMATED_AT_COST`, avviso `VALUED_AT_COST` silenzioso senza
+  provider, AI Export v2 per i due componenti (sonda reale col developer). Ordine J-17 → J-24 → CP-7b. **SELL**: resta
+  finché il developer non risponde. **`DistributionDialog.svelte:166`**: via dei colori (10:53), riservato a J fino
+  all'ingresso di J-17. Il golden non cambia (il suo scenario non ha rettifiche).
+- ✅ **CP-7a integrato** in `dev_release2` (treno 107, merge `4f9e94420`), con le due righe nel CHANGELOG; T-B5 e T-B6
+  chiuse dal coordinatore. Il rosso di `search-to-prices` va a X.
+- **P22 deciso dal developer** (CP-3, il TRANSFER nei contributi): «giusto così, ogni broker risponde del suo tratto»,
+  anche quando dopo il trasferimento arriva una perdita. CP-3 lo comprende quando tocca a lui.
+
+#### J-17 — codice (16/10, dalle 11:20; i rossi li scrive il test-author in parallelo, senza lanciare nulla)
+- ✅ **Codice scritto** (11:20–11:30; i rossi del test-author in parallelo, senza prove):
+  - `price_marks.py`: solo BUY e SELL fanno un'osservazione TRADE; docstring e commenti senza «priced ADJUSTMENT»;
+    `lots/conversions.py`: via il cambio della valuta del costo per i segni (resta quello delle conversioni del costo).
+  - `portfolio/models.py`: `ValuationSource.ESTIMATED_AT_COST`.
+  - `portfolio/daily_state.py`: `_value_held_position` (segno, o al costo storico se MISSING e il costo del pool è
+    completo; `_valued_at_cost`, `_book_cost_value`), usato dal giorno e dall'istantanea; `_add_unrealized_part(…,
+    at_cost=)` non aggiunge nulla per una posizione al costo (senza, una posizione estera avrebbe due parti finte,
+    prezzo e cambio, opposte); `_transfer_leg_capital(…, step)` e `_internal_pair_value` (estratto da
+    `_internal_transfer_flows` per la complessità) contano al costo che il pool sposta, se il titolo non ha prezzo;
+    `_movement_cost_step`.
+  - Qualità dei dati: `IssueCode.VALUED_AT_COST`, il blocco nel report, la lista in `portfolio_service.py` (grazia dal
+    primo giorno di posizione, solo asset con provider).
+  - Schemi: il codice nuovo nei due letterali di `schemas/portfolio.py`, con la descrizione della gerarchia.
+  - PAC: `source.ts` tiene il codice; `DistributionDialog.svelte` il ramo (via dei colori), chiave
+    `tools.pacAllocator.planner.distribution.valuedAtCost`.
+  - AI Export: `asset.provenance` v2 (testo di LAST_TRADE_PRICE, semantica nuova), `asset.positions_by_broker` v2
+    (l'enum), `portfolio.provenance` e `broker.provenance` v3 (la gerarchia nel testo); segnaposto del catalogo e
+    `COMPACT_COMPONENT_VERSIONS` mossi insieme. **⚠️ Fuori pista evitato**: un componente assente dalla mappa si rende
+    compatto solo alla v1 (`DEFAULT_COMPACT_VERSIONS`), quindi senza le due voci nuove `asset.provenance` e
+    `asset.positions_by_broker` sarebbero finiti nel ripiego YAML.
+  - i18n (`dev.py i18n add`): `dataQuality.valuedAtCost` e la chiave del PAC, 4 lingue; `i18n check` stretto, 4 776.
+  - Ruff, black e Prettier puliti (ruff ha trovato un `received` rimasto dopo l'estrazione: corretto). `api sync`
+    senza file tracciati cambiati; il client generato ha `VALUED_AT_COST`.
+  - **⚠️ Fuori pista**: `api sync` lanciato senza guardare il carico, che era 145; finito bene. Da qui il controllo
+    del carico torna prima d'ogni lancio.
+- **Coordinatore** (11:37–11:42):
+  - **P26 (J-26) deciso dal developer**: la sonda reale dell'AI Export gira su una copia dei suoi dati demo (utente
+    `alfy`, procedura della skill `real-data-copy`, copia mia in `/tmp`, porta 6195, password solo nella variabile
+    della sonda), lotto proprio dopo J-17 e CP-13a, su slot. I dati sono solo in EUR, senza cambi: le gambe in valuta di
+    CP-7a si dichiarano **non verificabili sui dati reali** (coperte da R1–R7 e dalla parità con la Dashboard); la sonda
+    prova le versioni di J-17 rese compatte, la sorgente nuova nei prompt e nient'altro di cambiato.
+  - **Nuova sessione MF**: i 16 lotti dell'audit della matematica finanziaria (A–P, da P21) entrano nella 1.3. MF non
+    tocca i miei file aperti finché i miei lotti non sono entrati. I due difetti di Y a `portfolio_service.py:852/856`
+    (pesi con NAV ≤ 0 o totale 0) passano a MF (lotto C dell'audit): non stanno in J-17, il cui diff in quel file non
+    tocca i pesi. Per MF: da J-17 una posizione al costo ha `current_value` = costo e conta in tutti e due i pesi.
+  - Coda: J-17 → CP-13a → J-24 → CP-7b → J-26.
+- **P2, ultima parola del developer** (11:45): «sì, la vendita resta una fonte di prezzo»; la rettifica no. Lettura
+  confermata al coordinatore: giorno per giorno, senza guardare avanti (prima della prima quotazione, acquisto o
+  vendita, al costo; dalla prima osservazione vince il prezzo, anche vecchio, `stale` come oggi); solo con il costo
+  noto (altrimenti MISSING come oggi); «costo storico» = il costo medio del pool nella valuta del report ai cambi
+  d'acquisto (Dashboard), il costo del singolo lotto (lotti).
+- **⚠️ Fuori pista** (11:50): test-author e docs-writer **falliti per un timeout di rete verso l'API del modello**
+  (ETIMEDOUT, 5 tentativi), dopo aver scritto parte del lavoro senza riferire: 11 file di test (tutti compilano), un
+  Vitest nuovo (`planner/source.test.ts`), 7 pagine. Rilanciati (11:58) sullo stesso brief, a partire dal diff lasciato,
+  con le decisioni nuove (SELL resta fonte di prezzo; regola giorno per giorno).
+- **Coordinatore, messaggi in ritardo** (11:55–11:57): i difetti di Y a `:852/856` e P19 riproposti con un ordine
+  vecchio; ricordato che i primi sono passati a MF (11:42) e che P19 è già CP-13a, subito dopo J-17 (11:40). Skill nuova
+  `design-system` (D-T29): ruoli `-lf-` per il markup nuovo; in J-17 il mio solo markup è un ramo senza classi.
+- **Ripartizione con MF** (12:10, proposta di MF accettata, in attesa del developer): passano a MF CP-3 (U5a, sulla mia
+  analisi delle 06:20, con P22), CP-5 (U2, U6, T-B4), U3/U7 di CP-11 (+O4), la matematica di CP-12 (U9, T-B8), CP-13
+  meno CP-13a (U8 lato backend), i residui R6–R10 di T-U4. Restano a J: J-17, CP-13a, J-24, CP-7b, J-26, J-10…J-12,
+  CP-8 (dopo l'ondata 2 di MF), CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9, B15. Vincoli dati a MF:
+  `daily_state.py` aperto fino a J-24 (I1 non sposta `_cumulative_split_ratio` nell'ondata 1); `lots_analysis_service.py`
+  riaperto da CP-7b; `returns.py` toccato da CP-13a (una funzione dopo `price_return`); versioni dell'AI Export già
+  salite con J-17 (`asset.provenance`, `asset.positions_by_broker` → 2; `portfolio.provenance`, `broker.provenance` → 3),
+  `catalog.py` e renderer dopo l'ingresso di J-17, poi MF tocca solo le voci di `COMPACT_COMPONENT_VERSIONS` dei suoi
+  componenti; `remaining_to_peak_ratio` nullabile (CP-13a) e componenti del drawdown dell'AI Export (MF-D); via per G1
+  e M sulla sorgente del PAC dopo J-17; D prima di CP-9 va bene. Dopo la conferma: voci spostate «→ MF» nel backlog.
+- ✅ **Rapporti degli specialisti rilanciati** (12:30–12:35): docs-writer 18 pagine EN (7 riviste, 11 nuove); test-author
+  rossi completati in 13 file + `planner/source.test.ts`. Tutti e due hanno trovato, leggendo il codice, gli stessi
+  difetti; corretti da me:
+  - **⚠️ Fuori pista: la grazia di VALUED_AT_COST non si applicava mai.** Partiva da `first_position_dates`, che conta
+    solo BUY e SELL (`_HOLDING_TYPES`): un asset al costo non ne ha, quindi era elencato subito, contro la regola e il
+    testo «da oltre 2 settimane». Ora parte dalla prima acquisizione dell'asset (minimo per asset di
+    `first_lot_txn_dates`: anche ADJUSTMENT e TRANSFER); lo stesso giorno va nel `first_position_date` della voce.
+    Allineati i tre passi di `data-quality-banner.md`.
+  - **⚠️ Fuori pista: il flusso fra broker d'un titolo al costo seguiva il pool del mittente.** Con il costo del
+    mittente ignoto il flusso era 0 e la linea del ricevente saltava di +100 all'arrivo (caso 05); con un pool di costo
+    in parte ignoto svuotato dal trasferimento il flag `report_complete` torna vero e spostava la sola parte nota. Ora,
+    col principio del lotto 41 («quello che l'arrivo porta nel NAV del ricevente, valutato come lo valuta il NAV»):
+    `_internal_pair_value` sposta il costo che l'arrivo aggiunge al pool del **ricevente** (riportato alla quota del
+    mittente). Caso 05: A (−100, 100), B (100, 0) all'arrivo, aggregato invariato; l'artefatto del costo ignoto resta ad
+    A, che l'ha (P22).
+  - **⚠️ Fuori pista (mio, corretto in giornata)**: avevo aggiunto una condizione di completezza (gamba orfana al costo
+    solo con il pool completo prima e dopo; flusso nullo con il pool del ricevente incompleto). Sbagliata: il pool conta un
+    costo ignoto o non convertibile come zero e tiene i conti coerenti, e le rettifiche in natura muovono il capitale di
+    `step.cost_report_change` comunque; con la condizione, una rettifica con costo in entrata (+50) seguita da un
+    trasferimento orfano di tutto lasciava −50 per sempre a posizione chiusa. Regola finale, per un titolo senza alcun
+    prezzo: il capitale segue il costo di carico del pool, come per le rettifiche — la gamba orfana sposta sempre
+    `step.cost_report_change` (la parte nota; un costo ignoto sposta 0), il flusso interno è il costo che l'arrivo aggiunge
+    al pool del ricevente, comunque sia completo; lo scarto resta al broker il cui costo è ignoto (P22). Seguiti di
+    correzione mandati ai due specialisti.
+  - **⚠️ Fuori pista: l'AI Export dava un `unit_price` a una posizione al costo** (`current_value / quantity` = costo
+    unitario), contro «nessun prezzo». Ora `None` per `ESTIMATED_AT_COST` in `asset.positions_by_broker` (già v2) e in
+    `portfolio.positions`/`broker.positions` (`map_position_row`, **v1 → v2**: segnaposto del catalogo e
+    `COMPACT_COMPONENT_VERSIONS` nello stesso cambio); i testi di provenienza (asset v2, portafoglio e broker v3) lo
+    dicono. È la direzione di V7 (U9, ora di MF): il resto di V7 resta a MF.
+  - Commento superato in `lots_analysis_service.py` (~:301, «priced ADJUSTMENT carryover») corretto.
+  - `planner/source.test.ts` registrato in `core-unit` (`_frontend_utility.py`, righe del PAC); `runs.sh` prende anche i
+    Vitest non tracciati e il file dei cataloghi dell'AI Export.
+  - Ruff, black e Prettier puliti sui file cambiati (carico 72).
+  - Seguiti mandati ai due specialisti (stessa sessione): caso 05 col ricevente, rosso della gamba che svuota un pool di
+    costo ignoto, `unit_price` nei tre componenti e versioni, renderer; pagine del flusso al costo, condizione della
+    sezione «Estimated-at-Cost» dei lotti, `unit_price`.
+  - Valori che cambiano in più (da dichiarare): posizione con rettifiche con e senza costo e nessun prezzo → MISSING
+    (prima: valutata alla rettifica), quindi P&L negativo del costo della parte con costo, con NAV incompleto e avviso
+    MISSING_PRICE (semantica di MISSING di sempre).
+  - Non corretti, segnalati: `index.en.md` §9 (il pre-frame legge i prezzi per le gambe orfane) va a MF, il cui lotto J1
+    toglie il pre-frame; l'avviso dei lotti `CURRENT_PRICE_ASSUMED_AT_COST` scatta senza quotazioni anche quando gli
+    scambi prezzano l'asset → **J-28** nel backlog.
+- ✅ **Specialisti chiusi** (13:00): test-author (rossi in 13 file + `planner/source.test.ts`, riallineati alla regola
+  finale: casi 05/05d/05e/05f, gamba orfana che svuota o riduce un pool di costo in parte ignoto, `unit_price` e
+  versioni, renderer) e docs-writer (pagine EN allineate alla regola finale; debito di traduzione 13 pagine). Ruff, black,
+  Prettier e `py_compile` puliti su tutti i test cambiati (carico 46).
+- **Rossi sul codice vecchio** (`code_out.sh` + `runs.sh red`, 13:07–13:16; log `files/j/j17/red_run.log` e
+  `red_*.log` nella cartella di sessione): `roi-fifo-utils` 38 rossi / 743 verdi, `portfolio-engine` 5 / 35,
+  `portfolio-allocation-source` 1 / 89, `lots-analysis-pure` 1 / 162, `ai-export` (filtro J-17) 14 / 411, `risk-dq`
+  31 verdi (guardie). Ogni rosso è un test di J-17 o un test esistente aggiornato; da rileggere uno per uno il motivo nei
+  log (in particolare `TestPositionUnitPrice::test_no_provider_assignment_yields_provenance_without_provider`, atteso dal
+  conteggio delle semantiche 3 → 4). **Non eseguiti**: `api portfolio` e Vitest (in attesa del carico, 134).
+- ⏸️ **PAUSA del developer** (13:2x, via coordinatore): fermato lo script nell'attesa del carico (nessun test in corso),
+  codice rimesso con `code_in.sh` («worktree back to the saved state»), porta 6185 libera. Stato: HEAD `16e039282`,
+  62 voci sporche (61 modificate + `source.test.ts`), nessun merge aperto, nessuno specialista attivo. **FROZEN.**
+  Ripresa: rossi di `api portfolio` e Vitest (codice fuori), poi `runs.sh green` col codice dentro, `front check`,
+  `core-unit`, mkdocs (build stretta, check-links, translate-validate), richiesta dello slot `all-backend`, handoff
+  FROZEN di J-17 (bozza in `files/j/j17/handoff_draft.md`); poi CP-13a (brief in `files/j/cp13a/`).
+- ▶️ **Ripresa** (14:14, via del coordinatore). Prove di J-17, tutte nella corsia 6185 (log in `files/j/j17/`):
+  - **rossi restanti sul codice vecchio** (`code_out.sh` + `ONLY="api-portfolio vitest" runs.sh red2` +
+    `code_in.sh`): `api portfolio` 51 verdi (solo guardie), Vitest 7 rossi su 92 (renderer: provenienza v3, asset v2,
+    posizioni v2; PAC: `ESTIMATED_AT_COST` → `null`). Codice rimesso, «worktree back to the saved state».
+  - ✅ **verdi** (`runs.sh green`, 14:21–14:32): `roi-fifo-utils` 781 (= 38 + 743), `portfolio-engine` 40 (= 5 + 35),
+    `portfolio-allocation-source` 90 (= 1 + 89), `lots-analysis-pure` 163 (= 1 + 162), `ai-export` (filtro J-17) 425
+    (= 14 + 411), `risk-dq` 31, `api portfolio` 51, Vitest 92/92. Porta libera.
+  - ✅ **statici** (`checks.sh`, 14:33–14:40): `front-utility core-unit` 179 file / 6 267 test verdi (con
+    `planner/source.test.ts` registrato), `check-orphans` pulito, `front check` (svelte-check) 0 errori / 0 avvisi,
+    `mkdocs build` stretto verde, `mkdocs check-links` verde. `translate-validate` rosso (747 errori nel sito): 18 da
+    J-17 (12 per il link nuovo a `index.md#3-position-state` su quattro pagine, 3 per un blocco di formula nuovo in
+    `price-resolution`, 3 per un link nuovo a `#estimated-at-cost` in `fifo-lot-analysis`), il resto precedente → **J-29**
+    nel backlog (debito di traduzione, 13 pagine).
+  - Backlog: segnate «→ MF» le voci passate a MF (nota in testa alla sezione J; J-1 e J-14), J-14 riga di W chiusa da
+    CP-7a; J-28 e J-29 aggiunte.
+  - Prossimo: slot `all-backend` (chiesto al coordinatore, probabile slot 2 dopo Y, ~15:40), poi handoff FROZEN di J-17.
+  - devWiki (in attesa dello slot): nuova `wiki/decisions/adjustment-is-never-a-price.md` (decisione P2, regola al
+    costo, le due trappole trovate in revisione), riga d'indice, voce di log, note datate in
+    `entities/portfolio-engine.md` e `problems/stale-price-banner-never-emitted.md`; `check_source_paths.py`: nessun
+    percorso mancante nella pagina nuova (i 5 mancanti del sito sono vecchi, output generati). Grafo non aggiornato
+    (graphify assente nel worktree).

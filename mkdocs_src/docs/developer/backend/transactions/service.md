@@ -390,7 +390,7 @@ flowchart LR
     Resolver --> Portfolio["portfolio_service / financial_math/portfolio/<br/>portfolio marks"]
 ```
 
-So the transaction layer can affect marks only by storing transaction facts (BUY/SELL amounts, priced ADJUSTMENT cost basis). It never reads current prices and never performs estimated-at-cost valuation.
+So the transaction layer can affect marks only by storing transaction facts: the amounts and quantities of `BUY` and `SELL` rows. An `ADJUSTMENT`'s cost basis is a cost, never a mark — it reaches valuation only as the book cost of a holding the resolver cannot mark at all (see [Price Resolver — No observation: valued at cost](price_resolver.md#valued-at-cost)). The layer never reads current prices and never performs estimated-at-cost valuation.
 
 ---
 

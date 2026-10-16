@@ -165,7 +165,7 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
     if needs_market_series(analyses):
         current = computed_from
         # The unified resolver marks each day from asset-system prices AND observed trades
-        # (BUY/SELL + priced ADJUSTMENT), each in its native currency; both the valuation and
+        # (BUY/SELL; never an ADJUSTMENT), each in its native currency; both the valuation and
         # chart lines convert those marks to target at the *valuation* date. Register the fx
         # needs for every price- and trade-currency across the whole window so a foreign mark
         # carried forward still translates on the day it is read (mirrors build_asset_price_series).
@@ -174,10 +174,9 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
             if tx.id in split_ratios_by_tx_id:
                 continue
             tx_type = str(getattr(tx.type, "value", tx.type))
+            # The series' observations: BUY/SELL trades, never an ADJUSTMENT (J-17).
             if tx_type in ("BUY", "SELL") and tx.amount:
                 currencies.add(tx.currency or asset_currency)
-            elif tx_type == "ADJUSTMENT" and tx.cost_basis_override not in (None, Decimal("0")):
-                currencies.add(tx.cost_basis_currency or asset_currency)
         currencies.discard(None)
         while current <= actual_to:
             for currency in currencies:
