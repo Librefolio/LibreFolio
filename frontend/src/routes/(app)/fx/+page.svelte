@@ -949,7 +949,7 @@
     let busy = $derived(loading || pairs.some((p) => p.loading));
 </script>
 
-<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
+<div class="space-y-6 text-lf-primary" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="fx-page">
     <!-- Header: Title left, ViewModeToggle + Add Pair right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room, the opposite of what "wrap only when space is
@@ -958,13 +958,13 @@
          no JS threshold tuning is needed for a simple 2-block header). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div use:guideAnchor={'fx.page.overview'} data-testid="fx-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+            <h2 class="text-lg font-semibold text-lf-secondary flex items-center gap-2">
                 {$_('fx.title')}
                 {#if pairs.length > 0}
-                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{pairs.length}</span>
+                    <span data-testid="fx-pair-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-lf-selected text-lf-link">{pairs.length}</span>
                 {/if}
             </h2>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">{$_('fx.subtitle')}</p>
+            <p class="text-lf-muted text-sm">{$_('fx.subtitle')}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
             {#if viewMode === 'list' && selectedFxRows.length > 0}
@@ -983,7 +983,7 @@
                 />
             {/if}
             <ViewModeToggle bind:mode={viewMode} storageKey="fxViewMode" />
-            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
+            <button class="flex items-center gap-1.5 px-3 py-2 text-sm bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors whitespace-nowrap" data-testid="fx-add-pair-button" use:guideAnchor={'fx.page.add'} onclick={handleAddPair}>
                 <Plus size={16} />
                 {$_('fx.actions.addPair')}
             </button>
@@ -1041,7 +1041,7 @@
                 </div>
                 <!-- Reset filters button -->
                 <button
-                    class="p-1.5 rounded-md transition-colors {filterCurrency1 ? 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 hover:text-red-500 dark:text-gray-400 dark:hover:text-red-400' : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'}"
+                    class="p-1.5 rounded-md transition-colors {filterCurrency1 ? 'hover:bg-lf-hover text-lf-muted hover:text-lf-danger' : 'text-lf-muted/50 cursor-not-allowed'}"
                     data-testid="fx-reset-filters"
                     disabled={!filterCurrency1}
                     onclick={() => {
@@ -1060,16 +1060,16 @@
             {#if viewMode === 'list'}
                 <ColumnVisibilityToggle tableRef={fxTableComponent?.getTableRef()} showLabel={showActionLabels} />
             {:else}
-                <div class="flex rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+                <div class="flex rounded-lg border border-lf-subtle overflow-hidden">
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => {
                             globalViewMode = 'absolute';
                         }}
                         >Abs
                     </button>
                     <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-libre-green text-white' : 'bg-white dark:bg-slate-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
+                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalViewMode === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                         onclick={() => {
                             globalViewMode = 'percentage';
                         }}
@@ -1078,30 +1078,17 @@
                 </div>
             {/if}
             <!-- Settings -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-chart-settings-button"
-                onclick={handleGlobalSettings}
-            >
+            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-chart-settings-button" onclick={handleGlobalSettings}>
                 <Settings size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.settings')}</span>{/if}
             </button>
             <!-- Sync All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-sync-all-button"
-                use:guideAnchor={'fx.page.sync'}
-                onclick={handleSyncAll}
-            >
+            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-sync-all-button" use:guideAnchor={'fx.page.sync'} onclick={handleSyncAll}>
                 <RotateCw size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.syncAll')}</span>{/if}
             </button>
             <!-- Refresh All -->
-            <button
-                class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-600 text-gray-600 dark:text-gray-300 transition-colors"
-                data-testid="fx-refresh-all-button"
-                onclick={handleRefreshAll}
-            >
+            <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" data-testid="fx-refresh-all-button" onclick={handleRefreshAll}>
                 <RefreshCw class={refreshing ? 'animate-spin' : ''} size={14} />
                 {#if showActionLabels}<span>{$_('sharedResource.refreshAll')}</span>{/if}
             </button>
@@ -1110,34 +1097,34 @@
 
     <!-- Content -->
     {#if loading}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
-            <div class="inline-flex items-center justify-center w-16 h-16 bg-libre-green/10 rounded-full mb-4">
-                <RefreshCw class="text-libre-green animate-spin" size={32} />
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-lf-selected rounded-full mb-4">
+                <RefreshCw class="text-lf-link animate-spin" size={32} />
             </div>
-            <p class="text-gray-500 dark:text-gray-400">{$_('common.loading')}</p>
+            <p class="text-lf-muted">{$_('common.loading')}</p>
         </div>
     {:else if error}
-        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
-            <p class="text-red-600 dark:text-red-400">{error}</p>
-            <button class="mt-3 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors" onclick={() => loadPairSources()}>
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-xl p-6 text-center">
+            <p class="text-lf-danger-on-soft">{error}</p>
+            <button class="mt-3 px-4 py-2 text-sm bg-lf-danger-solid text-lf-on-danger-solid rounded-lg hover:bg-lf-danger-hover transition-colors" onclick={() => loadPairSources()}>
                 {$_('common.retry')}
             </button>
         </div>
     {:else if filteredPairs.length === 0}
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-12 text-center border border-gray-100 dark:border-slate-700">
+        <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card p-12 text-center border border-lf-subtle">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full mb-4">
                 <Coins class="text-amber-600 dark:text-amber-400" size={32} />
             </div>
             {#if pairs.length === 0}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('fx.empty.noPairsTitle')}</h3>
-                <p class="text-gray-500 dark:text-gray-400 mb-4">{$_('fx.empty.noPairsDesc')}</p>
-                <button class="px-4 py-2 bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('fx.empty.noPairsTitle')}</h3>
+                <p class="text-lf-muted mb-4">{$_('fx.empty.noPairsDesc')}</p>
+                <button class="px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-colors" use:guideAnchor={'fx.add'} onclick={handleAddPair}>
                     <Plus size={16} class="inline mr-1" />
                     {$_('fx.empty.addFirstPair')}
                 </button>
             {:else}
-                <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-200 mb-2">{$_('common.noMatchesTitle')}</h3>
-                <p class="text-gray-500 dark:text-gray-400">{$_('fx.empty.noMatchesDesc')}</p>
+                <h3 class="text-lg font-semibold text-lf-secondary mb-2">{$_('common.noMatchesTitle')}</h3>
+                <p class="text-lf-muted">{$_('fx.empty.noMatchesDesc')}</p>
             {/if}
         </div>
     {:else if viewMode === 'grid'}

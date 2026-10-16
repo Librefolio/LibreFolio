@@ -63,7 +63,7 @@
                     </p>
                     <p class="text-[11px] opacity-80">{$t('import.csv.extraColumnsIgnored')}</p>
                 </div>
-                <button class="p-1 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 shrink-0" onclick={openDocs} title="Open documentation" type="button">
+                <button class="p-1 text-lf-info hover:text-lf-info-on-soft shrink-0" onclick={openDocs} title="Open documentation" type="button">
                     <BookOpen size={16} />
                 </button>
             </div>
@@ -73,7 +73,7 @@
     {#snippet helpContent()}
         <p class="font-semibold">Event CSV Format</p>
         <p>Each row represents an asset event. <code>type</code> and <code>amount</code> are required.</p>
-        <pre class="bg-white/50 dark:bg-slate-800/50 rounded p-2 text-xs font-mono">date;currency;type;amount;notes
+        <pre class="bg-lf-card/50 rounded p-2 text-xs font-mono">date;currency;type;amount;notes
 2024-03-15;USD;DIVIDEND;1.25;Q1 payout
 2024-06-01;;SPLIT;2;2:1 split
 2024-09-15;USD;DIVIDEND;1.30;</pre>

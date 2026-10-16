@@ -160,8 +160,9 @@ che usa 6150–6154 e 6160). Piani in `Release_2/Phase_1/<NN_nome>/plan-phase01<
 | B | B - Backup e Docker | 6187 | `07_backupDocker/plan-phase01BackupDocker.prompt.md` | dopo il primo checkpoint di H (configurazione e segreti) |
 | E | E - Email | 6188 | `08_email/plan-phase01Email.prompt.md` | dopo il checkpoint di A con token e inviti |
 | Y | Y - Cruscotto e grafici | 6189 | `09_dashboardCharts/plan-phase01DashboardCharts.prompt.md` | dopo il lotto B del programma colori |
+| MF | MF - Matematica finanziaria | 6190 | `11_financialMath/plan-phase01FinancialMath.prompt.md` | 16/10, dopo l'audit (decisione del developer su P21) |
 
-Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
+Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9; il 16/10 la decima, MF.
 
 ### H · Piattaforma
 
@@ -335,6 +336,19 @@ conversione dei colori sì** (W5 e W6 di T, §1):
   «chi parte prima» (§7);
 - gli spostamenti puri (FE2, FE3, FE7) si fondono con la conversione in qualunque ordine;
 - se al tag il riordino di Y non è finito, il resto passa dopo la 1.3.
+
+### MF · Matematica finanziaria
+
+Nasce il 16/10 dalla decisione del developer su P21: «verifica che tutta la matematica sia fattorizzata in
+`financial_math` e rivedi gli algoritmi troppo contorti». L'audit in sola lettura
+(`11_financialMath/audit-matematica-finanziaria-20261016.md`) ha trovato circa 15 duplicati che possono dare numeri
+diversi e propone 16 lotti (A–P). **Il developer li vuole tutti nella 1.3**, in un workstream dedicato accanto a J.
+- Il più grosso è A: il contributo per posizione (tabella Performance della Dashboard, pesi tecnici dell'AI Export)
+  letto dal motore invece che ricalcolato.
+- J il più contorto: `DailyStateBuilder.build`, con le regole dei pool scritte due volte.
+- Il lotto C prende da J i due difetti dei pesi segnalati da Y (`portfolio_service.py:852/856`).
+- La parte frontend del lotto P la consuma Y; MF prepara i campi del backend.
+- MF non tocca i file aperti di J finché i lotti di J non sono entrati.
 
 ## 5. Schede delle funzioni per il cloud
 
@@ -511,6 +525,39 @@ installa pacchetti.
 Una sola invocazione di test per corsia. Galleria completa e run completa con coverage:
 una alla volta fra i due programmi, sempre con avviso reciproco. Server di revisione
 fermati all'handoff, porta verificata libera.
+
+### Manuale admin: la struttura finale (decisione del developer, 16/10)
+
+Il developer, testuale nella sostanza: tutto il lavoro per LibreFolio Cloud si documenta **nel manuale admin**;
+l'alberatura va ristrutturata, e le variabili d'ambiente, che stanno crescendo, vanno divise **in più file per
+categoria o funzionalità** invece di una sola pagina grande. Oggi `admin/configuration.md` ha 533 righe e 38 variabili,
+`admin/hosting_providers.md` 385; H, A, B, E e Z le stanno ampliando.
+
+**Struttura proposta dal coordinatore** (da confermare col developer prima del lotto):
+- 🐳 **Installazione ed esposizione**: installazione sull'host, Docker avanzato, esposizione sicura, controllo delle
+  connessioni.
+- ⚙️ **Configurazione**:
+  - una pagina d'ingresso: come si legge la configurazione (`.env`, segreti `_FILE`, quale valore vince, controlli
+    d'avvio, arresto) e **una tabella di tutte le variabili**, una riga ciascuna, col link alla pagina che la spiega;
+  - una pagina per categoria: server e rete, sicurezza e segreti (chiave d'istanza, sessione), account e iscrizioni (con
+    il primo admin F02), email, dati di mercato e plugin (scheduler, impostazioni dei plugin, ricerca web), backup,
+    sospensione e risveglio.
+- ☁️ **Ospitare per altri (LibreFolio Cloud)**: il contratto fra l'istanza e il pannello di controllo, il profilo
+  gestito, il blocco, i backup per il pannello, il primo admin dal pannello, limiti e link di supporto e pagamento.
+- 👥 **Utenti e inviti**, **impostazioni globali**.
+- 🧹 **Operazioni**: backup e ripristino, strumenti CLI, struttura delle cartelle.
+
+**Quando e chi**: **un solo lotto di documentazione**, del coordinatore, eseguito dal docs-writer quando i lotti cloud
+di H, A, B, E e Z sono entrati e nessuno ha pagine admin aperte. Nello stesso lotto:
+- i link vecchi devono continuare a funzionare (redirect o pagine ponte), compresi quelli della app (`DocsLink`);
+- un controllo che ogni `LIBREFOLIO_*` letta dal codice stia in `.env.example` e in una sola pagina di categoria;
+- `.env.example` diviso con le stesse categorie.
+
+Le traduzioni (it, fr, es) si fanno dopo, su richiesta del developer, con la pipeline Aphra.
+
+**Fino ad allora, regola per i figli**: una variabile nuova si spiega per intero nella pagina della sua funzionalità
+(`email.md`, `sleep_wake.md`, `backup_restore.md`, `hosting_providers.md`…). In `configuration.md` va solo una riga
+nella tabella, col link. Così il lotto sposta pagine, non riscrive testo.
 
 ## 7. Coordinamento con il programma colori (sessione «UI color analysis»)
 
