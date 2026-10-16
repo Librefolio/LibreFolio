@@ -21,11 +21,13 @@ Create Date: 2026-10-16
 
 2. Quantities keep 10 decimal places and prices 12 (C-97, issue #43): no DDL, no data step.
 
-   ``transactions.quantity`` was declared ``NUMERIC(18, 6)``, and so were the ``open``,
-   ``high``, ``low``, ``close`` and ``adjusted_close`` of ``price_history``. Since
-   16/10/2026 the declarations in 001_initial read ``NUMERIC(22, 10)`` and
-   ``NUMERIC(24, 12)``; released SQLite databases keep their 18, 6, and that is
-   deliberate: the reasoning of 002 and 004 (``VARCHAR(14)``).
+   ``transactions.quantity`` was declared ``NUMERIC(18, 6)``, and so were the per-unit cost
+   basis ``transactions.cost_basis_override`` (a price: it is multiplied by the quantity)
+   and the ``open``, ``high``, ``low``, ``close`` and ``adjusted_close`` of
+   ``price_history``. Since 16/10/2026 the declarations in 001_initial read
+   ``NUMERIC(22, 10)`` for the quantity and ``NUMERIC(24, 12)`` for the prices and the cost
+   basis; released SQLite databases keep their 18, 6, and that is deliberate: the
+   reasoning of 002 and 004 (``VARCHAR(14)``).
 
    SQLite stores these values as a double (REAL; INTEGER for a whole value) whatever the
    declaration says: a quantity of ``0.12345678`` has always been saved whole. The six
@@ -43,9 +45,10 @@ Create Date: 2026-10-16
    Nothing stored is rewritten either (the developer's decision, 16/10/2026). A quantity
    saved with more than six decimals, by 1.1, an import or the API, now reads back with
    its digits, up to ten. A price keeps the six decimals it was truncated to when it was
-   written. A value with six decimals or fewer reads back exactly as before,
-   ``10.000000`` included. On the developer's demo data every stored quantity and price
-   reads back identical.
+   written. A per-unit cost basis saved with more than six decimals (Auto computes it as a
+   total divided by the quantity) now reads back with up to twelve. A value with six
+   decimals or fewer reads back exactly as before, ``10.000000`` included. On the
+   developer's demo data every stored quantity and price reads back identical.
 """
 
 import string
