@@ -2815,3 +2815,87 @@ cede; J-17 è nella lista del developer. Analisi in sola lettura fino al via (i 
 > di P6 si raggiunge anche con un promote (WITHDRAWAL e DEPOSIT a importo zero promossi); la descrizione di
 > `TXCreateItem.asset_event_id` è un'altra copia a mano nell'API (con quella di `cost_basis_pair`: residuo di W-B36 nel
 > backlog). Handoff FROZEN di W-B31 e W-B36 (02:15).
+
+> **Lotto di doc entrato** (treno 72, merge `6fa3f8936`, solo `32f8f659c`); A-14 chiusa dal coordinatore nella sezione di A.
+> **W-B36 committato** (`dcb33859f` codice e test, `ad346751b` doc, `a92dc76ec` giornale); base aggiornata con
+> `dev_release2` `bbfba9169` (dentro CP-16, CP-15, X CP11a, Z3/Z4, E4a, Y7) → HEAD `3b3ede3ed`. Prove d'ingresso di
+> W-B31 + W-B36 sulla revisione combinata (02:00–02:10, `nice`, carico sotto 70): `schemas transactions` **105/105**,
+> `services transaction` **66/66**, `db populate`, `api transactions` **26/26**, `api transactions-validate` **11/11**.
+> Porta 6184 libera. Pronti all'ingresso. Le note: il commento di `static_uploads.py:80` lo gira il coordinatore a H, il
+> caso del promote va in P6, il residuo dei testi dell'API resta nel backlog.
+
+**Decisione 47 — passi** (dopo il via del coordinatore, 02:10): 1. ⏳ rossi; 2. cura; 3. prove; 4. doc e handoff (l'ingresso
+aspetta J-17).
+
+1. ⏳ **Rossi** (test-author, 02:12–03:05; nessuna prova lanciata da lui). File: `test_broker_service.py` (BR-U-073 e
+   BR-U-076 sul caso `transfer-receiver-deleted`, BR-U-078 riscritto ×2, nuovi BR-U-086 ×2, BR-U-087 guardia del cambio
+   mancante con un vero PYG/EUR assente, BR-U-088 il calcolo che fallisce), `test_transaction_cost_basis_rule.py`
+   (`TestDecision47TheGivingLegOfATransfer`: costo della gamba dello split, prezzata dopo il resto del batch, split
+   rifiutato con `WAC_FX_UNAVAILABLE` in commit e validate, promote ×2), `test_orphan_transfer_after_broker_delete.py`
+   (`TestOrphanOutgoingTransfer` su due libri: un controllo con l'ADJUSTMENT −4 a 20 EUR scritto direttamente e il resto
+   della cancellazione), nuovo `test_lone_transfer_legs.py` (15 test, import tardivo) con l'azione nuova `services
+   lone-transfer-legs` in `scripts/test_runner/_backend_services.py` (condiviso, solo in aggiunta).
+   Reperti di test-author e mie **decisioni notturne, da rivedere** (nella cura preparata): una gamba il cui costo
+   solleva un errore resta un TRANSFER (con il motivo) e le altre vanno avanti, senza che il passo sollevi (la sezione 9 di
+   `test_post_migration_orphan_pairs.py` mette quantità `'n/a'` sullo stesso broker); le gambe si scelgono in SQL con
+   `quantity < 0`; il dry run conta anche una gamba il cui link nomina una riga sparita; la riga di comando salta il passo
+   se il controllo d'integrità fallisce; un costo dato alla gamba dello split da un update dello stesso batch resta.
+   > Rossi visti (02:15–02:25, `nice`, carico sotto 70): `services broker TestDeleteBulkCrossBrokerPair` → **7 failed,
+   > 19 passed** (i sette attesi; BR-U-087 verde); `services orphan-transfer-numbers TestOrphanOutgoingTransfer` → **2
+   > failed, 2 passed** (i controlli verdi confermano i numeri derivati da test-author sul motore di CP-16).
+   > Seguito di test-author (03:05–03:15): `test_lone_transfer_legs.py` a 18 elementi (la gamba il cui costo solleva un
+   > errore resta con il motivo e le altre si convertono; il dry run elenca la gamba col link verso una riga sparita; le
+   > prove della riga di comando con quattro gambe; una guardia: nessun passo dopo una correzione fallita);
+   > `test_transaction_cost_basis_rule.py` una guardia (il costo dato dall'update dello stesso batch resta);
+   > `test_account_deletion_api.py:17` docstring; sezione 9 di `test_post_migration_orphan_pairs.py` invariata.
+   > Rossi visti (03:15–03:18): `services transaction-cost-basis-rule TestDecision47TheGivingLegOfATransfer` → **6
+   > failed, 1 passed** (la guardia); `services lone-transfer-legs` → **17 failed, 1 passed** (la guardia della correzione
+   > fallita); `check-orphans` pulito (341 file del backend raggiungibili).
+2. ✅ **Cura** (03:20): `/tmp/libreFolio_w_dec47_fix.py --apply` (i 10 file della cura preparata, con le decisioni notturne
+   sopra); `black` invariato, `ruff` pulito; import freschi senza cicli (`lone_transfer_legs`, `app_lifespan`,
+   `post_migration.__main__`, `backend.app.main`).
+3. ✅ **Prove** (03:20–03:45, `nice -n 10`, una alla volta, carico controllato prima di ogni lancio): `services broker`
+   **76/76**; `services transaction-cost-basis-rule` **74/74**; `services lone-transfer-legs` **18/18**; `services
+   orphan-transfer-numbers` **21/21**; `services transaction` **66/66**; `services app-lifecycle` **42/42**; `services
+   roi-fifo-utils` **708/708**; `services user-profile` **36/36**; `services account-deletion-preview` **15/15**; `db
+   post-migration` **41/41**; `db post-migration-orphan-pairs` **47/47**; `db populate`; `api batch-split-promote`
+   **36/36** (il server di prova parte col passo nuovo); `api brokers` **34/34**; `api account-deletion` **9/9**; `api
+   transactions-wac` **20/20**. Porta 6184 libera. Non girati: E2E (lo split dal frontend: chiederò lo slot prima
+   dell'ingresso), `all-backend` (slot del coordinatore).
+4. ⏳ **Doc e handoff** (03:45–).
+   - **devWiki**: `decisions/orphan-transfer-becomes-an-adjustment.md` aggiornata (la gamba che cede al costo Auto del suo
+     broker, lo split e il promote, le gambe sole e il passo d'avvio, l'intreccio con J-17; via le righe superate «not in
+     the code yet» e «waits for point 46/47»), la riga di `index.md`, una voce in fondo a `log.md`; `check_source_paths.py`
+     5 mancanti, preesistenti.
+   - **docs-writer** (primo giro): 15 pagine inglesi — sviluppatore `service.md`, `split_promote.md` (nuova sezione
+     `#transfer-giving-leg`), `architecture/database/index.md` (nuova sezione `#lone-transfer-legs`), `overview.md`,
+     `users_and_brokers.md`, `brokers_transactions.md`, `wac.md`, `price_resolver.md` (J-17); amministratore
+     `cli_tools.en.md`, `docker_advanced.en.md`, `users.en.md`; utente `brokers/index.en.md`, `settings/profile.en.md`,
+     `dashboard/charts.en.md`, `transactions/index.en.md`. Build stretto 0 avvisi, `check-links` 96, `translate-validate`
+     solo il debito nuovo delle sei pagine tradotte toccate (non timbrate).
+   - **Testo dell'eliminazione del broker** (`brokers.confirmDeleteWithTransactions`, EN/IT/FR/ES con `dev.py i18n
+     update`): una frase in più, «Assets other brokers transferred to this one leave them at their average cost»; `i18n
+     check` stretto (4 687 chiavi). Il testo V-3 di A (`settings` `…unpaired`) è pronto in quattro lingue, va ad A col
+     coordinatore insieme alla 47.
+   - **Decisione notturna, da rivedere**: il passo d'avvio non tocca un DB danneggiato. Se c'è qualcosa da convertire,
+     prima `PRAGMA quick_check` (`_database_is_sound`); senza niente da convertire nessun controllo (una query). La riga di
+     comando già lo salta se il controllo d'integrità delle correzioni fallisce. `services lone-transfer-legs` di nuovo
+     **18/18**.
+   - Reperti di docs-writer, nel backlog: **W-B39** (uno split rifiutato non dice niente all'utente: `confirmSplit()` lo
+     scrive solo in console) e **W-B40** (lo split di una coppia non ancora salvata nel Bulk salva l'ADJUSTMENT in uscita
+     senza costo); due pagine della teoria finanziaria e una frase di `access_control.md` nel secondo giro di docs-writer.
+   - **Secondo giro di docs-writer** (04:00–04:20): `architecture/database/index.md` e `overview.md` (il controllo
+     `quick_check` all'avvio; resta una differenza documentata: dopo una correzione fallita su un DB sano il passo d'avvio
+     gira, la riga di comando no), `admin/cli_tools.en.md` (la riga di log nuova), `financial-theory/.../deposited-capital.en.md`
+     e `.../transfer.en.md` (lo split e il promote col costo), `access_control.md` (la gamba che resta TRANSFER senza
+     cambio). Build stretto 0 avvisi, `check-links` 96, `translate-validate` 429 errori e 1 140 avvisi (da 426 e 1 134: il
+     link nuovo di `transfer.en.md` e la riga di log di `cli_tools.en.md`, non timbrati).
+   - test-author: due guardie del passo d'avvio (DB che non passa il controllo: niente scritto, un avviso; niente da
+     convertire: nessun controllo); `services lone-transfer-legs` **20/20**.
+   > **Handoff FROZEN** (04:25): delta di 41 file tracciati e 2 nuovi (`lone_transfer_legs.py`,
+   > `test_lone_transfer_legs.py`); l'ingresso aspetta J-17. File condivisi dichiarati: `services/platform/app_lifespan.py`
+   > (di H: un import e una riga di passo col commento), `scripts/test_runner/_backend_services.py` (azione nuova, in
+   > aggiunta), `db/post_migration/__main__.py` (il passo dopo le correzioni), pagine d'account di A
+   > (`user/settings/profile.en.md`, `admin/users.en.md`, `architecture/users_and_brokers.md`: solo la frase sulla gamba
+   > che cede). Non girati: E2E (lo split e la finestra del broker dal frontend: chiedo lo slot prima dell'ingresso),
+   > `all-backend` (slot del coordinatore).
