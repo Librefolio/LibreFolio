@@ -48,10 +48,13 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series), annualization, period rebasing, G/L ratio, realized gain, price return, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*), annualization, period rebasing, G/L ratio, realized gain, price return, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
+├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule
+├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
 │   ├── models.py            input transactions, events, lots, fragments, closures, result
@@ -68,7 +71,7 @@ backend/app/services/financial_math/
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
-    ├── prices.py            PriceHistoryLookup, opening_reference_price()
+    ├── prices.py            from the asset's AssetPriceSeries: a lot's reference price at its opening, the last day valued at cost
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price and performance histories
@@ -78,6 +81,12 @@ backend/app/services/financial_math/
 `fifo/models.py` also holds the engine's economic allocations (events, groups, per-lot
 accumulators); `portfolio/models.py` holds `ValuationSource`, `EngineEndState` and
 `PortfolioCalculationResult`.
+
+`period_mwrr()` and `period_mwrr_series()` (`returns.py`) hold the Dashboard's MWRR rule, one rule for the card and for
+every point of the line (developer decision D-MF5): no rate when the value is zero or less, or when the net invested
+capital up to that day — the first snapshot's value plus the flows after it (decision N54) — is zero or less; the
+series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()` remain the bare solves, without that
+rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
 
 ### ⚙️ The Portfolio Package at Work {: #portfolio-package }
 
@@ -89,7 +98,8 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 
 1. resolves the target currency (by default `get_effective_base_currency()`) and the broker
    scope, each broker at its `effective_share()`;
-2. loads the scope's transactions and their split links, and classifies them
+2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`;
+   an unusable ratio raises `ValueError`), and classifies them
    (`ScopeAwareTransactionClassifier`, `classifier.py`);
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options and data fingerprints — that starts on or before the
@@ -162,8 +172,10 @@ checks with its guards that a day whose terms do not move keeps its values, and 
 
 `ledger_totals.py` reduces the transaction ledger to its control totals — the cash of every
 broker in each currency and the quantity of every position — read from the rows alone, with no
-price, rate, cost, setting or clock. The instance backup writes them into a backup's manifest
-and, after a restore, compares them with the totals recomputed on the restored database.
+price, rate, cost, setting or clock. The instance backup writes them into a backup's manifest.
+The check of a restore recomputes them on the archive's copy, once upgraded to the app's schema,
+and compares them before the restore is confirmed. A difference is a warning in the check's
+report, never a refusal: a migration may correct data.
 
 | Name | Contract |
 |------|----------|
@@ -206,6 +218,17 @@ Every amount is canonical decimal text — plain notation without trailing zeros
 text. `ControlTotals.from_json(data)` is the inverse of `to_json()` and raises `ValueError` for
 another version or a malformed document. Read `version` before calling it: totals of another
 version are not comparable, which is not the same as a difference.
+
+`from_json()` reads an amount only as `to_json()` writes it.
+
+- **Accepted:** an optional `-`, then at most 60 ASCII digits before the point and 60 after it,
+  the precision of the exact context.
+- **Refused with `ValueError`:** everything else that `Decimal` would also take — an exponent
+  (`"1E+9"`), a `+`, spaces, `_`, other scripts' digits.
+- **Why:** a manifest written by hand, or damaged, could otherwise make `_canonical()` write an
+  exponent out in full; `"1E+50000000"` alone costs about 121 MB.
+- **Round trip:** it holds for every total within that bound, and every ledger the database can
+  hold stays within it (amounts `Numeric(18, 6)`, quantities `RealDecimal(22, 10)`).
 
 What the totals promise their caller:
 
@@ -269,9 +292,10 @@ flowchart LR
    acquisition itself, at its own date, in one batched call. A calculation reads its own data
    from the database only at named points: the portfolio engine (`portfolio/engine.py`, with
    `load_configured_fx_pair_sets()` in `portfolio/data_quality.py` for the configured FX
-   routes), the Yield on Cost loaders (`yield_on_cost.py`) and the
+   routes), the Yield on Cost loaders (`yield_on_cost.py`), the
    [ledger control totals](#ledger-totals) (`compute_control_totals()`, through the session it
-   is given).
+   is given) and the split links (`splits.load_split_links()` and `splits.split_linked_ids()`,
+   the rows of the transactions it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports the
    orchestration services (`portfolio_service`, `broker_service`, `transaction_service`,
    `lots_analysis_service`), the API, AI Export, risk, PAC or signals: they call it.
@@ -306,6 +330,12 @@ flowchart LR
    [synthetic benchmarks](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md)
    (`CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`), all in
    `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
+   The declaration is the tag `@financial-math-exception` in the file's leading JSDoc block,
+   followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
+   (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
+   fails when a listed file lacks the tag, an unlisted file carries it, or an annualizing
+   exponent with 365 (`Math.pow(…, …365…)`, `** …365…` or `**= …365…`) appears outside the listed files:
+   adding an exception means extending that list on purpose; otherwise, use the backend's field.
 
 ---
 
@@ -403,11 +433,27 @@ functions of `lots/`; the service keeps the orchestration, the database loaders,
 builders and the analysis' data-quality report (see
 [Lots Analysis Service](transactions/lots_analysis_service.md#code-layout)).
 
+### 🚦 The Frontend Exceptions Gate {: #frontend-exceptions-gate }
+
+`frontend/src/financialMathExceptions.gate.test.ts` guards [rule 6](#layer-rules) over the `.ts`
+and `.svelte` sources of `frontend/src` — tests, mocks and generated API clients aside — and
+fails when:
+
+- a file of its list, `DECLARED_EXCEPTIONS`, lacks `@financial-math-exception` in its leading
+  JSDoc block, followed by a description of at least 20 characters;
+- any other source contains the tag, even in a comment or a string;
+- a power whose exponent holds 365 (`Math.pow(…, …365…)`, `**`, `**=`) appears outside the list.
+  Powers are found with the TypeScript and Svelte parsers, so comments and strings never count.
+
+As in the layer guard, each detector proves, on synthetic sources, that it sees what it looks
+for. The gate runs with the chart-safety unit tests:
+`./dev.py test front-portfolio chart-safety-unit`.
+
 ### 🎯 Targeted Test Selectors {: #test-selectors }
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`) and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
@@ -432,6 +478,7 @@ builders and the analysis' data-quality report (see
 | `portfolio/` | [The portfolio package at work](#portfolio-package); its data-quality report in [Data Quality Banner](../frontend/data-quality-banner.md); its cache in [FX Architecture](fx/architecture.md#portfolio-cache-invalidation) | [Portfolio Engine — Mathematical Model](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md) |
 | `returns.py` | — | [ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md), [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md); the gain that recovers a drawdown in [Max Drawdown](../../financial-theory/technical-analysis/risk-metrics/max-drawdown.md#recovery-time) and [Current Drawdown](../../financial-theory/technical-analysis/risk-metrics/current-drawdown.md#what-it-takes-to-get-back) |
 | `yield_on_cost.py` | — | [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) |
+| `splits.py` | — | [Split](../../financial-theory/instruments/asset-events/split.md) |
 | `ledger_totals.py` | [Ledger control totals](#ledger-totals) | — |
 
 ---

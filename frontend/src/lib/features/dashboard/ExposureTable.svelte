@@ -78,7 +78,6 @@
 
     interface Props {
         holdings: Holding[];
-        navAmount: number;
         displayCurrency: string;
         brokers?: ReadonlyArray<BrokerLike>;
         onAnalyze?: (assetId: number) => void;
@@ -110,7 +109,7 @@
         oldestOpenLotDate: string | null;
     }
 
-    let {holdings = [], navAmount = 0, displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, ..._legacyProps}: Props & Record<string, unknown> = $props();
+    let {holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -178,7 +177,8 @@
                     brokerName: safeString(holding.broker_name) || broker?.name || '—',
                     broker,
                     currentValue,
-                    navWeight: safeDecimal(holding.nav_weight_percent) ?? (currentValue != null && navAmount > 0 ? (currentValue / navAmount) * 100 : null),
+                    // The backend's weight as it is (W7): null reads «—», never value / NAV computed here.
+                    navWeight: safeDecimal(holding.nav_weight_percent),
                     unrealizedPnl: safeDecimal(holding.gain_loss),
                     unrealizedPnlPercent: safeDecimal(holding.gain_loss_percent),
                     annualizedReturn: safeDecimal(holding.annualized_return),
@@ -215,7 +215,7 @@
                 const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
                 return {
                     type: 'html',
-                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${nameHtml}">${nameHtml}</span></div>`,
+                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-lf-secondary" title="${nameHtml}">${nameHtml}</span></div>`,
                 };
             },
         };

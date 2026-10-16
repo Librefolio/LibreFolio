@@ -57,7 +57,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       invalid one with a coded error when the value is used rather than stop the startup.
       `profile_default()` converts nothing (a `cast`): an entry is written in the type of the
       module's fallback (`500`, never `"500"`). The first entry is the upload limit of a restore:
-      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43).
+      `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `500` megabytes in `managed` (decision 43), read by
+      `backup_max_upload_mb()` in `config/backup.py` with `profile_default(MAX_UPLOAD_VARIABLE, 0)`: no limit on a
+      self-hosted install.
       `./dev.py test services profile-defaults` guards this table too: one entry per profile;
       `selfhosted` empty; `managed` equal, value and type, to `ENVIRONMENT_MANAGED_DEFAULTS`, the
       decided table of the test file; no key that is a `Settings` field or sits in both tables; every
@@ -102,11 +104,15 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `https://` address with a host name (a name, an IPv4 or an IPv6 address, with a port or not) and
       no space, tab or line break inside, and one trailing slash is removed; anything else, `https://`
       alone included, raises `ValueError`, which names the variable. The accessor's caller decides
-      what an invalid address costs, and logs it.
+      what an invalid address costs, and logs it. `support_url()` (`platform.py`) also takes
+      `mailto:` and one email address, the scheme in any case: `?`, `#`, `%`, `,`, `;`, `<`, `>`, `"`,
+      `/` and any whitespace are refused before pydantic's `EmailStr` reads the address, without DNS,
+      and it returns `mailto:` and the address as `EmailStr` normalizes it. `env_url()` itself stays
+      http(s) only.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
-      go into one section module per topic, owned by the workstream of that area. Six exist today:
+      go into one section module per topic, owned by the workstream of that area. Seven exist today:
       `platform.py` (H: `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`),
@@ -130,9 +136,11 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       scheduled wake-up, `wake_token()`, also as `_FILE`, with the rules of the panel's backup token;
       see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync); the idle suspension,
       `idle_suspend_mode()` and `idle_suspend_minutes()`; see
-      [Idle Suspension](../../admin/sleep_wake.md#idle-suspend)) and `backup.py` (B:
+      [Idle Suspension](../../admin/sleep_wake.md#idle-suspend)), `backup.py` (B:
       `backup_download_token()`, the token a hosting panel presents to download the instance's
-      backups, also as `_FILE`). Unlike a `Settings` field, an
+      backups, also as `_FILE`) and `brim.py` (W: `brim_prewarm_enabled()`, the opt-in
+      [warm-up of the BRIM parse pool](../backend/brim/architecture.md#parse-pool-warm-up), which
+      raises `BrimConfigError` on a value it cannot use). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
       `registration_service.py` logs it and falls back safely — registration closed for the first

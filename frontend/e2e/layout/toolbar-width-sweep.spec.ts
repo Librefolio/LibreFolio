@@ -356,7 +356,7 @@ async function assetDetailReady(page: Page): Promise<void> {
 
 async function brokerDetailReady(page: Page): Promise<void> {
     await expect(page.getByTestId('broker-controls')).toBeVisible({timeout: 15_000});
-    // The page publishes no data-busy. Refresh is disabled exactly while the broker or its report loads.
+    // The page root publishes no data-busy; broker-refresh does, and is disabled while the page's tracked loads (pageBusy) run, the first load included.
     await expect(page.getByTestId('broker-refresh'), 'the broker and its report finished loading (Refresh enabled again)').toBeEnabled({timeout: 30_000});
     await expect(page.getByTestId('broker-edit-button'), 'precondition: the E2E user can edit this broker, so the bar shows all four actions').toBeVisible();
 }

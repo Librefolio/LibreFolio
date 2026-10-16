@@ -90,6 +90,7 @@
         "consumed": "Este enlace ya se ha usado. Si tu cuenta está activa, inicia sesión.",
         "revoked": "Este enlace ya no funciona: inicia sesión para pedir uno nuevo.",
         "unknown": "Este enlace no es válido: vuelve a abrirlo completo desde el correo. Si sigue fallando, inicia sesión para pedir uno nuevo.",
+        "blocked": "Esta instancia está bloqueada por su proveedor de alojamiento, así que el enlace no se puede comprobar ahora. Ábrelo de nuevo cuando la instancia se desbloquee; si el enlace ha caducado para entonces, inicia sesión para obtener uno nuevo.",
         "missing": "Este enlace está incompleto: vuelve a abrirlo desde el correo.",
         "error": "No se pudo comprobar el enlace: inténtalo de nuevo."
       },
@@ -129,6 +130,7 @@
         "EMAIL_RECIPIENT_NOT_ALLOWED": "Un enlace de restablecimiento solo va a la dirección de su cuenta.",
         "EMAIL_RECIPIENT_INVALID": "No es una sola dirección de correo válida.",
         "EMAIL_RATE_LIMITED": "Se alcanzó el límite de correos por hora: inténtalo de nuevo en {minutes} min.",
+        "RECIPIENT_REFUSED": "El servidor SMTP ha rechazado la dirección del destinatario.",
         "generic": "No se pudo enviar el correo."
       }
     },
@@ -138,7 +140,6 @@
       "sending": "Enviando…",
       "accepted": "Si coincide una cuenta activa, su propietario recibe un correo con un enlace para elegir una contraseña nueva. Revisa la bandeja de entrada y el spam: el enlace funciona durante 30 minutos.",
       "errors": {
-        "FORGOT_PASSWORD_DISABLED": "El restablecimiento de la contraseña por correo aún no está disponible en esta instancia: pregunta a su administrador.",
         "unavailable": "Ahora esta instancia no puede enviar correos: pregunta a su administrador.",
         "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
         "generic": "No se pudo enviar la solicitud: inténtalo de nuevo."

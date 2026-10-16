@@ -128,8 +128,3 @@ export function compareHistoryEvents(left: {date: string; transaction_id: number
     if (dateOrder !== 0) return dateOrder;
     return left.transaction_id - right.transaction_id;
 }
-
-/** Product of two nullable numbers, or `null` when either is absent (e.g. opening value = qty × price). */
-export function multiplyOrNull(a: number | null, b: number | null): number | null {
-    return a != null && b != null ? a * b : null;
-}

@@ -16,7 +16,7 @@
     "accountCreated": "Account creato con successo! Effettua l'accesso.",
     "registrationFailed": "Registrazione fallita. Riprova.",
     "registrationDisabled": "La registrazione di nuovi utenti è al momento disabilitata dall'amministratore.",
-    "emailRecoveryNotAvailable": "Il recupero via email non è ancora disponibile. Utilizza il terminale del server per reimpostare la password.",
+    "emailRecoveryNotAvailable": "Il recupero via email non è disponibile su questa istanza. Reimposta la password dal terminale del server, oppure chiedi al tuo amministratore un link per reimpostarla.",
     "serverTerminalInstructions": "Esegui questo comando sul server:",
     "contactAdministrator": "Contatta l'amministratore di sistema se non hai accesso al server.",
     "backToLogin": "Torna al Login",

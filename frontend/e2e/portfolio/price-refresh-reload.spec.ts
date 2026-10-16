@@ -1,5 +1,6 @@
 /**
- * «Updating prices…» end to end, and the open page that catches up after it (release 1.3, workstream Z, lots Z5 and Z-13).
+ * «Updating prices…» end to end, and the open page that catches up after it without saying it is busy (release 1.3,
+ * workstream Z, lots Z5, Z-13 and Z-18).
  *
  * Z5. While the server catches up on prices, every `/api/` answer carries `X-LibreFolio-Price-Refresh: starting|running`.
  * The axios interceptor hands the headers to `priceRefresh.observe()`; from the first one the tracker asks
@@ -10,6 +11,10 @@
  * Dashboard, a broker's page — asks for its report again in background, without force, with no navigation and without
  * anyone pressing «Aggiorna». Until Z-13 the tracker sent «Aggiorna»'s `{kind: 'refresh'}`, which only marks the caches:
  * the open page kept the figures of before the catch-up until it was reloaded.
+ * Z-18, and the Refresh spinner of Y11 (P3). That reload is the page's own, not a load the user asked for, and the page
+ * must not say otherwise: the Dashboard's root (`dashboard-page`) keeps `data-busy` — and `aria-busy`, bound to the same
+ * flags — false through it (a screen reader announced «busy» for a price refresh nobody asked for), and neither page's
+ * Refresh button (`sync-button`, `broker-refresh`: `pageBusy`) spins. A Refresh the user asks for still says busy, on both.
  *
  *   (a) Dashboard: a catch-up runs (the notice comes), ends having updated something (the notice goes), and the
  *       Dashboard asks for its main report again — once, the very question it showed — with no navigation.
@@ -18,6 +23,12 @@
  *       `last_refreshed` true even: no notice at any moment), then one that updated nothing (`running` → `idle` with
  *       `last_refreshed` false: the notice comes and goes). Then, in the same page, the control that gives the two
  *       absences their teeth: a catch-up that must reload it, and does, once.
+ *   (d) Dashboard: from the end of a catch-up that updated something to the user's next click — the whole reload in it —
+ *       neither the root nor its Refresh button says busy at any moment. Then the control, in the same page and under the
+ *       same record: the user's Refresh says busy on both, and both come back to idle.
+ *   (e) A broker's page: the same for its Refresh button (the root publishes no `data-busy`), with the same control.
+ *   (f) Dashboard on its Positions tab, with the Performance view saved: the same as (d), with a contribution on screen —
+ *       cached at load, turned stale by the catch-up, and asked again by the reload beside the main report.
  *
  * The catch-up is the stub's, never the lane's. Nothing real runs on the shared backend, and nothing a real catch-up of
  * that backend (its startup, say) says can reach a case. One route on `**​/api/v1/**`, installed after the sign-in and
@@ -44,7 +55,13 @@
  *     microtask, and the report leaves through axios in microtasks too. So when the record says an `idle` was read,
  *     a reload that answer caused is already recorded before it: the absence read at that moment is exact, not a bet
  *     on how long the page takes;
- *   - each time the notice element is put on screen (a `MutationObserver`): "no notice" means never, not "not now".
+ *   - each time the notice element is put on screen (a `MutationObserver`): "no notice" means never, not "not now";
+ *   - every value `data-busy` takes on the Dashboard's root and on the two Refresh buttons (a `MutationObserver` on the
+ *     whole document): the value an element is put on screen with, then each change. A mutation record carries only the
+ *     value before it, so a batch is read back value by value — the value after a record is the old value of the
+ *     element's next record, or the value it has now — and a flag raised and dropped within one tick is still a `true`;
+ *   - each click, stamped before the page handles it (a capture listener on the document): what the user's Refresh
+ *     caused and what came before it are split by a seq, not by the moment the spec happened to look.
  * The record lives on `window`: it survives the in-app navigations of (c) and dies with a full load — the report it
  * still holds after a reload proves the reload came without one. A reaction deferred by a timer would escape the
  * one-task barrier; in (c) it would still be caught by the window, which stays open over two round trips through
@@ -53,17 +70,29 @@
  * Which report. The Dashboard sends its main report (`loadAll`: history included, no contribution, no candles) and may
  * send the Performance contribution or the P&L candles beside it; the broker page its overview. Only the main report —
  * `include_history` true, `include_positions_contribution` and `include_pnl_candles` not — is counted, and the reload
- * must ask exactly the question the page showed: the same body, keys and broker ids in any order.
+ * must ask exactly the question the page showed: the same body, keys and broker ids in any order. In (f) the
+ * contribution — `include_positions_contribution` true, no history — is told apart by its body too, never by its order.
+ *
+ * The silence of (d), (e) and (f). The window opens on the record before the stub says idle and closes on the control's
+ * click, which comes once the reload has landed (every report back, the Dashboard's root settled); it is asserted after
+ * the control, which therefore runs whatever the silence says: a red there is the page saying busy, never a blind record.
+ * A silence also needs the flag down when the window opens — a flag already up needs no change to stay up — so the first
+ * load's hold on the button is let go before, and the record must say so at the mark.
  *
  * Isolation: read-only on the lane's shared backend, safe beside any neighbour. TEST_USER signs in; the pages read
- * (`GET`s, and the report, a computation); the broker id is read with `page.request` (which no route intercepts), by
- * name. The status route is answered in the browser and the header is added in the browser, per page: no other test
- * sees either. Nothing is written, so there is nothing to clean up; the routes and the init script go with the page.
+ * (`GET`s, and the report, a computation), and so does the control's Refresh (`requestPortfolioRefresh()` is a
+ * client-side mark); the broker id is read with `page.request` (which no route intercepts), by name. The status route is
+ * answered in the browser and the header is added in the browser, per page: no other test sees either. Nothing is
+ * written on the backend, so there is nothing to clean up: the view (f) saves lives in this context's own localStorage,
+ * and the routes and the init script go with the page.
  *
  * Desktop only: the tracker and the reload do not depend on the viewport, and (c) moves through the sidebar.
  *
- * Expected before the code of Z-13: the notice parts are green (Z5); (a) and (b) are red at the reload, (c) at its
- * control — its two absences are green with or without Z-13, and the control is what keeps them from being vacuous.
+ * Expected. (a)–(c) pin Z5 and Z-13, green (before Z-13 they were red at the reload, (c) at its control — its two
+ * absences are green with or without Z-13, and the control is what keeps them from being vacuous). Before the code of
+ * Z-18: (e) green, a regression pin of Y11; (d) red at its last assertion only — the Dashboard's root says busy through
+ * the reload, `loadAll()` setting `reportLoading` — with its premises, its button pin and its control green before it;
+ * (f) the same, its root raised by `contributionRefreshing` too (`loadContribution()`, on the stale cached contribution).
  */
 
 import type {APIResponse} from '@playwright/test';
@@ -79,6 +108,9 @@ const REPORT_PATH = `${API}/portfolio/report`;
 const STATUS_PATH = `${API}/system/price-refresh`;
 const HEADER = 'x-librefolio-price-refresh';
 const NOTICE_SELECTOR = '[data-testid="instance-notice"][data-notice-id="liveUpdates.priceRefresh"]';
+/** The elements whose `data-busy` the record follows (Z-18, Y11): the Dashboard's root and the Refresh button of each page. */
+const BUSY_TEST_IDS = ['dashboard-page', 'sync-button', 'broker-refresh'] as const;
+type BusyTestId = (typeof BUSY_TEST_IDS)[number];
 /** The tracker's cadence (PRICE_REFRESH_POLL_MS). */
 const POLL_MS = 3_000;
 /** A wait on the tracker: three polls — the one in flight, the next, and the answer's way back. */
@@ -161,6 +193,14 @@ async function simulateCatchUp(page: Page, initial: {header: CatchUpHeader; stat
 
 type ReportBody = Record<string, unknown> & {broker_ids?: number[]};
 
+/** A value `data-busy` took on an element of BUSY_TEST_IDS: the one it was put on screen with (`mount`), or a change. */
+interface BusyEntry {
+    seq: number;
+    testId: string;
+    kind: 'mount' | 'change';
+    value: string | null;
+}
+
 /** The record the init script keeps on `window` (see the header). */
 interface PageRecord {
     seq: number;
@@ -168,13 +208,24 @@ interface PageRecord {
     reportsSettled: number;
     statusRead: Array<{seq: number; state: string}>;
     noticeShown: number[];
+    busy: BusyEntry[];
+    /** Each click, with the test id of the nearest marked element (the target's own, or an ancestor's). */
+    clicks: Array<{seq: number; testId: string | null}>;
 }
 
 /** Arms the record for every document this page opens from now on: call it before the page under test loads. */
 async function recordPage(page: Page): Promise<void> {
     await page.addInitScript(
-        ({reportPath, statusPath, noticeSelector}: {reportPath: string; statusPath: string; noticeSelector: string}) => {
-            const record = {seq: 0, reports: [] as Array<{seq: number; body: unknown}>, reportsSettled: 0, statusRead: [] as Array<{seq: number; state: string}>, noticeShown: [] as number[]};
+        ({reportPath, statusPath, noticeSelector, busyTestIds}: {reportPath: string; statusPath: string; noticeSelector: string; busyTestIds: string[]}) => {
+            const record = {
+                seq: 0,
+                reports: [] as Array<{seq: number; body: unknown}>,
+                reportsSettled: 0,
+                statusRead: [] as Array<{seq: number; state: string}>,
+                noticeShown: [] as number[],
+                busy: [] as Array<{seq: number; testId: string; kind: 'mount' | 'change'; value: string | null}>,
+                clicks: [] as Array<{seq: number; testId: string | null}>,
+            };
             Object.defineProperty(window, '__lfSpecPriceRefresh', {value: record});
             const pathOf = (url: string): string => {
                 try {
@@ -249,8 +300,62 @@ async function recordPage(page: Page): Promise<void> {
                     }
                 }
             }).observe(document, {childList: true, subtree: true});
+
+            // The busy flags, every value they take: the one an element is put on screen with, then each change — on the
+            // whole document, so an element that mounts after the navigation (or again, after an in-app return) is
+            // followed from its insertion. A mutation record carries only the value before it, so a batch is read back
+            // value by value: the value after a record is the old value of the element's next record in the batch or,
+            // after its last one, the value it has now. A flag raised and dropped within one tick is still a `true` here.
+            const watched = new Set(busyTestIds);
+            const watchedSelector = busyTestIds.map((testId) => `[data-testid="${testId}"]`).join(', ');
+            const watchedTestId = (node: Node): string | null => {
+                const testId = node instanceof Element ? node.getAttribute('data-testid') : null;
+                return testId !== null && watched.has(testId) ? testId : null;
+            };
+            new MutationObserver((mutations) => {
+                // The entries of this batch still waiting for their value, per element.
+                const waiting = new Map<Element, Array<{value: string | null}>>();
+                const settle = (element: Element, value: string | null): void => {
+                    for (const entry of waiting.get(element) ?? []) entry.value = value;
+                    waiting.delete(element);
+                };
+                const note = (element: Element, testId: string, kind: 'mount' | 'change'): void => {
+                    const entry = {seq: ++record.seq, testId, kind, value: null as string | null};
+                    record.busy.push(entry);
+                    waiting.set(element, [...(waiting.get(element) ?? []), entry]);
+                };
+                for (const mutation of mutations) {
+                    const target = mutation.target;
+                    if (mutation.type === 'attributes') {
+                        const testId = watchedTestId(target);
+                        if (testId === null || !(target instanceof Element)) continue;
+                        settle(target, mutation.oldValue);
+                        note(target, testId, 'change');
+                        continue;
+                    }
+                    for (const node of Array.from(mutation.addedNodes)) {
+                        if (!(node instanceof Element)) continue;
+                        for (const element of [node, ...Array.from(node.querySelectorAll(watchedSelector))]) {
+                            const testId = watchedTestId(element);
+                            if (testId !== null) note(element, testId, 'mount');
+                        }
+                    }
+                }
+                for (const element of Array.from(waiting.keys())) settle(element, element.getAttribute('data-busy'));
+            }).observe(document, {childList: true, subtree: true, attributes: true, attributeFilter: ['data-busy'], attributeOldValue: true});
+
+            // Each click, stamped before the page handles it: a capture listener on the document runs before the page's
+            // own (on the button or, delegated, on the app's root, both bubbling). What the click caused comes after its seq.
+            document.addEventListener(
+                'click',
+                (event) => {
+                    const marked = event.target instanceof Element ? event.target.closest('[data-testid]') : null;
+                    record.clicks.push({seq: ++record.seq, testId: marked?.getAttribute('data-testid') ?? null});
+                },
+                true,
+            );
         },
-        {reportPath: REPORT_PATH, statusPath: STATUS_PATH, noticeSelector: NOTICE_SELECTOR},
+        {reportPath: REPORT_PATH, statusPath: STATUS_PATH, noticeSelector: NOTICE_SELECTOR, busyTestIds: [...BUSY_TEST_IDS]},
     );
 }
 
@@ -270,6 +375,16 @@ function isMainReport(body: ReportBody | null): body is ReportBody {
 /** The main reports sent after `since`. */
 function mainReportsSince(record: PageRecord, since: number): ReportBody[] {
     return record.reports.filter((report) => report.seq > since && isMainReport(report.body)).map((report) => report.body as ReportBody);
+}
+
+/** The contribution of the Performance view (Dashboard `loadContribution`): the positions' contribution alone, no history. */
+function isContributionReport(body: ReportBody | null): body is ReportBody {
+    return body !== null && body.include_positions_contribution === true && body.include_history === false;
+}
+
+/** The contribution requests sent after `since`. */
+function contributionsSince(record: PageRecord, since: number): ReportBody[] {
+    return record.reports.filter((report) => report.seq > since && isContributionReport(report.body)).map((report) => report.body as ReportBody);
 }
 
 /** A body as a key: object keys and `broker_ids` sorted. Two equal keys are the same question. */
@@ -335,6 +450,18 @@ async function reportsSettled(page: Page): Promise<void> {
         .toBe(true);
 }
 
+/** The value `data-busy` of `testId` had at `seq` by the record; undefined when the record had not seen it put on screen yet. */
+function busyAt(record: PageRecord, testId: BusyTestId, seq: number): string | null | undefined {
+    let value: string | null | undefined;
+    for (const entry of record.busy) if (entry.testId === testId && entry.seq <= seq) value = entry.value;
+    return value;
+}
+
+/** Each moment `testId` said busy after `since` and before `until`: put on screen with `data-busy="true"`, or switched to it. */
+function busyRaised(record: PageRecord, testId: BusyTestId, since: number, until = Number.POSITIVE_INFINITY): BusyEntry[] {
+    return record.busy.filter((entry) => entry.testId === testId && entry.seq > since && entry.seq < until && entry.value === 'true');
+}
+
 function notice(page: Page): Locator {
     return page.locator(NOTICE_SELECTOR);
 }
@@ -380,6 +507,84 @@ async function endRunningCatchUp(page: Page, catchUp: CatchUp, since: number, la
     const idleRead = await statusRead(page, mark, 'idle', 'the page never read the idle answer: the tracker stopped asking before the catch-up was over');
     await expect(notice(page), 'the notice outlived the catch-up (Z5)').toHaveCount(0);
     return {mark, idleRead};
+}
+
+/**
+ * The end of a running catch-up that updated something, and the reload in background it causes, up to its landing. The
+ * reload is checked, not assumed — a main report sent after the mark — and its landing is every report back, then
+ * `settled`. Returns the mark: from there to the next click the record spans the whole reload.
+ */
+async function backgroundReloadLanded(page: Page, catchUp: CatchUp, settled: () => Promise<void>): Promise<number> {
+    const {mark} = await endRunningCatchUp(page, catchUp, 0, true);
+    await expect
+        .poll(async () => mainReportsSince(await pageRecord(page), mark).length, {
+            message: 'the catch-up updated the prices and the page did not ask for its report again: there is no reload in background to watch (Z-13)',
+            timeout: POLL_BUDGET_MS,
+        })
+        .toBeGreaterThan(0);
+    await reportsSettled(page);
+    await settled();
+    return mark;
+}
+
+/**
+ * The control of a silence (Y11, Z-18): a Refresh the user asks for, in the same page and under the same record. Clicks
+ * the button `refresh` names and returns the seq of that click, stamped in the page before the page handled it. After it
+ * the record must see each of `says` say busy and the Refresh must ask the main report again; the page is then left
+ * settled — the button idle, every report back, `settled` — and the record must end where the page is, idle: it follows
+ * the flag both ways. A record that missed any of this would be blind, and its silence through the reload worthless.
+ */
+async function userRefreshSaysBusy(page: Page, refresh: 'sync-button' | 'broker-refresh', says: readonly BusyTestId[], settled: () => Promise<void>): Promise<number> {
+    const button = page.getByTestId(refresh);
+    const before = (await pageRecord(page)).seq;
+    await expect(button, 'the Refresh button cannot be pressed: a load of the page is still pending').toBeEnabled({timeout: PAGE_TIMEOUT});
+    await button.click();
+    let clicked = -1;
+    await expect
+        .poll(
+            async () => {
+                clicked = (await pageRecord(page)).clicks.find((click) => click.seq > before && click.testId === refresh)?.seq ?? -1;
+                return clicked;
+            },
+            {message: 'the click on the Refresh button never reached the page', timeout: POLL_BUDGET_MS},
+        )
+        .toBeGreaterThan(before);
+    for (const testId of says) {
+        await expect
+            .poll(async () => busyRaised(await pageRecord(page), testId, clicked).length, {
+                message: `the control: the user asked for a Refresh and the record never saw ${testId} say busy — the record is blind to it, or the page no longer says busy for a load the user asked for; either way its silence through the reload proves nothing`,
+                timeout: PAGE_TIMEOUT,
+            })
+            .toBeGreaterThan(0);
+    }
+    await expect.poll(async () => mainReportsSince(await pageRecord(page), clicked).length, {message: 'the control: the Refresh did not ask the main report again', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
+    await expect(button, 'the control: the Refresh never let go of its button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+    await reportsSettled(page);
+    await settled();
+    const record = await pageRecord(page);
+    for (const testId of says) expect(busyAt(record, testId, record.seq), `the record does not end where the page is: ${testId} is idle on screen`).toBe('false');
+    return clicked;
+}
+
+/** A toggle that publishes `aria-pressed`, pressed unless it is already: the state is asked first, the end state asserted. */
+async function pressToggle(button: Locator, why: string): Promise<void> {
+    await expect(button, why).toBeVisible({timeout: PAGE_TIMEOUT});
+    if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+    await expect(button, why).toHaveAttribute('aria-pressed', 'true');
+}
+
+/**
+ * Saves the Dashboard's positions view as Performance × table the way a user does, through the panel's toggles:
+ * PositionsPanel writes both modes per user in this context's localStorage on the click, and reads them back when it
+ * mounts. Ends on the view itself, its contribution on screen: a view with nothing to show would leave the case without
+ * a contribution to cache.
+ */
+async function saveDashboardPerformanceView(page: Page): Promise<void> {
+    await navigateTo(page, '/dashboard?tab=posizioni');
+    const panel = page.getByTestId('positions-panel');
+    await pressToggle(panel.getByTestId('positions-toggle-performance'), 'the Performance view of the positions panel could not be chosen');
+    await pressToggle(panel.getByTestId('positions-toggle-table'), 'the table view of the positions panel could not be chosen');
+    await expect(panel.getByTestId('contribution-table'), "the Dashboard's Performance view shows no contribution: check populate_mock_data.py").toBeVisible({timeout: PAGE_TIMEOUT});
 }
 
 test.beforeEach(async ({page}, testInfo) => {
@@ -521,5 +726,100 @@ test.describe('An open page catches up after the server did (Z5, Z-13)', () => {
         await reportsSettled(page);
         await waitForSettled(dashboard(page), PAGE_TIMEOUT);
         expect(catchUp.served.length, 'premise: the status route was answered by the stub').toBeGreaterThan(0);
+    });
+});
+
+test.describe('The reload in background is not a load the user asked for (Z-18, Y11)', () => {
+    test('(d) Dashboard: through the reload in background neither the page nor its Refresh button says busy, while a Refresh the user asks for says it on both', async ({page}) => {
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await navigateTo(page, '/dashboard');
+        await expect(dashboard(page)).toBeVisible({timeout: PAGE_TIMEOUT});
+        const settled = (): Promise<void> => waitForSettled(dashboard(page), PAGE_TIMEOUT);
+        await settled();
+        await mainReportLanded(page, 'the Dashboard never sent its main report, or it never came back');
+        // The first load holds the button (Y11): the window opens once it has let go, so that a spin in it is a change.
+        await expect(page.getByTestId('sync-button'), 'the first load never let go of the Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+
+        const mark = await backgroundReloadLanded(page, catchUp, settled);
+        const clicked = await test.step('control: a Refresh the user asks for says busy on the page and on its button', () => userRefreshSaysBusy(page, 'sync-button', ['dashboard-page', 'sync-button'], settled));
+
+        // The window — from before the stub said idle to the control's click, the whole reload in it — read whole now and
+        // asserted last: the control above ran whatever it holds. The root's silence last of all: the one red before Z-18.
+        const record = await pageRecord(page);
+        for (const testId of ['dashboard-page', 'sync-button'] as const) {
+            expect(busyAt(record, testId, mark), `premise: when the catch-up ended the record had not seen ${testId} put on screen, or saw it busy — a flag already up needs no change to stay up, and its silence would prove nothing`).toBe('false');
+        }
+        expect(busyRaised(record, 'sync-button', mark, clicked), 'the Refresh button spun for the reload in background after a price catch-up: it waits for the loads the user asks for, and this one is not (Y11, P3)').toEqual([]);
+        expect(busyRaised(record, 'dashboard-page', mark, clicked), 'the Dashboard said it was busy through the reload in background after a price catch-up: a screen reader announces «busy» for a price refresh nobody asked for (Z-18)').toEqual([]);
+    });
+
+    test('(e) broker page: the reload in background does not spin the Refresh button, while a Refresh the user asks for does', async ({page}) => {
+        const brokerId = await brokerIdByName(page, BROKER_WITH_HOLDINGS);
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await navigateTo(page, `/brokers/${brokerId}`);
+        await expect(page.getByTestId('broker-detail-page')).toBeVisible({timeout: PAGE_TIMEOUT});
+        await expect(page.getByTestId('broker-name')).toBeVisible({timeout: PAGE_TIMEOUT});
+        const isThisBroker = (body: ReportBody): boolean => canonical({broker_ids: body.broker_ids ?? []}) === canonical({broker_ids: [brokerId]});
+        await mainReportLanded(page, `the page of broker ${brokerId} never sent its overview report, or it never came back`, isThisBroker);
+        // The first load holds the button (Y11): the window opens once it has let go, so that a spin in it is a change.
+        await expect(page.getByTestId('broker-refresh'), 'the first load never let go of the Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+        // This page publishes no data-busy on its root: every report back is the landing.
+        const settled = (): Promise<void> => Promise.resolve();
+
+        const mark = await backgroundReloadLanded(page, catchUp, settled);
+        const clicked = await test.step('control: a Refresh the user asks for spins the button', () => userRefreshSaysBusy(page, 'broker-refresh', ['broker-refresh'], settled));
+
+        // The window, read whole now and asserted last: the control above ran whatever it holds.
+        const record = await pageRecord(page);
+        expect(busyAt(record, 'broker-refresh', mark), 'premise: when the catch-up ended the record had not seen broker-refresh put on screen, or saw it busy — a flag already up needs no change to stay up, and its silence would prove nothing').toBe('false');
+        expect(busyRaised(record, 'broker-refresh', mark, clicked), "the broker page's Refresh button spun for the reload in background after a price catch-up: it waits for the loads the user asks for, and this one is not (Y11, P3)").toEqual([]);
+    });
+
+    test('(f) Dashboard on the Positions tab with the Performance view: through the reload in background neither the page nor its Refresh button says busy, while the contribution is asked again', async ({page}) => {
+        // Two page loads: the visit that saves the view, and the page under test.
+        test.setTimeout(120_000);
+        // Saved before the stub, the way a user saves it: the page under test opens on the view and asks its contribution
+        // at load, and that cached contribution is what the catch-up turns stale.
+        await saveDashboardPerformanceView(page);
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await navigateTo(page, '/dashboard?tab=posizioni');
+        await expect(dashboard(page)).toBeVisible({timeout: PAGE_TIMEOUT});
+        const settled = (): Promise<void> => waitForSettled(dashboard(page), PAGE_TIMEOUT);
+        const panel = page.getByTestId('positions-panel');
+        await expect(panel.getByTestId('positions-toggle-performance'), 'precondition: the Positions tab did not open on the saved Performance view').toHaveAttribute('aria-pressed', 'true', {timeout: PAGE_TIMEOUT});
+        await expect(panel.getByTestId('contribution-table'), 'precondition: the saved Performance view never showed its contribution').toBeVisible({timeout: PAGE_TIMEOUT});
+        await settled();
+        await mainReportLanded(page, 'the Dashboard never sent its main report, or it never came back');
+        expect(contributionsSince(await pageRecord(page), 0).length, 'precondition: the Performance view on screen asked no contribution in this document, so none is cached for the catch-up to turn stale').toBeGreaterThan(0);
+        // The first load holds the button (Y11), the contribution it joins included: the window opens once it has let go.
+        await expect(page.getByTestId('sync-button'), 'the first load never let go of the Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+
+        // The catch-up ends having updated something. The reload asks the main report and — the cached contribution being
+        // stale — the contribution: both told by their bodies, and both back before the control.
+        const {mark} = await endRunningCatchUp(page, catchUp, 0, true);
+        await expect
+            .poll(
+                async () => {
+                    const record = await pageRecord(page);
+                    return {main: mainReportsSince(record, mark).length > 0, contribution: contributionsSince(record, mark).length > 0};
+                },
+                {message: 'the reload in background did not ask both the main report and the contribution of the Performance view on screen: there is no contribution refresh to watch (Z-13)', timeout: POLL_BUDGET_MS},
+            )
+            .toEqual({main: true, contribution: true});
+        await reportsSettled(page);
+        await settled();
+        const clicked = await test.step('control: a Refresh the user asks for says busy on the page and on its button', () => userRefreshSaysBusy(page, 'sync-button', ['dashboard-page', 'sync-button'], settled));
+
+        // The window — from before the stub said idle to the control's click, the report and the contribution in it — read
+        // whole now and asserted last: the control above ran whatever it holds. The root's silence last of all: the red.
+        const record = await pageRecord(page);
+        for (const testId of ['dashboard-page', 'sync-button'] as const) {
+            expect(busyAt(record, testId, mark), `premise: when the catch-up ended the record had not seen ${testId} put on screen, or saw it busy — a flag already up needs no change to stay up, and its silence would prove nothing`).toBe('false');
+        }
+        expect(busyRaised(record, 'sync-button', mark, clicked), 'the Refresh button spun for the reload in background after a price catch-up, or for the contribution it asks again: it waits for the loads the user asks for, and these are not (Y11, P3)').toEqual([]);
+        expect(
+            busyRaised(record, 'dashboard-page', mark, clicked),
+            'the Dashboard said it was busy through the reload in background after a price catch-up — for its report (`reportLoading`) or for the contribution of the Performance view (`contributionRefreshing`): a screen reader announces «busy» for a price refresh nobody asked for (Z-18)',
+        ).toEqual([]);
     });
 });

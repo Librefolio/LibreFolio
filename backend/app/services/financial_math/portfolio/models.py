@@ -188,10 +188,12 @@ class UnrealizedSplit:
 
 @dataclass(frozen=True, slots=True)
 class RealizedSale:
-    """A SELL replayed by the engine, with its proceeds and the historical cost it took from the pool.
+    """A disposal replayed by the engine: a SELL, or a priced outgoing ADJUSTMENT (J-24), with its proceeds and the
+    historical cost it took from the pool.
 
-    Amounts are in the target currency and scaled by the owner's share of the broker.
-    ``proceeds`` is None when they could not be converted (the pair is in the result's
+    Amounts are in the target currency and scaled by the owner's share of the broker. A SELL's ``proceeds`` are
+    its amount converted at its date; a priced outgoing ADJUSTMENT's are the value it hands over, quantity × cost
+    basis converted at its date. ``proceeds`` is None when they could not be converted (the pair is in the result's
     ``missing_fx``); ``cost_complete`` is False when the pool already lacked part of its cost.
     """
 
@@ -219,8 +221,8 @@ class BrokerDailyContribution:
     nav_contribution: Decimal  # market_value_by_broker + cash_by_broker + in_transit_by_broker
     capital_contribution: Decimal  # cumulative_ecf_by_broker (this broker's capital baseline)
     pnl_contribution: Decimal  # nav_contribution - capital_contribution
-    # The in-transit part of nav_contribution. Internal, never exported: the broker card
-    # (PortfolioService.get_summary) adds it to market value and cash valued at its own date.
+    # The in-transit part of nav_contribution, on the departure broker for the whole transit
+    # window. Internal, never exported: the engine's own checks read it.
     in_transit_contribution: Decimal
 
 
