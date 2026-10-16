@@ -123,6 +123,7 @@ class TXValidationCode(StrEnum):
     # C-97: a value over its column's limit, params {max}; the values of db/precision.decimal_limit_issue.
     DECIMAL_PLACES_EXCEEDED = "decimalPlacesExceeded"
     SIGNIFICANT_DIGITS_EXCEEDED = "significantDigitsExceeded"
+    INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
 
 
 class TXValidationCodeInfo(StrictModel):
