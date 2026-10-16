@@ -21,8 +21,8 @@ hooks of E5b are in place. The contract:
    for ``require_email_verification`` going from off to on while no email with a link can go out; nothing for on → on,
    on → off, off → off, another setting, or when such an email can go.
 6. ``verification.registration_email_allowed(address)``: ten registration emails an hour per client address, keyed by
-   ``flows.address_key`` (an IPv6 client by its /64); the eleventh refused and counted for nothing; no address, no
-   limit.
+   workstream H's ``client_rate_key`` (an IPv6 client by its /64; decision P17); the eleventh refused and counted for
+   nothing; no address, no limit.
 
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown); a new instance registers by invitation (workstream A), so the cases that
@@ -60,7 +60,7 @@ from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, TokenStatus
 from backend.app.services.email import delivery, verification
-from backend.app.services.email.flows import address_key
+from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_utils import print_section, print_success
@@ -343,7 +343,7 @@ async def test_deactivating_an_inactive_account_without_links_changes_nothing(en
     ],
 )
 def test_registration_emails_are_counted_per_client_address(monkeypatch: pytest.MonkeyPatch, first: str | None, eleventh: str | None, limited: bool) -> None:
-    """EVK-010 — E5b, after the security review: ``registration_email_allowed(address)`` admits ten registration emails an hour per client address — keyed by ``address_key``, an IPv6 client by its /64 — and refuses the eleventh, a refused one counted for nothing; past the hour of the first ten, the address is admitted again. Another address has a count of its own; a request without an address is not limited here. A private limiter with the shipped limit, on a fake clock."""
+    """EVK-010 — E5b, after the security review: ``registration_email_allowed(address)`` admits ten registration emails an hour per client address — keyed by workstream H's ``client_rate_key`` (decision P17), an IPv6 client by its /64 — and refuses the eleventh, a refused one counted for nothing; past the hour of the first ten, the address is admitted again. Another address has a count of its own; a request without an address is not limited here. A private limiter with the shipped limit, on a fake clock."""
     print_section(f"EVK-010: {first} then {eleventh}")
     assert (verification.REGISTRATION_EMAILS_BY_ADDRESS.limit, verification.REGISTRATION_EMAILS_BY_ADDRESS.window_seconds) == (10, 3600), "the shipped limit"
     clock = [1_000.0]
@@ -353,7 +353,7 @@ def test_registration_emails_are_counted_per_client_address(monkeypatch: pytest.
     admitted = [verification.registration_email_allowed(first) for _registration in range(10)]
     clock[0] += 60
     later = [verification.registration_email_allowed(eleventh) for _registration in range(2)]
-    key = address_key(eleventh)
+    key = client_rate_key(eleventh)
     counted = limiter.count(key) if key is not None else len(limiter)
     clock[0] = 1_000.0 + 3600 + 1
     past_the_hour = verification.registration_email_allowed(eleventh)

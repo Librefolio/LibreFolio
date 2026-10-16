@@ -2217,3 +2217,43 @@
     - `TargetsStep` tolto (0);
     - aggiunti i 3 file di `detail/` (accenti di sezione, AF-1).
   - Commit dei record: piano generale (esito della sera, stati di G, anteprima, DV e AF), riga dell'indice del backlog, registro.
+- **19:27, la 1.3:** H-21 (`946e02d55`, solo il runner) e X O-20 (`967ddbda4`: `AssetModal.svelte` e il suo test, `routes/(app)/assets/+page.svelte`, `syncHelpers.ts`, `asset-modal.spec.ts`). **Punta `967ddbda4`**, sopra `21e5d2d7d`. Nessuna riga con classi di colore cambiata; `--check` pulito.
+- **19:38, la 1.3:** MF wave 1b (`8d244d1c6`). Nel frontend: `YieldOnCostCell.svelte` (2 righe, senza classi), `ExposureTable.test.ts`, una chiave in `i18n/dashboard/*`, `snapshotDataRenderer.ts`. Record `b9c549300` = **punta**. `--check` pulito.
+  - **Per le gallerie:** MF N54 può mostrare un MWRR dove prima c'era «—»; J-24, in arrivo, sposta qualche euro di realizzato e P&L nella demo (AAPL −3 di IBKR). Sono differenze di dato attese: girate a G, che le annota nel suo piano per il confronto del giro della designer.
+  - **Per W6-d di DV:** MF ha cambiato `ExposureTable.test.ts`; DV lo prende con la base merge quando parte, dopo W7 di Y.
+  - **19:39, correzione della 1.3 su J-24:** circa −165 EUR di realizzato e P&L nella demo (AAPL −3 di IBKR a 160 USD contro un costo medio di ~220). Cambiano Dashboard (card dei KPI, grafico di crescita e P&L dal giorno −20, tabella Performance), dettaglio del broker IBKR e vista Periodo; NAV e lotti no. Dettagli nel piano di J, §10. Girata a G.
+- **19:57, Y nel target: `0c79932a7`** (Y12a, Y-12, Y11 passi 1–4b: `pageBusy` e un solo Refresh per pagina; `assets/+page.svelte` unito con O-20 di X; e2e `page-busy`), più W `0c3275057` (solo backend). Nessuna classe di palette; `--check` pulito. **La 1.3 libera DV W6-d e BK L4.**
+  - I 31 rami locali: nessuna modifica a `PositionsPanel`, `ExposureTable` o `LotCustodyModal` fuori dal target.
+  - **BK:** committata la sua nota del piano sul misto di G-18 (`2db15d1c5`); base merge **`855227a26`** con `0c79932a7` (albero = simulazione). Via a L4: `LotCustodyModal` 205, compresa la prop mista `contentClass="bg-white dark:bg-slate-800"`.
+  - **DV:** fast-forward a **`0c79932a7`**. Via a W6-d: `PositionsPanel` 46 ed `ExposureTable` 2.
+  - Entrambi: analisi breve, poi avanti senza il mio OK se resta 1:1; slot pesanti in sequenza (6156, 6158), annunciati alla 1.3.
+- **20:00, BK L4, analisi:** 205 classi m1; ne migrano 185, comprese la prop mista di G-18 (tolta, perché `ModalBase` dà la card) e i segni con `SIGN_TEXT`. Restano legacy 20 (BK-2): i 4 marcatori degli eventi (16) e le icone «in transito» (4). Nessun test legge i colori. BK procede (1:1). Due «da rivedere» nella raccolta per la designer: punto 28, le chip degli stati tutte `success-soft`; punto 29, i tratteggi più chiari. Ora 29 punti.
+- **20:01, la 1.3:** A nel target (`68355911f`: P18 email unica senza maiuscole con la migrazione 009, A-27, A7a, A7c, A-22). Nel frontend solo auth e impostazioni, senza classi di palette. Prossimi: E (poi la run `settings/email` di G), poi B.
+- **20:04, DV W6-d, analisi:** le 48 classi migrano tutte 1:1, sulle ricette della Dashboard.
+  - Il selezionato grigio di Tabella/Mappa va su `bg-lf-neutral`, non su `panel`, perché `panel` = `hover` darebbe ΔE00 0 col segmento inattivo sotto il puntatore.
+  - Gli scheletri vanno su `neutral`; `ExposureTable:218` su `text-lf-secondary`, come `ContributionTable`.
+  - Nessun test legge i colori. Slot: `front-portfolio dashboard` a 1 worker (10–12 minuti col build); galleria rimandata.
+  - **Decisioni del coordinatore, nello stesso lotto:**
+    - `AllocationPanel` (righe 118, 125, 137) da `bg-lf-action` a `bg-lf-checked text-lf-on-checked`. È la regola D-T16 dello skill: in scuro `action` sulla card fa 1,95:1, `checked` 5,32:1, e `GrowthChart` e `PositionsPanel` usano già `checked`.
+    - `aria-pressed` sui 4 bottoni di `PositionsPanel`.
+    - Tutte e due da dichiarare nel checkpoint.
+- **20:12, correzione su `AllocationPanel`:** DV trova **TD-3** nella sezione di T (TC-10). Per i pulsanti attivi della card «Allocazione Patrimoniale» T aveva seguito un'indicazione esplicita della designer (`--lf-action`), non D-T16. **Ritiro il mio sì: TD-3 resta.** DV rimette le 3 righe. Il contrasto in scuro (1,95 contro 5,32:1) va alla designer come punto 30 (ora 30 punti). `aria-pressed` resta; chiude Y-17 della sezione di Y, da segnalare alla 1.3 all'ingresso di DV.
+- **20:10, BK L4 committato: `16087f0fd`** (m1 930 → 745). Il diff cambia solo `class`, `contentClass` e `SIGN_TEXT`: il contenuto non di classe è identico, verificato tenendo conto delle classi su più righe. Base merge **`f4eeb3b63`** con `9d9030a94` (i record della 1.3, nessun frontend), albero = simulazione, gate 119/119.
+- **20:13, via allo slot di BK L4** su `f4eeb3b63` (6158, taglio alle 20:45): `front-broker detail`, `front-portfolio privacy-masking`, forse `front-broker list`. Annunciato alla 1.3, che ha 4 run attive (6185, 6187, 6189, 6190). Dopo: lo slot di DV W6-d (`front-portfolio dashboard`).
+- **20:12, la 1.3:** delle 4 run solo J `all-backend` (6185, slot 1, fino alle ~20:45) è pesante; le altre sono prove leggere. Lo slot 2 è libero; prima delle 20:45 non aprono altre run pesanti; carico 35. **DV W6-d parte in parallelo a BK** appena manda il checkpoint (6156, `front-portfolio dashboard`, 1 worker, taglio alle 20:45): in tutto 3 run pesanti.
+- **20:14, DV W6-d committato: `45f582eeb`.**
+  - Contenuto: `PositionsPanel` e `ExposureTable` sui ruoli, più `aria-pressed` (Y-17); `app.css` perde la regola `hover:bg-gray-50` (C4); `AllocationPanel` invariato (TD-3); m1 930 → 882.
+  - Diff verificato: fuori dalle `class` cambiano solo i 4 `aria-pressed`.
+  - Base merge **`8f1f27a44`** con `624fa5609` (A-25 della 1.3: `ProfileTab.svelte` ed `emailCase`, `--check` pulito), albero = simulazione, gate 119/119.
+  - **Via allo slot in parallelo a BK** (6156, `front-portfolio dashboard`, 1 worker, taglio alle 20:45).
+  - All'ingresso del secondo dei due, gate sul merge combinato: è il controllo C4 sugli usi divisi fra `LotCustodyModal` e `PositionsPanel`.
+- **20:18, la 1.3 chiede `settings/users/**` per A7b** (badge «Waiting for setup», niente «Reactivate» per l'admin in attesa). Risposto: libero, A è il writer fino all'ingresso. IM è chiuso; nella cartella e in `UsersTab` le classi legacy sono 0. Segnalato che il loro `e-alfy-e-email` ha già cambiato `linkShareActions.ts` (+6/−1, non entrato) e che il badge va sui ruoli (`STATUS_TONES`, skill `design-system`; senza riga nel TSV una classe di palette fa fallire `--check`).
+- **20:23, slot di DV W6-d VERDE** su `8f1f27a44` (20:15–20:23): `api sync` 0 file, E2E `front-portfolio dashboard` 27/27 senza tentativi ripetuti (447 s, di cui 243 di build). Piano committato in `1e061f578`.
+- **20:25, DV W6-d nel target: `3805bf2ca`.** La punta era `618d7208e` (`perf(brim)`, solo backend); il frontend dell'unione è identico a `8f1f27a44`. **Target m1 882, m2 2**; con BK L4 si scende a 697.
+  - Avvisata la 1.3: Y-17 chiuso da `aria-pressed` (da segnare ✅ nella sezione di Y), i due file della dashboard tornano liberi.
+  - DV in idle: nella sua area restano solo categorie, TD-1 e DV-7, in attesa della designer.
+- **20:24, slot di BK L4 VERDE** su `f4eeb3b63` (20:16–20:24, 1 worker): `front-broker detail` 38/38, `front-portfolio privacy-masking` 18/18, `front-broker list` 9/9, in totale 65/65 senza tentativi ripetuti. Piano committato in `00de11b8a`.
+- **20:26, BK L4 nel target: `979d0a151`.** Base merge `502dede41` con `3805bf2ca` (W6-d); gate 119/119 sul ramo unito, quindi nessuna regola C4 resta senza usi fra `LotCustodyModal` e `PositionsPanel`. **Target m1 697 (93,9 %), m2 2.** Area BK chiusa con 159 classi annotate (BK-1 69, BK-2 84, BK-3 4, BK-5 2).
+  - Risolto anche il secondo elemento misto di G-18.
+  - **Nessun file riservato alla 1.3 ha più classi da migrare.** Il residuo, tutto in attesa della designer: 561 categorie, 109 interruttori, 27 ruoli mancanti. CSV aggiornato: `LotCustodyModal` → categoria, tolti `PositionsPanel` ed `ExposureTable`.
+  - DV e BK in idle. Commit dei record: esito della sera nel piano generale, righe di DV e BK, indice del backlog, registro.

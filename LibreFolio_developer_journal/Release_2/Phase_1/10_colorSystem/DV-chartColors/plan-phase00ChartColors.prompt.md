@@ -1536,7 +1536,63 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 532 s: build di frontend e documentazione 411 s (la base aveva i docs di AF), il popolamento, il test in 11,5 s |
   >
   >   - A fine slot la porta 6156 è libera, l'HEAD è `63880bc8b` e il worktree non ha file tracciati cambiati.
-- [ ] W6-d, dopo l'ingresso di Y.
+- [x] ✅ (16/10/2026) W6-d: `PositionsPanel` 46 e `ExposureTable` 2, dalla versione di Y dopo il suo ingresso (W7 nel
+  target `0c79932a7`, via del coordinatore alle 19:58), più `aria-pressed` sui 4 bottoni di `PositionsPanel`.
+  > **Note implementazione** (16/10, 19:58–20:20), sulla base `0c79932a7`: la punta, per fast-forward, con dentro
+  > anche MF wave 1b.
+  > - **Analisi** (20:03): tutto 1:1, niente resta legacy. La mappa segue le ricette della Dashboard (`GrowthChart` di
+  >   W6-b; `AllocationPanel` e `KpiCard` di T):
+  >   - la card: `bg-lf-card text-lf-primary … border-lf-subtle shadow-sm shadow-lf-shadow-card`; il titolo
+  >     `text-lf-secondary`; le cornici dei due gruppi segmentati `border-lf-subtle`;
+  >   - Holdings/Performance: attivo `bg-lf-checked text-lf-on-checked` (D-T16), come `GrowthChart`; inattivo
+  >     `text-lf-muted hover:bg-lf-hover`, trasparente sulla card come prima;
+  >   - Tabella/Mappa, il selezionato grigio: `bg-lf-neutral text-lf-secondary`, come `WacPreviewSection` (stesso
+  >     originale). Il convertitore proponeva `bg-lf-panel`, ma `panel` = `hover`: l'inattivo sotto il puntatore
+  >     sarebbe uguale al selezionato. Con `neutral` restano distinti, ΔE00 3,4/2,5 (prima 1,3 in chiaro, 0 in scuro).
+  >     Le icone: `secondary` su `neutral` 5,77/5,84:1, `muted` sulla card 5,20/4,99:1;
+  >   - «Vedi tutte»: `text-lf-link`; gli scheletri: `bg-lf-neutral`, come dice lo skill (il convertitore diceva
+  >     `panel`); i due vuoti: `text-lf-muted`;
+  >   - `ExposureTable`:218, il nome dell'asset nella cella HTML: `text-lf-secondary`, come la cella gemella di
+  >     `ContributionTable`. Il template resta senza classi legacy.
+  > - **`aria-pressed` sui 4 bottoni** (sì del coordinatore, 20:00), come i fratelli `GrowthChart` e `AllocationPanel`:
+  >   il segnale di stato che i test leggono al posto del colore (regola 10). Chiude Y-17, che il coordinatore segnala
+  >   alla 1.3.
+  > - **⚠️ Fuori pista: `AllocationPanel` e TD-3.** Nell'analisi avevo segnalato che il selezionato dei suoi 3 gruppi
+  >   segmentati, `bg-lf-action`, in scuro fa 1,95:1 sulla card, contro i 5,32:1 di `checked`. Il coordinatore aveva
+  >   detto sì al cambio, poi l'ha ritirato quando gli ho segnalato TD-3 nel backlog (TC-10, sezione di T): lì T ha
+  >   seguito un'indicazione esplicita della designer (giro 2), che vale più della regola generale D-T16. Le 3 righe
+  >   sono tornate come nel target: **`AllocationPanel` invariato, TD-3.** La misura va alla designer, punto 30 della
+  >   raccolta.
+  > - **⚠️ Fuori pista: C4 rosso.** Gli ultimi 4 usi di `hover:bg-gray-50` erano nei bottoni di `PositionsPanel`:
+  >   `themeTokens` dava 20/21. Col sì del coordinatore (20:10), come AF nel lotto 9, ho tolto da `app.css` (di T) le
+  >   righe 255–259: il commento «Dark mode: Hover states», la regola `html.dark .hover\:bg-gray-50:hover` e la riga
+  >   vuota. `--theme-bg-hover` resta usata alla riga 229.
+  > - Prettier ha riformattato i due bottoni la cui riga passava i 300 caratteri.
+  > - **Test:** nessuno legge questi colori. `ExposureTable.test.ts` asserisce `row-analyzed`, una classe di stato;
+  >   `PositionsPanel` non ha test; le 10 spec E2E che lo usano cliccano i 4 bottoni senza leggerne lo stato.
+  > - **Prove leggere** (`files/dv_w6d_light.sh` della sessione, log in `files/w6d-light/`, 20:05–20:20, carico
+  >   39–46):
+  >   - compilatore (0 avvisi), regola 4 (0), dark-only (0), campi nativi (0 su 412 file), Prettier e `git diff
+  >     --check` puliti;
+  >   - `--update`: m1 930 → 882; `PositionsPanel` ed `ExposureTable` escono dal baseline. `--check` pulito;
+  >   - Vitest: `themeRoles` 80/80, `themeTokens` 21/21 dopo il rimedio di C4, `themeComponentTokens` 18/18,
+  >     `htmlInterpolation` 26/26, `htmlSink` 7/7, `ExposureTable` 17/17, `AllocationPanel` 3/3,
+  >     `AllocationPanel.negativeCash` 10/10.
+  > - Resta lo slot, al via del coordinatore dopo BK: l'E2E `front-portfolio dashboard`, che guida le 4 viste di
+  >   `PositionsPanel`. Gli scatti di galleria aspettano la prossima galleria completa.
+  > - Commit `45f582eeb` del coordinatore (20:14). Base merge `8f1f27a44` con la punta `624fa5609` (A-25 della 1.3:
+  >   `ProfileTab`, `emailCase`), pulita; gate del coordinatore 119/119.
+  > - **Slot** (via del coordinatore alle 20:14, in parallelo a BK), su `8f1f27a44`, corsia 6156 e
+  >   `/tmp/librefolio-r2-dv`, dalle 20:15:17 alle 20:23:08, carico da 51 a 30. Script e log in `files/w6d-slot/`
+  >   della sessione.
+  >
+  >   | Passo | Esito | Tempo |
+  >   |---|---|---|
+  >   | `api sync` | verde, 0 file tracciati cambiati | 24 s |
+  >   | E2E `front-portfolio dashboard`, 1 worker | 27 passed, nessun tentativo ripetuto | 447 s: build di frontend e documentazione 243 s, il popolamento, i 27 test in 2,4 min |
+  >
+  >   - La spec guida le 4 viste di `PositionsPanel` e quelle di `AllocationPanel` («adesso», «storico» e le schede).
+  >   - A fine slot la porta 6156 è libera, l'HEAD è `8f1f27a44` e il worktree non ha file tracciati cambiati.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
 

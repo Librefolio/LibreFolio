@@ -5,6 +5,8 @@
 
 import type {Component} from 'svelte';
 import type {LinkPurpose} from '$lib/features/auth/linkToken';
+import SendLinkByEmail from '$lib/features/email/SendLinkByEmail.svelte';
+import {sendByEmailVisible} from '$lib/features/email/sendLinkApi';
 
 /** What the dialog knows about the person the link is for. */
 export interface LinkShareContext {
@@ -25,7 +27,10 @@ export interface LinkShareAction {
     visible?: (ctx: {purpose: LinkPurpose; context: LinkShareContext}) => boolean;
 }
 
-export const LINK_SHARE_ACTIONS: LinkShareAction[] = [];
+export const LINK_SHARE_ACTIONS: LinkShareAction[] = [
+    // Workstream E: the link by email, built from LIBREFOLIO_PUBLIC_URL, while emails with a link can go out
+    {id: 'send-by-email', component: SendLinkByEmail, visible: () => sendByEmailVisible()},
+];
 
 /** The registered actions to show for this link, in registry order. */
 export function visibleLinkShareActions(purpose: LinkPurpose, context: LinkShareContext): LinkShareAction[] {

@@ -43,12 +43,15 @@ status, the setting) are not written yet: this module calls the functions of ``v
    otherwise, a token of another purpose being ``unknown``. A link without an address — the hold, or a link whose email
    did not go out as far as LibreFolio knows — is refused as ``revoked`` but left as it is: it may be the account's
    only unspent token, and revoking it would end the wait (a lockout); the account still waits and «resend» works. A
-   link emailed to an address the account no longer has (letter case and spaces aside) is revoked and refused as
-   ``revoked``. On success the account is active, ``email_verified_at`` is the moment, the link is consumed by its
-   account, the account's other verification tokens are revoked, other purposes and other accounts untouched;
-   committed. A link spent meanwhile is ``consumed``, and nothing changes.
+   link emailed to an address the account no longer has is revoked and refused as ``revoked``: the two compared by
+   ``user_service.same_email``, A's one rule of decision P18 (lot E4c) — A–Z in any case, every other character as
+   written, nothing stripped —, so the account's own address in other capitals is the same address, and with a letter
+   beyond A–Z in another case another one, refused on the safe side. On success the account is active,
+   ``email_verified_at`` is the moment, the link is consumed by its account, the account's other verification tokens
+   are revoked, other purposes and other accounts untouched; committed. A link spent meanwhile is ``consumed``, and
+   nothing changes.
 7. ``resend_verification(session, *, identifier, password, address)``: the limit per client address first, keyed by
-   ``flows.address_key`` and skipped without an address, before any password is checked; then the password as the
+   H's ``client_rate_key`` and skipped without an address, before any password is checked; then the password as the
    login checks it — a dummy hash for an unknown account, one refusal ``INVALID_CREDENTIALS`` for both —; an active
    account is ``EMAIL_VERIFICATION_NOT_NEEDED``, an inactive one that does not wait ``ACCOUNT_DISABLED``; then the
    block, email and links; then the limits per account, counted on the links emailed — tokens carrying an address,
@@ -162,9 +165,11 @@ MAPPED = "::ffff:198.51.100.7"
 SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
 #: The process's limiter of verification emails per recipient mailbox, as shipped (a fixture below replaces it too).
 SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
-#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX.
-MAILBOX_VARIANTS = ("Zq-Vic@Example.com", "zq-vic@example.com", "ZQ-VIC@EXAMPLE.COM", "zQ-vIc@eXaMpLe.CoM")
-MAILBOX = "zq-vic@example.com"
+#: One mailbox written four ways, each the address of an account of its own: the limiter keys them all as MAILBOX. The
+#: ways differ in the case of ``ï`` and ``ç`` alone, in NFC (one code point each): since P18 an address is unique
+#: regardless of A–Z case (``ux_users_email_lower``).
+MAILBOX_VARIANTS = ("zq-v\u00cf\u00e7@example.com", "zq-v\u00ef\u00e7@example.com", "zq-v\u00cf\u00c7@example.com", "zq-v\u00ef\u00c7@example.com")
+MAILBOX = "zq-v\u00ef\u00e7@example.com"
 START = 1_000.0
 
 POSITIONAL = inspect.Parameter.POSITIONAL_OR_KEYWORD
@@ -1188,17 +1193,18 @@ async def test_a_token_without_an_address_verifies_nothing_and_is_left_live(engi
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("sent_to", "verifies"),
+    ("own", "sent_to", "verifies"),
     [
-        pytest.param("zq-old-alice@example.com", False, id="an-address-the-account-no-longer-has"),
-        pytest.param("  ZQ_Alice@Example.COM ", True, id="the-same-address-in-other-letters-and-spaces"),
+        pytest.param(None, "zq-old-alice@example.com", False, id="an-address-the-account-no-longer-has"),
+        pytest.param(None, "ZQ_Alice@Example.COM", True, id="the-same-address-in-other-capitals"),
+        pytest.param("zq_\u00e1lice@example.com", "zq_\u00c1lice@example.com", False, id="another-case-beyond-a-to-z-is-another-address"),
     ],
 )
-async def test_a_link_emailed_to_another_address_is_revoked(engine: AsyncEngine, sent_to: str, verifies: bool) -> None:
-    """EMV-024 — contract 6: a live link emailed to an address the account no longer has is revoked and refused as ``revoked``, the account inactive; the account's own address written in other letters and with spaces around is the same address, and the link verifies."""
+async def test_a_link_emailed_to_another_address_is_revoked(engine: AsyncEngine, own: str | None, sent_to: str, verifies: bool) -> None:
+    """EMV-024 — contract 6: the address a live link was emailed to, against the account's, by ``user_service.same_email`` (A's one rule, decision P18). An address the account no longer has: the link revoked and refused as ``revoked``, the account inactive and unverified, the log saying the link was sent to another address. The account's own address in other A–Z capitals is the same address: the link verifies. The account's ``zq_álice@example.com`` and a link emailed to ``zq_Álice@example.com``, apart in the case of ``á`` alone — a letter beyond A–Z, compared as written —: another address, refused as the first, on the safe side. No case with spaces around: both addresses come from the database, where ``EmailStr`` stripped them, and ``same_email`` strips nothing (A's contract)."""
     print_section(f"EMV-024: sent to {sent_to!r}")
     moment = utcnow()
-    alice = await _add_user(engine, ALICE, active=False)
+    alice = await _add_user(engine, ALICE, email=own, active=False)
     link = await _emailed(engine, alice, created=moment - timedelta(minutes=5), email=sent_to)
 
     if verifies:
@@ -1478,8 +1484,8 @@ async def test_the_limit_per_address_comes_before_the_password(monkeypatch: pyte
         pytest.param(ADDRESS, MAPPED, ADDRESS, id="an-ipv4-address-and-its-mapped-form"),
     ],
 )
-async def test_the_limit_per_address_is_keyed_by_address_key(engine: AsyncEngine, resend_limit: SlidingWindowLimiter, first: str, eleventh: str, key: str) -> None:
-    """EMV-033 — contract 7: the requests are counted by ``flows.address_key``: two addresses of one IPv6 /64 are one client, and an IPv4-mapped IPv6 address is the IPv4 address — ten from one form, the eleventh from the other is refused."""
+async def test_the_limit_per_address_is_keyed_by_client_rate_key(engine: AsyncEngine, resend_limit: SlidingWindowLimiter, first: str, eleventh: str, key: str) -> None:
+    """EMV-033 — contract 7: the requests are counted by workstream H's ``client_rate_key``, the one home of the per-client key (decision P17): two addresses of one IPv6 /64 are one client, and an IPv4-mapped IPv6 address is the IPv4 address — ten from one form, the eleventh from the other is refused."""
     print_section(f"EMV-033: {first} then {eleventh}")
     moment = utcnow()
     await _waiting(engine, ALICE, created=moment)
@@ -1757,8 +1763,10 @@ async def _issue_and_send_directly(engine: AsyncEngine, user: User, moment: date
 
 @pytest.mark.asyncio
 async def test_a_mailbox_gets_three_registration_emails_an_hour_whatever_the_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, clock: FakeClock, mailbox_limit: SlidingWindowLimiter) -> None:
-    """EMV-043 — contracts 5 and 7: four accounts registered with one mailbox written four ways (``Zq-Vic@Example.com``, ``zq-vic@…``, ``ZQ-VIC@…``, ``zQ-vIc@…``), each waiting with its hold. The registration emails of the first three go out, a minute apart; the fourth's, a minute later, does not: «Verification email: not sent», a warning with ``EmailRateLimitedError`` and ``EMAIL_RATE_LIMITED``, nothing raised. That account still waits with its hold as it was — live, not revoked, no new token —; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
+    """EMV-043 — contracts 5 and 7: four accounts registered with one mailbox written four ways (``zq-vÏç@example.com``, ``zq-vïç@…``, ``zq-vÏÇ@…``, ``zq-vïÇ@…``: the case of ``ï`` and ``ç`` alone, since P18 makes an address unique regardless of A–Z case), each waiting with its hold. The registration emails of the first three go out, a minute apart; the fourth's, a minute later, does not: «Verification email: not sent», a warning with ``EmailRateLimitedError`` and ``EMAIL_RATE_LIMITED``, nothing raised. That account still waits with its hold as it was — live, not revoked, no new token —; no fourth message, no fourth unit of the budget; the mailbox counted three times."""
     print_section("EMV-043: three registration emails per mailbox")
+    assert {written.casefold() for written in MAILBOX_VARIANTS} == {MAILBOX}, "precondition: four spellings of one mailbox"
+    assert len({user_service.email_fold(written) for written in MAILBOX_VARIANTS}) == len(MAILBOX_VARIANTS), "precondition: four accounts on one mailbox: one casefold key, four addresses for the A–Z unique index (P18)"
     moment = utcnow()
     accounts = await _mailbox_accounts(engine, moment - timedelta(minutes=5))
     last, last_hold = accounts[-1]

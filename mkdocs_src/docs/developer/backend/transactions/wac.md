@@ -340,7 +340,11 @@ with the layer's command:
    The step must belong to the transaction being replayed (same movement id and
    date): a mismatch is a bug, never data, and raises `RuntimeError`. No cost is
    converted in the daily loop, and `_preload_fx_rates()` (`financial_math/portfolio/engine.py`)
-   no longer asks for acquisition-date rates.
+   no longer asks for acquisition-date rates. It does ask, for each priced outgoing
+   `ADJUSTMENT` (negative quantity, `cost_basis_override` set), the rate of its
+   `cost_basis_currency` — the asset's currency when empty — on the row's own date,
+   before the period too: the value the row hands over is a movement, converted at
+   its date (below).
 
 What the replay takes from the steps:
 
@@ -349,9 +353,9 @@ What the replay takes from the steps:
 | `DailyPortfolioState.open_cost_basis` | Σ `cost_report_for(qty)` over the held positions: historical cost in the target currency (its known part) |
 | `DailyPositionState` | `wac` per unit in the target currency (`None` while the cost is incomplete), `wac_currency` (the target currency), `cost_basis`, `unrealized_pnl` (`None` without a market value or with an incomplete cost; 0 for a position valued at cost), `asset_currency`, `wac_asset`, `cost_complete` |
 | Value of a held position the price resolver cannot mark (`ESTIMATED_AT_COST`) | `cost_report_for(qty)` of a pool complete on the report leg; an incomplete pool leaves it `MISSING` (see [Price Resolver](price_resolver.md#valued-at-cost)) |
-| `PortfolioCalculationResult.realized_sales` | One `RealizedSale` per SELL: `proceeds` converted at the sale date and scaled by the share (`None` when they cannot be converted), `cost` = the historical cost the step removed, `cost_complete` = completeness of the pool before the sale |
-| Capital baseline of priced in-kind `ADJUSTMENT`s | In: the cost the step added (`ADD` steps only). Out: the cost the step removed |
-| Capital of a `TRANSFER` of a security with no price at all | An orphan leg: the cost its own step moved (`cost_report_change`), in or out of the scope's capital, like an in-kind `ADJUSTMENT`. An unknown cost counts as zero, the pool's convention, so a leg out of a pool of incomplete cost (a `MISSING` holding) still takes its known cost out, and nothing is left in capital once the units are gone. An internal pair between two brokers: the per-broker flow is the cost the receiving leg's step added (`_movement_cost_step()` on the receiving leg), rescaled from the receiver's share to the sender's, whether or not the receiver's pool is complete; an arrival of unknown cost adds 0, so there is no flow |
+| `PortfolioCalculationResult.realized_sales` | One `RealizedSale` per disposal (`_realized_disposal()`): a SELL, its `proceeds` the amount converted at the sale date (`_realized_sale()`), or a priced outgoing `ADJUSTMENT` (`_is_capital_adjustment()`), its `proceeds` the value it hands over (`_handed_over_value()`: `abs(quantity) × cost_basis_override`, in `cost_basis_currency` or the asset's currency, converted at the row's date). Both are scaled by the share and `None` when they cannot be converted; `cost` = the historical cost the step removed, `cost_complete` = completeness of the pool before the disposal |
+| Capital baseline of priced in-kind `ADJUSTMENT`s | In: the cost the step added (`ADD` steps only). Out: the value the row hands over (`_handed_over_value()`), or the cost the step removed when that value cannot be converted (the pair is in `missing_fx` with the row's date); the difference from the cost removed is the row's `RealizedSale`. An outgoing `ADJUSTMENT` without a cost basis moves no capital and has no `RealizedSale` |
+| Capital of a `TRANSFER` of a security with no price at all | An orphan leg: the cost its own step moved (`cost_report_change`), in or out of the scope's capital — the book cost both ways, like an incoming in-kind `ADJUSTMENT` (an outgoing one takes out the value it hands over instead). An unknown cost counts as zero, the pool's convention, so a leg out of a pool of incomplete cost (a `MISSING` holding) still takes its known cost out, and nothing is left in capital once the units are gone. An internal pair between two brokers: the per-broker flow is the cost the receiving leg's step added (`_movement_cost_step()` on the receiving leg), rescaled from the receiver's share to the sender's, whether or not the receiver's pool is complete; an arrival of unknown cost adds 0, so there is no flow |
 | `DailyPortfolioState.unrealized_by_currency` | `UnrealizedSplit(asset, fx, unsplit)` per asset currency, see below |
 | `EngineEndState.wac_pool_qty` / `wac_pool_cost` | Quantity and historical cost of the last replayed step |
 | `PortfolioCalculationResult.average_costs` | The whole `AverageCost` map, for the services that read it |
@@ -393,8 +397,8 @@ boundary. The list is empty when there is no unrealized delta.
 
 `PortfolioCalculationResult.missing_fx` (`{"FROM/TO": {dates}}`) collects every
 conversion a movement needed and could not get, at the date the movement happened:
-the average costs' `missing` (both legs), cash amounts, external cash flows and
-the in-transit asset cost. Valuation failures stay per day in
+the average costs' `missing` (both legs), cash amounts, external cash flows, the
+value a priced outgoing `ADJUSTMENT` hands over and the in-transit asset cost. Valuation failures stay per day in
 `DailyPortfolioState.missing_fx_pairs`. The
 [Data Quality Banner](../../frontend/data-quality-banner.md#where-missing-fx-pairs-come-from)
 page explains how both reach the Dashboard.
@@ -402,9 +406,10 @@ page explains how both reach the Dashboard.
 ### 📊 PortfolioService
 
 - **Realized of the period.** `_period_realized_sales()` keeps the engine's
-  `realized_sales` dated in `(date_from, date_to]` whose proceeds and cost are both
-  known; realized = Σ (proceeds − cost). A sale left out is reported instead (its
-  pair, or the cost basis its pool lacks). There is no per-sale WAC query.
+  `realized_sales` — SELLs and priced outgoing `ADJUSTMENT`s — dated in
+  `(date_from, date_to]` whose proceeds and cost are both known; realized =
+  Σ (proceeds − cost). A disposal left out is reported instead (its pair, or the
+  cost basis its pool lacks). There is no per-sale WAC query.
 - **Period-boundary cost** (positions contribution). `_boundary_cost()` reads
   `state_at(day).cost_report_for(qty)` and returns `None` while the pool is
   incomplete that day, so no partial cost enters an unrealized figure.
@@ -558,7 +563,7 @@ Rule 12 of `validate_transaction_business_rules()`
 `_cost_basis_rule()`, shared with `cost_basis_required()` — is `forbidden`, or
 `required_qty_pos` without a positive quantity. It is the test the frontend makes
 before sending a cost basis (`cbAllowed` in
-`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`), and with today's
+`frontend/src/lib/features/transactions/txPayloadHelpers.ts`), and with today's
 table it admits exactly the rows that need an override: a `TRANSFER` or
 `ADJUSTMENT` adding quantity.
 
@@ -595,11 +600,11 @@ row's `cost_fields()`, so the update check above refuses it with
 `costBasisRequired` (operation `update`, `field` `cost_basis_override`), and the
 stored cost stays. Elsewhere the `null` is ignored, so the giving leg of a split
 `TRANSFER` keeps the cost decision 47 gives it (see
-[Split & Promote](split_promote.md)). It is ignored too when
+[Split & Promote](split_promote.md#transfer-giving-leg)). It is ignored too when
 the update names `cost_basis_mode` `auto` or `auto-detail`, which compute their
 own (see [Inline Batch Auto Modes](#inline-batch-auto-modes)): the frontend sends a
 `null` with an Auto row that has no currency hint yet (`buildUpdateDiff()` in
-`frontend/src/lib/utils/transactions/txPayloadHelpers.ts`). Tests:
+`frontend/src/lib/features/transactions/txPayloadHelpers.ts`). Tests:
 `./dev.py test services transaction-cost-basis-rule`
 (`TestDecisionP5AnExplicitNullEmptiesTheCost`).
 
@@ -655,6 +660,15 @@ outgoing leg would empty the pool and give 0; a partial transfer gets the same
 value with or without that leg, since a reduction does not move the unit cost;
 and purchases made on the source broker while the units are in transit stay out.
 
+Under the same condition, after the Auto rows, `compute_wac_and_fx_issues()` prices
+the giving leg of each `TRANSFER` pair the batch splits (`context.handover_rows`):
+`_handover_cost()` averages the leg's own broker, up to its date, without the leg,
+and `_write_auto_cost()` writes the result, unless an update of the batch gives the
+leg a `cost_basis_override` (decision 47; see
+[Split & Promote](split_promote.md#transfer-giving-leg)). A broker deletion writes
+the same cost on a giving leg it leaves without its partner (see
+[Broker Deletion](service.md#broker-deletion)).
+
 The create stage has already flushed new rows for generated IDs, and all of this
 work remains in the caller's session. Neither the WAC helper nor the surrounding
 batch stages commit.
@@ -673,7 +687,9 @@ If `compute_wac_iterative()` returns no WAC and reports missing FX pairs, the
 batch stage appends a `TXValidationIssue` with:
 
 - code `wacFxUnavailable`;
-- the originating create/update operation and index;
+- the originating create/update operation and index or, for the giving leg of a
+  split `TRANSFER` pair, operation `split`, the split's index and `ref_id` that
+  leg;
 - field `cost_basis_override`; and
 - pair names plus required dates in `params`.
 
@@ -687,7 +703,11 @@ performs an automatic WAC calculation. A promote-specific resolved value arrives
 as `resolved_fields.cost_basis_override` from the frontend merge flow (or another
 API client). The promote stage applies it to the positive-quantity transfer leg
 and clears it from the sender; without that key, the receiver keeps the cost basis
-it already has.
+it already has. Either way the sender ends without one: before it applies
+`resolved_fields`, `apply_promotes()` clears `cost_basis_override` and
+`cost_basis_currency` on a side whose new type takes none (`cost_basis_allowed()`),
+such as an `ADJUSTMENT` taking units out that a split left with a cost (decision
+47).
 
 Rows that are also present in `creates[]` or `updates[]` enter auto-WAC only
 because that create/update item requested an auto mode, never because of the
