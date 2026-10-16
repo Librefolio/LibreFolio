@@ -42,17 +42,32 @@ Modules under test: ``services/plugin_settings/resolver.py`` and ``runtime.py``,
    ``AssetSourceError`` ``PROVIDER_ERROR`` / ``FXServiceError`` carrying its masked description (the asset error in its
    message and in ``details["detail"]``, decision N6) and no ``__cause__`` or ``__context__``, while a ``BaseException``
    that is no ``Exception`` (a cancellation) is never replaced; an object that is not a plugin goes through unchecked.
+   **A secret the caller chose** (N15, security review of CP10–CP11): ``BoundSettings.carries_user_secrets`` is true
+   when a non-empty secret of a ``user`` field is bound — never for a system secret, an empty value, a user's plain
+   values, or an instance nobody configured. Then the asset boundary hides whole, ``***``, every text of the error that
+   shows a secret — arguments, ``message``, details, cause and context — instead of masking it in place; the type,
+   ``error_code`` and the very object stay, and a replaced error is described as ``Type: ***``. mockprov, whose error
+   echoes a known context and its instance key, called with a personal token made of that context and a guess of the
+   key's first character, raises the same error for a wrong guess and for the right one. Without a secret of the
+   caller's own the masking in place stays as above.
 6. **Search** (``AssetSearchService``): the plain search lists the providers refused with ``NOT_CONFIGURED`` in
    ``providers_not_configured``, in the order of the query, each in ``providers_with_errors`` too, and never calls them;
    a provider failing with another code is an error only, one answering is in neither list. The SSE ``provider_error``
    event of a provider not configured carries ``error_code: NOT_CONFIGURED`` beside its message and nothing else, and
    the refusal is logged at INFO, never as a warning. These providers are lab plugins the asset registry hands out for
    codes of their own, configured for real through the private engine: a required field without a value.
+7. **The asset URL** (``public_asset_url``): a URL that shows a bound secret, the instance's or the caller's, as written
+   or URL-encoded, is withheld whole — ``None``, never a masked URL — with one warning naming the provider, never the
+   URL or the secret; any other URL, and the URL of an object that is not a plugin, comes back as it is, nothing
+   logged. The probe (``probe_provider_config``) computes ``provider_url`` through it: mockprov's ``get_asset_url``
+   (patched with ``monkeypatch``) putting a secret in the URL gives ``provider_url`` ``None``, the rest of the probe
+   answering.
 
 Pure: the rows live in a private SQLite file under ``tmp_path`` (``create_all``), reached through a private engine put
 in place of ``runtime.get_async_engine``; the instance key is a test key set with ``monkeypatch`` and the data
 directory points into ``tmp_path``; every variable a test sets goes through ``monkeypatch``; a search asks a query of
-its own, so the process's search caches answer for no other test.
+its own, so the process's search caches answer for no other test. Every plugin a test binds is a new instance, and a
+method patched on mockprov's class goes through ``monkeypatch``.
 """
 
 from __future__ import annotations
@@ -65,7 +80,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, quote_plus
 
 import pytest
 import pytest_asyncio
@@ -75,9 +90,11 @@ from structlog.testing import capture_logs
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import PluginSystemSetting, PluginUserSetting, User
+from backend.app.schemas.provider import FAProviderConfigBase, ProbeOperation
 from backend.app.services.asset_source_providers.mockprov.plugin import SETTINGS_ECHO_QUERY, MockProvider
 from backend.app.services.assets import core as asset_core
 from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.assets.provider_management import ProviderManagementOperations
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.fx import runtime as fx_runtime
@@ -1380,6 +1397,191 @@ async def test_a_cancellation_is_never_replaced_at_the_fx_boundary():
     assert exception_renders_secret(raised.value, frozenset({secret}))
 
 
+# -----------------------------------------------------------------------------
+# A secret the caller chose: every text that shows a secret hidden whole (N15)
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("secrets", "carried"),
+    [
+        pytest.param({"personal_token": "a-token-the-user-chose"}, True, id="a-user-secret"),
+        pytest.param({"api_key": "the-instance-key-0001", "personal_token": "a-token-the-user-chose"}, True, id="a-user-secret-beside-a-system-one"),
+        pytest.param({"api_key": "the-instance-key-0001"}, False, id="a-system-secret-only"),
+        pytest.param({"api_key": "the-instance-key-0001", "personal_token": ""}, False, id="an-empty-user-secret"),
+        pytest.param({}, False, id="no-secret"),
+        pytest.param({"not_declared": "a-value-no-field-declares"}, False, id="a-key-no-field-declares"),
+    ],
+)
+def test_carries_user_secrets_is_a_non_empty_secret_of_a_user_field(secrets: dict[str, str], carried: bool):
+    """5, N15: mockprov's declaration — a system secret ``api_key``, a user secret ``personal_token`` — with the user's
+    plain values set in every case: only a non-empty secret of a ``user`` field is a secret the caller chose; a system
+    secret, an empty value, a user's plain values and a key no field declares are not."""
+    bound = BoundSettings(MockProvider.settings_fields, {"results_limit": 5, "preferred_language": "it"}, secrets)
+
+    assert bound.carries_user_secrets is carried
+
+
+def test_an_unbound_instance_carries_no_user_secret():
+    """5, N15: mockprov as the registry hands it out, before ``configure_instance``, and ``BoundSettings.unbound``."""
+    assert MockProvider().settings.carries_user_secrets is False
+    assert BoundSettings.unbound(MockProvider.settings_fields).carries_user_secrets is False
+
+
+def test_the_binding_of_a_call_carries_a_user_secret_only_with_the_users_own_readable_token():
+    """5, N15: ``build_bound_settings`` as ``configure_instance`` calls it for mockprov, the instance key bound every
+    time: the user's own token, read from their row, is carried; the same user without a token, a token row moved from
+    another user (unreadable: no value) and a call for nobody (``user_rows=None``, a scheduled sync) carry none."""
+    system = {"api_key": _secret_row(_marker(), "api_key", code="mockprov")}
+    limit = {"results_limit": _plain(5)}
+    token = _marker()
+
+    def bind(user_rows: dict[str, StoredValue] | None, user_id: int | None) -> BoundSettings:
+        return build_bound_settings("asset", "mockprov", MockProvider.settings_fields, system, user_rows, user_id=user_id)
+
+    own_token = bind({**limit, "personal_token": _secret_row(token, "personal_token", "user", 1, code="mockprov")}, 1)
+    no_token = bind(limit, 1)
+    moved_token = bind({**limit, "personal_token": _secret_row(_marker(), "personal_token", "user", 2, code="mockprov")}, 1)
+    for_nobody = bind(None, None)
+
+    bindings = (own_token, no_token, moved_token, for_nobody)
+    assert (own_token.secret("personal_token"), moved_token.secret("personal_token")) == (token, None), "barrier: the token as each binding resolved it"
+    assert all(binding.secret_values() for binding in bindings), "barrier: the instance key is bound every time"
+    assert [binding.carries_user_secrets for binding in bindings] == [True, False, False, False]
+
+
+#: What mockprov's error shows right before its instance key: a refused request, as an HTTP library writes it. Anybody
+#: can read it in the plugin's code. Longer than a key: a personal token chosen as this context and one character is the
+#: longer of the two, the order in which replacing the longest form first left the rest of the key in clear.
+ECHO_CONTEXT = "Client error '401 Unauthorized' for url 'https://api.mock.example/v1/quote?symbol=MOCK&apikey="
+ECHO_TAIL = "'"
+#: The identifiers ``_EchoingMock`` fails for: with an error the boundary masks in place, with one it has to replace.
+ECHO, ECHO_SLOTS = "LF_ECHO", "LF_ECHO_SLOTS"
+
+
+class _EchoingMock(MockProvider):
+    """mockprov, whose current value fails for ``ECHO`` and ``ECHO_SLOTS`` with the text of the refused request —
+    ``ECHO_CONTEXT``, the instance key, ``ECHO_TAIL`` —: for ``ECHO`` an ``AssetSourceError`` raised from the library's
+    ``ConnectionError`` (kept in ``raised``), which the boundary masks in place; for ``ECHO_SLOTS`` a ``_SlotsLeak``,
+    which it has to replace. Any other identifier gets mockprov's own answer."""
+
+    raised: AssetSourceError | None = None
+
+    async def get_current_value(self, identifier, identifier_type, provider_params=None):
+        if identifier not in (ECHO, ECHO_SLOTS):
+            return await super().get_current_value(identifier, identifier_type, provider_params)
+        echoed = f"{ECHO_CONTEXT}{self.settings.secret('api_key')}{ECHO_TAIL}"
+        if identifier == ECHO_SLOTS:
+            raise _SlotsLeak(echoed)
+        try:
+            raise ConnectionError(echoed)
+        except ConnectionError as cause:
+            self.raised = AssetSourceError(f"{echoed} refused", "AUTH_FAILED", {"url": echoed, "status": 401})
+            raise self.raised from cause
+
+
+def _bound_mockprov(*, api_key: str, personal_token: str | None = None, plugin_class: type[MockProvider] = MockProvider) -> MockProvider:
+    """A new ``plugin_class`` instance bound as ``configure_instance`` binds mockprov for a call made for user 1: the
+    instance key and, when given, that user's personal token, both read from their stored rows under the test key."""
+    system = {"api_key": _secret_row(api_key, "api_key", code="mockprov")}
+    user = {} if personal_token is None else {"personal_token": _secret_row(personal_token, "personal_token", "user", 1, code="mockprov")}
+    instance = plugin_class()
+    instance.bind_settings(build_bound_settings("asset", "mockprov", MockProvider.settings_fields, system, user, user_id=1))
+    assert (instance.settings.secret("api_key"), instance.settings.secret("personal_token"), instance.settings.missing) == (api_key, personal_token, ()), "setup: bound as stored"
+    return instance
+
+
+def _guesses(key: str) -> dict[str, str]:
+    """The personal tokens a caller chooses to guess ``key``'s first character: ``ECHO_CONTEXT``, then a wrong
+    character, or the right one."""
+    wrong = "0" if key[0] != "0" else "1"
+    return {"wrong": ECHO_CONTEXT + wrong, "right": ECHO_CONTEXT + key[0]}
+
+
+async def _raised_by(provider: MockProvider, identifier: str) -> AssetSourceError:
+    """What ``call_provider`` raises to its caller when ``provider``'s current value for ``identifier`` fails."""
+    with pytest.raises(AssetSourceError) as raised:
+        await asset_core.call_provider(provider, lambda: provider.get_current_value(identifier, None), timeout=5)
+    return raised.value
+
+
+def _link(error: BaseException | None) -> tuple | None:
+    return None if error is None else (type(error), error.args, str(error))
+
+
+def _what_the_caller_reads(error: AssetSourceError) -> tuple:
+    """All a caller can read of an error: type, code, arguments, message, details, text and representation, and the
+    type, arguments and text of its cause and of its context."""
+    return (type(error), error.error_code, error.args, error.message, error.details, str(error), repr(error), _link(error.__cause__), _link(error.__context__))
+
+
+@pytest.mark.asyncio
+async def test_with_a_personal_secret_two_guesses_of_the_instance_key_raise_the_same_error():
+    """5, N15, the overlap attack through ``call_provider``: mockprov's error echoes ``ECHO_CONTEXT`` and its instance
+    key; the caller's personal token is that context and a guess of the key's first character. Wrong or right, the
+    caller gets the same error: the very one the plugin raised, type and ``error_code`` kept, every text that showed a
+    secret — arguments, message, details, cause and context — ``***`` entirely. A detail that shows none stays, and an
+    error that shows no secret is left as it is."""
+    print_section("5: N15, two guesses of the instance key, one error")
+    key = _marker()
+    tokens = _guesses(key)
+    echoed = f"{ECHO_CONTEXT}{key}{ECHO_TAIL}"
+    assert len(tokens["right"]) > len(key), "setup: the chosen token is the longer one"
+    assert mask_text(echoed, frozenset({key, tokens["wrong"]})) != mask_text(echoed, frozenset({key, tokens["right"]})), "barrier: masked in place, the two guesses would read differently"
+
+    seen = {}
+    for guess, token in tokens.items():
+        provider = _bound_mockprov(api_key=key, personal_token=token, plugin_class=_EchoingMock)
+        assert provider.settings.carries_user_secrets, "barrier: the call carries a secret of the caller's own"
+        error = await _raised_by(provider, ECHO)
+        assert error is provider.raised, "masked in place: the very error the plugin raised, not a replacement"
+        seen[guess] = _what_the_caller_reads(error)
+
+    hidden = (ConnectionError, (MASK,), MASK)
+    assert seen["wrong"] == seen["right"], f"the two guesses must read the same: {seen}"
+    assert seen["right"] == (AssetSourceError, "AUTH_FAILED", (MASK,), MASK, {"url": MASK, "status": 401}, MASK, f"AssetSourceError({MASK!r})", hidden, hidden)
+    untouched = await _raised_by(_bound_mockprov(api_key=key, personal_token=tokens["right"], plugin_class=_EchoingMock), "INVALID_TICKER_12345")
+    assert (untouched.error_code, untouched.message, untouched.details) == ("NOT_FOUND", "Invalid identifier for mock provider.", {}), "an error that shows no secret is left as it is"
+    print_success("wrong or right guess: AUTH_FAILED, every text ***")
+
+
+@pytest.mark.asyncio
+async def test_without_a_personal_secret_the_errors_are_masked_in_place_as_before():
+    """5, the other side of N15: the instance key only, for a user without a token: the error reaches the caller masked
+    in place, the known context kept (the CP10 contract), and an error the boundary replaces is described by its text
+    masked in place."""
+    key = _marker()
+    provider = _bound_mockprov(api_key=key, plugin_class=_EchoingMock)
+    assert not provider.settings.carries_user_secrets, "barrier: no secret of the caller's own"
+
+    in_place = await _raised_by(provider, ECHO)
+    replaced = await _raised_by(_bound_mockprov(api_key=key, plugin_class=_EchoingMock), ECHO_SLOTS)
+
+    echoed = f"{ECHO_CONTEXT}{MASK}{ECHO_TAIL}"
+    message, link = f"{echoed} refused", (ConnectionError, (echoed,), echoed)
+    assert in_place is provider.raised
+    assert _what_the_caller_reads(in_place) == (AssetSourceError, "AUTH_FAILED", (message,), message, {"url": echoed, "status": 401}, message, f"AssetSourceError({message!r})", link, link)
+    description = f"_SlotsLeak: failed with {echoed}"
+    replacement = f"Provider mockprov failed: {description}"
+    assert _what_the_caller_reads(replaced) == (AssetSourceError, "PROVIDER_ERROR", (replacement,), replacement, {"detail": description}, replacement, f"AssetSourceError({replacement!r})", None, None)
+
+
+@pytest.mark.asyncio
+async def test_with_a_personal_secret_a_replaced_error_is_described_as_its_type_and_a_mask():
+    """5, N15: an error masking cannot rewrite — a ``__str__`` over ``__slots__``, the ``_SlotsLeak`` of the CP10 tests —
+    is replaced by ``PROVIDER_ERROR``; with a personal secret its description, in the message and in
+    ``details["detail"]``, is ``Type: ***``, the same for either guess, and the replacement keeps no link to the
+    original."""
+    key = _marker()
+
+    seen = {}
+    for guess, token in _guesses(key).items():
+        seen[guess] = _what_the_caller_reads(await _raised_by(_bound_mockprov(api_key=key, personal_token=token, plugin_class=_EchoingMock), ECHO_SLOTS))
+
+    replacement = f"Provider mockprov failed: _SlotsLeak: {MASK}"
+    assert seen["wrong"] == seen["right"] == (AssetSourceError, "PROVIDER_ERROR", (replacement,), replacement, {"detail": f"_SlotsLeak: {MASK}"}, replacement, f"AssetSourceError({replacement!r})", None, None)
+
+
 # =============================================================================
 # 6. SEARCH: THE PROVIDERS NOT CONFIGURED
 # =============================================================================
@@ -1465,3 +1667,104 @@ async def test_the_search_stream_reports_a_provider_not_configured_with_its_code
     assert [entry for entry in logs if entry["log_level"] in ("warning", "error", "critical") or entry.get("exc_info")] == []
     assert asked == []
     print_success(f"provider_error {error['error_code']}, logged at INFO")
+
+
+# =============================================================================
+# 7. THE ASSET URL: public_asset_url, and the probe's provider_url
+# =============================================================================
+
+#: The warning of a withheld URL: it names the provider, never the URL or a secret.
+URL_WITHHELD = "Provider asset URL withheld: it shows a secret"
+
+
+@pytest.mark.parametrize("form", ["as-written", "quote", "quote_plus"])
+@pytest.mark.parametrize("field_key", ["api_key", "personal_token"])
+def test_public_asset_url_withholds_a_url_that_shows_a_secret(field_key: str, form: str):
+    """7: a URL that shows a bound secret — the instance key or the caller's token, as written or URL-encoded — is
+    withheld whole: ``None``, never a masked URL, and one warning naming the provider, without the URL or a secret."""
+    bound_secrets = {key: _marker() + " /+&" for key in ("api_key", "personal_token")}
+    provider = _bound_mockprov(api_key=bound_secrets["api_key"], personal_token=bound_secrets["personal_token"])
+    secret = bound_secrets[field_key]
+    forms = {"as-written": secret, "quote": quote(secret, safe=""), "quote_plus": quote_plus(secret)}
+    assert len(set(forms.values())) == 3, "setup: the three forms must differ, or the test proves one of them only"
+    url = f"https://mock.example/assets/MOCK?region=eu&{field_key}={forms[form]}"
+
+    with capture_logs() as logs:
+        withheld = asset_core.public_asset_url(provider, url)
+
+    assert withheld is None
+    assert logs == [{"event": URL_WITHHELD, "log_level": "warning", "provider": "mockprov"}]
+    assert all(text not in repr(logs) for text in (*bound_secrets.values(), forms[form])), logs
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        pytest.param("https://mock.example/assets/MOCK?region=eu", id="a-url-without-a-secret"),
+        pytest.param(None, id="no-url"),
+        pytest.param("", id="an-empty-url"),
+    ],
+)
+def test_public_asset_url_hands_back_a_url_that_shows_no_secret(url: str | None):
+    """7: the URL as the plugin built it — the very object —, nothing logged: with both secrets bound, and on an instance
+    nobody configured."""
+    configured = _bound_mockprov(api_key=_marker(), personal_token=_marker())
+
+    with capture_logs() as logs:
+        handed_back = (asset_core.public_asset_url(configured, url), asset_core.public_asset_url(MockProvider(), url))
+
+    assert all(result is url for result in handed_back), handed_back
+    assert logs == []
+
+
+def test_public_asset_url_hands_a_test_doubles_url_back_as_it_is():
+    """7: an object that is not a plugin has no settings: its URL comes back as it is, nothing logged — even from a
+    double without a ``provider_code``."""
+    url = "https://double.example/assets/X?apikey=whatever-the-double-says"
+
+    with capture_logs() as logs:
+        handed_back = (asset_core.public_asset_url(_NotAPlugin(), url), asset_core.public_asset_url(_SuiteDouble(), url))
+
+    assert all(result is url for result in handed_back), handed_back
+    assert logs == []
+
+
+@pytest.mark.parametrize(
+    ("shown", "withheld"),
+    [
+        pytest.param("api_key", True, id="the-instance-key-in-the-url"),
+        pytest.param("personal_token", True, id="the-users-token-in-the-url"),
+        pytest.param(None, False, id="no-secret-in-the-url"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_the_probe_withholds_a_provider_url_that_shows_a_secret(shown: str | None, withheld: bool, users: dict[str, int], private_engine: AsyncEngine, through_private_engine: list[int], monkeypatch: pytest.MonkeyPatch):
+    """7: the probe computes ``provider_url`` outside the call boundary, through ``public_asset_url``. mockprov's
+    ``get_asset_url``, patched to put a secret in the URL — the instance key, or alice's token, URL-encoded —: alice's
+    probe answers ``provider_url`` ``None`` with one warning, and its current price as before. The control, a URL
+    without a secret, comes back as the plugin built it."""
+    print_section(f"7: the probe's provider_url, {shown or 'no secret'} in the URL")
+    alice = users["alice"]
+    bound_secrets = {key: _marker() + " /+" for key in ("api_key", "personal_token")}
+    await _store(private_engine, _system("mockprov", "api_key", secret=bound_secrets["api_key"]), _user(alice, "mockprov", "personal_token", secret=bound_secrets["personal_token"]))
+    built: list[str] = []
+
+    def asset_url(self: MockProvider, identifier: str, identifier_type: object, provider_params: dict | None = None) -> str:
+        query = "region=eu" if shown is None else f"region=eu&{shown}={quote(self.settings.secret(shown), safe='')}"
+        built.append(f"https://mock.example/assets/{identifier}?{query}")
+        return built[-1]
+
+    monkeypatch.setattr(MockProvider, "get_asset_url", asset_url)
+    config = FAProviderConfigBase(provider_code="mockprov", identifier="MOCK", identifier_type="TICKER", provider_params={})
+
+    with capture_logs() as logs:
+        response = await ProviderManagementOperations.probe_provider_config(config, [ProbeOperation.CURRENT_PRICE], user_id=alice)
+
+    assert len(built) == 1, "barrier: the probe asked the plugin for its URL"
+    assert shown is None or quote(bound_secrets[shown], safe="") in built[0], f"barrier: the plugin put the secret in its URL: {built}"
+    assert response.provider_url == (None if withheld else built[0])
+    assert [entry for entry in logs if entry["event"] == URL_WITHHELD] == ([{"event": URL_WITHHELD, "log_level": "warning", "provider": "mockprov"}] if withheld else [])
+    assert response.current_price is not None and response.current_price.success, f"the rest of the probe answers: {response.current_price}"
+    answer = response.model_dump_json()
+    assert not [form for secret in bound_secrets.values() for form in (secret, quote(secret, safe=""), quote_plus(secret)) if form in answer], "no form of a secret in the probe's answer"
+    print_success(f"provider_url {response.provider_url!r}")
