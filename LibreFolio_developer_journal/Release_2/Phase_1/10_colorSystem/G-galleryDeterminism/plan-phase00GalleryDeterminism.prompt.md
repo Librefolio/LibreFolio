@@ -1165,3 +1165,30 @@ cartella dello snapshot. **Solo segnalazione:** non fa mai fallire la run.
   - Le impronte sono uguali in tutte le varianti: desktop `dh` 761, schermo allungato a 745 per un blocco di 656 px;
     mobile `dh` 887.
   - Guardate a occhio es/light desktop e it/dark mobile: rese corrette, nessun trabocco della barra delle schede.
+- **`settings/email` per la 1.3 ✅, 16/10 21:22–21:37.** Commit `102fa9ec1`: la punta, con E (`56759b2c8`) e Y12b.
+  Due run identiche, `g-email-a` e `g-email-b`, sullo stesso build, 2 worker. Il filtro
+  `-f "Settings email \(admin\) - all languages and themes"` seleziona solo `gallery.spec.ts:2069`.
+  - Carico: a è partita con carico 58. b è partita a 122, dopo l'attesa massima di 5 min: giravano le corsie di W, Z,
+    X e B e `mediaanalysisd` di macOS. Entrambe verdi.
+  - Esito: 2 test su 2 verdi per run, 16 PNG ciascuna, `live_price_check` pulito. Misti a runtime (G-18): 0.
+  - **a↔b: 15 immagini identiche su 16.**
+    - L'unica cambiata, `desktop/it/light`, cambia di 1 livello in 38 pixel: l'avatar della barra laterale, riquadro
+      32×32 a (24, 548).
+    - È il rumore già misurato in G-13 (`low`, al massimo 0,0041 %, Δ 1), e lo stesso riquadro cambiava nella coppia
+      di FE5c. Lo scatto resta `low`.
+  - **G-15 chiusa.** La barra delle schede ora scorre (`affae6ffe`, 15/10) e tiene in vista la scheda attiva: «Correo» e
+    «E-mail» si vedono.
+    - In francese e spagnolo, nella vista admin su desktop, la barra trabocca ancora: «Perfil»/«Profil» è fuori vista e
+      la seconda scheda è tagliata al bordo («…ferencias»). Nello scatto non c'è segno che la barra scorra.
+    - La posizione è deterministica (a = b). In inglese e italiano la barra ci sta.
+- **Nota per la prossima galleria completa, quella del giro della designer** (coordinatore, 16/10 sera). Rispetto a
+  `designer-16b` e `baseline-r2` sono attese differenze **di dato, non di colore**, che arrivano dalla 1.3. Nel
+  confronto vanno classificate come cambi di dato, senza indagarle come regressioni.
+  - **MF N54**, entrato in `8d244d1c6`: dove prima c'era «—» può comparire un MWRR, nei portafogli più giovani
+    dell'intervallo.
+  - **J-24**, entrato in `31a59bdb1`: nella demo circa **−165 EUR** di realizzato e di P&L. L'aggiustamento AAPL −3 di IBKR esce a
+    160 USD contro un costo medio di circa 220.
+    - Cambiano: nella Dashboard le card dei KPI, il grafico di crescita e P&L dal giorno −20 e la tabella Performance;
+      il dettaglio del broker IBKR; la vista Periodo.
+    - Non cambiano NAV e lotti.
+    - Dettagli: piano di J, §10 «J-24».

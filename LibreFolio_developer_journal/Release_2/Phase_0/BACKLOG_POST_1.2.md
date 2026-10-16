@@ -2413,7 +2413,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - `UTC`: neutro e uguale alle immagini pubblicate oggi, ma cambia ogni scatto locale con un'ora o un asse del tempo.
       Dovrebbe entrare prima di G-13, e ogni candidata dovrebbe averlo nella base prima del suo cancello.
   - Verifica: una run filtrata di `settings/backup-ready`, che con `Europe/Rome` deve mostrare la stessa ora di prima.
-- **G-15 · Su desktop, in spagnolo, la scheda Email esce dalla barra delle schede di Settings** — basso-medio; G,
+- ✅ **G-15 · Su desktop, in spagnolo, la scheda Email esce dalla barra delle schede di Settings** — basso-medio; G,
   15/10, doppio lancio degli scatti nuovi (`g-new3-a/b`). **Difetto del prodotto, proprietario da instradare.**
   - Con le 3 schede nuove (Utenti, Backup, Email) l'admin ha 7 schede. In uno scatto desktop di 1280 px:
     - in inglese ci stanno, e resta lo spazio prima di «Admin»;
@@ -2430,8 +2430,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - un'etichetta spagnola più corta.
   - Per la gallery è deterministico: a e b sono identici. La correzione però cambierà gli scatti desktop di Settings in
     spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
+  - **Chiusa il 16/10.** La correzione è `affae6ffe` (15/10), la seconda proposta: la barra scorre in orizzontale e tiene
+    in vista la scheda attiva. Verificata negli scatti `g-email-a/b` (`102fa9ec1`): «Correo» ed «E-mail» sono in vista.
+    - Resta, in francese e spagnolo, una domanda di design: la prima scheda è fuori vista e la seconda è tagliata al
+      bordo, senza segno di scorrimento nello scatto. L'ho girata al coordinatore.
 
-  Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
+  Dettagli: snapshot `g-new3-a/b` e `g-email-a/b` in `LibreFolio_visual_review`,
+  `desktop/<lingua>/light/settings/email.png`.
 - ✅ **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
   developer approva dagli scatti le barre «ideale vs reale» sui colori delle categorie, D-T21).
   - Fatto da test-author, nel perimetro di G. Lo scatto è nel test `PAC allocator result`, fra il piano e la prova: 8
