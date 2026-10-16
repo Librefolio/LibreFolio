@@ -5351,12 +5351,22 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   rivedere). L'azione manda l'invito sempre nella lingua predefinita dell'istanza; `POST /email/links` accetterebbe
   `language`, ma la 1.3 non mostra un selettore. Da aggiungere se serve invitare chi parla un'altra lingua.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E4.1».
-- **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
+- ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
   username, testo libero di 50 caratteri. Il tetto resta `LIBREFOLIO_SMTP_MAX_PER_HOUR` per processo. Da valutare: una
   chiave che tolga il `+tag` (e i punti per i domini che li ignorano), oppure un controllo sullo username nelle
   email. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E6.9».
+  - 17/10, E: chiusa con la decisione notturna **N62** del coordinatore, da rivedere col developer. Le due cure
+    servono entrambe.
+    - (a) I tre limiti per casella contano su `delivery.mailbox_budget_key()`: `casefold`, il `+tag` tagliato su ogni
+      dominio, i punti tolti per Gmail e `googlemail.com`. Solo come chiave: l'email va all'indirizzo salvato.
+    - (b) Reset, verifica e avviso di cambio salutano senza username.
+    - (c) L'avviso non mostra più niente del nuovo indirizzo, perché senza DNS anche il TLD è testo libero.
+    - L'invariante: nessuna email che un estraneo può indirizzare porta testo scelto da lui.
+    - Il DoS sul budget d'istanza, fatto con tante caselle diverse, è una domanda del cloud per il developer
+      (coordinatore). Resta E-12.
+    - Dettagli: piano 08, «E-9.0» ed «E-9.1».
 - **E-11 · Su un'istanza bloccata, «Send the link again» legge il 401 del blocco come credenziali sbagliate** —
   minimo; E, 16/10 (E-10, nota del `test-author`).
   - `POST /email/verification/resend` è fuori da `ALLOWED_WHEN_BLOCKED`, quindi un chiamante anonimo riceve il 401 di
@@ -5372,6 +5382,14 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - leggere il testo di `detail`, che è fragile.
 
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-10».
+- **E-12 · I domini catch-all e i sottodomini di Fastmail aggirano la chiave per casella** — basso; E, 17/10 (E-9).
+  `mailbox_budget_key()` unisce gli alias `+tag` e i punti di Gmail. Restano due casi:
+  - un dominio catch-all, dove ogni parte locale arriva alla stessa casella;
+  - gli indirizzi a sottodominio di Fastmail (`qualsiasi@utente.fastmail.com`).
+
+  In questi casi ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza. Un limite per
+  dominio colpirebbe i grandi provider condivisi, quindi servirebbe un elenco di domini o un'altra idea. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-9.0», «Resti fuori da E-9».
 
 ## Y · Cruscotto e grafici (fase 01)
 
