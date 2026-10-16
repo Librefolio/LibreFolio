@@ -188,6 +188,8 @@ def configure_logging(log_level: str = "INFO", enable_file_logging: bool = True)
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
+        # basicConfig(force=True) below would close it, but finds nothing left: a log file would stay open
+        handler.close()
 
     # Silence verbose third-party loggers
     # aiosqlite logs every SQL operation at DEBUG level

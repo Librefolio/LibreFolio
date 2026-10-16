@@ -19,7 +19,7 @@ error, so the command looked as if it had done what was asked.
 ## Root cause
 
 The launcher handed the file to Alembic as the `DATABASE_URL` environment variable. `backend/alembic/env.py` reads
-the URL from `get_settings()`, and `get_settings()` (`backend/app/config.py`) **recomputes** `DATABASE_URL` from the
+the URL from `get_settings()`, and `get_settings()` (`backend/app/config/__init__.py`) **recomputes** `DATABASE_URL` from the
 data directory and overwrites whatever the environment said. The variable was set, and never read.
 
 Same family as [[problems/env-var-injection-point-duplicated]]: a value injected at a point the consumer does not

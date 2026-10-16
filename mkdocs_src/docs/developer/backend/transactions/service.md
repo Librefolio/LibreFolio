@@ -63,7 +63,7 @@ Its order is contractual:
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
-| 5 | `apply_updates()` | Apply and validate merged update state |
+| 5 | `apply_updates()` | Apply and validate merged update state. An explicit `cost_basis_override: null` removes the row's cost basis where its type and side take one, unless the update is in Auto; step 11 then refuses the update where one is required (decision P5, see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
 | 6 | `validate_updated_pairs()` | Re-check shared description/tags on updated linked pairs |
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |

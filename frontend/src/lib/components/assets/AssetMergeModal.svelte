@@ -232,56 +232,56 @@
 <ModalBase {open} {zIndex} maxWidth="2xl" allowOverflow={step === 1} onRequestClose={close} testId="asset-merge-modal">
     <div class="p-6 space-y-5 {step === 1 ? '' : 'max-h-[85vh] overflow-y-auto'}">
         <div>
-            <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100" data-testid="asset-merge-title">
+            <h2 class="text-lg font-semibold text-lf-primary" data-testid="asset-merge-title">
                 {$t('assets.merge.title')}
             </h2>
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            <p class="mt-1 text-sm text-lf-secondary">
                 {$t('assets.merge.subtitle')}
             </p>
         </div>
 
         <!-- The direction of the operation, stated once and always visible. -->
-        <div class="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 px-4 py-3 text-sm">
-            <span class="font-medium text-gray-900 dark:text-gray-100 line-through decoration-red-400" data-testid="asset-merge-source">
+        <div class="flex items-center gap-3 rounded-lg border border-lf-subtle bg-lf-panel px-4 py-3 text-sm">
+            <span class="font-medium text-lf-primary line-through decoration-lf-danger" data-testid="asset-merge-source">
                 {sourceAsset?.display_name ?? ''}
             </span>
-            <ArrowRight class="text-gray-400 shrink-0" size={16} />
-            <span class="font-medium text-gray-900 dark:text-gray-100" data-testid="asset-merge-target">
+            <ArrowRight class="text-lf-muted shrink-0" size={16} />
+            <span class="font-medium text-lf-primary" data-testid="asset-merge-target">
                 {targetAsset?.display_name ?? $t('assets.merge.targetPlaceholder')}
             </span>
         </div>
 
         {#if step === 1}
             <div class="space-y-2">
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span class="block text-sm font-medium text-lf-secondary">
                     {$t('assets.merge.chooseTarget')}
                 </span>
                 <AssetSelect bind:value={targetId} filter={targetFilter} placeholder={$t('assets.merge.targetPlaceholder')} testid="asset-merge-target-select" />
                 {#if !hasTargets}
-                    <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="asset-merge-no-targets">
+                    <p class="text-sm text-lf-muted" data-testid="asset-merge-no-targets">
                         {$t('assets.merge.noTargets')}
                     </p>
                 {/if}
-                <p class="text-xs text-gray-500 dark:text-gray-400">
+                <p class="text-xs text-lf-muted">
                     {$t('assets.merge.chooseTargetHint')}
                 </p>
             </div>
         {:else}
             <!-- What actually moves, straight from the backend's dry run. -->
             <div class="space-y-2">
-                <span class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span class="block text-sm font-medium text-lf-secondary">
                     {$t('assets.merge.whatMoves')}
                 </span>
                 {#if movedRows.length === 0}
-                    <p class="text-sm text-gray-500 dark:text-gray-400" data-testid="asset-merge-moves-nothing">
+                    <p class="text-sm text-lf-muted" data-testid="asset-merge-moves-nothing">
                         {$t('assets.merge.movesNothing')}
                     </p>
                 {:else}
-                    <ul class="divide-y divide-gray-100 dark:divide-slate-700 rounded-lg border border-gray-200 dark:border-slate-700" data-testid="asset-merge-preview">
+                    <ul class="divide-y divide-lf-subtle rounded-lg border border-lf-subtle" data-testid="asset-merge-preview">
                         {#each movedRows as row (row.key)}
                             <li class="flex items-center justify-between px-4 py-2 text-sm" data-testid="asset-merge-preview-{row.key}">
-                                <span class="text-gray-600 dark:text-gray-400">{row.label}</span>
-                                <span class="font-medium text-gray-900 dark:text-gray-100">{row.value}</span>
+                                <span class="text-lf-secondary">{row.label}</span>
+                                <span class="font-medium text-lf-primary">{row.value}</span>
                             </li>
                         {/each}
                     </ul>
@@ -298,39 +298,39 @@
             {/if}
 
             {#if identifiersAdded.length > 0}
-                <div class="rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-3" data-testid="asset-merge-identifiers-added">
-                    <span class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                <div class="rounded-lg border border-lf-subtle px-4 py-3" data-testid="asset-merge-identifiers-added">
+                    <span class="block text-sm font-medium text-lf-secondary">
                         {$t('assets.merge.identifiersKept')}
                     </span>
                     <div class="mt-2 flex flex-wrap gap-1.5">
                         {#each identifiersAdded as value (value)}
-                            <span class="inline-flex items-center rounded-md bg-gray-100 dark:bg-slate-700 px-2 py-0.5 text-xs font-mono text-gray-700 dark:text-gray-300">
+                            <span class="inline-flex items-center rounded-md bg-lf-neutral px-2 py-0.5 text-xs font-mono text-lf-secondary">
                                 {value}
                             </span>
                         {/each}
                     </div>
-                    <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    <p class="mt-2 text-xs text-lf-muted">
                         {$t('assets.merge.identifiersKeptHint')}
                     </p>
                 </div>
             {/if}
 
-            <div class="flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-4 py-3" data-testid="asset-merge-warning">
-                <AlertTriangle class="text-red-500 shrink-0 mt-0.5" size={16} />
-                <p class="text-sm text-red-700 dark:text-red-300">
+            <div class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft px-4 py-3" data-testid="asset-merge-warning">
+                <AlertTriangle class="text-lf-danger shrink-0 mt-0.5" size={16} />
+                <p class="text-sm text-lf-danger-on-soft">
                     {$t('assets.merge.destructiveWarning', {values: {name: sourceAsset?.display_name ?? ''}})}
                 </p>
             </div>
         {/if}
 
         {#if errorMessage}
-            <p class="text-sm text-red-600 dark:text-red-400" data-testid="asset-merge-error">{errorMessage}</p>
+            <p class="text-sm text-lf-danger" data-testid="asset-merge-error">{errorMessage}</p>
         {/if}
 
         <div class="flex justify-end gap-2 pt-1">
             {#if step === 2}
                 <button
-                    class="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700"
+                    class="px-4 py-2 text-sm rounded-lg border border-lf-input text-lf-secondary hover:bg-lf-hover"
                     data-testid="asset-merge-back"
                     disabled={merging}
                     onclick={() => {
@@ -342,16 +342,22 @@
                     {$t('common.back')}
                 </button>
             {/if}
-            <button class="px-4 py-2 text-sm rounded-lg border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700" data-testid="asset-merge-cancel" disabled={merging} onclick={close} type="button">
+            <button class="px-4 py-2 text-sm rounded-lg border border-lf-input text-lf-secondary hover:bg-lf-hover" data-testid="asset-merge-cancel" disabled={merging} onclick={close} type="button">
                 {$t('common.cancel')}
             </button>
             {#if step === 1}
-                <button class="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="asset-merge-next" disabled={targetId == null || previewLoading} onclick={loadPreview} type="button">
+                <button
+                    class="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-lf-action text-lf-on-action hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    data-testid="asset-merge-next"
+                    disabled={targetId == null || previewLoading}
+                    onclick={loadPreview}
+                    type="button"
+                >
                     {#if previewLoading}<Loader2 class="animate-spin" size={14} />{/if}
                     {$t('common.continue')}
                 </button>
             {:else}
-                <button class="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="asset-merge-confirm" disabled={merging} onclick={confirmMerge} type="button">
+                <button class="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-lf-danger-solid text-lf-on-danger-solid hover:bg-lf-danger-hover disabled:opacity-50 disabled:cursor-not-allowed" data-testid="asset-merge-confirm" disabled={merging} onclick={confirmMerge} type="button">
                     {#if merging}<Loader2 class="animate-spin" size={14} />{/if}
                     {$t('assets.merge.confirmButton')}
                 </button>

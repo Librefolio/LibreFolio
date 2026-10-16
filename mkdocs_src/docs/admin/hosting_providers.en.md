@@ -118,7 +118,8 @@ your users sign in again after each restart. See
 
 A hosting provider can block an instance, for example when its subscription is not paid. Users can
 still sign in, follow a password-reset link already sent to them, read why the instance is blocked
-and sign out; the rest of the app is closed.
+and sign out, and administrators can still download a backup of the instance; the rest of the app is
+closed.
 LibreFolio deletes nothing: the data stays as it is. The block works in both profiles.
 
 ### ⚙️ The Variables {: #block-variables }
@@ -169,7 +170,16 @@ After signing in, users get a full page instead of the app, **This instance is b
 - with `LIBREFOLIO_BILLING_URL` ([Environment Variables](configuration.md)),
   administrators also get a **Manage subscription** link to your subscription page, which opens in
   a new tab; the other users do not see it;
+- administrators also get a second card under the message, **Keep a copy of the data**: the backup
+  card of **Settings › Backup**, to back up the whole instance, follow the backup, download the
+  archive before the instance is gone, and delete it from the server. The other users do not see it:
+  their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
+
+The card makes the same archive as your [hosting panel](#panel-backups): it leaves out the logs and
+the instance key, and the card says so. Keep your copy of the instance's key, its
+`secrets/instance.key` or the key you configured, with the data: without it, what LibreFolio
+encrypted can no longer be read. See «The Instance Key» in [Environment Variables](configuration.md).
 
 A user still signed in after the restart gets the page as soon as the app asks the server for data.
 Once you lift the block and restart, users get the app back at their next page load.
@@ -183,7 +193,7 @@ On a blocked instance, only these API calls answer as usual:
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
-| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the block page has no button for it yet. For your panel, its [four routes](#panel-jobs), with its token |
+| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
 | The [scheduled wake-up](sleep_wake.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
