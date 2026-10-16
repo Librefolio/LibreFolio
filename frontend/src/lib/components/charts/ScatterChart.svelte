@@ -41,10 +41,10 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from './echartsAnimationConfig';
-    import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from './echartsTooltipHelpers';
+    import {buildTooltipTheme, scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from './echartsTooltipHelpers';
     import {buildScatterOption, type RiskReturnPoint} from './scatterChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Props {
         points: readonly RiskReturnPoint[];
@@ -77,15 +77,24 @@
     let dark = $state(false);
     const resizeWatcher = createResizeWatcher(() => chart?.resize());
 
-    let built = $derived(buildScatterOption({points, riskFreeRate, dark, labels, selectedId}));
+    /** Bumped by the Designer Lab's colour edits (C4): the option is rebuilt and its roles read again. */
+    let chartColorsRevision = $state(0);
+    let built = $derived.by(() => {
+        void chartColorsRevision;
+        return buildScatterOption({points, riskFreeRate, dark, labels, selectedId});
+    });
 
     onMount(() => {
         dark = isDarkTheme();
         const darkObserver = onThemeClassChange(() => {
             dark = isDarkTheme();
         });
+        const chartColors = onChartColorsChange(() => {
+            chartColorsRevision += 1;
+        });
         return () => {
             darkObserver.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             chart?.dispose();
         };
@@ -131,6 +140,7 @@
         resizeWatcher.observe(container);
 
         const {xAxis, yAxis, ...rest} = built.option;
+        const box = buildTooltipTheme(dark, container);
 
         chart.setOption(
             {
@@ -144,6 +154,10 @@
                 tooltip: {
                     position: tooltipPositionAboveFinger,
                     confine: true,
+                    // The shared box: without it ECharts drew its own, white in both themes (B4).
+                    backgroundColor: box.bg,
+                    borderColor: box.border,
+                    textStyle: {color: box.textColor},
                     formatter: (params: {data?: {name?: string; value?: [number, number]; detail?: string}}) => {
                         const item = params.data;
                         if (!item?.value) return '';

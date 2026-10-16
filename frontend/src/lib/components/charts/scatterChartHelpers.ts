@@ -33,7 +33,7 @@
  */
 
 import {themed} from '$lib/theme/themePair';
-import {RISK_RETURN_COLORS} from '$lib/theme/chartTheme';
+import {chartNeutrals, RISK_RETURN_COLORS} from '$lib/theme/chartTheme';
 
 /** What a point stands for. Drives symbol and colour, never position. */
 export type RiskReturnRole = 'portfolio' | 'benchmark' | 'asset';
@@ -250,8 +250,9 @@ export function buildScatterOption(input: ScatterOptionInput): ScatterOptionResu
                 };
             });
 
-    const axisColor = themed(RISK_RETURN_COLORS.axis, dark);
-    const textColor = themed(RISK_RETURN_COLORS.axisText, dark);
+    const {riskReturn} = chartNeutrals(dark);
+    const axisColor = riskReturn.axis;
+    const textColor = riskReturn.axisText;
 
     const line = capitalMarketLine(placeable, riskFreeRate);
 
@@ -266,7 +267,7 @@ export function buildScatterOption(input: ScatterOptionInput): ScatterOptionResu
             data: line,
             showSymbol: false,
             silent: true,
-            lineStyle: {type: 'dashed', width: 1, color: themed(RISK_RETURN_COLORS.capitalMarketLine, dark)},
+            lineStyle: {type: 'dashed', width: 1, color: riskReturn.capitalMarketLine},
             z: 1,
         });
     }
