@@ -218,3 +218,7 @@ Sono tutti locali: la push la fa il developer.
 | 129 | 16/10 19:48 | W: correzione di C-97a (D6): `round_computed_value` quantizza solo oltre la scala (i valori calcolati dai plugin non escono più con 12 zeri); gate su dev: real-decimal 96, brim-providers 736 | `0c3275057` |
 | 130 | 16/10 19:59 | Y: Y12a, Y-12, Y11 passi 1–4b (un solo «Aggiorna» per pagina che aspetta `pageBusy`; `join` per i pannelli, N55); E2E combinata 121/121 | `0c79932a7` |
 | 131 | 16/10 20:06 | A: P18 (email uniche senza distinzione di maiuscole, revisione 009), A-24, A-27 (link di reset revocati al cambio di email o password), A7a (admin iniziale da variabili; la pagina `/setup` arriva con A7b), A7c, A-22; all-backend 20 767/0, combinato verde | `68355911f` |
+| 132 | 16/10 20:20 | A: A-25 (Impostazioni › Profilo non chiede la password per un cambio di sole maiuscole) | `b7e50b359` |
+| 133 | 16/10 20:33 | W: W-B53 (riscaldamento facoltativo del pool di analisi BRIM, `LIBREFOLIO_BRIM_PREWARM`, spento in produzione e acceso in test; N56), cherry-pick con 3 risoluzioni di W | `618d7208e` |
+| 134 | 16/10 20:58 | J: J-24 (P21: un ADJUSTMENT in uscita con prezzo esce al valore dichiarato al cambio del giorno; differenza dal costo medio realizzata); all-backend su J-24 + MF 1b 6/7 (solo i 2 rossi CA già curati) | `31a59bdb1` |
+| 135 | 16/10 20:59 | MF: lotto C (pesi e HHI in `financial_math/weights.py`; peso su NAV «—» con patrimonio ≤ 0; D-MF7) | `0eb85aa9b` |

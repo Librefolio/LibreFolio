@@ -962,3 +962,52 @@ class TestPreloadFxRates:
         assert set(fx_map.values()) == {Decimal("1")}
         # Asset currencies only over the range: no rate at a BUY date before it (was requested for the inline WAC).
         assert ("JPY", "EUR", date(2024, 12, 30)) not in fx_map
+
+    @pytest.mark.asyncio
+    async def test_preload_asks_the_rate_of_every_priced_outgoing_adjustment_at_its_date(self, monkeypatch):
+        """J-24: a priced outgoing ADJUSTMENT leaves the capital at the value it hands over, converted at its own date,
+        so the preload asks (cost currency, row date) for every one of them — before the range too, where the per-day
+        loop over the asset currencies never reaches, and inside it in a currency no asset is quoted in. The cost
+        currency is ``cost_basis_currency``, or the asset's when it is None.
+
+        Range 2025-01-01..01-02, asset 1 in EUR, asset 2 in JPY (its rate asked every day of the range, as always).
+        Asked: (USD, 2024-12-20), an ADJUSTMENT −2 of asset 1 at 50 USD; (JPY, 2024-12-23), an ADJUSTMENT −3 of asset 2
+        at 700 with no cost currency; (GBP, 2025-01-02), an ADJUSTMENT −1 of asset 1 at 60 GBP inside the range. Not
+        asked: an ADJUSTMENT −1 without a cost basis on 2024-12-27 (it hands nothing over, J-11) and an ADJUSTMENT −1
+        at 40 EUR on 2024-12-30 (already in the report currency).
+
+        Before J-24: only (JPY, 2025-01-01) and (JPY, 2025-01-02) — nothing at the rows' dates.
+        """
+        txs = [
+            _c(_tx(tx_id=1, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 20), quantity=Decimal("-2"), currency=None, cbo=Decimal("50"), cbo_ccy="USD")),
+            _c(_tx(tx_id=2, asset_id=2, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 23), quantity=Decimal("-3"), currency=None, cbo=Decimal("700"), cbo_ccy=None)),
+            _c(_tx(tx_id=3, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 27), quantity=Decimal("-1"), currency=None)),
+            _c(_tx(tx_id=4, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2024, 12, 30), quantity=Decimal("-1"), currency=None, cbo=Decimal("40"), cbo_ccy="EUR")),
+            _c(_tx(tx_id=5, asset_id=1, tx_type=TransactionType.ADJUSTMENT, dt=date(2025, 1, 2), quantity=Decimal("-1"), currency=None, cbo=Decimal("60"), cbo_ccy="GBP")),
+        ]
+
+        async def fake_convert_bulk(db, bulk_items, raise_on_error=False):
+            return [(Currency(code="EUR", amount=Decimal("1")), item[2], False) for item in bulk_items], []
+
+        monkeypatch.setattr(portfolio_engine_module, "convert_bulk", fake_convert_bulk)
+
+        fx_map = await PortfolioCalculationEngine(object())._preload_fx_rates(
+            classified_txs=txs,
+            in_transit_intervals=[],
+            external_cash_flows=[],
+            price_map={},
+            asset_currencies={1: "EUR", 2: "JPY"},
+            target_currency="EUR",
+            date_from=date(2025, 1, 1),
+            date_to=date(2025, 1, 2),
+        )
+
+        keys = set(fx_map)
+        expected = {
+            ("USD", "EUR", date(2024, 12, 20)),
+            ("JPY", "EUR", date(2024, 12, 23)),
+            ("GBP", "EUR", date(2025, 1, 2)),
+            ("JPY", "EUR", date(2025, 1, 1)),
+            ("JPY", "EUR", date(2025, 1, 2)),
+        }
+        assert keys == expected, f"missing={sorted(expected - keys)} unexpected={sorted(keys - expected)}"

@@ -71,6 +71,7 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
+from backend.app.services.financial_math.weights import concentration
 
 _BROKER_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("broker.fifo_asset_metadata", Mapping)
 
@@ -204,12 +205,7 @@ class BrokerAllocationConcentrationPayload(StrictModel):
 
 def _concentration_metrics(positions: Sequence[PositionRow]) -> tuple[Decimal | None, Decimal | None]:
     """Computes concentration metrics over the *entire* position set - never a top-N subset."""
-    weights = [position.nav_weight_percent for position in positions if position.nav_weight_percent is not None]
-    if not weights:
-        return None, None
-    largest = max(abs(weight) for weight in weights)
-    herfindahl = sum(weight * weight for weight in weights)
-    return largest, herfindahl
+    return concentration(position.nav_weight_percent for position in positions if position.nav_weight_percent is not None)
 
 
 async def _build_broker_allocation_concentration(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerAllocationConcentrationPayload:
@@ -269,7 +265,7 @@ def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, S
         period_end=scope.period_end,
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request, scoped to this broker",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
-        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, converted at the sale date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect; ESTIMATED_AT_COST (no market quote, no BUY or SELL) counts the book cost instead, with no current_price or unit_price and no unrealized P&L. An ADJUSTMENT is never a price.",
+        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, or the value an outgoing ADJUSTMENT hands over at its cost basis, converted at its date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect; ESTIMATED_AT_COST (no market quote, no BUY or SELL) counts the book cost instead, with no current_price or unit_price and no unrealized P&L. An ADJUSTMENT is never a price.",
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
             ProvenanceNote(subject="period", text=f"Period is inclusive [{scope.period_start.isoformat()}, {scope.period_end.isoformat()}]; snapshot_as_of == period_end."),
