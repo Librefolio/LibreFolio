@@ -53,7 +53,9 @@ imports into: see [Who reaches a report file](../backend/brim/architecture.md#fi
 Each access row carries a `share_percentage` (0.000000–1.000000) used **only for portfolio
 aggregation**, never for permissions:
 
-- **OWNER** defaults to 1.00 and may be reduced for co-ownership (e.g. joint accounts);
+- **OWNER**: the broker's creator gets 1.00; through `PUT /api/v1/brokers/{broker_id}/access`,
+  every OWNER gets the share its item carries — 0 when the item has none, even for an OWNER
+  already on the broker. The share may be reduced for co-ownership (e.g. joint accounts);
   **EDITOR** and **VIEWER** default to 0.00 (delegated operator, read-only accountant).
 - The sum of shares across a broker's users **must not exceed 1.00** (validated on add/update);
   it **can be less** (a co-owner may simply not be in the system).
@@ -67,25 +69,36 @@ aggregation**, never for permissions:
 
 ### 🔒 The "Last Owner" Rule
 
-To prevent brokers from becoming "orphaned" (inaccessible by anyone with admin rights), the system enforces a strict rule:
+To prevent brokers from becoming "orphaned" (left without an OWNER to manage their access or delete them), the
+system enforces a strict rule:
 
-> **The last OWNER of a broker cannot be removed or downgraded.**
+> **A broker always keeps at least one OWNER.** The last OWNER cannot be removed or downgraded — by anyone,
+> themselves included — but can leave, and leaving deletes the broker.
 
 If a broker has only one user with the `OWNER` role:
 
-- ❌ That user **cannot** remove themselves.
-- ❌ That user **cannot** change their role to `EDITOR` or `VIEWER`.
-- ✅ To leave the broker, they must first promote another user to `OWNER` or delete the broker entirely.
+- ❌ **Nobody** — neither that user nor the administrator — can remove them or change their role to `EDITOR` or
+  `VIEWER` without making another user `OWNER`: `PUT /api/v1/brokers/{broker_id}/access` (`bulk_update_access()`)
+  refuses any configuration without an `OWNER` (400, "At least one OWNER is required").
+- ❌ That user **cannot** demote themselves with `PATCH /api/v1/brokers/{broker_id}/access/me` (`update_own_role()`):
+  400, "The last OWNER cannot demote themselves — promote another user first".
+- ⚠️ That user **can** leave with `DELETE /api/v1/brokers/{broker_id}/access/me` (`leave_broker()`), and leaving
+  **deletes the broker** with its transactions: see [Self-Management](#self-management).
+- ✅ To leave without deleting the broker, they first make another user `OWNER` with the `PUT`; they can then leave,
+  or drop their own row in that same `PUT`.
 
 ### 🔧 Self-Management
 
 - 🚪 **Leaving**: any user can remove *themselves* from a broker at any time (`leave_broker`).
   EDITOR/VIEWER always succeed. An OWNER may leave when at least one other OWNER remains —
-  otherwise leaving as the **last OWNER deletes the broker entirely** (cascade over
-  transactions; BRIM report files are cleaned up by the API layer).
+  otherwise leaving as the **last OWNER deletes the broker entirely**. Its transactions do not
+  go by a database cascade: `delete_by_broker()` deletes them, and the other half of a pair held
+  on another broker stays there as a standalone row, without its link (see
+  [Broker Deletion](../backend/transactions/service.md#broker-deletion)). BRIM report files are
+  cleaned up by the API layer.
 - ⬇️ **Self-demotion** (`update_own_role`): EDITOR → VIEWER is always allowed; OWNER →
   EDITOR/VIEWER is allowed only when another OWNER remains, and demoting from OWNER **zeroes
-  the share** (only OWNERs may hold share > 0). Promotions stay on the OWNER-only path.
+  the share** (only OWNERs may hold share > 0). Promotions go through the `PUT`, OWNER or administrator only.
 - 🗑️ **Deleting an account** applies `leave_broker()` to every broker of the account, in one
   commit: see [Deleting an Account](users_and_brokers.md#account-deletion).
 
@@ -95,18 +108,28 @@ The logic is centralized in `backend/app/services/brokers/access.py` (`BrokerAcc
 
 - 🔍 **`_check_user_access(broker_id, user_id, min_role)`**: Core internal method to verify permissions.
 - 📋 **`list_accesses()`**: The users with access to a broker, with role and share.
-- 🔄 **`bulk_update_access()`**: Replaces a broker's whole access configuration in one step (OWNER only): adds,
-  role changes and removals; at least one OWNER must remain, and the shares add up to at most 100 %.
+- 🔄 **`bulk_update_access()`**: Replaces a broker's whole access configuration in one step (OWNER or
+  administrator): adds, role changes and removals; at least one OWNER must remain, and the shares add up to at
+  most 100 %.
 - 🚪 **`leave_broker()`** / **`update_own_role()`**: The self-service paths described above.
 
 ### 🌐 API Endpoints
 
-Access management is exposed via the following endpoints:
+Access management is exposed via the following endpoints (`backend/app/api/v1/brokers.py`):
 
-- `GET /api/v1/brokers/{id}/access`: List all users with access.
-- `POST /api/v1/brokers/{id}/access`: Grant access.
-- `PATCH /api/v1/brokers/{id}/access/{user_id}`: Change role.
-- `DELETE /api/v1/brokers/{id}/access/{user_id}`: Revoke access.
+- `GET /api/v1/brokers/{broker_id}/access`: the users with access, with role and share (`list_accesses()`). Any
+  authenticated user can read the list of any existing broker, email addresses included; 404 only when the broker
+  does not exist.
+- `PUT /api/v1/brokers/{broker_id}/access`: replaces the whole access configuration in one step
+  (`bulk_update_access()`). The body is the **complete** desired list of `{user_id, role, share_percentage}`: users
+  missing from it lose their access, new ones are added, roles and shares are updated, in one transaction. Granting,
+  changing and revoking access all go through it. `OWNER` or administrator only (403 otherwise); 400 when a rule
+  fails (no `OWNER`, shares adding up to more than 1.0, a duplicate or unknown user); 422 for an empty list or a
+  share the schema refuses (outside 0–1, or above 0 for an `EDITOR` or `VIEWER`).
+- `PATCH /api/v1/brokers/{broker_id}/access/me`: self-demotion only (`update_own_role()`), body `{role}`; 400 for
+  any other change and for the last `OWNER`'s demotion, 403 without access to the broker.
+- `DELETE /api/v1/brokers/{broker_id}/access/me`: leave the broker (`leave_broker()`); the response's
+  `broker_deleted` is true when the last `OWNER`'s leaving deleted it. 403 without access to the broker.
 
 ## 👑 Superusers and the User CLI {: #superusers }
 
