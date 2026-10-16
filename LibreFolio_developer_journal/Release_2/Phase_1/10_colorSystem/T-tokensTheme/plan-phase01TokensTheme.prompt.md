@@ -608,7 +608,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 18 | W1-f1 (modali di sync), W1-g (banner e righe di sync), W2-b (changelog, server irraggiungibile), W2-d (AI Export), W1-f2 (`ui/data-editor`); la nota wiki sull'ordine di Tailwind 4 e la regola 8 della skill | ✅ W1-f1 `7bc586870`, W1-g `83cbb0855`, W2-b `eabf863f3`: ✅ terzo slot verde; W2-d `b338a442d` e W1-f2 `eb2adb37b` (l'interruttore «stale» resta per il lotto degli interruttori): ✅ quarto slot verde su `e1ae55a6c`; la nota wiki committata (`0d5cebce7`) |
 | 19 | Lo skill del design system (D-T29): `.github/skills/design-tools/design-system/SKILL.md`, le citazioni in `frontend.instructions.md`, `copilot-instructions.md` e `theme-roles` | ✅ integrato `6e569084a` |
 | 20 | Palette in `palette.md`; i ruoli `gain`/`loss` sulle tinte, `success-hover`, `info-hover`, `on-overlay`; `SIGN_BADGE`, `SIGN_TEXT.riskTable`, `SIGN_BAR.histogram`; l'estensione `over` del gate; le correzioni di DV allo skill | ✅ integrato `f043c1b58` |
-| 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | 🔄 prove leggere verdi (gate 71/71, `--check` pulito); impatto in sola lettura nullo sul target `f77743d47` e sui 6 worktree |
+| 21 | Lo scanner e i commenti nelle espressioni del markup (bug di AF), col test di regressione; la regola dei campi nativi negli skill (osservazione di TR) | ✅ integrato `be911db7e` (commit `18824449c` e `a317392d4`) |
+| 22 | Il resto della UI: `ColumnVisibilityToggle`, `SelectionBar`, `BrokerIcon`, `ConfirmModal`, `LoadingSpinner`, `FileGrid`, `routes/+page.svelte`; i campi nativi di `TagInput` e `TreeSelect`; l'hover del conteggio di `DataEditor` | 🔄 prove leggere verdi (gate 71/71, unità 780/780, m1 −60, m2 −6); slot E2E proposto (`slot5.sh`) |
 
 ## Avanzamento
 
@@ -2403,11 +2404,72 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > numero). Nomi delle utility esistenti (`design_system_tokens.py names`), link validi, larghezza ≤ 120,
 > `git diff --check` pulito.
 
-> ⏳ **2 · I due campi miei**, nel lotto del resto della UI: `text-lf-primary` sull'`<input>` di `TagInput` e su quello
-> di `TreeSelect`. Oggi nessun effetto visibile: il genitore dà già `text-lf-primary` (`tag-input-wrapper` e il
-> trigger del `TreeSelect`); la regola protegge dai genitori che cambiano.
+> ✅ **2 · I due campi miei**, nel lotto del resto della UI (16/10, 12:2x, su `be911db7e`): `text-lf-primary` sull'`<input>`
+> di `TagInput` e su quello di `TreeSelect`. Oggi nessun effetto visibile: il genitore dà già `text-lf-primary`
+> (`tag-input-wrapper` e il trigger del `TreeSelect`); la regola protegge dai genitori che cambiano. Il controllo del
+> coordinatore (`--all`) ora trova solo i 2 casi di DV.
 
 > ⏳ **3 · Un controllo del gate** (G6, nel lotto del G5 e del fondale): un `<input>` di tipo testuale, `<textarea>` o
 > `<select>` con una classe `-lf-` deve avere un ruolo `text-lf-…` di base, e `placeholder:text-lf-…` se ha
 > `placeholder`. Costruito sui `startTags` dello scanner, con la stessa lista di tipi esenti del controllo del
 > coordinatore.
+
+### Il resto della UI: sette componenti condivisi e i due campi nativi — 🔄 16/10/2026
+
+> **Avvio** (coordinatore, dopo gli OK della 1.3): `features/files/FileGrid` (di H), `routes/+page.svelte` (di A, lo
+> segnala il coordinatore all'ingresso), `table/ColumnVisibilityToggle` e `SelectionBar` (Y non li tocca),
+> `ui/display/BrokerIcon`, `ui/modals/ConfirmModal`, `ui/feedback/LoadingSpinner`. `ui/display` dei KPI e del rischio è
+> passato a DV; `pairCellHtml.ts` è di IW-5. Gli `<style>` con `--lf-cmp-*` (`ConfirmModal`, `FileGrid`) restano al
+> lotto dei component tokens; i 5 interruttori di `DataEditor` al lotto degli interruttori. Più `TagInput:214` e
+> `TreeSelect:357` (la regola dei campi nativi). Il via dopo l'ingresso di `be911db7e` (12:18).
+
+> ✅ **1 · Le bozze su copie** (`/tmp/libreFolio_T_r2/uilot/`, 12:0x–12:1x, durante il test di regressione dello
+> scanner), dalla tabella di `theme-roles` e dai precedenti (il pulsante della barra di `DataEditor` e di
+> `AiExportMenu`, le tendine con `border-lf-raised` di `TagInput` e `AiExportMenu`, il conteggio della selezione di
+> `DataEditor`):
+> - `ColumnVisibilityToggle`: il pulsante `bg-lf-card border-lf-subtle text-lf-secondary hover:bg-lf-hover`; la tendina
+>   `border-lf-raised bg-lf-card shadow-lf-shadow`, con `text-lf-primary` sulla radice (regola 1); le voci
+>   `text-lf-secondary`, l'occhio `text-lf-link`, l'occhio sbarrato e la voce nascosta `text-lf-muted`; «Reset layout»
+>   `text-lf-muted hover:text-lf-secondary hover:bg-lf-hover border-lf-subtle`;
+> - `SelectionBar`: il conteggio `bg-lf-selected text-lf-link hover:bg-lf-checked/20 hover:border-lf-checked/20`; le
+>   azioni in un ternario solo (regola 4), `danger` `bg-lf-panel text-lf-danger hover:bg-lf-danger-soft
+>   hover:text-lf-danger-on-soft`, le altre `bg-lf-panel text-lf-muted hover:bg-lf-neutral hover:text-lf-secondary`
+>   (su un `panel` l'hover è `neutral`, domanda aperta 3);
+> - `BrokerIcon`: il fondo `bg-lf-selected`, la valigetta `text-lf-link`;
+> - `ConfirmModal`: le icone della testata `text-lf-danger` e `text-lf-warning`, quelle degli esiti `text-lf-success` e
+>   `text-lf-danger`;
+> - `FileGrid`: la spunta del link copiato `text-lf-success`;
+> - `routes/+page.svelte`: «Loading...» `text-lf-link`;
+> - `LoadingSpinner` (m2 6): nel `<style>` il testo `var(--lf-text-muted)`, la traccia `var(--lf-surface-neutral)`,
+>   l'arco `var(--lf-link)`; tolte le due regole `:global(.dark)`.
+> Nessun chiamante passa colori per `class`/`className`/`variant` (`/tmp/libreFolio_T_r2/caller_props.mjs`); nessun test
+> asserisce queste classi.
+
+> ✅ **2 · Applicate** su `be911db7e` (nessuno dei 9 file era cambiato dal momento della copia), più `text-lf-primary`
+> sui due campi nativi e sulla radice della tendina delle colonne.
+
+> ⚠️ **Fuori pista — 3 · Un contrasto che il gate non tiene** (`/tmp/libreFolio_T_r2/uilot_contrast.mjs`, col risolutore
+> del gate): il testo `link` sul conteggio della selezione. A riposo, su `selected`, passa dove la barra sta davvero
+> (pagina 4,93 e 5,02:1; la card della modale di `BrokerImportFilesModal` 5,19 e 4,53); su un `panel` scuro sarebbe
+> 4,09. **Al passaggio del mouse, su `checked/20`, no:** 3,99 sulla card scura, 4,38 e 4,43 sulla pagina. Lo stesso
+> difetto nel conteggio di `DataEditor` (il mio W1-f2, sulla card). **Correzione:** `hover:text-lf-primary` sui due
+> conteggi, che tiene il fondo e il bordo del passaggio di prima e scurisce il testo come gli altri pulsanti
+> (`text-lf-muted hover:text-lf-secondary`): 10,09–12,86:1 su tutte le superfici, nei due temi. Gli altri accoppiamenti
+> nuovi passano: l'icona `link` di `BrokerIcon` su `selected` (≥ 4,09, icona: 3:1); `secondary` su `neutral` 5,77 e
+> 5,84; `danger` su `panel` 4,61 e 6,34; l'arco dello spinner 4,76 e 4,39 sulla traccia; la spunta `success` di
+> `FileGrid` sui fondi ancora legacy del pulsante (5,41/4,91 in chiaro, 5,67/4,16 in scuro; il verde di prima dava 2,28
+> in chiaro). **Per il lotto del G5:** coppie nel gate per il ruolo traslucido `selected` (`link` sopra app, pagina,
+> card e campo; `text-primary` sopra tutte), e nello skill il vincolo: il testo `link` su `selected` non sta su un
+> `panel`.
+
+> ✅ **4 · Prove leggere** (carico 64–75, sotto `nice`): Prettier verde sui 10 file; `--check` pulito, con 7 file sotto
+> il record; Vitest dei due gate 71/71 prima e dopo `--update`; i 29 file di unità che nominano questi componenti
+> 780/780; baseline stretta, **m1 8.249 → 8.189 (−60), m2 54 → 48 (−6)**, le 7 righe tolte; il controllo dei campi
+> nativi del coordinatore (`--all`) 2 casi, tutti di DV; `git diff --check` pulito. `front check` non lanciato: solo
+> classi e `<style>`, nessun tipo cambiato.
+
+> ⏳ **5 · Lo slot:** `/tmp/libreFolio_T_r2/slot5.sh` (pronto, sintassi verificata, non lanciato): `api sync`, `--check`,
+> i due gate, `front-utility component-unit`, poi 13 E2E a 1 worker, ordinati per quello che rendono: `files`,
+> `files-destructive`, `front-broker detail`, `broker-sharing`, `asset-data-editor`, `asset-modal`, `auth`,
+> `fx-destructive`, `tx-selection-after-bulk`, `asset-list`, `fx-list`, `risk-lab`, `tx-bulk-row-order`; stop a 70
+> minuti, log per unità in `/tmp/libreFolio_T_r2/slot5/units/`.
