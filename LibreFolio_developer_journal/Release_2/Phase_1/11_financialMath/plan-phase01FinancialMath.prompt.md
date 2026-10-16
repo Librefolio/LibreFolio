@@ -962,6 +962,39 @@ Quattro commit, uno per lotto che cambia numeri:
   dalla casa uguali a oggi su un corpus; i pesi del rischio identici (float).
 - **CHANGELOG** (🐛 Fixed): «Holdings: when the net worth is zero or negative, the weight on net worth shows "—" instead
   of a meaningless percentage.»
+- ✅ **Codice** (16/10, ~19:40, via del coordinatore 19:36, sul ramo così com'è): `financial_math/weights.py` nuovo
+  (`share_of`, `percent_of`, `slice_percents`, `gross_weights`, `concentration`); chiamanti `portfolio_service.py` (i due
+  pesi delle posizioni, None su un totale ≤ 0: D-MF7), `portfolio/derived_views.py` (`_alloc`,
+  `build_allocation_history`: stessa regola di oggi), `risk/service.py` (`share_of` dentro la stessa guardia, stessi
+  float), `technical_shared.py` (`gross_weights`), `broker_financial.py` e `broker_concentration_context.py`
+  (`concentration`: una copia sola, stessi ingressi; il docstring «Mirrors exactly» ora dice la funzione comune).
+  Descrizioni dei due campi in `schemas/portfolio.py` (già `Optional`). Mappe: docstring, `financial-math.instructions.md`,
+  `backend.instructions.md`, albero di `financial_math.md`. Ruff pulito, import verde. Test al test-author
+  (`test_weights.py` puro con la parità delle vecchie formule, `test_holding_weights.py` di servizio per D-MF7).
+  - **AI Export**: `portfolio.positions`/`broker.positions` copiano i due pesi (`payloads/portfolio_broker.py:676-677`,
+    già `| None`); con NAV ≤ 0 il peso diventa null e l'HHI e il peso massimo, che saltano i null, diventano null invece
+    d'un numero enorme. Valori nuovi attraverso builder invariati (le chiamate a `concentration` sono identiche): nessun
+    aumento di versione.
+  - ✅ **Rossi** (16/10 19:52, `files/lotc.sh red`: prodotto rovesciato + `weights.py` messo da parte, test tenuti;
+    patch `cc45d3a6…`, ripristino con hash identico): `services financial-math test_weights` **92/92 rossi**
+    (`ModuleNotFoundError`); `services roi-fifo-utils holding_weights` **6 rossi, 3 verdi** (i casi ordinari): NAV −70
+    → 63000.00 / 30000.00, NAV 0 → 70000.00 / 30000.00, HHI 4,869·10⁹ e 5,8·10⁹, allocazione −166.67 / 266.67 e
+    5000.00 / −5000.00.
+  - ✅ **Verdi** (19:53–20:01, `files/lotc.sh green`): `api sync` exit 0 (client generato ignorato, nessun file
+    tracciato cambia); `services financial-math` 581; `services roi-fifo-utils` 840; `services ai-export` 1056;
+    `services risk-all test_risk_service` 84; `api portfolio` 51 (20:04).
+  - ✅ **Statici** (`files/lotc.sh lint`): ruff e black puliti (11 file); `mkdocs build` strict exit 0 (3076 URL
+    relativi risolti); `git diff --check` pulito; porta 6190 libera.
+  - ✅ **Doc** (docs-writer `mf-c-docs`): `user/dashboard/positions.en.md:51` (il Peso mostra «—» con un patrimonio
+    netto ≤ 0) e `risk-metrics/concentration.en.md:82` (con un NAV ≤ 0 né peso massimo né indice, null). Nessun link
+    nuovo. Debito di traduzione: +1 riga per pagina (it/fr/es).
+  - **⚠️ Fuori pista — MF-C2**: il test-author nota che `slice_percents` (le fette dei grafici d'allocazione) divide
+    ancora per 1 su una somma 0 e cambia segno su una somma negativa: `{Azioni: 500, Liquidità: −500}` → 50000 / −50000.
+    È la regola d'oggi, tenuta identica apposta (la carta diceva «stessa regola di oggi»; D-MF7 riguarda i pesi delle
+    posizioni) e fissata nei test di parità. Docstring di `slice_percents` reso esplicito; proposta al developer come
+    **MF-C2** nel backlog (cambierebbe grafico, schema `AllocationItem.value` obbligatorio e dataset AI Export).
+- ✅ **Ondata 1b in dev** (coordinatore, treno 128): merge `8d244d1c6`; il mio ramo è già allo stesso albero
+  (`f5c6e8bba`), niente aggiornamento per C. L'`all-backend` di J su J-24 + la mia 1b coprirà anche me su dev.
 - **J-24 (J, 18:33)** tocca anche `portfolio/engine.py` (un pezzo nella raccolta dei cambi, ~:480-540) e una frase di
   `valuation_semantics` in `ai_export/components/portfolio_financial.py` e `broker_financial.py` (senza versione).
   `portfolio_service.py` no: i commenti «Realized G/L of the SELLs» (~:658, ~:1605) diventano «SELLs and priced
@@ -988,6 +1021,25 @@ Quattro commit, uno per lotto che cambia numeri:
   `services financial-math` **488 passed** (473 + i test di CP-13a), `services roi-fifo-utils` **831 passed**,
   `utils roi-utils` **9 passed**; ruff e black puliti sulla casa (27 file); `mkdocs build` stretto verde (46 s, nessun
   avviso), `check-links` verde (97). Verificato con le mappe nuove nel worktree (non ancora nella fusione).
+- ✅ Committati dal coordinatore: merge `4e880a93d` (genitori `2b9adb538` + `0452e592c`), mappe `a0480977e`, piano
+  `f5c6e8bba`. HEAD verificata, pulita. Build di debug del frontend rifatta prima dello slot (18:45, verde: il merge
+  aveva cambiato `YieldOnCostCell`, il renderer e i colori).
+
+#### `all-backend` nello slot 2 (16/10, dalle 18:55; chiusura 19:45)
+
+- `--workers 2 all-backend` su `f5c6e8bba`, `files/slot.sh all`, log `files/logs/slot2/all_backend.log`.
+- **Esito** (18:55–19:34, 39 min 37 s): **6/7 categorie verdi** — DB 19/19, Services, Utils, Schema, **API** (stavolta
+  verde, nessun J-30) ed E2E; passate parallele 5 902 + 6 184 + 85 + 2 963 + 1 048 + 785 + 1 082 + 769 passed,
+  7 skipped, 0 failed. **External rossa per 2 test**:
+  `test_external/test_brim_providers.py::TestCreditAgricoleCanonicalCharacterization::test_csv_freezes_entire_output[securities]`
+  e `::test_xlsx_matches_entire_literal_csv_output[securities]` («complete … parse output drifted»: le transazioni
+  analizzate differiscono dal fissato). Porta 6190 libera; slot liberato alle 19:34.
+- **Triage**: (1) non è forma né orologio: è un confronto con un'uscita fissata; (2) **il codice di MF non è sul
+  percorso**: il mio diff rispetto a `dev_release2` `0452e592c` non tocca `brim*`, `db/` né moduli che il plugin del
+  Crédit Agricole o `services/brim` importano (grep vuoto); (3) in `0452e592c` è appena entrato `bab52635d` (C-97a, W:
+  «keep quantity and price decimals», `RealDecimal`, «a value a BRIM plugin computes is rounded with
+  round_computed_value»), che cambia proprio le cifre che il parser produce. **Verdetto**: non di MF; lo stesso rosso è
+  atteso su `dev_release2` → al coordinatore per W (C-97a), senza rilanci nella mia corsia.
 - **MF-O2** non ancora: tocca anche `features/dashboard/YieldOnCostCell.svelte` (il tipo dei motivi e l'etichetta) e i
   cataloghi `dashboard/*`: serve l'OK del coordinatore per il `.svelte`.
 - **J sulle versioni** (17:17): ok le due voci (v1 nella 1.2.1, quindi v2 nella regola). Il segnaposto del catalogo è

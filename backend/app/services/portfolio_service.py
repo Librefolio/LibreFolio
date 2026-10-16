@@ -96,6 +96,7 @@ from backend.app.services.financial_math.returns import (
     rebase_to_period,
 )
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
     calculate_yield_on_cost_for_positions,
@@ -849,13 +850,15 @@ class PortfolioService:
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
 
-        total_market = sum(h.current_value for h in all_holdings if h.current_value) or Decimal("1")
-        nav_denominator = engine_nav if engine_nav > 0 else Decimal("1")
+        # Weights from the house (D-MF7): no share of a total at or below zero — the field stays None («—»).
+        total_market = sum((h.current_value for h in all_holdings if h.current_value), Decimal("0"))
         for h in all_holdings:
-            if h.current_value and total_market:
-                object.__setattr__(h, "allocation_percent", (h.current_value / total_market * 100).quantize(Decimal("0.01")))
-            if h.current_value:
-                object.__setattr__(h, "nav_weight_percent", (h.current_value / nav_denominator * 100).quantize(Decimal("0.01")))
+            if not h.current_value:
+                continue
+            allocation = percent_of(h.current_value, total_market)
+            nav_weight = percent_of(h.current_value, engine_nav)
+            object.__setattr__(h, "allocation_percent", allocation.quantize(Decimal("0.01")) if allocation is not None else None)
+            object.__setattr__(h, "nav_weight_percent", nav_weight.quantize(Decimal("0.01")) if nav_weight is not None else None)
 
         # ── 5. Performance from engine (correct daily NAV) ──
         nav_snapshots, cash_flows_perf = views.build_performance_inputs()
