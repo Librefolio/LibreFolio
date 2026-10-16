@@ -276,21 +276,29 @@ levels, L1–L4. The two hosts pass the same props with a different scope. What 
 ### 📉 How Much Can It Hurt? {: #dashboard-hurt }
 
 `levels/L1HowMuchItHurts.svelte`, over `historical_var` (two instances), `drawdown_summary` and
-`historical_kpi` (`L1_CODES`, `levels/RiskLevelsPanel.svelte:125`).
+`historical_kpi` (`L1_CODES`, `levels/RiskLevelsPanel.svelte:126`).
 
-- **Cards.** `buildHurtRows()` (`levels/levelHelpers.ts:374`) builds day → month → worst. The day and
-  month cards lead with the CVaR at 95 % (l.384); the VaR is computed as `secondaryLoss` but never drawn,
+- **Cards.** `buildHurtRows()` (`levels/levelHelpers.ts:368`) builds day → month → worst. The day and
+  month cards lead with the CVaR at 95 % (l.378); the VaR is computed as `secondaryLoss` but never drawn,
   and appears only as the histogram's cut. The 30-day horizon is the lab's: see [Requests](#requests),
-  *Bad month*. A rung whose analytic failed is omitted, never zero-filled (l.369).
+  *Bad month*. A rung whose analytic failed is omitted, never zero-filled (l.363).
 - **Worst fall.** Depth and duration come from `drawdown_summary`, falling back to `historical_kpi`
-  (`levelHelpers.ts:410`). The *recovery needed* line is `requiredRecovery()` (l.356: −50 % needs +100 %), drawn at
-  `L1HowMuchItHurts.svelte:169` and l.197.
-- **Current drawdown.** `buildCurrentDrawdown()` returns `null` at a peak (`levelHelpers.ts:437`), so the
-  card exists only below one (`L1HowMuchItHurts.svelte:190`).
+  (`levelHelpers.ts:396-397`, l.405). The *recovery needed* line is computed by the backend, not here:
+  `drawdown_summary`'s `maximum_drawdown_trough_to_peak_ratio` (`required_recovery_return()`,
+  `backend/app/services/financial_math/returns.py:239`: −50 % needs +100 %), read as it comes (l.408)
+  and only on the summary's own depth (`summaryDepth`, l.396) for a fall above 0. No fallback: a depth
+  from `historical_kpi` has no recovery. A total loss has none either: the backend leaves the ratio
+  `null` and states the `total_loss_no_recovery` warning, which does not degrade the result
+  ([The Drawdown Episode](../../../backend/risk/architecture.md#drawdown-episode)). The line is drawn at
+  `L1HowMuchItHurts.svelte:155`; a `null` omits it (l.152), as L1 omits every absent sub-measure.
+- **Current drawdown.** `buildCurrentDrawdown()` returns `null` at a peak (`levelHelpers.ts:435`), so the
+  card exists only below one (`L1HowMuchItHurts.svelte:176`). Its *recovery needed* line is the backend's
+  `remaining_to_peak_ratio`, read as it comes (`levelHelpers.ts:442`) and drawn at
+  `L1HowMuchItHurts.svelte:183`; it is `null` for a total loss, and the line is then omitted.
 - **Tail measures as second rows.** The worst realization sits under the day card; drawdown at risk and
-  conditional drawdown at risk under the worst fall (`L1HowMuchItHurts.svelte:174`, l.180; `buildTailMeasures()`,
-  `levels/l1/l1Helpers.ts:227`). The ulcer index is the caption of the underwater chart
-  (`levels/l1/UnderwaterChart.svelte:69`).
+  conditional drawdown at risk under the worst fall (`L1HowMuchItHurts.svelte:161`, l.167, l.170;
+  `buildTailMeasures()`, `levels/l1/l1Helpers.ts:281`). The ulcer index is the caption of the underwater
+  chart (`levels/l1/UnderwaterChart.svelte:69`).
 - **Histogram.** `buildReturnHistogram()` (`l1Helpers.ts:136`) flags the bin holding the VaR cut
   (`holdsCut`, l.92), drawn amber, and the bins wholly beyond it (`belowCut`, l.101), drawn red; the
   straddling bin is neither (`levels/l1/ReturnHistogram.svelte:51`). A bar's `title` gives its range
