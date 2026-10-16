@@ -18,6 +18,23 @@ The contract, over HTTP on the lane's server:
 - a refused change (wrong current password, the same password) raises nothing and sets no cookie: every device stays
   signed in, and the password is the one it was.
 
+Lot A-27 (the security review of workstream E, E6.9; plan phase01Accounts, «A-27») adds the account's password-reset
+links:
+
+- a reset link of the account live at the change dies with it: after a successful ``POST /auth/change-password``, or a
+  ``PUT /auth/profile`` that really changes the address (with ``current_password``), ``POST /auth/tokens/inspect``
+  answers ``revoked`` for it and ``POST /auth/password-reset`` refuses it, 400 ``TOKEN_INVALID``: a link asked for before
+  the change — from the old mailbox, say — no longer takes the account back. Another account's link stays valid;
+- a change that changes no address — the own address in other A–Z capitals, which needs no password (P18) — and a
+  refused change — of the password (wrong current password, a new one too weak, the same one) or of the address (wrong
+  current password, an address another account holds) — revoke nothing: both links stay valid.
+
+The links are created as an administrator creates them, ``POST /users/{user_id}/password-reset-link`` (201, the token
+shown once), by ``e2e_test_admin`` of ``populate_mock_data.py`` (the api setup, ``db populate``, seeds it on the lane):
+signed in for each test from a client of its own, its role checked, never changed. ``reset_password`` and
+``update_profile`` themselves, behind the CLI's ``user reset`` and ``user set-email``, are tested in-process in
+``test_services/test_session_version.py`` (its contract 7).
+
 Only real logins here: the lane's server signs with a JWT secret ``dev.py`` generates when it starts it, so this process
 cannot forge a cookie that server accepts. Cookies issued before 1.3 (no ``sv``) and version mismatches are tested
 in-process, in ``test_services/test_session_version.py``.
@@ -26,9 +43,11 @@ A device is a session cookie of its own, from a login made by a client of its ow
 explicitly, from an empty client, so no cookie jar decides what is sent. The version is read from the database the server
 serves, for this test's two accounts only.
 
-Write-scoped: each test registers its own two regular users (unique names), reads only their rows, and deletes both at
-teardown through ``user_service.delete_user`` — after a red too, whatever password and cookies they ended with. Changing
-a password ends that account's sessions, so no shared E2E user is ever touched.
+Write-scoped: each test registers its own two regular users (unique names and addresses), reads only their rows, and
+deletes both at teardown through ``user_service.delete_user`` — after a red too, whatever password, address and cookies
+they ended with; their reset links go with them (``account_tokens.user_id`` cascades). Changing a password ends that
+account's sessions, so no shared E2E user is ever touched: ``e2e_test_admin`` only signs in, and the only write on it is
+the login's (``record_login_and_maybe_show_popup``: its login counters), which no unit asserts on.
 """
 
 import uuid
@@ -75,10 +94,11 @@ def test_server():
 
 @dataclass(frozen=True)
 class _Account:
-    """A regular user one test registered."""
+    """A regular user one test registered, with the address it registered with."""
 
     user_id: int
     username: str
+    email: str
     password: str
 
 
@@ -106,7 +126,7 @@ def _lane_engine() -> AsyncEngine:
 
 
 async def _register(prefix: str, registered: list[int]) -> _Account:
-    """Register a regular user with a unique name; its id goes into ``registered`` the moment it exists, for the teardown."""
+    """Register a regular user with a unique name and address (``<name>@example.com``); its id goes into ``registered`` the moment it exists, for the teardown."""
     username = f"{prefix}_{uuid.uuid4().hex[:12]}"
     password = f"Initial-{uuid.uuid4().hex[:12]}1"
     async with httpx.AsyncClient() as client:
@@ -115,7 +135,7 @@ async def _register(prefix: str, registered: list[int]) -> _Account:
     user = response.json()["user"]
     registered.append(user["id"])
     assert user["is_superuser"] is False, f"Precondition: {username} must be a regular user; it registered as the instance's first user, hence its administrator: the api setup (db populate, e2e_test_admin) did not run on this lane"
-    return _Account(user_id=user["id"], username=username, password=password)
+    return _Account(user_id=user["id"], username=username, email=user["email"], password=password)
 
 
 async def _delete_users(user_ids: list[int]) -> list[str]:
@@ -341,3 +361,205 @@ class TestPasswordChangeEndsTheOtherSessions:
             _expect(violations, login.status_code == 401, f"[guard] the refused new password must not log in: {login.status_code} {login.text}")
         assert not violations, f"A refused password change must end no session:{_verdict(violations)}"
         print_success(f"✓ {refusal}: 400, no cookie, no version raised, both devices still signed in")
+
+
+# ============================================================================
+# A-27: THE ACCOUNT'S LIVE RESET LINKS END WITH ITS PASSWORD OR ITS ADDRESS
+# ============================================================================
+
+#: The administrator of populate_mock_data.py, which the api setup (``db populate``) seeds on the lane: signed in, never changed.
+E2E_ADMIN = ("e2e_test_admin", "E2eAdminPass123!")
+#: The purpose POST /auth/tokens/inspect is asked about here: a password-reset link.
+RESET_PURPOSE = "password_reset"
+
+
+@dataclass(frozen=True)
+class _ResetLinks:
+    """The token of a reset link of each account of the test, created by the administrator before the change."""
+
+    owner: str
+    bystander: str
+
+
+async def _admin_cookie() -> str:
+    """``e2e_test_admin`` signed in from a client of its own: its session cookie, once its role is checked."""
+    username, password = E2E_ADMIN
+    response = await _login(username, password)
+    status, body = _answer(response)
+    cookies = _session_cookies(response)
+    assert status == 200 and len(cookies) == 1 and cookies[0].value, f"Precondition: {username} of populate_mock_data.py must sign in on the lane (the api setup, db populate, seeds it): {status} {body}"
+    assert body["user"]["is_superuser"] is True, f"Precondition: {username} must be an administrator: {body['user']}"
+    return cookies[0].value
+
+
+async def _create_reset_link(admin_cookie: str, account: _Account) -> str:
+    """POST /users/{id}/password-reset-link as the administrator: 201, and the link's token, shown once."""
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{API_BASE}/users/{account.user_id}/password-reset-link", headers={"Cookie": f"{COOKIE}={admin_cookie}"}, timeout=TIMEOUT)
+    status, body = _answer(response)
+    assert status == 201 and isinstance(body, dict) and isinstance(body.get("token"), str) and body["token"], f"Setup: POST /users/{account.user_id}/password-reset-link must create the link, 201 with its token: {status} {body}"
+    return body["token"]
+
+
+async def _inspect_reset_link(token: str) -> tuple[int, Any]:
+    """POST /auth/tokens/inspect for a password-reset link, from an empty client: what whoever holds the link is told."""
+    async with httpx.AsyncClient() as client:
+        return _answer(await client.post(f"{API_BASE}/auth/tokens/inspect", json={"token": token, "purpose": RESET_PURPOSE}, timeout=TIMEOUT))
+
+
+def _valid_for(answer: tuple[int, Any], account: _Account) -> bool:
+    """Whether an inspection answers that the link is valid, and sets ``account``'s password."""
+    status, body = answer
+    return status == 200 and isinstance(body, dict) and body.get("status") == "valid" and body.get("username") == account.username
+
+
+async def _spend_reset_link(token: str, new_password: str) -> tuple[int, Any]:
+    """POST /auth/password-reset from an empty client: whoever holds the link sets a new password with it."""
+    async with httpx.AsyncClient() as client:
+        return _answer(await client.post(f"{API_BASE}/auth/password-reset", json={"token": token, "new_password": new_password}, timeout=TIMEOUT))
+
+
+async def _put_profile(cookie_value: str, body: dict[str, Any]) -> httpx.Response:
+    """PUT /auth/profile from the device holding ``cookie_value``."""
+    async with httpx.AsyncClient() as client:
+        return await client.put(f"{API_BASE}/auth/profile", json=body, headers={"Cookie": f"{COOKIE}={cookie_value}"}, timeout=TIMEOUT)
+
+
+def _local_part_in_capitals(address: str) -> str:
+    """``address`` with its local part in capitals and its domain as it is: the same address in other A–Z capitals (P18). EmailStr lowercases a domain, never a local part."""
+    local, _, domain = address.rpartition("@")
+    return f"{local.upper()}@{domain}"
+
+
+def _each_link(links: _ResetLinks, accounts: _Accounts) -> tuple[tuple[str, str, _Account], ...]:
+    """(label, token, the account it sets the password of) of both links."""
+    return (("the owner's reset link", links.owner, accounts.owner), ("the other account's reset link", links.bystander, accounts.bystander))
+
+
+async def _reset_links_before_the_change(accounts: _Accounts) -> _ResetLinks:
+    """A reset link for each account of the test, created by ``e2e_test_admin``; both valid, each for its account: the barrier of every «dead» and «still valid» below."""
+    admin_cookie = await _admin_cookie()
+    links = _ResetLinks(owner=await _create_reset_link(admin_cookie, accounts.owner), bystander=await _create_reset_link(admin_cookie, accounts.bystander))
+    for label, token, account in _each_link(links, accounts):
+        answer = await _inspect_reset_link(token)
+        assert _valid_for(answer, account), f"Precondition: {label} must be valid for {account.username} before the change: POST /auth/tokens/inspect {answer}"
+    return links
+
+
+async def _check_the_reset_links_after_a_change(violations: list[str], links: _ResetLinks, accounts: _Accounts) -> None:
+    """After a real change of the owner's password or address: the other account's link still valid; the owner's dead — revoked when inspected, then refused when spent."""
+    answer = await _inspect_reset_link(links.bystander)
+    _expect(violations, _valid_for(answer, accounts.bystander), f"[guard] another account's reset link must stay valid: POST /auth/tokens/inspect {answer}")
+    status, body = await _inspect_reset_link(links.owner)
+    _expect(violations, status == 200 and isinstance(body, dict) and body.get("status") == "revoked", f"[new] red until A-27: the owner's reset link, live at the change, must be revoked by it: POST /auth/tokens/inspect {(status, body)}")
+    status, body = await _spend_reset_link(links.owner, f"Taken-{uuid.uuid4().hex[:12]}1")
+    detail = body.get("detail") if isinstance(body, dict) else None
+    _expect(violations, status == 400 and isinstance(detail, dict) and detail.get("error_code") == "TOKEN_INVALID", f"[new] red until A-27: whoever holds the link from before the change must not set the password with it, 400 TOKEN_INVALID: POST /auth/password-reset {(status, body)}")
+
+
+async def _check_the_reset_links_still_valid(links: _ResetLinks, accounts: _Accounts, change: str) -> None:
+    """After a change that must revoke nothing: both links still valid, each for its account."""
+    for label, token, account in _each_link(links, accounts):
+        answer = await _inspect_reset_link(token)
+        assert _valid_for(answer, account), f"[guard] {change} must revoke no reset link: {label} must stay valid for {account.username}, POST /auth/tokens/inspect {answer}"
+
+
+class TestTheResetLinksEndWithThePasswordOrTheAddress:
+    """A-27 on the lane's server: a reset link of the owner and one of another account, created by ``e2e_test_admin``, then
+    the owner's password or address changes, or the change is refused.
+
+    In the reds expectations are collected, not stopped at the first: «[new]» marks A-27's contract, red until it lands,
+    «[guard]» what holds today and must keep holding.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_password_change_revokes_the_accounts_live_reset_links(self, accounts: _Accounts):
+        """REVOKE-003 — NEW, red until A-27 (the owner's link stays valid, and spent after the change it still sets the password): a successful POST /auth/change-password revokes the owner's live reset link — inspected, ``revoked``; spent, 400 ``TOKEN_INVALID`` —; the other account's link stays valid."""
+        print_section("REVOKE-003: a password change revokes the account's live reset links")
+        owner = accounts.owner
+        links = await _reset_links_before_the_change(accounts)
+        device = await _sign_in(owner)
+
+        response = await _change_password(device.value, owner.password, f"Changed-{uuid.uuid4().hex[:12]}1")
+
+        assert response.status_code == 200, f"The password change itself must succeed: {response.status_code} {response.text}"
+        violations: list[str] = []
+        await _check_the_reset_links_after_a_change(violations, links, accounts)
+        assert not violations, f"A password change must revoke the account's live reset links, and no other account's (A-27):{_verdict(violations)}"
+        print_success("✓ the owner's link revoked and refused, the other account's still valid")
+
+    @pytest.mark.asyncio
+    async def test_an_address_change_revokes_the_accounts_live_reset_links(self, accounts: _Accounts):
+        """REVOKE-004 — NEW, red until A-27 (the owner's link stays valid, and spent after the change it still sets the password): PUT /auth/profile to an address of this test only, with the current password — 200, the new address — revokes the owner's live reset link: whoever reads the old mailbox, or asked for the link before the change, cannot use it after; the other account's link stays valid."""
+        print_section("REVOKE-004: an address change revokes the account's live reset links")
+        owner = accounts.owner
+        links = await _reset_links_before_the_change(accounts)
+        device = await _sign_in(owner)
+        new_address = f"revoke_moved_{uuid.uuid4().hex[:12]}@example.com"
+
+        response = await _put_profile(device.value, {"email": new_address, "current_password": owner.password})
+
+        status, body = _answer(response)
+        assert status == 200 and isinstance(body, dict) and body.get("user", {}).get("email") == new_address, f"The address change itself must succeed: {status} {body}"
+        violations: list[str] = []
+        await _check_the_reset_links_after_a_change(violations, links, accounts)
+        assert not violations, f"An address change must revoke the account's live reset links, and no other account's (A-27):{_verdict(violations)}"
+        print_success("✓ the owner's link revoked and refused, the other account's still valid")
+
+    @pytest.mark.asyncio
+    async def test_the_own_address_in_other_capitals_revokes_no_reset_link(self, accounts: _Accounts):
+        """REVOKE-005 — GUARD, green today and after: the own address with its local part in capitals is the same address (P18, C5): without current_password, 200 and its new form stored — no change of address, so no reset link revoked."""
+        print_section("REVOKE-005: the own address in other A–Z capitals revokes no reset link")
+        owner = accounts.owner
+        links = await _reset_links_before_the_change(accounts)
+        device = await _sign_in(owner)
+        new_form = _local_part_in_capitals(owner.email)
+        assert new_form != owner.email and new_form.lower() == owner.email, f"setup: {new_form} must be {owner.email} in other A–Z capitals"
+
+        response = await _put_profile(device.value, {"email": new_form})
+
+        status, body = _answer(response)
+        assert status == 200 and isinstance(body, dict) and body.get("user", {}).get("email") == new_form, f"The own address in other A–Z capitals needs no password, and its new form is stored (P18): {status} {body}"
+        await _check_the_reset_links_still_valid(links, accounts, "the own address in other A–Z capitals")
+        print_success(f"✓ 200, {new_form} stored, both links still valid")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("refusal", ["wrong-current-password", "weak-new-password", "same-password"])
+    async def test_a_refused_password_change_revokes_no_reset_link(self, accounts: _Accounts, refusal: str):
+        """REVOKE-006 — GUARD, green today and after: a refused POST /auth/change-password — 400 for a wrong current password, a new password the rules refuse (PASSWORD_TOO_WEAK) or the same password — revokes no reset link."""
+        print_section(f"REVOKE-006: a refused password change ({refusal}) revokes no reset link")
+        owner = accounts.owner
+        links = await _reset_links_before_the_change(accounts)
+        device = await _sign_in(owner)
+        current_password, new_password, reason = {
+            "wrong-current-password": (f"Wrong-{uuid.uuid4().hex[:12]}1", f"Changed-{uuid.uuid4().hex[:12]}1", "incorrect"),
+            "weak-new-password": (owner.password, "weakpassword", "password_too_weak"),
+            "same-password": (owner.password, owner.password, "different"),
+        }[refusal]
+
+        response = await _change_password(device.value, current_password, new_password)
+
+        status, body = _answer(response)
+        assert status == 400 and reason in str(body).lower(), f"The change must be refused with 400 ({reason}): {status} {body}"
+        await _check_the_reset_links_still_valid(links, accounts, f"a refused password change ({refusal})")
+        print_success(f"✓ {refusal}: 400, both links still valid")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("refusal", ["wrong-current-password", "another-accounts-address"])
+    async def test_a_refused_address_change_revokes_no_reset_link(self, accounts: _Accounts, refusal: str):
+        """REVOKE-007 — GUARD, green today and after: a refused PUT /auth/profile to another address — 400 CURRENT_PASSWORD_INVALID for a wrong current password, «Email already registered» for the other account's address — revokes no reset link."""
+        print_section(f"REVOKE-007: a refused address change ({refusal}) revokes no reset link")
+        owner = accounts.owner
+        links = await _reset_links_before_the_change(accounts)
+        device = await _sign_in(owner)
+        if refusal == "wrong-current-password":
+            sent, reason = {"email": f"revoke_moved_{uuid.uuid4().hex[:12]}@example.com", "current_password": f"Wrong-{uuid.uuid4().hex[:12]}1"}, "CURRENT_PASSWORD_INVALID"
+        else:
+            sent, reason = {"email": accounts.bystander.email, "current_password": owner.password}, "Email already registered"
+
+        response = await _put_profile(device.value, sent)
+
+        status, body = _answer(response)
+        assert status == 400 and reason in str(body), f"The change must be refused with 400 ({reason}): {status} {body}"
+        await _check_the_reset_links_still_valid(links, accounts, f"a refused address change ({refusal})")
+        print_success(f"✓ {refusal}: 400, both links still valid")
