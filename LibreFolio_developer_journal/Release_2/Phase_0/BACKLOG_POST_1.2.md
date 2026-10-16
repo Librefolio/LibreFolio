@@ -3960,6 +3960,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `'Search failed'` in inglese (`AssetSearchAutocomplete.svelte`, ramo `catch` del REST).
   - Cura: una chiave `assets.search.failed` in 4 lingue. L'errore tecnico resta nel log (`console.error`).
   - Il timeout ha già la sua chiave (`assets.search.timeout`).
+- **X-R32 · Galleria: uno scatto della ricerca con le sezioni premium** — basso; X, 17/10 (DoD del piano 03, §10).
+  - Serve un provider premium instradato, come fa l'E2E `asset-modal.spec.ts` («Asset search — premium first…»).
+  - Si concorda con G; nel frattempo gli scatti degli import mostrano già la riga «Can't find it? Let us know».
+- **X-R33 · E2E `asset-modal.spec.ts`: la rotta «Bug G» su `/settings/user` è fragile** — basso; X, 17/10 (trovato
+  dal test-author di F21/P20).
+  - Fa `route.fulfill({response, json})` e così tiene `content-encoding: gzip` della risposta vera. Se quella risposta
+    arrivasse a 1 KB, il browser proverebbe a decomprimere un JSON in chiaro.
+  - Cura: togliere `content-encoding` e `content-length`, come fanno `fixtures/instance-config.ts` e il blocco F21/P20.
+- **X-R34 · Doc: `asset_plugin_guide.md` «How It Works» dice che il frontend chiama `GET …/search`** — basso; X, 17/10
+  (trovato dal docs-writer).
+  - In realtà il frontend usa prima lo streaming (`…/search/stream`), e il REST solo come ripiego.
 
 ## W · Import e transazioni (fase 01)
 
