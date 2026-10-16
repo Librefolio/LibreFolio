@@ -6,25 +6,29 @@
  * changed no pixel.
  *
  * **Divergences stay, with a name.** Where two charts draw the same thing in two colours, both values are kept side by
- * side — the shared tooltip box and the candlestick's own, the emerald of the tooltip Δ and the green of the lines — so
+ * side — the emerald of the tooltip Δ and the green of the lines, the red of the price charts and the portfolio's — so
  * the designer can see them and decide. A value with two meanings gets two names. Nothing here was unified.
  *
  * A `{light, dark}` pair is read with `themed(pair, dark)` (`./themePair`); a plain string is the same colour in both
  * themes.
  *
+ * **The neutrals are roles (B4, DV, 16/10/2026).** Axes, grids, labels, tooltip boxes and pointers left these tables for
+ * {@link chartNeutrals}, which reads the roles of tokens.css at each draw: there, two names of one meaning may now read
+ * one role (the shared tooltip box and the candlestick's own). The tables keep the series, the categories, the states
+ * and the signs, with their legacy values, for the designer.
+ *
  * @module lib/theme/chartTheme
  */
+
+import {toRgba} from './colorAlpha';
+import {chartRoles} from './roleColors';
 
 /** The price family: line chart, full price chart, candlestick chart, and the compact chart of the cards. */
 export const PRICE_SERIES = {
     /** The price line when it is not coloured against the baseline. */
     line: {light: '#1a4031', dark: '#4ade80'},
-    /** The dashed line that baseline colouring compares against. */
-    baseline: {light: '#9ca3af', dark: '#64748b'},
     /** Points with unsaved edits, the same in both themes. */
     pendingEditPoint: '#f59e0b',
-    /** The ring around unsaved-edit points: the card's background. */
-    pendingEditPointRing: {light: '#ffffff', dark: '#1e293b'},
     /** Event markers of a comparison overlay that carries no colour of its own, the same in both themes. */
     comparisonMarkerFallback: '#6b7280',
 } as const;
@@ -48,53 +52,130 @@ export const CHART_GAIN_LOSS = {
     },
 } as const;
 
-/** Axes, grid lines and other neutral strokes. */
-export const CHART_NEUTRALS = {
-    /** Axes of the price charts (`getChartColors`, and the line, full price and candlestick charts). */
-    priceAxis: {
-        line: {light: '#d1d5db', dark: '#475569'},
-        label: {light: '#6b7280', dark: '#94a3b8'},
-        gridLine: {light: '#d1d5db', dark: '#4b5563'},
-    },
-    /** Axis and legend text, and split lines, of the dashboard charts (`buildGridColors`, allocation, maps). */
-    dashboard: {
-        text: {light: '#64748b', dark: '#94a3b8'},
-        gridLine: {light: '#f1f5f9', dark: '#1e293b'},
-    },
-    /** The greyed arrow of a paged legend that cannot go further. */
-    legendPageIconInactive: {light: '#cbd5e1', dark: '#334155'},
-    /** A secondary axis with no signal colour to borrow. */
-    secondaryAxisFallback: {light: '#9ca3af', dark: '#64748b'},
-    /** Labels of an indicator's dashed reference levels (RSI 30 and 70, for instance). */
-    referenceLevelLabel: {light: '#64748b', dark: '#cbd5e1'},
-} as const;
+/**
+ * The neutrals of the charts, on the roles of tokens.css (B4, DV, 16/10/2026): axes, grid lines and rules, labels,
+ * tooltip boxes, axis pointers, and the gaps and rings drawn in the card's colour — the roles the interface gives the
+ * same things. Read through `chartRoles` on the chart's own element, `scope` (`<html>` when there is none), so a theme
+ * switch or a Designer Lab edit shows at the next draw: take them once per draw. The groups keep the names of the
+ * tables they left.
+ *
+ * - **Text,** by its legacy shade, as the interface's classes were migrated: `primary`, `secondary`, `muted`.
+ * - **A tooltip box is a popover:** the card, the raised border (N3), the primary and the muted text. The stale-data
+ *   warning in it is the warning state, the one state among the neutrals: its amber was 2.1:1 on the light card.
+ * - **A line** takes the role nearest to the contrast it had: the structure (axes, grids, separators, frames)
+ *   `subtle`; reference lines, pointers and leader lines `input`.
+ * - **Gaps and rings in the card's colour,** `card`; halos and label backgrounds, the card at the alpha they had; the
+ *   hover band and the pointer's shadow, the muted text at the alpha they had (ECharts draws the pointer over the bars).
+ *
+ * The mapping is the nearest role, «da rivedere» with the designer (D-T27): DV's plan, section «B4».
+ */
+export function chartNeutrals(dark: boolean, scope?: Element | null) {
+    const roles = chartRoles(dark, scope);
+    const primary = roles.color('--lf-text-primary');
+    const secondary = roles.color('--lf-text-secondary');
+    const muted = roles.color('--lf-text-muted');
+    const subtle = roles.color('--lf-border-subtle');
+    const raised = roles.color('--lf-border-raised');
+    const input = roles.color('--lf-border-input');
+    const card = roles.color('--lf-surface-card');
+    /** A value that was translucent, at the alpha it had in each theme. */
+    const translucent = (color: string, light: number, darkAlpha: number = light) => toRgba(color, dark ? darkAlpha : light);
+    return {
+        /** Axes of the price charts (`getChartColors`, and the line, full price and candlestick charts). */
+        priceAxis: {line: subtle, label: muted, gridLine: subtle},
+        /** Axis and legend text, and split lines, of the dashboard charts (`buildGridColors`, allocation, maps). */
+        dashboard: {text: muted, gridLine: subtle},
+        /** The greyed arrow of a paged legend that cannot go further: the muted text, dimmed as a disabled control is. */
+        legendPageIconInactive: translucent(muted, 0.4),
+        /** A secondary axis with no signal colour to borrow. */
+        secondaryAxisFallback: muted,
+        /** Labels of an indicator's dashed reference levels (RSI 30 and 70, for instance). */
+        referenceLevelLabel: muted,
+        /** The pointer where a chart named none and ECharts drew its own: its line, and its shadow over the bars. */
+        axisPointer: {line: input, shadow: translucent(muted, 0.2)},
+        /** Tooltip boxes and the text inside them. */
+        tooltip: {
+            /** The shared box (`buildTooltipTheme`, the line and full price charts), and where ECharts drew its own. */
+            box: {background: card, border: raised, text: primary, muted},
+            /** The candlestick chart's box: the same roles under its own names, and its crosshair. */
+            candlestickBox: {border: raised, text: primary, heading: primary, muted, crosshair: input},
+            /** Asides of the price tooltips — axis notes, the day a value is from, band bounds. */
+            aside: muted,
+            /** The stale-data warning line. */
+            staleWarning: roles.color('--lf-warning'),
+        },
+        /** The price charts: the dashed line that baseline colouring compares against, the ring around unsaved-edit points. */
+        price: {baseline: input, pendingEditPointRing: card},
+        /** The risk-return scatter chart: its axes and the capital market line. Its points: `RISK_RETURN_COLORS`. */
+        riskReturn: {axis: subtle, axisText: secondary, capitalMarketLine: input},
+        /** The allocation charts: the gap between slices and rings, the captions outside the outer ring, the labels on the history's areas and their halo. */
+        allocation: {sliceBorder: card, caption: secondary, historyAreaLabel: primary, historyAreaLabelShadow: card},
+        /**
+         * The ownership semi-donut. Its owners take the first asset types in order (`CATEGORY_SEQUENCE` in
+         * `./chartCategories`); the initial on an avatar takes the text that reads best on its disc (`readableText`).
+         * The slice of what is still available is a track.
+         */
+        semiDonut: {label: primary, labelShadow: translucent(card, 0.8, 0.6), labelLine: input, avatarBorder: card, sliceGap: card, available: roles.color('--lf-surface-neutral')},
+        /** World maps: the borders between countries, the labels and their background. The land and the highlight: `GEO_MAP_COLORS`. */
+        geoMap: {border: card, label: primary, labelBackground: translucent(card, 0.72, 0.55)},
+        /**
+         * The correlation heatmap and its tooltip. Its scale is three roles, danger, panel and info (GR5.3, read in
+         * `CorrelationHeatmap.svelte` through `./roleColors`); the value in a cell takes the text that reads best on it.
+         * The hovered cell: a border in the opposite shade of the theme, a halo in the card's.
+         */
+        correlation: {
+            cellGap: card,
+            emphasisBorder: primary,
+            emphasisHalo: translucent(card, 0.95),
+            axisLabel: secondary,
+            /** Exposure badges in the tooltip, and the rule above them. */
+            tooltipBadge: {background: roles.color('--lf-surface-panel'), text: secondary},
+            tooltipDivider: subtle,
+        },
+        /**
+         * The Growth chart's strokes other than its series: the dashed zero line of the P&L mode, and the separators
+         * between ladder buckets, stronger than the grid lines. Its broker lines: `growthBrokerColor` in `./chartPalettes`.
+         */
+        growth: {pnlReference: input, bucketSeparator: input},
+        /**
+         * The Performance chart: the value of a row that is exactly zero; the rows of the y axis (asset name, its second
+         * line, section headings); the zero line of the first series; the rule under a section heading; the band behind
+         * the hovered row (mobile) and the axis shadow (desktop).
+         */
+        performance: {
+            zeroValue: primary,
+            axisName: primary,
+            axisSecondary: muted,
+            axisSection: secondary,
+            zeroLine: muted,
+            sectionSeparator: subtle,
+            rowHighlight: translucent(muted, 0.16, 0.14),
+            axisPointerShadow: translucent(muted, 0.14, 0.12),
+        },
+        /** The exposure treemap: the header of a group (a broker) and its background, the borders of groups and tiles. */
+        treemap: {groupLabel: secondary, groupLabelBackground: translucent(card, 0.8), groupBorder: subtle, tileBorder: subtle},
+        /** The lot charts. */
+        lots: {
+            /** The ring that lifts a marker off what lies under it, and the same ring on a hovered marker. */
+            markerRing: card,
+            markerEmphasisRing: primary,
+            /** The Gantt: the border of a selected segment, the elbow to the lot it came from, the label on a segment, the text of a selected state button. */
+            gantt: {selectedSegmentBorder: primary, lineageConnector: translucent(primary, 0.45, 0.48), segmentLabel: primary, stateChipText: roles.color('--lf-on-status')},
+            /** The zero line of the WAC chart's P&L axis. */
+            wacZeroLine: input,
+        },
+    };
+}
 
-/** Tooltip boxes and the text inside them. */
+/** What the tooltips draw that is not a neutral. Their boxes and text: `chartNeutrals().tooltip`. */
 export const CHART_TOOLTIP_COLORS = {
-    /** The shared tooltip box (`buildTooltipTheme`, the line and full price charts). */
-    box: {
-        background: {light: '#ffffff', dark: '#1e293b'},
-        border: {light: '#e2e8f0', dark: '#334155'},
-        text: {light: '#1e293b', dark: '#e2e8f0'},
-        muted: {light: '#64748b', dark: '#94a3b8'},
-    },
-    /** The candlestick chart's own box: its border and text differ in the light theme. Its background is `box`'s. */
     candlestickBox: {
-        border: {light: '#e5e7eb', dark: '#334155'},
-        text: {light: '#111827', dark: '#e2e8f0'},
-        heading: {light: '#1f2937', dark: '#e2e8f0'},
-        muted: {light: '#6b7280', dark: '#94a3b8'},
-        crosshair: {light: '#9ca3af', dark: '#475569'},
         /** An overlay series that reports no colour, the same in both themes. */
         seriesFallback: '#888',
     },
-    /** Asides of the price tooltips — axis notes, the day a value is from, band bounds — one gray in both themes. */
-    aside: '#94a3b8',
-    /** The stale-data warning line, amber in both themes. */
-    staleWarning: '#f59e0b',
 } as const;
 
-/** The risk-return scatter chart. */
+/** The risk-return scatter chart: its points. Its axes and the capital market line: `chartNeutrals().riskReturn`. */
 export const RISK_RETURN_COLORS = {
     portfolio: {light: '#0284c7', dark: '#38bdf8'},
     benchmark: {light: '#d97706', dark: '#fbbf24'},
@@ -102,65 +183,23 @@ export const RISK_RETURN_COLORS = {
     other: {light: '#64748b', dark: '#94a3b8'},
     /** The selected point: the hue of a selected table row, apart from every role colour. */
     selected: {light: '#22c55e', dark: '#4ade80'},
-    axis: {light: '#cbd5e1', dark: '#475569'},
-    axisText: {light: '#475569', dark: '#cbd5e1'},
-    capitalMarketLine: {light: '#94a3b8', dark: '#64748b'},
 } as const;
 
-/** The allocation charts: pie and donut, allocation history. Their category colours: `./chartCategories`. */
+/** The allocation charts: pie and donut, allocation history. Their category colours: `./chartCategories`; their neutrals: `chartNeutrals().allocation`. */
 export const ALLOCATION_CHART_COLORS = {
-    /** The gap between pie slices and rings: white on the light card, a slate a step above the dark card. */
-    sliceBorder: {light: '#ffffff', dark: '#293548'},
-    /** Captions outside the outer ring. */
-    caption: {light: '#374151', dark: '#cbd5e1'},
     /** The bubble behind a family's icon on its slice, the same in both themes. */
     iconBubble: 'rgba(255, 255, 255, 0.75)',
-    /** Labels on the areas of the allocation history, and their halo. */
-    historyAreaLabel: {light: '#000000', dark: '#ffffff'},
-    historyAreaLabelShadow: {light: '#fff', dark: '#000'},
-} as const;
-
-/**
- * The ownership semi-donut. Its owners take the first asset types in order (`CATEGORY_SEQUENCE` in
- * `./chartCategories`); the initial on an avatar takes the text that reads best on its disc (`readableText`).
- */
-export const SEMI_DONUT_COLORS = {
-    label: {light: '#1e293b', dark: '#e2e8f0'},
-    labelShadow: {light: 'rgba(255,255,255,0.8)', dark: 'rgba(0,0,0,0.6)'},
-    labelLine: {light: '#94a3b8', dark: '#475569'},
-    /** The ring around an owner's avatar, picture or initial. */
-    avatarBorder: {light: '#ffffff', dark: '#334155'},
-    /** The gap between slices: the card's background. */
-    sliceGap: {light: '#ffffff', dark: '#1e293b'},
-    /** The slice of what is still available. */
-    available: {light: 'rgba(203,213,225,0.5)', dark: 'rgba(100,116,139,0.3)'},
 } as const;
 
 /** World maps: the portfolio's geography and the PAC planner's exposure maps. Their scale: `GEO_CHOROPLETH_SCALE`. */
 export const GEO_MAP_COLORS = {
-    /** Countries with no weight. */
+    /**
+     * Countries with no weight: the zero of the scale, so not a role (B4) — on `--lf-surface-neutral` it would sit at
+     * ΔE00 4.1 (light) and 3.7 (dark) from the scale's first step. For the designer, with the scale (GR5.1).
+     */
     land: {light: '#e2e8f0', dark: '#334155'},
-    border: {light: '#cbd5e1', dark: '#1e293b'},
     /** A hovered or selected country. */
     highlight: {light: '#f59e0b', dark: '#fbbf24'},
-    label: {light: '#1e293b', dark: '#e2e8f0'},
-    labelBackground: {light: 'rgba(255,255,255,0.72)', dark: 'rgba(15, 23, 42, 0.55)'},
-} as const;
-
-/**
- * The correlation heatmap and its tooltip. Its scale is three roles, danger, panel and info (GR5.3, read in
- * `CorrelationHeatmap.svelte` through `./roleColors`); the value in a cell takes the text that reads best on it.
- */
-export const CORRELATION_COLORS = {
-    /** The gap between cells: the card's background. */
-    cellGap: {light: '#ffffff', dark: '#1e293b'},
-    /** Border and halo of the hovered cell: no hue, the opposite shade of the theme. */
-    emphasisBorder: {light: '#0f172a', dark: '#ffffff'},
-    emphasisHalo: {light: 'rgba(255, 255, 255, 0.95)', dark: 'rgba(2, 6, 23, 0.95)'},
-    axisLabel: {light: '#475569', dark: '#cbd5e1'},
-    /** Exposure badges in the tooltip, and the rule above them: the same in both themes. */
-    tooltipBadge: {background: '#f1f5f9', text: '#334155'},
-    tooltipDivider: 'rgba(148,163,184,0.35)',
 } as const;
 
 /** Chart signals, the same in both themes. Default line colours: `SIGNAL_DEFAULT_PALETTE` in `./chartPalettes`. */
@@ -209,15 +248,7 @@ export const GROWTH_SERIES = {
     deposit: {light: '#0d9488', dark: '#2dd4bf'},
 } as const;
 
-/** The Growth chart's strokes other than its series. Its broker lines: `growthBrokerColor` in `./chartPalettes`. */
-export const GROWTH_CHART_COLORS = {
-    /** The dashed zero line of the P&L mode. */
-    pnlReference: {light: '#9ca3af', dark: '#64748b'},
-    /** Vertical separators between ladder buckets: stronger than the grid lines, which vanished at the same tint. */
-    bucketSeparator: {light: '#cbd5e1', dark: '#64748b'},
-} as const;
-
-/** The Performance chart (`palette()` and the axis rows in `PerformanceChart.svelte`). */
+/** The Performance chart's series and badges (`palette()` in `PerformanceChart.svelte`). Its rows and rules: `chartNeutrals().performance`. */
 export const PERFORMANCE_COLORS = {
     unrealized: {light: '#2563eb', dark: '#60a5fa'},
     /** Realized P&L: the gain green, under its own name. */
@@ -227,38 +258,19 @@ export const PERFORMANCE_COLORS = {
     costs: {light: '#dc2626', dark: '#f87171'},
     other: {light: '#7c3aed', dark: '#a78bfa'},
     neutral: {light: '#64748b', dark: '#cbd5e1'},
-    /** The value of a row that is exactly zero. */
-    zeroValue: {light: '#0f172a', dark: '#e2e8f0'},
-    /** The rows of the y axis: asset name, its second line, section headings. */
-    axisName: {light: '#1f2937', dark: '#e2e8f0'},
-    axisSecondary: {light: '#64748b', dark: '#94a3b8'},
-    axisSection: {light: '#475569', dark: '#cbd5e1'},
     /** Badges of an open or a fully sold position, on the axis and in the tooltip, and their text in both themes. */
     openBadge: {light: '#16a34a', dark: '#166534'},
     closedBadge: {light: '#64748b', dark: '#475569'},
     badgeText: '#ffffff',
-    /** The zero line of the first series. */
-    zeroLine: {light: '#64748b', dark: '#94a3b8'},
-    /** The rule under a section heading. */
-    sectionSeparator: {light: '#cbd5e1', dark: '#475569'},
-    /** The band behind the hovered row (mobile: one custom rect over label and bar), and the axis shadow on desktop. */
-    rowHighlight: {light: 'rgba(148, 163, 184, 0.16)', dark: 'rgba(148, 163, 184, 0.14)'},
-    axisPointerShadow: {light: 'rgba(148, 163, 184, 0.14)', dark: 'rgba(148, 163, 184, 0.12)'},
 } as const;
 
-/** The exposure treemap. Tiles with a P&L take `treemapPnlColor` (`./chartColorScales`). */
+/** The exposure treemap. Tiles with a P&L take `treemapPnlColor` (`./chartColorScales`); its headers and borders: `chartNeutrals().treemap`. */
 export const TREEMAP_COLORS = {
     /** A tile with no P&L, the same in both themes. */
     noPnl: '#6b7280',
-    /** The header of a group (a broker). */
-    groupLabel: {light: '#334155', dark: '#e2e8f0'},
-    groupLabelBackground: {light: 'rgba(248,250,252,0.8)', dark: 'rgba(30,41,59,0.8)'},
     /** The name on a tile, and its shadow, the same in both themes. */
     tileLabel: '#fff',
     tileLabelShadow: 'rgba(0,0,0,0.5)',
-    /** Borders of the first two levels: groups, then tiles. */
-    groupBorder: {light: '#e2e8f0', dark: '#334155'},
-    tileBorder: {light: '#cbd5e1', dark: '#475569'},
 } as const;
 
 /** Lines the risk panels add to a price chart, the same in both themes. */
@@ -276,15 +288,7 @@ export const LOT_STATE_COLORS = {
     closed: {light: '#64748b', dark: '#94a3b8'},
 } as const;
 
-/** Shared by the three lot charts. */
-export const LOT_CHART_COLORS = {
-    /** The ring that lifts a marker off what lies under it. */
-    markerRing: {light: '#ffffff', dark: '#0f172a'},
-    /** The same ring on a hovered marker. */
-    markerEmphasisRing: {light: '#0f172a', dark: '#e2e8f0'},
-} as const;
-
-/** The lots Gantt chart. Broker segments take the broker's colour (`getBrokerColor`). */
+/** The lots Gantt chart. Broker segments take the broker's colour (`getBrokerColor`); its neutrals: `chartNeutrals().lots`. */
 export const LOT_GANTT_COLORS = {
     /** A segment in transit between two brokers. */
     inTransit: {light: '#7c3aed', dark: '#c084fc'},
@@ -303,12 +307,6 @@ export const LOT_GANTT_COLORS = {
         stroke: {light: '#7c3aed', dark: '#c084fc'},
         glow: 'rgba(168, 85, 247, 0.35)',
     },
-    /** The border of a selected segment. */
-    selectedSegmentBorder: {light: '#0f172a', dark: '#e0f2fe'},
-    /** The elbow from a lot to the lot it came from. */
-    lineageConnector: {light: 'rgba(71,85,105,0.45)', dark: 'rgba(226,232,240,0.48)'},
-    /** The label on a segment. */
-    segmentLabel: {light: '#0f172a', dark: '#f8fafc'},
     /** Event symbols on the segments. */
     events: {
         sell: {light: '#dc2626', dark: '#f87171'},
@@ -316,8 +314,6 @@ export const LOT_GANTT_COLORS = {
         split: {light: '#ca8a04', dark: '#facc15'},
         buy: {light: '#059669', dark: '#34d399'},
     },
-    /** The text of a selected state filter button. */
-    stateChipText: {light: '#ffffff', dark: '#0f172a'},
 } as const;
 
 /** The lots WAC/price chart. */
@@ -338,8 +334,6 @@ export const LOT_WAC_COLORS = {
     bubbleZero: {light: '#64748b', dark: '#94a3b8'},
     /** The market price line. */
     marketLine: {light: '#16a34a', dark: '#4ade80'},
-    /** The zero line of the P&L axis. */
-    zeroLine: {light: 'rgba(71,85,105,0.6)', dark: 'rgba(148,163,184,0.75)'},
 } as const;
 
 /** The lots comparison chart. Its lot lines are generated by id (`lotColor`). */

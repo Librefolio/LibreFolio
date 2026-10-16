@@ -78,7 +78,8 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     without making a reset row or revoking any.
 14. ``email_changed_work(user_id, old_address, new_address, *, engine)`` (lot E4a), the notice of an email change: one
     message to the OLD address only — never the new one —, exactly what ``build_email_changed`` writes in the account's
-    language, the new address masked, the instance being the host of ``LIBREFOLIO_PUBLIC_URL`` when links are ready and
+    language — greeting nobody by name, and carrying no part of the new address, neither its local part nor its domain
+    (decision N62, E-9 b and c) —, the instance being the host of ``LIBREFOLIO_PUBLIC_URL`` when links are ready and
     ``INSTANCE_FALLBACK`` («LibreFolio») otherwise — never a request's host —; one unit spent. Nothing when the two
     addresses are the same by ``user_service.same_email`` — A's one rule of decision P18 (lot E4c): A–Z in any case,
     every other character as written, nothing stripped —, nothing logged either; a letter beyond A–Z in another case
@@ -96,6 +97,13 @@ checks the configuration and the hourly budget, sends and logs (``test_email_del
     composed, no SMTP conversation is opened, no unit of the budget is spent, and neither limiter counts it. A notice
     counts under both only once it went: one the server refused counts for neither, so the next one goes. The window
     slides: 3600 s after the first of three notices, the next one goes.
+16. Aliases of one mailbox share its budget (E-9 a): ``FORGOT_BY_MAILBOX`` and ``EMAIL_CHANGE_NOTICES_BY_MAILBOX`` key a
+    mailbox by ``delivery.mailbox_budget_key`` — the ``+tag`` cut on every domain, the dots of a Gmail local part
+    removed, ``googlemail.com`` read as ``gmail.com``, letter case aside —, never by the address as written. Four aliases
+    of one Gmail mailbox get three reset emails, or three notices, between them, each at its account's stored address
+    — or the address its change left — exactly as written (the key is never a recipient); the fourth is held like any
+    past the mailbox's limit, with the same ``info`` line. Outside Gmail a dot is part of the mailbox: ``zq.a@`` and
+    ``zqa@outlook.com`` keep a budget each.
 
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the default global
 settings (NullPool, disposed at teardown), users written as rows, tokens issued by A's token service with the ``now``
@@ -913,7 +921,7 @@ async def test_an_invitation_is_written_in_the_language_asked_else_the_instances
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("own", "language"), [pytest.param("it", "it", id="own-it-over-instance-fr"), pytest.param(None, "fr", id="no-row-instance-fr")])
 async def test_a_reset_link_goes_to_its_account_in_the_accounts_language(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, own: str | None, language: str) -> None:
-    """EMF-017 — contract 10: a reset link goes to the address of its account, in the account's language (its own, else the instance's ``fr``); the email is exactly ``build_password_reset`` with the PUBLIC_URL link and PUBLIC_URL's host; ``LinkEmailSent(the account's address, language)``; one unit spent."""
+    """EMF-017 — contract 10: a reset link goes to the address of its account, in the account's language (its own, else the instance's ``fr``); the email is exactly ``build_password_reset`` with the PUBLIC_URL link and PUBLIC_URL's host, and greets nobody by name — the username is in no part of it (decision N62) —; ``LinkEmailSent(the account's address, language)``; one unit spent."""
     print_section(f"EMF-017: reset link, {language}")
     admin = await _add_user(engine, ADMIN)
     alice = await _add_user(engine, ALICE)
@@ -930,7 +938,8 @@ async def test_a_reset_link_goes_to_its_account_in_the_accounts_language(monkeyp
     assert sent == flows.LinkEmailSent(to=alice.email, language=language)
     assert [message.rcpt_tos for message in fake.messages] == [[alice.email]]
     link = f"{PUBLIC_URL}/reset-password#token={issued.token}"
-    _assert_is(fake.messages[0], build_password_reset(language=language, username=ALICE, link=link, ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_HOST))
+    assert ALICE not in _text(fake.messages[0]) + _html(fake.messages[0]), "a reset email greets nobody by name: the username is text its owner chose (N62)"
+    _assert_is(fake.messages[0], build_password_reset(language=language, link=link, ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_HOST))
     assert budget.count() == 1
     print_success(f"to {alice.email}, in {language}")
 
@@ -1123,7 +1132,7 @@ async def test_without_a_client_address_only_the_limit_per_address_is_skipped(mo
 @pytest.mark.asyncio
 @pytest.mark.parametrize("written", [ALICE, f"{ALICE}@example.com", f"  {ALICE}  "], ids=["username", "email", "spaces-around"])
 async def test_the_work_emails_a_new_valid_reset_link_to_the_account(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, written: str) -> None:
-    """EMF-025 — contract 12: by username, by email address, or with spaces around: one email to the account's address, exactly ``build_password_reset`` in the account's language (``it``) with the PUBLIC_URL link of a new token — valid, of that account, its only reset row —; one unit spent; no log event holds the identifier or the token.
+    """EMF-025 — contract 12: by username, by email address, or with spaces around: one email to the account's address, exactly ``build_password_reset`` in the account's language (``it``) with the PUBLIC_URL link of a new token — valid, of that account, its only reset row —, greeting nobody by name: the username, which whoever holds the account chose, is in no part of it (decision N62); one unit spent; no log event holds the identifier or the token.
 
     Barrier first: the work's own success is among the captured events, so the capture hears it.
     """
@@ -1141,7 +1150,8 @@ async def test_the_work_emails_a_new_valid_reset_link_to_the_account(monkeypatch
     token = _token_in(_text(fake.messages[0]), PASSWORD_RESET)
     inspection = await _inspect(engine, token, PASSWORD_RESET)
     assert (inspection.status, inspection.record.user_id) == (TokenStatus.VALID, alice.id)
-    _assert_is(fake.messages[0], build_password_reset(language="it", username=ALICE, link=f"{PUBLIC_URL}/reset-password#token={token}", ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_HOST))
+    assert ALICE not in _text(fake.messages[0]) + _html(fake.messages[0]), "a reset email greets nobody by name: the username is text its owner chose (N62)"
+    _assert_is(fake.messages[0], build_password_reset(language="it", link=f"{PUBLIC_URL}/reset-password#token={token}", ttl=DEFAULT_TTL[PASSWORD_RESET], instance=PUBLIC_HOST))
     assert [row.id for row in await _reset_rows(engine, alice.id)] == [inspection.record.id]
     assert budget.count() == 1
     assert any(event.get("event") == "Forgotten password: reset link emailed" for event in events), f"barrier: the work's success is not among the captured events: {events}"
@@ -1567,6 +1577,8 @@ async def test_a_database_error_is_logged_as_its_type_without_the_identifier(mon
 #: The address an account changes to: a local part of its own, never shown, never a recipient.
 NEW_ADDRESS = "zq.new-alice.secret@example.org"
 NEW_LOCAL_PART = "zq.new-alice.secret"
+#: Its domain, a host name its new owner chose: since decision N62 the notice shows no part of the new address.
+NEW_DOMAIN = "example.org"
 #: An old address that is not one address.
 NOT_ONE_ADDRESS = "zq_alice@example.com, zq-other@example.com"
 #: An address and the same letters with ``á`` in another case, in NFC (one code point each): beyond A–Z
@@ -1608,7 +1620,7 @@ def test_email_changed_work_has_its_signature_and_its_fallback_name() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("own", "default", "language"), [pytest.param("it", "fr", "it", id="its-own-language"), pytest.param(None, "fr", "fr", id="the-instances-language"), pytest.param(None, "en", "en", id="english")])
 async def test_the_notice_goes_to_the_old_address_only_in_the_accounts_language(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, budget: SlidingWindowLimiter, own: str | None, default: str, language: str) -> None:
-    """EMF-044 — contract 14: one message, to the old address only — the new one neither a recipient nor in a header —, from the configured sender, exactly what ``build_email_changed`` writes in the account's language with the new address masked and the public host as the instance; one unit spent; returns None and logs the notice sent by the account's id and the language."""
+    """EMF-044 — contract 14: one message, to the old address only — the new one neither a recipient nor in a header —, from the configured sender, exactly what ``build_email_changed`` writes in the account's language with the public host as the instance: no part of the new address — neither its local part nor its domain — and no username in its text or its HTML (decision N62); one unit spent; returns None and logs the notice sent by the account's id and the language."""
     print_section(f"EMF-044: the notice in {language}")
     alice = await _add_user(engine, ALICE)
     await _set_default_language(engine, default)
@@ -1626,8 +1638,9 @@ async def test_the_notice_goes_to_the_old_address_only_in_the_accounts_language(
     assert received.rcpt_tos == [alice.email]
     assert (_mailboxes(received.message["To"]), _mailboxes(received.message["From"])) == ([("", alice.email)], [SENDER])
     assert (received.message["Cc"], received.message["Bcc"]) == (None, None)
-    _assert_is(received, build_email_changed(language=language, username=ALICE, new_address=NEW_ADDRESS, instance=PUBLIC_HOST))
-    assert NEW_LOCAL_PART not in _text(received) + _html(received)
+    shown = [part for part in (NEW_LOCAL_PART, NEW_DOMAIN, ALICE) if part in _text(received) + _html(received)]
+    assert shown == [], f"the notice shows {shown}: no part of the new address and no username, text whoever holds the account chose (N62)"
+    _assert_is(received, build_email_changed(language=language, instance=PUBLIC_HOST))
     assert budget.count() == 1
     assert [(event.get("event"), event.get("log_level"), event.get("user_id"), event.get("language")) for event in _notices(events)] == [("Email change notice sent to the previous address", "info", alice.id, language)]
     print_success(f"to the old address only, in {language}")
@@ -1654,7 +1667,7 @@ async def test_the_instance_is_the_public_host_or_librefolio(monkeypatch: pytest
         await flows.email_changed_work(alice.id, alice.email, NEW_ADDRESS, engine=engine)
 
     assert len(fake.messages) == 1
-    _assert_is(fake.messages[0], build_email_changed(language="en", username=ALICE, new_address=NEW_ADDRESS, instance=instance))
+    _assert_is(fake.messages[0], build_email_changed(language="en", instance=instance))
     print_success(f"named {instance}")
 
 
@@ -2010,3 +2023,96 @@ async def test_an_hour_after_the_first_of_three_notices_the_next_goes(monkeypatc
     assert [message.rcpt_tos for message in fake.messages] == [[alice.email]] * 4
     assert (notice_limits.by_account.count(alice.id), notice_limits.by_mailbox.count(alice.email)) == (3, 3), "the notices of 60, 120 and 3600 s"
     print_success("skipped at 3599 s, sent again at 3600 s")
+
+
+# =============================================================================
+# 18. ALIASES OF ONE MAILBOX SHARE ITS BUDGET (E-9 a)
+# =============================================================================
+
+#: One Gmail mailbox written four ways, each the stored address of an active account of its own: a ``+tag``, the dots of
+#: the local part and ``googlemail.com`` all deliver to it. ``delivery.mailbox_budget_key`` folds the four into
+#: GMAIL_ALIAS_KEY; ``strip().casefold()`` keeps them apart, a budget each.
+GMAIL_ALIASES = ("zqvictim+1@gmail.com", "zq.victim+2@gmail.com", "zqvictim+3@googlemail.com", "zq.vic.tim@gmail.com")
+GMAIL_ALIAS_KEY = "zqvictim@gmail.com"
+#: The addresses four accounts leave (EMF-061): aliases of one Gmail mailbox, one in letters of its own; one key.
+OLD_ALIASES = ("Zq.Old+1@GMail.com", "zqold+2@googlemail.com", "z.q.o.l.d@gmail.com", "zqold+notice@gmail.com")
+OLD_ALIAS_KEY = "zqold@gmail.com"
+#: Two mailboxes outside Gmail, apart in a dot alone: there a dot is part of the address (EMF-062).
+DOTTED = "zq.a@outlook.com"
+UNDOTTED = "zqa@outlook.com"
+#: The work's line when the recipient's mailbox had its reset emails of the hour.
+MAILBOX_SPENT = "Forgotten password: the mailbox had reset emails moments ago, nothing sent"
+
+
+def _forgot_lines(events: list[dict[str, object]]) -> list[tuple[object, object, object]]:
+    """``(event, level, user_id)`` of each line of «forgot password»'s work among ``events``."""
+    return [(event.get("event"), event.get("log_level"), event.get("user_id")) for event in events if str(event.get("event", "")).startswith("Forgotten password")]
+
+
+@pytest.mark.asyncio
+async def test_aliases_of_one_mailbox_share_its_reset_emails(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
+    """EMF-060 — contract 16: four active accounts whose stored addresses are aliases of one Gmail mailbox — ``zqvictim+1@gmail.com``, ``zq.victim+2@gmail.com``, ``zqvictim+3@googlemail.com``, ``zq.vic.tim@gmail.com`` — ask once each, by username, well within their own limits (the work alone runs: the admission's limits per client and per identifier are not on its path); the limiters' clock stands still. The first three get their reset email, each at its account's stored address exactly — tag, dots and domain as written: the key is never a recipient —; the fourth gets nothing: one ``info`` line «the mailbox had reset emails moments ago, nothing sent» with its account's id, and no reset row. The mailbox counted three times, under its folded key."""
+    print_section("EMF-060: four aliases of one mailbox, three reset emails")
+    assert len({address.casefold() for address in GMAIL_ALIASES}) == len(GMAIL_ALIASES), "precondition: letter case alone keeps the four apart: only folding the aliases makes them one mailbox"
+    moment = utcnow()
+    accounts = [await _add_user(engine, f"zq_alias_{index}", email=address) for index, address in enumerate(GMAIL_ALIASES)]
+    logged: list[list[dict[str, object]]] = []
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        clock.now = START
+        for account in accounts:
+            with capture_logs() as events:
+                await flows.forgotten_password_work(account.username, engine=engine, now=moment)
+            logged.append(events)
+
+    assert [message.rcpt_tos for message in fake.messages] == [[address] for address in GMAIL_ALIASES[:3]], "the 4th alias of one mailbox got its own budget: three reset emails an hour per mailbox, however its address is written"
+    assert _forgot_lines(logged[3]) == [(MAILBOX_SPENT, "info", accounts[3].id)], logged[3]
+    assert await _reset_rows(engine, accounts[3].id) == [], "past the mailbox's limit nothing may be made"
+    assert forgot_limits.by_mailbox.count(GMAIL_ALIAS_KEY) == 3, "the three emails counted under the mailbox's folded key"
+    print_success("three reset emails to one mailbox under three aliases; the fourth held")
+
+
+@pytest.mark.asyncio
+async def test_aliases_of_one_old_mailbox_share_its_notices(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, notice_limits: NoticeLimits) -> None:
+    """EMF-061 — contract 16: four accounts change their email once each, the limiters' clock standing still; the addresses they leave are aliases of one Gmail mailbox — ``Zq.Old+1@GMail.com``, ``zqold+2@googlemail.com``, ``z.q.o.l.d@gmail.com``, ``zqold+notice@gmail.com`` —, so no account comes near its own limit. The first three notices go, each to the address its change left, exactly as written; the fourth is skipped: one ``info`` line «past its limits, nothing sent» with its account's id, nothing counted for it. The old mailbox counted three times, under its folded key."""
+    print_section("EMF-061: four aliases of one old mailbox, three notices")
+    assert len({address.casefold() for address in OLD_ALIASES}) == len(OLD_ALIASES), "precondition: letter case alone keeps the four apart: only folding the aliases makes them one mailbox"
+    accounts = [await _add_user(engine, f"zq_leaver_{index}", email=f"zq-moved-{index}@example.org") for index in range(len(OLD_ALIASES))]
+    logged: list[list[dict[str, object]]] = []
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        clock.now = START
+        for account, old in zip(accounts, OLD_ALIASES, strict=True):
+            with capture_logs() as events:
+                await flows.email_changed_work(account.id, old, account.email, engine=engine)
+            logged.append(events)
+
+    assert [message.rcpt_tos for message in fake.messages] == [[old] for old in OLD_ALIASES[:3]], "the 4th alias of one mailbox got its own budget: three notices an hour per old mailbox, however its address is written"
+    assert _notice_lines(logged[3]) == [(PAST_ITS_LIMITS, "info", accounts[3].id)], logged[3]
+    assert notice_limits.by_mailbox.count(OLD_ALIAS_KEY) == 3, "the three notices counted under the old mailbox's folded key"
+    assert [notice_limits.by_account.count(account.id) for account in accounts] == [1, 1, 1, 0], "no account near its own limit; the fourth counted for nothing"
+    print_success("three notices to one old mailbox under three aliases; the fourth skipped")
+
+
+@pytest.mark.asyncio
+async def test_two_mailboxes_apart_in_a_dot_outside_gmail_keep_two_budgets(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine, clock: FakeClock, forgot_limits: ForgotLimits) -> None:
+    """EMF-062 — contract 16, the guard of EMF-060: outside Gmail a dot is part of the mailbox. The account at ``zq.a@outlook.com`` gets three reset emails, five minutes apart — within its own limits —, the limiters' clock standing still: that mailbox is spent. A request for the account at ``zqa@outlook.com`` still gets its email, at that address: another mailbox, another budget. Green before E-9 and after it."""
+    print_section("EMF-062: zq.a@ and zqa@outlook.com, two budgets")
+    moment = utcnow()
+    dotted = await _add_user(engine, "zq_dotted", email=DOTTED)
+    undotted = await _add_user(engine, "zq_undotted", email=UNDOTTED)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        clock.now = START
+        for minutes in (0, 5, 10):
+            await flows.forgotten_password_work(dotted.username, engine=engine, now=moment + timedelta(minutes=minutes))
+        spent = not forgot_limits.by_mailbox.peek(DOTTED).allowed
+        await flows.forgotten_password_work(undotted.username, engine=engine, now=moment + timedelta(minutes=10))
+
+    assert spent, "barrier: zq.a@outlook.com had its three reset emails of the hour"
+    assert [message.rcpt_tos for message in fake.messages] == [[DOTTED]] * 3 + [[UNDOTTED]], "zqa@outlook.com is another mailbox than zq.a@outlook.com: its reset email must go"
+    assert (forgot_limits.by_mailbox.count(DOTTED), forgot_limits.by_mailbox.count(UNDOTTED)) == (3, 1)
+    print_success("three reset emails to zq.a@outlook.com, then one to zqa@outlook.com")

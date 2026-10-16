@@ -28,7 +28,7 @@
       "set": "Establecido",
       "setOn": "Establecido el {date}",
       "unset": "No establecido",
-      "unreadable": "Guardado, pero la clave de esta instancia no puede leerlo: vuelve a introducirlo.",
+      "unreadable": "Guardado, pero la clave de esta instancia no puede leerlo. Si un administrador puede volver a poner la clave anterior, eso va primero; si no, vuelve a introducirlo.",
       "replace": "Reemplazar",
       "clear": "Borrar",
       "willClear": "Se borrará al guardar.",

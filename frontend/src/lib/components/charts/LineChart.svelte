@@ -35,9 +35,8 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
-    import {themed} from '$lib/theme/themePair';
-    import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS, PRICE_SERIES} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types
@@ -206,11 +205,14 @@
     // =========================================================================
 
     onMount(() => {
-        const observer = onThemeClassChange(() => {
+        const redraw = () => {
             if (chartContainer && data.length > 0) renderChart();
-        });
+        };
+        const observer = onThemeClassChange(redraw);
+        const chartColors = onChartColorsChange(redraw);
         return () => {
             observer.disconnect();
+            chartColors.disconnect();
             cleanup();
         };
     });
@@ -403,6 +405,7 @@
         }
 
         const isDark = isDarkTheme();
+        const neutrals = chartNeutrals(isDark, chartContainer);
         const isPercentage = viewMode === 'percentage';
 
         const baseColor = isDark ? darkLineColor || DEFAULT_LINE_DARK : lineColor || DEFAULT_LINE_LIGHT;
@@ -475,7 +478,7 @@
                 symbolSize: 10,
                 itemStyle: {
                     color: pendingColor,
-                    borderColor: themed(PRICE_SERIES.pendingEditPointRing, isDark),
+                    borderColor: neutrals.price.pendingEditPointRing,
                     borderWidth: 2,
                 },
                 z: 10,
@@ -611,7 +614,7 @@
                 showSymbol: false,
                 sampling: 'lttb',
                 lineStyle: {
-                    color: themed(PRICE_SERIES.baseline, isDark),
+                    color: neutrals.price.baseline,
                     type: 'dashed',
                     width: 1,
                 },
@@ -694,9 +697,9 @@
                 type: 'category',
                 data: dates,
                 show: !compact,
-                axisLine: {lineStyle: {color: themed(CHART_NEUTRALS.priceAxis.line, isDark)}},
+                axisLine: {lineStyle: {color: neutrals.priceAxis.line}},
                 axisLabel: {
-                    color: themed(CHART_NEUTRALS.priceAxis.label, isDark),
+                    color: neutrals.priceAxis.label,
                     fontSize: 11,
                     formatter: xAxisPolicy.formatter,
                     ...(xAxisPolicy.axisLabel ?? {}),
@@ -724,12 +727,12 @@
                         position: compact && showMiniAxis ? ('right' as const) : ('left' as const),
                         min: effectiveMin,
                         max: effectiveMax,
-                        axisLine: {show: !compact, lineStyle: {color: themed(CHART_NEUTRALS.priceAxis.line, isDark)}},
+                        axisLine: {show: !compact, lineStyle: {color: neutrals.priceAxis.line}},
                         axisTick: {show: !compact},
                         splitNumber: compact && showMiniAxis ? 2 : undefined,
                         axisLabel: {
                             show: showYAxis,
-                            color: themed(CHART_NEUTRALS.priceAxis.label, isDark),
+                            color: neutrals.priceAxis.label,
                             fontSize: compact && showMiniAxis ? 9 : 11,
                             formatter: isPercentage
                                 ? (v: number) => formatPercent(v, {digits: 1, signed: false})
@@ -742,7 +745,7 @@
                         splitLine: {
                             show: showGridLines && showYAxis,
                             lineStyle: {
-                                color: themed(CHART_NEUTRALS.priceAxis.gridLine, isDark),
+                                color: neutrals.priceAxis.gridLine,
                                 type: 'dashed' as const,
                                 opacity: compact && showMiniAxis ? 0.5 : 1,
                             },
@@ -759,9 +762,9 @@
                       appendToBody: true,
                       confine: true,
                       position: tooltipPositionSide,
-                      backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
-                      borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
-                      textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
+                      backgroundColor: neutrals.tooltip.box.background,
+                      borderColor: neutrals.tooltip.box.border,
+                      textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                       formatter: (params: any) => {
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
@@ -815,11 +818,11 @@
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
-                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
+                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">[${escapeHtml(axisLabel)}]</span>` : '';
                               html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                                  html += ` <span style="font-size:10px;color:${CHART_TOOLTIP_COLORS.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
+                                  html += ` <span style="font-size:10px;color:${neutrals.tooltip.aside}">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                               }
 
                               // For band signals, also show upper/lower in the tooltip
@@ -827,7 +830,7 @@
                               if (bandSignal?.bandData) {
                                   const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
                                   if (dataIdx >= 0) {
-                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:${CHART_TOOLTIP_COLORS.aside}">${$t('chart.tooltip.upper')}: ${formatFixed(bandSignal.bandData.upper[dataIdx], 4)}${suffix} · ${$t('chart.tooltip.lower')}: ${formatFixed(bandSignal.bandData.lower[dataIdx], 4)}${suffix}</span>`;
+                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:${neutrals.tooltip.aside}">${$t('chart.tooltip.upper')}: ${formatFixed(bandSignal.bandData.upper[dataIdx], 4)}${suffix} · ${$t('chart.tooltip.lower')}: ${formatFixed(bandSignal.bandData.lower[dataIdx], 4)}${suffix}</span>`;
                                   }
                               }
                           }
@@ -835,10 +838,10 @@
                           // Stale warning for main series
                           const staleDays = staleLookup.get(date);
                           if (staleDays !== undefined) {
-                              html += `<br/><span style="color:${CHART_TOOLTIP_COLORS.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
+                              html += `<br/><span style="color:${neutrals.tooltip.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</span>`;
                           }
                           if (isPercentage) {
-                              html += `<br/><span style="color:${CHART_TOOLTIP_COLORS.aside};font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
+                              html += `<br/><span style="color:${neutrals.tooltip.aside};font-size:10px">${$t('chart.tooltip.percentNote')}</span>`;
                           }
                           return html;
                       },
