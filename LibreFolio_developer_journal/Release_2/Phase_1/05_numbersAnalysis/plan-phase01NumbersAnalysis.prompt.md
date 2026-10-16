@@ -3631,3 +3631,96 @@ un campo del backend calcolato nella casa; Y lo legge in Y12b.
   - ✅ **statici** (18:19–18:23): `api sync` senza file tracciati cambiati, `i18n check` stretto verde, `core-unit` 181 file
     / 6 478 test, `check-orphans` pulito, svelte-check 0/0 (`remaining_to_peak_ratio` ora `number | null` nel client),
     `mkdocs build` stretto e `check-links` verdi; `translate-validate` 3 errori nuovi da CP-13a → **J-31**.
+
+#### J-24 — la Dashboard consegna una rettifica in uscita col costo al cambio del suo giorno (16/10, dalle 18:30)
+
+Via del coordinatore (18:29, «Next: J-24, with its `all-backend` bundled», con CP-13a); base `ffa08dd7d`. Regola del
+developer (P21): ogni importo convertito nella valuta di destinazione al cambio del giorno della transazione. I lotti la
+seguono da CP-7a; la Dashboard no. Contratto (letto sul codice di oggi):
+- **Valore consegnato** `D = |q × quota| × cost_basis_override`, nella `cost_basis_currency` o, senza, nella valuta
+  dell'asset (la stessa regola del pool per le rettifiche in entrata), convertito alla data della rettifica
+  (`_convert_movement`, che registra la coppia mancante con la data). Solo le rettifiche col costo
+  (`_is_capital_adjustment`); quelle senza costo restano unità distrutte (J-11, da decidere).
+- **Capitale** (`cumulative_ecf` e per broker): `−D`, al posto del costo storico tolto dal pool (`C`). Così il flusso
+  del giorno per TWRR e MWRR (che nasce dalla variazione della base di capitale, `derived_views.build_performance_inputs`)
+  è `−D`: con `D` = valore di mercato il giorno è neutro, oggi ha un rendimento finto `−(MV − C)`.
+- **Realizzato**: un `RealizedSale` con `proceeds = D` e `cost = C` (come una vendita il cui incasso è il valore
+  consegnato), quindi entra nel realizzato del periodo della Dashboard e nei contributi per posizione senza toccare
+  `portfolio_service.py`.
+- **Cambio mancante** alla data: `proceeds = None` (coppia nel `missing_fx`), capitale `−C` come oggi (dichiarato).
+- In tutti e due i rami (pre-frame e frame) di `daily_state.py`; `engine.py` carica il cambio `(valuta del costo, data)`
+  di ogni rettifica in uscita col costo, anche prima del periodo; docstring di `RealizedSale` (`models.py`).
+- **AI Export**: il testo `valuation_semantics` di `portfolio.provenance`/`broker.provenance` (già v3 in questa
+  release, nessun nuovo salto) dice che il realizzato confronta anche il valore consegnato da una rettifica in uscita.
+- **Valori che cambiano** (solo rettifiche in uscita col costo e `D ≠ C`, cioè un titolo in un'altra valuta col cambio
+  mosso dall'acquisto, o un costo dichiarato diverso dal costo medio): realizzato `+ (D − C)`; base di capitale e P&L
+  totale `+ (D − C)`; flusso di TWRR/MWRR del giorno `−D`; vista Periodo (realizzato, «Other» più piccolo); NAV invariato;
+  lotti invariati. In una sola valuta col costo della riga uguale al costo medio (quello che scrive la conversione della
+  cancellazione d'un broker, decisione 47) nulla cambia. **Correzione** (docs-writer, 18:55): il modo «auto» di W non
+  si applica alle rettifiche in uscita (`costBasisModeIncompatible`); il loro costo viene dall'API, dalle importazioni o
+  dalle conversioni di W.
+- Passi: rossi (test-author) → codice → rossi provati sul codice vecchio → verdi → doc EN (docs-writer) → `all-backend`
+  in uno slot (con CP-13a già entrato) → handoff.
+- ✅ **Codice J-24** (18:35–18:50; rossi del test-author e doc del docs-writer in parallelo, senza lanciare nulla):
+  `daily_state.py` (`_handed_over_value`, `_realized_disposal` estratto da `_realized_sale`; i due rami: capitale `−D`,
+  `RealizedSale(proceeds=D, cost=C)`, senza cambio `−C` e `proceeds` None; docstring di `_is_capital_adjustment`),
+  `engine.py` (cambio della valuta del costo alla data di ogni rettifica in uscita col costo, anche prima del periodo;
+  docstring), `models.py` (docstring di `RealizedSale`), AI Export (frase del realizzato in `valuation_semantics` di
+  portafoglio e broker, v3 già in questa release). Ruff e black puliti. Detto a MF (engine.py e la frase dell'AI
+  Export; i commenti «Realized G/L of the SELLs» di `portfolio_service.py` li porta MF-A). Script della prova in
+  `files/j/j24/` (`roi-fifo-utils`, `portfolio-engine`, `lots-analysis-pure`, `ai-export` mirato, semina del DB, `api
+  portfolio`).
+- ✅ **CP-13a entrato in dev**: merge `0452e592c` (genitori `7ac8b17de` + `ffa08dd7d`); prove del coordinatore sul
+  risultato in corso. Detto a Y (campo, versioni, avviso, i due riferimenti superati: `risk-lab.md:285-287` e il
+  commento di `levelHelpers.ts:137-141`) e a MF (MF-D: la perdita totale nei componenti dei drawdown dell'AI Export).
+- ✅ **Rossi scritti** (test-author): classe nuova `TestPricedAdjustmentOutHandsOverAtItsDate` in
+  `test_daily_state_builder.py` (8 rossi + 3 guardie: costo = costo medio in una valuta, senza costo, legata a uno
+  split), `TestPreloadFxRates::test_preload_asks_the_rate_of_every_priced_outgoing_adjustment_at_its_date` in
+  `test_portfolio_engine_vnext.py`, `TestForeignAdjustmentOutHandsOverAtItsDate` in
+  `test_adjustment_out_with_cost_numbers.py` (Dashboard e parità coi lotti su un libro in USD, cambi propri, rollback;
+  CP-16 resta guardia). Nessun test esistente cambiato (gli altri hanno `D = C` in EUR). Nei dati di prova: la riga
+  `[wac-test]` AAPL −3 a 160 USD su IBKR (giorno −20), 160 USD = costo medio in USD delle due BUY → cambia solo l'effetto
+  del cambio fra le date d'acquisto e il giorno −20 su 480 USD (pochi euro nel realizzato e nel P&L del portafoglio di
+  prova).
+- ✅ **Doc EN** (docs-writer, 14 pagine; ancore nuove `#outgoing-adjustments` in `deposited-capital`,
+  `#8-realized-gain-loss` in `portfolio-engine/index`). Dal suo rapporto, corretti da me: descrizioni di
+  `period_realized_gain_loss` (`schemas/portfolio.py`, due modelli: ora vendite e rettifiche in uscita col costo),
+  tooltip `dashboard.realizedSalesTooltip` (4 lingue, `dev.py i18n update`), docstring di `_transfer_leg_capital`,
+  due righe della devWiki (note datate e voce di log). Commenti «SELLs» di `portfolio_service.py` a MF-A (concordato);
+  docstring di `fifo/engine.py::_handover_currency` a CP-7b.
+- ✅ **Prove** (corsia 6185, carico < 50; log `files/j/j24/`): **rossi** sul codice vecchio 11 (`roi-fifo-utils` 10,
+  `portfolio-engine` 1), guardie verdi (`lots-analysis-pure` 163, `ai-export` mirato 283, `api portfolio` 51); codice
+  rimesso. **Verdi**: `roi-fifo-utils` 795, `portfolio-engine` 41, `lots-analysis-pure` 163, `ai-export` 283,
+  `api portfolio` 51 (DB seminato subito prima). **Statici**: `api sync` senza file tracciati cambiati, `i18n check`
+  stretto, `core-unit` 6 478, `check-orphans`, svelte-check 0/0, `mkdocs build` stretto e `check-links` verdi;
+  `translate-validate` 63 errori nuovi → **J-32**. Ruff e black puliti.
+- ✅ **J-24 committato**: `9d702ae8d` (fix, 30 file con la devWiki) + `aa8959852` (diario). Ordine del coordinatore: ondata
+  1b di MF in dev, aggiornamento della mia base, prove leggere, `all-backend` in uno slot (~20:00) sulla revisione
+  combinata, ingresso con la riga del CHANGELOG.
+- **Avviso per i colori (galleria) — numeri dei dati di prova che cambiano con J-24** (stima letta sul DB della corsia
+  seminato oggi, in sola lettura: transazioni IBKR/AAPL e cambi EUR/USD alle loro date; i giorni sono relativi a «oggi»
+  di `populate_mock_data.py`):
+  - la riga `[wac-test] ADJUSTMENT AAPL -3 with override $160` su Interactive Brokers, al **giorno −20**, consegna 3 AAPL a
+    160 USD, mentre il pool IBKR/AAPL ha un costo medio di circa 220 USD (198,40 EUR) per le tre BUY dei giorni −50, −36
+    e −28 (`Initial AAPL purchase`, 15 a ~280 USD). **La mia stima di «pochi euro» era sbagliata.**
+  - **Prima** di J-24: capitale −595,21 EUR (il costo medio), nessun realizzato. **Dopo**: capitale −430,56 EUR (3 × 160
+    USD al cambio del giorno −20), **realizzato −164,65 EUR**.
+  - Effetti visibili (portafoglio di prova, utente dei fixture): P&L totale circa −165 EUR da quel giorno in poi; capitale
+    investito circa +165 EUR; card «Sales» (realizzato) circa −165 EUR in ogni periodo che contiene il giorno −20; flusso
+    TWRR/MWRR del giorno −431 al posto di −595 EUR (rendimenti del periodo leggermente diversi); la pagina del broker
+    IBKR (stessi numeri sulla sua linea); la vista Periodo («Other» più piccolo). NAV invariato; lotti invariati.
+  - Schermate della galleria toccate: Dashboard (card KPI, grafico di crescita e P&L da quel giorno, tabella Performance),
+    dettaglio broker IBKR, vista Periodo. L'altra riga in uscita dei dati di prova (`[promote-test]` AAPL −2) non ha costo
+    e non cambia.
+- ✅ **Base aggiornata** dal coordinatore: merge `a7b70ea6a` (genitori `aa8959852` + `8d244d1c6`, ondata 1b di MF, treno
+  128), pulito. **Prove leggere sulla revisione combinata** (19:37–19:56, carico < 50, log `files/j/j24/merged_*`):
+  `api sync` senza file tracciati cambiati, svelte-check 0/0, `roi-fifo-utils` 845 (con i test di MF), `portfolio-engine`
+  41, `lots-analysis-pure` 163, `ai-export` (mirato) 291, `api portfolio` 51 (DB seminato prima), Vitest 92/92 (renderer e
+  sorgente del PAC). Porta libera. In attesa dello slot 2 per `all-backend` (dopo W). Nota del coordinatore: due rossi
+  External su Crédit Agricole, se compaiono, sono già curati in dev (`0c3275057`).
+- ✅ **Slot 1, `all-backend --workers 2` su `a7b70ea6a`** (19:57–20:31, log `files/j/j24/slot2_*` e un log per unità in
+  `slot2_units/`): **6/7**, 18 882 verdi + 7 saltati nel passaggio parallelo; DB, Services, Utils, Schema, API ed E2E
+  verdi. **External**: 2 rossi, `test_brim_providers.py::TestCreditAgricoleCanonicalCharacterization::
+  test_csv_freezes_entire_output[securities]` e `::test_xlsx_matches_entire_literal_csv_output[securities]`, i rossi
+  noti di W (forma D6 di C-97a) già curati in dev (`0c3275057`), fuori dal perimetro di J-24. Porta 6185 libera.
+  **J-24 pronto per l'ingresso.**

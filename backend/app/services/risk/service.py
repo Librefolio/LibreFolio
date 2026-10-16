@@ -57,6 +57,7 @@ from backend.app.schemas.risk import (
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.financial_math.portfolio.data_quality import normalize_fx_pair_slug
+from backend.app.services.financial_math.weights import share_of
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS, STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk.base import (
@@ -545,7 +546,7 @@ class RiskService:
         weights: dict[int, float] = {}
         composition_error: Optional[str] = None
         if scope_value > 0:
-            weights = {asset_id: float(value / scope_value) for asset_id, value in asset_values.items() if value >= 0}
+            weights = {asset_id: float(share_of(value, scope_value)) for asset_id, value in asset_values.items() if value >= 0}
             if any(value < 0 for value in asset_values.values()):
                 composition_error = "Negative asset values are outside the current-composition contract"
         elif requested_asset_ids:

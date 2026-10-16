@@ -1,9 +1,10 @@
 """Stock splits linked to the transaction ledger: which ADJUSTMENT rows belong to a SPLIT asset event, and the ratio.
 
 A split redistributes a position's existing cost over a new quantity: its ADJUSTMENT rows never add or remove cost or
-capital. Every reader of the ledger that must recognise them — the portfolio engine, the lots analysis, Yield on Cost
-— loads them here, with one query, and judges a ratio with one rule. A named point where the layer reads the database
-(rule 1 of ``financial-math.instructions.md``): the rows of the given transactions, nothing else.
+capital. Every reader of the ledger that must recognise them — the portfolio engine, the lots analysis, Yield on Cost,
+the average-cost replays of the WAC preview, the broker summary and the auto cost — loads them here, with one query,
+and judges a ratio with one rule. A named point where the layer reads the database (rule 1 of
+``financial-math.instructions.md``): the rows of the given transactions, nothing else.
 """
 
 from __future__ import annotations
@@ -92,3 +93,12 @@ async def load_split_links(db: AsyncSession, transactions: Sequence[Transaction]
 def is_valid_split_ratio(ratio: Decimal | None) -> bool:
     """A split ratio the layer can use: present, finite and positive."""
     return ratio is not None and ratio.is_finite() and ratio > 0
+
+
+async def split_linked_ids(db: AsyncSession, transactions: Sequence[Transaction]) -> set[int]:
+    """The ids of the given transactions linked to a SPLIT asset event; an empty set without candidates.
+
+    What an average-cost replay needs to mark a row as a split rescale: the rescale reads the row's own quantity,
+    never the event's ratio, so no ratio is judged here.
+    """
+    return {link.transaction_id for link in await load_split_links(db, transactions)}

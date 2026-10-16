@@ -48,6 +48,7 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 **How to read it**
 
 - **Weight counts cash**, so the rows add up to less than 100% when you hold cash.
+- **Weight shows `—` when your Net Worth is zero or below**, for example when you have borrowed more cash than your holdings are worth: a share of it would mean nothing.
 - **Avg. Cost keeps each purchase's exchange rate**, while Value uses the end date's: the Unrealized P&L includes what the rate did since.
 - **In the Map**, tiles are grouped by broker and asset type; size is the value, colour the P&L %. Scroll to zoom, drag to move, and **Reset zoom** (↺) shows everything again.
 

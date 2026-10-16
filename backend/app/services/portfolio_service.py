@@ -28,8 +28,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
     Asset,
-    AssetEvent,
-    AssetEventType,
     Broker,
     BrokerUserAccess,
     PriceHistory,
@@ -95,7 +93,9 @@ from backend.app.services.financial_math.returns import (
     realized_gain,
     rebase_to_period,
 )
+from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
     calculate_yield_on_cost_for_positions,
@@ -155,11 +155,7 @@ async def compute_wac_iterative(
 
     # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — a split
     # rescales the pool (same cost, new quantity) instead of adding or reducing.
-    split_event_row_ids = {row.id for row in db_rows if row.asset_event_id is not None}
-    split_linked_row_ids: set[int] = set()
-    if split_event_row_ids:
-        split_stmt = select(Transaction.id).join(AssetEvent, Transaction.asset_event_id == AssetEvent.id).where(Transaction.id.in_(split_event_row_ids)).where(AssetEvent.type == AssetEventType.SPLIT)
-        split_linked_row_ids = set((await session.execute(split_stmt)).scalars().all())
+    split_linked_row_ids = await split_linked_ids(session, db_rows)
 
     # WAC cache check: fingerprint from transaction IDs + updated_at
     import hashlib  # noqa: PLC0415
@@ -849,13 +845,15 @@ class PortfolioService:
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
 
-        total_market = sum(h.current_value for h in all_holdings if h.current_value) or Decimal("1")
-        nav_denominator = engine_nav if engine_nav > 0 else Decimal("1")
+        # Weights from the house (D-MF7): no share of a total at or below zero — the field stays None («—»).
+        total_market = sum((h.current_value for h in all_holdings if h.current_value), Decimal("0"))
         for h in all_holdings:
-            if h.current_value and total_market:
-                object.__setattr__(h, "allocation_percent", (h.current_value / total_market * 100).quantize(Decimal("0.01")))
-            if h.current_value:
-                object.__setattr__(h, "nav_weight_percent", (h.current_value / nav_denominator * 100).quantize(Decimal("0.01")))
+            if not h.current_value:
+                continue
+            allocation = percent_of(h.current_value, total_market)
+            nav_weight = percent_of(h.current_value, engine_nav)
+            object.__setattr__(h, "allocation_percent", allocation.quantize(Decimal("0.01")) if allocation is not None else None)
+            object.__setattr__(h, "nav_weight_percent", nav_weight.quantize(Decimal("0.01")) if nav_weight is not None else None)
 
         # ── 5. Performance from engine (correct daily NAV) ──
         nav_snapshots, cash_flows_perf = views.build_performance_inputs()
