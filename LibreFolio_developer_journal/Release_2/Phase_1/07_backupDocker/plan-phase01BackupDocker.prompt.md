@@ -3201,6 +3201,175 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (`features/backup/`: cinque moduli e cinque test). In attesa: la decisione (A)/(B)/(C) sull'esito senza
 >   `JWT_SECRET`; B-15, B-16, B-17 nel backlog; E2E (`e2e/settings/backup.spec.ts`) e galleria negli slot pesanti.
 
+### B5c — l'esito di un ripristino senza sessione (biglietto monouso) e B-17 (2026-10-16, 15:02-18:22) ✅ — 🧊 FROZEN
+
+> - **B5b committato** dal coordinatore: `1e2f6374a` feat (19 percorsi), `2efb36ffb` docs, `de4d0e293` journal (HEAD).
+>   **Il developer ha scelto (A)**, il biglietto monouso: lotto B5c dopo B5b, con B-17. E2E e galleria di B5b in coda
+>   per uno slot.
+> - **Analisi** (intera in `files/b5c-analysis.md` della sessione):
+>   - **biglietto** emesso da `POST /backup/restore/restart` (ogni richiesta ne emette uno nuovo, che sostituisce il
+>     precedente; non alla conferma: anche un ripristino trovato in attesa, confermato da CLI, si riavvia dalla
+>     scheda), `secrets.token_urlsafe(32)`, solo in quella risposta (`RestoreRestartAccepted`, `Cache-Control:
+>     no-store`), mai nei log;
+>   - **conservato** come hash in un file suo, `.restore/outcome-ticket.json` (`sha256`, `stage_id`, `issued_at`,
+>     `expires_at`; 0600, scrittura atomica senza seguire i link): fuori da `RestoreState`, così la macchina a stati
+>     di `apply.py`, rivista in B3, resta intatta; `.restore/` non si scambia mai, quindi il file sopravvive al
+>     riavvio, allo scambio, al commit e al ritorno indietro;
+>   - **scadenza** un'ora dalla richiesta di riavvio (costante, nessuna variabile nuova); **monouso**: consumato quando
+>     la rotta dà un esito finale (`committed`, `rolled_back`); `pending` e `in_progress` no; tolto anche da una
+>     conferma nuova, da un annullamento (API e CLI), da una lettura che lo trova scaduto; legato allo `stage_id`;
+>   - **rotta** `GET /backup/restore/outcome`, **senza sessione**, biglietto nell'header `X-Restore-Ticket` (mai
+>     nell'URL), risposta minima `{state, reason, waiting}` (niente nomi, date, versioni, percorsi), un 404 identico
+>     per ogni biglietto che non vale (`restore_outcome_not_found`), confronto a tempo costante;
+>   - **da bloccata deve rispondere** (P7/P8: «non applicato, bloccata» sull'overlay): una voce in
+>     `ALLOWED_WHEN_BLOCKED` di H (`instance_block.py`: import dopo la riga 34, voce dopo la riga 62, più la frase della
+>     docstring alle righe 9-14; `test_instance_block.py`: una voce in `ALLOWED_ROUTES` dopo la riga 146). Non avvia
+>     niente: riporta l'esito di un riavvio già chiesto alla pagina che l'ha chiesto. Un'aggiunta alla lista passa dal
+>     developer;
+>   - **B-17**: `DELETE /pending` con `cancel_restore(drop_copy=True)`, come la CLI; la scheda smette di chiamare
+>     `dropCheck`;
+>   - **frontend**: il controllore tiene il biglietto in memoria per quel riavvio (mai in storage); `restoreOutcome`
+>     col biglietto legge la rotta nuova, con un 404 ricade sulla lettura di oggi (riavvii da CLI, biglietto scaduto);
+>   - **doc**: `security.md` (rotta, biglietto, lista del blocco, `DELETE /pending`), la guida (via la limitazione
+>     (C) di `JWT_SECRET`; B-17), `hosting_providers.en.md` (la tabella di ciò che risponde da bloccata, riga 177).
+> - **Test** (test-author, prima i rossi): `api backup-restore-apply` (emissione, hash, 0600, sostituzione, senza
+>   cookie, solo header, 404 identici, consumo, campi minimi, `no-store`, niente log, istanza bloccata, conferma e
+>   annullamento che lo tolgono, B-17); `api instance-block` (la voce di H); frontend (`backupApi`, `restoreFlow`,
+>   `RestoreCard`). Poi `security-review` sul diff.
+> - **Coda per gli slot (B5b)**: l'E2E estende `e2e/settings/backup.spec.ts` (`front-utility backup`, nessun cambio al
+>   runner) col ripristino (caricamento, prova, report, parola scritta e incolla rifiutato, riavvio finto con
+>   `page.route`, gli esiti, il blocco in attesa); la galleria di G accanto a `settings/backup-ready` (scheda,
+>   report, overlay del fallimento).
+> - Stima: mezza giornata. Analisi al coordinatore; 🧊 FROZEN fino al via.
+> - **15:11, via del coordinatore** col disegno così com'è (B-17 compreso). Le due righe di `instance_block.py` e
+>   `test_instance_block.py` le concorda con H; intanto tutto il resto, prima i rossi; `security-review` sul diff finale;
+>   poi E2E e galleria di B5b in uno slot (li organizza con G dei colori).
+> - **Contratto** `files/b5c-contract.md` della sessione (nomi condivisi da codice e test). **Rossi** a due test-author
+>   in parallelo, su file distinti, solo scrittura: backend `628939b5` (`test_backup_outcome.py` nuovo, con la voce
+>   `services backup-outcome` del runner; `test_backup_apply.py`; `test_backup_restore_apply.py`), frontend `52dd383e`
+>   (`backupApi.test.ts`, `restoreFlow.test.ts`, `RestoreCard.test.ts`, con B-17: niente più `dropCheck`).
+> - **Bozze** in `files/b5c-wip/`: `outcome.py` (il modulo intero) e `apply_b5c_backend.py` (`paths.py`, `apply.py`
+>   con `drop_ticket` alla conferma e all'annullamento, gli schemi `RestoreRestartAccepted` e `RestoreOutcome`, le
+>   rotte, B-17), provato a secco su copie dei quattro file: si applica e compila; black pulito; ruff solo I001
+>   (l'ordine degli import, fuori dal repo ruff non riconosce `backend` come primo: `--fix` nel worktree). Le modifiche
+>   del frontend dopo i rossi, con il client rigenerato (`RestoreRestartAccepted`, `RestoreOutcome`).
+> - **Rossi del frontend** (test-author `52dd383e`, 15:15-15:45, solo Prettier): `backupApi.test.ts` 175 casi (71
+>   rossi: l'header, la richiesta col biglietto, gli esiti validi, il ripiego, la tabella dei `down`, la replica di
+>   `requestRestart` sul client generato, rossa finché il client non è rigenerato), `restoreFlow.test.ts` (14 rossi: B-17
+>   senza `dropCheck` in sei casi; il biglietto in sette: dopo giù e su, alla lettura veloce, un secondo riavvio,
+>   `restartNow()`, nessun biglietto sopravvive al suo riavvio, una risposta vecchia non porta il suo, solo in memoria),
+>   `RestoreCard.test.ts` (3 rossi). **Cambio mio al contratto** (15:40): un 401 o un 423 della rotta dell'esito
+>   ricadono sulla lettura di oggi come un 404 (la rotta non è raggiungibile per questo chiamante: la voce della lista del
+>   blocco che manca, un proxy), altrimenti l'overlay aspetterebbe per sempre senza suggerimento; un 5xx resta `down`
+>   (transitorio all'avvio).
+> - **Giro rosso del frontend** (15:53): 88 rossi su 407, 71 + 14 + 3, tutti e soli i previsti; nessun errore non gestito.
+> - **Rossi del backend** (test-author `628939b5`, 15:15-15:58; ruff, black e `--collect-only` puliti):
+>   `test_backup_outcome.py` nuovo, 95 casi (`services backup-outcome`, registrato accanto a `backup-apply`), tutti
+>   rossi; `test_backup_apply.py` +13 (sezione (n): la conferma riuscita toglie il biglietto, una rifiutata lo tiene;
+>   l'annullamento lo toglie con tutti e due i `drop_copy`, uno rifiutato lo tiene; scambio, commit e ritorni indietro lo
+>   tengono); `test_backup_restore_apply.py` da 84 a 136, 54 rossi (B-17 al posto del vecchio (d); il biglietto del
+>   riavvio; la rotta dell'esito senza sessione e solo nell'header; 17 biglietti che non valgono con lo stesso 404 fino ai
+>   byte; le fasi, i motivi d'attesa, il consumo; mai nei log; istanza bloccata, rossa finché manca la riga di H, e un
+>   controllo statico che l'esito sia l'unica rotta del ripristino nella lista; l'OpenAPI). Uno verde apposta: da
+>   bloccata, ogni altra rotta del ripristino risponde 423 a un admin. **Scelte fissate dal test-author, accolte**: un
+>   biglietto sbagliato non spende né toglie il file (nella bozza il confronto dell'hash passa prima della scadenza);
+>   le conferme e gli annullamenti rifiutati tengono il biglietto; l'header è esattamente `X-Restore-Ticket`
+>   (`alias`), facoltativo; i docstring dei due schemi nuovi in una riga, senza backtick; un `drop_ticket` fallito
+>   logga almeno un warning; niente rimozioni attraverso un link al posto di `.restore`. **Il caso non specificato**:
+>   se il biglietto non si scrive (disco pieno), il riavvio non parte, 500 `restore_restart_failed`, nel log; la scheda
+>   lo dice col messaggio generico «the server's log has the cause» (nessuna chiave nuova). Bozza aggiornata (anche i
+>   docstring della disposizione di `.restore` in `paths.py` e `apply.py` e la descrizione di `api
+>   backup-restore-apply` nel catalogo) e riprovata a secco.
+> - **Giro rosso del backend** (15:57-16:07): `services backup-outcome` 95 rossi su 95, `services backup-apply` 13 su
+>   223, `api backup-restore-apply` 54 su 136; tutti per il motivo giusto (modulo, nomi o comportamento che mancano).
+> - **Codice del backend** (16:08): `apply_b5c_backend.py` (`outcome.py` nuovo; `paths.py`; `apply.py` con
+>   `drop_ticket` dopo i controlli della conferma e dell'annullamento; gli schemi; le rotte; B-17; i docstring della
+>   disposizione di `.restore`; la descrizione del catalogo); `ruff --fix` (un ordine di import), black invariato.
+> - **Verde del backend** (16:14-16:42, col carico): `services backup-outcome` 95, `services backup-apply` 223,
+>   `utils backup-cli-restore` 77, `utils backup-cli` 102, `e2e backup-roundtrip` 3; `api backup-restore-apply` 133 su
+>   136 (i due rossi attesi della riga di H, l'esito da bloccata e il controllo statico della lista, più un errore del
+>   test); `api backup` 22 su 23 (il pin dell'ordine delle rotte, BACKUP-001, non conosceva la rotta nuova).
+>   - **⚠️ Fuori pista**: `test_the_ticket_is_never_logged` falliva sulla sua stessa richiesta: dentro la cattura
+>     mandava il biglietto in `?ticket=` (il caso «la query è ignorata») e il client httpx del test logga l'URL. Non è
+>     il prodotto (che non mette mai il biglietto in un URL): riparato dal test-author (dentro la cattura solo l'header;
+>     il caso della query resta nei suoi due test), e il pin di BACKUP-001 con nove rotte del ripristino. Nota sua per la
+>     revisione di sicurezza: la maschera del log d'accesso di uvicorn (`mask_query_credentials`) copre solo i nomi con
+>     parole da credenziale (token, secret, password); `ticket` no, quindi un biglietto scritto a mano in un URL finirebbe
+>     nel log d'accesso.
+> - **Codice del frontend** (16:46, col client rigenerato: `RestoreRestartAccepted`, `RestoreOutcome` non stretto):
+>   `apply_b5c_frontend.py` (`backupApi.ts`: il tipo, `requestRestart`, `RESTORE_TICKET_HEADER`, `restoreOutcome(ticket)`
+>   col ripiego `readStatusWithSession()` su 404, 401 e 423; `restoreFlow.svelte.ts`: `#ticket` in memoria, azzerato da
+>   `load()`, `dispose()` e a ogni riavvio, preso da `outcome_ticket ?? null`, passato a ogni lettura dell'esito; B-17:
+>   `cancelPending()` senza `dropCheck`). Prettier invariato.
+> - **Doc** (`docs-writer`, solo scrittura): `security.md` (le rotte, la sottosezione nuova «🎫 The Outcome Ticket»
+>   `#backup-restore-outcome`, la lista del blocco), la guida (via la limitazione di `JWT_SECRET`: il biglietto dice
+>   l'esito qualunque sia la configurazione; il ripiego onesto per una pagina ricaricata, più di un'ora d'attesa o un
+>   riavvio non chiesto dalla pagina; B-17), `hosting_providers.en.md` (una riga in «What Still Answers»). Quattro punti
+>   presuppongono la voce di H con l'alias `backup_restore`.
+> - **Verde completo** (16:44-16:59): Vitest `backupApi` + `restoreFlow` + `RestoreCard` 404 su 407 (i tre rossi
+>   dell'ambiente dei test: `localStorage` non c'è come globale sotto Node 26 con jsdom; riparati dal test-author con lo
+>   stub in memoria dello schema della base, `vi.stubGlobal`), gli altri cinque file 332, `front check` 0/0,
+>   `api backup-restore-apply` 134 su 136 (i due di H), `api backup` 23.
+> - **`security-review`** (`a8a19165`, 17:00-17:10): **nessuna vulnerabilità, a nessuna gravità.** Robustezza:
+>   (1) due riavvii insieme si pestano il file temporaneo del biglietto, e un annullamento può infilarsi fra la lettura
+>   dello stato e il biglietto → **corretto**: il biglietto si emette sotto il lock del ripristino
+>   (`apply.prepare_restart`, che la rotta usa); (2) con B-17 la copia si toglieva fuori dal lock, e una conferma della
+>   stessa copia da un'altra pagina l'avrebbe persa → **corretto**: dentro il lock. Ruff e black puliti. (3) **Disegno**:
+>   il «monouso» toglieva il biglietto prima che la risposta finale arrivasse; persa quella, il ripiego sulla sessione
+>   avrebbe detto «ripristinato» dopo un ritorno indietro senza `JWT_SECRET`. Chiesto al coordinatore.
+> - **17:20, decisione N53 del coordinatore** (da rivedere col developer): un esito finale si rilegge finché il
+>   biglietto non scade (un'ora); «monouso» vuol dire **un ripristino, un biglietto**, non più una lettura. Più `ticket`
+>   in `_CREDENTIAL_WORD` di `logging_config.py` (sono lo scrittore del file per questo lotto), con un caso nel test della
+>   maschera. Rossi al test-author `628939b5`; doc al `docs-writer`.
+> - **Doc di N53** (`docs-writer`): `security.md` (la riga della rotta: «as often as asked until the ticket expires»;
+>   «🎫 The Outcome Ticket»: il biglietto emesso sotto il lock, la query ignorata e mascherata nel log d'accesso, «One
+>   restore, one hour» col perché, «unknown» per mai emesso, sostituito o tolto; «📜 Request Logs» con `ticket`). La
+>   guida e la pagina dei fornitori non parlavano di una lettura sola: invariate.
+> - **17:22, sospensione del coordinatore** fino alle ~17:45 (la galleria intera dei colori, carico 130-170): niente
+>   prove nuove. Fermata la mia riesecuzione di Vitest, che aspettava ancora il carico (non era partita). Pronto
+>   `files/b5c-wip/apply_n53.py` (in `outcome.py` via `_FINAL` e la rimozione alla lettura finale; i docstring di
+>   `outcome.py`, della rotta e dello schema; `ticket` in `_CREDENTIAL_WORD` e nel docstring della maschera), provato a
+>   secco su copie.
+> - **Rossi di N53 e della maschera** (test-author `628939b5`, ruff, black e `--collect-only` puliti): `test_backup_outcome.py`
+>   97 (l'esito finale si rilegge uguale fino a un microsecondo prima di `expires_at`, a `expires_at` niente e il file
+>   tolto; il biglietto seguito da `pending` al commit letto due volte; un biglietto scaduto se ne va solo col suo
+>   portatore: rossi 4); `test_backup_restore_apply.py` 136 (l'esito finale tre volte uguale fino ai byte, rosso ×2; la
+>   riga `spent` del 404 identico diventa `dropped-by-a-cancel`; il log senza biglietto, anche con una lettura scaduta);
+>   `test_backup_apply.py` 228 (scambio, commit e ritorni indietro tengono il biglietto fino alla scadenza, rossi ×3; **in
+>   più, non chiesti e accolti**: `prepare_restart` emette il biglietto mentre il lock è tenuto, e senza un ripristino in
+>   attesa rifiuta senza scrivere niente, verdi ×5); `test_logging_access_filter.py` 110 (`ticket`, `outcome_ticket`,
+>   `TICKET`, `Restore-Ticket`, `tick%65t` dopo `?` e dopo `&`, rossi ×10; `q=ticket` e `ticker=AAPL` restano, guardia
+>   contro un'espressione troppo larga, verdi ×4). Il test-author ha toccato anche la descrizione del catalogo di
+>   `logging-access-filter` (voce di H, `/ticket`): da dire al coordinatore. Segnalati e aggiunti allo script i testi
+>   rimasti «used up»: la descrizione OpenAPI del 404 (`_OUTCOME_NOT_FOUND`) e la descrizione di `api
+>   backup-restore-apply` nel catalogo.
+> - **17:52, sospensione tolta** (prove leggere a carico sotto 50, una alla volta). **Giro rosso** (17:53-18:00):
+>   `services backup-outcome` 4 rossi, `services backup-apply` 3, `services logging-access-filter` 10, come previsti;
+>   `api backup-restore-apply` 9: i 2 di N53 e i 2 di H previsti, più 5 non previsti.
+>   - **⚠️ Fuori pista**: i 5 erano una regressione mia: `prepare_restart` prendeva il lock (creando `apply.lock`) prima di
+>     vedere che il ripristino non era in attesa, e `test_a_restart_refused_writes_no_ticket` (applying, applied,
+>     rolling_back, committed, rolled_back) fissa «un riavvio rifiutato non scrive niente». Corretto: prima la lettura
+>     senza lock (`read_restore`, come faceva la rotta), poi il lock e la rilettura solo se è in attesa.
+> - **18:02, applicati** `apply_n53.py` (in `outcome.py` niente rimozione alla lettura finale e via `_FINAL`; i
+>   docstring; `_OUTCOME_NOT_FOUND` senza «used up»; la descrizione del catalogo; `ticket` in `_CREDENTIAL_WORD` e nel
+>   docstring della maschera) e la correzione di `prepare_restart`; ruff e black puliti.
+> - **Verde** (18:00-18:13): `services backup-outcome` 97, `services backup-apply` 228, `services logging-access-filter`
+>   110, `api backup` 23, `utils backup-cli-restore` 77; `api backup-restore-apply` 134 su 136, i due rossi sono quelli
+>   della riga di H (l'esito da bloccata, il controllo statico della lista). Porta libera.
+> - **18:12, slot 2 offerto per un E2E**: non pronto (le prove della scheda del ripristino non erano scritte, la corsia
+>   finiva il giro leggero): lasciato ad A. Il coordinatore dà uno slot di 30 minuti dopo le 19:30 per
+>   `front-utility backup` con i casi nuovi. Test-author `332db941` sull'E2E (solo scrittura): estende
+>   `e2e/settings/backup.spec.ts` col ripristino; il riavvio, la sonda `/system/ready` e la rotta dell'esito sempre
+>   intercettati con `page.route` (un riavvio vero fermerebbe il server della corsia); un solo caso con la conferma
+>   vera, e ogni ripristino in attesa annullato nella pulizia; casi in serie (una prova e un ripristino alla volta).
+> - **Ultimi controlli** (18:14-18:20): Vitest `backupApi` + `restoreFlow` + `RestoreCard` 407 su 407 (con lo stub di
+>   `localStorage`); `front check` 0/0; `mkdocs build` stretta 0 avvisi; `check-links` 96; `utils gate-docs-links` 63;
+>   `git diff --check` pulito; porta libera.
+> - **18:22, handoff del checkpoint B5c** al coordinatore, 🧊 FROZEN per questi file: 20 tracciati modificati e 2 nuovi
+>   (`outcome.py`, `test_backup_outcome.py`). Fuori: `frontend/e2e/settings/backup.spec.ts`, che il test-author dell'E2E
+>   sta scrivendo (entra con il suo slot). Restano rossi due casi di `api backup-restore-apply`, finché entra la riga di H
+>   in `ALLOWED_WHEN_BLOCKED` (`instance_block.py`) e il suo pin (`test_instance_block.py`).
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto

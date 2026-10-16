@@ -3792,8 +3792,10 @@ sulla base `23f6578f3`.
   di risoluzione dei problemi: riavvialo a mano). Proposta: server su e stato `pending` oltre `slowAfterMs` → un
   messaggio suo nell'overlay («LibreFolio did not stop: restart it yourself»), deciso con il coordinatore (cambia un
   caso fissato di `restoreFlow.test.ts`). Dettagli: piano 07, §13, «B5b».
-- **B-17 · «Cancel the restore» della scheda non toglie la copia di un ripristino confermato dalla CLI** — minimo; B,
-  16/10 (docs-writer, B5b). La scheda, dopo un annullamento accettato, toglie la copia con `DELETE /stage/{stage_id}`;
+- ✅ **B-17 · «Cancel the restore» della scheda non toglie la copia di un ripristino confermato dalla CLI** — minimo; B,
+  16/10 (docs-writer, B5b). **Fatto il 16/10 in B5c** (checkpoint delle 18:22): `DELETE /backup/restore/pending` chiama
+  `cancel_restore(drop_copy=True)` come la CLI, e la copia si toglie dentro il lock del ripristino; la scheda non chiama
+  più `dropCheck`. Testo d'origine: la scheda, dopo un annullamento accettato, toglie la copia con `DELETE /stage/{stage_id}`;
   la CLI non tiene il record della prova, quindi per un ripristino confermato da riga di comando la richiesta è
   rifiutata (ignorata) e la copia resta in `.restore/stage/` finché una prova avviata dalla scheda non la trova più
   vecchia di 24 ore; dopo l'annullamento dalla scheda, `backup pending --cancel` non la raggiunge più. La guida dice di
