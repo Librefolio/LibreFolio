@@ -291,7 +291,7 @@ Everything else stays out: `secrets/`, `logs/`, `scheduler_state.json`, the `bac
 
 !!! warning "🔑 The instance key is not in the archive"
 
-    The archive leaves out `secrets/`, which holds the [instance key](configuration.md#instance-key). Back it up separately, as [Filesystem Structure → Backup](filesystem.md#backup) explains, and keep the copy as private as the archives. Before you start LibreFolio on the data of an archive, put `secrets/` back with it: without its key, what LibreFolio encrypted can no longer be read.
+    The archive leaves out `secrets/`, which holds the [instance key](configuration.md#instance-key). Back it up separately, as [Filesystem Structure → What to Back Up](filesystem.md#what-to-back-up) explains, and keep the copy as private as the archives. Before you start LibreFolio on the data of an archive, put `secrets/` back with it: without its key, what LibreFolio encrypted can no longer be read.
 
 ??? info "📋 `manifest.json` — what it records"
 
