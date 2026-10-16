@@ -412,6 +412,8 @@ async def test_risk_beta_can_reuse_primary_as_comparison(
 async def test_risk_signal_uses_target_currency_prepared_returns(
     asset_signal_data,
 ):
+    # A prepared-series risk signal: the rolling volatility, since developer's decision 29 removed
+    # the observation-count RISK_ROLLING_RETURN that used to stand here.
     async with AsyncSession(
         get_async_engine(),
         expire_on_commit=False,
@@ -425,8 +427,8 @@ async def test_risk_signal_uses_target_currency_prepared_returns(
                         target_currency="JPY",
                         signals=[
                             SignalRequest(
-                                instance_id="return",
-                                signal_code="RISK_ROLLING_RETURN",
+                                instance_id="volatility",
+                                signal_code="RISK_ROLLING_VOLATILITY",
                                 params={"window": 2},
                             )
                         ],

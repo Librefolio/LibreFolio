@@ -286,7 +286,7 @@ test.describe('FX CSV Import', () => {
         const modal = await openImportModal(page);
 
         // Initial: info banner should mention EUR and USD
-        const infoBanner = modal.locator('[class*="bg-blue"]');
+        const infoBanner = modal.getByTestId('info-banner-info');
         if ((await infoBanner.count()) > 0) {
             const bannerText = await infoBanner.first().textContent();
             expect(bannerText).toContain('EUR');

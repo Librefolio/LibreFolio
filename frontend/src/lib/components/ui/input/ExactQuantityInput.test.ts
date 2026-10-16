@@ -257,20 +257,25 @@ describe('ExactQuantityInput — exact digits, bounds, and hold acceleration', (
 });
 
 describe('ExactQuantityInput — sign state and validity', () => {
+    // The sign colour is a colour role at 70% on the inline border. No theme stylesheet is loaded here, so the unit
+    // asserts the role the style names; the colour the browser resolves is the e2e's («Sign coloring», transactions-modals).
+    const OK_SIGN_BORDER = 'border-color: color-mix(in oklab, var(--lf-success) 70%, transparent)';
+    const BAD_SIGN_BORDER = 'border-color: color-mix(in oklab, var(--lf-danger) 70%, transparent)';
+
     it.each([
-        ['positive', '1', 'ok', true, '163.223'],
-        ['positive', '-1', 'bad', false, '25.331'],
+        ['positive', '1', 'ok', true, OK_SIGN_BORDER],
+        ['positive', '-1', 'bad', false, BAD_SIGN_BORDER],
         ['positive', '-0.000000', 'neutral', true, ''],
-        ['negative', '-1', 'ok', true, '163.223'],
-        ['negative', '1', 'bad', false, '25.331'],
+        ['negative', '-1', 'ok', true, OK_SIGN_BORDER],
+        ['negative', '1', 'bad', false, BAD_SIGN_BORDER],
         ['negative', '-0.000000', 'neutral', true, ''],
-        ['nonzero', '-1', 'ok', true, '163.223'],
-        ['nonzero', '0', 'bad', false, '25.331'],
-        ['nonzero', '-0.000000', 'bad', false, '25.331'],
-        ['zero', '-0.000000', 'ok', true, '163.223'],
-        ['zero', '0.000001', 'bad', false, '25.331'],
+        ['nonzero', '-1', 'ok', true, OK_SIGN_BORDER],
+        ['nonzero', '0', 'bad', false, BAD_SIGN_BORDER],
+        ['nonzero', '-0.000000', 'bad', false, BAD_SIGN_BORDER],
+        ['zero', '-0.000000', 'ok', true, OK_SIGN_BORDER],
+        ['zero', '0.000001', 'bad', false, BAD_SIGN_BORDER],
         ['any', '-999999999999.123456', 'neutral', true, ''],
-    ] as const)('%s classifies %j as %s', async (signRule, value, signState, signValid, expectedHue) => {
+    ] as const)('%s classifies %j as %s', async (signRule, value, signState, signValid, expectedBorder) => {
         const {input, validities, unmount} = mountWithParentLoop({signRule});
 
         await fireEvent.input(input, {target: {value}});
@@ -278,11 +283,8 @@ describe('ExactQuantityInput — sign state and validity', () => {
 
         expect(lastValidity(validities)?.signValid).toBe(signValid);
         expect(lastValidity(validities)?.valid).toBe(signValid);
-        if (expectedHue) expect(hue(input)).toContain(expectedHue);
-        else {
-            expect(hue(input)).not.toContain('163.223');
-            expect(hue(input)).not.toContain('25.331');
-        }
+        if (expectedBorder) expect(hue(input)).toContain(expectedBorder);
+        else expect(hue(input), 'a neutral sign paints no border colour').not.toContain('border-color');
         unmount();
     });
 
@@ -290,16 +292,14 @@ describe('ExactQuantityInput — sign state and validity', () => {
         const syntax = mountWithParentLoop({signRule: 'positive'});
         await fireEvent.input(syntax.input, {target: {value: '-'}});
         expect(syntax.input).toHaveAttribute('aria-invalid', 'true');
-        expect(hue(syntax.input)).not.toContain('163.223');
-        expect(hue(syntax.input)).not.toContain('25.331');
+        expect(hue(syntax.input)).not.toContain('border-color');
 
         syntax.unmount();
         const digits = mountWithParentLoop({signRule: 'positive'});
         await fireEvent.input(digits.input, {target: {value: '1000000000000'}});
         expect(lastValidity(digits.validities)?.signState).toBe('ok');
         expect(digits.input).toHaveAttribute('aria-invalid', 'true');
-        expect(hue(digits.input)).not.toContain('163.223');
-        expect(hue(digits.input)).not.toContain('25.331');
+        expect(hue(digits.input)).not.toContain('border-color');
     });
 
     it.each([
