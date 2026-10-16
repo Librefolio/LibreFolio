@@ -4,10 +4,13 @@
  * The report leaves from the user's own client, never from the server:
  * - the instance's support address is `mailto:` and one address → a `mailto:` link with the subject and the body;
  * - it is an http(s) page → the page opens, and the report goes to the clipboard, to paste there;
- * - it is not set, or not valid → a prefilled GitHub issue, public, that the user reviews before sending it.
+ * - it is not set, or not valid → on a self-hosted instance, a prefilled GitHub issue, public, that the user reviews
+ *   before sending it; on a managed instance, or when the configuration could not be read, no link at all (N61): a
+ *   public issue would publish the profile, the provider codes and the identifiers.
  *
  * `LIBREFOLIO_SUPPORT_URL` reaches the app through `GET /system/instance` (`support_url`), already validated by the
- * backend; `supportChannel` checks the scheme again, so that nothing but http(s) and `mailto:` ever becomes a link.
+ * backend; `supportChannel` checks it again on the parsed address, so that nothing but http(s) and `mailto:` ever
+ * becomes a link, and an address with a user name or a password counts as missing.
  *
  * What the report carries: the text searched, the providers queried with their outcome (codes only), the form's
  * currency, type and identifiers when the caller gives them, the app's version, profile and language. Never the user,
@@ -51,28 +54,36 @@ const SUBJECT_QUERY_MAX = 80;
 /** What the backend refuses in a mailto address (`config/platform.py`), checked again: `?` or `#` would add headers. */
 const MAILTO_FORBIDDEN = /[\s?#%,;<>"/]/;
 
-function github(): SupportChannel {
-    return {kind: 'github', url: GITHUB_NEW_ISSUE_URL};
+export interface SupportChannelOptions {
+    /** Whether a missing or unusable address falls back to a new GitHub issue: on a self-hosted instance only (N61). */
+    githubFallback: boolean;
 }
 
-/** The channel for the instance's support address (`support_url`): its scheme checked again, anything else → GitHub. */
-export function supportChannel(value: string | null | undefined): SupportChannel {
+/**
+ * The channel for the instance's support address (`support_url`), checked again: a mailto with one address, or an
+ * http(s) page without user info, given back normalized. Anything else counts as missing: a new GitHub issue with
+ * `githubFallback`, otherwise null (no link).
+ */
+export function supportChannel(value: string | null | undefined, {githubFallback}: SupportChannelOptions): SupportChannel | null {
+    const missing = (): SupportChannel | null => (githubFallback ? {kind: 'github', url: GITHUB_NEW_ISSUE_URL} : null);
     const raw = (value ?? '').trim();
-    if (raw === '') return github();
+    if (raw === '') return missing();
     if (/^mailto:/i.test(raw)) {
         const address = raw.slice('mailto:'.length);
         const [local, domain, ...rest] = address.split('@');
-        if (MAILTO_FORBIDDEN.test(address) || rest.length > 0 || !local || !domain) return github();
+        if (MAILTO_FORBIDDEN.test(address) || rest.length > 0 || !local || !domain) return missing();
         return {kind: 'mailto', address};
     }
     let url: URL;
     try {
         url = new URL(raw);
     } catch {
-        return github();
+        return missing();
     }
-    if ((url.protocol === 'http:' || url.protocol === 'https:') && url.hostname !== '') return {kind: 'page', url: raw};
-    return github();
+    // A user name or a password would be shown to every user and sent to the page: not a support address.
+    if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.hostname === '' || url.username !== '' || url.password !== '') return missing();
+    // The normalized absolute address: a spelling such as `https:host` would otherwise resolve, as an href, on this instance.
+    return {kind: 'page', url: url.href};
 }
 
 function outcomeLine(outcome: ProviderOutcome): string {
