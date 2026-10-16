@@ -9476,7 +9476,7 @@
         "allocation_by_sector": [
           {
             "amount": "11557.176000000",
-            "emoji": "\ud83d\udcb5",
+            "emoji": "\ud83d\udcb0",
             "name": "Liquidity",
             "value": "85.87"
           },
@@ -9974,7 +9974,7 @@
       "allocation_by_sector": [
         {
           "amount": "11557.176000000",
-          "emoji": "\ud83d\udcb5",
+          "emoji": "\ud83d\udcb0",
           "name": "Liquidity",
           "value": "85.87"
         },
@@ -13616,7 +13616,7 @@
         "allocation_by_sector": [
           {
             "amount": "11557.176000000",
-            "emoji": "\ud83d\udcb5",
+            "emoji": "\ud83d\udcb0",
             "name": "Liquidity",
             "value": "87.19"
           },
@@ -14069,7 +14069,7 @@
       "allocation_by_sector": [
         {
           "amount": "11557.176000000",
-          "emoji": "\ud83d\udcb5",
+          "emoji": "\ud83d\udcb0",
           "name": "Liquidity",
           "value": "87.19"
         },

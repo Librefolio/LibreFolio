@@ -166,7 +166,9 @@ Returns the **current price** of each asset in a list: the assigned provider's l
       "currency": "EUR",
       "as_of_date": "2026-04-10",
       "source": "provider:justetf",
-      "error": null
+      "error": null,
+      "error_code": null,
+      "retry_after": null
     },
     {
       "asset_id": 2,
@@ -174,7 +176,9 @@ Returns the **current price** of each asset in a list: the assigned provider's l
       "currency": "USD",
       "as_of_date": "2026-04-09",
       "source": "db:last_known",
-      "error": null
+      "error": null,
+      "error_code": "RATE_LIMITED",
+      "retry_after": 1834.6
     },
     {
       "asset_id": 3,
@@ -182,7 +186,9 @@ Returns the **current price** of each asset in a list: the assigned provider's l
       "currency": null,
       "as_of_date": null,
       "source": null,
-      "error": "No price data available"
+      "error": "No price data available",
+      "error_code": null,
+      "retry_after": null
     }
   ],
   "success_count": 2,
@@ -195,8 +201,8 @@ Returns the **current price** of each asset in a list: the assigned provider's l
 **Resolution strategy** (per asset, all assets in parallel — `get_current_prices_bulk` in `backend/app/services/assets/price_query.py`):
 
 1. If a provider is assigned, ask its `get_current_value()` — at most five calls at a time, ten seconds each — and answer with `source: "provider:<code>"`. A provider answer is cached for two minutes. What "current" means is up to the provider: JustETF answers EUR with a real-time gettex quote, kept up to date by a WebSocket feed per ISIN, and otherwise (other currencies, or no quote) with the latest daily quote of its chart API; Yahoo Finance reads `regularMarketPrice` from `ticker.info` (then `currentPrice` or `previousClose`).
-2. **Fallback**: with no usable provider, or when its call fails or times out, return the latest close stored in `PriceHistory`, with `source: "db:last_known"`.
-3. With no stored price either, `value` is `null` and `error` is `No price data available` (`Asset not found` for an unknown ID).
+2. **Fallback**: with no usable provider, or when its call fails or times out, return the latest close stored in `PriceHistory`, with `source: "db:last_known"`. A provider paused after «too many requests» is not called at all, and one that refuses is paused ([Provider Pauses](../backend/assets/architecture.md#provider-pauses)): the item then also carries `error_code: "RATE_LIMITED"` and `retry_after`, the seconds until the provider may be called again, as asset 2 above.
+3. With no stored price either, `value` is `null` and `error` is `No price data available` — still with `error_code` and `retry_after` when the provider is paused — or `Asset not found` for an unknown ID.
 
 **Side effect**: the call is not read-only. A provider quote dated today creates today's `PriceHistory` row (open, high, low and close all equal to the quote) or extends it (`high` and `low` widened, `open` set if missing, `close` replaced). A database fallback is never written back.
 

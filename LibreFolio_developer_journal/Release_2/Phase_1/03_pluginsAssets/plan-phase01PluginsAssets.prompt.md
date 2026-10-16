@@ -2330,3 +2330,451 @@ parte 1, Y2. Merge aperto dal coordinatore e committato da lui (`f2a766f45`, gen
   **⚠️ Fuori pista**: l'avviso della seconda pausa (dalle 21:00) mi è arrivato dopo. `api assets-provider` era già in
   corso e ha finito alle 21:01:11. Dopo, lo script ha lanciato da solo due passi leggeri, `check-orphans` (7 s, una
   scansione dei file) e `api sync` (24 s), finiti alle 21:01:42. Da allora niente in esecuzione.
+
+## X-RL (X1–X8) — il contratto dei limiti dei fornitori, sopra Z7a ✅ (15/10, 21:03–23:16; FROZEN, in attesa del checkpoint)
+
+> **Via del coordinatore** (15/10, 21:03): «Via a X1–X8, il contratto dei limiti dei fornitori sopra Z7a, che è già
+> dentro.» Base: `86da642c3` (= `dev_release2`, avanzamento veloce del coordinatore). Disegno: piano 06 di Z, sezione
+> «Z7 — disegno», contratto X1–X8; decisioni D-Z7-1…4 del coordinatore (attuazione della decisione 34 del developer).
+
+### Analisi sul codice (15/10)
+
+- **Z7a** (`utils/runtime/cooldown.py`, `services/platform/provider_cooldown.py`):
+  - `RateLimitedError(retry_after, scope)`, `retry_after_seconds()`;
+  - `wait_before_call(domain, provider, scope)` (0 o i secondi che mancano; alla scadenza un solo tentativo);
+  - `record_refusal(…, retry_after) -> attesa`, `record_success`, `record_no_verdict` (altro errore, timeout,
+    cancellazione: libera il tentativo).
+  Sincroni, in memoria, impostazioni lette a ogni chiamata (0 spegne).
+- **I segnali dei fornitori**:
+  - yahoo: `yfinance` 1.7.0 ha `YFRateLimitError`; `_yf_with_retry` riprova anche i 429 con `sleep` 1,5–3–6 s;
+  - css_scraper: `httpx.HTTPStatusError` (oggi `HTTP_ERROR`), l'URL è l'identificativo, quindi lo scope è il suo host;
+  - justETF: `justetf_scraping` non ha eccezioni sue: `RuntimeError("…status 429…")` (`helpers.py:64`,
+    `etf_profile.py:232`), riconoscibile solo dal testo;
+  - Borsa Italiana: `borsa_italiana_scraping` 0.3.2 ha `RateLimitRaggiunto`, per un 429 dopo i suoi ritentativi con
+    `sleep` 2–4 s, e per un 403 del WAF;
+  - FX ECB, FED, BOE, SNB: `httpx` con `raise_for_status()`, poi `FXServiceError`.
+- **I confini** sono già unici dal CP10: `call_provider(provider, fn, *, timeout, scope=None)` per gli asset (ogni
+  chiamata: dal vivo, refresh, metadati, ricerca anche in streaming, `resolve_url`, prova) e `call_fx_provider` per i
+  cambi (sync, `ensure_rates_multi_source`, catalogo delle valute). Le cache stanno già prima del confine.
+- **Gli schemi**: `FACurrentPriceItem` (`prices.py:352`), `FARefreshResult` (`refresh.py:111`), `FXSyncPairResult`
+  (`refresh.py:206`) e `BaseProbeOperationResult` (`provider.py:346`, ha già `error_code` ed `error_details`). La
+  ricerca: `providers_with_errors` è una lista di codici; l'evento SSE `provider_error` è un JSON libero.
+
+### Scelte
+
+1. Ai consumatori arriva come `retry_after` **l'attesa decisa dal confine** (`record_refusal`, ≥ il `Retry-After` del
+   fornitore), non il solo `Retry-After`: è il tempo dopo cui una chiamata passa davvero.
+2. Lo scope lo dà il plugin con l'hook `cooldown_scope(identifier, identifier_type, provider_params)` (default `None`;
+   css_scraper: l'host). Lo calcolano i chiamanti, che hanno l'identificativo, con `core.cooldown_scope_for(...)`, e lo
+   passano a `call_provider`; la ricerca non ha identificativo, quindi scope `None`.
+3. I doppi dei test che non sono plugin restano fuori dalle pause, come restano fuori dalle impostazioni.
+4. yahoo: un rifiuto per troppe richieste non si riprova più nel thread (via i `sleep` sul 429); gli altri errori
+   transitori sì. justETF dal testo `status 429`; Borsa Italiana da `RateLimitRaggiunto`. I `sleep` interni della
+   libreria di Borsa restano: è un pacchetto a parte; lacuna scritta nella guida.
+5. Ricerca: `providers_with_errors` resta com'è; l'evento `provider_error` aggiunge `error_code` e `retry_after`.
+6. Prova (X8): `retry_after` in `BaseProbeOperationResult` e in `error_details`; la UI mostra «in pausa fino alle
+   HH:MM» con l'ora locale, chiave nuova `providerErrors.RATE_LIMITED` nelle 4 lingue; un'operazione in pausa è
+   un avviso, non un fallimento.
+7. Modalità «troppe richieste» dei doppi:
+   - `mockprov`: il parametro `mock_rate_limited` (secondi, o `true`) e la ricerca `lf-rate-limited`;
+   - `mockfx`: due attributi di classe per le prove in processo.
+   Mai una pausa vera sul backend condiviso.
+
+### Passi
+
+1. ✅ (2026-10-15) X1/X2: `AssetRateLimitedError`, `FXRateLimitedError`, gli aiuti per riconoscere un 429, l'hook `cooldown_scope`.
+   > **Note implementazione**: `assets/base.py`:
+   > - `AssetRateLimitedError(AssetSourceError, RateLimitedError)`: codice `RATE_LIMITED`, `retry_after`, `scope`;
+   > - gli aiuti `rate_limited_from_response` (un 429 di `httpx` o `requests` col suo `Retry-After`),
+   >   `rate_limited_from_exception` (anche dal testo «status 429» / «HTTP 429») e `raise_if_rate_limited`;
+   > - l'hook `cooldown_scope(identifier, identifier_type, provider_params)` del plugin, default `None`.
+   >
+   > `fx/base.py`: `FXRateLimitedError(FXServiceError, RateLimitedError)`, `fx_rate_limited_from_response`,
+   > `raise_if_fx_rate_limited`, `longest_refusal` e `raise_longest_refusal`.
+2. ✅ (2026-10-15) X4: le pause nei due confini; lo scope dai chiamanti.
+   > **Note implementazione**: `core.call_provider` e `fx/runtime.call_fx_provider` chiamano Z7a:
+   > - prima `wait_before_call`: in pausa → `AssetRateLimitedError` / `FXRateLimitedError` subito, senza thread né I/O;
+   > - dopo, un `RateLimitedError` → `record_refusal`, e l'errore riparte con `retry_after` = la pausa decisa;
+   > - una risposta → `record_success`; ogni altra fine, cancellazione compresa → `record_no_verdict`.
+   >
+   > Un `RateLimitedError` che non è dell'errore del dominio, o che mostra ancora un segreto, è sostituito da un
+   > `AssetRateLimitedError` / `FXRateLimitedError` senza legami. `core.cooldown_scope_for` chiama l'hook in modo sicuro
+   > (un hook che fallisce → `None`, nel log). Lo scope arriva da:
+   > - il dal vivo di `price_query`;
+   > - le due chiamate di `refresh`;
+   > - `metadata`;
+   > - le tre operazioni della prova.
+   >
+   > La ricerca e `resolve_url` restano senza scope.
+3. ✅ (2026-10-15) X3: i fornitori (yahoo, css_scraper, justETF, Borsa Italiana, 4 FX) e le modalità dei doppi.
+   > **Note implementazione**:
+   > - **yahoo**: `_is_rate_limited` (`YFRateLimitError`, o `429` come parola intera, «too many requests», «rate
+   >   limit») → `AssetRateLimitedError` in `_yf_with_retry`, senza ritentativi; tolti dalle parole transitorie. Ricerca
+   >   e metadati ora lo lasciano passare: prima ogni errore diventava `[]` o `None`.
+   > - **css_scraper**: un 429 → `AssetRateLimitedError` con `Retry-After` e scope = host; l'hook `cooldown_scope` dà
+   >   l'host dell'URL (identificativo). `_url_host` regge un URL malformato.
+   > - **justETF**: il testo «status 429» nei quattro gestori.
+   > - **Borsa Italiana**: `RateLimitRaggiunto` (429 dopo i ritentativi della libreria, 403 del WAF) nei cinque gestori.
+   > - **I 4 FX**: un 429 nei gestori `httpx`. Una valuta rifiutata rifiuta tutta la chiamata: BOE e FED dopo il
+   >   `gather`, ECB si ferma nel suo ciclo seriale.
+   > - **Doppi**: `mockprov` col parametro `mock_rate_limited` (secondi, o `true`) in corrente, storico e metadati, e
+   >   la ricerca `lf-rate-limited` (`Retry-After` 30 s); `MockFXProvider.rate_limited` /
+   >   `.rate_limited_retry_after`, che valgono per il catalogo e le quotazioni.
+   >
+   > Prova: l'app si importa; scoperta: 6 asset e 7 cambi senza errori; ruff e black puliti.
+   > **⚠️ Fuori pista**:
+   > - Al primo giro i rami aggiunti portavano 5 funzioni sopra il limite di complessità (C901). Invece di `noqa`, aiuti
+   >   che sollevano da sé: una riga per gestore, nessun ramo.
+   > - Una sostituzione automatica degli import, troppo larga, aveva fuso le righe di import seguenti in 6 file.
+   >   Riparata ricostruendo il blocco dalla versione di HEAD; controllo con `ast` e diff di sole righe d'import volute.
+4. ✅ (2026-10-15) X5: gli schemi e i servizi che li riempiono (dal vivo, refresh, sync FX, prova, evento della ricerca); `api sync`.
+   > **Note implementazione**: `error_code` e `retry_after` (secondi, `ge=0`) in `FACurrentPriceItem`,
+   > `FARefreshResult` e `FXSyncPairResult`; `retry_after` in `BaseProbeOperationResult`. Chi li riempie:
+   > - **dal vivo** (`price_query`): una pausa ripiega sull'ultimo prezzo come prima (`db:last_known`, HTTP 200), con
+   >   codice e attesa; anche senza prezzo salvato;
+   > - **refresh**: `_fetch_refresh_item` restituisce anche il rifiuto incontrato, storico o corrente (vince l'attesa più
+   >   lunga); `_persist_refresh_items` lo aggiunge al risultato finito con `model_copy`, che sia fallito o parziale, e
+   >   `_persist_refresh_item` resta com'è;
+   > - **sync FX**: i fornitori in pausa registrati da `_fetch_provider` (INFO, non più un'eccezione nel log); dopo il
+   >   `gather`, una coppia FAILED o PARTIAL con uno di loro nelle sue rotte prende `RATE_LIMITED` e l'attesa più
+   >   breve; una coppia servita per intero da un'altra rotta resta com'è;
+   > - **prova**: `_probe_failure_fields` mette `retry_after` sul risultato e in `error_details`;
+   > - **ricerca**: un fornitore in pausa scrive un INFO al posto di un traceback, e l'evento SSE `provider_error` porta
+   >   `error_code` e `retry_after`; la risposta non in streaming non cambia.
+   >
+   > `api sync` fatto; il client generato è ignorato.
+5. ✅ (2026-10-15) X8: la UI della prova e la chiave i18n.
+   > **Note implementazione**: `resolveProviderError.ts`: `RATE_LIMITED` → `providerErrors.RATE_LIMITED`, «…fino
+   > alle {time}». L'attesa viene da `retry_after` o da `error_details.retry_after`, e `formatResumeTime` arrotonda per
+   > eccesso al minuto in `uiLocale()`: solo l'ora oggi, data e ora un altro giorno. Senza attesa,
+   > `providerErrors.RATE_LIMITED_NO_TIME`. `providerProbe.ts`: `RATE_LIMITED` in `SOFT_FAIL_CODES`, un avviso: la
+   > configurazione può essere giusta, e il messaggio dice fino a quando. `ProviderAssignmentSection.svelte` non
+   > cambia: passava già `error_details`. Le due chiavi nelle 4 lingue con `dev.py i18n add` (sorgente
+   > `i18n/assets/`). Prove: Vitest `resolveProviderError` + `providerProbe` 36/36; Prettier invariato;
+   > `front check` 0 errori e 0 avvisi.
+   > Il primo smoke dei confini (`/tmp/libreFolio_x_rl_smoke.py`) dà 17/17:
+   > - il rifiuto mette in pausa per max(base, `Retry-After`);
+   > - durante la pausa nessuna chiamata;
+   > - dopo la scadenza passa un tentativo solo, e il successo toglie la pausa;
+   > - lo scope per host, i riconoscitori e il confine FX;
+   > - a pause spente ogni chiamata arriva al fornitore, con il suo `Retry-After`.
+   > **⚠️ Fuori pista (dalla rilettura di docs-writer, 15/10)**: cinque correzioni.
+   > - **Il riassunto della prova** (`summarizeProbeError`) taglia a 60 caratteri, e in spagnolo l'ora andava persa.
+   >   Testi accorciati, sotto i 60 nelle 4 lingue anche con la data (misurati). Una chiave in più,
+   >   `providerErrors.RATE_LIMITED_DAY`, perché in italiano «fino alle» non regge una data, e in FR/ES nemmeno; il
+   >   nuovo `resumesToday` sceglie la chiave.
+   > - **SNB**: anche la richiesta della mappa delle valute riconosce un 429 (`_ensure_currency_map`).
+   > - **Borsa Italiana `resolve_url`**: i due gestori best-effort non ingoiano più un rifiuto: il fornitore va in
+   >   pausa, e la ricerca salta comunque quell'URL. Resta best-effort solo la scheda del fondo dentro la ricerca.
+   > - **Le docstring**: la libreria di Borsa dorme 2, 4 e 8 s, non 2 e 4; `_yf_with_retry` fa al massimo tre
+   >   tentativi, con attese di 1,5 e 3 s.
+   > - **Il commento di `refresh.py`** prometteva il comportamento di Z7b, che non c'è ancora.
+   >
+   > Vitest 36/36, Prettier e ruff puliti.
+6. ✅ (2026-10-15) X6: prove (test-author), alla ripresa.
+   > **Note implementazione** (test-author). Quattro unità nuove, tutte `pure`:
+   >
+   > | unità | test |
+   > |---|---|
+   > | services `rate-limit-errors` | 43 |
+   > | services `rate-limit-boundaries` | 33 |
+   > | services `rate-limit-http-providers` | 18 (`httpx.MockTransport`) |
+   > | services `rate-limit-results` | 22 (DB privato sotto `tmp_path`) |
+   >
+   > Estesi `provider-errors` (Yahoo, justETF, Borsa Italiana: 177) e i due Vitest (`resolveProviderError` 35,
+   > `providerProbe` 30). Ogni prova installa il suo `Cooldowns` (orologio finto, jitter 0) con monkeypatch: nessuna
+   > pausa tocca il backend condiviso. Regressioni verdi:
+   > - services: asset-source 61, asset-source-refresh 12, asset-source-guards 29, provider-contracts 435,
+   >   provider-registry 7, web-link-finder 29, borsa-italiana-search 5 e -funds 17, fx-sync-service 5, fx-catalog 8,
+   >   provider-cooldown 66, plugin-settings-runtime 80;
+   > - utils: cooldown 112, provider-core-cache 29;
+   > - schemas: assets 70, fx-routes 34;
+   > - api (dopo `db --force populate`): fx-unit 29, fx 21, assets-provider 24;
+   > - `check-orphans` pulito; `providerProbeState` 237 e `svelte-check` 0/0.
+   >
+   > **Tre osservazioni**:
+   > 1. Una coppia FX PARTIAL con una rotta di riserva in pausa prende `RATE_LIMITED`: tenuta, perché finita la pausa
+   >    quella rotta può riempire le date che mancano.
+   > 2. Il riconoscitore di testo era stretto: allargato a «HTTP Error 429» (urllib), «status code 429» e «Too Many
+   >    Requests», con i casi aggiunti alle prove.
+   > 3. Un refresh può essere OK con `RATE_LIMITED`: Z7b deve rimandare in base a `error_code`, non allo stato
+   >    (nota per Z).
+7. ✅ (2026-10-15) X7: guide dei plugin e architettura (docs-writer).
+   > **Note implementazione** (docs-writer, solo inglese, tre giri):
+   > - **Guide dei plugin**: in `asset_plugin_guide.md` e `fx_plugin_guide.md` una sezione «Too many requests» con le
+   >   regole, gli aiuti, l'hook (asset), la regola della chiamata intera (FX), un esempio e le modalità dei doppi.
+   > - **Architettura e cambi**: `backend/assets/architecture.md` («Provider Pauses»: il confine, le pause, la tabella
+   >   dei chiamanti, i testi della prova); `backend/fx/configuration.md` («Paused Providers»).
+   > - **Pagine dei fornitori**: Yahoo, CSS, justETF, Borsa Italiana (le lacune volute) e i quattro FX. Sistemati anche
+   >   FED e BOE, che dicevano «sequenziale» per un codice parallelo.
+   > - **Altre pagine**: `plugin_settings.md`, `search_link_finder.md`, `api/overview.md` e
+   >   `test-walkthrough/external.md`, che dava ancora il 429 di yfinance fra gli errori riprovati.
+   > - **Utente**: `create-edit.en.md` (il messaggio della prova), `yahoo-finance.en.md`, `css-scraper.en.md`.
+   >
+   > Nessuna pagina nuova, nessuna riga in nav. Debito di traduzione: i tre `.it/.fr/.es` delle pagine utente. Le sue
+   > riletture hanno portato le correzioni del «Fuori pista» qui sopra, più due in Borsa Italiana: `_fund_metadata`
+   > rilancia un rifiuto prima di `except AssetSourceError`, e la scheda di `resolve_url` lo rilancia. Restano
+   > best-effort, scritti, solo la valuta (`_price_api_currency`) e la scheda del fondo dentro la ricerca.
+   > Le pagine di Z (scheduler, live ticker, variabili `LIBREFOLIO_PROVIDER_COOLDOWN_*`) non sono toccate: i link
+   > puntano a `.env.example` finché Z non le scrive (Z-9).
+8. ✅ (2026-10-15) Revisione, prove della corsia, checkpoint.
+   > **Note implementazione**:
+   > - `all-backend --workers 2` sullo slot pesante 1 (22:43–23:16, corsia 6183,
+   >   `--log-dir /tmp/libreFolio_x_rl_allbackend`): **7 categorie su 7 verdi**. Le fasi parallele 4796, 4819, 2750, 1119,
+   >   586 e 75 test. Le 6 righe ❌ della suite esterna FX sono stampe dentro prove che passano (28 passate, 21 saltate),
+   >   identiche nel giro del CP10.
+   > - `mkdocs build` (strict, 52 s) e `check-links` (96 link) verdi sulla documentazione finale.
+   > - `front check` 0/0; ruff pulito su 31 file. Black segnala solo `_backend_services.py`, che fallisce già a HEAD
+   >   per una riga di un altro lotto (l'anteprima della cancellazione dell'account): non toccata.
+   > - OpenAPI contro `86da642c3`: solo campi facoltativi aggiunti (`error_code`/`retry_after` in `FACurrentPriceItem`,
+   >   `FARefreshResult` e `FXSyncPairResult`; `retry_after` nei tre risultati della prova), nessun `required` cambiato,
+   >   nessun percorso.
+   > - Previsione dei conflitti contro `45499dec4`: due file in comune (`api/overview.md`, `_backend_services.py`),
+   >   entrambi puliti.
+
+### Checkpoint X-RL ✅ (2026-10-15) — committato dal coordinatore: `693b9ac3c` (codice, 58 percorsi) e `65b3fc0c4` (journal)
+
+### Undicesimo aggiornamento di base: `dev_release2` (`84a18fb4c`) nel ramo X ✅ (2026-10-15) — merge `276982a65`, pulito
+
+Dentro anche T+DV (la palette nuova, cambia `SectorListResponse`) e H CP-U1. `api/overview.md` e `_backend_services.py`
+si sono fusi da soli, come previsto. Le prove d'ingresso sulla revisione combinata, una alla volta con `nice -n 10` e
+un carico ≤ 70 (`/tmp/libreFolio_x_rl_entry_checks.sh`, log in `/tmp/libreFolio_x_rl_entry/`), tutte verdi:
+- `api sync`, senza file tracciati cambiati; `front check` 0/0; `front-utility core-unit` 5491, la regola per chi
+  tocca i cataloghi i18n;
+- services `rate-limit-errors` 55, `-boundaries` 33, `-http-providers` 18, `-results` 22, `provider-errors` 177;
+- Vitest `resolveProviderError` e `providerProbe` 65;
+- `mkdocs build` (strict) e `check-links` (96), perché `overview.md` si è fuso da solo; `check-orphans` pulito.
+
+Niente secondo `all-backend`, d'accordo col coordinatore: vale quello delle 23:16. Porta 6183 libera.
+
+### X-RL in `dev_release2` ✅ (2026-10-15) — treno 67, merge `da21c48c4`, registri `4ef2fc199`
+
+### CP11 — impostazioni dei plugin nell'interfaccia: analisi ⏳ (2026-10-15, 23:35)
+
+Base: HEAD `276982a65`; worktree pulito salvo questo piano. Disegno di riferimento: §4.4, D-X13, D-X14, D-X15.
+
+**Stato reale verificato**
+- Il backend del CP10 è completo.
+  - `GET /api/v1/settings/plugins`: filtri `family` e `plugin_code`; un plugin `test_only` compare solo se nominato.
+  - `PATCH …/bulk`: tutto o niente; un 422 porta `detail.results`.
+  - Ogni campo ha `label_key`, `description_key`, `options[].label_key`, `is_set`, `source`, `locked`, `env_variable`
+    (solo per l'admin), `editable`, `problem` e `updated_at`.
+  - Client generato: `get_plugin_settings_api_v1_settings_plugins_get`,
+    `update_plugin_settings_api_v1_settings_plugins_bulk_patch`.
+- Solo i doppi di prova dichiarano campi, ed entrambi sono `test_only`: `mockprov` ne ha 7, di ogni tipo, di sistema e
+  personali, con due segreti; `mockfx` ne ha 2. Oggi quindi la scheda, in produzione, sarebbe vuota; con D-X14
+  compaiono justETF e Borsa Italiana.
+- Il catalogo **non dice se un plugin è configurato**: il calcolo di `missing` vive solo nel resolver
+  (`resolver.py:254`).
+- La ricerca non dice perché un fornitore non ha risposto.
+  - Ricerca semplice: `NOT_CONFIGURED` finisce in `providers_with_errors`, che ha solo i codici.
+  - Stream: `provider_error` senza `error_code` (lo porta solo `RATE_LIMITED`).
+  - `AssetSearchAutocomplete` ignora ogni `provider_error`.
+- Le chiavi `providerErrors.NOT_CONFIGURED` e `providerErrors.PROVIDER_ERROR` mancano (sottosistema `assets`): la sonda
+  mostra il messaggio grezzo.
+- Gate di proprietà (`test_plugin_i18n_ownership_gate.py`):
+  - un plugin asset ha lo spazio `assets.providerParams.<codice>`, senza chiavi dichiarate raccolte;
+  - un plugin FX non ha spazio;
+  - le chiavi dei campi delle impostazioni non le legge nessuno.
+- justETF dà sempre 4 righe per fondo (EUR/USD/CHF/GBP), con 👑 sulla valuta del fondo, e non ha frammento i18n.
+- Borsa Italiana dà 2 righe per strumento (IT/EN), in tre punti (`_fund_search_items_all_langs`,
+  `_scheda_search_items_all_langs`, `search`), nell'ordine fisso `("it", "en")`. Il suo frammento ha
+  `assets.providerParams.borsa_italiana.*`.
+- UI riusabile senza colori legacy: `ModalBase` (m1 = 0) e `PasswordInput` (pulito).
+- Debito del programma colori: `SimpleSelect` (40), `Setting*.svelte` (palette), `ProviderAssignmentSection` (95) e
+  `AssetSearchAutocomplete` (57). Li riuso o li tocco solo con ruoli, senza classi legacy nuove.
+- Modello di scheda recente, `features/email/`:
+  - la scheda, `emailApi.ts` sottile, `emailText.ts` puro, i Vitest accanto;
+  - la galleria con la risposta servita da una fixture prima della navigazione (`galleryEmail.ts`);
+  - il `?tab=` onorato dalla pagina.
+
+**Disegno (dentro §4.4 approvato)**
+- Backend:
+  1. `PluginSettingsPluginRead.configured: bool`: la verità del resolver, campi nascosti compresi, con un solo helper
+     per `missing`, condiviso fra resolver e catalogo.
+  2. Ricerca:
+     - nello stream `NOT_CONFIGURED` porta `error_code`, come `RATE_LIMITED`;
+     - nella ricerca semplice, `providers_not_configured: list[str]` (additivo).
+  3. D-X14:
+     - justETF `preferred_currency`: select personale, con `all` e le 4 valute con la bandiera, default `all`;
+     - Borsa `preferred_language`: `all`/`it`/`en`, default `all`;
+     - il filtro agisce dopo ogni cache interna del plugin, con ricaduta per strumento;
+     - chiavi i18n nei frammenti `pluginSettings.asset.<codice>.label.<campo>`, `.description.<campo>`,
+       `.option.<campo>.<valore>`, come `providerParams`;
+     - frammento nuovo per justETF.
+  4. Gate esteso:
+     - ogni plugin asset e FX ha l'area `pluginSettings.<famiglia>.<codice>`;
+     - chiavi dichiarate: i `label_key` e `description_key` dei campi e delle opzioni;
+     - FX entra fra le famiglie con spazio.
+- Frontend, in `lib/features/plugin-settings/`:
+  - `pluginSettingsApi.ts`, sottile.
+  - `pluginSettingsForm.ts`, puro: gruppi per famiglia, testo con ripiego inglese, bozza → voci di scrittura, errori
+    per campo dal 422, stato del segreto.
+  - `PluginSettingsForm.svelte`, per tipo di campo:
+    - segreto a sola scrittura, con «impostato il …», «Sostituisci» e «Cancella»;
+    - campo bloccato con «impostato dal server», più la variabile per l'admin;
+    - campo di sistema in sola lettura per chi non è admin (D-X15);
+    - salva e annulla per plugin; ripristino del default = `clear`.
+  - `PluginSettingsTab.svelte`: gruppi Prezzi e Cambi, stato vuoto.
+  - `PluginSettingsModal.svelte`, su `ModalBase`, filtrata su un plugin.
+  - Una riga in `settingsTabs.ts`: `plugins`, icona `Puzzle`, ordine 25, visibile a tutti.
+  - «Configura» nella riga 1 di `ProviderAssignmentSection`, accanto alla guida, quando il plugin ha campi; badge «da
+    configurare» quando `configured` è falso.
+  - `AssetSearchAutocomplete`:
+    - una riga «<fornitore> da configurare · Configura» per ogni `provider_error` con `NOT_CONFIGURED`;
+    - la legenda della 👑 quando un risultato la mostra.
+  - i18n: il sottosistema nuovo `pluginSettings` (`prefixes.txt`: `pluginSettings`), più `providerErrors.NOT_CONFIGURED`
+    e `PROVIDER_ERROR` in `assets`.
+  - Nel codice nuovo solo ruoli colore.
+
+**Decisioni notturne, da rivedere**
+- **N1.** La scheda è visibile a tutti, con ordine 25 (dopo Preferenze, nel gruppo di sinistra): ha campi personali, e
+  per chi non è admin quelli di sistema sono in sola lettura (D-X15).
+- **N2.** `configured: bool` al posto delle chiavi mancanti: non rivela campi che il profilo gestito nasconde.
+- **N3.** Il filtro D-X14 ricade per strumento: uno strumento senza la variante preferita le mostra tutte. È un
+  superinsieme di «se svuota la lista, tutto».
+- **N4.** Le chiavi i18n delle impostazioni seguono il modello di `providerParams` (`label.<campo>`).
+- **N5.** Nel gate, lo spazio `pluginSettings.<famiglia>.<codice>` vale anche per gli FX.
+
+**Lotti**, ognuno con handoff FROZEN:
+- **CP11a**, backend e contratto i18n: i punti 1–4, le chiavi `providerErrors`, le unità, `api sync`.
+- **CP11b**, frontend: scheda, modulo, modale, Configura, ricerca; Vitest.
+- **CP11c**:
+  - E2E, fuori dalla finestra 00:00–01:15;
+  - galleria, su uno slot pesante;
+  - documentazione (docs-writer): pagina utente nuova, `admin/configuration`, `patterns/plugin_settings`, ricerca;
+  - revisione di sicurezza CP10–CP11.
+
+**Superfici condivise da dichiarare**
+- `settingsTabs.ts` (A): una riga e un import.
+- `_backend_services.py`, `_backend_utils.py` (la descrizione del gate) e la registrazione dei Vitest e degli E2E.
+- i18n `assets/`: due chiavi.
+- `openapi.json`.
+- `mkdocs.yml`: la navigazione della pagina utente nuova; la propongo, la scrive il coordinatore.
+- CHANGELOG: testi proposti.
+
+**Conflitti previsti**
+- `ProviderAssignmentSection.svelte` e `AssetSearchAutocomplete.svelte`, con il programma colori (se un suo lotto li
+  migra) e con il mio FE5a.
+- `settingsTabs.ts`, con chi aggiunge schede: la riga è additiva.
+
+**Rischi**
+- Un segreto nel browser: mai precompilato, `autocomplete="new-password"`, svuotato dopo il salvataggio. Da verificare
+  che nessun intercettore registri i corpi delle richieste.
+- Le preferenze personali nel DB condiviso degli E2E: scritture solo con un utente proprio o con ripristino garantito.
+- La cache della ricerca: l'impronta c'è già; il filtro va dopo le cache interne del plugin.
+
+**Prove (corsia 6183)**
+- CP11a:
+  - services `plugin-settings-*` e le unità nuove di justETF e Borsa (pure);
+  - utils `gate-plugin-i18n-ownership` e `gate-i18n-catalog`;
+  - api `plugin-settings` e `assets-provider`;
+  - `front-utility core-unit`.
+- CP11b: i Vitest dei file nuovi e toccati, `front check`.
+- CP11c: E2E `settings/plugin-settings`, galleria, `mkdocs build` e `check-links`.
+
+### CP11a — backend e contratto i18n ⏳ (via del coordinatore 2026-10-15, 23:35)
+
+N1–N5 restano «da rivedere»: il coordinatore le mette nella lista di domattina. Le due chiavi in `assets/` vogliono
+`front-utility core-unit` prima dell'handoff. La riga di `mkdocs.yml` la scrivo io con CP11c, dichiarata.
+
+1. ✅ (2026-10-15) `configured` nel catalogo.
+   > **Note implementazione**:
+   > - `missing_field_keys(states)` in `resolver.py` è la regola unica: un campo obbligatorio senza un valore usabile,
+   >   o con `invalid_env`.
+   > - Un segreto risolto senza decifrarlo (il catalogo) è usabile se impostato e leggibile.
+   > - La usano `build_bound_settings` (il `NOT_CONFIGURED` di una chiamata) e `read_catalogue`, dove si calcola su
+   >   tutti i campi, anche quelli che il profilo gestito nasconde (N2).
+   > - Schema: `PluginSettingsPluginRead.configured: bool`, obbligatorio.
+2. ✅ (2026-10-15) La ricerca dice chi è da configurare.
+   > **Note implementazione**:
+   > - Ricerca semplice: `FAProviderSearchResponse.providers_not_configured` (facoltativo, lista vuota per default),
+   >   un sottoinsieme di `providers_with_errors`. Ogni fornitore passa nel compito anche il codice d'errore.
+   > - Stream: `provider_error` porta `error_code` per ogni `AssetSourceError`, compreso `NOT_CONFIGURED`, che va nel
+   >   log come info e non come warning. La docstring ora elenca l'evento.
+3. ✅ (2026-10-15) D-X14.
+   > **Note implementazione**:
+   > - justETF `preferred_currency`: select personale, `all` più le 4 valute con la bandiera (opzioni costruite dalle
+   >   costanti del modulo), default `all`.
+   > - Borsa Italiana `preferred_language`: `all`/`it`/`en`, default `all`. `_languages_in_order` e
+   >   `_emitted_languages` sostituiscono i tre calcoli copiati di `emit_language_order`; la lingua del fetch resta la
+   >   prima di sempre (`it`).
+   > - Frammenti, con `dev.py i18n add --into`: il nuovo `justetf/i18n/` (3 chiavi) e `borsa_italiana/i18n/` (5 chiavi
+   >   nuove), sotto `pluginSettings.asset.<codice>.{label,description,option}`. `i18n check` severo verde (4645 chiavi).
+   > - Prova in processo (`/tmp/libreFolio_cp11a_smoke.py`, rete simulata): justETF dà 1 riga per fondo con la valuta
+   >   preferita, e la 👑 resta sulla valuta del fondo; Borsa dà solo la lingua preferita e fa il fetch sempre in `it`.
+4. ✅ (2026-10-15) `providerErrors.NOT_CONFIGURED` e `providerErrors.PROVIDER_ERROR` nel sottosistema `assets`.
+   > **Note implementazione**: il testo di `NOT_CONFIGURED` sta nei 60 caratteri del riassunto della sonda.
+   > `PROVIDER_ERROR` porta `{detail}` (N6).
+5. ✅ (2026-10-15) `api sync`: nessun file tracciato cambiato; `configured` e `providers_not_configured` sono nel client
+   generato. ruff e black puliti sugli 8 file Python.
+
+**Decisioni notturne, da rivedere** (seguono N1–N5)
+- **N6.** `PROVIDER_ERROR` porta la descrizione mascherata in `details["detail"]`, e il testo tradotto la mostra
+  («Il provider ha restituito un errore: {detail}»). La sonda mostra il testo tradotto al posto dell'errore grezzo:
+  con un testo fisso, la causa (per esempio un 401 su una chiave sbagliata) sparirebbe. La descrizione è già
+  mascherata dal confine del CP10.
+- **N7.** Nello stream, `error_code` per ogni `AssetSourceError` e non solo per `NOT_CONFIGURED`: un campo in più, che il
+  frontend ignora quando non lo conosce.
+- **N8.** Il filtro D-X14 restringe le varianti emesse invece di filtrarle dopo. Ogni strumento ha sempre ogni variante
+  (justETF 4 valute, Borsa 2 lingue), quindi è già per strumento e non svuota mai la lista. Per Borsa la lingua del
+  fetch non cambia.
+
+**Documentazione lasciata indietro dal CP11a**, per docs-writer nel CP11c (nessun controllo automatico la confronta col
+runner, verificato):
+- `developer/test-walkthrough/utils.md:25`: la riga del gate, con i nuovi spazi;
+- `patterns/asset_plugin_guide.md` (~392, «Translations») e `patterns/fx_plugin_guide.md`:
+  `pluginSettings.<famiglia>.<codice>`;
+- `developer/frontend/i18n.md`: che cosa tengono i frammenti dei plugin;
+- `patterns/plugin_settings.md`: `configured`, `missing_field_keys`, `PROVIDER_ERROR` con `detail`;
+- la ricerca: `providers_not_configured` e l'`error_code` dello stream;
+- lo skill `devpy-i18n` («Sources»).
+
+`front check` 0/0 dopo il CP11a. Audit i18n: le 10 chiavi nuove risultano usate; i 2 «likely unused»
+(`events.deleteBlocked`, `events.deleteNotFound`) c'erano già a HEAD (`f2a394a0f`), e non sono miei.
+6. ✅ (2026-10-16) Test (test-author), in 7 file esistenti, nessun file nuovo, quindi nessuna registrazione.
+   > **Note implementazione**:
+   > - **Gate di proprietà** (64 passati, prima delle modifiche 1 rosso atteso: R1 sulle 8 chiavi nuove):
+   >   - lo spazio di un plugin asset è `assets.providerParams.<codice>` più `pluginSettings.asset.<codice>`;
+   >   - quello di un FX è `pluginSettings.fx.<codice>`, col codice com'è nel registro (N5); FX è fra le famiglie con
+   >     spazio;
+   >   - le chiavi dichiarate dalle impostazioni si leggono col walker esistente, sulla dichiarazione ridotta a dati
+   >     semplici; `default` è un valore, mai una chiave;
+   >   - la sentinella copre anche gli attributi di `PluginSettingField` e `SettingOption`, prima che un plugin li usi;
+   >   - la descrizione `desc=` è aggiornata in `_backend_utils.py`.
+   > - `plugin-settings-service` 61:
+   >   - `configured` vero e falso: niente di obbligatorio, obbligatorio fino al salvataggio, segreto illeggibile con
+   >     la chiave B, variabile non valida su un campo facoltativo;
+   >   - profilo gestito: il campo nascosto non compare in nessuna parte della voce.
+   > - `plugin-settings-runtime` 96:
+   >   - `PROVIDER_ERROR` porta `details["detail"]`, mascherato;
+   >   - una matrice di 12 casi su `missing_field_keys`, uguale fra la chiamata e il catalogo;
+   >   - la ricerca: `providers_not_configured`, e l'evento SSE con esattamente 4 chiavi, loggato come info.
+   > - `rate-limit-results` 23: XRL-R21, `SEARCH_ERROR` porta il suo codice e nessun `retry_after`; la voce 5 della
+   >   docstring è riscritta.
+   > - `provider-errors` 182: le dichiarazioni e il filtro di justETF, su 3 fondi.
+   > - `borsa-italiana-search` 18: le preferenze su un fondo e un'azione; ricerca e scheda sempre in `it`, una volta.
+   > - `gate-i18n-catalog` 176 e `gate-i18n-usage` 195: le chiavi nuove risultano usate.
+   > - `api plugin-settings` 13, dopo `test db --force populate`: justETF e Borsa nel catalogo completo, e un giro
+   >   di salvataggio e cancellazione che non lascia righe.
+   > - **Limite noto, fissato da un test.** Un blob cifrato con l'impronta della chiave giusta ma non decifrabile:
+   >   il catalogo lo vede configurato, perché non decifra mai per scelta, mentre una chiamata risponde
+   >   `NOT_CONFIGURED`. L'API non può produrre una riga così.
+   >
+   > **⚠️ Fuori pista**:
+   > - test-author ha lanciato `plugin-settings-service` con un carico a 5 minuti di 70,73, appena sopra 70: aveva
+   >   letto il carico e lanciato nello stesso comando. Da lì in poi ha sempre letto il carico in un passo separato.
+   > - Su sua segnalazione: nella ricerca semplice il controllo testuale «not supported» veniva prima di
+   >   `NOT_CONFIGURED`. Un nome dichiarato da un plugin che contenesse quel testo avrebbe saltato il fornitore senza
+   >   segnalarlo nella lista nuova. Ora i due rifiuti tipizzati (`NOT_CONFIGURED`, `RATE_LIMITED`) vengono prima.
+7. ✅ (2026-10-16) Prove di chiusura, una alla volta con `nice` e il carico ≤ 70 (`/tmp/libreFolio_cp11a_checks.sh`,
+   log in `/tmp/libreFolio_cp11a_checks/`), dopo il riordino:
+   > - services `plugin-settings-runtime` 96 e `rate-limit-results` 23;
+   > - `front-utility core-unit` 5491, la regola per chi tocca le chiavi in `assets/`;
+   > - Vitest `resolveProviderError` e `providerProbe` 65; `check-orphans` pulito; porta 6183 libera.
+   > - `front check` 0/0; `i18n check` severo; ruff pulito sui 16 file Python cambiati; `git diff --check` pulito.
+   > - black segnala solo una riga che a HEAD era già fuori formato, in `_backend_utils.py` (il `print_info` del Designer Lab), e
+   >   che non tocco.
+   > - Previsione dei conflitti contro `dev_release2` (`59ce8ba20`): nessun percorso in comune.
+
+### Checkpoint CP11a — pronto, FROZEN (2026-10-16, 00:45)

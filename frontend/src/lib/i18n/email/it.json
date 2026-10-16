@@ -82,6 +82,63 @@
       "TIMEOUT": "Il server SMTP non ha risposto in tempo.",
       "SEND_FAILED": "Il server SMTP non ha accettato il messaggio."
     },
-    "loadError": "Non è stato possibile leggere lo stato dell'email."
+    "loadError": "Non è stato possibile leggere lo stato dell'email.",
+    "verification": {
+      "page": {
+        "checking": "Verifico il tuo indirizzo email…",
+        "expired": "Questo link è scaduto. Accedi con nome utente e password: ti verrà proposto un link nuovo.",
+        "consumed": "Questo link è già stato usato. Se il tuo account è attivo, accedi.",
+        "revoked": "Questo link non funziona più: accedi per chiederne uno nuovo.",
+        "unknown": "Questo link non è valido: riaprilo intero dall'email. Se non funziona ancora, accedi per chiederne uno nuovo.",
+        "missing": "Questo link è incompleto: riaprilo dall'email.",
+        "error": "Non è stato possibile verificare il link: riprova."
+      },
+      "verified": "Il tuo indirizzo email è verificato, {username}: ora puoi accedere.",
+      "loginRequired": "Il tuo indirizzo email non è ancora verificato: apri il link nell'email che ti abbiamo mandato, poi accedi.",
+      "resend": "Rispedisci il link",
+      "resending": "Invio…",
+      "resent": "Un link nuovo è in arrivo: controlla la posta, anche nello spam. I link precedenti non funzionano più.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "Nome utente o password non corretti: controllali nel modulo qui sopra.",
+        "EMAIL_RATE_LIMITED": "Troppe richieste per ora: riprova tra {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Il tuo account è già attivo: accedi.",
+        "USER_LIMIT_REACHED": "Il tuo link è scaduto e ora questa istanza è al completo: chiedi al suo amministratore.",
+        "ACCOUNT_DISABLED": "Questo account è disattivato: chiedi all'amministratore di questa istanza.",
+        "unavailable": "Ora l'email non può partire: riprova più tardi, o chiedi all'amministratore di questa istanza.",
+        "generic": "Non è stato possibile spedire il link: riprova."
+      }
+    },
+    "sendLink": {
+      "button": "Invia per email",
+      "sending": "Invio…",
+      "toLabel": "Invia a",
+      "toPlaceholder": "nome@esempio.it",
+      "resetTarget": "Il link va all'indirizzo email dell'account.",
+      "publicUrlHint": "Il link nell'email inizia con l'indirizzo impostato in LIBREFOLIO_PUBLIC_URL, che può essere diverso da quello qui sopra.",
+      "sent": "Inviato a {to}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "L'email è spenta o non funziona su questa istanza.",
+        "EMAIL_LINKS_UNAVAILABLE": "Le email non possono contenere link: LIBREFOLIO_PUBLIC_URL non è impostata, o non può iniziare un link.",
+        "EMAIL_LINK_INVALID": "Questo link non funziona più: creane uno nuovo.",
+        "EMAIL_ACCOUNT_INACTIVE": "L'account non è attivo: attivalo prima di mandargli un link di reset.",
+        "EMAIL_RECIPIENT_REQUIRED": "Scrivi l'indirizzo a cui mandare l'invito.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "Un link di reset va solo all'indirizzo del suo account.",
+        "EMAIL_RECIPIENT_INVALID": "Questo non è un solo indirizzo email valido.",
+        "EMAIL_RATE_LIMITED": "Il limite orario di email è raggiunto: riprova tra {minutes} min.",
+        "generic": "Non è stato possibile spedire l'email."
+      }
+    },
+    "forgot": {
+      "label": "Nome utente o indirizzo email",
+      "submit": "Mandami un link per il reset",
+      "sending": "Invio…",
+      "accepted": "Se un account attivo corrisponde, il suo proprietario riceve un'email con un link per scegliere una nuova password. Controlla la posta, anche nello spam: il link funziona per 30 minuti.",
+      "errors": {
+        "FORGOT_PASSWORD_DISABLED": "Il reset della password per email non è ancora disponibile su questa istanza: chiedi al suo amministratore.",
+        "unavailable": "Ora questa istanza non può spedire email: chiedi al suo amministratore.",
+        "EMAIL_RATE_LIMITED": "Troppe richieste per ora: riprova tra {minutes} min.",
+        "generic": "Non è stato possibile inviare la richiesta: riprova."
+      }
+    }
   }
 }

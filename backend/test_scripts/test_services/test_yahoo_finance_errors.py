@@ -6,7 +6,10 @@ module the provider imported is replaced by a fake exposing ``Ticker`` and
 empty / malformed history frames, NaN closes, dividends and splits, search
 failures, metadata assembly — is driven with exact, fixed inputs. No socket is
 opened. Non-retry cases avoid transient-retry keywords; the dedicated retry
-case stubs ``_time_mod.sleep`` and records the requested backoff delays.
+case stubs ``_time_mod.sleep`` and records the requested backoff delays. The
+«too many requests» cases (X-RL X3) replace it with a sleep that fails the
+test: a refusal leaves at once as ``AssetRateLimitedError``, after one request,
+and search and metadata no longer turn it into ``[]`` / ``None``.
 """
 
 from __future__ import annotations
@@ -17,13 +20,14 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+from yfinance.exceptions import YFRateLimitError
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source_providers.yahoo_finance import plugin as yfp
 from backend.app.services.asset_source_providers.yahoo_finance.plugin import YahooFinanceProvider
-from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
 
 # A type Yahoo does not accept (only TICKER and ISIN are valid).
 INVALID_TYPE = IdentifierType.CUSIP
@@ -666,6 +670,144 @@ async def test_metadata_isin_error_and_default_description(monkeypatch):
 async def test_metadata_exception_returns_none(monkeypatch):
     _install_yf(monkeypatch, ticker=_FakeTicker(info_exc=RuntimeError("kaboom")))
     assert await YahooFinanceProvider().fetch_asset_metadata("AAPL", IdentifierType.TICKER) is None
+
+
+# ── «too many requests» (X-RL X3): raised at once, never retried in the thread ──
+
+
+class _RefusingTicker(_FakeTicker):
+    """A ticker whose every request is refused with ``refusal``, counting how often it was asked."""
+
+    def __init__(self, refusal: Exception):
+        super().__init__(history_exc=refusal)
+        self._refusal = refusal
+        self.info_reads = 0
+
+    @property
+    def info(self):
+        self.info_reads += 1
+        raise self._refusal
+
+
+def _sleeping_fails(monkeypatch) -> None:
+    """A sleep in the provider's thread fails the test: a refusal is never waited out there."""
+
+    def forbidden(seconds):
+        raise AssertionError(f"slept {seconds} s in the provider's thread")
+
+    monkeypatch.setattr(yfp, "_time_mod", SimpleNamespace(sleep=forbidden))
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(YFRateLimitError(), id="yfinance-class"),
+        pytest.param(RuntimeError("429 Client Error: Too Many Requests for url: https://query2.finance.yahoo.com/v10"), id="429-whole-word"),
+        pytest.param(RuntimeError("Too Many Requests"), id="too-many-requests"),
+        pytest.param(RuntimeError("Rate limit reached, slow down"), id="rate-limit"),
+    ],
+)
+def test_is_rate_limited_recognises_a_refusal(error):
+    assert yfp._is_rate_limited(error) is True
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(RuntimeError("No data found for 4290.T"), id="ticker-4290"),
+        pytest.param(RuntimeError("1429 rows returned"), id="1429"),
+        pytest.param(RuntimeError("connection reset by peer"), id="transient"),
+        pytest.param(RuntimeError("503 Service Unavailable"), id="503"),
+    ],
+)
+def test_is_rate_limited_ignores_anything_else(error):
+    assert yfp._is_rate_limited(error) is False
+
+
+@pytest.mark.parametrize("refusal", [YFRateLimitError(), RuntimeError("HTTP Error 429: Too Many Requests")], ids=["yfinance-class", "message"])
+def test_a_refusal_is_raised_after_one_call_without_sleep(monkeypatch, refusal):
+    """The first refusal leaves ``_yf_with_retry`` as ``AssetRateLimitedError`` from it: one call, no sleep, no retry."""
+    _sleeping_fails(monkeypatch)
+    calls: list[int] = []
+
+    def refused():
+        calls.append(1)
+        raise refusal
+
+    with pytest.raises(AssetRateLimitedError) as raised:
+        yfp._yf_with_retry(refused, label="current_value(AAPL)")
+
+    assert len(calls) == 1
+    assert raised.value.__cause__ is refusal
+    assert (raised.value.error_code, raised.value.retry_after, raised.value.scope) == ("RATE_LIMITED", None, None)
+
+
+def test_a_refusal_after_a_transient_error_stops_the_retries(monkeypatch):
+    """A transient error is still retried after its backoff; the refusal that follows ends the loop at once."""
+    delays: list[float] = []
+    monkeypatch.setattr(yfp, "_time_mod", SimpleNamespace(sleep=delays.append))
+    outcomes = iter([RuntimeError("connection reset by peer"), YFRateLimitError(), RuntimeError("never reached")])
+    calls: list[int] = []
+
+    def flaky():
+        calls.append(1)
+        raise next(outcomes)
+
+    with pytest.raises(AssetRateLimitedError):
+        yfp._yf_with_retry(flaky, label="history(AAPL)")
+
+    assert (len(calls), delays) == (2, [1.5])
+
+
+@pytest.mark.asyncio
+async def test_current_value_and_history_refused_raise_rate_limited(monkeypatch):
+    """Not ``FETCH_ERROR``: the refusal reaches the core, one request each, without sleeping."""
+    _sleeping_fails(monkeypatch)
+    ticker = _RefusingTicker(YFRateLimitError())
+    _install_yf(monkeypatch, ticker=ticker)
+
+    with pytest.raises(AssetRateLimitedError) as current:
+        await YahooFinanceProvider().get_current_value("AAPL", IdentifierType.TICKER)
+    with pytest.raises(AssetRateLimitedError) as history:
+        await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
+
+    assert (current.value.error_code, history.value.error_code) == ("RATE_LIMITED", "RATE_LIMITED")
+    assert (ticker.info_reads, len(ticker.history_calls)) == (1, 1)
+
+
+@pytest.mark.asyncio
+async def test_search_refused_raises_instead_of_answering_nothing(monkeypatch):
+    """Search used to turn every error into ``[]``: a refusal now reaches the core; any other error still gives ``[]``."""
+    _sleeping_fails(monkeypatch)
+    searches: list[str] = []
+
+    def refused(query):
+        searches.append(query)
+        raise YFRateLimitError()
+
+    _install_yf(monkeypatch, search_factory=refused)
+    with pytest.raises(AssetRateLimitedError):
+        await YahooFinanceProvider().search("Apple")
+    assert searches == ["Apple"]
+
+    def broken(query):
+        raise RuntimeError("kaboom")
+
+    _install_yf(monkeypatch, search_factory=broken)
+    assert await YahooFinanceProvider().search("Apple") == []
+
+
+@pytest.mark.asyncio
+async def test_metadata_refused_raises_instead_of_answering_none(monkeypatch):
+    """Metadata used to turn every error into ``None``: a refusal now reaches the core, after one request."""
+    _sleeping_fails(monkeypatch)
+    ticker = _RefusingTicker(RuntimeError("Too Many Requests. Rate limited. Try after a while."))
+    _install_yf(monkeypatch, ticker=ticker)
+
+    with pytest.raises(AssetRateLimitedError):
+        await YahooFinanceProvider().fetch_asset_metadata("AAPL", IdentifierType.TICKER)
+
+    assert ticker.info_reads == 1
 
 
 if __name__ == "__main__":

@@ -90,6 +90,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/risk/assetSetI18n.test.ts",
             "src/lib/components/risk/warningTranslatorSites.test.ts",
             "src/lib/components/risk/syncTargets.test.ts",
+            "src/lib/components/risk/stressBucketLabel.test.ts",
             "src/lib/components/assets/providerProbe.test.ts",
             "src/lib/components/assets/resolveProviderError.test.ts",
             "src/lib/components/assets/assetIdentifiers.test.ts",
@@ -124,6 +125,11 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/theme/colorAlpha.test.ts",
             "src/lib/theme/chartTheme.test.ts",
             "src/lib/theme/themeMode.test.ts",
+            "src/lib/theme/chartCategories.test.ts",
+            "src/lib/theme/chartShades.test.ts",
+            "src/lib/theme/contrast.test.ts",
+            "src/lib/theme/roleColors.test.ts",
+            "src/lib/theme/roleColors.dom.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
@@ -131,12 +137,14 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/brokers/lots/lotStateVisual.test.ts",
             "src/lib/components/brokers/lots/unifiedLotsTableHelpers.test.ts",
             "src/lib/components/brokers/lots/lotCustodyModalHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotCustodyModalHelpers.closureValueLabel.test.ts",
             "src/lib/components/brokers/lots/lotsAnalysisHelpers.test.ts",
             "src/lib/components/brokers/lots/lotDataQualityHelpers.test.ts",
             "src/lib/stores/chartSettingsStore.test.ts",
             "src/lib/stores/chartSettingsStoreSsr.test.ts",
             "src/lib/stores/reference/brokerStore.test.ts",
             "src/lib/stores/reference/brokerStoreIconHydration.test.ts",
+            "src/lib/stores/reference/sectorStore.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
             "src/lib/features/onboarding/guideAnchors.test.ts",
@@ -147,6 +155,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/decimal.test.ts",
             "src/lib/features/tools/pac-allocator/planner/format.test.ts",
             "src/lib/features/tools/pac-allocator/planner/modeText.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/categoryLabels.test.ts",
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/riskGlossary.test.ts",
@@ -167,6 +176,9 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/email/emailText.test.ts",
             "src/lib/features/email/emailApi.test.ts",
             "src/lib/features/email/emailLinks.test.ts",
+            "src/lib/features/email/verificationApi.test.ts",
+            "src/lib/features/email/sendLinkApi.test.ts",
+            "src/lib/features/email/forgotPasswordApi.test.ts",
             "src/lib/features/backup/backupApi.test.ts",
             "src/lib/features/backup/backupJob.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
@@ -282,12 +294,14 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/MeasurePanel.test.ts",
             "src/lib/components/charts/PriceChartFull.test.ts",
             "src/lib/components/charts/LineChart.test.ts",
+            "src/lib/components/charts/SemiDonutChart.test.ts",
             "src/lib/components/risk/AssetSetLossComparisonSection.test.ts",
             "src/lib/components/risk/AssetSetRiskReturnSection.test.ts",
             "src/lib/components/charts/ScatterChart.test.ts",
             "src/lib/components/risk/AssetSetReplaySection.test.ts",
             "src/lib/components/risk/AssetSetComparisonLevels.test.ts",
             "src/lib/components/risk/AssetSetCorrelationSection.test.ts",
+            "src/lib/components/risk/CorrelationHeatmap.test.ts",
             "src/lib/components/risk/AssetChip.test.ts",
             "src/lib/features/auth/RegisterCard.test.ts",
             "src/lib/features/auth/LoginCard.test.ts",
@@ -298,6 +312,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/routes/page.authFlash.test.ts",
             "src/routes/invite/page.test.ts",
             "src/routes/reset-password/page.test.ts",
+            "src/routes/verify-email/page.test.ts",
             "src/lib/features/support/DonationPopupModal.test.ts",
             "src/lib/features/support/SupportActions.test.ts",
             "src/lib/features/support/SocialShareModal.test.ts",
@@ -339,6 +354,10 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/users/InviteDialog.test.ts",
             "src/lib/features/settings/users/ResetLinkDialog.test.ts",
             "src/lib/features/email/EmailSettingsTab.test.ts",
+            "src/lib/features/email/VerifyEmailCard.test.ts",
+            "src/lib/features/email/VerificationNotice.test.ts",
+            "src/lib/features/email/SendLinkByEmail.test.ts",
+            "src/lib/features/email/ForgotPasswordEmailForm.test.ts",
             "src/routes/(app)/settings/page.tabs.test.ts",
             "src/lib/features/tools/ToolsHub.test.ts",
             "src/lib/features/tools/ToolHost.test.ts",
@@ -517,7 +536,7 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
 
 
 def front_theme_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the colour roles of the sign-in page, in light and in dark, on desktop and mobile (workstream T, step T-2)."""
+    """Run the colour roles of the sign-in page, of its background and of the signed-in app shell, in light and in dark, on desktop and mobile (workstream T, steps T-2, T-3 and T-5)."""
     print_section("Frontend Theme Roles Tests")
     if not _ensure_frontend_build():
         return False
@@ -594,6 +613,30 @@ def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: boo
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_datatable_mobile(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the DataTable's pinned selection and actions columns at phone width: header and cells scroll with the table, the header row still sticks (Y7, D-Y17)."""
+    print_section("Frontend DataTable Mobile Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/datatable-mobile.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_datatable_resize(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the DataTable column resize: a mouse drag on an auto-layout column edge moves it by the drag, with a fixed-layout control, and a finger drag on a phone (Y7, C-62, D-Y18)."""
+    print_section("Frontend DataTable Resize Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/datatable-resize.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -801,15 +844,22 @@ def populate_registry(registry: dict) -> None:
         desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup; a refused secure write falls back once to the legacy copy, which fails explicitly because opening the share tab already consumed the click's user activation (known limit)",
         tests="support-copy-and-go.spec.ts",
     )
-    add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
+    add_test(
+        cat,
+        "header-scroll",
+        front_header_scroll,
+        name="Header Scroll Tests",
+        desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs; a mouse click on a header control leaves the header free to hide, keyboard focus pins it; signed out, the sign-in page's top bar (auth-page-controls) is fixed on desktop and, on a phone, scrolls away with the page instead of covering the card (T-8b)",
+        tests="layout/header-scroll.spec.ts",
+    )
     add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
     add_test(
         cat,
         "theme-roles",
         front_theme_roles,
         name="Theme Roles Tests",
-        desc="The sign-in page draws the colour roles of tokens.css, in light and in dark, as the browser resolves them (a probe element per role, never a hex): the login card's surface and border (in dark, proof that the legacy rounded-container rule of app.css exempts it), the username field's border at rest and in focus, its text and its placeholder (proof that the legacy input rule exempts it), the primary action, and the register card's password requirements on success-soft once every rule passes; a positive control first (the probe resolves, the two themes differ, the page is drawn in the theme set) — workstream T, step T-2",
-        prereq="Test users created",
+        desc="Colour roles as the browser resolves them, in light and in dark (a probe element per role, never a hex), a positive control first (the probe resolves, the two themes differ, the page is drawn in the theme set): (a) signed out on /, the login card in relief (--lf-border-raised, in dark its own colour and proof that the legacy rounded-container rule of app.css exempts it), the username field's border at rest and in focus, its text and its placeholder (proof that the legacy input rule exempts it), the primary action; on desktop the username and password fields under the pointer (--lf-border-input-hover, D-T18) and focused there (--lf-focus beats the hover); the register card's password requirements once every rule passes (the box on --lf-surface-panel with a --lf-border-subtle border, each rule's ✓ in --lf-success and its text in --lf-text-secondary); the forgot-password card in relief, its terminal box on --lf-terminal-bg with a --lf-terminal-border border, its commands in --lf-terminal-prompt and its comment lines in --lf-terminal-comment (Q6); (b) signed in as TEST_USER on /dashboard, --lf-surface-app resolving to --lf-surface-page, the app shell on --lf-surface-app; the green sidebar from its own roles (D-T17): on --lf-surface-bar in --lf-bar-text with no right border (D-T23), its logo block with no surface of its own and its text in --lf-on-brand, its active item (nav-dashboard, whose href is the page on view) on --lf-bar-active-bg in --lf-bar-active-text with a --lf-bar-indicator left border, an inactive item (nav-settings, read at rest) in --lf-bar-text, its connection-security line once the server has answered (the icon in the bar's status role of the level: secure --lf-bar-success, local --lf-bar-warning, insecure --lf-bar-danger; the label in --lf-bar-text), and a sidebar item reached by Tab drawing a solid --lf-bar-focus ring; the neutral header from the page's roles (D-T23): on --lf-surface-header with a --lf-border-subtle bottom border, theme-toggle in --lf-text-secondary, the donation link in --lf-donate, on mobile the burger in --lf-text-primary, and a header control reached by Tab drawing a solid --lf-focus ring; (c) in dark, the negative control: a legacy card of the page content (dashboard-cash-balances) still painted by the legacy remap (var(--theme-bg-card), not the card role, decision D-T3) while the language menu opened over it draws --lf-surface-card with a --lf-border-raised border; (d) signed out on /, the login background (AnimatedBackground) on --lf-surface-page, its three waves (rendered after mount, waited for) each a gradient with a stop in its own --lf-art-hill-N in DOM order and no opacity on top, its three chart lines stroked in --lf-art-line, and in dark none of the retired literals (#11151c, #00ff9a, #4ade80) drawn again — workstream T, steps T-2, T-3, T-5, T-8 and T-8b (decisions D-T17, D-T18, D-T23)",
+        prereq="Test users created (TEST_USER grandfathered on onboarding)",
         tests="layout/theme-roles.spec.ts",
     )
     add_test(
@@ -865,6 +915,24 @@ def populate_registry(registry: dict) -> None:
         desc="The documentation draws its formulas without internet: on a nested page in English and its Italian twin a folder deeper, every origin but the lane's refused, lib-loader.js loads MathJax from the site's root (/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js, 200), every formula gets its mjx-container, every MathJax font is a 200 from the site's copy (vendor/mathjax/output/chtml/fonts/woff-v2/) with at least one MJX face loaded and none in error, MathJax is never asked of another origin (jsDelivr included), and mathjax.js raises no typesetPromise page error (M-19, batch 25)",
         prereq="Docs site built with the MathJax copy and its fonts (dev.py cache js, then dev.py mkdocs build)",
         tests="layout/docs-offline-math.spec.ts",
+    )
+    add_test(
+        cat,
+        "datatable-mobile",
+        front_datatable_mobile,
+        name="DataTable Mobile Pinned Columns",
+        desc="At 390 px, read-only on seeded data, on Transactions (stickyActions false) and the Files static list (sticky actions): scrolled half an actions cell short of the far right, the actions header sits over its row's actions cell and both end with the table; the selection header and cell have scrolled out past the scroll area's left edge; and, the scroll area bounded to the header and two rows and scrolled down, every header cell stays on its top while the body passes under (Y7, D-Y17; needs the dt-scroll / dt-select-* / dt-actions-* test ids)",
+        prereq="Populated DB + test users",
+        tests="layout/datatable-mobile.spec.ts",
+    )
+    add_test(
+        cat,
+        "datatable-resize",
+        front_datatable_resize,
+        name="DataTable Column Resize",
+        desc="Read-only on seeded data. The contract: a drag of a column's resize handle (found by cursor: col-resize under the title cell's right edge, pressed at its centre) by Δ px changes the column's drawn width by Δ ±4 px. Files static list (tableLayout auto), by mouse: at 1280 px the File name column +80 then -40 px; at 390 px, where the table is wider than its box and draws every column at its minimum, +60 px, and the table's scroll width grows by as much (a resized column keeps its width as min-width, so the other columns are not squeezed back). Control: the Transactions Date column (fixed layout, table wider than its dt-scroll area) by mouse, +80 then -40 px. The input path alone, independent of the layout: at 390 x 844 with isMobile and hasTouch, a finger (Chromium CDP Input.dispatchTouchEvent: touchStart on the handle's centre, touchMove in 6 steps, touchEnd) drags the Date handle +60 px on that fixed table (Y7, C-62, D-Y18)",
+        prereq="Populated DB + test users",
+        tests="layout/datatable-resize.spec.ts",
     )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")

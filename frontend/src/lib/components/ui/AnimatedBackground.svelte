@@ -1,6 +1,10 @@
 <!--
   AnimatedBackground.svelte
   Animated financial chart-like background
+
+  Colours: the roles of lib/theme/tokens.css — the page surface, and the login illustration (--lf-art-*), whose alpha
+  is each layer's strength. The timing is the gallery's too: it pins every looping animation at 3.6 s of its own run
+  (e2e/fixtures/galleryShot.ts), so durations, delays and keyframe steps stay as they are.
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
@@ -11,7 +15,7 @@
     });
 </script>
 
-<div class="animated-bg">
+<div class="animated-bg" data-testid="animated-background">
     <!-- Animated waves -->
     {#if mounted}
         <div class="wave wave-1"></div>
@@ -21,9 +25,9 @@
 
     <!-- Chart lines container - multiple lines that cycle -->
     <svg class="chart-svg" preserveAspectRatio="none" viewBox="0 0 1200 200">
-        <path class="chart-line line-1" d="M0,150 L100,130 L200,140 L300,100 L400,120 L500,80 L600,90 L700,60 L800,70 L900,40 L1000,55 L1100,30 L1200,45" fill="none" stroke="#1a4031" stroke-width="2" />
-        <path class="chart-line line-2" d="M0,120 L100,140 L200,100 L300,130 L400,90 L500,110 L600,70 L700,95 L800,55 L900,80 L1000,45 L1100,65 L1200,35" fill="none" stroke="#1a4031" stroke-width="2" />
-        <path class="chart-line line-3" d="M0,140 L100,110 L200,130 L300,85 L400,115 L500,75 L600,100 L700,50 L800,85 L900,60 L1000,75 L1100,40 L1200,55" fill="none" stroke="#1a4031" stroke-width="2" />
+        <path class="chart-line line-1" d="M0,150 L100,130 L200,140 L300,100 L400,120 L500,80 L600,90 L700,60 L800,70 L900,40 L1000,55 L1100,30 L1200,45" fill="none" stroke-width="2" />
+        <path class="chart-line line-2" d="M0,120 L100,140 L200,100 L300,130 L400,90 L500,110 L600,70 L700,95 L800,55 L900,80 L1000,45 L1100,65 L1200,35" fill="none" stroke-width="2" />
+        <path class="chart-line line-3" d="M0,140 L100,110 L200,130 L300,85 L400,115 L500,75 L600,100 L700,50 L800,85 L900,60 L1000,75 L1100,40 L1200,55" fill="none" stroke-width="2" />
     </svg>
 </div>
 
@@ -32,13 +36,8 @@
         position: fixed;
         inset: 0;
         z-index: -10;
-        background-color: #f5f4ef;
+        background-color: var(--lf-surface-page);
         overflow: hidden;
-    }
-
-    /* Dark mode background */
-    :global(html.dark) .animated-bg {
-        background-color: #11151c;
     }
 
     .wave {
@@ -47,29 +46,23 @@
         left: -5%;
         width: 110%;
         height: 60%;
-        background: linear-gradient(to top, #9caf9c, transparent);
         transform-origin: bottom center;
     }
 
-    /* Dark mode waves */
-    :global(html.dark) .wave {
-        background: linear-gradient(to top, #00ff9a, transparent);
-    }
-
     .wave-1 {
-        opacity: 0.25;
+        background: linear-gradient(to top, var(--lf-art-hill-1), transparent);
         animation: wave1 12s ease-in-out infinite;
         clip-path: polygon(0% 100%, 0% 60%, 15% 55%, 30% 65%, 45% 50%, 60% 60%, 75% 45%, 90% 55%, 100% 40%, 100% 100%);
     }
 
     .wave-2 {
-        opacity: 0.18;
+        background: linear-gradient(to top, var(--lf-art-hill-2), transparent);
         animation: wave2 16s ease-in-out infinite;
         clip-path: polygon(0% 100%, 0% 70%, 20% 60%, 40% 70%, 60% 55%, 80% 65%, 100% 50%, 100% 100%);
     }
 
     .wave-3 {
-        opacity: 0.12;
+        background: linear-gradient(to top, var(--lf-art-hill-3), transparent);
         animation: wave3 20s ease-in-out infinite;
         clip-path: polygon(0% 100%, 0% 55%, 25% 65%, 50% 50%, 75% 60%, 100% 45%, 100% 100%);
     }
@@ -122,14 +115,10 @@
     }
 
     .chart-line {
+        stroke: var(--lf-art-line);
         opacity: 0;
         stroke-dasharray: 2000;
         stroke-dashoffset: 2000;
-    }
-
-    /* Dark mode chart lines */
-    :global(html.dark) .chart-line {
-        stroke: #4ade80;
     }
 
     .line-1 {
@@ -146,19 +135,20 @@
         animation-delay: 8s;
     }
 
+    /* The fade only: a line's strength is the alpha of --lf-art-line */
     @keyframes drawAndFade {
         0% {
             stroke-dashoffset: 2000;
             opacity: 0;
         }
         5% {
-            opacity: 0.15;
+            opacity: 1;
         }
         30% {
             stroke-dashoffset: -0;
         }
         55% {
-            opacity: 0.15;
+            opacity: 1;
         }
         60% {
             stroke-dashoffset: -2000;

@@ -71,6 +71,9 @@ Lo scheduler mantiene aggiornati prezzi e tassi di cambio da solo, anche quando 
   tassi di ogni coppia FX con un provider, nell'**Orizzonte di recupero**, per colmare eventuali lacune. Le coppie
   con soli tassi manuali vengono saltate.
 
+Se all'orario di una sincronizzazione il server è spento o sospeso, la sincronizzazione dello storico
+che ha saltato parte appena il server torna attivo, senza aspettare l'orario successivo.
+
 ### ⚙️ Configura la pianificazione
 
 Sblocca la scheda, apri **Job di aggiornamento** e fai clic su **Configura…** nella riga **Configurazione Schedule**.

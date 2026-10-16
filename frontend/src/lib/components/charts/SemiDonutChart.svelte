@@ -7,11 +7,12 @@
   Features:
   - Semi-circle pie chart (180°-360°)
   - Circular avatar images pre-clipped via offscreen canvas
-  - Initial letter fallback when no avatar available
+  - Initial letter fallback when no avatar available, in the text that reads best on its disc
   - "Available" slice for unallocated percentage
-  - Dark mode support
+  - Dark mode support: redraws when the theme switches, or when the chart colours change (Designer Lab, C4)
   - ResizeObserver for responsive sizing
-  - Diversified color palette with high chromatic distance
+  - Owners coloured in order with the first eight asset types of the designer's palette, a version per
+    theme (GR5.2), shaded past the eighth
 
   Used by:
   - BrokerSharingModal (ownership distribution)
@@ -29,8 +30,10 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
     import {CHART_TOOLTIP_COLORS, SEMI_DONUT_COLORS} from '$lib/theme/chartTheme';
-    import {SEMI_DONUT_PALETTE} from '$lib/theme/chartPalettes';
-    import {isDarkTheme} from '$lib/theme/themeMode';
+    import {CATEGORY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
+    import {shadePoles} from '$lib/theme/chartShades';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types
@@ -68,9 +71,6 @@
     let needsInitialLayoutStabilityPass = false;
     let renderGeneration = 0;
 
-    // Diversified color palette — high chromatic distance between adjacent slices
-    const PALETTE = SEMI_DONUT_PALETTE;
-
     // Cache for circular avatar data URLs
     const circularAvatarCache = new Map<string, string>();
 
@@ -79,8 +79,26 @@
     // =========================================================================
 
     onMount(() => {
-        return () => cleanup();
+        // The colours are read when the chart draws: a theme switch, or a chart colour changed without one (a Designer
+        // Lab edit, contract C4), draws it again (backlog R-7).
+        const theme = onThemeClassChange(redraw);
+        const colors = onChartColorsChange(redraw);
+        return () => {
+            theme.disconnect();
+            colors.disconnect();
+            cleanup();
+        };
     });
+
+    /** Draws the current data again, as the next generation. */
+    function redraw() {
+        if (!chartContainer) return;
+        void renderChart(
+            ++renderGeneration,
+            data.map((slice) => ({...slice})),
+            availableLabel,
+        );
+    }
 
     $effect(() => {
         const container = chartContainer;
@@ -193,6 +211,11 @@
         const avatarSize = 44;
         const borderColor = themed(SEMI_DONUT_COLORS.avatarBorder, isDark);
         const borderWidth = 2;
+        // GR5.2: the owners take the first eight asset types in order, then a shade of them (GR4) past the eighth. The
+        // roles are read once, from the chart's own element.
+        const roles = chartRoles(isDark, container);
+        const poles = shadePoles(isDark, roles.color('--lf-surface-card'));
+        const ownerColor = (index: number) => sequenceColor('type', CATEGORY_SEQUENCE, index, isDark, poles);
 
         // Pre-load circular avatars in parallel
         const avatarPromises: Array<{index: number; promise: Promise<string>}> = [];
@@ -218,6 +241,8 @@
         slices.forEach((slice, i) => {
             if (slice.percentage <= 0) return;
 
+            // The slice and its avatar's disc are one colour, the owner's: by its place among the owners.
+            const color = ownerColor(i);
             const initial = slice.name.charAt(0).toUpperCase();
             const totalIconSize = avatarSize + borderWidth * 2;
             const rich: Record<string, any> = {
@@ -247,8 +272,8 @@
                 rich['avatar'] = {
                     fontSize: 18,
                     fontWeight: 'bold',
-                    color: SEMI_DONUT_COLORS.avatarInitial,
-                    backgroundColor: PALETTE[i % PALETTE.length],
+                    color: roles.readableText(color),
+                    backgroundColor: color,
                     borderRadius: avatarSize / 2,
                     width: avatarSize,
                     height: avatarSize,
@@ -263,6 +288,7 @@
             chartData.push({
                 value: slice.percentage,
                 name: slice.name,
+                itemStyle: {color},
                 label: {show: true, formatter, rich},
             });
         });
@@ -289,7 +315,6 @@
         }
 
         const option: echarts.EChartsOption = {
-            color: PALETTE,
             tooltip: {
                 trigger: 'item',
                 formatter: (params: unknown) => {

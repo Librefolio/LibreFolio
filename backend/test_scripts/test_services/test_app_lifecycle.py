@@ -24,8 +24,9 @@ steps), ``middleware.py`` and ``static_site.py``, cut out of ``backend/app/main.
     ``FINALLY_STEPS`` is the tool executor alone; the BRIM parse pool is released off the event loop under a deadline.
     A step reaches its function through the module's name when it runs, so
     ``monkeypatch.setattr(app_lifespan, "<name>", ...)`` replaces it.
-(e) Middleware: GZip outside CORS, with their options; ``install_middleware`` adds any stack with its first entry
-    outermost; the app of ``backend.app.main`` carries ``MIDDLEWARE_STACK``.
+(e) Middleware: GZip outside CORS, with their options, checked in relative order so that a workstream adds an entry,
+    and a test of its own constraint, without touching this file's tests; ``install_middleware`` adds any stack with
+    its first entry outermost; the app of ``backend.app.main`` carries ``MIDDLEWARE_STACK``.
 (f) Static site: ``install_static_site`` registers ``/mkdocs``, ``/mkdocs/{path:path}``, ``/``, the ``/_app`` mount when the
     build has ``index.html`` and ``_app/``, the SPA catch-all last. On the app of ``backend.app.main``, imported as
     ``test_static_route_confinement`` imports it, the catch-all is the last route and the site comes after every
@@ -111,16 +112,17 @@ PLAIN_VALUE = SimpleNamespace(kind="watchdog")
 # =============================================================================
 
 
-def step_names(steps: Sequence[Step]) -> list[str]:
+def step_names(steps: Sequence[Step | MiddlewareEntry]) -> list[str]:
     """The names of ``steps``, in their order."""
     return [step.name for step in steps]
 
 
-def assert_in_relative_order(steps: Sequence[Step], expected: Sequence[str], what: str = "steps") -> None:
+def assert_in_relative_order(steps: Sequence[Step | MiddlewareEntry], expected: Sequence[str], what: str = "steps") -> None:
     """The names ``expected`` are among ``steps``, in this relative order; any other step may stand before, between or after.
 
     A workstream checks a constraint of its own with it, in a test of its own: a step that must run between two others is
     ``assert_in_relative_order(app_lifespan.STARTUP_STEPS, ("tool-catalog", "pending-restore", "data-directories"))``.
+    It also serves ``MIDDLEWARE_STACK``, whose entries carry a ``name`` as steps do.
     """
     names = step_names(steps)
     missing = [name for name in expected if name not in names]
@@ -655,22 +657,22 @@ class _Third(_Tagging):
 
 
 def test_the_middleware_stack_is_gzip_then_cors() -> None:
-    print_section("MIDDLEWARE_STACK: gzip outermost, cors inside it")
-    assert [entry.name for entry in MIDDLEWARE_STACK] == ["gzip", "cors"]
-    print_success("✓ gzip, cors")
+    print_section("MIDDLEWARE_STACK: gzip outside cors, with their options")
+    assert_in_relative_order(MIDDLEWARE_STACK, ("gzip", "cors"), "MIDDLEWARE_STACK")
+    entries = {entry.name: entry for entry in MIDDLEWARE_STACK}
+    assert (entries["gzip"].cls, dict(entries["gzip"].options)) == (GZipMiddleware, {"minimum_size": 1024, "compresslevel": 6})
+    assert (entries["cors"].cls, dict(entries["cors"].options)) == (CORSMiddleware, {"allow_credentials": True, "allow_methods": ["*"], "allow_headers": ["*"]})
+    print_success("✓ gzip outside cors, each with its class and options")
 
 
 def test_install_middleware_adds_the_stack_with_its_options_first_outermost() -> None:
-    print_section("install_middleware(app): GZip then CORS, with their options")
+    print_section("install_middleware(app): MIDDLEWARE_STACK in its order, with its options")
     app = FastAPI()
 
     install_middleware(app)
 
-    assert [(middleware.cls, middleware.args, middleware.kwargs) for middleware in app.user_middleware] == [
-        (GZipMiddleware, (), {"minimum_size": 1024, "compresslevel": 6}),
-        (CORSMiddleware, (), {"allow_credentials": True, "allow_methods": ["*"], "allow_headers": ["*"]}),
-    ]
-    print_success("✓ user_middleware is [GZipMiddleware, CORSMiddleware]")
+    assert [(middleware.cls, middleware.args, middleware.kwargs) for middleware in app.user_middleware] == [(entry.cls, (), dict(entry.options)) for entry in MIDDLEWARE_STACK]
+    print_success(f"✓ user_middleware is MIDDLEWARE_STACK's {len(MIDDLEWARE_STACK)} entries, the first outermost")
 
 
 @pytest.mark.asyncio
