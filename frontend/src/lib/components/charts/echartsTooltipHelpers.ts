@@ -1,4 +1,5 @@
 import type {ECharts} from 'echarts';
+import {chartFontLoaded, chartFontReady} from './chartFont';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {themed} from '$lib/theme/themePair';
@@ -274,10 +275,12 @@ function pollStableRect(el: HTMLElement, onStable: () => void, maxFrames = 180):
  * each one forces a full internal ECharts re-render and can interrupt an already
  * visible tap-triggered tooltip on mobile.
  *
- * Uses 3 non-magic-number signals:
+ * Uses 4 non-magic-number signals:
  *  1) immediate corrective resize right after first paint,
  *  2) rect-stability polling via rAF for late reflows above the chart,
- *  3) browser `load` + `document.fonts.ready` for cold-load resource/font settling.
+ *  3) browser `load` + `document.fonts.ready` for cold-load resource/font settling,
+ *  4) the flag face (K-13), when the first paint came before it: `document.fonts.ready` waits only for the faces the
+ *     page has asked for, and canvas text asks for none, so the request of `chartFontReady` is awaited instead.
  */
 export function scheduleFirstRenderStabilityFix(chart: ECharts, container: HTMLElement, afterResize?: (chart: ECharts) => void): void {
     const resizeOnce = () => {
@@ -299,6 +302,8 @@ export function scheduleFirstRenderStabilityFix(chart: ECharts, container: HTMLE
             resizeOnce();
         })
         .catch(() => {});
+
+    if (!chartFontLoaded()) void chartFontReady().then(resizeOnce);
 }
 
 /**
