@@ -389,6 +389,8 @@ sequenceDiagram
 - 💰 [Asset Architecture](../../../backend/assets/architecture.md) — Sync pipeline and pricing
 - ⏸️ [Provider Pauses](../../../backend/assets/architecture.md#provider-pauses) — The backend's
   pauses after «too many requests», behind `RATE_LIMITED`
+- 🛠️ [Provider Pauses](../../../../admin/sleep_wake.md#provider-pauses) — The administrator's
+  side: the two variables, and what each page shows during a pause
 - 🧠 [Domain state](../../state/domain-state.md) — The portfolio caches and the mutation signal
 - ⏱️ [Scheduler](../../../backend/scheduler.md) — The server-side current-price refresh
 - 🎨 [Styling](../../styling.md#utility-classes) — The `.lf-price-flash-*` classes
