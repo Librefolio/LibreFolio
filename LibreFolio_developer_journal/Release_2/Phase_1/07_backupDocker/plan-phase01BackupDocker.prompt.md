@@ -3369,6 +3369,28 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   (`outcome.py`, `test_backup_outcome.py`). Fuori: `frontend/e2e/settings/backup.spec.ts`, che il test-author dell'E2E
 >   sta scrivendo (entra con il suo slot). Restano rossi due casi di `api backup-restore-apply`, finché entra la riga di H
 >   in `ALLOWED_WHEN_BLOCKED` (`instance_block.py`) e il suo pin (`test_instance_block.py`).
+> - **B5c committato** dal coordinatore: `9137e1ef8` feat, `b699be101` docs, `57564d321` journal (HEAD). La descrizione
+>   di `logging-access-filter` con `/ticket` resta.
+> - **18:29, le righe di H, scritte da me e riviste da H** (coordinatore): `instance_block.py` (l'import di
+>   `restore as backup_restore`; la voce `backup_restore.get_restore_outcome` dopo quelle del pannello, con un commento;
+>   una frase nel docstring del modulo) e `test_instance_block.py` (la voce in `ALLOWED_ROUTES`). Nessun ciclo d'import:
+>   il pacchetto `backup` carica già `restore`. Ruff e black puliti. **Verde** (18:30-18:32): `api instance-block`
+>   62 su 62, `api backup-restore-apply` **136 su 136**. Entrano con lo slot dell'E2E dopo le 19:30. **H le ha riviste
+>   (18:33): OK, nessun cambio**; accoglie anche N53.
+> - **18:50, l'E2E del ripristino è scritto** (test-author `332db941`, solo Prettier): sette casi FBKP-101…107 in
+>   `e2e/settings/backup.spec.ts`, in serie dopo i quattro di B5a: 101 troppo grande (lo stato con un limite di 1 MB, il
+>   `PUT` registrato e interrotto), 102 incolla rifiutato (un `ControlOrMeta+V` vero, con i permessi degli appunti), 103
+>   ritorno indietro, 104 bloccata (`instance_blocked`), 105 il ripiego (404 dell'esito, 401 dello stato → il login),
+>   106 un ripristino trovato in attesa (caricamento, prova e conferma veri dall'API; annullamento dalla scheda), 107 il
+>   percorso vero (il selettore del file, la prova, il report, la parola, la conferma vera; il riavvio, la sonda e
+>   l'esito `committed` finti). Il riavvio è sempre intercettato prima della prima navigazione e non passa mai; il
+>   biglietto controllato nell'header e in nessun'altra richiesta; una pulizia dopo ogni caso, riuscito o no, con una
+>   sessione admin a parte: annulla quel che attende, toglie le prove, verifica che lo stato non sia in attesa. Chiesto
+>   lo slot al coordinatore (`front-utility backup`, con la build del frontend in testa).
+> - **Slot 1** (18:49-18:53, il coordinatore: «con le righe di H»): `front-utility backup` **12 su 12** in 3 minuti
+>   (FBKP-001, 001b, 002, 003, 004 di B5a; FBKP-101…107 del ripristino, FBKP-102 con l'incolla vero compreso), la build
+>   del frontend fatta prima (`--build-only`). La cartella dati della corsia pulita dopo: in `.restore/` nessuno stato,
+>   nessun biglietto, nessuna copia, nessun caricamento, solo i file di lock vuoti. Porta libera.
 
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
