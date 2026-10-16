@@ -2802,3 +2802,175 @@ verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso
 - ✅ **`all-backend --workers 2`** (slot 1, 16/10 03:01 → 03:33, `nice -n 10`, carico all'avvio 35): 7/7 categorie
   verdi; passate parallele 16 431 passed, 4 skipped, 0 failed, più la consolidata verde. Porta 6185 libera. Handoff
   FROZEN mandato.
+
+#### Checkpoint CP-6 ✅ (2026-10-16) — committato dal coordinatore (`58c10197c`, journal `bfc02a7ec`)
+
+- **Aggiornamento di base 9** — merge di `dev_release2` `503dce683`, HEAD `079e23b9c`, pulito. Fusi da soli indice e
+  log della devWiki, backlog e `wac.md`: riletti, le mie voci intatte, nessun marcatore di conflitto. Il nuovo paragrafo
+  di W-B31 in `wac.md` (regola 12: `cost_basis_mode` rifiutato su una riga in uscita) non tocca le mie righe ed è
+  coerente con CP-16: una rettifica in uscita col costo arriva solo dalle conversioni di W, non dall'API.
+- **Ingresso** (16/10 03:35–03:50, `nice -n 10`, carico 29–59): golden 1/1, `services financial-math` 392,
+  `test_portfolio_service` 98, `api portfolio` 51, `mkdocs build` stretto verde, `check-links` 96. B11 nella sezione I la
+  chiude il coordinatore.
+
+#### CP-10a — un solo Rolling Return (via del coordinatore, 16/10 03:35: «mandami le due righe e parti»)
+
+- Due righe mandate (03:37). Base: HEAD `079e23b9c`. Verificato in sola lettura: `signal_plugins/rolling_return/` e
+  `calendar_rolling_return/` ci sono ancora, `rolling_compounded_return_values` è a `risk/signal_helpers.py:175`; il
+  registro per famiglia di X è in `services/signals/registry.py`.
+- **Letto sul codice (sola lettura, 03:50–04:05)**:
+  - `RISK_ROLLING_RETURN`: `window` 1–500 osservazioni, uscita `rolling_return`, asse `risk_return`, helper composto
+    (`rolling_compounded_return_values`, `risk/signal_helpers.py:175`). Il plugin a calendario: `window_days` (`strict`,
+    `gt=0`, 30 di base), uscita e asse `calendar_return`, `catalog_visible = False`; chiavi `signals.riskRollingReturn.*`
+    condivise fra i due.
+  - La pagina asset usa già il plugin a calendario come vista principale (`priceChartHelpers.ts:40`,
+    `CALENDAR_RETURN_SIGNAL_CODE`), con finestre personalizzate senza massimo (`calendarReturnWindow.ts`).
+  - Il catalogo è `SignalPluginRegistry` (`services/signals/registry.py:49`, i soli `catalog_visible`). L'AI Export
+    usa indicatori curati per codice (`CuratedSignalSpec`), nessuno dei due rolling return: nessun cambio, nessuna sonda.
+  - I codici dei segnali non sono un enum dell'API: niente contratto da cambiare.
+  - Le configurazioni salvate tengono `signalType` = codice in minuscolo con i trattini (`catalogMapper.ts:7`), quindi
+    `risk-rolling-return`; lo store è alla versione 2 (`STORAGE_VERSION`).
+  - Il rendimento fra due prezzi: `end / start − 1` in Decimal, in `series_preparation.py:357` e nel plugin a calendario
+    (`:238`, ×100). In `returns.py` non c'è una funzione uguale (`gain_loss_ratio` è `gain / base`: arrotondamento
+    diverso).
+  - Sei file di test fissano il plugin vecchio o il suo helper (registro, matrice dei plugin, rischio, oracolo, segnali
+    dell'asset, cataloghi dell'API).
+- **Decisioni notturne, da rivedere**:
+  1. **Nessun limite superiore su `window_days`**, contro il «limite superiore per il selettore» del disegno. La vista
+     principale ammette finestre personalizzate senza massimo (anche 30 anni su un indice lungo): un `le` le rifiuterebbe
+     con un 422. Il plugin regge già finestre lunghissime (`_reference_target_date` contro `date.min`). Per il selettore,
+     un minimo esplicito: `ge=1` al posto di `gt=0` (stessa validazione sugli interi, ma lo schema porta `minimum: 1`).
+  2. **La funzione della casa**: `returns.price_return(start, end) -> Decimal | None` = `end / start − 1`, None se
+     manca un prezzo o l'iniziale è zero; la chiamano `series_preparation` e il plugin a calendario.
+  3. **La prova di parità** (plugin a calendario a D giorni contro il vecchio helper su D osservazioni, su una serie
+     giornaliera senza buchi): uno script usa e getta che lancio prima del taglio, con le prove nel piano. Non un test
+     da tenere: dopo il taglio l'helper non c'è più.
+  4. **La migrazione v2→v3**: una funzione pura esportata dallo store (file non mio, righe dichiarate nell'handoff),
+     chiamata dalla lettura del `localStorage`.
+- ✅ **Prova di parità prima del taglio** (16/10 04:10, `/tmp/libreFolio_j/cp10a/parity.py`, carico 28): 200 serie
+  giornaliere senza buchi (40–800 prezzi a 6 decimali, passi gaussiani al 2 %, seme 29), finestre 1, 2, 5, 30, 90, 365 e
+  una a caso: `rolling_compounded_return_values` su D osservazioni ×100 contro `(P_t / P_{t−D} − 1) × 100` in Decimal.
+  **444 695 punti, scarto massimo 5,7e-14 punti percentuali** (relativo 7,6e-11, sui valori vicini a zero): il vecchio
+  helper non porta via nulla che il plugin a calendario non dia. Log: `/tmp/libreFolio_j/cp10a/parity.log`.
+- **Rossi**: test-author al lavoro (catalogo, `price_return`, i sei file che fissano il plugin vecchio, la migrazione
+  v2→v3 in Vitest).
+- **Bozza del codice backend** (`/tmp/libreFolio_j/cp10a/apply_backend.py`, prova a secco passata: ogni ancora una volta):
+  `returns.price_return`; `series_preparation` la chiama tramite `_price_return_value`, che solleva se un prezzo non è
+  positivo (lo schema lo vieta: `target_close` `gt=0`, `schemas/risk.py:350`, quindi non succede); il plugin a calendario
+  la chiama nel ramo dei prezzi positivi, diventa visibile, `ge=1`, tooltip `signals.tooltips.calendarWindow`; Volatilità,
+  Sharpe e Beta passano da `x-suffix: "days"` a `"observations"` (J-13); esce la cartella `rolling_return/` con
+  l'helper `rolling_compounded_return_values`.
+- **i18n** (`dev.py i18n where`): `signals.tooltips.calendarWindow` e `signals.units.observations` vanno nel
+  sottosistema `charts`, accanto a `riskWindow` e alle unità. Se, uscito il plugin vecchio, il cancello di proprietà dei
+  plugin chiede le chiavi `signals.riskRollingReturn.*` nel frammento del plugin a calendario, le sposto con
+  `dev.py i18n move`, e cambio la riga 14 di `backend-signals.instructions.md` e la skill `devpy-i18n`, che le dicono
+  condivise.
+- **Nessun `implementation_version` da alzare**: la regola è «quando i valori cambiano», e i valori restano gli stessi
+  (stessa formula). Cambiano solo visibilità, minimo dello schema, tooltip e unità, che il catalogo legge dalle classi a
+  ogni richiesta.
+- ✅ **Rossi scritti** (test-author, 16/10): modificati `test_signal_catalogs.py`, `test_asset_signals.py`,
+  `test_returns_rebase_and_ratios.py` (`TestPriceReturn`, 13 casi), `test_risk_metrics_oracle.py`,
+  `test_risk_signal_plugins.py`, `test_signal_plugin_matrix.py`, `test_signal_registry.py`, `chartSettingsStore.test.ts`
+  (versione 2 → 3); nuovo `chartSettingsStore.migration.test.ts` (funzione pura `migratePersistedChartSettings`,
+  idratazione, scrittura di ritorno), registrato in core-unit (`_frontend_utility.py`).
+- ✅ **Codice backend applicato** (`apply_backend.py`): come la bozza qui sopra, tranne la chiave del tooltip (decisione 5).
+- ✅ **i18n** (`dev.py i18n`): il ramo `signals.riskRollingReturn.*` (4 chiavi) passa nel frammento del plugin a
+  calendario, come chiedeva il cancello di proprietà una volta uscito il plugin vecchio; nuova
+  `signals.riskRollingReturn.windowTooltip` (4 lingue) nello stesso frammento; nuova `signals.units.observations`
+  (4 lingue) in `charts`; la descrizione dice «giorni di calendario». `i18n check` stretto verde: 4 752 chiavi,
+  73 frammenti di plugin.
+- ✅ **Testi**: `backend-signals.instructions.md:14`, skill `devpy-i18n:64` e pagina dev `developer/frontend/i18n.md:114`
+  (solo EN, niente da timbrare): l'esempio di chiave condivisa diventa `signals.tooltips.riskWindow` (la dichiarano
+  Volatilità, Sharpe e Beta) al posto di `signals.riskRollingReturn.*`, che ora è di un plugin solo.
+- ✅ **Migrazione dello store** (`chartSettingsStore.svelte.ts`, file non mio): `STORAGE_VERSION` 2 → 3,
+  `PersistedChartSettings.version: typeof STORAGE_VERSION`, funzione pura esportata `migratePersistedChartSettings`
+  (v1/v2 → v3; in `globalSettings` e in ogni voce di `pairOverrides`: `signalType`, `window` → `window_days`,
+  `componentStyles.rolling_return` → `calendar_return`, solo se presenti), chiamata da `parsePersistedSettings`, che ora
+  accetta la sola versione 3. La scrittura di ritorno c'era già (`loadFromStorage`).
+- **Decisioni notturne, da rivedere** (seguito):
+  5. **Chiave del tooltip**: `signals.riskRollingReturn.windowTooltip`, nello spazio e nel frammento del plugin, al posto
+     di `signals.tooltips.calendarWindow` in `charts` scritta sopra. La usa un solo plugin, e lo spazio
+     `signals.riskRollingReturn.*` ora è suo: il frammento è la sua casa. Il cancello avrebbe accettato anche `charts`
+     (R2/R4 guardano solo le chiavi dentro lo spazio di un plugin).
+  6. **Scala dell'asse salvata**: la migrazione sposta anche `axisScales.secondary['independent:risk_return']` su
+     `'independent:calendar_return'`, se quest'ultima manca; altrimenti tiene quella del calendario e lascia cadere la
+     vecchia. Fuori dai rossi; un caso in più chiesto al test-author.
+- ✅ **Rossi → verdi** (16/10 04:36–04:47, `nice -n 10`, carico 24–53, `/tmp/libreFolio_j/cp10a/green.sh`):
+  `TestPriceReturn` 13, `signal-registry` 66, `risk-all -k test_risk_signal_plugins` 45, `risk-oracle` 214,
+  `asset-signals` 30, `api signal-catalogs` 5, `gate-plugin-i18n-ownership` 64, `gate-i18n-catalog` 176,
+  `gate-i18n-usage` 195, Vitest dei due file dello store 49/49. **Rosso**: `signal-plugin-matrix` 4 su 91.
+- **⚠️ Fuori pista**: la tabella `EXPECTED_PARAM_UNITS` di `test_signal_plugin_matrix.py` (decisione del 30/09, «i
+  periodi degli indicatori contano sedute; il rendimento a calendario e le finestre di rischio tengono i giorni») fissa
+  ancora il contratto di prima: `days` sulle finestre di Volatilità, Sharpe e Beta (J-13 le porta a `observations`,
+  deciso dal coordinatore il 15/10) e `signals.tooltips.riskWindow` sul plugin a calendario. Il codice è giusto, la
+  tabella va riallineata: al test-author, insieme alla spec E2E della pagina asset (`asset-detail.spec.ts:285` cerca
+  ancora l'opzione `signal-tree-option-risk-rolling-return`) e al Vitest dell'overlay previsto sopra (mancava: il
+  renderer generico scarta i punti senza numero, `backendRenderer.ts:215`, quindi un punto vuoto non diventa uno zero;
+  il test lo fissa). Due Vitest nominano ancora il codice tolto come esempio generico (`catalogMapper.test.ts:93`,
+  `priceChartHelpers.test.ts:489`): passano, ma vanno su un codice che esiste.
+- ✅ **Store dei grafici, proprietà** (coordinatore, 16/10 ~05:05): `chartSettingsStore.svelte.ts` è una superficie
+  condivisa con **J scrittore** per CP-10a, sulle righe dichiarate (`STORAGE_VERSION` e tipo della versione; il blocco
+  della migrazione prima di `parsePersistedSettings`; una riga dentro). Nessun import cambiato: nessuno scontro con lo
+  spostamento `lib/charts` → `features/signals` di Y4a. Ammessi come aggiunte i due test di `lib/charts/signals`,
+  `priceChartHelpers.test.ts` e la spec E2E della pagina asset (X la taglia, ma i `data-testid` restano).
+- **Fermo dei colori** (05:20–06:45 circa): dalle 05:25 solo scrittura; test-author e docs-writer avvisati.
+- ✅ **Prove leggere** (16/10 05:04–05:07, `nice -n 10`, carico 52–60, `/tmp/libreFolio_j/cp10a/light.sh`):
+  `services financial-math` 405 (392 + 13 di `TestPriceReturn`), `services roi-fifo-utils` 725, `api sync` verde e
+  nessun file tracciato cambiato, `check-orphans` verde (346 file del backend raggiungibili), `signal-plugin-matrix`
+  91/91 con la tabella delle unità riallineata dal test-author (`observations` sulle finestre di rischio,
+  `signals.riskRollingReturn.windowTooltip` sul plugin a calendario).
+- **Riserva** (coordinatore, 16/10 ~05:10): T (colori) ha un lotto di sole classi su
+  `features/ai-export/AiExportMenu.svelte` e `AiExportOptionsPanel.svelte`, slot verso le 07:30: non toccarli finché
+  non è entrato. CP-10a non li tocca; CP-12 lavora su `snapshotDataRenderer.ts`.
+- ✅ **devWiki** (skill `wiki-file`, 05:09): `features/F-088` diceva che `RISK_ROLLING_RETURN` «resta, invariato»; ora
+  registra la decisione 29, la prova di parità, la migrazione v3 dello store, le chiavi del plugin e la casa
+  `price_return` (righe nuove nella tabella dei file). Voce nel log. `check_source_paths`: 5 mancanti, come prima.
+- ✅ **Store**: la variabile destrutturata `window` (ombreggiava il globale del browser) diventa `observations`.
+  Prettier pulito; Vitest dei due file dello store 54/54 (05:09, carico 38), con i casi della scala dell'asse.
+- ✅ **Test-author, secondo giro** (16/10, finito 05:12; nessuna prova lanciata da lui, per il fermo):
+  - `test_signal_plugin_matrix.py`: la tabella delle unità segue J-13 e la decisione 29 (costante `RISK_WINDOW`), commento
+    e docstring con le tre regole (sedute / osservazioni / giorni di calendario); premessa del test delle traduzioni con
+    `signals.units.observations` e `signals.riskRollingReturn.windowTooltip`. Rinominato
+    `test_period_params_declare_sessions_or_days_and_their_tooltip` → `test_period_params_declare_their_unit_and_tooltip`
+    (nessun altro riferimento al vecchio nome).
+  - `chartSettingsStore.migration.test.ts`: cinque casi della scala dell'asse (solo la vecchia, tutte e due, dentro
+    `pairOverrides`, ingresso intatto, idratazione con riscrittura in v3).
+  - `backendRenderer.test.ts`: il risultato a calendario passa dal mapper; i punti `null` non si disegnano (uno `0` vero
+    sì), asse `calendar_return` indipendente (`secondaryAxisSettingsKey` → `independent:calendar_return`), avviso
+    `undefined_metric_window` nell'esito, stato `partial`.
+  - `catalogMapper.test.ts:93`, `priceChartHelpers.test.ts:489`: codice d'esempio → `RISK_ROLLING_VOLATILITY`.
+  - E2E `asset-detail.spec.ts`: nel test della Beta l'opzione a calendario visibile e quella tolta a zero; un test nuovo
+    sceglie il Rolling Return dal gruppo Rischio e verifica la richiesta (un solo overlay, `window_days` 30, istanza
+    diversa da `asset-calendar-return`), la risposta, lo stato `ok`/`partial` e nessun problema di gravità `error`. Il
+    gruppo si legge con un XPath sul `role="group"` fratello del pulsante del gruppo (`ui/select/TreeSelect.svelte:433,451`,
+    componente generico che Y non sposta): accettato.
+  - Trovato fuori lista: `connectNulls` → J-21 nel backlog; `outcome.warnings` del renderer tiene il messaggio inglese e
+    non il codice, ma la pagina asset non lo legge (il distintivo viene da `getSignalProblem`, che legge il codice):
+    nessuna voce.
+- ✅ **Docs-writer** (16/10, finito 05:13; niente build né stamp): 4 pagine dev solo EN (`registry_pattern.md`,
+  `signal_plugin_guide.md`, `risk/architecture.md` «quattro» plugin, `frontend/components/charts.md` con l'overlay e la
+  migrazione v3) e 4 pagine EN con traduzioni (`returns`, `indicators/index`, `risk-metrics/volatility`,
+  `user/assets/detail/signals`). Esce l'ancora `#rolling-return-sessions` (nessun riferimento nel codice); il link di
+  `signals.en.md` va a `#rolling-return-calendar`. Corretta anche una frase falsa sulla Beta: conta ogni giorno in cui
+  **uno dei due** asset è quotato, l'altro all'ultimo prezzo. Verificato sul codice: il calendario è l'unione dei giorni
+  con una quotazione fresca intersecata con i giorni in cui ogni asset ha un valore, anche portato
+  (`series_preparation.py:291-298`, decisione del 30/09). Debito di traduzione → J-22 (con l'avviso «`returns` e
+  `signals` nello stesso giro»); incoerenze già presenti → J-23.
+- ✅ **Mappe della casa** (regola 5, segnalate dal docs-writer): `price_return` nella docstring di
+  `financial_math/__init__.py`, nella tabella di `financial-math.instructions.md`, nella mappa di `backend.instructions.md`
+  e nell'albero di `developer/backend/financial_math.md`. Ruff e black puliti.
+- **Decisione notturna, da rivedere**:
+  7. **Testo dell'uscita**: `signals.riskRollingReturn.outputDescription` diceva «Compounded holding-period return»,
+     scritto per il plugin tolto, che componeva i rendimenti. Giusto nella sostanza, ma gergo per chi non è esperto:
+     diventa «Change of the price against the earlier price, in percentage points.» (IT «Variazione del prezzo
+     rispetto al prezzo precedente, in punti percentuali.», FR e ES uguali nel senso), con `dev.py i18n update` nel
+     frammento del plugin. `i18n check` stretto verde, 4 752 chiavi. Nessun test fissa il testo.
+- ✅ **Prove leggere, secondo giro** (16/10 05:12–05:18, `nice -n 10`, carico 23–54): Vitest dei tre file del renderer,
+  del mapper e degli aiuti del grafico 175/175; `signal-plugin-matrix` 91/91 dopo la rinomina; ruff e black sulla
+  matrice; `front check` 0 errori e 0 avvisi; `front-utility core-unit` 174 file, 6 160 test.
+- ✅ **Backlog**: J-13 chiusa (✅, commit al checkpoint); nuove J-21 (`connectNulls`, per Y o J d'accordo con Y), J-22
+  (debito di traduzione), J-23 (due incoerenze già presenti nelle pagine dell'analisi tecnica). C-71 sta nella sezione C:
+  la chiude il coordinatore dall'handoff.
+- **Rinviato dopo il fermo** (via del coordinatore, verso le 06:45): `mkdocs build` stretto (90–100 s, non stava prima
+  delle 05:20), `check-links`, `translate-validate`; poi gli slot pesanti: E2E della pagina asset con `--workers 2` e
+  `all-backend --workers 2`.
