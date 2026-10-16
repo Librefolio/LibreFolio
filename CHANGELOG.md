@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **One set of password rules for the app, the API and the command line**: at least 8 characters, an uppercase and a lowercase letter, a digit and a symbol. Letters and digits of any alphabet count (`É`, `é`), and a symbol is any character that is not a letter, a number or a space, so the sign-up form, the password change and `./dev.py user create`/`reset` now accept the same passwords. Passwords already saved keep working.
 - API: `GET /system/instance` carries `accounts.password_rules`, the rules every new password must meet.
 - **The managed profile changes three defaults**: idle risk workers stop after 60 seconds instead of 600, and frame protection and the report-only policy are on. A self-hosted install keeps every default, and a value you set always wins.
+- Settings → scheduler panel: prices deferred by a provider's pause are marked ⏸ "Deferred: provider paused" instead of counting as failures, and the panel shows when they will be retried.
 
 #### 🎨 A new colour palette
 
