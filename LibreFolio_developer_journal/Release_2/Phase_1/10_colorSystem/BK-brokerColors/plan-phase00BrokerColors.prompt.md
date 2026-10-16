@@ -308,7 +308,8 @@ marcatori degli eventi e le icone «in transito».
 ## Definizione di fatto
 
 - m1 dell'area 1.153 → 160, m2 0; `--check` pulito e baseline stretto con `--update`; gate `themeRoles`, `themeTokens`
-  (C4 compreso), `themeComponentTokens` e `moneyRenderSites` verdi.
+  (C4 compreso), `themeComponentTokens` e `moneyRenderSites` verdi. **Raggiunto il 16/10 sera: 1.153 → 159** (una in
+  meno della stima: BK-4 chiuso con `text-lf-on-overlay` di T); restano BK-1 69, BK-2 84, BK-3 4, BK-5 2, tutte annotate.
 - Nessun elemento misto, nemmeno a runtime (catene di classi controllate); nessuna coppia della stessa proprietà fuori
   da un ternario.
 - Prove leggere verdi per ogni lotto; slot pesante verde.
