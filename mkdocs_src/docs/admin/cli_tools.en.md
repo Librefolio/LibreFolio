@@ -475,6 +475,8 @@ A rollback also removes the restored data and the copy: to try again, run `backu
 3. **Put `secrets/` back** in the data directory, from the copy you saved separately.
 4. **Start LibreFolio**, the version that made the archive or a newer one: the pending migrations run by themselves at start.
 
+Good to know:
+
 - 🧪 Before step 1, check the archive on the installation that receives it, with `backup restore <archive> --dry-run` ([Try a Restore on a Copy](#backup-restore-dry-run)): without changing anything, it tells you whether that LibreFolio can take the archive, which migrations its start will apply, and which administrators you will sign in with.
 - ⛔ LibreFolio never downgrades a database: an archive made by a newer version needs that version or a newer one, and an older one does not start on it. `backup inspect` shows which version made the archive, and `backup restore --dry-run` refuses such an archive with `revision_unknown`.
 - 🧹 The `manifest.json` left at the root of the data directory is harmless: you can delete it.

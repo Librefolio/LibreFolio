@@ -23,6 +23,7 @@ command line, through environment variables, or in the app's **Admin** and **Use
 
 ### 🧹 Maintenance & Operations
 - 🛠️ **[CLI Admin Tools](cli_tools.md)**: How to use the `dev.py` script for administrative tasks (user management, database upgrades).
+- 💾 **[Backup, Restore & Moving](backup_restore.md)**: One archive with the whole instance: make it from Settings › Backup or the command line, check it, restore it, and move LibreFolio between a hosted instance and your own server.
 - 📂 **[Filesystem Structure](filesystem.md)**: Details on where databases, logs, uploads, and temporary folders are stored, and how to perform backups.
 
 ---
