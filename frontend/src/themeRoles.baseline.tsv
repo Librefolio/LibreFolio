@@ -51,9 +51,8 @@ lib/components/transactions/form/TxFormBanners.svelte	6
 lib/components/transactions/form/TxFormOptionalSection.svelte	25
 lib/components/transactions/form/TxFormPairSection.svelte	93
 lib/components/transactions/form/TxFormSingleSection.svelte	50
-lib/components/transactions/import/AssetGroupStep.svelte	14
+lib/components/transactions/import/AssetGroupStep.svelte	8
 lib/components/transactions/import/GapFixToggle.svelte	4
-lib/components/transactions/modals/ImportWizardModal.svelte	8
 lib/components/transactions/modals/PromoteAllModal.svelte	32
 lib/components/transactions/modals/PromoteMergeModal.svelte	100	#334155×2	#e2e8f0×2
 lib/components/transactions/modals/TransactionActionModal.svelte	146	#334155×2	#e2e8f0×2

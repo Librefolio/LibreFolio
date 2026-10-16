@@ -761,7 +761,7 @@
                                                                         type="text"
                                                                         inputmode="decimal"
                                                                         autocomplete="off"
-                                                                        class="w-32 rounded-lg border bg-lf-field px-2 py-1.5 text-sm text-lf-primary {preview.touched && !preview.valid ? 'border-lf-danger' : 'border-lf-input'}"
+                                                                        class="w-32 rounded-lg border bg-lf-field px-2 py-1.5 text-sm text-lf-primary placeholder:text-lf-placeholder {preview.touched && !preview.valid ? 'border-lf-danger' : 'border-lf-input'}"
                                                                         placeholder="0,00"
                                                                         value={line.amount}
                                                                         oninput={(e) => updateSplitLine(row, k, {amount: (e.currentTarget as HTMLInputElement).value})}
