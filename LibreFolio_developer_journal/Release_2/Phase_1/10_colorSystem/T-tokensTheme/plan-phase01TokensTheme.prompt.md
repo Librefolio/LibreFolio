@@ -615,7 +615,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 25 | I component tokens, parte 2a: `BrokerImportFilesModal` e `UnifiedLotsTable` (BK) sui ruoli, 22 token tolti | ✅ commit `26b45f520` |
 | 26 | I component tokens, parte 2b: i 13 letterali dello `<style>` di `TransactionsTable` (TR-3) sui ruoli | ✅ commit `c4b8a4ae3` |
 | 27 | TC-15: la regola centrale nello `<style>` delle 4 select (`SearchSelect`, `SimpleSelect` con `data-highlighted`, `TreeSelect` col passaggio, `AssetPickerPanel`); lo skill, regola 5 | ✅ commit `4b59cfe53`; base merge `4a3f5cf3f` (IW) |
-| 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | 🔄 prove leggere minime 115/115 |
+| 28 | I component tokens, parte 2c: `ImportBrokerMismatchModal` (IW) sui ruoli, 49 token tolti | ✅ commit `d39728347`; quinto slot verde (15:45–16:49, con il recupero): 312 E2E su 16 spec, `component-unit` 4.055, mutazione di TC-15 |
 
 ## Avanzamento
 
@@ -2818,3 +2818,42 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **2 · Prove leggere minime** (carico 137, sotto `nice`): Prettier verde (`dialogs.css` riformattato: la riga vuota
 > prima della graffa); `--check` pulito; il gate dei token di componente, quello dei ruoli e
 > `ImportBrokerMismatchModal.test.ts` **115/115**. Il resto nello slot (`tx-import-broker-mismatch` in testa).
+
+> ✅ **Committato** dal coordinatore: `d39728347` (15:45); fuori dallo `<style>` cambia solo la riga d'import.
+
+### Quinto slot — 🔄 16/10/2026 (resto della UI, gate, component tokens 1–2c, TC-15)
+
+> **Via** del coordinatore (15:45): corsia 6155 sul ramo `d39728347`, taglio alle 16:30 e nessun passo nuovo dopo le
+> 16:25; carico 86, quindi 1 worker; un E2E caduto per timeout si rilancia da solo prima di giudicarlo. Lo script
+> (`files/T-r2/slot5.sh`) prende la scadenza assoluta (`DEADLINE_AT=16:30`, `MIN_LEFT=300`): ogni passo riceve il
+> tempo che resta fino alle 16:30, allo scadere `timeout --signal=INT`, che il runner gestisce spegnendo il suo backend.
+> Ordine: `api sync`, `--check`, i quattro gate, `front check`, la mutazione di TC-15, `front-utility component-unit`,
+> poi gli E2E: `front-broker detail`, `tx-import-broker-mismatch`, `transactions-table`, `files`, `files-destructive`,
+> `fx-destructive`, `asset-event-delete`, `asset-modal`, `auth`, `tx-selection-after-bulk`, `asset-data-editor`,
+> `broker-sharing`, `asset-list`, `fx-list`, `risk-lab`, `tx-bulk-row-order`. Partito alle 15:45.
+
+> ✅ **Esito** (15:45–16:26, carico 36–104, 1 worker; log in `files/T-r2/slot5/`): **tutto verde quello che è partito.**
+> - `api sync` rc 0; `--check` pulito; i quattro gate dei colori verdi; `front check` 0 e 0.
+> - **La mutazione di TC-15** (`tc15_mutation.sh`): M0, la copia di controllo, 45/45; M1 (attributo tolto) 5 rossi; M2
+>   (attributo che segue la selezione) 4; M3 (guardia dei disabilitati tolta) 2: esattamente quanto previsto da
+>   test-author. Il file di test ripristinato, SHA-256 uguali prima e dopo.
+> - `front-utility component-unit`: 154 file, **4.055/4.055**.
+> - **E2E, 177 test, nessun rosso né «flaky»:** `front-broker detail` 37 (con le due righe passate a `data-selected`:
+>   il segmento del Gantt e la cella della custodia), `tx-import-broker-mismatch` 5, `transactions-table` 25, `files` 29,
+>   `files-destructive` 6, `fx-destructive` 10, `asset-event-delete` 4, `asset-modal` 17, `auth` 34,
+>   `tx-selection-after-bulk` 10.
+> - **Saltati dalla scadenza** (dopo le 16:25): `asset-data-editor`, `broker-sharing`, `asset-list`, `fx-list`,
+>   `risk-lab`, `tx-bulk-row-order`. Toccano il conteggio di `DataEditor`, `BrokerIcon`/`SelectionBar`, `TagInput` e
+>   `TreeSelect`, già coperti dai test di unità e dai gate.
+> - Porta 6155 libera alle 16:26.
+
+> ✅ **Recupero delle spec saltate** (coordinatore, 16:27: prima dell'ingresso, la stessa regola di AF; corsia 6155,
+> taglio alle 16:50; 2 worker col carico a 1 minuto sotto 60; `files/T-r2/slot5b.sh`, che decide i worker passo per
+> passo; log in `files/T-r2/slot5b/`): 16:28–16:47, **127 test verdi, nessun rosso né «flaky»:** `asset-data-editor` 26
+> (1 worker, carico 86), `broker-sharing` 17 (2 worker, carico 42), `asset-list` 28 (1, carico 63), `fx-list` 12 (1,
+> carico 90), `risk-lab` 44 (2, carico 57). **`tx-bulk-row-order` non partito:** alle 16:47 restavano 164 s, meno dei
+> 180 richiesti per avviare il backend e finire entro il taglio. Porta libera alle 16:47. Col quinto slot: **304 E2E
+> verdi** su 15 spec.
+
+> ✅ **`tx-bulk-row-order` da solo** (coordinatore, 16:47): 16:47–16:49, corsia 6155, 2 worker (carico 41): **8 verdi**,
+> porta libera. **Tutte le 16 spec dell'elenco sono verdi: 312 E2E.** Pronto per la base merge e l'ingresso.
