@@ -20,7 +20,6 @@
     import type {UploadScope} from '$lib/types';
 
     import {numericArrows} from '$lib/actions/numericArrows';
-    import '$lib/theme/components/media.css';
     // Props
     export let open: boolean = false;
     export let zIndex: number = 50;
@@ -518,23 +517,15 @@
         align-items: center;
         justify-content: space-between;
         padding: 0.625rem 1rem;
-        border-bottom: 1px solid var(--lf-cmp-image-edit-divider-border);
+        border-bottom: 1px solid var(--lf-border-subtle);
         flex-shrink: 0;
-    }
-
-    :global(.dark) .modal-header {
-        border-bottom-color: var(--lf-cmp-image-edit-divider-border-dark);
     }
 
     .modal-title {
         font-size: 1rem;
         font-weight: 600;
-        color: var(--lf-cmp-image-edit-title-text);
+        color: var(--lf-text-primary);
         margin: 0;
-    }
-
-    :global(.dark) .modal-title {
-        color: var(--lf-cmp-image-edit-title-text-dark);
     }
 
     .header-actions {
@@ -552,29 +543,24 @@
         border-radius: 0.375rem;
         border: none;
         background: transparent;
-        color: var(--lf-cmp-image-edit-header-btn-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .header-btn:hover {
-        background: var(--lf-cmp-image-edit-btn-hover-bg);
-        color: var(--lf-cmp-image-edit-btn-text);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-secondary);
     }
 
     .header-btn.reset {
-        background: var(--lf-cmp-image-edit-header-btn-reset-bg);
-        color: var(--lf-cmp-image-edit-header-btn-reset-text);
+        background: var(--lf-warning-soft);
+        color: var(--lf-warning);
     }
 
     .header-btn.reset:hover {
-        background: var(--lf-cmp-image-edit-header-btn-reset-hover-bg);
-        color: var(--lf-cmp-image-edit-header-btn-reset-hover-text);
-    }
-
-    :global(.dark) .header-btn:hover {
-        background: var(--lf-cmp-image-edit-btn-hover-bg-dark);
-        color: var(--lf-cmp-image-edit-btn-text-dark);
+        background: var(--lf-warning-line);
+        color: var(--lf-warning-on-soft);
     }
 
     /* Body */
@@ -605,57 +591,45 @@
         flex: 1;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-image-edit-field-border);
+        border: 1px solid var(--lf-border-input);
         border-right: none;
         border-radius: 0.375rem 0 0 0.375rem;
-        background: var(--lf-cmp-image-edit-field-bg);
-        color: var(--lf-cmp-image-edit-field-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         outline: none;
     }
 
+    .filename-input::placeholder {
+        color: var(--lf-text-placeholder);
+    }
+
     .filename-input:focus {
-        border-color: var(--lf-cmp-image-edit-accent-border);
-    }
-
-    :global(.dark) .filename-input {
-        background: var(--lf-cmp-image-edit-field-bg-dark);
-        border-color: var(--lf-cmp-image-edit-field-border-dark);
-        color: var(--lf-cmp-image-edit-field-text-dark);
-    }
-
-    :global(.dark) .filename-input:focus {
-        border-color: var(--lf-cmp-image-edit-accent-border-dark);
+        border-color: var(--lf-focus);
     }
 
     .format-select {
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid var(--lf-cmp-image-edit-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0 0.375rem 0.375rem 0;
-        background: var(--lf-cmp-image-edit-format-select-bg);
-        color: var(--lf-cmp-image-edit-field-text);
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-primary);
         cursor: pointer;
         outline: none;
     }
 
-    :global(.dark) .format-select {
-        background: var(--lf-cmp-image-edit-format-select-bg-dark);
-        border-color: var(--lf-cmp-image-edit-field-border-dark);
-        color: var(--lf-cmp-image-edit-field-text-dark);
+    .format-select:focus {
+        border-color: var(--lf-focus);
     }
 
     /* Quality spinner (inline with filename) */
     .quality-spinner {
         display: flex;
         align-items: center;
-        border: 1px solid var(--lf-cmp-image-edit-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.375rem;
         overflow: hidden;
         flex-shrink: 0;
-    }
-
-    :global(.dark) .quality-spinner {
-        border-color: var(--lf-cmp-image-edit-field-border-dark);
     }
 
     .spin-btn {
@@ -665,8 +639,8 @@
         width: 26px;
         height: 26px;
         border: none;
-        background: var(--lf-cmp-image-edit-btn-hover-bg);
-        color: var(--lf-cmp-image-edit-btn-text);
+        background: var(--lf-surface-panel);
+        color: var(--lf-text-secondary);
         cursor: pointer;
         font-size: 0.8125rem;
         font-weight: 600;
@@ -674,29 +648,16 @@
     }
 
     .spin-btn:hover {
-        background: var(--lf-cmp-image-edit-spin-btn-hover-bg);
-    }
-
-    :global(.dark) .spin-btn {
-        background: var(--lf-cmp-image-edit-btn-hover-bg-dark);
-        color: var(--lf-cmp-image-edit-btn-text-dark);
-    }
-
-    :global(.dark) .spin-btn:hover {
-        background: var(--lf-cmp-image-edit-spin-btn-hover-bg-dark);
+        background: var(--lf-surface-neutral);
     }
 
     .quality-value {
         padding: 0 0.375rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        color: var(--lf-cmp-image-edit-quality-value-text);
+        color: var(--lf-text-primary);
         min-width: 32px;
         text-align: center;
-    }
-
-    :global(.dark) .quality-value {
-        color: var(--lf-cmp-image-edit-quality-value-text-dark);
     }
 
     /* Cropper section with eye toggle on LEFT */
@@ -712,13 +673,9 @@
         align-items: center;
         justify-content: center;
         border-radius: 0.5rem;
-        background: var(--lf-cmp-image-edit-cropper-guard-bg);
-        color: var(--color-libre-green, var(--lf-cmp-image-edit-cropper-guard-text));
+        background: color-mix(in oklab, var(--lf-surface-card) 55%, transparent);
+        color: var(--lf-link);
         cursor: progress;
-    }
-
-    :global(.dark) .cropper-guard {
-        background: var(--lf-cmp-image-edit-cropper-guard-bg-dark);
     }
 
     .filename-input:disabled,
@@ -746,20 +703,20 @@
         height: 30px;
         border: none;
         border-radius: 0.25rem;
-        background: var(--lf-cmp-image-edit-ellipse-toggle-bg);
-        color: var(--lf-cmp-image-edit-ellipse-toggle-text);
+        background: color-mix(in oklab, var(--lf-surface-overlay) 80%, transparent);
+        color: color-mix(in oklab, var(--lf-on-overlay) 70%, transparent);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .ellipse-toggle:hover {
-        background: var(--lf-cmp-image-edit-ellipse-toggle-hover-bg);
-        color: var(--lf-cmp-image-edit-on-fill-text);
+        background: var(--lf-surface-overlay);
+        color: var(--lf-on-overlay);
     }
 
     .ellipse-toggle.active {
-        background: var(--lf-cmp-image-edit-ellipse-toggle-active-bg);
-        color: var(--lf-cmp-image-edit-on-fill-text);
+        background: color-mix(in oklab, var(--lf-checked) 80%, transparent);
+        color: var(--lf-on-checked);
     }
 
     /* ========= BOTTOM PANEL (2 columns) ========= */
@@ -768,12 +725,8 @@
         grid-template-columns: 1fr 1fr;
         gap: 0.5rem 1rem;
         padding: 0.625rem 0.75rem;
-        background: var(--lf-cmp-image-edit-bottom-panel-bg);
+        background: var(--lf-surface-panel);
         border-radius: 0.5rem;
-    }
-
-    :global(.dark) .bottom-panel {
-        background: var(--lf-cmp-image-edit-bottom-panel-bg-dark);
     }
 
     .panel-col {
@@ -792,12 +745,8 @@
     .panel-label {
         font-size: 0.6875rem;
         font-weight: 500;
-        color: var(--lf-cmp-image-edit-muted-text);
+        color: var(--lf-text-muted);
         min-width: 48px;
-    }
-
-    :global(.dark) .panel-label {
-        color: var(--lf-cmp-image-edit-muted-text-dark);
     }
 
     /* Preset buttons */
@@ -813,45 +762,25 @@
         padding: 0.1875rem 0.5rem;
         font-size: 0.625rem;
         font-weight: 500;
-        border: 1px solid var(--lf-cmp-image-edit-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.25rem;
-        background: var(--lf-cmp-image-edit-field-bg);
-        color: var(--lf-cmp-image-edit-btn-text);
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .preset-btn:hover,
     .aspect-btn:hover {
-        border-color: var(--lf-cmp-image-edit-accent-border);
-        color: var(--lf-cmp-image-edit-preset-btn-hover-text);
+        border-color: var(--lf-focus);
+        color: var(--lf-link);
     }
 
     .preset-btn.active,
     .aspect-btn.active {
-        background: var(--lf-cmp-image-edit-accent-bg);
-        border-color: var(--lf-cmp-image-edit-accent-border);
-        color: var(--lf-cmp-image-edit-preset-btn-active-text);
-    }
-
-    :global(.dark) .preset-btn,
-    :global(.dark) .aspect-btn {
-        background: var(--lf-cmp-image-edit-field-bg-dark);
-        border-color: var(--lf-cmp-image-edit-field-border-dark);
-        color: var(--lf-cmp-image-edit-btn-text-dark);
-    }
-
-    :global(.dark) .preset-btn:hover,
-    :global(.dark) .aspect-btn:hover {
-        border-color: var(--lf-cmp-image-edit-accent-border-dark);
-        color: var(--lf-cmp-image-edit-preset-btn-hover-text-dark);
-    }
-
-    :global(.dark) .preset-btn.active,
-    :global(.dark) .aspect-btn.active {
-        background: var(--lf-cmp-image-edit-accent-bg-dark);
-        border-color: var(--lf-cmp-image-edit-accent-border-dark);
-        color: var(--lf-cmp-image-edit-preset-btn-active-text-dark);
+        background: var(--lf-checked);
+        border-color: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     /* Dimensions */
@@ -866,40 +795,30 @@
         padding: 0.1875rem 0.25rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        border: 1px solid var(--lf-cmp-image-edit-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.25rem;
-        background: var(--lf-cmp-image-edit-field-bg);
-        color: var(--lf-cmp-image-edit-field-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         text-align: center;
         outline: none;
     }
 
     .dim-input:focus {
-        border-color: var(--lf-cmp-image-edit-accent-border);
-    }
-
-    :global(.dark) .dim-input {
-        background: var(--lf-cmp-image-edit-field-bg-dark);
-        border-color: var(--lf-cmp-image-edit-field-border-dark);
-        color: var(--lf-cmp-image-edit-field-text-dark);
-    }
-
-    :global(.dark) .dim-input:focus {
-        border-color: var(--lf-cmp-image-edit-accent-border-dark);
+        border-color: var(--lf-focus);
     }
 
     .dim-sep {
-        color: var(--lf-cmp-image-edit-faint-text);
+        color: var(--lf-text-muted);
         font-size: 0.6875rem;
     }
 
     .dim-unit {
         font-size: 0.625rem;
-        color: var(--lf-cmp-image-edit-faint-text);
+        color: var(--lf-text-muted);
     }
 
     :global(.lock-icon) {
-        color: var(--lf-cmp-image-edit-faint-text);
+        color: var(--lf-text-muted);
         margin-left: 0.125rem;
     }
 
@@ -917,7 +836,7 @@
 
     .scale-x {
         font-size: 0.625rem;
-        color: var(--lf-cmp-image-edit-faint-text);
+        color: var(--lf-text-muted);
     }
 
     .scale-input {
@@ -925,22 +844,16 @@
         padding: 0.1875rem 0.25rem;
         font-size: 0.6875rem;
         font-family: monospace;
-        border: 1px solid var(--lf-cmp-image-edit-field-border);
+        border: 1px solid var(--lf-border-input);
         border-radius: 0.25rem;
-        background: var(--lf-cmp-image-edit-field-bg);
-        color: var(--lf-cmp-image-edit-field-text);
+        background: var(--lf-surface-field);
+        color: var(--lf-text-primary);
         text-align: center;
         outline: none;
     }
 
     .scale-input:focus {
-        border-color: var(--lf-cmp-image-edit-scale-input-focus-border);
-    }
-
-    :global(.dark) .scale-input {
-        background: var(--lf-cmp-image-edit-field-bg-dark);
-        border-color: var(--lf-cmp-image-edit-field-border-dark);
-        color: var(--lf-cmp-image-edit-field-text-dark);
+        border-color: var(--lf-focus);
     }
 
     /* Info values (right column) */
@@ -951,26 +864,17 @@
     .info-value {
         font-size: 0.6875rem;
         font-family: monospace;
-        color: var(--lf-cmp-image-edit-info-value-text);
-    }
-
-    :global(.dark) .info-value {
-        color: var(--lf-cmp-image-edit-info-value-text-dark);
+        color: var(--lf-text-secondary);
     }
 
     /* Error */
     .error-message {
         padding: 0.5rem 0.75rem;
-        background-color: var(--lf-cmp-image-edit-error-message-bg);
-        border: 1px solid var(--lf-cmp-image-edit-error-message-border);
+        background-color: var(--lf-danger-soft);
+        border: 1px solid var(--lf-danger-line);
         border-radius: 0.375rem;
-        color: var(--lf-cmp-image-edit-error-message-text);
+        color: var(--lf-danger-on-soft);
         font-size: 0.8125rem;
-    }
-
-    :global(.dark) .error-message {
-        background-color: var(--lf-cmp-image-edit-error-message-bg-dark);
-        border-color: var(--lf-cmp-image-edit-error-message-border-dark);
     }
 
     /* Footer */
@@ -979,14 +883,9 @@
         justify-content: flex-end;
         gap: 0.5rem;
         padding: 0.625rem 1rem;
-        border-top: 1px solid var(--lf-cmp-image-edit-divider-border);
-        background: var(--lf-cmp-image-edit-footer-bg);
+        border-top: 1px solid var(--lf-border-subtle);
+        background: var(--lf-surface-panel);
         flex-shrink: 0;
-    }
-
-    :global(.dark) .modal-footer {
-        background: var(--lf-cmp-image-edit-footer-bg-dark);
-        border-top-color: var(--lf-cmp-image-edit-divider-border-dark);
     }
 
     .btn {
@@ -1008,38 +907,23 @@
     }
 
     .btn-primary {
-        background: var(--lf-cmp-image-edit-accent-bg);
-        color: var(--lf-cmp-image-edit-on-fill-text);
+        background: var(--lf-action);
+        color: var(--lf-on-action);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: var(--lf-cmp-image-edit-btn-primary-hover-bg);
-    }
-
-    :global(.dark) .btn-primary {
-        background: var(--lf-cmp-image-edit-accent-bg-dark);
-    }
-
-    :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: var(--lf-cmp-image-edit-btn-primary-hover-bg-dark);
+        background: var(--lf-action-hover);
     }
 
     .btn-secondary {
-        background: var(--lf-cmp-image-edit-btn-secondary-bg);
-        color: var(--lf-cmp-image-edit-btn-text);
+        background: var(--lf-surface-card);
+        color: var(--lf-text-secondary);
+        box-shadow: inset 0 0 0 1px var(--lf-border-subtle);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-cmp-image-edit-btn-secondary-hover-bg);
-    }
-
-    :global(.dark) .btn-secondary {
-        background: var(--lf-cmp-image-edit-btn-secondary-bg-dark);
-        color: var(--lf-cmp-image-edit-btn-text-dark);
-    }
-
-    :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: var(--lf-cmp-image-edit-btn-secondary-hover-bg-dark);
+        background: var(--lf-surface-hover);
+        color: var(--lf-text-primary);
     }
 
     :global(.animate-spin) {
@@ -1057,15 +941,10 @@
 
     /* Confirmation Dialog — backdrop handled by ModalBase */
     .confirm-dialog {
-        background: var(--lf-cmp-image-edit-confirm-dialog-bg);
+        background: var(--lf-surface-card);
         border-radius: 0.75rem;
         padding: 1.5rem;
         width: 100%;
-    }
-
-    :global(.dark) .confirm-dialog {
-        background: var(--lf-cmp-image-edit-confirm-dialog-bg-dark);
-        border: 1px solid var(--lf-cmp-image-edit-confirm-dialog-border-dark);
     }
 
     .confirm-header {
@@ -1083,21 +962,13 @@
         margin: 0;
         font-size: 1rem;
         font-weight: 600;
-        color: var(--lf-cmp-image-edit-confirm-title-text);
-    }
-
-    :global(.dark) .confirm-header h3 {
-        color: var(--lf-cmp-image-edit-confirm-title-text-dark);
+        color: var(--lf-warning);
     }
 
     .confirm-message {
-        color: var(--lf-cmp-image-edit-muted-text);
+        color: var(--lf-text-muted);
         margin-bottom: 1.5rem;
         line-height: 1.5;
-    }
-
-    :global(.dark) .confirm-message {
-        color: var(--lf-cmp-image-edit-muted-text-dark);
     }
 
     .confirm-actions {
@@ -1107,13 +978,13 @@
     }
 
     .btn-warning {
-        background: var(--lf-cmp-image-edit-btn-warning-bg);
-        color: var(--lf-cmp-image-edit-on-fill-text);
+        background: var(--lf-warning);
+        color: var(--lf-on-status);
         border: none;
     }
 
     .btn-warning:hover {
-        background: var(--lf-cmp-image-edit-btn-warning-hover-bg);
+        background: var(--lf-warning-hover);
     }
 
     /* Mobile: single column */
