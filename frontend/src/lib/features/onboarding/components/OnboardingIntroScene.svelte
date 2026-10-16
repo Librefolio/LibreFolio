@@ -108,7 +108,7 @@
 
 {#if open}
     <div
-        class="fixed inset-0 z-[80] flex items-center justify-center bg-libre-beige/95 p-4 backdrop-blur-sm dark:bg-slate-950/95"
+        class="fixed inset-0 z-[80] flex items-center justify-center bg-lf-page/95 p-4 text-lf-primary backdrop-blur-sm"
         role="dialog"
         aria-modal="true"
         aria-labelledby="onboarding-intro-title"
@@ -117,11 +117,11 @@
         data-phase={phaseName}
         data-auto-start-at={autoStartAt}
     >
-        <div class="relative w-full max-w-2xl rounded-3xl border border-white/70 bg-white p-6 text-center shadow-2xl dark:border-slate-700 dark:bg-slate-900 sm:p-10">
+        <div class="relative w-full max-w-2xl rounded-3xl border border-lf-raised bg-lf-card p-6 text-center shadow-2xl shadow-lf-shadow sm:p-10">
             <div class="mb-8 flex items-start justify-end">
                 <button
                     type="button"
-                    class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green dark:text-gray-300 dark:hover:bg-slate-800"
+                    class="rounded-lg p-2 text-lf-muted hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                     aria-label={closeLabel || $_('onboarding.actions.close')}
                     onclick={close}
                     disabled={busy}
@@ -133,19 +133,19 @@
 
             <div class="flex min-h-52 flex-col items-center justify-center">
                 <div class="flex flex-col items-center gap-4 sm:flex-row">
-                    <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-white p-2 shadow-md ring-1 ring-gray-200 dark:ring-slate-700">
+                    <span class="flex h-16 w-16 items-center justify-center rounded-2xl bg-lf-logo p-2 shadow-md ring-1 ring-lf-subtle">
                         <img src="/logo.png" alt="" class="h-full w-full object-contain" />
                     </span>
-                    <h1 id="onboarding-intro-title" class="text-3xl font-bold text-libre-green dark:text-emerald-300 sm:text-4xl">LibreFolio</h1>
+                    <h1 id="onboarding-intro-title" class="text-3xl font-bold text-lf-link sm:text-4xl">LibreFolio</h1>
                 </div>
                 {#if error}
-                    <div class="mt-5 w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200" role="alert" data-testid="onboarding-intro-error">
+                    <div class="mt-5 w-full rounded-xl border border-lf-danger-line bg-lf-danger-soft px-4 py-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="onboarding-intro-error">
                         {error}
                     </div>
                 {/if}
                 {#key reducedMotion ? 'reduced' : phase}
                     <p
-                        class="mt-6 max-w-xl text-lg leading-8 text-gray-600 transition-all duration-300 ease-out dark:text-gray-300 motion-reduce:transform-none motion-reduce:transition-none"
+                        class="mt-6 max-w-xl text-lg leading-8 text-lf-secondary transition-all duration-300 ease-out motion-reduce:transform-none motion-reduce:transition-none"
                         class:opacity-100={reducedMotion || phraseMotion === 'hold'}
                         class:opacity-0={!reducedMotion && phraseMotion !== 'hold'}
                         class:translate-y-3={!reducedMotion && phraseMotion === 'enter'}
@@ -161,7 +161,7 @@
                 <div class="mt-6 flex items-center justify-center gap-2" aria-label={$_('onboarding.intro.progress')} data-testid="onboarding-intro-progress">
                     {#each phaseKeys as _key, index}
                         <span
-                            class="h-1.5 rounded-full transition-all duration-300 motion-reduce:transition-none {reducedMotion || phase === index ? 'w-8 bg-libre-green dark:bg-emerald-300' : 'w-3 bg-gray-300 dark:bg-slate-600'}"
+                            class="h-1.5 rounded-full transition-all duration-300 motion-reduce:transition-none {reducedMotion || phase === index ? 'w-8 bg-lf-checked' : 'w-3 bg-lf-neutral'}"
                             data-testid={`onboarding-intro-progress-${index}`}
                             data-active={reducedMotion || phase === index ? 'true' : 'false'}
                         ></span>
@@ -171,7 +171,7 @@
 
             <button
                 type="button"
-                class="mt-8 inline-flex items-center gap-2 rounded-xl bg-libre-green px-6 py-3 font-semibold text-white hover:bg-libre-green/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green"
+                class="mt-8 inline-flex items-center gap-2 rounded-xl bg-lf-action px-6 py-3 font-semibold text-lf-on-action hover:bg-lf-action-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
                 onclick={start}
                 disabled={busy}
                 data-testid="onboarding-intro-start"

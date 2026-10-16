@@ -582,7 +582,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 13 | W3-c e W3-d (stati e polarità sui ruoli) | ✅ commit `078d4dcf8`; validato nello slot unico; ingresso unico |
 | 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; validato nello slot unico; ingresso unico |
 | 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | ✅ commit `eebbd1da4` e `17e26bfce`; validato nello slot unico (impronte di G uguali); base `3b9c4ca1c` con `front check` 0 e 0; ingresso unico |
-| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | 🔄 bozze su copie durante lo slot, patch pronte; si applicano dopo l'ingresso, poi tre checkpoint e il secondo slot (~04:15) |
+| 16 | W1-c (date, schede, barra), W1-e (`ModalBase`), W2-a (onboarding) | 🔄 applicati su `503dce683`, prove leggere verdi; tre commit; secondo slot dopo L-16 (~04:00–04:15) |
 
 ## Avanzamento
 
@@ -1852,3 +1852,20 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **Da rivedere:** il contorno del pulsante «Riprova» sul banner (`border-lf-warning-line`) è tenue in chiaro; i punti
 >   inattivi dell'introduzione più tenui in scuro; le tessere del logo bianche anche in scuro (`bg-lf-logo`); fondale
 >   del coachmark al 60 % invece del 45 %.
+
+> ✅ **4 · Applicazione e prove leggere** (03:28–03:31, dopo l'ingresso `503dce683`, il ramo in avanti veloce): `git diff
+> <BASE_COMMIT> HEAD` vuoto sui file di tutti e tre i lotti, quindi `git apply -p2` semplice (solo l'albero, niente
+> indice; il coordinatore: «se è vuoto, va bene anche la copia»), 22 file identici alle bozze. Prettier verde sui 22;
+> `--check` pulito (anche la grammatica G1–G4, ora sui file veri); nessun colore della stessa proprietà fuori da un
+> ternario; `diff --check` pulito; Vitest mirati sotto `nice -n 10` (lo slot di L girava): date, schede, barra,
+> `ModalBase` e onboarding, 16 file, 430/430 (compreso `DateRangePicker.test.ts`, scritto su copia senza poterlo
+> lanciare). `--update`: m1 10.166 → 9.701, m2 71 → 64; i 19 file escono dalla baseline. `front check` ed E2E nel secondo
+> slot, che apre con `api sync`.
+
+> **Dove guardarlo** (per il developer):
+> - **W1-c:** i selettori di date (preset, calendario, intervallo, campi) su quasi ogni pagina, le schede (asset, impostazioni,
+>   editor dei dati), la barra degli strumenti, la vista griglia/lista, l'elenco ordinabile del pianificatore.
+> - **W1-e:** tutte le modali, in chiaro e in scuro: il fondale più scuro, il pannello sulla superficie delle card, il bordo
+>   sottile, l'ombra.
+> - **W2-a:** il benvenuto del primo accesso, il tour guidato (bagliore, fondale, pannello), il ripasso dell'onboarding
+>   nelle impostazioni, il banner del bootstrap.
