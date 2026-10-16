@@ -2581,3 +2581,76 @@ scrivono qui quando partono.
 > | `git diff --check` | pulito; porta 6189 libera |
 >
 > Poi viene l'handoff del lotto C-34, e dopo il suo commit la corsa E2E unica: `DEADLINE=0850`, slot 1, dopo W.
+
+### Corsa E2E unica per Y3, Y9, Y10, Y5 e Y6 (2026-10-16, dalle 07:20; HEAD `be90b30e0`, che è la fusione con dev `1d37087f8`, DV compreso)
+
+> **Note implementazione**.
+> - **Prima della corsa**:
+>   - la fusione con DV ha portato modifiche alle API (`api/v1/settings.py`, `schemas/settings.py`,
+>     `schemas/transactions/transactions.py`), così ho rifatto `api sync`: nessun file tracciato cambiato;
+>   - il conflitto nel baseline l'ho risolto solo con `theme-roles.mjs --resolve`, poi `--check` pulito; il commit
+>     della fusione l'ha fatto il coordinatore.
+> - **Lo script**: `SKIP_API_SYNC=1 DEADLINE=0850 bash /tmp/libreFolio_y3y9y10_e2e.sh`. Una spec alla volta, `--workers 2`.
+>   Una spec parte solo se, secondo la sua stima, finisce entro DEADLINE − 2 minuti. I log sono
+>   `files/y3y9y10_e2e_<azione>.log` nella cartella della sessione.
+> - **La prima spec ha girato da sola**: «Running 27 tests using 2 workers», cioè `dashboard.spec` (26 test più il
+>   setup). Il coordinatore temeva che `--workers 2` con un'azione allargasse la corsa a tutta la categoria: non succede.
+> - **I 3 test «Live price direction flash» di `asset-detail` sono verdi**, anzi 4 su 4: la correzione di Z tiene.
+> - **`allocation-negative-cash`**, alla prima corsa in assoluto: 4/4.
+>
+> **⚠️ Fuori pista: un rosso in `front-broker detail`, 36 su 37.**
+> - Il test è `brokers-detail.spec.ts:553`, «Value presentation toggle…». Cade nell'helper `goToBrokerWithHoldings`, a
+>   `:104`: dopo il clic sulla card, `toHaveURL(/\/brokers\/\d+/, {timeout: 5000})` legge `/brokers` per 5 s.
+> - **Triage** (skill `test-triage`, ipotesi in ordine):
+>   - §1, la forma: no. La card si cerca per nome ed era visibile, e gli altri 16 test che passano dallo stesso helper
+>     sono verdi;
+>   - §2, l'orologio: sì. Il `load` di `brokers/[id]/+page.ts` non aspetta niente, quindi l'URL cambia quando il codice
+>     della pagina di dettaglio è caricato, e ogni test parte da un contesto nuovo, senza cache. Lo stesso test dura
+>     4,2 s a macchina scarica (15/10, 14:20), 15,8 s sotto carico (Y8) e 29,2 s qui: è arrivato al clic dopo circa
+>     24 s, nel picco di carico della corsa (media su 5 minuti 73,9). I 5 s sono l'attesa più stretta della catena
+>     (card 8 s, nome 10 s; il default di `expect` è 3 s);
+>   - §3, lo stato condiviso: nel frattempo altri test hanno creato e cancellato 6 broker, ma l'helper filtra per nome,
+>     e non c'è nessun segno che la lista si sia mossa sotto il clic.
+> - L'istantanea della pagina è andata persa: Playwright pulisce `test-results` alla spec dopo, e in locale non ci sono
+>   tracce (`trace: 'on-first-retry'`, 0 ripetizioni).
+> - **Verdetto: un'assunzione sul tempo.** Non dipende da Y5, che è solo uno spostamento: la stessa spec era verde nel
+>   giro di Y8, sotto carico.
+> - **Correzione** (scelta (b) del coordinatore, 07:58): `test-author` cambia i tre punti della spec, `:72`, `:104` e
+>   `:140`. Prima si aspetta la pagina di destinazione, `broker-detail-page`, con il tempo della navigazione; poi si
+>   controlla l'URL. Dopo la corsa, `front-broker detail` gira da solo nello slot, entro le 08:50. Commit a parte,
+>   `test(e2e): …`.
+> - **Correzione della nota sul limite di 30 s**: non vale per il test rosso. Il blocco FIFO ha già
+>   `test.describe.configure({timeout: 60_000})`, a `:281`. I 30 s di default valgono per gli altri 12 test di
+>   `Broker Detail Page`: è un rischio nei picchi di carico, mai visto.
+> - **Esteso dal coordinatore** (08:08), nello stesso commit:
+>   - `:329`, «View Asset»: la stessa correzione, su `asset-detail-page`;
+>   - `test.describe.configure({timeout: 60_000})` come prima istruzione di `Broker Detail Page`.
+>
+>   Restano solo elencati `:205-206` (ora `:213-214`) e `:33/:35`. La coda del test a `:582` (era `:573`) non gira da
+>   luglio: è **Y-12** nel backlog, e il coordinatore porta al developer la decisione sulla funzione.
+>
+> **Esito della corsa unica** (07:20:02–08:09:58, HEAD `be90b30e0`). Ogni spec da sola, `--workers 2`; in ogni riga i
+> test verdi su quelli girati.
+>
+> | Lotto | Spec |
+> |---|---|
+> | Y3 | `front-portfolio dashboard` 27/27; `dashboard-cache` 6/6 |
+> | Y10 | `front-portfolio allocation-negative-cash` 4/4 |
+> | Y9 | `front-asset asset-detail` 33/33; `asset-name-xss` 2/2; `front-fx fx-detail` 17/17; `fx-flag-font` 7/7 |
+> | Y5 | `front-broker detail` **36/37**; `front-broker list` 9/9; `front-user broker-sharing` 17/17; `front-portfolio broker-icons` 1/1; `front-transaction tx-import-flow` 10/10 |
+> | Y6 | `front-utility files` 29/29; `files-pdf-offline` 1/1 |
+> | altre | `privacy-masking` 18/18; `yield-on-cost-real` 2/2; `broker-filter-label` 2/2; `tx-broker-icon-hydration` 2/2 |
+>
+> In tutto 223 verdi su 224, 18 spec su 18, nessuna saltata per la scadenza. Alla fine la porta 6189 era libera.
+>
+> **La correzione del rosso.** L'ha scritta `test-author`, senza lanciare niente: +22/−6 in
+> `e2e/brokers/brokers-detail.spec.ts`, solo quel file.
+> - **I quattro clic che navigano** (`goToFirstBrokerDetail`, `goToBrokerWithHoldings`, il test del clic sulla card e
+>   «View Asset»): prima la pagina di destinazione, `broker-detail-page` o `asset-detail-page`, che è la radice
+>   incondizionata della route, con 10 s di tempo; poi l'URL, ormai immediato. In SvelteKit 2 l'ordine è: carica il
+>   codice della route, poi `pushState`, poi `root.$set`.
+> - **`Broker Detail Page`**: `test.describe.configure({timeout: 60_000})` come prima istruzione. Il commento non
+>   ricopia «a 30 s finiva il tempo» del blocco FIFO, perché per questo blocco C-58 aveva misurato il contrario
+>   (13 s); cita invece i circa 24 s prima del primo clic, misurati oggi a carico 70.
+> - **La riprova**, Prettier pulito, poi `front-broker detail` da solo (08:15:39–08:21:11): **37/37** in 3,5 minuti, a
+>   carico 45–53. I quattro test toccati durano 7,5–11,4 s, il più lento della spec 16,0 s. Porta 6189 libera.

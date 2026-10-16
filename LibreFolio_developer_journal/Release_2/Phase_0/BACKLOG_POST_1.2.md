@@ -3987,8 +3987,9 @@ da Y il 15/10.
   di Y, 15/10 (Y2). Dice «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
   l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
   il commento, quando Y o altri toccano `types.ts`. Dettagli: piano di Y, §7 «Y2 — passi 5–6».
-- **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
-  15/10. `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
+- ✅ **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
+  15/10. Chiuso il 16/10 da Y10 (`1bb8dc990`): campo e tipo tolti; la torta prende le emoji dallo store dei settori.
+  `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
   (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
   dopo DV. Dettagli: piano di Y, §2.
 - **Y-7 · Dopo Y4a le primitive dei grafici importeranno dalla feature dei segnali** — medio-basso; Y (analisi di Y3 e
@@ -4032,3 +4033,14 @@ da Y il 15/10.
   - Rimedio proposto: `test-author` ricattura il corpus con la procedura del file, annotando che la differenza viene da
     I-01.
   - Dettagli: piano di Y, §7 «Y3».
+- **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
+  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
+  developer sulla funzione**, che porta il coordinatore.
+  - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
+    delle attese) esce in anticipo a ogni corsa: `if (!(await presentationFilter.isVisible({timeout: 5_000})…)) return`.
+  - I testid che cerca, `lots-value-presentation-filter` e i tre `lots-value-*-toggle`, sono entrati in `6b28d60df`
+    (16/07) e usciti da `src` in `59c160325` (18/07, «chart cleanup»). Un verde prova quindi solo la navigazione, il
+    pannello e un clic.
+  - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
+  - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
+  - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
