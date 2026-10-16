@@ -3598,3 +3598,33 @@ vengono dal catalogo generato alle 18:27.
     `degrades_result=false`, e non è più vero.
 - **Conflitti previsti all'aggiornamento della base**: la fusione `0452e592c` tocca solo il BACKLOG fra i miei file,
   nella sezione di J.
+
+### Passo 4 + 4b · E2E (slot 1, dalle 18:55, scadenza 20:00; HEAD `1c3f6a432`) — ✅ 19:30, 180/180
+
+- Il coordinatore ha committato il 4b: `7f0a07b9d` (feat) e `1c3f6a432` (journal).
+  - N55 e Y-18 vanno nella revisione con il developer, e anche Y-15 con la proposta «Refresh / Aggiorna…».
+- Script: `files/scripts/y11s4_e2e.sh` con `DEADLINE=2000`. Riepilogo in `files/logs/y11s4_e2e_summary.log`.
+
+> **Note implementazione**: tutte e 12 le spec verdi alla prima corsa, **180/180**, dalle 18:55:31 alle 19:29:54,
+> con il carico fra 25 e 88. Alle 19:29:54 la porta 6189 è libera (`lsof` non trova processi in ascolto).
+>
+> | Spec | Esito | Cosa copre |
+> |---|---|---|
+> | `front-portfolio page-busy` | 12/12 | 6 vecchi, 4 del passo 4 (P3 e «Aggiorna» del broker, lista dei broker, transazioni), 2 di N55 (viste Candele e Performance salvate) |
+> | `front-broker detail` | 38/38 | la pagina del broker |
+> | `front-broker list` | 9/9 | la lista dei broker |
+> | `front-transaction transactions-table` | 25/25 | TT20, cioè «Aggiorna» con il `data-busy` della radice |
+> | `front-transaction tx-broker-icon-hydration` | 2/2 | barriera su `tx-refresh-button` |
+> | `front-portfolio price-refresh` | 3/3 | ricaricamento di sfondo di Z-13, nella Dashboard e nel broker |
+> | `front-portfolio default-currency` | 6/6 | gettoni sulla valuta, nella lista e nel broker |
+> | `front-portfolio risk` | 38/38 | barriera su `broker-refresh` in `risk-analysis` |
+> | `front-portfolio privacy-masking` | 18/18 | barriere su `broker-refresh` |
+> | `front-utility toolbar-width-sweep` | 24/24 | barriera su `broker-refresh` |
+> | `front-portfolio yield-on-cost-real` | 2/2 | barriera su `broker-refresh` |
+> | `front-portfolio data-quality-real` | 3/3 | barriera su `broker-refresh` |
+>
+> - **Cosa resta di Y11**:
+>   - `assets/[id]`, dopo FE5c e il 9b di X;
+>   - alla chiusura: la riga del CHANGELOG e la documentazione con `docs-writer`, cioè la sezione «Coming back and
+>     refreshing», la pagina dei broker e una pagina per sviluppatori su `pageBusy`.
+> - **Revisione con il developer**: N55, Y-18 e Y-15.
