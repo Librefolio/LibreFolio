@@ -173,6 +173,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lots in a foreign currency: realized P&L now converts the cost at the purchase rate and the proceeds at the sale rate, as the Dashboard does. A closed lot keeps no market P&L, and a lot sold in a currency other than the one it was bought in shows the right proceeds.
 - Short lots: P&L now subtracts the buy-backs, and the return reads against the amount sold (a short at break-even shows 0%, not −100%).
 - **Emptying a manual cost basis is no longer silently ignored**: when you edit a received transfer or an incoming adjustment and clear its manual cost, the save is refused with "cost basis required" instead of keeping the old cost without a word. API: an explicit `cost_basis_override: null` in an update removes the manual cost where the type and side take one, and is ignored elsewhere and in Auto mode.
+- **An asset chart shown in another currency no longer reloads every 30 seconds.** With live updates on, the asset page compared the live price, in the asset's own currency, with the chart's converted close: they never matched, so the whole chart reloaded at every update. It now compares the two in the same currency and reloads only when the price has changed, with fewer requests to the server.
+- **The green or red flash of the live price no longer stays on** when the asset page restarts its live updates in the middle of a flash, for example when you change the display currency. With reduced motion, the price stayed coloured until the next change.
 
 #### 🔒 Security
 

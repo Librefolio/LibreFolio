@@ -3582,6 +3582,15 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
       compreso (X-R24);
     - un tempo di attesa per la ricerca sopra quello del server, almeno 60 s con la risoluzione degli URL.
   - Un lotto piccolo, quando c'è tempo.
+- **X-R26 · `AssetDetailLive`: un cambio d'asset diretto confronta il primo prezzo con l'ultimo dell'asset di prima**
+  — minimo, latente; trovato dal test-author scrivendo i rossi delle correzioni dal vivo, X, 16/10.
+  - **Il caso**: l'effetto riparte quando cambia l'asset, ma tiene `#previousNative`. Il primo tick del nuovo asset
+    si confronterebbe col prezzo del vecchio, e il lampeggio sarebbe falso.
+  - **Oggi la pagina non ci arriva**: al cambio d'asset `reloadPage()` mette prima `assetInfo = null`
+    (`routes/(app)/assets/[id]/+page.svelte` ~1058). L'effetto passa così dal ramo fermo, che azzera il riferimento.
+  - **Cura, se mai servisse**: azzerare il riferimento solo quando cambia l'id dell'asset. Azzerarlo a ogni nuova
+    esecuzione romperebbe il caso «keeps no trace of a dropped answer».
+  - Dettagli: piano 03, «Correzioni dal vivo 1 e 2».
 
 ## W · Import e transazioni (fase 01)
 

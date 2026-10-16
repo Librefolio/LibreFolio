@@ -22,14 +22,17 @@
  *     after the effect re-ran, or after the page was destroyed — not even the reference of the next tick.
  *   - **The summary.** The direction against the previous native value: a move lights the flash and bumps
  *     `flashToken`, a flat tick changes nothing, and the flash decays to neutral `LIVE_PRICE_FLASH_DECAY_MS` after the
- *     latest move. The native price when no conversion is needed (the asset's own currency, no display currency, no
- *     asset currency, the FX pair missing); otherwise the price converted for today, or the native price with
- *     `conversionFailed` when the conversion answers no amount or throws. A conversion landing after the effect
- *     re-ran writes nothing.
+ *     latest move; a re-run of the effect puts a lit flash out at once, with its timer, and leaves `flashToken` alone.
+ *     The native price when no conversion is needed (the asset's own currency, no display currency, no asset currency,
+ *     the FX pair missing); otherwise the price converted for today, or the native price with `conversionFailed` when
+ *     the conversion answers no amount or throws. A conversion landing after the effect re-ran writes nothing.
  *   - **The chart head.** Nothing without a provider code, while the chart loads, while the calendar view loads in
- *     calendar mode, for an answer with an error or no date, or for a close the chart already has on that date. A
- *     converted chart, or the calendar mode, is reloaded — `invalidateAssetPriceStore`, then `loadChartData(true)` —
- *     and the poll lasts until the reload lands. Otherwise today's point is merged into `chartData`, through its setter.
+ *     calendar mode, for an answer with an error or no date, or for a close the chart already has on that date. The
+ *     close compared with the poll is the point's native one, `original_close ?? close` — a converted point keeps it in
+ *     `original_close`, a point left native for want of a rate in `close` — so a converted chart reloads only when the
+ *     native price moved. A converted chart, or the calendar mode, is reloaded — `invalidateAssetPriceStore`, then
+ *     `loadChartData(true)` — and the poll lasts until the reload lands. Otherwise today's point is merged into
+ *     `chartData`, through its setter.
  *   - **`resetPrice()`** clears the price and the conversion flag, and nothing else.
  *
  * `startActivePolling` is mocked: each call is recorded with its options, and a case runs a poll itself by calling
@@ -37,11 +40,6 @@
  * `livePriceService` and `assetDetailChartPoints` are the real ones (pure). The page is a reactive box the case owns,
  * handed to the instance as the page hands it: an object of getters, with a setter for `chartData`. The clock is
  * faked only around the decay of the flash.
- *
- * Not pinned here, on purpose: whether a re-run of the effect puts out a lit flash (its cleanup clears the decay timer
- * but leaves `direction` as it is), and whether a converted chart reloads when the price did not move (the same-close
- * guard compares the chart's converted `close` with the native quote). Both are the page's behaviour, moved as it was;
- * a test written now would pin one answer before it is chosen.
  */
 import {beforeAll, beforeEach, describe, expect, it, onTestFinished, vi} from 'vitest';
 import type {Mock} from 'vitest';
@@ -82,6 +80,8 @@ const AS_OF = '2026-10-16';
 interface ChartPoint {
     date: string;
     close: number;
+    /** The native close of a point the chart load converted into the display currency; absent or null otherwise. */
+    original_close?: number | null;
     open?: number;
     volume?: number;
     currency?: string;
@@ -744,6 +744,12 @@ describe('the price summary', () => {
 
 // --- The flash of a tick --------------------------------------------------------------------------------------------
 
+/** What re-runs the effect without stopping the poll: the old poller stopped, a new one started. */
+const RERUNS: Array<{rerun: string; change: Partial<PageState>}> = [
+    {rerun: 'a display currency switch', change: {displayCurrency: 'EUR'}},
+    {rerun: 'a move to another asset', change: {assetInfo: {id: OTHER_ASSET_ID, currency: 'USD'}, pageAssetId: OTHER_ASSET_ID}},
+];
+
 describe('the flash of a tick (fake clock)', () => {
     it('decays to neutral LIVE_PRICE_FLASH_DECAY_MS after the latest move: a flat tick neither cuts nor extends it, a new move restarts it', async () => {
         useFakeClock();
@@ -805,6 +811,30 @@ describe('the flash of a tick (fake clock)', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
+    it.each(RERUNS)('is put out at once when $rerun re-runs the effect, and its timer with it, `flashToken` left as it is', async ({change}) => {
+        useFakeClock();
+        const {live, page} = mount();
+        quoteNext('100');
+        await poll();
+        quoteNext('101');
+        await poll();
+        expect(live.direction).toBe('up');
+        expect(live.flashToken).toBe(1);
+        expect(vi.getTimerCount()).toBe(1);
+
+        Object.assign(page, change);
+        flushSync();
+
+        // A re-run, not a stop: the poll goes on with a new poller.
+        expect(startActivePolling).toHaveBeenCalledTimes(2);
+        expect(live.direction).toBe('neutral');
+        expect(vi.getTimerCount()).toBe(0);
+        vi.advanceTimersByTime(LIVE_PRICE_FLASH_DECAY_MS);
+        expect(live.direction).toBe('neutral');
+        // `flashToken` re-keys the flash element: a bump here would restart the animation it puts out.
+        expect(live.flashToken).toBe(1);
+    });
+
     it('leaves no timer behind when the page is destroyed', async () => {
         useFakeClock();
         const {stop} = mount();
@@ -851,6 +881,25 @@ const HELD_BACK: Array<{when: string; overrides?: Partial<PageState>; item?: Rec
 const RELOADS: Array<{when: string; overrides: Partial<PageState>}> = [
     {when: 'the chart is converted into another currency', overrides: {displayCurrency: 'EUR'}},
     {when: 'the chart shows calendar returns', overrides: {primaryMode: 'calendar-return'}},
+];
+
+/**
+ * Today's point of a chart converted into EUR, as the chart load leaves it, when the native price is 100 USD: converted
+ * with its native close in `original_close`, or left native, its `close` the native one, for want of a rate that day.
+ */
+const NATIVE_100_ON_CONVERTED: Array<{point: string; today: ChartPoint}> = [
+    {point: 'converted, with `original_close`', today: {date: AS_OF, close: 92, original_close: 100}},
+    {point: 'left native, `original_close` null', today: {date: AS_OF, close: 100, original_close: null}},
+    {point: 'left native, without `original_close`', today: {date: AS_OF, close: 100}},
+];
+
+/**
+ * Native prices that moved off 100, the `original_close` of today's point `{close: 92, original_close: 100}` on a chart
+ * converted into EUR: to a new price, or onto the converted close, which compared with `close` would pass for no move.
+ */
+const NATIVE_MOVES_ON_CONVERTED: Array<{to: string; quoted: string; converted: string}> = [
+    {to: 'a new price, 101', quoted: '101', converted: '92.92'},
+    {to: 'the converted close, 92', quoted: '92', converted: '84.64'},
 ];
 
 describe('the chart head', () => {
@@ -922,6 +971,32 @@ describe('the chart head', () => {
         const {chartWrites, loadChartData} = mount(overrides);
         quoteNext('101.5');
         convertEndpoint.mockResolvedValue(conversion('93.50')); // asked only when the chart is converted
+        await poll();
+
+        expect(invalidateAssetPriceStore).toHaveBeenCalledTimes(1);
+        expect(invalidateAssetPriceStore).toHaveBeenCalledWith(ASSET_ID);
+        expect(loadChartData).toHaveBeenCalledTimes(1);
+        expect(loadChartData).toHaveBeenCalledWith(true);
+        expect(invalidateAssetPriceStore.mock.invocationCallOrder[0]).toBeLessThan(loadChartData.mock.invocationCallOrder[0]);
+        expect(chartWrites).not.toHaveBeenCalled();
+    });
+
+    it.each(NATIVE_100_ON_CONVERTED)('reloads nothing when the native price did not move on a converted chart whose point for today is $point', async ({today}) => {
+        const {live, chartWrites, loadChartData} = mount({displayCurrency: 'EUR', chartData: [today]});
+        quoteNext('100');
+        convertEndpoint.mockResolvedValueOnce(conversion('92'));
+        await poll();
+
+        expect(live.currentPrice).toBe(92);
+        expect(chartWrites).not.toHaveBeenCalled();
+        expect(loadChartData).not.toHaveBeenCalled();
+        expect(invalidateAssetPriceStore).not.toHaveBeenCalled();
+    });
+
+    it.each(NATIVE_MOVES_ON_CONVERTED)("reloads a converted chart when the native price moved off today's `original_close` to $to: the price store invalidated, then a forced load", async ({quoted, converted}) => {
+        const {chartWrites, loadChartData} = mount({displayCurrency: 'EUR', chartData: [{date: AS_OF, close: 92, original_close: 100}]});
+        quoteNext(quoted);
+        convertEndpoint.mockResolvedValueOnce(conversion(converted));
         await poll();
 
         expect(invalidateAssetPriceStore).toHaveBeenCalledTimes(1);
