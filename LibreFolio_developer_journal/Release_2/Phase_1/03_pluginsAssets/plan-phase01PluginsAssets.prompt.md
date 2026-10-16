@@ -4596,3 +4596,83 @@ Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874
 > - **Dal test-author, non preso**:
 >   - la data `end` in UTC vicino alla mezzanotte, che c'era già prima;
 >   - `results` vuoto che diventa `null`, come un errore. Va bene: per il chiamante significa «nessun risultato».
+> - **O-20 committato**: `2b0be1d05` (fix) e `24242bdd2` (diario), in dev con il merge `967ddbda4` (treno 127).
+>   - Il coordinatore ha portato il mio ramo a `967ddbda4` per avanzamento rapido: AF lotto 9 sulla pagina
+>     dell'asset, `ModalBase`, `ConfirmModal`.
+
+#### C-66 — l'avviso nel dialogo di sync ✅ scritto e provato in Vitest (19:30–20:09; E2E in uno slot)
+
+> - **Rossi prima** (test-author): **26 casi**, tutti rossi per la ragione giusta, e i 104 esistenti verdi (6 file).
+>   - 13 su `hasStoredPointInRange`, nel file nuovo `utils/sync/__tests__/syncHelpers.test.ts`, registrato in
+>     `core-unit`.
+>   - 1 su `extractDaysBack` esportato.
+>   - 9 su `SyncModalBase`:
+>     - un avviso per sezione, col titolo solo se le sezioni attive sono più d'una;
+>     - nessun avviso senza intersezione;
+>     - gli id che non sono bersagli vengono ignorati;
+>     - l'avviso sparisce allo Start e non torna con i risultati, anche falliti; torna a una nuova apertura;
+>     - la frase c'è nei 4 cataloghi.
+>   - 1 per ciascun involucro (`AssetSyncModal`, `FxSyncModal`, `PageSyncModal`).
+> - **Implementazione** (innesto `files/checks/c66_splice.py`, 30 sostituzioni, tutte verificate a vuoto):
+>   - `extractDaysBack` esportato, unica casa della regola dei punti riempiti all'indietro;
+>   - `SyncSection.existingIds` e `hasStoredPointInRange()` in `syncHelpers.ts`;
+>   - `SyncModalBase` mostra un `InfoBanner` di avviso per sezione prima dello Start
+>     (`{testId}-overwrite-warning`, con `data-section`, `data-existing` e `data-total`);
+>   - le prop degli involucri: `withDataInRange`, `assetsWithDataInRange`, `fxPairsWithDataInRange`;
+>   - le pagine calcolano gli id dai dati che mostrano:
+>     - Asset ed FX dalle proprie store;
+>     - le pagine di dettaglio dal grafico del proprio asset o della coppia, e dalle store delle coppie.
+>   - Prese due note del test-author:
+>     - le due pagine FX ora usano `extractDaysBack` invece della loro copia della regola;
+>     - corretti i commenti che dicevano `PageSyncAllModal`.
+> - **Non contati, documentati**: gli asset di confronto delle pagine di dettaglio; i dialoghi aperti dai pannelli
+>   di rischio, dal modulo delle transazioni e dal PAC, che non passano id e quindi non avvisano.
+> - **i18n**: `fx.sync.overwriteWarning` nelle 4 lingue, col vocabolario di `common.provider`; in FR c'è uno spazio
+>   prima di «:», come nel resto del file.
+> - **Documentazione**:
+>   - user: `assets/index.en.md` e `fx/sync.en.md`, una frase ciascuno;
+>   - developer: `core-ui/modals.md`, un paragrafo sull'avviso.
+>   - CHANGELOG: una riga ✨ in `[Unreleased]`.
+> - **Prove**, col cancello a 50:
+>   - i 6 file **130/130**;
+>   - `i18n check` rigoroso;
+>   - `front check` 0/0;
+>   - `core-unit` **189 file, 6848/6848**;
+>   - `component-unit` **158 file, 4109/4109**;
+>   - `mkdocs build` stretto, verde, senza avvisi.
+> - **⚠️ Fuori pista (ambiente)**: il primo `front check` ha dato 1 errore in `pac-allocator/planner/source.ts:290`.
+>   - Il client generato era delle 18:39, cioè di prima dell'avanzamento rapido, e il backend di dev ha aggiunto
+>     `ESTIMATED_AT_COST` a quel campo.
+>   - Dopo `api sync`: 0/0.
+> - **Resta**: l'E2E del C-66, che il test-author scrive senza farlo girare, insieme all'E2E combinato `asset-modal` e
+>   `asset-list` con AF lotto 9. Gireranno nello slot che il coordinatore assegna.
+> - **E2E del C-66, scritti dal test-author e non ancora fatti girare** (20:2x). Sono 5 test, tutti col filtro
+>   `C-66`:
+>   - `front-asset asset-list C-66` (2): un periodo con prezzi salvati avvisa una volta, con `data-existing` fra 1 e
+>     il totale e il testo uguale a quello del catalogo; un periodo futuro, riempito solo all'indietro, non avvisa.
+>     Senza premere Start e senza richieste di sync.
+>   - `front-fx fx-sync C-66` (2): lo stesso per le coppie.
+>   - `front-asset asset-detail C-66` (1): la sezione `assets` conta l'asset della pagina, `data-existing="1"`.
+>   - La fixture nuova `e2e/fixtures/sync-overwrite.ts` contiene:
+>     - le precondizioni lette dall'API;
+>     - la frase del catalogo, con `intl-messageformat`;
+>     - il registro delle richieste di sync.
+>   - `assets-helpers.ts`: `goToAssetsPage` e `goToAssetDetailPage` accettano `search`.
+>   - Le `desc=` del runner per `asset-list`, `asset-detail` e `fx-sync` dicono la copertura C-66.
+> - **Ritocco**: nella pagina FX, `syncModalWithData` usa un `Set` invece di `includes` dentro `filter`, che era
+>   quadratico. Nota del test-author. `front check` 0/0.
+> - ruff e black segnalano solo gli E701 già presenti nei file del runner, su righe non toccate. Il perimetro del
+>   lint è `backend/`.
+> - **Slot E2E** alle 20:45, cut-off 21:15, con il copione `files/checks/c66_e2e_slot.sh`:
+>   1. `front-asset asset-list C-66`, poi `front-fx fx-sync C-66`, poi `front-asset asset-detail C-66`;
+>   2. poi `front-asset asset-modal` e `front-asset asset-list` per intero, sulla revisione combinata con AF lotto 9.
+> - **Slot 1 (20:32–20:48)**, anticipato perché J aveva finito. Porta 6183 libera alla fine.
+>   - C-66:
+>     - `asset-list C-66` 2/2;
+>     - `fx-sync C-66` 2/2;
+>     - `asset-detail C-66` 1/1.
+>   - **Revisione combinata con AF lotto 9**: `asset-modal` 18/18, `asset-list` 30/30.
+>   - **Pagine toccate dal C-66, per intero**: `fx-sync` 5/5, `fx-list` 12/12, `fx-detail` 17/17, `asset-detail` 35/35.
+>   - Una sola build, al primo spec.
+> - **C-66 ✅ pronto per l'handoff**. Le voci C-66 (sezione W/C del backlog) e O-20 (backlog 38) le chiude il
+>   coordinatore, perché non sono nella mia sezione.
