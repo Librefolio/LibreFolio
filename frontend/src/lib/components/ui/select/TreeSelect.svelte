@@ -359,7 +359,7 @@
                 bind:value={query}
                 aria-controls={treeId}
                 aria-activedescendant={activeEntry?.id}
-                class="min-w-0 flex-1 border-none bg-transparent text-sm outline-none placeholder:text-lf-placeholder"
+                class="min-w-0 flex-1 border-none bg-transparent text-sm text-lf-primary outline-none placeholder:text-lf-placeholder"
                 placeholder={searchPlaceholder ?? $t('common.search')}
                 onclick={(event) => event.stopPropagation()}
                 oninput={() => defer(() => setActiveIndex(0))}

@@ -205,7 +205,7 @@
                             title={$t('uploads.copyLink') || 'Copy Link'}
                         >
                             {#if copiedFileId === file.id}
-                                <Check size={14} class="text-green-500" />
+                                <Check size={14} class="text-lf-success" />
                             {:else}
                                 <Link2 size={14} />
                             {/if}
