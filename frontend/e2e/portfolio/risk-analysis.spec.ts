@@ -1842,11 +1842,20 @@ async function dragColumnEdge(page: Page, header: Locator, dx: number): Promise<
     await page.mouse.up();
 }
 
-/** One rest of the pointer on a trigger, in `hoverUntilHelpOpens`: four times the Tooltip's own delay (`showDelayMs`, 500 ms). */
-const HELP_REST_MS = 2_000;
+/**
+ * One rest of the pointer on a trigger, in `hoverUntilHelpOpens`: six times the Tooltip's own delay (`showDelayMs`,
+ * 500 ms). It is all the room a delay run late gets: the next attempt's move to the corner disarms a delay still
+ * pending (`handlePointerLeave`), so a wider deadline buys more rests, never a longer one. Widened on 17/10/2026 from
+ * 2 s, four times the delay, together with the deadline: on the deadline's evidence, not a measurement of its own.
+ */
+const HELP_REST_MS = 3_000;
 
-/** How long `hoverUntilHelpOpens` rests on a trigger again before a help that never opened is a red: a deadline, not a delay. */
-const HELP_OPEN_DEADLINE_MS = 10_000;
+/**
+ * How long `hoverUntilHelpOpens` rests on a trigger again before a help that never opened is a red: a deadline, not a
+ * delay. 17/10/2026, load 94–115: 10 s did not fit; 20 s — inside the 90 s budget of «Risk analysis functional
+ * integration», so a help that never opens still fails here, by name.
+ */
+const HELP_OPEN_DEADLINE_MS = 20_000;
 
 /**
  * Rest the pointer on `trigger` until the help it carries is open, and hand that help back.
@@ -1861,7 +1870,10 @@ const HELP_OPEN_DEADLINE_MS = 10_000;
  * So every attempt enters the trigger afresh and gives its help a few times that delay to open, and the
  * attempts repeat until the deadline. Afresh means from the page's corner, where no Tooltip is drawn: a
  * pointer already resting on the trigger fires no new `mouseenter`, and a hover alone would never arm
- * the delay again. No sleep: every attempt ends on an assertion.
+ * the delay again. Leaving for the corner also disarms a delay the last attempt left pending, so attempts
+ * never add up: a delay run late must fit in one rest, and the deadline only buys more of them. For the
+ * deadline, on the same category at 2 workers — 17/10/2026, load 94–115: 10 s did not fit; 20 s. No sleep:
+ * every attempt ends on an assertion.
  *
  * The help is portalled to `<body>`, so it is found by its testid on the whole page: the caller starts
  * from a pointer that left no other help open, and reads the help's text itself.
