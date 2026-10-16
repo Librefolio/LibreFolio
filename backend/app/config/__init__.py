@@ -41,6 +41,7 @@ variable the code reads is listed in .env.example.
 import os
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -160,16 +161,22 @@ def env_url(name: str) -> str | None:
     """The http(s) address in the variable ``name``, from the process environment only, never from ``.env``.
 
     - An empty or blank value counts as unset: ``None``.
-    - Otherwise the value, stripped, must start with ``http://`` or ``https://`` (in any case); one trailing slash is
-      removed, so a path can be appended to it.
+    - Otherwise the value, stripped, must be an ``http://`` or ``https://`` address (the scheme in any case) with a host
+      name, and no space, tab or line break inside. One trailing slash is removed, so a path can be appended to it;
+      nothing else changes, the case included.
     - Any other value raises ``ValueError``, which names the variable and the value: the caller decides what an invalid
       address costs, and logs it.
     """
     value = os.environ.get(name, "").strip()
     if not value:
         return None
-    if not value.lower().startswith(("http://", "https://")):
-        raise ValueError(f"{name}={value!r}: expected an http:// or https:// address")
+    try:
+        # urlsplit drops tabs and line breaks before parsing: the whitespace check reads the raw value.
+        valid = not any(character.isspace() for character in value) and value.lower().startswith(("http://", "https://")) and bool(urlsplit(value).hostname)
+    except ValueError:  # a malformed address, such as an unclosed IPv6 bracket
+        valid = False
+    if not valid:
+        raise ValueError(f"{name}={value!r}: expected an http:// or https:// address with a host name")
     return value[:-1] if value.endswith("/") else value
 
 
