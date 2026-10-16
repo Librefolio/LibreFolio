@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `./dev.py user set-email <username> <address>` changes an account's email address from the command line (sessions ended and verification reset on a real change, as from the Profile).
 - **Faster first broker import, optional**: `LIBREFOLIO_BRIM_PREWARM=true` prepares the broker-import processes at startup, with their plugins loaded, so the first import after a start is about 4 s faster, at the cost of about 80 MB of memory and 1.4 s of CPU at every server start. Off by default.
 - **The sync window warns before you start** when the period already holds stored prices or rates: it says how many of the assets or pairs have data there, which the sync replaces with the provider's values, manual edits included. On the Assets and FX pages, and on the detail pages of an asset or a pair.
+- **Test configuration says what it read**: only the last few days of prices, while a new asset gets its whole price history when it is created.
 
 ### 🔄 Changed
 
