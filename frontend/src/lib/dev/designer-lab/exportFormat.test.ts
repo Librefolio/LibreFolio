@@ -28,7 +28,7 @@ const GROWTH = 'src/lib/components/charts/GrowthChart.svelte';
 const COLORS_TS = 'src/lib/utils/colors.ts';
 const OFFLINE = 'static/offline.html';
 const BADGE = 'src/lib/components/Badge.svelte';
-const TX_TABLE = 'src/lib/components/transactions/TransactionsTable.svelte';
+const TX_TABLE = 'src/lib/features/transactions/TransactionsTable.svelte';
 
 function literal(id: number, fields: Partial<CatalogLiteral>): CatalogLiteral {
     return {id, file: 0, line: 1, col: 1, raw: '#64748b', kind: 'hex', key: '#64748b', alpha: 1, zone: 'css-file', theme: 'both', layer: 'css-literal', preview: true, snippet: '', ...fields};
