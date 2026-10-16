@@ -23,24 +23,38 @@ Raising the account's version ends every session issued before, everywhere at on
    so that a reactivation does not bring the old sessions back; and by ``set_user_admin(..., False)``. Activation and
    promotion leave it alone, and a refused operation (unknown user, last active administrator, already an admin, not an
    admin) changes nothing, for anybody.
+7. Lot A-27 (the security review of workstream E, E6.9): ``reset_password``, and ``update_profile`` when the address
+   really changes — another address under ``same_email`` (P18: other A–Z capitals are the same address, a letter outside
+   A–Z in capitals is another one) —, also revoke, in the commit of the change, every live password-reset link of the
+   account (``PASSWORD_RESET``, neither consumed nor revoked), whoever issued it: a link the old mailbox asked for before
+   the change opens nothing after it. Nothing else moves — the account's links of the other purposes (its email
+   verification, its admin setup, an invitation it issued), its reset links already spent or revoked, which keep their
+   own moments, every other account's links —, and a change that keeps the address (other A–Z capitals, the username
+   alone) or is refused (an address another account holds) revokes nothing.
 
 ``POST /auth/change-password``, which raises the version and re-issues the current device's cookie in the same response,
-is tested over HTTP in ``test_api/test_session_revocation_api.py``. Cookies without ``sv`` and version mismatches are
-tested here, in-process: the lane's server signs with a secret ``dev.py`` generates when it starts it, so no test can
-forge a cookie that server accepts.
+is tested over HTTP in ``test_api/test_session_revocation_api.py``, with the reset links it and ``PUT /auth/profile``
+revoke (contract 7). Cookies without ``sv`` and version mismatches are tested here, in-process: the lane's server signs
+with a secret ``dev.py`` generates when it starts it, so no test can forge a cookie that server accepts.
 
 Every database is a private file under ``tmp_path`` built by ``SQLModel.metadata.create_all``, opened as production opens
 its own (``sqlite+aiosqlite``, NullPool, the connect listener of ``backend.app.db.session``). Users are written as rows,
 with a marker for a hash and with starting versions other than 0, so that «raised by one» cannot pass for «set to one»;
-every version check reads all the users of the database, so that raising somebody else's version is caught too. The JWT
-secret is replaced by a known one for each test (monkeypatch, this process only), so a hand-made token is signed exactly
-as the server signs. No server, no session on the lane's database. Nothing is timed.
+every version check reads all the users of the database, so that raising somebody else's version is caught too. Contract
+7's links are issued there by ``token_service.issue_token``, then read back as rows — every row of ``account_tokens``, so
+that a link revoked by mistake is caught too — and through ``token_service.inspect_token``. The JWT secret is replaced by
+a known one for each test (monkeypatch, this process only), so a hand-made token is signed exactly as the server signs.
+No server, no session on the lane's database. Nothing is timed.
 
 Red until A4b lands. A test that needs ``SessionClaims``, ``end_sessions`` or the new signature of ``create_jwt_token``
 fails on its absence; the others fail on the behaviour (a token with a broken ``sv`` or ``sub`` accepted or raising, a
 cookie at another version accepted, a version not raised, bcrypt on the event loop's thread). The guards — the tokens
 refused today, the cookies at the account's version, the inactive account's 401, activation, promotion and every
 refusal — are green today and must stay green.
+
+Red until A-27, contract 7: the account's live reset links still valid after ``reset_password`` or a real change of the
+address. Its guards — the address kept, the username alone, the refusal, and every other link — are green today and must
+stay green.
 """
 
 from __future__ import annotations
@@ -52,6 +66,7 @@ import json
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -65,8 +80,10 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
-from backend.app.db.models import User
-from backend.app.services.accounts import auth_service, user_service
+from backend.app.db.models import AccountTokenPurpose, User
+from backend.app.services.accounts import auth_service, token_service, user_service
+from backend.app.services.accounts.token_service import TokenStatus
+from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_utils import print_section, print_success
 
 #: The JWT secret of every test here (the ``secret`` fixture): known, so that a hand-made token is signed as the server signs.
@@ -667,3 +684,231 @@ async def test_a_refused_operation_raises_nobodys_version(engine: AsyncEngine, c
     assert await _accounts(engine) == accounts, "a refusal must change no account"
     assert await _versions(engine) == versions, "a refusal must raise no version"
     print_success(f"{case}: refused, nothing changed")
+
+
+# =============================================================================
+# 7. A-27: THE LIVE RESET LINKS END WITH THE PASSWORD OR THE ADDRESS
+# =============================================================================
+
+
+@dataclasses.dataclass(frozen=True)
+class _Link:
+    """A link of contract 7's database: the token its holder has, the id of its row, and what it is for."""
+
+    token: str
+    token_id: int
+    purpose: AccountTokenPurpose
+
+
+#: The account's live reset links, those a real change of its password or of its address must revoke: the one it asked
+#: for («forgot password») and one an administrator issued.
+LIVE_RESET_LINKS = ("asked-for-by-the-account", "issued-by-an-administrator")
+#: What every link of contract 7's database is worth before any change, by label. Those after the first two stay as they
+#: are whatever the change: the account's reset links already spent and already revoked, its live links of the other
+#: purposes, an invitation it issued, and another account's live reset link.
+LINKS_BEFORE: dict[str, TokenStatus] = {
+    "asked-for-by-the-account": TokenStatus.VALID,
+    "issued-by-an-administrator": TokenStatus.VALID,
+    "already-spent": TokenStatus.CONSUMED,
+    "already-revoked": TokenStatus.REVOKED,
+    "its-email-verification": TokenStatus.VALID,
+    "its-admin-setup": TokenStatus.VALID,
+    "an-invitation-it-issued": TokenStatus.VALID,
+    "another-accounts-reset-link": TokenStatus.VALID,
+}
+
+
+async def _issue(engine: AsyncEngine, purpose: AccountTokenPurpose, **arguments: Any) -> _Link:
+    """A link issued by token_service.issue_token on the private database, committed as a route or the CLI commits it."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        issued = await token_service.issue_token(session, purpose, **arguments)
+        await session.commit()
+    return _Link(token=issued.token, token_id=issued.record.id, purpose=purpose)
+
+
+async def _link_statuses(engine: AsyncEngine, links: dict[str, _Link]) -> dict[str, TokenStatus]:
+    """What token_service.inspect_token says of each link now, by label, in a fresh session."""
+    async with AsyncSession(engine) as session:
+        return {label: (await token_service.inspect_token(session, link.token, link.purpose)).status for label, link in links.items()}
+
+
+async def _link_moments(engine: AsyncEngine) -> dict[int, tuple[Any, Any]]:
+    """{token id: (consumed_at, revoked_at)} of every account token of the private database, as a fresh connection reads it: what is committed."""
+    async with engine.connect() as connection:
+        rows = (await connection.execute(text("SELECT id, consumed_at, revoked_at FROM account_tokens"))).tuples().all()
+    return {token_id: (consumed_at, revoked_at) for token_id, consumed_at, revoked_at in rows}
+
+
+async def _profiles(engine: AsyncEngine) -> dict[int, tuple[str, str, int]]:
+    """{user id: (username, email, session_version)} of every user of the private database, as a fresh connection reads it."""
+    async with engine.connect() as connection:
+        rows = (await connection.execute(text("SELECT id, username, email, session_version FROM users"))).tuples().all()
+    return {user_id: (username, email, version) for user_id, username, email, version in rows}
+
+
+async def _user_rows(engine: AsyncEngine) -> dict[int, dict[str, Any]]:
+    """Every column of every user of the private database, by id, as a fresh connection reads it: «nothing written», to the letter."""
+    async with engine.connect() as connection:
+        rows = (await connection.execute(text("SELECT * FROM users"))).mappings().all()
+    return {row["id"]: dict(row) for row in rows}
+
+
+async def _account_with_links(engine: AsyncEngine, username: str) -> tuple[int, dict[str, _Link]]:
+    """``username`` (version 2) with every link of LINKS_BEFORE, beside ``zack`` (version 5) and ``root``, an administrator:
+    the account's id and its links by label, all committed, each checked to be worth what LINKS_BEFORE says.
+
+    Every link was issued five minutes ago, so a reset link has 25 minutes left and the others longer. The spent one was
+    consumed a minute later, the revoked one revoked two minutes later: moments of their own, which a second revocation
+    would overwrite.
+    """
+    user_id = await _add_user(engine, username, version=2)
+    other_id = await _add_user(engine, "zack", version=5)
+    admin_id = await _add_user(engine, "root", version=1, admin=True)
+    issued_at = utcnow() - timedelta(minutes=5)
+    reset = AccountTokenPurpose.PASSWORD_RESET
+    links = {
+        "asked-for-by-the-account": await _issue(engine, reset, user_id=user_id, now=issued_at),
+        "issued-by-an-administrator": await _issue(engine, reset, user_id=user_id, created_by_user_id=admin_id, now=issued_at),
+        "already-spent": await _issue(engine, reset, user_id=user_id, now=issued_at),
+        "already-revoked": await _issue(engine, reset, user_id=user_id, created_by_user_id=admin_id, now=issued_at),
+        "its-email-verification": await _issue(engine, AccountTokenPurpose.EMAIL_VERIFICATION, user_id=user_id, now=issued_at),
+        "its-admin-setup": await _issue(engine, AccountTokenPurpose.ADMIN_SETUP, user_id=user_id, now=issued_at),
+        "an-invitation-it-issued": await _issue(engine, AccountTokenPurpose.INVITE, email="guest@example.test", created_by_user_id=user_id, now=issued_at),
+        "another-accounts-reset-link": await _issue(engine, reset, user_id=other_id, now=issued_at),
+    }
+    async with AsyncSession(engine) as session:
+        spent = await token_service.consume_token(session, links["already-spent"].token, reset, now=issued_at + timedelta(minutes=1)) is not None
+        revoked = await token_service.revoke_tokens(session, token_id=links["already-revoked"].token_id, now=issued_at + timedelta(minutes=2))
+        await session.commit()
+    assert spent and revoked == 1, f"setup: one reset link spent, one revoked: spent {spent}, revoked {revoked}"
+    statuses = await _link_statuses(engine, links)
+    assert statuses == LINKS_BEFORE, f"barrier: before any change every link is worth what it was written to be: {statuses}"
+    return user_id, links
+
+
+async def _assert_only_the_live_reset_links_revoked(engine: AsyncEngine, links: dict[str, _Link], before: dict[int, tuple[Any, Any]], change: str) -> None:
+    """After a real change of the password or the address. First the GUARD: no link added or deleted, every other link as it
+    was, its moments included. Last the contract, red until A-27: each live reset link of the account revoked — its row
+    has a revoked_at and inspect_token says so."""
+    after = await _link_moments(engine)
+    assert after.keys() == before.keys(), f"{change} must neither add nor delete a link: token ids {sorted(before)} → {sorted(after)}"
+    moved = {label: (before[link.token_id], after[link.token_id]) for label, link in links.items() if label not in LIVE_RESET_LINKS and after[link.token_id] != before[link.token_id]}
+    assert not moved, f"{change} must leave every other link as it was — the account's links of the other purposes, its reset links already spent or revoked with their own moments, another account's link —: (consumed_at, revoked_at) before → after {moved}"
+    statuses = await _link_statuses(engine, links)
+    live = {label: (statuses[label], after[links[label].token_id][1] is not None) for label in LIVE_RESET_LINKS}
+    revoked = dict.fromkeys(LIVE_RESET_LINKS, (TokenStatus.REVOKED, True))
+    assert live == revoked, f"red until A-27: {change} must revoke, in its commit, every live reset link of the account, whoever issued it — a link asked for before the change still opens the account after it: (status, revoked_at set) {live}"
+
+
+async def _assert_no_link_moved(engine: AsyncEngine, links: dict[str, _Link], before: dict[int, tuple[Any, Any]], change: str) -> None:
+    """After a change that must revoke nothing: every row of account_tokens as it was, and every link worth what it was, the account's live reset links valid."""
+    after = await _link_moments(engine)
+    assert after == before, f"{change} must revoke no link: (consumed_at, revoked_at) by token id, {before} → {after}"
+    statuses = await _link_statuses(engine, links)
+    assert statuses == LINKS_BEFORE, f"{change} must leave every link worth what it was, the account's live reset links valid: {statuses}"
+
+
+@pytest.mark.asyncio
+async def test_reset_password_revokes_the_accounts_live_reset_links(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Contract 7 — NEW, red until A-27 (both links stay valid): the CLI's ``user reset`` stores the new password and ends
+    the account's sessions (contract 6: the barrier); its commit must also revoke every live reset link of the account, the
+    one it asked for and the one an administrator issued. Nothing else moves. bcrypt is not under test: hash_password is a
+    stand-in."""
+    print_section("Contract 7: reset_password revokes the live reset links")
+    monkeypatch.setattr(user_service, "hash_password", lambda password: STAND_IN_HASH)
+    user_id, links = await _account_with_links(engine, "ivy")
+    profiles, before = await _profiles(engine), await _link_moments(engine)
+
+    async with AsyncSession(engine) as session:
+        outcome = await user_service.reset_password(session, "ivy", NEW_PASSWORD)
+
+    assert outcome == (True, None), f"reset_password must succeed: {outcome}"
+    assert (await _account(engine, "ivy")).hashed_password == STAND_IN_HASH, "barrier: the new password's hash is stored"
+    username, email, version = profiles[user_id]
+    assert await _profiles(engine) == {**profiles, user_id: (username, email, version + 1)}, "barrier: ivy's sessions end (contract 6), nobody else's"
+    await _assert_only_the_live_reset_links_revoked(engine, links, before, "reset_password")
+    print_success("ivy's two live reset links revoked, every other link as it was")
+
+
+#: Real changes of the address (contract 7), as (the account's username — its address is <username>@example.test —, the
+#: new address): another mailbox, and the same one with a letter outside A–Z in capitals, which P18 compares as written.
+REAL_ADDRESS_CHANGES: dict[str, tuple[str, str]] = {
+    "another-address": ("ivy", "ivy.elsewhere@example.test"),
+    "a-letter-outside-a-z-in-capitals": ("émile", "Émile@example.test"),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", list(REAL_ADDRESS_CHANGES))
+async def test_a_real_change_of_the_address_revokes_the_accounts_live_reset_links(engine: AsyncEngine, case: str) -> None:
+    """Contract 7 — NEW, red until A-27 (both links stay valid): ``update_profile`` to another address — behind ``PUT
+    /auth/profile`` and the CLI's ``user set-email`` — stores it and ends the account's sessions (A6e: the barrier); its
+    commit must also revoke every live reset link of the account: one the old mailbox asked for before the change no longer
+    opens the account. Nothing else moves."""
+    print_section(f"Contract 7: update_profile to another address ({case})")
+    username, new_address = REAL_ADDRESS_CHANGES[case]
+    user_id, links = await _account_with_links(engine, username)
+    profiles, before = await _profiles(engine), await _link_moments(engine)
+    old_address, version = profiles[user_id][1], profiles[user_id][2]
+    assert not user_service.same_email(new_address, old_address), f"setup: {new_address} must be another address than {old_address}, under P18"
+
+    async with AsyncSession(engine) as session:
+        user, error = await user_service.update_profile(session, user_id, email=new_address)
+
+    assert user is not None and error is None, f"update_profile must accept {new_address}: {error}"
+    assert await _profiles(engine) == {**profiles, user_id: (username, new_address, version + 1)}, "barrier: the new address stored and the account's sessions ended (A6e), nobody else's"
+    await _assert_only_the_live_reset_links_revoked(engine, links, before, f"a real change of the address ({case})")
+    print_success(f"{case}: the address changed, the two live reset links revoked, every other link as it was")
+
+
+#: Changes that keep the address (contract 7), as (the arguments of update_profile, the account's username and address
+#: after): the own address in other A–Z capitals — the same address (P18's C5), its new form stored — and a new username.
+CHANGES_THAT_KEEP_THE_ADDRESS: dict[str, tuple[dict[str, str], tuple[str, str]]] = {
+    "the-own-address-in-capitals": ({"email": "IVY@example.test"}, ("ivy", "IVY@example.test")),
+    "the-username-alone": ({"username": "ivy_renamed"}, ("ivy_renamed", "ivy@example.test")),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", list(CHANGES_THAT_KEEP_THE_ADDRESS))
+async def test_a_change_that_keeps_the_address_revokes_no_reset_link(engine: AsyncEngine, case: str) -> None:
+    """Contract 7 — GUARD, green today and after: the own address in other A–Z capitals is no change of address (P18), and
+    a new username touches no address: the change is stored, no session ends, and no link moves — the account's live reset
+    links stay valid."""
+    print_section(f"Contract 7: update_profile keeps the address ({case})")
+    arguments, (username, email) = CHANGES_THAT_KEEP_THE_ADDRESS[case]
+    user_id, links = await _account_with_links(engine, "ivy")
+    profiles, before = await _profiles(engine), await _link_moments(engine)
+
+    async with AsyncSession(engine) as session:
+        user, error = await user_service.update_profile(session, user_id, **arguments)
+
+    assert user is not None and error is None, f"update_profile({arguments}) must succeed: {error}"
+    assert await _profiles(engine) == {**profiles, user_id: (username, email, profiles[user_id][2])}, "barrier: the change stored, and no session ended, for anybody"
+    await _assert_no_link_moved(engine, links, before, f"a change that keeps the address ({case})")
+    print_success(f"{case}: stored, every link as it was")
+
+
+#: Addresses another account holds (contract 7): zack's, as written and in other A–Z capitals — the same address (P18).
+TAKEN_ADDRESSES: dict[str, str] = {
+    "another-accounts-address": "zack@example.test",
+    "another-accounts-address-in-capitals": "ZACK@example.test",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", list(TAKEN_ADDRESSES))
+async def test_a_refused_change_of_the_address_revokes_no_reset_link_and_writes_nothing(engine: AsyncEngine, case: str) -> None:
+    """Contract 7 — GUARD, green today and after: an address another account holds is refused, «Email already registered»,
+    before anything is written: no user row changes and no link moves — the account's live reset links stay valid."""
+    print_section(f"Contract 7: update_profile refused ({case})")
+    user_id, links = await _account_with_links(engine, "ivy")
+    users, before = await _user_rows(engine), await _link_moments(engine)
+
+    async with AsyncSession(engine) as session:
+        outcome = await user_service.update_profile(session, user_id, email=TAKEN_ADDRESSES[case])
+
+    assert outcome == (None, "Email already registered"), f"{TAKEN_ADDRESSES[case]} is zack's address: update_profile must refuse it, got {outcome}"
+    assert await _user_rows(engine) == users, "a refusal must write no user row"
+    await _assert_no_link_moved(engine, links, before, f"a refused change of the address ({case})")
+    print_success(f"{case}: refused, nothing written, every link as it was")
