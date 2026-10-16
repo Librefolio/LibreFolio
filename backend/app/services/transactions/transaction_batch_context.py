@@ -61,6 +61,8 @@ class TransactionBatchContext:
     existing_by_id: dict[int, Transaction] = field(default_factory=dict)
     # What decided the cost basis of each preloaded row before the batch touched it (``cost_fields``).
     stored_cost_fields: dict[int, tuple] = field(default_factory=dict)
+    # The type, quantity and cash of each preloaded row before the batch touched it (``rule_values``, decision P6).
+    stored_rule_values: dict[int, tuple] = field(default_factory=dict)
     earliest_date_by_broker: dict[int, date] = field(default_factory=dict)
     link_uuid_map: dict[str, list[tuple[int, Transaction]]] = field(default_factory=lambda: defaultdict(list))
     consumed_link_uuids: set[str] = field(default_factory=set)
@@ -96,3 +98,26 @@ def cost_fields(transaction: Transaction) -> tuple:
     """What decides whether a row needs a cost basis, and whether it has one: its type, quantity, cost basis and asset
     event link — an ADJUSTMENT linked to a SPLIT takes its cost from the split, so unlinking it is a cost change."""
     return (transaction.type, transaction.quantity, transaction.cost_basis_override, transaction.cost_basis_currency, transaction.asset_event_id)
+
+
+def rule_values(transaction: Transaction) -> tuple:
+    """What the four points of decision P6 read on a row: its type, its quantity, and its cash (amount and currency)."""
+    return (transaction.type, transaction.quantity, transaction.amount, transaction.currency)
+
+
+def changed_rule_fields(stored: tuple | None, transaction: Transaction) -> frozenset[str]:
+    """The fields of decision P6 an update changed, ``"type"``, ``"quantity"`` and ``"cash"``, for
+    ``validate_transaction_business_rules``: compared by value with the row as stored before the batch
+    (``rule_values``), so a value sent back as stored is no change. A row without stored values (every updated row is
+    preloaded) counts as unchanged, as before P6."""
+    if stored is None:
+        return frozenset()
+    tx_type, quantity, amount, currency = rule_values(transaction)
+    changed: set[str] = set()
+    if tx_type != stored[0]:
+        changed.add("type")
+    if quantity != stored[1]:
+        changed.add("quantity")
+    if (amount, currency) != stored[2:]:
+        changed.add("cash")
+    return frozenset(changed)
