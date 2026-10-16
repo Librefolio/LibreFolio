@@ -197,7 +197,8 @@ function buildController(initial: {userId?: string | null; generation?: number; 
  * Builds an `appBootstrap` instance whose identity/generation/welcome-flow/replay
  * inputs are all test-owned mutable refs, and whose three loaders are independently
  * controllable mocks (default: all resolved, so a test that doesn't care reaches
- * 'ready' without restating every mock).
+ * 'ready' without restating every mock). `startOpenRegistrationNotice` is a spy
+ * (accounts lot A7b): whether and when a load starts the open-registration warning.
  */
 function buildBootstrap(initial: {userId?: string | null; generation?: number} = {}) {
     let userId: string | null = initial.userId ?? 'user-1';
@@ -208,6 +209,7 @@ function buildBootstrap(initial: {userId?: string | null; generation?: number} =
     const loadUserSettings = vi.fn<() => Promise<boolean>>().mockResolvedValue(true);
     const loadOnboarding = vi.fn<() => Promise<unknown>>().mockResolvedValue(undefined);
     const loadGlobalSettings = vi.fn<() => Promise<unknown>>().mockResolvedValue(undefined);
+    const startOpenRegistrationNotice = vi.fn<() => void>();
 
     const bootstrap = createAppBootstrap({
         getUserId: () => userId,
@@ -218,6 +220,7 @@ function buildBootstrap(initial: {userId?: string | null; generation?: number} =
         loadGlobalSettings,
         findWelcome: () => welcome,
         checkWelcomeReplay: (version: number) => replayVersions.has(version),
+        startOpenRegistrationNotice,
     });
 
     return {
@@ -225,6 +228,7 @@ function buildBootstrap(initial: {userId?: string | null; generation?: number} =
         loadUserSettings,
         loadOnboarding,
         loadGlobalSettings,
+        startOpenRegistrationNotice,
         setUserId: (next: string | null) => {
             userId = next;
         },
@@ -1256,6 +1260,17 @@ describe('appBootstrap — load (no authenticated user)', () => {
         expect(loadOnboarding).not.toHaveBeenCalled();
         expect(loadGlobalSettings).not.toHaveBeenCalled();
     });
+
+    // A7b guard: green before A7b and after it — without a user there is nobody to warn
+    it('never starts the open-registration notice when there is no authenticated user, forced or not', async () => {
+        const {bootstrap, startOpenRegistrationNotice, setUserId} = buildBootstrap();
+        setUserId(null);
+
+        expect(await bootstrap.load()).toBe('idle');
+        expect(await bootstrap.load(true)).toBe('idle');
+
+        expect(startOpenRegistrationNotice).not.toHaveBeenCalled();
+    });
 });
 
 describe('appBootstrap — load (success path)', () => {
@@ -1389,6 +1404,113 @@ describe('appBootstrap — load (stale generation/account guarding)', () => {
 
         expect(await loadPromise).toBe('loading');
         expect(bootstrap.state).toBe('loading');
+    });
+});
+
+/**
+ * appBootstrap — the open-registration warning (accounts lot A7b, C4; contract approved by the coordinator).
+ *
+ * The bootstrap starts the module of the warning, `startOpenRegistrationNotice()` of
+ * `$lib/features/auth/openRegistrationNotice.svelte`, injectable as the dependency `startOpenRegistrationNotice`:
+ * inside `load()`, right after the `if (!userId)` guard and before the loaders, so that it starts even when they fail
+ * (`blocked`, `degraded`) or hang — never without a user (the guard beside «idles without calling any loader»). Every
+ * load may call it again: the module's start is idempotent. The default calls it without arguments, so the module's
+ * own defaults (the auth store, `instanceConfig`, `window.location`, `instanceNotices`) are the app's, and ignores the
+ * stop function it returns.
+ *
+ * Red until A7b: `createAppBootstrap` ignores a dependency it does not know yet, so the spy is never called; and until
+ * `AppBootstrapDependencies` declares it, `buildBootstrap`'s object literal is an excess property for `front check`.
+ * The default's case replaces the module with `vi.doMock` in a module graph of its own, undone after it.
+ */
+describe('appBootstrap — load (the open-registration warning, lot A7b)', () => {
+    type Built = ReturnType<typeof buildBootstrap>;
+
+    /** A load whose loaders fail, the state it ends in, and how the case arranges it. */
+    const FAILED_LOADS: Array<[label: string, state: 'blocked' | 'degraded', arrange: (built: Built) => void]> = [
+        ['the user settings fail to load', 'blocked', ({loadUserSettings}) => loadUserSettings.mockRejectedValue(new Error('settings endpoint down'))],
+        ['the user settings come back unusable', 'blocked', ({loadUserSettings}) => loadUserSettings.mockResolvedValue(false)],
+        ['the onboarding fails with no usable cached Welcome', 'blocked', ({loadOnboarding}) => loadOnboarding.mockRejectedValue(new Error('onboarding endpoint down'))],
+        [
+            'the onboarding fails with a completed Welcome cached',
+            'degraded',
+            ({loadOnboarding, setWelcome}) => {
+                setWelcome(progressItem({flow: 'welcome', status: 'completed'}));
+                loadOnboarding.mockRejectedValue(new Error('onboarding endpoint down'));
+            },
+        ],
+    ];
+
+    // red until A7b
+    it('starts it on a load with an authenticated user', async () => {
+        const {bootstrap, startOpenRegistrationNotice} = buildBootstrap();
+
+        expect(await bootstrap.load()).toBe('ready');
+
+        expect(startOpenRegistrationNotice).toHaveBeenCalled();
+    });
+
+    // red until A7b
+    it('starts it as soon as the user is known: within load(), before any loader is called', async () => {
+        const {bootstrap, loadUserSettings, loadOnboarding, loadGlobalSettings, startOpenRegistrationNotice} = buildBootstrap();
+        const settings = deferred<boolean>();
+        loadUserSettings.mockReturnValue(settings.promise);
+
+        const loading = bootstrap.load();
+
+        expect(startOpenRegistrationNotice, 'started while the loaders are still out: a loader that hangs must not hold the warning back').toHaveBeenCalled();
+        const started = startOpenRegistrationNotice.mock.invocationCallOrder[0];
+        expect(started, 'before the user settings are asked for').toBeLessThan(loadUserSettings.mock.invocationCallOrder[0]);
+        expect(started, 'before the onboarding is asked for').toBeLessThan(loadOnboarding.mock.invocationCallOrder[0]);
+        expect(started, 'before the global settings are asked for').toBeLessThan(loadGlobalSettings.mock.invocationCallOrder[0]);
+
+        settings.resolve(true);
+        expect(await loading).toBe('ready');
+    });
+
+    // red until A7b
+    it.each(FAILED_LOADS)('starts it also when %s: the load ends %s', async (_label, state, arrange) => {
+        const built = buildBootstrap();
+        arrange(built);
+
+        expect(await built.bootstrap.load(), 'premise: the load ends as this case says').toBe(state);
+
+        expect(built.startOpenRegistrationNotice, 'a failed load still has a user, who may be an admin to warn').toHaveBeenCalled();
+    });
+
+    // red until A7b
+    it('without the dependency, a load starts the module itself: startOpenRegistrationNotice() of $lib/features/auth/openRegistrationNotice.svelte, without arguments, its stop function ignored', async () => {
+        const NOTICE_MODULE = '$lib/features/auth/openRegistrationNotice.svelte';
+        const stopWatcher = vi.fn<() => void>().mockName('the stop function of the watcher');
+        const startWatcher = vi.fn((..._deps: unknown[]) => stopWatcher).mockName('startOpenRegistrationNotice');
+        vi.resetModules();
+        vi.doMock(NOTICE_MODULE, () => ({startOpenRegistrationNotice: startWatcher}));
+        try {
+            const fresh = await import('$lib/features/onboarding/appBootstrap.svelte');
+            const bootstrap = fresh.createAppBootstrap({
+                getUserId: () => 'user-1',
+                getGeneration: () => 1,
+                isCurrent: () => true,
+                loadUserSettings: async () => true,
+                loadOnboarding: async () => undefined,
+                loadGlobalSettings: async () => undefined,
+                findWelcome: () => null,
+                checkWelcomeReplay: () => false,
+            });
+
+            expect(await bootstrap.load()).toBe('ready');
+            bootstrap.reset();
+            expect(await bootstrap.load()).toBe('ready');
+
+            expect(startWatcher, 'the default starts the module of the warning').toHaveBeenCalled();
+            expect(
+                startWatcher.mock.calls.every((deps) => deps[0] === undefined),
+                'without dependencies: the module’s own defaults are the app’s',
+            ).toBe(true);
+            expect(stopWatcher, 'the bootstrap keeps no hold on the watcher: not even a reset stops it').not.toHaveBeenCalled();
+        } finally {
+            vi.doUnmock(NOTICE_MODULE);
+            vi.resetModules();
+        }
     });
 });
 
