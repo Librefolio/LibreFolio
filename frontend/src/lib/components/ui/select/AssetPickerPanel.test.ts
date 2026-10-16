@@ -9,17 +9,17 @@
  * Stage 1 extracts it from the Asset Global lab into `ui/select/`, in two modes, and each mode is a
  * promise made to code that exists today:
  *
- *  - `mode="multi"` is the lab's «+», `risk/LabAssetPicker.svelte`. The lab keeps a thin wrapper and
- *    must behave exactly as before, so the cases below restate today's behaviour under generic test
- *    ids: every one is `${testId}-…`.
+ *  - `mode="multi"` is the lab's «+», `features/risk/LabAssetPicker.svelte`. The lab keeps a thin
+ *    wrapper and must behave exactly as before, so the cases below restate today's behaviour under
+ *    generic test ids: every one is `${testId}-…`.
  *  - `mode="single"` is a drop-in for `SearchSelect`, and for what `AssetSelect` adds to it: the same
  *    test ids, the same search (`filterOptions`), the same keyboard (`stepSelectable`), plus Risk's
  *    verdicts. A ruled-out asset is listed, disabled, in `${testId}-blocked`, and the current value is
  *    never dropped from the trigger, whatever hides it from the list.
  *
- * The five helpers that leave `risk/assetSetSelection.ts` with the picker (`applyFilters`,
+ * The five helpers that leave `features/risk/assetSetSelection.ts` with the picker (`applyFilters`,
  * `foldForSearch`, `pickerRows`, `toggleVisibleRows`, `visibleRowsAllChecked`) bring their tests
- * along, unchanged in substance. `ui/select` imports nothing from `components/risk/`, and the last
+ * along, unchanged in substance. `ui/select` imports nothing from `features/risk/`, and the last
  * block gates it.
  *
  * Conventions, the suite's own:
@@ -38,13 +38,13 @@
  */
 import {beforeAll, describe, expect, expectTypeOf, it, vi} from 'vitest';
 import {createRawSnippet} from 'svelte';
-import {readdirSync, readFileSync} from 'node:fs';
-import {dirname, join, resolve, sep} from 'node:path';
+import {existsSync, readdirSync, readFileSync} from 'node:fs';
+import {dirname, join, relative, resolve, sep} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {reactiveBox} from '$test/runes.svelte';
-import type {EligibilityView} from '$lib/components/risk/eligibility';
+import type {EligibilityView} from '$lib/features/risk/eligibility';
 import type {AssetInfo} from '$lib/stores/reference/assetStore';
 import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 import AssetPickerPanel from './AssetPickerPanel.svelte';
@@ -95,7 +95,7 @@ const ELIGIBLE: PickerVerdict = {level: 'eligible', codes: [], texts: []};
 const BLOCKED_LABEL = 'probe: cannot take part';
 const FULL_LABEL = 'probe: no room left';
 
-// ─── assetPicker.ts: the helpers that moved out of risk/assetSetSelection.ts ─────────────────
+// ─── assetPicker.ts: the helpers that moved out of features/risk/assetSetSelection.ts ────────
 
 /** The fields `applyFilters` reads, and an id to name a row by. Structural: risk's `SelectableAsset` stays in risk. */
 interface FilterRow {
@@ -419,7 +419,7 @@ describe('dropdownPlacement', () => {
 
 /**
  * Compile-time pins. `expectTypeOf` does nothing at run time: `npm run check` (svelte-check) is
- * what fails on them. The one import from `components/risk/` in this folder lives here, type-only,
+ * what fails on them. The one import from `features/risk/` in this folder lives here, type-only,
  * in a test: it is the contract the panel must meet without importing it.
  */
 describe('the exported types', () => {
@@ -1480,13 +1480,16 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
     });
 });
 
-// ─── The boundary: ui/select imports nothing from components/risk/ ──────────────────────────
+// ─── The boundary: ui/select imports nothing from features/risk/ ─────────────────────────────
 
 describe('the ui/select boundary', () => {
     /** This folder, from the test's own location: the gate does not depend on where vitest was started. */
     const HERE = dirname(fileURLToPath(import.meta.url));
-    const RISK = resolve(HERE, '../../risk');
-    /** The files stage 1 adds here. Moved out of `components/risk/`, they are the likeliest to keep a risk import. */
+    /** `$lib`, as SvelteKit maps it by default: `src/lib`, three folders up. */
+    const LIB = resolve(HERE, '../../..');
+    /** The folder the gate keeps out: the whole risk feature, its components, modules and stores alike. */
+    const RISK = resolve(HERE, '../../../features/risk');
+    /** The files stage 1 adds here. Moved out of the risk folder (now `features/risk/`), they are the likeliest to keep a risk import. */
     const STAGE_ONE = ['AssetPickerPanel.svelte', 'SelectPopover.svelte', 'CheckMenu.svelte', 'assetPicker.ts'];
 
     /** Every module a source names: imports and re-exports, side-effect imports, dynamic imports. */
@@ -1496,9 +1499,9 @@ describe('the ui/select boundary', () => {
         return [...named, ...bare];
     }
 
-    /** Whether a specifier written in a file of this folder lands in `components/risk/`. */
+    /** Whether a specifier written in a file of this folder lands in `features/risk/`. */
     function reachesRisk(specifier: string): boolean {
-        if (specifier.startsWith('$lib/')) return /^\$lib\/components\/risk(\/|$)/.test(specifier);
+        if (specifier.startsWith('$lib/')) return /^\$lib\/features\/risk(\/|$)/.test(specifier);
         if (!specifier.startsWith('.')) return false;
         const target = resolve(HERE, specifier);
         return target === RISK || target.startsWith(RISK + sep);
@@ -1513,16 +1516,32 @@ describe('the ui/select boundary', () => {
         expect(specifiers(readFileSync(join(HERE, 'SearchSelect.svelte'), 'utf8'))).toContain('./optionFilter');
     });
 
-    it('recognises a risk import in every form it can take', () => {
-        const source = ["import {x} from '../../risk/eligibility';", 'import type {Y} from "$lib/components/risk/eligibility";', "export {z} from './z';", "import './side-effect';", "const lazy = () => import('../../risk/lazy');"].join('\n');
-        expect(specifiers(source)).toEqual(['../../risk/eligibility', '$lib/components/risk/eligibility', './z', './side-effect', '../../risk/lazy']);
-        expect(specifiers(source).filter(reachesRisk)).toEqual(['../../risk/eligibility', '$lib/components/risk/eligibility', '../../risk/lazy']);
-        expect(reachesRisk('../../risk/LabPopover.svelte')).toBe(true);
-        expect(reachesRisk('$lib/components/riskless/probe')).toBe(false);
-        expect(reachesRisk('$lib/components/ui/select/types')).toBe(false);
+    it('watches the risk folder where it is: features/risk/ exists, holds eligibility.ts, and $lib/ names it too', () => {
+        // A gate aimed at a folder that is gone finds nothing to forbid, and stays green: Y4b's move
+        // into features/risk/ would have left it watching the old path. The folder must be there, with
+        // the module the type pins above import from it.
+        expect(existsSync(RISK), `${RISK} exists`).toBe(true);
+        expect(existsSync(join(RISK, 'eligibility.ts')), `${RISK} holds eligibility.ts`).toBe(true);
+        // The $lib/ spelling must name that same folder: a move that updated RISK and not the
+        // pattern would watch the relative imports and wave every $lib/ one through.
+        const viaLib = `$lib/${relative(LIB, RISK).split(sep).join('/')}`;
+        expect(reachesRisk(viaLib), viaLib).toBe(true);
+        expect(reachesRisk(`${viaLib}/eligibility`), `${viaLib}/eligibility`).toBe(true);
     });
 
-    it('imports nothing from components/risk/', () => {
+    it('recognises a risk import in every form it can take', () => {
+        const source = ["import {x} from '../../../features/risk/eligibility';", 'import type {Y} from "$lib/features/risk/eligibility";', "export {z} from './z';", "import './side-effect';", "const lazy = () => import('../../../features/risk/lazy');"].join('\n');
+        expect(specifiers(source)).toEqual(['../../../features/risk/eligibility', '$lib/features/risk/eligibility', './z', './side-effect', '../../../features/risk/lazy']);
+        expect(specifiers(source).filter(reachesRisk)).toEqual(['../../../features/risk/eligibility', '$lib/features/risk/eligibility', '../../../features/risk/lazy']);
+        expect(reachesRisk('../../../features/risk/LabPopover.svelte')).toBe(true);
+        expect(reachesRisk('$lib/features/riskless/probe')).toBe(false);
+        expect(reachesRisk('$lib/components/ui/select/types')).toBe(false);
+        // The old home, in both spellings: since Y4b it is not the risk folder.
+        expect(reachesRisk('$lib/components/risk/eligibility')).toBe(false);
+        expect(reachesRisk('../../risk/eligibility')).toBe(false);
+    });
+
+    it('imports nothing from features/risk/', () => {
         const offenders = productionFiles().flatMap((name) =>
             specifiers(readFileSync(join(HERE, name), 'utf8'))
                 .filter(reachesRisk)

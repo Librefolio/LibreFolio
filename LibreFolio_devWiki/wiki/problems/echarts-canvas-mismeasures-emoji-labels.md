@@ -45,7 +45,7 @@ One review round of the redesign (F-3b V5-A). No data impact.
 ## Source files
 | Role | Path |
 |------|------|
-| Matrix | `frontend/src/lib/components/risk/CorrelationHeatmap.svelte` |
-| `plainName`, `nameOrder`, `heatmapLayout` | `frontend/src/lib/components/risk/correlationHelpers.ts` |
-| Tests | `frontend/src/lib/components/risk/correlationHelpers.test.ts` |
+| Matrix | `frontend/src/lib/features/risk/CorrelationHeatmap.svelte` |
+| `plainName`, `nameOrder`, `heatmapLayout` | `frontend/src/lib/features/risk/correlationHelpers.ts` |
+| Tests | `frontend/src/lib/features/risk/correlationHelpers.test.ts` |
 | Journal | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-laboratorio-postmerge.md` |
