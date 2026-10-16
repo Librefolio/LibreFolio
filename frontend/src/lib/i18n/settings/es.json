@@ -30,6 +30,8 @@
     "passwordChanged": "Contraseña cambiada con éxito",
     "passwordChangeFailed": "Error al cambiar la contraseña",
     "currentPasswordIncorrect": "La contraseña actual es incorrecta",
+    "currentPasswordRequired": "Introduce tu contraseña actual para cambiar el correo electrónico",
+    "emailPasswordHint": "Para cambiar el correo electrónico, introduce tu contraseña actual. Se cerrará la sesión en tus otros dispositivos.",
     "passwordsMustMatch": "Las contraseñas deben coincidir",
     "passwordMustBeDifferent": "La nueva contraseña debe ser diferente de la actual",
     "language": "Idioma",
