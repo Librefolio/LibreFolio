@@ -387,11 +387,12 @@ it is.
 `derive_key()` and `derive_key_from()` validate and derive through the same private helpers
 (`_check_purpose_and_length()`, then `_derive()`), so the two cannot drift. `derive_key_from()` is for
 a key that is not this instance's. Its intended caller is the restore of workstream B, which will
-re-encrypt the plugin secrets that a backup's instance encrypted with its own key. The restore will
-read that key from the backup's `secrets/instance.key` with `read_secret_file(path, label)`
-(`backend/app/config/__init__.py`: the file's text without a leading byte order mark and its trailing
-line breaks), as this module reads its own, derive the old subkey with
-`derive_key_from(old_key, "plugins.settings.v1", 32)`, and give it, with this instance's subkey, to
+re-encrypt the plugin secrets that a backup's instance encrypted with its own key. The archive leaves
+that key out, so it comes from where the administrator kept it: a copy of the old
+`secrets/instance.key`, read with `read_secret_file(path, label)` (`backend/app/config/__init__.py`:
+the file's text without a leading byte order mark and its trailing line breaks) as this module reads
+its own, or the old value of `LIBREFOLIO_INSTANCE_KEY`. The restore derives the old subkey with
+`derive_key_from(old_key, "plugins.settings.v1", 32)` and gives it, with this instance's subkey, to
 `rekey_plugin_secrets(conn, old_subkey, new_subkey)` in
 `backend/app/services/plugin_settings/crypto.py`. No code calls `derive_key_from()` yet.
 
@@ -425,8 +426,9 @@ encrypted can be read with it. The plugin settings, whose secrets are the only d
 under the instance key today, make the change visible: each row records the `key_id` of the key that
 encrypted it, and from the first start after the change the startup step `plugin-secrets-check` logs
 an error that counts the stored system secrets the current key cannot read, if there are any
-([Plugin Secrets Check](#plugin-secrets-check)). The administrator restores `secrets/instance.key`
-from the backup taken with the data, or enters the secrets again.
+([Plugin Secrets Check](#plugin-secrets-check)). The administrator puts back `secrets/instance.key`
+from their copy of the data directory (the archive of the instance backup leaves the key out), or
+enters the secrets again.
 
 Tests: `./dev.py test services config-secrets` (`env_secret()`) and
 `./dev.py test services config-instance-key`, whose section (g) pins `derive_key_from()` to three
@@ -673,7 +675,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
-| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away; the block page has no button for it yet |
+| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away, from the backup card of the block page (`backup_available` of `GET /system/block`, below) |
 | `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
@@ -712,14 +714,18 @@ caller of a refused route gets the `423` even with an invalid body, never a `422
 
 **`GET /system/block`** (`backend/app/api/v1/system/block.py`) is for signed-in users only, and allowed
 on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`;
-`deletion_date`, `null` without a date; and `billing_url`, where the subscription is managed
+`deletion_date`, `null` without a date; `billing_url`, where the subscription is managed
 (`LIBREFOLIO_BILLING_URL`, from `registration_service.billing_link()`), for administrators only: it is
 `null` for the other users, and when the variable is unset or not an `http(s)` address (`billing_link()`
-logs the latter once per process). The block page
-(`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again that it is an
-`http(s)` address, then shows an administrator a **Manage subscription** link to it, opened in a new tab
-(`rel="noopener noreferrer"`). A workstream that owns part of the block page adds one field there and
-fills it in `block.py` with one call to its service.
+logs the latter once per process); and `backup_available`, whether this user may still download a full
+backup of the instance: the user's `is_superuser`, so `true` for administrators only (decision 12). The
+block page (`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again
+that `billing_url` is an `http(s)` address, then shows an administrator a **Manage subscription** link
+to it, opened in a new tab (`rel="noopener noreferrer"`). When `backup_available` is `true`, and only
+then, it shows the backup card of **Settings › Backup** under the block message: the card's four
+`backup_instance` routes are on the list above, and nothing else on the server changes for it (see
+[Instance block](../frontend/state/app-state.md#instance-block)). A workstream that owns part of the
+block page adds one field there and fills it in `block.py` with one call to its service.
 
 **Changing the list.** The list is short on purpose. The two link endpoints joined it for someone who
 lost the password (see the table above): they read a link already sent or spend a reset link, and
