@@ -325,6 +325,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/brokers/BrokerModal.test.ts",
             "src/lib/components/brokers/BrokerSharingPanel.test.ts",
             "src/lib/components/brokers/BrokerCard.test.ts",
+            "src/lib/components/brokers/BrokerImportFilesModal.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
             "src/lib/components/assets/AssetTable.privacy.test.ts",
             "src/lib/components/dashboard/KpiSection.test.ts",
