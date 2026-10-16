@@ -4,7 +4,8 @@ LibreFolio does not have to run around the clock. The machine it runs on can be 
 nobody uses it, or switched off at night, and started again later: by a hosting panel, on its own
 schedule, or by a script or a cron job of yours on a home server. While the machine sleeps, nothing
 updates the prices and the exchange rates; the
-[market data scheduler](settings.md#market-data-scheduler) catches up once it runs again.
+[market data scheduler](settings.md#market-data-scheduler) catches up once it runs again, in the
+background, while the app shows **Updating prices…** ([While Prices Catch Up](#price-refresh)).
 
 Two features help, both off until you turn them on. With the [idle suspension](#idle-suspend), the
 instance asks Fly.io to suspend its machine after a few minutes without visitors (on any other
@@ -83,9 +84,10 @@ awake.
 - **Waking up.** The request that reaches a suspended machine resumes it, and LibreFolio answers it
   as usual. The first request from a user after a suspension, like any that comes after at least a
   minute of silence, also makes the [market data scheduler](settings.md#market-data-scheduler) run
-  at once: it catches up the price and exchange-rate updates that fell due while the machine slept.
-  After asking for a suspension, LibreFolio waits a minute before its next check, so that the
-  request that woke the machine counts first.
+  at once: it catches up the price and exchange-rate updates that fell due while the machine slept,
+  in the background ([While Prices Catch Up](#price-refresh)). After asking for a suspension,
+  LibreFolio waits a minute before its next check, so that the request that woke the machine counts
+  first.
 - **After a cold start.** A deploy discards the state Fly saved, and Fly may start a machine from
   scratch in other cases too: the minutes then count from the start of the server.
 - **One server process.** Run a single server process, as the Docker image does: each process
@@ -365,6 +367,43 @@ rates. Once the block is lifted, the next run catches up the history sync missed
 
 ---
 
+## 🔄 While Prices Catch Up {: #price-refresh }
+
+Some runs of the [market data scheduler](settings.md#market-data-scheduler) are catch-ups, the runs
+someone may be waiting for: they bring the prices and the exchange rates up to date after the server
+was off, asleep or left without visitors. A catch-up comes:
+
+- when the server starts;
+- at the first request after a minute of silence, the first one after a
+  [suspension](#idle-suspend-timing) included;
+- at a [scheduled wake-up](#wake-sync).
+
+It runs in the background, so the app can be used meanwhile. While one of its jobs runs, the current
+price refresh or the history sync ([What a Wake-up Runs](#wake-sync-jobs)), the app shows
+**Updating prices…** above its pages. The notice has no close button: it goes away by itself when the
+catch-up is over.
+
+- **Nothing due, nothing shown.** When no job is due, the catch-up is over within seconds and no
+  notice shows. The scheduler's regular check, every minute, never shows it.
+- **Afterwards.** When the catch-up has brought at least one price or rate up to date, a tab that
+  showed the notice brings its portfolio pages up to date. A Dashboard or a broker's page on screen
+  asks for its figures again by itself, in the background: its figures stay until the new ones
+  arrive, with no need to press **Refresh** or to leave the page. The other portfolio pages, such as
+  the broker list, and those two when they are not open, ask for their figures again the next time
+  they load.
+- **The machine can still sleep.** Without a catch-up, the app asks nothing more than usual. During
+  one, it asks the server every 3 seconds whether it is over: these questions count as visits, like
+  the [live prices](#idle-suspend-activity), and pause the same way, in a background tab and after
+  two minutes without input. The catch-up itself keeps the machine awake until it ends.
+- **One server process.** With several (`--workers N`), only one of them runs the jobs, and the
+  notice may not show.
+
+The app learns of a catch-up from a header of the server's answers, `X-LibreFolio-Price-Refresh`: a
+reverse proxy that strips the response headers it does not know only loses the notice, and the update
+of the portfolio pages that follows it, never the catch-up.
+
+---
+
 ## ⏸️ Provider Pauses {: #provider-pauses }
 
 LibreFolio asks outside services for prices and exchange rates: its price providers, such as Yahoo
@@ -452,7 +491,9 @@ and `Scheduler: history sync`, give the deferred items in `deferred`, with `retr
 - 🪂 **[Machine Suspend and Resume](https://fly.io/docs/reference/suspend-resume/)** — Fly.io's
   documentation: how a suspension works, and what a machine needs for it
 - 🧑‍💻 For developers: **[Market Data Scheduler](../developer/backend/scheduler.md)** — How a run
-  works: its checks, its lock and its report
+  works: its checks, its lock and its report; [Catch-up Progress](../developer/backend/scheduler.md#price-refresh)
+  for how the app learns of a catch-up, and [Updating prices…](../developer/frontend/components/features/live-ticker.md#price-refresh)
+  for the notice
 - 🧑‍💻 For developers: **[Provider Pauses](../developer/backend/assets/architecture.md#provider-pauses)** —
   The boundary every call to an asset provider goes through, and what each caller gets during a
   pause; [Paused Providers](../developer/backend/fx/configuration.md#paused-providers) for the
