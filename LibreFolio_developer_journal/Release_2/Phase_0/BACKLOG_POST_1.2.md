@@ -4068,6 +4068,8 @@ da Y il 15/10.
   con valori a inizio settimana e `null` l'ultimo giorno (una linea di broker che esce dal perimetro) mostra un buco in
   quel secchio; la scala delle candele, invece, tiene l'ultimo valore. Prima un test rosso. Dettagli: piano di Y, §7
   «Y1 — passo 4».
+  - **Nessuna attesa** (16/10, coordinatore): DV-8 (`28f4bed75`, sul ramo di DV) tocca solo `lib/theme/chartPalettes.ts`, né
+    `GrowthChart.svelte` né `growthChartSeries.ts`. Y-2 non è in calendario.
 - **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
   `moneyRenderSites.test.ts` esclude dai token numerici solo `$_(`, `$t(` e `label(`: nel tooltip di GrowthChart, ora
   `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
@@ -4139,3 +4141,10 @@ da Y il 15/10.
   - Nello stesso test, `:577` seleziona per classe CSS (`.checkbox-btn`), contro le regole dei test frontend.
   - Due strade: togliere la coda del test, oppure riscriverla sui controlli di oggi.
   - Dettagli: piano di Y, «Corsa E2E unica…», Fuori pista.
+- **Y-13 · Due test dei lotti controllano la selezione con la classe `selected`** — minimo; `test-author` di Y, 16/10
+  (riscrittura di Y-12).
+  - In `e2e/brokers/brokers-detail.spec.ts`, il clic su un segmento del Gantt e quello sulla cella della custodia
+    fanno `toHaveClass(/selected/)` sulla riga.
+  - La regola 10 della skill design-system vuole lo stato, non le classi: la riga pubblica già `data-selected`
+    (`DataTable.svelte:1098-1149`).
+  - Rimedio: `test-author` passa a `toHaveAttribute('data-selected', 'true')`. Dettagli: piano di Y, «Y-12».
