@@ -1733,7 +1733,7 @@ Solo neutri e marchio, quindi ruoli diretti senza dipendenze: `planner/result/Or
 - `risk/lab-correlation`, `dashboard/risk-diversification`;
 - con S9, gli scatti dei segnali di asset e cambi.
 
-### B4 — I neutri dei grafici sui ruoli ⏳ (notte 16→17/10/2026)
+### B4 — I neutri dei grafici sui ruoli ✅ (notte 16→17/10/2026)
 
 Mandato del coordinatore (22:18), valgono D-T27 e D-T28; base `07700355f`. Fonte: l'inventario in sola lettura di L
 (`L-designerLab/audit-colori-fuori-metrica.md`, sul ramo di L): `lib/theme/chartTheme.ts` tiene 277 letterali della
@@ -1910,7 +1910,96 @@ i suoi predefiniti in 5 punti. Perimetro: i neutri (assi, linee e griglie, etich
   >   `front check`: 0 errori, 0 avvisi.
   > - Lo script delle prove aveva un difetto: la variabile del ciclo d'attesa sovrascriveva il contatore dei file,
   >   quindi le etichette `#NN` del riassunto sono sbagliate (l'ordine e i nomi no). Corretto per la prossima volta.
-- [ ] B4-6 Slot pesante al via del coordinatore.
+- [x] ✅ (17/10/2026) B4-6 Slot pesante al via del coordinatore.
+  > **Note implementazione.** Commit `38e17c2a5` del coordinatore (00:19), base merge `f35fd9026` con la punta
+  > `3e5336a0a` (T: tabelle, i 23, lo skill, unito da solo coi miei hunk; AF: file e media); gate del coordinatore sul
+  > ramo unito 119/119. Via alle 00:40; slot dalle 00:40:41 alle 01:26:28, corsia 6156 e `/tmp/librefolio-r2-dv`, taglio
+  > alle 01:45 (galleria di G alle 02:01), carico da 38 a 68. Script e log in `files/b4-slot/` della sessione; i passi
+  > lunghi in testa, così dopo il taglio potevano partire solo quelli corti.
+  >
+  > | Passo | Esito | Tempo |
+  > |---|---|---|
+  > | `api sync` | verde, 0 file tracciati cambiati | 24 s |
+  > | `front-utility core-unit` | 195 file, 7.618 test | 104 s |
+  > | `front-utility component-unit` | 166 file, 4.373 test | 356 s |
+  > | E2E `front-portfolio dashboard` | 27 passed | 576 s, col build della base nuova (281 s) |
+  > | E2E `front-asset asset-detail` | 35 passed | 313 s |
+  > | E2E `front-portfolio risk-lab` | 44 passed | 323 s |
+  > | E2E `front-portfolio risk` | 38 passed | 392 s |
+  > | E2E `front-broker detail` | 38 passed | 302 s |
+  > | E2E `front-fx fx-detail` | 17 passed | 153 s |
+  > | E2E `front-utility pac-allocator-real` | 1 passed | 105 s |
+  > | E2E `front-portfolio allocation-negative-cash` | 4 passed | 97 s |
+  >
+  > - Le E2E a 1 worker, 204 test, nessun tentativo ripetuto. A fine slot la porta 6156 è libera, l'HEAD è
+  >   `f35fd9026` e il worktree non ha file tracciati cambiati.
+  > - La galleria filtrata dei grafici la fa G dopo le 02:00 (fra le 00:00 e le 02:00 non si cattura).
+
+### B4b — I ruoli che leggerà AF, e il ponte sempre in sRGB ✅ (17/10/2026)
+
+Richiesta del coordinatore per AF (17/10 00:20, decisioni alle 00:21 e alle 00:55): il prossimo lotto di AF porta
+sui ruoli `lib/theme/drawnColors.ts`, cioè i colori disegnati su canvas da cheetah-grid e quelli degli SVG dei
+segnaposto, letti con `chartRoles`. `roleColors.ts` ha un solo writer, DV; AF prepara le bozze sul contratto. Commit a
+parte, dopo lo slot di B4: solo `roleColors.ts` e i suoi test; nessun grafico cambia.
+
+- [x] ✅ (17/10/2026) B4b-1 Gli 8 ruoli e la correzione di `resolve()`.
+  > **Note implementazione** (01:26).
+  > - `ChartRole` passa da 14 a 22 ruoli: `--lf-surface-field`, `--lf-surface-hover`, `--lf-focus`, `--lf-selected`,
+  >   `--lf-checked`, `--lf-action`, `--lf-on-action`, `--lf-mark-bg` (`--lf-warning` c'era già, da B4). Gli stand-in
+  >   sono i valori del risolutore del gate. **`--lf-selected` è traslucido** (il verde del fuoco al 12 %,
+  >   `color-mix(in oklab, var(--lf-focus) 12%, transparent)`): il suo stand-in è un `rgba()`.
+  > - **⚠️ Fuori pista: un difetto del ponte, trovato da AF.** In Chromium 149 (quello di Playwright) il `fillStyle`
+  >   di un canvas riporta una `color-mix(in oklab, …)` come `oklab(…)`, anche opaca, e una `in srgb` come
+  >   `color(srgb …)`: `resolve()` la passava così, contro il commento del modulo («`#rrggbb` when opaque, `rgba()`
+  >   when translucent»), e né `parseRgba` né `toRgba` la leggono. Dei 14 ruoli di B4 nessuno è una miscela in nessun
+  >   blocco di `tokens.css` (verificato), quindi B4 non ne soffre; dei 22 solo `--lf-selected`.
+  > - **Correzione** (decisione del coordinatore: in `resolve()`, nello stesso commit; il modo a me): una funzione
+  >   privata `toSrgb` riporta in sRGB quello che il canvas restituisce. Esadecimali e `rgba()` passano come sono;
+  >   `oklab()`, `oklch()` e `color(srgb …)` sono convertiti (OKLab → sRGB con le matrici di Ottosson, come CSS Color 4,
+  >   tagliati alla gamma e arrotondati a 8 bit): `#rrggbb` se opachi, `rgba()` se traslucidi; un'altra notazione torna
+  >   allo stand-in. Scartata la lettura di un pixel 1×1 sopra il nero e il bianco: al 12 % d'alfa sbaglia i canali fino
+  >   a ±4.
+  > - Verifica a mano, in node su una copia: il campione di AF `oklab(0.474452 -0.0824938 0.0265417 / 0.12)` →
+  >   `rgba(35,107,77,0.12)`, cioè `#236b4d` al 12 %; la stessa opaca → `#236b4d`; in `oklch` → `#236b4d`;
+  >   `color(srgb …)`, `oklab(100% 0 0)`, `oklab(0 0 0 / 50%)` giusti; `color(display-p3 …)`, `hsl()` e una `oklab`
+  >   con due componenti → stand-in. 12 casi su 12.
+- [x] ✅ (17/10/2026) B4b-2 `test-author`: il gate di parità impara l'alfa; `PENDING_READERS` con gli 8 ruoli («AF,
+  `lib/theme/drawnColors.ts`»), che diventa rosso quando AF comincia a leggerli (AF ne toglie le righe nel suo lotto);
+  i casi `oklab`/`oklch`/`color(srgb)` nel test jsdom.
+  > **Note implementazione** (01:28–01:37, log in `files/b4-tests/` della sessione; ogni corsa partita col carico
+  > sotto 50, dopo un ciclo d'attesa).
+  > - `roleColors.test.ts`, 60/60 (erano 41): i ruoli opachi come prima; i traslucidi passano da un aiuto puro che
+  >   vuole un `rgba(r,g,b,a)` con le virgole, canali uguali e alfa entro 1e-3; una barriera mostra che `--lf-selected`
+  >   è traslucido nei due temi; un controllo positivo rifiuta un canale sbagliato, un'alfa sbagliata, un esadecimale,
+  >   un `rgb()` senza alfa, un `rgba()` senza virgole. `PENDING_READERS` con gli 8 ruoli; il controllo dei ruoli morti
+  >   accetta un ruolo letto o in attesa; un test nuovo diventa rosso per un nome che non è in `ChartRole` e per un
+  >   ruolo in attesa che la produzione legge già (prova del rosso: con `--lf-warning` in elenco, «remove --lf-warning
+  >   from PENDING_READERS: production code reads it now»; file tornato identico, stesso md5).
+  > - `roleColors.dom.test.ts`, 21/21 (erano 11): il campione di AF (`oklab(… / 0.12)` → `rgba(35,107,77,0.12)`, letto
+  >   da `parseRgba`), i 6 valori convertiti, e `color(display-p3 …)`, `hsl()` e una `oklab` con due componenti allo
+  >   stand-in, con la barriera che il canvas li ha riportati davvero.
+  > - **Tre osservazioni di `test-author`:**
+  >   - il passaggio di consegne vede solo le chiamate letterali `.color('--lf-…')`: AF deve leggere i ruoli così, come
+  >     `chartNeutrals`, o le righe di `PENDING_READERS` resterebbero per sempre;
+  >   - `lab()`, `lch()`, `color(display-p3 …)` e `color(srgb-linear …)` vanno allo stand-in senza segnale: oggi nessun
+  >     effetto, perché `tokens.css` mescola solo `in oklab`. Annotato in DV-10;
+  >   - zrender legge `rgba()` dividendo alle virgole, e disegna nero un `rgba()` senza virgole: lo stand-in le ha, e
+  >     anche quel che `toSrgb` produce (`toRgba`).
+- [x] ✅ (17/10/2026) B4b-3 Prove leggere sotto 50, checkpoint.
+  > **Note implementazione** (01:40–01:48, ognuna partita col carico sotto 50, sotto `nice`; script
+  > `files/dv_b4b_light.sh` della sessione, log in `files/b4b-light/`).
+  > - Prettier (i 4 file), `--check` del ratchet, `git diff --check`: puliti.
+  > - Vitest, 16 file e 765 test: i gate `themeRoles` 80 e `themeTokens` 21, e ogni test che importa `chartTheme` o
+  >   `roleColors`: `chartCoreHelpers` 287, `chartCategories` 95, `roleColors` 60, `allocationRings` 41,
+  >   `AllocationHistoryChart` 38, `exposureBarColours` 24, `AllocationPieChart` 23, `allocationHierarchy` 23,
+  >   `roleColors.dom` 21, `ScatterChart` 16, `ExposureBars` 12, `chartTheme` 10, `SemiDonutChart` 8,
+  >   `CorrelationHeatmap` 6.
+  > - **⚠️ Fuori pista: `front check` con 1 errore di tipo,** che Vitest non vede: `INJECTED_COLOURS` di
+  >   `chartTheme.test.ts`, un `Record<ChartRole, string>` completo, aveva i 14 ruoli di B4. `test-author` gli ha dato
+  >   gli 8 nuovi (`chartTheme` ripetuto, 10/10); di nuovo `front check`: 0 errori, 0 avvisi.
+  > - **Y-22/23 della 1.3** (due test del layout con molti `vi.mock`, sulla punta): nessuno finge un modulo dei grafici
+  >   o del tema, e il layout `(app)` non li importa; nessun test, nel worktree o sulla punta, finge `chartTheme`,
+  >   `roleColors` o gli helper dei grafici. Gli export nuovi non possono mancare sotto un mock.
 
 ## Definizione di fatto
 

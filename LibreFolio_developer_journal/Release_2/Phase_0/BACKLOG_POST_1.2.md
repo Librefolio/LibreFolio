@@ -2926,6 +2926,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - **Quattro helper puri leggono i ruoli su `<html>`,** non sull'elemento del grafico (`buildSecondaryYAxes`,
     `buildSignalReferencePrimitives`, `buildScatterOption`, `buildGrowthFullSeries`): oggi nessun effetto, da
     sistemare se un grafico entra in un sottoalbero a tema forzato.
+  - **Il ponte riporta in sRGB `oklab()`, `oklch()` e `color(srgb …)`** (B4b); `lab()`, `lch()`, `color(display-p3 …)`
+    e `color(srgb-linear …)` vanno allo stand-in senza segnale. Oggi nessun effetto (`tokens.css` mescola solo `in
+    oklab`); da estendere se una miscela o una modifica del Lab usa un altro spazio.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione
     «B4».
 
