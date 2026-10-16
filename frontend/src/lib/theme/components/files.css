@@ -1,5 +1,5 @@
 /*
- * Files area: preview, the files page, the broker import files.
+ * Files area: preview, the files page.
  *
  * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
  * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
@@ -94,22 +94,4 @@
     --lf-cmp-files-page-brim-edit-btn-hover-text-dark: #a7f3d0;
     --lf-cmp-files-page-brim-edit-btn-hover-bg: #1a40311a; /* rgba(26, 64, 49, 0.1) */
     --lf-cmp-files-page-brim-edit-btn-hover-bg-dark: #a7f3d01a; /* rgba(167, 243, 208, 0.1) */
-
-    /* BrokerImportFilesModal.svelte */
-    --lf-cmp-broker-import-files-divider-border: #e5e7eb;
-    --lf-cmp-broker-import-files-divider-border-dark: #374151;
-    --lf-cmp-broker-import-files-muted-text: #6b7280;
-    --lf-cmp-broker-import-files-hover-bg: #f3f4f6;
-    --lf-cmp-broker-import-files-hover-bg-dark: #374151;
-    --lf-cmp-broker-import-files-hover-text: #374151;
-    --lf-cmp-broker-import-files-hover-text-dark: #d1d5db;
-    --lf-cmp-broker-import-files-btn-primary-bg: #1a4031;
-    --lf-cmp-broker-import-files-on-fill-text: #fff; /* white */
-    --lf-cmp-broker-import-files-btn-primary-hover-bg: #143326;
-    --lf-cmp-broker-import-files-btn-secondary-bg: #6b7280;
-    --lf-cmp-broker-import-files-btn-secondary-hover-bg: #4b5563;
-    --lf-cmp-broker-import-files-subtle-bg: #f9fafb;
-    --lf-cmp-broker-import-files-subtle-bg-dark: #111827;
-    --lf-cmp-broker-import-files-manage-link-text: #1a4031;
-    --lf-cmp-broker-import-files-manage-link-text-dark: #10b981;
 }
