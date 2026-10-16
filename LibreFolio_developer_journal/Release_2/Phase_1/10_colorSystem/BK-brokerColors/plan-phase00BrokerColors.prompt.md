@@ -228,7 +228,35 @@ Richiesta del coordinatore (12:03): `api sync`; BK-4 con `text-lf-on-overlay`; v
 >   `themeRoles`, `themeTokens`, `themeComponentTokens` 84/84; `BrokerModal.test.ts` (monta il form) 15/15; Prettier
 >   pulito su `BrokerForm`; `git diff --check` pulito; controllo «solo scuro» 0.
 
-### S6 — Slot pesante L1–L3 ⏳ (slot del coordinatore; in coda dopo AF, IM e W6)
+### S6 — Slot pesante L1–L3 ✅ (16/10/2026, 14:15–14:46, verde)
+> **Stato** (12:13): L1–L3 committati in `82f304f4a`, base merge `2eef01e59`, mini-checkpoint BK-4 in `cb1fb5690`
+> (HEAD verificato, albero pulito). Il coordinatore concorda: LONG/SHORT resta in BK-2.
+> **Vincoli della 1.3 sui due file delle pagine:** Z-13 e Y11 toccano subito lo `<script>` di
+> `routes/(app)/brokers/+page.svelte` e di `routes/(app)/brokers/[id]/+page.svelte`; Y11 tocca anche i loro bottoni
+> «Aggiorna», ma dopo l'ingresso di BK. Da qui: né lo `<script>` né quei bottoni.
+> **Preparazione fuori slot** (OK del coordinatore, 12:14: uno alla volta, `nice`, carico a 1 minuto < 50, nessun server
+> né porta, populate solo nella mia cartella): `front build --debug`, `mkdocs build`, `test --test-port 6158 --data-dir
+> /tmp/librefolio-r2-bk db populate --force --clean --with-reports` (script `bk_prep_slot.sh` della sessione). Lo slot
+> gira sulla base attuale: gli ingressi di AF non toccano l'area; la base merge la fa il coordinatore all'ingresso.
+> ✅ **Preparazione fatta** (12:18–12:25, HEAD `cb1fb5690`, ciascun passo avviato a carico < 50):
+> - `front build --debug`: exit 0 in 213 s; il suo svelte-check: **0 errori, 0 avvisi** (vale come `front check` su
+>   quest'albero: nello slot non lo ripeto, salvo una base merge);
+> - `mkdocs build`: exit 0 in 144 s, 3.076 URL relativi risolti;
+> - `db populate --force --clean --with-reports` nella corsia: exit 0 in 31 s (istantanea della DB in `.testLog/00_archive/`,
+>   ignorata da git).
+> Script dello slot pronto (`bk_slot_l1l3.sh`): `api sync`, poi le E2E in ordine di priorità (broker list, detail,
+> condivisione, create-feedback, recovery, data-quality legacy e real, multi-user, privacy), poi le tre Vitest del runner;
+> smette di avviare passi dopo 42 minuti e dice cosa resta.
+> ✅ **Slot fatto** (16/10, 14:15:13–14:46:31, 31 min, su `cb1fb5690`, corsia 6158 + `/tmp/librefolio-r2-bk`; senza `nice`,
+> nessun passo dopo le 14:55 per il taglio del coordinatore):
+> - `api sync`: exit 0;
+> - E2E, **94/94**: `front-broker list` 9, `detail` 37, `broker-create-feedback` 2, `broker-recovery` 5;
+>   `front-user broker-sharing` 17, `multi-user` 2; `front-portfolio data-quality-legacy` 1, `data-quality-real` 3,
+>   `privacy-masking` 18. Nessun flaky, nessun tentativo ripetuto;
+> - Vitest del runner: `component-unit` 154 file, 4.027/4.027; `onboarding-component-unit` 15 file, 449/449; `core-unit`
+>   179 file, 6.406/6.406;
+> - `front check`: lo svelte-check della build debug delle 12:18 sullo stesso albero, 0 errori e 0 avvisi;
+> - fine: nessun listener sulla 6158 (`lsof`), albero pulito a parte questo piano.
 `api sync`; `front build --debug` e `mkdocs build` se mancano; `db populate --force --clean` sulla corsia se vuota;
 `front check`; `front-utility core-unit`, `component-unit`, `onboarding-component-unit`; E2E
 `front-broker list|detail|broker-recovery|broker-create-feedback`, `front-user broker-sharing|multi-user`,
