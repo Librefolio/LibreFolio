@@ -259,7 +259,7 @@
                 <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-secondary bg-lf-panel hover:bg-lf-neutral" onclick={handleCancel} data-testid="promote-merge-cancel">
                     {$t('common.cancel')}
                 </button>
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-white bg-green-600 hover:bg-green-700 inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">
+                <button type="button" class="px-4 py-2 text-sm rounded-lg text-lf-on-status bg-lf-success hover:bg-lf-success-hover inline-flex items-center gap-1.5" onclick={handleConfirm} data-testid="promote-merge-confirm">
                     <Link2 size={14} />
                     {$t('transactions.promote.mergeConfirm')}
                 </button>

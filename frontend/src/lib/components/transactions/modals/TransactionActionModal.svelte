@@ -384,7 +384,13 @@
                 <button type="button" class="px-4 py-2 text-sm text-lf-secondary bg-lf-panel rounded-lg hover:bg-lf-neutral transition" onclick={onCancel} data-testid="tx-action-modal-cancel">
                     {$t('common.cancel')}
                 </button>
-                <button type="button" class="px-4 py-2 text-sm text-white rounded-lg transition flex items-center gap-1.5 {mode === 'split' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}" onclick={onConfirm} disabled={loading} data-testid="tx-action-modal-confirm">
+                <button
+                    type="button"
+                    class="px-4 py-2 text-sm text-lf-on-status rounded-lg transition flex items-center gap-1.5 {mode === 'split' ? 'bg-lf-warning hover:bg-lf-warning-hover' : 'bg-lf-success hover:bg-lf-success-hover'}"
+                    onclick={onConfirm}
+                    disabled={loading}
+                    data-testid="tx-action-modal-confirm"
+                >
                     {#if mode === 'split'}
                         <Unlink size={15} />
                     {:else}
