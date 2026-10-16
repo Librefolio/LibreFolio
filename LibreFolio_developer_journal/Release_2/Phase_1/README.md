@@ -189,3 +189,4 @@ Sono tutti locali: la push la fa il developer.
 | 100 | 16/10 08:17 | J: CP-10a (decisione 29: un solo Rolling Return in giorni di calendario, `price_return` in `financial_math/returns.py`, impostazioni dei grafici v3, J-13 finestre in osservazioni; C-71 chiusa; asset E2E 34/34, all-backend 17 204/0, mirate sulla revisione unita) | `82e9c5305` |
 | 101 | 16/10 08:17 | W per cherry-pick: W-B32 (i report senza broker non compaiono più sotto ogni broker; `api brim` 118/118; dentro la decisione 36, da rivedere) | `84d24ed03` |
 | 102 | 16/10 08:24 | W per cherry-pick: W-B45 (T13 di `transactions-modals` con il budget di 60 s dei vicini) | `72ac088fc` |
+| 103 | 16/10 08:29 | E: E5b (verifica email alla registrazione, limiti 3/h per casella e 10/h per rete, revisione di sicurezza, merge con A6c; E2E 5/5, mirate sulla revisione unita) | `dbe232723` |
