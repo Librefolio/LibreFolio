@@ -8,6 +8,8 @@ Reference: backend/app/services/transactions/transaction_service.py
 """
 
 import sys
+import uuid
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock
@@ -25,11 +27,13 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
+from backend.app.schemas.transactions.batch import TXBatchResponse
 from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXUpdateItem
 from backend.app.schemas.transactions.type_metadata import PairFieldConstraint
@@ -2196,3 +2200,426 @@ class TestTransferPromotion:
             )
         )
         assert promote_resp.rolled_back is True
+
+
+# ============================================================================
+# W-B36b (P6) — THE TYPE TABLE IN UPDATES, WHEN THE FIELD CHANGES
+# ============================================================================
+
+P6_DAY = date(2025, 3, 3)
+P6_NEXT_DAY = P6_DAY + timedelta(days=1)
+P6_TAG = "w-b36b"
+P6_EDITED_TAG = "w-b36b-edited"
+# What a read-back compares: every column an edit may write, or a refusal must leave as it was (all but the timestamps).
+P6_STORED_COLUMNS = (
+    Transaction.broker_id,
+    Transaction.asset_id,
+    Transaction.type,
+    Transaction.date,
+    Transaction.quantity,
+    Transaction.amount,
+    Transaction.currency,
+    Transaction.related_transaction_id,
+    Transaction.description,
+    Transaction.tags,
+    Transaction.cost_basis_override,
+    Transaction.cost_basis_currency,
+    Transaction.asset_event_id,
+)
+
+
+@dataclass(frozen=True)
+class _P6World:
+    """One test's ground: its session, the file's two brokers and asset — by id: a rolled-back savepoint expires the
+    objects it touched, and an expired attribute would load lazily outside the event loop — and a marker of its own.
+
+    ``overdraft`` may overdraw its cash and may not go short; ``shorting`` may go short and may not overdraw.
+    """
+
+    session: AsyncSession
+    overdraft_id: int
+    shorting_id: int
+    asset_id: int
+    marker: str
+
+
+@dataclass(frozen=True)
+class _P6Pair:
+    """A linked pair of one test, by id: the giving leg (the units or the cash leave there) and the receiving leg."""
+
+    pair_type: TransactionType
+    giving_id: int
+    receiving_id: int
+
+    @property
+    def ids(self) -> tuple[int, int]:
+        return self.giving_id, self.receiving_id
+
+    def leg(self, side: str) -> int:
+        """The id of the ``giving`` or the ``receiving`` leg."""
+        return {"giving": self.giving_id, "receiving": self.receiving_id}[side]
+
+    def partner(self, side: str) -> int:
+        """The id of the leg that is not ``side``."""
+        return self.receiving_id if side == "giving" else self.giving_id
+
+
+@dataclass(frozen=True)
+class _P6Point:
+    """One point of P6 as an update breaks it on a valid pair (``P6_POINTS``)."""
+
+    pair_type: TransactionType
+    side: str  # the leg the update changes
+    change: dict  # the update's change, as the batch receives it
+    code: str  # the code TX_TYPE_METADATA gives that change
+    case: int  # the case of P6
+    user_faces: str  # what the user has once it is saved
+
+
+# The four points of P6, five updates (case 4 on both types). As an update of a valid pair each was red before W-B36b,
+# now its guard: refused, the table holding when the field changes. Saved, each leaves a pair outside the table, which an
+# API client could store before W-B36b: written with the ORM, those pairs are what the two GUARD tests edit.
+P6_POINTS: dict[str, _P6Point] = {
+    "case1-transfer-cash": _P6Point(TransactionType.TRANSFER, "receiving", {"cash": {"code": "EUR", "amount": "100"}}, "cashForbidden", 1, "an asset transfer that also brings 100 EUR of cash, which no deposit explains"),
+    "case2-fx-conversion-quantity": _P6Point(TransactionType.FX_CONVERSION, "giving", {"quantity": "5"}, "qtyZero", 2, "a currency exchange that also moves 5 units of no asset"),
+    "case3-transfer-zero-quantity": _P6Point(TransactionType.TRANSFER, "giving", {"quantity": "0"}, "qtyNonzero", 3, "an asset transfer whose giving broker gives nothing, while the other still receives 10 units"),
+    "case4-fx-conversion-zero-cash": _P6Point(TransactionType.FX_CONVERSION, "giving", {"cash": {"code": "EUR", "amount": "0"}}, "cashNonzero", 4, "a currency exchange that gives 0 EUR for 540 USD"),
+    "case4-cash-transfer-zero-cash": _P6Point(TransactionType.CASH_TRANSFER, "receiving", {"cash": {"code": "EUR", "amount": "0"}}, "cashNonzero", 4, "a cash transfer whose 100 EUR leave one broker and reach the other as 0 EUR"),
+}
+
+# P6 case 4 through a promote (red before W-B36b, now its guard). ``promote_from`` (TX_TYPE_METADATA) pairs a WITHDRAWAL
+# and a DEPOSIT into a CASH_TRANSFER (one currency, two brokers, opposite amounts) or an FX_CONVERSION (one broker, two
+# currencies). Both take a zero amount when created — rule 7 wants a cash, which a zero cash is; rule 11 judges their sign
+# on a non-zero amount only — so the case is reachable. The CASH_TRANSFER needs both at 0 (opposite amounts); the exchange
+# has its EUR side alone at 0, so the refusal must land on that row and on no other.
+# (pair type, the WITHDRAWAL's cash, the DEPOSIT's cash, the DEPOSIT on the other broker, what the user has once it is saved)
+P6_ZERO_CASH_PROMOTES = [
+    pytest.param(TransactionType.CASH_TRANSFER, {"code": "EUR", "amount": "0"}, {"code": "EUR", "amount": "0"}, True, "a cash transfer of 0 EUR between two brokers, a pair that moves nothing", id="cash-transfer"),
+    pytest.param(TransactionType.FX_CONVERSION, {"code": "EUR", "amount": "0"}, {"code": "USD", "amount": "540"}, False, "a currency exchange that gives 0 EUR for 540 USD", id="fx-conversion"),
+]
+
+
+def _p6_pair_columns(world: _P6World, pair_type: TransactionType) -> tuple[dict, dict]:
+    """The columns of a valid ``pair_type`` pair, giving leg first, laid out so that no balance replay refuses an edit
+    of it: units leave ``shorting`` (which may go short), cash leaves ``overdraft`` (which may overdraw), an exchange
+    stays on one broker (W-B17), the receiving TRANSFER leg carries the cost basis it needs (N2)."""
+    layouts = {
+        TransactionType.TRANSFER: (
+            {"broker_id": world.shorting_id, "asset_id": world.asset_id, "quantity": Decimal("-10")},
+            {"broker_id": world.overdraft_id, "asset_id": world.asset_id, "quantity": Decimal("10"), "cost_basis_override": Decimal("50"), "cost_basis_currency": "EUR"},
+        ),
+        TransactionType.FX_CONVERSION: (
+            {"broker_id": world.overdraft_id, "amount": Decimal("-500"), "currency": "EUR"},
+            {"broker_id": world.overdraft_id, "amount": Decimal("540"), "currency": "USD"},
+        ),
+        TransactionType.CASH_TRANSFER: (
+            {"broker_id": world.overdraft_id, "amount": Decimal("-100"), "currency": "EUR"},
+            {"broker_id": world.shorting_id, "amount": Decimal("100"), "currency": "EUR"},
+        ),
+    }
+    common = {"type": pair_type, "date": P6_DAY, "description": world.marker, "tags": P6_TAG}
+    giving, receiving = layouts[pair_type]
+    return {**common, **giving}, {**common, **receiving}
+
+
+def _p6_create_payload(columns: dict, link_uuid: str) -> dict:
+    """A leg's ``columns`` as the batch receives a create (``TXCreateItem``): the cash and the cost basis as ``{code, amount}``."""
+    payload = {
+        "broker_id": columns["broker_id"],
+        "asset_id": columns.get("asset_id"),
+        "type": columns["type"].value,
+        "date": columns["date"].isoformat(),
+        "quantity": format(columns.get("quantity", Decimal("0")), "f"),
+        "link_uuid": link_uuid,
+        "description": columns["description"],
+        "tags": [columns["tags"]],
+    }
+    if columns.get("currency") is not None:
+        payload["cash"] = {"code": columns["currency"], "amount": format(columns["amount"], "f")}
+    if columns.get("cost_basis_override") is not None:
+        payload["cost_basis_override"] = {"code": columns["cost_basis_currency"], "amount": format(columns["cost_basis_override"], "f")}
+    return payload
+
+
+def _p6_columns_of(change: dict) -> dict:
+    """The columns an update's ``change`` writes (``_apply_update_values``, ``batch_edits.py``): a cash as amount and currency."""
+    columns = {}
+    if "quantity" in change:
+        columns["quantity"] = Decimal(change["quantity"])
+    if "cash" in change:
+        columns.update(amount=Decimal(change["cash"]["amount"]), currency=change["cash"]["code"])
+    return columns
+
+
+async def _p6_commit(session: AsyncSession, *, creates: list[dict] | None = None, updates: list[dict] | None = None, promotes: list[dict] | None = None) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` runs it, its transaction included: kept when the service answers
+    committed, rolled back otherwise (``commit_transactions``, ``api/v1/transactions.py``); no user, so no access check.
+
+    ``execute_batch`` writes an update into the row before its checks run, flushes it with the rest of the batch even
+    when they refuse it, and leaves the commit or the rollback to its caller. A savepoint stands in for the request's
+    transaction, as in W-B17's test above: the rows written before it survive its rollback (their flush opened SQLite's
+    transaction, so the savepoint nests in it), and the session fixture still rolls everything back at teardown.
+    """
+    savepoint = await session.begin_nested()
+    response = await TransactionService(session).execute_batch(creates_raw=creates or [], updates_raw=updates or [], deletes=[], promotes_raw=promotes or [], commit=True)
+    if response.committed:
+        await savepoint.commit()
+    else:
+        await savepoint.rollback()
+    return response
+
+
+async def _p6_stored(session: AsyncSession, row_ids) -> dict[int, dict]:
+    """The rows as the database holds them, by id, read by column (``P6_STORED_COLUMNS``): what the user finds once the
+    request is over. Never through the ORM objects, which a rolled-back savepoint leaves expired."""
+    statement = select(Transaction.id, *P6_STORED_COLUMNS).where(Transaction.id.in_(list(row_ids)))
+    return {row["id"]: {column: value for column, value in row.items() if column != "id"} for row in (await session.execute(statement)).mappings()}
+
+
+def _p6_sorted(issues: list[tuple]) -> list[tuple]:
+    """``(operation, index, ref_id, code, params)`` issues in a fixed order: their order is not the subject."""
+    return sorted(issues, key=lambda issue: (issue[0], issue[1], issue[2] or 0, issue[3] or ""))
+
+
+def _p6_issues(response: TXBatchResponse) -> list[tuple]:
+    """The batch's issues as ``(operation, index, ref_id, code, params)``, sorted."""
+    return _p6_sorted([(issue.operation, issue.index, issue.ref_id, issue.code, issue.params) for issue in response.issues])
+
+
+def _p6_render(response: TXBatchResponse) -> str:
+    """The batch's issues, for a failure message."""
+    return "; ".join(f"{issue.operation}[{issue.index}] ref_id={issue.ref_id} code={issue.code} params={issue.params} error={issue.error!r}" for issue in response.issues) or "none"
+
+
+def _p6_money(cash: dict) -> str:
+    """A ``{code, amount}`` cash, for a failure message."""
+    return f"{cash['amount']} {cash['code']}"
+
+
+async def _p6_created_pair(world: _P6World, pair_type: TransactionType) -> _P6Pair:
+    """A valid ``pair_type`` pair created through the batch, as the form sends one: the create rules (2, 3, 3b and the
+    pair's) admit it, so what refuses an update of it afterwards is the update's own doing."""
+    link_uuid = str(uuid.uuid4())
+    response = await _p6_commit(world.session, creates=[_p6_create_payload(columns, link_uuid) for columns in _p6_pair_columns(world, pair_type)])
+    assert response.committed is True, f"scaffold: a valid {pair_type.value} pair was refused at creation, so no update of it proves anything: {_p6_render(response)}"
+    ids = {result.index: result.ids[0] for result in response.results if result.operation == "create"}
+    pair = _P6Pair(pair_type=pair_type, giving_id=ids[0], receiving_id=ids[1])
+    links = {row_id: stored["related_transaction_id"] for row_id, stored in (await _p6_stored(world.session, pair.ids)).items()}
+    assert links == {pair.giving_id: pair.receiving_id, pair.receiving_id: pair.giving_id}, f"scaffold: the two {pair_type.value} legs created together are not linked to each other: {links}"
+    return pair
+
+
+async def _p6_pair_outside_the_table(world: _P6World, point: _P6Point) -> _P6Pair:
+    """The pair ``point``'s update leaves once saved, written with the ORM: what an API client could store before W-B36b.
+
+    The batch would refuse to create it (rules 2, 3, 3b), so the ORM writes it, linked both ways once the ids exist. It
+    is checked to be stored outside the table: the guards edit a row they verified, not one they assume.
+    """
+    session = world.session
+    columns = dict(zip(("giving", "receiving"), _p6_pair_columns(world, point.pair_type), strict=True))
+    broken = _p6_columns_of(point.change)
+    columns[point.side] = {**columns[point.side], **broken}
+    now = utcnow()
+    giving = Transaction(**columns["giving"], created_at=now, updated_at=now)
+    receiving = Transaction(**columns["receiving"], created_at=now, updated_at=now)
+    session.add_all([giving, receiving])
+    await session.flush()
+    giving.related_transaction_id = receiving.id
+    receiving.related_transaction_id = giving.id
+    await session.flush()
+    pair = _P6Pair(pair_type=point.pair_type, giving_id=giving.id, receiving_id=receiving.id)
+    stored = (await _p6_stored(session, pair.ids))[pair.leg(point.side)]
+    assert {column: stored[column] for column in broken} == broken, f"scaffold: the {point.side} {point.pair_type.value} leg is not stored outside the table as {broken}: {stored}"
+    return pair
+
+
+def _p6_edit_date(pair: _P6Pair, before: dict[int, dict], marker: str) -> tuple[list[dict], dict[int, dict]]:
+    """Both legs move to the next day: a field no point of P6 reads."""
+    updates = [{"id": row_id, "date": P6_NEXT_DAY.isoformat()} for row_id in pair.ids]
+    return updates, {row_id: {**before[row_id], "date": P6_NEXT_DAY} for row_id in pair.ids}
+
+
+def _p6_edit_same_values(pair: _P6Pair, before: dict[int, dict], marker: str) -> tuple[list[dict], dict[int, dict]]:
+    """A new description on both legs, their quantity and cash re-sent as stored: a client sending the whole row."""
+    description = f"{marker} edited"
+    updates = []
+    for row_id in pair.ids:
+        stored = before[row_id]
+        cash = {"cash": {"code": stored["currency"], "amount": format(stored["amount"], "f")}} if stored["currency"] is not None else {}
+        updates.append({"id": row_id, "description": description, "quantity": format(stored["quantity"], "f"), **cash})
+    return updates, {row_id: {**before[row_id], "description": description} for row_id in pair.ids}
+
+
+def _p6_edit_quantity(pair: _P6Pair, before: dict[int, dict], marker: str) -> tuple[list[dict], dict[int, dict]]:
+    """The TRANSFER moves 12 units instead of 10, both legs: its quantity changes and stays non-zero, its cash does not change."""
+    quantities = {pair.giving_id: Decimal("-12"), pair.receiving_id: Decimal("12")}
+    updates = [{"id": row_id, "quantity": format(quantity, "f")} for row_id, quantity in quantities.items()]
+    return updates, {row_id: {**before[row_id], "quantity": quantities[row_id]} for row_id in pair.ids}
+
+
+def _p6_edit_cash(pair: _P6Pair, before: dict[int, dict], marker: str) -> tuple[list[dict], dict[int, dict]]:
+    """The exchange's EUR leg gives 400 instead of 500: its cash changes and stays non-zero, its quantity does not change."""
+    updates = [{"id": pair.giving_id, "cash": {"code": "EUR", "amount": "-400"}}]
+    return updates, {**before, pair.giving_id: {**before[pair.giving_id], "amount": Decimal("-400"), "currency": "EUR"}}
+
+
+# The edits that leave the field of a pair's point as stored (GUARD): the updates, and the rows they must leave.
+P6_EDIT_BUILDERS = {"date": _p6_edit_date, "same-values": _p6_edit_same_values, "quantity": _p6_edit_quantity, "cash": _p6_edit_cash}
+# ``date`` and ``same-values`` on every point; ``quantity`` and ``cash`` where the pair type has the other field of the
+# table to change without breaking it: the TRANSFER with cash (case 3's quantity), the exchange with a quantity (case 4's cash).
+P6_EDITS_LEAVING_THE_FIELD = [
+    *(pytest.param(point_id, "date", id=f"{point_id}-date") for point_id in P6_POINTS),
+    *(pytest.param(point_id, "same-values", id=f"{point_id}-same-values") for point_id in P6_POINTS),
+    pytest.param("case1-transfer-cash", "quantity", id="case1-transfer-cash-quantity"),
+    pytest.param("case2-fx-conversion-quantity", "cash", id="case2-fx-conversion-quantity-cash"),
+]
+
+
+class TestUpdateTypeTableRules:
+    """W-B36b — the developer's decision P6 (2026-10-16): «la tabella dei tipi vale anche negli update, solo quando cambia
+    il campo interessato (come N2)».
+
+    An update runs rules 5-12 alone (``validate_transaction_business_rules``, from
+    ``batch_edits._validate_updated_final_state``), and so does a batch promote (``batch_creates._promoted_state_issues``).
+    Since W-B36 they read ``TX_TYPE_METADATA``, but four points where the table is stricter stayed unchecked before
+    W-B36b (rules 8, 10 and 11 of ``transactions.py``): (1) a TRANSFER's cash, ``cash_mode``
+    forbidden; (2) an FX_CONVERSION's quantity, ``quantity_sign`` zero; (3) a TRANSFER's zero quantity, ``quantity_sign``
+    nonzero; (4) the zero cash of an FX_CONVERSION or a CASH_TRANSFER, ``cash_sign`` nonzero, which had no code (W-B36b
+    added ``cashNonzero``). CREATE refuses all four with its own rules 2, 3 and 3b.
+
+    The cure (W-B36b): the function gets the fields an update changed (``changed_fields``), compared by value with the row
+    as stored before the batch (``changed_rule_fields`` against ``stored_rule_values``, as N2's ``stored_cost_fields``),
+    ``None`` for CREATE, which stayed as it was. Cases 1 and 4 are checked when the cash changes, 2 and 3 when the
+    quantity changes; a promote, which changes the type (``{"type"}``), checks the whole table on the rows it produces;
+    rows already stored outside the table stay editable.
+
+    - ``test_update_breaking_the_type_table_is_refused``, red before W-B36b, now its guard: each point, broken by an
+      update of a valid pair created through the batch, is refused with the table's code on the row changed; before
+      W-B36b the update was saved.
+    - ``test_promote_of_zero_cash_rows_is_refused``, red before W-B36b, now its guard: a WITHDRAWAL and a DEPOSIT at 0
+      promoted into a CASH_TRANSFER, or a WITHDRAWAL at 0 and a DEPOSIT promoted into an FX_CONVERSION, is refused with
+      ``cashNonzero`` on each row at 0; before W-B36b the promote was saved.
+    - GUARD ``test_notes_or_tags_edit_of_a_pair_stored_outside_the_table_commits``: the pairs those updates leave, written
+      with the ORM, take a description-only or a tags-only edit; green before W-B36b and since.
+    - GUARD ``test_edit_leaving_the_broken_field_as_stored_commits``: the same pairs take an edit that leaves the field of
+      their point as stored — the date, the other field of the table, the quantity and cash re-sent as stored; green
+      before W-B36b and since.
+
+    Every batch runs as ``POST /transactions/commit`` runs it, its transaction included (``_p6_commit``), and the rows are
+    read back by column (``_p6_stored``). Ownership: the rows are the test's own, on the file's per-test brokers and
+    asset, in the session the fixture rolls back; nothing is committed to the lane's database.
+    """
+
+    @pytest_asyncio.fixture
+    async def world(self, session, test_broker_overdraft, test_broker_shorting, test_asset) -> _P6World:
+        """The file's two brokers and asset of this test, by id, and a marker for this test alone."""
+        return _P6World(session=session, overdraft_id=test_broker_overdraft.id, shorting_id=test_broker_shorting.id, asset_id=test_asset.id, marker=f"W-B36b {uuid.uuid4().hex}")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("point_id", list(P6_POINTS))
+    async def test_update_breaking_the_type_table_is_refused(self, world, point_id):
+        """Red before W-B36b, now its guard: an update breaking a point of P6 on a valid pair is refused, with the table's code on its row.
+
+        One issue, ``(update, 1, the row changed, code, {"type": <pair type>})``; nothing committed; the pair as stored.
+        The partner leg's date goes first, at index 0 — an edit no rule refuses, before or after the cure — so the
+        refusal must land on the changed row's own index, not on a default. Before W-B36b the update was saved: the four
+        points stayed out of rules 5-11.
+        """
+        point = P6_POINTS[point_id]
+        pair = await _p6_created_pair(world, point.pair_type)
+        subject_id = pair.leg(point.side)
+        before = await _p6_stored(world.session, pair.ids)
+        updates = [{"id": pair.partner(point.side), "date": P6_NEXT_DAY.isoformat()}, {"id": subject_id, **point.change}]
+
+        response = await _p6_commit(world.session, updates=updates)
+
+        expected = [("update", 1, subject_id, point.code, {"type": point.pair_type.value})]
+        assert (
+            response.committed is False
+        ), f"W-B36b (P6 case {point.case}): the update {point.change} of the {point.side} leg id={subject_id} of a {point.pair_type.value} pair was saved, and the user now has {point.user_faces}. TX_TYPE_METADATA refuses it once the field changes: expected {expected}; got committed=True, issues: {_p6_render(response)}"
+        assert _p6_issues(response) == expected, f"W-B36b (P6 case {point.case}): the update is refused, but the user is not told {point.code} on the row they changed, and on it alone (update 1, id={subject_id}): got {_p6_render(response)}"
+        after = await _p6_stored(world.session, pair.ids)
+        assert after == before, f"W-B36b (P6 case {point.case}): the user is told the update was refused, yet the pair is no longer as stored: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("pair_type", "withdrawn", "deposited", "two_brokers", "user_faces"), P6_ZERO_CASH_PROMOTES)
+    async def test_promote_of_zero_cash_rows_is_refused(self, world, pair_type, withdrawn, deposited, two_brokers, user_faces):
+        """Red before W-B36b, now its guard: a promote of rows at 0 into a CASH_TRANSFER or an FX_CONVERSION is refused with ``cashNonzero``.
+
+        The two rows are saved through the batch (scaffold: they still can be, so the case is reachable) and
+        ``promote_from`` pairs them into ``pair_type`` (scaffold). A promote changes the type, so the whole table holds on
+        the rows it produces: one ``(promote, 0, the row, cashNonzero, {"type": <pair type>})`` per row at 0; nothing
+        committed; both rows as stored. Before W-B36b the promote was saved: rule 11 did not read ``nonzero``.
+        """
+        session = world.session
+        loose = [
+            {"broker_id": world.overdraft_id, "type": "WITHDRAWAL", "date": P6_DAY.isoformat(), "cash": withdrawn, "description": world.marker},
+            {"broker_id": world.shorting_id if two_brokers else world.overdraft_id, "type": "DEPOSIT", "date": P6_DAY.isoformat(), "cash": deposited, "description": world.marker},
+        ]
+        created = await _p6_commit(session, creates=loose)
+        assert created.committed is True, f"scaffold: a WITHDRAWAL of {_p6_money(withdrawn)} and a DEPOSIT of {_p6_money(deposited)} can no longer be saved, so P6 case 4 is unreachable through a promote: retire this case. Refused with: {_p6_render(created)}"
+        ids = {result.index: result.ids[0] for result in created.results if result.operation == "create"}
+        withdrawal_id, deposit_id = ids[0], ids[1]
+        promoted_to = TransactionService._find_promote_rule_match(await session.get(Transaction, withdrawal_id), await session.get(Transaction, deposit_id))
+        assert promoted_to == pair_type, f"scaffold: promote_from (TX_TYPE_METADATA) pairs this WITHDRAWAL and DEPOSIT into {promoted_to}, not {pair_type.value}: the promote below would prove nothing about it"
+        before = await _p6_stored(session, (withdrawal_id, deposit_id))
+        zero_ids = [row_id for row_id in (withdrawal_id, deposit_id) if before[row_id]["amount"] == 0]
+
+        response = await _p6_commit(session, promotes=[{"id_a": withdrawal_id, "id_b": deposit_id}])
+
+        expected = _p6_sorted([("promote", 0, row_id, "cashNonzero", {"type": pair_type.value}) for row_id in zero_ids])
+        assert (
+            response.committed is False
+        ), f"W-B36b (P6 case 4): the promote of WITHDRAWAL id={withdrawal_id} ({_p6_money(withdrawn)}) and DEPOSIT id={deposit_id} ({_p6_money(deposited)}) into a {pair_type.value} was saved, and the user now has {user_faces}. A promote changes the type, so the whole table holds on the rows it produces: expected {expected}; got committed=True, issues: {_p6_render(response)}"
+        assert _p6_issues(response) == expected, f"W-B36b (P6 case 4): the promote is refused, but the user is not told cashNonzero on each row at 0 ({zero_ids}), and on those alone: got {_p6_render(response)}"
+        after = await _p6_stored(session, (withdrawal_id, deposit_id))
+        assert after == before, f"W-B36b (P6 case 4): the user is told the promote was refused, yet the rows are no longer as stored: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("edit", ["description", "tags"])
+    @pytest.mark.parametrize("point_id", list(P6_POINTS))
+    async def test_notes_or_tags_edit_of_a_pair_stored_outside_the_table_commits(self, world, point_id, edit):
+        """Guard, green before W-B36b and since: a description-only or tags-only edit of a pair stored outside the table commits.
+
+        The pair is the one ``point``'s update leaves, written with the ORM. The edit goes to both legs, as the app sends
+        it (a pair keeps one description and one set of tags). It changes no cash and no quantity, so no point of P6 is
+        asked: the edit lands, and nothing else changes, the field outside the table included (no repair).
+        """
+        point = P6_POINTS[point_id]
+        pair = await _p6_pair_outside_the_table(world, point)
+        before = await _p6_stored(world.session, pair.ids)
+        sent, stored_as = (f"{world.marker} edited", f"{world.marker} edited") if edit == "description" else ([P6_EDITED_TAG], P6_EDITED_TAG)
+
+        response = await _p6_commit(world.session, updates=[{"id": row_id, edit: sent} for row_id in pair.ids])
+
+        assert (
+            response.committed is True and response.issues == []
+        ), f"W-B36b: rows stored outside the table stay editable for their notes and tags (P6, as N2). The user cannot save a {edit}-only edit of {point.user_faces} (P6 case {point.case}), stored before the rule, though it changes no cash and no quantity: {_p6_render(response)}"
+        expected = {row_id: {**before[row_id], edit: stored_as} for row_id in pair.ids}
+        after = await _p6_stored(world.session, pair.ids)
+        assert after == expected, f"W-B36b: the {edit} edit was saved, but the pair is not the stored one with its new {edit}: nothing else may change, the field outside the table included (no repair). Expected {expected}, got {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("point_id", "edit"), P6_EDITS_LEAVING_THE_FIELD)
+    async def test_edit_leaving_the_broken_field_as_stored_commits(self, world, point_id, edit):
+        """Guard, green before W-B36b and since: an edit leaving the field of the pair's point as stored commits.
+
+        ``date``: the date alone. ``same-values``: a new description with the quantity and the cash re-sent as stored,
+        as a client sending the whole row does: the cure compares values with the stored row, not the keys of the
+        payload. ``quantity`` (the TRANSFER with cash): 12 units each way instead of 10, so the quantity changes and holds
+        (case 3) while the cash does not change (case 1 not asked). ``cash`` (the exchange with a quantity): 400 EUR
+        instead of 500, so the cash changes and holds (case 4) while the quantity does not change (case 2 not asked). Red
+        after a cure that asks every point on every update, or on every key a payload carries.
+        """
+        point = P6_POINTS[point_id]
+        pair = await _p6_pair_outside_the_table(world, point)
+        before = await _p6_stored(world.session, pair.ids)
+        updates, expected = P6_EDIT_BUILDERS[edit](pair, before, world.marker)
+
+        response = await _p6_commit(world.session, updates=updates)
+
+        assert (
+            response.committed is True and response.issues == []
+        ), f"W-B36b: the table holds in an update only when the field changes (P6). The user cannot save the {edit} edit {updates} of {point.user_faces} (P6 case {point.case}), stored before the rule, though it leaves that field as stored: {_p6_render(response)}"
+        after = await _p6_stored(world.session, pair.ids)
+        assert after == expected, f"W-B36b: the {edit} edit was saved, but the pair is not the stored one with that edit: nothing else may change, the field outside the table included (no repair). Expected {expected}, got {after}"

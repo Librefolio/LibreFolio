@@ -1127,19 +1127,22 @@ CASH_SIGN_REFUSALS = {
     "positive": ("cashSignPositive", lambda amount: amount < 0),
 }
 
-# P6 — a decision pending with the developer (2026-10-16): should rules 5-11, which with rule 12 are all the UPDATE path
-# runs (``batch_edits._validate_updated_final_state``), enforce the stricter modes TX_TYPE_METADATA gives TRANSFER,
-# FX_CONVERSION and CASH_TRANSFER, as CREATE already does with its create-only rules 2, 3 and 3b? Until it is taken they
-# keep the behaviour of before W-B36: W-B36 reads the table with these four cases as explicit exceptions.
-# Key: the (type, field) of TX_TYPE_METADATA that rules 5-11 do not enforce; value: the case, and what they do instead.
-# Case 4 moves no cell of TX-S-095 (rule 11 judges a non-zero cash only, where "nonzero" has nothing to refuse): only its
-# guard sees it. An entry leaves only with P6, and its guard (TX-S-104 … TX-S-107) flips with it.
-_P6_PENDING: dict[tuple[TransactionType, str], str] = {
-    (TransactionType.TRANSFER, "cash_mode"): "case 1: 'forbidden', yet rule 8 refuses cash on ADJUSTMENT only, no cashForbidden",
-    (TransactionType.FX_CONVERSION, "quantity_sign"): "case 2: 'zero', yet rule 10 leaves FX_CONVERSION out of qtyZero",
-    (TransactionType.TRANSFER, "quantity_sign"): "case 3: 'nonzero', yet rule 10 checks ADJUSTMENT only, no qtyNonzero",
-    (TransactionType.FX_CONVERSION, "cash_sign"): "case 4: 'nonzero', yet a zero cash gets no code from rules 5-11",
-    (TransactionType.CASH_TRANSFER, "cash_sign"): "case 4: 'nonzero', yet a zero cash gets no code from rules 5-11",
+# P6 — the developer's decision (2026-10-16), cured in W-B36b: rules 5-11, which with rule 12 are all the UPDATE path runs
+# (``batch_edits._validate_updated_final_state``), hold these (type, field) cells of TX_TYPE_METADATA only on a field the
+# operation changed, the ``changed_fields`` of ``validate_transaction_business_rules``: ``"cash"`` for cases 1 and 4,
+# ``"quantity"`` for cases 2 and 3, ``"type"`` (a promote) for every case. A call without ``changed_fields`` — CREATE's,
+# which refuses all four with its create-only rules 2, 3 and 3b, and every cell of the parity table TX-S-095 — leaves
+# them out, as every call did before W-B36b (W-B36 had kept them as explicit exceptions).
+# Key: the (type, field) of TX_TYPE_METADATA held only on a change; value: the case, and what a change gets.
+# Case 4 moves no cell of TX-S-095 (rule 11 judges the sign of a non-zero cash, where "nonzero" has nothing to refuse, and
+# its zero-cash code, cashNonzero, needs a changed cash): only its guards see it (TX-S-107, TX-S-110). An entry and its
+# guard (TX-S-104 … TX-S-107, each case with and without a change) change together.
+_P6_ON_A_CHANGE: dict[tuple[TransactionType, str], str] = {
+    (TransactionType.TRANSFER, "cash_mode"): "case 1: 'forbidden', rule 8 refuses a TRANSFER's cash (cashForbidden) only when the cash changes",
+    (TransactionType.FX_CONVERSION, "quantity_sign"): "case 2: 'zero', rule 10 refuses an FX_CONVERSION's quantity (qtyZero) only when the quantity changes",
+    (TransactionType.TRANSFER, "quantity_sign"): "case 3: 'nonzero', rule 10 refuses a TRANSFER's zero quantity (qtyNonzero) only when the quantity changes",
+    (TransactionType.FX_CONVERSION, "cash_sign"): "case 4: 'nonzero', rule 11 refuses a zero cash (cashNonzero) only when the cash changes",
+    (TransactionType.CASH_TRANSFER, "cash_sign"): "case 4: 'nonzero', rule 11 refuses a zero cash (cashNonzero) only when the cash changes",
 }
 
 # TX-S-108: one violation of each code of rules 5-11 on today's table. The cell, otherwise valid, then the code, the
@@ -1172,15 +1175,20 @@ VISIBLE_RULE_MESSAGES = [
 ]
 
 
-def _run_rules(*, tx_type: TransactionType, asset_id: Optional[int] = None, quantity: Decimal = Decimal("0"), cash: Optional[Currency] = None, asset_event_id: Optional[int] = None) -> list[PydanticCustomError]:
-    """``validate_transaction_business_rules`` on this final state, with cost_basis_mode=None: rule 12 (W-B31's) is silent."""
-    return validate_transaction_business_rules(tx_type=tx_type, asset_id=asset_id, quantity=quantity, cash=cash, asset_event_id=asset_event_id, cost_basis_mode=None)
+def _run_rules(*, tx_type: TransactionType, asset_id: Optional[int] = None, quantity: Decimal = Decimal("0"), cash: Optional[Currency] = None, asset_event_id: Optional[int] = None, changed_fields: Optional[frozenset[str]] = None) -> list[PydanticCustomError]:
+    """``validate_transaction_business_rules`` on this final state, with cost_basis_mode=None: rule 12 (W-B31's) is silent.
+
+    ``changed_fields`` goes through as given (W-B36b): ``None``, CREATE's call, leaves out the cells decision P6 holds only
+    on a changed field (``_P6_ON_A_CHANGE``); an update passes the fields it changed, a promote ``{"type"}``.
+    """
+    return validate_transaction_business_rules(tx_type=tx_type, asset_id=asset_id, quantity=quantity, cash=cash, asset_event_id=asset_event_id, cost_basis_mode=None, changed_fields=changed_fields)
 
 
 def _returned_violations(codes: Optional[frozenset[str]], **cell) -> list[tuple[str, dict]]:
     """The (code, params) ``validate_transaction_business_rules`` returns for ``cell``, in its order, kept to ``codes``.
 
     ``codes=None`` keeps every code but rule 12's ``costBasisModeIncompatible`` (W-B31's): a code a rule would add shows.
+    ``cell`` may carry ``changed_fields``, passed on to the function (``_run_rules``).
     """
     errors = _run_rules(**cell)
     if codes is None:
@@ -1189,8 +1197,12 @@ def _returned_violations(codes: Optional[frozenset[str]], **cell) -> list[tuple[
 
 
 def _metadata_mode(tx_type: TransactionType, field: str) -> Optional[str]:
-    """What ``TX_TYPE_METADATA``, read when called, says of ``field`` for ``tx_type``; ``None`` where P6 keeps it out of rules 5-11."""
-    return None if (tx_type, field) in _P6_PENDING else getattr(TX_TYPE_METADATA[tx_type], field)
+    """What ``TX_TYPE_METADATA``, read when called, says of ``field`` for ``tx_type`` to a call without ``changed_fields``.
+
+    ``None`` on the cells decision P6 holds only on a changed field (``_P6_ON_A_CHANGE``): such a call, CREATE's, leaves
+    them out of rules 5-11.
+    """
+    return None if (tx_type, field) in _P6_ON_A_CHANGE else getattr(TX_TYPE_METADATA[tx_type], field)
 
 
 def _metadata_event_allowed() -> str:
@@ -1211,8 +1223,9 @@ def _metadata_violations(codes: Optional[frozenset[str]], *, tx_type: Transactio
       are; eventRequiresAsset without an asset, whatever the type;
     - rules 10 and 11: ``QUANTITY_SIGN_REFUSALS`` by quantity_sign, ``CASH_SIGN_REFUSALS`` by cash_sign on a non-zero cash;
 
-    less the P6 cases (``_P6_PENDING``). Params are ``{"type": <type>}``, plus ``allowed`` for eventTypeIncompatible. Kept
-    to ``codes``; ``None`` keeps them all.
+    less the cells decision P6 holds only on a changed field (``_P6_ON_A_CHANGE``), so never ``cashNonzero``: the
+    expectation of a call without ``changed_fields``, CREATE's, the only call the tests that use it make. Params are
+    ``{"type": <type>}``, plus ``allowed`` for eventTypeIncompatible. Kept to ``codes``; ``None`` keeps them all.
     """
     params = {"type": tx_type.value}
     cash_mode = _metadata_mode(tx_type, "cash_mode")
@@ -1258,8 +1271,10 @@ class TestRules5To11FollowMetadata:
     Before W-B36 they were hand-written copies of the table: the types that want an asset (rule 5, ``asset_mode``) and a
     cash (7, ``cash_mode``), the cash refused to ADJUSTMENT (8, ``cash_mode`` ``forbidden``), the types an asset event may
     link (9, ``event_compatible``, copied once more as ``EVENT_COMPATIBLE_TYPES``), the quantity and cash signs (10 and 11,
-    ``quantity_sign`` and ``cash_sign``). Since W-B36 they read the table when they run, keeping the four cases where the
-    table is stricter than the rules as explicit exceptions until P6 (``_P6_PENDING``, ``TestRules5To11P6Pending``).
+    ``quantity_sign`` and ``cash_sign``). Since W-B36 they read the table when they run. The four cases where the table is
+    stricter than the rules stayed explicit exceptions until decision P6; since W-B36b the rules hold them only on a
+    changed field (``_P6_ON_A_CHANGE``, ``TestRules5To11P6OnAChange``). No call in this class passes ``changed_fields``,
+    so those cases stay out of it.
 
     - TX-S-095: parity guard, green before W-B36 (the copies matched the table, less the P6 cases) and since.
     - TX-S-096 … TX-S-103: red before W-B36, now its guards. One entry of ``TX_TYPE_METADATA`` is replaced for one test
@@ -1272,14 +1287,15 @@ class TestRules5To11FollowMetadata:
     """
 
     def test_rules_5_11_match_metadata_on_every_cell(self):
-        """TX-S-095: rules 5-11 return exactly what TX_TYPE_METADATA implies, less the P6 cases, on every cell.
+        """TX-S-095: rules 5-11, called without ``changed_fields``, return exactly what TX_TYPE_METADATA implies, less the P6 cases, on every cell.
 
         Every type × asset (none, 1) × cash (none, EUR 0, +100, -100) × quantity (-1, 0, 1) × asset event (none, 1), with
-        cost_basis_mode=None: the (code, params) the function returns against those ``_metadata_violations`` derives from
-        the table. Guard: green before W-B36 because the hand-written rules matched the table once the four P6 cases were
-        set aside, and since because the rules read it. Every code but rule 12's is compared, so a code a rule would add,
-        or return twice, shows; the order of the list is not compared. One table, one assertion: a failure shows every
-        wrong cell at once.
+        cost_basis_mode=None and no ``changed_fields`` (CREATE's call): the (code, params) the function returns against
+        those ``_metadata_violations`` derives from the table. Guard: green before W-B36 because the hand-written rules
+        matched the table once the four P6 cases were set aside, and since because the rules read it; since W-B36b they
+        hold the P6 cases on a changed field only, and no cell here passes one. Every code but rule 12's is compared, so a
+        code a rule would add, or return twice, shows; the order of the list is not compared. One table, one assertion: a
+        failure shows every wrong cell at once.
         """
         returned: dict[str, list[tuple[str, dict]]] = {}
         expected: dict[str, list[tuple[str, dict]]] = {}
@@ -1290,7 +1306,7 @@ class TestRules5To11FollowMetadata:
             expected[label] = _sorted_violations(_metadata_violations(None, **cell))
 
         wrong = {label: f"returned {returned[label]}, TX_TYPE_METADATA says {expected[label]}" for label in expected if returned[label] != expected[label]}
-        assert returned == expected, f"Rules 5-11 must return what TX_TYPE_METADATA implies, less the P6 cases (_P6_PENDING): {len(wrong)} of {len(expected)} cells differ: {wrong}"
+        assert returned == expected, f"Rules 5-11, called without changed_fields (CREATE's call), must return what TX_TYPE_METADATA implies, less the cells decision P6 holds only on a changed field (_P6_ON_A_CHANGE): {len(wrong)} of {len(expected)} cells differ: {wrong}"
 
     def test_rule5_asset_required_follows_metadata(self, monkeypatch):
         """TX-S-096: red before W-B36, now its guard. A BUY made ``asset_mode="optional"`` in TX_TYPE_METADATA gets no assetRequired without asset.
@@ -1448,73 +1464,127 @@ class TestRules5To11FollowMetadata:
         assert returned == expected, f"W-B36: with TX_TYPE_METADATA[DEPOSIT].cash_sign = 'negative', rule 11 must refuse DEPOSIT +100 EUR (cashSignNegative) and admit -100 EUR; it returned {returned}: rule 11 no longer reads the table"
 
 
-class TestRules5To11P6Pending:
-    """The four cases where ``TX_TYPE_METADATA`` is stricter than rules 5-11 today: P6, a decision pending with the developer.
+class TestRules5To11P6OnAChange:
+    """Decision P6 at the function level: rules 5-11 hold the four cases where ``TX_TYPE_METADATA`` is stricter only on a changed field (W-B36b).
 
-    These guards pin a pending developer decision (P6, 2026-10-16): should the UPDATE path, which runs rules 5-12 alone,
-    enforce the table's stricter modes as CREATE does with its create-only rules 2, 3 and 3b? Until it is taken the
-    behaviour of before W-B36 stays: W-B36 keeps these cases as explicit exceptions. Green before and since W-B36; each
-    flips only with P6, together with its entry in ``_P6_PENDING``. Each checks first that the table still says the
-    stricter thing and that the case is still pending. Every cell is otherwise valid for rules 5-11, so nothing at all
-    comes back.
+    The developer's decision (P6, 2026-10-16): the UPDATE path, which runs rules 5-12 alone, holds the table's stricter
+    modes, as CREATE does with its create-only rules 2, 3 and 3b, but only on a field the operation changed, so a row
+    stored outside them stays editable. ``validate_transaction_business_rules`` gets those fields as ``changed_fields``:
+    ``"cash"`` asks cases 1 and 4, ``"quantity"`` cases 2 and 3, ``"type"`` (a promote: a new type judges every field
+    anew) all four; ``None``, CREATE's call, none. Through the batch, ``TestUpdateTypeTableRules``
+    (``test_transaction_service.py``) pins the same decision on stored rows.
+
+    Each test pins one case on one cell, otherwise valid for rules 5-11, so nothing else comes back:
+
+    - without ``changed_fields``, nothing: guard, green before W-B36b (W-B36 kept the case out of every call as an
+      explicit exception) and since;
+    - with the case's field changed, exactly its code with ``{"type": <type>}``; with only the other field changed,
+      nothing; with ``{"type"}``, the code: green since W-B36b, which gave the function ``changed_fields``.
+
+    Each checks first that the table still says the stricter thing and that the cell is still in ``_P6_ON_A_CHANGE``.
     """
 
-    def test_p6_case1_transfer_cash_not_refused(self):
-        """TX-S-104: P6 case 1. A TRANSFER with 100 EUR of cash gets no cashForbidden, though TX_TYPE_METADATA forbids its cash.
+    def test_p6_case1_transfer_cash_refused_only_when_the_cash_changes(self):
+        """TX-S-104: P6 case 1. A TRANSFER with 100 EUR of cash gets cashForbidden only when its cash changes, or its type.
 
-        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 8 refuses cash on ADJUSTMENT
-        only. CREATE refuses this TRANSFER anyway (create-only rule 2); an UPDATE lets it through.
+        TX_TYPE_METADATA forbids a TRANSFER's cash, and since W-B36b rule 8 holds that on a changed cash only. Without
+        ``changed_fields``, CREATE's call, nothing comes back (CREATE refuses this TRANSFER with its create-only rule 2):
+        green before W-B36b and since. An update changing the cash gets exactly cashForbidden; one changing only the
+        quantity, nothing, so a TRANSFER stored with cash stays editable; a promote (``{"type"}``) gets cashForbidden:
+        green since W-B36b.
         """
         assert TX_TYPE_METADATA[TransactionType.TRANSFER].cash_mode == "forbidden", "scaffold: TX_TYPE_METADATA no longer forbids cash on TRANSFER: P6 case 1 is gone, retire this guard"
-        assert (TransactionType.TRANSFER, "cash_mode") in _P6_PENDING, "scaffold: P6 case 1 has left _P6_PENDING, so the decision is taken: flip this guard with it"
+        assert (TransactionType.TRANSFER, "cash_mode") in _P6_ON_A_CHANGE, "scaffold: P6 case 1 has left _P6_ON_A_CHANGE, the cells rules 5-11 hold only on a changed field, so this test no longer describes the code: rewrite or retire it with the case"
+        cell = {"tx_type": TransactionType.TRANSFER, "asset_id": 1, "quantity": Decimal("1"), "cash": CASH_EUR_PLUS_100}
+        refused = [("cashForbidden", {"type": "TRANSFER"})]
 
-        returned = _returned_violations(None, tx_type=TransactionType.TRANSFER, asset_id=1, quantity=Decimal("1"), cash=CASH_EUR_PLUS_100)
+        unchanged = _returned_violations(None, **cell)
+        cash_changed = _returned_violations(None, **cell, changed_fields=frozenset({"cash"}))
+        quantity_changed = _returned_violations(None, **cell, changed_fields=frozenset({"quantity"}))
+        promoted = _returned_violations(None, **cell, changed_fields=frozenset({"type"}))
 
-        assert returned == [], f"P6 case 1 is pending: until the developer decides, rules 5-11 must keep admitting a TRANSFER with cash (no cashForbidden); got {returned}"
+        assert unchanged == [], f"P6 case 1: without changed_fields, CREATE's call (its rule 2 refuses this TRANSFER on its own), rules 5-11 must admit a TRANSFER with cash, no cashForbidden; got {unchanged}"
+        assert cash_changed == refused, f"P6 case 1 (W-B36b): an update changing a TRANSFER's cash to 100 EUR must get exactly {refused}, or the user saves an asset transfer that also brings cash, which no deposit explains; got {cash_changed}"
+        assert quantity_changed == [], f"P6 case 1 (W-B36b): an update changing only the quantity of a TRANSFER stored with 100 EUR of cash must not be refused for that cash, or the user can no longer edit a row stored before the rule; got {quantity_changed}"
+        assert promoted == refused, f"P6 case 1 (W-B36b): a promote into a TRANSFER changes the type, so every field is judged anew and its 100 EUR of cash must get exactly {refused}; got {promoted}"
 
-    def test_p6_case2_fx_conversion_quantity_not_refused(self):
-        """TX-S-105: P6 case 2. An FX_CONVERSION with quantity 1 gets no qtyZero, though TX_TYPE_METADATA gives it quantity_sign ``zero``.
+    def test_p6_case2_fx_conversion_quantity_refused_only_when_the_quantity_changes(self):
+        """TX-S-105: P6 case 2. An FX_CONVERSION with quantity 1 gets qtyZero only when its quantity changes, or its type.
 
-        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 10 leaves FX_CONVERSION out of
-        qtyZero. CREATE refuses it anyway (create-only rule 3, fxConversionQtyZero); an UPDATE lets it through.
+        TX_TYPE_METADATA gives FX_CONVERSION quantity_sign ``zero``, and since W-B36b rule 10 holds that on a changed
+        quantity only. Without ``changed_fields``, CREATE's call, nothing comes back (CREATE refuses this FX_CONVERSION
+        with its create-only rule 3, fxConversionQtyZero): green before W-B36b and since. An update changing the quantity
+        gets exactly qtyZero; one changing only the cash, nothing, so an exchange stored with a quantity stays editable; a
+        promote (``{"type"}``) gets qtyZero: green since W-B36b.
         """
         assert TX_TYPE_METADATA[TransactionType.FX_CONVERSION].quantity_sign == "zero", "scaffold: TX_TYPE_METADATA no longer wants quantity = 0 from FX_CONVERSION: P6 case 2 is gone, retire this guard"
-        assert (TransactionType.FX_CONVERSION, "quantity_sign") in _P6_PENDING, "scaffold: P6 case 2 has left _P6_PENDING, so the decision is taken: flip this guard with it"
+        assert (TransactionType.FX_CONVERSION, "quantity_sign") in _P6_ON_A_CHANGE, "scaffold: P6 case 2 has left _P6_ON_A_CHANGE, the cells rules 5-11 hold only on a changed field, so this test no longer describes the code: rewrite or retire it with the case"
+        cell = {"tx_type": TransactionType.FX_CONVERSION, "quantity": Decimal("1"), "cash": CASH_EUR_PLUS_100}
+        refused = [("qtyZero", {"type": "FX_CONVERSION"})]
 
-        returned = _returned_violations(None, tx_type=TransactionType.FX_CONVERSION, quantity=Decimal("1"), cash=CASH_EUR_PLUS_100)
+        unchanged = _returned_violations(None, **cell)
+        quantity_changed = _returned_violations(None, **cell, changed_fields=frozenset({"quantity"}))
+        cash_changed = _returned_violations(None, **cell, changed_fields=frozenset({"cash"}))
+        promoted = _returned_violations(None, **cell, changed_fields=frozenset({"type"}))
 
-        assert returned == [], f"P6 case 2 is pending: until the developer decides, rules 5-11 must keep admitting an FX_CONVERSION with a quantity (no qtyZero); got {returned}"
+        assert unchanged == [], f"P6 case 2: without changed_fields, CREATE's call (its rule 3 refuses this FX_CONVERSION on its own, fxConversionQtyZero), rules 5-11 must admit an FX_CONVERSION with a quantity, no qtyZero; got {unchanged}"
+        assert quantity_changed == refused, f"P6 case 2 (W-B36b): an update changing an FX_CONVERSION's quantity to 1 must get exactly {refused}, or the user saves a currency exchange that also moves units of no asset; got {quantity_changed}"
+        assert cash_changed == [], f"P6 case 2 (W-B36b): an update changing only the cash of an FX_CONVERSION stored with quantity 1 must not be refused for that quantity, or the user can no longer edit a row stored before the rule; got {cash_changed}"
+        assert promoted == refused, f"P6 case 2 (W-B36b): a promote into an FX_CONVERSION changes the type, so every field is judged anew and its quantity of 1 must get exactly {refused}; got {promoted}"
 
-    def test_p6_case3_transfer_zero_quantity_not_refused(self):
-        """TX-S-106: P6 case 3. A TRANSFER with quantity 0 gets no qtyNonzero, though TX_TYPE_METADATA gives it quantity_sign ``nonzero``.
+    def test_p6_case3_transfer_zero_quantity_refused_only_when_the_quantity_changes(self):
+        """TX-S-106: P6 case 3. A TRANSFER with quantity 0 gets qtyNonzero only when its quantity changes, or its type.
 
-        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 10 wants quantity != 0 from
-        ADJUSTMENT only. CREATE refuses this TRANSFER anyway (create-only rule 2); an UPDATE lets it through.
+        TX_TYPE_METADATA gives TRANSFER quantity_sign ``nonzero``, and since W-B36b rule 10 holds that on a changed
+        quantity only. Without ``changed_fields``, CREATE's call, nothing comes back (CREATE refuses this TRANSFER with its
+        create-only rule 2): green before W-B36b and since. An update changing the quantity gets exactly qtyNonzero; a
+        change of the cash alone, nothing, so a TRANSFER stored with quantity 0 stays editable; a promote (``{"type"}``)
+        gets qtyNonzero: green since W-B36b.
         """
         assert TX_TYPE_METADATA[TransactionType.TRANSFER].quantity_sign == "nonzero", "scaffold: TX_TYPE_METADATA no longer wants quantity != 0 from TRANSFER: P6 case 3 is gone, retire this guard"
-        assert (TransactionType.TRANSFER, "quantity_sign") in _P6_PENDING, "scaffold: P6 case 3 has left _P6_PENDING, so the decision is taken: flip this guard with it"
+        assert (TransactionType.TRANSFER, "quantity_sign") in _P6_ON_A_CHANGE, "scaffold: P6 case 3 has left _P6_ON_A_CHANGE, the cells rules 5-11 hold only on a changed field, so this test no longer describes the code: rewrite or retire it with the case"
+        cell = {"tx_type": TransactionType.TRANSFER, "asset_id": 1, "quantity": Decimal("0")}
+        refused = [("qtyNonzero", {"type": "TRANSFER"})]
 
-        returned = _returned_violations(None, tx_type=TransactionType.TRANSFER, asset_id=1, quantity=Decimal("0"))
+        unchanged = _returned_violations(None, **cell)
+        quantity_changed = _returned_violations(None, **cell, changed_fields=frozenset({"quantity"}))
+        cash_changed = _returned_violations(None, **cell, changed_fields=frozenset({"cash"}))
+        promoted = _returned_violations(None, **cell, changed_fields=frozenset({"type"}))
 
-        assert returned == [], f"P6 case 3 is pending: until the developer decides, rules 5-11 must keep admitting a TRANSFER with quantity 0 (no qtyNonzero); got {returned}"
+        assert unchanged == [], f"P6 case 3: without changed_fields, CREATE's call (its rule 2 refuses this TRANSFER on its own), rules 5-11 must admit a TRANSFER with quantity 0, no qtyNonzero; got {unchanged}"
+        assert quantity_changed == refused, f"P6 case 3 (W-B36b): an update changing a TRANSFER's quantity to 0 must get exactly {refused}, or the user saves an asset transfer whose leg moves nothing while its partner still does; got {quantity_changed}"
+        assert cash_changed == [], f"P6 case 3 (W-B36b): a change of the cash alone must not ask a TRANSFER's quantity, or the user cannot touch the cash of a row stored with quantity 0 before the rule without being refused for that quantity; got {cash_changed}"
+        assert promoted == refused, f"P6 case 3 (W-B36b): a promote into a TRANSFER changes the type, so every field is judged anew and its quantity of 0 must get exactly {refused}; got {promoted}"
 
-    def test_p6_case4_zero_cash_not_refused_on_fx_conversion_and_cash_transfer(self):
-        """TX-S-107: P6 case 4. FX_CONVERSION and CASH_TRANSFER with a zero cash get no code, though their cash_sign is ``nonzero``.
+    def test_p6_case4_fx_conversion_and_cash_transfer_zero_cash_refused_only_when_the_cash_changes(self):
+        """TX-S-107: P6 case 4. FX_CONVERSION and CASH_TRANSFER with a zero cash get cashNonzero only when their cash changes, or their type.
 
-        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 11 judges a non-zero cash only
-        and rule 7 wants a cash, which a zero cash is: none of rules 5-11 refuses it. CREATE refuses both anyway (create-only
-        rules 3 and 3b: fxConversionCashRequired, cashRequired); an UPDATE lets them through. The parity table (TX-S-095)
-        cannot see this case: only this guard does.
+        TX_TYPE_METADATA gives both cash_sign ``nonzero``. Before W-B36b none of rules 5-11 refused their zero cash: rule
+        11 judged a non-zero cash only, and rule 7 wants a cash, which a zero cash is. Since W-B36b rule 11 refuses it, on
+        a changed cash only, with the code P6 added, cashNonzero. Without ``changed_fields``, CREATE's call, nothing comes
+        back (CREATE refuses both with its create-only rules 3 and 3b, fxConversionCashRequired and cashRequired): green
+        before W-B36b and since. An update changing the cash gets exactly cashNonzero; one changing only the quantity,
+        nothing, so a pair stored at 0 stays editable; a promote (``{"type"}``) gets cashNonzero: green since W-B36b. The
+        parity table (TX-S-095) cannot see this case: only this guard and TX-S-110 do.
         """
         types = (TransactionType.FX_CONVERSION, TransactionType.CASH_TRANSFER)
         not_nonzero = [tx_type.value for tx_type in types if TX_TYPE_METADATA[tx_type].cash_sign != "nonzero"]
         assert not not_nonzero, f"scaffold: TX_TYPE_METADATA no longer gives {not_nonzero} cash_sign 'nonzero': that part of P6 case 4 is gone, retire it here"
-        not_pending = [tx_type.value for tx_type in types if (tx_type, "cash_sign") not in _P6_PENDING]
-        assert not not_pending, f"scaffold: P6 case 4 has left _P6_PENDING for {not_pending}, so the decision is taken: flip this guard with it"
+        not_on_a_change = [tx_type.value for tx_type in types if (tx_type, "cash_sign") not in _P6_ON_A_CHANGE]
+        assert not not_on_a_change, f"scaffold: P6 case 4 has left _P6_ON_A_CHANGE for {not_on_a_change}, the cells rules 5-11 hold only on a changed field, so this test no longer describes the code there: rewrite or retire it with the case"
+        cells = {tx_type.value: {"tx_type": tx_type, "quantity": Decimal("0"), "cash": CASH_EUR_ZERO} for tx_type in types}
+        admitted = {"FX_CONVERSION": [], "CASH_TRANSFER": []}
+        refused = {"FX_CONVERSION": [("cashNonzero", {"type": "FX_CONVERSION"})], "CASH_TRANSFER": [("cashNonzero", {"type": "CASH_TRANSFER"})]}
 
-        returned = {tx_type.value: _returned_violations(None, tx_type=tx_type, cash=CASH_EUR_ZERO) for tx_type in types}
+        unchanged = {label: _returned_violations(None, **cell) for label, cell in cells.items()}
+        cash_changed = {label: _returned_violations(None, **cell, changed_fields=frozenset({"cash"})) for label, cell in cells.items()}
+        quantity_changed = {label: _returned_violations(None, **cell, changed_fields=frozenset({"quantity"})) for label, cell in cells.items()}
+        promoted = {label: _returned_violations(None, **cell, changed_fields=frozenset({"type"})) for label, cell in cells.items()}
 
-        assert returned == {"FX_CONVERSION": [], "CASH_TRANSFER": []}, f"P6 case 4 is pending: until the developer decides, rules 5-11 must keep admitting a zero cash on FX_CONVERSION and CASH_TRANSFER (no code at all); got {returned}"
+        assert unchanged == admitted, f"P6 case 4: without changed_fields, CREATE's call (its rules 3 and 3b refuse a zero cash on their own), rules 5-11 must admit a zero cash on FX_CONVERSION and CASH_TRANSFER, no code at all; got {unchanged}"
+        assert cash_changed == refused, f"P6 case 4 (W-B36b): an update changing the cash of an FX_CONVERSION or a CASH_TRANSFER to 0 EUR must get exactly cashNonzero, or the user saves a pair one of whose legs moves no money: expected {refused}, got {cash_changed}"
+        assert quantity_changed == admitted, f"P6 case 4 (W-B36b): an update changing only the quantity of an FX_CONVERSION or a CASH_TRANSFER stored at 0 EUR must not be refused for that cash, or the user can no longer edit a row stored before the rule; got {quantity_changed}"
+        assert promoted == refused, f"P6 case 4 (W-B36b): a promote into an FX_CONVERSION or a CASH_TRANSFER changes the type, so every field is judged anew and a cash of 0 EUR must get exactly cashNonzero: expected {refused}, got {promoted}"
 
 
 class TestRules5To11VisibleMessages:
@@ -1533,6 +1603,10 @@ class TestRules5To11VisibleMessages:
     which batch validation (``TXValidationIssue.error``) and broker import (``BRIMValidationIssue.message``) pass on.
     Before W-B38 the pack carried each ``message_template``, so a ``{type}`` template reached the user unresolved:
     "{type} requires asset_id".
+
+    TX-S-110 pins the code decision P6 added (W-B36b) for the ``nonzero`` cash_sign of FX_CONVERSION and CASH_TRANSFER,
+    ``cashNonzero``, the same way: it is reached by an update that changes the cash (``changed_fields``). Red before
+    W-B36b (``TypeError``: the function had no ``changed_fields``), now its guard.
     """
 
     @pytest.mark.parametrize(("cell", "violation"), VISIBLE_RULE_MESSAGES)
@@ -1565,3 +1639,25 @@ class TestRules5To11VisibleMessages:
             {"code": "qtyPositive", "msg": "BUY requires quantity > 0", "ctx": {"type": "BUY"}},
         ]
         assert packed == expected, f"Two violations must be packed with the code, the rendered message and the params of each (W-B38): expected {expected}, got {packed}"
+
+    def test_cash_nonzero_message_on_an_update_changing_the_cash(self):
+        """TX-S-110: red before W-B36b (TypeError, no such keyword), now its guard. A CASH_TRANSFER whose update changes its cash to 0 gets ``cashNonzero`` (P6 case 4).
+
+        The code P6 added for the ``nonzero`` cash_sign TX_TYPE_METADATA gives FX_CONVERSION and CASH_TRANSFER, pinned as
+        TX-S-108 pins the others: the code, the ``message_template`` "{type} requires cash.amount != 0", the rendered
+        ``message()`` (the text batch validation shows, ``TXValidationIssue.error``) and the params. W-B36b gave
+        ``validate_transaction_business_rules`` the fields an update changes (``changed_fields``; ``None`` for CREATE,
+        which stayed as it was: its rules 3 and 3b refuse a zero cash on their own), so the code is reached through an
+        update whose cash changed, ``changed_fields=frozenset({"cash"})``. The CASH_TRANSFER is otherwise valid (no asset,
+        quantity 0, a cash of 0 EUR, no asset event, no cost_basis_mode): exactly one violation comes back.
+
+        Before W-B36b the function had no such parameter, so the call raised a ``TypeError`` (unexpected keyword argument
+        ``changed_fields``). Red again means the user no longer reads this code, text or params for a zero cash.
+        """
+        assert TX_TYPE_METADATA[TransactionType.CASH_TRANSFER].cash_sign == "nonzero", "scaffold: TX_TYPE_METADATA no longer gives CASH_TRANSFER cash_sign 'nonzero': P6 case 4 is gone there, retire this pin"
+
+        errors = validate_transaction_business_rules(tx_type=TransactionType.CASH_TRANSFER, asset_id=None, quantity=Decimal("0"), cash=CASH_EUR_ZERO, asset_event_id=None, cost_basis_mode=None, changed_fields=frozenset({"cash"}))
+
+        returned = [(error.type, error.message_template, error.message(), error.context) for error in errors]
+        expected = [("cashNonzero", "{type} requires cash.amount != 0", "CASH_TRANSFER requires cash.amount != 0", {"type": "CASH_TRANSFER"})]
+        assert returned == expected, f"W-B36b (P6 case 4): a CASH_TRANSFER whose update changes its cash to 0 must get exactly cashNonzero, with the template, the rendered message and the params the user reads: expected {expected}, got {returned}"

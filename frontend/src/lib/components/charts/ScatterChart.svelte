@@ -165,7 +165,7 @@
     {#if built.isEmpty}
         <!-- An empty canvas is indistinguishable from a broken one, so the empty
              case says so in words rather than rendering nothing. -->
-        <div class="flex items-center justify-center rounded-lg border border-dashed border-gray-300 text-sm text-gray-500 dark:border-slate-600 dark:text-gray-400" style:height data-testid="{testId}-empty">
+        <div class="flex items-center justify-center rounded-lg border border-dashed border-lf-input text-sm text-lf-muted" style:height data-testid="{testId}-empty">
             {emptyLabel}
         </div>
     {:else}
