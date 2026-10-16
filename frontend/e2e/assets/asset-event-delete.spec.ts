@@ -13,10 +13,18 @@
  * beside the edited rows, and no `DELETE` is sent (decision of 15/10 16:20). Before E1b the editor
  * deletes through `DELETE /assets/events`, so scenarios 1 and 2 wait for a POST that never comes.
  *
- * Prerequisites: backend in test mode (port 6041), mock data with asset events populated.
+ * Data (W-B29). Scenarios 1 and 2 never write on the shared mock data: each creates a USD asset of
+ * its own (unique name, two closes so the chart and its editor button are drawn) and its own events;
+ * scenario 2 adds a broker of its own with the one DIVIDEND that realises its event. They used to save
+ * on the shared Apple at a fixed date, so the desktop and mobile projects overwrote each other's row,
+ * and a regression of the refusal would have deleted Apple's mock events. After each test the owned
+ * broker goes first (with `force`, which takes its transaction), then the asset with its prices and
+ * events — whatever the outcome. Scenarios 3 and 4 only read the mock data (mock data with asset
+ * events and linked transactions populated).
  *
  * UI flow:
- *   Asset detail → click "Edit Prices & Events" (data-testid="asset-detail-editdata-btn")
+ *   Asset detail (/assets/{id}, opened by id) → click "Edit Prices & Events"
+ *   (data-testid="asset-detail-editdata-btn")
  *   → editor panel opens (data-testid="asset-detail-editor-panel")
  *   → click Events tab (data-testid="asset-editor-events-tab")
  *   → DataEditor shows event rows (data-row-id={eventId})
@@ -29,52 +37,13 @@ import {expect, test, type Page, type Request, type Response} from '../fixtures/
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
-
-/** The path of the save, and of the old delete: the same, told apart by the method. */
-const EVENTS_PATH = '/api/v1/assets/events';
+import {daysAgoIso} from '../fixtures/dates';
+import {uniqueSuffix} from '../fixtures/unique';
+import {createOwnedAsset, deleteOwned, eventRow, EVENTS_PATH, linkDividend, markDeleted, openEventsEditor, seedEvents, snapshot, storedEvents, type Owned} from './asset-events-owned';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Open the combined data editor and switch to Events tab */
-async function openEventsEditor(page: Page) {
-    // The events are loaded by the detail page itself and handed to the editor
-    // as a prop, so the editor can only be as ready as the page. Sleeping 500 ms
-    // after the tab click turned "still loading" into "this asset has no events"
-    // once four workers shared the backend.
-    await expect(page.getByTestId('asset-detail-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
-
-    // Click "Edit Prices & Events" button
-    const editBtn = page.locator('[data-testid="asset-detail-editdata-btn"]');
-    await expect(editBtn).toBeVisible({timeout: 5_000});
-    await editBtn.click();
-
-    // Wait for editor panel to appear
-    const editorPanel = page.locator('[data-testid="asset-detail-editor-panel"]');
-    await expect(editorPanel).toBeVisible({timeout: 5_000});
-
-    // Switch to Events tab
-    const eventsTab = page.locator('[data-testid="asset-editor-events-tab"]');
-    await eventsTab.click();
-    await expect(eventsTab).toHaveAttribute('aria-selected', 'true', {timeout: 5_000});
-}
-
-/** Get visible event rows in the DataEditor table */
-function getEventRows(page: Page) {
-    return page.locator('[data-testid="asset-detail-editor-panel"] tbody tr[data-row-id]');
-}
-
-/**
- * Trigger the "delete" row action via the DataTable kebab menu: click the
- * "row-actions-{rowId}" button, then the "context-menu-action-delete" item
- * (see DataTable.svelte / ContextMenu.svelte).
- */
-async function clickDeleteRowAction(page: Page, row: import('@playwright/test').Locator) {
-    const kebabBtn = row.getByTestId(/^row-actions-/);
-    await kebabBtn.click();
-    await page.getByTestId('context-menu-action-delete').click();
-}
 
 /**
  * Close every toast of one variant through its own ✕ and wait until they have slid out.
@@ -115,166 +84,115 @@ function standaloneNumber(n: number): RegExp {
 // ---------------------------------------------------------------------------
 
 test.describe('Asset Event Delete', () => {
-    const API = '/api/v1';
+    // No longer serial, and no longer on Apple. Scenarios 1 and 2 each own the asset, the events
+    // and (scenario 2) the broker they act on, so neither takes anything from the other, from the
+    // other Playwright project running the same spec, or from the shared mock data.
 
-    // No longer serial. It used to be, because the first test consumed one of
-    // Apple's two unlinked mock events and the others read that same finite set.
-    // The first test now creates the event it deletes, and the second works only
-    // inside the 3M window — where every fixture event is linked, so it deletes
-    // nothing. Neither takes anything from the other.
+    /** What the running test created; deleted after it, whatever its outcome (nothing for scenarios 3 and 4). */
+    let owned: Owned = {assetIds: [], brokerIds: []};
 
     test.beforeEach(async ({page}) => {
+        owned = {assetIds: [], brokerIds: []};
         await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwned(page, owned);
     });
 
     // ===================================================================
     // Scenario 1: Delete event without linked transactions → success
     // ===================================================================
     test('delete unlinked event succeeds', async ({page}) => {
-        // This test used to delete one of Apple's two unlinked mock DIVIDENDs.
-        // That works exactly twice: on the third run the oldest row is a *linked*
-        // event, the API answers `in_use`, and the test goes red for a reason that
-        // has nothing to do with the code. A test that consumes fixture data is a
-        // test with an expiry date — so it creates the event it is about to delete.
-        await navigateTo(page, '/assets');
-        await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
-        // The cards render first and are re-rendered when the bulk price request lands.
-        // Clicking during that window aims at a node Svelte is about to replace, and the
-        // navigation is simply lost — which is what took this test red at load average 22.
-        await waitForSettled(page.getByTestId('assets-page'));
+        // Setup and cleanup are API round trips on top of the UI flow, as in asset-event-editor-save.
+        test.setTimeout(60_000);
+        // An asset of this test's own, with the one unlinked DIVIDEND it deletes. It used to save that
+        // event on the shared Apple at a fixed date: the desktop and mobile projects then upserted the
+        // same (asset, date, type) and the second overwrote the first's row.
+        const asset = await createOwnedAsset(page, owned);
+        const marker = `e2e-event-delete ${uniqueSuffix()}`;
+        const [eventId] = await seedEvents(page, asset.id, [{date: daysAgoIso(20), type: 'DIVIDEND', amount: '0.42', notes: marker}]);
 
-        const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
-        await expect(appleCard).toBeVisible({timeout: 5_000});
-        await appleCard.click();
+        // The asset's own page, opened by id, on a range holding the event: the editor only lists
+        // events inside the selected range.
+        const panel = await openEventsEditor(page, asset);
 
-        await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
-        const assetId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
-        expect(Number.isFinite(assetId), 'asset detail URL must end with the asset id').toBeTruthy();
+        // Ours, by id — not "the first row".
+        await expect(eventRow(panel, eventId), 'the unlinked DIVIDEND this test created is listed').toBeVisible({timeout: 15_000});
+        await markDeleted(page, panel, eventId);
 
-        // A date inside the 1Y window but clear of the fixture's own events
-        // (~270 / 180 / 90 / 13 / 3 days ago), so the upsert cannot overwrite one.
-        const eventDate = new Date(Date.now() - 230 * 86_400_000).toISOString().slice(0, 10);
-        const marker = `e2e-event-delete-${Date.now()}`;
-        const created = await page.request.post(`${API}/assets/events`, {
-            data: [{asset_id: assetId, events: [{date: eventDate, type: 'DIVIDEND', value: {amount: 0.42, code: 'USD'}, notes: marker}]}],
-        });
-        expect(created.ok(), 'the event this test deletes must exist first').toBeTruthy();
+        // The save button should become enabled (dirty count > 0)
+        const saveBtn = panel.getByTestId('asset-editor-save-btn');
+        await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
-        const queried = await page.request.post(`${API}/assets/events/query`, {
-            data: [{asset_id: assetId, date_range: {start: eventDate, end: eventDate}}],
-        });
-        expect(queried.ok()).toBeTruthy();
-        const queryBody = await queried.json();
-        const mine = (queryBody.items?.[0]?.events ?? []).find((e: any) => e.notes === marker);
-        expect(mine, `no event carries the marker ${marker}`).toBeTruthy();
-        const eventId: number = mine.id;
+        // The editor reports the outcome in a toast: none left over, so the next is this save's.
+        await closeToasts(page, 'success');
 
-        try {
-            // Reload so the detail page fetches the event we just created, and widen
-            // to 1Y: the editor only lists events inside the selected range.
-            await page.reload();
-            await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
+        // The save is one POST carrying the deletion (E1b). Before E1b the editor deleted
+        // through DELETE /assets/events, and this POST never came.
+        const recorder = recordEventWrites(page);
+        const responsePromise = page.waitForResponse(isEventsSave, {timeout: 10_000});
 
-            // Changing the range refetches prices *and* events in one request. Arm the
-            // wait before the click: a refetch that lands after a row is marked for
-            // deletion resets the editor and silently disables Save.
-            const rangeApplied = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/prices/query') && resp.request().method() === 'POST', {timeout: 30_000});
-            await page.locator('button:text("1Y")').click();
-            await rangeApplied;
+        // Click save to commit deletion
+        await saveBtn.click();
+        const response = await responsePromise;
+        expect(response.status()).toBe(200);
+        const sent = (response.request().postDataJSON() as Array<{asset_id: number; delete_ids?: number[]}>).find((item) => item.asset_id === asset.id);
+        expect(sent?.delete_ids, 'the row marked deleted travels in the save as delete_ids').toEqual([eventId]);
 
-            await openEventsEditor(page);
+        // The event we own must come back as deleted — not merely "something was".
+        const body = (await response.json()) as {results?: Array<{asset_id: number; deleted_ids?: number[]}>};
+        const ours = body.results?.find((r) => r.asset_id === asset.id);
+        expect(ours?.deleted_ids ?? [], `event ${eventId} should be reported deleted, got ${JSON.stringify(body.results)}`).toContain(eventId);
 
-            // Ours, by id — not "the first row", which belongs to whoever the fixture says.
-            const targetRow = page.locator(`[data-testid="asset-detail-editor-panel"] tbody tr[data-row-id="${eventId}"]`);
-            await expect(targetRow).toBeVisible({timeout: 15_000});
-            await clickDeleteRowAction(page, targetRow);
+        // The toast is where the user learns how many events went: the one row this test
+        // marked. Every catalogue spells the count `{n}`; a value passed under any other
+        // name leaves svelte-i18n nothing to format, and it shows the raw message instead.
+        // The placeholder and the number are asserted, never the words around them.
+        const toast = page.getByTestId('toast-success');
+        await expect(toast, 'the save reports the deletion in a success toast').toBeVisible({timeout: 5_000});
+        await expect(toast, 'the count is interpolated, not left as the raw {n}').not.toContainText('{n}');
+        await expect(toast, 'no ICU placeholder is left unresolved').not.toContainText('{');
+        await expect(toast, 'the toast says how many events were deleted: the one this test marked').toContainText(standaloneNumber(1));
+        // The toast closes the save: whatever it sent is in by now.
+        recorder.stop();
+        expect(recorder.methods, 'a save is one POST, and never a DELETE').toEqual(['POST']);
 
-            // The save button should become enabled (dirty count > 0)
-            const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
-            await expect(saveBtn).toBeEnabled({timeout: 3_000});
-
-            // The editor reports the outcome in a toast: none left over, so the next is this save's.
-            await closeToasts(page, 'success');
-
-            // The save is one POST carrying the deletion (E1b). Before E1b the editor deleted
-            // through DELETE /assets/events, and this POST never came.
-            const recorder = recordEventWrites(page);
-            const responsePromise = page.waitForResponse(isEventsSave, {timeout: 10_000});
-
-            // Click save to commit deletion
-            await saveBtn.click();
-            const response = await responsePromise;
-            expect(response.status()).toBe(200);
-            const sent = (response.request().postDataJSON() as Array<{asset_id: number; delete_ids?: number[]}>).find((item) => item.asset_id === assetId);
-            expect(sent?.delete_ids, 'the row marked deleted travels in the save as delete_ids').toEqual([eventId]);
-
-            // The event we own must come back as deleted — not merely "something was".
-            const body = (await response.json()) as {results?: Array<{asset_id: number; deleted_ids?: number[]}>};
-            const ours = body.results?.find((r) => r.asset_id === assetId);
-            expect(ours?.deleted_ids ?? [], `event ${eventId} should be reported deleted, got ${JSON.stringify(body.results)}`).toContain(eventId);
-
-            // The toast is where the user learns how many events went: the one row this test
-            // marked. Every catalogue spells the count `{n}`; a value passed under any other
-            // name leaves svelte-i18n nothing to format, and it shows the raw message instead.
-            // The placeholder and the number are asserted, never the words around them.
-            const toast = page.getByTestId('toast-success');
-            await expect(toast, 'the save reports the deletion in a success toast').toBeVisible({timeout: 5_000});
-            await expect(toast, 'the count is interpolated, not left as the raw {n}').not.toContainText('{n}');
-            await expect(toast, 'no ICU placeholder is left unresolved').not.toContainText('{');
-            await expect(toast, 'the toast says how many events were deleted: the one this test marked').toContainText(standaloneNumber(1));
-            // The toast closes the save: whatever it sent is in by now.
-            recorder.stop();
-            expect(recorder.methods, 'a save is one POST, and never a DELETE').toEqual(['POST']);
-        } finally {
-            // If anything above failed before the UI deleted it, do not leave it behind. The
-            // delete is scoped by asset (decision 21): without asset_id it is a 422, and the event stays.
-            await page.request.delete(`${API}/assets/events?asset_id=${assetId}&ids=${eventId}`).catch(() => {});
-        }
+        // Gone from the server, not only from the table.
+        const remaining = (await storedEvents(page, asset.id)).map((e) => e.id);
+        expect(remaining, `event ${eventId} is no longer stored`).not.toContain(eventId);
     });
 
     // ===================================================================
     // Scenario 2: Delete event with linked transaction → the save is refused whole
     // ===================================================================
     test('deleting an event a transaction realises refuses the save: nothing deleted, an error toast', async ({page}) => {
-        // Navigate to Apple detail (has a DIVIDEND event linked to a transaction)
-        await navigateTo(page, '/assets');
-        await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
-        // The cards render first and are re-rendered when the bulk price request lands.
-        // Clicking during that window aims at a node Svelte is about to replace, and the
-        // navigation is simply lost — which is what took this test red at load average 22.
-        await waitForSettled(page.getByTestId('assets-page'));
+        // Setup and cleanup are API round trips on top of the UI flow, as in asset-event-editor-save.
+        test.setTimeout(60_000);
+        // An asset of this test's own with two DIVIDENDs: one realised by a DIVIDEND transaction on a
+        // broker of its own, one unlinked beside it. It used to mark Apple's mock events, found by a
+        // visibility probe: a regression of the refusal would have deleted shared data.
+        const asset = await createOwnedAsset(page, owned);
+        const linkedDay = daysAgoIso(22);
+        const marker = `e2e-event-delete in use ${uniqueSuffix()}`;
+        const [linkedId, unlinkedId] = await seedEvents(page, asset.id, [
+            {date: linkedDay, type: 'DIVIDEND', amount: '1.00', notes: `${marker} linked`},
+            {date: daysAgoIso(18), type: 'DIVIDEND', amount: '2.00', notes: `${marker} unlinked`},
+        ]);
+        await linkDividend(page, owned, asset.id, linkedId, linkedDay);
+        const before = await snapshot(page, asset.id);
 
-        const appleCard = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
-        await expect(appleCard).toBeVisible({timeout: 5_000});
-        await appleCard.click();
-        await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
-        const assetId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
-        expect(Number.isFinite(assetId), 'asset detail URL must end with the asset id').toBeTruthy();
+        const panel = await openEventsEditor(page, asset);
+        await expect(eventRow(panel, linkedId), 'the realised DIVIDEND this test created is listed').toBeVisible({timeout: 15_000});
+        await expect(eventRow(panel, unlinkedId), 'the unlinked DIVIDEND beside it is listed').toBeVisible();
 
-        // Open events editor
-        await openEventsEditor(page);
-
-        // Deliberately left at the default 3M range: every Apple event inside that
-        // window is linked to a transaction, so this test stays independent of the
-        // destructive delete performed by the first test above.
-        const eventRows = getEventRows(page);
-        await expect.poll(() => eventRows.count(), {timeout: 10_000, message: 'Apple must have events — check populate_mock_data.py'}).toBeGreaterThan(0);
-        const count = await eventRows.count();
-
-        // Mark ALL events for deletion (one of them is linked → the whole save is refused)
-        const markedIds: number[] = [];
-        for (let i = 0; i < count; i++) {
-            const row = eventRows.nth(i);
-            const kebabBtn = row.getByTestId(/^row-actions-/);
-            if (await kebabBtn.isVisible({timeout: 1_000}).catch(() => false)) {
-                markedIds.push(Number(await row.getAttribute('data-row-id')));
-                await clickDeleteRowAction(page, row);
-            }
-        }
-        expect(markedIds.length, 'at least one Apple event can be marked deleted').toBeGreaterThan(0);
+        // Mark both deleted, by id: the linked one makes the whole save refused, and the unlinked one
+        // proves that nothing of a refused save goes through (before E1b it was deleted anyway).
+        const markedIds = [linkedId, unlinkedId];
+        for (const id of markedIds) await markDeleted(page, panel, id);
 
         // Save should be enabled
-        const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
+        const saveBtn = panel.getByTestId('asset-editor-save-btn');
         await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
         // The editor reports the outcome in a toast: none left over, so the next is this save's.
@@ -287,6 +205,11 @@ test.describe('Asset Event Delete', () => {
         await saveBtn.click();
 
         const response = await responsePromise;
+        const sent = (response.request().postDataJSON() as Array<{asset_id: number; delete_ids?: number[]}>).find((item) => item.asset_id === asset.id);
+        expect(
+            [...(sent?.delete_ids ?? [])].sort((a, b) => a - b),
+            'both marked rows travel in the save as delete_ids',
+        ).toEqual([...markedIds].sort((a, b) => a - b));
         expect(response.status(), 'an event in use cannot be deleted: the save is refused whole').toBe(409);
 
         // The refusal names the events in use, with how many transactions realise each — counts,
@@ -294,7 +217,10 @@ test.describe('Asset Event Delete', () => {
         const body = (await response.json()) as {detail?: {error_code?: string; params?: {events?: Array<Record<string, unknown>>}}};
         expect(body.detail?.error_code).toBe('EVENT_IN_USE');
         const inUse = body.detail?.params?.events ?? [];
-        expect(inUse.length, 'at least one marked event is in use').toBeGreaterThan(0);
+        expect(
+            inUse.map((event) => event.id),
+            'exactly the event the DIVIDEND realises is named in use',
+        ).toEqual([linkedId]);
         for (const event of inUse) {
             expect(Object.keys(event).sort(), 'an event in use is named by id, date, type and a count').toEqual(['date', 'id', 'linked_transactions', 'type']);
             expect(markedIds, 'only events this save marked are named').toContain(event.id);
@@ -307,14 +233,13 @@ test.describe('Asset Event Delete', () => {
         await expect(errorToast, 'a refused save is reported in an error toast').toBeVisible({timeout: 5_000});
         await expect(errorToast, 'no ICU placeholder is left unresolved').not.toContainText('{');
 
-        // Nothing deleted: every marked event is still there, the unlinked ones included.
-        const stored = await page.request.get(`${API}/assets/events?${markedIds.map((id) => `ids=${id}`).join('&')}`);
-        expect(stored.ok(), `read the marked events back: HTTP ${stored.status()}`).toBeTruthy();
-        const storedIds = ((await stored.json()) as {items: Array<{asset_id: number; events: Array<{id: number}>}>}).items.flatMap((item) => item.events.map((e) => e.id));
+        // Nothing deleted: every marked event is still there, the unlinked one included, and unchanged.
+        const storedIds = (await storedEvents(page, asset.id)).map((e) => e.id);
         expect(
             [...storedIds].sort((a, b) => a - b),
             'all or nothing: no marked event was deleted',
         ).toEqual([...markedIds].sort((a, b) => a - b));
+        expect(await snapshot(page, asset.id), 'nothing of the refused save is kept').toEqual(before);
     });
 
     // ===================================================================
