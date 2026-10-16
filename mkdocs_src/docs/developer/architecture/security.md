@@ -150,7 +150,7 @@ second account), and, for the administrator API and the reset links, `./dev.py t
 
 An account's email is a way into it: a password-reset link sent to that address lets whoever reads it choose the
 password. `PUT /api/v1/auth/profile` used to change the email on the session cookie alone, so with the self-service
-«forgot password» ([held](../backend/email.md#flow-forgot) until lot E4) a moment inside someone else's session — an
+«forgot password» ([open](../backend/email.md#flow-forgot) since lot E4) a moment inside someone else's session — an
 XSS, a stolen cookie, a computer left unlocked — would become a permanent takeover: change the email, ask for a reset,
 choose the password (security review of lot E3, rated medium). Since lot A6e (release 1.3), an email change asks for
 the current password and ends the account's other sessions. No other route changes an account's email.
@@ -168,6 +168,10 @@ the current password and ends the account's other sessions. No other route chang
   new address. The route then sets a new session cookie through `_issue_session_cookie()`, as `change-password` does:
   the device that made the change carries on, and every other session gets `401` at its next request. A
   username-only change ends no session, nor does a refused one.
+- **The notice.** After a change of address, the route queues workstream E's `email_changed_work()` with the address
+  read before the change: a notice to that address, after the answer, with the new one masked
+  ([An Email Address Changes](../backend/email.md#flow-email-changed)). It changes neither the answer nor the cookie;
+  with email off, nothing is sent.
 
 | Answer | `detail` | When |
 |--------|----------|------|
@@ -763,10 +767,12 @@ who may register, the user limit, what each endpoint answers — are in
 [Registration, Invitations and the Admin API](access_control.md#registration); those of email verification in
 [Email Verification](../backend/email.md#verification). What protects their tokens:
 
-- **Only an administrator, or a shell on the server, issues a link.** `POST /api/v1/users/invites` and
+- **Only an administrator, or a shell on the server, issues a link it can see.** `POST /api/v1/users/invites` and
   `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
   `./dev.py user reset-link` run on the server. The token is in that response, or printed by that command,
-  once. A lost link is replaced with a new one.
+  once. A lost link is replaced with a new one. «Forgot password» issues a reset link for an anonymous request,
+  but only by email, to the account's own address, and within its limits
+  ([A Forgotten Password](../backend/email.md#flow-forgot)).
 - **Only the newest reset link of an account works.** Issuing one revokes the account's live reset links, and
   spending one revokes any other.
 - **A verification link is never shown, only emailed, and only to the account's own address.** Registration
