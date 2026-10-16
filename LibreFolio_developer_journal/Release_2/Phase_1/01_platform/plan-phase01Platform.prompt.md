@@ -4049,3 +4049,111 @@ CP7a, e dire lo stato di C-96. HEAD `91cfe34b3`.
    > Lasciata così: l'ingranaggio la lega al «⚙️ Populating…» di `_api_setup()` che segue. Nessuna modifica a
    > `_backend_utils.py` (in stage da MF), quindi il `desc` del selettore `test-runner-cli` non nomina i casi nuovi:
    > lo dice la docstring del file di test.
+6. ✅ **Entrata** (19:24): commit `74b420db8` (fix), `e0dbc23a2` (docs), `c2a842653` (journal); in `dev_release2` con
+   il merge `946e02d55` (treno 126), senza conflitti. HEAD `c2a842653` verificato, albero pulito. Il coordinatore
+   chiude W-B54 come «spostato in H-21».
+
+### Revisioni della sera (2026-10-16) — in FROZEN, su richiesta del coordinatore
+
+Tutte in sola lettura. Le due nei worktree di W e di B sono un'eccezione alla regola d'isolamento, concessa dal
+coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altre leggono oggetti git già committati.
+
+1. ✅ **W-B53 / N56** (19:35, worktree di W): il passo `brim-parse-pool`, che avvia il forkserver di BRIM in
+   background. **OK**, con due modifiche e alcune prove in più.
+   - La posizione è giusta: dopo `market-holidays` e prima di `scheduler`, con gli altri prewarm.
+   - Modifica 1: il suo test di posizione usi `assert_in_relative_order(…, ("market-holidays", "brim-parse-pool",
+     "scheduler"))`, non `index + 1`.
+   - Modifica 2: `LIBREFOLIO_BRIM_PREWARM` riga **commentata** in `.env.example`, con il suo default (regole 1 e 5
+     del mio guardiano `services env-example`), e doc secondo C-99. Per la modalità test, `is_test_mode()`.
+   - Prontezza e risveglio non ritardati: `/system/ready` controlla solo DB e migrazioni; il risveglio di Fly
+     riprende dalla memoria senza rifare il lifespan.
+   - Prove in più per W: `services shutdown-budget`, `services shutdown-budget-process` e `services env-example`,
+     perché il forkserver ora è un figlio fin dall'avvio. Lo termina il mio passo `child-processes`.
+2. ✅ **L'ordine d'avvio con B3** (20:30). Il mio passo `plugin-secrets-check` non vuole commenti: non solleva mai,
+   come fissa `test_at_startup_a_check_that_cannot_run_is_a_warning_and_never_raises`.
+   - Il punto vero: `admin-bootstrap` (A, su dev da `a39b67944`) e `restore-commit` (B, su un ramo indietro di 49
+     commit) entrano entrambi subito dopo `global-settings`, e i pin di B e il mio non decidono quale va prima.
+   - Proposta, **adottata come N57**: `global-settings` → `admin-bootstrap` → `restore-commit` →
+     `plugin-secrets-check`. Il passo di A legge e scrive i dati ripristinati, e in `run_admin_bootstrap` un
+     `OperationalError` che non sia «locked» si propaga. Prima del commit, un errore riporta indietro il ripristino
+     all'avvio seguente; dopo, il server cade a ogni avvio.
+   - B fissa l'ordine nel suo test e mette un commento sul suo passo; A è informato.
+3. ✅ **Revisione di B5c** (18:30): vedi il passo 12 del lotto H-12. OK, con N53 accettata.
+4. ✅ **La nota di E sul rapporto dead-code** (20:31) → **H-22** nel backlog. `mask_client_address` e
+   `reset_client_address_cache` sono davvero usate solo dai test.
+   - Nessun log del codice scrive l'indirizzo di un client (grep su `dev_release2`), quindi la prima non ha
+     consumatori; la seconda è un aggancio per i test.
+   - Le usa solo `test_client_address.py`, su dev e sui rami di E e di B.
+   - `client_rate_key`, `profile_default` e `derive_key_from` sono nello stesso rapporto, ma aspettano un consumatore
+     già previsto: E `2ef892b3f`, B per H-17, X per P24.
+   - Il rapporto completo: 55 voci in molte aree (5 senza riferimenti, 50 usate solo dai test), quindi non è un
+     cancello attivo. Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
+     lint --dead-code --scope backend`, carico 31; log in `files/runs/dead-code-backend.log`.
+
+### Lotto «H-22: niente funzioni di produzione solo per i test in `client_address.py`» (N58, 2026-10-16, sera) — ✅ provato
+
+> **Via** del coordinatore (20:35), **N58**, convenzione da rivedere col developer:
+> - via `mask_client_address`, con i suoi test e le mie due frasi di `security.md`; la regola diventa «un log non
+>   contiene mai l'indirizzo di un client»;
+> - niente funzioni di produzione che servono solo ai test: un test azzera da sé la cache (`cache_clear()` della
+>   funzione in cache, oppure il fixture a livello di modulo); `ignore_names`, con il motivo, solo quando non si può,
+>   per esempio uno stato che non è una cache.
+>
+> Un lotto piccolo, con rossi e verdi, e checkpoint insieme al journal. Z riceve dal coordinatore la stessa nota per
+> `reset_provider_cooldowns` e `reset_shutdown_budget_state`.
+
+1. ✅ **Analisi** (20:40, sola lettura).
+   - Sulla testa di ogni ramo locale (dev e i 15 rami dei workstream) le due funzioni compaiono solo in
+     `client_address.py` e in `test_client_address.py`. Più le descrizioni del selettore in
+     `scripts/test_runner/_backend_services.py` (docstring, `print_info`, `desc`), file in stage da MF e aperto da A:
+     non lo tocco, e il testo sostitutivo va al coordinatore.
+   - La doc admin (`connection_checks`, 4 lingue) e `.env.example` non promettono alcun mascheramento: cambiano solo la
+     pagina developer `security.md`, solo in inglese, e la docstring del modulo.
+   - Nel test: il fixture `fresh_client_address_cache` e `api.reset()` (11 usi) passano da
+     `reset_client_address_cache()`; il blocco (g) ha `MASKS` e un test.
+   > **⚠️ Fuori pista**: la regola di N58 detta così è falsa per l'access log di uvicorn. L'immagine lo avvia con i
+   > suoi default (`CMD ["uvicorn", …]`), quindi l'access log è attivo, e ogni riga di richiesta porta `ip:porta`:
+   > l'ho visto anche in `shared-backend.log` (`127.0.0.1:63629`). Vera invece la versione circoscritta: nessun record
+   > che LibreFolio scrive contiene l'indirizzo. Nessun `bind_contextvars` nel backend, nessun log con l'indirizzo
+   > (grep su `dev_release2`), e la connessione non registra il peer. La specifica del cloud non parla di indirizzi nei
+   > log. In `security.md` va la formula circoscritta, con il fatto dell'access log; lo dico al coordinatore. Se un
+   > giorno si vorrà mascherare l'access log, il filtro su `uvicorn.access` (`logging_config.py`) è il posto giusto,
+   > e la funzione tornerà con quel primo chiamante.
+2. ✅ **Rossi, doc e cura a secco** (20:40–20:47, in parallelo).
+   - **Test** (test-author, solo `test_client_address.py`). `start_over()` sostituisce `_reset_if_there()`: chiama
+     `module._configured_header.cache_clear()` e `module._warned.clear()`. La usano il fixture
+     `fresh_client_address_cache` (prima e dopo ogni test) e `UnderTest.reset`, così i 3 `api.reset()` restano com'erano.
+   - Il blocco (g) di `mask_client_address` è tolto: 11 casi di `MASKS`. Al suo posto c'è un (g) nuovo, la guardia
+     `test_the_module_has_no_function_only_for_the_tests[reset_client_address_cache|mask_client_address]`, che
+     controlla prima che `client_address` e `client_rate_key` ci siano ancora. I contratti (d) ed (e) dicono ora «un
+     nuovo processo», riprodotto dai test (N58).
+   - Black ha spezzato una sola asserzione, con un messaggio oltre i 300 caratteri: applicato al file, che resta
+     pulito con ruff e black.
+   - **Doc** (docs-writer, `security.md`): tolta la riga della tabella; in «Read once per process.», «There is no
+     reset function: a test itself clears that cache and `_warned`… (decision N58…)»; in «Callers.», «LibreFolio's
+     own log records never hold a client's address (a refusal logs at most the account, never the address); uvicorn's
+     access log, like any web server's, writes the connection's address on each request line (see Request Logs)».
+   > **⚠️ Fuori pista**: il docs-writer aveva tolto anche «and its key from `client_rate_key()`», perché oggi nessun
+   > limite lo chiama (usano `flows.address_key`). L'ho rimesso io: è la regola per chi scrive un limite nuovo, e
+   > diventa vera alla lettera con `2ef892b3f` di E; «Their key follows the rule of `client_rate_key()`» è già vera.
+   > Una riga di 122 colonne c'era già a HEAD, con lo stesso testo: lasciata.
+   - **Cura** (`files/h22/apply_cure.py`): 3 sostituzioni in `client_address.py`, +3 −24. Tolte le due funzioni; al
+     posto del punto della docstring, la regola «No log record LibreFolio writes holds a client's address (decision
+     N58)…». Il controllo sulla fine del file ha fermato il primo tentativo, che lasciava una riga vuota in fondo.
+     Ruff e black puliti.
+   - **Testo per `_backend_services.py`**, che non tocco: `files/h22/apply_backend_services_desc.py`, 4 sostituzioni su
+     ancore di testo (docstring, `print_info`, due tratti del `desc`). Provato a secco sulla mia base e sulla versione
+     di `dev_release2`, ruff pulito.
+3. ✅ **Rosso** (20:47, carico 34): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py
+   test --test-port 6181 --data-dir /tmp/librefolio-r13-h services client-address` → **2 failed, 120 passed**: sono
+   solo i due casi della guardia, sui messaggi «still has … (N58, H-22)». Il resto, già sul reset dei test, era verde
+   sul modulo invariato. Log in `files/runs/h22-red.log`.
+4. ✅ **Cura e verdi** (20:47–20:49, carico < 50; `files/runs/h22-light.sh`, log in `files/runs/h22-light/`).
+   - Cura applicata: coincide byte per byte con la prova a secco.
+   - `services client-address` **122/122**.
+   - L'app si importa (`backend.app.main`, `auth`, `email`).
+   - `dev.py lint --dead-code --scope backend`: i simboli usati solo dai test scendono **da 50 a 48**; di
+     `client_address.py` resta solo `client_rate_key`, che aspetta E.
+   - `mkdocs build`: solo l'avviso noto di `wac.md`, quindi `#request-logs` si risolve. `check-links`: 97.
+   - Nessun riferimento alle due funzioni in `backend/app`, `scripts` e `dev.py`, fuori dalle descrizioni di
+     `_backend_services.py`.
