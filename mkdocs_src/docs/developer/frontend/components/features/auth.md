@@ -28,6 +28,10 @@ The `LoginCard` handles user authentication via username/email and password.
           reveals whether an account exists;
         - 403 carrying `ACCOUNT_DISABLED` (only the right password of a disabled account gets it) →
           `auth.accountDisabled`;
+        - 403 carrying `EMAIL_NOT_VERIFIED` (only the right password of an account waiting for its
+          email verification gets it) → `email.verification.loginRequired`, which `LoginCard` answers
+          with [`VerificationNotice`](../../../backend/email.md#verification-frontend) instead of the
+          `login-error` line, passing the form's `username` and `password`;
         - 422 → `auth.invalidInput`; 429 → `auth.tooManyAttempts` (the backend sets no login limit of
           its own: a throttling proxy in front of it may answer 429);
         - no response at all (network error, timeout), or a 502, 503 or 504 →
@@ -136,7 +140,7 @@ the command line ([Registration, Invitations and the Admin API](../../../archite
 | Page `data-testid` | `invite-page` | `reset-password-page` |
 | Token inspected as | `invite` | `password_reset` |
 | Valid link | `RegisterCard` in [invitation mode](#registercard): `inviteToken`, then `initialEmail` and `grantsAdmin` from the inspection. While the mode in force is `disabled`, the page shows `closed` instead: the server would refuse the invitation | `ResetPasswordCard` for the `username` of the inspection |
-| Success | `RegisterCard` dispatches `gotoLogin` with `auth.accountCreated`; the page passes the message to `setAuthFlash()` | `ondone`: `setAuthFlash()` with `auth.resetPassword.done` |
+| Success | `RegisterCard` dispatches `gotoLogin` with `auth.accountCreated`, or `email.verification.registered` when the answer says `verification_required`; the page passes the message to `setAuthFlash()` | `ondone`: `setAuthFlash()` with `auth.resetPassword.done` |
 | Then | `goto('/')`: the login page shows the message in `login-success` | The same |
 
 Both are outside the `(app)` group: they need no session and run no auth check. They are not
@@ -249,6 +253,7 @@ returns a catalogue key (`{key}`), or the server's own words (`{raw}`) when noth
 | `{error_code: "INVITE_REQUIRED"}` | `auth.registrationInviteOnly` |
 | `{error_code: "INVITE_INVALID"}` | `auth.link.unknown` |
 | `{error_code: "USER_LIMIT_REACHED"}` | `auth.userLimitReached`: the server is full, with no count, as the caller is not signed in |
+| `{error_code: "EMAIL_VERIFICATION_UNAVAILABLE"}` | `email.verification.signUpUnavailable`: email verification is required and no email with a link can go out now |
 | Any other object | `auth.registrationFailed` |
 | A Pydantic error list | Its first error: on `email`, `auth.validation.invalidEmailDomain` for a special-use or reserved domain, `auth.validation.invalidEmail` otherwise; on `username`, `auth.validation.usernameMinLength`; on `password`, `auth.validation.passwordTooWeak`; anything else, `auth.registrationFailed` |
 | A string that mentions `username` (case-folded) | `auth.validation.usernameTaken` |

@@ -369,7 +369,7 @@ toast, when there is one, is a field of the same call.
 #### UserRow {: #userrow }
 
 `lib/features/settings/users/UserRow.svelte`. Props: `account` (`AdminAccount`, the `GET /users`
-item), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
+item, with `holds_place` when it is sent), `isSelf`, `isOnlyActiveAdmin`, `full`, `onAction(action, account)`.
 
 - The `<li>` is `users-row`, with `data-user-id`, `data-username`, `data-active`, `data-admin`,
   `data-protected` and `data-self` (`"true"` or `"false"`).
@@ -388,7 +388,7 @@ condition that holds gives the reason:
 | Button | `data-disabled-reason` |
 |---|---|
 | `users-action-deactivate` | `protected` when `account.protected`; `last-admin` when the account is an administrator and `isOnlyActiveAdmin` |
-| `users-action-reactivate` | `limit` when `full` |
+| `users-action-reactivate` | `limit` when `full`, unless `account.holds_place`: an account waiting for its email verification with a live link already holds its place ([Email Verification](../../../backend/email.md#verification)) |
 | `users-action-demote` | `protected` when `account.protected`; `last-admin` when the account is active and `isOnlyActiveAdmin` |
 | `users-action-delete` | `protected` when `account.protected`; `demote-first` when the account is an administrator, active or not |
 

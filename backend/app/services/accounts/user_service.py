@@ -319,7 +319,8 @@ async def update_user_status(
 
     Returns ``"LAST_ADMIN"``, changing nothing, when the change would deactivate or demote the last active
     administrator; None otherwise. Deactivating or demoting ends every session of the account. A value equal to the
-    current one changes nothing.
+    current one changes nothing. Activating or deactivating revokes the account's email-verification links: an
+    administrator has decided, so the account no longer waits for one, and an old link cannot wake it (workstream E).
     """
     deactivate = is_active is False and user.is_active
     demote = is_superuser is False and user.is_superuser
@@ -329,6 +330,7 @@ async def update_user_status(
     if is_active is not None and is_active != user.is_active:
         user.is_active = is_active
         changed = True
+        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
     if is_superuser is not None and is_superuser != user.is_superuser:
         user.is_superuser = is_superuser
         changed = True
@@ -353,7 +355,8 @@ async def set_user_active(
 
     The last active administrator cannot be deactivated: an inactive user cannot log in, so the
     instance would be left with nobody to administer it. Deactivating ends every session of the account,
-    so that a later activation does not bring them back.
+    so that a later activation does not bring them back. Either way the account's email-verification links are
+    revoked: the operator has decided, so the account no longer waits for one (workstream E).
 
     Args:
         session: Database session
@@ -376,6 +379,7 @@ async def set_user_active(
     user.is_active = active
     if not active:
         end_sessions(user)
+    await token_service.revoke_tokens(session, user_id=user_id, purpose=AccountTokenPurpose.EMAIL_VERIFICATION)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()

@@ -236,7 +236,8 @@ describe('SettingToggle', () => {
     });
 
     it('keeps a «Coming soon» placeholder read-only even with the section unlocked', async () => {
-        // How the global tab draws `require_email_verification`: `disabled` plus a badge, whatever the page lock says.
+        // How the global tab draws a setting in `PLACEHOLDER_KEYS` (`require_email_verification` was one until lot E5b made
+        // it a real switch): `disabled` plus a badge, whatever the page lock says.
         // The E2E reached it only by accident, as «the first toggle of the tab», and now names editable settings by key.
         // Unlocked and non-default on purpose: without `disabled` the switch would be live and Reset on offer, so every
         // assertion below is the placeholder's doing, not the lock's. The badge has a test id of its own and renders

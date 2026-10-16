@@ -164,7 +164,7 @@ PUBLIC_URL = "https://librefolio.example.test/base/"
 PUBLIC_ORIGIN = "https://librefolio.example.test/base"
 BILLING_LINK = "https://billing.example.test/plans/family"
 
-USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected"})
+USER_ITEM_KEYS = frozenset({"id", "username", "email", "is_active", "is_superuser", "created_at", "protected", "holds_place"})
 INVITE_ITEM_KEYS = frozenset({"id", "grants_admin", "email", "created_at", "expires_at", "created_by_user_id"})
 USAGE_KEYS = frozenset({"used", "max_users", "billing_url"})
 ISSUED_INVITE_KEYS = frozenset({"invite", "token", "path", "url"})
@@ -295,14 +295,15 @@ def _comparable(item: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     return {key: _instant(value) if key.endswith("_at") else value for key, value in item.items()}
 
 
-def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False) -> list[str]:
-    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its seven fields, with these values.
+def _user_item_violations(item: Any, account: _Account, *, active: bool, superuser: bool, protected: bool = False, holds_place: bool = False) -> list[str]:
+    """What is wrong with an account as GET /users lists it, and PATCH answers it: exactly its eight fields, with these values.
 
     ``protected`` is False unless the test replaced the hook: today the hook protects nobody (lot A6a).
+    ``holds_place`` is workstream E's flag, true only for an inactive account whose live verification link holds its place (``api email-verification-hooks``, EVH-006…012); no account here waits for one, the option being off.
     """
     if not isinstance(item, dict) or set(item) != USER_ITEM_KEYS:
         return [f"{account.username}: an account must be exactly {sorted(USER_ITEM_KEYS)}, no hash and no secret: {item}"]
-    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected}
+    expected = {"id": account.user_id, "username": account.username, "email": account.email, "is_active": active, "is_superuser": superuser, "protected": protected, "holds_place": holds_place}
     found = {key: item[key] for key in expected}
     violations = [] if found == expected else [f"{account.username}: expected {expected}, got {found}"]
     _expect(violations, _instant(item["created_at"]) is not None, f"{account.username}: created_at is not a timestamp: {item['created_at']!r}")
@@ -2019,7 +2020,7 @@ class TestAccountProtectionInProcess:
 
     @pytest.mark.asyncio
     async def test_protected_says_whether_the_hook_gives_a_reason(self, private_head: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """UADM-052: the hook protects boss: GET /users lists root, boss and member with exactly their seven fields, ``protected`` true for boss alone; PATCH promoting member answers it with ``protected`` false."""
+        """UADM-052: the hook protects boss: GET /users lists root, boss and member with exactly their eight fields, ``protected`` true for boss alone; PATCH promoting member answers it with ``protected`` false."""
         print_section("UADM-052: the protected field")
         root, cookie = await _admin(private_head)
         boss = await _add_user(private_head, "boss", admin=True)

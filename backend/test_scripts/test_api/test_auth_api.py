@@ -21,7 +21,7 @@ from typing import Optional, Union
 import httpx
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException, Request, Response
+from fastapi import BackgroundTasks, HTTPException, Request, Response
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -230,13 +230,15 @@ class TestRegister:
             async with AsyncSession(engine, expire_on_commit=False) as session:
                 assert await user_service.count_users(session) == 0, "Precondition: the private database must have no user"
                 assert (await effective_registration_mode(session)).mode == "disabled", "Precondition: registration must be disabled"
+                # Keyword arguments, as FastAPI calls the route: E5b added ``background`` before ``session``.
                 response = await auth_api.register(
                     AuthRegisterRequest(
                         username=username,
                         email=f"{username}@example.com",
                         password="password123",
                     ),
-                    session,
+                    background=BackgroundTasks(),
+                    session=session,
                 )
 
             assert response.user.username == username
@@ -1838,7 +1840,7 @@ class TestPasswordWorkLeavesTheEventLoopFree:
         username, password = "loop_newcomer", "NewcomerPass123!"
 
         async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
-            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), session)
+            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), background=BackgroundTasks(), session=session)
 
         assert response.user.username == username, f"register must answer with the new user: got {response!r}"
         assert [call["password"] for call in hashing.calls] == [password.encode("utf-8")], f"register must hash the chosen password, once: {hashing.calls}"

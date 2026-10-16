@@ -46,6 +46,7 @@ from backend.app.services.accounts import registration_service, token_service, u
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.settings_service import initialize_global_settings
+from backend.app.services.email import verification as email_verification
 
 
 def validate_password(password: str) -> tuple[bool, list[str]]:
@@ -231,7 +232,8 @@ async def cmd_set_user_active(username: str, active: bool):
     async with AsyncSession(engine) as session:
         if active:
             user = await user_service.get_user_by_username(session, username)
-            if user is not None and not user.is_active:
+            # An account waiting for its email verification already holds its place while its link is live (workstream E).
+            if user is not None and not user.is_active and not await email_verification.holds_place(session, user):
                 _warn_if_full(await registration_service.user_usage(session), "reactivates the account")
         success, error = await user_service.set_user_active(session, username, active)
 

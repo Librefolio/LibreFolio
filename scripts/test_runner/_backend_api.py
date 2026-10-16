@@ -735,6 +735,16 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Email verification API tests", verbose=verbose)
 
 
+def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the email-verification hooks in A's routes (lot E5b): register, login, users, settings, in-process."""
+    print_section("Email Verification Hooks API Tests")
+    print_info("Testing POST /auth/register (verification_required, 409 EMAIL_VERIFICATION_UNAVAILABLE), POST /auth/login (403 EMAIL_NOT_VERIFIED), GET/PATCH /users (holds_place, the limit), PATCH /settings/global/bulk (off → on needs an email with a link)")
+    print_info("In-process: the real auth, users, settings and email routers on a private SQLite, SMTP and public URL variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_verification_hooks_api.py", test_names)
+    return run_command(cmd, "Email verification hooks API tests", verbose=verbose)
+
+
 def _api_setup() -> bool:
     """Reseed the fixture data the API units assert against.
 
@@ -983,6 +993,17 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP, public URL,
         # block and user-limit variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "email-verification-hooks",
+        api_email_verification_hooks,
+        name="Email Verification Hooks API",
+        desc="With require_email_verification on: register 201 verification_required + inactive + the email from LIBREFOLIO_PUBLIC_URL, login 403 EMAIL_NOT_VERIFIED (wrong password the 401 of an unknown account), resend, click, login 200; the first account never waits; an invited one waits and spends its invitation; no email with a link → 409 EMAIL_VERIFICATION_UNAVAILABLE, nothing created, the invitation live; option off as before. A waiting account takes a place while its link is live (GET /users usage, holds_place, a registration refused when full), none once expired; PATCH /users reactivation on a full instance accepted while the link is live, refused once expired, the old link then revoked; PATCH is_active false on a waiting account a no-op (its link live and counted); the PATCH answer and GET /users carry holds_place, true while the link is live and false once it expired. Settings bulk: off → on 409 without email (nothing saved), 200 with email; on again or off always saved",
+        # PURE: the real auth, users, settings and email routers run in-process on a private SQLite file under tmp_path, the
+        # option set in that file only, the SMTP, public URL and user-limit variables set with monkeypatch in this process,
+        # the limiters private on a fake clock, the fake SMTP server on 127.0.0.1: the lane's backend is never called.
         isolation="pure",
     )
     add_test(

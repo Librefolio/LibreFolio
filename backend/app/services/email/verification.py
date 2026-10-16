@@ -138,6 +138,29 @@ async def _holds_live_link(session: AsyncSession, user_id: int, now: datetime) -
     return (await session.execute(statement)).first() is not None
 
 
+async def place_holders(session: AsyncSession, *, now: datetime | None = None) -> set[int]:
+    """The ids of the inactive accounts whose live verification link holds their place, in one query (for a list)."""
+    statement = (
+        select(AccountToken.user_id)
+        .distinct()
+        .join(User, User.id == AccountToken.user_id)  # type: ignore[arg-type]
+        .where(
+            AccountToken.purpose == VERIFICATION,
+            AccountToken.consumed_at.is_(None),  # type: ignore[union-attr]
+            AccountToken.revoked_at.is_(None),  # type: ignore[union-attr]
+            AccountToken.expires_at > (now or utcnow()),
+            User.is_active.is_(False),  # type: ignore[attr-defined]
+        )
+    )
+    return {user_id for user_id in (await session.execute(statement)).scalars().all() if user_id is not None}
+
+
+async def holds_place(session: AsyncSession, user: User, *, now: datetime | None = None) -> bool:
+    """Whether ``user`` already holds a place under ``LIBREFOLIO_MAX_USERS`` without being active: it waits for its
+    verification with a live link, which ``registration_service.user_usage`` counts. Activating it takes no new place."""
+    return not user.is_active and await _holds_live_link(session, user.id, now or utcnow())
+
+
 async def hold_for_verification(session: AsyncSession, user: User, *, first: bool, now: datetime | None = None) -> bool:
     """Inside ``register_user``'s transaction, once the account is written: whether it must wait for its link.
 
