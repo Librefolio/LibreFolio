@@ -107,8 +107,9 @@
                 {/if}
             </button>
 
-            <!-- Register Link: only while anyone may register; until the instance answers, its default (open) keeps it -->
-            {#if instanceConfig.config.accounts.registration_mode === 'open'}
+            <!-- Register Link: while anyone may register, or while the instance has no account (its first account can be
+                 created in any mode, decision 36); until the instance answers, its default (open) keeps it -->
+            {#if instanceConfig.config.accounts.registration_mode === 'open' || instanceConfig.config.accounts.first_account_open === true}
                 <div class="text-center pt-2 text-xs text-lf-secondary">
                     <span>{$_('auth.noAccount')} </span>
                     <button class="font-bold text-lf-link hover:underline" data-testid="goto-register" on:click={() => dispatch('gotoRegister')} type="button">

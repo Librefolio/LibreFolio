@@ -139,7 +139,9 @@ for reading:
       "duration_s": 12.48,
       "items_ok": 24,
       "items_err": 0,
-      "error": null
+      "error": null,
+      "items_deferred": 0,
+      "retry_at": null
     },
     {
       "name": "history_sync",
@@ -148,7 +150,9 @@ for reading:
       "duration_s": null,
       "items_ok": 0,
       "items_err": 0,
-      "error": null
+      "error": null,
+      "items_deferred": 0,
+      "retry_at": null
     }
   ]
 }
@@ -165,13 +169,18 @@ for reading:
 | `jobs[].started_at`, `jobs[].duration_s` | When the job started, in UTC, and how long it ran, in seconds; `null` when it was not due |
 | `jobs[].items_ok`, `jobs[].items_err` | How many assets, and for the history sync FX pairs too, were brought up to date, and how many failed |
 | `jobs[].error` | When the job stopped on an error, the name of that error; `null` otherwise |
+| `jobs[].items_deferred` | How many assets or FX pairs were put off because their provider is pausing after it answered «too many requests» (HTTP 429): they count neither as brought up to date nor as failed, and a job with deferred items is `partial` |
+| `jobs[].retry_at` | When the job will run again, in UTC, if it has deferred items to retry (when the first of their providers' pauses ends) or is waiting after an error (when the wait ends; it doubles at each error in a row). `null` otherwise. A job that is not due reports it too, and deferred items are retried at the job's regular time if that comes first |
+
+A job with deferred items, or one waiting after an error, thus says when it will run again: a hosting
+panel can use `retry_at` to plan its next wake-up.
 
 The report's `status`:
 
 | `status` | What it means |
 | --- | --- |
 | `ok` | Every job that ran went well, or no job was due |
-| `partial` | Part of the work failed: a job is `partial`, or one job is `ok` and the other `error` |
+| `partial` | Part of the work failed or was deferred: a job is `partial`, or one job is `ok` and the other `error` |
 | `error` | Every job that ran failed, or the run itself failed (see `error`) |
 | `disabled` | The scheduler is off: no job ran |
 | `not_leader` | This server process does not run the jobs, and no job ran: see [Several Workers](#wake-sync-workers) |

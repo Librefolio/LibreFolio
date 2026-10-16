@@ -1459,3 +1459,533 @@ scrivono qui quando partono.
 >   `git diff --check`.
 > - **Nel messaggio al coordinatore**: le righe del CHANGELOG (non scritte nel file, per la sua regola) e il filtro
 >   della galleria mobile.
+
+### Y7 — commit e revisione combinata con T+DV ✅ (2026-10-15, 23:34–23:48)
+
+> **Note implementazione**:
+> - **Commit del coordinatore**: `ca681b4f9` (codice) e `8d4719c21` (journal). Merge di `dev_release2` (`4ef2fc199`,
+>   che contiene T+DV) in `94a8b4a7e`, senza conflitti: backlog e `_frontend_utility.py` si sono uniti da soli.
+> - **Prove sulla revisione combinata**, una alla volta, `nice`, carico sotto 70, tutte finite prima della finestra
+>   di G-13 (00:00–01:15):
+>   - `api sync`: nessun cambio tracciato;
+>   - svelte-check: 0 errori, 0 avvisi;
+>   - `theme-roles --check`: pulito;
+>   - E2E: `datatable-mobile` 6/6, `datatable-resize` 4/4, `transactions-table` 25/25, `files` 28/28.
+> - **Ingresso di Y7**: dopo la fine di G-13, così il riferimento della galleria resta quello di prima. Dopo le 01:15
+>   tocca alla galleria mobile filtrata (il filtro è nel checkpoint), confrontata con il riferimento di G-13.
+> - **Regola del CHANGELOG** confermata: le righe vanno nel messaggio. La `desc` cambiata del runner l'ha dichiarata
+>   il coordinatore ai colori.
+> - **Nota per Y10** (coordinatore, 23:34): T farà TD-3, cioè sfondi e pulsanti della card «Allocazione
+>   Patrimoniale» sui ruoli, in `AllocationPanel.svelte`, dopo l'ingresso di T+DV e il suo lotto W3-a. Fino a TD-3
+>   quel file non si tocca; Y10 partirà da una base che lo contiene.
+
+### Prossimo lotto — proposta Y4b ⏳ (2026-10-15, 23:50)
+
+> **Note implementazione**: il coordinatore mi ha lasciato scegliere fra Y3, Y4b e Y9, chiedendo prima l'elenco dei
+> file per i colori.
+> - **Ordine proposto**:
+>   - Y4b subito;
+>   - Y3 dopo TD-1 e TD-1b, che toccano `GrowthChart.svelte`, `growthChartSeries.ts`, `GrowthChart.test.ts` e
+>     `KpiSection.svelte` (verso le 01:30);
+>   - Y9 dopo gli spostamenti, perché modifica circa 35 file di grafici e va fatto sui percorsi definitivi.
+> - **Y4b su `94a8b4a7e`**: 103 file vanno in `frontend/src/lib/features/risk/`, che oggi non esiste. Forma piatta
+>   (D-Y13), nessuna collisione di nomi:
+>   - 47 da `components/risk/`, 4 da `lib/risk/` e 6 da `stores/risk/` alla radice;
+>   - 46 in `levels/`, `levels/l1/` e `levels/l4/`.
+>   - 5 importatori esterni: la Dashboard, il dettaglio broker, le due pagine degli asset (area di X) e
+>     `AssetPickerPanel.test.ts`.
+>   - **Stringhe di percorso**: `RiskCardGrid` e il suo test, `assetPicker.ts`, `catalogIcuLocale.test.ts`,
+>     `moneyRenderSites.test.ts`.
+>   - **Programma colori**: `scan-colors.mjs:193`, `scanColors.test.ts` e il baseline.
+>   - **Runner**: `_frontend_portfolio.py`, `_frontend_utility.py` e `coverage_js.py`.
+>   - **Backend**: `test_risk_schemas.py` e `test_i18n_usage_gate.py`.
+>   - **Testi**: `backend-risk.instructions.md:19`, `TODO_FUTURI.md`, 5 pagine MkDocs e circa 27 della devWiki.
+> - **Tempi proposti**: gli script di spostamento e di riscrittura degli import si preparano durante la finestra di
+>   G-13, senza applicarli. Si applicano dopo la galleria mobile di Y7, che si costruisce da questo worktree.
+> - **In attesa**: il via del coordinatore e dei colori sulla lista.
+> - **Via di Y4b** (coordinatore, 23:5x), con l'ordine Y4b, poi Y3 dopo TD-1b, poi Y9. Le asset pages di X: una riga
+>   di import si fonde senza problemi; lo avvisa il coordinatore.
+> - **Risposte dei colori**:
+>   1. stanotte nessun loro lotto tocca `components/risk/**`, `lib/risk/` o `stores/risk/`;
+>   2. `scan-colors.mjs` e `scanColors.test.ts` li scrive L, che aggiunge `features/risk` accanto a `components/risk`,
+>      e così funziona in qualunque ordine;
+>   3. il baseline lo scrivo io, ma solo con `theme-roles.mjs` (R4 accoppia le righe rinominate), mai a mano.
+>      Nell'handoff: `--check` pulito e le righe `~` verificate;
+>   4. i percorsi del runner li scrivo io.
+
+### Y4b — preparazione degli script ✅ (2026-10-15, 23:50–00:00, niente applicato)
+
+> **Note implementazione**: gli script sono nella cartella di sessione, con prove a secco, sola lettura, worktree
+> intatto.
+> - **`files/y4b_move.py`**: 103 spostamenti con `mv` semplice, non `git mv`: il Git policy vieta lo stage, e lo stage
+>   lo fa il coordinatore.
+>   - riscrive 148 specificatori in 68 file: gli spostati più le 4 pagine `routes/(app)/{dashboard,brokers/[id],assets,
+>     assets/[id]}`;
+>   - ogni specificatore si risolve dalla posizione vecchia, passa per la mappa degli spostamenti e si riscrive dalla
+>     posizione nuova, con lo stile `$lib/` o relativo, il suffisso implicito e `?raw` conservati;
+>   - legge anche `vi.mock` e `new URL(…, import.meta.url)`.
+> - **`files/y4b_paths.py`**: 323 sostituzioni di percorsi in 110 file di testo: runner, `coverage_js.py`,
+>   `test_risk_schemas.py`, istruzioni, `TODO_FUTURI.md`, 5 pagine MkDocs, 24 pagine della devWiki, commenti e test
+>   con chiavi di percorso. Si lancia dopo lo spostamento.
+> - **Lasciati fuori di proposito**:
+>   - il journal, la devWiki `sources/` e `log.md`: sono cronache;
+>   - `scan-colors.mjs`, `scanColors.test.ts` e `designer-lab.md:448`, che descrive lo scanner: tutti di L;
+>   - il baseline, che si scrive solo con lo strumento;
+>   - `test_i18n_usage_gate.py`: alberi sintetici, quindi dati di test;
+>   - `AssetPickerPanel.test.ts`: le sue stringhe a forma di import alla riga 1517 sono dati del test di confine
+>     «ui/select imports nothing from components/risk/». Va a `test-author`, con l'import vero alla riga 47.
+>
+> **Fuori pista**:
+> - la prima regex dei letterali prendeva anche gli URL `/api/v1/risk/…` (89 righe), e l'ho ristretta ai percorsi di
+>   cartella (15 righe);
+> - la prima riscrittura avrebbe toccato le stringhe di test di `AssetPickerPanel.test.ts`, e ho aggiunto un elenco a
+>   mano.
+>
+> **Ordine di applicazione**, dopo la galleria mobile di Y7:
+> 1. `y4b_move.py --apply`;
+> 2. `y4b_paths.py --apply`;
+> 3. `theme-roles.mjs --check`, poi `--update` per i nomi nuovi, solo se non ci sono cali in file d'altri;
+> 4. `test-author` per `AssetPickerPanel.test.ts`;
+> 5. le prove: svelte-check, Vitest del rischio e i gate, `test_risk_schemas.py`, knip, `theme-roles --check`,
+>    `mkdocs build` e `check-links`, `check_source_paths.py`; con lo slot, le E2E del rischio.
+
+### Y3 — preparazione degli script ✅ (2026-10-16, 00:00–00:10, niente applicato; entra dopo TD-1b)
+
+> **Note implementazione**: gli script sono derivati da quelli di Y4b, con la sola mappa degli spostamenti diversa.
+> - **`files/y3_move.py`**: 35 spostamenti in `lib/features/dashboard/`, a radice piatta:
+>   - i 32 file di `components/dashboard/`, senza sottocartelle;
+>   - `stores/portfolio/dashboardViewStore.ts` con il suo test;
+>   - `stores/dateRangeController.svelte.ts`.
+>   I due store li importa solo la pagina della Dashboard. Le riscritture sono 42 specificatori in 8 file: gli
+>   spostati, `chartCoreHelpers.test.ts` (D-Y16: solo i percorsi), `AssetRiskScenariosView` e `RiskAnalysisPanel`, e
+>   le pagine della Dashboard e del dettaglio broker.
+> - **`files/y3_paths.py`**: 87 sostituzioni in 34 file. Comprende il runner (`_frontend_asset.py` di X,
+>   `_frontend_portfolio.py`, `_frontend_utility.py`), `themeModeReads.gate.test.ts` e `moneyRenderSites.test.ts`, che
+>   hanno chiavi di percorso, `charts.md` e 16 pagine della devWiki.
+> - **Lasciati fuori**:
+>   - `pickView.test.ts` e `scanColors.test.ts` del Lab, di L;
+>   - la pagina `designer-lab/picker.md`;
+>   - `KpiDivergingFlowBar.test.ts` e `KpiMetricBar.test.ts`: «promoted out of `components/dashboard/`» è storia;
+>   - la cronaca e il baseline, come in Y4b.
+> - Gli script leggono lo stato dell'albero, quindi l'ordine con Y4b è indifferente.
+
+### Y11 — analisi (C-85, decisione 48) ✅ (2026-10-16, 00:00–00:10, sola lettura, agente `explore`)
+
+> **Note implementazione**:
+> - **Nessun pulsante «Aggiorna» globale**: l'header dell'app (`layout/Header.svelte`) non ne ha. Ogni pagina ha il
+>   suo, nella propria barra:
+>   - la Dashboard `sync-button` (`:968`), i broker `brokers-refresh` (`:371`), il dettaglio broker
+>     `broker-refresh` (`:604`);
+>   - la lista FX `fx-refresh-all-button` (`:1102`), il dettaglio FX `fx-detail-refresh-btn` (`:1319`);
+>   - la lista asset (`:1611`), il dettaglio asset `asset-detail-refresh-btn` (`:2878`);
+>   - le transazioni `tx-refresh-button` (`:740`), i file `files-refresh-button` (`:724`).
+>   Ognuno gira solo con il proprio flag locale. La Dashboard gira solo mentre è premuto: un cambio di periodo o una
+>   rivalidazione della cache non lo fanno girare. FX e asset in lista non hanno `disabled`, quindi non diventano
+>   grigi.
+> - **Nessun meccanismo comune**: nessun contatore di richieste nel client API, nessuno store «busy».
+> - **I pollers** (`startActivePolling`: lista asset `:461`, dettaglio asset `:1512`) non mostrano niente.
+>   «Aggiornamento in pausa» (`live-updates/LiveUpdatesStatus.svelte`) sta nell'intestazione della pagina, non accanto
+>   al pulsante.
+> - **Pulsanti nei pannelli**:
+>   - `RiskPanelHeader.svelte:100` e `RiskAnalysisPanel.svelte:601` (`risk-refresh-button`): un aggiornamento
+>     semplice, da togliere;
+>   - i loro `risk-sync-button` aprono la sincronizzazione prezzi e FX: è un'altra azione, e resta;
+>   - restano anche le azioni per riga o per selezione, `ChartSignalsSection`, i modali e i pannelli di Impostazioni e
+>     Tools, che non hanno un pulsante di pagina.
+> - **Test che fissano l'oggi**: `dashboard-cache.spec.ts` (clic su `sync-button`, attesa di `data-busy`), le spec del
+>   rischio (`risk-refresh-button`), `asset-live-pause.spec.ts`, i Vitest di `LiveUpdatesStatus` e `activePolling`.
+> - **Decisione notturna, da rivedere** (tecnica, nel mio perimetro): uno store `pageBusy` con `begin()` che dà un
+>   gettone e `end(gettone)`, azzerato alla navigazione.
+>   - Ogni pagina avvolge i suoi ricaricamenti: periodo, filtri, rivalidazione della cache, `loadBase`; i pollers
+>     passano da un aggancio facoltativo di `startActivePolling`.
+>   - Il pulsante della pagina gira e diventa grigio con `busy` o con la pressione.
+>   - Il pulsante resta nella pagina che lo disegna, cambia solo l'espressione: niente componente nuovo, che dovrebbe
+>     usare solo i ruoli `*-lf-*` e sposterebbe le classi di palette.
+> - **Domanda al developer**, mandata al coordinatore secondo la regola della notte:
+>   - «la barra in cima» va letta come la barra di ogni pagina;
+>   - le due rimozioni nei pannelli del rischio;
+>   - se i pollers dal vivo, ogni 30 s, debbano far girare il pulsante.
+
+### Y9 — analisi (K-15, C-34, K-13) ✅ (2026-10-16, 00:10–00:20, sola lettura, agente `explore`)
+
+> **Note implementazione**, sul codice dopo T+DV:
+> - **K-15**: quasi tutti i formatter a funzione escapano già, nei costruttori locali e in `growthChartTooltip`,
+>   `exposureTooltip`, `signalLabelToHtml`, `buildTooltipTopN` e `buildTooltipByThreshold`. Restano tre buchi:
+>   - `charts/AllocationPieChart.svelte:455/472-477`: `translated`, cioè caption o nome dai dati, e `parentLabel`, che
+>     ricade sulla chiave grezza;
+>   - `charts/CandlestickChart.svelte:522/524`: il codice valuta e la bandiera nell'intestazione;
+>   - `charts/PriceChartFull.svelte:1013`: la bandiera.
+> - **Correzione alla wiki**: `htmlInterpolation.gate` vede anche i formatter, ma solo per i nomi con un suffisso di
+>   `TEXT_SUFFIXES` (`:171`); `HTML_FIRST_ARGUMENT` (`:221`) tratta come HTML il primo argomento dei costruttori di
+>   riga. Per questo i tre buchi passano. `htmlSink.gate` invece non vede i formatter.
+> - **C-34**: `risk/CorrelationHeatmap.svelte:351-353` escapa `& < >` ma non `"` e `'`; `utils/core/escapeHtml.ts`
+>   escapa tutti e cinque. `utils/inlineMath.ts:14` resta: lascia `'` per KaTeX, ed è voluto. Altre copie locali non ce
+>   ne sono.
+> - **K-13**: nessun file di grafico e nessun `lib/theme/*` imposta `fontFamily`, quindi il testo su canvas usa
+>   `sans-serif`, senza 'LF Flags'.
+>   - Testo su canvas con bandiere: la legenda e le serie di `FxPairSignal.ts:98-100`, le etichette della mappa
+>     (`geographyMapHelpers.ts:140-146`), l'emoji in area di `AllocationHistoryChart.svelte:698`, la legenda e le
+>     etichette di `AllocationPieChart` (`:353`, `:546`).
+>   - Gli `echarts.init` sono 16 componenti più 2 del PAC (`LotGanttChart` ne ha due).
+>   - `flagFont.gate` legge solo le pile CSS, non le opzioni di ECharts.
+> - **Proposte**, da approvare con l'elenco dei file:
+>   - K-15: escapare i tre punti, e aggiungere al gate i suffissi o una lista di nomi ammessi per i template restituiti
+>     da un `formatter`;
+>   - C-34: importare `escapeHtml`, e un gate che rifiuti un `escapeHtml` locale fuori da `escapeHtml.ts` e
+>     `inlineMath.ts`;
+>   - K-13: una costante `CHART_FONT_FAMILY` con 'LF Flags' in testa, come `textStyle.fontFamily` globale, e un gate
+>     sugli `echarts.init`.
+> - **Rischio da verificare in K-13**: il canvas disegna una volta sola. 'LF Flags', caricato con `@font-face` e
+>   `unicode-range`, deve essere già caricato al disegno, altrimenti la bandiera esce con il ripiego fino al disegno
+>   dopo. Forse serve `document.fonts.load()` prima del primo `setOption`, o un ridisegno a `document.fonts.ready`.
+> - **Ordine**: Y9 dopo Y4b e Y3, così i percorsi sono quelli definitivi. `lib/theme/chartTheme.ts` è nell'area del
+>   programma colori: va nell'elenco dei file per loro.
+
+### Ingresso di T+DV (2026-10-16, ~00:00, informazione del coordinatore)
+
+> **Note implementazione**: T+DV è entrato in `dev_release2` (`a0915bef9`).
+> - Nei file di Y ha toccato `components/risk/stressBucketLabel.ts` (DV-6), che è nel lotto di Y4b.
+> - Ha cambiato `e2e/portfolio/dashboard.spec.ts` e `privacy-masking.spec.ts`, e ha aggiunto
+>   `e2e/fixtures/headerKeyboardFocus.ts`: per il focus da tastiera nell'intestazione si usa quello, non `focus()`.
+> - Al prossimo checkpoint il coordinatore aggiorna la base; dopo serve `api sync` (`SectorListResponse`).
+> - Y3, Y4b, Y9 e Y10 sono sbloccati, nel mio ordine dopo Y7. Per Y10 vale la nota su TD-3.
+>
+> **Decisione notturna, da rivedere**: Y4b si applica solo su una base che contiene `a0915bef9`, cioè dopo
+> l'ingresso di Y7 e l'aggiornamento della base. Così lo spostamento parte dal `stressBucketLabel.ts` di DV-6, invece
+> di unire un file modificato su un file spostato.
+
+### Y5 — preparazione degli script ✅ (2026-10-16, 00:05–00:25, niente applicato)
+
+> **Note implementazione**: richiesta del coordinatore per la finestra di G-13. Y5 entra dopo CP-16 di J, verso
+> l'01:00, e dopo il ritocco di T su `LotCustodyModal.svelte`.
+> - **`files/y5_move.py`**: 40 spostamenti; 52 specificatori riscritti in 28 file.
+>   - 11 file in `features/brokers/`;
+>   - 27 in `features/brokers/lots/`: i 25 di `lots/` e `lotsAnalysisStore` con il suo test, che importa solo
+>     `LotsAnalysisPanel`;
+>   - 2 in `components/ui/display/` (`BrokerIcon` e il suo test).
+>   Fuori dal lotto: le transazioni (W), il PAC, `ui/`, `AssetSetRiskPanel`, 4 pagine, `chartCoreHelpers.test.ts`,
+>   un harness e `e2e/brokers/brokers-detail.spec.ts`.
+> - **`files/y5_paths.py`**: circa 100 percorsi in 58 file: il runner (`_frontend_broker.py`,
+>   `_frontend_portfolio.py`, `_frontend_utility.py`), `moneyRenderSites.test.ts`, 3 pagine MkDocs e 23 della devWiki.
+> - **Lasciati fuori**: come Y3; in più `frontend/scripts/theme/theme-roles.mjs:70`, un'eccezione con chiave sul
+>   percorso di `lotComparisonChartHelpers.ts` che aggiornano i colori, e `frontend/design/REPORT.md:78`, che è
+>   storia.
+> - **Decisione notturna, da rivedere**: `BrokerIcon` va in `components/ui/display/`, accanto a `BrokerBadge`, e non
+>   nella feature. Ha 17 importatori fra transazioni, PAC e `ui/`, che altrimenti dipenderebbero da
+>   `features/brokers`.
+> - `stores/reference/brokerStore.ts` resta dov'è: è un dato di riferimento letto da 30 file (D-Y5).
+> - **Per i colori**, girato al coordinatore: `theme-roles.mjs:70`; e lo scanner di L, `CHART_PATH_RE`, che deve
+>   imparare anche `features/dashboard` e `features/brokers/lots`.
+> - **Y9, risposte dei colori** (coordinatore, 00:06):
+>   - `chartTheme.ts` lo scrivo io, ma dopo l'ingresso di TD-1 di DV, verso le 01:45–02:00, che tocca `chartTheme.ts`,
+>     `ExposureBars.svelte` e `GrowthChart.svelte`;
+>   - i componenti di grafico non sono in nessuna loro ondata stanotte;
+>   - i gate nuovi non toccano i loro.
+>   L'ordine Y4b, Y3, Y9 rispetta già questi tempi.
+
+### Y6 — preparazione degli script ✅ (2026-10-16, 00:10–00:20, niente applicato; dopo CP-U2 di H)
+
+> **Note implementazione**: richiesta del coordinatore. H sta rifacendo `components/files/` per CP-U2, quindi gli
+> script calcolano spostamenti e riscritture dall'albero al momento dell'applicazione.
+> - **`files/y6_move.py`**: 6 spostamenti, tutto `components/files/*` in `features/files/`. 8 specificatori in 5 file:
+>   gli spostati, `BrokerImportFilesModal` (che con Y5 sarà in `features/brokers/`), `ImportWizardModal` (W),
+>   `ui/media/AssetPickerModal` e la pagina `files`.
+> - **`files/y6_paths.py`**: 21 percorsi in 14 file. Sono `htmlSink.gate.test.ts:70` (una chiave di percorso fra le
+>   eccezioni), `_frontend_utility.py` (2 righe) e 7 pagine della devWiki.
+> - **Restano dove sono**: `utils/files/*` e `stores/files/imagePreviewCache.ts`, utilità condivise lette da `ui/`,
+>   broker e transazioni (D-Y5).
+> - Nessuna riga dei colori. L'elenco è al coordinatore, per H e per i colori.
+
+### Y10 — analisi (54-1, Y-6, decisione 49) ✅ (2026-10-16, 00:20–00:30, sola lettura, agente `explore`)
+
+> **Note implementazione**, sul codice dopo T+DV:
+> - **Il contratto dei dati va già bene**:
+>   - `AllocationItem{name, value: percentuale 0-100, amount, emoji}` (`schemas/portfolio.py:75-81`);
+>   - la liquidità è una riga «Liquidity» con il segno (`financial_math/portfolio/daily_state.py:720-721`), presente
+>     nei tipi e nei settori, non nella geografia;
+>   - le quote le calcola il backend sul totale netto (`derived_views.py:213-217`, `:239-243`).
+>   Con liquidità negativa il backend manda già `value` e `amount` < 0, e le quote positive sommano più di 100. La
+>   decisione 49 vuole esattamente questo, quindi niente backend e niente matematica nel frontend.
+> - **Cosa taglia il negativo, solo nel frontend**:
+>   - `dashboard/AllocationHistoryChart.svelte:777` ha `max: 100` fisso;
+>   - i filtri del tooltip `> 0.01` a `:607`, `:610` (famiglie dei tipi) e `:750` (le altre dimensioni);
+>   - `buildTooltipByThreshold` metterebbe una riga negativa nel «Remaining».
+>   Lo stack (`:678`, `areaStyle` `:691`) usa il predefinito di ECharts 6, `stackStrategy: 'samesign'`: i negativi
+>   scendono già sotto zero.
+> - **La torta**: `AllocationPanel.svelte:64` toglie `v <= 0` e `AllocationPieChart.svelte:201` filtra `> 0`. Restano
+>   tutti e due, perché la decisione tiene solo le quote positive. Uno spazio per la nota oggi non c'è.
+> - **Y-6**: `emoji` è morto. Lo scrive `AllocationPanel.svelte:65`, lo dichiara il tipo a `:23`, e la torta prende le
+>   emoji dei settori dallo store. Il campo `AllocationItem.emoji` del backend resta.
+> - **Privacy**: la torta maschera gli importi con `formatCurrencyAmountPlain`; la storia mostra solo percentuali. La
+>   nota «−X» deve passare dallo stesso formattatore e va registrata in `moneyRenderSites.test.ts`, che oggi non
+>   registra questi file.
+> - **Dati di test**: `populate_mock_data.py:312-336` dà a ogni broker `allow_cash_overdraft: False`, quindi nessun
+>   portafoglio popolato ha liquidità negativa.
+> - **Decisioni notturne, da rivedere** (tecniche, nel mio perimetro):
+>   1. l'asse della storia ha `max` dai dati: 100, o la somma positiva più alta arrotondata in su. `min` va sotto zero
+>      solo se c'è un negativo. È presentazione dell'asse, non matematica finanziaria;
+>   2. `stackStrategy: 'samesign'` esplicito su ogni serie, per non dipendere dal predefinito;
+>   3. i filtri del tooltip guardano il valore assoluto, e la riga negativa resta sempre in vista, fuori dal
+>      «Remaining»;
+>   4. la nota della torta è una didascalia sotto la torta in `AllocationPanel`, letta dalla riga «Liquidity» del
+>      backend (`amount`). Chiave `dashboard.allocationNegativeCash`, «Negative cash: {amount}», nelle 4 lingue;
+>      l'importo formattato e mascherato, con il «−» fuori dalla maschera (D8);
+>   5. per i test: niente modifica al popolamento condiviso. I casi negativi vanno nei Vitest, con un riassunto finto,
+>      e in un E2E con la risposta del riassunto intercettata. Nessun nuovo broker in scoperto nei dati comuni;
+>   6. Y-6: tolgo `emoji` da `AllocEntry` e da `toAllocEntries`.
+> - **Ordine**: Y10 parte dopo TD-3 dei colori su `AllocationPanel.svelte`, per la nota del coordinatore.
+
+### Y10 — passo 1, rossi ✅ (2026-10-16, 00:15–00:40; il codice di prodotto dopo l'ingresso di Y7 e TD-3)
+
+> **Note implementazione**: `test-author`, solo Vitest e in file nuovi e separati, così la galleria non cambia.
+> Lanciati uno alla volta, con `nice`.
+> - **`dashboard/AllocationHistoryChart.negativeCash.test.ts`**: 9 test, 7 rossi e 2 verdi (le guardie).
+>   - I due tipi d'asse, `type` e `sector`: l'asse deve arrivare a 120 e scendere a −20. Rossi su `max: 100` (`:777`).
+>     Il `min` è già assente, quindi segue i dati.
+>   - `stackStrategy: 'samesign'` esplicito: rossi per tipo, settore e geografia.
+>   - Il tooltip per tipo deve avere la voce `LIQUIDITY` negativa, e «Remaining» solo le famiglie positive lasciate
+>     fuori: rosso, filtri a `:607` e `:610`.
+>   - Il tooltip per settore: rosso, filtro a `:750`.
+>   - Guardie: senza negativi l'asse va da 0 a 100, in tutti e due i tipi.
+>   - Controlli positivi nei test del tooltip: la serie della liquidità è disegnata a −20, e il lettore riconosce una
+>     riga negativa costruita da `buildTooltipRow`. Così il rosso viene dal grafico, non dal test.
+> - **`dashboard/AllocationPanel.negativeCash.test.ts`**: 10 test, 5 rossi e 5 verdi (le guardie).
+>   - Y-6, per tipo e per settore: rossi, perché le voci portano ancora `emoji` (`:65`).
+>   - La nota `allocation-negative-cash-note` con −2000 scritto da `formatCurrencyAmountPlain`; mascherata in privacy
+>     (`-••• € 🇪🇺 EUR`, il segno fuori dalla maschera, D8); che segue il cambio di privacy sul posto: rossi, la nota non
+>     c'è.
+>   - Guardie: solo quote positive alla torta, per tipo e per settore; nessuna nota con liquidità positiva, zero o
+>     assente.
+> - **Registrazione**: tutti e due i file sono in `allocation-unit` di `scripts/test_runner/_frontend_portfolio.py`, il
+>   mio file del runner, e la `desc` è estesa. `check-orphans`: «All test files are registered». `ruff` dà 28 avvisi
+>   (`E701`, `PLC0415`) e una riformattazione, uguali a quelli di HEAD: debito preesistente, non mio.
+>
+> **Decisioni notturne, da rivedere**:
+> - `AllocationPanel.negativeCash.test.ts` è registrato in `allocation-unit`, il mio file, invece che accanto ad
+>   `AllocationPanel.test.ts` in `front_component_unit` di `_frontend_utility.py`, che è del programma colori;
+> - la nota va anche sotto la torta per settore, che ha la riga «Liquidity», e non sotto quella per geografia, che
+>   non ce l'ha. Oggi i test la chiedono solo per tipo; il secondo caso si aggiunge con il prodotto;
+> - le due descrizioni «0-100» non valgono più con liquidità negativa. Quella del commento di
+>   `AllocationPieChart.svelte:53` la correggo io in Y10. Quella di `AllocationItem.value`
+>   (`backend/app/schemas/portfolio.py:79`) è nell'area di J: la segnalo e non la tocco.
+
+### Y5 — risposte dei colori (2026-10-16, 00:39)
+
+> **Note implementazione**:
+> - `frontend/scripts/theme/theme-roles.mjs:70` lo cambio io nello stesso commit dello spostamento, solo il percorso:
+>   l'eccezione si confronta con `===`. Prova: `--check` pulito e i totali m1/m2 identici prima e dopo. Il file è
+>   tornato fra quelli di `files/y5_paths.py`; è l'unica riga del file che cita `components/brokers`.
+> - `designer-lab.md` e `CHART_PATH_RE` li aggiorna L. Il baseline si scrive con lo strumento.
+> - Y5 entra dopo le 03:20, dopo il lotto di T che porta `LotCustodyModal`.
+> - **Strumento della prova**: `files/theme_totals.mjs` stampa i totali m1/m2 dell'albero e del baseline, con
+>   `scanTree`, `readBaseline` e `totalsOf` esportati da `theme-roles.mjs`. Su `94a8b4a7e`:
+>   `{"tree":{"m1":11026,"m2":83},"baseline":{"m1":11026,"m2":83},"treeFiles":284,"baselineFiles":284}`. Si lancia
+>   prima e dopo ogni spostamento: Y4b, Y3, Y5 e Y6.
+> - **Y6**: il coordinatore aspetta la risposta dei colori su `htmlSink.gate.test.ts:70`.
+
+### Y6 — risposte dei colori (2026-10-16, 00:40)
+
+> **Note implementazione**: via libero dai colori. Y6 si applica sempre dopo l'ingresso di CP-U2 di H.
+> - `htmlSink.gate.test.ts:70` è il gate di K, non loro. Lo cambio io nello stesso commit dello spostamento, perché la
+>   chiave si confronta con il percorso.
+> - `_frontend_utility.py` lo scrivo io.
+> - Il baseline ha una riga sola, `lib/components/files/FileGrid.svelte`, e si scrive con lo strumento.
+> - `files/y6_paths.py` copre già tutti e due i file; la prova dei totali con `files/theme_totals.mjs`, come per gli
+>   altri spostamenti.
+
+### Y7 — galleria mobile d'ingresso, preparazione ✅ (2026-10-16, 00:41–00:55; si lancia nello slot dopo G-13)
+
+> **Note implementazione**: il riferimento di G-13 è `a2c1c39f4` (coordinatore, 00:41), cioè lo snapshot
+> `g-ref13-r1`: alle 00:43 era ancora in corsa (partito alle 00:02), e il suo `meta.json` arriva alla fine.
+> - **Confronto scelto**: leggere il diff con l'attribuzione, senza un ramo temporaneo. `a2c1c39f4` è antenato della
+>   base `4ef2fc199`. Fra i due, nel frontend cambiano solo `providerProbe.ts`, `resolveProviderError.ts` e l'i18n
+>   degli asset (X-RL: errori dei fornitori) e una riga di `FilesTable.test.ts` (H CP-U1); `gallery.spec.ts` è
+>   identica. Nel backend, H CP-U1 cambia `services/files/static_uploads.py` (le righe dei file statici) e X-RL i
+>   fornitori FX e asset. Quindi una differenza nelle schermate filtrate è di Y7, salvo le righe delle liste dei file,
+>   che possono venire da H CP-U1. E5a, W-B20, W3-a e J CP-16 non sono in nessuna delle due revisioni.
+> - **Desktop invariato per costruzione**: senza trascinamento `columnMinWidth()` rende `column.minWidth || 60`, come
+>   prima, e la galleria parte senza larghezze salvate. Il cancello resta solo mobile.
+> - **Filtro**, verificato su `HEAD` e su `a2c1c39f4`, con 11 test su 139 in entrambe le revisioni:
+>   `PAC allocator steps|transaction list|dashboard transactions tab|(dashboard|broker) (positions tab|fifo lots panel)|Asset list table|FX list table|static resources tab|broker reports tab`.
+>   `dev.py` lo passa a Playwright così com'è (`-g`, lista di argomenti, niente shell).
+> - **Script**: `/tmp/libreFolio_y7_gallery.sh`.
+>   - Si ferma se il riferimento non ha `meta.json` o se la porta 6189 è occupata.
+>   - `gallery_snapshot.sh y7-tables-<sha>-mobile --port 6189 --data-dir /tmp/librefolio-r13-y -- --mobile-only -f
+>     "<filtro>" --workers 2`, con `nice -n 10` e senza `--no-populate`: dopo le E2E di Y7, il DB della corsia non ha i
+>     file statici.
+>   - Poi `gallery_tool.py diff … --common-only --stability diffs/g-final3__r1__vs__r2/stability.json` (177 shot,
+>     16 varianti ciascuno, mobile compreso) e `/tmp/libreFolio_y7_attr.py`, che raggruppa le immagini cambiate per
+>     pagina e shot, con il riquadro unito e la larghezza del PNG (1290 px, iPhone 14 Pro Max a 3×).
+> - **Attesa per Y7**: sui telefoni la colonna delle azioni non è più fissata al bordo destro. In una tabella più
+>   larga dello schermo, a scorrimento zero, le azioni spariscono dal bordo destro: il riquadro della differenza sta
+>   sulla destra della tabella, intestazione compresa. Le composizioni A | B | pixel si guardano a campione.
+
+### Y7 — galleria avviata e fermata (2026-10-16, 00:52–00:57)
+
+> **⚠️ Fuori pista**: alle 00:48 il coordinatore ha dato il via: «lancia la galleria appena G-13 ha il `meta.json` e la
+> porta è libera». Ho messo in attesa `/tmp/libreFolio_y7_gallery_wait.sh`, un ciclo che aspetta il `meta.json`, il
+> carico sotto 70 e la 6189 libera.
+> - Il `meta.json` di `g-ref13-r1` è comparso alle 00:52:44, e il ciclo ha avviato la galleria subito, mentre partiva la
+>   r2 dei colori (`g-ref13-r2`, `--workers 6`).
+> - Alle ~00:57 il coordinatore ha fermato tutte le prove e le build fino all'01:40 circa: la galleria dei colori aveva
+>   rossi per il carico. Ho fermato la mia alle 00:57:38.
+> - Fino a lì aveva fatto solo la build debug del frontend (svelte-check e vite build), finita. Niente populate,
+>   backend o Playwright, e nessun processo rimasto. La 6189 è libera.
+> - Lo snapshot vuoto `y7-tables-94a8b4a7e-mobile` l'ho tolto, perché lo script non riusa un'etichetta esistente.
+>   La build log è in `files/gallery_y7_aborted_build.log`.
+> - Il coordinatore ne è informato, con la sovrapposizione all'inizio della r2.
+> - **Da qui**: niente cicli d'avvio automatici. La galleria parte solo al via esplicito del coordinatore, verso
+>   l'01:40, dopo la r2. La build debug è pronta e ha la versione bloccata, quindi la run parte dal populate.
+
+### Y9 — passo 1, rossi ⏳ (2026-10-16, dalle 00:58; via del coordinatore alle 00:48)
+
+> **Note implementazione**: `test-author`, solo file Vitest nuovi, senza codice di prodotto e senza toccare i gate di K.
+> Per lo stop del coordinatore, l'agente scrive e non lancia niente. Li lancio io, uno alla volta con `nice`, quando il
+> coordinatore lo permette.
+> - **K-15** (escape nei tooltip, verdetto: il payload `<b data-pwned>` resta testo e non diventa un elemento):
+>   - `charts/AllocationPieChart.tooltipEscape.test.ts`: `caption` e `parentLabel` (`:455`, `:472-477`, `:480`);
+>   - `charts/CandlestickChart.tooltipEscape.test.ts`: valuta e bandiera nell'intestazione (`:522`, `:524`);
+>   - `charts/PriceChartFull.tooltipEscape.test.ts`: la bandiera del segnale sovrapposto (`:1013`), valuta e bandiera
+>     della serie principale (`:1020`, `:1023`).
+> - **C-34**:
+>   - `risk/CorrelationHeatmap.tooltipEscape.test.ts`: il nome dell'asset esce come `escapeHtml(nome)` condiviso, con
+>     `&quot;` e `&#39;`;
+>   - `utils/core/escapeHtml.single.test.ts`: una guardia statica, un solo escaper HTML nel sorgente (`inlineMath` a
+>     parte).
+> - **K-13**, `charts/chartFlagFont.test.ts`:
+>   - parte A: ECharts vero in SSR (SVG), con un controllo positivo (un tema inline) e il rosso con `CHART_INIT_THEME`;
+>   - parte B: la scansione statica, ogni `echarts.init` passa `CHART_INIT_THEME`. Oggi sono 18 chiamate in 17 file: l'analisi ne contava 16 nei componenti, ma sono 16 in 15 file, perché `LotGanttChart` ne ha due, più le 2 del PAC. I commenti che citano `echarts.init()` non contano: la scansione li toglie, e nei `.svelte` legge solo i blocchi `<script>`.
+> - **Registrazione**: una unità nuova, `chart-safety-unit`, nel mio `scripts/test_runner/_frontend_portfolio.py`, con la
+>   funzione `front_portfolio_chart_safety_unit` e un `add_test` su più righe.
+>
+> **Decisioni notturne, da rivedere**:
+> - **Il disegno di K-13**. `chartTheme.ts` esporta `CHART_FONT_FAMILY`, cioè 'LF Flags' seguito dal default di
+>   ECharts, così il testo senza bandiere non cambia: `'sans-serif'`, o 'Microsoft YaHei' su Windows
+>   (`echarts/lib/model/globalDefault.js:104`). Esporta anche `CHART_INIT_THEME = {textStyle: {fontFamily}}`, un tema
+>   passato come secondo argomento di ogni `echarts.init`.
+>   - ECharts 6 accetta un oggetto come tema. Il suo `textStyle` è il font globale del canvas e del `font` in linea del
+>     tooltip HTML, e si riapplica a ogni `setOption(…, true)`.
+>   - Sul Mac della galleria non mi aspetto differenze: le bandiere sono Apple in tutti e due i casi.
+>   - Usare Inter nel canvas, come l'HTML, sarebbe un cambiamento visibile su tutti i grafici: non lo faccio senza
+>     una decisione del developer.
+> - **La registrazione** va in un'unità mia, `chart-safety-unit`, e non accanto a `PriceChartFull.test.ts` e
+>   `CorrelationHeatmap.test.ts` in `front_component_unit` di `_frontend_utility.py`, che è del programma colori.
+>   Come per Y10.
+> - **Correzione all'analisi di Y9**: una copia locale dell'escaper c'è. `transactions/modals/TransactionBulkModal.svelte:1879`
+>   escapa tre caratteri in linea per una cella `html`; è nell'area di W (FE8). La guardia la ammette per nome del
+>   file, con il motivo scritto, e fallisce se la copia sparisce, così la lista non invecchia. Lo segnalo al
+>   coordinatore. Le altre corrispondenze non sono escaper HTML:
+>   - `toastStore.svelte.ts:63` decodifica;
+>   - `PerformanceChart.svelte:162` toglie le graffe del rich text di ECharts;
+>   - `markdown.ts` scrive Markdown.
+
+### Y7 — galleria mobile d'ingresso ✅ (2026-10-16, 01:33–01:48; via del coordinatore alle 01:33)
+
+> **Note implementazione**: `bash /tmp/libreFolio_y7_gallery.sh` sulla corsia 6189: snapshot
+> `y7-tables-94a8b4a7e-mobile`, `--mobile-only`, `--workers 2` e `nice`. 11 test su 11 verdi in 5,8 minuti, 272 PNG.
+> Il carico era fra 41 e 57, con altre due corsie e una build di un altro worktree in corsa.
+> - **Diff** contro `g-ref13-r1` (`a2c1c39f4`), `--common-only` e `--stability` di `g-final3`, report in
+>   `diffs/g-ref13-r1__vs__y7-tables-94a8b4a7e-mobile/`. 174 immagini cambiate e 98 identiche; nessuna cambia di
+>   dimensione o manca; il massimo è lo 0,6%.
+> - **Attribuzione, tutto a Y7 (D-Y17)**, guardando a occhio sei composizioni:
+>   1. l'intestazione «Actions» non è più fissata al bordo destro. Al suo posto c'è l'intestazione della colonna sotto:
+>      «Δ 1D» in FX, «Total P&L» nei lotti, «Size» nei file, «Ac…» tagliato nella revisione del PAC;
+>   2. anti-aliasing nel testo dell'intestazione e negli angoli della cornice, con Δ massimo fra 10 e 148;
+>   3. sulle righe colorate dei lotti FIFO la cella di selezione prende il colore della riga, al posto del blocco scuro
+>      opaco del fissaggio. Il caso massimo è fr/dark, allo 0,6%;
+>   4. grafici e mappe identici, o rumore entro lo 0,005%.
+>   H CP-U1 e X-RL non si vedono: le righe dei file sono identiche.
+> - **⚠️ Fuori pista**: `mkdocs gallery` ricostruisce comunque il frontend, con svelte-check (0/0) e vite. La build
+>   della run fermata alle 00:57 quindi non ha fatto risparmiare tempo: avevo detto il contrario al coordinatore e l'ho
+>   corretto nell'handoff.
+> - **Ingresso**: `theme-roles --check` alle 01:48 dice «0 files dropped». Handoff al coordinatore alle 01:48. Entra
+>   solo il committato (`ca681b4f9` e `8d4719c21`): il piano, i rossi di Y9 e Y10 e `_frontend_portfolio.py` restano
+>   fuori.
+> - **Da riferire al developer**, con il riepilogo di D-Y17: la tinta delle righe sulla cella di selezione, sui
+>   telefoni.
+
+### Y7 — ingresso ✅ (2026-10-16, 01:49)
+
+> **Note implementazione**: il treno 76 l'ha portato in `dev_release2` con il merge `a613a217c`, con le mie due righe 🐛
+> nel CHANGELOG. La tinta delle righe sulla cella di selezione va nella lista di domattina del developer.
+> Il coordinatore ha aggiornato la mia base: merge `c7dea8be6`, HEAD `f068a2f5f`. C'era un conflitto di sola aggiunta
+> in `LibreFolio_devWiki/log.md`, e i miei file aperti non sono stati toccati.
+
+### Y4b — FE2b, il rischio in `lib/features/risk/` ⏳ (2026-10-16, dalle 01:50; via del coordinatore alle 01:49)
+
+> **Note implementazione**:
+> 1. **Base**: HEAD `f068a2f5f`, che contiene T+DV (`a0915bef9`, DV-6 su `stressBucketLabel.ts`). `api sync` senza
+>    cambi tracciati.
+> 2. **Il runner messo da parte** (passo nuovo). `_frontend_portfolio.py` aveva anche le registrazioni dei rossi di Y9
+>    e Y10, che non entrano con Y4b. Ho salvato la copia (`files/_frontend_portfolio.y9y10.py`) e la patch
+>    (`files/y9y10_runner.patch`), e ho riportato il file a HEAD. Dopo il commit di Y4b rimetto le registrazioni, con
+>    il percorso nuovo del rosso di `CorrelationHeatmap`.
+> 3. **`test-author` dei rossi di Y9** chiuso prima dello spostamento: sei file, 19 rossi e 30 verdi attesi, niente
+>    lanciato. Fra i suoi reperti, per il passo 2 di Y9: le bandiere dei marcatori d'evento (`PriceChartFull.svelte`,
+>    `:812` e `:815`), e l'asse di `CorrelationHeatmap`, che fissa `fontFamily: 'sans-serif'` (`:131`).
+> 4. **Spostamento**: `files/y4b_move.py --apply`, 104 file (i 103 previsti più il rosso nuovo di Y9) e 149
+>    specificatori riscritti in 69 file. `components/risk/`, `lib/risk/` e `stores/risk/` non esistono più.
+> 5. **Percorsi**: `files/y4b_paths.py --apply`, 177 sostituzioni in 46 file. La prova a secco ne contava 328 perché
+>    comprendeva anche i 149 specificatori già riscritti. Restano solo le eccezioni previste:
+>    - `AssetPickerPanel.test.ts`, che va a `test-author`;
+>    - `scanColors.test.ts`, di L;
+>    - gli alberi sintetici di `test_i18n_usage_gate.py`;
+>    - il baseline, che si scrive con lo strumento;
+>    - le cronache (il journal, `sources/` e `log.md`);
+>    - `mkdocs_src/site/`, ignorato.
+> 6. **Colori**, con lo strumento come chiesto da loro:
+>    - `--check` pulito già dopo lo spostamento, perché R4 accoppia i file per nome;
+>    - `--update` scrive i nomi nuovi: 30 righe rinominate, conteggi identici a coppie, nessun'altra riga toccata,
+>      «m1 10980 → 10980, m2 83 → 83»;
+>    - `files/theme_totals.mjs` dà gli stessi totali prima e dopo: albero e baseline a 10980/83, 284 file;
+>    - `--check` di nuovo pulito.
+> 7. **`AssetPickerPanel.test.ts`** a `test-author`. L'import di tipo di `:47` e il gate di confine «ui/select non
+>    importa dal rischio»: il gate risolveva `RISK = resolve(HERE, '../../risk')`, una cartella che non esiste più.
+>    Così sarebbe passato in silenzio anche con un import da `features/risk`. Ora punta alla cartella nuova, con una
+>    guardia sulla sua esistenza.
+>
+> **Prove leggere**, una alla volta con `nice`, carico fra 21 e 35:
+> - `schemas risk` (pytest): 69 verdi;
+> - `check_source_paths.py`: 5 percorsi inesistenti, gli stessi di prima e non miei. I 3 nuovi erano tabelle «Source
+>   files» di pagine `sources/` e li ho aggiornati (vedi le decisioni);
+> - `mkdocs build` stretto: 3060 URL relativi risolti. `mkdocs check-links`: 96 link validi. Le 5 pagine MkDocs
+>   cambiate non hanno traduzioni;
+> - knip (`npm run lint:dead`): gli stessi reperti di Y8 a percorsi normalizzati, più l'import di
+>   `AssetPickerPanel.test.ts:47`, in correzione;
+> - `front-portfolio`: `risk-unit` 40, `risk-request-unit` 26, `risk-benchmark-unit` 13, `risk-controller-unit` 102,
+>   `risk-levels-unit` 498, `risk-levels-component` 273 e `risk-frame-component` 20, tutti verdi;
+> - `front-utility core-unit`: 170 file e 5870 test verdi, compresi i gate (`htmlSink`, `themeRoles`, `themeTokens`),
+>   `moneyRenderSites` e `catalogIcuLocale`, che hanno chiavi di percorso;
+> - `check-orphans`: orfani solo gli 8 rossi non tracciati di Y9 e Y10.
+>
+> **Decisioni notturne, da rivedere**:
+> - **Le tre pagine `sources/` della devWiki** («Source files»: `RiskLevelsPanel.svelte`, `riskAnalysisHelpers.ts`,
+>   `riskStore.svelte.ts`) le ho aggiornate al percorso nuovo, anche se gli script lasciavano fuori `sources/`. Il
+>   motivo: `check_source_paths.py` chiede che ogni percorso di quelle tabelle esista, e c'è un precedente (il
+>   refactor `27a29af09`). Le cronache in prosa restano com'erano.
+> - **Il runner riportato a HEAD per il checkpoint**, con le registrazioni dei rossi rimesse dopo, invece di uno stage
+>   parziale da parte del coordinatore.
+>
+> **Seguito delle prove** (02:08–02:25):
+> - `AssetPickerPanel.test.ts`, dopo `test-author`: 97 verdi da solo. Il gate di confine ora guarda `features/risk/`,
+>   con una guardia che la cartella esista e contenga `eligibility.ts`, e con il nome `$lib/` ricavato dalla cartella.
+>   I due nomi vecchi sono fra i negativi;
+> - `front-utility component-unit`: 144 file e 3795 test verdi;
+> - `front check` (svelte-check): 0 errori, 0 avvisi;
+> - Prettier `--check` sui 113 file frontend toccati: puliti;
+> - ruff sui 4 file Python: identico a HEAD. In `_frontend_portfolio.py` restano i 28 avvisi e la deriva di formato, che
+>   c'erano già;
+> - `utils gate-i18n-catalog` 176 verdi e `utils gate-i18n-usage` 195 verdi. Il secondo l'avevo escluso dagli script
+>   come «alberi sintetici» senza lanciarlo, e lo conferma;
+> - `check-orphans` sullo stato del checkpoint, con gli 8 rossi messi da parte e poi rimessi (8 somme OK): «All test
+>   files are registered», e 448 test frontend raggiungibili da `all`;
+> - `git diff --check` pulito, `theme-roles --check` pulito, 6189 libera.
+>
+> **⚠️ Fuori pista**: il primo tentativo di `check-orphans` «pulito» ha messo da parte 51 file invece di 8, perché il
+> glob degli untracked prendeva anche i 43 test del rischio appena spostati. Li ho rimessi tutti (51 somme OK) e ho
+> rifatto la prova con l'elenco esatto degli 8.
+>
+> **Checkpoint**: 255 percorsi da mettere in stage, in `files/y4b_stage_code.txt`: 103 cancellazioni, 103 file nuovi
+> in `features/risk/` e 49 modifiche. Restano fuori gli 8 rossi di Y9 e Y10 e il piano, che va nel commit del journal.
+> Non ci sono righe di CHANGELOG: è uno spostamento interno. Le E2E `risk` e `risk-lab` aspettano lo slot del
+> coordinatore, dopo H e A.

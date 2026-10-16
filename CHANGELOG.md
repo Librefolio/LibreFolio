@@ -43,18 +43,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
 - Test configuration shows until when a provider is paused after too many requests. API: live prices, asset refresh and FX sync results carry `error_code="RATE_LIMITED"` and `retry_after`.
 - **Scheduled wake-up**: `POST /api/v1/system/wake-sync` runs the price and exchange-rate updates that are due, for a hosting panel or a cron; off until `LIBREFOLIO_WAKE_TOKEN` is set. Documented in the new admin page "Sleep and Wake".
+- **Files page: a Visibility column** shows whether each file is shared with every user or personal. From the row menu or a grid card you can share a file with everyone or make it personal again, with a confirmation, since the others lose it.
+- **Check a backup before restoring it**: `dev.py backup restore ARCHIVE --dry-run` and `/api/v1/backup/restore/*` unpack the archive into a copy, bring it to this version's schema, check it and report what a restore would do — the backup's administrators, the migrations applied, the rows — without touching the instance. Hosting providers can cap the upload with `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (500 MB by default in the managed profile).
+- **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again. A server variable can set the instance-wide ones and lock them.
+- **Asset search**: justETF and Borsa Italiana can show only your preferred currency or language; a provider that still needs settings says so, with a «Configure» button, also in the provider panel of an asset; a legend explains the 👑.
 
 ### 🔄 Changed
 
 - An empty or blank secret counts as not set, as if the variable were absent.
-- Changing your password signs out every other device; the one you changed it from stays signed in.
+- Changing your password or your email signs out every other device; the one you changed it from stays signed in.
+- **Changing your email asks for your current password** in Settings › Profile.
 - A password reset from the command line, a deactivation or a demotion signs the account out of every device; reactivating an account does not bring its old sessions back.
 - Import wizard: when a broker's default plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your language.
 - `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
 - The list of exchange-rate providers no longer waits for the ECB and the SNB every time it opens: each provider's currency list is kept for a day, and a slow or unreachable provider is given up after 5 seconds, showing the last list it gave.
-- «Enable registration» becomes «Registration»: the upgrade keeps an open instance open and a closed one closed. The login page offers «Register here» only when registration is open.
+- «Enable registration» becomes «Registration»: the upgrade keeps an open instance open and a closed one closed. The login page offers «Register here» only when registration is open, or while the instance has no account yet.
 - `./dev.py user create`, `invite` and `activate` warn, then go ahead, when the instance has reached `LIBREFOLIO_MAX_USERS`.
-- API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`.
+- API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`, with `first_account_open` true while the instance has no account.
 - Docker: the image exposes only port 6040, and both compose files set `PORT=6040` inside the container; `PORT` in `.env` still chooses the host port. The unused 6041 mapping is gone.
 - **Live prices pause while you are away.** On the Assets page (every minute) and on an asset's page (every 30 seconds), live prices stop refreshing while the tab is in the background or after two minutes without using the page, with a small «Updates paused» label, and start again by themselves as soon as you come back. An asset's page now sends one request per refresh instead of two, and none at all on a date range that ends in the past.
 - **Saving the asset events editor is all or nothing.** The Events tab saves deletions, edits and new rows in one step: if anything is refused, none of them is kept, and the message, in your language, names the event at fault. An event linked to transactions can no longer be deleted together with other changes: the save stops and says which event and how many transactions use it, so remove the link first. Until now the other changes were saved and that deletion was skipped with a warning. Deleting an event and giving its date and type to another in the same save now works.
@@ -66,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
 - **Yahoo Finance no longer retries a "too many requests" refusal three times**: like every price and exchange-rate provider, it pauses. During a pause the last stored price stays on screen.
 - **Scheduled syncs catch up.** When the server comes back after being stopped or suspended, the scheduler runs at once the history sync of a configured day it missed in the last 7 days, instead of waiting for the next slot. On an instance blocked by the hosting provider no scheduled job runs, so prices stop updating until it is unblocked; the first round after that catches up.
+- A file uploaded from the Files page is personal; images uploaded through an image picker (asset icon, broker icon, avatar) are shared. Picking one of your personal images in a picker shares it, with a notice.
+- On the Files page, Delete appears only on the files you may delete; a bulk delete leaves the others in place, with a notice.
+- **Scheduled price and exchange-rate updates respect a provider's pause** after "too many requests": the paused items are retried when the pause ends instead of counting as failures, and a job that fails waits 1, 2, 4… minutes before trying again instead of retrying every minute.
 
 #### 🎨 A new colour palette
 
@@ -132,6 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lots: an adjustment that takes units away while carrying a cost now hands them over at that cost**, as the Dashboard already did, so the lots show the same gain instead of reading the units as destroyed. Units from a lot bought at another price realize the difference from that average cost: 10 units bought at 10 and handed over at an average cost of 15 realize +50. In a lot's history these rows show the value handed over at cost instead of proceeds. Lots opened by an adjustment whose cost is in another currency now convert that cost from its own currency.
 - **On a phone, a table's selection and actions columns scroll with it.** The «Actions» header stayed pinned at the right edge while the rows' ⋮ scrolled away, and the checkbox column covered the start of the first column; both now move with the table, and the header still stays on top when the table scrolls.
 - **Resizing a column follows the pointer, and works with a finger.** On several tables (Files, the import wizard, the PAC allocator) dragging a column edge moved it by only part of the drag; it now follows the pointer, a resized column keeps its width on a narrow screen, and columns can be resized by touch.
+- The image picker no longer reloads its list over and over when it has nothing to show.
 
 #### 🔒 Security
 
@@ -142,10 +151,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ⚠️ Breaking changes
 
-- The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `closed`): an API client that read the old key must read the new one.
+- The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `disabled`): an API client that read the old key must read the new one.
 - **`DELETE /api/v1/assets/events` requires `asset_id`.** Only that asset's events are deleted, so a wrong or crafted request can no longer delete another asset's events. A request with `ids` alone is refused (422), and an id of another asset answers `not_found`, its event untouched. A client deleting events must send their asset.
 - **`POST /api/v1/assets/events` answers a refusal with an object.** `detail` is `{error_code, message, params}` instead of a sentence; `params` names the item (`item_index`, `asset_id`) and the events at fault. A missing asset is now a 400 instead of a 200 that saved nothing. A client showing `detail` as text must read `detail.message`.
 - **The four placeholder backup endpoints are removed**: `/api/v1/backup/export`, `/backup/restore`, `/backup/formats` and `/backup/status` only answered "not implemented". The instance backup has its own endpoints under `/api/v1/backup/instance`.
+- **A new instance registers by invitation.** Its first account signs up without one and becomes the administrator; every later account needs an invitation link, unless an administrator sets «Registration» to Open. An upgraded instance keeps the mode it had.
+- `GET /api/v1/settings/global` and `/settings/global/{key}` need a signed-in session: an API client must sign in to read them.
+- `PUT /api/v1/auth/profile` with a new `email` needs `current_password`: missing → 400 `CURRENT_PASSWORD_REQUIRED`, wrong → 400 `CURRENT_PASSWORD_INVALID`.
 
 ---
 

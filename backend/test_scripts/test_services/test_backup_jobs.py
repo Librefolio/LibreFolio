@@ -37,6 +37,10 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     or through ``__cause__`` / ``__context__`` up to the eighth exception of the chain; false otherwise: no ``errno``,
     another ``errno``, another SQLite code, SQLite's message without its code, a plain ``RuntimeError``, a ninth
     exception of the chain. A cycle of causes or contexts ends the walk.
+(j) ``backup_in_progress`` (workstream Z's idle monitor: never suspend during a backup): true while anyone holds the
+    run lock (``backups/.jobs/.lock``) or the lock of the restore checks (``.restore/stage/.stage.lock``), false
+    otherwise. Read only: without the lock files it creates nothing; with them free, it leaves them free. Without
+    ``fcntl`` it follows the locks of the process. Without ``data_dir``, the configured data directory.
 
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
 replaced by a guard that fails the test, so the lane's data directory is never reached. ``LF_APP_VERSION`` is set, so
@@ -76,6 +80,7 @@ from backend.app.services.platform.instance_backup.jobs import (
     BackupJobNotFoundError,
     BackupJobStateError,
     archive_name,
+    backup_in_progress,
     delete_job,
     get_job,
     job_archive,
@@ -83,7 +88,7 @@ from backend.app.services.platform.instance_backup.jobs import (
     run_backup,
     start_backup,
 )
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, STATE_FILE, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, STAGE_LOCK_FILE, STATE_FILE, ensure_private_dir, is_job_id, job_dir, jobs_dir, lock_path, stages_dir
 from backend.app.services.platform.instance_backup.snapshot import file_digest
 from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_utils import print_section, print_success
@@ -1096,3 +1101,83 @@ def test_a_cycle_of_causes_ends_the_walk(link):
     assert not walker.is_alive(), f"_out_of_space was still walking a cycle of {link} after {WALK_DEADLINE_S}s: the walk must be bounded"
     assert answers == [False], f"a cycle without a full disk is no lack of space: {answers}"
     print_success(f"cycle of {link} → walk ended, False")
+
+
+# =============================================================================
+# (j) backup_in_progress
+# =============================================================================
+
+
+def check_lock_path(data_dir: Path) -> Path:
+    """The lock of the restore checks (lot B2b): held while an archive is checked, in its request's thread or after."""
+    return stages_dir(data_dir) / STAGE_LOCK_FILE
+
+
+#: The two locks ``backup_in_progress`` asks about, by what holds them.
+LOCKS = {"a-backup": lock_path, "a-restore-check": check_lock_path}
+
+
+def everything_below(root: Path) -> list[str]:
+    return sorted(path.relative_to(root).as_posix() for path in root.rglob("*"))
+
+
+def free_lock_files(data_dir: Path) -> None:
+    """Both lock files on disk, as runs that ended leave them: taken once, released."""
+    for path in (lock_path(data_dir), check_lock_path(data_dir)):
+        ensure_private_dir(path.parent, data_dir)
+        holder = jobs._RunLock(path)
+        assert holder.try_acquire(), f"precondition: nobody holds {path.name}"
+        holder.release()
+
+
+def test_without_lock_files_nothing_is_in_progress_and_nothing_is_created(data_dir):
+    """(j) A data directory where no backup ever ran nor archive was checked: false, and no file or folder created."""
+    print_section("backup_in_progress")
+    before = everything_below(data_dir)
+    assert backup_in_progress(data_dir=data_dir) is False, "no lock file: nothing in progress"
+    assert everything_below(data_dir) == before, f"read only: nothing created: {sorted(set(everything_below(data_dir)) - set(before))}"
+
+
+def test_free_lock_files_are_not_in_progress_and_stay_free(data_dir):
+    """(j) Both lock files there, nobody holding them: false, and both can still be taken afterwards."""
+    free_lock_files(data_dir)
+    before = everything_below(data_dir)
+    assert backup_in_progress(data_dir=data_dir) is False, "free locks: nothing in progress"
+    assert everything_below(data_dir) == before, "nothing created"
+    for path in (lock_path(data_dir), check_lock_path(data_dir)):
+        again = jobs._RunLock(path)
+        assert again.try_acquire(), f"the probe left {path.name} free"
+        again.release()
+
+
+@pytest.mark.parametrize("holder", sorted(LOCKS))
+def test_a_held_lock_is_work_in_progress(data_dir, monkeypatch, holder):
+    """(j) Either lock held (here by this test, as by a backup or a check in another worker), the other free: true; the
+    configured data directory is the one asked about without ``data_dir``. Released: false again."""
+    free_lock_files(data_dir)
+    lock = jobs._RunLock(LOCKS[holder](data_dir))
+    assert lock.try_acquire(), "precondition: nobody holds it"
+    try:
+        given = backup_in_progress(data_dir=data_dir)
+        monkeypatch.setattr(jobs, "get_data_dir", lambda: data_dir)
+        configured = backup_in_progress()
+    finally:
+        lock.release()
+    assert (given, configured, backup_in_progress(data_dir=data_dir)) == (True, True, False), f"{holder}: (held, held without data_dir, released): {(given, configured)}"
+    print_success(f"{holder}: in progress while held")
+
+
+@pytest.mark.parametrize("holder", sorted(LOCKS))
+def test_without_fcntl_backup_in_progress_follows_the_locks_of_the_process(data_dir, without_fcntl, holder):
+    """(j) Not POSIX: the locks are the process's own, and no file: false, then true while one is held, false once it is
+    released, and nothing created on disk."""
+    before = everything_below(data_dir)
+    lock = jobs._RunLock(LOCKS[holder](data_dir))
+    idle = backup_in_progress(data_dir=data_dir)
+    assert lock.try_acquire(), "precondition: nobody holds it"
+    try:
+        held = backup_in_progress(data_dir=data_dir)
+    finally:
+        lock.release()
+    assert (idle, held, backup_in_progress(data_dir=data_dir)) == (False, True, False), f"{holder}: (before, held, released): {(idle, held)}"
+    assert everything_below(data_dir) == before, "the locks of the process are no files: nothing created"

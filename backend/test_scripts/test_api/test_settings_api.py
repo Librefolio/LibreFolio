@@ -5,12 +5,13 @@ Tests for user settings and global settings endpoints.
 
 Test IDs:
 - SET-001 to SET-004: User Settings
-- GSET-001 to GSET-010: Global Settings
+- GSET-001 to GSET-010: Global Settings (GSET-001, 002, 002b, 002c, 003: who reads them, A6d — any signed-in user,
+  nobody without a valid session)
 """
 
 import uuid
 import zoneinfo
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Optional
 
 import httpx
@@ -18,8 +19,10 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1.auth import SESSION_COOKIE_NAME
 from backend.app.config import get_settings
 from backend.app.db.session import get_async_engine
+from backend.app.schemas.settings import GlobalSettingRead
 from backend.app.services.accounts import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success
@@ -989,54 +992,141 @@ class TestOnboardingWelcomeAtomicApi:
 
 
 # ============================================================================
-# Global Settings Tests - List
+# Global Settings Tests - List, and who reads them
 # ============================================================================
+#
+# Read by signed-in users only (A6d, decision 36): any session, an administrator's or a regular user's, reads them
+# whole, and nobody without a valid one, whatever the key. Writes stay the administrator's (require_admin, GSET-005 to
+# GSET-010). What the app needs before anyone signs in, the registration mode included, comes from the public
+# GET /system/instance (test_system_api.py), no longer from here.
+
+#: The answer of every protected route (get_current_user) to a request without a session cookie.
+NO_SESSION_ANSWER = {"detail": "Not authenticated"}
+#: The answer of every protected route (get_current_user) to a session cookie the server never issued.
+FORGED_SESSION_ANSWER = {"detail": "Session expired or invalid"}
+#: A protected route of this file's own: the reference for the answer every protected route gives.
+PROTECTED_REFERENCE = f"{API_BASE}/settings/user"
+#: Every field of a global setting, as GET /settings/global lists it and GET /settings/global/{key} answers it.
+GLOBAL_SETTING_FIELDS = set(GlobalSettingRead.model_fields)
+
+
+async def _get(url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+    """GET ``url`` with exactly these headers, from a client with an empty cookie jar: a session travels only in ``headers``."""
+    async with httpx.AsyncClient() as client:
+        return await client.get(url, headers=headers or {}, timeout=TIMEOUT)
+
+
+async def _delete_user_of_this_test(username: str) -> None:
+    """Cleanup of an account a test of this section registered, through the service layer, with what goes with it."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is not None:
+            await user_service.delete_user(session, user.id)
+
+
+@pytest_asyncio.fixture
+async def regular_session(test_server) -> AsyncIterator[dict[str, str]]:
+    """A Cookie header with the session of a user registered for this test only, proven a regular user, not an administrator.
+
+    The api category populates the lane before it runs, so a new registration is never the instance's first account,
+    the one that becomes its administrator: the register answer and GET /auth/me check it rather than assume it. The
+    session travels explicitly on each request, never through a cookie jar; the account is deleted at teardown.
+    """
+    username = f"gset_reader_{uuid.uuid4().hex[:12]}"
+    credentials = {"username": username, "password": "TestPass123!"}
+    try:
+        async with httpx.AsyncClient() as client:
+            registered = await client.post(f"{API_BASE}/auth/register", json={**credentials, "email": f"{username}@test.com"}, timeout=TIMEOUT)
+            assert registered.status_code == 201, f"Setup: registering {username} failed: {registered.status_code} {registered.text}"
+            assert registered.json()["user"]["is_superuser"] is False, f"Barrier: {username} must be a regular user, not an administrator (the lane already has its accounts): {registered.text}"
+            login = await client.post(f"{API_BASE}/auth/login", json=credentials, timeout=TIMEOUT)
+        token = login.cookies.get(SESSION_COOKIE_NAME)
+        assert login.status_code == 200 and token, f"Setup: signing in as {username} failed: {login.status_code} {login.text}"
+        cookie = {"Cookie": f"{SESSION_COOKIE_NAME}={token}"}
+        me = await _get(f"{API_BASE}/auth/me", cookie)
+        assert me.status_code == 200 and me.json()["user"]["username"] == username and me.json()["user"]["is_superuser"] is False, f"Barrier: the session must be {username}'s, a regular user's: {me.status_code} {me.text}"
+        yield cookie
+    finally:
+        await _delete_user_of_this_test(username)
 
 
 class TestGlobalSettingsList:
-    """Tests for listing global settings."""
+    """Listing the global settings, and who may read them: any signed-in user, nobody without a valid session."""
 
     @pytest.mark.asyncio
-    async def test_list_global_settings_authenticated(self, test_server):
-        """GSET-001: List global settings when authenticated."""
-        print_section("GSET-001: GET /settings/global - Authenticated")
+    async def test_list_global_settings_authenticated(self, test_server, regular_session):
+        """GSET-001: Any signed-in user lists the global settings, not only an administrator: a regular user gets 200 and
+        the same settings an administrator gets, each with every field of a global setting."""
+        print_section("GSET-001: GET /settings/global - Regular user")
 
-        async with httpx.AsyncClient() as client:
-            username, email, session = await create_user_simple(client)
-            assert session is not None, "Failed to create test user"
+        resp = await _get(f"{API_BASE}/settings/global", regular_session)
 
-            resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+        assert resp.status_code == 200, f"GET /settings/global must answer any signed-in user, a regular one too: {resp.status_code} {resp.text}"
+        data = resp.json()
+        assert set(data) == {"items"} and isinstance(data["items"], list), f"The answer must be the list of the global settings, under items: {resp.text}"
+        malformed = [item for item in data["items"] if set(item) != GLOBAL_SETTING_FIELDS]
+        assert not malformed, f"Every global setting must carry exactly {sorted(GLOBAL_SETTING_FIELDS)}: {malformed}"
+        keys = {item["key"] for item in data["items"]}
+        assert "session_ttl_hours" in keys, f"Barrier: the list holds the settings the instance seeds, session_ttl_hours among them: {sorted(keys)}"
 
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            data = resp.json()
+        async with httpx.AsyncClient() as admin_client:
+            await get_admin_session(admin_client)
+            admin_resp = await admin_client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+        assert admin_resp.status_code == 200, f"Barrier: an administrator lists the global settings: {admin_resp.status_code} {admin_resp.text}"
+        admin_keys = {item["key"] for item in admin_resp.json()["items"]}
+        assert keys == admin_keys, f"A regular user must read the same global settings as an administrator: missing {sorted(admin_keys - keys)}, extra {sorted(keys - admin_keys)}"
 
-            # Verify structure
-            assert "items" in data, "Response should contain 'items' key"
-            assert isinstance(data["items"], list), "Settings should be a list"
-
-            if len(data["items"]) > 0:
-                setting = data["items"][0]
-                assert "key" in setting, "Setting should have 'key'"
-                assert "value" in setting, "Setting should have 'value'"
-                assert "value_type" in setting, "Setting should have 'value_type'"
-                print_info(f"  Found {len(data['items'])} global settings")
-
-            print_success("✓ Global settings listed successfully")
+        print_info(f"  {len(keys)} global settings, the same as an administrator's")
+        print_success("✓ A regular user lists the global settings")
 
     @pytest.mark.asyncio
     async def test_list_global_settings_unauthenticated(self, test_server):
-        """GSET-002: List global settings without authentication → 200 (public read access)."""
-        print_section("GSET-002: GET /settings/global - Unauthenticated (Public)")
+        """GSET-002: List global settings without a session → 401, the answer of every protected route.
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{API_BASE}/settings/global", timeout=TIMEOUT)
+        No longer public (A6d, decision 36): the scheduler, the session lifetime and the registration mode are for
+        signed-in users only. The login page does not need them: it reads the registration mode, and whether the instance
+        has no account yet, from the public GET /system/instance.
+        """
+        print_section("GSET-002: GET /settings/global - No session → 401")
 
-            # Global settings have PUBLIC read access by design
-            # (needed for frontend to check registration_mode, etc.)
-            assert resp.status_code == 200, f"Expected 200 (public access), got {resp.status_code}"
-            data = resp.json()
-            assert "items" in data, "Response should contain 'items' key"
-            print_success("✓ Global settings publicly accessible (as designed)")
+        reference = await _get(PROTECTED_REFERENCE)
+        resp = await _get(f"{API_BASE}/settings/global")
+
+        assert (reference.status_code, reference.json()) == (401, NO_SESSION_ANSWER), f"Barrier: a protected route without a session answers 401 {NO_SESSION_ANSWER}: GET /settings/user → {reference.status_code} {reference.text}"
+        assert (resp.status_code, resp.json()) == (reference.status_code, reference.json()), f"GET /settings/global without a session must answer as every protected route, 401 {NO_SESSION_ANSWER}: {resp.status_code} {resp.text}"
+        print_success("✓ No session: 401, as every protected route")
+
+    @pytest.mark.asyncio
+    async def test_get_single_setting_unauthenticated(self, test_server):
+        """GSET-002b: GET /settings/global/{key} without a session → 401, the answer of every protected route, for a key
+        the instance has and for one it has not: the session is checked first, so a caller without one cannot tell which
+        keys exist."""
+        print_section("GSET-002b: GET /settings/global/{key} - No session → 401")
+        keys = ["session_ttl_hours", f"gset_002b_unknown_{uuid.uuid4().hex}"]
+
+        reference = await _get(PROTECTED_REFERENCE)
+        answers = {key: await _get(f"{API_BASE}/settings/global/{key}") for key in keys}
+
+        assert (reference.status_code, reference.json()) == (401, NO_SESSION_ANSWER), f"Barrier: a protected route without a session answers 401 {NO_SESSION_ANSWER}: GET /settings/user → {reference.status_code} {reference.text}"
+        for key, resp in answers.items():
+            assert (resp.status_code, resp.json()) == (reference.status_code, reference.json()), f"GET /settings/global/{key} without a session must answer as every protected route, 401 {NO_SESSION_ANSWER}: {resp.status_code} {resp.text}"
+        print_success("✓ No session: 401 for a key the instance has and for one it has not")
+
+    @pytest.mark.asyncio
+    async def test_global_settings_with_a_forged_session_cookie(self, test_server):
+        """GSET-002c: Both reads with a session cookie the server never issued → 401, the answer every protected route
+        gives that cookie: GET /settings/global and GET /settings/global/{key} accept only a session the server issued."""
+        print_section("GSET-002c: GET /settings/global[/{key}] - Forged session cookie → 401")
+        forged = {"Cookie": f"{SESSION_COOKIE_NAME}=forged-{uuid.uuid4().hex}"}
+        paths = ["/settings/global", "/settings/global/session_ttl_hours"]
+
+        reference = await _get(PROTECTED_REFERENCE, forged)
+        answers = {path: await _get(f"{API_BASE}{path}", forged) for path in paths}
+
+        assert (reference.status_code, reference.json()) == (401, FORGED_SESSION_ANSWER), f"Barrier: a protected route reads the forged cookie as a session it never issued, 401 {FORGED_SESSION_ANSWER}: GET /settings/user → {reference.status_code} {reference.text}"
+        for path, resp in answers.items():
+            assert (resp.status_code, resp.json()) == (reference.status_code, reference.json()), f"GET {path} with a forged session cookie must answer as every protected route, 401 {FORGED_SESSION_ANSWER}: {resp.status_code} {resp.text}"
+        print_success("✓ Forged session cookie: 401, as every protected route")
 
 
 # ============================================================================
@@ -1048,30 +1138,19 @@ class TestGlobalSettingsSingle:
     """Tests for single global setting operations."""
 
     @pytest.mark.asyncio
-    async def test_get_single_setting(self, test_server):
-        """GSET-003: Get a single global setting."""
-        print_section("GSET-003: GET /settings/global/{key} - Single Setting")
+    async def test_get_single_setting(self, test_server, regular_session):
+        """GSET-003: Any signed-in user reads a single global setting, not only an administrator: a regular user gets 200
+        and session_ttl_hours, with every field of a global setting."""
+        print_section("GSET-003: GET /settings/global/{key} - Regular user")
 
-        async with httpx.AsyncClient() as client:
-            username, email, session = await create_user_simple(client)
-            assert session is not None, "Failed to create test user"
+        resp = await _get(f"{API_BASE}/settings/global/session_ttl_hours", regular_session)
 
-            # Try to get session_ttl_hours (should exist)
-            resp = await client.get(f"{API_BASE}/settings/global/session_ttl_hours", timeout=TIMEOUT)
+        assert resp.status_code == 200, f"GET /settings/global/session_ttl_hours must answer any signed-in user, a regular one too: {resp.status_code} {resp.text}"
+        data = resp.json()
+        assert set(data) == GLOBAL_SETTING_FIELDS, f"A global setting must carry exactly {sorted(GLOBAL_SETTING_FIELDS)}: {resp.text}"
+        assert data["key"] == "session_ttl_hours", f"The answer must be the setting asked for, session_ttl_hours: {resp.text}"
 
-            # Accept 200 or 404 (if single-get not implemented)
-            if resp.status_code == 404:
-                # Check if it's "not found" for the endpoint or the setting
-                data = resp.json()
-                if "detail" in data and "not found" in str(data["detail"]).lower():
-                    pytest.skip("Single setting GET endpoint not implemented")
-
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            data = resp.json()
-            assert "key" in data, "Response should have 'key'"
-            assert data["key"] == "session_ttl_hours", "Key should match"
-
-            print_success("✓ Single setting retrieved successfully")
+        print_success("✓ A regular user reads a single global setting")
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_setting(self, test_server):
