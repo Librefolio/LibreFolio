@@ -2,7 +2,7 @@
 
 Owner: workstream H (platform), CP2b. ``MIDDLEWARE_STACK`` lists every middleware of the app in order: the first entry
 is the outermost, the first to see a request and the last to see its response. A workstream adds one entry where its
-middleware belongs. Moved out of ``main.py`` as it was: GZip outermost, CORS inside it.
+middleware belongs. Today: the activity tracking of sleep and wake, the security headers, GZip, CORS.
 """
 
 from collections.abc import Mapping, Sequence
@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from backend.app.services.platform.security_headers import SecurityHeadersMiddleware
 from backend.app.services.platform.sleep_wake.activity import ActivityMiddleware
 
 
@@ -29,6 +30,8 @@ MIDDLEWARE_STACK: tuple[MiddlewareEntry, ...] = (
     # The user's presence and the requests in flight (workstream Z, decision D-S1): outermost, so it sees every
     # request first and counts the compression of a response as in flight; the probes are not counted.
     MiddlewareEntry("activity", ActivityMiddleware),
+    # nosniff and Referrer-Policy on every response, the 500s and the compressed ones included (D5)
+    MiddlewareEntry("security_headers", SecurityHeadersMiddleware),
     # Compress responses (API JSON, SvelteKit JS/CSS, docs HTML) for clients that accept
     # gzip: a first visit drops from ~7.5 MB to ~2.8 MB. Starlette leaves images, fonts,
     # archives, Server-Sent Events, 206 range replies and pre-encoded responses alone,

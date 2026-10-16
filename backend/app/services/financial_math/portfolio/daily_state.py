@@ -16,7 +16,7 @@ from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostStep,
 )
-from backend.app.services.financial_math.native_cash import NativeCash
+from backend.app.services.financial_math.native_cash import NativeCash, change_days
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
     AcquisitionFundingContribution,
@@ -52,6 +52,11 @@ def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, va
             ratio *= split.ratio
             adjusted = True
     return ratio, adjusted
+
+
+def _calendar(first: date_type, last: date_type) -> list[date_type]:
+    """Every day from ``first`` to ``last``, both included."""
+    return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
 
 
 # =============================================================================
@@ -356,6 +361,8 @@ class DailyStateBuilder:
         # A rate change of a held foreign currency revalues its cash
         frame_fx_days = set(self.native_cash.rate_change_days(self.frame_start, self.date_to))
         dirty_days.update(frame_fx_days)
+        # ...and a rate the day reads for its securities or its cash in transit changes their value
+        dirty_days.update(self._valuation_rate_change_days())
         for interval in self.in_transit_intervals:
             if interval.start_date >= self.frame_start:
                 dirty_days.add(interval.start_date)
@@ -363,17 +370,16 @@ class DailyStateBuilder:
                 dirty_days.add(interval.end_date)
             if interval.end_date < self.date_to and interval.end_date + timedelta(days=1) >= self.frame_start:
                 dirty_days.add(interval.end_date + timedelta(days=1))
+        # A market quote sets the day's mark even with the previous close: the mark may have come from a trade, and
+        # a new quote restarts the price's age
         for prices in self.price_map.values():
-            prev_price = None
-            for dt, close, _ in prices:
-                if dt < self.frame_start:
-                    prev_price = close
-                    continue
-                if prev_price is not None and close != prev_price:
-                    dirty_days.add(dt)
-                elif prev_price is None:
-                    dirty_days.add(dt)
-                prev_price = close
+            dirty_days.update(dt for dt, _close, _currency in prices if self.frame_start <= dt <= self.date_to)
+        # A carried price turns stale on the day its age passes the threshold, with nothing else happening
+        observed = {dt for prices in self.price_map.values() for dt, _close, _currency in prices} | set(position_txs_by_date)
+        for day in observed:
+            first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
+            if self.frame_start <= first_stale <= self.date_to:
+                dirty_days.add(first_stale)
         for history in self.split_history.values():
             dirty_days.update(split.date for split in history if self.frame_start <= split.date <= self.date_to)
         dirty_days.add(self.frame_start)
@@ -910,6 +916,31 @@ class DailyStateBuilder:
         cost_at_today_rate = cost_asset * rate
         part[0] += market_value - cost_at_today_rate
         part[1] += cost_at_today_rate - cost_report
+
+    def _read_rate(self, currency: str, day: date_type) -> Decimal | None:
+        """The rate the day reads from the pre-loaded map: the exact day's, or None."""
+        return self.fx_rate_map.get((currency, self.target_currency, day))
+
+    def _valuation_rate_change_days(self) -> set[date_type]:
+        """Frame days on which a rate the day reads to value it changes from the day before.
+
+        The currencies of prices and assets are read every day (securities held and in transit, the exchange part
+        of the unrealized result); the currency of cash in transit on the days of its transit. Same reading as the
+        valuation: the exact day's rate, so one that appears or disappears counts.
+        """
+        changed: set[date_type] = set()
+        currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
+        currencies.update(currency for currency in self.asset_currencies.values() if currency)
+        currencies.discard(self.target_currency)
+        if currencies:
+            changed.update(day for day in change_days(self._read_rate, currencies, _calendar(self.frame_start - timedelta(days=1), self.date_to)) if day >= self.frame_start)
+        for interval in self.in_transit_intervals:
+            currency = interval.departure_leg.currency
+            start, end = max(interval.start_date, self.frame_start), min(interval.end_date, self.date_to)
+            if interval.tx_type != "cash" or not currency or currency == self.target_currency or start > end:
+                continue
+            changed.update(day for day in change_days(self._read_rate, {currency}, _calendar(start - timedelta(days=1), end)) if day >= start)
+        return changed
 
     def _convert(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
         """Convert amount from from_ccy to target_currency using pre-loaded FX map."""
