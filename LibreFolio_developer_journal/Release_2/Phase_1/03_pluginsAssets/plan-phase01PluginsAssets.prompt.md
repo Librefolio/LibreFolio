@@ -4159,3 +4159,57 @@ carico è salito più volte a ~150 per gli slot pesanti delle altre corsie, e il
   Arriva col prossimo aggiornamento della base; prima del lotto delle icone la leggo dal checkout principale, in sola
   lettura, come indicato dal coordinatore.
 - **X-R25** (da J): il test della ricerca justETF in `all-backend` va in timeout; aperta nel backlog.
+
+Commits of the batch: `1713d97bf` (F21 fix), `24f51cde3` (F21 tests), `914360874` (X-R21), `fedad56cb` (9a), `039ccc9d5`
+(journal).
+
+#### FE5c-9b · la parte dal vivo, innestata ✅ (12:02–12:45)
+
+> **Note implementazione**:
+> - `files/checks/fe5c_piece9b_splice.py --apply`: la pagina passa da **2937 a 2757 righe**. Prettier: nessuna modifica.
+> - L'istanza `live = new AssetDetailLive({…getter…})` sta nel punto del vecchio `$effect` del polling, quindi
+>   l'effetto resta nello stesso ordine fra gli effetti della pagina.
+> - Il `$derived` `lastPrice` legge `live.currentPrice` in modo pigro, solo dopo l'inizializzazione: nessun problema
+>   d'ordine.
+> - Escono dalla pagina gli import del polling (`livePriceService`, `activePolling`, `cadence`).
+> - **Prove**:
+>   - `front check` → **0/0**: l'oggetto di getter soddisfa `AssetDetailLiveInput`;
+>   - cancelli dei colori `--check` puliti, nessuna classe spostata, quindi niente `--split`.
+> - **Test**: un test-author scrive `assetDetailLive.svelte.test.ts`, con il polling e le API sostituiti, lo stato
+>   fermo, la conversione, le risposte vecchie, la testa del grafico e `resetPrice()`.
+> - Le E2E che coprono il dal vivo, `asset-live-pause.spec.ts` e `asset-detail.spec.ts`, vanno nello slot del FE5c.
+
+#### Icone in Impostazioni › Plugin ⏳ (backend scritto alle 12:07; il frontend dopo l'handoff del 9b, perché serve `api sync`)
+
+> **Note implementazione**:
+> - `PluginSettingsPluginRead.icon_url` (descrizione su una riga, senza backtick: va nel client generato);
+> - `FAMILY_ICON_ATTRIBUTES = {"asset": "get_icon", "fx": "icon"}` accanto a `FAMILY_REGISTRIES`;
+> - `_plugin_identity()` sostituisce `_plugin_name()`: nome e icona dalla stessa istanza; un'icona illeggibile o vuota
+>   diventa `None`.
+> - **Prova in processo**: `borsa_italiana` e `justetf` hanno la loro icona, `mockprov` (solo test) nessuna.
+> - Un test-author scrive i test backend.
+
+**FE5c-9b, chiusura (12:45)**:
+> - **Il test unitario** `assetDetailLive.svelte.test.ts` (test-author), 63 casi:
+>   - jsdom, con gli helper `$test/runes.svelte`;
+>   - il polling e le API sostituiti, i servizi puri veri;
+>   - l'effetto legge esattamente i 5 ingressi;
+>   - lo stato fermo, la conversione, le risposte vecchie, la pausa del 429, la testa del grafico e `resetPrice()`.
+>   - È registrato in `core-unit`, come gli altri test di store a rune senza componente.
+> - Aggiornata la doc `developer/frontend/components/features/live-ticker.md` al modulo: stesso comportamento, nomi
+>   nuovi.
+> - **Prove**:
+>   - il file da solo → **63/63** al primo giro;
+>   - `core-unit` → **185 file, 6693/6693**;
+>   - `mkdocs build` stretto ok;
+>   - `front check` 0/0 e cancelli dei colori puliti (12:05).
+> - **Trovati dal test unitario** (codice di prima, spostato così com'è, non toccato nel taglio); il coordinatore ha
+>   approvato la correzione in un commit a parte, subito dopo il 9b, con i rossi prima (12:37):
+>   1. su un grafico convertito, ogni poll ricarica tutto il grafico, perché la guardia confronta il `close` convertito
+>      con il prezzo nativo: una 🐛 nel CHANGELOG;
+>   2. il lampeggio può restare acceso quando l'effetto riparte, perché la pulizia non rimette `direction` a
+>      `'neutral'`; con il movimento ridotto il prezzo resta colorato;
+>   3. un commento di `app.css` (ridotto movimento) che cita `+page.svelte`. `app.css` è dei colori: aspetto il loro ok.
+> - **⚠️ Fuori pista**: il controllo di `api plugin-settings` del lotto icone (12:28) è rimasto in attesa del carico, a
+>   ~160. L'ho fermato prima che partisse, senza server né porta da pulire, per dare la precedenza alle prove del 9b. Lo
+>   rilancio con il lotto icone.
