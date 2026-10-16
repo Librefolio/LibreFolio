@@ -106,12 +106,14 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, the address reader `env_url()`, `Settings` and `get_settings()`. New variables
-      go into one section module per topic, owned by the workstream of that area. Six exist today:
+      go into one section module per topic, owned by the workstream of that area. Seven exist today:
       `platform.py` (H: `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`, `support_url()`),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
-      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
+      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`, and
+      `admin_bootstrap_config()`, the [initial administrator](access_control.md#initial-admin), its
+      token also as `_FILE`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
       `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
       `web_link_finder_max_results()`, `plugin_setting_env()` and `plugin_setting_env_origin()`
@@ -128,9 +130,11 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       scheduled wake-up, `wake_token()`, also as `_FILE`, with the rules of the panel's backup token;
       see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync); the idle suspension,
       `idle_suspend_mode()` and `idle_suspend_minutes()`; see
-      [Idle Suspension](../../admin/sleep_wake.md#idle-suspend)) and `backup.py` (B:
+      [Idle Suspension](../../admin/sleep_wake.md#idle-suspend)), `backup.py` (B:
       `backup_download_token()`, the token a hosting panel presents to download the instance's
-      backups, also as `_FILE`). Unlike a `Settings` field, an
+      backups, also as `_FILE`) and `brim.py` (W: `brim_prewarm_enabled()`, the opt-in
+      [warm-up of the BRIM parse pool](../backend/brim/architecture.md#parse-pool-warm-up), which
+      raises `BrimConfigError` on a value it cannot use). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
       `registration_service.py` logs it and falls back safely — registration closed for the first
@@ -138,7 +142,8 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       ([Registration Modes](access_control.md#registration-modes)). An invalid
       `LIBREFOLIO_SUPPORT_URL` does not either: `support_link()`
       (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
-      `support_url: null`, so the app keeps its link to the project's GitHub issues.
+      `support_url: null`, so the app keeps its link to the project's GitHub issues. An unusable
+      `LIBREFOLIO_ADMIN_*` value does stop it, as `admin_bootstrap_config()` runs in the startup audit.
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector
@@ -228,7 +233,7 @@ The global keys declared today, and where the **Admin** tab shows them
 | Key | Type | Default | In the Admin tab |
 |-----|------|---------|------------------|
 | `session_ttl_hours` | int | `24` | Session → **Session Duration** |
-| `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
+| `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. The startup that creates the [initial administrator](access_control.md#initial-admin) writes `invite` too. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
 | `require_email_verification` | bool | `false` | Security → **Require Email Verification**: every account created by `POST /auth/register` but the first waits for an emailed link ([Email Verification](../backend/email.md#verification)). It turns on only while an email with a link can go out: the switch is disabled while its saved value is off and `email.links` of `GET /system/instance` is false, and `PATCH /settings/global/bulk` refuses an off-to-on change with 409 `EMAIL_VERIFICATION_UNAVAILABLE` (`GlobalSettingUnavailableError`). Turning it off always works |
 | `max_file_upload_mb` | int | `10` | Memory → **Max File Upload Size** |
 | `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label from `settings.globalSettingNames.scheduler_enabled`) |
