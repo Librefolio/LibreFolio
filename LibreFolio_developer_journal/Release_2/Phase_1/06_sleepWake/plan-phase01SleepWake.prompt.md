@@ -2767,3 +2767,7 @@ base.
    annuncia «occupato»; da decidere dopo l'ingresso di Y11. Verificato sul codice: la radice
    (`routes/(app)/dashboard/+page.svelte:841`) lega `aria-busy` e `data-busy` a `reportLoading`; la pagina del
    broker non ha `aria-busy` sulla radice, ma la sua icona «Aggiorna» segue `reportLoading`.
+8. ✅ 16/10 20:35 — Z-18 salvato (`3bdb16d15`). Poi la convenzione N58 (coordinatore, da H-22): nessuna funzione di
+   produzione solo per i test. `--dead-code` segnala `reset_provider_cooldowns()` (Z7a) e
+   `reset_shutdown_budget_state()` (Z6b), verificate sul codice: le chiamano solo `test_provider_cooldown.py` e
+   `test_shutdown_budget.py`. Nel backlog come Z-19, da allineare nel prossimo lotto di codice di Z.
