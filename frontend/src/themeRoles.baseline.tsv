@@ -80,7 +80,7 @@ lib/features/settings/tabs/AboutTab.svelte	21
 lib/features/support/SocialShareModal.svelte	1
 lib/features/support/supportLinks.ts	14
 lib/features/tools/pac-allocator/planner/result/AssetTable.svelte	1
-lib/features/tools/pac-allocator/planner/result/BackendTimingBar.svelte	16
+lib/features/tools/pac-allocator/planner/result/BackendTimingBar.svelte	14
 lib/features/tools/pac-allocator/planner/result/ResultCell.svelte	1
 lib/features/tools/pac-allocator/planner/steps/DistributionDialog.svelte	3
 lib/features/tools/pac-allocator/planner/steps/TargetsStep.svelte	2
