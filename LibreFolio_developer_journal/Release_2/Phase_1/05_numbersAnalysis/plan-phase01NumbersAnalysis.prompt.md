@@ -3560,3 +3560,74 @@ le vendite misurate contro quel costo).
     altri 0,2–0,3 s. Percorso BRIM non toccato da J-17; gli stessi test erano verdi in `all-backend` di CP-7a (carico
     più basso). **Verdetto: lentezza** (avvio a freddo del pool sotto un host sovraccarico, carico 100–158), voce
     propria → **J-30** nel backlog, da smistare dal coordinatore. Porta 6185 libera.
+
+#### CP-13a — P19: il guadagno che recupera un drawdown, campo del backend (16/10, dalle 17:10)
+
+Via del coordinatore (17:06), dopo l'ingresso di J-17 in dev (merge `94321d7db`); base `9545826db`. Contratto concordato
+con Y (11:35) e approvato (11:40): `levelHelpers.ts:356-360` (`requiredRecovery(L) = 1/(1−L) − 1`, frontend) diventa
+un campo del backend calcolato nella casa; Y lo legge in Y12b.
+- **Casa**: `financial_math/returns.py::required_recovery_return(drawdown)` → `−d/(1+d)` (la forma precisa per i valori
+  piccoli), `0.0` senza zero negativo, `None` per una perdita totale (`d ≤ −1`), `ValueError` per `d > 0` o non finito.
+- **Serie** (`risk/metrics.py::drawdown_episodes`): `remaining_to_peak_ratio` (dal drawdown corrente) e il nuovo
+  `maximum_drawdown_trough_to_peak_ratio` (dal massimo, episodio aperto o recuperato; `0.0` senza drawdown) dalla casa;
+  oggi `:392` divide per zero con un sottostante esattamente −1 (raggiungibile in virgola mobile: due rendimenti di
+  −0,9999999999).
+- **Schemi** (`RiskDrawdownOutput`, `RiskAssetSetDrawdownItem`): `remaining_to_peak_ratio` obbligatorio ma nullabile;
+  `maximum_drawdown_trough_to_peak_ratio` facoltativo, `ge=0`, positivo vietato con `NO_DRAWDOWN`.
+- **Plugin**: `drawdown_summary` 1.1.0 → 1.2.0, `asset_set_drawdown` 1.0.0 → 1.1.0 (campo in più, valori invariati).
+- AI Export dei drawdown invariato (lo eredita MF-D); nessun ripiego dal KPI; frontend a Y.
+- Passi: rossi (test-author, brief `files/j/cp13a/test_author_prompt.md`) → codice → rossi provati sul codice vecchio →
+  verdi → mappe della casa e doc EN → `api sync` → handoff.
+- ✅ **Codice** (17:15–17:30; rossi del test-author e doc del docs-writer in parallelo, senza lanciare nulla):
+  `returns.required_recovery_return` (dopo `price_return`); `risk/metrics.py` importa la casa, `DrawdownEpisodeReport`
+  con `maximum_drawdown_trough_to_peak_ratio` e `remaining_to_peak_ratio: float | None` (via la formula locale di
+  `:392`); `schemas/risk.py` (i due modelli: campo nuovo con descrizione, `remaining_to_peak_ratio` nullabile ma
+  obbligatorio, positivo vietato con `NO_DRAWDOWN`); plugin `drawdown_summary` 1.2.0 e `asset_set_drawdown` 1.1.0;
+  mappe della casa (`financial_math/__init__.py`, docstring di `returns.py`, `financial-math.instructions.md`,
+  `backend.instructions.md`, riga dell'albero in `developer/backend/financial_math.md`). Ruff e black puliti.
+  **⚠️ Fuori pista**: una sostituzione nel docstring di `DrawdownEpisodeReport` aveva tolto la riga
+  `current_drawdown: float`; rimessa e verificata subito.
+  - Script della prova in `files/j/cp13a/` (`code_out.sh`, `code_in.sh`, `runs.sh`: `financial-math`, `risk-all -k
+    "drawdown or recovery or trough"`, `schemas risk`, `api risk`, `ai-export -k drawdown_context` come guardia).
+- ✅ **Rossi scritti** (test-author, 17:19–17:30): file nuovo `test_financial_math/test_required_recovery_return.py`
+  (17 casi), estesi `test_risk_metrics.py`, `test_risk_schemas.py` (prima prova di `RiskAssetSetDrawdownItem`),
+  `test_risk_analytics.py`, `test_risk_asset_set.py`; nessuna registrazione nel runner. `test_risk_api.py` invariato
+  (la corsa sul DB non esegue `drawdown_summary`).
+- ✅ **Doc EN** (docs-writer): `max-drawdown.en.md`, `current-drawdown.en.md` (debito di traduzione: frasi nuove sul
+  calcolo del massimo), `developer/backend/risk/architecture.md` (sezione nuova «The Drawdown Episode», ancora
+  `#drawdown-episode`), `developer/backend/financial_math.md`.
+- **⚠️ Fuori pista (deciso da me, dentro il lotto)**: il docs-writer ha notato che `architecture.md` «Adding a Risk
+  Analytic», punto 4, chiede «`None` più un avviso» per un valore indefinito. Una perdita totale ora dà due rapporti
+  nulli senza spiegazione, e nell'AI Export il componente dei drawdown cade (il suo payload vuole
+  `remaining_to_peak_ratio` non nullo su `ok`): caso irraggiungibile dai prezzi salvati, ma prima era un `failed`
+  onesto. Aggiunto l'avviso `total_loss_no_recovery` (`risk.warnings.total_loss_no_recovery`, 4 lingue con
+  `dev.py i18n add`, `degrades_result=False`, `details.asset_ids` nell'insieme d'asset) nei due plugin; seguiti ai
+  due specialisti (rossi dell'avviso; doc). La mappatura nell'AI Export resta a MF-D (glielo segnalo).
+- In attesa del via del coordinatore (~17:45, galleria dei colori in corso) per i rossi sul codice vecchio.
+- ✅ **Avviso finito** (17:30–17:39): chiave per l'insieme d'asset separata, `risk.warnings.total_loss_no_recovery_assets`
+  con `{count}` e `{names}` (li riempie il servizio da `details.asset_ids`, come gli `assets_excluded_*`), stesso
+  codice; `message` inglese allineato alla frase del catalogo; commenti di versione dei due plugin con l'avviso;
+  `architecture.md` allineata. Rossi dell'avviso scritti dal test-author (chiave, `degrades_result=False`, nessun
+  avviso con rapporti `0.0`, un solo avviso per due perdite totali). `py_compile`, ruff e black puliti su 5 file di
+  test (carico 80). Da passare a Y: `risk-lab.md:285-287` e il commento di `levelHelpers.ts:137-141` («l'unico avviso
+  con `degrades_result` falso»); a MF-D: la perdita totale nei componenti dei drawdown dell'AI Export.
+- ✅ **Prove di CP-13a** (via del coordinatore 17:52; corsia 6185, carico < 50; log in `files/j/cp13a/`):
+  - **rossi sul codice vecchio** (`code_out.sh` + `runs.sh red` + `code_in.sh`, 17:53–18:02): `financial-math` errore di
+    raccolta (l'import nuovo, i 17 casi del file nuovo), `risk-all -k "drawdown or recovery or trough or warnings_i18n"`
+    22 rossi / 35 verdi, `schemas risk` 17 / 71; guardie `ai-export -k drawdown_context` 19 verdi. Codice rimesso,
+    «worktree back to the saved state».
+  - **⚠️ Fuori pista (ambiente)**: `api risk` 4 rossi sia sul codice vecchio sia sul nuovo, «Test database is not
+    populated: user 'e2e_test_user' is missing». Causa: `services financial-math` e `services risk-all` cancellano il DB
+    della corsia e lo ricreano vuoto dalle migrazioni prima dei loro test, quindi `api risk` lanciato da solo dopo di
+    loro non trova i fixture (in `all-backend` il runner semina prima delle API). Verdetto `test-triage`: ambiente,
+    ordine del mio script. Cura: `db populate --force` sulla mia corsia subito prima di `api risk` (passo aggiunto in
+    `runs.sh`).
+  - **⚠️ Fuori pista (test)**: `test_a_small_drawdown_keeps_every_digit_of_its_gain` rosso anche sul codice nuovo, nel suo
+    controllo interno: `pytest.approx(…, rel=1e-12)` tiene la tolleranza assoluta di default 1e-12, grande quanto il
+    valore. Riparato dal test-author con `abs=0` nelle due asserzioni (le altre 32 `approx` controllate: nessuna nasconde
+    una differenza).
+  - ✅ **verdi**: `financial-math` 430, `risk` (filtro) 57, `schemas risk` 88, `api risk` 15 (con i fixture),
+    `ai-export -k drawdown_context` 19.
+  - ✅ **statici** (18:19–18:23): `api sync` senza file tracciati cambiati, `i18n check` stretto verde, `core-unit` 181 file
+    / 6 478 test, `check-orphans` pulito, svelte-check 0/0 (`remaining_to_peak_ratio` ora `number | null` nel client),
+    `mkdocs build` stretto e `check-links` verdi; `translate-validate` 3 errori nuovi da CP-13a → **J-31**.

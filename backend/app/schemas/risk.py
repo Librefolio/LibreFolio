@@ -1298,7 +1298,12 @@ class RiskDrawdownOutput(StrictModel):
     maximum_drawdown_recovery_date: Optional[date] = None
     maximum_drawdown_duration_days: int = Field(..., ge=0)
     maximum_drawdown_recovered_ratio: Optional[FiniteFloat] = Field(None, ge=0, le=1)
-    remaining_to_peak_ratio: FiniteFloat = Field(..., ge=0)
+    maximum_drawdown_trough_to_peak_ratio: Optional[FiniteFloat] = Field(
+        None,
+        ge=0,
+        description="Gain needed to climb from the maximum drawdown's trough back to the peak before it (0.25 = +25 %); 0 without a drawdown, null for a total loss.",
+    )
+    remaining_to_peak_ratio: Optional[FiniteFloat] = Field(..., ge=0, description="Gain still needed to climb from the current value back to the running peak; 0 when not underwater, null for a total loss.")
     available_start: date
     available_end: date
     n_observations: int = Field(..., ge=0)
@@ -1319,6 +1324,8 @@ class RiskDrawdownOutput(StrictModel):
                 raise ValueError("no_drawdown must not expose episode dates")
             if self.maximum_drawdown_recovered_ratio is not None:
                 raise ValueError("no_drawdown must not expose a recovered ratio")
+            if self.maximum_drawdown_trough_to_peak_ratio is not None and self.maximum_drawdown_trough_to_peak_ratio > 0:
+                raise ValueError("no_drawdown must not expose a positive trough-to-peak ratio")
             if self.maximum_drawdown_duration_days != 0:
                 raise ValueError("no_drawdown must report a zero maximum duration")
         else:
@@ -1476,7 +1483,12 @@ class RiskAssetSetDrawdownItem(StrictModel):
     maximum_drawdown_recovery_date: Optional[date] = None
     maximum_drawdown_duration_days: int = Field(..., ge=0)
     maximum_drawdown_recovered_ratio: Optional[FiniteFloat] = Field(None, ge=0, le=1)
-    remaining_to_peak_ratio: FiniteFloat = Field(..., ge=0)
+    maximum_drawdown_trough_to_peak_ratio: Optional[FiniteFloat] = Field(
+        None,
+        ge=0,
+        description="Gain needed to climb from the maximum drawdown's trough back to the peak before it (0.25 = +25 %); 0 without a drawdown, null for a total loss.",
+    )
+    remaining_to_peak_ratio: Optional[FiniteFloat] = Field(..., ge=0, description="Gain still needed to climb from the current value back to the running peak; 0 when not underwater, null for a total loss.")
 
     @model_validator(mode="after")
     def validate_episode_contract(self) -> RiskAssetSetDrawdownItem:  # noqa: C901 — flat status-branch invariant raises
@@ -1489,6 +1501,8 @@ class RiskAssetSetDrawdownItem(StrictModel):
                 raise ValueError("no_drawdown must not expose episode dates")
             if self.maximum_drawdown_recovered_ratio is not None:
                 raise ValueError("no_drawdown must not expose a recovered ratio")
+            if self.maximum_drawdown_trough_to_peak_ratio is not None and self.maximum_drawdown_trough_to_peak_ratio > 0:
+                raise ValueError("no_drawdown must not expose a positive trough-to-peak ratio")
             if self.maximum_drawdown_duration_days != 0:
                 raise ValueError("no_drawdown must report a zero maximum duration")
             return self

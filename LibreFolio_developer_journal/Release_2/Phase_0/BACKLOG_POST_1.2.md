@@ -3270,6 +3270,17 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     girare ad A.
 
   Dettagli: piano H, §14 «H-3, il resto».
+- **H-20 · L'output del runner rediretto su un file arriva solo alla fine** — molto basso; H (`all-backend` di H-12),
+  16/10.
+  - Con `> file`, ma anche con `--log-file`, lo stdout del runner è bufferizzato a blocchi, come ogni processo Python
+    che scrive su un file. In un `all-backend -q` il file resta fermo per mezz'ora alle righe della build: quelle
+    escono da un sottoprocesso. Le righe del runner, come «Starting shared test backend» e «Shared backend ready»,
+    arrivano solo all'uscita. Chi segue un run lungo non ne vede l'avanzamento, salvo leggere i log per unità di
+    `.testLog`.
+  - Cura possibile: `sys.stdout.reconfigure(line_buffering=True)` all'avvio del runner, oppure `PYTHONUNBUFFERED=1`
+    nei comandi documentati. Nessuna fretta: il run non ne soffre.
+
+  Dettagli: piano H, §14 «Lotto «H-12, il resto»», passo 13.
 
 ## A · Account e accessi (fase 01)
 
@@ -4445,6 +4456,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   aspetta 30 s fissi (`TIMEOUT`), quindi il primo test della classe scade. Verdetto `test-triage`: lentezza.
   Strade possibili: scaldare il pool all'avvio del server, oppure una fixture che lo scaldi prima dei test temporizzati.
   Allungare il tempo no. Dettagli: piano J, §10 «J-17», slot 2.
+- **J-31 · Debito di traduzione di CP-13a (il guadagno che recupera un drawdown)** — basso, documentazione; J, 16/10.
+  Pagine EN cambiate di senso, senza stamp: `financial-theory/technical-analysis/risk-metrics/max-drawdown` (dopo
+  l'avviso dell'asimmetria, in `#recovery-time`: il risultato porta il guadagno dal minimo al picco; prima diceva che il
+  sistema calcola solo la lettura corrente, e IT/FR/ES lo dicono ancora) e `…/risk-metrics/current-drawdown` (il
+  paragrafo dopo la formula, quello nuovo sulla perdita totale con l'avviso, la prima frase dell'avviso, in
+  `#what-it-takes-to-get-back`). `translate-validate` (16/10): 3 errori strutturali nuovi, il link da `max-drawdown`
+  a `current-drawdown.md#what-it-takes-to-get-back`. Tradurle nello stesso giro. Dettagli: piano J, §10 «CP-13a».
 
 ## Z · Sospensione e risveglio (fase 01)
 
