@@ -1341,15 +1341,14 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
 |----------|---------|
 | `client_address(request)` | The header's address when the request carries the header once, holding one IP address (an IPv4-mapped IPv6 one as IPv4); otherwise the connection's, `request.client.host`, and `None` without one (a test client) |
 | `client_rate_key(address)` | The key of a limit per client: an IPv4 address whole, an IPv6 one by its /64, which one subscriber usually holds whole; anything else as written, and `None` without an address |
-| `mask_client_address(address)` | The form an address may take in a log: an IPv4 address by its /24, an IPv6 one by its /48, since an IP address is personal data |
 
 - **Validated at startup.** The field's validator strips the value (empty: unset), then wants the name of one HTTP
   header, an RFC 9110 `token`, and refuses `X-Forwarded-For` and `Forwarded` in any case: lists whose first value the
   client chooses, which uvicorn handles with `FORWARDED_ALLOW_IPS`. A refused value fails `Settings()`, which
   `backend/app/main.py` builds at import, so the server does not start.
 - **Read once per process.** `_configured_header()` (`functools.cache`) reads the field, lowercased, at the first call,
-  never per request: a change takes a restart. `reset_client_address_cache()` clears it and re-arms the warning, for
-  the tests.
+  never per request: a change takes a restart. There is no reset function: a test itself clears that cache and
+  `_warned`, the flag of the warning below (decision N58: no production function exists only for the tests).
 - **A malformed header** (repeated, a list, a port, a zone, any other text, empty) falls back to the connection's
   address and logs one warning per process, `Client address header unusable: using the connection's address`, with
   `header`, `lines` and `length`, never the value. A missing header falls back silently.
@@ -1357,7 +1356,9 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
   crosses that proxy: a client that reaches the app directly (a published port, another path) can choose its address,
   to get around a limit or to spend another client's.
 - **Callers.** A limit per client takes its address from `client_address(request)` and its key from
-  `client_rate_key()`, and a log holds only the `mask_client_address()` form. The three per-address email limits read
+  `client_rate_key()`. LibreFolio's own log records never hold a client's address (a refusal logs at most the account,
+  never the address); uvicorn's access log, like any web server's, writes the connection's address on each request
+  line (see [Request Logs](#request-logs)). The three per-address email limits read
   their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
   the registration email in `backend/app/api/v1/auth.py`. Their key follows the rule of `client_rate_key()`.
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
