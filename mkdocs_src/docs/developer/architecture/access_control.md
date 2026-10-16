@@ -395,9 +395,12 @@ use, link `/reset-password#token=…`, bound to its account (`user_id`). Unlike 
 the administrator does not choose the new password: whoever spends the link does.
 
 - **Issued** by `user_service.create_password_reset()`, from
-  `POST /api/v1/users/{user_id}/password-reset-link` or `./dev.py user reset-link <username>`. It
-  first revokes the account's live reset links, so only the newest one works. Issuing a link ends no
-  session.
+  `POST /api/v1/users/{user_id}/password-reset-link` or `./dev.py user reset-link <username>`, and,
+  when email works, from **Forgot Password?** on the login page (`POST /api/v1/email/password-reset`,
+  workstream E): that link is never shown, only emailed to the account's own address, within its
+  limits, and never while an administrator's reset link is still live
+  ([A Forgotten Password](../backend/email.md#flow-forgot)). It first revokes the account's live
+  reset links, so only the newest one works. Issuing a link ends no session.
 - **Spent** by `POST /api/v1/auth/password-reset` `{token, new_password}`, which is public.
   `new_password` must meet the [password rules](security.md#password-rules), checked before the
   token is read: a weak one is `400` `PASSWORD_TOO_WEAK`, and the link is neither spent nor

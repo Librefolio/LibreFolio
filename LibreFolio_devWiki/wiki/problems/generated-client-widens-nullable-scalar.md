@@ -7,6 +7,7 @@ tags: [frontend, api-client, openapi, zodios, typescript, risk, correlation, gen
 related:
   - problems/front-check-does-not-check-what-you-think
   - decisions/zodios-api-client
+  - domains/email
 ---
 
 # Problem: generated client widens a nullable scalar into a scalar-or-array union
@@ -63,6 +64,10 @@ bug worth recording, not a fact about the API.
 Latent, not active: no endpoint currently returns an array there. The cost was a
 missing compile-time guard on a path where a malformed cell would have reached a chart
 renderer untyped.
+
+- 2026-10-15, workstream E: the same widening on `EmailStatusResponse` (plan 08 «E2.5»);
+  `emailApi.fetchEmailStatus()` narrows it once. Backlog E-2, deferred to 1.4:
+  [[domains/email]].
 
 ## Source files
 
