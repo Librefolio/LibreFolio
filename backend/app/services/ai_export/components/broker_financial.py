@@ -71,6 +71,7 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
+from backend.app.services.financial_math.weights import concentration
 
 _BROKER_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("broker.fifo_asset_metadata", Mapping)
 
@@ -204,12 +205,7 @@ class BrokerAllocationConcentrationPayload(StrictModel):
 
 def _concentration_metrics(positions: Sequence[PositionRow]) -> tuple[Decimal | None, Decimal | None]:
     """Computes concentration metrics over the *entire* position set - never a top-N subset."""
-    weights = [position.nav_weight_percent for position in positions if position.nav_weight_percent is not None]
-    if not weights:
-        return None, None
-    largest = max(abs(weight) for weight in weights)
-    herfindahl = sum(weight * weight for weight in weights)
-    return largest, herfindahl
+    return concentration(position.nav_weight_percent for position in positions if position.nav_weight_percent is not None)
 
 
 async def _build_broker_allocation_concentration(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerAllocationConcentrationPayload:
