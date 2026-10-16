@@ -16,14 +16,13 @@
  * - `src/lib/utils/core/escapeHtml.ts` — the escaper;
  * - `src/lib/utils/inlineMath.ts` — KaTeX's variant, which keeps the apostrophe because KaTeX reads it as prime
  *   notation (documented in both files);
- * - `TransactionBulkModal.svelte`, matched by basename because the file may move: a temporary entry. It escapes three
- *   characters inline for an `html` cell (:1879); the file belongs to another workstream and the copy has been reported.
- *   Remove the entry when it adopts `escapeHtml`.
  * An allowlisted file that no longer holds a copy fails the gate, so the list cannot go stale.
  *
- * ## Why it is red today
+ * ## Why it was red before C-34
  *
- * `src/lib/features/risk/CorrelationHeatmap.svelte:352`: a local `escapeHtml` that escapes only `& < >`.
+ * `src/lib/features/risk/CorrelationHeatmap.svelte` held a local `escapeHtml` that escaped only `& < >` (Y9 removed it), and
+ * `TransactionBulkModal.svelte` an inline three-character copy for an `html` cell, allowed here as a temporary entry
+ * until its workstream replaced it with `escapeHtml` (`60917185c`).
  *
  * ## How it reads, and what it cannot see
  *
@@ -360,11 +359,6 @@ function scanTree(): TreeScan {
 const ALLOWED: ReadonlyArray<{entry: string; matches: (path: string) => boolean; why: string}> = [
     {entry: 'src/lib/utils/core/escapeHtml.ts', matches: (path) => path === 'src/lib/utils/core/escapeHtml.ts', why: 'the one escaper'},
     {entry: 'src/lib/utils/inlineMath.ts', matches: (path) => path === 'src/lib/utils/inlineMath.ts', why: "KaTeX's variant: it keeps the apostrophe, which KaTeX reads as prime notation (documented in both files)"},
-    {
-        entry: 'TransactionBulkModal.svelte (basename, temporary)',
-        matches: (path) => basename(path) === 'TransactionBulkModal.svelte',
-        why: "three characters escaped inline for an `html` cell; another workstream's file, reported — remove this entry when it adopts escapeHtml",
-    },
 ];
 
 const isAllowed = (file: string): boolean => ALLOWED.some((entry) => entry.matches(file));
@@ -421,7 +415,9 @@ describe('C-34 — one HTML escaper: no copy of escapeHtml outside the allowlist
 
         expect(files.length, 'the scan read too few production sources: wrong directory, or a filter too strict').toBeGreaterThanOrEqual(500);
         expect(files.filter((file) => file.endsWith('.svelte')).length, 'the scan read too few Svelte components').toBeGreaterThanOrEqual(100);
-        const self = relative(FRONTEND, fileURLToPath(import.meta.url)).split(sep).join('/');
+        const self = relative(FRONTEND, fileURLToPath(import.meta.url))
+            .split(sep)
+            .join('/');
         expect(files, 'this test file was read as a production source: the test filter does not work').not.toContain(self);
     });
 
