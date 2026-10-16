@@ -1449,7 +1449,23 @@ cartella della sessione (`files/dv_w6_convert.py`), con la correzione dell'inden
   > - `--update`: m1 4.290 → 4.288; `BackendTimingBar` da 16 a 14, restano solo le categorie delle fasi.
   > - **Vitest** (carico 49,7): `themeRoles` 52/52, `themeTokens` 19/19 (C4 compreso), `ChartSignalsSection` 21/21,
   >   `SignalTreeSelect` 28/28 (le righe di `SignalOptionContent`, TC-15), `scanColors` 67/67.
-  > - **E2E `front-utility pac-allocator-real`:** da girare al via del coordinatore, nella coda pesante.
+  > - Commit `7f918f075` del coordinatore (18:04). Base merge `1a1dadba2` (con `ce5954329`), poi `baac53f99` (con
+  >   `c179a5144`, il lotto 9 di AF) e `ec3d54ca3` (con `5eaf67ff1`, C-97a della 1.3 e i docs di AF), tutte pulite.
+  >   Su `ec3d54ca3` i gate del coordinatore danno 119/119.
+  > - **Slot breve** (via del coordinatore alle 18:36), su `ec3d54ca3`, corsia 6156 e `/tmp/librefolio-r2-dv`, dalle
+  >   18:37:11 alle 18:42:22, carico da 20 a 92. Script e log in `files/w6-g18-slot/` della sessione.
+  >
+  >   | Passo | Esito | Tempo |
+  >   |---|---|---|
+  >   | `api sync` | verde, 0 file tracciati cambiati | 15 s |
+  >   | `ChartSignalsSection.test.ts` | 21/21 | 18 s |
+  >   | `SignalTreeSelect.test.ts` | 28/28: le righe di `SignalOptionContent` (TC-15) sulla regola centrale di T per le select | 21 s |
+  >   | `TreeSelect.test.ts` | 28/28 | 20 s |
+  >   | `htmlSink.gate.test.ts` | 7/7: ha un'eccezione su `SignalOptionContent` | 6 s |
+  >   | E2E `front-utility pac-allocator-real`, 1 worker | 1 passed, nessun tentativo ripetuto | 231 s: il build della base nuova, il popolamento, il test in 6,8 s |
+  >
+  >   - `SignalOptionContent` non ha un test suo; lo coprono i due test delle select.
+  >   - Alla fine la porta 6156 è libera e l'HEAD è `ec3d54ca3`.
 - [ ] W6-d, dopo l'ingresso di Y.
 
 ### Inventario m1/m2 dei file dei grafici, per il lotto dopo Y3, Y4b e Y5 (16/10/2026, sola lettura)
