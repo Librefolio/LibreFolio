@@ -2298,6 +2298,21 @@ class TestGalleryHandsTheSetupToPlaywright:
 # edited after the last build must make the build stale as well: otherwise the
 # app keeps serving the old text, and an E2E that reads the file
 # (`layout/changelog-locale.spec.ts`) disagrees with the bundle it runs against.
+#
+# Not all of `frontend/src` is an input of the bundle, though (H-24). A file
+# there is left out of the comparison when, read relative to `src`:
+#   - a part of its path starts with `.`: the Finder's `.DS_Store`, an
+#     AppleDouble `._App.svelte`, a `.gitignore`, the translation catalogue's
+#     stamp `lib/i18n/.generated`, anything inside a hidden folder;
+#   - its name contains `.test.` or `.spec.`: a Vitest file;
+#   - one of its folders is named exactly `__tests__` or `__mocks__`: Vitest's
+#     harnesses, fixtures and module mocks, which no app code imports.
+# None of them reaches the bundle, so one newer than the build must not force a
+# rebuild of minutes — as a `.DS_Store` the Finder dropped into `src` once did.
+# Everything else still counts, the near-misses included (`latest.ts`,
+# `testing/helpers.ts`, `lib/tests/x.ts`, `lib/__tests__.ts`), and a folder
+# above `src`, in the checkout's own path, hides nothing.
+#
 # The project root is a tree under `tmp_path` and every mtime is set with
 # `os.utime`: no clock, no sleep, no repository file touched.
 
@@ -2307,31 +2322,37 @@ OLDER_MTIME = BUILD_MTIME - 3600
 NEWER_MTIME = BUILD_MTIME + 3600
 
 
-@pytest.fixture
-def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
-    """A built frontend under a ``tmp_path`` project root, every input an hour older than the build.
+def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
+    """A built frontend under the project root ``root``, every input an hour older than the build.
 
     Inputs: one ``frontend/src`` file, ``frontend/package.json`` and the root
     markdown files a test may move forward — the two changelogs and a README that
     is not one. The Tool codegen inputs are absent here, verified rather than
     assumed: they could otherwise answer either way for the guards below.
+    ``cli_base.get_project_root`` answers ``root`` for the rest of the test.
     """
     files = {
-        "index.html": tmp_path / "frontend" / "build" / "index.html",
-        "source": tmp_path / "frontend" / "src" / "app.html",
-        "package.json": tmp_path / "frontend" / "package.json",
-        "CHANGELOG.md": tmp_path / "CHANGELOG.md",
-        "CHANGELOG.it.md": tmp_path / "CHANGELOG.it.md",
-        "README.md": tmp_path / "README.md",
+        "index.html": root / "frontend" / "build" / "index.html",
+        "source": root / "frontend" / "src" / "app.html",
+        "package.json": root / "frontend" / "package.json",
+        "CHANGELOG.md": root / "CHANGELOG.md",
+        "CHANGELOG.it.md": root / "CHANGELOG.it.md",
+        "README.md": root / "README.md",
     }
     for path in files.values():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic build input\n", encoding="utf-8")
         os.utime(path, (OLDER_MTIME, OLDER_MTIME))
     os.utime(files["index.html"], (BUILD_MTIME, BUILD_MTIME))
-    monkeypatch.setattr(cli_base, "get_project_root", lambda: tmp_path)
-    assert [path for path in cli_base._tool_contract_sources(tmp_path) if path.exists()] == [], "a Tool codegen input exists under the fake root"
+    monkeypatch.setattr(cli_base, "get_project_root", lambda: root)
+    assert [path for path in cli_base._tool_contract_sources(root) if path.exists()] == [], "a Tool codegen input exists under the fake root"
     return files
+
+
+@pytest.fixture
+def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
+    """``make_frontend_project`` with ``tmp_path`` itself as the project root."""
+    return make_frontend_project(monkeypatch, tmp_path)
 
 
 # The translation catalogue is an input of the build too (workstream U, step U-2): `src/lib/i18n/<lang>.json` is
@@ -2366,6 +2387,51 @@ def frontend_catalogue(frontend_project, tmp_path) -> dict[str, Path]:
     assert cli_base.generated_catalogs(tmp_path) == [i18n / f"{language}.json" for language in CATALOGUE_LANGUAGES], "premise: the probe sees the four generated catalogues"
     assert [path for path in cli_base._tool_contract_sources(tmp_path) if path.exists()] == [], "a Tool codegen input exists under the fake root"
     return {**frontend_project, **files}
+
+
+# The files under `frontend/src` the H-24 rule leaves out, by their path relative to `src`, each with what it is.
+NOT_BUNDLED_SOURCES = {
+    ".DS_Store": "the Finder's folder metadata",
+    "lib/components/.DS_Store": "the Finder's folder metadata, in a subfolder",
+    "lib/components/._App.svelte": "an AppleDouble file, the metadata macOS keeps beside App.svelte on a volume without extended attributes",
+    "lib/api/.gitignore": "a hidden file",
+    "lib/i18n/.generated": "the translation catalogue's stamp",
+    "lib/.cache/x.ts": "a file inside a hidden folder",
+    "lib/.cache/vite/x.ts": "a file deeper inside a hidden folder",
+    "x.test.ts": "a Vitest file",
+    "lib/components/x.dom.test.ts": "a Vitest file",
+    "lib/utils/x.spec.ts": "a Vitest file",
+    "routes/x/page.test.ts": "a Vitest file",
+    "__tests__/component.ts": "a Vitest harness",
+    "lib/charts/__tests__/fixtures/series.json": "a Vitest fixture",
+    "__mocks__/$app/navigation.ts": "a Vitest module mock",
+}
+
+# The files under `frontend/src` it must keep counting: ordinary inputs, then the near-misses of each of its clauses — a
+# name or a folder that merely contains "test", "spec" or "__tests__".
+BUNDLED_SOURCES = {
+    "lib/utils/format.ts": "a module",
+    "lib/components/App.svelte": "a component",
+    "lib/data/currencies.json": "a JSON module",  # not under lib/i18n/base/, where a JSON would make a catalogue due and answer True for that reason
+    "lib/i18n/assets/prefixes.txt": "a subsystem's key prefixes, read by the catalogue generator",
+    "latest.ts": "'test' in the name, not '.test.'",
+    "contest.svelte": "'test' in the name, not '.test.'",
+    "lib/utils/x.testing.ts": "'.test' in the name, not '.test.'",
+    "inspect.ts": "'spec' in the name, not '.spec.'",
+    "spectrum.ts": "'spec' in the name, not '.spec.'",
+    "testing/helpers.ts": "'test' in a folder's name",
+    "lib/tests/x.ts": "a folder named tests, not __tests__",
+    "lib/my__tests__/x.ts": "a folder whose name merely contains __tests__",
+    "lib/__tests__.ts": "a file, not a folder, named like __tests__",
+}
+
+
+def add_newer_source(project: dict[str, Path], relative: str) -> None:
+    """Write ``frontend/src/<relative>`` into a ``make_frontend_project`` tree, an hour newer than its build."""
+    path = project["source"].parent / relative  # the project's one source is frontend/src/app.html
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("synthetic source\n", encoding="utf-8")
+    os.utime(path, (NEWER_MTIME, NEWER_MTIME))
 
 
 class TestFrontendBuildStaleness:
@@ -2416,3 +2482,36 @@ class TestFrontendBuildStaleness:
         os.utime(frontend_catalogue[newer], (NEWER_MTIME, NEWER_MTIME))
 
         assert cli_base.check_frontend_needs_build() is True
+
+    @pytest.mark.parametrize("relative", list(NOT_BUNDLED_SOURCES))
+    def test_a_newer_file_that_is_not_an_input_of_the_bundle_leaves_it_up_to_date(self, frontend_project, relative):
+        add_newer_source(frontend_project, relative)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-24: frontend/src/{relative} ({NOT_BUNDLED_SOURCES[relative]}) is not an input of the bundle: newer than the build, it must not force a rebuild"
+
+    @pytest.mark.parametrize("relative", list(BUNDLED_SOURCES))
+    def test_a_newer_input_of_the_bundle_needs_a_rebuild(self, frontend_project, relative):
+        # Green before H-24 and after it: these keep the cure from leaving out more than it should.
+        add_newer_source(frontend_project, relative)
+
+        assert cli_base.check_frontend_needs_build() is True, f"frontend/src/{relative} ({BUNDLED_SOURCES[relative]}) is an input of the bundle: newer than the build, it must make the build stale"
+
+    @pytest.mark.parametrize("left_out", [".DS_Store", "x.test.ts", "__tests__/component.ts"], ids=["a-hidden-file", "a-vitest-file", "a-tests-folder"])
+    def test_a_file_left_out_is_skipped_and_the_scan_goes_on(self, frontend_project, left_out):
+        # The left-out file sits at most one folder down in `src`, the bundled one two: `rglob` yields the first before
+        # the second, so a rule that ended the scan at a left-out file, instead of skipping it, would answer False here.
+        add_newer_source(frontend_project, left_out)
+        add_newer_source(frontend_project, "lib/utils/format.ts")
+
+        assert cli_base.check_frontend_needs_build() is True, f"frontend/src/lib/utils/format.ts is newer than the build: leaving frontend/src/{left_out} out must not end the scan"
+
+    @pytest.mark.parametrize("folder", [".hidden-root", "__tests__"], ids=["a-hidden-folder", "a-tests-folder"])
+    def test_a_folder_above_src_hides_none_of_its_sources(self, monkeypatch, tmp_path, folder):
+        # The rule reads each path relative to `src`: a checkout may live under a hidden folder, or one named
+        # `__tests__` — here the project root itself is that folder — and its sources must still count.
+        project = make_frontend_project(monkeypatch, tmp_path / folder)
+        assert cli_base.check_frontend_needs_build() is False
+
+        os.utime(project["source"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"frontend/src/app.html is an input of the bundle: {folder}, a folder above src, must not hide it"

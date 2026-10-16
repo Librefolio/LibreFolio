@@ -248,13 +248,6 @@ def current_shutdown_watchdog() -> ShutdownWatchdog | None:
     return _watchdog
 
 
-def reset_shutdown_budget_state() -> None:
-    """For tests: forget the installed watchdog. Signal handlers are left as they are."""
-    global _watchdog
-    with _state_lock:
-        _watchdog = None
-
-
 def shutdown_deadline(*, clock: Callable[[], float] = time.monotonic) -> float | None:
     """The deadline of the shutdown steps, absolute on the monotonic clock; None with no limit.
 

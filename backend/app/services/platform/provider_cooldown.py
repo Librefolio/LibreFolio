@@ -86,8 +86,3 @@ def record_no_verdict(domain: str, provider: str, scope: str | None = None) -> N
 def cooldown_snapshot() -> tuple[CooldownState, ...]:
     """The pauses this process holds, least recently used first: for the log and a future admin panel."""
     return PROVIDER_COOLDOWNS.snapshot()
-
-
-def reset_provider_cooldowns() -> None:
-    """Forget every pause."""
-    PROVIDER_COOLDOWNS.clear()
