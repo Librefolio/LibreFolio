@@ -47,7 +47,7 @@ Only administrators (superusers) have the lock; everyone else gets a read-only v
 | Category | Setting | Default | What it does — when to change it |
 |---|---|---|---|
 | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value applies from each user's next login. |
-| 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** (see [Who Can Sign Up](#registration)). An instance upgraded from an earlier version keeps the mode it had. **Open** lets in anyone who reaches the login page: avoid it if the instance is reachable from the internet. |
+| 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** (see [Who Can Sign Up](#registration)). An instance upgraded from an earlier version keeps the mode it had. **Open** lets in anyone who reaches the login page: avoid it if the instance is reachable from the internet. Administrators who open the app at an address outside the local network are [warned](#open-registration-warning) while it is **Open**. |
 | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before they can sign in; the first account never waits, and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is greyed out. See *Email Verification* in [Email](email.md). |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
@@ -112,6 +112,40 @@ The **Registration** setting decides who can create an account:
     Or give LibreFolio `LIBREFOLIO_ADMIN_EMAIL` before its first start: it then creates the
     administrator itself, with a setup link for you, and nobody can register in its place
     ([The Initial Administrator](configuration.md#initial-admin)).
+
+### 📢 The Open-Registration Warning {: #open-registration-warning }
+
+While **Registration** is **Open**, an administrator who opens LibreFolio at an address outside the
+local network gets a warning above the pages of the app:
+
+*Registration is open and this instance is reachable from outside your local network: anyone who
+finds it can create an account.*
+
+Its link, **Change who can sign up**, opens **Settings › Admin**, where this setting is. When
+`LIBREFOLIO_REGISTRATION` sets the mode on the server, the warning names that variable instead, and
+has no link: only the server's configuration can change the mode
+([Accounts and Sign-ups](configuration.md#accounts)).
+
+- 👑 Only administrators see it.
+- 🌐 Your browser decides, from the name or IP address in its address bar (the port does not
+  matter). Nothing is sent to the server, and nothing tests whether the instance can really be
+  reached from the internet. These addresses count as local, and get no warning:
+    - `localhost`, and every name ending in `.localhost`;
+    - a name without a dot, such as `nas`, and every name ending in `.local`, `.lan`, `.home.arpa`
+      or `.internal`;
+    - the IPv4 addresses of `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` and
+      `100.64.0.0/10` (carrier-grade NAT, the range where Tailscale numbers its devices);
+    - the IPv6 address `::1`, and those of `fc00::/7` and `fe80::/10`; an IPv4 address written as
+      IPv6, such as `::ffff:192.168.1.10`, counts as the IPv4 address it carries.
+
+    Capitals and a final dot change nothing. Every other address counts as outside, the Tailscale
+    names ending in `.ts.net` included: Tailscale Funnel can publish them on the internet.
+- ✖️ Its close button hides it until the page is loaded again.
+- 🔄 It goes away as soon as the mode is no longer **Open**: saving **Registration** here updates it
+  at once.
+
+How it decides, for developers:
+[The Open-Registration Warning](../developer/architecture/security.md#open-registration-warning).
 
 ---
 

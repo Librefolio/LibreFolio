@@ -616,6 +616,13 @@ def _categories_in_scope(args) -> list:
     return [category] if category in TEST_REGISTRY else []
 
 
+def _single_pure_action(category: str, action: str | None) -> bool:
+    """One action of ``category`` run on its own, which the catalogue declares ``pure``: it opens no database (H-23)."""
+    from ._inventory import PURE, declared_isolation
+
+    return action not in (None, "all") and declared_isolation(category, action) == PURE
+
+
 def _run_exclusive_setups(args) -> bool:
     """Run the setups that own the database file, before the server ever starts.
 
@@ -628,9 +635,17 @@ def _run_exclusive_setups(args) -> bool:
     with ``database_file_owned_exclusively()`` wherever it is called from. What
     this adds is the knowledge of *which* setups are destructive, declared next to
     the category instead of discovered at the moment of damage.
+
+    One action run on its own that the catalogue declares ``pure`` opens no database: its category's setup is
+    skipped, and the lane's database is left as it is (H-23). A whole category, ``all`` and any other action still
+    run it, an action with no declared class included (``declared_isolation()``: the static scan does not count).
     """
+    action = getattr(args, "action", None)
     for category in _categories_in_scope(args):
         if not _common.setup_is_exclusive(category):
+            continue
+        if _single_pure_action(category, action):
+            print_info(f"{category}: {action} is pure, it opens no database: the category's setup is skipped and the lane's database is left as it is")
             continue
         if not _common.run_category_setup(category):
             print_error(f"{category}: setup failed before the shared backend — aborting")
@@ -908,13 +923,28 @@ def _parallel_classes(args, scope: str = None) -> tuple:
     return (PURE,)
 
 
+def _parallel_prepass_applies(args) -> bool:
+    """Whether the parallel pre-pass serves this invocation: a whole category or a whole suite (H-25).
+
+    The consolidated pre-passes' rule (``_backend_consolidation_scope``): naming one action, or filtering by test
+    name, keeps the serial 1:1 shape. Before it, ``--workers 2 services client-address`` ran the parallel-safe units
+    of the whole category, its setup included (an empty lane database), and a ``-k`` filter was ignored.
+    """
+    if getattr(args, "test_names", None):
+        return False
+    return getattr(args, "action", None) in (None, "all")
+
+
 def _run_parallel_prepass(args, workers: int, verbose: bool) -> tuple:
     """Run the isolation-safe units concurrently before the serial pass.
 
     Returns ``(ok, covered_actions)``. When nothing qualifies — a frontend
-    category, or ``--workers 1`` — this is a no-op and the run takes exactly
+    category, ``--workers 1``, one action or a test-name filter
+    (``_parallel_prepass_applies``) — this is a no-op and the run takes exactly
     the path it takes today.
     """
+    if not _parallel_prepass_applies(args):
+        return True, set()
     category = args.category
     if category in TEST_REGISTRY:
         # A single registry category: parallelise it only if it is a backend one.

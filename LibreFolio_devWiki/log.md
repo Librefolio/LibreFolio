@@ -3664,3 +3664,22 @@ pending A7a. `check_source_paths.py`: 5 missing (8 occurrences) before and after
 50 paths, all present.
 Filed: [[domains/email]].
 Graph not rebuilt: not available in the worktree.
+
+## [2026-10-16] update | CP-7b: the lots follow the Dashboard's at-cost rule day by day
+The lots now value an open LONG lot at cost on every day with no observation on or before it, as the Dashboard does,
+and the lots warning names exactly those days, which closes J-28. A lot opened by an ADJUSTMENT takes the home's mark on
+its opening day as its reference, trades included, converted at that day's rate.
+Updated: [[decisions/adjustment-is-never-a-price]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-16] update | `toISOString().slice(0,10)` is not today — a comparison is one site (Z-3)
+Workstream Z's lot A (`a43502298`) fixed the asset pages' `isHeadToday`, which compared the store's `dateEnd` (the
+user's calendar since the audit's commit `2e104b919`, 2026-08-30) with the UTC date. Added to the page: the history
+checked in git (both sides UTC until that commit, which fixed only the store), the two faces of the `>=` (west in the
+evening, a range ending today looks past, since 2026-08-30; east after midnight, a range that ended yesterday polls
+and writes, older), the rule that a date comparison moves as one site, the FX conversion date left UTC on purpose (a
+backward-filled lookup), the guard that freezes the time zone as well as the clock, and the six product lines that
+still carry the idiom, not re-audited. `check_source_paths.py`: 5 missing (8 occurrences) before and after, all
+pre-existing; the five new rows exist.
+Updated: [[problems/utc-today-vs-user-calendar]].
+Graph: not updated; graphify is not available in this worktree.

@@ -50,6 +50,50 @@ too), and it never writes. Pure: throwaway categories through
 ``monkeypatch.setitem``, a private ``_SETUP_DONE``, SQLite files built with the
 stdlib under ``tmp_path``; ``populate_mock_data.py`` is parsed as source text,
 never imported.
+
+The H-23 regressions pin how one action run on its own keeps the lane's database.
+``dev.py test … services client-address``, a ``pure`` unit that opens no database,
+still ran the ``services`` category's exclusive setup (``_services_setup`` →
+``db_create``), which recreates that database empty: two workstreams lost their
+fixture users that way. ``_inventory.declared_isolation(category, action)`` is the
+one definition of the class the catalogue declares for an action, read from
+``TEST_REGISTRY`` when asked: ``write-global`` when the entry has an
+``exclusive_because`` (it wins over a declared ``isolation``), else the entry's
+``isolation``, else the category's ``default_isolation``, else None, which is also
+the answer for an unknown category or action. ``build_inventory`` classifies every
+unit through it: ``classify(engine, path, declared_isolation(category, action))``.
+``_cli._run_exclusive_setups`` leaves a category's exclusive setup unrun for one
+action other than ``all`` that the catalogue declares ``pure``, and says so on one
+``print_info`` line naming the category and the action. The whole category, ``all``,
+an action declared anything else and an action with no declared class at all
+(``classify()``'s static ``pure`` does not count) still run it, once, through
+``run_category_setup``; a failing setup still aborts with today's error, and a
+category without an exclusive setup gets neither a setup nor a line. Pure:
+throwaway categories through ``monkeypatch.setitem``, a private ``_SETUP_DONE``,
+``collect_launches`` stubbed; on the real ``services`` entry ``run_category_setup``
+only records, and ``_services_setup``, ``db_create`` and ``subprocess.run`` fail the
+test if reached.
+
+The H-25 regressions pin which invocations the parallel pre-pass serves. With
+``--workers`` above 1, ``_cli._run_parallel_prepass`` handed the whole category to
+``_parallel_for_scope`` whatever the action and the test names:
+``--workers 2 services client-address`` ran every parallel-safe ``services`` unit,
+behind the category's setup (``db create``, which empties the lane's database), and
+``--workers 4 services all -k foo`` ran them all, ignoring ``-k``.
+``_cli._parallel_prepass_applies(args)`` is the consolidated pre-passes' rule
+(``_backend_consolidation_scope``) for the parallel one: False when ``test_names`` is
+non-empty, else True for an ``action`` that is None, absent or ``all``, else False;
+``test_names`` absent (the ``all`` / ``all-backend`` parsers declare none), None or
+``[]`` all mean no test names. ``_run_parallel_prepass`` asks it, looked up on ``_cli``
+when it runs, and on False returns ``(True, set())`` calling nothing; otherwise it is
+unchanged: one ``_parallel_for_scope(args, category, workers, verbose)`` for a backend
+registry category, its verdict passed back; none for a frontend category or
+``all-frontend``; one per ``CONSOLIDATABLE`` category, in order, for ``all`` /
+``all-backend``. Through ``_apply_parallel`` with ``--workers 2``, one action or a
+``-k`` filter reaches neither the parallel pass nor a setup, and leaves the serial pass
+nothing to skip. Pure: ``_parallel_for_scope`` and both consolidated pre-passes are
+recorders; ``run_category_setup``, ``plan``, ``run_groups`` and ``subprocess.run``
+fail the test if reached.
 """
 
 from __future__ import annotations
@@ -64,10 +108,12 @@ from types import SimpleNamespace
 import pytest
 
 from scripts.test_runner import _backend_api as backend_api
+from scripts.test_runner import _backend_db as backend_db
+from scripts.test_runner import _backend_services as backend_services
 from scripts.test_runner import _backend_utils as backend_utils
 from scripts.test_runner import _cli as runner_cli
-from scripts.test_runner import _common, _frontend_common
-from scripts.test_runner._consolidate_backend import _junit_results
+from scripts.test_runner import _common, _executor, _frontend_common, _inventory, _scheduler
+from scripts.test_runner._consolidate_backend import CONSOLIDATABLE, _junit_results
 from scripts.test_runner._registry import TEST_REGISTRY
 
 PROJECT_ROOT = _common.PROJECT_ROOT
@@ -904,6 +950,828 @@ class TestApiCategoryDeclaresSetupNeeded:
         assert meta.get("setup_needed") is not None, "H-21: the api category declares no setup_needed"
         assert meta["setup_needed"] is getattr(backend_api, "_api_fixture_users_missing", None)
         assert meta["setup"] is backend_api._api_setup
+
+
+# ── H-23: one pure action run on its own leaves the lane's database as it is ──────────────────────────────────────────
+# ``_inventory.declared_isolation`` is looked up at call time: while it is missing, the cases that ask it fail on the
+# named "H-23: declared_isolation is missing" barrier and leave the cases above alone. Every ``_run_exclusive_setups``
+# case on a fake category either is, or first proves (a presence barrier), that one pure action of a category with an
+# exclusive setup leaves that setup unrun: today's code, which runs the setup before any action, fails each of them on
+# the "H-23: the exclusive setup ran for a single pure action" barrier, and a case that then sees the setup run has teeth.
+
+PURE = _inventory.PURE
+READ = _inventory.READ
+WRITE_SCOPED = _inventory.WRITE_SCOPED
+WRITE_GLOBAL = _inventory.WRITE_GLOBAL
+
+#: Every fake category of the H-23 cases starts with it: ``setup_door`` opens the real setup door for those only.
+H23_PREFIX = "h23-"
+H23_CATEGORY = "h23-fake-category"
+#: The fake category's actions, one per way the catalogue declares a class.
+H23_OWN_PURE = "h23-own-pure"
+H23_OWN_READ = "h23-own-read"
+H23_OWN_WRITE_SCOPED = "h23-own-write-scoped"
+H23_OWN_WRITE_GLOBAL = "h23-own-write-global"
+H23_EXCLUSIVE_OVER_PURE = "h23-exclusive-over-pure"
+H23_UNDECLARED = "h23-undeclared"
+#: The actions declaring a class of their own other than pure, with that class.
+H23_OWN_NOT_PURE = {H23_OWN_READ: READ, H23_OWN_WRITE_SCOPED: WRITE_SCOPED, H23_OWN_WRITE_GLOBAL: WRITE_GLOBAL}
+H23_EXCLUSIVE_REASON = "truncates a table every unit of this fake category reads (a reason of this test only)"
+#: A pytest unit no file stands at: the static classifier answers write-global for it without reading anything.
+H23_MISSING_PYTEST_UNIT = "test_utilities/test_h23_no_such_unit.py"
+#: A vitest unit: the static classifier answers pure for any vitest unit without reading it.
+H23_VITEST_UNIT = "src/lib/h23-no-such-unit.test.ts"
+#: ``args`` without an ``action`` attribute at all, as an invocation naming only a category may build them.
+NO_ACTION_ATTRIBUTE = object()
+#: The real catalogue (``_backend_services.populate_registry``): ``client-address`` declares ``pure``; ``asset-source``
+#: declares nothing of its own and takes the ``services`` default, ``write-scoped``.
+SERVICES_PURE_ACTION = "client-address"
+SERVICES_DEFAULT_ACTION = "asset-source"
+
+
+class _H23FakeCategory:
+    """A throwaway category whose setup only records that it ran, with one action per way of declaring a class.
+
+    Built with the real ``make_category``/``add_test`` and injected with ``monkeypatch.setitem(TEST_REGISTRY, …)``. Its
+    actions fail the test if anything runs one: the class of an action is read from the catalogue, never found by
+    running the action.
+    """
+
+    def __init__(self, name: str = H23_CATEGORY, *, default_isolation: str | None = None, with_setup: bool = True, setup_exclusive: bool = True, setup_result: bool = True) -> None:
+        self.name = name
+        self.default_isolation = default_isolation
+        self.with_setup = with_setup
+        self.setup_exclusive = setup_exclusive
+        self.setup_result = setup_result
+        self.events: list[str] = []
+
+    def setup(self) -> bool:
+        self.events.append("setup")
+        return self.setup_result
+
+    def _refusing(self, action: str):
+        """The function registered for ``action``: it fails the test if anything runs it."""
+
+        def run(*_args, **_kwargs):
+            pytest.fail(f"{self.name} {action}: an action of the fake category ran; the class of an action is read from the catalogue, not found by running it")
+
+        return run
+
+    def register(self, monkeypatch) -> _H23FakeCategory:
+        setup = self.setup if self.with_setup else None
+        category = _common.make_category("H-23 fake category", "A category of this test only", setup=setup, setup_exclusive=self.setup_exclusive, default_isolation=self.default_isolation)
+        declarations = {
+            H23_OWN_PURE: {"isolation": PURE},
+            **{action: {"isolation": isolation} for action, isolation in H23_OWN_NOT_PURE.items()},
+            H23_EXCLUSIVE_OVER_PURE: {"isolation": PURE, "exclusive_because": H23_EXCLUSIVE_REASON},
+            H23_UNDECLARED: {},
+        }
+        for action, declaration in declarations.items():
+            _common.add_test(category, action, self._refusing(action), name=f"H-23 {action}", desc="An action of the fake category", **declaration)
+        _common.add_test(category, "all", self._refusing("all"), test_names=False, name="All", desc="The fake category's own all")
+        monkeypatch.setitem(TEST_REGISTRY, self.name, category)
+        return self
+
+
+@pytest.fixture
+def setup_door(monkeypatch):
+    """``_common.run_category_setup`` behind a recorder that still opens the real door, for the H-23 fake categories only.
+
+    Each category asked for is recorded; the real once-per-invocation ``run_category_setup`` then runs the fake's
+    recording setup. A real category is refused before its setup could run.
+    """
+    real_door = _common.run_category_setup
+    door = SimpleNamespace(calls=[])
+
+    def recording_door(category):
+        door.calls.append(category)
+        if not category.startswith(H23_PREFIX):
+            pytest.fail(f"run_category_setup was asked for {category!r}, a real category: these cases open only the setups of their own fake categories")
+        return real_door(category)
+
+    monkeypatch.setattr(_common, "run_category_setup", recording_door)
+    return door
+
+
+@pytest.fixture
+def services_setup_unreachable(monkeypatch):
+    """On the real ``services`` entry: ``run_category_setup`` only records the categories it is asked for.
+
+    The real setup behind it, ``_services_setup`` → ``db_create``, deletes the lane's database and rebuilds it from the
+    migrations. It is replaced wherever it is bound — the registry's ``_meta``, both runner modules, ``subprocess.run`` —
+    so a case that reached it fails here, loudly, instead of emptying the database the lane runs on.
+    """
+    calls: list[str] = []
+
+    def record_only(category):
+        calls.append(category)
+        return True
+
+    def fail_if_reached(*_args, **_kwargs):
+        pytest.fail("the real services setup was reached past the run_category_setup recorder: _services_setup → db_create would have emptied the lane's test database")
+
+    monkeypatch.setattr(_common, "run_category_setup", record_only)
+    monkeypatch.setitem(TEST_REGISTRY["services"]["_meta"], "setup", fail_if_reached)
+    monkeypatch.setattr(backend_services, "_services_setup", fail_if_reached)
+    monkeypatch.setattr(backend_services, "db_create", fail_if_reached)
+    monkeypatch.setattr(backend_db, "db_create", fail_if_reached)
+    monkeypatch.setattr(_common.subprocess, "run", fail_if_reached)
+    return calls
+
+
+def _declared_isolation():
+    """``_inventory.declared_isolation``, looked up at call time, or the H-23 barrier while it is missing."""
+    declared = getattr(_inventory, "declared_isolation", None)
+    if declared is None:
+        pytest.fail("H-23: declared_isolation is missing")
+    return declared
+
+
+def _args_for(category: str, action) -> SimpleNamespace:
+    """The ``args`` of an invocation naming ``category`` and ``action``; no ``action`` attribute for ``NO_ACTION_ATTRIBUTE``."""
+    if action is NO_ACTION_ATTRIBUTE:
+        return SimpleNamespace(category=category)
+    return SimpleNamespace(category=category, action=action)
+
+
+def _assert_setup_not_run(category: str, action: str, door_calls: list, setup_events=()) -> None:
+    """The H-23 barrier: one pure action of ``category`` run on its own leaves the category's exclusive setup unrun."""
+    assert not door_calls and not setup_events, f"H-23: the exclusive setup ran for a single pure action ({category} {action}: run_category_setup was asked for {door_calls}, the setup itself ran {len(setup_events)} time(s))"
+
+
+def _assert_skip_line(lines, category: str, action: str) -> None:
+    """Exactly one ``print_info`` line, naming the category and the action whose setup was left unrun, and no error line."""
+    assert len(lines.info) == 1, f"one visible line, got {lines.info}"
+    assert category in lines.info[0], f"the line must name the category {category!r}: {lines.info[0]!r}"
+    assert action in lines.info[0], f"the line must name the action {action!r}: {lines.info[0]!r}"
+    assert lines.error == [], f"leaving the setup unrun is not an error: {lines.error}"
+
+
+def _assert_pure_single_action_skipped(monkeypatch, fake: _H23FakeCategory, door, lines) -> None:
+    """Presence barrier: one pure action of ``fake`` leaves its exclusive setup unrun, so the case that follows has teeth.
+
+    The recorders and ``_SETUP_DONE`` are emptied afterwards: the case starts as if nothing had run.
+    """
+    result = runner_cli._run_exclusive_setups(_args_for(fake.name, H23_OWN_PURE))
+
+    _assert_setup_not_run(fake.name, H23_OWN_PURE, door.calls, fake.events)
+    assert result is True
+    door.calls.clear()
+    fake.events.clear()
+    lines.info.clear()
+    lines.error.clear()
+    monkeypatch.setattr(_common, "_SETUP_DONE", set())
+
+
+def _assert_setup_ran_once(fake: _H23FakeCategory, door, lines) -> None:
+    """The exclusive setup ran once, through ``run_category_setup``, and no line says the database was left as it is."""
+    assert door.calls == [fake.name], f"the setup must run once, through _common.run_category_setup (asked for: {door.calls})"
+    assert fake.events == ["setup"], f"the fake's setup must run exactly once (ran: {fake.events})"
+    assert lines.info == [], f"the setup ran: no line may say the lane's database was left as it is ({lines.info})"
+
+
+def _stub_launches(monkeypatch, launches: dict) -> None:
+    """``_inventory.collect_launches`` answering ``launches`` in its own shape, ``{(category, action): [(engine, path, project), …]}``, and no error."""
+
+    def collect(only_all: bool = False):
+        return launches, {}
+
+    monkeypatch.setattr(_inventory, "collect_launches", collect)
+
+
+class TestDeclaredIsolation:
+    """Contract point 1: ``_inventory.declared_isolation`` answers the class the catalogue declares for one action."""
+
+    def test_an_exclusive_because_wins_over_a_declared_pure(self, monkeypatch):
+        declared = _declared_isolation()
+        fake = _H23FakeCategory(default_isolation=PURE).register(monkeypatch)
+        entry = TEST_REGISTRY[fake.name][H23_EXCLUSIVE_OVER_PURE]
+        assert entry["isolation"] == PURE and entry["exclusive_because"] == H23_EXCLUSIVE_REASON, f"precondition: the entry declares both ({entry})"
+
+        assert declared(fake.name, H23_EXCLUSIVE_OVER_PURE) == WRITE_GLOBAL
+
+    @pytest.mark.parametrize(
+        ("default", "action", "expected"),
+        [
+            pytest.param(WRITE_SCOPED, H23_OWN_PURE, PURE, id="pure-over-a-write-scoped-default"),
+            pytest.param(PURE, H23_OWN_READ, READ, id="read-over-a-pure-default"),
+            pytest.param(PURE, H23_OWN_WRITE_SCOPED, WRITE_SCOPED, id="write-scoped-over-a-pure-default"),
+            pytest.param(PURE, H23_OWN_WRITE_GLOBAL, WRITE_GLOBAL, id="write-global-over-a-pure-default"),
+            pytest.param(None, H23_OWN_PURE, PURE, id="pure-without-a-default"),
+        ],
+    )
+    def test_an_own_isolation_is_declared_whatever_the_category_default(self, monkeypatch, default, action, expected):
+        declared = _declared_isolation()
+        fake = _H23FakeCategory(default_isolation=default).register(monkeypatch)
+
+        assert declared(fake.name, action) == expected
+
+    @pytest.mark.parametrize("default", [PURE, READ, WRITE_SCOPED, WRITE_GLOBAL])
+    def test_an_action_without_its_own_isolation_takes_the_category_default(self, monkeypatch, default):
+        declared = _declared_isolation()
+        fake = _H23FakeCategory(default_isolation=default).register(monkeypatch)
+
+        assert declared(fake.name, H23_UNDECLARED) == default
+
+    def test_no_own_isolation_and_no_category_default_is_none(self, monkeypatch):
+        declared = _declared_isolation()
+        fake = _H23FakeCategory(default_isolation=None).register(monkeypatch)
+        assert "default_isolation" not in TEST_REGISTRY[fake.name]["_meta"], "precondition: the fake category declares no default"
+
+        assert declared(fake.name, H23_UNDECLARED) is None
+
+    def test_an_unknown_category_is_none(self):
+        declared = _declared_isolation()
+        category = "h23-no-such-category"
+        assert category not in TEST_REGISTRY, "precondition: the category must be genuinely absent"
+
+        assert declared(category, H23_OWN_PURE) is None
+
+    @pytest.mark.parametrize("default", [None, WRITE_SCOPED], ids=["no-default", "write-scoped-default"])
+    def test_an_unknown_action_is_none_whatever_the_category_default(self, monkeypatch, default):
+        declared = _declared_isolation()
+        fake = _H23FakeCategory(default_isolation=default).register(monkeypatch)
+        action = "h23-no-such-action"
+        assert action not in TEST_REGISTRY[fake.name], "precondition: the action must be genuinely absent"
+
+        assert declared(fake.name, action) is None
+
+    def test_the_catalogue_is_read_when_asked(self, monkeypatch):
+        declared = _declared_isolation()
+        fake = _H23FakeCategory(default_isolation=PURE).register(monkeypatch)
+        assert declared(fake.name, H23_UNDECLARED) == PURE
+
+        _H23FakeCategory(fake.name, default_isolation=WRITE_SCOPED).register(monkeypatch)
+
+        assert declared(fake.name, H23_UNDECLARED) == WRITE_SCOPED, "declared_isolation answered from a copy: it must read TEST_REGISTRY when asked"
+
+
+class TestBuildInventoryClassifiesThroughDeclaredIsolation:
+    """Contract point 2: a unit's class is ``classify(engine, path, declared_isolation(category, action))``, one definition.
+
+    ``collect_launches`` is replaced by each case's launches, in its own shape, so no action is invoked: every fake action
+    launches one ``(engine, path, project)`` the static classifier judges without reading a file.
+    """
+
+    @pytest.mark.parametrize(
+        ("default", "action", "engine", "path", "expected"),
+        [
+            pytest.param(WRITE_SCOPED, H23_OWN_READ, "pytest", H23_MISSING_PYTEST_UNIT, READ, id="own-isolation"),
+            pytest.param(WRITE_SCOPED, H23_UNDECLARED, "pytest", H23_MISSING_PYTEST_UNIT, WRITE_SCOPED, id="category-default"),
+            pytest.param(PURE, H23_EXCLUSIVE_OVER_PURE, "vitest", H23_VITEST_UNIT, WRITE_GLOBAL, id="exclusive-because"),
+            pytest.param(None, H23_UNDECLARED, "pytest", H23_MISSING_PYTEST_UNIT, WRITE_GLOBAL, id="undeclared-pytest-static"),
+            pytest.param(None, H23_UNDECLARED, "vitest", H23_VITEST_UNIT, PURE, id="undeclared-vitest-static"),
+        ],
+    )
+    def test_a_unit_takes_the_class_classify_gives_its_declared_isolation(self, monkeypatch, default, action, engine, path, expected):
+        declared = _declared_isolation()
+        assert not (_inventory.PROJECT_ROOT / "backend" / "test_scripts" / H23_MISSING_PYTEST_UNIT).exists(), "precondition: the static classifier must find no file there"
+        fake = _H23FakeCategory(default_isolation=default).register(monkeypatch)
+        _stub_launches(monkeypatch, {(fake.name, action): [(engine, path, "")]})
+
+        units, _errors = _inventory.build_inventory()
+
+        assert [(unit.category, unit.action, unit.engine, unit.path) for unit in units] == [(fake.name, action, engine, path)]
+        assert units[0].isolation == _inventory.classify(engine, path, declared(fake.name, action))
+        assert units[0].isolation == expected
+        assert units[0].exclusive_because == TEST_REGISTRY[fake.name][action].get("exclusive_because", "")
+
+    def test_every_unit_takes_the_class_declared_isolation_answers(self, monkeypatch):
+        """One definition, looked up when ``build_inventory`` runs: a stand-in ``declared_isolation`` decides every unit's class."""
+        real_declared = _declared_isolation()
+        fake = _H23FakeCategory(default_isolation=WRITE_SCOPED).register(monkeypatch)
+        launches = {
+            (fake.name, H23_OWN_READ): [("pytest", H23_MISSING_PYTEST_UNIT, "")],
+            (fake.name, H23_EXCLUSIVE_OVER_PURE): [("vitest", H23_VITEST_UNIT, "")],
+            (fake.name, H23_UNDECLARED): [("pytest", H23_MISSING_PYTEST_UNIT, ""), ("vitest", H23_VITEST_UNIT, "")],
+        }
+        assert PURE not in {real_declared(*key) for key in launches}, "precondition: the catalogue declares none of these actions pure"
+        _stub_launches(monkeypatch, launches)
+        asked = []
+
+        def stand_in(category, action):
+            asked.append((category, action))
+            return PURE
+
+        monkeypatch.setattr(_inventory, "declared_isolation", stand_in)
+
+        units, _errors = _inventory.build_inventory()
+
+        assert set(launches) <= set(asked), f"H-23: build_inventory did not ask declared_isolation for every action it launches (asked: {asked})"
+        assert {(unit.action, unit.engine, unit.path): unit.isolation for unit in units} == {(action, engine, path): PURE for (_category, action), items in launches.items() for engine, path, _project in items}
+        assert [unit.exclusive_because for unit in units if unit.action == H23_EXCLUSIVE_OVER_PURE] == [H23_EXCLUSIVE_REASON], "a unit's exclusive_because is still its entry's"
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestRunExclusiveSetupsSparesASinglePureAction:
+    """Contract point 3: one action run on its own that the catalogue declares pure leaves its category's exclusive setup unrun.
+
+    Everything else runs it as today, once, through ``run_category_setup``: the whole category, ``all``, an action
+    declared anything else, an action with no declared class. The fake categories default to ``pure`` wherever that
+    sharpens a case: an implementation that read the default before the action's own class, or asked about ``all``,
+    would leave the setup unrun there.
+    """
+
+    def test_a_single_pure_action_leaves_the_setup_unrun_and_says_so_once(self, monkeypatch, runner_lines, setup_door, capsys):
+        """The action's own pure wins over the category's write-scoped default."""
+        fake = _H23FakeCategory(default_isolation=WRITE_SCOPED).register(monkeypatch)
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, H23_OWN_PURE))
+
+        _assert_setup_not_run(fake.name, H23_OWN_PURE, setup_door.calls, fake.events)
+        assert result is True
+        _assert_skip_line(runner_lines, fake.name, H23_OWN_PURE)
+        assert fake.name not in _common._SETUP_DONE, "_SETUP_DONE means the setup ran: recording one that did not would make the category's own all skip it later in this invocation"
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == "", "the one line goes through print_info: nothing else is printed"
+
+    def test_an_action_without_its_own_isolation_in_a_pure_category_leaves_it_unrun_too(self, monkeypatch, runner_lines, setup_door):
+        fake = _H23FakeCategory(default_isolation=PURE).register(monkeypatch)
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, H23_UNDECLARED))
+
+        _assert_setup_not_run(fake.name, H23_UNDECLARED, setup_door.calls, fake.events)
+        assert result is True
+        _assert_skip_line(runner_lines, fake.name, H23_UNDECLARED)
+
+    @pytest.mark.parametrize("action", list(H23_OWN_NOT_PURE))
+    def test_a_single_action_declared_anything_but_pure_runs_the_setup_once(self, monkeypatch, runner_lines, setup_door, action):
+        """The category's pure default must not win over the action's own class."""
+        fake = _H23FakeCategory(default_isolation=PURE).register(monkeypatch)
+        _assert_pure_single_action_skipped(monkeypatch, fake, setup_door, runner_lines)
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, action))
+
+        _assert_setup_ran_once(fake, setup_door, runner_lines)
+        assert result is True
+
+    def test_an_exclusive_because_over_a_declared_pure_runs_the_setup_once(self, monkeypatch, runner_lines, setup_door):
+        fake = _H23FakeCategory(default_isolation=PURE).register(monkeypatch)
+        _assert_pure_single_action_skipped(monkeypatch, fake, setup_door, runner_lines)
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, H23_EXCLUSIVE_OVER_PURE))
+
+        _assert_setup_ran_once(fake, setup_door, runner_lines)
+        assert result is True
+
+    def test_an_action_with_no_declared_class_runs_the_setup_once(self, monkeypatch, runner_lines, setup_door):
+        """Conservative: no own isolation and no category default is not pure, whatever ``classify()`` would find statically."""
+        fake = _H23FakeCategory(default_isolation=None).register(monkeypatch)
+        _assert_pure_single_action_skipped(monkeypatch, fake, setup_door, runner_lines)
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, H23_UNDECLARED))
+
+        _assert_setup_ran_once(fake, setup_door, runner_lines)
+        assert result is True
+
+    @pytest.mark.parametrize("action", ["all", None, NO_ACTION_ATTRIBUTE], ids=["all", "none", "missing"])
+    def test_the_whole_category_runs_the_setup_once(self, monkeypatch, runner_lines, setup_door, action):
+        """``all`` is not one action run on its own, though the catalogue gives this category's ``all`` entry the pure default."""
+        fake = _H23FakeCategory(default_isolation=PURE).register(monkeypatch)
+        _assert_pure_single_action_skipped(monkeypatch, fake, setup_door, runner_lines)
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, action))
+
+        _assert_setup_ran_once(fake, setup_door, runner_lines)
+        assert result is True
+
+    def test_a_failing_setup_still_aborts_with_todays_error(self, monkeypatch, runner_lines, setup_door):
+        fake = _H23FakeCategory(default_isolation=PURE, setup_result=False).register(monkeypatch)
+        _assert_pure_single_action_skipped(monkeypatch, fake, setup_door, runner_lines)
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, H23_OWN_WRITE_SCOPED))
+
+        _assert_setup_ran_once(fake, setup_door, runner_lines)
+        assert result is False
+        assert len(runner_lines.error) == 1, f"one error line, got {runner_lines.error}"
+        assert fake.name in runner_lines.error[0]
+        assert "setup failed before the shared backend" in runner_lines.error[0]
+
+    @pytest.mark.parametrize(
+        ("with_setup", "setup_exclusive"),
+        [
+            pytest.param(True, False, id="setup-not-exclusive"),
+            pytest.param(False, True, id="no-setup"),
+        ],
+    )
+    def test_a_category_without_an_exclusive_setup_gets_no_setup_and_no_line(self, monkeypatch, runner_lines, setup_door, capsys, with_setup, setup_exclusive):
+        witness = _H23FakeCategory("h23-exclusive-witness", default_isolation=PURE).register(monkeypatch)
+        _assert_pure_single_action_skipped(monkeypatch, witness, setup_door, runner_lines)
+        fake = _H23FakeCategory("h23-no-exclusive-setup", default_isolation=PURE, with_setup=with_setup, setup_exclusive=setup_exclusive).register(monkeypatch)
+        assert not _common.setup_is_exclusive(fake.name), "precondition: the category has no exclusive setup"
+
+        result = runner_cli._run_exclusive_setups(_args_for(fake.name, H23_OWN_PURE))
+
+        assert result is True
+        assert setup_door.calls == []
+        assert fake.events == []
+        assert runner_lines.info == [], f"no exclusive setup was left unrun: there is nothing to say ({runner_lines.info})"
+        assert runner_lines.error == []
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == ""
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestServicesClientAddressKeepsTheLaneDatabase:
+    """Contract point 3 on the real catalogue: ``services client-address`` no longer empties the lane's database first."""
+
+    def test_the_catalogue_declares_client_address_pure(self):
+        entry = TEST_REGISTRY["services"][SERVICES_PURE_ACTION]
+        assert entry.get("isolation") == PURE and not entry.get("exclusive_because"), f"precondition: {SERVICES_PURE_ACTION} is declared pure in _backend_services.py ({entry.get('isolation')!r})"
+
+        assert _declared_isolation()("services", SERVICES_PURE_ACTION) == PURE
+
+    def test_client_address_on_its_own_leaves_the_services_setup_unrun(self, runner_lines, services_setup_unreachable, capsys):
+        assert _common.setup_is_exclusive("services"), "precondition: services recreates the lane's database in an exclusive setup"
+
+        result = runner_cli._run_exclusive_setups(_args_for("services", SERVICES_PURE_ACTION))
+
+        _assert_setup_not_run("services", SERVICES_PURE_ACTION, services_setup_unreachable)
+        assert result is True
+        _assert_skip_line(runner_lines, "services", SERVICES_PURE_ACTION)
+        captured = capsys.readouterr()
+        assert captured.out + captured.err == ""
+
+    def test_an_action_on_the_write_scoped_default_still_runs_the_setup_once(self, runner_lines, services_setup_unreachable):
+        meta = TEST_REGISTRY["services"]["_meta"]
+        entry = TEST_REGISTRY["services"][SERVICES_DEFAULT_ACTION]
+        assert meta.get("default_isolation") == WRITE_SCOPED, "precondition: services declares write-scoped as its default"
+        assert "isolation" not in entry and not entry.get("exclusive_because"), f"precondition: {SERVICES_DEFAULT_ACTION} declares nothing of its own; pick another services action on the default"
+        assert _declared_isolation()("services", SERVICES_DEFAULT_ACTION) == WRITE_SCOPED
+
+        result = runner_cli._run_exclusive_setups(_args_for("services", SERVICES_DEFAULT_ACTION))
+
+        assert services_setup_unreachable == ["services"], f"the setup must run once, through _common.run_category_setup (asked for: {services_setup_unreachable})"
+        assert result is True
+        assert runner_lines.info == [], f"the setup ran: no line may say the lane's database was left as it is ({runner_lines.info})"
+
+
+# ── H-25: the parallel pre-pass serves a whole category or a whole suite, as the consolidated pre-passes do ────────────
+# ``_cli._parallel_prepass_applies`` is looked up at call time: while it is missing, its own cases fail on the named
+# "H-25: _parallel_prepass_applies is missing" barrier and leave the cases above alone. ``_parallel_for_scope`` is a
+# recorder in every case, and what a real pass reaches behind it (the category's setup, the plan, the workers, a
+# subprocess) fails the test if reached. Every case expecting no parallel pass first proves, on the same recorder, that
+# the whole category or suite does run one (a presence barrier). Today's code runs it whatever the action and the test
+# names: each case naming one action or test names fails on the "H-25: the parallel pre-pass ran for …" barrier, and the
+# case whose stand-in rule says yes fails on the rule never being asked.
+
+#: ``test_names`` absent from ``args``, as the ``all`` / ``all-backend`` parsers build them: they declare no test names.
+NO_TEST_NAMES_ATTRIBUTE = object()
+#: What the recorded ``_parallel_for_scope`` reports covered for each scope it is asked for: ``(scope, H25_COVERED_ACTION)``.
+H25_COVERED_ACTION = "h25-covered-action"
+#: The workers handed to ``_run_parallel_prepass`` directly: not 2, so a count fixed in the code would show.
+H25_WORKERS = 3
+#: ``--workers 2`` as argparse hands it to ``_apply_parallel``: a string, which ``_scheduler.resolve_workers`` reads as 2.
+H25_APPLY_WORKERS = "2"
+#: Positional test names after the action: the runner turns them into a pytest ``-k`` filter.
+H25_TEST_NAMES = ("foo",)
+#: An existing ``utils`` action: this file's own, pinned by ``TestSelfRegistrationInTheCatalogue``.
+H25_UTILS_ACTION = "test-runner-cli"
+#: A frontend registry category, which the parallel pre-pass never serves.
+H25_FRONTEND_CATEGORY = "front-utility"
+#: A whole registry category, or a whole suite, as ``(category, action)``: the suites' parsers declare no ``action``.
+H25_WHOLE = [
+    pytest.param("services", "all", id="action-all"),
+    pytest.param("services", None, id="action-none"),
+    pytest.param("all-backend", NO_ACTION_ATTRIBUTE, id="action-missing"),
+]
+#: No test names: the attribute absent, None, or the empty list a registry category's parser gives without names.
+H25_NO_TEST_NAMES = [
+    pytest.param(NO_TEST_NAMES_ATTRIBUTE, id="names-missing"),
+    pytest.param(None, id="names-none"),
+    pytest.param([], id="names-empty"),
+]
+
+
+def _parallel_prepass_applies():
+    """``_cli._parallel_prepass_applies``, looked up at call time, or the H-25 barrier while it is missing."""
+    applies = getattr(runner_cli, "_parallel_prepass_applies", None)
+    if applies is None:
+        pytest.fail("H-25: _parallel_prepass_applies is missing")
+    return applies
+
+
+def _prepass_args(category: str, action=NO_ACTION_ATTRIBUTE, test_names=NO_TEST_NAMES_ATTRIBUTE, **extra) -> SimpleNamespace:
+    """The ``args`` of ``dev.py test [--workers N] <category> [<action> [<test name>…]]``; a sentinel leaves its attribute absent.
+
+    A registry category's parser always sets ``action`` and ``test_names`` (``[]`` without names); the ``all`` /
+    ``all-backend`` parsers set neither. ``test_names`` is copied: no two cases share a list.
+    """
+    fields = {"category": category, **extra}
+    if action is not NO_ACTION_ATTRIBUTE:
+        fields["action"] = action
+    if test_names is not NO_TEST_NAMES_ATTRIBUTE:
+        fields["test_names"] = None if test_names is None else list(test_names)
+    return SimpleNamespace(**fields)
+
+
+def _whole(category: str) -> SimpleNamespace:
+    """The ``args`` of the whole ``category`` (``<category> all``, no test names), or of the whole suite it names."""
+    if category in TEST_REGISTRY:
+        return _prepass_args(category, "all", [])
+    return _prepass_args(category)
+
+
+def _invocation(args) -> str:
+    """``args`` as the command line reads, for a barrier message: ``services client-address``, ``all-backend -k foo``."""
+    words = [f"--workers {args.workers}"] if hasattr(args, "workers") else []
+    words.append(args.category)
+    action = getattr(args, "action", None)
+    if action:
+        words.append(action)
+    names = getattr(args, "test_names", None)
+    if names:
+        words += ["-k", " or ".join(names)]
+    return " ".join(words)
+
+
+def _scopes(recorder) -> list:
+    """The scopes the recorded ``_parallel_for_scope`` was asked for, in order."""
+    return [scope for _args, scope, _workers, _verbose in recorder.calls]
+
+
+def _unreachable(what: str):
+    """A stand-in for ``what`` that fails the test the moment anything calls it."""
+
+    def fail_if_reached(*call_args, **_kwargs):
+        pytest.fail(f"{what} was reached past the _parallel_for_scope recorder (called with {call_args}): a real parallel pass ran its setup, its plan or its workers against the lane; for services the setup is db create, which empties the lane's database")
+
+    return fail_if_reached
+
+
+@pytest.fixture
+def parallel_pass(monkeypatch):
+    """``_cli._parallel_for_scope`` behind a recorder; what a real parallel pass reaches behind it fails the test if reached.
+
+    ``_run_parallel_prepass`` looks ``_parallel_for_scope`` up among ``_cli``'s globals when it runs, so the recorder is
+    what it calls. Each call is recorded as ``(args, scope, workers, verbose)`` and answered
+    ``(parallel_pass.ok, {(scope, H25_COVERED_ACTION)})``. A real pass runs the category's setup through
+    ``_common.run_category_setup``, plans through ``_scheduler.plan`` and spawns its workers through
+    ``_executor.run_groups``: all three, and ``subprocess.run``, are replaced where the runner looks them up.
+    """
+    recorder = SimpleNamespace(calls=[], ok=True)
+
+    def record(args, scope, workers, verbose):
+        recorder.calls.append((args, scope, workers, verbose))
+        return recorder.ok, {(scope, H25_COVERED_ACTION)}
+
+    monkeypatch.setattr(runner_cli, "_parallel_for_scope", record)
+    monkeypatch.setattr(_common, "run_category_setup", _unreachable("_common.run_category_setup"))
+    monkeypatch.setattr(_scheduler, "plan", _unreachable("_scheduler.plan"))
+    monkeypatch.setattr(_executor, "run_groups", _unreachable("_executor.run_groups"))
+    monkeypatch.setattr(_common.subprocess, "run", _unreachable("subprocess.run"))
+    return recorder
+
+
+@pytest.fixture
+def consolidation_passes(monkeypatch):
+    """Both consolidated pre-passes behind recorders answering ``(True, set())``, and the runner's process-wide sets kept.
+
+    ``_apply_parallel`` runs them after the parallel pre-pass: the backend one would launch a whole category's pytest, the
+    frontend one Playwright. The backend one is recorded with what it was told to skip. ``_apply_parallel`` also writes
+    ``_common._E2E_WORKERS`` and ``_common._SKIP_ACTIONS``: monkeypatch puts them back.
+    """
+    passes = SimpleNamespace(backend=[], frontend=[])
+
+    def backend(args, verbose, skip):
+        passes.backend.append(set(skip))
+        return True, set()
+
+    def frontend(args, verbose):
+        passes.frontend.append(args)
+        return True, set()
+
+    monkeypatch.setattr(runner_cli, "_run_backend_consolidation_prepass", backend)
+    monkeypatch.setattr(runner_cli, "_run_consolidation_prepass", frontend)
+    monkeypatch.setattr(_common, "_E2E_WORKERS", _common._E2E_WORKERS)
+    monkeypatch.setattr(_common, "_SKIP_ACTIONS", set())
+    monkeypatch.setattr(_common, "_FAILED_ACTIONS", set())
+    return passes
+
+
+def _assert_the_whole_runs_a_parallel_pass(category: str, recorder) -> None:
+    """Presence barrier: the whole ``category``, or the whole suite, reaches the recorder, so a case expecting no pass has teeth.
+
+    The recorder is emptied afterwards: the case starts as if nothing had run.
+    """
+    whole = _whole(category)
+
+    runner_cli._run_parallel_prepass(whole, H25_WORKERS, False)
+
+    assert recorder.calls, f"precondition: the parallel pre-pass for {_invocation(whole)} must reach the _parallel_for_scope recorder, or a case expecting none proves nothing"
+    recorder.calls.clear()
+
+
+def _assert_no_parallel_pass(args, recorder, result) -> None:
+    """The H-25 barrier: one action, or test names, and the pre-pass runs nothing and covers nothing."""
+    assert recorder.calls == [], f"H-25: the parallel pre-pass ran for {_invocation(args)} (scopes: {_scopes(recorder)}); it serves a whole category or a whole suite only, as the consolidated pre-passes do"
+    assert result == (True, set()), f"no parallel pass ran for {_invocation(args)}: nothing failed and nothing is covered (got {result!r})"
+
+
+def _assert_apply_parallel_runs_one_pass_for_the_whole_category(monkeypatch, recorder, passes) -> None:
+    """``--workers 2 services all`` through ``_apply_parallel``: one pass for ``services``, whose coverage both later passes skip.
+
+    Also the presence barrier of the cases expecting no pass: the recorders and ``_SKIP_ACTIONS`` are emptied afterwards.
+    """
+    args = _prepass_args("services", "all", [], workers=H25_APPLY_WORKERS)
+    covered = {("services", H25_COVERED_ACTION)}
+
+    result = runner_cli._apply_parallel(args, False)
+
+    assert recorder.calls == [(args, "services", 2, False)], f"one parallel pass for services, with the 2 workers --workers 2 asks for (calls: {recorder.calls})"
+    assert result == (True, True)
+    assert passes.backend == [covered], f"the consolidated backend pre-pass skips what the parallel pass covered (asked with: {passes.backend})"
+    assert _common._SKIP_ACTIONS == covered, f"and so does the serial pass (skips: {_common._SKIP_ACTIONS})"
+    recorder.calls.clear()
+    passes.backend.clear()
+    passes.frontend.clear()
+    monkeypatch.setattr(_common, "_SKIP_ACTIONS", set())
+
+
+class TestParallelPrepassApplies:
+    """Contract point 1: ``_cli._parallel_prepass_applies(args)``, the consolidated pre-passes' rule for the parallel one.
+
+    A whole category or a whole suite applies: ``action`` None, absent or ``all``, and no test names (``test_names``
+    absent, None or ``[]``). One named action does not; any test name does not, whatever the action.
+    """
+
+    @pytest.mark.parametrize("test_names", H25_NO_TEST_NAMES)
+    @pytest.mark.parametrize(("category", "action"), H25_WHOLE)
+    def test_the_whole_category_or_suite_without_test_names_applies(self, category, action, test_names):
+        applies = _parallel_prepass_applies()
+
+        assert applies(_prepass_args(category, action, test_names)) is True
+
+    @pytest.mark.parametrize("test_names", H25_NO_TEST_NAMES)
+    def test_one_named_action_does_not_apply(self, test_names):
+        applies = _parallel_prepass_applies()
+
+        assert applies(_prepass_args("services", SERVICES_PURE_ACTION, test_names)) is False
+
+    @pytest.mark.parametrize(("category", "action"), [*H25_WHOLE, pytest.param("services", SERVICES_PURE_ACTION, id="named-action")])
+    def test_test_names_never_apply(self, category, action):
+        applies = _parallel_prepass_applies()
+
+        assert applies(_prepass_args(category, action, H25_TEST_NAMES)) is False
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestRunParallelPrepassRunsNothingForOneActionOrTestNames:
+    """Contract point 2: when the rule says no, ``_run_parallel_prepass`` returns ``(True, set())`` and calls nothing.
+
+    No ``_parallel_for_scope``, so no plan of the whole category, no setup (``services``: ``db create``) and no worker.
+    """
+
+    @pytest.mark.parametrize(
+        ("category", "action"),
+        [
+            pytest.param("services", SERVICES_PURE_ACTION, id="services-pure-action"),
+            pytest.param("services", SERVICES_DEFAULT_ACTION, id="services-write-scoped-action"),
+            pytest.param("utils", H25_UTILS_ACTION, id="utils-action"),
+        ],
+    )
+    def test_one_action_runs_no_parallel_pass(self, parallel_pass, category, action):
+        """Whatever the class the catalogue declares for the action: the rule reads the invocation, not the catalogue."""
+        assert action in TEST_REGISTRY[category], f"precondition: {category} {action} is an action of the catalogue"
+        _assert_the_whole_runs_a_parallel_pass(category, parallel_pass)
+        args = _prepass_args(category, action, [])
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        _assert_no_parallel_pass(args, parallel_pass, result)
+
+    @pytest.mark.parametrize(
+        ("category", "action"),
+        [
+            pytest.param("services", "all", id="services-all"),
+            pytest.param("all-backend", NO_ACTION_ATTRIBUTE, id="all-backend"),
+            pytest.param("all", NO_ACTION_ATTRIBUTE, id="all"),
+        ],
+    )
+    def test_test_names_run_no_parallel_pass_even_for_the_whole(self, parallel_pass, category, action):
+        """The parallel pass knows nothing of ``-k``: it would run every parallel-safe unit of the scope instead."""
+        _assert_the_whole_runs_a_parallel_pass(category, parallel_pass)
+        args = _prepass_args(category, action, H25_TEST_NAMES)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        _assert_no_parallel_pass(args, parallel_pass, result)
+
+    def test_the_rule_is_asked_when_the_prepass_runs_and_a_no_stops_even_the_whole_category(self, monkeypatch, parallel_pass):
+        """One rule, looked up on ``_cli`` when the pre-pass runs: a stand-in answering False stops ``services all`` too."""
+        _assert_the_whole_runs_a_parallel_pass("services", parallel_pass)
+        args = _whole("services")
+        asked = []
+
+        def say_no(prepass_args):
+            asked.append(prepass_args)
+            return False
+
+        monkeypatch.setattr(runner_cli, "_parallel_prepass_applies", say_no, raising=False)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert parallel_pass.calls == [], f"H-25: the parallel pre-pass ran for {_invocation(args)} although _cli._parallel_prepass_applies, looked up when it runs, answers False (asked: {asked}; scopes: {_scopes(parallel_pass)})"
+        assert asked == [args], f"the rule is asked once, with the invocation's args (asked: {asked})"
+        assert result == (True, set())
+
+    def test_a_yes_from_the_rule_leaves_the_prepass_as_it_was_for_one_action(self, monkeypatch, parallel_pass):
+        """Nothing but the rule decides: a stand-in answering True for one action gets today's pass, unchanged."""
+        args = _prepass_args("services", SERVICES_PURE_ACTION, [])
+        asked = []
+
+        def say_yes(prepass_args):
+            asked.append(prepass_args)
+            return True
+
+        monkeypatch.setattr(runner_cli, "_parallel_prepass_applies", say_yes, raising=False)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert asked == [args], f"H-25: the parallel pre-pass for {_invocation(args)} did not ask _cli._parallel_prepass_applies when it ran (asked: {asked})"
+        assert parallel_pass.calls == [(args, "services", H25_WORKERS, False)], f"the rule said yes: today's one pass for the category (calls: {parallel_pass.calls})"
+        assert result == (True, {("services", H25_COVERED_ACTION)})
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestRunParallelPrepassStillServesTheWholeCategoryOrSuite:
+    """Contract point 2, unchanged: the whole category or suite gets the parallel pass it gets today (green before and after)."""
+
+    @pytest.mark.parametrize("ok", [True, False], ids=["green-pass", "red-pass"])
+    @pytest.mark.parametrize(
+        ("action", "test_names"),
+        [
+            pytest.param("all", [], id="action-all"),
+            pytest.param(None, None, id="action-none"),
+        ],
+    )
+    def test_a_whole_backend_category_runs_one_pass_and_gets_its_verdict_back(self, parallel_pass, action, test_names, ok):
+        parallel_pass.ok = ok
+        args = _prepass_args("services", action, test_names)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, True)
+
+        assert parallel_pass.calls == [(args, "services", H25_WORKERS, True)], f"one pass, for the category, with the workers and the verbosity given (calls: {parallel_pass.calls})"
+        assert result == (ok, {("services", H25_COVERED_ACTION)}), f"the pass's own verdict and coverage come back as they are (got {result!r})"
+
+    @pytest.mark.parametrize("suite", ["all-backend", "all"])
+    def test_a_whole_suite_runs_one_pass_per_consolidatable_category_in_order(self, parallel_pass, suite):
+        assert suite not in TEST_REGISTRY, f"precondition: {suite} is a suite, not a registry category"
+        args = _whole(suite)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert parallel_pass.calls == [(args, category, H25_WORKERS, False) for category in CONSOLIDATABLE], f"one pass per CONSOLIDATABLE category, in the suite's order (scopes: {_scopes(parallel_pass)})"
+        assert result == (True, {(category, H25_COVERED_ACTION) for category in CONSOLIDATABLE})
+
+    @pytest.mark.parametrize(
+        ("category", "in_registry"),
+        [
+            pytest.param(H25_FRONTEND_CATEGORY, True, id="frontend-category"),
+            pytest.param("all-frontend", False, id="all-frontend"),
+        ],
+    )
+    def test_a_frontend_scope_runs_no_pass(self, parallel_pass, category, in_registry):
+        """A frontend category or ``all-frontend``, whole: the rule lets it through, and the pre-pass serves neither, as today."""
+        assert (category in TEST_REGISTRY) is in_registry, f"precondition: {category} is {'a' if in_registry else 'no'} registry category"
+        _assert_the_whole_runs_a_parallel_pass("services", parallel_pass)
+        args = _whole(category)
+
+        result = runner_cli._run_parallel_prepass(args, H25_WORKERS, False)
+
+        assert parallel_pass.calls == [], f"the parallel pre-pass never serves {_invocation(args)} (scopes: {_scopes(parallel_pass)})"
+        assert result == (True, set())
+
+
+@pytest.mark.usefixtures("fresh_setup_done")
+class TestApplyParallelLeavesOneActionToTheSerialPass:
+    """Through ``_apply_parallel`` with ``--workers 2``: one action or test names reach no parallel pass and no setup.
+
+    ``--workers`` is a string there, which ``_scheduler.resolve_workers`` reads as 2. ``parallel_pass`` fails the case if
+    ``run_category_setup`` is reached; ``consolidation_passes`` keeps both consolidated pre-passes from running anything.
+    """
+
+    def test_the_whole_category_runs_one_parallel_pass(self, monkeypatch, parallel_pass, consolidation_passes):
+        """Guard, green today and after: ``--workers 2 services all`` keeps its parallel pass."""
+        _assert_apply_parallel_runs_one_pass_for_the_whole_category(monkeypatch, parallel_pass, consolidation_passes)
+
+    @pytest.mark.parametrize(
+        ("action", "test_names"),
+        [
+            pytest.param(SERVICES_PURE_ACTION, [], id="one-action"),
+            pytest.param("all", H25_TEST_NAMES, id="test-names"),
+        ],
+    )
+    def test_one_action_or_test_names_reach_no_parallel_pass_and_no_setup(self, monkeypatch, parallel_pass, consolidation_passes, action, test_names):
+        _assert_apply_parallel_runs_one_pass_for_the_whole_category(monkeypatch, parallel_pass, consolidation_passes)
+        args = _prepass_args("services", action, test_names, workers=H25_APPLY_WORKERS)
+
+        result = runner_cli._apply_parallel(args, False)
+
+        assert parallel_pass.calls == [], f"H-25: the parallel pre-pass ran for {_invocation(args)} through _apply_parallel (scopes: {_scopes(parallel_pass)}): behind it, a real pass runs the category's setup and every parallel-safe unit of the category"
+        assert result == (True, True), f"nothing failed: the serial pass goes on (got {result!r})"
+        assert consolidation_passes.backend == [set()], f"the consolidated backend pre-pass is still asked, with nothing to skip (asked with: {consolidation_passes.backend})"
+        assert _common._SKIP_ACTIONS == set(), f"nothing was covered: the serial pass has nothing to skip (skips: {_common._SKIP_ACTIONS})"
 
 
 if __name__ == "__main__":

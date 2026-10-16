@@ -246,7 +246,8 @@
         "you": "You",
         "admin": "Admin",
         "inactive": "Deactivated",
-        "protected": "Protected"
+        "protected": "Protected",
+        "pendingSetup": "Waiting for setup"
       },
       "actions": {
         "deactivate": "Deactivate",
@@ -307,7 +308,8 @@
         "DELETION_FAILED": "The deletion failed: nothing was deleted.",
         "INVALID_INPUT": "Check what you entered: the e-mail address may not be valid.",
         "generic": "The action failed. Try again.",
-        "load": "The accounts could not be loaded."
+        "load": "The accounts could not be loaded.",
+        "PENDING_SETUP": "This administrator activates the account through its setup link: it cannot be reactivated here."
       },
       "invite": {
         "button": "Invite",
@@ -338,7 +340,8 @@
         "signedOut": "{username} is signed out everywhere.",
         "guidesRestarted": "The guides of {username} start again.",
         "resetLinkCreated": "Reset link created for {username}."
-      }
+      },
+      "pendingSetupHint": "This administrator account activates through its setup link. If the link is lost, run «dev.py user setup-link» on the server, or ask your hosting provider."
     },
     "linkShare": {
       "addressLabel": "Server address",

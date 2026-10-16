@@ -48,4 +48,4 @@ post-1.2 backlog and the closing notes of plan 41 (`8339b0a06`).
 | Plan 44 | `LibreFolio_developer_journal/Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` |
 | Post-1.2 backlog, section I (F-AI (b)) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Plan 41, the closing notes | `LibreFolio_developer_journal/Release_2/Phase_0/41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md` |
-| The wizard | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| The wizard | `frontend/src/lib/features/transactions/import/ImportWizardModal.svelte` |

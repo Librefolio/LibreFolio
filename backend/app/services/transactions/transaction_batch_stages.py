@@ -89,8 +89,14 @@ _DECIMAL_LIMIT_LABELS = {"quantity": "Quantity", "cash.amount": "Cash amount", "
 
 
 def _decimal_limit_values(item: Any) -> Iterator[tuple[str, str, Decimal]]:
-    """The checked values of ``item``: (issue field, column of ``transactions``, value); a field left out has none."""
-    cash, cost = item.cash, item.cost_basis_override
+    """The checked values of ``item``: (issue field, column of ``transactions``, value); a field left out has none.
+
+    An Auto cost basis (``cost_basis_mode`` "auto" or "auto-detail") is not checked: the batch recomputes its amount and
+    reads only its currency (``auto_cost.py``), so the preview's average the Form sends back, 100 / 3 in full, is no
+    value of the user's. A manual one is.
+    """
+    cash = item.cash
+    cost = item.cost_basis_override if getattr(item, "cost_basis_mode", None) not in ("auto", "auto-detail") else None
     candidates = (("quantity", "quantity", item.quantity), ("cash.amount", "amount", cash.amount if cash is not None else None), ("cost_basis_override", "cost_basis_override", cost.amount if cost is not None else None))
     for field, column, value in candidates:
         if value is not None:

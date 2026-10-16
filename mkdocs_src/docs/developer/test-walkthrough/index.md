@@ -43,7 +43,7 @@ Playwright spec files (Vitest files are not listed).
 | `--cov-clean-backend` | Together with `--coverage`, clean Python coverage from backend tests (`htmlcov-backend/` + `.coverage_data/backend`) |
 | `--cov-clean-backend-e2e` | Together with `--coverage`, clean Python coverage collected during E2E runs (`htmlcov-backend-e2e/` + `.coverage_data/frontend`) |
 | `--cov-clean-js` | Clean JS/Svelte coverage (`coverage-js/`). Manual utility only — a `--coverage js` run cleans it by itself |
-| `--workers N\|auto` | Run isolation-safe backend units in parallel; the same number sets the Playwright workers, capped at half the logical cores. Default `1` — the serial path, unchanged. `auto` is half the cores |
+| `--workers N\|auto` | Run isolation-safe backend units in parallel, for a whole category or suite only: naming one action, or filtering by test name (pytest `-k`), keeps them serial. The same number sets the Playwright workers, capped at half the logical cores. Default `1` — the serial path, unchanged. `auto` is half the cores |
 | `--fail-fast` | Stop handing out work after the first red. The default runs everything and reports every failure |
 | `--resume` | Continue from the last failure: skip the tests the run cache records as passed and run the rest (see *Run cache and timing campaign* below) |
 | `--fresh-run` | Delete the run cache before starting, and open a new timing campaign. Without a category it only deletes the cache |
