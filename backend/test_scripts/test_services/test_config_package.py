@@ -5,7 +5,7 @@ Package under guard: ``backend/app/config/`` — the base (constants, data direc
 ``__init__.py``, and one section module per owner (``platform.py``, ``accounts.py``, ...) holding that owner's variables.
 
 The project rule, in one line: every environment variable of the application is read inside ``backend/app/config/``; a
-module elsewhere calls an accessor of the package instead of reading ``os.environ``. Four checks:
+module elsewhere calls an accessor of the package instead of reading ``os.environ``. Six checks:
 
 (a) The detector. A source READS the environment wherever it evaluates ``os.environ`` (or ``os.environb``) for anything
     but an item assignment or deletion — a subscript, ``.get``, ``.copy``, ``.items``, ``.keys``, ``.values``, ``in``,
@@ -37,6 +37,17 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
     ``ValueError``; ``LIBREFOLIO_DELETION_DATE`` unset or blank is no date, an ISO date (stripped) is that ``date``, any
     other value raising ``ValueError``.
 (d) ``PROJECT_ROOT``, now computed from one directory deeper, is still the repository root.
+(e) One rule for the address variables (CP13-1): ``env_url(name)`` reads ``name`` from the process environment, stripped;
+    unset, empty or blank is ``None``; otherwise the value must start with ``http://`` or ``https://``, in any case, and
+    loses one trailing slash, one only (``https://a.example//`` keeps one), nothing else changed; any other value raises
+    ``ValueError`` naming the variable and quoting the value. ``support_url()`` (``config/platform.py``) reads
+    ``LIBREFOLIO_SUPPORT_URL`` by that rule; ``public_url()`` and ``billing_url()`` (``config/accounts.py``) are pinned in
+    ``test_registration_service.py``.
+(f) ``support_link()`` (``services/platform/instance_links.py``), what ``GET /system/instance`` publishes as
+    ``support_url``, never raises: the address, or ``None`` when it is unset or invalid, and the app then links to the
+    project's issues on GitHub. An invalid address is logged once per process (``_report_invalid``, ``functools.cache``):
+    one error event, ``Invalid instance link``, whose ``problem`` names the variable and quotes the value and whose
+    ``consequence`` says what it costs. A missing or a valid address logs nothing.
 
 What the detector does not see: a read made on the module's behalf (``os.path.expanduser``, a library honouring
 ``HTTPS_PROXY``) and ``os`` reached dynamically (``importlib``, ``sys.modules``). The rule is about the variables the
@@ -48,22 +59,28 @@ repository. The guard asserts an absence, so the detector first proves it sees a
 synthetic source and nothing allowed, and the scan must reach known modules, find the writes of ``spawn_worker.py``
 without calling them reads, and find the reads of the config package itself (an empty parametrization would be skipped,
 never red). The ratchet, with no entry to check today, proves on synthetic modules that it flags an entry excusing
-nothing; it is one test over the whole dictionary, so an empty one passes instead of adding a skip.
+nothing; it is one test over the whole dictionary, so an empty one passes instead of adding a skip. The log of
+``support_link`` is read with ``structlog.testing.capture_logs``, behind a barrier: a canary logged through the module's
+own logger must reach the capture, or "nothing was logged" would prove nothing. The cache of ``_report_invalid`` is
+emptied before and after each of those tests, so "once per process" starts over in each. Not tested here: that
+``env_url`` never reads ``.env`` — it takes no path, and no case of this file loads a dotenv file.
 """
 
 from __future__ import annotations
 
 import ast
-from collections.abc import Callable
+import contextlib
+from collections.abc import Callable, Iterator
 from datetime import date
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import pytest
+from structlog.testing import capture_logs
 
-from backend.app.config import PROJECT_ROOT, SecretFileError
+from backend.app.config import PROJECT_ROOT, SecretFileError, env_url
 from backend.app.config.accounts import donation_popup_disabled
-from backend.app.config.platform import configured_jwt_secret, frozen_app_version, instance_blocked, instance_deletion_date, owning_test_lane_id, scheduler_disabled
+from backend.app.config.platform import configured_jwt_secret, frozen_app_version, instance_blocked, instance_deletion_date, owning_test_lane_id, scheduler_disabled, support_url
 from backend.app.config.plugins import (
     web_link_finder_api_key,
     web_link_finder_ddgs_backend,
@@ -73,6 +90,7 @@ from backend.app.config.plugins import (
     web_link_finder_max_results,
     web_link_finder_timeout,
 )
+from backend.app.services.platform import instance_links
 from backend.test_scripts.test_utils import print_section, print_success
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -680,3 +698,162 @@ def test_project_root_is_the_repository_root():
     assert (PROJECT_ROOT / "dev.py").is_file(), f"{PROJECT_ROOT} holds no dev.py: it is not the repository root"
     assert PROJECT_ROOT.resolve() == REPO_ROOT, f"backend.app.config was imported from {PROJECT_ROOT}, not from the checkout of this test ({REPO_ROOT})"
     print_success(f"PROJECT_ROOT = {PROJECT_ROOT}")
+
+
+# =============================================================================
+# One rule for the address variables: env_url, and support_url built on it
+# =============================================================================
+
+#: A variable no application code reads: the generic rule of ``env_url`` is tested on it.
+URL_PROBE = "LIBREFOLIO_PROBE_URL"
+#: Where the users of the instance ask for help (CP13): read by ``support_url()``, published by ``support_link()``.
+SUPPORT_URL_VARIABLE = "LIBREFOLIO_SUPPORT_URL"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, None, id="unset-is-none"),
+        pytest.param("", None, id="empty-is-none"),
+        pytest.param("   ", None, id="blank-is-none"),
+        pytest.param(" \t\n", None, id="any-whitespace-is-none"),
+        pytest.param("https://a.example", "https://a.example", id="https"),
+        pytest.param("http://192.168.1.20:6040", "http://192.168.1.20:6040", id="http-with-a-port"),
+        pytest.param("  https://a.example \n", "https://a.example", id="stripped"),
+        pytest.param("HTTPS://A.EXAMPLE/Help", "HTTPS://A.EXAMPLE/Help", id="upper-case-scheme-accepted-and-case-kept"),
+        pytest.param("Http://a.example", "Http://a.example", id="mixed-case-scheme-accepted"),
+        pytest.param("https://a.example/", "https://a.example", id="trailing-slash-removed"),
+        pytest.param("https://a.example/help/", "https://a.example/help", id="trailing-slash-of-a-path-removed"),
+        pytest.param("https://a.example//", "https://a.example/", id="one-slash-removed-only"),
+        pytest.param(" https://a.example/ \n", "https://a.example", id="stripped-before-the-slash-is-removed"),
+    ],
+)
+def test_env_url_is_the_address_stripped_and_without_one_trailing_slash(monkeypatch, value, expected):
+    """(e) ``env_url(name)``: ``None`` when unset, empty or blank; otherwise the value stripped, ``http://`` or ``https://`` in any case, one trailing slash removed — one only —, nothing else changed."""
+    _set_variable(monkeypatch, URL_PROBE, value)
+    address = env_url(URL_PROBE)
+    assert address == expected, f"{URL_PROBE}={value!r} must give {expected!r}, env_url gave {address!r}"
+    print_success(f"{URL_PROBE}={value!r}: env_url() == {address!r}")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("a.example", id="no-scheme"),
+        pytest.param("a.example/help/", id="no-scheme-with-a-path"),
+        pytest.param("ftp://a.example", id="ftp"),
+        pytest.param(" FTP://a.example/ ", id="ftp-any-case-stripped"),
+        pytest.param("//a.example", id="scheme-relative"),
+        pytest.param("https:/a.example", id="one-slash-after-the-scheme"),
+        pytest.param("mailto:help@a.example", id="mailto"),
+        pytest.param("javascript:alert(1)", id="javascript"),
+    ],
+)
+def test_env_url_raises_on_anything_but_an_http_or_https_address(monkeypatch, value):
+    """(e) Any other value is an error naming the variable and quoting the value: it would become a link the instance hands out, so it is never guessed."""
+    monkeypatch.setenv(URL_PROBE, value)
+    with pytest.raises(ValueError, match=URL_PROBE) as raised:
+        env_url(URL_PROBE)
+    assert value.strip() in str(raised.value), f"the error must quote the value it refused, {value.strip()!r}: {raised.value}"
+    print_success(f"{URL_PROBE}={value!r}: {raised.value}")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, None, id="unset-is-none"),
+        pytest.param("", None, id="empty-is-none"),
+        pytest.param(" \t ", None, id="blank-is-none"),
+        pytest.param(" https://help.example.com/support/ ", "https://help.example.com/support", id="stripped-without-its-trailing-slash"),
+        pytest.param("HTTP://help.example.com", "HTTP://help.example.com", id="http-any-case"),
+    ],
+)
+def test_support_url_is_librefolio_support_url_by_the_rule_of_env_url(monkeypatch, value, expected):
+    """(e) ``LIBREFOLIO_SUPPORT_URL``: the address the users of the instance ask for help at, by the rule of ``env_url``; ``None`` when unset or blank."""
+    _set_variable(monkeypatch, SUPPORT_URL_VARIABLE, value)
+    address = support_url()
+    assert address == expected, f"{SUPPORT_URL_VARIABLE}={value!r} must give {expected!r}, support_url gave {address!r}"
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: support_url() == {address!r}")
+
+
+@pytest.mark.parametrize("value", [pytest.param("help.example.com", id="no-scheme"), pytest.param("ftp://help.example.com", id="ftp")])
+def test_support_url_raises_naming_librefolio_support_url(monkeypatch, value):
+    """(e) An address that is not http(s) is an error naming ``LIBREFOLIO_SUPPORT_URL``: the accessor never guesses, and ``support_link()`` decides what it costs."""
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    with pytest.raises(ValueError, match=SUPPORT_URL_VARIABLE) as raised:
+        support_url()
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: {raised.value}")
+
+
+# =============================================================================
+# The support address the instance publishes: support_link
+# =============================================================================
+
+#: The one event an invalid instance link logs (``services/platform/instance_links.py``).
+INVALID_INSTANCE_LINK = "Invalid instance link"
+LINK_LOG_CANARY = "canary: the capture reaches the logger of the instance links"
+
+
+@pytest.fixture
+def fresh_link_reports() -> Iterator[None]:
+    """The cache of ``_report_invalid`` empty before and after the test: "once per process" starts over, and no test inherits what another reported."""
+    instance_links._report_invalid.cache_clear()
+    yield
+    instance_links._report_invalid.cache_clear()
+
+
+@contextlib.contextmanager
+def _captured_link_log() -> Iterator[list[dict[str, Any]]]:
+    """The structlog events of the block, behind a barrier: a canary logged through the module's own logger must be among them.
+
+    Without it, a capture that misses the module's events would pass every "nothing was logged" and count no error where
+    one was logged.
+    """
+    with capture_logs() as events:
+        instance_links.logger.debug(LINK_LOG_CANARY)
+        yield events
+    assert any(event.get("event") == LINK_LOG_CANARY for event in events), f"barrier: the events of the instance links' logger do not reach capture_logs, so what this test reads of the log proves nothing: {events}"
+
+
+def _error_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The error-level events among those captured: what an operator's log shows as a problem."""
+    return [event for event in events if event.get("log_level") in ("error", "critical")]
+
+
+@pytest.mark.usefixtures("fresh_link_reports")
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, None, id="unset-is-no-link"),
+        pytest.param("  ", None, id="blank-is-no-link"),
+        pytest.param(" https://help.example.com/support/ ", "https://help.example.com/support", id="valid-is-the-address"),
+    ],
+)
+def test_support_link_is_the_support_address_and_logs_nothing(monkeypatch, value, expected):
+    """(f) ``support_link()``: the address of ``LIBREFOLIO_SUPPORT_URL``, ``None`` without one — the app then links to the project's issues —; neither is a problem: nothing is logged."""
+    _set_variable(monkeypatch, SUPPORT_URL_VARIABLE, value)
+    with _captured_link_log() as events:
+        link = instance_links.support_link()
+    assert link == expected, f"{SUPPORT_URL_VARIABLE}={value!r}: support_link() must give {expected!r}, gave {link!r}"
+    assert _error_events(events) == [], f"a missing or a valid {SUPPORT_URL_VARIABLE} is no problem to report: {_error_events(events)}"
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: support_link() == {link!r}, nothing logged")
+
+
+@pytest.mark.usefixtures("fresh_link_reports")
+@pytest.mark.parametrize("value", [pytest.param("help.example.com", id="no-scheme"), pytest.param("ftp://help.example.com", id="ftp")])
+def test_an_invalid_support_address_is_no_link_and_one_error_however_often_it_is_read(monkeypatch, value):
+    """(f) An invalid ``LIBREFOLIO_SUPPORT_URL`` never raises out of ``support_link()``: no link at every reading, so the app keeps its default one.
+
+    And one error for the whole process, ``Invalid instance link``, whose ``problem`` names the variable and quotes the
+    value and whose ``consequence`` says what it costs.
+    """
+    monkeypatch.setenv(SUPPORT_URL_VARIABLE, value)
+    with _captured_link_log() as events:
+        links = [instance_links.support_link(), instance_links.support_link()]
+    errors = _error_events(events)
+    assert links == [None, None], f"{SUPPORT_URL_VARIABLE}={value!r}: every reading must give no link, got {links}"
+    reported = [(error.get("event"), error.get("consequence")) for error in errors]
+    assert reported == [(INVALID_INSTANCE_LINK, instance_links._DEFAULT_SUPPORT)], f"two readings of an invalid {SUPPORT_URL_VARIABLE} must log exactly one error, {INVALID_INSTANCE_LINK!r}, saying what it costs: {errors}"
+    problem = str(errors[0].get("problem"))
+    assert SUPPORT_URL_VARIABLE in problem and value in problem, f"the problem must name {SUPPORT_URL_VARIABLE} and quote the value it refused, {value!r}: {problem!r}"
+    print_success(f"{SUPPORT_URL_VARIABLE}={value!r}: no link twice, one error — {problem}")
