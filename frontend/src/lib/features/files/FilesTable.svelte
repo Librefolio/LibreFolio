@@ -29,7 +29,7 @@
     import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
-    import FileSetBadges from '$lib/components/files/FileSetBadges.svelte';
+    import FileSetBadges from '$lib/features/files/FileSetBadges.svelte';
     import {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
     import {fileSetBadges, setRequest, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
     import type {BrimPlugin, BrimSetPreview} from '$lib/types';

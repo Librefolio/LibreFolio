@@ -42,7 +42,6 @@ lib/components/charts/SignalOptionContent.svelte	6
 lib/components/charts/SignalParamControl.svelte	24
 lib/components/charts/SignalStyleEditor.svelte	42
 lib/components/charts/SignalVisualLegend.svelte	16
-lib/components/files/FileGrid.svelte	1
 lib/components/fx/FxCard.svelte	63
 lib/components/fx/FxDataEditorSection.svelte	15
 lib/components/fx/FxDataImportModal.svelte	20
@@ -135,6 +134,7 @@ lib/features/dashboard/OtherPeriodEffectsTable.svelte	28
 lib/features/dashboard/PerformanceChart.svelte	4
 lib/features/dashboard/PositionsPanel.svelte	46
 lib/features/dashboard/YieldOnCostCell.svelte	8
+lib/features/files/FileGrid.svelte	1
 lib/features/risk/AssetChip.svelte	2
 lib/features/risk/AssetRiskScenariosView.svelte	13
 lib/features/risk/AssetSetCorrelationSection.svelte	20
