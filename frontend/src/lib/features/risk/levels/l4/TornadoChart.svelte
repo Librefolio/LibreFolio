@@ -88,9 +88,9 @@
         // The zero line is drawn, not implied: without it a reader cannot tell a small
         // gain from a small loss at a glance.
         return (
-            `<span class="relative block h-3 w-full rounded bg-gray-100 dark:bg-slate-700">` +
+            `<span class="relative block h-3 w-full rounded bg-lf-panel">` +
             `<span class="absolute top-0 h-3 rounded ${loss ? `${SIGN_BAR.tornado.loss} right-1/2` : `${SIGN_BAR.tornado.gain} left-1/2`}" style="width: ${(magnitude / 2).toFixed(2)}%" data-testid="${escapeHtml(`${testId}-bar`)}" data-sign="${loss ? 'loss' : 'gain'}"></span>` +
-            `<span class="absolute left-1/2 top-0 h-3 w-px bg-gray-300 dark:bg-slate-500"></span>` +
+            `<span class="absolute left-1/2 top-0 h-3 w-px bg-lf-neutral"></span>` +
             `</span>`
         );
     }

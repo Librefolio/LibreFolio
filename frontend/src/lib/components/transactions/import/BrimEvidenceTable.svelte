@@ -46,14 +46,14 @@
     let hasRowNumbers = $derived(rowNumbers.length === rows.length && rows.length > 0);
 
     const toneRing: Record<string, string> = {
-        info: 'border-sky-200 dark:border-sky-800',
-        warning: 'border-amber-200 dark:border-amber-800',
-        blocker: 'border-red-200 dark:border-red-800',
+        info: 'border-lf-info-line',
+        warning: 'border-lf-warning-line',
+        blocker: 'border-lf-danger-line',
     };
     const toneHead: Record<string, string> = {
-        info: 'bg-sky-50 dark:bg-sky-900/30 text-sky-900 dark:text-sky-200',
-        warning: 'bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-200',
-        blocker: 'bg-red-50 dark:bg-red-900/30 text-red-900 dark:text-red-200',
+        info: 'bg-lf-info-soft text-lf-info-on-soft',
+        warning: 'bg-lf-warning-soft text-lf-warning-on-soft',
+        blocker: 'bg-lf-danger-soft text-lf-danger-on-soft',
     };
     /** Only offered when the rows are numbered: without a line number there is nowhere to go. */
     // Every row of the evidence is tinted in the preview, but the jump lands on the
@@ -62,9 +62,9 @@
     let gotoRow = $derived(gotoRows.length > 0 ? gotoRows[0] : null);
 
     const toneComment: Record<string, string> = {
-        info: 'text-sky-800 dark:text-sky-300',
-        warning: 'text-amber-800 dark:text-amber-300',
-        blocker: 'text-red-800 dark:text-red-300',
+        info: 'text-lf-info',
+        warning: 'text-lf-warning',
+        blocker: 'text-lf-danger',
     };
 </script>
 
@@ -115,33 +115,33 @@
 
     <!-- The comment sits above the rows: it is the message, the rows are the proof. -->
     {#if evidence.comment && (!collapsible || expanded)}
-        <div class="flex items-start gap-1.5 border-b border-gray-100 bg-white px-2.5 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-start gap-1.5 border-b border-lf-subtle bg-lf-card px-2.5 py-1.5">
             <MessageSquareWarning size={12} class="mt-0.5 shrink-0 {toneComment[tone]}" />
             <p class="text-[11px] leading-relaxed {toneComment[tone]}" data-testid="brim-evidence-comment">{evidence.comment}</p>
         </div>
     {/if}
 
     {#if rows.length > 0 && (!collapsible || expanded)}
-        <div class="max-h-48 overflow-auto bg-white dark:bg-slate-800">
+        <div class="max-h-48 overflow-auto bg-lf-card">
             <table class="w-full text-[11px] border-collapse">
                 <thead class="sticky top-0 z-10">
-                    <tr class="bg-gray-50 dark:bg-slate-700/80">
+                    <tr class="bg-lf-panel">
                         {#if hasRowNumbers}
-                            <th class="px-2 py-1 text-right font-medium text-gray-400 dark:text-gray-500 border-b border-gray-200 dark:border-slate-600 whitespace-nowrap">#</th>
+                            <th class="px-2 py-1 text-right font-medium text-lf-muted border-b border-lf-subtle whitespace-nowrap">#</th>
                         {/if}
                         {#each headers as header}
-                            <th class="px-2 py-1 text-left font-medium text-gray-600 dark:text-gray-300 border-b border-gray-200 dark:border-slate-600 whitespace-nowrap">{header}</th>
+                            <th class="px-2 py-1 text-left font-medium text-lf-secondary border-b border-lf-subtle whitespace-nowrap">{header}</th>
                         {/each}
                     </tr>
                 </thead>
                 <tbody>
                     {#each rows as row, i}
-                        <tr class="odd:bg-white even:bg-gray-50/60 dark:odd:bg-slate-800 dark:even:bg-slate-700/30">
+                        <tr class="odd:bg-lf-card even:bg-lf-panel/60">
                             {#if hasRowNumbers}
-                                <td class="px-2 py-1 text-right font-mono text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-slate-700 whitespace-nowrap">{rowNumbers[i]}</td>
+                                <td class="px-2 py-1 text-right font-mono text-lf-muted border-b border-lf-subtle whitespace-nowrap">{rowNumbers[i]}</td>
                             {/if}
                             {#each row as cell}
-                                <td class="px-2 py-1 text-gray-700 dark:text-gray-200 border-b border-gray-100 dark:border-slate-700 align-top">{cell}</td>
+                                <td class="px-2 py-1 text-lf-secondary border-b border-lf-subtle align-top">{cell}</td>
                             {/each}
                         </tr>
                     {/each}

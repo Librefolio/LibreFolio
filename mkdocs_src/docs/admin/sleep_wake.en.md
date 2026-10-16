@@ -4,12 +4,14 @@ LibreFolio does not have to run around the clock. The machine it runs on can be 
 nobody uses it, or switched off at night, and started again later: by a hosting panel, on its own
 schedule, or by a script or a cron job of yours on a home server. While the machine sleeps, nothing
 updates the prices and the exchange rates; the
-[market data scheduler](settings.md#market-data-scheduler) catches up once it runs again.
+[market data scheduler](settings.md#market-data-scheduler) catches up once it runs again, in the
+background, while the app shows **Updating prices…** ([While Prices Catch Up](#price-refresh)).
 
 Two features help, both off until you turn them on. With the [idle suspension](#idle-suspend), the
 instance asks Fly.io to suspend its machine after a few minutes without visitors (on any other
 host, leave it off); with the [scheduled wake-up](#wake-sync), whoever wakes the machine brings the
-data up to date at once, and knows when it is done, with one call.
+data up to date at once, and knows when it is done, with one call. To check both on a real Fly.io
+machine, see [Check That It Works](#check-it-works).
 
 The page also covers the [provider pauses](#provider-pauses), on by default on every install: a
 price provider that answers «too many requests» is left alone until its pause is over.
@@ -60,7 +62,11 @@ awake.
 - a run of the [market data scheduler](settings.md#market-data-scheduler), which updates the prices
   and the exchange rates;
 - a [Tool](../user/tools/index.md) calculation, waiting or running;
-- a backup, whoever started it, and the check of an archive uploaded for a restore.
+- a backup, whoever started it, and the check of an archive uploaded for a restore. While a backup
+  runs, the **Backup** tab of the settings reads its progress every second, in the background too,
+  and those reads are visits: with that page open, the minutes start again when the backup ends.
+  Leave it or close it, and the machine sleeps within 30 seconds of the end, once the minutes have
+  run out since you left.
 
 !!! tip "📡 Uptime monitors"
 
@@ -74,8 +80,10 @@ awake.
 - **Going to sleep.** LibreFolio checks every 30 seconds, so the machine is suspended at most
   30 seconds after the minutes have run out: with the default, between 5 minutes and 5 minutes
   30 seconds after the user's last request. When work is still in progress then, it is suspended
-  within 30 seconds of the end of that work. With an Assets page left open, add the two minutes
-  its live prices keep refreshing after the last input.
+  within 30 seconds of the end of that work. Work that is itself a user's request, such as a long
+  download or a Tool calculation, counts as a visit when it ends, so the minutes start again from
+  its end. With an Assets page left open, add the two minutes its live prices keep refreshing after
+  the last input.
 - **After a [scheduled wake-up](#wake-sync).** The wake-up is not a visit, so it does not start the
   minutes again. A check comes 2 seconds after its jobs end: when nobody has been around for the
   minutes, the machine goes back to sleep at once, without waiting for the next regular check. A
@@ -83,9 +91,10 @@ awake.
 - **Waking up.** The request that reaches a suspended machine resumes it, and LibreFolio answers it
   as usual. The first request from a user after a suspension, like any that comes after at least a
   minute of silence, also makes the [market data scheduler](settings.md#market-data-scheduler) run
-  at once: it catches up the price and exchange-rate updates that fell due while the machine slept.
-  After asking for a suspension, LibreFolio waits a minute before its next check, so that the
-  request that woke the machine counts first.
+  at once: it catches up the price and exchange-rate updates that fell due while the machine slept,
+  in the background ([While Prices Catch Up](#price-refresh)). After asking for a suspension,
+  LibreFolio waits a minute before its next check, so that the request that woke the machine counts
+  first.
 - **After a cold start.** A deploy discards the state Fly saved, and Fly may start a machine from
   scratch in other cases too: the minutes then count from the start of the server.
 - **One server process.** Run a single server process, as the Docker image does: each process
@@ -365,6 +374,103 @@ rates. Once the block is lifted, the next run catches up the history sync missed
 
 ---
 
+## 🔄 While Prices Catch Up {: #price-refresh }
+
+Some runs of the [market data scheduler](settings.md#market-data-scheduler) are catch-ups, the runs
+someone may be waiting for: they bring the prices and the exchange rates up to date after the server
+was off, asleep or left without visitors. A catch-up comes:
+
+- when the server starts;
+- at the first request after a minute of silence, the first one after a
+  [suspension](#idle-suspend-timing) included;
+- at a [scheduled wake-up](#wake-sync).
+
+It runs in the background, so the app can be used meanwhile. While one of its jobs runs, the current
+price refresh or the history sync ([What a Wake-up Runs](#wake-sync-jobs)), the app shows
+**Updating prices…** above its pages. The notice has no close button: it goes away by itself when the
+catch-up is over.
+
+- **Nothing due, nothing shown.** When no job is due, the catch-up is over within seconds and no
+  notice shows. The scheduler's regular check, every minute, never shows it.
+- **Afterwards.** When the catch-up has brought at least one price or rate up to date, a tab that
+  showed the notice brings its portfolio pages up to date. A Dashboard or a broker's page on screen
+  asks for its figures again by itself, in the background: its figures stay until the new ones
+  arrive, with no need to press **Refresh** or to leave the page. The other portfolio pages, such as
+  the broker list, and those two when they are not open, ask for their figures again the next time
+  they load.
+- **The machine can still sleep.** Without a catch-up, the app asks nothing more than usual. During
+  one, it asks the server every 3 seconds whether it is over: these questions count as visits, like
+  the [live prices](#idle-suspend-activity), and pause the same way, in a background tab and after
+  two minutes without input. The catch-up itself keeps the machine awake until it ends.
+- **One server process.** With several (`--workers N`), only one of them runs the jobs, and the
+  notice may not show.
+
+The app learns of a catch-up from a header of the server's answers, `X-LibreFolio-Price-Refresh`: a
+reverse proxy that strips the response headers it does not know only loses the notice, and the update
+of the portfolio pages that follows it, never the catch-up.
+
+---
+
+## ✅ Check That It Works {: #check-it-works }
+
+These checks try the idle suspension and the scheduled wake-up on a real Fly.io machine. You need
+a Fly app set up as in [Setting Up Fly.io](#idle-suspend-fly) and, for the wake-up, a token in
+`LIBREFOLIO_WAKE_TOKEN` ([Turning It On](#wake-sync-token)). Any request through Fly's proxy
+resumes a suspended machine, health checks included: pause any uptime monitor while you check.
+
+1. **It is on.** After `fly deploy`, `fly logs` shows `Idle monitor started`, with `mode` (`fly`)
+    and `minutes`. No such line: the idle suspension is off, and [In the Log](#idle-suspend-log)
+    lists the errors to look for at startup.
+2. **It goes to sleep.** Sign in, open a page, then close the tab or leave it in the background.
+    LibreFolio checks every 30 seconds: with the default, the machine is suspended between 5 minutes
+    and 5 minutes 30 seconds after your last request. An Assets page or an asset's page left in the
+    foreground adds two minutes: its live prices pause two minutes after your last mouse, keyboard
+    or touch input. `fly logs` then shows `Idle suspend requested`, with `idle_s` and `minutes` (or
+    after the next resume, when Fly suspended the machine first), and `fly machine list`, or
+    `fly machine status <machine-id>`, shows the state `suspended`.
+3. **A visit wakes it.** Open the app again: the first request resumes the machine, and LibreFolio
+    answers it as usual. It then runs at once the price and exchange-rate updates that fell due
+    while the machine slept: while one runs, the app shows **Updating prices…**, which goes away by
+    itself ([While Prices Catch Up](#price-refresh)). The machine does not go back to sleep while
+    you use it: your visit started the minutes again, and LibreFolio waits a minute after asking
+    for a suspension before it checks again.
+4. **Work keeps it awake.** Start a backup from the **Backup** tab of the settings, then close the
+    browser tab: that page reads the backup's progress every second, in the background too, and
+    each read is a visit ([What Keeps the Machine Awake](#idle-suspend-activity)). If the minutes
+    run out before the backup ends, the machine stays awake until the end, and is suspended within
+    30 seconds after.
+5. **A wake-up brings the data up to date.** While the machine sleeps, call the route from your
+    computer, with the token in the shell variable `LIBREFOLIO_WAKE_TOKEN` (`-N` shows the answer
+    as it comes):
+
+    ```bash
+    curl -N -X POST -H "Authorization: Bearer $LIBREFOLIO_WAKE_TOKEN" \
+      https://<your-app>.fly.dev/api/v1/system/wake-sync
+    ```
+
+    The call resumes the machine. The answer, a `200`, is blank spaces, one at once and one every
+    15 seconds while the jobs run, then the report in JSON on one line: check its `status`, `ok`
+    when all went well ([The Answer](#wake-sync-answer)). `fly logs` shows `Wake-up run started`,
+    then `Wake-up run finished` with `status` and `jobs`, the jobs that ran. A wake-up is not a
+    visit: it does not start the minutes again, so with nobody around for the minutes, 2 seconds
+    after the jobs end the machine is suspended again (`Idle suspend requested`, state `suspended`).
+6. **A wrong call is refused.** Without the `Authorization` header, or with a wrong token, the
+    answer is `401` (`wake_unauthorized`). A second call while a run is in progress, from another
+    terminal, gets `409` (`wake_in_progress`). A `404` means the server has no token.
+
+**If the machine does not sleep**, or sleeps at the wrong time:
+
+- An `Idle suspend failed` line gives a `reason`: see [In the Log](#idle-suspend-log).
+- Neither that line nor `Idle suspend requested`: something keeps the machine awake, such as a tab
+  left open and used, the **Backup** tab open during a backup, or an uptime monitor that calls
+  every minute or so ([What Keeps the Machine Awake](#idle-suspend-activity)).
+- Check against [Setting Up Fly.io](#idle-suspend-fly): `auto_stop_machines = "off"`, and a machine
+  with 2 GB of memory or less, no swap, no schedule, updated since 20 June 2024.
+- Run a single server process: with several (`--workers N`), one may suspend the machine while
+  another serves a user ([When It Sleeps and Wakes](#idle-suspend-timing)).
+
+---
+
 ## ⏸️ Provider Pauses {: #provider-pauses }
 
 LibreFolio asks outside services for prices and exchange rates: its price providers, such as Yahoo
@@ -452,7 +558,9 @@ and `Scheduler: history sync`, give the deferred items in `deferred`, with `retr
 - 🪂 **[Machine Suspend and Resume](https://fly.io/docs/reference/suspend-resume/)** — Fly.io's
   documentation: how a suspension works, and what a machine needs for it
 - 🧑‍💻 For developers: **[Market Data Scheduler](../developer/backend/scheduler.md)** — How a run
-  works: its checks, its lock and its report
+  works: its checks, its lock and its report; [Catch-up Progress](../developer/backend/scheduler.md#price-refresh)
+  for how the app learns of a catch-up, and [Updating prices…](../developer/frontend/components/features/live-ticker.md#price-refresh)
+  for the notice
 - 🧑‍💻 For developers: **[Provider Pauses](../developer/backend/assets/architecture.md#provider-pauses)** —
   The boundary every call to an asset provider goes through, and what each caller gets during a
   pause; [Paused Providers](../developer/backend/fx/configuration.md#paused-providers) for the

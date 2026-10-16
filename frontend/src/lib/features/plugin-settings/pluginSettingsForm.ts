@@ -7,6 +7,7 @@
  * an option's `label_key`); the interface never builds a key (plan 03 §4.4). A missing translation falls back to the
  * English text (`translateOr`). Every class and key below is a whole literal (theme-roles rule 6, i18n audit).
  */
+import {ChartColumn, Coins} from 'lucide-svelte';
 import {translateOr, type Translate} from '$lib/utils/core/translateOr';
 import type {PlainValue, PluginSettingsEntry, PluginSettingWriteItem, PluginSettingWriteResult, SettingField, SettingOption, SettingsFamily} from './pluginSettingsApi';
 
@@ -20,6 +21,12 @@ export const FAMILY_ORDER: readonly SettingsFamily[] = ['asset', 'fx'];
 export const FAMILY_TITLE_KEYS: Record<SettingsFamily, string> = {
     asset: 'pluginSettings.families.asset',
     fx: 'pluginSettings.families.fx',
+};
+
+/** The icon before a family's title: the one the family has on the documentation's home («A Modular Ecosystem»). */
+export const FAMILY_ICONS: Record<SettingsFamily, typeof ChartColumn> = {
+    asset: ChartColumn,
+    fx: Coins,
 };
 
 export interface FamilyGroup {
