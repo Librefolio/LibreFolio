@@ -2945,3 +2945,718 @@ Via del coordinatore alle 03:48 del 16/10. Il lotto più delicato: ogni campo ha
 >
 > Ho guardato anche i punti ciechi di G3: classi composte in script, passate a componenti figli o alle props delle
 > colonne.
+
+> **Ingresso**: CP7b-2 è in `dev_release2` (treno 92, merge `d8549c69a`), con le righe 🔒 e 🔄 nel CHANGELOG. Il rosso
+> di `config-package` l'ha curato Z (treno 93). Il ramo è stato portato avanti con fast-forward a `34405dfbb`.
+
+### Le note di X: H-14, H-15, H-16 (2026-10-16, notte) — in corso
+
+Approvate con l'analisi di CP7b. Fino alle 05:25 solo prove leggere, poi pausa fino alle 06:45. A7 aggiunge una riga
+ciascuno in `app_lifespan.py` (il passo `admin-bootstrap` dopo `global-settings`), `config_audit.py` e `instance_block.py`:
+all'aggiornamento di base si tengono entrambe le parti. La cura sta in `/tmp/librefolio-r13-h-xnotes/` (`apply_xnotes.py`,
+provato a secco su copie; ruff e black puliti), da applicare dopo il giro dei rossi.
+
+**Disegno**:
+
+- **H-14**: `derive_key_from(key, purpose, length=32)` in `instance_key.py`, con lo stesso HKDF di `derive_key`, che ora
+  la usa tramite `_derive`. L'ordine dei controlli: scopo e lunghezza (`ValueError`), poi il tipo della chiave
+  (`TypeError`), poi la lunghezza della chiave (`InstanceKeyError`, senza la chiave nel messaggio). Non legge né
+  l'ambiente né la cartella dei dati, e non crea il file della chiave. B legge la chiave del backup con
+  `read_secret_file()`, come il modulo legge la sua. Tre vettori noti, calcolati col `derive_key` di oggi, fissano la
+  derivazione.
+- **H-15**: un modulo nuovo, `platform/plugin_secrets_check.py`:
+  - `check_plugin_secrets(session)` restituisce un `ConfigCheck` `platform.plugin_secrets`: `ok` senza segreti di
+    sistema illeggibili, `error` con `{"count": system}` quando ce ne sono;
+  - `log_plugin_secrets_check()` è il passo d'avvio `plugin-secrets-check`, dopo `global-settings`. Non solleva mai: un
+    errore del controllo diventa un avviso col solo nome della classe;
+  - le chiavi i18n `instance.checks.pluginSecrets.ok` e `.unreadable` (plurale ICU), in 4 lingue.
+- **H-16**: le due frasi di `security.md`, con la doc di H-14 e H-15 (docs-writer, dopo le prove).
+
+**Decisioni notturne, da rivedere**:
+
+- solo il conteggio `system`, anche nel log: è la regola del piano di X («mostra all'admin solo il conteggio di
+  sistema»). Resta un buco: se sono illeggibili solo segreti di utenti, il controllo dice `ok` e all'avvio l'operatore
+  non sa che la chiave è cambiata. Da rivedere con X;
+- nessuna voce nell'interfaccia: la scheda «Sicurezza» non esiste ancora (`config_audit.py` dice «will evaluate»). Il
+  controllo restituisce già un `ConfigCheck`, con le sue chiavi i18n, pronto per il registro di A.
+
+#### Passo 1 — i rossi ✅ (2026-10-16, notte)
+
+> **Note implementazione** (test-author, 66 casi nuovi, ruff e black puliti):
+>
+> - `test_instance_key.py`, sezione (g), da 98 a 151 casi. Tre risposte note, l'equivalenza con `derive_key` (chiave
+>   configurata e generata), la chiave data che vince su quella dell'istanza, nessun file della chiave creato,
+>   l'ambiente e la cartella dei dati mai letti, le sorgenti guaste ignorate, 32 richieste non valide, il `TypeError`, le
+>   chiavi corte, quelle da 32 caratteri;
+> - `test_plugin_secrets_check.py`, nuovo, 11 casi: `ok`, `error` col solo conteggio `system`, il log, le eccezioni
+>   ridotte a un avviso, due casi su un DB SQLite vero. Senza segreti il passo non crea il file della chiave;
+> - `test_app_lifecycle.py`, 2 casi: il passo dopo `global-settings` e prima di `scheduler`, in ordine relativo perché
+>   A7 aggiunge `admin-bootstrap` nello stesso punto; il suo `run()` restituisce un awaitable;
+> - il runner: `services plugin-secrets-check`, `isolation="pure"`.
+>
+> **Prova dei rossi** (05:10–05:12, uno alla volta, `nice`): `plugin-secrets-check` 11 rossi (`ModuleNotFoundError`),
+> `config-instance-key` 53 rossi («derive_key_from is missing»), 98 verdi, `app-lifecycle` 2 rossi (il passo che
+> manca), 42 verdi. Ognuno sulla sua barriera.
+
+#### Passo 2 — la cura ✅ (2026-10-16, notte)
+
+> **Note implementazione**: applicato `apply_xnotes.py`: `instance_key.py` (`derive_key_from`, `_check_purpose_and_length`,
+> `_derive`), `plugin_secrets_check.py` nuovo, il passo in `app_lifespan.py`, le chiavi i18n nelle sorgenti
+> `instance/{en,it,fr,es}.json`. Ruff e black puliti.
+>
+> **Prove** (05:12–05:13): `plugin-secrets-check` 11, `config-instance-key` 151, `app-lifecycle` 44; `i18n check`
+> rigoroso, verde. `config-package`: 694 verdi, compreso il caso del modulo nuovo, e 1 rosso, quello noto di Z2b
+> (`sleep_wake/suspend.py`). È curato nel treno 93, che il mio ramo `34405dfbb` non ha ancora. Porta 6181 libera.
+
+#### Passo 3 — la doc (2026-10-16, notte) — scritta, build dopo le 06:45
+
+> **Note implementazione** (docs-writer, solo inglese, nessun comando):
+>
+> - `developer/architecture/security.md`:
+>   - H-16, l'elenco di `env_secret()`: i sei segreti, `LIBREFOLIO_WAKE_TOKEN` compreso, poi «ogni variabile delle
+>     impostazioni dei plugin». Due frasi su cosa succede quando il token del risveglio o un `_FILE` di un plugin non
+>     si possono usare;
+>   - `derive_key_from()`: una riga nella tabella e un paragrafo sui due helper comuni e sull'uso previsto per B;
+>   - H-16, la «Known limitation» riscritta: ora un cambio di chiave si vede, grazie al `key_id` e al passo d'avvio;
+>   - la riga `i18n_key`, che diceva 13 messaggi, ora ne conta 15;
+>   - la sottosezione nuova `#plugin-secrets-check`.
+> - `developer/architecture/patterns/plugin_settings.md`: «No startup check calls it yet» sostituita, più una riga nella
+>   tabella dei test.
+> - `developer/architecture/overview.md`: il passo 12 `plugin-secrets-check`, i seguenti rinumerati fino a 16.
+> - `admin/configuration.en.md`: una riga ❌ nella tabella «Startup Checks» e una frase in «Saved Secrets and the
+>   Instance Key». È il debito di traduzione (it/fr/es), pagina non marcata.
+>
+> Verificati da me: `require_wake_token` e `wake_unavailable` (`api/v1/system/wake.py`), le ancore `#secrets`,
+> `#environment`, `#startup-checks`, `#plugin-secrets`.
+>
+> **⚠️ Fuori pista**:
+>
+> - il docs-writer ha lanciato `python3` due volte, una per leggere `instance/en.json` e una per spostare una riga della
+>   tabella. È roba leggera, ma la regola della pausa diceva nessun comando; `git diff --check` pulito;
+> - i messaggi i18n `unreadable` rimandavano a «Plugin settings», il titolo della scheda. Li ho corretti col percorso
+>   della scheda nello stile della UI: «Settings → Plugins», «Impostazioni → Plugin», «Paramètres → Plugins»,
+>   «Configuración → Plugins»;
+> - dalla doc: `check_plugin_secrets()` può sollevare su un errore del DB, e la cattura solo il passo d'avvio. Quando A
+>   la userà nella scheda «Sicurezza», dovrà gestirlo.
+>
+> **Da fare dopo le 06:45**: `i18n check` (dopo il ritocco dei messaggi), `mkdocs build --strict`, `check-links`,
+> `translate-validate --file admin/configuration.en.md`, poi lo slot pesante di `all-backend` (il passo nuovo gira a
+> ogni avvio del server di prova).
+
+> **Checkpoint intermedio**: commit `cb37c79cf` (feat), `3b95550e1` (doc), `dee4dc311` (diario); merge di
+> `dev_release2` `72e66d1a6` (il treno 93 con la cura di Z e il secondo lotto di T), pulito, HEAD `af24a61bb`. Restano
+> le prove leggere sulla revisione combinata e `all-backend`, dopo il «blocco finito» dei colori.
+
+### La card del backup nella pagina di blocco (2026-10-16, mattina) — preparazione fuori dal worktree
+
+Assegnato dal coordinatore dopo le note di X («then the backup card on the block page»). B ha già consegnato il campo
+`backup_available` di `GET /system/block` (vero per gli amministratori, decisione 12), e le rotte del backup completo
+sono in `ALLOWED_WHEN_BLOCKED`. Manca il bottone: la doc admin lo dice due volte, «the block page has no button for it
+yet».
+
+**Disegno**:
+
+- `InstanceBlockedPage.svelte` legge `backup_available` dalla risposta e, quando è `true`, mostra la
+  `BackupDownloadCard` di B, che è autonoma per scelta. La decisione è del server, non del ruolo letto nel client.
+- La card sta in un riquadro `bg-lf-card` (`instance-blocked-backup`) sotto l'avviso, **fuori** dalla sezione
+  `role="alert"`: un lettore di schermo annuncia il blocco, non tutta la card. Le due cose stanno in un contenitore
+  `max-w-lg`. Solo ruoli, nessuna classe di tavolozza.
+- Nessun testo nuovo: la card ha già titolo e avvertenze. Quello per gli utenti dice già «chiedi un backup
+  all'amministratore».
+
+**Superfici**: il componente; il suo Vitest con uno stub della card (`__tests__/harness/BackupDownloadCardStub.svelte`);
+la doc `admin/hosting_providers.en.md` («What Users See», «What Still Answers»), `developer/architecture/security.md`
+(la tabella delle rotte ammesse) e `developer/frontend/state/app-state.md` (la pagina di blocco e i suoi test id).
+Nessun E2E della pagina di blocco esiste: il Vitest e i test API di B coprono il resto.
+
+**Stato**: la patch `/tmp/librefolio-r13-h-blockcard/apply_blockcard.py` è provata a secco; il test-author scrive i rossi
+Vitest in `/tmp`. Si applica dopo `all-backend` delle note di X: un cambio delle sorgenti del frontend farebbe
+ricostruire il frontend al server di prova.
+
+> **⚠️ Fuori pista (note di X, dopo il checkpoint intermedio)**: la card di B dice «The logs and the instance key are not
+> included». L'archivio del backup dell'istanza non contiene `secrets/instance.key`, quindi tre frasi della mia doc
+> rimandavano a un posto dove la chiave non c'è. Corrette, non ancora committate:
+>
+> - la riga ❌ di «Startup Checks» in `admin/configuration.en.md`: ora parla della propria copia di
+>   `secrets/instance.key`, salvata con la cartella dei dati come dice «The Instance Key»;
+> - due paragrafi di `developer/architecture/security.md`: il file perso, e l'uso previsto di `derive_key_from()`. La
+>   vecchia chiave viene dalla copia dell'amministratore o dal vecchio `LIBREFOLIO_INSTANCE_KEY`;
+> - la docstring di `derive_key_from()`, solo il testo.
+>
+> **Rossi della card** (test-author, in `/tmp/librefolio-r13-h-blockcard/`, non applicati, niente lanciato):
+> `InstanceBlockedPage.test.ts` completo, con 7 casi nuovi (11 test con le righe di `it.each`), e lo stub
+> `harness/BackupDownloadCardStub.svelte`. I casi negativi montano prima la stessa pagina con `backup_available: true`
+> come controllo, così oggi sono rossi per la ragione giusta.
+>
+> **Rifiniture dalla sua revisione**, nella patch:
+>
+> - il riquadro è un `<section aria-labelledby>` con un `<h2>` (`instance.block.backupTitle`, 4 lingue), così i titoli
+>   vanno h1 → h2 → h3 della card di B e la regione ha un nome;
+> - un `ToastContainer` nella pagina di blocco: il layout lo monta solo attorno all'app, quindi i toast della card
+>   (errori, «backup parziale») non si vedevano. Sta nel mio componente, senza toccare il layout condiviso.
+>
+> **Accettati come sono**: la card dentro una card segue i ruoli (un `bg-lf-panel` dentro un `bg-lf-card`, come nella
+> scheda Backup); se `GET /system/block` fallisce, la card torna solo ricaricando la pagina; la descrizione segue il
+> ruolo nel client, la card il campo del server.
+
+#### Card del backup — passo 1, applicata (2026-10-16, mattina) — prove dopo il «blocco finito»
+
+> Il coordinatore (05:47) ha dato il via a scrivere durante la pausa. B3 (`887a24123`) non tocca il frontend: la
+> `BackupDownloadCard` resta quella di dev, e il coordinatore ricontrolla all'ingresso di B5b, il lotto UI di B.
+>
+> **Note implementazione**:
+>
+> - applicato `apply_blockcard.py`: `InstanceBlockedPage.svelte` (`backupAvailable`, la `<section>` con `<h2>`, il
+>   `ToastContainer`) e `instance.block.backupTitle` nelle 4 sorgenti i18n di `instance`;
+> - copiati il Vitest dei rossi e lo stub `__tests__/harness/BackupDownloadCardStub.svelte`;
+> - in corso, solo scrittura: il test-author aggiunge i casi per la regione con nome e per i toast; il docs-writer
+>   aggiorna `hosting_providers`, `security.md` e `app-state.md`.
+>
+> **Prove da fare**, una alla volta, dopo il «blocco finito»: `prettier` sul componente, `front check`, il Vitest del
+> file (rosso sul componente di HEAD per ragionamento, verde sul nuovo), `i18n check`, `mkdocs build`, `check-links`;
+> poi `all-backend` insieme alle note di X, che prende anche la ricostruzione del frontend.
+
+#### Card del backup — passo 2, rossi completati e doc (2026-10-16, mattina) — prove dopo il «blocco finito»
+
+> **Note implementazione**:
+>
+> - test-author: in `InstanceBlockedPage.test.ts` due casi in più, tre test con le righe di `it.each`. La sezione ha
+>   per nome il suo `<h2>`, l'unico della pagina, dopo l'`<h1>`. Un toast spinto dallo store mentre la pagina è montata
+>   si vede, per un amministratore con la card e per un utente senza. Ogni test toglie il suo toast con
+>   `onTestFinished`. Su HEAD falliscono sull'`<h2>` che manca e sul toast che non compare, per ragionamento: niente
+>   lanciato;
+> - docs-writer, senza debito di traduzione:
+>   - `admin/hosting_providers.en.md`: l'introduzione del blocco, «What Users See» (la card e la copia di
+>     `secrets/instance.key`), «What Still Answers»;
+>   - `developer/architecture/security.md`: la tabella delle rotte ammesse e `backup_available`;
+>   - `developer/frontend/state/app-state.md`: la card, il `ToastContainer`, il link «Manage subscription» che
+>     mancava, tutti e sei i test id;
+>   - `developer/api/index.md`: il riassunto di `/system/block`;
+> - corretto il commento troncato sopra `<ToastContainer />`.
+>
+> **⚠️ Fuori pista**:
+>
+> - due errori nel mio brief al docs-writer, corretti da lui. Il selettore del Vitest è `front-utility component-unit`,
+>   non `core-unit`. Un link a `configuration.md#instance-key` da una pagina solo inglese avrebbe rotto la build
+>   rigorosa delle lingue tradotte, perché `configuration.{it,fr,es}.md` non hanno quell'ancora (decisione
+>   `docs-anchors-from-the-render`): ha usato il nome della sezione;
+> - il test-author ha visto che `ToastContainer` non ha regione live: nessun toast dell'app arriva ai lettori di schermo.
+>   È fuori perimetro: **H-18** nel backlog.
+
+### H-17 — un solo posto per i default del profilo: analisi (2026-10-16, mattina) — sola lettura
+
+Richiesta del coordinatore (06:00). La porta lui a B.
+
+**Oggi**: `backup_max_upload_mb()` (`config/backup.py`, di B) legge `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` da `os.environ` a
+ogni chiamata.
+
+- Vuoto o solo spazi equivale a non impostato: `0` in self-hosted, `MANAGED_MAX_UPLOAD_MB` (500) in managed.
+- Solo cifre ASCII, con spazi attorno ammessi; tutto il resto solleva `BackupConfigError`
+  (`BACKUP_MAX_UPLOAD_MB_INVALID`).
+- Chi la usa: solo `_upload_limit()` di `api/v1/backup/restore.py`. Un valore illeggibile scrive un errore nel log e
+  fa rispondere 503 `backup_upload_unavailable` al solo upload del ripristino: il resto dell'istanza va avanti.
+- Test (`api backup-restore`, sezione (e)): 10 casi sui valori validi e sui due profili, 8 valori illeggibili (segno
+  meno, decimale, lettere, cifra araba, apice, segno più, esponente, esadecimale), più un caso che fissa
+  costante e variabile.
+- Doc: la tabella di `#restore-upload-limit` in `admin/hosting_providers.en.md` («Not set, or empty»), la riga di
+  `admin/configuration.en.md` (tradotta) e il mio punto in `developer/architecture/settings.md`, che la cita come
+  esempio del secondo meccanismo.
+
+**Opzione 1 — farne un campo di `Settings`** e mettere 500 in `PROFILE_DEFAULTS["managed"]`. Sconsigliata:
+
+- vuoto e solo spazi diventerebbero un errore di validazione, cioè il server non parte. Per tenere «vuoto = non
+  impostato» servirebbe un passo `mode="before"` che tolga i valori vuoti dall'input, perché il campo resti fuori da
+  `model_fields_set`: un meccanismo in più;
+- un valore illeggibile fermerebbe l'avvio dell'istanza, invece di un 503 sul solo upload. B ha scelto apposta il
+  contrario, e l'ha documentato;
+- il parsing degli interi di pydantic non è la regola «solo cifre ASCII» di B: gli 8 casi illeggibili andrebbero
+  rifissati, e qualcuno potrebbe passare;
+- tocca `restore.py`, dove B3 aggiunge 118 righe, la sezione (e) dei test di B, due pagine di doc e il debito di
+  traduzione di `configuration`.
+
+**Opzione 2 — consigliata: una seconda tabella accanto a `PROFILE_DEFAULTS`**, per le variabili che un modulo di
+sezione legge dall'ambiente. Per esempio `ENVIRONMENT_PROFILE_DEFAULTS = {"selfhosted": {}, "managed":
+{"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}}`, con `profile_default(name, fallback)` in `config/__init__.py`.
+
+- **Per B**: in `backup_max_upload_mb()`, `if not raw: return profile_default(MAX_UPLOAD_VARIABLE, 0)` e via
+  `MANAGED_MAX_UPLOAD_MB`. Oppure resta come alias del valore della tabella: decide B. Nella sezione (e) cambia solo il
+  caso che fissa la costante, che legge la tabella. Il comportamento è identico: vuoto = non impostato, 503 su un valore
+  illeggibile.
+- **Per H**: la tabella e `profile_default()`. In `test_profile_defaults.py` le stesse guardie della prima tabella:
+  una voce per profilo, ogni chiave una variabile letta sotto `backend/app/config/` e documentata in `.env.example`, il
+  valore un `int` diverso dal ripiego, un caso «self-hosted invariato» parametrizzato su ogni chiave. Poi il punto di
+  `settings.md`: un solo posto per i default del profilo, due tabelle.
+- **Doc admin**: nessun cambiamento e nessun debito di traduzione, perché il comportamento non cambia.
+- **Peso**: piccolo. Due righe nel file di B, una tabella, un helper e una decina di casi da me, un paragrafo di doc.
+
+**Quando**: B3 (`5f1543e81`, `2c2c8fc3e`) non tocca `config/backup.py`. Tocca però `restore.py` e
+`test_backup_restore.py`, che l'opzione 2 non tocca o tocca appena (il caso della costante). Quindi:
+
+- **dopo l'ingresso di B3** basta per l'opzione 2, se B5 non tocca `config/backup.py`; lo verifica il coordinatore sul
+  ramo di B;
+- non serve aspettare B5 per il meccanismo. Il mio lotto (tabella, helper, test, doc) si può fare prima, e le due righe
+  di B arrivano dopo, scritte da B o da me col suo OK.
+
+### H-17 — la seconda tabella dei default del profilo (2026-10-16, mattina) — in corso, solo scrittura
+
+**Via del coordinatore** (06:03): opzione 2 approvata, come lotto a parte. La mia parte: la tabella, `profile_default()`,
+le guardie in `test_profile_defaults.py`, `settings.md`. Le due righe di `backup_max_upload_mb()` le scrive B, dopo
+l'ingresso di B3.
+
+**Disegno** (cura in `/tmp/librefolio-r13-h-h17/apply_h17.py`, provata a secco su una copia):
+
+- in `config/__init__.py`, sotto `PROFILE_DEFAULTS`: `ENVIRONMENT_PROFILE_DEFAULTS = {"selfhosted": {}, "managed":
+  {"LIBREFOLIO_BACKUP_MAX_UPLOAD_MB": 500}}`;
+- `profile_default[T](name, fallback) -> T`, subito dopo `get_settings()`. Legge il profilo a ogni chiamata e
+  restituisce il valore della tabella, oppure il ripiego del codice. Il modulo di sezione la chiama solo con la variabile
+  non impostata, e tiene le sue regole per il vuoto e l'illeggibile;
+- la docstring del modulo nomina le due tabelle;
+- in attesa delle righe di B, il valore 500 vive in due posti, uguali: la tabella e `MANAGED_MAX_UPLOAD_MB`. La doc non
+  dice che `backup_max_upload_mb()` legge la tabella finché non lo fa.
+
+**In corso, solo scrittura**: il test-author scrive i rossi nella sezione nuova di `test_profile_defaults.py`; il
+docs-writer aggiorna il punto «Profile defaults» di `settings.md`. Al «blocco finito»: il giro dei rossi, la cura, ruff e
+black, il giro dei verdi.
+
+#### H-17 — passo 1, rossi e doc scritti (2026-10-16, mattina) — niente lanciato
+
+> **Note implementazione**:
+>
+> - test-author: una sezione nuova, (f), in `test_profile_defaults.py`, che passa da 37 a 52 test. Undici funzioni,
+>   15 test:
+>   - la tabella: una voce per profilo, `selfhosted` vuoto, `managed` uguale a `ENVIRONMENT_MANAGED_DEFAULTS` con i
+>     tipi esatti (`exactly()`: `same()` accetterebbe `500.0`), nessun campo di `Settings` fra le chiavi;
+>   - ogni chiave letta come costante stringa (AST) da un modulo di sezione, e documentata in `.env.example` con il
+>     parser di `test_env_example.py`;
+>   - `profile_default()`: il ripiego stesso (`is`) in self-hosted, il valore della tabella in managed, `MANAGED` e
+>     ` Managed `, il profilo letto a ogni chiamata.
+>
+>   Le barriere: «ENVIRONMENT_PROFILE_DEFAULTS is missing» (6 test) e «profile_default is missing» (9), cercati con
+>   `getattr` mentre il test gira, così i 37 casi esistenti restano uguali;
+> - docs-writer: in `settings.md` il punto «Profile defaults» rimanda al punto nuovo «Profile defaults of the section
+>   modules' variables» (la tabella, l'helper, le guardie, come si aggiunge una voce). Non dice che
+>   `backup_max_upload_mb()` legge la tabella;
+> - runner: la descrizione di `services profile-defaults` nomina H-17.
+>
+> **Dopo il «blocco finito»**: `services profile-defaults` sul codice di oggi (attesi 15 rossi, 37 verdi), poi
+> `apply_h17.py`, ruff e black, `profile-defaults` verde (52), `config-package` e `config-env-example`.
+
+#### Prove leggere delle note di X e della card, sulla revisione combinata ✅ (2026-10-16, mattina)
+
+> Dopo il «blocco finito» (06:48), HEAD `31089e96f`, una alla volta, `nice`, carico sotto 70 (06:48–07:08):
+>
+> - card: `prettier --check` pulito, cancello dei colori pulito. Il Vitest di `InstanceBlockedPage.test.ts` dà 14 rossi
+>   sul componente di prima (`af24a61bb`, rimesso al suo posto e verificato identico a HEAD) e 36 verdi sul nuovo;
+> - `front check`: al primo giro 4 errori, tutti in `PasswordStrength.svelte` di A (`password_rules` assente da
+>   `AccountsInstanceConfig`). Era il client generato vecchio dopo il merge della base: `api sync`, poi `front check`
+>   0/0;
+> - `i18n check` rigoroso, verde (4753 chiavi);
+> - note di X: `plugin-secrets-check` 11, `config-instance-key` 151, `app-lifecycle` 44, `config-package` 695 (ora
+>   verde: dentro c'è la cura di Z del treno 93), `config-audit` 90;
+> - doc: `mkdocs build` rigoroso senza avvisi, `check-links` 97. `translate-validate --file admin/configuration.en.md`:
+>   192 errori e 501 avvisi, il debito noto (174 e 474 a CP7b-2), più le righe nuove di questa notte e di altri;
+> - porta 6181 libera.
+
+#### H-17 — passo 2, rossi, cura e verdi ✅ (2026-10-16, mattina)
+
+> **Prove**: `services profile-defaults` sul codice di prima: 15 rossi (6 «ENVIRONMENT_PROFILE_DEFAULTS is missing», 9
+> «profile_default is missing»), 37 verdi. Poi `apply_h17.py`, ruff e black puliti, e i verdi: `profile-defaults` 52,
+> `config-package` 695, `config-env-example` 38. La doc di `settings.md` era già nel `mkdocs build` delle 06:59.
+
+### TS1 — i test speculari: numeri aggiornati e proposta (2026-10-16, mattina) — sola lettura
+
+Voce 7 di H nel piano generale, decisione aperta n. 13: si decide a riordino del backend finito, con i numeri in mano.
+Richiesta del coordinatore (07:10): l'analisi del prossimo elemento, in sola lettura.
+
+**Numeri di oggi** (HEAD `7caa98c20`; tra parentesi quelli di §13, del 14/10):
+
+- 358 file di test (266): `test_api` 70 (58), `test_services` 200 (141), `test_utilities` 47 (34), `test_db` 16 (10),
+  `test_schemas` 12 (11), `test_external` 7, `test_e2e` 2;
+- il runner codifica 327 percorsi di test distinti (236);
+- l'app ha 322 moduli di servizio in 22 pacchetti, più qualche modulo sciolto in `services/`;
+- uno specchio esiste già, solo per la finanza: `test_services/test_financial/` (27 file, più `test_portfolio_engine/`
+  con 15) e `test_services/test_financial_math/` (7).
+
+**Cosa costerebbe lo specchio** (`test_services/<pacchetto>/` come `backend/app/services/<pacchetto>/`):
+
+- circa 150 spostamenti da `test_services/`, e la stessa cosa per `test_api/` (70) se lo specchio si estende alle rotte;
+- riscrivere le voci del runner, fino a 327 stringhe (una superficie condivisa), più la doc dei test,
+  `backend-testing.instructions.md`, la skill `testing-backend` e le istruzioni del `test-author`;
+- un conflitto per ogni sessione aperta. Oggi A7, B3/B5, X CP13 e FE5c, E5b, Z, W, J e Y aggiungono o cambiano test
+  in queste cartelle: uno spostamento in mezzo ai loro lotti vuol dire file ricreati al posto vecchio e voci del runner
+  da rifare a ogni treno;
+- nessun guadagno di comportamento: il runner elenca i percorsi uno per uno, pytest non cambia nulla. Si guadagna solo
+  nel trovare un test accanto al suo modulo.
+
+**Proposta**:
+
+- **nella 1.3, no**. Restano la struttura piatta e la regola `test_<modulo>.py`. Niente sottocartelle nuove: le due
+  della finanza restano dove sono, senza estendere lo schema, così non ci sono due posti in cui cercare;
+- **dopo il tag 1.3.0**, se il developer vuole la vicinanza: un lotto solo, scritto da uno script, in una finestra senza
+  sessioni parallele, con le regole P2. Prima la rinomina (`git mv` più le voci del runner riscritte dallo script), poi
+  il resto; grep dei vecchi percorsi a zero, `all-backend`. Stima: una sessione di poche ore;
+- **decisione del developer** (n. 13). Il mio default è il no nella 1.3.
+
+> **Esito**: il coordinatore porta TS1 al developer come **P23**, con la mia proposta.
+
+### Lotto «b-doc-notes»: B-4 e B-5 (2026-10-16, mattina) — in corso
+
+Via del coordinatore (07:13): due lotti di sola scrittura in commit separati. Questo e poi H-1, H-4, H-6, H-9; prove
+leggere come al solito. Le due voci erano di B (piano 07, §13 B6a) e il coordinatore le ha passate ad H il 15/10.
+
+> **Note implementazione**:
+>
+> - io: il commento in testa a `docker-compose.yml` mette `backup` fra i comandi che funzionano nell'immagine, con
+>   l'esempio `./dev.py docker exec backup create`. Nessun test ne fissa il testo. Il file è di B dopo CP7a, ma la voce
+>   l'ha assegnata il coordinatore;
+> - io: l'ancora `{: #what-to-back-up }` sul titolo «✅ What to Back Up» di `admin/filesystem` nelle 4 lingue
+>   (`en`, `it`, `fr`, `es`). I titoli tradotti avevano slug diversi;
+> - in corso, docs-writer, solo inglese:
+>   - `docker_advanced.en.md#docker-exec`: `backup`, più un rimando a `backup create` nella sezione del backup manuale;
+>   - `admin/index.en.md`: la riga della CLI;
+>   - `filesystem.en.md`: il rimando alla CLI, la nota su `backups/`, `backups/` nell'albero;
+>   - `cli_tools.en.md`: il link verso `filesystem.md#what-to-back-up`.
+
+> - docs-writer, fatto: le quattro pagine inglesi come sopra, più l'avviso sui permessi di `filesystem.en.md`, che ora
+>   nomina anche `backups/` e `.restore/`. `ensure_private_dir` li crea `0700`, gli archivi sono `0600`: con Docker e
+>   un altro utente sull'host, copiare o cancellare un archivio dà `Permission denied`, e si usa `sudo cp -a` o
+>   `sudo rm`. Ogni fatto è verificato sul codice.
+>
+> **Prove leggere** (07:28–07:31): `mkdocs build` rigoroso senza avvisi, `check-links` 97. `translate-validate`:
+> `filesystem` 27 errori, `docker_advanced` 42, `index` 15, debito già esistente compreso. Annotato in H-5, con l'ordine
+> di traduzione: insieme a B-7 o dopo.
+
+### Lotto H-1, H-4, H-6, H-9 (2026-10-16, mattina) — in corso
+
+> **Note implementazione**:
+>
+> - **H-1** ✅ (io): corrette 12 pagine vive della devWiki, con i percorsi di oggi:
+>   - `services/platform/scheduler/`;
+>   - `services/files/static_uploads.py`;
+>   - `config/__init__.py`;
+>   - `api/v1/system/connection.py` per l'indirizzo di F-102;
+>   - `api/v1/system/info.py` per i tre campi di `docker-system-info-missing-deps`;
+>   - la riga «(planned) … (not yet created)» di `domains/scheduler.md`, ora vera;
+>   - l'albero di `entities/market-data-scheduler.md`.
+>
+>   Restano come sono, perché raccontano lo stato di allora: le pagine `sources/` (`phase00-brim-danske-bank`,
+>   `r2-parallel-features-pwa-borsa-fx`), `features/F-078.md:34` e `decisions/port-6040-scheme.md:34` («were
+>   updated»).
+>
+>   `check_source_paths.py`: nessun percorso nuovo che manchi. I 5 segnalati sono cartelle generate (coverage, output
+>   delle sonde) assenti in un worktree nuovo, ed esistevano già prima;
+> - **H-4** (cura in `/tmp/librefolio-r13-h-hsmall/apply_h4_h9.py`, provata a secco, ruff e black puliti). In Python
+>   3.13 `Path.exists()` ignora solo ENOENT, ENOTDIR, EBADF ed ELOOP (`pathlib/_abc.py`), quindi un EACCES esce. Con
+>   `sqlite/` senza attraversamento, `rglob` lo salta in silenzio e poi `nearest_existing(sqlite/app.db)` solleva. La
+>   cura: un `OSError` diventa `ValueError("Cannot verify test data path: <relativo> (<strerror>)")` nel ciclo dei
+>   percorsi gestiti, e `ValueError("Cannot verify the test data directory: …")` nel controllo degli indicatori
+>   degli antenati. Resta fail-closed;
+> - **H-9** (stessa patch): `handler.close()` su ogni gestore tolto. `pytest.ini` non ha un `log_file`, quindi chiudere
+>   anche i gestori di pytest non perde niente: un `FileHandler` chiuso in modo `w` non si riapre, e uno `StreamHandler`
+>   non chiude il suo stream;
+> - **H-6**: in corso, test-author, insieme ai rossi di H-4 e H-9.
+
+> **Ingresso del primo lotto**: `b-doc-notes` committato (`d7eb9c5f3`, diario `881bd20c0`), HEAD `881bd20c0`.
+
+#### Lotto H-1, H-4, H-6, H-9 — rossi, cura, verdi ✅ (2026-10-16, mattina)
+
+> **Note implementazione** (test-author, niente lanciato da lui):
+>
+> - **H-4**, in `test_runtime_isolation.py`, 3 test. `sqlite/` e `secrets/` con modo 000 (dentro, `app.db` e
+>   `instance.key`), più la radice dei dati di test con modo 000, per il controllo degli indicatori. Si aspettano un
+>   `ValueError` con il prefisso e il percorso, e come causa un `PermissionError`. Saltati da root o su Windows; il modo
+>   viene ripristinato in un `finally`;
+> - **H-6**, in `AboutTab.test.ts`: i due casi d'assenza ora usano `/settings\.assetProviders/` e i loro gemelli per gli
+>   FX e gli import, cinque controlli in tutto, ciascuno con un controllo positivo prima. L'intestazione è
+>   «etichetta (n)», quindi il testo esatto non trovava mai nulla. Ora un `{#if assetProviders}` sbagliato li farebbe
+>   diventare rossi;
+> - **H-9**, sezione (e) di `test_logging_access_filter.py`, 2 test: dopo una seconda chiamata il file di log della
+>   prima è chiuso, e un `FileHandler` trovato sulla radice viene chiuso. I file stanno sotto `tmp_path`;
+> - io: la descrizione e il commento di `logging-access-filter` nel runner (i file di log della sezione (e) stanno sotto
+>   `tmp_path`; H-9).
+>
+> **Prove**, una alla volta, `nice`:
+>
+> - rossi (07:41–07:42): `utils runtime-isolation` 3 rossi su 200 («a raw PermissionError escape instead of refusing
+>   with a ValueError»); `services logging-access-filter` 2 rossi su 98 (il gestore resta aperto); Vitest `AboutTab` 38
+>   verdi, come deve essere per una riparazione;
+> - cura applicata (`apply_h4_h9.py`); ruff, black e prettier puliti;
+> - verdi (07:45–07:51): `runtime-isolation` 200, `logging-access-filter` 98, `AboutTab` 38, `config-instance-key` 151,
+>   `secret-masking` 68, `config-misc` 12, `config-package` 695, `utils dev-cli-db-path` 15. Porta 6181 libera.
+>
+> **⚠️ Fuori pista**:
+>
+> - durante i verdi il carico è salito fino a 137, per le corsie degli altri; i miei risultati sono comunque verdi. Dalle
+>   07:47 la soglia per le prove leggere è **sotto 50**, con attese di 60 s: aggiornati i miei script;
+> - effetto di H-9 notato dal test-author: le chiamate a `configure_logging()` in (d) e in `test_secret_masking.py`
+>   non svuotano prima la radice, quindi chiudono anche i gestori di pytest. Oggi non fa danno, perché `pytest.ini` non ha
+>   `log_file`; con `pytest --log-file` quel file smetterebbe di ricevere righe dopo il primo test così.
+
+> **Ingresso del lotto 2**: committato (`60f41e18e` fix, `c1ecdc389` test, `1235dd414` wiki, `811ccc4bf` diario), HEAD
+> `811ccc4bf`. `all-backend` per tutti i lotti nello slot 1 dopo A7a, verso le 09:30.
+
+### H-3, il resto: niente chiave nuova in silenzio quando il DB ha segreti — analisi (2026-10-16, mattina) — sola lettura
+
+**Oggi** (HEAD `811ccc4bf`):
+
+- chi chiama `derive_key()`:
+  - le impostazioni dei plugin (`settings_subkey()` e `fingerprint_subkey()` nel resolver, e `plugin_secrets_key_status`
+    di X), con le sole righe cifrate dell'istanza, ognuna col suo `key_id`;
+  - il probe dell'indirizzo di A, che non salva nulla. `verify_probe_nonce` tollera una chiave inutilizzabile e
+    risponde `False`; `issue_probe_nonce` no;
+- gli archivi di B non contengono la chiave (`ManifestInstanceKey.included`, falso). Solo un archivio protetto da password
+  potrà contenerla (B4);
+- lo scenario: dati ripristinati senza `secrets/`, oppure il file della chiave cancellato. Da H-15 la prima derivazione
+  la fa il passo `plugin-secrets-check`, perché la funzione di X deriva quando ci sono righe. La chiave nuova nasce
+  quindi all'avvio, e il log ha l'errore col conteggio;
+- il rischio che resta: se l'amministratore, prima di accorgersene, inserisce di nuovo dei segreti, questi vengono cifrati
+  con la chiave nuova. Rimettere poi la vecchia chiave rende illeggibili proprio quelli. Lo avvisa solo il log.
+
+**Opzione A, la cura vera: nessuna chiave nuova in silenzio se il DB ha segreti.**
+
+- In `plugin-secrets-check`: se `instance_key_status().source == "not_created"` e il DB ha righe con un segreto
+  (contate senza derivare), il passo non chiama la funzione di X. Scrive un errore: «il file della chiave manca, ma N
+  segreti salvati sono cifrati con una chiave: rimetti `secrets/instance.key`, oppure `./dev.py instance-key new` per
+  ripartire con una chiave nuova, e quei segreti vanno inseriti di nuovo». Poi chiama
+  `instance_key.forbid_generation(reason)`: per il resto del processo `_instance_key()` solleva `InstanceKeyError`
+  invece di creare il file.
+- Effetti: le impostazioni dei plugin si comportano come con una chiave inutilizzabile, come X ha già documentato
+  (`unreadable` nel catalogo, chiamate senza segreti, scritture con un segreto a 503, un errore nel log).
+  `POST /users/address-probe` di A darebbe 500: è un buco che c'è già (H-19). A dovrebbe rispondere 503.
+- Il self-hosted resta com'è: cambia solo uno stato già guasto. Un'installazione nuova genera la chiave al primo uso,
+  come oggi. Una chiave configurata non può sparire in silenzio: se è inutilizzabile, l'avvio si ferma.
+- Superfici: `instance_key.py` (il divieto), `plugin_secrets_check.py` (il ramo), un comando CLI `instance-key new`
+  (`dev.py`, superficie condivisa), la doc admin (`configuration`, «The Instance Key» e «Startup Checks», con debito di
+  traduzione) e `security.md`, i test (il divieto, la CLI, l'installazione nuova invariata). Peso: un lotto
+  piccolo-medio.
+
+**Opzione B, solo doc**: si tiene H-15 com'è e si scrive l'ordine giusto, cioè rimettere il file della chiave **prima**
+di inserire di nuovo i segreti, nella riga ❌ di «Startup Checks» e in «The Instance Key». Rischio zero.
+
+**Proposta**: la B adesso, la A come lotto se il developer la vuole nella 1.3, insieme alla piccola correzione di A
+(H-19). Per il cloud cambia poco: le istanze gestite hanno una chiave configurata, e un cambio di chiave lo segnala già
+H-15. È decisione del developer, perché cambia il comportamento di uno stato guasto e aggiunge un comando.
+
+> **Esito**: il coordinatore vuole **l'opzione B subito** (solo doc, commit separato). L'opzione A va nella lista del
+> developer come **P24**; H-19 passa ad A, per il suo backlog, prima di un'eventuale A.
+
+#### H-3, opzione B: l'ordine giusto nella doc ✅ (2026-10-16, mattina)
+
+> **Note implementazione**:
+>
+> - docs-writer, verificando sul codice: salvare un segreto riscrive `secret_ciphertext` e `key_id` della riga
+>   (`plugin_settings/service.py`). In `admin/configuration.en.md`:
+>   - il punto dell'avviso di «🗝️ The Instance Key»;
+>   - la riga ❌ `platform.plugin_secrets` di «Startup Checks», ora in ordine: prima la chiave vecchia, a LibreFolio
+>     fermo, e solo senza una copia i segreti inseriti di nuovo;
+>   - «Saved Secrets and the Instance Key», che diceva «enter them again» senza condizioni.
+>
+>   In `developer/architecture/security.md` una frase nel paragrafo «A lost key file»;
+> - io: il punto ⛔ di `admin/filesystem.en.md` («Never edit, replace or delete `instance.key`») contraddiceva
+>   l'ordine nuovo, cioè rimettere la copia al posto della chiave generata. Ora dice «the `instance.key` in use», e
+>   rimette la copia a LibreFolio fermo, prima di inserire di nuovo un segreto.
+>
+> **Prove** (08:03): `mkdocs build` rigoroso senza avvisi, `check-links` 97. Debito di traduzione: `configuration`
+> (tre punti) e `filesystem` (un punto), senza timbro.
+>
+> **Da girare a X**: dicono ancora «enter it again» senza l'ordine il suggerimento della UI
+> (`frontend/src/lib/i18n/pluginSettings/en.json:31`) e `user/settings/plugins.en.md:117`.
+
+> **Ingresso di H-3 B**: committato (`481a93f1c`, diario `498c5d623`).
+
+### `all-backend` di tutti i lotti aperti (2026-10-16, mattina) — in corso
+
+Lotti: note di X, card del backup, H-17, `b-doc-notes`, H-1/4/6/9, H-3 B. Il coordinatore ha aggiornato la base con il
+dev del mattino (`d5c3c3ae3`: E5b, Y, J CP-10a, W, i lotti di T), senza conflitti: HEAD `9ddecbde0`, slot 1.
+
+> **⚠️ Fuori pista — lo stop e il riavvio**:
+>
+> - il primo giro (dalle 08:34, `--workers 2`, `nice`) ha ricostruito il frontend in debug e il sito MkDocs, cambiati
+>   con la base. Alle 08:46:39 si è fermato per un SIGINT arrivato da fuori (uscita 130, `KeyboardInterrupt` nel
+>   runner), prima che partisse un solo test: nessun risultato. Porta 6181 libera, verificato dallo script;
+> - alle 08:49 lo stop chiesto dal developer: nessun comando, worktree lasciato com'era (pulito);
+> - alle 10:03 la macchina si è riavviata, e macOS svuota `/tmp` al riavvio. Sono spariti gli script, le patch già
+>   applicate, i log della notte e la cartella dati della corsia, `/tmp/librefolio-r13-h`. Non si perde niente: il
+>   lavoro è committato e le prove sono già in questo piano. Il runner ricrea la cartella da sé, come alla prima prova
+>   del 14/10;
+> - alle 10:32 il coordinatore riprende. Dopo il controllo (HEAD `9ddecbde0`, worktree pulito, porta libera, nessun
+>   processo rimasto della corsia), il secondo giro parte alle 10:33 con `--fresh-run`. Script e log ora sono in
+>   `/tmp/librefolio-r13-h-runs/`.
+
+> **Esito del secondo giro** (10:33–11:11, HEAD `9ddecbde0`, `--workers 2`, `nice`): **18 266 passati, 7 saltati, 5
+> falliti**; 5 categorie su 7 verdi. Log nella cartella della sessione (`files/runs/allbackend-1033/`). Porta 6181
+> libera.
+>
+> **Triage dei 5 rossi** (skill `test-triage`, prima le prove e poi i rilanci):
+>
+> - tutti e 5 sono `httpx.ReadTimeout` del client del test, che aspetta al massimo 30 s (`TIMEOUT` dei due file), su due
+>   rotte lente per natura:
+>   - `e2e search-to-prices`, 3 casi, `GET /assets/provider/search` («World», «Apple», «iShares Core MSCI World»);
+>   - `api brim`, 2 casi di `TestParseEndpoint`, `POST /brokers/import/files/{id}/parse`;
+> - §1, la forma della risposta: non si applica, perché non è arrivata nessuna risposta da confrontare;
+> - §2, il tempo: la ricerca dà a ogni fornitore fino a 30 s (`core.call_provider(..., timeout=30.0)` in
+>   `services/assets/search.py`), e dopo un risultato vuoto anche il link-finder. Il limite del test è uguale a quello del
+>   prodotto, senza margine. Alle 11:13 Yahoo rispondeva 429 a una prova con `curl`; JustETF e Borsa Italiana
+>   rispondevano in meno di 1 s. Il parse BRIM lavora nel pool di processi: era il primo giro dopo il riavvio, a cache
+>   fredda, e alle 10:45 il carico era a 78 per gli slot pesanti degli altri;
+> - rilanci da soli (11:13–11:18, `db populate --force` prima, carico intorno a 45): `api brim` **118 passati** (in
+>   158 s), `e2e search-to-prices` **3 passati** (in 20 s);
+> - nessuno dei due percorsi passa dal codice dei miei lotti. La ricerca è di X, il parse BRIM è di W.
+>
+> **Verdetti**:
+>
+> - ricerca: **assumption**. Il test fissa 30 s, quanto il limite di un solo fornitore nel prodotto, quindi una ricerca
+>   corretta con un fornitore lento o rallentato dal 429 lo supera. Cura per X: un limite del client sopra quello del
+>   prodotto (30 s più il link-finder, con margine). Da valutare anche se la ricerca vuole un limite complessivo, perché
+>   oggi un utente può aspettare più di 30 s quando un fornitore si blocca;
+> - parse BRIM: **slowness** sotto concorrenza, da confermare da W con i tempi del primo parse dopo l'avvio, a pool
+>   freddo. Voce sua, non da curare in un rosso.
+>
+> I 7 saltati (stanotte erano 4): i miei 3 casi di H-4 saltano solo da root, su Windows o se il permesso non si può
+> togliere, e alle 07:45, da soli, erano passati tutti (200 su 200). La conferma sulla revisione combinata è nelle prove
+> leggere che seguono.
+
+> **Esito accettato dal coordinatore** (11:2x): i 5 timeout non sono miei. La ricerca va a X e il parse BRIM a W, li gira
+> lui; nessun giro pulito in più. I lotti entrano appena le prove leggere sono verdi.
+>
+> **Prove leggere sulla revisione combinata** ✅ (HEAD `9ddecbde0`, una alla volta, `nice`, ciascuna partita col carico
+> sotto 50, 11:36–11:54; il carico era salito fino a 142 per gli slot degli altri):
+>
+> - `front check`: svelte-check 0 errori, 0 avvisi;
+> - Vitest `InstanceBlockedPage.test.ts`: 36 su 36;
+> - `utils runtime-isolation untraversable`: **3 passati**, 197 deselezionati. I casi di H-4 girano e non saltano;
+> - porta 6181 libera.
+>
+> **I 7 saltati di `all-backend`** (erano 4 a CP7b-2): i miei 3 casi di H-4 girano in questo ambiente (sopra). L'unico
+> altro punto di salto nuovo, nel delta della base `887c6dd12..9ddecbde0`, è il `pytest.skip` parametrizzato di
+> `test_provider_contracts.py` (X): uno per ogni fornitore che non traduce parametri. Molto probabilmente vengono da lì;
+> l'elenco esatto dei saltati non c'è, perché i log sono in `-q`.
+
+### I lotti pronti a entrare (2026-10-16, mattina)
+
+Diciassette commit fuori da `dev_release2`, più questo diario: note di X (H-14/15/16), card del backup sulla pagina di
+blocco, H-17 (la mia parte), `b-doc-notes` (B-4, B-5), H-1/4/6/9, H-3 opzione B. Nel backlog, all'ingresso il
+coordinatore chiude con ✅ H-1, H-4, H-6, H-9, H-14, H-15, H-16. H-17 resta aperta fino alle due righe di B. H-3 resta
+aperta per l'opzione A (P24). Restano aperte anche H-5 (traduzioni), H-18 (sezione C, la UI comune) e H-19 (ad A).
+
+> **Ultima validazione e ingresso**: il coordinatore ha committato il diario (`306554879`) e fuso `dev_release2` (merge
+> `0d7503098`, pulito: J CP-7a, W-B17, Z7c-1, i ruoli di T). Sulla revisione combinata, una alla volta, carico sotto 50
+> (12:03–12:43): `api sync`, `front check` 0/0, Vitest `InstanceBlockedPage` 36, `db populate --force`,
+> `api instance-block` 62, `api system` 118. **Entrati nel treno 110** (merge `0ecc5ed27`, registro `0f3b9e3db`),
+> con 🔒/✨ per H-15 e la card, e due righe 📚 (`34e1e8092`). Chiuse H-1, H-4, H-6, H-9, H-14, H-15, H-16. Base portata
+> avanti con fast-forward a `0f3b9e3db`, eseguito dal coordinatore: le mie regole mi vietano di muovere la storia.
+
+### P17 — l'indirizzo del client dietro un proxy fidato (2026-10-16, pomeriggio) — in corso
+
+Decisione del developer (P17): nel cloud l'indirizzo vero del visitatore si legge da `Fly-Client-IP`. Oggi i limiti per
+client (le email di registrazione di E5b, i login falliti di A) vedono solo il proxy di Fly e contano tutti i visitatori
+insieme. Il contratto l'ho mandato alle 12:4x e il coordinatore l'ha approvato, **compreso il punto 4**, come sua
+decisione da far rivedere al developer.
+
+**Il contratto approvato**:
+
+- `LIBREFOLIO_CLIENT_IP_HEADER`, un campo di `Settings`, vuoto di default e validato all'avvio. Deve essere il nome di
+  un header (token HTTP); `X-Forwarded-For` e `Forwarded` sono rifiutati;
+- **nessuna voce in `PROFILE_DEFAULTS["managed"]`**: il cloud la imposta nel suo ambiente, come
+  `LIBREFOLIO_IDLE_SUSPEND_MODE=fly`;
+- `services/platform/client_address.py`:
+  - `client_address(request)`: con la variabile vuota, `request.client.host` com'è oggi. Con la variabile impostata e
+    l'header presente una volta con un solo IP, quell'IP normalizzato. Senza header, il peer. Con un header malformato,
+    il peer e un avviso una volta per processo, mai col valore;
+  - `client_rate_key(address)`: la regola di oggi di E (`flows.address_key`). E la toglie dal suo codice nel suo lotto,
+    senza shim; fino ad allora le copie sono due, ed è previsto;
+  - `mask_client_address(address)`, per il log: IPv4 per /24, IPv6 per /48;
+- doc secondo C-99. La spiegazione intera va in `admin/connection_checks.en.md`, «Behind a Reverse Proxy» (pagina con
+  traduzioni); una riga in `admin/configuration.en.md`, una riga del cloud in `hosting_providers.en.md`, poi
+  `.env.example` e `security.md`;
+- chi la chiama, nei propri lotti dopo il mio: E (`api/v1/email.py:157`, `:203`, `auth.py:274`, `address_key`) e A (il
+  limitatore dei login falliti).
+
+**Fatti verificati**:
+
+- uvicorn parte coi default (`Dockerfile`: `proxy_headers`, `FORWARDED_ALLOW_IPS=127.0.0.1`), quindi su Fly il peer è
+  il proxy;
+- la doc di Fly («Request headers») dice che il proxy imposta `Fly-Client-IP` e sovrascrive quello mandato dal client,
+  mentre `X-Forwarded-For` si può falsificare;
+- `api/v1/system/connection.py` e `utils/runtime/network.py` restano come sono: classificano l'indirizzo dall'ultimo
+  `X-Forwarded-For` solo per dare un consiglio, non per una decisione di sicurezza.
+
+**⚠️ Fuori pista**: la riga del docstring di `instance_block.py` per `POST /api/v1/auth/setup` (P16(d)) descriverebbe
+una rotta che a `0f3b9e3db` non esiste ancora: A7 non è entrato. La scrivo quando A7 è nella mia base.
+
+#### P17 — passo 1, rossi ✅ (2026-10-16, pomeriggio)
+
+> **Note implementazione** (test-author, niente lanciato da lui): `test_client_address.py`, nuovo, 21 funzioni e 131
+> casi, registrato come `services client-address` (`isolation="pure"`). Coprono il campo (vuoto, valori accettati e
+> rifiutati, le liste `X-Forwarded-For` e `Forwarded` con `FORWARDED_ALLOW_IPS` nel messaggio, nessun profilo che lo
+> imposta) e `client_address()`: variabile vuota, un solo IP normalizzato, header assente, i malformati con un solo
+> avviso che non contiene mai il valore, nome senza distinzione di maiuscole, WebSocket, lettura una sola volta e
+> `reset_client_address_cache()`. Più `client_rate_key()` e `mask_client_address()`, con valori espliciti.
+>
+> **Rossi** (13:09–13:11): 131 falliti, 34 sulla barriera del campo e 97 su quella del modulo. Ruff e black puliti.
+
+#### P17 — passo 2, la cura e i chiamanti (2026-10-16, pomeriggio) — verdi in corso
+
+> **⚠️ Fuori pista**: il docs-writer ha visto che la variabile, da sola, non avrebbe fatto niente. I tre punti che
+> contano per client leggevano `request.client.host`, quindi le pagine admin avrebbero detto una cosa falsa. Al
+> coordinatore ho proposto due strade, e ha scelto la (1) (13:07): cambio io solo le tre chiamate. Ha verificato che
+> E4b (`b22747e52`) e A (`946285a91`) hanno quelle righe uguali, solo spostate; E4b aggiunge `flows as email_flows`
+> agli import di `auth.py`, quindi al merge si risolvono righe vicine, non il significato. I test API di E e della
+> registrazione li lancio io. Il limitatore dei login falliti non esiste ancora: tolto dai testi.
+>
+> **Note implementazione** (`files/p17/apply_p17.py` della sessione, provato a secco, ruff e black puliti):
+>
+> - `config/__init__.py`: `import re`, `_HEADER_TOKEN` e `_LIST_HEADERS`, il campo `LIBREFOLIO_CLIENT_IP_HEADER` col
+>   validatore `after` (spazi tolti, vuoto ammesso, token HTTP, liste rifiutate, maiuscole conservate). La docstring
+>   del modulo lo elenca;
+> - `services/platform/client_address.py`, nuovo: il nome dell'header è letto una volta (`functools.cache`),
+>   l'avviso una sola volta per processo (una lista come flag, sul modello del resolver di X),
+>   `reset_client_address_cache()`, `client_rate_key()` (la regola di `flows.address_key`, nella sua casa nuova),
+>   `mask_client_address()`;
+> - `.env.example`: la sezione «The Visitor's Address Behind a Reverse Proxy», con la riga commentata e il rimando
+>   alla doc;
+> - le tre chiamate: `api/v1/email.py` (le due letture `address = request.client.host if request.client else None`)
+>   e `api/v1/auth.py` (`registration_email_allowed`), più un import ciascuno;
+> - doc (docs-writer, secondo C-99): la sottosezione `#client-address` in `admin/connection_checks.en.md`, con la
+>   regola di sicurezza in un riquadro e corretto l'ultimo paragrafo dei «Limits», che diceva che non c'erano proxy
+>   fidati da configurare; una riga in `admin/configuration.en.md`; un punto in `admin/hosting_providers.en.md`; la
+>   sottosezione `#client-address` in `developer/architecture/security.md`, che io ho corretto sui chiamanti dopo la
+>   strada (1). Le pagine solo inglesi puntano a `connection_checks.md#reverse-proxy`, perché `#client-address` non
+>   esiste ancora nelle traduzioni.
+> - Fly: la doc ufficiale «Request headers» dice che il proxy imposta `Fly-Client-IP`; che sovrascriva quello del
+>   client lo dicono fonti esterne. Resta la prova di accettazione del cloud già nel contratto.
+>
+> **Il ruff della prova a secco**: segnalava I001 sui due import solo perché il modulo nuovo non esisteva ancora nel
+> worktree, e quindi non lo riconosceva come modulo del progetto. Applicata la cura, è pulito senza `--fix`.
+
+> **Verdi parziali** (13:11–13:23, una alla volta, carico sotto 50): `services client-address` **131**,
+> `config-env-example` 38, `config-package` 694, nessun fallito.
+>
+> **⏸️ Pausa del developer** (13:22): ho fermato solo lo script che mette in fila le prove (PID 48197, con `kill`), e ho
+> lasciato finire il test in corso (`config-package`). Porta 6181 libera. **Restano da lanciare**: `services
+> profile-defaults` e `config-misc`; `db populate --force`; `api email`, `email-verification`,
+> `email-verification-hooks`, `registration` e `auth`; `mkdocs build` e `check-links`. Lo script è
+> `files/runs/p17.sh green` nella cartella della sessione: rilancia anche i tre già verdi. Poi l'handoff, FROZEN.
+> Worktree sporco col lotto P17, nessun merge aperto, HEAD `0f3b9e3db`.
+
+> **Ripresa** (14:14, via del developer). B conferma: `RestoreCard` è un componente a parte, montato solo in
+> `BackupTab`; la pagina di blocco tiene solo `BackupDownloadCard`, come vuole P7.
+>
+> **Verdi** (14:14–14:40, una alla volta, carico sotto 50, HEAD `0f3b9e3db`):
+>
+> - `services profile-defaults` 52 e `config-misc` 12;
+> - `db populate --force`, poi `api email` 160, `email-verification` 49, `email-verification-hooks` 16,
+>   `registration` 96 e `auth` 88. Sono le rotte con le tre chiamate cambiate: con la variabile vuota, il
+>   comportamento di prima;
+> - `check-links` 97;
+> - insieme ai verdi di prima della pausa: `client-address` 131, `config-env-example` 38, `config-package` 694.
+>
+> **⚠️ Fuori pista — `mkdocs build` rigoroso rosso, non per il lotto**: un solo avviso, in
+> `developer/backend/transactions/wac.md`, il link `split_promote.md#transfer-giving-leg` verso un'ancora che non
+> esiste. Il link l'ha messo `54880598b` («fix(transactions): emptied manual cost basis…», treno 111), che è già nella
+> base `0f3b9e3db`; io quelle pagine non le tocco. Visto che la build dà solo quell'avviso, le mie quattro pagine non
+> ne aggiungono. Va girato al proprietario delle pagine delle transazioni.
+>
+> **H-5**: aggiunto il debito di traduzione di P17, `connection_checks` e `configuration`, con l'ordine.
+
+#### Checkpoint P17 🧊 (2026-10-16, pomeriggio) — FROZEN, in attesa del coordinatore

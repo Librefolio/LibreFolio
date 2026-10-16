@@ -49,33 +49,33 @@
 
 <ModalBase open={donationPopup.shouldShow} closeOnBackdropClick={false} closeOnEscape={false} maxWidth="xl" testId="donation-popup-modal">
     <!-- Header: LibreFolio logo + name, same style as LoginCard.svelte -->
-    <div class="bg-libre-green px-6 py-5 flex items-center justify-center gap-3 shrink-0">
-        <div class="w-8 h-8 rounded-lg flex items-center justify-center p-1 shrink-0" style="background:#fff">
+    <div class="bg-lf-brand px-6 py-5 flex items-center justify-center gap-3 shrink-0">
+        <div class="w-8 h-8 rounded-lg flex items-center justify-center p-1 shrink-0 bg-lf-logo">
             <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
         </div>
-        <span class="text-xl font-bold tracking-wide text-white">LibreFolio</span>
+        <span class="text-xl font-bold tracking-wide text-lf-on-brand">LibreFolio</span>
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
         <!-- Body -->
-        <div class="px-6 py-6 flex flex-col items-center text-center gap-3 bg-libre-beige dark:bg-slate-800">
-            <Coffee size={36} class="text-amber-600 dark:text-amber-400" />
-            <h2 class="text-lg font-semibold text-libre-dark dark:text-slate-100">{$_('donationPopup.title')}</h2>
-            <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">{$_('donationPopup.message')}</p>
-            <p class="text-sm font-medium text-libre-green dark:text-green-400 leading-relaxed">{$_('donationPopup.donationNote')}</p>
+        <div class="px-6 py-6 flex flex-col items-center text-center gap-3 bg-lf-card">
+            <Coffee size={36} class="text-lf-donate" />
+            <h2 class="text-lg font-semibold text-lf-primary">{$_('donationPopup.title')}</h2>
+            <p class="text-sm text-lf-secondary leading-relaxed whitespace-pre-line">{$_('donationPopup.message')}</p>
+            <p class="text-sm font-medium text-lf-link leading-relaxed">{$_('donationPopup.donationNote')}</p>
         </div>
 
         <!-- Support actions: coffee + social share -->
-        <div class="px-6 pb-4 bg-libre-beige dark:bg-slate-800" data-testid="donation-popup-support-card">
-            <div class="rounded-xl border border-black/5 bg-white/70 p-4 shadow-sm dark:border-white/10 dark:bg-slate-900/20">
+        <div class="px-6 pb-4 bg-lf-card" data-testid="donation-popup-support-card">
+            <div class="rounded-xl border border-lf-subtle bg-lf-panel p-4 shadow-sm shadow-lf-shadow-card">
                 <SupportActions onCoffeeClick={handleDonateClick} coffeeTestId="donation-popup-donate" onShare={openSocialShare} />
             </div>
         </div>
     </div>
 
     <!-- Footer: exactly 1 button; the coffee action above also closes the popup -->
-    <div class="flex flex-col gap-2 border-t border-black/5 bg-libre-beige px-6 py-4 dark:border-white/10 dark:bg-slate-800 shrink-0">
-        <button type="button" class="flex-1 rounded-lg bg-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-300 dark:bg-slate-600 dark:text-gray-200 dark:hover:bg-slate-500" onclick={handleLater} data-testid="donation-popup-later">
+    <div class="flex flex-col gap-2 border-t border-lf-subtle bg-lf-card px-6 py-4 shrink-0">
+        <button type="button" class="flex-1 rounded-lg bg-lf-panel px-4 py-2.5 text-sm font-medium text-lf-secondary transition-colors hover:bg-lf-neutral" onclick={handleLater} data-testid="donation-popup-later">
             {$_('donationPopup.laterButton')}
         </button>
     </div>

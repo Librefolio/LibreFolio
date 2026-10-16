@@ -63,7 +63,7 @@ Its order is contractual:
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
-| 5 | `apply_updates()` | Apply and validate merged update state |
+| 5 | `apply_updates()` | Apply and validate merged update state. An explicit `cost_basis_override: null` removes the row's cost basis where its type and side take one, unless the update is in Auto; step 11 then refuses the update where one is required (decision P5, see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
 | 6 | `validate_updated_pairs()` | Re-check shared description/tags on updated linked pairs |
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |
@@ -115,15 +115,20 @@ frontend, each time they run, so they follow any change to it:
 | 5 | `asset_mode`: `required` | A missing asset (`assetRequired`); `optional` (rule 6) checks nothing, and `forbidden` is left to a create's rules 3, 3b and 4 (an update or a promote cannot set an asset) |
 | 7, 8 | `cash_mode`: `required`, `forbidden` | Missing cash (`cashRequired`); a cash movement (`cashForbidden`) |
 | 9 | `event_compatible()` | An asset event link on another type (`eventTypeIncompatible`, its `allowed` param from `event_compatible_types()`) or without an asset (`eventRequiresAsset`) |
-| 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`) |
+| 10, 11 | `quantity_sign`, `cash_sign` | A quantity, or a non-zero cash amount, of the wrong sign (`qtyPositive`, `qtyNegative`, `qtyZero`, `qtyNonzero`; `cashSignPositive`, `cashSignNegative`); a zero cash amount where `cash_sign` is `nonzero` (`cashNonzero`; see below for when) |
 | 12 | `cost_basis_allowed()` | A `cost_basis_mode` where the type and side take no cost basis (`costBasisModeIncompatible`; see [Persisted Cost Basis](wac.md#persisted-cost-basis)) |
 
-Until the developer's pending decision P6 (2026-10-16), rules 5–11 leave unchecked four
-points where the table is stricter: a `TRANSFER`'s cash, `FX_CONVERSION`'s zero quantity,
-`TRANSFER`'s non-zero quantity, and the non-zero cash of `FX_CONVERSION` and
-`CASH_TRANSFER` (`_P6_CASH_FORBIDDEN_UNCHECKED`, `_P6_QUANTITY_SIGN_UNCHECKED`; rule 11
-does not read `nonzero`). Only a create refuses them, with its rules 2, 3 and 3b; an
-update or a promote does not.
+Decision P6 (the developer's, 2026-10-16) sets when four of these refusals hold: a
+`TRANSFER`'s cash (`cashForbidden`), `FX_CONVERSION`'s non-zero quantity (`qtyZero`),
+`TRANSFER`'s zero quantity (`qtyNonzero`), and the zero cash of `FX_CONVERSION` and
+`CASH_TRANSFER` (`cashNonzero`). In an update, each holds only when its field changes:
+the cash for the first and the last, the quantity for the middle two.
+`changed_rule_fields()` compares the row by value with `stored_rule_values`, the row as
+stored before the batch, so a row stored outside the table stays editable: its notes,
+tags or date, or the field re-sent as stored. A promote changes the type, which counts as
+a changed cash and quantity, so it checks all four. A create (`changed_fields=None`)
+keeps them in its own rules 2, 3 and 3b. This mirrors N2's cost check, which judges only
+an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cost-basis)).
 
 ---
 
@@ -205,8 +210,9 @@ transactions. A create request uses `link_uuid` only as transient correlation:
 `A.related_transaction_id = B.id` and `B.related_transaction_id = A.id`.
 
 `_validate_linked_pair()` requires equal pair types (`pairTypeMismatch`), distinct
-brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and allows an
-intra-broker `FX_CONVERSION`. A `TRANSFER` pair must also move one asset
+brokers for `TRANSFER` and `CASH_TRANSFER` (`pairSameBroker`), and one broker for
+both legs of an `FX_CONVERSION` (`pairBrokerMismatch`, params `brokerA`/`brokerB`).
+A `TRANSFER` pair must also move one asset
 (`pairAssetMismatch`, params `assetA`/`assetB`) by exactly opposite quantities,
 compared as `Decimal` (`pairQuantityMismatch`, params `qtyA`/`qtyB`): what leaves one
 broker arrives at the other, and no unit is created or lost. The first rule that

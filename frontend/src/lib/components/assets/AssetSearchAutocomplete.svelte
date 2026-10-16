@@ -409,7 +409,7 @@
 <div class="space-y-2" data-search-autocomplete>
     <!-- Section label (hidden when parent renders it externally) -->
     {#if !hideTitle}
-        <div class="flex items-center gap-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        <div class="flex items-center gap-2 text-xs font-semibold text-lf-muted uppercase tracking-wider">
             <Search size={12} />
             <span>{$t('assets.modal.searchOnline')}</span>
         </div>
@@ -419,9 +419,9 @@
     <div class="relative">
         <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
             {#if loading}
-                <Loader2 size={16} class="text-gray-400 animate-spin" />
+                <Loader2 size={16} class="text-lf-muted animate-spin" />
             {:else}
-                <Search size={16} class="text-gray-400" />
+                <Search size={16} class="text-lf-muted" />
             {/if}
         </div>
         <input
@@ -431,10 +431,10 @@
             onfocusin={handleFocusIn}
             placeholder={$t('assets.search.placeholder')}
             {disabled}
-            class="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-600 rounded-lg
-                       bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100
-                       placeholder-gray-400 dark:placeholder-gray-500
-                       focus:outline-none focus:ring-2 focus:ring-libre-green/50 focus:border-libre-green
+            class="w-full pl-10 pr-4 py-2 text-sm border border-lf-input hover:border-lf-input-hover rounded-lg
+                       bg-lf-field text-lf-primary
+                       placeholder:text-lf-placeholder
+                       focus:outline-none focus:ring-2 focus:ring-lf-focus/50 focus:border-lf-focus
                        disabled:opacity-50 disabled:cursor-not-allowed"
         />
     </div>
@@ -442,7 +442,7 @@
     <!-- Provider badge toggles -->
     {#if searchableProviders.length > 0}
         <div class="flex items-center gap-2 flex-wrap">
-            <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.providers')}:</span>
+            <span class="text-xs text-lf-muted">{$t('common.providers')}:</span>
             {#each searchableProviders as prov}
                 <button
                     type="button"
@@ -450,7 +450,7 @@
                     data-testid="asset-search-provider-{prov.code}"
                     data-selected={selectedProviders.has(prov.code)}
                     class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full border transition-all
-                               {selectedProviders.has(prov.code) ? 'bg-libre-green/15 dark:bg-libre-green/25 border-libre-green/40 text-libre-green dark:text-green-400' : 'bg-gray-100/50 dark:bg-slate-700/50 border-gray-200 dark:border-slate-600 text-gray-400 dark:text-gray-500 opacity-60'}"
+                               {selectedProviders.has(prov.code) ? 'bg-lf-selected border-lf-focus/40 text-lf-link' : 'bg-lf-panel/50 border-lf-subtle text-lf-muted opacity-60'}"
                 >
                     {#if prov.icon_url}
                         <img src={prov.icon_url} alt="" class="w-3.5 h-3.5 rounded-sm object-contain {selectedProviders.has(prov.code) ? '' : 'grayscale opacity-50'}" />
@@ -466,8 +466,8 @@
         <div
             data-testid="asset-search-results"
             data-state={loading ? 'searching' : error ? 'error' : hasResults ? 'results' : 'empty'}
-            class="border border-gray-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800
-                    shadow-lg max-h-60 overflow-y-auto"
+            class="border border-lf-raised rounded-lg bg-lf-card
+                    shadow-lg shadow-lf-shadow max-h-60 overflow-y-auto"
         >
             {#each notConfigured as code (code)}
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-xs text-lf-warning-on-soft" data-provider={code} data-testid="asset-search-not-configured">
@@ -478,22 +478,22 @@
                 </div>
             {/each}
             {#if loading && results.length === 0}
-                <div class="flex items-center justify-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
+                <div class="flex items-center justify-center gap-2 py-4 text-sm text-lf-muted">
                     <Loader2 size={16} class="animate-spin" />
                     <span>{$t('assets.search.searching')}{providersDone > 0 && providersTotal > 0 ? ` (${providersDone}/${providersTotal})` : ''}</span>
                 </div>
             {:else if error}
-                <div class="py-4 px-4 text-sm text-red-500 dark:text-red-400 text-center">
+                <div class="py-4 px-4 text-sm text-lf-danger text-center">
                     {error}
                 </div>
             {:else if !hasResults && !loading}
-                <div class="py-4 text-sm text-gray-500 dark:text-gray-400 text-center">
+                <div class="py-4 text-sm text-lf-muted text-center">
                     {$t('common.noResults')}
                 </div>
             {:else}
                 <!-- Loading banner (streaming partial results) -->
                 {#if loading}
-                    <div class="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700">
+                    <div class="flex items-center gap-2 px-3 py-1.5 text-xs text-lf-muted bg-lf-panel border-b border-lf-subtle">
                         <Loader2 size={12} class="animate-spin" />
                         <span>{$t('assets.search.searching')} ({providersDone}/{providersTotal})</span>
                     </div>
@@ -504,7 +504,7 @@
                         data-testid="asset-search-result-{i}"
                         data-identifier={result.identifier}
                         data-provider={result.provider_code}
-                        class="w-full flex items-start sm:items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors border-b border-gray-100 dark:border-slate-700 last:border-b-0"
+                        class="w-full flex items-start sm:items-center gap-3 px-3 py-2.5 text-left hover:bg-lf-hover transition-colors border-b border-lf-subtle last:border-b-0"
                         onclick={() => selectResult(result)}
                     >
                         <!-- Icon placeholder -->
@@ -512,12 +512,12 @@
 
                         <!-- Info -->
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100 min-w-0">
+                            <div class="flex items-center gap-1.5 text-sm font-medium text-lf-primary min-w-0">
                                 <span class="truncate">{result.display_name}</span>
                             </div>
-                            <div class="flex flex-nowrap items-center gap-1 text-xs text-gray-500 dark:text-gray-400 overflow-x-auto [&>*]:shrink-0">
+                            <div class="flex flex-nowrap items-center gap-1 text-xs text-lf-muted overflow-x-auto [&>*]:shrink-0">
                                 {#if webRanks[i] > 0}
-                                    <span class="font-mono text-gray-400 dark:text-gray-500 shrink-0" title={$t('assets.search.rankHint')}>
+                                    <span class="font-mono text-lf-muted shrink-0" title={$t('assets.search.rankHint')}>
                                         <span class="sm:hidden">Web#{webRanks[i]}</span>
                                         <span class="hidden sm:inline">WebSearch#{webRanks[i]}</span>
                                     </span>
@@ -539,7 +539,7 @@
                                     <span class="mx-0.5">·</span>
                                     <span class="inline-flex items-center gap-1 shrink-0">
                                         <img src={getAssetProviderIconUrl(result.provider_code)} alt={result.provider_code} class="w-3.5 h-3.5 rounded-sm object-contain" title={result.provider_code} />
-                                        <span class="text-gray-400 dark:text-gray-500">{result.provider_code}</span>
+                                        <span class="text-lf-muted">{result.provider_code}</span>
                                     </span>
                                 {/if}
                             </div>
@@ -547,7 +547,7 @@
 
                         <!-- Provider URL link -->
                         {#if result.provider_url}
-                            <a href={result.provider_url} target="_blank" rel="noopener noreferrer" class="shrink-0 p-1 text-gray-400 hover:text-libre-green transition-colors" onclick={(e) => e.stopPropagation()} title="Open provider page">
+                            <a href={result.provider_url} target="_blank" rel="noopener noreferrer" class="shrink-0 p-1 text-lf-muted hover:text-lf-link transition-colors" onclick={(e) => e.stopPropagation()} title="Open provider page">
                                 <ExternalLink size={14} />
                             </a>
                         {/if}
