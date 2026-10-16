@@ -12,19 +12,17 @@
  * some roles. The buckets (`Liquidity`, `Unknown`) are one entry for both kinds, as in the tables.
  */
 
+import {lookupKey} from '$lib/theme/chartCategories';
 import {toCanvasColor} from '../color.js';
 import {changesForTheme} from '../store';
 import type {LabChange} from '../types';
 import {resolveTarget} from './targets';
 
 /**
- * A key as `categoryColor` compares it: case, spaces and underscores ignored (`Health Care`, `HEALTH_CARE`). The rule of
- * `lookupKey` in `chartCategories.ts`, which DV exports in TD-1: until then this copy, held to `categoryColor` by the
- * tests, and replaced by the import when TD-1 is in the base.
+ * A key as `categoryColor` compares it: case, spaces and underscores ignored (`Health Care`, `HEALTH_CARE`). DV's own
+ * `lookupKey` (TD-1), so that an edit and the table it overrides always agree on what the same key is.
  */
-export function categoryKey(key: string): string {
-    return key.replace(/[\s_]/g, '').toUpperCase();
-}
+export const categoryKey = lookupKey;
 
 const BUCKETS = new Set(['LIQUIDITY', 'UNKNOWN']);
 

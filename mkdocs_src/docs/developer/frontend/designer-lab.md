@@ -342,8 +342,13 @@ families and 14 sectors, plus two buckets that both kinds share, `Liquidity` (th
 Workstream DV keeps them in `frontend/src/lib/theme/chartCategories.ts`, under a contract with the Lab:
 
 - **C1, one read point.** Every chart reads a category's colour through `categoryColor(kind, key, dark)`:
-  the pie, the history, their legends and tooltips. The GR4 subtype shades are mixed from the colour it
-  returns.
+  the allocation pie and the allocation history, with their legends and tooltips; the PAC planner's
+  exposure bars, for the actual weights (`actualColours()` in `exposureBarColours.ts`: an asset type by
+  its family, its subtypes shaded with `familyShade`, a sector by its key, the uncategorised remainder as
+  `Unknown`). The colours borrowed from a category go through it too (see **Reach** below): the owners of
+  the semi-donut and the countries of the allocation history through `sequenceColor`, the Growth chart's
+  broker lines and their tooltip rows through `growthBrokerColor()`. The GR4 subtype shades are mixed
+  from the colour it returns.
 - **C2, one literal per line.** The tables write one literal per line, each entry under its key, as
   `light:` and `dark:`: an edit is exported by file and line.
 - **C3, a hook in debug builds.** `categoryColor` first asks
@@ -375,8 +380,9 @@ in the asked theme:
   edit included, and a value that does not resolve now gives no answer;
 - the answer is a colour the canvas reads, clamped to sRGB: `#rrggbb` when opaque, the form the GR4 shades
   mix, and `rgba()` when translucent;
-- keys are compared as `categoryColor` compares them, ignoring case, spaces and underscores
-  (`Health Care`, `HEALTH_CARE`), and the two buckets answer for both kinds.
+- keys go through DV's own `lookupKey` (`chartCategories.ts`), as in `categoryColor`: case, spaces and
+  underscores ignored (`Health Care`, `HEALTH_CARE`), so an edit and the table it overrides always agree
+  on what the same key is; the two buckets answer for both kinds.
 
 `stats().categoryOverrides` counts the `category` changes the engine holds.
 
@@ -398,14 +404,19 @@ the role again. Nothing is sent while the signature stays the same: the same cha
 the changes the charts do not read at their draw — stylesheet literals that define no variable, chart
 colours and chart specialisations (L3 patches the charts already drawn), the colour-vision simulation.
 The signal brings an edit of a role, from L1 or from the stylesheets, to the charts that read roles
-through `chartRoles` — today the allocation pie, the allocation history, the semi-donut and the
-correlation heatmap — at once, where it used to wait for their next draw. A stylesheet that arrives
-later sends no signal of its own ([Known Limits](#known-limits)).
+through `chartRoles` — today the allocation pie, the allocation history, the semi-donut, the
+correlation heatmap and the PAC planner's exposure bars — at once, where it used to wait for their next
+draw. A stylesheet that arrives later sends no signal of its own ([Known Limits](#known-limits)).
 
 **Reach.** A category's colour is the base of its family's GR4 subtype shades, and the categories without
 a key of their own borrow it by rank (GR5, `sequenceColor`): the owners of the semi-donut take the first
-eight asset types, the countries of the allocation history the sectors. All of them follow a `category`
-change; the Growth chart's broker lines do not yet ([Known Limits](#known-limits)).
+eight asset types, the countries of the allocation history the sectors. The Growth chart's broker lines
+borrow the same eight types, cycled without a shade: broker line *i* takes the colour of the asset type
+`CATEGORY_SEQUENCE[i mod 8]` (`growthBrokerColor()` in `src/lib/theme/chartPalettes.ts`, read each time
+the series are built). Every chart that reads a category redraws on C4 — the allocation pie, the
+allocation history, the semi-donut, the Growth chart and the PAC planner's exposure bars — so a
+`category` change reaches all of them at once, the subtype shades and the borrowed colours included: a
+type edit also recolours the broker lines that borrow it.
 
 ### 📌 Specialisations — `element` Rules {: #specialisations }
 
@@ -1099,9 +1110,6 @@ their alias, so their chips show.
   colour, and one value can belong to two categories: open the category from the **Categories** tab.
   While a `category` change applies, the slice reports the edited colour, not the table's.
   Naming the category is in L's backlog.
-- **The Growth chart's broker lines** take the first asset types' colours once, when
-  `GROWTH_BROKER_PALETTE` (`src/lib/theme/chartPalettes.ts`) is imported, and the Growth chart does not
-  listen to C4: they do not follow a `category` change until DV's batch TD-1b.
 - **Translucent category colours.** For a translucent value the engine answers `rgba()`, and the charts
   draw the category with it. Its GR4 subtype shades, though, are mixed from the colour alone —
   `familyShade` reads the channels and drops the alpha — so they come out opaque.
@@ -1110,9 +1118,6 @@ their alias, so their chips show.
   countries of the allocation history). `categoryColor` also draws a key outside its tables in the
   Unknown colour, but the edit does not reach such a key: it keeps the table's colour. The enum gates keep
   such keys out of real data.
-- **A copy of the key rule.** Until DV exports `lookupKey` from `chartCategories.ts` (batch TD-1),
-  `categoryKey()` in `engine/categories.ts` holds a copy of its rule — case, spaces and underscores
-  ignored — which the tests hold to `categoryColor`.
 
 **The element picker:**
 
@@ -1546,8 +1551,9 @@ four-language rule of the UI. Do not add Lab keys to the [app catalogue](i18n.md
   `contrast.ts`, `export.ts` with `sanitizeAnchor()`, `pickView.ts`); the DOM helpers of
   `picker/anchor.ts`, which take the test-id index as a parameter and run under jsdom; `elementRule()` and
   `applyElementRules()` in `engine/anchors.ts`; `applyVars()` and `VAR_SELECTOR` in `engine/vars.ts`;
-  `categoryKey()`, `categoryTargetKey()`, `setCategoryChanges()` and `categoryColor()` in
-  `engine/categories.ts`; `collectRules()` in `picker/describe.ts`; the exported functions of the scripts
+  `categoryKey` (DV's `lookupKey`, re-exported), `categoryTargetKey()`, `setCategoryChanges()` and
+  `categoryColor()` in `engine/categories.ts`; `collectRules()` in `picker/describe.ts`; the exported
+  functions of the scripts
   (`scanColors()`, `scanSource()`, `listSourceFiles()`, `testidValues()`, `categoryLines()`,
   `designerLabEnabled()`, `filesWithMarker()`, `testidIndex()`, `verifyExport()`, `locate()`,
   `locateCategory()`, `testidKnown()`); `mapChartOption()` and `chartPatch()` in `engine/charts.ts`, kept

@@ -9,17 +9,18 @@
  * The answer is what a canvas reads — `#rrggbb` when opaque, `rgba()` when translucent — resolved at each ask, so a
  * `var()` follows the page.
  *
- * Two things are held against DV's real module rather than against a copy: the key rule (every variant DV's
- * `categoryColor` reads as a key of its tables must be read the same way here, and only those), and the hook itself
- * (the real `categoryColor` returns the engine's answer only when `__LF_DESIGNER_LAB__` is on). The keys and the table
- * colours are read from that module at run time; every colour a change writes is made up by the test.
+ * Two things are held against DV's real module rather than against a copy: the key rule (`categoryKey` is DV's own
+ * `lookupKey`, the function itself; and every variant DV's `categoryColor` reads as a key of its tables must be read the
+ * same way here, and only those), and the hook itself (the real `categoryColor` returns the engine's answer only when
+ * `__LF_DESIGNER_LAB__` is on). The keys and the table colours are read from that module at run time; every colour a
+ * change writes is made up by the test.
  *
  * jsdom: `resolveTarget` reads variables with `getComputedStyle(<html>)`, and jsdom answers the custom properties set
  * on `<html>`.
  */
 
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {CATEGORY_BUCKETS, CATEGORY_KEYS, categoryColor as chartCategoryColor, type CategoryKind} from '$lib/theme/chartCategories';
+import {CATEGORY_BUCKETS, CATEGORY_KEYS, categoryColor as chartCategoryColor, lookupKey, type CategoryKind} from '$lib/theme/chartCategories';
 import {categoryColor, categoryKey, categoryTargetKey, setCategoryChanges} from './engine/categories';
 import {changeId} from './store';
 import type {LabChange, Scope} from './types';
@@ -44,6 +45,10 @@ afterEach(() => {
 });
 
 describe('categoryKey and categoryTargetKey', () => {
+    it('is DV’s own `lookupKey` (TD-1), the function itself: no copy of the rule left to drift from the tables it keys', () => {
+        expect(categoryKey, 'the engine keys its edits with the very function DV keys its tables with').toBe(lookupKey);
+    });
+
     it('compares a key without its case, spaces and underscores, as DV does — a hyphen still counts', () => {
         for (const variant of ['Health Care', 'health care', 'HEALTH_CARE', 'HealthCare', 'healthcare', ' Health  Care ', 'Health\tCare']) expect(categoryKey(variant), variant).toBe('HEALTHCARE');
         expect(categoryKey('Health-Care')).toBe('HEALTH-CARE');
