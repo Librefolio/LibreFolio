@@ -657,3 +657,11 @@
         </SelectPopover>
     </div>
 {/if}
+
+<style>
+    /* On the selection tint the muted text falls under 4.5:1 (design system, rule 5; TC-15): inside the highlighted
+       option a muted caption, this component's own or a caller's snippet's, turns secondary. */
+    [data-highlighted='true'] :global(.text-lf-muted) {
+        color: var(--lf-text-secondary);
+    }
+</style>

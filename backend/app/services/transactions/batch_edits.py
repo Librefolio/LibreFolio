@@ -12,8 +12,8 @@ from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResultItem, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import TXUpdateItem, tags_to_csv, validate_transaction_business_rules
-from backend.app.schemas.transactions.type_metadata import get_swap_group
-from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
+from backend.app.schemas.transactions.type_metadata import cost_basis_allowed, get_swap_group
+from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext, changed_rule_fields
 from backend.app.utils.datetime_utils import utcnow
 
 if TYPE_CHECKING:
@@ -187,7 +187,7 @@ async def apply_updates(
             check_date = _apply_update_type_and_date(transaction, item)
             _apply_update_values(transaction, item)
             await _apply_update_event(service, transaction, item)
-            rule_errors = _validate_updated_final_state(transaction, item)
+            rule_errors = _validate_updated_final_state(transaction, item, changed_rule_fields(context.stored_rule_values.get(item.id), transaction))
             if rule_errors:
                 for rule_error in rule_errors:
                     context.issues.append(
@@ -245,7 +245,14 @@ def _apply_update_values(
     transaction: Transaction,
     item: TXUpdateItem,
 ) -> None:
-    """Apply optional scalar fields without changing their current semantics."""
+    """Apply optional scalar fields: a missing field leaves the stored value.
+
+    An explicit null ``cost_basis_override`` removes the manual cost basis (decision P5, W-B30) where the row's final
+    type and side take one (``cost_basis_allowed``); elsewhere it is ignored, so the handover cost decision 47 writes
+    on a giving leg stays (coordinator decision B, 16/10). An update asking for an Auto cost (``cost_basis_mode`` auto
+    or auto-detail) ignores it too and writes its own. Where a cost basis is required, the removal is refused later
+    with ``costBasisRequired`` (N2's check of the changed cost fields).
+    """
     if item.quantity is not None:
         transaction.quantity = item.quantity
     if item.cash is not None:
@@ -258,6 +265,9 @@ def _apply_update_values(
     if item.cost_basis_override is not None:
         transaction.cost_basis_override = item.cost_basis_override.amount
         transaction.cost_basis_currency = item.cost_basis_override.code
+    elif "cost_basis_override" in item.model_fields_set and item.cost_basis_mode not in ("auto", "auto-detail") and cost_basis_allowed(transaction.type, transaction.quantity):
+        transaction.cost_basis_override = None
+        transaction.cost_basis_currency = None
 
 
 async def _apply_update_event(
@@ -283,8 +293,10 @@ async def _apply_update_event(
 def _validate_updated_final_state(
     transaction: Transaction,
     item: TXUpdateItem,
+    changed_fields: frozenset[str],
 ):
-    """Run shared business rules against the merged ORM state."""
+    """Run shared business rules against the merged ORM state; the points of decision P6 only on the fields the update
+    changed (``changed_fields``, from ``changed_rule_fields``)."""
     final_cash = Currency(code=transaction.currency, amount=transaction.amount) if transaction.currency else None
     return validate_transaction_business_rules(
         tx_type=transaction.type,
@@ -293,6 +305,7 @@ def _validate_updated_final_state(
         cash=final_cash,
         asset_event_id=transaction.asset_event_id,
         cost_basis_mode=item.cost_basis_mode,
+        changed_fields=changed_fields,
     )
 
 
