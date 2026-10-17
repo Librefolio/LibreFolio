@@ -192,7 +192,8 @@ Each submitted item gets one result carrying the same `is_chain`/`providers_used
 
     The web app's provider editor (`FxPairAddModal`, the pair's detail page) saves this way. Before X-R75 it deleted the
     whole pair first and then posted the new routes, so a failed post left the pair with no route at all, and removing
-    every route deleted the pair instead of leaving it manual.
+    every route deleted the pair instead of leaving it manual. The intermediate pairs it adds for a chain go first, in a
+    plain request, so that `replace` names only the pair being edited (X-R79).
 
 ### 🗑️ Delete Routes
 
