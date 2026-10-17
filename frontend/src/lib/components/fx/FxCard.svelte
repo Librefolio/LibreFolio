@@ -10,7 +10,8 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {ArrowLeftRight, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
-    import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {isCardInverted, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -30,6 +31,8 @@
         quote: string;
         slug: string;
         data?: FxDataPoint[];
+        /** The pair's Δ over the range on screen, both ways, from the backend (X-R59); null while unknown. */
+        rangeDeltas?: {direct: RangeDelta; inverse: RangeDelta} | null;
         loading?: boolean;
         /** Date range start (passed to detail page on navigation) */
         dateStart?: string;
@@ -56,7 +59,7 @@
         oninversionchange?: (info: {slug: string; inverted: boolean}) => void;
     }
 
-    let {base, quote, slug, data = [], loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings, oninversionchange}: Props = $props();
+    let {base, quote, slug, data = [], rangeDeltas = null, loading = false, dateStart, dateEnd, manualOnly = false, globalViewMode = 'absolute', chartSettings, renderSignals, ondelete, onrefresh, onsync, onsettings, oninversionchange}: Props = $props();
 
     // =========================================================================
     // State
@@ -95,10 +98,8 @@
         return displayFxRate(last.rate, inverted);
     });
 
-    let deltaPercent = $derived.by(() => {
-        if (data.length < 2) return null;
-        return displayFxDelta(data[0].rate, data[data.length - 1].rate, inverted)?.pct ?? null;
-    });
+    /** The backend's Δ over the range, the way the card shows the pair (X-R59). */
+    let deltaPercent = $derived((inverted ? rangeDeltas?.inverse : rangeDeltas?.direct)?.pct ?? null);
 
     let chartData = $derived.by((): LineDataPoint[] => {
         const absolute = data.map((d): LineDataPoint => {
@@ -222,7 +223,7 @@
                     {formatFixed(lastRate, 4)}
                 </span>
                 {#if deltaPercent !== null}
-                    <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
+                    <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}" data-testid="fx-range-delta">
                         {deltaPercent >= 0 ? '▲' : '▼'}
                         {formatPercent(deltaPercent)}
                     </span>
