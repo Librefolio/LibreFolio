@@ -4900,7 +4900,7 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
 2. ✅ 17/10 ~14:36 — Bozza fuori dal repo (`files/z30-draft/apply_z30.py`: l'import di `EARLIEST_RANGE_START` e
    l'inizio del carico, nient'altro del file di MF), provata su una copia: applicazione, compilazione, black pulito,
    inverso esatto.
-3. ✅ 17/10 ~15:05 — Codice applicato, poi ristretto. La prima formula passava `services range-ceiling` 67/67, ma
+3. ✅ 17/10 ~14:58 — Codice applicato, poi ristretto. La prima formula passava `services range-ceiling` 67/67, ma
    `services asset-signals` dava 2 rossi su 30 (`logs/z_z30_asig.log`).
    > **⚠️ Fuori pista**: `test_calendar_interior_fx_gap_is_sparse_with_typed_reference_cause` tiene i suoi dati
    > nel 1800 per isolarsi, e una finestra di 7 giorni perdeva il riscaldamento: la formula toglieva OGNI
@@ -4909,7 +4909,7 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
    > `warmup_days = max((inizio visibile − EARLIEST_RANGE_START).days, 0)` solo se `requires_full_history`, al posto
    > di `(inizio − date.min).days`; il tetto a `date.min` e `load_range` restano. Commento E1 aggiornato (non diceva
    > più il vero). Il secondo rosso è la guardia T6 (`starts == [date.min]`): ora 1900-01-01, i 500 punti restano.
-   > Coordinatore informato alle ~15:05 («se non sei d'accordo, dillo prima del checkpoint»).
+   > Coordinatore informato alle ~15:00 («se non sei d'accordo, dillo prima del checkpoint»).
    > **Note implementazione**: con la formula ristretta i quattro casi di storia intera di BL-L01, BL-L02…L05
    > restano come scritti; i due casi a riscaldamento corto diventano una guardia (riscaldamento finito invariato,
    > 5/5). A test-author: quella guardia, la riparazione di T6, la ricerca di altri test fissati a `date.min`.
@@ -4917,13 +4917,14 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
    > X-R55), AI Export chiede solo riscaldamenti finiti (EMA/SMA 200 al massimo); il suo drawdown d'asset passa
    > da `RiskService` (limitato a 100 anni). `risk_metadata.analyzed_range` di un segnale a storia intera parte
    > ora dal 1900-01-01 invece che dallo 0001-01-01: nessuno lo legge nel frontend né in AI Export.
-4. ⏳ 17/10 ~15:08 — Docs (docs-writer): `developer/backend/assets/architecture.md` (`#bulk-request-limits`,
-   `#stored-date-bounds`) e `developer/architecture/patterns/signal_plugin_guide.md` (la storia intera).
+4. ✅ 17/10 ~15:00 — Docs (docs-writer, esito al passo 8): `developer/backend/assets/architecture.md`
+   (`#bulk-request-limits`, `#stored-date-bounds`) e `developer/architecture/patterns/signal_plugin_guide.md` (la
+   storia intera).
    > **Residuo** (nota di test-author): il percorso dei prezzi non limita l'inizio VISIBILE. Un intervallo chiesto a
    > mano prima del 1900 su un asset con una riga vecchia emette ancora fino a ~740 000 punti visibili, dentro il
    > budget di 1 milione. «All» della UI parte dal 2000-01-01 (`dateRangeStore.svelte.ts:145`). Rimedio: limitare
    > l'inizio come fanno già lo scope di rischio e la conversione FX (`range_span_floor`, X-R55). Voce nuova Z-31.
-5. ✅ 17/10 ~15:35 — Seconda correzione della regola (nota di test-author, prova usa e getta
+5. ✅ 17/10 ~15:08 — Seconda correzione della regola (nota di test-author, prova usa e getta
    `/tmp/libreFolio_z30_mixed_probe.log`).
    > **⚠️ Fuori pista**: anche la formula ristretta tagliava i riscaldamenti finiti nei piani misti. Con SMA 200 e
    > drawdown su dati prima del 1900 (1850-06 e 1900-03), lo SMA usciva `insufficient_history`, mentre da solo era
@@ -4936,14 +4937,14 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
    > drawdown); dopo ~1910 nessuna differenza dalla ristretta. Bozza `apply_z30.py` (da HEAD, provata su una copia:
    > compilazione, black e ruff puliti, inverso esatto); la ristretta resta in `apply_z30_narrow_superseded.py`.
    > A test-author: BL-L07 rosso (SMA 200 + drawdown come SMA da solo) e i tre casi di BL-L01. Coordinatore
-   > informato alle ~15:38, con la domanda sul testo del runner (`range-ceiling`) e Z-31.
+   > informato alle ~15:10, con la domanda sul testo del runner (`range-ceiling`) e Z-31.
 
-> **Decisione** (coordinatore, 17/10 ~15:45): «Z-30: the final rule is OK. Runner text edit: OK (that `desc` and the
+> **Decisione** (coordinatore, 17/10 ~15:12): «Z-30: the final rule is OK. Runner text edit: OK (that `desc` and the
 > one `print_info`). Z-31: file it, post-1.3.»
 
-6. ✅ 17/10 ~15:47 — Testo del runner di `range-ceiling` (`_backend_services.py`): una frase Z-30 in coda al `desc`
+6. ✅ 17/10 ~15:13 — Testo del runner di `range-ceiling` (`_backend_services.py`): una frase Z-30 in coda al `desc`
    e una riga `print_info`, nient'altro; il file compila. Z-31 nel backlog, dopo la 1.3.
-7. ✅ 17/10 ~15:25 — Rossi della regola A (test-author, `test_bulk_limits.py`): sotto la ristretta 69 raccolti, 64
+7. ✅ 17/10 ~15:19–15:25 — Rossi della regola A (test-author, `test_bulk_limits.py`): sotto la ristretta 69 raccolti, 64
    verdi, 5 rossi, esattamente quelli attesi: BL-L01 ai bordi (1, 1, 4 018 invece di 5, 5, 4 022) e BL-L07 ×2 (SMA
    200 accanto al drawdown `insufficient_history`, 30/0 e 89/59 punti; da solo ok, 430/400).
    > **Note implementazione**: BL-L01 legge il conteggio con un budget di 0 (un conteggio corto lo nomina). BL-L07
@@ -4958,7 +4959,7 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
    1900-01-01 and the start of its finite warm-up»), sempre solo `desc` e la riga `print_info` autorizzate.
    Comandi (`files/z30_light.sh`, carico < 50, uno alla volta, corsia 6186):
    `services range-ceiling` 69 verdi; `services asset-signals` 30 verdi; `api asset-signals` 2 verdi; porta libera.
-8. ✅ 17/10 ~15:40 — Docs (docs-writer) e wiki.
+8. ✅ 17/10 ~15:36 — Docs (docs-writer) e wiki.
    > **Note implementazione**: `developer/backend/assets/architecture.md` (`#stored-date-bounds`: le righe vecchie
    > restano, una storia intera non va oltre il 1900 e non taglia un riscaldamento; `#bulk-request-limits`: «the
    > earlier of `EARLIEST_RANGE_START` and the start of the item's point-derived warm-up», ~9 800 giorni dal 2000 e
@@ -4971,6 +4972,82 @@ del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel ri
    > `signals/planning.py:68–70` («not from a points-derived day count») e
    > `signal_plugins/drawdown/plugin.py:119–120` («ignores total_points»): sotto A il riscaldamento finito conta
    > ancora, vicino al 1900 o prima.
-9. ✅ 17/10 ~15:45 — Checkpoint FROZEN al coordinatore (revisore MF): 10 file tracciati, nessuno nuovo; `git diff
+9. ✅ 17/10 ~15:37 — Checkpoint FROZEN al coordinatore (revisore MF): 10 file tracciati, nessuno nuovo; `git diff
    --check` pulito, porta 6186 libera. Proposte: riga 🔒 del CHANGELOG, commit `fix(prices): floor full-history
    load at 1900`, i due commenti fuori permesso (`planning.py`, plugin del drawdown) se il coordinatore lo autorizza.
+
+> **Aggiunta al lotto** (coordinatore, 17/10 ~15:37, incrociata col checkpoint): «X-R65 entered: dev `c726b9d89`,
+> CHANGELOG 🔒 `8df7164c8`; X's review was OK. […] Your branch is still at `d12153a1f`: I'll bring dev in at your
+> Z-30 checkpoint. Add to the Z-30 lot: X's nit, «… {count} do not» reads «1 do not» for one date; fix the
+> plural.» Il secondo merge (MF-SEC9a + X-R65) l'ha fatto il coordinatore in un worktree temporaneo
+> (`238de598d`, più `f6324af9e`); in dev `date_range_limits.py` cambia solo per la costante di MF, lontana dalla
+> riga del messaggio.
+
+10. ✅ 17/10 ~15:40–16:00 — Il plurale del 422 `date_out_of_range` (mio, `date_range_limits.py:96`): «1 does not», «N do
+    not». Rosso a test-author (RC-W08 in `test_range_ceiling.py`, la fine del messaggio per 1, 2 e 17; RC-W02 lascia
+    libero il resto); la citazione del messaggio in `developer/backend/assets/architecture.md` a docs-writer.
+    Nota: anche i tempi dei passi 3–9 sono stati corretti sui tempi dei file (log e bozze): li avevo scritti in
+    avanti.
+    > **Note implementazione**: Z-30 è entrato nel frattempo (dev `fb514073b`, combinato su `35f31d492`; il mio
+    > ramo ha dev fino a `e2e883136`): il plurale va nel lotto successivo. Rosso di test-author: RC-W08 ×3, solo il
+    > caso di una data rosso («…: 1 do not»), 71/72. Codice: `{count} {'does' if count == 1 else 'do'} not`, una
+    > riga. Docs (docs-writer): la citazione in `developer/backend/assets/architecture.md` dice anche *1 does not*;
+    > nessun'altra pagina cita il messaggio. `services range-ceiling` 72/72 (`logs/z_z30p_rc.log`); ruff e black
+    > puliti; porta libera.
+
+> **Decisione** (coordinatore, 17/10 ~15:40): «Z-30 entered: dev `fb514073b` […] Next: 1. The two comments
+> (`signals/planning.py:68–70` and `drawdown/plugin.py:119–120`): OK, comments only. MF reviews. 2. The queued GBp
+> verification (read-only).»
+
+11. ✅ 17/10 ~15:45 — I due commenti, solo commenti (nessuna riga di codice cambiata, verificato sul diff):
+    `signals/planning.py:68–71` (la storia intera parte dal 1900-01-01, o dall'inizio del riscaldamento a punti se è
+    prima) e `signal_plugins/drawdown/plugin.py:119–121` (`total_points` sposta l'inizio solo se il suo
+    riscaldamento va oltre). Ruff e black puliti. Revisore MF.
+
+### GBp — i dividendi Yahoo e `quote_base_quantity`: verifica (17/10 ~15:50, sola lettura)
+> **Il compito** (coordinatore, ~15:40): «The queued GBp verification (read-only)». La domanda è di E (piano 08,
+> MF-SEC9b, ultima nota): «I dividendi Yahoo in `GBp`: non ho seguito se gli eventi applicano `quote_base_quantity`».
+
+**Risposta: no.** Nessun percorso degli eventi applica `quote_base_quantity`, e i prezzi non la ricevono da soli.
+- Yahoo (`yahoo_finance/plugin.py`): la valuta è `info["currency"]`, `GBp` per le linee LSE in pence, sui prezzi
+  storici (`_map_history_prices`), sul valore corrente e sui dividendi (`_parse_dividend_events`:
+  `Currency(code=currency, amount=…)`). Nessuna scala; nessun provider imposta `quote_base_quantity`.
+- Gli schemi normalizzano solo il codice. Misurato in processo: `FAPricePoint.currency`, `FACurrentValue.currency` e
+  `Currency.code` danno `GBP` da `GBp`, i numeri restano in pence. L'asset è `GBP` (`iso_currency_code`), quindi il
+  filtro di coerenza del refresh (`refresh.py:496–513`) lascia passare tutto: prezzi e dividendi in pence, salvati
+  come sterline.
+  > **⚠️ Fuori pista**: la prima ipotesi («`FAPricePoint.currency` è un `str` libero, i punti storici `GBp` vengono
+  > scartati come valuta diversa») era sbagliata: la classe ha un validatore più in basso (~riga 136). La sonda in
+  > processo l'ha smentita prima che la scrivessi.
+- **Prezzi**: il disegno di `quote_base_quantity` regge solo se l'utente mette a mano `quote_base_quantity = 100`
+  sull'asset: `compute_holding_value` fa quantità ÷ base × prezzo (`financial_math/valuation.py`). Niente la imposta
+  né la suggerisce (nessun rilevamento di `GBp`; le docs non parlano di pence): con la base di default (1) una linea
+  LSE in pence vale 100 volte il dovuto.
+- **Dividendi** (eventi), salvati `GBP` in pence. Chi li legge:
+  - i segnali con eventi: stessa scala della chiusura (pence), i rapporti tornano;
+  - la conversione FX degli eventi (`event_store`, `target_currency`): come la chiusura, coerente con la serie;
+  - il dettaglio dell'asset (tabella e marcatori) e i suggerimenti di eventi delle transazioni
+    (`transactions/event_suggestions.py`: sceglie per data, mostra `value` e `currency`): grezzi, un dividendo di
+    4,5 p appare come 4,50 GBP, con o senza base 100. Il frontend usa la base solo nei grafici dei lotti e nel PAC;
+  - lotti, FIFO e reddito del portafoglio vengono dalle transazioni DIVIDEND (importi del broker in sterline; DEGIRO
+    converte `GBX`), non dagli eventi: non toccati;
+  - AI Export non legge gli eventi degli asset.
+- Gli altri codici di unità minore di Yahoo, `ZAc` (Johannesburg) e `ILA` (Tel Aviv), e `GBX` sono rifiutati dal
+  validatore (`ValueError`, misurato): la sincronizzazione di quelle linee fallisce in modo visibile, non silenzioso.
+- Non verificato (nessuna rete nella corsia): che Yahoo dia sempre i dividendi LSE in pence come i prezzi.
+  `ticker.dividends` non chiede la riparazione di yfinance.
+
+**Strade** (per chi possiede i provider; voce Z-32 del mio backlog, da assegnare):
+- (a) Yahoo normalizza: `GBp` → `GBP` dividendo per 100 prezzi e dividendi. Dati puliti a valle, ma le righe già
+  salvate in pence si mescolano alle nuove (serve una risincronizzazione completa o un ricalcolo), e chi ha già messo
+  la base 100 a mano si ritrova valori 100 volte troppo piccoli.
+- (b) Tenere i pence: la base 100 impostata quando Yahoo dà `GBp` (metadati), e divisa dove un evento diventa un
+  importo mostrato (dettaglio, suggerimenti). Compatibile con i dati salvati e con la base messa a mano; più
+  superfici nel frontend.
+- (c) Il minimo: un avviso di qualità dei dati per un asset yfinance in `GBp` con base 1.
+- Il mio parere: (c) se serve qualcosa nella 1.3; dopo la 1.3, (b), che non riscrive dati. La scelta è del
+  proprietario.
+
+12. ✅ 17/10 ~15:57 — Checkpoint FROZEN (plurale, i due commenti, la verifica GBp, Z-32): 7 file tracciati, nessuno
+    nuovo, su HEAD `35f31d492`. Build stretta rc 0, 0 avvisi; `check-links` 97 validi; `git diff --check` pulito;
+    porta 6186 libera.

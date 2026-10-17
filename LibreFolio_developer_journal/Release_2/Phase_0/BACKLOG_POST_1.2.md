@@ -6655,6 +6655,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     «All» della UI parte dal 2000-01-01. Rimedio: lo stesso limite nel percorso dei prezzi (file di MF).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-30 — le righe salvate
   prima del 1900: lavoro», passo 4.
+- **Z-32 · Le linee Yahoo in pence (`GBp`) salvate come sterline** — medio, dati; Z, 17/10 (verifica chiesta dal
+  coordinatore, da una nota di E in MF-SEC9b). Da assegnare a chi possiede i provider.
+  - Yahoo dà `GBp` per le linee LSE in pence; gli schemi lo normalizzano a `GBP` senza scala: prezzi e dividendi
+    restano in pence ma salvati come sterline. Nessuno imposta `quote_base_quantity`: con la base di default (1) la
+    linea vale 100 volte il dovuto; con la base 100 messa a mano i valori tornano, ma i dividendi mostrati (dettaglio
+    dell'asset, suggerimenti di eventi) restano in pence. `ZAc`, `ILA` e `GBX` sono invece rifiutati.
+  - Strade: (a) Yahoo divide per 100 (dati puliti, ma le righe salvate vanno ricalcolate e la base messa a mano si
+    rompe); (b) la base 100 impostata quando Yahoo dà `GBp` e divisa dove un evento diventa un importo; (c) un avviso
+    di qualità dei dati. Parere: (c) nella 1.3 se serve, (b) dopo.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «GBp — i dividendi Yahoo e
+  `quote_base_quantity`: verifica».
 
 ## B · Backup e Docker (fase 01)
 
