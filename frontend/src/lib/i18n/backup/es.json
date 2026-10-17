@@ -161,6 +161,7 @@
         "waitingTitle": "LibreFolio se está reiniciando",
         "waiting": "Su inicio aplica la restauración. Esta página espera a que vuelva.",
         "slow": "LibreFolio aún no ha vuelto. Si nada lo reinicia por sí solo, inícialo tú: la restauración se aplica en ese inicio.",
+        "notStopped": "LibreFolio no se ha detenido. Si no se reinicia por sí solo, reinícialo tú: la restauración se aplica en ese inicio.",
         "rolledBack": "Los datos están como antes: {reason}.",
         "stillPending": "LibreFolio se reinició, pero la restauración no se aplicó. {waiting}",
         "back": "Volver a la copia de seguridad",

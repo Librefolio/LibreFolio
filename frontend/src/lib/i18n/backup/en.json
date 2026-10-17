@@ -161,6 +161,7 @@
         "waitingTitle": "LibreFolio is restarting",
         "waiting": "Its start applies the restore. This page waits for it to come back.",
         "slow": "LibreFolio has not come back yet. If nothing starts it again by itself, start it yourself: the restore is applied at that start.",
+        "notStopped": "LibreFolio has not stopped. If it does not restart by itself, restart it yourself: the restore is applied at that start.",
         "rolledBack": "The data is as it was before: {reason}.",
         "stillPending": "LibreFolio restarted, but the restore was not applied. {waiting}",
         "back": "Back to Backup",
