@@ -46,7 +46,7 @@ The July brainstorm that put the signals first in Release 2: [[sources/release2-
 | Role | Path |
 |------|------|
 | Canonical contracts | `backend/app/schemas/signals.py` |
-| Signal orchestration | `backend/app/services/signals/service.py` |
+| Signal orchestration | `backend/app/services/signals/service.py` (façade), `planning.py`, `execution.py`, `validation.py` |
 | Plugin registry | `backend/app/services/provider_registry.py` |
 | Production plugins | `backend/app/services/signal_plugins/` |
 | Asset adapter | `backend/app/services/assets/price_query.py` |

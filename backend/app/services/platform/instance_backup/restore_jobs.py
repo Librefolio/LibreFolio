@@ -7,6 +7,8 @@
 - ``start_check`` checks an upload in the background, one check at a time: the lock of the checks is taken by the
   request, so that a second start is refused at once, and handed to the thread, which releases it only once the
   check's end is recorded. ``read_check`` follows it; a check whose server stopped reads as ``restore_interrupted``.
+  A secure backup's password is checked in the request (lot B4): a missing or wrong one is refused at once and keeps
+  the upload, for another try; the thread gets the key it gives, never the password.
 - ``remove_check`` drops an ended check with its copy; ``prune`` drops what is older than ``STAGE_LIFETIME``, and
   ends a check its stopped server left running.
 - ``confirm_check`` confirms the restore of a finished check (lot B3, ``apply.py``): its copy then waits for the next
@@ -30,6 +32,7 @@ from typing import Literal
 from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.apply import RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
+from backend.app.services.platform.instance_backup.envelope import EnvelopeKey, is_envelope, read_header, unlock
 from backend.app.services.platform.instance_backup.jobs import _lock_held, _out_of_space, _RunLock
 from backend.app.services.platform.instance_backup.paths import (
     STAGE_LOCK_FILE,
@@ -77,6 +80,10 @@ class UploadNotFoundError(LookupError):
     """No finished upload has this id: never received, replaced, or already checked."""
 
 
+class PasswordRequiredError(RuntimeError):
+    """The upload is a secure backup, and no password came with it: the upload stays for another try."""
+
+
 class CheckNotFoundError(LookupError):
     """No check has this id."""
 
@@ -91,10 +98,11 @@ class CheckPendingError(RuntimeError):
 
 @dataclass(frozen=True)
 class RestoreUploaded:
-    """A finished upload: the id to check it with, and its size."""
+    """A finished upload: the id to check it with, its size, and its kind: ``envelope`` for a secure backup."""
 
     upload_id: str
     size: int
+    kind: Literal["zip", "envelope"] = "zip"
 
 
 @dataclass(frozen=True)
@@ -175,8 +183,9 @@ class UploadWriter:
         self._fd = None
         os.replace(self._partial, self._final)
         _remove_replaced_uploads(self._data_dir, keep=self.upload_id)
-        logger.info("Backup archive received for a restore", upload_id=self.upload_id, size=self.size)
-        return RestoreUploaded(upload_id=self.upload_id, size=self.size)
+        kind: Literal["zip", "envelope"] = "envelope" if is_envelope(self._final) else "zip"
+        logger.info("Backup archive received for a restore", upload_id=self.upload_id, size=self.size, kind=kind)
+        return RestoreUploaded(upload_id=self.upload_id, size=self.size, kind=kind)
 
     def abort(self) -> None:
         """Drop what was received; nothing when already finished or aborted."""
@@ -201,11 +210,13 @@ def _remove_replaced_uploads(data_dir: Path, *, keep: str) -> None:
 # =============================================================================
 
 
-def start_check(upload_id: str, *, data_dir: Path | None = None) -> RestoreCheck:
+def start_check(upload_id: str, *, data_dir: Path | None = None, password: str | None = None) -> RestoreCheck:
     """Check the upload ``upload_id`` in the background, on a copy; its first state.
 
     ``UploadNotFoundError`` when there is no such upload, ``StagingBusyError`` while another check runs,
-    ``BackupPathError`` when ``.restore`` is not a plain folder.
+    ``BackupPathError`` when ``.restore`` is not a plain folder. A secure backup needs its ``password``, checked here:
+    ``PasswordRequiredError`` without one, ``EnvelopeError`` (``wrong_password``, ``envelope_damaged``,
+    ``envelope_unsupported``) when it does not open it; the upload then stays, and no check starts. A zip ignores it.
     """
     data_dir = data_dir or get_data_dir()
     if not is_job_id(upload_id):
@@ -219,16 +230,29 @@ def start_check(upload_id: str, *, data_dir: Path | None = None) -> RestoreCheck
     if not lock.try_acquire():
         raise StagingBusyError("Another archive is being checked")
     try:
-        check = RestoreCheck(stage_id=new_stage_id(), upload_id=upload_id, status="running", phase="checking", done_bytes=0, total_bytes=0, created_at=_now())
+        key = _envelope_key(upload_path(data_dir, upload_id), password)
+        phase: StagePhase = "decrypting" if key is not None else "checking"
+        check = RestoreCheck(stage_id=new_stage_id(), upload_id=upload_id, status="running", phase=phase, done_bytes=0, total_bytes=0, created_at=_now())
         _write_state(data_dir, check)
-        threading.Thread(target=_run_check, args=(data_dir, check, lock), name=f"restore-check-{check.stage_id[:8]}", daemon=True).start()
+        threading.Thread(target=_run_check, args=(data_dir, check, lock, key), name=f"restore-check-{check.stage_id[:8]}", daemon=True).start()
     except BaseException:
         lock.release()
         raise
     return check
 
 
-def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock) -> None:
+def _envelope_key(upload: Path, password: str | None) -> EnvelopeKey | None:
+    """The key of a secure backup's upload, for its password; ``None`` for a zip, whatever the password. Its header is
+    read first: an envelope that cannot be opened asks for no password."""
+    if not is_envelope(upload):
+        return None
+    read_header(upload)
+    if password is None:
+        raise PasswordRequiredError("The backup is protected by a password")
+    return unlock(upload, password)
+
+
+def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock, key: EnvelopeKey | None = None) -> None:
     """The thread of one check: the copy, its state along the way, its end; the upload removed in any case."""
     upload = upload_path(data_dir, check.upload_id)
     current = check
@@ -237,15 +261,16 @@ def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock) -> None:
     def progress(phase: StagePhase, done: int, total: int) -> None:
         nonlocal current, written
         moved = phase != current.phase
-        # done_bytes and total_bytes measure the unpacking; the later phases count other things, and keep its figures.
-        current = replace(current, phase=phase, done_bytes=done, total_bytes=total) if phase == "unpacking" else replace(current, phase=phase)
+        # done_bytes and total_bytes measure the decryption, then the unpacking; the later phases count other things, and
+        # keep its figures.
+        current = replace(current, phase=phase, done_bytes=done, total_bytes=total) if phase in ("decrypting", "unpacking") else replace(current, phase=phase)
         if moved or time.monotonic() - written >= _STATE_INTERVAL:
             _write_state(data_dir, current)
             written = time.monotonic()
 
     error_code: str | None = None
     try:
-        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock)
+        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key)
     except StagingError as exc:
         error_code = exc.code
     except BackupPathError:

@@ -122,8 +122,9 @@ from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.financial_math.weights import gross_weights
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.signals.planning import SignalExecutionPlan
 from backend.app.services.signals.registry import SignalPluginRegistry
-from backend.app.services.signals.service import SignalExecutionPlan, SignalService
+from backend.app.services.signals.service import SignalService
 
 # =============================================================================
 # Shared temporal aggregator metadata (matches catalog.py's own constant)

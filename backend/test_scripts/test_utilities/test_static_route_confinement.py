@@ -22,6 +22,12 @@ leaving the folder does. Each such case first writes the file into the build wit
 own, so the fallback never stands for a file that is not there; a name with a dot anywhere else
 (``robots.txt``, a ``v1.2`` folder) is still served.
 
+Nor do the documentation and the build's ``/_app`` mount serve a hidden file (H-29): a path with a part below the site
+folder starting with ``.`` (a Finder ``.DS_Store``, a file in a hidden folder, a hidden folder's ``index.html``, the same
+through parent segments) gets the documentation's 404, and one below ``_app`` the mount's, each as a file its tree does
+not hold. Each case writes its file with a content of its own and compares the answer with a missing file's, once the
+route is proved to serve the fake tree; a ``style.css``, a folder's ``index.html``, a ``v1.2`` folder are still served.
+
 The requests are raw ASGI calls. An HTTP client normalises dot segments before sending, so the route
 would not receive the path written in the test; here ``path`` reaches the app as the server hands it
 over once percent-decoded. A plain ``http`` scope never runs the lifespan, and without
@@ -29,8 +35,10 @@ over once percent-decoded. A plain ``http`` scope never runs the lifespan, and w
 
 The folders are built under ``tmp_path`` and swapped in for the module globals the routes read at
 call time (``FRONTEND_BUILD_DIR`` and ``SITE_DIR`` of ``backend.app.services.platform.static_site``, ``PLUGIN_STATIC_DIRS`` of
-``backend.app.api.v1.uploads``). The two public routes are called on the global app as it is (``backend.app.main``); the
-plugin route is mounted on a fresh app whose sign-in dependency is overridden. Only these modules are imported, never the
+``backend.app.api.v1.uploads``). The catch-all and the documentation are called on the global app as it is
+(``backend.app.main``). The ``/_app`` mount fixes its folder when ``install_static_site()`` runs, so the global app's
+mount serves the real build: the mount is called on a fresh app holding the static site of the fake build. The plugin
+route is mounted on a fresh app whose sign-in dependency is overridden. Only these modules are imported, never the
 helper behind the routes. No DB, no server, no network.
 """
 
@@ -45,6 +53,7 @@ from urllib.parse import quote
 
 import pytest
 from fastapi import FastAPI
+from starlette.routing import Mount
 
 import backend.app.api.v1.uploads as uploads
 import backend.app.main as app_main
@@ -341,19 +350,28 @@ DOTTED_BUILD_FILES = {
 }
 
 
+def add_file(folder: Path, relative: str, tree: str) -> bytes:
+    """Write ``relative`` into ``folder``, the ``tree``, with a content no other file holds, prove it is a file inside, return the content.
+
+    A refusal then never stands for a file that is not there, and a reply can carry that content only if the route sent
+    this very file.
+    """
+    path = folder / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = f"content of the {tree} file {relative}".encode()
+    path.write_bytes(content)
+    assert path.is_file() and path.read_bytes() == content, f"premise: {relative} is a file of the {tree}"
+    assert path.resolve().is_relative_to(folder), f"premise: {relative} lies inside the {tree} folder"
+    return content
+
+
 def add_build_file(served: Served, relative: str) -> bytes:
     """Write ``relative`` into the build with a content no other file holds, prove it is a file inside, return the content.
 
     A fallback then never stands for a file that is not there, and a reply can carry that content only if the route
     sent this very file.
     """
-    path = served.build / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = f"content of the build file {relative}".encode()
-    path.write_bytes(content)
-    assert path.is_file() and path.read_bytes() == content, f"premise: {relative} is a file of the build"
-    assert path.resolve().is_relative_to(served.build), f"premise: {relative} lies inside the build folder"
-    return content
+    return add_file(served.build, relative, "build")
 
 
 @pytest.mark.asyncio
@@ -403,4 +421,162 @@ async def test_frontend_route_still_serves_a_dotted_name_that_is_not_hidden(serv
     reply = await raw_get(app_main.app, "/" + relative)
 
     assert reply.status == 200, f"GET /{relative} ({DOTTED_BUILD_FILES[relative]}) was not served"
+    assert reply.body == content
+
+
+# ---------------------------------------------------------------------------
+# Documentation and the /_app mount: the hidden files of their trees (H-29)
+# ---------------------------------------------------------------------------
+
+
+def answer(reply: Reply) -> tuple[int, str | None, bytes]:
+    """What a reply tells the client: its status, its type, its body."""
+    return reply.status, reply.headers.get("content-type"), reply.body
+
+
+#: The hidden files of a documentation site, by the path requested below ``/mkdocs/``: (the file it names in the site,
+#: what it is). MkDocs writes none; the Finder of a Mac leaves a ``.DS_Store`` in a folder it shows.
+HIDDEN_SITE_PATHS = {
+    ".DS_Store": (".DS_Store", "the Finder's record of the site folder"),
+    "assets/.hidden.css": ("assets/.hidden.css", "a hidden file in a folder of the site"),
+    ".hidden-dir/page.html": (".hidden-dir/page.html", "a page inside a hidden folder"),
+    ".hidden-dir/": (".hidden-dir/index.html", "the index.html of a hidden folder"),
+    "assets/../.DS_Store": (".DS_Store", "the Finder's record of the site folder, reached through parent segments"),
+}
+
+#: Paths the documentation serves before H-29 and after it: (the file each names in the site, what it is).
+VISIBLE_SITE_PATHS = {
+    "assets/style.css": ("assets/style.css", "a style sheet of the site"),
+    "guide/": ("guide/index.html", "the index.html of a folder"),
+    "v1.2/page.html": ("v1.2/page.html", "a page in a folder whose name holds a dot"),
+}
+
+#: A page the site does not hold.
+MISSING_PAGE = "no-such-page.html"
+
+
+def add_site_file(served: Served, relative: str) -> bytes:
+    """Write ``relative`` into the site with a content no other file holds, prove it is a file inside, return the content."""
+    return add_file(served.site, relative, "site")
+
+
+def docs_target(site: Path, requested: str) -> Path:
+    """The file ``/mkdocs/<requested>`` names when joined to ``site`` without any check: dot segments resolved, a folder standing for its ``index.html``."""
+    target = (site / requested).resolve()
+    return target / "index.html" if target.is_dir() else target
+
+
+async def docs_not_found(served: Served) -> Reply:
+    """The documentation's 404, the answer to a page the site does not hold, as to a path leaving it.
+
+    A barrier first proves that the route serves the fake site: another site holds none of the case's files either, and
+    its 404 would make a refusal vacuous.
+    """
+    home = await raw_get(app_main.app, "/mkdocs/")
+    assert (home.status, home.body) == (200, SITE_INDEX_HTML), f"barrier: GET /mkdocs/ answered {home.status}, not the index of the fake site"
+    assert not (served.site / MISSING_PAGE).exists(), f"premise: the site holds no {MISSING_PAGE}"
+    reply = await raw_get(app_main.app, "/mkdocs/" + MISSING_PAGE)
+    assert reply.status == 404, f"premise: GET /mkdocs/{MISSING_PAGE} answered {reply.status}, not the documentation's 404"
+    return reply
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("requested", list(HIDDEN_SITE_PATHS))
+async def test_docs_route_never_serves_a_hidden_file_of_the_site(served: Served, requested: str) -> None:
+    relative, what = HIDDEN_SITE_PATHS[requested]
+    (served.site / "assets").mkdir()  # a folder of the site, as a built documentation has: parent segments climb out of it
+    content = add_site_file(served, relative)
+    assert docs_target(served.site, requested) == served.site / relative, f"premise: /mkdocs/{requested} names {relative}"
+    not_found = await docs_not_found(served)
+
+    reply = await raw_get(app_main.app, "/mkdocs/" + requested)
+
+    assert content not in reply.body, f"H-29: GET /mkdocs/{requested} sent {what}"
+    assert reply.status == 404
+    assert answer(reply) == answer(not_found), f"H-29: GET /mkdocs/{requested} was not answered with the documentation's 404"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("requested", list(VISIBLE_SITE_PATHS))
+async def test_docs_route_still_serves_a_file_that_is_not_hidden(served: Served, requested: str) -> None:
+    # Green before H-29 and after it: only a part of the path that starts with a dot hides a file.
+    relative, what = VISIBLE_SITE_PATHS[requested]
+    content = add_site_file(served, relative)
+
+    reply = await raw_get(app_main.app, "/mkdocs/" + requested)
+
+    assert reply.status == 200, f"GET /mkdocs/{requested} ({what}) was not served"
+    assert reply.body == content
+
+
+#: The hidden files under ``_app``, by the path requested below ``/_app/``: (the file it names in the build, what it is).
+#: SvelteKit writes none; the Finder of a Mac leaves a ``.DS_Store`` in a folder it shows.
+HIDDEN_APP_PATHS = {
+    ".DS_Store": ("_app/.DS_Store", "the Finder's record of the _app folder"),
+    "immutable/.hidden.js": ("_app/immutable/.hidden.js", "a hidden script among the immutable chunks"),
+    ".hidden-dir/x.js": ("_app/.hidden-dir/x.js", "a script inside a hidden folder"),
+    "immutable/../.DS_Store": ("_app/.DS_Store", "the Finder's record of the _app folder, through parent segments Starlette normalises away"),
+}
+
+#: Paths the mount serves before H-29 and after it: (the file each names in the build, what it is).
+VISIBLE_APP_PATHS = {
+    "immutable/chunk.js": ("_app/immutable/chunk.js", "an immutable chunk"),
+    "version.json": ("_app/version.json", "the version file of the build"),
+    "v1.2/x.js": ("_app/v1.2/x.js", "a script in a folder whose name holds a dot"),
+}
+
+#: A file ``_app`` does not hold.
+MISSING_CHUNK = "immutable/no-such-chunk.js"
+
+
+@pytest.fixture
+def app_mount(served: Served) -> FastAPI:
+    """A fresh app holding the static site of the fake build, its ``/_app`` mounted on the build's ``_app`` folder.
+
+    ``install_static_site()`` fixes the mount's folder when it runs, so the global app, made at import, mounts the real
+    build. ``served`` has swapped the fake build (``index.html``, ``200.html``) in for ``FRONTEND_BUILD_DIR``; given an
+    ``_app/immutable/`` folder, as a real build has, a fresh app mounts it, as test_nosniff_content_types.py builds one.
+    """
+    app_folder = served.build / "_app"
+    (app_folder / "immutable").mkdir(parents=True)
+    app = FastAPI()
+    static_site.install_static_site(app)
+    mounted = [getattr(route.app, "directory", None) for route in app.routes if isinstance(route, Mount) and route.path == "/_app"]
+    assert mounted == [app_folder], f"premise: /_app is mounted once, on the _app folder of the fake build, not on {mounted}"
+    return app
+
+
+async def app_not_found(app: FastAPI, served: Served) -> Reply:
+    """The mount's 404, the answer to a file ``_app`` does not hold: Starlette's ``HTTPException``, rendered by FastAPI."""
+    assert not (served.build / "_app" / MISSING_CHUNK).exists(), f"premise: _app holds no {MISSING_CHUNK}"
+    reply = await raw_get(app, "/_app/" + MISSING_CHUNK)
+    assert reply.status == 404, f"premise: GET /_app/{MISSING_CHUNK} answered {reply.status}, not a 404"
+    return reply
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("requested", list(HIDDEN_APP_PATHS))
+async def test_app_mount_never_serves_a_hidden_file_of_the_build(served: Served, app_mount: FastAPI, requested: str) -> None:
+    relative, what = HIDDEN_APP_PATHS[requested]
+    content = add_build_file(served, relative)
+    assert (served.build / "_app" / requested).resolve() == served.build / relative, f"premise: /_app/{requested} names {relative}"
+    not_found = await app_not_found(app_mount, served)
+
+    reply = await raw_get(app_mount, "/_app/" + requested)
+
+    assert content not in reply.body, f"H-29: GET /_app/{requested} sent {what}"
+    assert reply.status == 404
+    assert answer(reply) == answer(not_found), f"H-29: GET /_app/{requested} was not answered as a file _app does not hold"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("requested", list(VISIBLE_APP_PATHS))
+async def test_app_mount_still_serves_a_file_that_is_not_hidden(served: Served, app_mount: FastAPI, requested: str) -> None:
+    # Green before H-29 and after it: only a part of the path that starts with a dot hides a file.
+    relative, what = VISIBLE_APP_PATHS[requested]
+    content = add_build_file(served, relative)
+
+    reply = await raw_get(app_mount, "/_app/" + requested)
+
+    assert reply.status == 200, f"GET /_app/{requested} ({what}) was not served"
     assert reply.body == content
