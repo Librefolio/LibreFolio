@@ -6687,6 +6687,11 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - **Parte 2**, dopo A8b: i percorsi «Settings › Administration › Email». Sono 8 valori i18n più circa 15 righe;
       A8b aveva già allineato il resto.
     - Commit: la parte 1 fino a `443eda316`, la parte 2 al checkpoint. Dettagli: piano 08, da «E-8.2» a «E-8.4».
+  - 17/10, E: dopo l'ingresso, il gate G del coordinatore (dev `91f4de9cb`) ha trovato due rossi Vitest di E.
+    - ETX-14 si aspettava ancora solo `{to}` in «sent».
+    - Il mock di `$lib/i18n` di `linkShareRegistration.test.ts` non dava `DEFAULT_LOCALE` allo store della lingua, che
+      il barile delle select carica.
+    - Curati nei soli test (E-8.5); tutta la cartella `features/email` è verde. Dettagli: piano 08, «E-8.5».
 - ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
@@ -6764,6 +6769,17 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       chiave più pesante.
     - I docs «310 contro 100 000» sono corretti.
     - Commit al checkpoint di E-14.
+- **E-15 · Nei run combinati il limite dei login si accende da solo, e i test di E vanno rossi** — piccolo; E, 17/10
+  (triage dell'`all-backend` di W, coordinatore).
+  - `conftest.py` mette `LIBREFOLIO_LOGIN_LIMIT=off` una volta sola, all'avvio.
+  - I 60 moduli che chiamano `setup_test_database()` all'import passano da `configure_test_runtime()`, che toglie ogni
+    `LIBREFOLIO_*`: nel processo il limite si accende alla raccolta.
+  - Ne nascono 21 rossi nei servizi e 7 nelle API di `email-verification`, solo in combinato.
+  - Decisione del coordinatore (17/10): la cura alla radice.
+    - Un fixture autouse nel `conftest.py` condiviso rimette `off` prima di ogni test, se la variabile manca.
+    - Niente fixture per modulo.
+    - Va dopo la revisione X-R44.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-15».
 
 ## Y · Cruscotto e grafici (fase 01)
 
