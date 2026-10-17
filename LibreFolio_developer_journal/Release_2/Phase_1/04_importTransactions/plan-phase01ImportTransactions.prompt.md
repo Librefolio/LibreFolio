@@ -4845,7 +4845,7 @@ X rivede `price_query.py` (e, se vuole, `price_store.py` ed `event_store.py`, ch
 CHANGELOG (C-97a e W-B53 non sono usciti). Dopo l'ingresso: C-97b riprende (la cura, poi la frase di `tooManyDigits` col
 `max_integer_digits`).
 
-### C-97b — i decimali in input: la cura ✅, handoff FROZEN, E2E nello slot ⏳ (2026-10-17)
+### C-97b — i decimali in input: la cura ✅, handoff FROZEN, E2E ✅ (2026-10-17)
 
 **Ripresa** (coordinatore, 02:0x): W-B58/W-B59 committati (`7a4fdf024`, `e69544f79`, journal `94fbd54fd`) ed entrati in dev
 (`4e9d1815f`, revisione di X ok; le sue 2 note su `price_query.py` vanno a X come X-R40). HEAD `94fbd54fd` verificato; nel
@@ -4928,10 +4928,243 @@ combinata. Due commit proposti: `feat(transactions): 10-decimal input, digit mes
 galleria 03:50–04:45, poi Y): prima, sulla HEAD nuova, `api sync` (il client generato è ignorato da git) e `front check` a carico
 < 50; poi `files/scripts/c97b_slot.sh`. Riga del CHANGELOG da aggiungere alla voce C-97 (#43), all'ingresso, dal coordinatore.
 
-**Passo 6 — gli E2E ⏳**: nello slot del coordinatore, dopo le 04:45: `db populate --force`, poi
+**Prima dello slot ✅ (03:30–03:3x)**: C-97b committato (`24aa1d69b`, `527306638`), dev `2818924b7` unito → HEAD **`1f779d386`**;
+sopra, `dev.py api sync` (carico 35, uscita 0; il client generato è ignorato da git: nessuna differenza tracciata) e `front check`
+**0/0** (carico 40). E2E di R13-SEC5 (revisione di sicurezza di E su C-97b): niente sopra la soglia, e il lotto chiude un pozzo
+`{@html}` nella cella del Bulk; tre note basse → **W-B66** (un `1e-8` incollato diventa `18`; un incolla enorme blocca la
+scheda: `10n ** places` e una regex quadratica; il toast a 2 decimali, con C-97c).
+
+**Passo 6 — gli E2E ✅ (slot 2, 04:48–05:13)**, `files/scripts/c97b_slot.sh` su HEAD **`1f779d386`** (la revisione combinata; nel
+worktree solo i file di test di W-B60 e il journal, nessun file di `frontend/` né di `backend/app/`; `api sync` già fatto alle 03:30
+sulla stessa HEAD): `db populate --force` ok, `tx-bulk-operations` **11** (la guardia del satoshi compresa), `tx-event-create-exists`
+**8**, `tx-event-picker` **5**, `transactions-modals` **25**, `tx-commit-all-types` **19**, `tx-wac-bulk` **11**,
+`tx-bulk-promote-cost-basis` **8**, `tx-bulk-import-handoff` **3** (partito a carico 41, finito a 158: verde lo stesso),
+`tx-fx-completeness` **4**: **94 passati, 0 falliti**; porta 6184 libera dopo (lsof: 0 in ascolto). C-97b pronto per l'ingresso.
+
+Lista originale dello slot: `db populate --force`, poi
 `tx-bulk-operations` (con la guardia), `tx-event-create-exists`, `tx-event-picker`, `transactions-modals`, `tx-commit-all-types`,
 `tx-wac-bulk`, `tx-bulk-promote-cost-basis`, `tx-bulk-import-handoff` (la conversione import → Bulk), `tx-fx-completeness`. Il PAC
 non ha E2E che scrivano nei campi toccati (solo la fixture della galleria li nomina).
 Restano, a carico < 50: `front check`, `front-utility component-unit` e `core-unit`, `utils gate-i18n-catalog` e
 `gate-i18n-usage`; poi lo slot (dopo il blocco) per gli E2E: `tx-bulk-operations` (la guardia), `tx-event-create-exists`,
 `tx-event-picker`, `transactions-modals`, `tx-commit-all-types`, `tx-wac-bulk`, `tx-bulk-promote-cost-basis`.
+
+### W-B60 — importi e valori degli eventi senza il rumore del double: ✅ handoff FROZEN, `all-backend` dopo l'unione (2026-10-17)
+
+**Ordine del coordinatore** (03:0x): C-97b committato (`24aa1d69b`, `527306638`), base aggiornata con dev `2818924b7` → HEAD
+**`1f779d386`**, pulito. Nell'attesa dello slot di C-97b (dopo le 04:45): l'analisi di W-B60 e i rossi, **solo file di test**;
+nessun codice di prodotto finché gli E2E di C-97b non sono verdi, perché lo slot provi esattamente questa revisione.
+
+**Stato reale verificato** (HEAD `1f779d386`, sola lettura):
+- `Transaction.amount` (`db/models.py:892`) e `AssetEvent.value` (`:1052`) sono `Numeric(18, 6)`: SQLAlchemy li rilegge col
+  formato `'%.6f'` del double, quindi da ~11 cifre intere il rumore entra nei 6 decimali (`123456789012.345` →
+  `123456789012.345001`, `12345678901.2345` → `12345678901.234501`; con le 15 cifre intere di N63, `99999999999999.9` →
+  `99999999999999.906250`). Gli importi interi tornano esatti (un double è esatto fino a 2^53). Un REAL inf torna
+  `Decimal('Infinity')` (W-B63), e niente impedisce di scriverlo (nessun `process_bind_param`).
+- **SQL**: nessun aggregato su queste colonne (le `func.sum` del backend contano righe con `case`); l'unica espressione è il
+  filtro `func.abs(Transaction.amount) >= …` di `transactions/queries.py:79-81`, che il tipo non tocca. Le somme sono già in
+  Python (`native_balances`, `_LedgerAccumulator` di `ledger_totals.py`).
+- **Arrotondamenti**: i plugin BRIM arrotondano solo il costo per unità (`credit_agricole:1078`, `intesa:372`), mai un importo;
+  `truncate_to_db_precision`/`round_computed_value` su `amount` non hanno chiamanti nell'app. Da `RealDecimal` prenderebbero il
+  taglio a 15 cifre significative (oggi il test `test_real_decimal.py:332` fissa il contrario: `1234567890123.456789`, «nessun
+  taglio delle cifre significative» per un `Numeric`).
+- **Totali del backup** (J-27/B-13): `compute_control_totals` legge dall'ORM, quindi i due lati seguono il tipo; un backup
+  registrato **prima** e ripristinato **dopo** riporterebbe una differenza per un importo enorme con decimali (riportata, mai un
+  rifiuto). I backup della 1.2 non hanno totali (J-27 è della 1.3): tocca solo i backup delle build di sviluppo. La docstring di
+  `ledger_totals.py` (di J/MF) dice «amounts are Numeric(18, 6)» e il commento di `_EXACT` «Sums of Numeric(18, 6) amounts»:
+  da allineare (solo testo).
+- **Test che si adattano da soli**: `test_numeric_truncation.py` scopre le colonne e il loro `decorated` dal tipo
+  (`numeric is not column.type`): con `RealDecimal` si aspetterà il taglio a 15 cifre. `db_schema_validate.py:10` lo dice in
+  docstring.
+
+**Disegno della cura** (dopo gli E2E di C-97b): `RealDecimal(18, 6)` per `Transaction.amount` e `AssetEvent.value` — stesso DDL,
+**nessuna migrazione** (Alembic confronta l'`impl`: `NUMERIC(18, 6)` com'è); docstring di `models.py`; regola in
+`.github/instructions/backend-db.instructions.md`; doc (`architecture/database/index.md` — tabella e «Read» —,
+`brokers_transactions.md`, `backend/assets/events.md`); docstring di `ledger_totals.py` con l'ok di J/MF. Effetti: la lettura
+esatta (15 cifre significative, sempre 6 decimali come oggi), un inf letto `None` e mai più scritto (la metà importo/evento di
+W-B63), `truncate_to_db_precision`/`round_computed_value` su un importo con le 15 cifre. Costo: la lettura di un importo passa da
+Python (repr + `Decimal`), come già la quantità: ~1–2 µs a riga.
+
+**Prove** (rossi, test-author `0746298a`, che conosce i file di W-B58): `utils real-decimal` (il tipo delle due colonne; l'andata e
+ritorno esatta di `123456789012.345`, `-99999999999999.9`, `12345678901.2345`; le guardie `-100` → `-100.000000`, `0.000001`,
+`999999999999999`; un inf letto `None`; `1E+400` rifiutato in scrittura; il test di `:332` riscritto, 15 cifre ROUND_DOWN; un
+`round_computed_value` su un importo a 15 cifre); `services transaction-decimal-places` (una BUY con importo `-123456789012.345`
+riletta esatta dal servizio e nei totali di controllo della sua riga); `services asset-digit-limits` (un evento di valore
+`12345678901.2345` riletto esatto). Dopo la cura: gli stessi, `db numeric-truncation`, `db validate`, `utils decimal-precision`,
+le API delle transazioni e degli eventi nello slot.
+
+**I rossi ✅ (03:1x–03:28, carico 38–42)**, test-author `0746298a`, solo file di test, nessun file nuovo:
+
+| Azione | Rossi | Passati |
+|---|---|---|
+| `utils real-decimal` | 27 | 212 |
+| `services transaction-decimal-places` | 2 | 122 |
+| `services asset-digit-limits` | 1 | 77 |
+
+Ogni rosso per l'assenza del contratto: il tipo delle due colonne (×2); la rilettura esatta di `123456789012.345`,
+`-99999999999999.9`, `12345678901.2345` (×6, oggi il rumore); un inf letto `None` (×4); `1E+400` rifiutato in scrittura (×8 diretti, ×2
+dal motore); `truncate_to_db_precision` su un importo a 15 cifre ROUND_DOWN (×3: il vecchio guard
+`test_guard_an_amount_gets_no_significant_digit_cut` diventa un rosso, e `999999999999999.999999` → `999999999999999`, mai per
+eccesso); `round_computed_value` su un importo (×2); la BUY di `-123456789012.345` riletta dall'ORM dopo `expire` e da `get_by_ids`, e
+nei totali di controllo della sua sola riga (`TestACashAmountReadsBackExactly`); un dividendo di `12345678901.2345` riletto da
+`query_events_bulk`. Guardie verdi: la dichiarazione e il DDL `NUMERIC(18, 6) NOT NULL` invariati; `-100`, `0.000001`,
+`999999999999999`, `-1234.5`, `1.5` con la forma di oggi. > **Note implementazione**: `_UNCHANGED_COLUMNS` non elenca più le due
+colonne; `_process_bind_param` gestisce un `Numeric` (senza il metodo) con un fallimento nominato; `db_schema_validate.py:10`, solo
+docstring. `test_numeric_truncation.py` non chiede nulla (scopre il tipo da sé; verificato col suo aiuto e la regola di `(18, 6)`),
+ma le sue docstring («seven columns», `:175`, `:257-258`) andranno a nove con la cura. > **⚠️ Fuori pista**: dopo la cura un valore di
+evento inf si legge `None`, e `query_events_bulk` costruisce `Currency(amount=None)`, che fallisce: la query degli eventi resta rotta
+su una riga così (oggi fallisce su `Infinity`: nulla peggiora) → in **W-B63**.
+
+### W-B62 e W-B63 — i valori enormi nelle risposte e gli inf già salvati: analisi ✅, rossi di W-B62 ✅ (2026-10-17)
+
+**Ordine del coordinatore** (03:3x): analisi in sola lettura con una proposta, nell'attesa dello slot di C-97b; niente codice
+finché C-97b non è verde. (E le due righe di `ledger_totals.py`, di J, le scrivo io in W-B60, solo testo: aggiunte allo script
+`files/scripts/wb60_cure.py`, da applicare con la cura.)
+
+**W-B62 — stato reale** (HEAD `1f779d386`):
+- `price_query.get_current_prices_bulk` (`services/assets/price_query.py:703`, di X): `cv = await core.call_provider(…)`, poi
+  **`core._asset_current_cache.set(cache_key, cv)` prima di ogni controllo** (`:785`), poi `FACurrentPriceItem(value=cv.value)`.
+  Un `1E+50000000` è un `Decimal` finito: pydantic lo accetta (rifiuta solo ±Infinity e NaN, che cadono nel `except` e vanno al
+  ripiego del DB), `SafeDecimal` lo scrive con `format(v, "f")` (`schemas/common.py:47`): ~50 MB a risposta, e la cache lo
+  riserve per 2 minuti a ogni utente (ramo del colpo in cache, `:767-776`). W-B58 lo tiene fuori dalla DB (`storable_price`,
+  `:864`), non dalla risposta.
+- **Lo stesso nel refresh**: `refresh._persist_refresh_item` costruisce `changed_items_delta` dai punti **in arrivo**
+  (`_count_actual_price_changes`, o il ripiego `list(price_items)` quando quello solleva) e li risponde in
+  `FARefreshResult.changed_points` (`refresh.py:643`, fino a `CHANGED_POINTS_PAYLOAD_CAP`): una data che `bulk_upsert_prices`
+  scarta come non memorizzabile torna comunque nel delta col valore grezzo.
+- Il serializzatore non è il posto: è condiviso da ogni `SafeDecimal`, e sollevare lì dà un 500 all'intera risposta.
+
+**W-B62 — proposta** (codice di X, scritto da me con la sua revisione, come W-B58):
+1. Al confine del provider in `get_current_prices_bulk`: `storable_price(cv.value)` subito dopo la chiamata; se `None` la quotazione
+   è un fallimento del provider (avviso nel log), **non va in cache**, e l'elemento cade sul ripiego del DB come per un errore. Le
+   valide si servono troncate come le salva la DB (12 decimali, 15 cifre: la risposta e la riga di oggi dicono lo stesso numero).
+2. Il delta del refresh elenca solo i punti scritti: lo stesso predicato di `price_store._unstorable_provider_point` filtra
+   `changed_items_delta` (va esposto come funzione pubblica del modulo).
+3. Il ripiego del DB (`:815`, `Decimal(str(last_price.close))`) salta una riga con chiusura `None` (un inf letto dopo W-B58):
+   oggi `Decimal('None')` solleva `InvalidOperation`, e il `gather` rompe tutta la richiesta.
+Peso: piccolo (2 file di X + un aiuto pubblico in `price_store`); rossi: una quotazione `1E+50000000` mai servita né in cache, il
+delta senza la data scartata, il ripiego con una chiusura `None`.
+
+**W-B63 — stato reale**: dopo W-B58 e W-B60 le colonne lette da `RealDecimal` (quantità, importo, costo, i cinque prezzi, valore
+dell'evento) rileggono un inf come `None` e non ne scrivono più; restano `Numeric`: `price_history.volume` (24, 0), `fx_rates.rate`
+(24, 10) e `broker_user_access.share_percentage` (7, 6; limitata dallo schema, un inf non ci arriva). Lettori: il volume in 7 file
+(segnali `obv`, `mfi`, `signals/base.py`, `price_query`, `price_store`, il plugin Borsa Italiana, l'export del backup), il cambio in 5
+file della conversione FX (ovunque si converta). Un inf letto `Decimal('Infinity')` passa nei calcoli e il JSON lo scrive
+`Infinity`, che lo Zod del frontend rifiuta: la risposta intera cade. Ma anche il `None` delle colonne `RealDecimal` ha lettori che
+non lo reggono: il ripiego del prezzo corrente (sopra), `services/assets/crud.py:793` (`Decimal(str(ev.value))` nel confronto degli
+eventi) e `query_events_bulk` (`Currency(amount=None)`, trovato dal test-author).
+- **Come può esserci, oggi**: solo da una 1.2 (nessun limite di grandezza: un `1E+400` manuale diventava un REAL inf), da una
+  scrittura a mano, o da un archivio preparato. SQLite salva NaN come NULL, quindi il caso è solo ±inf (`col IN (9e999, -9e999)`).
+
+**W-B63 — proposta**: niente indurimento di N lettori; i dati si correggono una volta, all'avvio dopo l'aggiornamento.
+1. **Una correzione post-migrazione** (`db/post_migration/`, il quadro che esiste per i dati che Alembic non deve toccare:
+   connessione `sqlite3` diretta, controllo d'integrità, copia di backup, una transazione, verifica, `row_count_changes`), non una
+   migrazione Alembic né `db validate` (lo strumento di sviluppo: un self-hosted non lo lancia). `NonFiniteDecimalsFix`: `detect`
+   conta per colonna i valori `IN (9e999, -9e999)`; `apply`:
+   - colonne annullabili (`price_history.open/high/low/adjusted_close/volume`, `transactions.cost_basis_override`): `NULL`;
+   - righe ricavabili di nuovo: `price_history` con la chiusura inf e `fx_rates` col cambio inf **cancellate** (il refresh e la
+     sincronizzazione FX le riprendono; un cambio manuale perso è nel rapporto con data e coppia);
+   - dati dell'utente NOT NULL (`transactions.quantity/amount`, `asset_events.value`): **mai toccati**, solo riportati (id nel log e
+     nel rapporto): dopo W-B58/W-B60 si leggono `None` e l'utente li corregge o cancella (la cancellazione è provata dai test di
+     W-B58).
+2. Le due guardie puntuali sui lettori del `None` che rompono una richiesta intera (il ripiego del prezzo corrente, sopra;
+   `crud.py:793` e `query_events_bulk`: la riga saltata con un avviso).
+3. Il cambio (W-B61, di X) chiude l'ultima scrittura senza limite.
+Decisione per il developer (**D-W63-1**): cancellare all'avvio le righe di prezzo e di cambio con un inf (ricavabili, riportate),
+o solo riportarle. **Predefinito**: cancellare e riportare. Peso: medio (una correzione con i suoi test di rilevamento, dry run e
+verifica, più le due guardie); rossi prima.
+
+**Ordine proposto**: W-B60 (dopo gli E2E di C-97b) → W-B62 (piccolo, sicurezza della risposta) → W-B63 (dopo D-W63-1 e, per i
+cambi, W-B61 di X).
+
+**Ordine approvato** (coordinatore, 03:38): W-B60 (dopo gli E2E di C-97b) → W-B62 (file di X, revisione di X) → W-B63 (dopo
+D-W63-1, data al developer, e W-B61/X-R38 di X per i cambi). Nell'attesa dello slot: i rossi di W-B62, solo file di test.
+
+**I rossi di W-B62 ✅ (03:46, carico 43)**, test-author `0746298a`, tutti in `test_asset_digit_limits.py`: `services
+asset-digit-limits` **18 falliti, 80 passati** (i 17 di W-B62 più il rosso di W-B60 sul valore dell'evento). Rossi: mai servita
+(`1E+50000000`, `1E+60`, `1E-13`, con e senza riga salvata; ×6); mai in cache (le tre, più `derived-float-inf`: la cache registra
+ogni valore che riceve, e una seconda chiamata deve tornare al provider; ×4); la quotazione valida servita come la tiene la DB
+(`65432.1234567890999` → `65432.123456789`, confronto per valore; ×1); il delta del refresh senza la data scartata (chiusura
+`1E+60`, volume `1E+25`; ×2); il ripiego oltre una chiusura illeggibile e senza nessuna leggibile, senza provider o con un
+provider che fallisce (oggi `InvalidOperation` da `Decimal(str(None))`; ×4). Guardie verdi: `101.5` servita e in cache come prima;
+la riga più recente normale come ripiego. > **Note implementazione**: il provider finto conta le chiamate, solleva se la quotazione
+è un'eccezione e serve uno storico; la fixture `assigned` divisa in `_assign_double`/`_drop_double`; la barriera di
+`test_an_unstorable_current_quote_is_not_persisted` ora controlla che il provider sia stato chiamato (non che l'elemento venga da
+lui), perché con la cura una quotazione non memorizzabile cade sul ripiego: i suoi 4 casi restano verdi. `1E+50000000` non costa
+nulla (19,6 s tutta la prova: niente lo scrive per intero). > **⚠️ Fuori pista** (letto nel codice, non provato): l'elemento del
+colpo in cache si costruisce fuori dal `try` del provider; oggi un float inf finisce in cache prima che lo schema lo rifiuti, e la
+chiamata successiva entro 2 minuti solleva e rompe tutto il bulk. La cura (una quotazione non memorizzabile non va in cache) lo
+chiude.
+
+**W-B62 passa a X** (coordinatore, 03:4x), insieme alla sua X-R40 (la stessa quotazione rifiutata data come viva, nei file di X):
+la mia analisi qui sopra è il riferimento. I rossi già scritti restano non committati nel mio worktree finché il coordinatore non
+li passa a X, che mette i suoi casi in un file nuovo e cambia solo la riga della barriera in `test_asset_digit_limits.py`. Copie
+fuori dal repo: `files/wb62_for_x/` (il file intero, il diff contro HEAD, il blocco 1132–1371). Prima del checkpoint di W-B60 tolgo
+dal file le parti di W-B62 (il blocco, il paragrafo della docstring, gli import usati solo da lì, gli aiuti del provider finto e la
+barriera), così il commit porta solo W-B60. Il mio ordine: slot di C-97b → W-B60 → W-B63 (dopo D-W63-1).
+
+**Il file torna solo W-B60 ✅ (03:5x)**: il coordinatore ha passato le copie a X; per il checkpoint di W-B60, barriera e aiuti come
+committati con W-B58 (li cambia X). Il test-author `0746298a` ha tolto da `test_asset_digit_limits.py` ogni parte di W-B62 (il
+blocco, il paragrafo della docstring, gli import `contextlib`, `AsyncIterator`, `FARefreshItem`/`SyncDateRangeModel`, `core`) e
+riportato `_Assigned`, `_QuoteDouble`, la fixture `assigned` e la barriera al testo di HEAD: il diff ha 3 hunk, tutti di W-B60 (il
+paragrafo della docstring, gli import `FAEventQueryItem`/`DateRangeModel`, la sezione «W-B60: an event value reads back exactly»).
+`ruff` e `black` puliti; `services asset-digit-limits` (03:54, carico 45): **1 fallito** (il rosso di W-B60), **77 passati**. Delta di
+W-B60 nel worktree: 4 file di test (+350/−18) e il journal; nessun codice di prodotto.
+
+**Coda aggiornata** (coordinatore, 03:56): slot di C-97b → W-B60 → **W-B67** (il costo Auto sulla riga sbagliata, da J nell'analisi
+di V-4: `_find_created_tx_for_wac` ripiega sull'ultima riga con broker, asset, data e tipo uguali; prima del rilascio, rossi prima)
+→ W-B63 (dopo D-W63-1). Dopo C-97b, J scrive un `case` in `features/transactions/events/eventSaveError.ts` (il 409 di P-10,
+`EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`): lo rivedo io.
+
+**C-97b entrato** (coordinatore, 05:1x): dev `b2462042d`, la mia frase aggiunta alla voce C-97 del CHANGELOG in `b214c8200`. Il mio
+ff fallisce per i file di W-B60 non committati: HEAD resta `1f779d386`, la punta arriva al checkpoint di W-B60 (col piano 04).
+
+**W-B60 — la cura ✅ (05:1x)**: gli E2E di C-97b sono verdi, quindi il codice di prodotto è ammesso.
+`files/scripts/wb60_cure.py --apply` (3 file): `backend/app/db/models.py` (`Transaction.amount` e `AssetEvent.value` →
+`RealDecimal(18, 6)`, la docstring del modulo), `.github/instructions/backend-db.instructions.md` (la regola) e
+`backend/app/services/financial_math/ledger_totals.py` (di J, assegnato dal coordinatore: le due righe che nominano il tipo degli
+importi, solo testo). Docstring di `test_numeric_truncation.py` a mano: la scoperta trova ora **nove** colonne `RealDecimal` (le
+sette di C-97a più importo e valore dell'evento) e tre `Numeric` (`share_percentage`, `rate`, `volume`).
+> **Note implementazione**: il filtro `func.abs(Transaction.amount) >= …` (`transactions/queries.py:79-81`) non passa dal
+`process_bind_param` del nuovo tipo: `func.abs` è senza tipo, il parametro prende `Numeric` dal valore, e un `1E+400` si lega
+come oggi (`inf`, nessun risultato, nessun 500); `amount != 0` passa da `RealDecimal` con un letterale finito. Verificato con
+SQLAlchemy dalla venv del progetto. Un importo della 1.2 con più di 15 cifre significative ora si rilegge arrotondato alla
+quindicesima: al più 0,000005 di differenza con 10 cifre intere, circa dieci volte tanto per ogni cifra intera in più (misurato dal
+docs-writer su 300 000 campioni per caso: 0,000055 con 11, 0,00055 con 12; la 1.2 non limitava le cifre degli importi); dopo C-97
+un importo nuovo non ne ha più di 15.
+
+**W-B60 — le prove leggere ✅ (05:16–05:28, carico 29–47)** (`files/scripts/wb60_light.sh`, cancello < 50 che salta e non forza):
+i rossi verdi — `utils real-decimal` **239**, `services transaction-decimal-places` **124**, `services asset-digit-limits` **78**; i
+vicini che leggono importi — `db numeric-truncation` **4** (rifatto dopo le docstring), `db validate` **17**, `db post-migration`
+**41**, `utils decimal-precision` **21**, `services financial-math` **825**, `services backup-totals` **84**, `services
+backup-archive` **155** (1 saltato), `services backup-staging` **145**, `services lots-analysis-pure` **177**, `services
+transaction-cost-basis-rule` **80**. `ruff` e `black` puliti sui 7 file `.py` toccati. Doc per sviluppatori: docs-writer `9c1ef823` in
+corso. Restano: lo slot pesante (`all-backend --workers 2`, ~33 min l'ultima volta: il tipo di ogni importo cambia) e la simulazione
+sulla punta di dev.
+
+**W-B60 — la doc ✅ (05:3x–05:4x)**, docs-writer `9c1ef823`: `architecture/database/index.md` (la riga della tabella a
+`RealDecimal(18, 6)`, gli esempi del rumore, la frase su W-B60 senza migrazione, la nota sui dati della 1.2, le colonne senza le
+guardie ridotte a `volume` e `rate`), `brokers_transactions.md:101` (la riga `amount`), `backend/transactions/service.md:184-186`
+(«the amount is `Numeric`» → l'importo fra le colonne `RealDecimal`), `backend/financial_math.md:239`; `events.md` non nomina il
+tipo: niente. Build stretta e `check-links` verdi (carico 30–32); secondo giro chiesto per `brim_plugin_guide.md:212-214` (15 cifre
+intere anche per l'importo). > **⚠️ Fuori pista** (dalle verifiche del docs-writer): (1) la mia nota sui dati della 1.2 diceva «al più
+0,000005»: vale solo con 10 cifre intere → corretta sopra e nella doc; (2) tre passi di `backend/app/db/precision.py` dicevano ancora
+l'importo `Numeric` (la docstring del modulo, il commento di N63, l'esempio di `round_computed_value`, che ora usa un cambio:
+`123456789.12345678912` → `123456789.1234567891`, verificato con la funzione) → corretti a mano, solo testo, `ruff` e `black` puliti;
+(3) i valori degli eventi dei provider non sono troncati alla colonna come i prezzi dei provider (`_storable_events` controlla solo la
+grandezza): con la lettura nuova un pareggio al settimo decimale arrotonda diversamente (`784.0774475`: prima `…447`, ora `…448`) e un
+valore di 10+ cifre intere può superare le 15 significative → **W-B68**, basso.
+
+**Il percorso del coordinatore** (05:29): lo slot 3 per `all-backend --workers 2`, ma sulla revisione combinata (HEAD `1f779d386` è
+130 commit indietro rispetto a dev): doc finite → CHECKPOINT READY e FROZEN con le liste da mettere in stage → lui committa e unisce
+dev nel mio ramo → `all-backend --workers 2` nella mia corsia (6184) quando il carico a 5 minuti è < 50. CHANGELOG: la mia riga come
+riga 🐛 a sé, non dentro C-97.
+
+**La simulazione e le risoluzioni ✅ (05:4x–05:5x)**: su dev `252835dce`, 3 conflitti in 2 file, tutti fra W-B60 e X-R38/X-R50
+(i cambi di X, `80f5c65ff` e `243ab6150`, la parte FX di W-B58): in `test_real_decimal.py` due paragrafi della docstring e due sezioni
+di test aggiunti nello stesso punto (×2); in `architecture/database/index.md` la tabella (la riga dell'importo mia, `RealDecimal(18,
+6)`; quella del cambio di X, 14 cifre intere). Risolti per unione, prima X poi W-B60 (`files/scripts/wb60_resolve.py` →
+`files/wb60_resolved/`). Rifatta su dev **`1c2bac918`** con `--resolved`: **0 conflitti**, lint pulito nell'albero simulato, `mkdocs
+build` stretto e `check-links` verdi; i due file risolti non sono cambiati in dev fra le due punte (fuori di essi, solo altre sezioni
+del backlog, che si fondono da sole). Prova semantica: `utils real-decimal` lanciato nell'albero simulato (il codice di dev più il mio)
+→ **267 passati** (i 239 di W-B60 più i 28 di X-R38/X-R50).

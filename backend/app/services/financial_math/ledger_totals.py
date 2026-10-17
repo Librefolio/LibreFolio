@@ -19,7 +19,7 @@ that two readings of the same ledger always agree, they are:
   written in plain decimal notation without trailing zeros, never «-0». ``from_json`` reads back only that text: an
   optional «-», at most 60 digits before the point and 60 after it, the precision of the exact context. A manifest
   written by hand therefore cannot make it expand an exponent or an unbounded number (J-27). The round trip holds for
-  every total within that bound, and every ledger the database can hold stays within it: amounts are Numeric(18, 6),
+  every total within that bound, and every ledger the database can hold stays within it: amounts are RealDecimal(18, 6),
   quantities RealDecimal(22, 10).
 
 ``CONTROL_TOTALS_VERSION`` names the method: totals written by another version are not comparable.
@@ -45,7 +45,7 @@ CONTROL_TOTALS_VERSION = 1
 # Rows per query: keyset blocks on the primary key keep the read linear and its memory bounded.
 _BLOCK_SIZE = 5000
 
-# Sums of Numeric(18, 6) amounts never need this many digits; a total that would is an error, not a rounding.
+# Sums of RealDecimal(18, 6) amounts never need this many digits; a total that would is an error, not a rounding.
 _EXACT = decimal.Context(prec=60, traps=[decimal.InvalidOperation, decimal.DivisionByZero, decimal.Overflow, decimal.Inexact])
 
 # An amount as ``to_json`` writes it, the only text ``from_json`` reads: an optional minus, then ASCII digits — at most
