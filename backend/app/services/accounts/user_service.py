@@ -15,6 +15,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
+from backend.app.config.accounts import USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE
 from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.services.accounts import token_service
 from backend.app.services.accounts.auth_service import hash_password
@@ -149,7 +150,14 @@ async def get_user_by_email(session: AsyncSession, email: str) -> Optional[User]
 
 async def get_user_by_username_or_email(session: AsyncSession, identifier: str) -> Optional[User]:
     """
-    Get user by username OR email; the email regardless of the case of A–Z (decision P18).
+    The account an identifier typed at sign-in names: an address first, then a username (A-21a, rule 3).
+
+    An identifier holding an ``@`` is the account whose email it is, regardless of the case of A–Z (decision P18); only
+    when no account has that address, the account whose username it is exactly — a name from before A-21a, which refuses
+    the ``@`` in new names. Without an ``@`` it is a username only, compared exactly, never an address. So no username
+    stands in front of another account's address, whichever row was written first. Usernames regardless of case wait
+    for their unique index (A-21b): folding the case here before it would let «Bob» stand in front of «bob».
+    The sign-in, «forgot password» and the verification resend look an identifier up here.
 
     Args:
         session: Database session
@@ -158,9 +166,24 @@ async def get_user_by_username_or_email(session: AsyncSession, identifier: str) 
     Returns:
         User or None if not found
     """
-    stmt = select(User).where((User.username == identifier) | (func.lower(User.email) == func.lower(identifier)))
-    result = await session.execute(stmt)
-    return result.scalars().first()
+    if USERNAME_RESERVED_CHARACTER in identifier:
+        user = await get_user_by_email(session, identifier)
+        if user is not None:
+            return user
+    return await get_user_by_username(session, identifier)
+
+
+async def address_is_a_username(session: AsyncSession, address: str, *, other_than: int | None = None) -> bool:
+    """Whether ``address`` is the username of an account, regardless of the case of A–Z (A-21a, rule 2).
+
+    Only a username from before A-21a holds an ``@``. An address equal to one would take that account's sign-in by name
+    (``get_user_by_username_or_email`` reads an address first), so no account takes it as its email — the account
+    ``other_than``, the name's own, apart. No index serves ``lower(username)``: the accounts of an instance are few.
+    """
+    stmt = select(User.id).where(func.lower(User.username) == func.lower(address))
+    if other_than is not None:
+        stmt = stmt.where(User.id != other_than)
+    return (await session.execute(stmt.limit(1))).first() is not None
 
 
 async def get_user_by_id(session: AsyncSession, user_id: int) -> Optional[User]:
@@ -235,14 +258,18 @@ async def create_user(
     Returns:
         Tuple of (User, None) on success or (None, error_message) on failure
     """
+    # A new username holds no @: the sign-in reads an identifier with one as an address first (A-21a, rule 1)
+    if USERNAME_RESERVED_CHARACTER in username:
+        return None, USERNAME_RESERVED_MESSAGE
+
     # Check if username exists
     existing = await get_user_by_username(session, username)
     if existing:
         return None, "Username already taken"
 
-    # Check if email exists
+    # Check if email exists, or is the username of an account from before A-21a (rule 2): the same answer
     existing = await get_user_by_email(session, email)
-    if existing:
+    if existing or await address_is_a_username(session, email):
         return None, "Email already registered"
 
     # Create user
@@ -509,18 +536,21 @@ async def update_profile(
     if username is None and email is None:
         return user, None
 
-    # Check username uniqueness (if changing)
+    # Check username uniqueness (if changing); a new name holds no @ (A-21a, rule 1), the name kept keeps its own
     if username is not None and username != user.username:
+        if USERNAME_RESERVED_CHARACTER in username:
+            return None, USERNAME_RESERVED_MESSAGE
         existing = await get_user_by_username(session, username)
         if existing:
             return None, "Username already taken"
         user.username = username
 
-    # Check email uniqueness (if changing): the same address in another case is no change (decision P18)
+    # Check email uniqueness (if changing): the same address in another case is no change (decision P18). The username
+    # of another account is taken too (A-21a, rule 2): the sign-in would read it as this address; the account's own is not.
     email_changed = email is not None and not same_email(email, user.email)
     if email_changed:
         existing = await get_user_by_email(session, email)
-        if existing:
+        if existing or await address_is_a_username(session, email, other_than=user.id):
             return None, "Email already registered"
         user.email = email
         # A new address is not verified (E5), every session opened with the old one ends (A6e), and so does every live

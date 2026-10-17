@@ -27,7 +27,8 @@
       "invalidEmailDomain": "Il dominio email non è valido o non può essere usato",
       "usernameTaken": "Questo nome utente è già in uso",
       "emailTaken": "Questa email è già registrata",
-      "passwordTooWeak": "La password non soddisfa i requisiti di sicurezza"
+      "passwordTooWeak": "La password non soddisfa i requisiti di sicurezza",
+      "usernameNoAt": "Il nome utente non può contenere @: per accedere puoi sempre usare il tuo indirizzo email."
     },
     "passwordStrength": {
       "veryWeak": "Molto Debole",
