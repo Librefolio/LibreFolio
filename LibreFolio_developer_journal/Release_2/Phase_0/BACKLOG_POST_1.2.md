@@ -7835,6 +7835,24 @@ da Y il 15/10.
     lascia un segno durevole sulla riga di `?highlight=` (il test guarda la navigazione e la modale). Un `data-state` o un
     `data-highlighted` li renderebbe espliciti.
   - Dettagli: piano di Y, «J-12, la metà del pannello».
+- **Y-32 · Le card della lista degli asset: prezzo live, Δ della serie** — basso, coerenza, domanda di prodotto per il
+  developer; Y, 17/10 (X-R59, D2: il coordinatore ha scelto la parità per il lotto A).
+  - La card mostra il prezzo live (`livePriceMap`, dal poll di `/prices/current`), ma la sua Δ sull'intervallo è quella della
+    serie, fino al prezzo salvato su `as_of`: dopo X-R59, il `range_change` di `period-changes`. Finché il prossimo
+    caricamento non la rilegge, la Δ non segue il prezzo mostrato. Succedeva già prima, con la Δ calcolata nel browser.
+  - Rimedio possibile: quando l'intervallo finisce oggi, il poll della lista chiede `/prices/current?range_start=` e la card
+    usa quel `range_change`, come la pagina dell'asset (lotto B di X-R59).
+  - Attenzione, se si fa: le glob esatte `'**/api/v1/assets/prices/current'` delle spec che restano sulla lista (per esempio
+    `asset-list.spec.ts`) non vedono più la richiesta con la query, perché in Playwright la glob è ancorata alla fine. Vanno
+    allargate con un `*` finale, come il lotto B ha fatto per le spec che aprono la pagina dell'asset.
+  - Dettagli: piano di Y, «X-R59».
+- **Y-33 · `asset-detail.spec.ts`: 10 s per una navigazione a freddo sotto carico** — minimo, stabilità dei test; Y, 17/10
+  (slot E2E di X-R59, 16:05). `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`) clicca la card
+  di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build (carico a 1 minuto 93 alle 15:24) un
+  contesto nuovo importa a freddo il bundle grosso della pagina, e «edit button opens asset modal» (`:240`) è caduto lì,
+  ancora sulla lista; da solo, a carico normale, passa in 4,1 s, e gli altri test con lo stesso aiuto sono passati. La cura,
+  come Y-22: più tempo alla navigazione, oppure aspettare prima l'URL e poi la radice. Spec dell'area degli asset: a chi
+  la tocca. Dettagli: piano di Y, «X-R59».
 
 ## MF · Matematica finanziaria (fase 01)
 

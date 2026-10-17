@@ -602,7 +602,7 @@ test.describe('Asset Data Editor', () => {
             // The detail page polls POST /assets/prices/current, which asks the live
             // providers and writes today's price into the shared database. Nothing here
             // is about live prices, so it is answered locally instead.
-            await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+            await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
         });
 
         /** Apple's id, looked up by exact name: these tests need it before they navigate. */
