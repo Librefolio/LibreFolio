@@ -41,6 +41,9 @@ the administrators' routes of ``instance.py``.
   the spaces around its credentials. Each route answers 503 ``backup_panel_unavailable``, without a header and to that
   very token, and each request logs one error naming the variable, never the value; the jobs are never reached. The same
   token without its spaces opens the routes.
+- PANEL-022 (B-30), a full disk at the panel's start: ``start_backup`` raising ``ENOSPC`` through ``job_views.start_job``,
+  with the token: 507 ``backup_no_space``, one WARNING with the origin ``panel``, never a path or the system's words;
+  OpenAPI documents the start's 507 (``START_RESPONSES``).
 - Every request of this module: the token, and whatever the caller presented, never appears in the answer, its body or
   its headers, nor in the log.
 
@@ -837,3 +840,35 @@ async def test_a_token_with_spaces_around_it_answers_503_even_to_that_very_token
     assert refused_calls == [], f"the jobs must never be reached with a token the server cannot use: {refused_calls}"
     assert opened.response.status_code == 200 and service.calls == [("get_job", job.job_id)], f"Barrier: the same token without its spaces opens the routes: {opened.answer}, calls {service.calls}"
     print_success(f"{len(exchanges)} requests: 503 backup_panel_unavailable, to that very token too, one error line each; without its spaces the token opens the routes")
+
+
+# =============================================================================
+# PANEL-022: a full disk at the panel's start (B-30)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_a_panel_start_on_a_full_disk_answers_507_backup_no_space(app, monkeypatch, service):
+    """PANEL-022 (B-30): the panel's start through ``job_views.start_job``, ``start_backup`` raising ``ENOSPC``: with the
+    token, 507 ``backup_no_space``, never 500 ``backup_failed``; one WARNING, «Instance backup could not start: not
+    enough free space», with the origin ``panel``; never the data directory's path nor the system's words."""
+    token = a_token()
+    monkeypatch.setenv(TOKEN_VARIABLE, token)
+    service.start_error = OSError(errno.ENOSPC, os.strerror(errno.ENOSPC), str(DATA_DIR / "backups" / ".jobs"))
+
+    started = await send(app, "POST", PANEL, authorization=f"Bearer {token}", never=[token])
+
+    assert service.calls == [("start_backup", "panel")], f"Precondition: the route asked for a run of origin panel: {service.calls}"
+    assert started.code == (507, "backup_no_space"), f"a full disk at the panel's start: 507 backup_no_space: {started.answer}"
+    loud = [(event.get("log_level"), event.get("event"), event.get("origin")) for event in started.events if event.get("log_level") in ("warning", "error", "critical")]
+    assert loud == [("warning", "Instance backup could not start: not enough free space", "panel")], f"one warning, with the origin panel: {loud}"
+    leaked = [word for word in (str(DATA_DIR), os.strerror(errno.ENOSPC)) if word in started.response.text]
+    assert leaked == [], f"the answer must not carry the server's path or the system's words: {leaked} in {started.response.text}"
+    print_success("507 backup_no_space, one warning")
+
+
+def test_openapi_documents_507_on_the_panel_start():
+    """PANEL-022 (B-30): the panel's start documents its 507 beside its 409 and its 500, as the administrators' start does
+    (``START_RESPONSES``)."""
+    documented = set(backup_app().openapi()["paths"][PANEL]["post"]["responses"])
+    assert {"409", "500", "507"} <= documented, f"the panel's start, its refusals, 507 included: {sorted(documented)}"
