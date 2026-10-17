@@ -241,6 +241,10 @@ def _generate_schedule_values(
     auto-generates an INTEREST event (coupon), dated on the maturation date where the chart shows
     the peak. After the coupon, the value resets to initial_value and the accrual restarts from there.
 
+    Without late interest, the last period closes the asset with a MATURITY_SETTLEMENT on its end date, worth
+    what is left after that day's coupon: the principal when the final coupon is paid (it resets the value), the
+    day's value when no coupon is paid. The final coupon is the INTEREST event of that day, never counted twice (J-39).
+
     Returns:
         Tuple of (values dict, auto_events list).
         - values: date → Decimal for maturation dates in the schedule range
@@ -266,10 +270,12 @@ def _generate_schedule_values(
 
     values: dict[date_type, Decimal] = {}
     auto_events: list[FAAssetEventPoint] = []
+    last_coupon_day: date_type | None = None
     for day in _accrual_days(schedule, last_end):
         if day.is_maturation:
             values[day.day] = day.value
         if day.coupon is not None:
+            last_coupon_day = day.day
             # Reset: value returns to initial_value (D1/D2); the coupon includes both accrued interest and any price adjustments.
             auto_events.append(
                 FAAssetEventPoint(
@@ -283,7 +289,8 @@ def _generate_schedule_values(
     # === D6: MATURITY_SETTLEMENT at end of schedule (if no late interest) ===
     last_period = schedule.schedule[-1]
     if last_period.generate_interest and not schedule.late_interest:
-        settlement_value = values.get(last_end, principal)
+        # values[last_end] is the pre-coupon peak the chart draws: after a final coupon only the principal is left.
+        settlement_value = principal if last_coupon_day == last_end else values.get(last_end, principal)
         auto_events.append(
             FAAssetEventPoint(
                 date=last_end,
