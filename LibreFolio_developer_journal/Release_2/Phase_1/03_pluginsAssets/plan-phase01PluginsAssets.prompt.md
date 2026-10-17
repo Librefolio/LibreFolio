@@ -5789,3 +5789,77 @@ il conteggio, la rotta).
 - **Consegna** (06:54, FROZEN): commit proposti `fix(events): split predicate; P-10 fails closed` e
   `docs(journal): X-R47b, X-R55 to Z`. Revisioni: J (`splits.py` e il blocco P-10 nel file di W), W (`event_store.py`,
   `events.py`, i due file di test, il frontend), E (X-R47b).
+- **Commit e base** (06:55): il coordinatore ha committato il lotto (`1b6d65da7` fix, `8914eacf3` journal) e aggiornato
+  la base: `61229b9a4` = X + dev `38adbfde0` (W-B60, che cambia `test_asset_digit_limits.py`, fuso da solo; H-37; SEC7-2
+  di MF). Verificato: HEAD `61229b9a4`, genitori `8914eacf3` e `38adbfde0`, albero pulito; nessuna nuova chiamata
+  diretta della rotta senza chiamante; `AssetEventType.SPLIT` di nuovo solo nelle due case.
+- **Revisione combinata** (06:55–06:56, carico < 50), tutto verde: `services financial-math` 1076, `event-split-ratio`
+  78, `asset-event-store` 71, `asset-digit-limits` 78 (2 nuovi di W-B60), Vitest `eventSaveError` 82; porta 6183
+  libera. Riferito al coordinatore: pronto per l'ingresso. Revisioni: J (predicato e blocco P-10), E (X-R47b).
+- Il messaggio «O-8 sbloccato» era superato: O-8 è entrato alle 02:06 (`b1b4960c4`); i chip `<code>` delle due modali
+  d'importazione sono AF-5, non miei.
+
+### X-R43 — impostazioni dei plugin: un intero enorme dà un 500 ✅ (2026-10-17, 06:57–07:32; consegnato)
+
+**Decisione del coordinatore**: esito **per campo** (`INVALID_VALUE`, come il resto del contratto bulk), niente 422.
+Per E conta che non ci sia un 500 e che quel campo non venga scritto.
+
+**Stato verificato** (su `952c68cd5`): `validate_value` chiama `math.isfinite(value)` prima dei limiti; su un `int`
+oltre il double (circa 309 cifre) solleva `OverflowError`, che nessuno prende. Le strade sono quattro, non una:
+1. la scrittura (`service.py`, `_check_item`, prende solo `SettingValueError`): `PATCH /plugins/settings/bulk` con un
+   intero JSON di 401 cifre → **500**. FastAPI legge il corpo con `json.loads`, che accetta fino a 4300 cifre; oltre,
+   FastAPI stesso risponde 400 («There was an error parsing the body»), e non arriva al mio codice;
+2. l'ambiente (`resolver._from_environment` → `parse_env_value`, `int(…)` poi `validate_value`): una variabile con un
+   intero di 401 cifre per un campo INTEGER di sistema fa fallire la risoluzione del plugin (catalogo e uso). Un campo
+   NUMBER no: `float()` dà `inf`, già rifiutato;
+3. la riga salvata (`resolver._from_row`, prende `ValueError` e `SettingValueError`): un `value_json` di 401 cifre (solo
+   se scritto a mano) fa fallire la risoluzione;
+4. le dichiarazioni: un limite o un default di 401 cifre danno `OverflowError` invece di `SettingsDeclarationError`.
+
+**Disegno** (`files/checks/xr43_code.py`, 4 sostituzioni, provato a secco anche sulla base nuova):
+- `MAX_SAFE_INTEGER = 2**53 - 1`, l'ultimo intero che un numero JavaScript (la pagina delle impostazioni) e un double
+  tengono esatti; `_holdable_number()` non solleva mai;
+- in `validate_value`, dopo i controlli di tipo e prima dei limiti: un `int` oltre quel valore, per i campi INTEGER e
+  NUMBER, è «too large: at most 9007199254740991 in absolute value» (mai il valore nel messaggio); un float non finito
+  resta «expected a finite number»;
+- i limiti dichiarati usano lo stesso controllo; un default oltre il limite diventa `SettingsDeclarationError`;
+- le quattro strade ne seguono senza altro codice: la scrittura risponde col rifiuto che la rotta ha già (422,
+  `detail.results` per voce, `INVALID_VALUE` sulla voce enorme, niente scritto: la scrittura è tutto o niente);
+  l'ambiente dà `invalid_env`; la riga salvata è ignorata come ogni riga che il campo oggi rifiuta.
+- Cambia anche un caso che oggi passa: un intero fra 2^53 e il limite del double, su un campo senza massimo, veniva
+  accettato; ora è rifiutato. Nessun campo dei plugin rilasciati ne è toccato (le impostazioni dei plugin escono con la
+  1.3).
+- **Rossi** affidati a un test-author (06:58), nei quattro file delle impostazioni: contratto (valori e dichiarazioni),
+  risoluzione (ambiente e riga salvata), servizio (scrittura), API (il 422 al posto del 500; 5000 cifre come guardia).
+
+> **⚠️ Fuori pista (07:05) — X-R53: la lista dei file al coordinatore, e il via.** Mandata in anticipo (07:02), mentre
+> il test-author scrive i rossi di X-R43. **Via dopo X-R43**, con le condizioni del coordinatore dei colori:
+> - `fx/+page.svelte`: non toccare le righe **1141–1142** (le 4 classi nella baseline, AF-3 aspetta il designer); le
+>   mie righe sono lontane (174–260);
+> - `AssetTable.svelte`: se devo toccarlo, le 12 classi di colore di `txScope` (AF-2) restano come sono, e **prima lo
+>   dico** al coordinatore;
+> - `assets/+page.svelte`: zero classi di palette, e non ne aggiungo;
+> - `theme-roles --check` pulito, nessuna classe di palette nuova da nessuna parte. Nessun worktree dei colori tocca
+>   quei file.
+- **Rossi** (test-author, 06:58–07:15; 575 righe in 4 file, tutti miei):
+  - il test-author segnala che la rotta vera è `PATCH /api/v1/settings/plugins/bulk` (la costante `BULK` del file), non
+    `/plugins/settings/bulk` come scrivevo; `MAX_SAFE_INTEGER` letto con `getattr` al momento del test, così il file
+    raccoglie prima della cura; i valori enormi del servizio e dell'API sono interi casuali di 401 cifre, per provare
+    davvero che il messaggio non li contiene; `_Lane.call` prende un `content=` facoltativo (JSON grezzo: `json.dumps`
+    di Python rifiuta un intero oltre 4300 cifre, e la guardia delle 5000 cifre ne ha bisogno).
+  - **Rossi confermati** (07:17–07:22, per la ragione giusta): `plugin-settings-contract` 22 su 229
+    (`OverflowError`, oppure 2^53 accettato), `plugin-settings-runtime` 4 su 127 (`OverflowError` dall'ambiente e dalla
+    riga salvata), `plugin-settings-service` 3 su 103 (`OverflowError` dalla scrittura); slot 5 (carico a 5 minuti 28):
+    `api plugin-settings` 1 su 16, «answers 500 'Internal Server Error'»; la guardia delle 5000 cifre verde (400 di
+    FastAPI).
+- **Codice** (07:22): `xr43_code.py`, 4 sostituzioni in `fields.py`; ruff, black e `import backend.app.main` puliti.
+- **Verdi** (07:22–07:24): `plugin-settings-contract` 229, `-runtime` 127, `-service` 103, `-crypto` 30, `-guards`
+  25; slot 6: `api plugin-settings` 16; porta 6183 libera.
+- **Documentazione** (docs-writer, dalle 07:25): `developer/architecture/patterns/plugin_settings.md`, la tabella
+  «Types and Validation» e le regole di registrazione dicono il limite. Pagina solo inglese.
+- Niente CHANGELOG: le impostazioni dei plugin escono con la 1.3, mai rilasciate.
+- **Documentazione fatta** (07:25–07:31): `plugin_settings.md`, 8 righe aggiunte e 6 tolte (le righe `number` e
+  `integer` della tabella, una frase sul perché del limite e sul messaggio, la regola dei limiti alla registrazione).
+  `mkdocs build` stretto ✅ (3085 URL relativi risolti), `check-links` ✅.
+- **Consegna** (07:32, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
+  `fix(plugin-settings): refuse integers past 2^53` e `docs(journal): X-R43`. Revisione: E (la sua R13-SEC7-2).

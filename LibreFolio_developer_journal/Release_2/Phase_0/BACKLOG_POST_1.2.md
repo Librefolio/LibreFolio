@@ -4496,13 +4496,16 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `test_upsert_multiple_pairs` e la fixture di modulo di `test_fx_conversion` committano tassi che non tolgono mai.
   - Inoltre le ragioni `exclusive_because` di `fx-core` e `fx-sync-service` nel runner descrivono ancora il troncamento
     di tutta la tabella, mentre le due fixture ora sono limitate alle loro righe.
-- **X-R43 · Impostazioni dei plugin: un intero di 401 cifre in `value` dà un 500** — basso, solo admin o proprietario; X,
-  17/10 (trovato con H-32, girato nel backlog dal coordinatore).
+- ✅ **X-R43 · Impostazioni dei plugin: un intero di 401 cifre in `value` dà un 500** (consegnata il 17/10, 07:30; SHA all'ingresso) — basso, solo admin o proprietario; X,
+  17/10 (trovato con H-32, girato nel backlog dal coordinatore; lo stesso difetto nella R13-SEC7-2 di E).
   - `fields.py:324` passa il valore a `math.isfinite()`, che con un `int` più grande di un double solleva
     `OverflowError`. `service.py:255` cattura solo `SettingValueError`, quindi `PATCH /settings/plugins/bulk` risponde 500
     invece dell'esito per voce `INVALID_VALUE`.
   - Cura: in `validate_value`, un intero fuori dall'intervallo di un double (o qualunque `OverflowError`) diventa
     `SettingValueError`; un rosso con un intero di 401 cifre.
+  - Fatto: il limite è `MAX_SAFE_INTEGER` (2^53 − 1), quello che la pagina delle impostazioni tiene esatto; copre anche
+    la variabile d'ambiente, la riga salvata e le dichiarazioni, che fallivano allo stesso modo. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+    sezione «X-R43».
 - **X-R44 · `mockprov` si può nominare e assegnare a un asset anche in produzione** — piccolo, **prima del rilascio,
   dopo X-R38**; X, 17/10 (revisione R13-SEC5 di E su X-R24/25, girata dal coordinatore).
   - `mockprov` è nell'immagine di produzione e sempre registrato. Con X-R24 la ricerca senza `providers` lo salta, ma
@@ -4535,7 +4538,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Cura: mostrare il `detail` del 400 e gli `errors` del 200 (per data), contarli a parte. Prove: Vitest e
     `front-fx fx-editor`. Poi la frase della pagina utente (`user/fx/detail/data-editor.en.md`) può dire «con un messaggio
     che nomina la data».
-- ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (consegnata il 17/10, 06:00; committata `5f68a8db0`; l'ingresso aspetta la cura della regola (d) e X-R47b, stesso lotto; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
+- ✅ **X-R47 · Il rapporto di uno SPLIT non è mai validato** (chiusa il 17/10: `5f68a8db0`, la regola (d) con `1b6d65da7`; entrata in dev `952c68cd5`; gli SPLIT già salvati sono MF-D4) — **prima del rilascio**, dopo X-R40/W-B62; X, 17/10 (J, analisi
   V-4 di CP-14a, F4, girato dal coordinatore).
   - Si salva uno SPLIT con rapporto 0 o negativo. Appena una transazione lo collega, il motore solleva un `ValueError` e
     il report della Dashboard risponde 500.
@@ -4543,7 +4546,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     eventi (consegnati a W dopo CP2b).
   - Rosso della regola (d) dei confini dello strato (J, 17/10 06:20): `event_store.py` nominava `AssetEventType.SPLIT`.
     Cura: il predicato `financial_math.splits.is_split_event_type` (file di J, J rivede).
-- ✅ **X-R47b · Senza chiamante il rifiuto di P-10 mostrava tutti gli id** (consegnata il 17/10, 06:54; SHA all'ingresso) — piccolo, sicurezza (LOW); X, 17/10 (E,
+- ✅ **X-R47b · Senza chiamante il rifiuto di P-10 mostrava tutti gli id** (chiusa il 17/10: `1b6d65da7`, entrata in dev `952c68cd5`) — piccolo, sicurezza (LOW); X, 17/10 (E,
   revisione di `5f68a8db0`, girato dal coordinatore). Nello stesso lotto della cura della regola (d).
   - Cura: la rotta passa `_current_user.id`; senza chiamante nessun id, solo `hidden_transactions_count`. I test P-10 di
     J (file di W) rispondono a un utente che vede le transazioni: J e W rivedono. Nello stesso lotto, la nota LOW di W:
