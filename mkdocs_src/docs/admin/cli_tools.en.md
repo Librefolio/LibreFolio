@@ -272,7 +272,7 @@ The fix **`event_types`** repairs, once, the asset events stored with a type Lib
 
 From version 1.3, LibreFolio saves a currency only as an ISO 4217 alphabetic code, such as `EUR` or `USD`. Earlier versions also accepted the name of a currency or its numeric code, and saved it as written: `Euro`, `978`. Such a value still reads, but an edit that saves its row again is refused until its code is corrected, and its amounts never meet those of the ISO code: `978` and `EUR` make two balances. A restored backup can bring such values back.
 
-At every start, the log warns when the database holds some, and LibreFolio does not change them by itself:
+Shortly after every start, the log warns when the database holds some, and LibreFolio does not change them by itself:
 
 ```text
 Stored currency codes that are not ISO 4217 codes: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them)
