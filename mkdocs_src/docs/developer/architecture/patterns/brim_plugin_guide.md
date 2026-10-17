@@ -700,6 +700,13 @@ transaction breaks these rules, so flip source signs as needed:
     per-unit cost lands near `1.0` — that is correct, the engine handles the /100 quote
     scaling elsewhere. Canonical example: `broker_intesa/plugin.py` (patrimonio seed).
 
+    A plugin sets a cost basis on these incoming seeds only: on any other row — a `BUY`, a
+    cash row, a `TRANSFER`'s giving leg — `_create_transaction()` refuses the row, a
+    `costBasisNotAllowed` validation issue instead of a transaction (rule 12b, W-B72, or
+    rule 12's `costBasisModeIncompatible` when the row names a `cost_basis_mode`; an
+    `ADJUSTMENT` taking units out may still carry its handover cost: see
+    [Per-type rules](../../backend/transactions/service.md#per-type-rules)).
+
 !!! tip "Matured-bond redemption: close at par, surplus → INTEREST"
 
     A bond is **redeemed at par (100)** at maturity. When the bank credits *more* than par
@@ -1483,6 +1490,14 @@ never a proposal. The proposals are ordinary `TXCreateItem`s described as
 `Gap-fix <date> — <provider_name>: <what> at the end of the day, as stated by the bank`, and the
 bulk editor saves them like any other row. The endpoint accepts any registered plugin, since it
 only reads `history_tag` and `provider_name`.
+
+When a transaction of the broker dated up to a checkpoint's `as_of` (and not among
+`pending_delete_tx_ids`) holds a value that is no number — a quantity or an amount that reads
+`None`, which an older version or another tool left — LibreFolio's side cannot be summed: the
+endpoint answers **409** `{"code": "ledger_unreadable", "message": …}` instead of comparing a
+wrong balance with the bank, which would propose a correction duplicating the row it cannot read
+(`get_balances_at_end_of` raises `UnreadableLedgerError`, `brim_gap_fix` turns it into
+`BRIMLedgerUnreadable`; W-B74). The wizard shows the message in that broker's group.
 
 ### 🧪 Testing a report-set plugin {: #report-set-tests }
 

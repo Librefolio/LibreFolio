@@ -172,6 +172,13 @@ While a split of the asset has linked adjustments without a purchase cost, the c
 and nothing is deleted: the message names the split by its date — give those adjustments a
 [purchase cost](../transactions/form.md) first.
 
+New settings for a [Scheduled Investment](providers/scheduled-investment.md) plan, or another
+provider, delete the asset's prices and the events the plan generated; they are then generated
+again from the new settings, or downloaded from the new provider. While one of those events is a
+split with linked adjustments without a purchase cost, the change of plan or provider is refused:
+the form names the split by its date, and the rest of your edit is saved — give those adjustments
+a [purchase cost](../transactions/form.md) first.
+
 ## 🏷️ Edit identifiers {: #one-instrument-several-codes }
 
 One security can have several codes. LibreFolio keeps **one asset** with all of them, under

@@ -139,9 +139,19 @@ The `RegisterCard` handles new user registration with client-side validation.
 ## 🗝️ ForgotPasswordCard {: #forgotpasswordcard }
 
 The sign-in's **Forgot Password?** card, `lib/features/auth/ForgotPasswordCard.svelte` (`forgot-modal`). It calls
-`instanceConfig.load()` on mount, sharing the sign-in page's request. Until the server has answered
-(`instanceConfig.loaded`), and if it never does, the card shows **Back to Login** alone: the default configuration
-has no `email` and says `selfhosted`, and a managed instance must never show the server commands. Then:
+`instanceConfig.load()` on mount, sharing the sign-in page's request. Before any answer, the configuration in force is
+the default, which has no `email` and says `selfhosted`, and a managed instance must never show the server commands:
+
+- **While the request is pending** (`instanceConfig.loaded` and `instanceConfig.failed` both false), the card shows
+  **Back to Login** alone.
+- **If it failed before any answer** (`failed` true, `loaded` still false), the card shows `forgot-ask-admin`, the
+  advice that holds in both profiles, then **Back to Login**: no server command, no warning, and no email form, since
+  the default has no `email` (FPM-08, the A9 fix-forward: before it, the card was a dead end). The next `load()` that
+  gets an answer, such as the one of the card's next mount, brings that answer's branch.
+- **A request that fails after an answer** changes nothing: the store keeps that answer in force, `loaded` stays
+  true, and the card keeps its branch.
+
+Once the server has answered:
 
 | `profile` | `email.links` of `GET /system/instance` true | `email.links` false |
 |---|---|---|
@@ -155,8 +165,9 @@ has no `email` and says `selfhosted`, and a managed instance must never show the
   administrator creates the link in the Users tab ([UsersTab](settings.md#userstab)).
 - **Back to Login** dispatches `gotoLogin`.
 - Tests: `ForgotPasswordCard.managed.test.ts` (FPM-01…07: both profiles, with and without `email.links`, before
-  the answer and once it lands; CAT-01…02: the key a sentence in the four catalogues, naming no command), with
-  `./dev.py test front-utility component-unit`.
+  the answer and once it lands; FPM-08…10: the request failed before any answer, then an answer that says `managed`
+  or `selfhosted`; FPM-11: a request failed after a self-hosted answer, with and without `email.links`; CAT-01…02: the
+  key a sentence in the four catalogues, naming no command), with `./dev.py test front-utility component-unit`.
 
 ## 🔗 Account Link Pages {: #link-pages }
 
@@ -276,7 +287,7 @@ What a link page shows instead of its form. Props: `status` (`LinkPageStatus`), 
 | `checking` | The inspection is running | `common.loading` | — |
 | `expired` | The link has expired | `auth.link.expired` | ✅ |
 | `consumed` | The link was used | `auth.link.consumed` | ✅ |
-| `revoked` | The link was withdrawn: an invitation revoked by an administrator, a reset or setup link replaced by a newer one, or a setup link ended by a change of its account, set up another way or given a new address ([Revocation](../../../architecture/security.md#account-token-revocation)) | `auth.link.revoked` | ✅ |
+| `revoked` | The link was withdrawn: an invitation revoked by an administrator, a reset or setup link replaced by a newer one, or a setup link ended by a change of its account — set up another way, given a new address, or deactivated while it waits for its setup, the cancellation of its link (lot A-43) — or retired by the setup that refused it, its account set up before ([Revocation](../../../architecture/security.md#account-token-revocation)) | `auth.link.revoked` | ✅ |
 | `unknown` | An unknown token, a token of another purpose, or a reset or setup refused with `TOKEN_INVALID` | `auth.link.unknown` | ✅ |
 | `missing` | No `token` in the fragment, or a blank one | `auth.link.missing` | ✅ |
 | `closed` | A valid invitation while registration is `disabled` | `auth.registrationDisabled` | — |
@@ -329,7 +340,7 @@ the password of the account the link sets up, twice. Built like
 | The answer | The card |
 |---|---|
 | Success | Calls `ondone` |
-| `400` `TOKEN_INVALID`: the link was used, expired or was revoked meanwhile, or its account is already active | Calls `oninvalid`; the page shows `unknown` |
+| `400` `TOKEN_INVALID`: the link was used, expired or was revoked meanwhile; or its account is already active, or another of its setup links was consumed, the setup done or the links retired (lot A-42) | Calls `oninvalid`; the page shows `unknown` |
 | `400` `PASSWORD_TOO_WEAK`, or `422` | `auth.validation.passwordTooWeak` in `setup-error`, never the server's English |
 | `401`, or `423` with `detail.code` `instance_blocked` (`isInstanceBlockedError()`): the [instance is blocked](../../../architecture/security.md#instance-block), the `401` for a browser without a session, the `423` for one that holds another account's session | `auth.setup.blocked` in `setup-blocked`, and `setup-submit` disappears: every setup is refused until the hosting provider lifts the block. Neither callback runs |
 | Anything else, a request that never reached the server and a `423` with another code included | `auth.setup.failed` in `setup-error`; the form stays, for another try |

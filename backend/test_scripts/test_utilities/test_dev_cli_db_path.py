@@ -17,8 +17,15 @@ the script directory, never written here.
 
 The sentinel: the configured database, ``<tmp>/configured/sqlite/app.db``, which the defect touches instead of the
 target. Its bytes are hashed before each command and compared after; a case without one checks that none appears.
+
+DBP-j, lot B-37: Alembic's process opens the copy of a restore's archive too (``alembic upgrade head`` on it, in the
+check of lot B2), so every connection it opens turns ``PRAGMA trusted_schema=OFF`` first: ``run_migrations_online`` of
+``backend/alembic/env.py`` registers a ``connect`` listener on its engine, for every URL (``-x`` or configured), before
+the engine connects, and the listener executes the pragma. Read statically (``ast``): the pragma is a state of a
+connection inside a process that ends, which no file records, so a real run cannot show it cheaply.
 """
 
+import ast
 import hashlib
 import os
 import re
@@ -614,3 +621,115 @@ class TestWithoutPath:
         problems += change_problems(sentinel, "the configured database")
         verdict(done, problems)
         print_success(f"reported {sentinel.revision}, the configured database's revision")
+
+
+# ---------------------------------------------------------------------------
+# DBP-j, lot B-37: every connection the upgrade opens turns trusted_schema off
+# ---------------------------------------------------------------------------
+
+ENV_PY = ALEMBIC_SCRIPTS / "env.py"
+#: ``PRAGMA trusted_schema=OFF`` however written: any case and spacing, ``OFF`` as ``0``, ``false`` or ``no``.
+TRUSTED_SCHEMA_OFF = re.compile(r"\s*pragma\s+trusted_schema\s*(?:=\s*(?:off|0|false|no)|\(\s*(?:off|0|false|no)\s*\))\s*;?\s*", re.IGNORECASE)
+#: What makes an engine in ``env.py``.
+ENGINE_FACTORIES = frozenset({"engine_from_config", "create_engine"})
+#: What runs a statement on a connection, a cursor or an engine's connection.
+EXECUTES = frozenset({"execute", "executescript", "exec_driver_sql"})
+
+
+@dataclass(frozen=True)
+class ConnectListener:
+    """A ``connect`` listener ``run_migrations_online`` registers on its engine: the statement of its body that
+    registers it (``event.listen(engine, "connect", fn)``, or a function decorated
+    ``@event.listens_for(engine, "connect")``), and the listener's code when the module holds it."""
+
+    statement: ast.stmt
+    listener: ast.AST | None
+
+
+def called_name(call: ast.Call) -> str | None:
+    """The name a call calls: ``listen`` for ``event.listen(...)`` as for ``listen(...)``."""
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    return call.func.id if isinstance(call.func, ast.Name) else None
+
+
+def online_function(tree: ast.Module) -> ast.FunctionDef:
+    """``run_migrations_online``, a function of the module."""
+    found = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run_migrations_online"]
+    assert len(found) == 1, f"precondition: env.py defines run_migrations_online once: {len(found)} found"
+    return found[0]
+
+
+def engine_names(function: ast.FunctionDef) -> set[str]:
+    """The names the function gives the engines it makes."""
+    return {target.id for node in ast.walk(function) if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and called_name(node.value) in ENGINE_FACTORIES for target in node.targets if isinstance(target, ast.Name)}
+
+
+def connect_lines(function: ast.FunctionDef, engines: set[str]) -> list[int]:
+    """The lines where the function connects from one of ``engines``: ``<engine>.connect()``."""
+    return sorted(node.lineno for node in ast.walk(function) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "connect" and isinstance(node.func.value, ast.Name) and node.func.value.id in engines)
+
+
+def registers_connect(call: ast.Call, engines: set[str], name: str) -> bool:
+    """Whether ``call`` is ``name(<an engine>, "connect", ...)``."""
+    return called_name(call) == name and len(call.args) >= 2 and isinstance(call.args[0], ast.Name) and call.args[0].id in engines and isinstance(call.args[1], ast.Constant) and call.args[1].value == "connect"
+
+
+def connect_listeners(tree: ast.Module, *, anywhere: bool = False) -> list[ConnectListener]:
+    """The ``connect`` listeners ``run_migrations_online`` registers on its engine, each by a statement of its own body
+    — so for every URL, whichever ``-x`` or the configuration gave — or, ``anywhere``, at any depth of it (an ``if``
+    included)."""
+    function = online_function(tree)
+    engines = engine_names(function)
+    functions = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)}
+    statements = list(ast.walk(function)) if anywhere else function.body
+    found: list[ConnectListener] = []
+    for statement in statements:
+        if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call) and registers_connect(statement.value, engines, "listen"):
+            given = statement.value.args[2] if len(statement.value.args) > 2 else None
+            found.append(ConnectListener(statement, functions.get(given.id) if isinstance(given, ast.Name) else given))
+        elif isinstance(statement, ast.FunctionDef) and any(isinstance(decorator, ast.Call) and registers_connect(decorator, engines, "listens_for") for decorator in statement.decorator_list):
+            found.append(ConnectListener(statement, statement))
+    return found
+
+
+def statements_executed(listener: ast.AST | None) -> list[str]:
+    """The SQL texts a listener's code executes: the literal first argument of each ``execute`` it calls."""
+    if listener is None:
+        return []
+    return [node.args[0].value for node in ast.walk(listener) if isinstance(node, ast.Call) and called_name(node) in EXECUTES and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str)]
+
+
+class TestTheUpgradeTrustsNoSchema:
+    """Lot B-37: Alembic's process upgrades the copy of an archive in the check of a restore. Each connection its engine
+    opens runs ``PRAGMA trusted_schema=OFF`` first, as every other connection to the copy: the copy's views, triggers
+    and defaults can reach no function or virtual table that is not harmless. On the live database too: LibreFolio's
+    schema holds only tables and indexes."""
+
+    def test_run_migrations_online_registers_a_connect_listener_for_every_url_before_it_connects(self):
+        """DBP-j: ``run_migrations_online`` registers a ``connect`` listener on its engine, as a statement of its own body
+        (not under a condition: ``-x`` or the configured URL alike), before the line where the engine connects. Red
+        today: no listener."""
+        print_section("DBP-j: env.py's engine registers a connect listener")
+        tree = ast.parse(ENV_PY.read_text(encoding="utf-8"))
+        function = online_function(tree)
+        engines = engine_names(function)
+        opened = connect_lines(function, engines)
+        assert engines and opened, f"precondition: run_migrations_online makes an engine ({sorted(engines)}) and connects from it (lines {opened})"
+
+        listeners = connect_listeners(tree)
+        conditional = [listener.statement.lineno for listener in connect_listeners(tree, anywhere=True)]
+        assert listeners, f"env.py's run_migrations_online registers no 'connect' listener on {', '.join(sorted(engines))} as a statement of its body (lot B-37){f'; one is registered under a condition, at line {conditional}: not for every URL' if conditional else ''}"
+        first = min(listener.statement.lineno for listener in listeners)
+        assert first < opened[0], f"the listener is registered at line {first}, after the engine connects at line {opened[0]}: the first connection would run without it"
+        print_success(f"a connect listener at line {first}, the engine connecting at line {opened[0]}")
+
+    def test_the_connect_listener_turns_trusted_schema_off(self):
+        """DBP-j: the listener's code executes ``PRAGMA trusted_schema=OFF`` on the connection it is given. Red today: no
+        listener."""
+        tree = ast.parse(ENV_PY.read_text(encoding="utf-8"))
+        listeners = connect_listeners(tree)
+        assert listeners, "env.py's run_migrations_online registers no 'connect' listener on its engine (lot B-37)"
+        executed = [text for listener in listeners for text in statements_executed(listener.listener)]
+        assert any(TRUSTED_SCHEMA_OFF.fullmatch(text) for text in executed), f"the connect listener executes PRAGMA trusted_schema=OFF: it executes {executed}"
+        print_success(f"the listener executes {executed}")

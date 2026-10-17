@@ -11,6 +11,14 @@
  * `lookupFxRate`, never for `lookupFxRateSync`. It is driven through the real
  * bus, never through a helper exported for the test (N58).
  *
+ * In the `loadFxRatesAndSignalsBulk` block, the cases of Z-27: a list past the
+ * backend's bulk caps (1,000 items; 1,000,000 item-days since R13-SEC9-2 —
+ * Z-25) goes in batches planned by `$lib/api/bulkBatches`, sent one after the
+ * other, applied all at the end, each batch's signal groups read through its
+ * own entries. Their sizes follow the caps that module exports. That module is
+ * the real one, with `sendBulkBatches` passed through a spy so one case can
+ * read the estimate the loader gives it.
+ *
  * One behaviour the suite deliberately pins rather than asserts as correct,
  * flagged in the coverage report:
  *   - `loadFxRatesAndSignalsBulk` re-throws where the two `ensureFxRangeLoaded*`
@@ -24,6 +32,14 @@ vi.mock('$lib/api', () => ({
         convert_currency_bulk_api_v1_fx_currencies_convert_post: vi.fn(),
     },
 }));
+
+// Z-27: the real batching helper, with `sendBulkBatches` passed through a spy so that one case can read the estimate
+// the loader hands it; the plan, the sends and the splits stay the real ones. Until the module exists nothing imports
+// it but that case, which fails at its import.
+vi.mock('$lib/api/bulkBatches', async (importOriginal) => {
+    const real = await importOriginal<typeof import('$lib/api/bulkBatches')>();
+    return {...real, sendBulkBatches: vi.fn(real.sendBulkBatches)};
+});
 
 import {zodiosApi} from '$lib/api';
 import {notifyPortfolioMutation, notifyPricesCaughtUp, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
@@ -45,6 +61,7 @@ import {
     parsePairSlug,
     removeFxStore,
 } from '../fxStoreRegistry';
+import type {FxRatesAndSignalsBulkRequest, FxRatesAndSignalsBulkResult} from '../fxStoreRegistry';
 
 const mockConvert = vi.mocked(zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post);
 
@@ -936,6 +953,289 @@ describe('loadFxRatesAndSignalsBulk', () => {
             mockConvert.mockResolvedValueOnce({success_count: 0, results: []} as any);
             await loadFxRatesAndSignalsBulk([cachedNoSignals]);
             expect(mockConvert).toHaveBeenCalledTimes(2);
+        });
+    });
+
+    // =========================================================================
+    //  A list past the bulk caps goes in batches (Z-27, decisions D1–D4 of 17/10)
+    //
+    //  Since Z-25 `POST /fx/currencies/convert` refuses more than `MAX_BULK_ITEMS` items (1,000; 422
+    //  `bulk_too_many_items`) and more than `MAX_BULK_ITEM_DAYS` item-days (1,000,000 since R13-SEC9-2; 422
+    //  `bulk_too_many_days`), and the FX list sent every entry in one POST: past either cap it loaded nothing. The
+    //  loader sends its entries through `sendBulkBatches` (`$lib/api/bulkBatches`): batches planned under
+    //  `BULK_MAX_ITEMS` entries and `BULK_ITEM_DAYS_BUDGET` estimated item-days (80 % of the backend's) — an entry
+    //  estimated at the days of its range (`bulkRangeDays`), doubled plus `BULK_SIGNAL_MARGIN_DAYS` of warm-up when it
+    //  has signals — sent one after the other, a batch refused for its days split and sent again. D3, all at the end:
+    //  once every batch settled the points are merged, the signal groups of each batch are read through that batch's
+    //  own entries (`request_index` counts from 0 in every POST), and the entries of the batches that answered are
+    //  marked fetched; after a failure a 404 marks the entries of the request that got it, nothing further is sent,
+    //  and the error is re-thrown. With one batch the load is today's, which every case above keeps pinning.
+    //
+    //  Every size here is derived from the caps the module exports, read when a case runs (`caps()`): a later change
+    //  of the budget moves the cases with it. The fake backend answers each POST from its own body and numbers its
+    //  signal groups from 0, as the real one does (`backend/app/api/v1/fx/currencies.py`). The first case reaches its
+    //  batches through the item-days budget with «All» from 2000: it is the slow one of the file — the loader walks
+    //  every day of every range in the stores, before and after the POSTs — and its size grows with the budget. The
+    //  failure cases reach a second batch through the item cap with two-day ranges, which cost nothing. The estimate
+    //  itself is read from the call to `sendBulkBatches` (passed through a spy, see the top of the file).
+    //  A card's store is read on two days: its last day holds the answered point («merged»); its first day holds
+    //  none, so only a fetched mark keeps it out of the missing intervals («fetched»).
+    //
+    //  Red first: until the module exists every case fails at the import of its caps; once it exists, they fail on
+    //  the loader's single POST until the loader sends its entries through it.
+    // =========================================================================
+    describe('in batches under the bulk caps (Z-27)', () => {
+        const TWO_DAYS = {start: '2024-01-01', end: '2024-01-02'};
+        /** «All» from 2000: 9,497 days, both ends included. */
+        const ALL = {start: '2000-01-01', end: '2025-12-31'};
+        const ALL_DAYS = 9_497;
+        /** What the backend's 422 says it allows (`max_item_days`): 1,000,000 since R13-SEC9-2. The split reads it from the refusal. */
+        const BACKEND_MAX_ITEM_DAYS = 1_000_000;
+
+        /** The caps of `$lib/api/bulkBatches`, read from the module when a case runs: every size below follows them. */
+        async function caps(): Promise<{maxItems: number; budget: number; margin: number}> {
+            const bulk = await import('$lib/api/bulkBatches');
+            return {maxItems: bulk.BULK_MAX_ITEMS, budget: bulk.BULK_ITEM_DAYS_BUDGET, margin: bulk.BULK_SIGNAL_MARGIN_DAYS};
+        }
+
+        /** The item cap, for the cases that reach a second batch through it: two-day cards without signals never fill the item-days budget first. */
+        async function itemCap(): Promise<number> {
+            const {maxItems, budget} = await caps();
+            expect(maxItems * 2, 'premise: a full batch of two-day cards stays under the item-days budget').toBeLessThanOrEqual(budget);
+            return maxItems;
+        }
+
+        /** The n-th of 17,576 distinct codes, all before USD (AAA, AAB, …): `<code>-USD` is a canonical slug. */
+        function code(n: number): string {
+            const letter = (k: number) => String.fromCharCode(65 + (k % 26));
+            return letter(Math.floor(n / 676)) + letter(Math.floor(n / 26)) + letter(n);
+        }
+
+        /** `n` cards in list order, each its own pair over `range`; with signals, one EMA whose instance id names the pair. */
+        function cards(n: number, range: {start: string; end: string}, withSignals: boolean): FxRatesAndSignalsBulkRequest[] {
+            return Array.from({length: n}, (_, i) => {
+                const slug = `${code(i)}-USD`;
+                return {slug, ...range, displayedInverted: false, signals: withSignals ? [{instance_id: `ema-${slug}`, signal_code: 'EMA', params: {period: 20}}] : []};
+            });
+        }
+
+        /**
+         * The backend's answer to one POST, built from its own body: a point on the last day of each item's range, and
+         * for each item with signals a group numbered by the item's position IN THIS POST, echoing that item's signals.
+         */
+        function answerOf(body: any[]) {
+            return {
+                success_count: body.length,
+                results: body.map((item) => ({from_amount: {code: item.from_amount.code, amount: '1'}, to_amount: {code: item.to, amount: '1.25'}, conversion_date: item.date_range.end, rate: '1.25', backward_fill_info: null})),
+                signal_results: body.flatMap((item, requestIndex) =>
+                    item.signals?.length > 0
+                        ? [
+                              {
+                                  request_index: requestIndex,
+                                  from_currency: item.from_amount.code,
+                                  to_currency: item.to,
+                                  date_range: item.date_range,
+                                  signals: item.signals.map((signal: any) => ({instance_id: signal.instance_id, signal_code: signal.signal_code, status: 'unavailable'})),
+                              },
+                          ]
+                        : [],
+                ),
+            } as any;
+        }
+
+        /** How many entries each POST carried, in call order. */
+        const postSizes = () => mockConvert.mock.calls.map(([body]) => (body as unknown[]).length);
+
+        /** The instance ids a load returned for a pair, joined; `nothing` when no group reached it. */
+        function signalIdsOf(signalsBySlug: FxRatesAndSignalsBulkResult['signalsBySlug'], slug: string): string {
+            const signals = signalsBySlug.get(slug);
+            return signals ? signals.map((signal) => signal.instance_id).join() : 'nothing';
+        }
+
+        /** What the load left in the cards' stores, counted: `merged+fetched`, `fetched` (no point: a 404), `merged`, or `untouched`. */
+        function tally(list: FxRatesAndSignalsBulkRequest[]): Record<string, number> {
+            const counts: Record<string, number> = {};
+            for (const card of list) {
+                const store = getFxStore(card.slug);
+                const merged = store.get(card.end) !== undefined;
+                const fetched = store.getMissingIntervals(card.start, card.start).length === 0;
+                const state = merged && fetched ? 'merged+fetched' : merged ? 'merged' : fetched ? 'fetched' : 'untouched';
+                counts[state] = (counts[state] ?? 0) + 1;
+            }
+            return counts;
+        }
+
+        function deferred<T>(): {promise: Promise<T>; resolve: (value: T) => void} {
+            let resolve!: (value: T) => void;
+            const promise = new Promise<T>((settle) => {
+                resolve = settle;
+            });
+            return {promise, resolve};
+        }
+
+        /** `promise`, or a failure naming what never came: a red fails fast and says why, instead of at the test timeout. */
+        async function within<T>(promise: Promise<T>, what: string, ms = 3_000): Promise<T> {
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const deadline = new Promise<never>((_resolve, reject) => {
+                timer = setTimeout(() => reject(new Error(`${what} — nothing within ${ms} ms`)), ms);
+            });
+            try {
+                return await Promise.race([promise, deadline]);
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        function settled<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> {
+            return Promise.allSettled([promise]).then(([outcome]) => outcome);
+        }
+
+        it('splits a list past the item-days budget into consecutive POSTs and gives every pair its own signals', {timeout: 60_000}, async () => {
+            const {maxItems, budget, margin} = await caps();
+            // An «All» card with a signal is estimated at 2 × 9,497 + the warm-up margin — the daily items, and the
+            // signal items with their warm-up: 19,394 item-days at 400. `perBatch` of them fill the budget (41 at
+            // 800,000): two full batches and one card more make three POSTs.
+            const perBatch = Math.floor(budget / (2 * ALL_DAYS + margin));
+            expect(perBatch, 'premise: an «All» card fits the budget').toBeGreaterThan(0);
+            expect(perBatch, 'premise: the budget closes these batches, not the item cap').toBeLessThan(maxItems);
+            const list = cards(2 * perBatch + 1, ALL, true);
+            mockConvert.mockImplementation(async (body) => answerOf(body as any[]));
+
+            const result = await within(loadFxRatesAndSignalsBulk(list), 'the load never settled', 30_000);
+
+            expect(
+                postSizes(),
+                `${list.length} cards with a signal over «All» go as ${perBatch} + ${perBatch} + 1 POSTs, planned under the budget of ${budget} (Z-27): in one POST they are about ${list.length * (2 * ALL_DAYS + margin)} item-days, where the backend refuses past its MAX_BULK_ITEM_DAYS (422 bulk_too_many_days, Z-25)`,
+            ).toEqual([perBatch, perBatch, 1]);
+            expect(
+                mockConvert.mock.calls.flatMap(([body]) => (body as any[]).map((item) => `${item.from_amount.code}-${item.to} ${item.date_range.start}..${item.date_range.end} ${item.signals[0]?.instance_id}`)),
+                'consecutive batches, in list order, every entry whole',
+            ).toEqual(list.map((card) => `${card.slug} ${card.start}..${card.end} ema-${card.slug}`));
+            const misfiled = list.filter((card) => signalIdsOf(result.signalsBySlug, card.slug) !== `ema-${card.slug}`).map((card) => `${card.slug} got ${signalIdsOf(result.signalsBySlug, card.slug)}`);
+            expect(misfiled, 'request_index counts from 0 in every POST: the groups of a batch are read through that batch’s own entries — or the groups of the later batches land on the first cards, and their own cards get none').toEqual([]);
+            expect(tally(list), 'every pair: its point merged, its range marked fetched').toEqual({'merged+fetched': list.length});
+        });
+
+        it('estimates an entry at the days of its range as the backend cuts it — doubled, plus the warm-up margin, when it has signals (D1)', async () => {
+            // 2026-10-17 at noon on the machine's calendar: `todayIso()` is 2026-10-17, the backend's last day 2026-10-18.
+            vi.useFakeTimers({toFake: ['Date']});
+            vi.setSystemTime(new Date(2026, 9, 17, 12));
+            try {
+                const {sendBulkBatches, BULK_SIGNAL_MARGIN_DAYS} = await import('$lib/api/bulkBatches');
+                const spied = vi.mocked(sendBulkBatches);
+                spied.mockClear();
+                mockConvert.mockImplementation(async (body) => answerOf(body as any[]));
+
+                await within(
+                    loadFxRatesAndSignalsBulk([
+                        {slug: 'AAA-USD', ...ALL, displayedInverted: false, signals: [{instance_id: 'ema-AAA-USD', signal_code: 'EMA', params: {period: 20}}]},
+                        {slug: 'AAB-USD', ...ALL, displayedInverted: false, signals: []},
+                        {slug: 'AAC-USD', start: '2026-10-01', end: '2026-12-31', displayedInverted: false, signals: []},
+                    ]),
+                    'the load never settled',
+                );
+
+                expect(spied, 'the loader sends its entries through sendBulkBatches').toHaveBeenCalledOnce();
+                const [items, estimate] = spied.mock.calls[0];
+                expect(
+                    items.map((item) => estimate(item)),
+                    '«All» from 2000 with a signal: 2 × 9,497 + the margin (the daily items, the signal items and their warm-up); without: 9,497; a range past tomorrow: cut there, 18 days',
+                ).toEqual([2 * ALL_DAYS + BULK_SIGNAL_MARGIN_DAYS, ALL_DAYS, 18]);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('merges nothing of an answered batch while the next one is pending (D3: all at the end)', {timeout: 15_000}, async () => {
+            const maxItems = await itemCap();
+            const list = cards(maxItems + 1, TWO_DAYS, false);
+            const secondSent = deferred<unknown[]>();
+            const secondAnswer = deferred<unknown>();
+            mockConvert
+                .mockImplementationOnce(async (body) => answerOf(body as any[]))
+                .mockImplementationOnce((body) => {
+                    secondSent.resolve(body as unknown[]);
+                    return secondAnswer.promise as any;
+                });
+
+            const loading = settled(loadFxRatesAndSignalsBulk(list));
+            const secondBody = await within(secondSent.promise, `the second POST never went out: ${list.length} cards in one POST pass the backend’s ${maxItems}-item cap (422 bulk_too_many_items, Z-25)`);
+
+            expect(postSizes(), `${maxItems} cards, then the last one`).toEqual([maxItems, 1]);
+            expect(tally(list.slice(0, maxItems)), 'D3: the first batch has answered, but nothing of it reaches the stores before every batch settled').toEqual({untouched: maxItems});
+
+            secondAnswer.resolve(answerOf(secondBody as any[]));
+            const outcome = await within(loading, 'the load never settled once the second POST answered');
+
+            expect(outcome.status).toBe('fulfilled');
+            expect(tally(list), 'once every batch settled: every pair merged and marked fetched').toEqual({'merged+fetched': list.length});
+        });
+
+        it('keeps the batch answered before a 500, sends nothing after it, and re-throws the 500', {timeout: 15_000}, async () => {
+            const maxItems = await itemCap();
+            const list = cards(2 * maxItems + 1, TWO_DAYS, false);
+            const boom = Object.assign(new Error('Request failed with status code 500'), {response: {status: 500, data: {detail: 'Internal Server Error'}}});
+            mockConvert
+                .mockImplementationOnce(async (body) => answerOf(body as any[]))
+                .mockRejectedValueOnce(boom)
+                // Would answer a third POST: there must be none.
+                .mockImplementation(async (body) => answerOf(body as any[]));
+
+            const outcome = await within(settled(loadFxRatesAndSignalsBulk(list)), 'the load never settled');
+
+            expect(postSizes(), `batches of ${maxItems}, ${maxItems} and 1, and none after the one that failed: ${list.length} cards in one POST pass the backend’s ${maxItems}-item cap (422 bulk_too_many_items, Z-25)`).toEqual([maxItems, maxItems]);
+            expect(outcome.status, 'the 500 reaches the caller, as today').toBe('rejected');
+            expect((outcome as PromiseRejectedResult).reason).toBe(boom);
+            expect(tally(list.slice(0, maxItems)), 'the batch that answered: merged and marked fetched').toEqual({'merged+fetched': maxItems});
+            expect(tally(list.slice(maxItems, 2 * maxItems)), 'the batch of the 500: nothing merged, nothing marked — the next load asks again').toEqual({untouched: maxItems});
+            expect(tally(list.slice(2 * maxItems)), 'the batch never sent: neither merged nor marked').toEqual({untouched: 1});
+        });
+
+        it('marks the batch that got a 404 fetched, keeps the batch before it, sends nothing after it, and re-throws the 404', {timeout: 15_000}, async () => {
+            const maxItems = await itemCap();
+            const list = cards(2 * maxItems + 1, TWO_DAYS, false);
+            const err404 = Object.assign(new Error('Not Found'), {response: {status: 404}});
+            mockConvert
+                .mockImplementationOnce(async (body) => answerOf(body as any[]))
+                .mockRejectedValueOnce(err404)
+                // Would answer a third POST: there must be none.
+                .mockImplementation(async (body) => answerOf(body as any[]));
+
+            const outcome = await within(settled(loadFxRatesAndSignalsBulk(list)), 'the load never settled');
+
+            expect(postSizes(), `batches of ${maxItems}, ${maxItems} and 1, and none after the one that failed: ${list.length} cards in one POST pass the backend’s ${maxItems}-item cap (422 bulk_too_many_items, Z-25)`).toEqual([maxItems, maxItems]);
+            expect(outcome.status, 'the 404 reaches the caller, as today').toBe('rejected');
+            expect((outcome as PromiseRejectedResult).reason).toBe(err404);
+            expect(tally(list.slice(0, maxItems)), 'the batch that answered: merged and marked fetched').toEqual({'merged+fetched': maxItems});
+            expect(tally(list.slice(maxItems, 2 * maxItems)), 'today’s 404 rule, applied to the request that got it: no rates there, and the next load does not ask again').toEqual({fetched: maxItems});
+            expect(tally(list.slice(2 * maxItems)), 'the batch never sent: neither merged nor marked').toEqual({untouched: 1});
+        });
+
+        it('splits a batch the backend refuses for its days, and still loads every pair with its own signals', {timeout: 15_000}, async () => {
+            const {maxItems, budget, margin} = await caps();
+            const list = cards(6, TWO_DAYS, true);
+            expect(list.length * (2 * 2 + margin), 'premise: six two-day cards with a signal are planned as one batch').toBeLessThanOrEqual(budget);
+            expect(list.length, 'premise: … under the item cap as well').toBeLessThanOrEqual(maxItems);
+            // The estimate cannot see every warm-up, so the backend may count more than was planned. Its 422 says by
+            // how much: one item-day past its budget asks for max(2, ceil(item_days / max_item_days) + 1) = 3 parts of 2.
+            const refusal = Object.assign(new Error('Request failed with status code 422'), {
+                response: {
+                    status: 422,
+                    data: {detail: {code: 'bulk_too_many_days', message: `A bulk request may build at most ${BACKEND_MAX_ITEM_DAYS} per-day points, and this one would build at least ${BACKEND_MAX_ITEM_DAYS + 1}`, max_item_days: BACKEND_MAX_ITEM_DAYS, item_days: BACKEND_MAX_ITEM_DAYS + 1}},
+                },
+            });
+            mockConvert.mockRejectedValueOnce(refusal).mockImplementation(async (body) => answerOf(body as any[]));
+
+            const outcome = await within(settled(loadFxRatesAndSignalsBulk(list)), 'the load never settled');
+
+            expect(outcome.status, 'the FX list gave up on the backend’s 422 bulk_too_many_days instead of splitting the batch (Z-27)').toBe('fulfilled');
+            expect(postSizes(), 'the refused POST of 6, then its 3 parts').toEqual([6, 2, 2, 2]);
+            const {signalsBySlug} = (outcome as PromiseFulfilledResult<FxRatesAndSignalsBulkResult>).value;
+            expect(
+                list.map((card) => `${card.slug} ${signalIdsOf(signalsBySlug, card.slug)}`),
+                'every part numbers its groups from 0: each pair still gets its own signals',
+            ).toEqual(list.map((card) => `${card.slug} ema-${card.slug}`));
+            expect(tally(list), 'every pair: its point merged, its range marked fetched').toEqual({'merged+fetched': 6});
         });
     });
 });

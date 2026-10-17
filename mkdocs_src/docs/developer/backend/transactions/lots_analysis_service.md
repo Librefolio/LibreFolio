@@ -87,13 +87,13 @@ Top-level fields always present:
 | `asset_id` | Requested asset |
 | `target_currency` | Final response currency |
 | `quote_base_quantity` | Asset qbq, needed by frontend price/WAC axis |
-| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` engine run becomes `DEGRADED` when a conversion is missing — in a WAC line or in any other figure of the analysis — or a WAC line misses a cost basis (see [FX Conversion](#fx-conversion) and [WAC Lines](#wac-lines)) |
+| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` engine run becomes `DEGRADED` when a conversion is missing — in a WAC line or in any other figure of the analysis — or a WAC line misses a cost basis (see [FX Conversion](#fx-conversion) and [WAC Lines](#wac-lines)). With `FAILED` the lot figures are withheld (see [A Failed Reconstruction](#failed-reconstruction)) |
 | `calculation_metadata` | Broker scope, selection, requested/computed date bounds, generation date |
 | `data_quality` | FIFO/data-quality issues mapped to UI-friendly DTOs |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) mapped from the engine, `None` unless `LOT_SUMMARY` requested |
 | `asset_orphan_income` / `asset_orphan_fees` / `asset_orphan_taxes` | Amounts that belonged to no eligible lot, kept at asset level (never dropped, never double-counted) |
 
-All analysis payload sections are `None` unless explicitly requested.
+All analysis payload sections are `None` unless explicitly requested — and, with `FAILED`, every section but the WAC lines (see [A Failed Reconstruction](#failed-reconstruction)).
 
 ---
 
@@ -184,6 +184,38 @@ departure to the arrival; the lots do the same:
   value only when both brokers are in the requested scope (`_fragment_in_scope`), as the Dashboard's combined view.
 - A partner outside the scope is read at the scope's edge instead (see
   [Transfers Across the Scope's Edge](#scope-edge-transfers)), whatever its date.
+
+### 🛑 A Failed Reconstruction {: #failed-reconstruction }
+
+A replay that hits a quantitative failure is `FAILED`: a code of `_QUANTITATIVE_FAILURE_CODES` — a sale or a transfer
+beyond the quantity held (`FIFO_SOURCE_QUANTITY_MISSING`), a transfer or an adjustment out of SHORT inventory
+(`SHORT_TRANSFER_NOT_SUPPORTED`, `SHORT_ADJUSTMENT_NOT_SUPPORTED`), a transfer leg without its partner
+(`TRANSFER_PAIR_MISSING`). The lots it leaves do not match what the account holds, and every later event consumes the
+wrong ones, so every lot figure would be wrong. Missing data is declared, never shown wrong (J-12, decision N81): right
+after the engine, the service keeps only the analyses that do not read the lots.
+
+- **Withheld.** Every section that reads the lots is `None`, requested or not: `lots`, `gantt_segments`,
+  `custody_history`, `lot_events`, `value_history`, `return_history`, `price_history` (one series per lot),
+  `performance_history`, `income_events` and `economic_allocation_groups`, and the three orphan totals. No rate is
+  registered and no market value is computed for them.
+- **Kept.** The WAC lines (`broker_wac_history`, `cumulative_wac_history`) come from the transactions, not from the
+  replay: they are built as usual, with their gaps. So are `quote_base_quantity`, `calculation_metadata` — whose
+  `requested_analyses` are still those asked for — and `data_quality`.
+- **The issues.** `data_quality` holds the issues that fail the replay and the gaps of the WAC lines (`_report_gaps()`:
+  their missing rates, `MISSING_COST_BASIS`). The issues about what is withheld are left out: `REFERENCE_PRICE_FALLBACK`
+  / `REFERENCE_PRICE_UNAVAILABLE`, `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS`,
+  `CURRENT_PRICE_ASSUMED_AT_COST` and the rates of the lot figures.
+- **The row to fix.** `_build_data_quality_report()` gives each issue that fails the replay
+  (`fails_the_replay()`, `financial_math/fifo/models.py`) two more `message_params`: `transaction_date`, the ISO date of
+  its `transaction_id`, and `fails_analysis: true`, so a reader needs no list of codes. `transaction_id` is always a
+  row of the scope — for a transfer, the giving leg (see [Depart](fifo_lot_engine.md#depart)); a copy read at the
+  scope's edge or still in transit keeps the id of its row. `related_transaction_id` is the partner, never the row to
+  fix.
+
+`analysis_failure_codes(response)` reads them back: the sorted unique codes of the issues that carry `fails_analysis`.
+The AI Export declares a `FAILED` asset with them instead of exporting its lots (see
+[Snapshot Data Tables](../../architecture/patterns/ai_export_composition.md#snapshot-data-tables)). A `DEGRADED`
+analysis is not concerned: its gaps are isolable, and its figures stay.
 
 ### 💱 FX Conversion {: #fx-conversion }
 

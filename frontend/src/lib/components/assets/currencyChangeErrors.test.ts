@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * currencyChangeErrors — unit test (Vitest, node). Workstream X, lot X-R48.
+ * currencyChangeErrors — unit test (Vitest, node). Workstream X, lots X-R48 and X-R49.
  *
  * Why. A currency change that market data blocks goes through `AssetCurrencyChangeModal`: its confirm wipes the
  * asset's prices and events (`POST /assets/{id}/market-data/wipe`), then patches the currency. Since X-R48 the wipe
@@ -38,6 +38,24 @@
  * Green once the module and the key in the four sources (`src/lib/i18n/assets/<lang>.json`) are in. The parse control
  * is green as soon as the file loads.
  *
+ * X-R49. The same refusal has a second door. The provider assignment (`POST /assets/provider`) regenerates the plan of
+ * a parametric provider whose params change, or that the asset leaves, and deleting the plan deletes its splits: it
+ * refuses, writing nothing, with 409 `detail = {error_code: 'PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST', message,
+ * params: {asset_id, item_index, splits: [{event_id, date, transaction_ids, hidden_transactions_count}, …]}}`, the
+ * splits listed as the wipe lists them. The asset modal words it through this module, with a key of its own:
+ * `t('assets.modal.planSplitAdjustmentsWithoutCost', {values: {date, n, hidden, more}})`, the values read from
+ * `params.splits` exactly as for the wipe, which keeps its key. A code is looked up among the module's own codes only:
+ * `constructor`, `toString`, `__proto__` and the other names every object inherits are not codes, and neither is a
+ * list holding one (JSON can carry a list) — `null`, and the catalogue is not asked. The new key is read in the four
+ * catalogues as the first one is (in words of its own, and not the currency change's sentence either; the four names
+ * and the three plurals; through svelte-i18n with nothing left raw), and its French counts carry the CLDR `many`
+ * branch, as the first one's do.
+ *
+ * Expected (X-R49). Red before the cure: the module answers `null` to the plan's code and asks nothing, so every case
+ * of its describe is red, the side-by-side case included; the catalogue cases of the new key stay red until the key is
+ * in the four sources (`src/lib/i18n/assets/<lang>.json`). Green before the cure and after it: the inherited names, the
+ * list and the near miss `PROVIDER_SOMETHING_NEW` — guards against a lookup that reads what an object inherits.
+ *
  * Registered in `scripts/test_runner/_frontend_utility.py`, in the Vitest list of `front_utility_unit` (action
  * `core-unit`), next to `currencyBlocker.test.ts`.
  */
@@ -54,6 +72,9 @@ import {wipeRefusalMessage} from './currencyChangeErrors';
 
 const CODE = 'MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST';
 const KEY = 'assetDetail.currencyChange.splitAdjustmentsWithoutCost';
+/** X-R49: the provider assignment's refusal, and the key it is worded by. */
+const PLAN_CODE = 'PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST';
+const PLAN_KEY = 'assets.modal.planSplitAdjustmentsWithoutCost';
 
 type Values = Record<string, string | number>;
 type Call = {key: string; values: Values | undefined};
@@ -85,6 +106,19 @@ function wipeRefused(params: unknown) {
     return apiError(409, {error_code: CODE, message: SERVER_SENTENCE, params});
 }
 
+/** The assignment's own sentence (X-R49), English and totals only: the user must never read it either. */
+const PLAN_SERVER_SENTENCE = "Provider not assigned: the server's own sentence";
+
+/** The params of the assignment's refusal: the asset and the item of the request, beside the splits as given. */
+function planParams(splits: unknown) {
+    return {asset_id: 7, item_index: 0, splits};
+}
+
+/** The assignment's refusal (X-R49), 409, with its params as given. */
+function planRefused(params: unknown) {
+    return apiError(409, {error_code: PLAN_CODE, message: PLAN_SERVER_SENTENCE, params});
+}
+
 /** One split as the refusal lists it: its date, the adjustments the user can see, and how many others. */
 function split(date: string, transactionIds: unknown[], hidden: number, eventId = 12) {
     return {event_id: eventId, date, transaction_ids: transactionIds, hidden_transactions_count: hidden};
@@ -103,6 +137,7 @@ function expectReadable(message: string) {
     expect(message).not.toContain('[object Object]');
     expect(message).not.toContain("the server's own sentence");
     expect(message).not.toContain(CODE);
+    expect(message).not.toContain(PLAN_CODE);
 }
 
 describe('wipeRefusalMessage — a split whose adjustments have no purchase cost (X-R48)', () => {
@@ -189,6 +224,73 @@ describe('wipeRefusalMessage — a split whose adjustments have no purchase cost
     });
 });
 
+describe('wipeRefusalMessage — a split of the plan the provider assignment would delete (X-R49)', () => {
+    it("one split, one adjustment in sight and none hidden: the plan's own key, its date as the server wrote it, n 1, hidden 0, more 0", () => {
+        const {t, calls, outputs} = fakeT();
+        const message = wipeRefusalMessage(planRefused(planParams([split('2026-02-10', [5], 0)])), t);
+
+        expect(onlyCall(calls)).toEqual({key: PLAN_KEY, values: {date: '2026-02-10', n: 1, hidden: 0, more: 0}});
+        expect(message, 'the sentence is the translation, as t wrote it').toBe(outputs[0]);
+        expectReadable(String(message));
+    });
+
+    it('fail-closed, none in sight: no id listed and two hidden — n 2, hidden 2', () => {
+        const {t, calls, outputs} = fakeT();
+        const message = wipeRefusalMessage(planRefused(planParams([split('2026-02-10', [], 2)])), t);
+
+        expect(onlyCall(calls)).toEqual({key: PLAN_KEY, values: {date: '2026-02-10', n: 2, hidden: 2, more: 0}});
+        expect(message).toBe(outputs[0]);
+        expectReadable(String(message));
+    });
+
+    it('two splits: the first is named — its date, its adjustments — and the second is only counted in more', () => {
+        const {t, calls} = fakeT();
+        // The second split differs from the first in every value: a sum, or the last split, reads otherwise.
+        const splits = [split('2026-02-10', [5], 1, 12), split('2026-05-04', [7, 8, 9], 4, 15)];
+        const message = wipeRefusalMessage(planRefused(planParams(splits)), t);
+
+        expect(onlyCall(calls)).toEqual({key: PLAN_KEY, values: {date: '2026-02-10', n: 2, hidden: 1, more: 1}});
+        expectReadable(String(message));
+    });
+
+    it("the date label is applied to the first split's date", () => {
+        const {t, calls} = fakeT();
+        const splits = [split('2026-02-10', [5, 6], 0, 12), split('2026-05-04', [7], 0, 15)];
+        wipeRefusalMessage(planRefused(planParams(splits)), t, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: PLAN_KEY, values: {date: 'D<2026-02-10>', n: 2, hidden: 0, more: 1}});
+    });
+
+    it.each<[string, unknown, Values]>([
+        ['params missing', undefined, {date: '', n: 0, hidden: 0, more: 0}],
+        ['params null', null, {date: '', n: 0, hidden: 0, more: 0}],
+        ['params with the asset and the item but no splits', {asset_id: 7, item_index: 0}, {date: '', n: 0, hidden: 0, more: 0}],
+        ['splits an empty list (more is never -1)', planParams([]), {date: '', n: 0, hidden: 0, more: 0}],
+        ['splits not a list: a string', planParams('2026-02-10'), {date: '', n: 0, hidden: 0, more: 0}],
+        ['a split that is not an object', planParams([null]), {date: '', n: 0, hidden: 0, more: 0}],
+        ['ids that are not a list and a hidden count of -1', planParams([{event_id: 12, date: '2026-02-10', transaction_ids: '5,6', hidden_transactions_count: -1}]), {date: '2026-02-10', n: 0, hidden: 0, more: 0}],
+        ['a date that is not a string', planParams([{event_id: 12, date: {year: 2026, month: 2, day: 10}, transaction_ids: [5], hidden_transactions_count: 0}]), {date: '', n: 1, hidden: 0, more: 0}],
+    ])('%s: no throw — each missing piece is 0 or the empty string', (_label, params, values) => {
+        const {t, calls} = fakeT();
+        const message = wipeRefusalMessage(planRefused(params), t);
+
+        expect(onlyCall(calls)).toEqual({key: PLAN_KEY, values});
+        expectReadable(String(message));
+    });
+
+    it('side by side with the currency change: the same splits under each code — each to its own key, with the same values', () => {
+        const splits = [split('2026-02-10', [5, 6], 1, 12), split('2026-05-04', [7], 0, 15)];
+        const currencyChange = fakeT();
+        const providerChange = fakeT();
+        wipeRefusalMessage(wipeRefused({splits}), currencyChange.t, dateLabel);
+        wipeRefusalMessage(planRefused(planParams(splits)), providerChange.t, dateLabel);
+
+        const values = {date: 'D<2026-02-10>', n: 3, hidden: 1, more: 1};
+        expect(onlyCall(currencyChange.calls), 'the currency change keeps its key').toEqual({key: KEY, values});
+        expect(onlyCall(providerChange.calls), 'the provider change has a key of its own: the sentence is about another operation').toEqual({key: PLAN_KEY, values});
+    });
+});
+
 describe('wipeRefusalMessage — anything else is null, and the catalogue is not asked', () => {
     const SPLITS = {splits: [split('2026-02-10', [5], 1)]};
 
@@ -199,6 +301,10 @@ describe('wipeRefusalMessage — anything else is null, and the catalogue is not
             apiError(409, {error_code: 'EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST', message: SERVER_SENTENCE, params: {asset_id: 7, item_index: 0, event_id: 12, date: '2026-02-10', transaction_ids: [5], hidden_transactions_count: 1}}),
         ],
         ['another code, with the same splits', apiError(409, {error_code: 'MARKET_DATA_SOMETHING_NEW', message: SERVER_SENTENCE, params: SPLITS})],
+        // X-R49: a near miss of the assignment, with the plan's params.
+        ['another code of the assignment, with the same splits', apiError(409, {error_code: 'PROVIDER_SOMETHING_NEW', message: PLAN_SERVER_SENTENCE, params: planParams(SPLITS.splits)})],
+        // X-R49: a code is a string. JSON can carry a list, and a list of one code, used as a property name, is that code.
+        ["a list holding the plan's code", apiError(409, {error_code: [PLAN_CODE], message: PLAN_SERVER_SENTENCE, params: planParams(SPLITS.splits)})],
         ['a structured detail without a code', apiError(409, {message: SERVER_SENTENCE, params: SPLITS})],
         ['a string detail', apiError(404, 'Asset not found')],
         ['a 422 validation list', apiError(422, [{type: 'int_parsing', loc: ['path', 'asset_id'], msg: 'Input should be a valid integer', input: 'x'}])],
@@ -211,6 +317,14 @@ describe('wipeRefusalMessage — anything else is null, and the catalogue is not
 
         expect(wipeRefusalMessage(err, t)).toBeNull();
         expect(calls, 'the caller keeps its generic sentence: nothing is asked of the catalogue').toEqual([]);
+    });
+
+    // X-R49: with two codes the module may look the code up; only its own codes are found, never what an object inherits.
+    it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf'])('an error_code that names what every object inherits (%s) is no code: null, and t is not called', (code) => {
+        const {t, calls} = fakeT();
+
+        expect(wipeRefusalMessage(apiError(409, {error_code: code, message: PLAN_SERVER_SENTENCE, params: planParams(SPLITS.splits)}), t)).toBeNull();
+        expect(calls, 'an inherited member is not a key of the catalogue').toEqual([]);
     });
 });
 
@@ -261,6 +375,12 @@ function argumentNames(message: string): string[] {
 /** The names a message counts with a cardinal plural, at any depth, sorted. */
 function cardinalPlurals(message: string): string[] {
     const names = elementsOf(parse(message)).flatMap((element) => (element.type === PLURAL_TYPE && 'pluralType' in element && element.pluralType === 'cardinal' ? [element.value] : []));
+    return [...new Set(names)].sort();
+}
+
+/** The names a message counts with a cardinal plural that has a CLDR `many` branch, at any depth, sorted. */
+function pluralsWithMany(message: string): string[] {
+    const names = elementsOf(parse(message)).flatMap((element) => (element.type === PLURAL_TYPE && 'pluralType' in element && element.pluralType === 'cardinal' && 'options' in element && 'many' in element.options ? [element.value] : []));
     return [...new Set(names)].sort();
 }
 
@@ -318,6 +438,61 @@ describe('the sentence in the four generated catalogues (X-R48)', () => {
 
         for (const message of [several, one]) {
             expect(message, `control: the ${lang} catalogue has the message, not the bare key`).not.toBe(KEY);
+            expectReadable(String(message));
+            expect(message, 'the first split, by its date label').toContain('D<2026-02-10>');
+            expect(message, 'every argument and plural formatted: a name the text needs and the module does not pass leaves the raw text').not.toMatch(/[{}]/);
+            expect(figures(String(message)), 'no figure 0: with nothing hidden and no other split, the sentence says nothing of either').not.toContain('0');
+        }
+        expect(figures(String(several)), 'n = 5, hidden = 2 and more = 3 are written').toEqual(expect.arrayContaining(['5', '2', '3']));
+    });
+});
+
+describe("the plan's sentence in the four generated catalogues (X-R49)", () => {
+    beforeAll(async () => {
+        init({fallbackLocale: 'en', initialLocale: 'en'});
+        await waitLocale('en');
+    });
+
+    afterEach(async () => {
+        // The language is module-level state shared by every case of the file.
+        await uiLanguage('en');
+    });
+
+    it.each(SUPPORTED_LOCALES)("%s: the generated catalogue has the key, in words of its own — not the English, not the currency change's sentence", (lang) => {
+        const text = messageAt(CATALOGUES[lang], PLAN_KEY);
+
+        expect(typeof text, `the generated ${lang} catalogue has no ${PLAN_KEY}`).toBe('string');
+        if (lang !== 'en') expect(text, `the ${lang} source has no ${PLAN_KEY}: this is the English text the build fills it with`).not.toBe(messageAt(CATALOGUES.en, PLAN_KEY));
+        expect(text, 'a provider change is not a currency change: the sentence of the wipe, copied over, would tell the user about the wrong operation').not.toBe(messageAt(CATALOGUES[lang], KEY));
+    });
+
+    it.each(SUPPORTED_LOCALES)('%s: its text names exactly date, n, hidden and more — the values the module passes — and counts n, hidden and more with ICU plurals', (lang) => {
+        const text = messageAt(CATALOGUES[lang], PLAN_KEY);
+        expect(typeof text, `premise: the generated ${lang} catalogue has ${PLAN_KEY}`).toBe('string');
+
+        expect(argumentNames(String(text)), 'a name the module does not pass leaves the raw text on screen; one it passes and the text drops is a figure lost').toEqual(['date', 'hidden', 'more', 'n']);
+        expect(cardinalPlurals(String(text)), 'n, hidden and more are counts: ICU plurals').toEqual(['hidden', 'more', 'n']);
+    });
+
+    it("fr: n, hidden and more each carry the CLDR many branch, as the currency change's sentence does", () => {
+        expect(pluralsWithMany('{n, plural, one {# item} other {# items}}'), 'control: a count without the branch').toEqual([]);
+        expect(pluralsWithMany(String(messageAt(CATALOGUES.fr, KEY))), "control: the currency change's French sentence, which has it in its three counts").toEqual(['hidden', 'more', 'n']);
+        const text = messageAt(CATALOGUES.fr, PLAN_KEY);
+        expect(typeof text, `premise: the generated fr catalogue has ${PLAN_KEY}`).toBe('string');
+
+        expect(pluralsWithMany(String(text))).toEqual(['hidden', 'more', 'n']);
+    });
+
+    it.each(SUPPORTED_LOCALES)('%s: through the module and svelte-i18n, every value is written, no ICU syntax is left, and a 0 says nothing', async (lang) => {
+        await uiLanguage(lang);
+        // n 5 (3 in sight, 2 hidden), hidden 2, more 3: three figures above 1, which every language writes as digits.
+        const several = wipeRefusalMessage(planRefused(planParams([split('2026-02-10', [5, 6, 7], 2, 12), split('2026-03-11', [8], 0, 13), split('2026-04-12', [], 1, 14), split('2026-05-13', [9], 0, 15)])), get(_), dateLabel);
+        // n 1, hidden 0, more 0: nothing hidden and no other split.
+        const one = wipeRefusalMessage(planRefused(planParams([split('2026-02-10', [5], 0)])), get(_), dateLabel);
+
+        for (const message of [several, one]) {
+            expect(message, "the module words the plan's refusal").not.toBeNull();
+            expect(message, `control: the ${lang} catalogue has the message, not the bare key`).not.toBe(PLAN_KEY);
             expectReadable(String(message));
             expect(message, 'the first split, by its date label').toContain('D<2026-02-10>');
             expect(message, 'every argument and plural formatted: a name the text needs and the module does not pass leaves the raw text').not.toMatch(/[{}]/);

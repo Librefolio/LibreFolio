@@ -27,16 +27,17 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import select
+from pydantic import ValidationError
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions.batch import TXBatchResponse
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXPromoteBatchItem, TXSplitBatchItem, TXValidationCode
 from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXUpdateItem
-from backend.app.schemas.transactions.type_metadata import PairFieldConstraint
+from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, PairFieldConstraint, TXTypesResponse
 from backend.app.services.transactions import balances as balances_module
 from backend.app.services.transactions.transaction_batch_stages import _parse_lenient
 from backend.app.services.transactions.transaction_service import TransactionService
@@ -331,6 +332,93 @@ class TestServiceHelpers:
         )
 
         assert result is True
+
+
+# ============================================================================
+# THE PARAMS OF A LONE BUSINESS-RULE ERROR (N78, W-B72)
+# ============================================================================
+
+# A BUY of -5 units paying 500 EUR, valid but for rule 10: qtyPositive is its one error, a lone one.
+LONE_RULE_BUY = {"broker_id": 1, "asset_id": 1, "type": "BUY", "date": "2025-02-03", "quantity": "-5", "cash": {"code": "EUR", "amount": "-500"}}
+# A DEPOSIT valid but for its description, one character past the 500 TXCreateItem allows: a field-level error, alone.
+LONG_DESCRIPTION_DEPOSIT = {"broker_id": 1, "type": "DEPOSIT", "date": "2025-02-03", "cash": {"code": "EUR", "amount": "100"}, "description": "x" * 501}
+
+
+def _pydantic_errors(model, raw: dict) -> list[dict]:
+    """What pydantic answers of ``raw`` under ``model``: its errors (``type``, ``loc``, ``ctx``); [] when it validates."""
+    try:
+        model.model_validate(raw)
+    except ValidationError as exc:
+        return exc.errors()
+    return []
+
+
+def _lone_parse_issues(raw: dict, model, operation: str) -> list[tuple]:
+    """The issues ``_parse_lenient`` answers for ``raw`` sent alone, as ``(operation, index, code, field, params)``."""
+    parsed, issues = _parse_lenient([raw], model, operation)
+    assert parsed == [], f"scaffold: the {operation} must be refused at the parse; it parsed: {parsed}"
+    return [(issue.operation, issue.index, issue.code, issue.field, issue.params) for issue in issues]
+
+
+class TestParseLenientParamsOfALoneError:
+    """The params of a lone business-rule error: the coordinator's approval of 17/10, with the refined N78 (W-B72).
+
+    ``_parse_lenient`` (``transaction_batch_stages.py``) unpacks ``multipleBusinessRuleErrors`` into one issue per packed
+    error, each with its context as ``params`` (``test_parse_lenient_unpacks_multiple_business_rule_errors``), but gives a
+    LONE error ``params`` None: a create breaking one business rule reaches the app without the ``{type}`` its message names.
+    The contract: a lone model-level business-rule error — ``loc`` empty, its context plain data (str, int, float, bool or
+    None values) — keeps that context as ``params``. A field-level pydantic error (``loc`` not empty) and a ``value_error``
+    (``loc`` empty too, but its context holds the exception itself) keep ``params`` None: the H-41 and decimal-places pins
+    stay valid. Each case first checks what pydantic answers, so it tests the kind of error it names.
+
+    - RED until the lone-params cure: a BUY of −5 units paying 500 EUR breaks rule 10 alone, ``qtyPositive``; its issue
+      carries ``{"type": "BUY"}``, today None.
+    - Guard: a description of 501 characters gets ``string_too_long`` on ``description``, ``params`` None.
+    - Guard: a split or a promote its own model validator refuses with a ``ValueError`` — a split's ``id_a == id_b``, a
+      promote without a reference to its TX B (a promote's validator does not compare the two ids) — gets ``value_error``,
+      no field, ``params`` None.
+    """
+
+    def test_a_lone_business_rule_error_keeps_its_context_as_params(self):
+        """RED until the lone-params cure: ``("create", 0, "qtyPositive", None, {"type": "BUY"})``; today ``params`` None."""
+        errors = _pydantic_errors(TXCreateItem, LONE_RULE_BUY)
+        assert [(error["type"], error["loc"], error.get("ctx")) for error in errors] == [("qtyPositive", (), {"type": "BUY"})], f"scaffold: the BUY of -5 units must break rule 10 alone, a model-level error with the context {{'type': 'BUY'}}; pydantic answers {errors}"
+
+        issues = _lone_parse_issues(LONE_RULE_BUY, TXCreateItem, "create")
+
+        assert [issue[:4] for issue in issues] == [("create", 0, "qtyPositive", None)], f"The lone qtyPositive must be the one issue of create 0, on no field: {issues}"
+        assert issues[0][4] == {"type": "BUY"}, (
+            f"N78 (W-B72), lone params: a create breaking rule 10 alone must keep its context as params {{'type': 'BUY'}}, as a packed error does; today it carries {issues[0][4]!r}. "
+            "_parse_lenient keeps the ctx of a business-rule error only when several are packed (multipleBusinessRuleErrors), so the app cannot name the type"
+        )
+
+    def test_guard_a_field_level_error_keeps_params_none(self):
+        """Guard, green today and after: ``("create", 0, "string_too_long", "description", None)`` — the context
+        ``{"max_length": 500}`` is plain data, but the error is the field's, not the model's."""
+        errors = _pydantic_errors(TXCreateItem, LONG_DESCRIPTION_DEPOSIT)
+        assert [(error["type"], error["loc"]) for error in errors] == [("string_too_long", ("description",))], f"scaffold: the DEPOSIT must fail on its description alone, a field-level error; pydantic answers {errors}"
+
+        issues = _lone_parse_issues(LONG_DESCRIPTION_DEPOSIT, TXCreateItem, "create")
+
+        assert issues == [("create", 0, "string_too_long", "description", None)], f"A field-level pydantic error keeps params None (the approval of 17/10): {issues}"
+
+    @pytest.mark.parametrize(
+        ("model", "operation", "raw"),
+        [
+            pytest.param(TXSplitBatchItem, "split", {"id_a": 7, "id_b": 7}, id="split-id_a-equals-id_b"),
+            pytest.param(TXPromoteBatchItem, "promote", {"id_a": 7}, id="promote-without-a-reference-to-tx-b"),
+        ],
+    )
+    def test_guard_a_value_error_of_a_model_validator_keeps_params_none(self, model, operation, raw):
+        """Guard, green today and after: ``(operation, 0, "value_error", None, None)`` — a model-level error like a business
+        rule's, ``loc`` empty, but its context ``{"error": ValueError(...)}`` is no plain data."""
+        errors = _pydantic_errors(model, raw)
+        assert [(error["type"], error["loc"]) for error in errors] == [("value_error", ())], f"scaffold: the {operation} {raw} must fail its own model validator alone, a model-level value_error; pydantic answers {errors}"
+        assert isinstance((errors[0].get("ctx") or {}).get("error"), ValueError), f"scaffold: the context of a validator's value_error holds the exception itself; pydantic answers {errors[0].get('ctx')!r}"
+
+        issues = _lone_parse_issues(raw, model, operation)
+
+        assert issues == [(operation, 0, "value_error", None, None)], f"A value_error keeps params None (the approval of 17/10): {issues}"
 
 
 # ============================================================================
@@ -922,6 +1010,295 @@ class TestBalanceReplayDays:
         assert response.committed is True and response.issues == [], f"scaffold: two valid cash rows were refused: {_render_issues(response)}"
         assert replayed == [broker_id], f"scaffold: the replay must run once, for broker {broker_id}; it ran for {replayed}"
         assert len(day_steps) <= REPLAY_MAX_DAY_STEPS, f"R13-SEC7-3: two rows ten years apart, and the replay built {len(day_steps)} day steps: it walks every calendar day; it must visit the days holding a row, plus from_date (at most {REPLAY_MAX_DAY_STEPS})"
+
+
+# ============================================================================
+# 3.3c W-B74 — A ROW THE BALANCE REPLAY CANNOT READ
+# ============================================================================
+#
+# Since W-B58 a stored quantity or amount that is no number — a text such as 'n/a', a REAL ±inf — reads None
+# (``RealDecimal``). The replay meets such a row two ways. Before its window (``_get_balances_before_date``: the rows
+# before ``from_date``), ``cash_movement_from_transaction`` and ``position_quantities`` skip it in silence: the starting
+# balance is wrong, and a batch the broker cannot afford commits. Inside it (from ``from_date`` on), the day loop adds
+# None and raises TypeError, which ``validate_balances`` turns into a codeless «Balance validation error» at index -1.
+#
+# The cure (approved design, W-B74): ``_validate_broker_balances``, after its early returns — no broker, or a broker
+# allowing both overdraft and shorting —, counts the broker's rows whose quantity or amount reads None, at every date
+# (``count_unreadable_rows``, ``services/transactions/unreadable_rows.py``), and when there is one raises
+# ``BalanceValidationError`` with code ``ledgerUnreadable`` (``TXValidationCode.LEDGER_UNREADABLE``), params
+# ``{"brokerId": id, "count": N}``, index -1, operation "create": one broker-level issue (field None), the batch not
+# committed. The gap-fix's half is in test_brim_gap_fix.py; the W-B69 batches that also replay such a broker, in
+# test_transaction_cost_basis_rule.py.
+#
+# RED until the cure: (a) a WITHDRAWAL whose amount is 'n/a' before the batch's day — today the batch commits; (b) the
+# same row on the batch's day or after it — today the codeless issue; (c) an ADJUSTMENT whose quantity is 'n/a' before
+# it — today it commits; (d) the count, rows and not values; (e) the code, listed. Guards, green today and after: a
+# broker allowing both overdraft and shorting replays nothing; an unreadable row at another broker refuses nothing; a
+# readable ledger gets the normal replay.
+#
+# The rows are legacy data, written straight into the session (``_insert_legacy_row``); ``_make_unreadable`` then
+# overwrites a column with 'n/a' by raw SQL and checks that SQLite keeps the text and the row loads None. A batch runs as
+# its endpoint runs it, in a savepoint (``_wb74_endpoint``); the session fixture rolls everything back.
+
+#: ``TXValidationCode.LEDGER_UNREADABLE``, as a literal: the member does not exist before the cure.
+LEDGER_UNREADABLE = "ledgerUnreadable"
+WB74_ENDPOINTS = (pytest.param(True, id="commit"), pytest.param(False, id="validate"))
+#: (a)'s days: the DEPOSIT, the WITHDRAWAL whose amount is 'n/a', the batch's WITHDRAWAL, and a day after it.
+WB74_DEPOSIT_DAY = date(2024, 3, 1)
+WB74_UNREADABLE_DAY = date(2024, 3, 5)
+WB74_BATCH_DAY = date(2024, 3, 10)
+WB74_LATER_DAY = date(2024, 3, 15)
+
+
+async def _insert_legacy_row(session, broker_id: int, tx_type: TransactionType, day: date, *, amount: str = "0", currency: str | None = None, asset_id: int | None = None, quantity: str = "0") -> int:
+    """A row written straight into the session, without the batch and its replay: legacy data. Its id."""
+    row = Transaction(broker_id=broker_id, asset_id=asset_id, type=tx_type, date=day, quantity=Decimal(quantity), amount=Decimal(amount), currency=currency, created_at=utcnow(), updated_at=utcnow())
+    session.add(row)
+    await session.flush()
+    return row.id
+
+
+async def _make_unreadable(session, row_id: int, *columns: str) -> None:
+    """Overwrite ``columns`` of row ``row_id`` with 'n/a' by raw SQL, then check what the case rests on: SQLite keeps the
+    text, and the row loads None there (``RealDecimal``, W-B58). Its ORM copy is expired first, so a later load re-reads
+    it: an unexpired copy would go on showing the number that was written."""
+    for column in columns:
+        assert column in ("quantity", "amount"), f"scaffold: a W-B74 plant overwrites quantity or amount, not {column!r}"
+        await session.execute(text(f"UPDATE transactions SET {column} = 'n/a' WHERE id = :id"), {"id": row_id})
+    kinds = (await session.execute(text("SELECT typeof(quantity) AS quantity, typeof(amount) AS amount FROM transactions WHERE id = :id"), {"id": row_id})).one()._asdict()
+    assert {column: kinds[column] for column in columns} == dict.fromkeys(columns, "text"), f"setup: row id={row_id} must hold 'n/a' as text in {columns}; typeof = {kinds}"
+    session.expire(await session.get(Transaction, row_id))
+    loaded = (await session.execute(select(Transaction).where(Transaction.id == row_id).execution_options(populate_existing=True))).scalar_one()
+    read = {"quantity": loaded.quantity, "amount": loaded.amount}
+    assert {column: read[column] for column in columns} == dict.fromkeys(columns), f"setup: RealDecimal must read the 'n/a' of id={row_id} as None (W-B58); the row loads {read}"
+
+
+async def _wb74_endpoint(session, *, commit: bool, creates: list[dict]) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` (``commit``) or ``/validate`` runs it, its transaction included: /commit
+    keeps what the service answers committed and rolls back the rest, /validate always rolls back
+    (``api/v1/transactions.py``). A savepoint stands in for the request's transaction; the session fixture still rolls
+    everything back. A refusal is an issue: a batch that raises fails the test, as the endpoint would answer 500."""
+    savepoint = await session.begin_nested()
+    try:
+        response = await TransactionService(session).execute_batch(creates_raw=creates, updates_raw=[], deletes=[], commit=commit)
+    except Exception as error:  # the contract: a refusal is an issue, nothing raises
+        pytest.fail(f"W-B74: the batch must answer with its issues, never raise; it raised {type(error).__name__}: {error!r}")
+    if commit and response.committed:
+        await savepoint.commit()
+    else:
+        await savepoint.rollback()
+    return response
+
+
+async def _ledger(session, broker_id: int) -> dict[int, tuple]:
+    """Every row of ``broker_id`` as SQLite holds it, by id — ``(type, date, quantity, amount, currency)`` read past every
+    column type, the 'n/a' included: what the user finds once the request is over."""
+    rows = (await session.execute(text("SELECT id, type, date, quantity, amount, currency FROM transactions WHERE broker_id = :broker ORDER BY id"), {"broker": broker_id})).all()
+    return {row.id: (row.type, row.date, row.quantity, row.amount, row.currency) for row in rows}
+
+
+def _wb74_issues(response: TXBatchResponse) -> list[tuple]:
+    """Every issue as ``(operation, index, ref_id, code, field, params)``."""
+    return [(issue.operation, issue.index, issue.ref_id, issue.code, issue.field, issue.params) for issue in response.issues]
+
+
+def _ledger_unreadable(broker_id: int, count: int) -> tuple:
+    """The broker-level issue of W-B74's cure, as ``_wb74_issues`` shows it."""
+    return ("create", -1, None, LEDGER_UNREADABLE, None, {"brokerId": broker_id, "count": count})
+
+
+def _wb74_today(response: TXBatchResponse) -> str:
+    """What the batch did, for a failure message."""
+    if response.committed:
+        return "the batch committed"
+    if not response.issues:
+        return "the batch validated clean, what /commit saves"
+    return f"the batch was refused with [{_render_issues(response)}]"
+
+
+async def _assert_ledger_unreadable(session, response: TXBatchResponse, broker_id: int, count: int, *, commit: bool, ledger: str, before: dict[int, tuple], today: str) -> None:
+    """The cure's refusal: exactly one issue, ``ledgerUnreadable`` ``{brokerId, count}`` at index -1 (operation "create",
+    ``ref_id`` and ``field`` None); not committed; the broker's rows as they were — nothing saved, the 'n/a' left alone.
+    ``ledger`` says what the broker holds, ``today`` what today's replay makes of it."""
+    expected = [_ledger_unreadable(broker_id, count)]
+    endpoint = "/commit" if commit else "/validate"
+    message = f"W-B74: broker {broker_id} holds {ledger}, so its balances cannot be checked: the batch must be refused with exactly one issue {LEDGER_UNREADABLE} {{brokerId: {broker_id}, count: {count}}} at index -1 ({endpoint}); today {_wb74_today(response)} — {today}"
+    assert (response.committed, _wb74_issues(response)) == (False, expected), message
+    after = await _ledger(session, broker_id)
+    assert after == before, f"W-B74: the refused batch changed broker {broker_id}'s rows: before {before}, after {after}"
+
+
+async def _cash_ledger(session, broker_id: int, *, withdrawn: str = "-100", day: date = WB74_UNREADABLE_DAY, unreadable: bool = True) -> int:
+    """(a)'s ledger: a DEPOSIT of 50 EUR, then a WITHDRAWAL of ``withdrawn`` EUR on ``day``, its amount then 'n/a' when
+    ``unreadable``. The WITHDRAWAL's id."""
+    await _insert_legacy_row(session, broker_id, TransactionType.DEPOSIT, WB74_DEPOSIT_DAY, amount="50", currency="EUR")
+    withdrawal_id = await _insert_legacy_row(session, broker_id, TransactionType.WITHDRAWAL, day, amount=withdrawn, currency="EUR")
+    if unreadable:
+        await _make_unreadable(session, withdrawal_id, "amount")
+    return withdrawal_id
+
+
+async def _position_ledger(session, broker_id: int, asset_id: int) -> int:
+    """(c)'s ledger: a DEPOSIT of 1 000 EUR and a BUY of 10 units paid with it, then an ADJUSTMENT −10 on
+    ``WB74_UNREADABLE_DAY``, its quantity then 'n/a'. The ADJUSTMENT's id."""
+    await _insert_legacy_row(session, broker_id, TransactionType.DEPOSIT, WB74_DEPOSIT_DAY, amount="1000", currency="EUR")
+    await _insert_legacy_row(session, broker_id, TransactionType.BUY, WB74_DEPOSIT_DAY, amount="-1000", currency="EUR", asset_id=asset_id, quantity="10")
+    adjustment_id = await _insert_legacy_row(session, broker_id, TransactionType.ADJUSTMENT, WB74_UNREADABLE_DAY, asset_id=asset_id, quantity="-10")
+    await _make_unreadable(session, adjustment_id, "quantity")
+    return adjustment_id
+
+
+def _withdrawal_of_30(broker_id: int) -> dict:
+    """The batch's WITHDRAWAL of 30 EUR, on ``WB74_BATCH_DAY``."""
+    return _cash_row(broker_id, "WITHDRAWAL", WB74_BATCH_DAY, "-30")
+
+
+async def _wb74_broker(session, label: str, *, overdraft: bool, shorting: bool) -> int:
+    """A broker of the test's own; its id."""
+    broker = Broker(name=f"W-B74 {label} {uuid.uuid4().hex}", description=f"W-B74: {label}", allow_cash_overdraft=overdraft, allow_asset_shorting=shorting, created_at=utcnow(), updated_at=utcnow())
+    session.add(broker)
+    await session.flush()
+    return broker.id
+
+
+class TestWB74AnUnreadableRowInTheReplay:
+    """W-B74: a batch that replays a broker whose rows hold a quantity or an amount that reads None is refused with
+    ``ledgerUnreadable``, never replayed over balances that leave the row out. RED until the cure, but for the guards."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", WB74_ENDPOINTS)
+    async def test_an_unreadable_amount_before_the_batch_is_refused(self, session, test_broker, commit):
+        """RED (a): a DEPOSIT of 50 EUR, then a WITHDRAWAL of 100 EUR whose amount is 'n/a', both before the batch, which
+        WITHDRAWs 30 EUR. Exactly one issue, ``ledgerUnreadable`` ``{brokerId, count: 1}`` at index -1; not committed;
+        nothing saved. Today the replay starts from 50 EUR, the WITHDRAWAL left out, and the batch commits: 20 EUR where
+        the 100 withdrawn make it -80."""
+        broker_id = test_broker.id
+        await _cash_ledger(session, broker_id)
+        before = await _ledger(session, broker_id)
+
+        response = await _wb74_endpoint(session, commit=commit, creates=[_withdrawal_of_30(broker_id)])
+
+        ledger = f"a WITHDRAWAL of 100 EUR whose amount reads None, on {WB74_UNREADABLE_DAY}, before the batch's {WB74_BATCH_DAY}"
+        await _assert_ledger_unreadable(session, response, broker_id, 1, commit=commit, ledger=ledger, before=before, today="its replay started from 50 EUR, the WITHDRAWAL left out: 50 - 30 = 20 where the 100 withdrawn make it -80")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", WB74_ENDPOINTS)
+    @pytest.mark.parametrize("day", [pytest.param(WB74_BATCH_DAY, id="on-the-batch-day"), pytest.param(WB74_LATER_DAY, id="after-it")])
+    async def test_an_unreadable_amount_inside_the_window_is_refused_with_its_code(self, session, test_broker, day, commit):
+        """RED (b): the WITHDRAWAL whose amount is 'n/a' dated on the batch's day or after it, inside the window the replay
+        walks. (a)'s refusal. Today the day loop adds None, raises TypeError, and ``validate_balances`` answers it as an
+        issue without a code, «Balance validation error» at index -1."""
+        broker_id = test_broker.id
+        await _cash_ledger(session, broker_id, day=day)
+        before = await _ledger(session, broker_id)
+
+        response = await _wb74_endpoint(session, commit=commit, creates=[_withdrawal_of_30(broker_id)])
+
+        ledger = f"a WITHDRAWAL of 100 EUR whose amount reads None, on {day}, inside the window the batch replays from {WB74_BATCH_DAY}"
+        await _assert_ledger_unreadable(session, response, broker_id, 1, commit=commit, ledger=ledger, before=before, today="its replay added None, raised TypeError, and the batch got an issue without a code")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", WB74_ENDPOINTS)
+    async def test_an_unreadable_quantity_before_the_batch_is_refused(self, session, test_broker, test_asset, commit):
+        """RED (c): a BUY of 10 units (a DEPOSIT pays for it), then an ADJUSTMENT −10 whose quantity is 'n/a', both before
+        the batch, which takes 5 units out with an ADJUSTMENT −5. (a)'s refusal. Today the replay starts from 10 units, the
+        ADJUSTMENT left out, and the batch commits: 5 units where the 10 taken out make it -5."""
+        broker_id, asset_id = test_broker.id, test_asset.id
+        await _position_ledger(session, broker_id, asset_id)
+        before = await _ledger(session, broker_id)
+        taken_out = {"broker_id": broker_id, "asset_id": asset_id, "type": "ADJUSTMENT", "date": WB74_BATCH_DAY.isoformat(), "quantity": "-5"}
+
+        response = await _wb74_endpoint(session, commit=commit, creates=[taken_out])
+
+        ledger = f"an ADJUSTMENT −10 of asset {asset_id} whose quantity reads None, on {WB74_UNREADABLE_DAY}, before the batch's {WB74_BATCH_DAY}"
+        await _assert_ledger_unreadable(session, response, broker_id, 1, commit=commit, ledger=ledger, before=before, today="its replay started from 10 units, the ADJUSTMENT left out: 10 - 5 = 5 where the 10 taken out make it -5")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("plants", "count"), [pytest.param("two-rows", 2, id="two-rows"), pytest.param("one-row-two-columns", 1, id="one-row-quantity-and-amount")])
+    async def test_count_is_the_number_of_unreadable_rows(self, session, test_broker, test_asset, plants, count):
+        """RED (d): ``count`` counts rows, not values. (a)'s WITHDRAWAL of amount 'n/a' and (c)'s ADJUSTMENT of quantity
+        'n/a' give ``count`` 2; one SELL whose quantity and amount are both 'n/a' gives ``count`` 1 (DERIVED from «the rows
+        whose quantity or amount reads None»). (a)'s batch on /commit; today it commits, those rows left out of the
+        replay."""
+        broker_id, asset_id = test_broker.id, test_asset.id
+        if plants == "two-rows":
+            await _cash_ledger(session, broker_id)
+            await _position_ledger(session, broker_id, asset_id)
+            ledger = "a WITHDRAWAL whose amount reads None and an ADJUSTMENT whose quantity reads None"
+        else:
+            await _insert_legacy_row(session, broker_id, TransactionType.DEPOSIT, WB74_DEPOSIT_DAY, amount="50", currency="EUR")
+            sell_id = await _insert_legacy_row(session, broker_id, TransactionType.SELL, WB74_UNREADABLE_DAY, amount="100", currency="EUR", asset_id=asset_id, quantity="-10")
+            await _make_unreadable(session, sell_id, "quantity", "amount")
+            ledger = "one SELL whose quantity and amount both read None"
+        before = await _ledger(session, broker_id)
+
+        response = await _wb74_endpoint(session, commit=True, creates=[_withdrawal_of_30(broker_id)])
+
+        await _assert_ledger_unreadable(session, response, broker_id, count, commit=True, ledger=ledger, before=before, today="those rows were left out of its replay")
+
+    def test_the_code_is_a_validation_code(self):
+        """RED (e): ``TXValidationCode.LEDGER_UNREADABLE == "ledgerUnreadable"`` — the app maps a refusal's code to
+        ``transactions.errors.<code>``, whose four messages W-B69's gate (test_transaction_cost_basis_rule.py) then
+        requires of every member."""
+        member = getattr(TXValidationCode, "LEDGER_UNREADABLE", None)
+
+        assert member is not None and member.value == LEDGER_UNREADABLE, f"W-B74: TXValidationCode.LEDGER_UNREADABLE is {member!r}: expected a member of value {LEDGER_UNREADABLE!r}"
+
+    def test_transaction_types_lists_the_code(self):
+        """RED (e): the response ``GET /transactions/types`` builds (``get_transaction_types``) lists ``ledgerUnreadable``
+        in ``validation_codes``."""
+        response = TXTypesResponse(transaction_types=list(TX_TYPE_METADATA.values()), event_types=EVENT_TYPE_METADATA)
+
+        listed = sorted(info.code for info in response.validation_codes)
+
+        assert LEDGER_UNREADABLE in listed, f"W-B74: GET /transactions/types does not list {LEDGER_UNREADABLE!r} in validation_codes: {listed}"
+
+    @pytest.mark.asyncio
+    async def test_guard_a_broker_allowing_overdraft_and_shorting_replays_nothing(self, session):
+        """Guard, green today and after W-B74: a broker allowing both overdraft and shorting returns before any replay — no
+        check, no refusal there. (a)'s ledger on it, and (a)'s batch commits, its WITHDRAWAL saved."""
+        broker_id = await _wb74_broker(session, "free broker", overdraft=True, shorting=True)
+        await _cash_ledger(session, broker_id)
+
+        response = await _wb74_endpoint(session, commit=True, creates=[_withdrawal_of_30(broker_id)])
+
+        assert (response.committed, _wb74_issues(response)) == (True, []), f"W-B74: a broker allowing overdraft and shorting is never replayed, so its unreadable WITHDRAWAL refuses nothing; {_wb74_today(response)}"
+        created = [tx_id for result in response.results if result.operation == "create" for tx_id in result.ids]
+        held = await _ledger(session, broker_id)
+        assert len(created) == 1 and created[0] in held, f"Committed, but the batch's WITHDRAWAL {created} is not among broker {broker_id}'s rows {sorted(held)}"
+
+    @pytest.mark.asyncio
+    async def test_guard_an_unreadable_row_at_another_broker_refuses_nothing(self, session, test_broker):
+        """Guard, green today and after W-B74: (a)'s ledger on another broker (no overdraft, no shorting) is none of
+        ``test_broker``'s. A DEPOSIT of 50 EUR on ``test_broker`` covers (a)'s batch there, which commits."""
+        other_id = await _wb74_broker(session, "other broker", overdraft=False, shorting=False)
+        await _cash_ledger(session, other_id)
+        broker_id = test_broker.id
+        await _insert_legacy_row(session, broker_id, TransactionType.DEPOSIT, WB74_DEPOSIT_DAY, amount="50", currency="EUR")
+
+        response = await _wb74_endpoint(session, commit=True, creates=[_withdrawal_of_30(broker_id)])
+
+        assert (response.committed, _wb74_issues(response)) == (True, []), f"W-B74: the unreadable WITHDRAWAL is broker {other_id}'s, not broker {broker_id}'s, whose 50 EUR cover the batch's 30; {_wb74_today(response)}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("withdrawn", "refusals"),
+        [
+            pytest.param("-100", [("create", 0, "balanceCashNegative", Decimal("-80"), WB74_BATCH_DAY.isoformat())], id="short"),
+            pytest.param("-10", [], id="covered"),
+        ],
+    )
+    async def test_guard_a_readable_ledger_gets_the_normal_replay(self, session, test_broker, withdrawn, refusals):
+        """Guard, green today and after W-B74: (a)'s ledger with its WITHDRAWAL readable. Of 100 EUR, it leaves -50 before
+        the batch, and the batch's -30 makes -80: refused with ``balanceCashNegative`` on create 0, dated the batch's day —
+        what (a) hides today. Of 10 EUR, it leaves 40, and 40 - 30 = 10: committed."""
+        broker_id = test_broker.id
+        await _cash_ledger(session, broker_id, withdrawn=withdrawn, unreadable=False)
+
+        response = await _wb74_endpoint(session, commit=True, creates=[_withdrawal_of_30(broker_id)])
+
+        got = [(issue.operation, issue.index, issue.code, Decimal(issue.params["balance"]) if issue.params and "balance" in issue.params else None, (issue.params or {}).get("date")) for issue in response.issues]
+        assert (response.committed, got) == (not refusals, refusals), f"A readable ledger (DEPOSIT 50, WITHDRAWAL {withdrawn}) and a WITHDRAWAL of 30: expected committed={not refusals}, refusals {refusals}; {_wb74_today(response)}"
 
 
 # ============================================================================
@@ -2457,6 +2834,51 @@ class TestTransferPromotion:
         expected = [("create", index, None, "integerDigitsExceeded", "quantity", {"max": 15}) for index in (0, 1)]
         assert _issue_tuples(batch) == expected and batch.committed is False, f"R13-SEC7-3: the batch must refuse both legs of {quantity} units with {expected}; it answered committed={batch.committed}, issues {_issue_tuples(batch)}"
         await _assert_promotion_left_nothing(session, response, before, broker_ids)
+
+    # ------------------------------------------------------------------
+    # N78 (W-B72) — an FX_CONVERSION promotion refuses a cost basis
+    # ------------------------------------------------------------------
+    #
+    # The coordinator's approval of 17/10, with the refined N78. ``promote_transfer`` builds the two legs of an
+    # FX_CONVERSION without ``req.cost_basis_override``: a cost basis sent with one is dropped in silence and the promotion
+    # commits. Neither leg of an FX_CONVERSION takes a cost basis (``cost_basis_allowed``), so the request is refused
+    # instead, as an ``asset_id`` sent with one is: rolled back, one error naming ``cost_basis_override`` and FX_CONVERSION.
+
+    @pytest.mark.asyncio
+    async def test_promote_to_fx_conversion_with_a_cost_basis_is_refused(self, session, test_broker_overdraft):
+        """RED until N78's promotion cure. The FX_CONVERSION promotion of
+        ``test_promote_deposit_withdrawal_to_fx_conversion_intra_broker`` — a WITHDRAWAL of 500 EUR and a DEPOSIT of 540 USD
+        on one broker — sent with a cost basis of 12.5 EUR, run as the route runs it (``_promote_as_the_route``): rolled
+        back; exactly one error, naming ``cost_basis_override`` and FX_CONVERSION (the sentence is the cure's: only those
+        two names are pinned); the cash pair as it was; no FX_CONVERSION row on the broker. Today the promotion commits,
+        and the cost basis is dropped."""
+        service = TransactionService(session)
+        resp = await create_bulk(
+            service,
+            [
+                TXCreateItem(broker_id=test_broker_overdraft.id, type=TransactionType.WITHDRAWAL, date=date.today(), cash=Currency(code="EUR", amount=Decimal("-500"))),
+                TXCreateItem(broker_id=test_broker_overdraft.id, type=TransactionType.DEPOSIT, date=date.today(), cash=Currency(code="USD", amount=Decimal("540"))),
+            ],
+        )
+        assert resp.rolled_back is False, f"scaffold: the cash pair was not stored: {resp.errors}"
+        from_id, to_id = resp.results[0].transaction_id, resp.results[1].transaction_id
+        before = await _rows_state(session, [from_id, to_id])
+        request = TXTransferPromoteRequest(from_tx_id=from_id, to_tx_id=to_id, new_type=TransactionType.FX_CONVERSION, cost_basis_override=Currency(code="EUR", amount=Decimal("12.5")))
+
+        response = await _promote_as_the_route(session, request, "an FX_CONVERSION promotion with a cost basis of 12.5 EUR")
+
+        if not response.rolled_back:
+            statement = select(Transaction.id, Transaction.type, Transaction.cost_basis_override, Transaction.cost_basis_currency).where(Transaction.id.in_([response.new_from_tx_id, response.new_to_tx_id]))
+            written = {row.id: (row.type.value, row.cost_basis_override, row.cost_basis_currency) for row in await session.execute(statement)}
+            pytest.fail(
+                "N78 (W-B72): an FX_CONVERSION promotion sent with a cost basis of 12.5 EUR must be refused — rolled back, one error naming cost_basis_override and FX_CONVERSION; "
+                f"today it committed (errors {response.errors}), the pair re-created as {written} (id: type, cost basis, currency): the cost basis dropped in silence"
+            )
+        assert len(response.errors) == 1 and "cost_basis_override" in response.errors[0] and "FX_CONVERSION" in response.errors[0], f"N78: the refusal must be exactly one error, naming cost_basis_override and FX_CONVERSION; the promotion answered {response.errors}"
+        after = await _rows_state(session, [from_id, to_id])
+        assert after == before, f"N78: the promotion was refused, yet the cash pair changed: before {before}, after {after}"
+        fx_rows = (await session.execute(select(Transaction.id).where(Transaction.broker_id == test_broker_overdraft.id, Transaction.type == TransactionType.FX_CONVERSION))).scalars().all()
+        assert fx_rows == [], f"N78: the promotion was refused, yet the broker holds the FX_CONVERSION rows {fx_rows}"
 
 
 # ============================================================================

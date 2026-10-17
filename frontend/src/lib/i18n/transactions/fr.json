@@ -247,7 +247,10 @@
       "significantDigitsExceeded": "Au maximum {max} chiffres significatifs",
       "integerDigitsExceeded": "Au maximum {max} chiffres avant la virgule",
       "dateOutOfRange": "Entre {min} et {max}",
-      "autoCostUnreadable": "Coût automatique indisponible : {count, plural, one {# transaction utilisée} many {# transactions utilisées} other {# transactions utilisées}} pour le coût moyen de cet actif {count, plural, one {contient} many {contiennent} other {contiennent}} une valeur qui n'est pas un nombre. Saisissez le coût à la main."
+      "autoCostUnreadable": "Coût automatique indisponible : {count, plural, one {# transaction utilisée} many {# transactions utilisées} other {# transactions utilisées}} pour le coût moyen de cet actif {count, plural, one {contient} many {contiennent} other {contiennent}} une valeur qui n'est pas un nombre. Saisissez le coût à la main.",
+      "ledgerUnreadable": "Les soldes de {brokerName} ne peuvent pas être vérifiés : {count, plural, one {# de ses transactions contient} many {# de ses transactions contiennent} other {# de ses transactions contiennent}} une valeur qui n'est pas un nombre. Demandez à l'administrateur de réparer les données.",
+      "costBasisNotAllowed": "❌ <b>{type}</b> ne prend pas de coût de base ici : retirez-le. Seules les unités qui entrent par un <b>Ajustement</b> ou un <b>Transfert d'Actif</b> en ont un.",
+      "costBasisModeIncompatible": "❌ <b>{type}</b> ne prend pas de coût de base ici, donc aucun mode <b>Auto</b> ou <b>Manuel</b> : retirez-le."
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",

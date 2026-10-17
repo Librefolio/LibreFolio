@@ -6399,3 +6399,160 @@ riga delle verifiche email in `update_user_status` resta com'è (accanto). Le pa
 - **Totale**: API **338/338**; E2E **93 verdi** e 2 rossi non di A9 (sopra); Vitest **13.286/13.286**. Impronta
   dell'albero invariata (`37bb0f493c0fe652`), porta 6182 libera.
 - **A9: definizione di fatto ✅** (salvo la sonda di prova di J dopo l'ingresso e la galleria di G).
+
+## A9 — Entrato; correzione in avanti FPM-08 (17/10, 11:14–)
+- **A9 entrato**: `3c9303cf2`, `b1b647edc`, `2811d5756`, `f6489c75e`, `bda45901c` → dev `ba8f3b06e`, senza conflitti;
+  CHANGELOG ✨ + 🔄 `4f46144d4` (il mio ramo portato in avanti). Sulla revisione combinata il coordinatore ha fatto
+  `api sync`, `front check` 0/0, `i18n check` stretto. Revisioni dei proprietari dopo l'ingresso (H, J, E; WelcomePage
+  OK dal coordinatore). La sonda di prova va sulla lista del developer (servono i suoi account). G rigenera la galleria;
+  il rosso di `theme-roles.spec.ts:613` passato alla squadra dei colori.
+- **FPM-08** (dal coordinatore, prima del codice di A-42/A-43): una richiesta della configurazione **fallita prima di
+  ogni risposta** lasciava la «password dimenticata» senza nulla (solo «torna all'accesso»). Contratto: in quello
+  stato «chiedi all'amministratore» (vale per i due profili). Rosso FPM-08 (`test-author`, più le guardie FPM-09/10:
+  una risposta dopo il fallimento, gestita o self-hosted, e FPM-11: un fallimento dopo una risposta tiene i comandi).
+  Codice `work/a9fix/apply_fpm08.py`: `(loaded && managed) || (!loaded && failed)` → `askAdmin`. Verdi: Vitest
+  `features/auth` **660/660**; `front check` 0/0; colori puliti. Doc: una riga in `features/auth.md` (`docs-writer`).
+- I rossi di A-42/A-43 (nei file di test dell'area, in corso) restano **fuori** da questo checkpoint.
+- **FPM-08 entrato**: `d04ffde90` → dev `cd52e25fc`; il mio ramo portato in avanti, i 5 file rossi di A-42/A-43 intatti.
+
+## A-42 + A-43 — Implementazione (17/10, base `cd52e25fc`)
+
+Aggiunte durante il lavoro, approvate dal coordinatore: l'admin in attesa si **cancella direttamente** (niente
+`DEMOTE_FIRST` per lui: non si può retrocedere e non è mai stato un admin attivo; `DEMOTE_FIRST` resta per tutti gli
+altri) e un **toast** di successo per l'annullamento (l'esito non si vede: la riga resta uguale).
+
+### A-43.1 — Rossi ✅ (osservati a `4f46144d4`; nessun file rilevante cambiato fino a `cd52e25fc`)
+- Servizi `test_admin_bootstrap.py`: **13 rossi** (A42-001..006, A43-001..005; A32-004 ridotto).
+- API `test_admin_setup_api.py`: **4 rossi** (SETUP-016 cambiato, 017, 018).
+- API `test_users_admin_api.py`: **18 rossi** (UADM-062/067/069 cambiati; 072–078 nuovi, UADM-076 è la cancellazione).
+- UI: **18 rossi** (UPS-12..22 in `UserRow.pendingSetup.test.ts`, UTAB-55..60 in `UsersTab.test.ts`).
+
+### A-43.2 — Codice del backend ✅ (`work/a42/apply_a42_backend.py`)
+- `bootstrap_admin_service`: `issue_setup_link` e il riarmo (`_keep_pending_admin`) **revocano prima**, poi rileggono
+  «in attesa» sotto il lock (`registration_service.is_pending_admin`); se non aspetta più: rollback (CLI: nessun link;
+  avvio: `IGNORED`, una riga info senza token). `_setup_spent_before()` nuovo: `complete_admin_setup` rifiuta se un
+  **altro** link di setup dell'account è consumato (rollback, ritiro, avviso «…the account was set up before»).
+- `user_service`: `_is_pending_admin` (import locale: `registration_service` importa questo modulo) e
+  `_end_setup_links` (revoca se in attesa, con un avviso; ritiro altrimenti); `update_user_status` e `set_user_active`
+  leggono `waiting` prima di ogni cambio (un account già inattivo passa da `_end_setup_links`); `set_user_admin`
+  rifiuta la retrocessione dell'admin in attesa.
+- `api/v1/users.py`: `_PENDING_SETUP_DETAIL` condiviso (riattivazione e retrocessione, 409); `delete_account` salta
+  `DEMOTE_FIRST` per l'admin in attesa; docstring.
+
+### A-43.3 — Codice del frontend ✅ (`work/a42/apply_a43_frontend.py`, più il pulsante)
+- `users/types.ts`: `'cancel-setup'`. `UserRow.svelte`: motivo `pending-setup` («Retrocedi» spento con quel motivo),
+  «Elimina» acceso per l'admin in attesa, il pulsante `users-action-cancel-setup` (icona `Link2Off`) al posto di
+  «Riattiva». `UsersTab.svelte`: confermabile `cancel-setup` (danger) → PATCH `{is_active:false}`, evento
+  `accounts.user.setup-cancelled`, toast `settings.usersTab.toasts.setupCancelled`.
+- i18n (`work/a42/i18n_a43.py`, sorgente `settings`): 6 chiavi nuove, `errors.PENDING_SETUP` riformulata (copre anche la
+  retrocessione); `i18n build` + `check` stretto puliti (5 036 chiavi).
+- `promptRenderer.test.ts`: le 5 etichette «red until A9» → «A9 (legal_notice)» (permesso del coordinatore).
+
+### A-43.4 — Verdi ✅ (fino alle 12:19)
+- Vitest `features/settings` + `promptRenderer.test.ts`: **1 121/1 121** (27 file; dentro UPS, UTAB e `accountErrors`).
+- In processo (`/tmp/libreFolio_a8a_inproc/run.sh`): `test_admin_bootstrap.py` **207/207**; `test_admin_setup_api.py`
+  **48/48** dei casi in processo; `test_users_admin_api.py` **88/88** dei casi in processo. I 38 casi delle classi della
+  corsia (4 + 34) vanno nello slot.
+- Corsia, servizi: `admin-bootstrap` 207, `registration` 151, `email-verification` 127, `session-version` 56,
+  `user-profile` 52, `account-tokens` 76 → **669/669**; porta 6182 libera.
+- ruff, black, Prettier, `theme-roles --check` puliti.
+> **⚠️ Fuori pista**: lanciati in processo senza `-k`, i due file API hanno preso anche le classi della corsia: la loro
+> fixture `test_server` avvia uvicorn in un thread sulla `TEST_PORT` di default, **6041**. Il lifespan è fallito sul DB
+> privato vuoto **prima del bind** (`Server.startup` esce dopo `lifespan.startup()`), quindi nessuna socket; `lsof` su
+> 6041 e 6182: liberi. Rimedio: `run.sh` ora fissa `TEST_PORT=6182`; nei lanci in processo le classi della corsia
+> (`TestOnlyAnAdministrator`, `*OnTheLane`) si deselezionano con `-k` e girano solo nello slot.
+
+### A-43.5 — Revisione di E (dal coordinatore, 12:19): verificata; la protezione (12:22, nessun veto)
+1. `revoke_tokens` resta **un solo UPDATE**, senza pre-select: prende il lock di scrittura anche se nessuna riga
+   corrisponde, e i chiamanti del setup rileggono sotto quel lock. Commento aggiunto in `token_service.py`.
+2. `_setup_spent_before`: `id != spent_id`; conta i ritirati (`consumed_at`), non i soli revocati, quindi «annulla poi
+   `setup-link`» funziona. I due rifiuti → `None` → `TOKEN_INVALID`, prima di `hash_password` ✓.
+3. L'annullamento ha per chiave `is_active is False` + «in attesa», nel PATCH e nella CLI ✓. **Domanda aperta di E**:
+   `_protected` scatta solo su una transizione, quindi un co-admin potrebbe annullare il proprietario protetto in attesa
+   (solo se l'operatore ha creato prima un altro admin). **Decisione** (il coordinatore non pone veto): nel PATCH anche
+   l'annullamento risponde 409 `ACCOUNT_PROTECTED`, come la cancellazione; la riga spegne «Annulla il link di setup»
+   col motivo `protected`; la CLI resta sopra la protezione (potere dell'operatore, come per ogni protezione). Oggi è
+   inerte: `account_protection` restituisce None (aggancio di A7). Rossi UADM-079 + UPS-23 (`test-author`).
+4. Riarmo: se la rilettura dice no → rollback, una riga info senza token, `IGNORED`; `deliver_setup_link` agisce solo su
+   `CREATED`, dopo il commit; la CLI stampa il link solo dopo il suo commit ✓.
+- Visto verificando (LOW, backlog **A-50**): dopo un annullamento, riavviare con lo **stesso**
+  `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` non lo riarma (il valore è noto): giusto, ma l'avviso dice «has expired».
+- Doc (`docs-writer`, in corso): `security.md`, `access_control.md`, `admin/users.en.md`, `admin/cli_tools.en.md`,
+  `developer/frontend/components/features/settings.md`.
+
+### A-43.6 — La protezione sull'annullamento ✅ (12:24–12:42)
+- Rossi (`test-author`): **UADM-079** (`TestTheSetupLinkLifecycleInTheUsersTab`: l'admin in attesa protetto, il PATCH
+  `{is_active:false}` di un co-admin → 409 `ACCOUNT_PROTECTED` con `reason`; nulla cambia, il link resta vivo e completa
+  il setup dopo) e **UPS-23** (2 casi: «Annulla il link di setup» spento con `data-disabled-reason="protected"`, il motivo
+  sotto la riga, un click non chiama `onAction`). Osservati: 1 rosso (200 invece di 409), 2 rossi (`toBeDisabled`), i
+  63 UPS vicini verdi. Guardie già esistenti, non duplicate: UADM-062/074 (il non protetto annulla), UPS-12/13.
+  > **Nota del test-author**: UPS-23 clicca con `element.click()` (un browser non clicca un pulsante spento);
+  > `fireEvent.click` in jsdom arriva anche al pulsante spento (devWiki «jsdom is not a browser").
+- Codice (`work/a42/apply_a43_protect.py`): in `update_account` `pending` letto una volta; `cancel = request.is_active
+  is False and pending` entra nel controllo di `_protected` con `deactivate` e `demote`; docstring. `UserRow.svelte`:
+  `cancelReason` (`protected` o null) sul pulsante e fra i motivi della riga (al posto di null per l'admin in attesa).
+- Verdi: in processo `test_users_admin_api.py` **89/89** (+UADM-079; 34 della corsia deselezionati),
+  `test_admin_setup_api.py` **48/48** (4 deselezionati); Vitest `features/settings` **1 110/1 110** (26 file);
+  `front check` **0/0**; ruff, black, Prettier, `theme-roles --check` puliti. Porte 6041 e 6182 libere.
+- Il runner registra già i file toccati (`_frontend_utility.py:406`, `:426`; `_backend_api.py:603`, `:666`;
+  `_backend_services.py:578`): nessuna voce nuova.
+
+### A-43.7 — Doc ✅ e i rilievi del `docs-writer` (12:24–12:51)
+- `docs-writer` (strict build ×2 e `check-links` 97 validi, exit 0; nessuna pagina timbrata):
+  - `developer/architecture/security.md`: «Session Revocation», la tabella «Revocation», sezione nuova «♻️ The Setup
+    Link's Lifecycle» (`#setup-link-lifecycle`), «Links in Use»;
+  - `developer/architecture/access_control.md`: «Superusers», la tabella dell'API admin (PATCH, DELETE), «Deleting an
+    Account», «Protected Accounts», «The Initial Administrator» (azioni dell'avvio `ignored`/`rearmed`/`expired`;
+    corrette due frasi false di prima: «una retrocessione o una disattivazione non ritira nulla» e «una retrocessione lo
+    lascia in attesa»; paragrafo nuovo `#setup-cancel`);
+  - `admin/users.en.md`: «What Each Action Does», «When an Action Is Off», «Waiting for Its Setup Link», sezione nuova
+    «🚫 Cancel Its Setup Link» (`#cancel-setup`), «Delete an Account»;
+  - `admin/cli_tools.en.md`: `deactivate` sull'admin in attesa, «A New Setup Link…», `demote` rifiutato. **Non
+    timbrata**: aggiunge contenuto, e la pagina aveva già debito (le traduzioni del 10/10 non hanno nulla di
+    `setup-link`);
+  - `developer/frontend/components/features/settings.md`: UsersTab (confermabile, evento, toast), UserRow (pulsante,
+    motivi), «Account Errors».
+- Rilievi, verificati e curati (prima dello slot, nessun cambio di comportamento):
+  - la protezione sull'annullamento «non c'era»: l'aveva letta prima di A-43.6, ora c'è ✓;
+  - `user demote` diceva «…or delete it», ma la CLI non cancella account → «…or delete it from Settings › Users»
+    (i test vogliono solo «falso, una riga con ❌»: A43-004/005 **5/5** in processo); la citazione in
+    `cli_tools.en.md:164` allineata;
+  - docstring: `setup_admin` (`auth.py`: il rifiuto di A-42), `update_user_status` (annullamento e ritiro),
+    `set_user_active` (lo stesso; la protezione non conta per l'operatore), `set_user_admin` (l'admin in attesa non si
+    retrocede). Guardia dei testi del client `test_openapi_client_text.py` **78/78**; ruff e black puliti.
+- Pagine rimaste indietro, fuori dal mandato del primo giro: `admin/hosting_providers.en.md` (la riga «withdrawn» e «A
+  New Link»), `developer/architecture/database/users_access.md` (le celle `revoked_at`/`consumed_at` di `admin_setup`),
+  `developer/frontend/components/features/auth.md` (lo stato `revoked`); più le citazioni UADM-079/UPS-23. Secondo giro
+  del `docs-writer` **dopo lo slot** (ogni unità dello slot ricostruisce `mkdocs_src/site` se un `.md` è più nuovo:
+  due build contemporanee nella stessa cartella si pesterebbero).
+
+### A-43.8 — Slot ✅ (12:51–13:03; `cd52e25fc` + A-42/A-43 non committato, impronta dell'albero `076e96d24602ac67`)
+- API `users-admin`, `admin-setup`, `auth`, `registration`; E2E `admin-users` (`work/slot_a43/slot.sh`).
+- API: `users-admin` **123** (i 34 casi della corsia compresi), `admin-setup` **52** (4 della corsia), `auth` **95**,
+  `registration` **102** → **372/372**. E2E `admin-users` **10/10** (regressione della scheda: la corsia ha già utenti,
+  quindi nessun admin in attesa; l'annullamento è provato in processo e in Vitest, come previsto al punto 6).
+- Impronta dell'albero invariata (`076e96d24602ac67`) prima e dopo ogni parte; porta 6182 libera (`lsof` rc=1).
+
+### A-43.9 — Secondo giro della doc ✅ e chiusura (13:03–13:16)
+- `docs-writer`, round 2 (dopo lo slot, nessuna build in corsa):
+  - `security.md` («♻️ The Setup Link's Lifecycle»), `access_control.md` («The Initial Administrator») e
+    `features/settings.md` allineate alla protezione com'è nel codice, con UADM-079 e UPS-23 citati;
+  - le tre pagine rimaste indietro, solo nelle parti del link di setup:
+    - `admin/hosting_providers.en.md`: la riga «withdrawn», il paragrafo dell'annullamento in «🔁 A New Link» e il
+      punto ⏱️ di «🧾 Create the Administrator» (mancava l'annullamento); le sezioni di H non toccate;
+    - `database/users_access.md`: le celle `revoked_at`, `consumed_at` e «Issuing» di `admin_setup`;
+    - `features/auth.md`: lo stato `revoked` e la riga `400 TOKEN_INVALID` della SetupCard (il caso di A-42).
+  - Build strict e `check-links` (97 validi, 8 risolti a runtime) puliti. Nessuna pagina timbrata; nessun debito di
+    traduzione nuovo in questo giro. Il debito di `admin/cli_tools` (round 1 e la riga 164) resta da tradurre.
+- **Rilievo del secondo giro, curato**: il messaggio di `user demote` diceva «Settings › Users», ma dalla A8b la scheda
+  sta nel gruppo «Administration» → «…or delete it from Settings › Administration › Users», come gli altri messaggi
+  (backup); la citazione di `cli_tools.en.md:164` allineata. In processo: A43-004/005 **5/5**, `user-demote-refused`
+  di SETUP-016 **1/1**; ruff e black puliti; build strict finale pulita (66 s).
+> **⚠️ Fuori pista**: dopo lo slot è cambiata solo la parola «Administration» nella frase di `user demote`: lo slot è
+> girato sull'impronta `076e96d24602ac67`, che contiene già le 4 docstring e la frase con «Settings › Users». Nessun
+> comportamento cambiato; i test che lanciano `user demote` vogliono solo «falso, una riga con ❌» e sono stati
+> rilanciati in processo.
+- Nota del `docs-writer`, per dopo: quando l'aggancio di A7 proteggerà il proprietario gestito, l'«altro
+  amministratore» di `hosting_providers` non potrà più annullare dalla scheda (solo la CLI); la pagina rimanda già alla
+  sezione sulla protezione.
+- **A-42 + A-43: definizione di fatto ✅** (revisione di E dopo l'ingresso).

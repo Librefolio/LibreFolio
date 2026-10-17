@@ -173,6 +173,7 @@
         "backup_too_large": "The archive is larger than this LibreFolio accepts ({limit} MB).",
         "backup_no_space": "Not enough free space on the server for this archive.",
         "backup_upload_unavailable": "LibreFolio cannot read its upload limit right now: try again later.",
+        "backup_restore_unavailable": "LibreFolio cannot read its restore limit right now: try again later.",
         "backup_upload_failed": "The archive could not be saved on the server: the server's log has the cause.",
         "backup_upload_not_found": "The uploaded archive is gone: send it again.",
         "restore_folder_unusable": "The restore folder of the data directory is not a plain folder: whoever runs the server must fix it.",
@@ -187,6 +188,7 @@
         "manifest_unreadable": "The archive's description cannot be read.",
         "manifest_too_large": "The archive's description is too large.",
         "too_many_entries": "The archive holds too many files.",
+        "unpacked_too_large": "Unpacked, the archive is larger than this LibreFolio accepts for a restore.",
         "duplicate_entry": "The archive holds the same file twice.",
         "unexpected_entry": "The archive holds a file its description does not list.",
         "not_a_file": "The archive holds something that is not a plain file.",
@@ -242,6 +244,12 @@
         "unlimited": "A restore accepts archives of any size.",
         "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used (a whole number of megabytes, 0 for no limit): restore uploads are refused until it is fixed.",
         "profileTable": "LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type, so restore uploads are refused: set LIBREFOLIO_BACKUP_MAX_UPLOAD_MB to a whole number of megabytes and report the error."
+      },
+      "restoreLimit": {
+        "limited": "A restore check accepts archives that unpack to up to {limit_mb} MB.",
+        "unlimited": "A restore check accepts archives that unpack to any size.",
+        "invalid": "{variable} cannot be used (a whole number of megabytes, 0 for no limit): restore checks are refused until it is fixed.",
+        "profileTable": "LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type, so restore checks are refused: set LIBREFOLIO_BACKUP_MAX_RESTORE_MB to a whole number of megabytes and report the error."
       }
     }
   }

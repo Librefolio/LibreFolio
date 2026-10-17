@@ -6107,3 +6107,177 @@ pulizia nel `finally`. Nello stesso lotto **X-R57** (il commento C-66 di `asset-
 - X-R44 entrato (dev `5a8c64c5c`, CHANGELOG esteso dal coordinatore in `1c8eba6f5`); da E: **X-R44b** nel backlog.
 - **Consegna** (11:05, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti `test(assets): C-66
   weekend filled backward, past period` e `docs(journal): Y-28, X-R44b, X-R61, reviews`.
+
+### X-R49 — il cambio dei parametri di un Scheduled Investment cancella gli SPLIT del piano ⏳ (2026-10-17, dalle 11:08)
+
+**Base**: `8aafffad8` (Y-28 entrato), albero pulito.
+
+**Stato verificato**: `bulk_assign_providers` (`provider_management.py`), per un fornitore parametrico i cui parametri
+cambiano (o che si lascia), cancella tutti i prezzi e gli eventi di quell'assegnazione
+(`provider_assignment_id == existing.id`), scollegando le transazioni; gli eventi manuali restano. Il piano di uno
+Scheduled Investment (`FAScheduledInvestmentSchedule.asset_events`, `FAAssetEventPoint`) accetta ogni tipo di evento,
+SPLIT compreso: uno SPLIT del piano con una rettifica +q senza costo collegata diventa, cancellato, un acquisto di costo
+ignoto. Oggi ogni voce risponde `success=True`; la rotta (`assign_providers_bulk`) prende ogni eccezione come 500; nel
+frontend il percorso di modifica (`AssetModal.saveEdit`) non ha un `catch` suo intorno all'assegnazione.
+
+**Disegno**:
+- il controllo di X-R48 diventa un aiuto condiviso, `services/assets/split_guard.py`, che riceve gli eventi da cancellare
+  (id, data) e il chiamante e dà gli SPLIT con rettifiche senza costo come li nomina il rifiuto (per data e id, le
+  transazioni che il chiamante vede, le altre contate); X-R48 lo chiama con tutti gli eventi dell'asset;
+- in `bulk_assign_providers`, prima della cancellazione di una voce, con gli eventi di quell'assegnazione: rifiuto
+  `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, `details = {asset_id, item_index, splits}`; tutto o niente (il commit è in
+  fondo); `current_user_id` dalla rotta, senza chiamante nessun id; la rotta risponde 409 `{error_code, message, params}`;
+- frontend: proposta al coordinatore (AssetModal, colori).
+- **Via del coordinatore** (11:12): (a), la frase tradotta; `AssetModal.svelte` è libero (nessun ramo né i colori AF lo
+  toccano), file del ratchet diviso: solo logica in `saveEdit`, niente markup né classi.
+  > **⚠️ Fuori pista (11:15)** — leggendo il percorso d'errore: `handleSave` legge ogni 409 come «nome duplicato»
+  > (`trySave` → `onError`), e il percorso della conferma di rigenerazione mostra solo un generico «errore». Lanciare il
+  > rifiuto darebbe la frase sbagliata o una inutile: il `catch` sta dentro `saveEdit`, mette la frase in `formError`,
+  > azzera `pendingSaveAssetId` e torna, con la modale aperta.
+- **Codice pronto**, provato a secco: `xr49_code.py` (il modulo nuovo `split_guard.py`; X-R48 lo usa senza cambiare
+  comportamento; il controllo in `bulk_assign_providers` prima della cancellazione; la rotta: 409 strutturato; 9
+  sostituzioni in 3 file; ruff segnala solo l'ordine degli import nella copia in /tmp, dove `split_guard` non risulta del
+  progetto: da ricontrollare dopo l'applicazione) e `xr49_frontend.py` (il modulo di X-R48 impara il secondo codice,
+  `saveEdit`, la chiave `assets.modal.planSplitAdjustmentsWithoutCost` in 4 lingue; prettier pulito).
+- **Rossi** affidati a due test-author (11:10 e 11:16): backend, file nuovo `test_provider_wipe_split_guard.py`;
+  frontend, `currencyChangeErrors.test.ts` e `AssetModal.providerLifecycle.test.ts`.
+- **Rossi backend** (test-author, 11:28): `backend/test_scripts/test_services/test_provider_wipe_split_guard.py`, 12 casi
+  (5 rossi: cambio di tasso del piano, uscita dal piano verso `yfinance`, richiesta a due voci con la seconda rifiutata,
+  vista per chiamante A/B/nessuno, rotta 409; 7 guardie verdi: costo 12,5 e 0, SPLIT manuale, stessi parametri,
+  provider online, assegnazione nuova servizio/rotta). Registrato `services provider-wipe-split-guard`
+  (`_backend_services.py`, WRITE-SCOPED). Prima del codice: **5 failed, 7 passed** (`TypeError` sul `current_user_id`
+  mancante; la rotta risponde 200 e cancella), log `files/checks/logs/xr49-reds-backend.log`.
+  > **⚠️ Fuori pista (11:29)** — il test-author fissa che il rifiuto lasci **pulita anche la sessione della chiamata**
+  > (la voce 0 della test 3 non deve risultare scritta nemmeno lì: un chiamante che poi committa la salverebbe). Il mio
+  > controllo dentro il ciclo arrivava dopo le scritture delle voci precedenti. Cura: un **passaggio preliminare**
+  > `_reject_wipes_of_costless_split_adjustments()` prima della prima scrittura, che segue le voci in ordine come il
+  > ciclo (un asset nominato due volte si confronta con la voce precedente); la decisione «cancella o no» diventa
+  > `_wipe_reason()` a livello di modulo, una sola risposta per i due passaggi (con `_params_to_store()` e
+  > `_is_parametric()`, prima annidata nel ciclo). `bulk_assign_providers` scende da complessità 12 a ≤ 10: tolto il
+  > `# noqa: C901` ormai falso.
+- **Codice backend applicato** (11:33, `xr49_code.py`, 11 sostituzioni in 3 file + `split_guard.py` nuovo): ruff e black
+  puliti, `import backend.app.main` ok. **Verdi**: `services provider-wipe-split-guard` 12 passed;
+  `market-data-wipe-split-guard` 13 passed (X-R48 invariato sul modulo condiviso); `financial-math` 1145 passed (regola
+  d); `scheduled-investment-param-change` 3 passed; `asset-source` 61 passed.
+- **Rossi frontend** (test-author, 11:40; +592 righe in `currencyChangeErrors.test.ts` e
+  `AssetModal.providerLifecycle.test.ts`, già registrati in core-unit/component-unit): prima del codice **29 failed, 96
+  passed** (13 del modulo, 13 del catalogo, 3 della modale: via della conferma di rigenerazione ×2 e via semplice, dove
+  oggi il 409 si legge «nome duplicato»). Il test-author ha aggiunto `scheduled_investment` al catalogo dei provider del
+  banco di prova (l'editor vero monta) e ha fissato: niente toast sul rifiuto, etichetta della data = `formatDay`.
+- **Codice frontend applicato** (11:45, `xr49_frontend.py` + `dev.py i18n add` della chiave in 4 lingue nel sorgente
+  `i18n/assets`): **125 passed**. Prettier, `i18n check` (5019 chiavi), `gate-i18n-catalog`, `gate-i18n-usage`, cancello
+  dei colori (pulito: nessun markup né classe), `check-orphans` verdi; `front-utility core-unit` e `component-unit` verdi.
+  > **⚠️ Fuori pista (11:51)** — `front check`: `'refusal' is possibly 'null'` in `currencyChangeErrors.ts:37`: con il
+  > codice letto in una costante, TypeScript non restringe più `refusal`. Aggiunto `refusal === null ||` alla guardia
+  > (nessun cambio di comportamento: con `refusal` nullo il codice non è una stringa). Ripassati: modulo 78 passed,
+  > `front check` 0 errori e 0 avvisi.
+- **CHANGELOG** (🐛, dopo la riga di X-R48): il cambio di piano o di provider è rifiutato e il piano resta com'era.
+  > **⚠️ Fuori pista (11:40)** — `saveEdit` salva prima gli altri campi dell'asset (PATCH, passo 1) e poi il provider
+  > (passo 2): il rifiuto lascia salvati nome e altri campi, quindi né la riga del CHANGELOG né la frase dicono «nulla è
+  > cambiato», ma «il provider e i suoi parametri non sono cambiati».
+  > **⚠️ Fuori pista (11:42)** — letto, non riprodotto: «Nessun provider» cancella l'assegnazione, gli eventi del
+  > provider vanno via in CASCADE e le transazioni li tengono in RESTRICT (`PRAGMA foreign_keys=ON`): con un evento del
+  > provider collegato a una transazione (un dividendo Yahoo, uno SPLIT del piano) la rimozione fallisce con un errore
+  > d'integrità, generico per l'utente. Nessun costo corrotto (fallisce chiuso), fuori da X-R49: **X-R62** nel backlog.
+  > Nota: l'editor del piano offre solo Interessi, Rettifica di prezzo e Liquidazione a scadenza; uno SPLIT nel piano
+  > arriva solo dall'API (nessun import scrive i `provider_params`: verificato dal docs-writer).
+- **Slot API** (12:03–12:11, `slot.sh xr49-api`, carico a 5 minuti 48,6): `api assets-provider` 24 passed,
+  `api parametric-provider-semantics` 2 passed, `api assets-crud` 35 passed, `api market-data-wipe` 5 passed; porta 6183
+  libera alla fine.
+- **Documentazione** (docs-writer, 12:14–12:25, solo inglese): `events.md` (nuova sottosezione «🔁 Parametric Provider
+  Change» `#parametric-provider-change`; il wipe del cambio di valuta passa da `split_guard`), `wac.md` (il terzo
+  rifiuto), `architecture.md` (riga della rotta, riga di `provider_management.py`, riga nuova di `split_guard.py`),
+  `provider_scheduled_investment.md` (voce «Stored data»; corretti i tipi di **Add Event**: anche Maturity Settlement),
+  `user/assets/create-edit.en.md` (paragrafo dopo quello della valuta). `mkdocs build` strict pulito, `check-links` 97
+  validi; `translate-validate` su `create-edit`: debito nuovo atteso (due link e il paragrafo), nessuno `translate-stamp`
+  (debito vero, come per X-R48).
+  > **⚠️ Fuori pista (12:25)** — il docs-writer ha trovato due vuoti vecchi fuori lotto (`provider_policy.py` assente dalla
+  > tabella dei moduli; Maturity Settlement assente dalla pagina utente del piano): **X-R63** nel backlog.
+- ✅ **X-R49 chiuso il 17/10 (12:30)**, in attesa del commit del coordinatore.
+
+### Revisione di MF X-R59 (`a8de6b584`), sola lettura — 17/10 12:30–12:50
+
+Richiesta dal coordinatore (blocca l'ingresso di MF): rotte, `POST /prices/current?range_start=`, contratto `range_change`.
+Letti il diff di rotte, schemi, servizi (asset e FX), `financial_math.returns.range_change`, i nomi dei test e la
+documentazione. **Esito: OK**, con queste note:
+
+1. **Basso** — nessun test forza il fallimento di `live_range_changes`: il `try` proprio della rotta (le quotazioni
+   restano, `range_change` tutto nullo) è promesso e non provato.
+2. **Info** — un prezzo sceso a 0 (un prestito di crowdfunding svalutato a 0, un titolo radiato): oggi la card e la pagina
+   dell'asset mostrano −100 % (`computeDerivedPriceState`: basta il primo prezzo diverso da 0); `range_change` non dà
+   nulla con un estremo ≤ 0. È la regola della casa di X-R53 (le colonne 1D…5Y già nulle): la tengo e la scrivo nella
+   riga 🔄 del mio lotto frontend. FX invariato (`displayFxDelta` vuole già entrambi > 0).
+3. **Info** — oltre 100 anni di dati la serie FX parte da `range_span_floor(end)` (`currencies.py:445`), il riferimento da
+   `range_start`: oggi irraggiungibile.
+4. **Info** — un `range_start` prima del 1900 in un item fa fallire tutta la richiesta (422 dello schema); i prezzi prima
+   del 1900 si possono salvare, quindi «Tutto» può risolvere `dateStart` prima del 1900: il mio lotto frontend lo limita
+   al 1900-01-01. Per `/prices/current` il 422 è testo semplice (forse `Query(None, ge=…)` darebbe la forma standard).
+5. **Coordinamento** — la documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238) assegna a Z-27
+   la divisione in lotti di period-changes; il coordinatore l'ha data a me. Proposta: la faccio dopo Z-27, con il suo
+   limite e il suo aiuto, dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola
+   risposta), e aggiorno quei due passi.
+6. **Nit** — la descrizione di `FARangeChange.change_ratio` raggruppa male: «(Price on as_of, or the live price ÷
+   reference price) − 1».
+- Il limite sui `range_start` è separato (5 `as_of` + 5 `range_start`), non condiviso come diceva la decisione: va bene
+  (un `range_start` costa una query, non dieci), solo da sapere.
+- Verificato: le catene FX sono salvate come righe della coppia (`fx/sync.py` `_storable_chain_rates`), quindi la query del
+  primo tasso dentro l'intervallo legge le stesse righe di `convert_bulk`, che non triangola.
+
+### TS2769 in `asset-list.spec.ts:1046` (da Y-28) ✅ — 17/10 12:31–12:40
+
+Segnalato dal coordinatore: `tsc -p tsconfig.e2e.json` rosso sul mio `c18517e31`.
+- `tsc` prima: **tre** TS2769, tutti miei: `e2e/assets/asset-list.spec.ts:1046` (Y-28) e `e2e/fixtures/sync-overwrite.ts:89`
+  e `:125` (la fixture di C-66, `32c64bbd9`). Stessa causa: `points.filter(isStoredPoint)`, e il parametro di
+  `isStoredPoint` accetta solo un oggetto, mentre il tipo TypeScript generato per `backward_fill_info` è
+  `(Info | null) | Array<Info | null>`. L'OpenAPI e lo zod dicono oggetto o null: la lista è un artefatto del generatore
+  dei tipi.
+- Cura in `sync-overwrite.ts`: il parametro diventa `{backward_fill_info?: unknown}` e la regola legge `days_back` come
+  `extractDaysBack` della pagina (solo il `days_back` numerico di un oggetto, altrimenti 0). Comportamento identico
+  (scratch su 9 casi: assente, null, oggetto vuoto, 0, 3, `days_back` null, lista vuota, lista piena).
+- `tsc` dopo: i tre TS2769 spariti. Restano due errori non miei: `e2e/onboarding-tour.spec.ts:863` TS2322 (`580bd504f`,
+  onboarding) e `src/lib/types/files.ts:9` TS2307 `$lib/api/generated` (`ff38088b9`, Files; `tsconfig.e2e.json` non
+  mappa `$lib`). Prettier pulito. Nessun E2E rilanciato: cambia solo il tipo, la regola è la stessa.
+
+### X-R44c ✅ — solo asset e cambi possono dichiarare `test_only` (12:45–13:10)
+
+Ordine del coordinatore (17/10): TS2769 → X-R44c → X-R60.
+- **Analisi** (sola lettura, HEAD `9e8f6e8dc`): il filtro di X-R44 è nella base, `AbstractPluginRegistry._withheld()`, e
+  copre `get_plugin`, `get_plugin_instance`, `list_plugin_codes` e `list_providers`. Ma altre famiglie hanno porte che
+  leggono l'archivio direttamente: `SignalPluginRegistry.list_definitions()` e `RiskAnalyticRegistry.list_definitions()`
+  (`cls._plugins.items()`), `BRIMProviderRegistry.auto_detect_plugin`/`get_compatible_plugins`/`list_plugin_info`
+  (`cls._providers.items()`), e l'istantanea di `ToolPluginRegistry` (`get_snapshot`, `get_definition`). Un
+  `test_only = True` lì sarebbe servito in produzione. Oggi lo dichiarano solo `mockprov`, `MOCKFX` e `MOCKFX_FAIL`.
+- **Scelta**: una guardia, non la copertura delle altre porte (fuori dal perimetro chiesto). Il test sta nella suite di
+  X-R44 (`test_test_only_providers.py`, PURE): nessuna azione nuova nel runner, solo la sua descrizione.
+- Test affidati a un test-author (12:47): la regola su ogni registro di prima parte (trovati risalendo le sottoclassi,
+  almeno i sei noti) e la prova che il controllo sa fallire (un registro sonda con una classe segnata).
+  > **⚠️ Fuori pista (12:52)** — il test-author corregge il mio brief: `PluginSettingsMixin` (che dichiara `test_only`) è
+  > ereditato solo dalle basi asset e FX, non da tutte. Su BRIM, segnali, rischio e tools il flag non è dichiarato, ma
+  > un attributo di classe sarebbe comunque letto da `_withheld()` (`getattr(..., False)`): è proprio il caso che la
+  > guardia ferma. Trovata anche `shutdown_all_providers()` (asset, FX, BRIM), che scorre `_providers`: solo allo
+  > spegnimento, non serve nulla a un utente (la nota di E su X-R44).
+- **Test** (12:52): `test_guard_only_asset_and_fx_plugins_are_flagged_test_only` (i registri dai `services/*/registry.py`
+  e dalle sottoclassi, barriere: i sei noti, ognuno serve almeno una classe, i tre doppi trovati segnati) e
+  `test_guard_the_test_only_rule_reports_a_flagged_class_outside_the_asset_and_fx_registries` (il registro sonda del
+  file). **`services test-only-providers` 31 passed** (29 + 2).
+- **Mutazione** (12:54): `test_only = True` messo per un attimo su `AdxSignalPlugin` → **2 failed, 29 passed**, il
+  messaggio nomina `SignalPluginRegistry`, `ADX`, la classe e le porte; il file ripristinato identico (`git diff --quiet`).
+- **Runner**: la descrizione di `services test-only-providers` cita X-R44c (black e ruff puliti). Nessuna riga nel
+  CHANGELOG: niente di visibile all'utente. Documentazione (docs-writer, 12:57): `plugin_settings.md` («Test-Only
+  Plugins») e `registry_pattern.md`.
+  `mkdocs build` strict pulito, `check-links` 97 validi; pagine solo inglesi, nessun debito di traduzione. Il
+  docs-writer nomina anche il `get_plugin_instance()` proprio di `ToolPluginRegistry`, che legge l'istantanea.
+- ✅ **X-R44c chiuso il 17/10 (13:10)**, in attesa del commit del coordinatore.
+
+### X-R60 ⏳ — le colonne Δ: tre note di Y su X-R53 (preparato; rossi dalle 12:50)
+
+- **Disegno** (da `files/drafts/xr60/design.md`): un registro puro `PeriodChangesLedger<K>` in `periodChanges.ts` (ticket
+  `{id, asOf, full}`, `begin`/`end`/`busy`/`settle`/`fail`), usato da entrambe le liste. La richiesta di una sola coppia
+  delle liste FX diventa un ticket: la pagina resta occupata e una risposta piena più vecchia non la sovrascrive (nota 1).
+  Il nuovo tentativo dei segnali, il salvataggio delle impostazioni e l'inversione chiedono solo le serie (nota 2). Un
+  fallimento pieno tiene le Δ dello stesso `dateEnd` (nota 3).
+- **Codice pronto**: `xr60_code.py`, 16 sostituzioni in 3 file. A secco pulito su `9e8f6e8dc`, prettier pulito; 17
+  scenari scratch del registro coerenti col disegno. Le righe di Z-27 (`assets/+page.svelte` ~742-760,
+  `fxStoreRegistry.ts`) non sono toccate.
+- **Rossi** affidati a un test-author (12:50): unità del registro in `periodChanges.test.ts`; E2E nelle due liste,
+  accanto ai describe di X-R53 (la corsa FX, l'indicatore, nessuna richiesta inutile, un errore che tiene le Δ).

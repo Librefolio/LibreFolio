@@ -180,27 +180,37 @@ async def list_accounts(admin: Annotated[User, Depends(require_admin)], session:
     )
 
 
+#: The refusal of a reactivation or a demotion of the initial administrator waiting for its setup (F02, A-43).
+_PENDING_SETUP_DETAIL = {"error_code": "PENDING_SETUP", "message": "This administrator activates the account through its setup link"}
+
+
 @router.patch("/{user_id}", response_model=AdminUserRead, summary="Activate, deactivate, promote or demote an account (admin)")
 async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> AdminUserRead:
     """Change whether an account is active and an administrator, all or nothing.
 
-    The last active administrator can be neither deactivated nor demoted (409 ``LAST_ADMIN``); a reactivation needs a
-    free place (409 ``USER_LIMIT_REACHED``), except for an account waiting for its email verification with a live link,
-    which already holds one. The initial administrator waiting for its setup (F02) is never reactivated here (409
-    ``PENDING_SETUP``): nobody knows its password, and its setup link would stop working. Deactivating or demoting ends
-    every session of the account.
+    A protected account is neither deactivated nor demoted (409 ``ACCOUNT_PROTECTED``, before any other refusal). The
+    last active administrator can be neither deactivated nor demoted (409 ``LAST_ADMIN``); a reactivation needs a free
+    place (409 ``USER_LIMIT_REACHED``), except for an account waiting for its email verification with a live link,
+    which already holds one. The initial administrator waiting for its setup (F02) is neither reactivated nor demoted
+    here (409 ``PENDING_SETUP``): nobody knows its password, and it keeps its role until its setup. Deactivating it
+    cancels its setup link (A-43): the link stops working and the account keeps waiting; a protected one refuses that
+    too. Deactivating or demoting ends every session of the account.
     """
     user = await _user_or_404(session, user_id)
+    pending = await registration_service.is_pending_admin(session, user)
     deactivate = request.is_active is False and user.is_active
+    # Deactivating the initial administrator waiting for its setup, already inactive, cancels its setup link (A-43):
+    # a deactivation all the same, which a protected account refuses
+    cancel = request.is_active is False and pending
     demote = request.is_superuser is False and user.is_superuser
-    if (deactivate or demote) and (refusal := _protected(user)):
+    if (deactivate or cancel or demote) and (refusal := _protected(user)):
         raise refusal
+    if demote and pending:
+        # The initial administrator keeps its role until its setup (A-43): to cancel it, deactivate it or delete it
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_PENDING_SETUP_DETAIL)
     if request.is_active is True and not user.is_active:
-        if await registration_service.is_pending_admin(session, user):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"error_code": "PENDING_SETUP", "message": "This administrator activates the account through its setup link"},
-            )
+        if pending:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_PENDING_SETUP_DETAIL)
         usage = await registration_service.user_usage(session)
         # An account waiting for its email verification already holds its place while its link is live (workstream E).
         if usage.full and not await email_verification.holds_place(session, user):
@@ -229,15 +239,16 @@ async def delete_account(user_id: int, admin: Annotated[User, Depends(require_ad
 
     Refused for the caller's own account (409 ``SELF_DELETION``: that is deleted from the profile), for a protected
     account (409 ``ACCOUNT_PROTECTED``, before any other answer: demoting it would be refused too) and for an
-    administrator (409 ``DEMOTE_FIRST``: demote it first, so the last one never goes from here). All or nothing;
-    cannot be undone.
+    administrator (409 ``DEMOTE_FIRST``: demote it first, so the last one never goes from here) — but the initial
+    administrator waiting for its setup, which cannot be demoted and never was an active one: deleting it is the hard
+    cancellation of its setup (A-43). All or nothing; cannot be undone.
     """
     user = await _user_or_404(session, user_id)
     if user.id == admin.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SELF_DELETION", "message": "Delete your own account from your profile"})
     if refusal := _protected(user):
         raise refusal
-    if user.is_superuser:
+    if user.is_superuser and not await registration_service.is_pending_admin(session, user):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "DEMOTE_FIRST", "message": "An administrator must be demoted before it can be deleted"})
     # A failed deletion rolls the session back and expires every object in it, the caller's included: read them first
     username, admin_id = user.username, admin.id

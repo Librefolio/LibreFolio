@@ -11,8 +11,17 @@
  * module never imports i18n; the component passes a closure over `$_`. The CSS
  * class maps, the icon components and the i18n header text stay in the component.
  *
+ * A FAILED analysis (J-12, N81 option A) adds two helpers: `partitionLotIssues`
+ * sends the issues that broke the FIFO replay to the failure notice and keeps the
+ * rest for the banner; `buildFailureRows` turns the blocking ones into the
+ * notice's rows (broker name, day, the transaction to fix). The quantity
+ * formatter is injected for the same reason as `labelForDate`.
+ *
  * @module brokers/lots/lotDataQualityHelpers
  */
+
+import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+import {resolveBrokerName} from './lotChartShared';
 
 /** The three severities a data-quality issue can carry. */
 export type IssueSeverity = 'error' | 'warning' | 'info';
@@ -110,4 +119,90 @@ export function buildIssueGroups(issues: readonly DataQualityIssueLike[], lotDat
     }
 
     return result.sort((left, right) => severityOrder[left.severity] - severityOrder[right.severity]);
+}
+
+type IssueParams = Record<string, string | number | boolean | null | undefined>;
+
+/**
+ * Split the issues of an analysis between the failure notice and the banner.
+ *
+ * Only a FAILED analysis has a failure to explain. There, an issue goes to the notice when the backend flagged it
+ * `fails_analysis: true` (its code is one of `_QUANTITATIVE_FAILURE_CODES`): the flag decides, so the frontend keeps no
+ * copy of that list. Every other issue stays in the banner. Both lists keep the input order.
+ */
+export function partitionLotIssues<T extends DataQualityIssueLike>(issues: readonly T[], failed: boolean): {failure: T[]; banner: T[]} {
+    const failure: T[] = [];
+    const banner: T[] = [];
+    for (const issue of issues) {
+        if (failed && issue.message_params?.fails_analysis === true) failure.push(issue);
+        else banner.push(issue);
+    }
+    return {failure, banner};
+}
+
+/** One row of the failure notice: what failed, where, when, and the transaction to fix. */
+export interface FailureRow {
+    /** `${code}:${transactionId ?? 'none'}`: one row per (code, transaction). */
+    key: string;
+    code: string;
+    /** The row to open in the transactions page; null when the issue names none. */
+    transactionId: number | null;
+    /** The ISO day of that row; null when the issue does not carry a bare `YYYY-MM-DD`. */
+    transactionDate: string | null;
+    brokerName: string;
+    messageKey: string;
+    messageParams: IssueParams;
+}
+
+/** A positive safe integer, given as a number or as a string of digits; anything else is no id. */
+function positiveId(raw: unknown): number | null {
+    const value = typeof raw === 'number' ? raw : typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/** A bare ISO day, as sent; anything else is no day. */
+function isoDay(raw: unknown): string | null {
+    return typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+/** Ascending, with null after every value. Days are ISO strings, so their order is the strings' order. */
+function compareNullLast<T extends string | number>(left: T | null, right: T | null): number {
+    if (left === right) return 0;
+    if (left === null) return 1;
+    if (right === null) return -1;
+    return left < right ? -1 : 1;
+}
+
+/**
+ * The rows of the failure notice, from the blocking issues of a FAILED analysis.
+ *
+ * - The transaction comes from `transaction_id` only: `related_transaction_id` may name a partner leg the user cannot
+ *   see, so it is never offered.
+ * - The broker is named from the panel's broker list (`resolveBrokerName`, with its defaults), not by its id: a
+ *   broker the list lacks falls back to `#<id>`, and an issue without one to `—`.
+ * - `missing_quantity`, a quantity of the lots, is written by `formatQuantity` (the lots' formatter, masked under
+ *   privacy); the other params go to the catalogue as sent. The issues read are left unchanged.
+ * - One row per (code, transaction): the first occurrence wins. Rows come by day (undated last), then transaction id
+ *   (none last), then code: the replay breaks at its first wrong row.
+ */
+export function buildFailureRows(issues: readonly DataQualityIssueLike[], brokers: ReadonlyArray<BrokerLike>, formatQuantity: (raw: unknown) => string): FailureRow[] {
+    const rows = new Map<string, FailureRow>();
+    for (const issue of issues) {
+        const params: IssueParams = issue.message_params ?? {};
+        const transactionId = positiveId(params.transaction_id);
+        const key = `${issue.code}:${transactionId ?? 'none'}`;
+        if (rows.has(key)) continue;
+        const messageParams: IssueParams = {...params};
+        if (messageParams.missing_quantity != null) messageParams.missing_quantity = formatQuantity(messageParams.missing_quantity);
+        rows.set(key, {
+            key,
+            code: issue.code,
+            transactionId,
+            transactionDate: isoDay(params.transaction_date),
+            brokerName: resolveBrokerName(positiveId(params.broker_id), brokers),
+            messageKey: issue.message_i18n_key,
+            messageParams,
+        });
+    }
+    return [...rows.values()].sort((left, right) => compareNullLast(left.transactionDate, right.transactionDate) || compareNullLast(left.transactionId, right.transactionId) || compareNullLast(left.code, right.code));
 }

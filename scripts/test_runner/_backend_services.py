@@ -35,7 +35,9 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_components_technical.py",
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
+    "backend/test_scripts/test_services/test_ai_export_fifo_failed_reconstruction.py",
     "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
+    "backend/test_scripts/test_services/test_ai_export_price_day_budget.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
     "backend/test_scripts/test_services/test_ai_export_structural_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",
@@ -89,6 +91,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_warnings_i18n.py",
     "backend/test_scripts/test_services/test_risk_eligibility.py",
     "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
+    "backend/test_scripts/test_services/test_risk_price_day_budget.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
@@ -214,7 +217,7 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     print_section("Services: Date Range Ceiling (X-R55) and Bulk Limits (Z-25)")
     print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
     print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
-    print_info("Bulk caps: 1 000 items per request, 5 M item-days (the fill's span, warm-up and comparisons included), lowered per case")
+    print_info("Bulk caps: 1 000 items per request, 1 M item-days (R13-SEC9-2) (the fill's span, warm-up and comparisons included), lowered per case")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RANGE_CEILING_TEST_PATHS, "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
@@ -886,7 +889,7 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
     """Test parse resilience when the file is renamed underfoot."""
     print_section("Services: BRIM Parse Race")
     print_info("Testing: backend/app/services/brim/brim_provider.py (uploaded → parsed rename race)")
-    print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata")
+    print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata, re-detection, the per-broker metadata lock (no link followed, created 0o600)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
     return run_command(cmd, "BRIM parse race tests", verbose=verbose)
@@ -1113,6 +1116,15 @@ def services_market_data_wipe_split_guard(verbose: bool = False, test_names: lis
     print_info("Tests: the wipe refused with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409) naming each such split by date and only the caller's adjustments, nothing written; with a cost, an outgoing row, no link or a dry run the wipe is as before")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_split_guard.py", test_names)
     return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
+
+
+def services_provider_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R49: a parametric provider's change refuses while a SPLIT it generated has incoming adjustments without a purchase cost."""
+    print_section("Services: Provider Wipe Split Guard")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_assign_providers), backend/app/services/assets/split_guard.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a plan's new params or leaving it refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's adjustments named, nothing written; else the save is as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_wipe_split_guard.py", test_names)
+    return run_command(cmd, "Provider wipe split guard tests", verbose=verbose)
 
 
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
@@ -1522,6 +1534,14 @@ def services_backup_checks(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Backup configuration checks tests", verbose=verbose)
 
 
+def services_series_export_csv(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CSV of the series exports against formula injection (lot B-39): a cell a spreadsheet would read as a formula is escaped."""
+    print_section("Services: Series Export CSV")
+    print_info("Testing: backend/app/services/platform/series_export.py (stream_rows_as_csv, stream_rows_as_json)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_series_export_csv.py", test_names)
+    return run_command(cmd, "Series export CSV tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger and closing the handlers it removes."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -1862,7 +1882,7 @@ Note: No backend server required.
         "range-ceiling",
         services_range_ceiling,
         name="Date Range Ceiling",
-        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 5 M item-days, counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
         # with create_all (or on a stand-in session that reads nothing); the FX handler is called directly with
         # convert_bulk replaced by an in-process converter; the sync step runs with an in-process provider double and
@@ -2267,7 +2287,7 @@ Note: No backend server required.
         name="BRIM Parse Pool",
         desc="Process-pool off-loading, pickle round-trip, thread fallback; W-B53: workers born from a forkserver preloaded with the BRIM module, its plugins and the discovery (brim_parse_preload, whose import never raises), started early by prewarm() (never raises, the pool stays lazy), importing the pool stays light",
     )
-    add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail")
+    add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail; re-detection; the broker metadata lock (refuses a symlink, created 0o600)")
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
@@ -2421,9 +2441,10 @@ Note: No backend server required.
         "test-only-providers",
         services_test_only_providers,
         name="Test-Only Providers",
-        desc="X-R44: outside test mode (LIBREFOLIO_TEST_MODE off, simulated in process) a plugin flagged test_only — mockprov, MOCKFX, MOCKFX_FAIL — is found by no registry lookup or list, configured by no runtime, and an assignment or probe naming it is refused as an unknown provider; in test mode, for real providers (yfinance, justetf, ECB) and for a family without the flag (signals) nothing changes",
+        desc="X-R44: outside test mode (LIBREFOLIO_TEST_MODE off, simulated in process) a plugin flagged test_only — mockprov, MOCKFX, MOCKFX_FAIL — is found by no registry lookup or list, configured by no runtime, and an assignment or probe naming it is refused as an unknown provider; in test mode, for real providers (yfinance, justetf, ECB) and for a family without the flag (signals) nothing changes. X-R44c: only an asset or an FX plugin may be flagged test_only (the BRIM, signal, risk and tool registries have doors that do not withhold one), read over every registry the application defines, and the check proven to report a flagged class elsewhere",
         # PURE: nothing is written; production is simulated with monkeypatch inside a block, and the settings step
-        # (configure_instance) is replaced by a recorder, so no database, server or network is touched.
+        # (configure_instance) is replaced by a recorder, so no database, server or network is touched. The X-R44c guard
+        # loads every plugin family in process (heavier than the rest, as other services suites do).
     )
     add_test(
         cat,
@@ -2433,6 +2454,15 @@ Note: No backend server required.
         desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
+    )
+    add_test(
+        cat,
+        "provider-wipe-split-guard",
+        services_provider_wipe_split_guard,
+        name="Provider Wipe Split Guard",
+        desc="X-R49: POST /assets/provider refused before any write of the request with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) when an item would wipe the events a parametric provider generated (new params of the plan, or leaving it for another provider) while a SPLIT among them has linked incoming ADJUSTMENTs without a purchase cost; details name the item (asset_id, item_index) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the items before the refused one are not written either. With a cost (0 included), a manual SPLIT, the same params, an online provider's params change or a new assignment the save is as before",
+        # WRITE-SCOPED, the category default: four assets, three assignments, two users and two brokers under a unique
+        # marker; each test restores the assignments by id and wipes by asset and broker id.
     )
     add_test(
         cat,
@@ -2668,7 +2698,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.
@@ -2751,8 +2781,17 @@ Note: No backend server required.
         "backup-checks",
         services_backup_checks,
         name="Backup Configuration Checks",
-        desc="Lot B-9 (instance_backup/checks.py, in the platform's CONFIG_CHECKS). check_panel_token, backup.panel_token: unset or blank ok .off (a default start logs nothing new), usable (32 characters included) ok, 31 characters tooShort {minimum: 32}, a space, a tab or a letter outside ASCII notVisibleAscii, a _FILE missing, blank or not UTF-8 unreadable with the reader's error as reason, the variable winning over its broken file. check_upload_limit, backup.upload_limit: 0 or unset self-hosted unlimited, a number or the managed 500 limited {limit_mb}, letters, negative or decimal invalid, H's managed entry of another type or removed profileTable (H-27, H-37), self-hosted reading no entry, the variable winning over a wrong table. Never raises on each documented error of its reader; no token in any result, record or event of the startup audit (canary); BACKUP_CONFIG_CHECKS in order, in CONFIG_CHECKS together before the email checks; either module imported first in a fresh interpreter; the startup audit logs an unusable configuration as one ERROR and goes on, a default start logs nothing about them; the nine messages in the four backup catalogues with their placeholders",
+        desc="Lot B-9 (instance_backup/checks.py, in the platform's CONFIG_CHECKS). check_panel_token, backup.panel_token: unset or blank ok .off (a default start logs nothing new), usable (32 characters included) ok, 31 characters tooShort {minimum: 32}, a space, a tab or a letter outside ASCII notVisibleAscii, a _FILE missing, blank or not UTF-8 unreadable with the reader's error as reason, the variable winning over its broken file. check_upload_limit, backup.upload_limit: 0 or unset self-hosted unlimited, a number or the managed 500 limited {limit_mb}, letters, negative or decimal invalid, H's managed entry of another type or removed profileTable (H-27, H-37), self-hosted reading no entry, the variable winning over a wrong table. Never raises on each documented error of its reader; no token in any result, record or event of the startup audit (canary); BACKUP_CONFIG_CHECKS in order, in CONFIG_CHECKS together before the email checks; either module imported first in a fresh interpreter; the startup audit logs an unusable configuration as one ERROR and goes on, a default start logs nothing about them; the nine messages in the four backup catalogues with their placeholders; B-35 (h): backup_max_restore_mb() (its variable, ratio 8, no profile-table entry; an explicit value wins, 0 included; unset none self-hosted, else 8 × the upload limit, failing closed with it; BACKUP_MAX_RESTORE_MB_INVALID naming the variable, never the value) and check_restore_limit (limited, unlimited, invalid with the variable it names, profileTable; never raises), BACKUP_CONFIG_CHECKS now three, the restore limit's records in the startup audit, its four messages",
         # PURE: variables through monkeypatch, secret files under tmp_path. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "series-export-csv",
+        services_series_export_csv,
+        name="Series Export CSV",
+        desc="Lot B-39, CSV formula injection in the series exports (series_export.stream_rows_as_csv): a cell whose text starts with =, +, -, @, a tab or a CR, behind any apostrophes ('*[=+-@\\t\\r]), written with one leading apostrophe ('=x becomes ''=x, so the round trip is exact; a CR alone too; a value that is no str written as one; in a row of the events' schema, only that cell); a plain number never escaped in any type (Decimal -1.5, text -1.5, +2, -1E+2, -0, int -3); dates, UTC datetimes, None, other text ('hello included), the header rows of the three schemas and the ; delimiter unchanged; the JSON export unchanged; every cell read back with csv.reader",
+        # PURE: the two stream functions called directly. No database, no server, no network, no file.
         isolation="pure",
     )
     add_test(

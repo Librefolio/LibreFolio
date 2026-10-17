@@ -232,7 +232,7 @@ def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     """Test the post-migration fixes on temporary databases (a 1.1 install upgraded to head)."""
     print_section("DB Test: Post-Migration Fixes")
     print_info("This test works on temporary databases and data dirs only: the test database is not touched")
-    print_info("Testing: detection, backup, AUTOINCREMENT conversion, orphan broker folders, rollback, dry run, offline script, concurrent runs, duration in the log")
+    print_info("Testing: detection, backup, AUTOINCREMENT conversion, orphan broker folders, rollback, dry run, offline script, concurrent runs, duration in the log, lock file (no link followed, created 0o600)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration.py", test_names)
     return run_command(cmd, "Post-migration fix tests", verbose=verbose)
@@ -413,7 +413,7 @@ Note: No backend server required. Tests operate directly on test DB.
              desc="event_types: asset event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked; declared row-count changes checked exactly; dry run, log lines, rollback",
              prereq="None (temporary databases)")
     add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
-             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback",
+             desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback; the run lock refuses a symlink and is created 0o600; B-36 (17): table names a database brings quoted (x\"y, a\" WHERE 1 --): the pending fix applied, its row counts holding them, no OperationalError",
              prereq="None (temporary databases)")
     add_test(cat, "post-migration-orphan-pairs", db_post_migration_orphan_pairs, name="Post-Migration Orphan Pair Halves",
              desc="orphan_pair_halves: the lone halves older broker deletions left become standalone rows; giving TRANSFER legs and unreadable rows left; dry run, log lines, rollback",

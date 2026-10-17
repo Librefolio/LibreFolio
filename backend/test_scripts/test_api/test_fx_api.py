@@ -1129,14 +1129,14 @@ async def test_convert_extreme_end_is_bounded(test_server):
 # ============================================================================
 #
 # POST /fx/currencies/convert refuses more than MAX_BULK_ITEMS (1 000) conversions before any work, and stops counting
-# the daily and signal items it is about to build as soon as they pass MAX_BULK_ITEM_DAYS (5 million): both are a 422
+# the daily and signal items it is about to build as soon as they pass MAX_BULK_ITEM_DAYS (1 million): both are a 422
 # with a coded detail, and nothing is converted. Identity conversions (CHF → CHF) need no rate and write nothing. The
 # lowered budgets, the warm-up and the conversions past the ceiling are pinned at service level (services
 # range-ceiling, BL-I and BL-F).
 
 BULK_REJECT_SECONDS = 30.0  # a refusal is answered once the count passes the budget; 7.3 million conversions, minutes
 BULK_MAX_ITEMS = 1_000  # the contract's numbers (N77), written here and not read from the code under test
-BULK_MAX_ITEM_DAYS = 5_000_000
+BULK_MAX_ITEM_DAYS = 1_000_000
 CONVERSION_SPAN_DAYS = 36_526  # X-R55: a conversion runs from range_span_floor(end), 36 525 days back, to its end
 
 
@@ -1173,9 +1173,9 @@ async def test_convert_more_than_1000_items_is_refused(test_server):
 @pytest.mark.asyncio
 async def test_convert_over_the_item_day_budget_is_refused_fast(test_server):
     """BL-API-03 (Z-25, N77, guard): 200 conversions of 100 years — 36 526 daily items each, 7 305 200 in all —
-    answer 422 ``{"code": "bulk_too_many_days", "message", "max_item_days": 5000000, "item_days": n}`` within
-    ``BULK_REJECT_SECONDS``, ``n`` the count when it passed the budget: more than 5 000 000, at most the 5 004 062 of the
-    first 137 conversions.
+    answer 422 ``{"code": "bulk_too_many_days", "message", "max_item_days": 1000000, "item_days": n}`` within
+    ``BULK_REJECT_SECONDS``, ``n`` the count when it passed the budget: more than 1 000 000, at most the 1 022 728 of the
+    first 28 conversions (27 make 986 202).
 
     Not sent to code whose route reads no ``MAX_BULK_ITEM_DAYS``: there the lane's shared backend would build and
     convert the 7.3 million items, its event loop blocked for minutes and every neighbour test with it (the size X-R55
@@ -1186,7 +1186,7 @@ async def test_convert_over_the_item_day_budget_is_refused_fast(test_server):
 
     if not hasattr(convert_route, "MAX_BULK_ITEM_DAYS"):
         pytest.fail("the conversion route reads no MAX_BULK_ITEM_DAYS: 7.3 million item-days not sent to the lane's shared backend")
-    crossing = -(-(BULK_MAX_ITEM_DAYS + 1) // CONVERSION_SPAN_DAYS)  # the conversion whose items pass the budget: 137th
+    crossing = -(-(BULK_MAX_ITEM_DAYS + 1) // CONVERSION_SPAN_DAYS)  # the conversion whose items pass the budget: 28th
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         started = time.monotonic()

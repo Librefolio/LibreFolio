@@ -1328,9 +1328,16 @@ describe('translateErrorCode', () => {
  * setting to change, and over the 100-position ceiling no setting helps at all. A metric the
  * backend has no remedy for still answers `resource_limit`, without one.
  *
+ * J-50 adds a fifth remedy, from outside the simulation: every risk analysis prepares its prices in
+ * one bulk request, and one that would build more per-day points than the budget of Z-25
+ * (`MAX_BULK_ITEM_DAYS`) is refused by `risk/scope.py::prepare_asset_series` with `resource_limit`,
+ * `{metric: 'price_item_days', actual, limit, remedy: 'period_or_assets'}` — a shorter period or
+ * fewer assets. Until J-50 that refusal was a 500; the cases naming `period_or_assets` are red
+ * until the remedy is listed and worded in the four catalogues.
+ *
  * The contract pinned below, written red first against a module that exports neither new name:
  *
- *   - `RESOURCE_LIMIT_REMEDIES`: the four remedies, in the order of `REMEDIES`;
+ *   - `RESOURCE_LIMIT_REMEDIES`: the remedies, in the order of `REMEDIES`;
  *   - `errorDisplayCode(error)`: the code an error is worded by — `resource_limit_<remedy>` for a
  *     remedy this build knows, the code itself (trimmed) for anything else, `null` for no code;
  *   - `resultErrorCodes` hands the levels those display codes, deduplicated in arrival order;
@@ -1342,8 +1349,8 @@ describe('translateErrorCode', () => {
  * is missing — those cases only, never the collection of this file.
  */
 
-/** The four remedies a refusal can name, in the contract's order: this file's own copy, which the export is pinned to. */
-const REMEDIES = ['paths_or_horizon', 'horizon_or_sampling', 'period', 'positions'] as const;
+/** The remedies a refusal can name, in the contract's order: this file's own copy, which the export is pinned to. */
+const REMEDIES = ['paths_or_horizon', 'horizon_or_sampling', 'period', 'positions', 'period_or_assets'] as const;
 type Remedy = (typeof REMEDIES)[number];
 
 /** `MAX_SIMULATION_ASSETS`, the ceiling the `positions` sentence cites: pinned on the backend by `test_the_ceilings_cited_to_the_user_are_pinned`. */
@@ -1356,12 +1363,13 @@ const UNKNOWN_ERROR_KEY = 'risk.errors.unknown';
 const remedyCode = (remedy: Remedy): string => `resource_limit_${remedy}`;
 const remedyKey = (remedy: Remedy): string => `risk.errors.${remedyCode(remedy)}`;
 
-/** One refusal per remedy, its details as `simulation.py::_resource_limit` sends them for a metric that maps to it. */
+/** One refusal per remedy, its details as the backend sends them for a metric that maps to it: `simulation.py::_resource_limit`, and `risk/scope.py::prepare_asset_series` for the price-day budget (J-50). */
 const REFUSAL_DETAILS: Record<Remedy, Record<string, unknown>> = {
     paths_or_horizon: {metric: 'portfolio_cells', actual: 20_000_001, limit: 20_000_000, remedy: 'paths_or_horizon'},
     horizon_or_sampling: {metric: 'sobol_dimension', actual: 21_202, limit: 21_201, remedy: 'horizon_or_sampling'},
     period: {metric: 'observations', actual: 5001, limit: 5000, remedy: 'period'},
     positions: {metric: 'assets', actual: 101, limit: POSITIONS_CEILING, remedy: 'positions'},
+    period_or_assets: {metric: 'price_item_days', actual: 5_000_001, limit: 5_000_000, remedy: 'period_or_assets'},
 };
 
 /** What `errorDisplayCode` reads, as the contract types it: declared here, so the cases compile before the export exists. */
@@ -1392,7 +1400,7 @@ function resourceLimitRemedies(): unknown {
 const limitRefusal = (details: unknown): DisplayedError => ({code: 'resource_limit', details});
 
 describe('RESOURCE_LIMIT_REMEDIES', () => {
-    it('lists exactly the four remedies a refusal can name, in order', () => {
+    it('lists exactly the remedies a refusal can name, in order', () => {
         expect(resourceLimitRemedies()).toStrictEqual([...REMEDIES]);
     });
 });

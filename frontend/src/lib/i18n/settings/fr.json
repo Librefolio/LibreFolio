@@ -256,13 +256,15 @@
         "resetLink": "Lien de réinitialisation",
         "signOut": "Déconnecter partout",
         "restartGuides": "Relancer les guides",
-        "delete": "Supprimer"
+        "delete": "Supprimer",
+        "cancelSetup": "Annuler le lien de configuration"
       },
       "reasons": {
         "protected": "Ce compte est protégé : personne ne peut le désactiver, le rétrograder ou le supprimer.",
         "lastAdmin": "C'est le seul administrateur actif : il ne peut être ni désactivé ni rétrogradé.",
         "limit": "L'instance est pleine : libérez une place pour le réactiver.",
-        "demoteFirst": "Un administrateur doit être rétrogradé avant d'être supprimé."
+        "demoteFirst": "Un administrateur doit être rétrogradé avant d'être supprimé.",
+        "pendingSetup": "Il attend sa configuration : il garde son rôle jusque-là."
       },
       "confirm": {
         "deactivate": {
@@ -294,6 +296,11 @@
           "title": "Révoquer l'invitation pour {email} ?",
           "message": "Le lien cesse de fonctionner immédiatement.",
           "confirm": "Révoquer"
+        },
+        "cancelSetup": {
+          "title": "Annuler le lien de configuration de {username} ?",
+          "message": "Le lien déjà remis cesse de fonctionner. Le compte reste en attente de sa configuration : un nouveau lien s'obtient avec « dev.py user setup-link » sur le serveur, ou auprès de votre hébergeur.",
+          "confirm": "Annuler le lien"
         }
       },
       "errors": {
@@ -308,7 +315,7 @@
         "INVALID_INPUT": "Vérifiez votre saisie : l'adresse e-mail n'est peut-être pas valide.",
         "generic": "L'action a échoué. Réessayez.",
         "load": "Impossible de charger les comptes.",
-        "PENDING_SETUP": "Cet administrateur active le compte par son lien de configuration : il ne peut pas être réactivé ici."
+        "PENDING_SETUP": "Cet administrateur attend sa configuration : il ne peut être ni réactivé ni rétrogradé ici."
       },
       "invite": {
         "button": "Inviter",
@@ -338,7 +345,8 @@
       "toasts": {
         "signedOut": "{username} est déconnecté partout.",
         "guidesRestarted": "Les guides de {username} recommencent.",
-        "resetLinkCreated": "Lien de réinitialisation créé pour {username}."
+        "resetLinkCreated": "Lien de réinitialisation créé pour {username}.",
+        "setupCancelled": "Le lien de configuration de {username} ne fonctionne plus."
       },
       "pendingSetupHint": "Ce compte administrateur s'active par son lien de configuration. Si le lien est perdu, lancez « dev.py user setup-link » sur le serveur, ou demandez à votre hébergeur."
     },

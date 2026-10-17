@@ -26,6 +26,7 @@ the server stopped. Plan ``34_accountAndIdReuse`` §2.3.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -67,9 +68,15 @@ def _integrity_ok(conn: sqlite3.Connection) -> bool:
     return conn.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
 
 
+def _quoted(name: str) -> str:
+    """``name`` as an SQL identifier, in double quotes with its own doubled (B-36): a restore's check runs these fixes on
+    an archive's database, whose tables may be named anything."""
+    return '"' + name.replace('"', '""') + '"'
+
+
 def _row_counts(conn: sqlite3.Connection) -> dict[str, int]:
     names = [name for (name,) in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
-    return {name: conn.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0] for name in names}
+    return {name: conn.execute(f"SELECT count(*) FROM {_quoted(name)}").fetchone()[0] for name in names}
 
 
 def _fk_violations(conn: sqlite3.Connection) -> set[tuple]:
@@ -183,20 +190,22 @@ def _exclusive_run(db_path: Path) -> Iterator[None]:
     """Hold an exclusive lock on ``<db file name>.post-migration.lock`` until the block ends; wait for it if another run holds it.
 
     Taken before the database is opened, so a waiting run holds no SQLite lock. The file stays on
-    disk: deleting it while another run waits on it would let a third lock a new file at once.
+    disk: deleting it while another run waits on it would let a third lock a new file at once. It is
+    opened with ``O_NOFOLLOW`` and created ``0o600`` (Z-28): a symbolic link in its place raises
+    ``OSError`` before anything runs, and nothing behind the link is created or locked.
     """
     if fcntl is None:  # pragma: no cover - not POSIX
         yield
         return
-    handle = open(db_path.with_name(f"{db_path.name}.post-migration.lock"), "a+")  # noqa: SIM115 — held for the whole run, closed below
+    fd = os.open(db_path.with_name(f"{db_path.name}.post-migration.lock"), os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        fcntl.flock(fd, fcntl.LOCK_EX)
         try:
             yield
         finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            fcntl.flock(fd, fcntl.LOCK_UN)
     finally:
-        handle.close()
+        os.close(fd)
 
 
 def run_post_migration_fixes(db_path: Path, data_dir: Optional[Path] = None, *, dry_run: bool = False) -> PostMigrationReport:
@@ -210,6 +219,9 @@ def run_post_migration_fixes(db_path: Path, data_dir: Optional[Path] = None, *, 
         ctx = FixContext(db_path=db_path, data_dir=Path(data_dir) if data_dir is not None else None, timestamp=datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"), report=report)
         conn = sqlite3.connect(str(db_path), isolation_level=None, timeout=_BUSY_TIMEOUT)
         try:
+            # Before anything else, as every connection to a restore's copy (B-28, B-37): the schema of an archive's
+            # database reaches no function that is not harmless. LibreFolio's own holds only tables and indexes.
+            conn.execute("PRAGMA trusted_schema=OFF")
             if not _integrity_ok(conn):
                 report.integrity_ok = False
                 report.errors.append("integrity_check did not answer ok: no fix applied")

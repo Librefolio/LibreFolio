@@ -214,7 +214,8 @@
       "currencyHelp": "Divisa en la que se guardan los precios de este activo.",
       "currencyHelpLabel": "Información sobre la divisa del activo",
       "nameRequired": "Introduce el nombre del activo para continuar.",
-      "descriptionPlaceholder": "Breve descripción del activo…"
+      "descriptionPlaceholder": "Breve descripción del activo…",
+      "planSplitAdjustmentsWithoutCost": "No se han cambiado el proveedor ni sus parámetros: el desdoblamiento del {date}, generado por el proveedor, tiene {n, plural, one {# ajuste vinculado} other {# ajustes vinculados}} sin coste de compra{hidden, plural, =0 {} one { (# en un bróker que no puedes ver)} other { (# en brókers que no puedes ver)}}{more, plural, =0 {} one {, y # desdoblamiento más también} other {, y # desdoblamientos más también}}. Cambiar estos parámetros, o el proveedor, borra los eventos que generó, y esas unidades contarían como compradas a un precio desconocido: da primero un coste de compra a los ajustes."
     },
     "provider": {
       "assignment": "Asignación de Proveedor",

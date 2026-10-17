@@ -128,7 +128,7 @@
       "shortLotLabel": "Short {date}",
       "detailTitle": "Détail des Lots FIFO",
       "loadFailed": "Échec du chargement des données de lots",
-      "analysisFailed": "L'analyse des lots n'a pas pu être reconstruite de manière fiable (quantités ou transferts incohérents) — les valeurs peuvent être incomplètes.",
+      "analysisFailed": "Les lots de cet actif ne peuvent pas être reconstruits : certaines de ses transactions ne concordent pas. Les lots, leur chronologie et la comparaison sont masqués ; les lignes du coût moyen ci-dessous ne sont pas concernées.",
       "combined": "Combiné",
       "chartMarkers": {
         "legend": {
@@ -284,7 +284,8 @@
       "yAxisAuto": "Auto",
       "yAxisFromZero": "Depuis 0",
       "annualizedReturn": "Annualisé",
-      "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de ce lot unique sur sa durée de détention, net des revenus et frais, pour comparer des lots détenus sur des durées différentes."
+      "annualizedReturnTooltip": "Rendement net annualisé (TCAC) de ce lot unique sur sa durée de détention, net des revenus et frais, pour comparer des lots détenus sur des durées différentes.",
+      "analysisFailedFix": "Corrigez ces transactions et les lots reviennent :"
     },
     "createdInSystem": "Créé dans le Système",
     "deleteBlockedTitle": "Impossible de supprimer le courtier",

@@ -3821,8 +3821,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     object-src 'none'; base-uri 'self'; form-action 'self'`. Le altre tengono solo `frame-ancestors 'self'`: Chromium
     tratta il visore PDF integrato come un plugin, e `object-src 'none'` sulla risposta di un PDF lo fermerebbe.
   - E2E con `page.route` come guardia permanente, perché una corsia non può accendere la protezione (vedi H-43).
-  - In corso (17/10): cura e test backend fatti, spec E2E scritto. Restano lo slot E2E e i documenti di
-    `security.md`.
+  - Cura fatta il 17/10 da H (lotto «H-42», piano H §14); E rivede. A protezione accesa, le risposte `text/html` hanno
+    `PAGE_POLICY`, le altre solo `frame-ancestors 'self'`. Test backend `services managed-headers` (256). Guardia nel
+    browser: `front-utility page-policy`, verde a 1 e a 4 worker, con i tre controlli positivi e documenti, PDF e
+    Dashboard senza violazioni.
+  - Nota per E: in Chromium 149, un `<object>` di un'immagine inserito nello stesso task di un `form.submit()` verso
+    un'altra origine parte come immagine, senza il controllo `object-src`. Plugin e documenti restano bloccati. Per
+    questo il controllo dello spec è un `<object>` `application/pdf`.
 
   Dettagli: piano H, §14, lotto «H-42».
 - **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
@@ -3841,10 +3846,117 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - `serve_file` passa sempre `filename` a `FileResponse`, quindi la risposta è `Content-Disposition: attachment`, e un
     iframe con un allegato fa partire uno scaricamento.
   - È precedente a H-19 e H-42, e non è verificato in un browser.
+  - Solo la pagina File. Lo stesso componente, nei dialoghi d'import dei broker, riceve come `source_url`
+    `/api/v1/brokers/import/files/{id}/download?download=false` (`api/v1/brokers.py:750`), servito inline: lì il
+    ripiego mostra il PDF. Il confronto fra le due rotte indica la cura.
   - Legame con H-42: la CSP più stretta va solo sulle risposte `text/html` anche per questo caso. Un PDF mostrato inline
     non deve ricevere `object-src 'none'`, che può fermare il visore integrato di Chromium.
 
   Dettagli: piano H, §14, lotto «H-42».
+- **H-45 · `image/svg+xml` e `application/xhtml+xml` fuori dalla politica delle pagine** — basso, sicurezza; seguito di
+  H-42 per E, via coordinatore, 17/10. E lo giudica nella revisione di H-42.
+  - Con la protezione dai frame accesa, `PAGE_POLICY` va solo sulle risposte `text/html`. Un SVG o un XHTML, documenti
+    anche loro quando si aprono direttamente, tengono il solo `frame-ancestors 'self'`.
+  - Oggi la build, i documenti e i plugin non hanno SVG (verificato il 17/10: lo dicevo a torto). Un SVG dell'utente
+    arriva come `attachment`, dagli upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `api/v1/brokers.py` non ha
+    `image/svg+xml`).
+  - Cura fatta il 17/10 da H (lotto «H-45», piano H §14), con la specifica di E; E rivede.
+    - Con la protezione dai frame accesa, `PAGE_POLICY` va su ogni documento: `text/html`, `application/xhtml+xml`,
+      `image/svg+xml`, `application/xml`, `text/xml` e i tipi `+xml`. I PDF restano fuori, e il report-only resta su
+      `text/html` esatto.
+    - Un 304 non riceve nessuna CSP. Una sonda in Chromium 149 mostra che la CSP di un 304 sostituisce quella della
+      pagina in cache; oggi è latente, perché solo `StaticFiles` (`/_app`) risponde 304 e non ha documenti.
+    - Test: `services managed-headers`, 355.
+
+  Dettagli: piano H, §14, lotti «H-42», passo 7, e «H-45».
+- **H-46 · `LIBREFOLIO_TEST_MODE` acceso fuori da una corsia di test non si vede** — basso, sicurezza; E (review di
+  X-R44), via coordinatore, 17/10.
+  - `dev.py server` lo spegne sempre. Un server avviato in altro modo (`uvicorn` a mano, un'unità di servizio) lo
+    prende dal suo ambiente, e nessun controllo lo dice. Effetti:
+    - `mockprov` e `mockfx` (X-R44) tornano visibili;
+    - i dati vanno nella cartella di test;
+    - `.env` non si legge più.
+  - Nell'immagine così com'è il server invece si ferma all'import su un `PermissionError`: l'utente del server non può
+    creare la cartella di test. È dedotto dai file e riprodotto fuori da un container; la prova in un container va con
+    CP7a.
+  - Cura fatta il 17/10 da H (lotto «H-46», piano H §14); E rivede. Il controllo `platform.test_mode` è `error` quando
+    test mode è acceso senza `LIBREFOLIO_TEST_LANE_ID` (che ogni corsia ha e che `dev.py server` toglie), nel log
+    d'avvio e nella scheda Sicurezza. Nel profilo managed **ferma l'avvio**, come un `JWT_SECRET` corto (decisione del
+    coordinatore, 17/10). Test: `services config-audit`, 204.
+  - Residuo per CP7a: provare in un container che l'immagine si fermi all'import, e valutare un messaggio chiaro al
+    posto del traceback di `PermissionError`.
+
+  Dettagli: piano H, §14, lotto «H-46».
+- **H-47 · `read_secret_file`: un'opzione per rifiutare link e file non regolari, per chi legge da root** — basso,
+  sicurezza; B-38 della review BZ di B, via coordinatore, 17/10. Dopo la 1.3, salvo che costi poco.
+  - La CLI del backup gira da root e legge la password e la chiave d'istanza vecchia (`--password-file`,
+    `--instance-key-file`, B-18) con `read_secret_file` (`config/__init__.py`). Quella segue i link e apre le FIFO.
+    Il file può stare in una cartella che l'utente del server controlla: `backups/`, come suggeriva la guida di B-18.
+  - B mette ora la guardia dal lato della CLI: `O_NOFOLLOW|O_NONBLOCK` e `fstat` su un file regolare, prima di
+    chiamare la mia funzione.
+  - L'opzione di H, `regular_only=False` per default: `os.open` con `O_NOFOLLOW` (dove esiste) e `O_NONBLOCK`, poi
+    `fstat`. Un link, una FIFO, una cartella o un dispositivo danno `SecretFileError` («is not a regular file»), con il
+    nome e il percorso come oggi.
+  - **Mai di default**: i segreti di Kubernetes sono link (`..data/`). I segreti di Docker invece sono file regolari
+    montati, quindi i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono.
+  - Costo stimato: piccolo, una ventina di righe e i test (link, FIFO senza blocco, cartella, file regolare, opzione
+    spenta come oggi). Si fa dopo B-38, così la CLI può passare all'opzione e togliere la sua copia.
+
+  Dettagli: questa riga; la guardia di B in B-38.
+- **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
+  17/10. Da fare con H-47 (stesso file, `config/__init__.py`), altrimenti dopo la 1.3.
+  - `env_url` toglie una barra finale perché a `LIBREFOLIO_PUBLIC_URL` si attacca un percorso. Gli altri suoi
+    lettori sono link a una pagina, dove `…/terms/` diventa `…/terms`:
+    - `LIBREFOLIO_SUPPORT_URL` (H, `config/platform.py`);
+    - `LIBREFOLIO_TOS_URL` e `LIBREFOLIO_PRIVACY_URL` (A9, stesso file);
+    - `LIBREFOLIO_BILLING_URL` (A, `config/accounts.py`).
+    Quasi ovunque il server risponde con un redirect, quindi il danno è raro.
+  - Cura: i link tengono il percorso com'è scritto, per esempio con un parametro di `env_url` o con una funzione
+    sorella; `PUBLIC_URL` tiene il taglio. Gli stessi controlli (`http(s)`, nome dell'host, niente credenziali).
+  - **Rimandata a dopo la 1.3** (coordinatore, 17/10). I rossi erano scritti, ma la cura toccava più di quanto stimato.
+    Il lavoro in corso (i test, la doc, `apply_h48.py`) è conservato fuori dal repo, nella cartella della sessione H
+    (`files/h48-wip/`); i file del repo sono tornati come prima.
+  - I test da cambiare (13), con l'OK di A sui suoi:
+    - miei:
+      - `test_config_package.py`: i sei test di `env_url` estesi a `env_link`; due test nuovi su `env_link`; la riga
+        `stripped-without-its-trailing-slash` di `support_url`; `test_support_link_is_the_support_address_and_logs_nothing[valid-is-the-address]`;
+      - `test_instance_block.py`: `BILLING_LINK`, la riga `https-one-trailing-slash-removed` e
+        `test_the_block_page_gives_a_regular_user_no_billing_link`;
+      - `test_system_api.py`: `test_the_configured_support_address_is_answered[set-without-its-trailing-slash]`;
+    - di A:
+      - `test_legal_links.py`: le righe `stripped-without-its-trailing-slash` e `ipv4-with-a-port`, il confronto con
+        `env_url` e `test_the_link_is_the_address_and_logs_nothing[terms|privacy-valid-is-the-address]`;
+      - `test_instance_config_legal_api.py`: `test_a_valid_address_is_published_as_env_url_gives_it[selfhosted|managed-both-stripped-…]`;
+      - `test_registration_service.py`: `test_a_url_variable_is_stripped_of_spaces_and_of_its_trailing_slash[trailing-slash|stripped-http-with-port|path-and-case-kept-billing_url]`
+        e `test_a_missing_url_or_a_valid_billing_url_is_no_problem_to_report`.
+  - Selettori: `services config-package`, `legal-links`, `registration`; e, con uno slot di ~8 min,
+    `api instance-block`, `api system`, `api instance-legal`.
+
+  Dettagli: piano H, §14, «Review di A9» e lotto «H-49 e H-48».
+- **H-49 · `platform.test_mode`: un lane id nei limiti della sonda di prontezza** — basso; E (review di H-46), via
+  coordinatore, 17/10. Da fare con H-48.
+  - H-46 conta come corsia ogni `LIBREFOLIO_TEST_LANE_ID` non bianco. Il runner ne crea uno di 32 caratteri, e la sonda
+    `test-lane-health` accetta da 16 a 128 caratteri: un lane id fuori da quei limiti non è una corsia che funziona.
+  - Cura: i due limiti in costanti accanto a `owning_test_lane_id()`, usate dalla sonda e dal controllo.
+  - Cura fatta il 17/10 da H (lotto «H-49 e H-48», piano H §14); E rivede.
+    - `TEST_LANE_ID_MIN_LENGTH` (16) e `TEST_LANE_ID_MAX_LENGTH` (128) in `config/platform.py`, usati dalla sonda e da
+      `platform.test_mode`: è una corsia solo un id, senza spazi, fra quei limiti.
+    - Il messaggio dello stop managed dice «(no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters)».
+    - Test: `services config-audit`, 220.
+
+  Dettagli: piano H, §14, lotto «H-49 e H-48».
+- **H-50 · Le impostazioni di scope SYSTEM si leggono una volta per voce di `/prices/current`** — basso, prestazioni;
+  E (R13-SEC9), via coordinatore, 17/10. Dopo la 1.3.
+  - `configure_instance()` (`services/plugin_settings/runtime.py`) apre un `AsyncSession` sul motore asincrono per ogni
+    istanza di un plugin che ha campi SYSTEM o USER. `POST /api/v1/assets/prices/current` configura un'istanza per
+    voce: una connessione SQLite e una lettura per ogni asset della richiesta.
+  - Oggi solo `mockprov` (test-only) dichiara campi così, quindi in esercizio non costa nulla; costerà al primo plugin
+    vero con impostazioni.
+  - Cura: leggere le righe una volta per richiesta (per famiglia e plugin) e passarle alle istanze, oppure una cache
+    breve, invalidata da ogni scrittura delle impostazioni. Il codice è di X (impostazioni dei plugin): serve il suo
+    OK, o lo fa X.
+
+  Dettagli: questa riga.
 
 ## A · Account e accessi (fase 01)
 
@@ -4233,12 +4345,19 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In parte già coperto: `test_validation_errors_api.py` vuole il segnale assente da **tutta** la risposta sulle otto
     rotte con credenziali, ma solo per le forme d'errore che esercita. Cura: una regola in `security.md#validation-errors`
     («un validatore non mette il valore nel messaggio») e, se serve, un test che la imponga per ogni campo segreto.
-- **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; dalla revisione di E di A7b-2 («R13-SEC4»).
+- ✅ **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; chiusa il 17/10 in A-42/A-43 (commit del
+  coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»). Cura: `issue_setup_link` e il riarmo revocano prima (un solo
+  UPDATE, che prende il lock) e rileggono «in attesa» sotto il lock; `complete_admin_setup` rifiuta (`TOKEN_INVALID`)
+  quando un altro link di setup dell'account è consumato, e ritira i suoi link.
   `issue_setup_link` e il riarmo all'avvio decidono «in attesa» da una lettura fatta prima del BEGIN differito: un
   `POST /auth/setup` chiuso in quella finestra lascia un link vivo all'account appena attivato. Cura proposta da E: rifiutare
   il consumo (e il rilascio) quando un altro link di setup dell'account è già consumato.
-- **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; dalla revisione
-  di E di A7b-2 («R13-SEC4»); A-44 unita qui dal coordinatore (17/10, 03:09). Dopo A8a.
+- ✅ **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; chiusa il
+  17/10 in A-42/A-43 (commit del coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»); A-44 unita qui dal
+  coordinatore (17/10, 03:09). Cura: come sotto; in più la retrocessione dell'admin in attesa è rifiutata (409
+  `PENDING_SETUP`, `user demote`), la sua cancellazione diretta è permessa, la scheda Utenti ha «Annulla il link di
+  setup», e un account protetto rifiuta anche l'annullamento (la CLI no). Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-42 + A-43 — Implementazione».
   - Disattivare l'admin **in attesa** è l'annullamento: i suoi link si **revocano** (non si ritirano: resta in attesa,
     così `user setup-link`, la via dell'operatore, gli dà ancora un link nuovo; un ritiro lo toglierebbe dall'attesa e
     `setup-link` non lo troverebbe più).
@@ -4272,6 +4391,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   (`emailLinks.ts`, di E) «irraggiungibile»: col codice nuovo i due posti possono dire «questa istanza non può
   verificare gli indirizzi: vedi i controlli di configurazione». Condivisa con E. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Revisione di H-19».
+- **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; da A-43 (A, 17/10). Annullato il link dell'admin in
+  attesa, un riavvio con lo **stesso** `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` giustamente non lo riarma (il valore è noto),
+  ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
+  no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-43.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -4780,7 +4904,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il riepilogo (dry run) non rifiuta mai, quindi il pannello di conferma non può avvisare: l'utente incontra il 409
     solo dopo aver confermato.
   - Cura facoltativa: il riepilogo porta il numero degli SPLIT che bloccano, e la modale avvisa prima della conferma.
-- **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** — basso; X, 17/10 (J, F2,
+- ✅ **X-R49 · Lo stesso buco di X-R48 dal cambio dei parametri di un Scheduled Investment** (chiusa il 17/10, in attesa del commit del coordinatore: rifiuto 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` prima di ogni scrittura, frase tradotta nella modale dell'asset; dettagli nel piano 03, «X-R49») — basso; X, 17/10 (J, F2,
   girato dal coordinatore).
   - `provider_management.py:212-221`: vale solo se un utente ha scritto uno SPLIT fra gli eventi del piano.
   - Ordine deciso dal coordinatore dopo X-R40/W-B62: X-R47 → X-R48 → X-R44 → X-R49.
@@ -4873,12 +4997,35 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   2. Il nuovo tentativo dei segnali e il cambio delle impostazioni richiedono anche i periodi, che non ne dipendono.
   3. Un errore cancella le Δ ancora valide per lo stesso `dateEnd`.
 - **X-R61 · Il Sync di una sola card o riga sovrascrive i prezzi salvati senza l'avviso di C-66** — basso, domanda di
-  prodotto per il developer; X, 17/10 (il test-author di Y-28).
+  prodotto per il developer (nel file delle domande del coordinatore, 17/10); X, 17/10 (il test-author di Y-28).
   - `handleSyncAsset` (la card o la riga della lista) parte subito, senza la finestra: nessun avviso prima di
     sostituire i prezzi salvati del periodo, modifiche manuali comprese. L'avviso c'è solo nella finestra (Sync all, il
     Sync della selezione, la pagina dell'asset).
   - Da decidere: aprire la finestra anche lì, o un avviso leggero, o lasciare com'è.
-- **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** — minimo; X, 17/10 (Z, dopo Z-3).
+- **X-R62 · «Nessun provider» fallisce quando un evento del provider è collegato a una transazione** — basso (fallisce
+  chiuso, nessun costo corrotto), **dopo la 1.3** salvo che costi poco; X, 17/10 (trovato leggendo X-R49, non
+  riprodotto).
+  - `bulk_remove_providers` cancella l'assegnazione; `AssetEvent.provider_assignment_id` è `ON DELETE CASCADE`,
+    `Transaction.asset_event_id` è `ON DELETE RESTRICT` e SQLite applica le chiavi (`PRAGMA foreign_keys=ON`): con un
+    dividendo Yahoo o uno SPLIT del piano collegato a una transazione, la rimozione fallisce con un errore d'integrità,
+    che la modale mostra come errore generico.
+  - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
+    codice e i collegamenti. Prima un rosso che lo riproduca.
+- ✅ **X-R44c · Solo asset e cambi possono dichiarare `test_only`** (chiusa il 17/10, in attesa del commit del coordinatore: due guardie in `services test-only-providers`, provate con una mutazione) — piccolo, **subito** (il coordinatore, 17/10); X, 17/10.
+  - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
+    (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
+    sarebbe servito in produzione. Un test di guardia lo vieta fuori da asset e cambi.
+- **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** — piccolo, **dopo l'ingresso di Z-27**, con il suo
+  aiuto e la sua costante; X, 17/10 (dalla revisione di X-R59: il limite scende da 10.000 a 1.000).
+  - Dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola risposta unita); poi
+    aggiornare i due passi della documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238), che
+    oggi la assegnano a Z-27. Insieme a X-R58.
+- **X-R63 · Due vuoti vecchi nella documentazione degli asset** — minimo, al prossimo tocco di quelle pagine; X, 17/10
+  (il docs-writer di X-R49).
+  - `developer/backend/assets/architecture.md`: la tabella dei moduli non elenca `provider_policy.py`.
+  - `user/assets/providers/scheduled-investment.en.md`, tabella degli eventi del piano: manca **Maturity Settlement**,
+    che l'editor offre (la pagina ha traduzioni: debito da tradurre).
+- ✅ **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** (chiusa il 17/10 con Y-28: `c18517e31`, entrata in dev `8aafffad8`) — minimo; X, 17/10 (Z, dopo Z-3).
   - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
     `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
     la ragione scritta. Da fare al prossimo tocco di quel file.
@@ -5422,6 +5569,22 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N78** (D-W72-1 → b, coordinatore 08:39, da rivedere col developer): la regola 12 estesa a `cost_basis_override` su ogni scrittura,
   codice `costBasisNotAllowed {type, qty}`, le righe già salvate restano; più la chiave mancante di `costBasisModeIncompatible` (oggi
   in inglese grezzo) e un cancello sui codici delle regole. Ordine: dopo W-B71. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  **N78 raffinata** (coordinatore, 17/10, dai rossi): **tranne un ADJUSTMENT a quantità < 0**, il costo di consegna della decisione 47,
+  che la decisione 4 lascia mettere a un update dello stesso batch dello split. Con la cura: un errore di regola da solo tiene i suoi
+  `params` (oggi solo quelli impacchettati), e il vecchio `promote_transfer` rifiuta un costo su un FX_CONVERSION invece di lasciarlo
+  cadere. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+  ✅ 17/10: regola 12b (`cost_basis_set`, `costBasisNotAllowed {type, qty}`, tranne un ADJUSTMENT −q) su create e update;
+  `_resolved_cost_issues` per il costo unito di una coppia di cassa; `_lone_error_params` in `_parse_lenient`; `promote_transfer`
+  rifiuta un costo su FX_CONVERSION; `costBasisNotAllowed` e `costBasisModeIncompatible` in 4 lingue, cancello su tutti i codici delle
+  regole (22). 21 rossi verdi: `transaction-cost-basis-rule` 164, `transaction` 125, `transaction-decimal-places` 201; BRIM
+  (`brim-create-transaction` 14, `brim-gap-fix` 115, `external brim-providers` 736) e gate i18n verdi. Dettagli: piano 04, sezione
+  «W-B72 — … (N78): cura».
+- **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
+  17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
+  errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
+  `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
+  rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
+  (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
 - **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
   `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
@@ -5437,6 +5600,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   passare. Cura: il conteggio delle righe illeggibili del broker all'inizio del giro e in `get_balances_at_end_of`, rifiuto
   `ledgerUnreadable {brokerId, count}` (4 lingue, il messaggio manda all'amministratore: la lista non le mostra). Primo dei tre, dopo la
   metà del batch di W-B69, con l'aiuto di query condiviso con quello di MF. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  ✅ 17/10: `count_unreadable_rows()` (nuovo `unreadable_rows.py`, condiviso col conteggio dell'insieme di W-B69); il giro di un broker
+  con righe illeggibili rifiutato con `ledgerUnreadable {brokerId, count}` (indice −1, 4 lingue), il gap-fix con 409
+  `ledger_unreadable`; 17 rossi verdi, i 24 contratti di W-B69 aggiornati (due issue). Resta la via d'uscita dei dati: W-B63. Dettagli:
+  piano 04, sezione «W-B74».
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
@@ -5668,6 +5835,13 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - oppure il pannello le nasconde.
 
   Prima un rosso sul caso speculare di W. Dettagli: piano J, §10 «Domande di W N1».
+  - ✅ 17/10, metà backend e AI Export: fatta da J (checkpoint J-12; N81, opzione A). La metà del pannello è di Y.
+    - Con `FAILED` il servizio non dà nessuna cifra dei lotti: tiene le righe WAC, le issue che fanno fallire il
+      rigioco (con `transaction_date`, `fails_analysis` e, per un trasferimento, la gamba che dà) e le lacune delle
+      righe WAC.
+    - AI Export: l'asset è dichiarato in `failed_lot_reconstructions` (solo identità e codici), i totali del perimetro
+      sono nulli; `*.fifo_lots` v3, `asset.lot_detail` v4 con lo stato. Dettagli: piano 05, sezione «J-12 — backend e
+      AI Export».
 - ✅ **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
   non esperti); J, 15/10, nella nota sul punto 29 per il coordinatore.
   - `rolling_volatility`, `rolling_sharpe` e `rolling_beta` dichiarano `"x-suffix": "days"` sulla finestra (come oggi
@@ -6063,13 +6237,18 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   (`from …datetime_utils import latest_range_end`) è uguale alla lista. Prima un rilevatore che vede un modulo finto,
   come le regole di `test_layer_boundaries.py`. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
-- **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
+- ✅ **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
   chiarezza (è già un rifiuto, non un DoS); dal coordinatore (17/10 08:34), dopo SEC8-1b. Con Z-25 (N77)
   `get_prices_bulk` alza `BulkTooManyDaysError` (il nome lo darà Z all'ingresso di Z-25) oltre 5 M giorni-asset per
   richiesta. Il rischio (l'ambito degli asset) e l'AI Export lo chiamano dall'interno: senza traduzione l'utente vede
   un 500. Va tradotto in un rifiuto con codice, dalla parte del rischio (`RiskUnavailableError` con un `RiskErrorCode`)
   e dell'AI Export. Prima i rossi. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - ✅ 17/10: fatta da J (checkpoint J-50).
+    - Rischio: ogni analitica risulta `unavailable` · `resource_limit` col rimedio `period_or_assets`, la
+      convenzione D379 (200), al posto del 500.
+    - AI Export: 422 `selection_not_applicable`, `reason_code` `too_many_price_days`, al posto del 503.
+    - Una frase propria in 4 lingue per tutti e due. Dettagli: piano 05, sezione «J-50».
 - **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
   J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
   al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza
@@ -6266,7 +6445,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `scheduler/run_lock.py`. Un modulo comune li unirebbe; tocca file di più sessioni (fra cui B per il backup).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra
   processi: analisi».
-- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H** (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo, facoltativo; Z, 17/10
+- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H**
+  (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo,
+  facoltativo; Z, 17/10
   (Z-11, segnalato da test-author). `validate_test_data_dir` (`backend/app/config/__init__.py`, file di H) elenca i
   percorsi gestiti che una cartella di test non può condividere con la produzione: c'è `scheduler_state.json`, non
   il nuovo `.scheduler.lock`. Rischio basso: un symlink al suo posto è già rifiutato (`O_NOFOLLOW`), e un hardlink al
@@ -6297,7 +6478,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   fermava i giri degli altri, e `wake-sync` rispondeva 409 a chi arrivava dopo. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-26 — l'attesa del lock fra
   processi senza tempo massimo: analisi».
-- **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
+- ✅ **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
   (Z-25, N77; via coordinatore).
   - La lista asset (`fetchAllPriceData` in `routes/(app)/assets/+page.svelte`) manda una voce per asset in un solo
     `POST /assets/prices/query`; la lista e il registro dei cambi fanno lo stesso con le coppie.
@@ -6309,8 +6490,32 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     e `POST /fx/currencies/period-changes` hanno lo stesso tetto (`MAX_BULK_ITEMS`, 422 `bulk_too_many_items`), più
     ≤ 5 giorni `as_of`/`range_start` distinti (422 `period_changes_too_many_days`): la stessa regola di divisione in
     lotti da 1 000 vale per loro, con un `as_of` per richiesta.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
-  richieste di massa di prezzi e cambi: analisi».
+  - **Chiusa il 17/10 per la parte di Z** (il commit è del coordinatore; decisioni D1–D4): l'aiuto
+    `lib/api/bulkBatches.ts` e i chiamanti A (lista asset) e C (lista cambi), con R13-SEC9-2 (il budget a 1 000 000,
+    800 000 nel web app). Le colonne Δ (D/B) le passa X all'aiuto, con X-R59 e X-R60; il messaggio di X-R58 viene
+    dopo, negli stessi `catch`.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-25 — un tetto alle
+  richieste di massa di prezzi e cambi: analisi», «Z-27 — il web app e i tetti delle richieste di massa: analisi» e
+  «Z-27 — le richieste di massa divise in lotti: lavoro».
+- **Z-29 · Una scheda della lista asset carica lo storico giornaliero intero** — **alto** (coordinatore, 17/10, da
+  R13-SEC9-2 di E: «it's the real cure, post-1.3»), progetto, dopo la 1.3; Z, 17/10 (dall'analisi di Z-27).
+  - Su «All» la lista chiede per ogni asset tutti i giorni dal 2000 (~9 800 punti): 300 asset sono ~2,9 milioni di
+    punti, centinaia di MB di JSON, elaborati dal pool di worker. I lotti di Z-27 ne limitano il picco per risposta,
+    non il totale.
+  - Una scheda ne mostra un riassunto (ultimo prezzo, mini grafico): servirebbe una serie ridotta dal backend
+    (campionata) o un'altra fonte per le schede. Da progettare dopo la 1.3; tocca la lista (X) e la query dei prezzi.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-27 — il web app e i tetti
+  delle richieste di massa: analisi».
+- ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
+  (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
+  coordinatore).
+  - `db/post_migration/__init__.py` (`_exclusive_run`) e `services/brim/brim_provider.py` (`_acquire_file_lock`)
+    aprono il loro lock con `open(…, "a+")`: un symlink al suo posto viene seguito (uno pendente crea un file vuoto
+    altrove), e il modo viene dall'umask (di solito `0o644`).
+  - Cura: `os.open` con `O_RDWR | O_CREAT | O_NOFOLLOW` e `0o600`, come i lock del backup e dello scheduler.
+    Revisori: W (BRIM) e H (post-migrazione).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
+  aperti con `open()`».
 
 ## B · Backup e Docker (fase 01)
 
@@ -6483,6 +6688,8 @@ sulla base `23f6578f3`.
     un'altra quando la chiave di questa istanza non si può usare.
   - Doc in `cli_tools.en.md`, con una sottosezione nuova, e in `backup_restore.en.md`. Revisione di H al checkpoint.
   Dettagli: piano 07, «B-18».
+  - 17/10, 11:52: il cancello G era rosso, perché `instance_key_invalid` mancava in `RestoreErrorCode`. Ora è
+    dichiarato, e `api backup-restore` dà 146 passati. Dettagli: piano 07, «B-18, riparazione».
 - ✅ **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
   comandi di `dev.py backup` lavorano come il proprietario della cartella dei dati (`_drop_root_privileges`); `decrypt`
   non legge la cartella dei dati, quindi con `docker compose exec` lo zip appartiene a root. La guida lo dice. Proposta:
@@ -6673,6 +6880,84 @@ sulla base `23f6578f3`.
   - Un test per la FIFO al posto dello stato ora si può scrivere, con un timeout: la lettura `lstat`-prima la ignora,
     prima restava appesa.
   Dettagli: piano 07, «B-32».
+- **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
+  — basso; B, 17/10 (revisione di H su B-18: LOW-1 e due appunti; piano di H §14 «Review di B-18»).
+  - **LOW-1**: su un'istanza senza chiave (dal cloud a un server nuovo), se la verifica non può crearla (`secrets/` non
+    scrivibile) tutto resta illeggibile. Però `instance_key_status()` dice ancora `not_created` con `problem=None`, e la
+    riga ⚠️ di D2 accusa la chiave data. Cura: in `_print_given_key`, il ramo dell'eccezione anche per
+    `source == "not_created"`, più un caso accanto a c7.
+  - **Doc**: `cli_tools` deve dire che un vecchio `LIBREFOLIO_INSTANCE_KEY` vale «as written, spaces included»;
+    `backup_restore` deve aggiungere `chmod 600` sul file della chiave vecchia mentre sta in `backups/`.
+  Niente codice prima del via del coordinatore. Dettagli: piano 07, «B-18».
+- ✅ **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
+  nel self-hosted; B, 17/10 (BZ parte 1, F3).
+  - `staging.space_needed` e `_check_space` (`staging.py:462-470`) confrontano le dimensioni dichiarate dal manifest
+    (uguali alle intestazioni dello zip) soltanto con il disco libero.
+  - `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (500 MB nel cloud) limita lo zip, non quello che se ne scompatta. Un deflate da
+    500 MB può dichiarare e scrivere centinaia di GB durante la verifica.
+  - Il danno: un DoS dell'istanza stessa su un volume isolato; dell'host dove i volumi condividono un disco senza quote.
+  - Cura: una soglia sul totale dichiarato, controllata prima di `_check_space`: `backup_too_large` con il limite.
+    - La forma è una variabile `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` (senza valore di default, così il self-hosted non
+      cambia) oppure K volte il limite di caricamento: **da decidere**.
+    - Test: un manifest oltre la soglia è rifiutato prima di scrivere un byte.
+
+  ✅ **Fatto il 17/10** (checkpoint delle 12:36).
+  - `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`: senza default nel self-hosted; nel profilo ospitato 8 volte il limite di
+    caricamento (decisione N82, K misurato); un valore esplicito vince.
+  - Il controllo dello staging viene prima dello spazio (`unpacked_too_large`). L'avvio della verifica risponde 503
+    `backup_restore_unavailable`, e la CLI segue la stessa regola.
+  - Controllo della configurazione `backup.restore_limit`. Dettagli: piano 07, «B-35».
+- ✅ **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
+  - `post_migration._row_counts` (`backend/app/db/post_migration/__init__.py:70-72`) costruisce
+    `f'SELECT count(*) FROM "{name}"'` senza raddoppiare `"`. B-28 lascia passare tabelle con qualsiasi nome.
+  - Con una correzione da applicare, il nome di un archivio ostile rompe la verifica (`stage_failed`). Su un database
+    ripristinato, rompe un avvio successivo in cui una correzione si applica.
+  - sqlite3 esegue un solo statement e non carica estensioni: nessuna fuga dalla copia.
+  - Cura: quotare come `snapshot._quoted`. Test: una tabella `x"y` con una correzione pendente.
+  - **Il modulo non è di B**: passa dal coordinatore.
+- ✅ **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
+  - Le connessioni sono quella delle correzioni post-migrazione (`PM:211`) e il motore di Alembic su `-x sqlalchemy.url`.
+    Sono le uniche alla copia senza `PRAGMA trusted_schema=OFF`.
+  - Dopo B-28 restano solo tabelle e indici, e nessuna funzione dell'app è registrata lì: nessun exploit noto.
+  - Cura: spegnerlo in entrambe. **Proprietari fuori da B** (post_migration, `env.py`).
+  ✅ **Fatto il 17/10** (B-36 + B-37, checkpoint delle 13:33), con il permesso del coordinatore sui due file.
+  - `_row_counts` quota i nomi raddoppiando `"`.
+  - `run_post_migration_fixes` spegne `trusted_schema` per primo; `env.py` lo fa con un listener `connect`, per ogni URL.
+  Dettagli: piano 07, «B-36 + B-37».
+- **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
+  BZ parte 1, F4.
+  - `read_secret_file` apre con `path.open("rb")`.
+  - La guida di B-18 suggerisce `LibreFolio-data/backups/` per la chiave vecchia, una cartella dell'utente del server.
+    Quell'utente può scambiare il file con un link a un file di root (letto da root, usato come chiave, mai stampato) o
+    con una FIFO (il comando si blocca). Per farlo deve essere già ostile, e possiede già tutti i dati.
+  - Cura:
+    - nella CLI, per i file letti da root: `O_NOFOLLOW|O_NONBLOCK` e `fstat` regolare (o un'opzione di
+      `read_secret_file`, che è di H);
+    - nella guida, la chiave fuori dalla cartella dei dati.
+    Test: un link o una FIFO come `--instance-key-file` da root → ❌, niente letto.
+- ✅ **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
+  - Ogni utente può scrivere le `notes` degli eventi di un asset (`POST /assets/events`), e ogni utente può esportarle
+    in CSV (`GET /backup/asset/{id}/events`, `series_export.stream_rows_as_csv`).
+  - Una nota che comincia con `=`, `+`, `-`, `@`, tab o CR diventa una formula quando un altro utente apre il file in un
+    foglio di calcolo.
+  - Cura: un `'` davanti ai valori di testo che cominciano così, mai ai numeri (`-1.5` resta). Test: `=1+1` diventa
+    `'=1+1`.
+  ✅ **Fatto il 17/10** (B-39). All'export, un testo come una formula (`'*[=+\-@\t\r]` all'inizio, mai un numero
+  puro) riceve un `'` in più; l'import degli eventi toglie esattamente quell'apostrofo dalle `notes`, quindi il ritorno
+  è esatto. Dettagli: piano 07, «B-39».
+- ✅ **B-40 · La tabella «What It Lists» della scheda Sicurezza non ha i due controlli di B-9** — minimo; H con H-46, 17/10.
+  `admin/settings.en.md` («What It Lists») non elenca `backup.panel_token` e `backup.upload_limit`, e la pagina dice che
+  i risultati seguono l'ordine della tabella. Le due righe vanno nel prossimo lotto, nel loro posto dell'ordine.
+  ✅ **Fatto il 17/10** in B-35 (checkpoint delle 12:36): le tre righe di B (`backup.panel_token`,
+  `backup.upload_limit`, `backup.restore_limit`) fra il «Log level» della piattaforma e il primo controllo di A.
+- **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
+  17/10.
+  - Con uno stato del ripristino illeggibile, la rotta anonima `GET /backup/restore/outcome` legge lo stato prima del
+    biglietto, e la lettura indulgente registra un errore a ogni chiamata. Un client anonimo può ripeterlo.
+  - È rumore, com'era prima di B-32.
+  - Cura economica: la rotta controlla prima il biglietto (forma, registro, impronta, scadenza) e legge lo stato
+    soltanto per un biglietto valido; oppure un solo log per stato, o a livello debug.
+  Dopo la 1.3, se non costa poco.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -6832,7 +7117,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       chiave più pesante.
     - I docs «310 contro 100 000» sono corretti.
     - Commit al checkpoint di E-14.
-- **E-15 · Nei run combinati il limite dei login si accende da solo, e i test di E vanno rossi** — piccolo; E, 17/10
+- ✅ **E-15 · Nei run combinati il limite dei login si accende da solo, e i test di E vanno rossi** — piccolo; E, 17/10
   (triage dell'`all-backend` di W, coordinatore).
   - `conftest.py` mette `LIBREFOLIO_LOGIN_LIMIT=off` una volta sola, all'avvio.
   - I 60 moduli che chiamano `setup_test_database()` all'import passano da `configure_test_runtime()`, che toglie ogni
@@ -6842,7 +7127,29 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Un fixture autouse nel `conftest.py` condiviso rimette `off` prima di ogni test, se la variabile manca.
     - Niente fixture per modulo.
     - Va dopo la revisione X-R44.
+  - 17/10, E: fatta.
+    - `restore_login_limit`, nel `conftest.py` radice, di funzione, con un `MonkeyPatch` suo: rimette il valore della
+      sessione (quello esplicito, o `off`) prima di ogni test che l'ha perso.
+    - I fixture di A, che tolgono la variabile, girano dopo e vincono ancora.
+    - `security.md` è allineato.
+    - Prova: il modulo più un modulo che configura la corsia, prima 21 rossi, ora 179 verdi. Tutti i 13 moduli di E in
+      un processo: 1 453 verdi.
+    - Commit al checkpoint di E-15.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-15».
+- ✅ **E-16 · Le due frasi di E sulla «password dimenticata» non dicono la richiesta della configurazione fallita** —
+  minimo (doc, solo inglese); E, 17/10 (seguito della revisione di A9 e di FPM-08 di A, `d04ffde90`).
+  - `admin/email.en.md` e `developer/backend/email.md` descrivono self-hosted e managed, non il caso in cui
+    `GET /system/instance` fallisce: lì la scheda mostra solo «Ask your administrator…», in tutti e due i profili.
+  - Una frase per pagina. Nessuna decisione.
+  - 17/10, E: fatta (via del coordinatore, 12:22). Build stretta e `check-links` puliti. Commit al checkpoint di E-16.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-16».
+- ✅ **E-17 · Due errori di `tsc -p frontend/tsconfig.e2e.json`** — piccolo (test e configurazione); coordinatore, 17/10.
+  - `onboarding-tour.spec.ts:863`: la lista dei passi è tipizzata dalle opzioni di `expectGuideStep`. Dietro c'era
+    un secondo errore, il `backdrop` mancante: ora c'è un `backdrop: false`, che prende lo stesso ramo di prima.
+  - `tsconfig.e2e.json`: la mappa `$lib`.
+  - Nessun cambio a runtime, `tsc` senza i due errori, Prettier pulito.
+  - Restano 3 TS2769 di C-66 (`c18517e31`): l'allargamento di E-2 contro `isStoredPoint`, di un ramo attivo.
+  - Commit al checkpoint di E-17. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -7127,6 +7434,23 @@ da Y il 15/10.
   fuori dai file dichiarati) non guarda più dentro i tre moduli dei lotti di D-MF6(b), che sommano, mediano e ribasano ma non
   annualizzano. Un'annualizzazione aggiunta un giorno lì passerebbe in silenzio. Rimedio possibile: un segnalino per voce
   («può annualizzare»), vero solo per `MeasureSignal.ts` e le curve di R19. Dettagli: piano di Y, «Y12b, il resto».
+- **Y-30 · Con l'analisi dei lotti `FAILED` il grafico prezzo/WAC perde la linea del prezzo di mercato** — basso,
+  chiarezza; **per J** (backend); Y, 17/10 (J-12, metà del pannello). Il coordinatore (11:4x) l'ha tenuta fuori da J-12.
+  - Con `FAILED` (J-12, N81 opzione A) `price_history` torna `null`, perché è per lotto (`LotPriceHistoryPoint.lot_id`,
+    un punto per ogni giorno di vita di ogni lotto). Il grafico costruisce la linea del prezzo dall'unione per data di quei
+    punti (`LotWacPriceChart.svelte:747-764`), quindi mostra solo le linee del costo medio.
+  - Rimedio possibile: una serie del prezzo senza lotti sull'intervallo calcolato, un campo nuovo della risposta (e il
+    suo contratto nell'AI Export, se serve); il pannello la userebbe solo con `FAILED`, o sempre al posto dell'unione.
+  - Dettagli: piano di Y, «J-12, la metà del pannello».
+- **Y-31 · E2E di J-12: la regola della lingua dell'interfaccia (M-18) ricopiata in una spec, e due stati non
+  pubblicati** — basso, test; Y, 17/10 (test-author di J-12).
+  - `brokers-detail.spec.ts::dayAsThePanelWritesIt` ricopia `resolveUiLocale`, perché Playwright non può importare
+    `uiLocale.ts`; anche `fixtures/dates.ts` ricopia `dateOnly`. Se M-18 cambia, J12-1 diventa rosso per un motivo che
+    non c'entra. Rimedio: una fixture condivisa della lingua dell'interfaccia.
+  - Il grafico WAC non pubblica il suo stato «nessun dato» (il test guarda la tela). La pagina delle transazioni non
+    lascia un segno durevole sulla riga di `?highlight=` (il test guarda la navigazione e la modale). Un `data-state` o un
+    `data-highlighted` li renderebbe espliciti.
+  - Dettagli: piano di Y, «J-12, la metà del pannello».
 
 ## MF · Matematica finanziaria (fase 01)
 
