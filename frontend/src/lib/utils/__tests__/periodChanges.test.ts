@@ -14,17 +14,23 @@
  *   - `visiblePeriodColumns`: the period columns of a range — every period but 1D, the tables' fixed column, whose days
  *     fit the whole calendar days of the range — in the order given; calendar days, so a night the clocks change takes
  *     no day away and adds none;
- *   - `fetchAssetPeriodChanges`, `fetchFxPeriodChanges`: one call each through `zodiosApi.post`, every asset (pair) in
- *     the order given, up to `as_of`, and none for an empty list; the periods of the first item that has any; each
- *     item's changes in percent, a pair's in both orientations (`direct`, `inverse`) under `BASE/QUOTE`; a failed call
- *     rejects, for the page to handle;
+ *   - `fetchAssetPeriodChanges`, `fetchFxPeriodChanges`: through `zodiosApi.post`, every asset (pair) in the order given,
+ *     up to `as_of`, and no call for an empty list. At most 1,000 items a call (lot X-R64: since MF's X-R59, aligned to
+ *     Z-25, both endpoints refuse more than the backend's `MAX_BULK_ITEMS`, 1,000, with a 422 `bulk_too_many_items`): a
+ *     longer list goes as consecutive calls in its order, each sent once the one before answered (Z-27's
+ *     `sendBulkBatches`), and up to 1,000 items go as one call, as before. The answers merge as if one call had
+ *     answered: the periods of the first item that has any, whichever call answered it; each item's changes in percent,
+ *     a pair's in both orientations (`direct`, `inverse`) under `BASE/QUOTE`. A failed call rejects with its own error,
+ *     for the page to handle: no partial answer, and no call after it;
  *   - `PeriodChangesLedger` (lot X-R60): which answer of those calls a list keeps when several are in flight and land in
  *     any order, whether the list is busy, and what a failed call leaves on screen.
  *
  * `$lib/api` is mocked: `post` answers what each case gives it, shaped as the generated client declares the answers
- * (`FAPeriodChangesResponse`, `FXPeriodChangesResponse`).
+ * (`FAPeriodChangesResponse`, `FXPeriodChangesResponse`); past 1,000 items, a fake backend answers each call from its
+ * own body, one item per asset (pair), as the real one does.
  *
- * Red today (X-R60): the module exports no `PeriodChangesLedger`, so its describe fails; every other case stays green.
+ * Red today (X-R64): each function sends every item in one call, so the cases past 1,000 items see one call where they
+ * expect two or three; the case of exactly 1,000 items is their guard, green today.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -75,11 +81,29 @@ function fxItem(base: string, quote: string, ratios: Record<string, [string, str
     };
 }
 
-/** The body of the one call, as it reaches the backend: through JSON, where a key holding `undefined` is not sent. */
+/** The body of the one call a list of up to 1,000 items makes, as it reaches the backend: through JSON, where a key holding `undefined` is not sent. */
 function sentBody(): unknown {
-    expect(post, 'one call, whatever the number of items').toHaveBeenCalledTimes(1);
+    expect(post, 'one call: a list of up to 1,000 items, the backend’s MAX_BULK_ITEMS, goes whole').toHaveBeenCalledTimes(1);
     return JSON.parse(JSON.stringify(post.mock.calls[0][1]));
 }
+
+/** Each call made, in call order: its path and how many items it carried. */
+function sentCalls(): Array<{path: string; items: number}> {
+    return post.mock.calls.map(([path, body]) => ({path, items: (body as unknown[]).length}));
+}
+
+/** Every item sent, the calls joined in call order, as they reach the backend (through JSON). */
+function sentItems(): unknown[] {
+    return post.mock.calls.flatMap(([, body]) => JSON.parse(JSON.stringify(body)) as unknown[]);
+}
+
+/** How a call settled, without throwing: a case that expects a rejection still reads the calls made when it resolved instead. */
+function settled<T>(promise: Promise<T>): Promise<PromiseSettledResult<Awaited<T>>> {
+    return Promise.allSettled([promise]).then(([outcome]) => outcome);
+}
+
+/** A change of `percent` % as the backend writes it: a fraction, in a decimal string (`7` → `"0.07"`, `-1001` → `"-10.01"`). */
+const ratioOf = (percent: number): string => (percent / 100).toFixed(2);
 
 beforeEach(() => {
     post.mockReset();
@@ -244,6 +268,118 @@ describe('fetchAssetPeriodChanges — the Assets list’s Δ columns', () => {
 
         await expect(fetchAssetPeriodChanges([7], AS_OF)).rejects.toBe(failure);
     });
+
+    /**
+     * Past 1,000 assets (lot X-R64). Since MF's X-R59, aligned to Z-25, the endpoint refuses more than the backend's
+     * `MAX_BULK_ITEMS` (1,000) items with a 422 `bulk_too_many_items`, and the list sent every asset in one call: past
+     * 1,000 assets it lost its Δ columns. The assets go in consecutive calls of at most 1,000, in the order given, each
+     * sent once the one before answered (Z-27's `sendBulkBatches`, with no day estimate: the endpoint has no day budget),
+     * and the answers merge as if one call had answered. The fake backend answers each call from its own body.
+     *
+     * Red today: one call carries every asset, where these cases expect two or three; exactly 1,000 assets, their guard,
+     * is green.
+     */
+    describe('past 1,000 assets: consecutive calls of at most 1,000, answered as one (X-R64)', () => {
+        /** `count` asset ids in a list's order, which is not theirs: `count` down to 1, so a call out of order, or a list sorted on the way, shows. */
+        const assetIdsOf = (count: number): number[] => Array.from({length: count}, (_, index) => count - index);
+
+        /** The items of `ids` as they must reach the backend: every asset up to the same as_of, nothing else. */
+        const queryItems = (ids: readonly number[]) => ids.map((assetId) => ({asset_id: assetId, as_of: AS_OF}));
+
+        /**
+         * The backend answering a call from its own body, as the real one does: one item per asset, in the order sent.
+         * Asset `n` moved `n` % over 1D, every other period without a price; an asset `hasPrices` turns down has no price
+         * up to as_of, so no period at all.
+         */
+        function assetBackend(hasPrices: (assetId: number) => boolean = () => true) {
+            return async (_path: string, body: unknown) => ({
+                items: (body as Array<{asset_id: number}>).map(({asset_id: assetId}) => (hasPrices(assetId) ? assetItem(assetId, {'1D': ratioOf(assetId)}) : {asset_id: assetId, as_of: AS_OF, currency: null, periods: [], errors: []})),
+            });
+        }
+
+        /** The assets whose 1D change is not their own, `n` % for asset `n`: missing from the result, or another's. */
+        const misfiled = (ids: readonly number[], deltasByAssetId: ReadonlyMap<number, PeriodDeltas>): number[] => ids.filter((assetId) => deltasByAssetId.get(assetId)?.['1D'] !== assetId);
+
+        it('sends 1,001 assets as two calls, 1,000 then 1, in the order given and up to the same as_of, and merges both answers', async () => {
+            const ids = assetIdsOf(1_001);
+            post.mockImplementation(assetBackend());
+
+            const result = await fetchAssetPeriodChanges(ids, AS_OF);
+
+            expect(sentCalls(), 'at most 1,000 assets a call: the backend refuses one more (422 bulk_too_many_items)').toEqual([
+                {path: ASSET_PATH, items: 1_000},
+                {path: ASSET_PATH, items: 1},
+            ]);
+            expect(sentItems(), 'consecutive calls: every asset once, in the order given, each up to as_of').toStrictEqual(queryItems(ids));
+            expect(result.periods).toEqual(PERIODS);
+            expect(result.deltasByAssetId.size, 'the assets of both answers, and no other').toBe(1_001);
+            expect(misfiled(ids, result.deltasByAssetId), 'each asset’s own change under its id, whichever call answered it').toEqual([]);
+            expect(result.deltasByAssetId.get(ids[1_000]), 'the asset of the second call, keyed as those of the first').toEqual(deltas({'1D': ids[1_000]}));
+        });
+
+        it('takes the periods from the first item that has any, whichever call answered it: none in the first call, some in the second', async () => {
+            // 2,001 assets, three calls; only the assets of the second have prices: the periods are in neither the first
+            // answer nor the last.
+            const ids = assetIdsOf(2_001);
+            const priced = new Set(ids.slice(1_000, 2_000));
+            post.mockImplementation(assetBackend((assetId) => priced.has(assetId)));
+
+            const result = await fetchAssetPeriodChanges(ids, AS_OF);
+
+            expect(sentCalls()).toEqual([
+                {path: ASSET_PATH, items: 1_000},
+                {path: ASSET_PATH, items: 1_000},
+                {path: ASSET_PATH, items: 1},
+            ]);
+            expect(result.periods, 'the periods of the second call’s assets, the first that have any').toEqual(PERIODS);
+            expect(result.deltasByAssetId.get(ids[0]), 'an asset of the first call: no price up to as_of, no change').toEqual({});
+            expect(result.deltasByAssetId.get(ids[1_000])).toEqual(deltas({'1D': ids[1_000]}));
+            expect(result.deltasByAssetId.get(ids[2_000]), 'the asset of the third call').toEqual({});
+        });
+
+        it('sends 2,500 assets as three calls: 1,000, 1,000 and 500', async () => {
+            const ids = assetIdsOf(2_500);
+            post.mockImplementation(assetBackend());
+
+            const result = await fetchAssetPeriodChanges(ids, AS_OF);
+
+            expect(sentCalls()).toEqual([
+                {path: ASSET_PATH, items: 1_000},
+                {path: ASSET_PATH, items: 1_000},
+                {path: ASSET_PATH, items: 500},
+            ]);
+            expect(sentItems(), 'consecutive calls: every asset once, in the order given, each up to as_of').toStrictEqual(queryItems(ids));
+            expect(result.deltasByAssetId.size).toBe(2_500);
+            expect(misfiled(ids, result.deltasByAssetId)).toEqual([]);
+        });
+
+        it('sends exactly 1,000 assets as one call, as before (the guard: green today)', async () => {
+            const ids = assetIdsOf(1_000);
+            post.mockImplementation(assetBackend());
+
+            const result = await fetchAssetPeriodChanges(ids, AS_OF);
+
+            expect(sentBody(), 'the backend takes 1,000 items').toStrictEqual(queryItems(ids));
+            expect(post.mock.calls[0][0]).toBe(ASSET_PATH);
+            expect(misfiled(ids, result.deltasByAssetId)).toEqual([]);
+        });
+
+        it('rejects with the error of the call that failed and sends nothing after it: the call before it went, no partial answer', async () => {
+            const ids = assetIdsOf(2_500);
+            const failure = new Error('synthetic: the second POST /assets/prices/period-changes answered 500');
+            // The first call answers, the second fails; a third, were it sent, would answer.
+            post.mockImplementationOnce(assetBackend()).mockRejectedValueOnce(failure).mockImplementation(assetBackend());
+
+            const outcome = await settled(fetchAssetPeriodChanges(ids, AS_OF));
+
+            expect(sentCalls(), 'the first call answered, the second failed, the third never went').toEqual([
+                {path: ASSET_PATH, items: 1_000},
+                {path: ASSET_PATH, items: 1_000},
+            ]);
+            expect(outcome.status, 'no answer, not even the first call’s').toBe('rejected');
+            expect((outcome as PromiseRejectedResult).reason, 'the failure of the second call, as it was raised').toBe(failure);
+        });
+    });
 });
 
 describe('fetchFxPeriodChanges — the FX list’s Δ columns, in both orientations', () => {
@@ -319,6 +455,141 @@ describe('fetchFxPeriodChanges — the FX list’s Δ columns, in both orientati
 
         await expect(fetchFxPeriodChanges([{base: 'EUR', quote: 'USD'}], AS_OF)).rejects.toBe(failure);
     });
+
+    /**
+     * Past 1,000 pairs (lot X-R64), as for the assets: since X-R59 the endpoint refuses more than the
+     * backend's `MAX_BULK_ITEMS` (1,000) pairs with a 422 `bulk_too_many_items`, and the list sent every pair in one
+     * call. The pairs go in consecutive calls of at most 1,000, in the order given, each sent once the one before
+     * answered, and the answers merge as one. The pairs are generated, each its own base against USD; the fake backend
+     * answers each call from its own body.
+     *
+     * Red today: one call carries every pair, where these cases expect two or three; exactly 1,000 pairs, their guard,
+     * is green.
+     */
+    describe('past 1,000 pairs: consecutive calls of at most 1,000, answered as one (X-R64)', () => {
+        type Pair = {base: string; quote: string};
+
+        /** The n-th of 17,576 three-letter codes, AAA, AAB, …: none is a real currency, and the list holds whatever pairs it is given. */
+        function currencyCode(n: number): string {
+            const letter = (k: number) => String.fromCharCode(65 + (k % 26));
+            return letter(Math.floor(n / 676)) + letter(Math.floor(n / 26)) + letter(n);
+        }
+
+        /** `count` pairs in a list's order, each its own base against USD: the n-th is `currencyCode(n)/USD`. */
+        const pairsOf = (count: number): Pair[] => Array.from({length: count}, (_, n) => ({base: currencyCode(n), quote: 'USD'}));
+
+        /** A pair as the result keys it. */
+        const keyOf = ({base, quote}: Pair): string => `${base}/${quote}`;
+
+        /** The items of `pairs` as they must reach the backend: every pair up to the same as_of, its base and quote only. */
+        const queryItems = (pairs: readonly Pair[]) => pairs.map(({base, quote}) => ({base, quote, as_of: AS_OF}));
+
+        /** What the fake backend says a pair moved over 1D, in percent, read back from its base: n + 1 for the n-th pair. */
+        const moveOf = (base: string): number => [...base].reduce((n, letter) => n * 26 + letter.charCodeAt(0) - 65, 0) + 1;
+
+        /** The changes the fake backend gives a pair, as the module must give them: its move directly, the opposite inverted. */
+        const changesOf = ({base}: Pair) => ({direct: deltas({'1D': moveOf(base)}), inverse: deltas({'1D': -moveOf(base)})});
+
+        /**
+         * The backend answering a call from its own body, as the real one does: one item per pair, in the order sent. The
+         * n-th pair moved n + 1 % over 1D and −(n + 1) % inverted, every other period without a rate; a pair whose base
+         * `hasRates` turns down has no rate up to as_of, so no period at all.
+         */
+        function fxBackend(hasRates: (base: string) => boolean = () => true) {
+            return async (_path: string, body: unknown) => ({
+                items: (body as Pair[]).map(({base, quote}) => (hasRates(base) ? fxItem(base, quote, {'1D': [ratioOf(moveOf(base)), ratioOf(-moveOf(base))]}) : {base, quote, as_of: AS_OF, periods: [], errors: ['no rate']})),
+            });
+        }
+
+        /** The pairs whose 1D changes are not their own, either way: missing from the result, or another's. As `BASE/QUOTE`. */
+        function misfiled(pairs: readonly Pair[], deltasByPair: ReadonlyMap<string, {direct: PeriodDeltas; inverse: PeriodDeltas}>): string[] {
+            const wrong = pairs.filter((pair) => {
+                const both = deltasByPair.get(keyOf(pair));
+                return both?.direct['1D'] !== moveOf(pair.base) || both?.inverse['1D'] !== -moveOf(pair.base);
+            });
+            return wrong.map(keyOf);
+        }
+
+        it('sends 1,001 pairs as two calls, 1,000 then 1, in the order given and up to the same as_of, and merges both answers', async () => {
+            const pairs = pairsOf(1_001);
+            post.mockImplementation(fxBackend());
+
+            const result = await fetchFxPeriodChanges(pairs, AS_OF);
+
+            expect(sentCalls(), 'at most 1,000 pairs a call: the backend refuses one more (422 bulk_too_many_items)').toEqual([
+                {path: FX_PATH, items: 1_000},
+                {path: FX_PATH, items: 1},
+            ]);
+            expect(sentItems(), 'consecutive calls: every pair once, in the order given, each up to as_of').toStrictEqual(queryItems(pairs));
+            expect(result.periods).toEqual(PERIODS);
+            expect(result.deltasByPair.size, 'the pairs of both answers, and no other').toBe(1_001);
+            expect(misfiled(pairs, result.deltasByPair), 'each pair’s own changes under BASE/QUOTE, both ways, whichever call answered it').toEqual([]);
+            expect(result.deltasByPair.get(keyOf(pairs[1_000])), 'the pair of the second call, keyed as those of the first').toEqual(changesOf(pairs[1_000]));
+        });
+
+        it('takes the periods from the first pair that has any, whichever call answered it: none in the first call, some in the second', async () => {
+            // 2,001 pairs, three calls; only the pairs of the second have rates: the periods are in neither the first
+            // answer nor the last.
+            const pairs = pairsOf(2_001);
+            const rated = new Set(pairs.slice(1_000, 2_000).map(({base}) => base));
+            post.mockImplementation(fxBackend((base) => rated.has(base)));
+
+            const result = await fetchFxPeriodChanges(pairs, AS_OF);
+
+            expect(sentCalls()).toEqual([
+                {path: FX_PATH, items: 1_000},
+                {path: FX_PATH, items: 1_000},
+                {path: FX_PATH, items: 1},
+            ]);
+            expect(result.periods, 'the periods of the second call’s pairs, the first that have any').toEqual(PERIODS);
+            expect(result.deltasByPair.get(keyOf(pairs[0])), 'a pair of the first call: no rate up to as_of, no change either way').toEqual({direct: {}, inverse: {}});
+            expect(result.deltasByPair.get(keyOf(pairs[1_000]))).toEqual(changesOf(pairs[1_000]));
+            expect(result.deltasByPair.get(keyOf(pairs[2_000])), 'the pair of the third call').toEqual({direct: {}, inverse: {}});
+        });
+
+        it('sends 2,500 pairs as three calls: 1,000, 1,000 and 500', async () => {
+            const pairs = pairsOf(2_500);
+            post.mockImplementation(fxBackend());
+
+            const result = await fetchFxPeriodChanges(pairs, AS_OF);
+
+            expect(sentCalls()).toEqual([
+                {path: FX_PATH, items: 1_000},
+                {path: FX_PATH, items: 1_000},
+                {path: FX_PATH, items: 500},
+            ]);
+            expect(sentItems(), 'consecutive calls: every pair once, in the order given, each up to as_of').toStrictEqual(queryItems(pairs));
+            expect(result.deltasByPair.size).toBe(2_500);
+            expect(misfiled(pairs, result.deltasByPair)).toEqual([]);
+        });
+
+        it('sends exactly 1,000 pairs as one call, as before (the guard: green today)', async () => {
+            const pairs = pairsOf(1_000);
+            post.mockImplementation(fxBackend());
+
+            const result = await fetchFxPeriodChanges(pairs, AS_OF);
+
+            expect(sentBody(), 'the backend takes 1,000 items').toStrictEqual(queryItems(pairs));
+            expect(post.mock.calls[0][0]).toBe(FX_PATH);
+            expect(misfiled(pairs, result.deltasByPair)).toEqual([]);
+        });
+
+        it('rejects with the error of the call that failed and sends nothing after it: the call before it went, no partial answer', async () => {
+            const pairs = pairsOf(2_500);
+            const failure = new Error('synthetic: the second POST /fx/currencies/period-changes answered 500');
+            // The first call answers, the second fails; a third, were it sent, would answer.
+            post.mockImplementationOnce(fxBackend()).mockRejectedValueOnce(failure).mockImplementation(fxBackend());
+
+            const outcome = await settled(fetchFxPeriodChanges(pairs, AS_OF));
+
+            expect(sentCalls(), 'the first call answered, the second failed, the third never went').toEqual([
+                {path: FX_PATH, items: 1_000},
+                {path: FX_PATH, items: 1_000},
+            ]);
+            expect(outcome.status, 'no answer, not even the first call’s').toBe('rejected');
+            expect((outcome as PromiseRejectedResult).reason, 'the failure of the second call, as it was raised').toBe(failure);
+        });
+    });
 });
 
 /**
@@ -343,7 +614,8 @@ describe('fetchFxPeriodChanges — the FX list’s Δ columns, in both orientati
  * Every answer lands as the pages land it: `settle` or `fail`, then `end`. The values are labels naming the request
  * that gave them, so a failure reads which one was kept.
  *
- * Red today: `periodChanges.ts` exports no `PeriodChangesLedger` — every case fails at its first `new`.
+ * `periodChanges.ts` exports `PeriodChangesLedger`, the class each list holds; every case builds a ledger of its own
+ * with `new`, so none inherits the requests of another.
  */
 describe('PeriodChangesLedger — the answer a list keeps, whatever order its requests land in (X-R60)', () => {
     /** The end of the range on screen: what each request asks up to, unless a case moves it. */

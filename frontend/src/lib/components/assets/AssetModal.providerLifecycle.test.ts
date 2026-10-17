@@ -33,6 +33,10 @@
  * only settles. The catalogue lists the parametric provider too, as the real
  * plugin declares it, so a scheduled asset is edited through the real
  * ScheduledInvestmentEditor.
+ *
+ * The provider's removal is a planned route too (workstream X, X-R62, written
+ * by H): «No provider» saved, `DELETE /assets/provider` is answered — or
+ * refused through `planRejection` — like any other planned request.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockInstance} from 'vitest';
 import {flushSync, tick, type Component, type ComponentProps} from 'svelte';
@@ -58,6 +62,7 @@ type PatchItem = z.infer<typeof schemas.FAAssetPatchItem>;
 type PatchResponse = z.infer<typeof schemas.FABulkAssetPatchResponse>;
 type AssignmentItem = z.infer<typeof schemas.FAProviderAssignmentItem>;
 type AssignmentResponse = z.infer<typeof schemas.FABulkAssignResponse>;
+type RemovalResponse = z.infer<typeof schemas.FABulkRemoveResponse>;
 type EditData = NonNullable<ComponentProps<typeof AssetModal>['editData']>;
 type VerificationStatus = 'not_tested' | 'testing' | 'passed' | 'failed';
 type ResultStatus = 'success' | 'error' | 'warning';
@@ -162,6 +167,7 @@ const routes = {
     metadata: 'POST /api/v1/assets/provider/probe [metadata]',
     patch: 'PATCH /api/v1/assets',
     assign: 'POST /api/v1/assets/provider',
+    remove: 'DELETE /api/v1/assets/provider',
 } as const;
 type Route = (typeof routes)[keyof typeof routes];
 
@@ -635,6 +641,7 @@ beforeEach(() => {
     });
     mocks.api.patch_assets_bulk_api_v1_assets_patch.mockImplementation((...args: unknown[]) => consume(routes.patch, args));
     mocks.api.assign_providers_bulk_api_v1_assets_provider_post.mockImplementation((...args: unknown[]) => consume(routes.assign, args));
+    mocks.api.remove_providers_bulk_api_v1_assets_provider_delete.mockImplementation((...args: unknown[]) => consume(routes.remove, args));
     mocks.api.list_assets_api_v1_assets_query_get.mockImplementation((...args: unknown[]) => {
         checkArguments('incidental duplicate-name listing', args, [{queries: {}}]);
         return Promise.resolve([]);
@@ -2000,9 +2007,9 @@ function otherConflict() {
     return apiError(409, {error_code: 'SYNTHETIC_OTHER_CONFLICT', message: 'Synthetic conflict that is not a split of the plan', params: {}});
 }
 
-/** Make the module word `refusal` — that very error, and nothing else. */
-function wordRefusal(refusal: unknown) {
-    mocks.refusals.wipeRefusalMessage.mockImplementation((err: unknown) => (err === refusal ? REFUSAL_SENTENCE : null));
+/** Make the module word `refusal` — that very error, and nothing else — as `sentence`. */
+function wordRefusal(refusal: unknown, sentence = REFUSAL_SENTENCE) {
+    mocks.refusals.wipeRefusalMessage.mockImplementation((err: unknown) => (err === refusal ? sentence : null));
 }
 
 /** Change the stored plan through the real editor: its initial value, 10000 → 12000. Ends on a changed, untested provider. */
@@ -2205,6 +2212,238 @@ describe('AssetModal: a provider change refused for a split of the plan (X-R49)'
         expect(screen.getByTestId('asset-modal-form-error').textContent?.trim(), "trySave's reading of a 409, kept: the error is thrown on, as before").toBe(duplicateName);
         expect(mocks.toasts.error, 'inline, as today: no toast').not.toHaveBeenCalled();
         expectSaveStopped(view);
+        assertTraffic();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// X-R62 — removing the provider is refused while its events carry transactions.
+//
+// «No provider» removes the asset's provider (DELETE /assets/provider), and the
+// server deletes the events that provider generated with it. Since X-R62 the
+// removal refuses, writing nothing, while transactions are linked to one of
+// those events: 409, `detail.error_code` = PROVIDER_REMOVAL_LINKED_TRANSACTIONS,
+// the events in its params — or PROVIDER_REMOVAL_CONFLICT, when a link appeared
+// between the check and the delete. saveEdit's step 2 makes the removal with no
+// catch, so today the refusal reaches trySave, whose onError reads every 409 as
+// «duplicate name». The cure, as X-R49's in the assign branch just below it: a
+// refusal `wipeRefusalMessage` words becomes the form's banner
+// (`asset-modal-form-error`), pendingSaveAssetId is reset, and the save stops
+// there — no toast, no sync, the modal open, no onupdated. Any other failure is
+// thrown on, as today.
+//
+// The asset is the Atlas one of `editFixture`, its provider unticked through the
+// real header switch (`asset-modal-no-provider`): nothing is left to test or to
+// regenerate, so the save asks nothing and runs through trySave. The module
+// answers a marker for the very refusal the removal threw, so the banner is read
+// against what the module wrote, never against a translation.
+//
+// Red before the cure: the banner says «duplicate name», and the module is never
+// asked. The guards are green before and after it: a failure the module does not
+// word keeps trySave's reading, and a removal that succeeds saves and closes.
+// ---------------------------------------------------------------------------
+
+/** The Atlas asset of `editFixture`, whose provider the save removes. */
+const ATLAS_ASSET_ID = 8101;
+/** What the stubbed `wipeRefusalMessage` answers for each refusal of the removal: markers, so the banner is read against the module's answer. */
+const LINKED_SENTENCE = '⟨wipeRefusalMessage: the removal refused for its linked transactions, worded⟩';
+const CONFLICT_SENTENCE = '⟨wipeRefusalMessage: the removal that met a new link, worded⟩';
+/** The detail of a 500 on the removal: a sentence trySave shows as it is. */
+const REMOVAL_FAILURE_DETAIL = 'Synthetic failure of the provider removal';
+
+/** Independent oracle of the save's PATCH: the stored fields as they are — the edit is the provider's removal alone. */
+function atlasPatch(): PatchItem[] {
+    return [
+        {
+            asset_id: ATLAS_ASSET_ID,
+            display_name: 'Owned Atlas security',
+            currency: 'USD',
+            asset_type: 'STOCK',
+            icon_url: null,
+            quote_base_quantity: 1,
+            active: true,
+            is_benchmark: false,
+            user_url: null,
+            // Untouched classification is omitted, not sent as a clear.
+            identifier_isin: null,
+            identifier_ticker: null,
+            identifier_cusip: null,
+            identifier_sedol: null,
+            identifier_figi: null,
+            identifier_uuid: null,
+            identifier_other: null,
+        },
+    ];
+}
+
+function atlasPatchAccepted(): PatchResponse {
+    return {results: [{asset_id: ATLAS_ASSET_ID, success: true, message: 'Synthetic patch accepted'}], success_count: 1, errors: []};
+}
+
+/** Independent oracle of the removal as the save sends it: no body, the asset in the query. */
+function removalArgs(): unknown[] {
+    return [undefined, {queries: {asset_ids: [ATLAS_ASSET_ID]}}];
+}
+
+function removalAccepted(): RemovalResponse {
+    return {results: [{asset_id: ATLAS_ASSET_ID, success: true, deleted_count: 1, message: 'Synthetic removal accepted'}], success_count: 1, errors: []};
+}
+
+/** The removal's X-R62 refusal: 409, a structured detail, the server's English (totals only), the linked events in its params. */
+function linkedTransactionsRefusal() {
+    return apiError(409, {
+        error_code: 'PROVIDER_REMOVAL_LINKED_TRANSACTIONS',
+        message: 'Provider not removed: 1 generated event has 3 linked transactions',
+        params: {asset_id: ATLAS_ASSET_ID, item_index: 0, events: [{event_id: 41, date: '2026-03-02', type: 'DIVIDEND', transaction_ids: [7, 9], hidden_transactions_count: 1}]},
+    });
+}
+
+/** The removal's other X-R62 refusal: a link appeared between the check and the delete; its params are empty. */
+function removalConflict() {
+    return apiError(409, {error_code: 'PROVIDER_REMOVAL_CONFLICT', message: 'Provider not removed: a link to its events appeared meanwhile', params: {}});
+}
+
+/** A failure of the removal that is no refusal: a 500 whose detail is a sentence. */
+function removalServerError() {
+    return apiError(500, REMOVAL_FAILURE_DETAIL);
+}
+
+/** Untick the asset's provider through the real header switch. Ends on a dirty draft with no provider, its assignment form folded away. */
+async function chooseNoProvider() {
+    const noProvider = screen.getByTestId('asset-modal-no-provider');
+    expect(noProvider).toBeVisible();
+    expect(noProvider).toBeEnabled();
+    expect(noProvider).not.toBeChecked();
+    await fireEvent.click(noProvider);
+    await flushUi();
+    expect(screen.getByTestId('asset-modal-no-provider')).toBeChecked();
+    expect(screen.getByTestId('asset-modal-provider-header')).toHaveAttribute('data-expanded', 'false');
+    expect(screen.queryByTestId('provider-test-config'), 'no provider left to test').toBeNull();
+    expect(screen.getByTestId('asset-modal-form')).toHaveAttribute('data-dirty', 'true');
+}
+
+/**
+ * The removal road: the Atlas asset's provider unticked and the asset saved — straight through trySave, with no
+ * question, since nothing is left to test or regenerate. The PATCH is accepted and the removal is answered by the call
+ * `planRemoval` plans on the expected arguments. Ends with that answer handled and every request answered.
+ */
+async function saveWithoutProvider(planRemoval: (expectedArgs: unknown[]) => PlannedCall) {
+    const view = await renderEdit();
+    await chooseNoProvider();
+    const patch = plan('removal-road PATCH', routes.patch, [atlasPatch()], atlasPatchAccepted());
+    const removal = planRemoval(removalArgs());
+    expect(screen.getByTestId('asset-modal-save')).toBeEnabled();
+    await fireEvent.click(screen.getByTestId('asset-modal-save'));
+    await referenceReady; // The real saveEdit awaits the ready provider cache.
+    await flushUi();
+    expect(screen.queryByTestId('confirm-modal-message'), 'no provider left to test: the save asks nothing').toBeNull();
+    expect(screen.queryByTestId('asset-scheduled-regen-confirm')).toBeNull();
+    patch.assertUnchanged();
+    expect(removal.actualArgs).toBeUndefined();
+    expectBusy(true);
+    await patch.finish();
+    removal.assertUnchanged();
+    await removal.finish();
+    await flushUi();
+    return view;
+}
+
+/** Where a stopped removal leaves the user: the modal open on their draft — still without a provider — nothing reported done, nothing synced. */
+function expectRemovalStopped(view: Awaited<ReturnType<typeof renderEdit>>) {
+    expect(screen.getByTestId('asset-modal')).toBeVisible();
+    expectBusy(false);
+    expect(screen.getByTestId('asset-modal-no-provider'), 'the draft is still the user’s: no provider').toBeChecked();
+    expect(screen.getByTestId('asset-modal-form')).toHaveAttribute('data-dirty', 'true');
+    expect(screen.getByTestId('asset-modal-save'), 'the save can be tried again, once the transactions are unlinked').toBeEnabled();
+    expect(view.onupdated).not.toHaveBeenCalled();
+    expect(view.onclose).not.toHaveBeenCalled();
+    expect(view.oncreated).not.toHaveBeenCalled();
+    expect(mocks.toasts.success).not.toHaveBeenCalled();
+    expect(mocks.api.sync_prices_bulk_api_v1_assets_prices_sync_post).not.toHaveBeenCalled();
+}
+
+describe('AssetModal: a provider removal refused for the transactions linked to its events (X-R62)', () => {
+    let consoleError: MockInstance<typeof console.error>;
+
+    beforeEach(() => {
+        // trySave logs the failure it handles: the guards read that log, the other cases only silence it.
+        consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    it.each<[string, () => unknown, string]>([
+        ['PROVIDER_REMOVAL_LINKED_TRANSACTIONS', linkedTransactionsRefusal, LINKED_SENTENCE],
+        ['PROVIDER_REMOVAL_CONFLICT', removalConflict, CONFLICT_SENTENCE],
+    ])('%s: the refusal is the banner the module wrote, not «duplicate name» — no toast, no sync, the modal open on the draft', async (_code, refused, sentence) => {
+        const refusal = refused();
+        wordRefusal(refusal, sentence);
+        const view = await saveWithoutProvider((expectedArgs) => planRejection('refused removal', routes.remove, expectedArgs, refusal));
+
+        const banner = screen.getByTestId('asset-modal-form-error');
+        expect(banner).toBeVisible();
+        expect(banner).toHaveAttribute('data-form-error');
+        // Today trySave's onError reads every 409 as a duplicate name.
+        expect(banner.textContent?.trim(), "the banner is the module's sentence for that refusal, not «duplicate name»").toBe(sentence);
+        expect(mocks.toasts.error).not.toHaveBeenCalled();
+        expect(mocks.toasts.warning).not.toHaveBeenCalled();
+        expect(mocks.toasts.info).not.toHaveBeenCalled();
+        expectRemovalStopped(view);
+        assertTraffic();
+    });
+
+    it('the module is asked about the very error the removal threw, with the interface translator and its day label', async () => {
+        const refusal = linkedTransactionsRefusal();
+        wordRefusal(refusal, LINKED_SENTENCE);
+        await saveWithoutProvider((expectedArgs) => planRejection('refused removal', routes.remove, expectedArgs, refusal));
+
+        expect(mocks.refusals.wipeRefusalMessage, 'asked once, when the removal failed').toHaveBeenCalledTimes(1);
+        const [err, translate, dateLabel] = mocks.refusals.wipeRefusalMessage.mock.calls[0];
+        expect(err, 'the error as the removal rejected with it').toBe(refusal);
+        const key = 'assets.modal.saveFailed';
+        expect(get(_)(key), `premise: the catalogue has ${key}`).not.toBe(key);
+        expect(translate(key), 'the translator of the interface: a key reads as the catalogue writes it').toBe(get(_)(key));
+        expect(dateLabel, 'a day label is handed over').toBeTypeOf('function');
+        expect(formatDay('2026-03-02'), 'premise: the interface does not write a day in its ISO form').not.toBe('2026-03-02');
+        expect(dateLabel('2026-03-02'), 'the day written as the interface writes one (formatDay)').toBe(formatDay('2026-03-02'));
+        assertTraffic();
+    });
+
+    it('guard — a 500: as today, thrown on to trySave, whose reading of it, the server detail, is the banner; the save stops', async () => {
+        const failure = removalServerError();
+        const view = await saveWithoutProvider((expectedArgs) => planRejection('failed removal', routes.remove, expectedArgs, failure));
+
+        expect(screen.getByTestId('asset-modal-form-error').textContent?.trim(), "trySave's reading of a detail it can show, kept: the error is thrown on, as before").toBe(REMOVAL_FAILURE_DETAIL);
+        expect(consoleError.mock.calls.flat(), 'the very error reached trySave').toContain(failure);
+        expect(mocks.toasts.error, 'inline, as today: no toast').not.toHaveBeenCalled();
+        expectRemovalStopped(view);
+        assertTraffic();
+    });
+
+    it('guard — a 409 the module does not word: as today, the banner reads it as «duplicate name»', async () => {
+        const failure = otherConflict();
+        const view = await saveWithoutProvider((expectedArgs) => planRejection('failed removal', routes.remove, expectedArgs, failure));
+
+        const duplicateName = get(_)('assets.modal.duplicateName');
+        expect(duplicateName, 'premise: the catalogue has assets.modal.duplicateName').not.toBe('assets.modal.duplicateName');
+        expect(screen.getByTestId('asset-modal-form-error').textContent?.trim(), "trySave's reading of a 409, kept: the error is thrown on, as before").toBe(duplicateName);
+        expect(consoleError.mock.calls.flat(), 'the very error reached trySave').toContain(failure);
+        expect(mocks.toasts.error, 'inline, as today: no toast').not.toHaveBeenCalled();
+        expectRemovalStopped(view);
+        assertTraffic();
+    });
+
+    it('guard — the removal succeeds: as today, the asset is saved — one success toast, the modal closed, onupdated — and nothing is synced', async () => {
+        const view = await saveWithoutProvider((expectedArgs) => plan('accepted removal', routes.remove, expectedArgs, removalAccepted()));
+
+        expect(screen.queryByTestId('asset-modal')).toBeNull();
+        expect(view.onupdated).toHaveBeenCalledTimes(1);
+        expect(view.onupdated).toHaveBeenCalledWith();
+        expect(view.onclose).not.toHaveBeenCalled();
+        expect(view.oncreated).not.toHaveBeenCalled();
+        expect(mocks.toasts.success).toHaveBeenCalledTimes(1);
+        expect(mocks.toasts.error).not.toHaveBeenCalled();
+        expect(mocks.toasts.warning).not.toHaveBeenCalled();
+        expect(mocks.refusals.wipeRefusalMessage, 'nothing refused, nothing to word').not.toHaveBeenCalled();
+        expect(mocks.api.sync_prices_bulk_api_v1_assets_prices_sync_post, 'no provider left to sync').not.toHaveBeenCalled();
         assertTraffic();
     });
 });

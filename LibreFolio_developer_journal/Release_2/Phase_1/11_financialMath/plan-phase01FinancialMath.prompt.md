@@ -2747,3 +2747,139 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
 - ✅ Chiusura: ruff pulito; black pulito tranne `test_portfolio_api.py` (hunk 1348–1834, preesistenti; la classe nuova
   2218–2359 non toccata); `git diff --check` pulito; porta 6190 libera. Albero: 33 modificati, 3 nuovi (test).
   **CHECKPOINT READY** inviato (due lotti), FROZEN.
+
+#### Committato `ad399d383` + `35ceba12f`; merge di dev `d1976bca8` (17/10, 13:3x)
+- Due conflitti, risolti per somma: `BACKLOG_POST_1.2.md` (Z-27 chiusa da Z, Z-28, Z-29 di dev + il mio punto «Anche i
+  cambi a periodo fisso» dentro Z-27; il «Dettagli» di dev, che cita la stessa sezione Z-25 e due di Z-27) e
+  `developer/architecture/security.md` (il conftest di dev che rimette `LIBREFOLIO_LOGIN_LIMIT` prima di ogni test + la
+  mia frase su `LIBREFOLIO_PROBE_RATE_LIMIT=0`). Contro dev le due risoluzioni aggiungono solo righe mie. Fusioni
+  automatiche controllate (entrambi i lati): `prices.py` (docstring di R13-SEC9-2), `providers.py` (il rifiuto degli split
+  senza costo), `fifo/engine.py` (cifre trattenute di una ricostruzione fallita), `.env.example`, i18n `dataQuality`.
+- Prove: `mkdocs build` stretto rc 0, `check-links` 97, `services probe-rate-limit` 49, `services financial-math` 1211,
+  `services roi-fifo-utils` 1366, `utils gate-i18n-catalog` 176, `i18n check` stretto, `import backend.app.main`, ruff.
+  ⚠️ **Fuori pista**: carico a 1 minuto 52,6 all'avvio (soglia 50), non atteso. Porta 6190 libera.
+- In stage solo i due file risolti; FROZEN per il commit del coordinatore.
+
+#### Lotto entrato; MF-SEC9a — le scritture in blocchi, i tetti di scrittura, la sonda letta a ogni chiamata (17/10, 13:4x)
+- Coordinatore: il lotto è **entrato** (`79ae5787c` → dev `482343eb3`; CHANGELOG `04955c498`; X ed E OK); worktree
+  portato a `04955c498`. Backlog: chiuse MF-D3, MF-SI1 (era entrata con `f37b1d0ea` → `16f8c74ed`, riga rimasta
+  aperta), MF-SI2, MF-J45a, MF-SEC8-2a, MF-SEC8-2b; MF-SEC9a «in corso»; nuova MF-SEC9d (tetto globale per fornitore,
+  solo informazione, da E).
+- **Richiesta** (E, via coordinatore): (1) `fx/storage.py:139`/`:262`, `price_store.py:461`, `fx/sync.py:234` un termine
+  OR per elemento → blocchi come `FX_PAIRS_PER_QUERY`, più un tetto sulla rotta (≥ ciò che serve all'import) e un test
+  della taglia d'un import; (2) la sonda letta a ogni chiamata, come `login_limit_enabled()`; (3) informazione: tetto
+  globale per fornitore; più i tre 500 con `str(e)` e il tetto di `DELETE /prices`.
+- **Misura** (SQLite in memoria, `/tmp/libreFolio_mf_or_probe.py`, HEAD): `upsert_rates_bulk` e `delete_rates_bulk`
+  passano a 990 elementi e falliscono a 1 001 («Expression tree is too large»). ⚠️ **Fuori pista**: l'import CSV della
+  pagina FX salva con `POST /fx/currencies/rate`, che chiama `upsert_rates_bulk` **un elemento alla volta**: l'import
+  d'ogni taglia passa già (lento); fallisce la **cancellazione** di più di 1 000 giorni non consecutivi
+  (`FxDataEditorSection` manda un intervallo per serie di giorni consecutivi) con un 500 che ripete l'SQL
+  (`Bulk deletion failed: {e!s}`). Lo stesso per `DELETE /assets/prices`. `fx/sync.py:234`: con ~46 valute le coppie
+  superano 1 000; il rifiuto era preso per «tabella mancante» e ogni cambio contato come nuovo (nessun 500).
+- **Codice**:
+  - NUOVO `utils/sql_chunks.py`: `OR_TERMS_PER_QUERY = 500`, `chunks()`; `fx/conversion.FX_PAIRS_PER_QUERY =
+    OR_TERMS_PER_QUERY` (un valore, il nome che le query FX conoscono).
+  - `fx/storage.py`: `upsert_rates_bulk` legge le chiavi salvate a blocchi e fa `INSERT … ON CONFLICT` a blocchi (sei
+    valori per riga: sotto il limite delle variabili), un commit; `delete_rates_bulk` legge a blocchi e conta per coppia
+    (prima: per ogni cancellazione un giro su tutte le righe trovate, quadratico).
+  - `price_store.bulk_delete_prices`: un DELETE per blocco, i conteggi sommati, un commit.
+  - `fx/sync._stored_rates()`: la lettura per il confronto a blocchi.
+  - `utils/date_range_limits.MAX_BULK_WRITE_ITEMS = 10_000` (file di Z, aggiunta): `POST`/`DELETE /fx/currencies/rate`
+    (elementi), `DELETE /assets/prices` (intervalli di tutti gli asset) → 422 `bulk_too_many_items` prima di ogni
+    lettura. Scelta mia (regola del coordinatore: ≥ ciò che serve all'import): i cambi giornalieri dal 1999 sono ~7 000
+    righe in una richiesta.
+  - 500 generici + log: `POST /prices`, `DELETE /prices`, `POST /prices/sync`; FX: il 500 della cancellazione, il testo
+    d'errore per elemento dell'upsert e del «delete all» (nessun `{e!s}`); `fx/currencies.py` non aveva un `logger`.
+  - Sonda: `PROBES_BY_USER` sostituito da `probe_limiter()` letto a ogni sonda, `PROBES_BY_LIMIT` (un limitatore per
+    valore, i conteggi ritrovati), avviso/errore una volta per valore (`_PROBE_SETTING_LOGGED`), una chiamata
+    all'import (il log d'avvio resta). Provato in-process (`/tmp/libreFolio_mf_probe_percall.py`).
+  - Docs: `assets/architecture.md` («Provider Probe», «Writes» nei limiti delle richieste di massa),
+    `fx/architecture.md` (nuovo `#rate-write-limits`), `admin/configuration.en.md` (la riga della sonda: letta a ogni
+    prova).
+- In corso: test-author `sec9a-tests` (file puro `test_bulk_writes_chunked.py`, `test_probe_rate_limit.py` adattato,
+  un caso API della taglia d'un import).
+- ✅ **Test** (test-author `sec9a-tests`, verificati in Python puro su SQLite in memoria, HEAD da `git show`):
+  NUOVO `test_bulk_writes_chunked.py` (42: `chunks()`; barriera — questo SQLite rifiuta un OR di 1 500; i tre servizi a
+  500, 501 e 1 500 termini con valori e conteggi esatti; `_stored_rates` e il confronto della sincronizzazione su 1 035
+  coppie, 46 valute: HEAD conta 45 cambi invece di 2; le rotte: DELETE FX di 1 500 giorni separati 200, POST FX di
+  1 500 righe come guardia, i tre tetti > 10 000 → 422 prima d'ogni scrittura e 10 000 passano, gli 8 messaggi d'errore
+  senza SQL, la guardia del 400 di dominio di `POST /prices`); `test_probe_rate_limit.py` adattato (seam
+  `probe_limiter`, `PROBES_BY_LIMIT` vuoto per test; nuovi: valore nuovo alla sonda dopo, valore che torna = stesso
+  limitatore, un log per valore); `test_fx_api.py::test_rates_of_an_import_written_and_deleted_by_separate_days`
+  (coppia MAD/PKR, di nessun altro test: POST 1 500 cambi — guardia —, DELETE di 1 500 giorni separati — rosso su HEAD,
+  500 —, 10 001 elementi → 422). Riga del runner `services bulk-writes-chunked` (pura); testi di `probe-rate-limit`
+  aggiornati. Notati e non fissati dal test-author (preesistenti): cancellazioni FX sovrapposte contano la stessa riga;
+  un asset in due elementi di `DELETE /prices` riporta il conteggio dell'ultimo.
+- ✅ **Rossi nella corsia** (14:11, carico 27–32; `files/sec9a.sh red`, prodotto tolto = 8 file + `sql_chunks.py`
+  rimosso, sha `0a4096f9…`/`f29e2054…` uguali dopo): `bulk-writes-chunked` **29 rossi** / 13 guardie;
+  `probe-rate-limit` **15** / 37.
+- ✅ **Verdi** (14:12–14:16; un'attesa a carico 57,9): `bulk-writes-chunked` 42, `probe-rate-limit` 52, `fx-conversion`
+  44, `fx-pairs-per-query` 6, `fx-core` 42, `fx-sync-service` 35, `period-changes` 60, `current-prices-bulk` 24,
+  `config-env-example` 38. ruff/black puliti, `git diff --check`, `api sync`, `mkdocs build` stretto, `check-links`.
+  Porta libera.
+- Da fare nello slot (`files/sec9a.sh slot`): rosso del caso API (prodotto tolto), poi `api fx`, `api assets-price`,
+  `api current-price-persistence`, `api fx-sync`.
+- ✅ **Slot** (14:18–14:24, GO del coordinatore; tetto 10 000 approvato): rosso del caso API con il prodotto tolto — 500
+  `Bulk deletion failed: (sqlite3.OperationalError) Expression tree is too large…` con l'SQL nel dettaglio —; rimesso
+  (sha uguali). Verdi: `api fx` **26**, `api assets-price` **21**, `api current-price-persistence` **5**, `api fx-sync`
+  **10**. Porta 6190 libera. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF-SEC9a committato; il resto di SEC9a (BRIM, WAC) e MF-SEC9c (17/10, 14:2x)
+- Coordinatore: SEC9a committato `34cc1a58b` + `d63558abb` (entra dopo E; Z-X-R65 entra dopo e si fonde). Scelta (c),
+  nell'ordine **BRIM → PAC `wac.py` → MF-SEC9c**; scrittura OK solo su `search_asset_candidates_bulk` (H lavora su
+  `BRIMProvider._create_transaction`, W-B75, nello stesso file) e su `_load_wac_fx_rows`. Revisori W e H.
+- **BRIM** `brim/brim_provider.py` `search_asset_candidates_bulk`: fino a 5 condizioni per titolo distinto (ISIN ×2,
+  ticker, nome ×2): un rendiconto con ~250 titoli passava i mille termini. ✅ Una SELECT per blocco di condizioni,
+  unione per id (`universe_by_id`), poi ordinata per `display_name` (unico e non nullo: l'ordine è quello di SQL, il
+  punto di codice di SQLite è quello di Python). Docstring («una sola andata e ritorno»: una per blocco).
+- **WAC** `pac_allocator/source/wac.py` `_load_wac_fx_rows`: un termine per (coppia, data) delle conversioni del costo;
+  ✅ letto a blocchi, unito. Il test esistente (2 chiavi → una sola istruzione) resta valido.
+- **MF-SEC9c** `services/assets/price_query.py`: ✅ la `gather` fa solo le quotazioni (`_live_one`, che non tocca la
+  sessione); dopo, `_last_readable_prices()` legge l'ultima riga d'ogni asset senza quotazione in una query raggruppata
+  (`MAX(date) … GROUP BY`), e solo un asset con l'ultima chiusura illeggibile passa, da solo, per il vecchio
+  `_last_readable_price` a pagine. Doc: `assets/architecture.md` (il ripiego). Suite esistenti verdi col codice:
+  `current-prices-bulk` 24, `current-price-storable` 27, `current-price-bootstrap` 8, `provider-cooldown` 66.
+- In corso: test-author `sec9a-rest-tests` (NUOVO `test_bulk_reads_chunked.py`), `sec9c-tests`
+  (`test_current_prices_bulk.py`).
+- ✅ **Test BRIM/WAC** (test-author `sec9a-rest-tests`): NUOVO `test_bulk_reads_chunked.py` (8: due barriere — un OR di
+  1 500 rifiutato, **un `or_()` annidato conta ogni termine** —; 300 terne ISIN+ticker+nome e 150 solo nome uguali,
+  terna per terna, alla ricerca per asset — id, confidenze, ordine, auto-selezione —, con nomi ASCII misti, accenti,
+  greco, CJK; la guardia di 50 terne; WAC a 500, 501 e 1 510 chiavi). Riga del runner `services bulk-reads-chunked`.
+  ⚠️ **Fuori pista** (dal test-author): la prima cura BRIM restava rossa — SQLAlchemy scrive `or_(a, or_(b, c))` piatto,
+  quindi i 7 ILIKE del nome contano per SQLite uno per uno e un blocco di 500 condizioni ne aveva 1 100 → le 7 colonne
+  ora sono condizioni separate (`conditions.extend`), stesso significato. La soglia reale su HEAD era quindi ~90 titoli
+  con ISIN, ticker e nome (11 termini), non ~250.
+- ✅ **Corsia** (14:37, `files/sec9ar.sh`; prodotto tolto = `brim_provider.py` + `wac.py`, sha `9224f507…` uguale
+  dopo): rosso **3** (2 BRIM `OperationalError`, 1 WAC) / 5 guardie; verdi `bulk-reads-chunked` 8, `db brim-bulk` 7
+  (la parità esistente), `portfolio-allocation-source` 98, `brim-provider-base` 39.
+- ✅ **Test SEC9c** (test-author `sec9c-tests`, in `test_current_prices_bulk.py`): `_WatchedSession` conta le
+  istruzioni in volo; 20 asset senza quotazione (senza fornitore, fornitore che fallisce, in pausa) → mai più d'una
+  istruzione in volo (HEAD: 20); i ripieghi leggibili in **una** istruzione raggruppata, solo gli illeggibili da soli
+  (HEAD: 6 istruzioni per 6 asset); 3 guardie (la chiusura leggibile sotto ±inf anche oltre una pagina, la pausa col suo
+  rifiuto, l'ordine della richiesta). **Corsia** (14:39; prodotto tolto `price_query.py`, sha `2a7b7007…` uguale dopo):
+  rosso **2** / 27; verdi `current-prices-bulk` 29, `current-price-storable` 27, `current-price-bootstrap` 8,
+  `provider-cooldown` 66. Descrizione del runner aggiornata.
+- **Revisione di E su MF-SEC9a** (entrato: dev `dd416f5bb`, CHANGELOG `942934dd6`), dentro questo lotto:
+  (1) LOW-1 ✅ `delete_rates_bulk`: le date di ogni coppia ordinate una volta con i loro id, ogni cancellazione per
+  bisezione (`bisect_left`/`bisect_right`, conteggio `max(0, hi − lo)`): era una scansione per cancellazione, ~4 s di
+  ciclo al tetto. (2) BRIM: la soglia reale su HEAD è 91 titoli con tutti i campi — già curata con le condizioni piatte;
+  chiesto al test-author il caso a 100 (rosso) e a 90 (guardia). (3) Nit ✅: docstring di `sql_chunks.py` (i siti, e
+  che un `or_()` annidato conta ogni termine), di `delete_rates_bulk` e di `bulk_delete_prices`; il conteggio per
+  intervallo di quest'ultimo resta → backlog MF-SEC9e. (4) Backlog ✅ MF-SEC9f (`scheduler/jobs.py:100`, ~1 000 coppie;
+  `engine.py:133` sicuro). (5) Il coordinatore porta dev al prossimo checkpoint (Z-30 tocca `get_prices_bulk` in
+  `price_query.py`, altra funzione). Doc FX: la bisezione in `#rate-write-limits`.
+- In corso: test-author `sec9a-tests` (rosso LOW-1 sul conto dei passi), `sec9a-rest-tests` (BRIM a 100/90).
+- ✅ **Rossi della revisione di E** (test-author): `test_delete_rates_bulk_matching_is_bisection_not_a_scan` (date
+  contate: ≤ 4⌈log₂(D+1)⌉ confronti per cancellazione, 2 000 × 2 000; HEAD supera il tetto alla 22ª — la scansione intera
+  sarebbe ~6 milioni) e la guardia contro una scansione a forza bruta su richieste casuali (5 semi; sovrapposizioni,
+  fine < inizio, coppia assente, giorni singoli); BRIM `[100-triples]` (rosso, appena oltre i 91 di E) e la guardia a
+  50/90. **Corsia** (14:48): BRIM/WAC rosso **4** / 6 (`9224f507…`), LOW-1 rosso **2** / 47 (`56565953…`, solo
+  `storage.py` tolto); verdi `bulk-writes-chunked` 49, `fx-core` 42, `bulk-reads-chunked` 10, `db brim-bulk` 7,
+  `portfolio-allocation-source` 98, `brim-provider-base` 39. ruff/black/diff-check, `mkdocs build` stretto, `check-links`.
+  Porta libera. Slot chiesto (`files/sec9ar.sh slot`: `api current-price-persistence`, `assets-price`, `brim`,
+  `brim-scalable`, `fx`).
+- ✅ **Slot** (14:53–14:57, GO del coordinatore, carico 23): `api current-price-persistence` 5, `api assets-price` 21,
+  `api brim` **118**, `api brim-scalable` 2, `api fx` 26. Porta libera. Nota del coordinatore per l'aggiornamento di
+  base: X-R65 (dev `c726b9d89`) rifiuta date di cambi e prezzi dopo domani; nella revisione combinata `DAY0` di
+  `test_bulk_writes_chunked.py` è passato al 1990 (`f6324af9e`) — da tenere alla fusione; i miei casi nuovi restano lontani
+  da oggi (API dal 2003 per ~3 000 giorni, gli altri a pochi anni dal 2001–2004). **CHECKPOINT READY** inviato, FROZEN.

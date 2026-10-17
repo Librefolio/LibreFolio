@@ -3901,6 +3901,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     montati, quindi i lettori dell'avvio (`env_secret`, la chiave generata) restano come sono.
   - Costo stimato: piccolo, una ventina di righe e i test (link, FIFO senza blocco, cartella, file regolare, opzione
     spenta come oggi). Si fa dopo B-38, così la CLI può passare all'opzione e togliere la sua copia.
+  - B-38 è entrato (`1ed071c2f`). La guardia della CLI apre il file e lo controlla, poi `read_secret_file` lo riapre
+    per percorso: sono due aperture, e fra le due il percorso può cambiare (`scripts/backup_cli.py`, «two opens»).
+    L'opzione legge dallo stesso descrittore che controlla: con lei basta una sola apertura, e la corsa sparisce
+    (coordinatore, 17/10).
 
   Dettagli: questa riga; la guardia di B in B-38.
 - **H-48 · `env_url` toglie la barra finale anche ai link di una pagina** — basso; H (review di A9), via coordinatore,
@@ -3957,6 +3961,28 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     OK, o lo fa X.
 
   Dettagli: questa riga.
+- **H-51 · Il motore del server vivo tiene `trusted_schema` acceso, con il `regexp` e il `floor` Python di SQLAlchemy**
+  — basso, sicurezza; H (review di B-36/B-37), deciso dal coordinatore il 17/10. Da fare dopo W-B75, nella 1.3.
+  - SQLAlchemy 2.0.52 (dialetto pysqlite, ereditato da aiosqlite) registra `regexp` e `floor` in Python su ogni
+    connessione. `trusted_schema` vale 1 di default.
+  - Il listener globale `set_sqlite_pragma()` (`db/session.py`) imposta solo `foreign_keys`, WAL e `busy_timeout`.
+  - B-28 controlla i tipi degli oggetti, non le espressioni.
+  - Sonda (`files/b36review/` della sessione H): un archivio con una colonna `DEFAULT (regexp(…))` passa il controllo
+    del ripristino, perché l'`integrity_check` della connessione semplice risponde `ok` (un CHECK invece lì fallisce,
+    «unknown function»). Poi, nel server, ogni insert che omette quella colonna fa girare il `regexp` Python con il
+    pattern e il valore dell'archivio; lo fa anche il motore async.
+  - Cura: `PRAGMA trusted_schema=OFF` per primo nel listener globale. Lo schema di LibreFolio (head 009) chiama solo
+    il built-in `lower()`, quindi per l'app non cambia niente.
+  - Nello stesso lotto: la frase di `security.md` sulla chiave d'istanza durante il ripristino, superata da B-18
+    (r. ~706). Va riscritta col percorso vero:
+    - `dev.py backup restore --instance-key-file`, solo da CLI;
+    - il file è letto da root prima del cambio di utente (B-38);
+    - `instance_key_invalid` scatta prima di creare qualsiasi cosa;
+    - la chiave dell'archivio vince (D1).
+  - Sempre nello stesso lotto, la frase sul motore di Alembic: il listener di `env.py` è una cura vera.
+  - Verifica nello slot: i miei test, le suite delle migrazioni e `api backup-restore`.
+
+  Dettagli: piano H, §14, «Review di B-36/B-37» e il lotto H-51.
 
 ## A · Account e accessi (fase 01)
 
@@ -4372,11 +4398,13 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
   refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
   estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
-- **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; dal `docs-writer` di A-21a
-  (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
+- ✅ **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; chiusa il 17/10 (commit del
+  coordinatore): `user_service._new_username_refusal()` (la `@`, poi 3–50) in `create_user` e `update_profile`
+  (UNAME-020…023); dal `docs-writer` di A-21a (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
   profilo rifiutano. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-21a.5».
-- **A-47 · `USERNAME_INVALID` riconosciuto dal testo del messaggio** — minimo; dalla revisione di E di A-21a (17/10,
-  LOW). `auth.py` (registrazione via `registration_service`, profilo) sceglie il codice confrontando
+- ✅ **A-47 · `USERNAME_INVALID` riconosciuto dal testo del messaggio** — minimo; chiusa il 17/10 (commit del
+  coordinatore): `AccountError` (un `str` con `.code`), i chiamanti guardano il codice (UNAME-030/031, UNAME-API-12);
+  dalla revisione di E di A-21a (17/10, LOW). `auth.py` (registrazione via `registration_service`, profilo) sceglie il codice confrontando
   `error == USERNAME_RESERVED_MESSAGE`: un cambio di parole lo romperebbe in silenzio. Meglio un codice restituito da
   `user_service.create_user`/`update_profile`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
   «A-21a — Revisione di E».
@@ -4391,7 +4419,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   (`emailLinks.ts`, di E) «irraggiungibile»: col codice nuovo i due posti possono dire «questa istanza non può
   verificare gli indirizzi: vedi i controlli di configurazione». Condivisa con E. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Revisione di H-19».
-- **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; da A-43 (A, 17/10). Annullato il link dell'admin in
+- ✅ **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; chiusa il 17/10 (commit del coordinatore), con il
+  lotto del helper del profilo; da A-43 (A, 17/10). Cura: `_latest_setup_withdrawn()`; se l'ultimo link di setup è
+  revocato e mai consumato, il WARNING dice «…was withdrawn (cancelled, or its address changed)…» (A50-001…004).
+  Annullato il link dell'admin in
   attesa, un riavvio con lo **stesso** `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` giustamente non lo riarma (il valore è noto),
   ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
   no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
@@ -5011,6 +5042,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     che la modale mostra come errore generico.
   - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
     codice e i collegamenti. Prima un rosso che lo riproduca.
+- **X-R66 · Il limite delle sonde dei provider detto nella lingua dell'utente** — basso, **dopo X-R58** (il
+  coordinatore, 17/10); X, 17/10 (dalla revisione di MF-SI2).
+  - `POST /assets/provider/probe` risponde 429 `{error_code: PROBE_RATE_LIMITED, retry_after, message}` oltre 30
+    sonde al minuto per utente. «Test Configuration» mostra il `message` inglese del backend (`extractErrorMessage`),
+    «Ask Provider» un generico «si è verificato un errore».
+  - Cura: una frase tradotta con l'ora locale di fine attesa, come per il `RATE_LIMITED` dei provider.
 - **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; X, 17/10
   (il coordinatore; numerata X-R65 per lo scontro con X-R64).
   - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
@@ -5021,7 +5058,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
     (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
     sarebbe servito in produzione. Un test di guardia lo vieta fuori da asset e cambi.
-- **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** — piccolo, **dopo l'ingresso di Z-27**, con il suo
+- ✅ **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** (chiusa il 17/10, in attesa del commit del coordinatore; con il sondaggio dal vivo di `/prices/current`, tetto di R13-SEC9-1: sì del coordinatore, 17/10) — piccolo, **dopo l'ingresso di Z-27**, con il suo
   aiuto e la sua costante; X, 17/10 (dalla revisione di X-R59: il limite scende da 10.000 a 1.000).
   - Dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola risposta unita); poi
     aggiornare i due passi della documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238), che
@@ -5491,6 +5528,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   non combacia (solo il proprio browser); (3) il toast di «+ New event» mostra 2 decimali (`parseFloat`, `formatFixed`): va con
   C-97c. Cura: (1) un esponente incollato letto esatto o rifiutato col messaggio; (2) un tetto alla lunghezza del testo prima del
   confronto e una regex lineare; (3) in C-97c. Dettagli: piano 08 di E, «R13-SEC5».
+  ✅ 17/10 (D-W66-1 = (a), coordinatore). Un testo incollato interamente in notazione scientifica si legge esatto entro ±100 (il
+  limite del backend), in `filterDecimalInput` e in `normalizeDecimalInput` per ogni campo che legge da lì: `1e-8` →
+  `0.00000001`. Un testo con un esponente che non si legge (fuori portata, o non interamente un numero: `1e5x`) resta com'è,
+  rosso, con `common.decimalExponentOutOfRange` (4 lingue). Le frecce non lo spostano. Le tre regex quadratiche sono lineari
+  (circa 3 s a 40 000 caratteri), e `compareExact` gira solo nel budget delle cifre. Prove: 88 rossi verdi (Vitest 231),
+  `core-unit` 8 589, `component-unit` 4 821, `front check` 0/0. Il punto (3) resta in C-97c. Dettagli: piano 04, «W-B66 — cura».
 - **W-B67 · Il costo Auto può finire sulla riga sbagliata** — medio, numeri; J, 17/10 (analisi di V-4, via il coordinatore). Prima
   del rilascio. `_find_created_tx_for_wac` (`backend/app/services/transactions/auto_cost.py:158-183`) trova la riga creata di un
   elemento senza `link_uuid` cercando l'ultima con lo stesso broker, asset, data e tipo (`order_by(id.desc()).limit(1)`): con due
@@ -5498,6 +5541,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   controllo del costo), il secondo lo riceve due volte; e un Auto seguito da un Manuale con la stessa chiave sovrascrive il costo
   Manuale con la media. Cura: la riga di ogni elemento dalla mappa che la creazione già conosce (indice → riga), senza la ricerca per
   campi; rossi prima. Dopo W-B60. Dettagli: piano 04, sezione «W-B67» (quando parte).
+  Analisi (17/10, W): c'è un secondo difetto. Le righe Auto dello stesso batch non ancora costate entrano a zero nelle medie delle
+  altre, e il risultato segue l'ordine degli indici (BUY 10 a 100, due Auto +5 lo stesso giorno: con la sola mappa 66,67 e 88,89).
+  **Decisione N84** (D-W67-1 → P1, coordinatore 17/10): ogni create sulla propria riga; le righe Auto in ordine di data del loro
+  gruppo, poi per indice; quelle non ancora costate (salvo le legate a uno split) fuori dai gruppi delle altre. Lo stesso costo che
+  avrebbero salvate una alla volta in ordine di data. Dettagli: piano 04, «W-B67 — … analisi» e «W-B67 — cura».
+  ✅ 17/10: `context.created_by_index` (la riga di ogni create, da `apply_creates`) al posto della ricerca per campi
+  (`_find_created_tx_for_wac` tolta); le righe Auto in ordine di data del gruppo, poi le create per indice e gli update per indice;
+  quelle non ancora costate (salvo le legate a uno split) fuori dai gruppi delle altre. 4 rossi verdi (`transaction-cost-basis-rule`
+  171); `transaction` 125, `transaction-decimal-places` 201, `auto-cost-unreadable-pool` 17, `lone-transfer-legs` 20,
+  `orphan-transfer-numbers` 21, `roi-fifo-utils` 1 312, `broker` 81. Slot prima dell'ingresso: `api transactions-wac` 20,
+  `portfolio-wac` 12, `batch-split-promote` 38; E2E `tx-wac-bulk` 11, `tx-wac-formmodal` 10, `tx-transfer-auto-cost` 2. Dettagli:
+  piano 04, sezione «W-B67 — cura».
 - **W-B68 · I valori degli eventi dei provider non sono troncati alla colonna** — basso, numeri; W, 17/10 (W-B60, docs-writer). I
   prezzi dei provider si salvano troncati a ciò che la colonna tiene (`storable_value`, `truncate_priceHistory`), i valori degli eventi
   dei provider no: `_storable_events` (`backend/app/services/assets/event_store.py`) ne controlla solo la grandezza. Con la lettura di
@@ -5585,13 +5640,21 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   rifiuta un costo su FX_CONVERSION; `costBasisNotAllowed` e `costBasisModeIncompatible` in 4 lingue, cancello su tutti i codici delle
   regole (22). 21 rossi verdi: `transaction-cost-basis-rule` 164, `transaction` 125, `transaction-decimal-places` 201; BRIM
   (`brim-create-transaction` 14, `brim-gap-fix` 115, `external brim-providers` 736) e gate i18n verdi. Dettagli: piano 04, sezione
-  «W-B72 — … (N78): cura».
+  «W-B72 — … (N78): cura». Dopo l'ingresso, un rosso di dev (X): il cancello dell'HTML
+  (`frontend/src/htmlInterpolation.gate.test.ts`) non ammetteva il `<b>` delle due chiavi nuove. Ora sono testo semplice; il
+  cancello dà 26 verdi e `core-unit` 8 378 verdi.
 - **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
   17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
   errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
   `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
   rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
   (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+- **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
+  coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
+  `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
+  J-12 può solo controllare che la modale si apra. Cura, economica: un segno che resta, `data-highlighted="true"` sulla riga fino
+  alla prossima evidenziazione o al cambio di pagina, con un ruolo visibile del design system (un ruolo `-lf-`, niente palette);
+  l'E2E di J-12 lo legge. Dopo la 1.3, salvo spazio. Dettagli: questa voce.
 - **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
   `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
@@ -6044,7 +6107,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `user/dashboard/kpi-cards`. `translate-validate` (16/10): 63 errori strutturali nuovi da J-24. `adjustment`, `fifo-engine/index` e
   `fifo-lot-analysis` avevano già debito (J-25). Tradurle nello stesso giro, con `index` (l'ancora del §8). Dettagli: piano
   J, §10 «J-24».
-- **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
+- ✅ **J-33 · Lo storico della performance dei lotti salta i giorni senza prezzo, la Dashboard li valuta al costo** —
   medio-basso, numeri; J, 16/10, trovata in CP-7b.
   - Dove: `lots/histories.py::build_performance_history` (ROI e TWRR dei lotti, `PERFORMANCE_HISTORY`). Fa la NAV solo
     nei giorni con un prezzo; i flussi di prima li porta al primo giorno con la NAV.
@@ -6060,6 +6123,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     aperti (costo noto, cambio all'apertura; un giorno con un lotto SHORT aperto o un costo ignoto resta senza punto), con
     le stesse `at_cost_until`; rosso prima. Dichiarare prima i valori che cambiano.
   - Dettagli: piano J, §10 «CP-7b — codice».
+  - ✅ 17/10: fatta da J (checkpoint J-33). Nei giorni senza osservazione la NAV è al costo dei lotti LONG aperti (cambio
+    d'apertura) e un trasferimento sposta il costo delle sue unità; il TWRR comprende il salto dal costo al primo
+    prezzo, come il ROI. Una rettifica senza costo conta 0 come nella storia del valore (J-35 resta al developer).
+    Dettagli: piano 05, sezione «J-33».
 - **J-34 · Debito di traduzione di CP-7b (il riferimento dei lotti e i giorni al costo)** — basso, documentazione; J,
   16/10. Pagine EN cambiate di senso, senza stamp:
   - `financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis`:
@@ -6101,7 +6168,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     zero o ignoto. Se ignoto: un segno `cost_known` sul lotto, messo dal motore, e niente valore al costo senza di
     esso (sintesi e storici); rosso prima.
   - Dettagli: piano J, §10 «CP-7b — codice».
-- **J-36 · I due messaggi del prezzo di riferimento dei lotti dicono cose inesatte** — basso, chiarezza; J, 16/10
+- ✅ **J-36 · I due messaggi del prezzo di riferimento dei lotti dicono cose inesatte** — basso, chiarezza; J, 16/10
   (docs-writer di CP-7b). Chiavi `dataQuality.referencePriceFallback` / `referencePriceUnavailable`, quattro cataloghi.
   - `referencePriceUnavailable` («relative return cannot be computed»): falso per un lotto col suo costo, che ripiega
     sul proprio prezzo (`opening_reference_price`, sorgente `exact`). Vero solo per un lotto a costo zero.
@@ -6112,6 +6179,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     known price, a carried quote or a trade price»; «no price on or before the opening day — the relative return uses
     the lot's own price, when it has one»), e il prezzo convertito con la sua valuta; quattro lingue.
   - Dettagli: piano J, §10 «CP-7b — codice».
+  - ✅ 17/10: fatta da J (checkpoint J-36). I due testi dicono cosa fa il calcolo, nei 4 cataloghi, senza il prezzo: il
+    banner dei lotti raggruppa le issue per codice in un messaggio solo (i parametri della prima) con un chip per lotto,
+    quindi un prezzo non può valere per tutti. Il parametro `reference_price` resta nei `message_params`, non letto.
+    Dettagli: piano 05, sezione «J-36».
 - **J-38 · La guida dei plugin dei segnali descrive male l'ordine del taglio e il piano** — minimo, documentazione; J,
   17/10 (docs-writer di CP-10c). Pagina `developer/architecture/patterns/signal_plugin_guide.md`, solo inglese.
   - Il diagramma di sequenza del grafico disegna «Slice to visible range and assign status» dopo le annotazioni. Nel
@@ -6264,7 +6335,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - 17/10 13:45: dev rosso sulla guardia dei rimedi (il rimedio era un letterale fuori dalla tabella): curato in
       J-50b, una tabella e un costruttore in `risk/base.py` e una scansione che vieta un rimedio scritto altrove.
       Dettagli: piano 05, sezione «J-50b».
-- **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
+- ✅ **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
   J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
   al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza
   storia: `FIFO_SOURCE_QUANTITY_MISSING` → `FAILED`, YoC «non disponibile» per la posizione in B. Il lato del
@@ -6272,6 +6343,24 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   La cura naturale è la lettura al confine di J-10 (`financial_math/lots/scope_boundary.py`), applicata ai broker
   visibili al posto della gamba aggiunta. Prima un rosso. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - ✅ 17/10: fatta da J (checkpoint J-51). Lo YoC legge al confine dei broker visibili le sole gambe in arrivo
+    (`read_arrivals_at_scope_boundary`); una partenza tiene la compagna (le unità in viaggio contano per l'origine). Il
+    costo resta il WAC della posizione della Dashboard: con la base della gamba un valore, senza `MISSING_WAC`.
+    Dettagli: piano 05, sezione «J-51».
+- **J-53 · Il banner dei lotti mostra un solo fondo orfano per codice** — medio, numeri e chiarezza; J, 17/10 (analisi
+  di J-36). **Titolare: Y** (frontend, decisione del coordinatore 17/10), dopo i lotti A/B di X-R59, nella 1.3.
+  `lotDataQualityHelpers.buildIssueGroups` raggruppa le issue per codice e mostra il messaggio coi parametri della
+  prima; `ASSET_INCOME_NO_ELIGIBLE_LOTS` e `ASSET_COST_NO_ELIGIBLE_LOTS` arrivano una per fondo orfano («…of
+  {target_amount} {target_currency} on {as_of_date} — income left unallocated»), senza lotto, quindi senza chip: con più
+  fondi il banner mostra l'importo e la data di uno solo e nasconde gli altri. La cura: una riga per issue per i codici
+  senza lotto (non un totale del backend, che sommerebbe valute diverse e perderebbe le date). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-36».
+- **J-52 · Due convenzioni d'eco per la finestra del rigioco fuori dai limiti** — minimo, chiarezza; nota cosmetica di E
+  alla revisione di SEC8-1b (17/10), facoltativa. Per una richiesta fuori dai limiti la finestra preparata
+  (`requested_range`, che fa da ripiego di `metadata.analyzed_range`) è quella limitata, mentre `output.replay_range` e
+  `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
+  nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
+  «SEC8-1b».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -6531,6 +6620,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     Revisori: W (BRIM) e H (post-migrazione).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
   aperti con `open()`».
+- **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione D3).
+  - Da X-R65 (N83) le scritture le rifiutano, ma una riga già nel database resta: il riempimento dei prezzi parte dal
+    primo prezzo salvato, e uno del 0001-01-01 fa camminare ~740 000 giorni per asset (sotto il budget di 1 milione).
+  - Strade: un pavimento in lettura nel riempimento (`_build_backward_filled_series` e `_fill_span` da
+    `max(primo prezzo, 1900)`), o una correzione post-migrazione che le segnala o le toglie. Da decidere.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R65 (N83) — date assurde
+  nelle scritture manuali di prezzi e cambi: analisi».
 
 ## B · Backup e Docker (fase 01)
 
@@ -6894,8 +6990,12 @@ sulla base `23f6578f3`.
     copia di un ripristino forse ancora in attesa; l'avvio dopo direbbe `stage_missing`.
   - Un test per la FIFO al posto dello stato ora si può scrivere, con un timeout: la lettura `lstat`-prima la ignora,
     prima restava appesa.
+  - **La pagina** (17/10, trovato in B-41): con uno stato illeggibile dopo un riavvio, il ripiego su `GET /status`
+    riceve 500, che `readStatusWithSession` (`backupApi.ts`) prende per «server giù». L'overlay interroga ogni secondo
+    per sempre: due righe d'errore a ogni giro col biglietto, una dopo la sua ora. E non dice perché. Va con la stessa
+    decisione.
   Dettagli: piano 07, «B-32».
-- **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
+- ✅ **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
   — basso; B, 17/10 (revisione di H su B-18: LOW-1 e due appunti; piano di H §14 «Review di B-18»).
   - **LOW-1**: su un'istanza senza chiave (dal cloud a un server nuovo), se la verifica non può crearla (`secrets/` non
     scrivibile) tutto resta illeggibile. Però `instance_key_status()` dice ancora `not_created` con `problem=None`, e la
@@ -6904,6 +7004,14 @@ sulla base `23f6578f3`.
   - **Doc**: `cli_tools` deve dire che un vecchio `LIBREFOLIO_INSTANCE_KEY` vale «as written, spaces included»;
     `backup_restore` deve aggiungere `chmod 600` sul file della chiave vecchia mentre sta in `backups/`.
   Niente codice prima del via del coordinatore. Dettagli: piano 07, «B-18».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 14:10).
+  - `_print_given_key` prende il ramo dell'eccezione anche con `not_created`: «`<path>`: there is no instance key yet,
+    and it could not be created». Un test accanto a c7.
+  - `cli_tools`: «as written in the variable, spaces included», e la riga dell'eccezione.
+  - Il `chmod 600`: dopo B-38 la chiave non passa più da `backups/`; va sul file `old-instance.key` dell'host
+    (`backup_restore` l.320).
+  Dettagli: piano 07, «B-34».
 - ✅ **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
   nel self-hosted; B, 17/10 (BZ parte 1, F3).
   - `staging.space_needed` e `_check_space` (`staging.py:462-470`) confrontano le dimensioni dichiarate dal manifest
@@ -6939,7 +7047,7 @@ sulla base `23f6578f3`.
   - `_row_counts` quota i nomi raddoppiando `"`.
   - `run_post_migration_fixes` spegne `trusted_schema` per primo; `env.py` lo fa con un listener `connect`, per ogni URL.
   Dettagli: piano 07, «B-36 + B-37».
-- **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
+- ✅ **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
   BZ parte 1, F4.
   - `read_secret_file` apre con `path.open("rb")`.
   - La guida di B-18 suggerisce `LibreFolio-data/backups/` per la chiave vecchia, una cartella dell'utente del server.
@@ -6950,6 +7058,11 @@ sulla base `23f6578f3`.
       `read_secret_file`, che è di H);
     - nella guida, la chiave fuori dalla cartella dei dati.
     Test: un link o una FIFO come `--instance-key-file` da root → ❌, niente letto.
+  ✅ **Fatto il 17/10** (B-38, checkpoint delle 13:58), con la rifinitura approvata dal coordinatore.
+  - Ovunque, un file regolare aperto con `O_NONBLOCK`.
+  - Da root, nessun componente del percorso è un link dentro la cartella dei dati; fuori si seguono (Kubernetes).
+  - La guida usa `/root` del container.
+  - La corsa fra le due aperture è nella riga H-47 di H. Dettagli: piano 07, «B-38».
 - ✅ **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
   - Ogni utente può scrivere le `notes` degli eventi di un asset (`POST /assets/events`), e ogni utente può esportarle
     in CSV (`GET /backup/asset/{id}/events`, `series_export.stream_rows_as_csv`).
@@ -6965,7 +7078,7 @@ sulla base `23f6578f3`.
   i risultati seguono l'ordine della tabella. Le due righe vanno nel prossimo lotto, nel loro posto dell'ordine.
   ✅ **Fatto il 17/10** in B-35 (checkpoint delle 12:36): le tre righe di B (`backup.panel_token`,
   `backup.upload_limit`, `backup.restore_limit`) fra il «Log level» della piattaforma e il primo controllo di A.
-- **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
+- ✅ **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
   17/10.
   - Con uno stato del ripristino illeggibile, la rotta anonima `GET /backup/restore/outcome` legge lo stato prima del
     biglietto, e la lettura indulgente registra un errore a ogni chiamata. Un client anonimo può ripeterlo.
@@ -6973,6 +7086,23 @@ sulla base `23f6578f3`.
   - Cura economica: la rotta controlla prima il biglietto (forma, registro, impronta, scadenza) e legge lo stato
     soltanto per un biglietto valido; oppure un solo log per stato, o a livello debug.
   Dopo la 1.3, se non costa poco.
+
+  ✅ **Fatto il 17/10** (checkpoint delle 14:56), nella 1.3 (coordinatore).
+  - La rotta passa a `read_outcome` il modo di leggere lo stato, chiamato una volta e solo per il biglietto di un
+    riavvio non scaduto. Chi non ha quel biglietto non fa più leggere lo stato, né registrare l'errore.
+  - Il titolare del biglietto resta com'era (guardia b5).
+  Dettagli: piano 07, «B-41 + B-42».
+- ✅ **B-42 · Un file del biglietto dell'esito rotto registra un errore a ogni chiamata anonima** — basso; B, 17/10
+  (trovato in B-41).
+  - Ogni biglietto ben formato (43 caratteri URL-safe, senza sessione) arriva a `outcome._read_record`. Un file del
+    biglietto illeggibile, un link, troppo grande o non valido registra un errore a ogni chiamata.
+  - Cura: un errore la prima volta per cartella dati, poi `debug` finché dura lo stesso errore; di nuovo dopo che il file
+    è stato scritto, tolto o letto, o se fallisce in altro modo.
+  Dentro B-41 (coordinatore, 17/10). Dettagli: piano 07, «B-41 + B-42».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 14:56).
+  - `outcome._report`: un errore la prima volta per cartella dati e processo, poi `debug` finché dura lo stesso errore.
+  - `_forget` lo dimentica quando il file viene scritto, tolto, trovato mancante o letto.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -7165,6 +7295,22 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - Nessun cambio a runtime, `tsc` senza i due errori, Prettier pulito.
   - Restano 3 TS2769 di C-66 (`c18517e31`): l'allargamento di E-2 contro `isStoredPoint`, di un ramo attivo.
   - Commit al checkpoint di E-17. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-17».
+- ✅ **E-18 · Codici di valuta stretti sulle scritture (MF-SEC9b)** — piccolo; coordinatore, 17/10 (analisi di E, 13:2x).
+  - `Currency.validate_code` accetta nomi e numeri (`EURO`, `978`, `US DOLLAR`) e li salva così, senza
+    canonicalizzarli; nelle transazioni senza limite di lunghezza.
+  - Decisione: stretto solo sugli schemi di richiesta (tre lettere ASCII e `alpha_3` esistente; `XXX`/`XTS` ammessi);
+    le letture restano tolleranti.
+  - Il codice dopo l'ingresso di X-R59/SEC9-1 di MF; prima i rossi, in un file nuovo.
+  - A parte: un avviso di qualità dei dati per i codici non ISO salvati, e la SQL di misura nella lista dello
+    sviluppatore.
+  - 17/10, E: fatta. `IsoCurrencyCode` e `IsoCurrencyAmount` sugli schemi di richiesta di transazioni, asset, eventi,
+    FX (tassi e rotte) e sull'ingresso di Investimental. La lettura delle rotte resta sottoclasse e rinuncia col suo
+    `ClassVar`. Lo schema OpenAPI è identico.
+    - Prova: 17 selettori, 3 674 verdi, 0 rossi; build stretta e `check-links` puliti.
+    - Restano fuori, aperti: l'avviso di qualità dei dati; il gap-fix del BRIM che costruisce `TXCreateItem` senza
+      prendere l'errore (oggi irraggiungibile).
+    - Commit al checkpoint di E-18.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «MF-SEC9b» ed «E-18».
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -7575,23 +7721,31 @@ punto di partenza, l'audit dello stesso giorno:
   a quote diverse sta dentro il ramo `tx.date != paired.date`: una coppia dello stesso giorno non lo produce. Il divario
   è un risultato nel P&L (J2), l'avviso spiega perché. Da vedere con chi possiede la qualità dei dati (J). Dettagli:
   piano MF, sezione «MF-J2 — codice e misura».
-- **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+- ✅ **MF-D3 · Il fattore d'annualizzazione riscritto nei validatori degli schemi del rischio** — minimo, nessun numero;
+  **chiusa il 17/10**: `returns.observations_per_year`, letto dai due validatori (decisione D3 del coordinatore: uno
+  schema può importare una funzione pura della casa; regola 8), commit `ad399d383`, entrato in dev `482343eb3`.
   MF, 17/10 (MF-D resto). `schemas/risk.py:514` e `:595` ricalcolano `n_observations * 365 / calendar_days` per
   controllare l'invariante del contratto, accanto alla funzione della casa `returns.observed_annualization`. Gli
   schemi non importano servizi per scelta: oggi è un controllo dichiarato, non una seconda implementazione. Da
   decidere se resta così (riga nella pagina dev) o se la formula scende in un modulo che entrambi possono leggere.
   Dettagli: piano MF, sezione «MF-D resto».
-- **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+- ✅ **MF-SI1 · La storia della Scheduled Investment da «min» solleva** — basso, preesistente; test-author di MF, 17/10
+  **chiusa il 17/10**: commit `f37b1d0ea`, entrato in dev `16f8c74ed`.
   (R13-SEC7-2). `get_history_value(start_date="min")` confronta il letterale `"min"` con le date
   (`start_date < min(cached.keys())`) e filtra gli eventi con `start_date` invece di `effective_start`: solleva
   `CALCULATION_ERROR`, su HEAD come dopo SEC7-2. La via del refresh può passare `"min"`. Cura: `effective_start` in quei
   due punti, rossi prima. Dettagli: piano MF, sezione «R13-SEC7-2».
-- **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+- ✅ **MF-SI2 · Scheduled Investment: un tetto agli `asset_events` e un limite per utente alla sonda** — basso,
+  **chiusa il 17/10**: `SCHEDULE_MAX_EVENTS` 10 000, la sonda a 30 al minuto per utente (`LIBREFOLIO_PROBE_RATE_LIMIT`,
+  0 = spento, le corsie spente), commit `ad399d383`, entrato in dev `482343eb3`; la lettura a ogni sonda col lotto
+  MF-SEC9a.
   sicurezza sotto soglia; E, 17/10 (revisione di R13-SEC7-2). Gli eventi manuali di un piano non hanno un numero
   massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
   per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
   limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
-- **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+- ✅ **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+  **Chiusa il 17/10**: `shutdown_engine_executor()` nel passo `portfolio-engine` dello spegnimento, commit
+  `ad399d383`, entrato in dev `482343eb3`.
   `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
   ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
   Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
@@ -7599,11 +7753,14 @@ punto di partenza, l'audit dello stesso giorno:
   lettura della cache `portfolio_blob` (`portfolio/engine.py` ~:316) e la sua scrittura (~:457) nessun lucchetto: due
   richieste identiche concorrenti ricostruiscono entrambe (con J-45 occupano i due worker). Nessuna azione ora; cura
   possibile: un `asyncio.Future` per chiave in volo. Dettagli: piano MF, sezione «J-45».
-- **MF-SEC8-2a · Un avviso di qualità dati per le righe datate prima del 1900** — basso; coordinatore, 17/10 (decisione 2
+- ✅ **MF-SEC8-2a · Un avviso di qualità dati per le righe datate prima del 1900** — basso; coordinatore, 17/10 (decisione 2
+  **chiusa il 17/10**: avviso `TRANSACTIONS_BEFORE_FLOOR` (warning, senza CTA), commit `871f75a38`, entrato in dev
+  `482343eb3`; il caso API con `ad399d383`.
   di MF-SEC8-2). N74 impedisce le nuove; quelle già salvate si rigiocano ma la storia parte dal 1900-01-01 senza dirlo.
   Proposta: un codice `TRANSACTION_BEFORE_FLOOR` (INFO) con `navigate_asset`/il broker. Dettagli: piano MF, sezione
   «MF-SEC8-2».
-- **MF-SEC8-2b · `date.min − 1 giorno` fuori dalla ricostruzione** — minimo, preesistente; MF, 17/10 (decisione 3 di
+- ✅ **MF-SEC8-2b · `date.min − 1 giorno` fuori dalla ricostruzione** — minimo, preesistente; MF, 17/10 (decisione 3 di
+  **chiusa il 17/10**: `day_before()` accanto a `shift_date()`, commit `e864827d3`, entrato in dev `482343eb3`.
   MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
   provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
   di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
@@ -7614,6 +7771,26 @@ punto di partenza, l'audit dello stesso giorno:
   ripete l'SQL. Altre query con un termine OR per elemento, da verificare se raggiungibili con tanti elementi:
   `fx/storage.py:262`, `brim_provider.py:2030`, `fx/sync.py:234`, `pac_allocator/source/wac.py:44`. Cura: messaggio
   generico + log, `MAX_BULK_ITEMS`, blocchi come `FX_PAIRS_PER_QUERY`. Dettagli: piano MF, sezione «R13-SEC9».
+  **In corso (17/10)**, allargata da E (revisione di R13-SEC9): anche `fx/storage.py:139`/`:262`, `price_store.py:461`,
+  `fx/sync.py:234` in blocchi (`utils/sql_chunks.OR_TERMS_PER_QUERY`), un tetto di scrittura `MAX_BULK_WRITE_ITEMS`
+  (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
+  verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-SEC9d · Nessun tetto globale alle chiamate concorrenti per fornitore** — basso, carico; E, 17/10 (revisione di
+  R13-SEC9). Il semaforo di `get_current_prices_bulk` limita una richiesta, non il processo: 1 000 id distinti con un
+  fornitore lento sono ~33 minuti di chiamate in uscita per richiesta, e più richieste si sommano. Proposta: un
+  semaforo per fornitore, condiviso fra richieste e scheduler, accanto alle pause dopo un 429. Solo informazione per ora.
+  Dettagli: piano MF, sezione «MF-SEC9a».
+  **Entrata la prima parte** il 17/10 (dev `dd416f5bb`, E OK); il resto — `brim_provider.py` (soglia reale ~90 titoli
+  con ISIN, ticker e nome: l'`or_()` annidato del nome conta 7 termini) e `wac.py`, più il ciclo di conteggio di
+  `delete_rates_bulk` per bisezione (LOW-1 di E) — col lotto «BRIM/WAC/SEC9c».
+- **MF-SEC9e · `bulk_delete_prices` conta con una query per intervallo** — basso, prestazioni; E, 17/10 (revisione di
+  MF-SEC9a). Prima del DELETE a blocchi, i conteggi per asset sono una `COUNT` attesa per intervallo: fino a 10 000
+  query al tetto `MAX_BULK_WRITE_ITEMS`. Lento, non blocca il ciclo degli eventi. Cura possibile: contare dalle righe
+  lette a blocchi (id per asset), che rende esatti anche gli intervalli sovrapposti (oggi contati due volte).
+  Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
+  `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
+  `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».
 - **MF-SEC9b · `Currency.validate_code` accetta nomi e codici numerici** — basso, preesistente, tutta l'app;
   test-author di MF, 17/10 (Y D1). La ricerca generale di pycountry accetta `EURO`, `978`, `US Dollar` e restituisce
   l'input in maiuscolo (`EURO`, `978`, `US DOLLAR`), non il codice a tre lettere: ogni campo valuta li lascia passare

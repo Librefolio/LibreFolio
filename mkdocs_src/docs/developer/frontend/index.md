@@ -49,7 +49,7 @@ frontend/
 │       │   ├── dashboard/       # Dashboard panels and charts, view store and date-range controller
 │       │   ├── email/           # Email tab, address verification, password-reset and shared-link emails
 │       │   ├── files/           # Files table and grid, preview modal and file-set badges
-│       │   ├── instance/        # Instance config, notices and blocked-instance page
+│       │   ├── instance/        # Instance config, profile helpers (selfHostedConfirmed, managedConfirmed), notices and blocked-instance page
 │       │   ├── legal/           # Legal notice of the instance: LegalNotice (full) and LegalLinks (one line)
 │       │   ├── live-updates/    # Activity-aware polling of live prices and its "Updates paused" pill
 │       │   ├── onboarding/      # Welcome setup, intro tour and contextual guides

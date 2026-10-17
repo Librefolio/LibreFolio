@@ -198,6 +198,16 @@ def needs_market_series(analyses: Sequence[LotAnalysisType]) -> bool:
     )
 
 
+def _need_cost_rates(fx_resolver: FxRateResolver, lots_by_id: dict[int, FifoLot], at_cost_until: date_type | None) -> None:
+    """When some day is valued at cost, each LONG lot's currency at its opening date: the rate that day reads the lot's
+    cost at (J-33)."""
+    if at_cost_until is None:
+        return
+    for lot in lots_by_id.values():
+        if lot.direction == "LONG":
+            fx_resolver.need(lot.currency, lot.opening_date)
+
+
 def collect_performance_fx_needs(
     *,
     fx_resolver: FxRateResolver,
@@ -206,9 +216,11 @@ def collect_performance_fx_needs(
     closures: Sequence[LotClosure],
     lots_by_id: dict[int, FifoLot],
     asset_currency: str,
+    at_cost_until: date_type | None = None,
 ) -> None:
     if LotAnalysisType.PERFORMANCE_HISTORY not in analyses:
         return
+    _need_cost_rates(fx_resolver, lots_by_id, at_cost_until)
     for tx in transactions:
         tx_type = str(getattr(tx.type, "value", tx.type))
         if tx_type == "BUY":

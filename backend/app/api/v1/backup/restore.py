@@ -24,6 +24,7 @@ it tells the page that the restore waits for the unblock.
 """
 
 import asyncio
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, Response, status
 from starlette.requests import ClientDisconnect
@@ -437,18 +438,24 @@ def get_restore_outcome(response: Response, x_restore_ticket: str | None = Heade
     """What became of a restore, for the page that asked its restart: no session (a restore ends every session, and
     without ``JWT_SECRET`` every start does), the one-time ticket of the restart in the ``X-Restore-Ticket`` header
     instead, never in the URL. The same 404 for every ticket that does not give it. The outcome can be read again until
-    the ticket expires, a final one included (decision N53)."""
+    the ticket expires, a final one included (decision N53). The ticket comes first: the state of the restore is read
+    only for the ticket of a restart not expired, so no other caller makes LibreFolio read it, nor log that it cannot
+    (B-41)."""
     data_dir = get_data_dir()
-    try:
-        state = read_restore(data_dir)
-    except RestoreStateUnreadableError:
-        # Logged by the reader: the holder of a ticket learns no more than with any other ticket (B-32).
-        state = None
-    found = outcome.read_outcome(x_restore_ticket, state, data_dir=data_dir)
+    found = outcome.read_outcome(x_restore_ticket, lambda: _state_for_outcome(data_dir), data_dir=data_dir)
     if found is None:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_outcome_not_found", "No restore outcome for this ticket")
     response.headers["Cache-Control"] = "no-store"
     return found
+
+
+def _state_for_outcome(data_dir: Path) -> RestoreState | None:
+    """The state of the restore, for the holder of the ticket of its restart: one the file system does not let be read
+    is none there, logged by the reader, so the holder learns no more than with any other ticket (B-32)."""
+    try:
+        return read_restore(data_dir)
+    except RestoreStateUnreadableError:
+        return None
 
 
 def _restart() -> None:

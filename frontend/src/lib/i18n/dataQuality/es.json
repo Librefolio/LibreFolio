@@ -24,8 +24,8 @@
       "sync_fx_pair": "Sincronizar tipos de cambio",
       "sync_asset_prices": "Sincronizar precios"
     },
-    "referencePriceFallback": "Precio de apertura del lote no disponible en la fecha exacta — se usa el último precio conocido {reference_price} como referencia para el rendimiento relativo",
-    "referencePriceUnavailable": "No hay precio de referencia disponible para la apertura de un lote — no se puede calcular el rendimiento relativo",
+    "referencePriceFallback": "Lotes abiertos por un ajuste en un día sin cotización de mercado: su rendimiento abierto parte del último precio hasta ese día, una cotización anterior o el precio de una compra o una venta",
+    "referencePriceUnavailable": "Lotes abiertos por un ajuste antes de cualquier precio: su rendimiento abierto parte de su propio coste de compra unitario, y no está disponible sin coste de compra",
     "shortTransferNotSupported": "La transferencia de una posición short aún no es compatible",
     "shortAdjustmentNotSupported": "Un ajuste todavía no puede abrir ni cerrar una posición short",
     "fifoSourceQuantityMissing": "Retira {missing_quantity} más de lo que el bróker tenía ese día",

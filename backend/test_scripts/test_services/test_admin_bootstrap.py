@@ -75,6 +75,17 @@ that does not wait; ``./dev.py user demote`` refuses the waiting administrator �
 changed — and demotes any other administrator as before. A32-004 loses four variants by construction: its two
 deactivations of the account already inactive now revoke the link (A43-001), and its two demotions are now refused at
 the CLI (A43-004) and in the Users tab (UADM-072), wherever the refusal lives.
+
+Lot A-50 (the restart's warning; cure approved by the coordinator, 17/10) adds one more section at the end, every new
+red labelled ``# red until A-50``. A50 — a restart that finds the waiting administrator without a live setup link
+still answers ``EXPIRED`` — the same account, no ``link_token``, nothing written — and its one warning says why: the
+link «withdrawn» when the account's most recent setup link — the latest created — is revoked and was never consumed,
+«has expired» otherwise; the start that changes the address still says «address changed». A50-001 and A50-002: the
+setup cancelled, through the Users tab's PATCH with a token in the configuration, and through the CLI's
+``user deactivate`` with a generated link; A50-003: the starts after the one that changed the address; A50-004, a
+guard: a link that ran out, an earlier one revoked by a re-arm counting for nothing. The remedy is today's:
+``./dev.py user setup-link``, and ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`` only when the configuration carries a token. Only
+a distinctive word of the warning is pinned, never its sentence: the log is English, for the developer.
 """
 
 from __future__ import annotations
@@ -2809,3 +2820,184 @@ async def test_the_cli_still_demotes_any_other_administrator(engine: AsyncEngine
     assert await _waiting(engine, bootstrap, admin_id) == (True, True, admin_id), "the waiting administrator must still wait"
     assert await _status(engine, TOKEN_ONE, moment + AFTERWARDS) == TokenStatus.VALID, "its setup link must stay valid"
     print_success("demoted; the waiting administrator untouched")
+
+
+# =============================================================================
+# A50 — LOT A-50: THE RESTART SAYS WHY THE SETUP LINK IS GONE
+# =============================================================================
+# A-50: a restart while the initial administrator waits finds no live setup link, and a token of the variable already
+# known re-arms nothing: ``_keep_pending_admin`` answers ``EXPIRED`` and logs one warning — «address changed» at the
+# start that changes the address (A-33), «has expired» at any other, even for a link that did not run out but was
+# revoked: cancelled (A-43: ``update_user_status(..., is_active=False)``, the Users tab's PATCH, or
+# ``set_user_active(..., False)``, the CLI's ``user deactivate``), or revoked by an address changed at an earlier start.
+# The cure (approved by the coordinator, 17/10): when the address did not change at this start, and the account's most
+# recent setup link — the latest created — is revoked and was never consumed, the warning says the link was withdrawn;
+# otherwise «has expired», as today. The action stays ``EXPIRED`` — the same ``user_id`` and ``username``, no
+# ``link_token`` —, nothing is written, and the remedy is today's: ``./dev.py user setup-link``, with a new
+# LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN when the configuration carries one. The log is English, for the developer: only a
+# distinctive word is pinned — «withdrawn», «has expired», «address changed» —, never the sentence. The cancellations go
+# through ``user_service``, which reads the clock: A50-001 and A50-002 are dated from it, as A43's; every other call
+# takes its ``now``.
+
+#: The distinctive words of the restart's warning, looked for in its message in lower case: the link withdrawn (A-50),
+#: the link run out, the address changed at this very start (A-33). The withdrawn warning may name the change of
+#: address among its causes, so «address changed» alone does not tell the two apart: «withdrawn» does.
+SAYS_WITHDRAWN = "withdrawn"
+SAYS_EXPIRED = "has expired"
+SAYS_MOVED = "address changed"
+#: When the restart after the change of address runs (A50-003): an hour after it, the link's 72 hours not over; or once
+#: they are, the link revoked and run out at once — its revocation decides all the same.
+LATER_RESTARTS = [
+    pytest.param(HOUR, id="an-hour-later"),
+    pytest.param(SETUP_TTL + HOUR, id="once-its-72-hours-are-over-too"),
+]
+#: Setup links that ran out, never revoked (A50-004): (the token the administrator is created with, or None for a
+#: generated link; the token that re-arms it an hour later — revoking the first link —, or None). The restart's
+#: configuration carries the last token given.
+RUN_OUT_LINKS = [
+    pytest.param(TOKEN_ONE, None, id="the-variables-token"),
+    pytest.param(None, None, id="a-generated-link"),
+    pytest.param(TOKEN_ONE, TOKEN_TWO, id="the-token-that-re-armed-it-its-first-link-revoked"),
+]
+
+
+def _said(event: dict[str, Any]) -> str:
+    """The message of a log event, in lower case: where a distinctive word is looked for."""
+    return str(event.get("event", "")).lower()
+
+
+def _the_restarts_warning(events: list[dict[str, Any]], token: Optional[str]) -> dict[str, Any]:
+    """The one warning of a restart that found no live setup link, its remedy as today: it names ``./dev.py user setup-link``, and ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`` exactly when the configuration carries a token — a new one there re-arms."""
+    warnings = _at_level(events, "warning")
+    assert len(warnings) == 1, f"the restart must log one warning: {warnings}"
+    warning = warnings[0]
+    assert SETUP_LINK_COMMAND in repr(warning), f"the warning must still name {SETUP_LINK_COMMAND}: {warning}"
+    if token is None:
+        assert TOKEN_VARIABLE not in repr(warning), f"the configuration carries no token: the warning must name {SETUP_LINK_COMMAND} alone, never {TOKEN_VARIABLE}: {warning}"
+    else:
+        assert TOKEN_VARIABLE in repr(warning), f"the configuration carries a token: the warning must name {TOKEN_VARIABLE} too: {warning}"
+    return warning
+
+
+async def _cancelled_waiting_administrator(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, cancel: Change, moment: datetime, *, token: Optional[str]) -> tuple[int, str]:
+    """The F02 administrator created by the bootstrap an hour before ``moment`` — with ``token`` from the configuration, or a generated link —, root beside it, then its setup cancelled by ``cancel``: the id of the waiting account and its link.
+
+    Barriers: before, the account waits and its link is valid at ``moment``; after, the link is revoked and only
+    revoked, and the account still waits — what A43-001 pins.
+    """
+    created = await _created(engine, bootstrap, f02, token=token, now=moment - HOUR)
+    await _add_user(engine, ROOT_USERNAME, admin=True)
+    link = token or created.link_token
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "barrier: the F02 administrator waits for its setup"
+    assert await _status(engine, link, moment) == TokenStatus.VALID, "barrier: its setup link is valid"
+    await cancel(engine, created.user_id, moment)
+    assert _link_states(await _setup_rows(engine, created.user_id)) == [REVOKED_ONLY], f"barrier: {_named(cancel)} must revoke the link, and only revoke it (A43-001)"
+    assert await _waiting(engine, bootstrap, created.user_id) == (True, True, created.user_id), "barrier: the account still waits for its setup"
+    return created.user_id, link
+
+
+# red until A-50
+@pytest.mark.asyncio
+async def test_a_restart_after_the_setup_was_cancelled_in_the_users_tab_says_the_link_was_withdrawn(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A50-001 — NEW, red until A-50 (today «has expired», for a link that did not run out): the waiting administrator, created by the bootstrap with TOKEN_ONE from the configuration, its setup cancelled in the Users tab — ``update_user_status(..., is_active=False)``, the PATCH, revokes its link (A43-001) —; a restart five minutes later with the same configuration, TOKEN_ONE known so re-arming nothing: ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which says the link was withdrawn — never «has expired» —, its remedy as today: ``./dev.py user setup-link``, or a new ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN``. No token in the log."""
+    print_section("A50-001: a restart after the cancellation through the PATCH, a token in the configuration")
+    moment = utcnow()
+    user_id, link = await _cancelled_waiting_administrator(engine, bootstrap, f02, _deactivate_by_update_user_status, moment, token=TOKEN_ONE)
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, _config(f02, token=TOKEN_ONE), now=moment + AFTERWARDS, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, user_id, ADMIN_USERNAME, None), f"no live link, and a token already known: EXPIRED, for the waiting account, as today: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, TOKEN_ONE)
+    assert _holding(events, link) == [] and _holding(events, CANARY) == [], "no log event may hold the token"
+    assert SAYS_WITHDRAWN in _said(warning), f"red until A-50: the link was cancelled, it did not run out: the warning must say it was withdrawn: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_EXPIRED in _said(event)] == [], "a link withdrawn must not be said to have expired"
+    print_success("EXPIRED; one warning: withdrawn, the remedy as today")
+
+
+# red until A-50
+@pytest.mark.asyncio
+async def test_a_restart_after_user_deactivate_cancelled_a_generated_link_says_it_was_withdrawn(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType) -> None:
+    """A50-002 — NEW, red until A-50 (today «has expired»): A50-001 the other way, with the other link — the CLI's ``user deactivate``, ``set_user_active(..., False)``, cancels a generated link, and the configuration carries no token —: a restart five minutes later with the same configuration is ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which says the link was withdrawn — never «has expired» —, its remedy as today: ``./dev.py user setup-link`` alone, never ``LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN``. The link is not in the log."""
+    print_section("A50-002: a restart after the cancellation by user deactivate, a generated link")
+    moment = utcnow()
+    user_id, link = await _cancelled_waiting_administrator(engine, bootstrap, f02, _deactivate_by_set_user_active, moment, token=None)
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, _config(f02), now=moment + AFTERWARDS, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, user_id, ADMIN_USERNAME, None), f"no live link: EXPIRED, for the waiting account, as today: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, None)
+    assert _holding(events, link) == [], "no log event may hold the link"
+    assert SAYS_WITHDRAWN in _said(warning), f"red until A-50: the link was cancelled, it did not run out: the warning must say it was withdrawn: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_EXPIRED in _said(event)] == [], "a link withdrawn must not be said to have expired"
+    print_success("EXPIRED; one warning: withdrawn, the command alone")
+
+
+# red until A-50
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delay", LATER_RESTARTS)
+@pytest.mark.parametrize("token", LINK_ORIGINS)
+async def test_a_restart_after_the_one_that_changed_the_address_says_the_link_was_withdrawn(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, token: Optional[str], delay: timedelta) -> None:
+    """A50-003 — NEW, red until A-50 (today «has expired»): the waiting administrator created at NOW — with TOKEN_ONE from the configuration, or a generated link —; an hour later a start with a new LIBREFOLIO_ADMIN_EMAIL revokes the link (A33-001) and says so: ``EXPIRED``, one warning that the address changed — not «withdrawn», a later start's word —, its remedy as today. A later restart with the same variables — an hour later, or once the link's 72 hours are over too —: ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which says the link was withdrawn — never «has expired» —, its remedy as today. No link in the log."""
+    print_section(f"A50-003: a restart after the change of address, {'the variable token' if token else 'a generated link'}, {delay} later")
+    created = await _created(engine, bootstrap, f02, token=token)
+    link = token or created.link_token
+    config = _config(f02, email=OTHER_EMAIL, token=token)
+    moment = NOW + HOUR
+
+    with _captured(bootstrap) as moving:
+        moved = await _run(engine, bootstrap, config, now=moment)
+
+    assert (moved.action, moved.link_token) == (bootstrap.BootstrapAction.EXPIRED, None), f"setup: the new address leaves no live link: {moved!r}"
+    assert _link_states(await _setup_rows(engine, created.user_id)) == [REVOKED_ONLY], "barrier: the new address revokes the link, and only revokes it (A33-001)"
+    assert await _accounts(engine) == {ADMIN_USERNAME: (created.user_id, OTHER_EMAIL, False, True)}, "barrier: the account at its new address, still inactive"
+    said = _said(_the_restarts_warning(moving, token))
+    assert SAYS_MOVED in said and SAYS_WITHDRAWN not in said, f"the start that changes the address must still say so, as today — not that the link was withdrawn: {said!r}"
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, config, now=moment + delay, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, created.user_id, ADMIN_USERNAME, None), f"no live link: EXPIRED, for the waiting account, as today: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, token)
+    assert _holding(moving, link) == [] and _holding(events, link) == [], "no log event may hold the link"
+    assert SAYS_WITHDRAWN in _said(warning), f"red until A-50: the link was revoked by the address changed at an earlier start, it did not run out: the warning must say it was withdrawn: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_EXPIRED in _said(event)] == [], "a link withdrawn must not be said to have expired"
+    print_success("the start of the change: address changed; the starts after it: withdrawn")
+
+
+# guard
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("created_with", "rearmed_with"), RUN_OUT_LINKS)
+async def test_a_restart_after_the_link_ran_out_still_says_it_has_expired(engine: AsyncEngine, bootstrap: ModuleType, f02: ModuleType, created_with: Optional[str], rearmed_with: Optional[str]) -> None:
+    """A50-004 — GUARD, green today and after: a setup link that ran out, never revoked — the variable's token, a generated link, or the token that re-armed the waiting administrator an hour after its creation, its first link revoked by that re-arm —; a restart with the same configuration an hour after the link's 72 hours: ``EXPIRED``, the same account, no ``link_token``, nothing written; one warning, which still says the link has expired — never «withdrawn»: the most recent setup link decides, and an earlier one revoked does not —, its remedy as today. No link in the log."""
+    print_section(f"A50-004: a restart after the link ran out, {'the variable token' if created_with else 'a generated link'}{', re-armed an hour later' if rearmed_with else ''}")
+    created = await _created(engine, bootstrap, f02, token=created_with)
+    issued_at = NOW
+    if rearmed_with is not None:
+        issued_at = NOW + HOUR
+        rearmed = await _run(engine, bootstrap, _config(f02, token=rearmed_with), now=issued_at)
+        assert rearmed.action == bootstrap.BootstrapAction.REARMED, f"setup: a token never seen re-arms the waiting administrator: {rearmed!r}"
+    token = rearmed_with or created_with
+    moment = issued_at + SETUP_TTL + HOUR
+    states = _link_states(await _setup_rows(engine, created.user_id))
+    assert states == [REVOKED_ONLY] * (len(states) - 1) + [(False, False, None)], f"barrier: the latest setup link neither revoked nor consumed, any earlier one revoked: {states}"
+    assert await _live_setup_rows(engine, moment) == [], "barrier: no setup link is live at the restart: the latest ran out"
+    before = await _snapshot(engine)
+
+    with _captured(bootstrap) as events:
+        result = await _run(engine, bootstrap, _config(f02, token=token), now=moment, then_commit=True)
+
+    assert (result.action, result.user_id, result.username, result.link_token) == (bootstrap.BootstrapAction.EXPIRED, created.user_id, ADMIN_USERNAME, None), f"no live link: EXPIRED, for the waiting account: {result!r}"
+    assert await _snapshot(engine) == before, "EXPIRED must write nothing"
+    warning = _the_restarts_warning(events, token)
+    assert SAYS_EXPIRED in _said(warning), f"a link that ran out, never revoked, must still be said to have expired: {warning.get('event')!r}"
+    assert [event for event in _logged(events) if SAYS_WITHDRAWN in _said(event)] == [], "a link that ran out must not be said withdrawn: the most recent setup link decides, not an earlier one revoked"
+    assert _holding(events, CANARY) == [] and (created.link_token is None or _holding(events, created.link_token) == []), "no log event may hold a link"
+    print_success("EXPIRED; one warning: has expired, the remedy as today")

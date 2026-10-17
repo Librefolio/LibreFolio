@@ -1,4 +1,4 @@
-"""A-21a, rules 1 and 2: no new username with an @, no address that is another account's username — the command line, F02 and registration's service (release 1.3, workstream A, lot A-21a; workstream E's review, point c).
+"""A-21a, rules 1 and 2: no new username with an @, no address that is another account's username — the command line, F02 and registration's service (release 1.3, workstream A, lot A-21a; workstream E's review, point c). A-46 and A-47: 3 to 50 characters on the command line too, and refusals that carry their code (lots A-46 and A-47; A-47 is workstream E's LOW).
 
 Until A-21a a username is any 3 to 50 characters, ``@`` included — ``AuthRegisterRequest``, ``UpdateProfileRequest``,
 ``LIBREFOLIO_ADMIN_USERNAME`` and ``./dev.py user create`` check the length alone —, and the sign-in looks what is typed
@@ -29,13 +29,34 @@ profile) in ``test_api/test_username_rules_api.py``; the lookup, rule 3, in ``te
 Where rule 1 refuses registration and the profile — the schema (422) or the service (400) — is the implementer's call:
 it is pinned over HTTP only. ``register_user`` is pinned here for rule 2, which no schema can decide.
 
+A-46 and A-47 (workstream A; A-47 is workstream E's LOW). Registration and the profile refuse a username outside 3 to 50
+characters — their schemas answer 422 before the service —, and ``LIBREFOLIO_ADMIN_USERNAME`` does at config parse; but
+``./dev.py user create`` takes any length (A-46). And the callers of ``user_service.create_user`` and ``update_profile``
+read a refusal by its text: ``register_user`` and ``PUT /auth/profile`` answer ``USERNAME_INVALID`` when the message
+equals the ``USERNAME_RESERVED_MESSAGE`` they imported, so a change of wording would silently turn that refusal into
+another (A-47). The cure, pinned here where it does not go through HTTP (over HTTP: UNAME-API-12 to 14):
+
+- A-47: every refusal of ``create_user`` and ``update_profile`` is a ``user_service.AccountError``, a ``str`` carrying
+  ``code`` — its message unchanged, so every comparison with the text still holds: ``USERNAME_INVALID`` (an ``@``, and a
+  length outside 3 to 50), ``USERNAME_TAKEN`` («Username already taken»), ``EMAIL_TAKEN`` («Email already registered»:
+  an address registered, or another account's username) and ``USER_NOT_FOUND`` («User not found», ``update_profile``).
+  ``register_user`` branches on the code: a username with an ``@`` is ``USERNAME_INVALID`` however ``user_service``
+  words it — reworded there only, by ``monkeypatch``, so the constant the callers imported no longer equals it.
+- A-46: ``create_user`` and ``update_profile`` — a name that CHANGES only, as for the ``@`` — refuse a new username
+  shorter than 3 or longer than 50 characters: ``(None, error)``, ``USERNAME_INVALID``, a message of its own that says
+  the rule (it names 3 and 50; nothing more of its wording is pinned), nothing written. So ``cmd_create_user`` refuses
+  it, an administrator or ``--role user``: falsy, ❌, nothing written. A legacy name of such a length is kept: a change
+  that keeps it, or changes the address alone, is not checked (GUARD). The lengths are written out here, 3 and 50: the
+  constants the cure renames are not imported.
+
 Pure: every database is a private SQLite file under ``tmp_path`` built with ``create_all`` and the global settings the
 startup seeds, opened as production opens its own (aiosqlite, NullPool, the PRAGMA listener of
 ``backend.app.db.session``), disposed at teardown. The command line runs in this process, its ``get_async_engine``
 pointed at that file; ``get_async_engine`` of the session module and of the modules that import it by name is a
 tripwire. The accounts, F02 and email variables of the shell are removed; bcrypt runs at its lowest cost. The accounts
 of a scene are rows with a marker hash; every username and address carries a random tag of its own. «Nothing written»
-is every row of every table, ``sqlite_sequence`` included, read by SQLite from the file before and after.
+is every row of every table, ``sqlite_sequence`` included, read by SQLite from the file before and after. UNAME-031
+rewords the ``@``'s message in ``user_service`` through ``monkeypatch``, put back after it.
 
 Red until A-21a, each test on its own, at its first assertion: today ``cmd_create_user`` creates an account named with an
 ``@`` (UNAME-001) or whose address is another account's username (UNAME-012), ``admin_bootstrap_config`` takes an ``@``
@@ -43,6 +64,15 @@ username (UNAME-003), ``cmd_set_email`` changes the address (UNAME-010), ``regis
 (UNAME-011). Each refusal carries a barrier, run after it: the same call with the ``@`` replaced, or with a fresh
 address, goes through — so the refusal is the rule's, not the scene's. The GUARDS (UNAME-002, 004, 013) are green today
 and must stay so.
+
+Red until A-46, each test on its own, at its first assertion: today ``cmd_create_user`` creates an account named with 2
+or 51 characters (UNAME-020), so does ``create_user`` (UNAME-021), and ``update_profile`` gives an account such a name
+(UNAME-022); 021 and 022 ask A-47's code of the refusal too, so they turn green with both. Red until A-47: every refusal
+of ``create_user`` and ``update_profile`` is a bare ``str``, without ``code`` (UNAME-030, at the code: its GUARD half —
+the message as today, a ``str``, nothing written — is asserted first and holds today), and ``register_user`` answers
+``ACCOUNT_EXISTS`` to a username with an ``@`` once ``user_service`` words the refusal otherwise (UNAME-031, at the code:
+the reworded message reaching the refusal is asserted first). Each refusal of A-46 carries a barrier: the same call with
+the name one character nearer, at 3 or 50 characters, goes through. UNAME-023 is a GUARD, green today and to stay green.
 """
 
 from __future__ import annotations
@@ -52,7 +82,7 @@ import importlib
 import os
 import sqlite3
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -69,7 +99,7 @@ from backend.app.config import accounts
 from backend.app.db import session as db_session
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import AccountTokenPurpose, GlobalSetting, User
-from backend.app.services.accounts import auth_service, bootstrap_admin_service, registration_service, token_service
+from backend.app.services.accounts import auth_service, bootstrap_admin_service, registration_service, token_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.email import flows as email_flows
 from backend.app.services.email import verification as email_verification
@@ -100,6 +130,20 @@ ALLOWED_USERNAMES = [
 #: already registered. A code of its own is the other admissible decision: then change both.
 EMAIL_TAKEN_CODE = "ACCOUNT_EXISTS"
 EMAIL_TAKEN_MESSAGE = "Email already registered"
+#: A-46: a new username has 3 to 50 characters, as registration and the profile ask (``AuthRegisterRequest``,
+#: ``UpdateProfileRequest``) — written out: the constants the cure renames are not imported.
+SHORTEST, LONGEST = 3, 50
+#: (a length A-46 refuses in a new username, the barrier's length): the barrier is one character nearer, a boundary.
+OUTSIDE_LENGTHS = [pytest.param(2, 3, id="2-characters"), pytest.param(51, 50, id="51-characters")]
+#: The lengths of a legacy username A-46 leaves alone: those it refuses in a new one (GUARD).
+LEGACY_LENGTHS = [pytest.param(2, id="2-characters"), pytest.param(51, id="51-characters")]
+#: A-47: the code of a new username refused — by ``user_service.AccountError`` and by ``register_user`` alike.
+USERNAME_INVALID = "USERNAME_INVALID"
+#: Today's messages of the other refusals of ``create_user`` and ``update_profile``: A-47 leaves them as they are.
+USERNAME_TAKEN_MESSAGE = "Username already taken"
+USER_NOT_FOUND_MESSAGE = "User not found"
+#: The ``@``'s message as ``user_service`` might word it one day: reworded there only (UNAME-031).
+REWORDED_RESERVED_MESSAGE = "Reworded for A-47: a new username holds no at sign"
 ADMIN_EMAIL_VARIABLE = "LIBREFOLIO_ADMIN_EMAIL"
 ADMIN_USERNAME_VARIABLE = "LIBREFOLIO_ADMIN_USERNAME"
 
@@ -141,6 +185,16 @@ def _named(template: str) -> str:
 def _without_at(name: str) -> str:
     """The barrier's name: ``name`` with each ``@`` replaced, nothing else changed."""
     return name.replace(AT, NOT_AT)
+
+
+def _of_length(length: int) -> str:
+    """A fresh name of exactly ``length`` characters, random hex: nothing but its length for a rule to refuse."""
+    return "".join(uuid.uuid4().hex for _ in range(length // 32 + 1))[:length]
+
+
+def _to_length(name: str, length: int) -> str:
+    """The barrier's name: ``name`` cut, or carried on with fresh characters, to exactly ``length`` characters."""
+    return name[:length] if len(name) >= length else name + _of_length(length - len(name))
 
 
 def _ascii_fold(text: str) -> str:
@@ -323,9 +377,9 @@ def _lines_starting(printed: str, marker: str) -> list[str]:
     return [line for line in printed.splitlines() if line.startswith(marker)]
 
 
-def _assert_cli_refused(answer: Any, printed: str, what: str) -> None:
-    """The command line's refusal: a falsy answer, a line starting with ❌, none with ✅."""
-    assert not answer, f"red until A-21a: {what} must be refused: the command answered {answer!r} and printed {printed!r}"
+def _assert_cli_refused(answer: Any, printed: str, what: str, lot: str = "A-21a") -> None:
+    """The command line's refusal: a falsy answer, a line starting with ❌, none with ✅. ``lot`` is the one it is red until."""
+    assert not answer, f"red until {lot}: {what} must be refused: the command answered {answer!r} and printed {printed!r}"
     assert _lines_starting(printed, REFUSED) and not _lines_starting(printed, DONE), f"{what}: a line must start with {REFUSED} and none with {DONE}: {printed!r}"
 
 
@@ -344,6 +398,111 @@ async def _register(engine: AsyncEngine, username: str, email: str, invite_token
             return refusal
         await session.commit()
     return user
+
+
+# =============================================================================
+# HELPERS — A-46 AND A-47: the service called as its callers call it
+# =============================================================================
+
+Outcome = tuple[Optional[User], Optional[str]]
+
+
+async def _create(engine: AsyncEngine, username: str, email: str) -> Outcome:
+    """``user_service.create_user`` as ``./dev.py user create`` calls it — committed after, as a careless caller would, so a refusal that left something behind shows. Its answer."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        outcome = await user_service.create_user(session, username, email, PASSWORD)
+        await session.commit()
+    return outcome
+
+
+async def _update(engine: AsyncEngine, user_id: int, **changes: str) -> Outcome:
+    """``user_service.update_profile`` as the profile and ``./dev.py user set-email`` call it — committed after, as a careless caller would. Its answer."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        outcome = await user_service.update_profile(session, user_id, **changes)
+        await session.commit()
+    return outcome
+
+
+def _shown(outcome: Outcome) -> str:
+    """An answer of the service as a failure says it: the account it gave, or its refusal with the code it carries."""
+    user, error = outcome
+    if user is not None:
+        return f"(account #{user.id} {user.username!r}, {error!r})"
+    return f"(None, {error!r}) of type {type(error).__qualname__}, code {getattr(error, 'code', 'none')!r}"
+
+
+def _assert_length_refusal(outcome: Outcome, what: str) -> None:
+    """A-46's refusal: ``(None, error)``, a message of its own that says the rule — it names 3 and 50 —, and A-47's code ``USERNAME_INVALID``."""
+    user, error = outcome
+    assert user is None and error, f"red until A-46: {what} must be refused, (None, error): got {_shown(outcome)}"
+    assert str(SHORTEST) in error and str(LONGEST) in error, f"{what}: the message must say the rule, {SHORTEST} to {LONGEST} characters: {error!r}"
+    assert getattr(error, "code", None) == USERNAME_INVALID, f"{what}: the refusal must carry the code {USERNAME_INVALID} (A-47): {_shown(outcome)}"
+
+
+@dataclass(frozen=True)
+class Scene:
+    """The accounts the refusals of UNAME-030 meet, written as rows: a holder whose name and address are taken, a legacy account named with an address, a member who changes its profile; and an id no account has."""
+
+    holder_name: str
+    holder_email: str
+    legacy_name: str
+    member: int
+    missing: int
+
+
+async def _scene(engine: AsyncEngine) -> Scene:
+    """UNAME-030's accounts, committed before anything under test runs; the id no account has is past every one of them."""
+    holder_name, holder_email, legacy_name = f"holder_{_tag()}", _address("holder"), _address("legacy.name")
+    await _add_account(engine, username=holder_name, email=holder_email)
+    await _add_account(engine, username=legacy_name, email=_address("legacy"))
+    member = await _add_account(engine, username=f"member_{_tag()}", email=_address("member"))
+    return Scene(holder_name=holder_name, holder_email=holder_email, legacy_name=legacy_name, member=member, missing=member + 1000)
+
+
+Ask = Callable[[AsyncEngine, Scene], Awaitable[Outcome]]
+
+
+async def _create_with_an_at(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _create(engine, _named("name@{tag}"), _address("new"))
+
+
+async def _create_a_taken_username(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _create(engine, scene.holder_name, _address("new"))
+
+
+async def _create_with_a_taken_address(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _create(engine, f"new_{_tag()}", scene.holder_email)
+
+
+async def _create_with_a_legacy_username_for_address(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _create(engine, f"new_{_tag()}", scene.legacy_name)
+
+
+async def _update_no_such_account(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _update(engine, scene.missing, username=f"new_{_tag()}")
+
+
+async def _update_with_an_at(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _update(engine, scene.member, username=_named("name@{tag}"))
+
+
+async def _update_to_a_taken_username(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _update(engine, scene.member, username=scene.holder_name)
+
+
+async def _update_to_a_taken_address(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _update(engine, scene.member, email=scene.holder_email)
+
+
+async def _update_to_a_legacy_username_for_address(engine: AsyncEngine, scene: Scene) -> Outcome:
+    return await _update(engine, scene.member, email=scene.legacy_name)
+
+
+def _reword_reserved_message(monkeypatch: pytest.MonkeyPatch) -> str:
+    """The ``@``'s message reworded in ``user_service`` only — the namespace ``create_user`` and ``update_profile`` read it from at each call —, so the constant the callers imported no longer equals what the service answers. The reworded text."""
+    assert hasattr(user_service, "USERNAME_RESERVED_MESSAGE"), "setup: user_service no longer reads USERNAME_RESERVED_MESSAGE from its own namespace: reword the message where the refusal now takes it"
+    monkeypatch.setattr(user_service, "USERNAME_RESERVED_MESSAGE", REWORDED_RESERVED_MESSAGE)
+    return REWORDED_RESERVED_MESSAGE
 
 
 # =============================================================================
@@ -517,3 +676,154 @@ async def test_a_legacy_username_with_an_at_is_left_as_it_is(engine: AsyncEngine
     _assert_cli_done(answer, printed, f"user set-email {name!r}, a legacy account by its exact name,")
     stored = await _stored(engine, legacy)
     assert stored is not None and (stored.username, stored.email) == (name, fresh), f"the legacy name stays as it is, the address changes: {stored}"
+
+
+# =============================================================================
+# A-46 — A NEW USERNAME HAS 3 TO 50 CHARACTERS: user create, create_user, update_profile
+# =============================================================================
+
+
+# red until A-46
+@pytest.mark.asyncio
+@pytest.mark.parametrize("superuser", [True, False], ids=["administrator", "role-user"])
+@pytest.mark.parametrize(("length", "boundary"), OUTSIDE_LENGTHS)
+async def test_user_create_refuses_a_new_username_outside_3_to_50_characters(engine: AsyncEngine, db_path: Path, user_cli: ModuleType, capsys: pytest.CaptureFixture[str], length: int, boundary: int, superuser: bool) -> None:
+    """UNAME-020 — A-46, NEW, red until A-46 (today the account is created, ✅): ``cmd_create_user`` — ``./dev.py user create``, an administrator or ``--role user`` — with a username of 2 or 51 characters, which registration and the profile refuse, and a password that meets the rules answers falsy and prints a line starting with ❌; every row of every table is as it was. Barrier: the same command with the name one character nearer — 3 or 50 characters, the boundaries — creates the account, ✅: the refusal is the length's."""
+    print_section(f"UNAME-020: user create {'--role admin' if superuser else '--role user'} with a username of {length} characters")
+    name = _of_length(length)
+    before = _rows(db_path)
+
+    answer, printed = await _cli(user_cli, capsys, "cmd_create_user", name, _address("cli"), PASSWORD, superuser)
+
+    _assert_cli_refused(answer, printed, f"user create {name!r}, {length} characters,", lot="A-46")
+    assert _changed(before, _rows(db_path)) == [], f"a refused user create must write nothing: {_changed(before, _rows(db_path))}"
+    allowed = _to_length(name, boundary)
+    answer, printed = await _cli(user_cli, capsys, "cmd_create_user", allowed, _address("cli"), PASSWORD, superuser)
+    _assert_cli_done(answer, printed, f"barrier: user create {allowed!r}, {boundary} characters,")
+    assert await _usernames(engine, name, allowed) == {allowed}, f"barrier: the account of {boundary} characters exists, the one of {length} does not"
+    print_success(f"{length} characters refused, nothing written; {boundary} characters created")
+
+
+# red until A-46
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("length", "boundary"), OUTSIDE_LENGTHS)
+async def test_create_user_refuses_a_new_username_outside_3_to_50_characters(engine: AsyncEngine, db_path: Path, length: int, boundary: int) -> None:
+    """UNAME-021 — A-46, NEW, red until A-46 (today the account is created): ``user_service.create_user`` of a username of 2 or 51 characters answers ``(None, error)``: a message of its own that says the rule — it names 3 and 50; nothing more of its wording is pinned —, ``error.code`` ``USERNAME_INVALID`` (A-47); every row of every table is as it was, even once the caller commits. Barrier: the same call with the name one character nearer — 3 or 50 characters — creates the account."""
+    print_section(f"UNAME-021: create_user with a username of {length} characters")
+    name = _of_length(length)
+    before = _rows(db_path)
+
+    outcome = await _create(engine, name, _address("svc"))
+
+    _assert_length_refusal(outcome, f"create_user of {name!r}, {length} characters,")
+    assert _changed(before, _rows(db_path)) == [], f"a refused create_user must write nothing, even once the caller commits: {_changed(before, _rows(db_path))}"
+    allowed = _to_length(name, boundary)
+    created = await _create(engine, allowed, _address("svc"))
+    assert created[0] is not None and created[1] is None, f"barrier: create_user of {allowed!r}, {boundary} characters, must go through: {_shown(created)}"
+    assert await _usernames(engine, name, allowed) == {allowed}, f"barrier: the account of {boundary} characters exists, the one of {length} does not"
+    print_success(f"{length} characters refused: {outcome[1]!r}")
+
+
+# red until A-46
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("length", "boundary"), OUTSIDE_LENGTHS)
+async def test_update_profile_refuses_a_new_username_outside_3_to_50_characters(engine: AsyncEngine, db_path: Path, length: int, boundary: int) -> None:
+    """UNAME-022 — A-46, NEW, red until A-46 (today the name changes): an account written as a row; ``user_service.update_profile`` changing its username to one of 2 or 51 characters answers ``(None, error)`` as ``create_user`` does — the rule's own message naming 3 and 50, ``USERNAME_INVALID`` —, and every row of every table is as it was, even once the caller commits: its name, its address, its session version. Barrier: the same change with the name one character nearer — 3 or 50 characters — goes through, the name stored."""
+    print_section(f"UNAME-022: update_profile to a username of {length} characters")
+    member = await _add_account(engine, username=f"member_{_tag()}", email=_address("member"))
+    name = _of_length(length)
+    before = _rows(db_path)
+
+    outcome = await _update(engine, member, username=name)
+
+    _assert_length_refusal(outcome, f"update_profile of #{member} to {name!r}, {length} characters,")
+    assert _changed(before, _rows(db_path)) == [], f"a refused update_profile must write nothing, even once the caller commits: {_changed(before, _rows(db_path))}"
+    allowed = _to_length(name, boundary)
+    updated = await _update(engine, member, username=allowed)
+    stored = await _stored(engine, member)
+    assert updated[0] is not None and updated[1] is None and stored is not None and stored.username == allowed, f"barrier: update_profile to {allowed!r}, {boundary} characters, must go through and be stored: {_shown(updated)}, {stored}"
+    print_success(f"{length} characters refused, nothing written; {boundary} characters stored")
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+@pytest.mark.parametrize("length", LEGACY_LENGTHS)
+async def test_a_legacy_username_outside_3_to_50_characters_is_kept(engine: AsyncEngine, user_cli: ModuleType, capsys: pytest.CaptureFixture[str], length: int) -> None:
+    """UNAME-023 — A-46, GUARD (green today; red if A-46 checks a name that does not change, or renames one): a legacy account named with 2 or 51 characters — as ``./dev.py user create`` could write one before A-46 —, written as a row. ``update_profile`` given its own name beside a fresh address answers the account: the address changes, the name stays. ``cmd_set_email`` — ``./dev.py user set-email``, the address alone — reaches it by that exact name and changes the address again, ✅; the name stays — A-46 refuses NEW names, it renames none."""
+    name = _of_length(length)
+    legacy = await _add_account(engine, username=name, email=_address("legacy"))
+    stored = await _stored(engine, legacy)
+    assert stored is not None and stored.username == name, f"setup: a legacy name of {length} characters is written as a row, as given: {stored}"
+    fresh = _address("fresh")
+
+    outcome = await _update(engine, legacy, username=name, email=fresh)
+
+    assert outcome[0] is not None and outcome[1] is None, f"update_profile of #{legacy} with its own name {name!r} ({length} characters) beside a fresh address must go through: {_shown(outcome)}"
+    stored = await _stored(engine, legacy)
+    assert stored is not None and (stored.username, stored.email) == (name, fresh), f"the legacy name stays, the address changes: {stored}"
+    again = _address("again")
+    answer, printed = await _cli(user_cli, capsys, "cmd_set_email", name, again)
+    _assert_cli_done(answer, printed, f"user set-email {name!r}, a legacy account of {length} characters by its exact name,")
+    stored = await _stored(engine, legacy)
+    assert stored is not None and (stored.username, stored.email) == (name, again), f"the legacy name stays, the address changes again: {stored}"
+
+
+# =============================================================================
+# A-47 — EVERY REFUSAL OF create_user AND update_profile CARRIES ITS CODE
+# =============================================================================
+
+#: Each refusal of ``create_user`` and ``update_profile``, made against the accounts of ``Scene``: (how it is asked, the
+#: message it answers — today, and unchanged after A-47 —, the code A-47 adds to it).
+REFUSALS = [
+    pytest.param(_create_with_an_at, accounts.USERNAME_RESERVED_MESSAGE, USERNAME_INVALID, id="create_user-an-at"),
+    pytest.param(_create_a_taken_username, USERNAME_TAKEN_MESSAGE, "USERNAME_TAKEN", id="create_user-a-taken-username"),
+    pytest.param(_create_with_a_taken_address, EMAIL_TAKEN_MESSAGE, "EMAIL_TAKEN", id="create_user-a-taken-address"),
+    pytest.param(_create_with_a_legacy_username_for_address, EMAIL_TAKEN_MESSAGE, "EMAIL_TAKEN", id="create_user-a-legacy-username-for-address"),
+    pytest.param(_update_no_such_account, USER_NOT_FOUND_MESSAGE, "USER_NOT_FOUND", id="update_profile-no-such-account"),
+    pytest.param(_update_with_an_at, accounts.USERNAME_RESERVED_MESSAGE, USERNAME_INVALID, id="update_profile-an-at"),
+    pytest.param(_update_to_a_taken_username, USERNAME_TAKEN_MESSAGE, "USERNAME_TAKEN", id="update_profile-a-taken-username"),
+    pytest.param(_update_to_a_taken_address, EMAIL_TAKEN_MESSAGE, "EMAIL_TAKEN", id="update_profile-a-taken-address"),
+    pytest.param(_update_to_a_legacy_username_for_address, EMAIL_TAKEN_MESSAGE, "EMAIL_TAKEN", id="update_profile-a-legacy-username-for-address"),
+]
+
+
+# red until A-47
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("ask", "message", "code"), REFUSALS)
+async def test_every_refusal_of_create_user_and_update_profile_carries_its_code(engine: AsyncEngine, db_path: Path, ask: Ask, message: str, code: str) -> None:
+    """UNAME-030 — A-47, NEW, red until A-47 (today a bare ``str``, without ``code``): every refusal of ``create_user`` and ``update_profile`` — a new username with an ``@``, a username taken, an address registered or another account's username, an account that does not exist — answers ``(None, error)``, ``error`` a ``user_service.AccountError`` whose ``code`` says which: ``USERNAME_INVALID``, ``USERNAME_TAKEN``, ``EMAIL_TAKEN``, ``USER_NOT_FOUND``. GUARD half, asserted first and green today: ``error`` is a ``str`` equal to today's message — so every caller comparing the text still holds —, and nothing is written, even once the caller commits."""
+    print_section(f"UNAME-030: the refusal {message!r} carries {code}")
+    scene = await _scene(engine)
+    before = _rows(db_path)
+
+    outcome = await ask(engine, scene)
+
+    user, error = outcome
+    assert user is None and isinstance(error, str) and error == message, f"GUARD half: the refusal must be (None, {message!r}), a str, as today: {_shown(outcome)}"
+    assert _changed(before, _rows(db_path)) == [], f"GUARD half: a refusal writes nothing, even once the caller commits: {_changed(before, _rows(db_path))}"
+    assert getattr(error, "code", None) == code, f"red until A-47: the refusal {error!r} must carry the code {code!r} — its callers branch on it, not on the text —: {_shown(outcome)}"
+    account_error = getattr(user_service, "AccountError", None)
+    assert isinstance(account_error, type) and isinstance(error, account_error), f"the refusal must be a user_service.AccountError: it is a {type(error).__module__}.{type(error).__qualname__}"
+    print_success(f"(None, {message!r}) carries {code}")
+
+
+# red until A-47
+@pytest.mark.asyncio
+async def test_register_user_refuses_an_at_as_username_invalid_whatever_its_wording(engine: AsyncEngine, db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """UNAME-031 — A-47, NEW, red until A-47 (today ``ACCOUNT_EXISTS``: ``register_user`` compares the message with the constant it imported): the ``@``'s message reworded in ``user_service`` only — the namespace ``create_user`` reads it from at each call —, an instance with an account, registration ``open``: ``register_user`` of a new username holding an ``@`` raises ``RegistrationError`` with the code ``USERNAME_INVALID`` and the reworded message — the code decides, not the text —, and writes nothing. The reworded message reaching the refusal is asserted first: the test cannot pass by not rewording. Barrier: the same registration with the ``@`` replaced goes through."""
+    print_section("UNAME-031: register_user with an @, the message reworded in user_service")
+    await _add_account(engine, username=f"seed_{_tag()}", email=_address("seed"))
+    await _registration_open(engine)
+    reworded = _reword_reserved_message(monkeypatch)
+    name = _named("squat.{tag}@example.com")
+    before = _rows(db_path)
+
+    outcome = await _register(engine, name, _address("newcomer"), None)
+
+    assert isinstance(outcome, registration_service.RegistrationError), f"{name!r} holds an @: the registration must be refused, yet it created account #{outcome.id}"
+    assert outcome.message == reworded, f"setup: the refusal must carry the reworded message — user_service words it —, or this test proves nothing: {outcome.message!r}"
+    assert outcome.code == USERNAME_INVALID, f"red until A-47: register_user must answer {USERNAME_INVALID} by the refusal's code, whatever its wording: got {outcome.code!r} ({outcome.message!r})"
+    assert _changed(before, _rows(db_path)) == [], f"a refused registration must write nothing: {_changed(before, _rows(db_path))}"
+    created = await _register(engine, _without_at(name), _address("newcomer"), None)
+    assert isinstance(created, User), f"barrier: the same registration with the @ replaced must go through: {created!r}"
+    print_success(f"refused as {USERNAME_INVALID}, the reworded message carried; {_without_at(name)!r} registered")

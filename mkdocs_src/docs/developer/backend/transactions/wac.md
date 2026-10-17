@@ -528,7 +528,7 @@ provenance: `fx_info` (rate date and days back), `original_unit_cost`,
 
 | Caller | `as_of_date` | Target currency |
 |--------|--------------|-----------------|
-| Batch auto modes (`TransactionService._compute_wac_for_auto_items()`) | The row's date; the partner's date for the receiving side of a `TRANSFER` | The `cost_basis_override.code` sent as a hint, or the last acquisition's currency |
+| Batch auto modes (`TransactionService._compute_wac_for_auto_items()`) | The row's date; the partner's date for the receiving side of a `TRANSFER`. The batch costs its Auto rows in the order of this date (see [Inline Batch Auto Modes](#inline-batch-auto-modes)) | The `cost_basis_override.code` sent as a hint, or the last acquisition's currency |
 | `POST /portfolio/wac` (`portfolio_api.py`) | The query's end date, or today | The last acquisition's currency |
 | PAC planner (`portfolio_allocation_source.py`) | The planner's date | The planner's target currency, as override, with `use_cache=False` |
 
@@ -659,7 +659,12 @@ create → promote → link resolution → compute_wac_and_fx_issues()
 `compute_wac_and_fx_issues()` calls
 `TransactionService._compute_wac_for_auto_items()` only when no non-balance issue
 already exists. That helper scans only `parsed_creates` and `parsed_updates` for
-`auto` or `auto-detail`.
+`auto` or `auto-detail`, and costs each item on its own row: a create on the row
+`apply_creates()` flushed for it, read by create index from
+`context.created_by_index` (its `created_rows` argument), and an update on the row
+its `id` names. It costs the rows in the order of their pool's date — the `as_of`
+date `_auto_cost_source()` returns, below — and on one date in the order they came:
+the creates by index, then the updates by index.
 
 For each selected row:
 
@@ -669,6 +674,9 @@ For each selected row:
   partner's outgoing leg and the row itself;
 - any other row — an incoming `ADJUSTMENT` — averages its own broker as of its
   own date, leaving itself out;
+- the batch's other Auto rows whose cost is not written yet — split-linked ones
+  aside — are left out too: their ids join the excluded ids that `_auto_cost()`
+  passes to `compute_wac_iterative()` (decision N84, below);
 - `_auto_cost()` averages that pool with `compute_wac_iterative()`, once it has
   checked that every row of it can be read (see [Unreadable pool](#unreadable-pool));
 - a supplied `cost_basis_override.code` acts as the target-currency hint; and
@@ -689,6 +697,42 @@ transfer of the whole position keeps the source's average, where counting the
 outgoing leg would empty the pool and give 0; a partial transfer gets the same
 value with or without that leg, since a reduction does not move the unit cost;
 and purchases made on the source broker while the units are in transit stay out.
+
+The order and the exclusion make one rule (W-B67, decision N84 of the coordinator,
+17/10): each Auto row gets the cost it would get were the rows saved one at a time
+in date order. Three cases follow from it:
+
+- a split-linked `ADJUSTMENT` in Auto is never left out: it only rescales the
+  pool, and it gets no cost (see
+  [Split-linked adjustment skip](#split-linked-adjustment-skip));
+- a row whose cost could not be written — an unreadable pool, a missing
+  conversion — stays out of the later pools, never counted at zero, and the batch
+  refuses it anyway (`autoCostUnreadable`, `wacFxUnavailable`); and
+- an update in Auto counts as not costed yet: the cost its row holds is the one
+  the Auto step replaces.
+
+`wac_results` keeps the order of the items — the creates, then the updates — not
+the order they were costed in, and each item carries the value written on its own
+row. The excluded ids are part of the facade's cache key (see
+[The WAC Facade](#wac-facade)), so no Auto row reads a result cached for another's
+pool: a cost the batch writes changes no row's `updated_at`, and the fingerprint
+alone would not tell the pools apart.
+
+Before W-B67, a create in Auto without a `link_uuid` was found as the newest row
+with its broker, asset, date and type (`_find_created_tx_for_wac()`, since
+removed). Of two Auto rows sharing those four fields, the first kept no cost — the
+batch's cost check skips Auto creates, so it committed without one — and the second
+got it twice; an Auto row followed by a Manual one sharing them wrote its average
+over the Manual cost. The rows were also costed by index, each with the others in
+its pool as they stood — a create not yet costed at zero cost, as an acquisition
+of unknown cost (`ADD_UNKNOWN_COST`) or at the 0 of its currency hint — so the
+result followed the order of the indexes. With 10 units bought at 100 EUR and two
+Auto `ADJUSTMENT`s of +5 on the same later day, the first row got no cost and the
+second ≈ 66.67 (1000 / 15); fixing the row lookup alone would have given ≈ 66.67
+and ≈ 88.89; now both get 100. Tests:
+`./dev.py test services transaction-cost-basis-rule WB67`
+(`TestWB67EachAutoCreateCostsItsOwnRow`, `TestWB67AutoRowsAreCostedInDateOrder`,
+`TestWB67GuardsWhereTodaysSearchFindsTheRow`).
 
 Under the same condition, after the Auto rows, `compute_wac_and_fx_issues()` prices
 the giving leg of each `TRANSFER` pair the batch splits (`context.handover_rows`):

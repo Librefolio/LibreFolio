@@ -1,6 +1,6 @@
 /**
  * livePriceService — the live prices of the Assets pages, and the outcome a live poll hands back to its poller (Z1;
- * Z7c-1, decision 34, D-Z7-1, D-Z7-2).
+ * Z7c-1, decision 34, D-Z7-1, D-Z7-2; X-R64).
  *
  * The contract under test:
  *   - `toLivePriceResult(raw)` maps one item of `POST /api/v1/assets/prices/current` (`FACurrentPriceItem`) into exactly
@@ -9,7 +9,12 @@
  *     else null;
  *   - `fetchCurrentPrices(ids)` posts the ids, as they are, to that path through `axiosInstance` of `$lib/api`, and maps
  *     every item with `toLivePriceResult`, in the order answered; `[]` asks nothing and answers `[]`; an answer without
- *     `results` is `[]`; a refusal reaches the caller as axios raised it — the page hands it to `livePollFailure`;
+ *     `results` is `[]`; a refusal reaches the caller as axios raised it — the page hands it to `livePollFailure`. At most
+ *     1,000 ids a request (lot X-R64: since R13-SEC9-1 the endpoint refuses more than the backend's `MAX_BULK_ITEMS`,
+ *     1,000, with a 422 `bulk_too_many_items`): a longer list goes as consecutive requests in its order, each sent once
+ *     the one before answered (Z-27's `sendBulkBatches`), their items mapped batch after batch, as if one request had
+ *     answered; up to 1,000 ids go as one request, as before. A refusal stops the sending — no request after it, no
+ *     partial result — and reaches the caller unchanged, its `Retry-After` included;
  *   - `livePollOutcome(results, now)`: `{ok: true}` — no `notBefore` key — unless every result is `RATE_LIMITED`; then
  *     `{ok: true, notBefore: now + min(retryAfter) × 1000}` when every one of them carries a finite `retryAfter ≥ 0`,
  *     else `{ok: false}`, so that the poller doubles its wait. With providers of both kinds the list goes on: the
@@ -26,6 +31,9 @@
  *
  * Time. `now` is injected wherever it is a parameter, as one fixed instant; the default (`Date.now()`) has one case per
  * function, on a spied clock.
+ *
+ * Red today (X-R64): LPS-14 and LPS-16 — the service posts every id in one request, where they expect two; LPS-15, one
+ * request for exactly 1,000 ids, is their guard, green today.
  *
  * Node environment: nothing here renders.
  */
@@ -99,6 +107,49 @@ function noServer(): void {
         throw new AxiosError('Network Error', AxiosError.ERR_NETWORK, config, {});
     };
     axiosInstance.defaults.adapter = adapter;
+}
+
+/** `count` asset ids in a list's order, which is not theirs: `count` down to 1, so a request out of order, or a list sorted on the way, shows. */
+function assetIds(count: number): number[] {
+    return Array.from({length: count}, (_, index) => count - index);
+}
+
+/**
+ * The server answers each request from its own body, as the endpoint does: one item per id, in the order sent, asset `n`
+ * quoted at `n.5` USD. With `refuse`, the request numbered `refuse.request` (from 1, in the order received) is refused
+ * instead, with that status and those headers, settled as axios's own adapters settle it. `raised` holds what the server
+ * raised: the very errors a caller must see.
+ */
+function serverAnswersEach(refuse?: {request: number; status: number; headers: Record<string, string>; data: unknown}): {raised: unknown[]} {
+    const raised: unknown[] = [];
+    const adapter: AxiosAdapter = async (config) => {
+        received.push(config);
+        if (refuse !== undefined && received.length === refuse.request) {
+            const error = refusal(refuse.status, {'content-type': 'application/json', ...refuse.headers}, config, refuse.data);
+            raised.push(error);
+            throw error;
+        }
+        const ids = JSON.parse(String(config.data)) as number[];
+        const data = {results: ids.map((id) => quoted({asset_id: id, value: `${id}.5`})), success_count: ids.length, errors: []};
+        return {status: 200, statusText: 'OK', headers: {'content-type': 'application/json'}, config, request: {}, data};
+    };
+    axiosInstance.defaults.adapter = adapter;
+    return {raised};
+}
+
+/** The result of asset `n` as `serverAnswersEach` quotes it, once mapped. */
+function quotedResult(assetId: number): LivePriceResult {
+    return result({assetId, value: assetId + 0.5, currency: 'USD'});
+}
+
+/** The requests received, in order: each as `method url` and the number of ids it carried. */
+function requestsReceived(): Array<{request: string; ids: number}> {
+    return received.map((config) => ({request: `${config.method} ${config.url}`, ids: (JSON.parse(String(config.data)) as unknown[]).length}));
+}
+
+/** Every id the requests carried, the requests joined in the order received. */
+function idsReceived(): number[] {
+    return received.flatMap((config) => JSON.parse(String(config.data)) as number[]);
 }
 
 beforeEach(() => {
@@ -186,6 +237,47 @@ describe('fetchCurrentPrices — POST /api/v1/assets/prices/current through axio
         );
         expect(refused).toBeInstanceOf(AxiosError);
         expect((refused as AxiosError).response?.status).toBe(429);
+    });
+
+    it('LPS-14: posts 1,001 ids as two requests, 1,000 then 1, in the order given, and maps the results of both in that order', async () => {
+        const ids = assetIds(1_001);
+        serverAnswersEach();
+
+        const results = await fetchCurrentPrices(ids);
+
+        expect(requestsReceived(), 'at most 1,000 ids a request: the endpoint refuses one more (422 bulk_too_many_items, R13-SEC9-1)').toEqual([
+            {request: `post ${PATH}`, ids: 1_000},
+            {request: `post ${PATH}`, ids: 1},
+        ]);
+        expect(idsReceived(), 'consecutive requests: the ids as they are, each once, in the order given').toEqual(ids);
+        expect(results, 'every item mapped, batch after batch, as if one request had answered').toStrictEqual(ids.map(quotedResult));
+    });
+
+    it('LPS-15: posts exactly 1,000 ids as one request, as before (a guard, green today)', async () => {
+        const ids = assetIds(1_000);
+        serverAnswersEach();
+
+        await expect(fetchCurrentPrices(ids)).resolves.toStrictEqual(ids.map(quotedResult));
+        expect(requestsReceived(), 'the endpoint takes 1,000 ids').toEqual([{request: `post ${PATH}`, ids: 1_000}]);
+        expect(idsReceived()).toEqual(ids);
+    });
+
+    it('LPS-16: a refusal of the second request — a 429 with Retry-After — reaches the caller unchanged: the first request went, none after it', async () => {
+        const ids = assetIds(2_500);
+        const server = serverAnswersEach({request: 2, status: 429, headers: {'retry-after': '120'}, data: {detail: 'Too Many Requests'}});
+
+        const refused = await fetchCurrentPrices(ids).then(
+            () => null,
+            (error: unknown) => error,
+        );
+
+        expect(requestsReceived(), 'the first request answered, the second refused, the third never sent').toEqual([
+            {request: `post ${PATH}`, ids: 1_000},
+            {request: `post ${PATH}`, ids: 1_000},
+        ]);
+        expect(refused, 'the very error axios raised for the second request: no partial result, nothing wrapped').toBe(server.raised[0]);
+        expect((refused as AxiosError).response?.status).toBe(429);
+        expect(livePollFailure(refused, NOW), 'its Retry-After, still read by the live poller').toStrictEqual({ok: false, notBefore: NOW + 120_000});
     });
 });
 

@@ -69,8 +69,11 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     --instance-key-file reads none of the saved provider keys: …`` right before the ⚠️ line of the unreadable keys —
     unless this instance's own key cannot be used (``LIBREFOLIO_INSTANCE_KEY`` too short), then ``⚠️  This instance's
     own key cannot be used, so nothing was re-encrypted with the key given: <problem>`` in its place, the right key
-    given all the same. As root (B-19's fake identity, ``test_backup_cli_secure.py``), the file is read before the
-    switch to the owner: a file root alone could read works. No key text ever reaches standard output or error.
+        given all the same; B-34 (red until it lands): also when this instance has no key yet and the check cannot create
+        one (``secrets/`` not writable, skipped as root), the problem then ``<its secrets/instance.key>: there is no
+        instance key yet, and it could not be created``. As root (B-19's fake identity, ``test_backup_cli_secure.py``), the
+        file is read before the switch to the owner: a file root alone could read works. No key text ever reaches standard
+        output or error.
 (i) B-35 (red until it lands; contract §3, CLI): ``restore`` honours ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``, the largest
     total a check unpacks (what the manifest declares; MB of 1024², ``0`` no limit; unset, no limit self-hosted and 8
     times the upload limit in any other profile). Over it: exactly one ❌ line ending in ``(unpacked_too_large)``, exit 1,
@@ -1003,6 +1006,9 @@ KEY_INCLUDED_LINE = "   Instance key: included"
 KEY_NOT_USED_LINE = "ℹ️  The archive carries its own instance key: --instance-key-file is not used"
 WRONG_KEY_LINE = "⚠️  The key given with --instance-key-file reads none of the saved provider keys: it is not the key of the instance this backup came from"
 TOO_SHORT_LINE = "❌ The instance key given is too short: an instance key has at least 32 characters (instance_key_invalid)"
+#: (B-34) The end of D2's exception when this instance has no key yet and the check could not create one; the path of
+#: the key file it could not create comes first.
+NO_KEY_YET = "there is no instance key yet, and it could not be created"
 #: The saved provider keys of a ``secure_cases.secret_source``, every one under its key.
 SAVED_KEYS = len(secure_cases.SECRET_ROWS)
 #: (B-18, §2) A key file that gives no key: missing, blank, or one the file system will not read (skipped as root).
@@ -1195,6 +1201,48 @@ def test_when_this_instance_s_own_key_cannot_be_used_it_is_said_instead_of_blami
     assert WRONG_KEY_LINE not in lines and rekeyed_line(SAVED_KEYS) not in lines, f"the right key is never blamed, nothing re-encrypted: {lines}"
     no_key_shown(text, source.key, UNUSABLE_OWN_KEY, THIS_KEY)
     print_success("D2's exception: this instance's own key named, not the key given")
+
+
+@contextmanager
+def secrets_unwritable(root: Path) -> Iterator[Path]:
+    """(B-34) ``<root>/secrets`` a folder this process may search but not write (0500): no ``instance.key`` in it, and
+    none can be made there — the first use of a key that cannot be generated. Its mode restored at the end, so that the
+    folder can be removed."""
+    folder = root / "secrets"
+    folder.mkdir(mode=0o700)
+    folder.chmod(0o500)
+    try:
+        yield folder
+    finally:
+        folder.chmod(0o700)
+
+
+@cli.needs_permission_checks
+def test_when_this_instance_has_no_key_yet_and_none_can_be_created_it_is_said_instead_of_blaming_the_key_given(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-34, D2's exception when this instance has no key yet: none in the environment, no ``secrets/instance.key``,
+    and the check cannot create one (``secrets/`` not writable). Nothing is re-encrypted whatever the key given — here
+    the right one, K1. Right before the unreadable line, the line that says so, naming the key file that could not be
+    created (a printable path: ``_safe`` leaves it as it is); never D2's, which would blame the right key."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = instance(tmp_path, monkeypatch)
+    key_path = root / "secrets" / "instance.key"
+    with secrets_unwritable(root) as folder:
+        status = instance_key_status()
+        assert (status.source, status.problem, status.path) == ("not_created", None, key_path) and str(key_path).isprintable(), f"precondition: no key in the environment nor at {key_path}, and none made yet: {status}"
+        code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, source.key), "--dry-run")
+        after = instance_key_status()
+        made = sorted(path.name for path in folder.iterdir())
+    assert (after.source, made) == ("not_created", []), f"precondition: the check could not create this instance's key, nor left anything in secrets/: {after}, {made}"
+    expected = own_key_unusable_line(f"{key_path}: {NO_KEY_YET}")
+    unreadable = unreadable_keys_line(SAVED_KEYS)
+    assert code == 0 and cli.RESTORABLE_LINE in lines and unreadable in lines, f"exit 0, restorable, every saved key left unreadable: exit {code}: {lines}"
+    before = lines[lines.index(unreadable) - 1]
+    assert before == expected, f"right before the unreadable line, verbatim {expected!r}, not {before!r}: {lines}"
+    assert WRONG_KEY_LINE not in lines, f"the right key is never blamed: {lines}"
+    assert [line for line in lines if "re-encrypted with this instance's key" in line] == [], f"nothing re-encrypted: {lines}"
+    no_key_shown(text, source.key)
+    print_success("D2's exception, no key yet: the key file that could not be created named, not the key given")
 
 
 @secure_cli.needs_another_owner
