@@ -53,10 +53,8 @@ from backend.app.services.signal_plugins.drawdown.plugin import (
 )
 from backend.app.services.signals import risk_adapters as signal_helpers
 from backend.app.services.signals.base import SignalUnavailableError
-from backend.app.services.signals.service import (
-    SignalPreparedSeriesBundle,
-    SignalService,
-)
+from backend.app.services.signals.execution import SignalPreparedSeriesBundle
+from backend.app.services.signals.service import SignalService
 
 
 def _dates(count: int) -> list[date]:
