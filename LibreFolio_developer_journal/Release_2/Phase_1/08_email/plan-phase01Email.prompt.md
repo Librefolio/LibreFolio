@@ -4212,3 +4212,57 @@ il testo inglese.
 
 > **Al coordinatore**: l'esito, le note per B (cripto 2–3, ripristino 1–4) e per A (1–4, 6), le domande del cloud
 > (cripto 2, A7b-2 nota 3) e la nota 7 per chi tiene i gestori. Nessuna correzione da parte mia.
+
+> **R13-SEC4 committato ed entrato** (coordinatore, 03:08; dev `110125350`; HEAD portato avanti con un fast-forward).
+> Lo smistamento:
+> - B (B4b): i resti dopo un crollo, l'avviso di `decrypt`, `getpass`, `autocomplete`;
+> - A: la corsa, la disattivazione, il `msg` del 422, l'admin in attesa;
+> - H: `ResponseValidationError`, che diventa H-33;
+> - le 2 domande del cloud vanno al developer.
+
+### E-12 — Catch-all e sottodomini di Fastmail
+
+#### E-12.0 — Analisi ✅ (2026-10-17, 03:10–03:20)
+> **Il compito del coordinatore** (03:08): E-12, poi in attesa per R13-SEC5 (X-R38, C-97b, Z-20, J CP-10c).
+
+**Stato reale**: dopo E-9, `delivery.mailbox_budget_key()` unisce `+tag`, i punti di Gmail e `googlemail.com`. Restano
+due casi in cui ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza (50/h per
+processo):
+- **un dominio catch-all**, dove tutto `*@dominio` arriva a una casella;
+- **l'indirizzamento a sottodominio di Fastmail**: `qualsiasi@utente.fastmail.com` arriva a `utente@fastmail.com`.
+  - Una ricerca web lo conferma: vale per **tutti** i domini di Fastmail (`fastmail.com`, `fastmail.fm`,
+    `fastmail.co.uk`… sono decine) e per i domini personali dei clienti, con il DNS a posto.
+
+**Le strade**
+1. **Una regola Fastmail nella chiave** (`x@u.fastmail.com` → `u@fastmail.com`). È piccola, ma non si può fare
+   completa: decine di domini e i domini personali. Il catch-all resta. ✗
+2. **Un limite per dominio destinatario**, che coprirebbe catch-all e Fastmail insieme (`x@u.fastmail.com` ha dominio
+   `u.fastmail.com`). Ma su `gmail.com` unirebbe tutti gli utenti, e allora:
+   - (2a) un elenco di grandi provider esenti, che non è mai completo: un'istanza self-hosted pubblica con molti utenti
+     di un provider non in elenco verrebbe frenata;
+   - (2b) una variabile nuova, per esempio `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`.
+     - Spenta di default, come chiede la regola della specifica.
+     - Il profilo `managed` avrebbe un default, per esempio 20/h, che sta largo sopra il traffico legittimo di
+       un'istanza piccola (`max_users`).
+     - È una scelta di prodotto, ed è un lotto piccolo-medio: variabile, controllo di configurazione, tre punti di
+       chiamata, test e docs con la riga di C-99.
+3. **Accettare il resto e chiudere E-12**, senza codice.
+
+**Proposta: (3).**
+- Dopo N62 queste email non portano testo dell'attaccante: sono messaggi di LibreFolio innocui, e il budget d'istanza
+  li limita.
+- Chi ha un catch-all è un utente tecnico, e il caso è raro.
+- La leva vera dell'abuso è la registrazione aperta. La domanda del cloud sul DoS del budget, già al developer
+  (captcha o proof-of-work, limiti alla registrazione), copre lo stesso terreno con una cura migliore.
+- La doc lo dice già, da E-9: in `admin/email.en.md`, «One mailbox, however its address is written», i catch-all e
+  Fastmail sono frenati solo dal limite orario.
+- **Se il coordinatore o il developer vogliono il codice**, la strada è la (2b), in un lotto suo.
+
+#### E-12.1 — Chiusa come accettata ✅ (2026-10-17, 03:10)
+> **Decisione del coordinatore** (03:10): chiudere E-12 come accettata, con la ragione nel backlog e un rimando a
+> **D-E9-1**, la domanda anti-abuso sulla registrazione aperta, che è col developer. Nessun codice. Il checkpoint del
+> journal lo committa lui al prossimo passaggio.
+>
+> **Fatto**: E-12 ✅ nel backlog, con le ragioni di «E-12.0», il rimando a D-E9-1 e la strada (2b) se il codice servirà.
+>
+> **Dopo**: in attesa degli SHA di R13-SEC5, verso le 04:00, a slot dopo il freeze finiti.
