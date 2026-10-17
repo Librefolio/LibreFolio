@@ -144,7 +144,10 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    scope, each broker at its `effective_share()`;
 2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`;
    an unusable ratio raises `ValueError`), and classifies them
-   (`ScopeAwareTransactionClassifier`, `classifier.py`);
+   (`ScopeAwareTransactionClassifier`, `classifier.py`). The range it replays starts no earlier than the first
+   transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
+   day, and an end far in the future held the instance (R13-SEC7-1). A range that ends before the first transaction
+   gives an empty result;
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options, data fingerprints and the day of
    `position_states_start` — that starts on or before the requested start and ends on the
