@@ -84,17 +84,27 @@ pair name to its detail page (`fxPairHtml(…, {linkToDetail: true})`).
 
 `convert_bulk()` (`backend/app/services/fx/conversion.py`) is the shared conversion function:
 `POST /api/v1/fx/currencies/convert`, the portfolio engine and service, lots analysis, Yield on Cost,
-asset price queries, risk eligibility and AI Export components call it with a list of
-`(Currency, to_currency, date)` items. For each item:
+asset price queries, the [fixed-period changes](#fixed-period-changes) of the Assets and FX tables, risk eligibility
+and AI Export components call it with a list of `(Currency, to_currency, date)` items. For each item:
 
 1. **Identity**: same currency in and out — the amount is returned as is, with no lookup.
 2. **Stored pair**: the pair is normalized alphabetically, the way rates are stored. The amount is
    multiplied by the rate when converting from the stored base, divided by it otherwise.
-3. **Backward fill**: the rate is the latest one on or before the requested date, with no time limit.
-   The result carries the rate's date and whether backward fill applied; the convert endpoint turns them
-   into `backward_fill_info` (`actual_rate_date`, `days_back`).
-4. **No rate**: when the pair has no rate on or before the date, the item fails —
-   `RateNotFoundError` with `raise_on_error=True`, or a `None` result plus an error message otherwise.
+3. **Backward fill**: the rate is the latest usable one on or before the requested date, with no time
+   limit. The result carries the rate's date and whether backward fill applied; the convert endpoint
+   turns them into `backward_fill_info` (`actual_rate_date`, `days_back`).
+4. **No rate**: when the pair has no usable rate on or before the date, the item fails —
+   `RateNotFoundError` with `raise_on_error=True`, or a `None` result plus an error message otherwise
+   (*No FX rate found for B/Q on or before D*).
+
+A usable rate is one `fx_rates.rate` can keep (X-R38, see
+[Chain Dates, Writes and Counters](configuration.md#chain-dates-writes-and-counters)). A row the
+column cannot keep, written by an older release (an infinite rate, 0, 20 digits before the decimal
+point), is a missing rate for its date: backward-filled from the latest usable rate before it, as a
+date without a row would be, or the missing-rate error. A conversion never divides by zero nor
+returns an infinite amount. Read through the model, such a row still gives `Decimal('Infinity')` for
+a stored inf (see [Decimal Columns](../../architecture/database/index.md#decimal-columns)); the FX
+writers no longer send one.
 
 There is no triangulation at conversion time. A pair that no provider quotes directly gets its rates at
 sync time from a multi-step chain route, which stores the composite rate under the pair itself
@@ -110,12 +120,45 @@ use, in one query for all pairs:
 - it loads the rows from the **backward-fill anchor** — the last rate on or before `min_date`, a
   `MAX(date)` scalar subquery — up to `max_date`. The anchor keeps the unlimited backward fill exact:
   the earliest item still finds its rate, however old;
+- it reads only the usable rates (X-R38): `rate >= 1E-10 AND rate < 1E+14`, the bounds of
+  `usable_fx_rate_bounds()` (`backend/app/db/precision.py`), in the anchor subquery as in the window,
+  so a legacy unusable row neither anchors the window nor is loaded. There is no per-row check in
+  Python: any double within those bounds reads back as a rate `storable_fx_rate()` keeps, and this
+  path is hot;
 - it selects plain columns (`base`, `quote`, `date`, `rate`), not ORM objects;
 - each item finds its rate with `bisect_right` over the pair's ascending dates.
 
-Return values and errors are those of the full-history version this replaced, which loaded every pair's
-whole history up to the latest requested date and scanned it linearly for each item (PR #30 by Martin
-Sova, commit `5aa267f11`).
+The writers keep to the same upper bound (X-R50). SQLite keeps the rate as a double, so a rate within
+about 0.008 of `1E+14` with more digits than a double holds (`99999999999999.995`) has 14 digits
+before the point but would be stored as `1E+14`: `storable_fx_rate()` refuses it too, so a manual one
+is refused and a provider's skipped, as for any rate the column cannot keep (`99999999999999.99`
+stays the double `99999999999999.98` and is kept). Before, the limit was on the digits alone, as for
+W-B58: the writers accepted `99999999999999.999`, stored it as `1E+14`, and these bounds then
+skipped it as unusable.
+
+Apart from the unusable rates left out, return values and errors are those of the full-history version
+this replaced, which loaded every pair's whole history up to the latest requested date and scanned it
+linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
+
+### 📅 Fixed-Period Changes {: #fixed-period-changes }
+
+`POST /api/v1/fx/currencies/period-changes` returns the fixed-period changes of the FX table: 1D, 1W, 1M, 3M, 6M,
+1Y, 2Y, 3Y and 5Y (developer decision D-MF6 b). `get_fx_period_changes_bulk()` in
+`backend/app/services/fx/period_changes.py` values the days. The change itself is the house's
+`fixed_period_changes()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
+
+- **Request**: a list of `{base, quote, as_of}`. `base` and `quote` must differ, or the request is refused (422).
+- **Rate on a day**: the conversion of 1 `base` into `quote` on that day by `convert_bulk()`, with its unlimited
+  backward fill. It is the rate `POST /api/v1/fx/currencies/convert` returns for that day. One `convert_bulk()` batch
+  serves every pair and day of the request.
+- **Response**: `items[]`, in request order, of `{base, quote, as_of, periods[], errors[]}`. Each period is
+  `{key, days, change_ratio, inverse_change_ratio}`.
+- **`change_ratio`**: `rate(as_of) / rate(as_of − days) − 1`, the pair as asked (quote per base).
+- **`inverse_change_ratio`**: `rate(as_of − days) / rate(as_of) − 1`, the change of the inverted pair (base per
+  quote).
+
+Both are fractions, null when either rate is missing. A day without a rate adds *No B/Q rate on or before D* to
+`errors`.
 
 ## 🧹 Rate writes clear the portfolio caches {: #portfolio-cache-invalidation }
 

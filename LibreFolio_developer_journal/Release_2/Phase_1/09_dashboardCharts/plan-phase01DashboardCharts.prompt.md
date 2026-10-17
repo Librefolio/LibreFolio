@@ -4849,3 +4849,150 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >   `2cd430a5e`. Con questo **Y11 è completo nel codice**: tutte le pagine e la scheda Correlation. Restano per la
 >   chiusura le righe del CHANGELOG e la documentazione utente del kit (`files/y11_closing/`), che aspettano la parola di
 >   Y-15 dal developer.
+
+## R17 · W8 · P4 — implementazione (17/10, dalle 04:48; HEAD `d32d0f3d9`, il lotto `assets` entrato, MF-P4b dentro)
+
+> **Note implementazione**.
+> - **Base**: `d32d0f3d9` = dev, con dentro il lotto `assets` (`aa95cc86d` journal, `1e93d8046` wiki) e MF-P4b.
+>   - `api sync` a rc 0: il client ha i 4 campi `period_*_percent`;
+>   - i 4 file di prodotto non sono cambiati da `2cd430a5e`;
+>   - la prova a secco dà ancora 27 sostituzioni; `y11_docrefs.py` 69/69;
+>   - svelte-check prima del codice 0/0, con i 3 test trattenuti.
+> - **Via dei colori** sui 4 file DV (coordinatore, 04:5x).
+>   - Le regole: non toccare le 4 classi di palette delle barre di `KpiSection`, che sono nella baseline e aspettano
+>     il designer; i colori di segno solo dagli aiuti esistenti; un aiuto nuovo nei file del tema solo con il loro via;
+>     `theme-roles --check` fra le prove leggere.
+>   - Rispettate tutte: nessun attributo `class` cambiato (controllato sul diff), nessun colore e nessun aiuto nuovo.
+> - **Applicato** `r17w8_apply.py --apply`: 27 sostituzioni in 4 file (+71/−74). Prettier pulito.
+> - **⚠️ Fuori pista, due correzioni a mano in `ExposureTreemap.svelte`**, trovate dalle prove:
+>   1. **Il rosso del gruppo assente.** Il caso chiede «—», come diceva il mio brief, ma il tooltip saltava le righe
+>      con `gl` null.
+>      - Ora le tessere di tipo e di broker scrivono «Unrealized P&L: —» quando il backend non dà una cifra (gruppo
+>        assente o null); le tessere degli asset restano come prima.
+>      - È la regola «null → «—»» concordata con MF.
+>   2. **svelte-check, 3 errori.** Un `gl: 0` rimasto nell'inizializzazione della tessera di tipo, e il mio tipo locale
+>      `HoldingGroupFigures` che non combaciava con il tipo generato, dove ogni campo ammette anche array.
+>      - Ora il tipo è `NonNullable<PortfolioSummary['holding_groups']>[number]`, dallo store, come usano già
+>        `PositionsPanel` e il test.
+>      - Le letture passano per `safeString`, `safeCurrency` e `safeDecimal` di `$lib/types`. A runtime è equivalente.
+> - **Prove** (carico 31–56):
+>   - Vitest: `KpiSection` 51/51, `ExposureTreemap` 7/7 (dopo la correzione 1), `PerformanceChart` 24/24,
+>     `AllocationPanel` 3/3;
+>   - **`front-utility core-unit` 7941/7941** (200 file, con i gate di HTML e denaro) e **`component-unit`
+>     4468/4468** (166 file). Sono girati prima della correzione 2, che cambia solo tipi e letture equivalenti; dopo
+>     ho rilanciato il file della treemap;
+>   - svelte-check 0/0 dopo la correzione 2; `theme-roles --check` pulito; `git diff --check` pulito.
+>   - Log in `files/logs/r17w8_green*_*.log`, `r17w8_core-unit.log`, `r17w8_component-unit.log` e
+>     `r17w8_front-check_post2.log`.
+> - **Documentazione per sviluppatori**: `pages/index.md:120-123` descriveva ancora il calcolo nel browser (gli ultimi
+>   due punti della history, `mwrr − twrr`). Affidata a `docs-writer`. Nessuna pagina utente cambia:
+>   `kpi-cards.en.md` dice già «from yesterday to today».
+> - **Slot breve** pronto: `files/scripts/r17w8_e2e.sh` (`front-portfolio dashboard`, `privacy-masking`,
+>   `front-broker detail`).
+> - **E2E breve** (slot 1, 05:11–05:25; `files/scripts/r17w8_e2e.sh`): `front-portfolio dashboard` 27/27,
+>   `privacy-masking` 18/18, `front-broker detail` 38/38: **83/83**. Porta 6189 libera, nessun processo rimasto.
+> - **Documentazione** (`docs-writer`):
+>   - `developer/frontend/pages/index.md` (+23/−5): i punti del Δ del giorno e del timing dicono ora che si leggono i
+>     campi del backend; due punti nuovi per i gruppi della treemap e per i ritorni di `PerformanceChart`;
+>   - `user/dashboard/kpi-cards.en.md`, due frasi: «It needs two days of history» era fuorviante. Ora la riga manca
+>     solo quando il periodo finisce nel primo giorno del portafoglio, e di lunedì copre il fine settimana.
+>     **Debito di traduzione**: it/fr/es hanno ancora la frase vecchia, senza stamp.
+>   - Durante la corsa E2E `docs-writer` non ha lanciato build: due build scriverebbero sullo stesso `mkdocs_src/site`.
+>     Le ho lanciate io dopo, con `files/scripts/r17w8_docs_check.sh`: build stretta rc 0 e 0 WARNING (53,7 s);
+>     `check-links` con 97 collegamenti validi.
+> - **Backlog**: T-U8 («il frontend solo di presentazione») sta nella sezione T, che non è mia. Lo segnalo al
+>   coordinatore: con Y12a e questo lotto restano solo V11 e P5, che aspettano MF-E e il CP-7b di J.
+> - **E2E breve verde** (05:11–05:25): `dashboard` 27/27, `privacy-masking` 18/18, `front-broker detail` 38/38. **Entrato**:
+>   `9d40a1df0`, `879cfc9d7`, `f24096f01` → dev `1565b6bbb`; CHANGELOG `a3662b3ef` con le mie due righe 🐛. T-U8 lo
+>   riconcilia il coordinatore.
+
+## Coda del mattino del 17/10: Y-16, Y-2, Y-13, Y-8 (dalle 05:30; HEAD `a3662b3ef`)
+
+### Y-16 · la vista Candele salvata si carica per una dipendenza involontaria — opzione A approvata (05:4x)
+
+> **Note implementazione**.
+> - **Meccanismo**, verificato sul codice:
+>   - l'`$effect` di `GrowthChart` (`:975-979`) legge solo `viewMode`, `pnlSubmode` e `pnlCandles`, e chiama
+>     `onRequestPnlCandles()` in modo sincrono;
+>   - nella Dashboard la callback è `pageBusy.join('dashboard-pnl-candles', loadPnlCandles)`, e `loadPnlCandles` legge
+>     prima del primo `await` `canAsk`, `pnlCandles`, `pnlCandlesLoading`, `activeBrokerIds`, `dateRangeCtl` e
+>     `targetCurrency`. Diventano tutte dipendenze dell'effetto del figlio;
+>   - è il passaggio di `canAsk` a true, quando i broker diventano noti, a far ripartire la richiesta di una vista
+>     Candele salvata;
+>   - la pagina del broker non ha una guardia di prontezza.
+> - **Trovato analizzando: Y-24**, nel backlog, per il developer insieme a Y-18. La stessa dipendenza nascosta da
+>   `pnlCandlesLoading` riarma la richiesta dopo ogni errore, perché `requestReport` restituisce `null` invece di
+>   lanciare: richieste senza limite finché il backend fallisce. `PositionsPanel` fa lo stesso per il contributo,
+>   attraverso la sua prop dichiarata.
+> - **Opzione A** (coordinatore, 05:4x): nessun cambio di comportamento.
+>   - Un E2E diretto in `page-busy.spec.ts` (`test-author` `13eb06ea`): la richiesta dei broker è trattenuta, quindi
+>     niente candele; al rilascio parte la richiesta delle candele.
+>   - La prova di mutazione: un `untrack` attorno alla chiamata deve far diventare rosso il test.
+>   - Due commenti. In `GrowthChart.svelte`, sopra l'effetto: la callback gira tracciata apposta (Y-16), il test che lo
+>     fissa, Y-24. Nella Dashboard, sul JSDoc di `loadPnlCandles`: le letture della guardia sono dipendenze
+>     dell'effetto, e vanno tenute prima del primo `await`.
+> - **Opzione B, per il developer**: una prop esplicita `canRequestPnlCandles` più `untrack`. Toglie il ciclo, ma dopo
+>   un errore, o in un passaggio di periodo da null a null, non si richiederebbe più niente. Serve una «chiave di
+>   scope» e uno stato d'errore: è la decisione di Y-18.
+
+### Y-13 · ✅ già chiuso da T
+
+> `4a7ba1d7e` (16/10): `brokers-detail.spec.ts:392-419` usa `data-selected`. Aggiunta la ✅ nella mia sezione del backlog
+> (via del coordinatore, 05:4x).
+
+### Y-2 · il buco nella cascata settimanale — analisi e rosso (dalle 05:45)
+
+> **Note implementazione**.
+> - **Il difetto**, verificato:
+>   - `buildBucketInfos` (`growthChartData.ts:225`) dà a ogni secchio settimanale o mensile, come `date`, l'ultimo
+>     giorno di quel secchio presente in storia;
+>   - `aggregateMetric` (`:380`) cerca il valore aggregato **per `bucket.date`**, mentre `aggregateLineSeries`
+>     (`components/charts/timeSeriesAggregation.ts`) lo data sull'ultimo punto con un valore;
+>   - quindi una linea che si ferma a metà settimana (valori da lunedì a mercoledì, poi null) non trova niente il
+>     venerdì e fa un buco. La scala a gradini delle candele (`ladderLast`) tiene invece l'ultimo valore. Lo stesso
+>     vale per il mese.
+> - **La correzione prevista**: cercare per `bucketEnd`, il bordo di calendario che i due lati calcolano con la stessa
+>   `mapDateToBucket`, cioè l'ultimo valore esistente nel secchio. Il punto resta su `bucket.date`; un secchio senza
+>   valori resta un buco. Non è matematica finanziaria: è la scelta del punto che rappresenta il secchio, come già
+>   fanno `aggregateLineSeries` e `ladderLast`.
+> - Il rosso lo scrive `test-author` (`e6cd112c`) in `components/charts/chartCoreHelpers.test.ts`, nella sezione di
+>   growthChartData (FE6a), che ha già le fixture `week` e `weekBucket`.
+> - **I rossi di Y-2** (`test-author` `e6cd112c`, `chartCoreHelpers.test.ts` dopo `:4577`), tre casi:
+>   - settimanale, la linea si ferma a metà settimana: `[null]` contro `[30]`;
+>   - due settimane: `[null, null]` contro `[30, null]`. La seconda settimana resta un buco vero, quindi un valore non
+>     viene portato nella settimana dopo;
+>   - mensile, il secchio da `buildResolutionData`: `[null]` contro `[119]`, più un controllo che passa anche oggi;
+>   - il controllo «valore l'ultimo giorno» c'era già (`:4577` e la cascata a `:3874`).
+>   - **Lanciati** alle 05:45 (carico 47): **3 rossi su asserzioni**, 287 verdi (`files/logs/y2_red.log`).
+> - **Correzione di Y-2 applicata** (`files/scripts/y2_apply.py`): `aggregateMetric` cerca per `bucketEnd`, con un
+>   commento sul perché. Verdi: `chartCoreHelpers` 290/290, `GrowthChart` 166/166, `GrowthChart.tooltip` 6/6,
+>   `growthLadderAxis` 138/138.
+> - **Nota, fuori da Y-2**: `aggregateCandleMetric` (`:481-497`) cerca anch'esso per `bucket.date`. Ma la vista Candele
+>   prende la scala a gradini (`getActiveAggregation`: `ladderActive` → `buildLadderData` → `ladderCandleMetric`), quindi
+>   quella candela della cascata non si disegna mai. Nessun effetto visibile, niente voce nel backlog.
+> - **L'E2E di Y-16** (`test-author` `13eb06ea`): `page-busy.spec.ts` ~l.867, «Dashboard loaded from scratch on a saved
+>   P&L candles view: the candles are asked, and drawn, once the brokers are known…».
+>   - Usa `saveCandlesView`, `hold(BROKERS_PATH, isBrokerList)`, `expectBusy` e le prove di montaggio (`aria-pressed`
+>     di `growth-toggle-pnl` e `growth-pnl-submode-candles`).
+>   - Con i broker trattenuti, nessun corpo con `include_pnl_candles`. Al rilascio parte la richiesta, con `broker_ids`
+>     non vuoti, e le candele vengono disegnate (`candleBodies` attraverso `[data-chart-ready]`).
+>   - Con la mutazione `untrack` si aspetta un timeout con un messaggio proprio.
+> - **Prove leggere su Y-16 e Y-2** (05:5x, carico 36): svelte-check 0/0, Prettier pulito sui 5 file,
+>   `theme-roles --check` pulito, `git diff --check` pulito.
+> - **Slot chiesto**: `files/scripts/y16_e2e.sh`.
+>   - Prima la mutazione su `GrowthChart.svelte` (provata su una copia: diventa `untrack(() => onRequestPnlCandles?.())`
+>     più l'import), e `page-busy` che si aspetta rossa.
+>   - Poi il ripristino controllato con l'hash, con una trap anche in caso d'errore.
+>   - Infine `page-busy` e `dashboard` sul codice vero.
+> - **E2E di Y-16 e Y-2** (slot 1, 05:50–06:07; `files/scripts/y16_e2e.sh`). La guardia sul carico a 5 minuti sotto 50
+>   l'ho aggiunta allo script prima di lanciarlo: il coordinatore la dava per già presente, ma non c'era. Partenza dopo
+>   150 s, con il carico a 47.
+>   - **Mutazione** (`untrack(() => onRequestPnlCandles?.())` più l'import): `page-busy` 15 verdi e **2 rossi, per la
+>     ragione giusta**:
+>     - `:867`, il test di Y-16, con il suo messaggio: «Y-16: the brokers are known, and the candles the chart asked
+>       before them are never asked — the refused ask was not re-armed when the brokers landed»;
+>     - `:774`, N55, sulla sua precondizione: «the saved candles view never drew its candles».
+>   - **Ripristino**: l'hash è uguale (`54d25178…`) e nel codice non resta nessun `untrack` (`grep` dà 0).
+>   - **Codice vero**: `front-portfolio page-busy` **17/17** e `front-portfolio dashboard` **27/27**.
+>   - Porta 6189 libera. Log in `files/logs/y16_e2e_*.log`.
+> - **Backlog**: Y-16 ✅ (opzione A; la correzione vera è Y-24) e Y-2 ✅.

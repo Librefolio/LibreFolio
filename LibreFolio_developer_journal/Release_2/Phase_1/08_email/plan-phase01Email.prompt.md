@@ -4353,3 +4353,472 @@ processo):
 >
 > **R13-SEC5 chiusa**: nessun reperto sopra la soglia nei quattro lotti. Il punto fuori diff sulle scritture FX va al
 > coordinatore per la domanda D-SEC2-1.
+>
+> **R13-SEC5 committato ed entrato** (coordinatore, 03:58; dev `7d3012e3b`; HEAD portato avanti con un
+> fast-forward). Le note sono andate a X; le scritture FX sono aggiunte alla domanda D-SEC2-1 del developer.
+
+### E-8 — La lingua dell'invito spedito per email
+
+#### E-8.0 — Analisi in sola lettura ✅ (2026-10-17, 04:00–04:10)
+> **Il compito del coordinatore** (03:58): l'analisi di E-8 in sola lettura. Il codice viene dopo A8b, perché A
+> riordina le schede di Impostazioni. Prima arriva R13-SEC6 su A8a, appena A lo consegna.
+
+**Stato reale** (HEAD `7d3012e3b`)
+- **Il backend è pronto.**
+  - `POST /email/links` accetta `language: "en" | "it" | "fr" | "es"`, solo per l'invito (`schemas/email.py:74`).
+  - Senza lingua decide `default_language` dell'istanza; il reset va sempre nella lingua dell'account
+    (`flows.send_link_email`, `:138-160`).
+  - La risposta dice in che lingua è partita (`EmailLinkResponse.language`).
+- **Il frontend non la passa.**
+  - `sendLinkApi.sendLinkByEmail({purpose, token, to})` non manda `language` (`:39-41`).
+  - `SendLinkByEmail.svelte` (80 righe, di E, a ruoli) ha per l'invito solo il campo «a chi» e il pulsante. È montato
+    da `LINK_SHARE_ACTIONS` (`features/settings/users/linkShareActions.ts`, di A), che A8b può spostare.
+- **Cosa c'è da riusare**:
+  - `LANGUAGE_OPTIONS` in `lib/i18n/index.ts:56`: codice, bandiera e nome nella sua lingua, «per i selettori»;
+  - `default_language` in `stores/app/globalSettings.ts`.
+
+**Disegno proposto**
+1. In `SendLinkByEmail`, solo per `purpose === 'invite'`, un `<select>` nativo «Language of the email».
+   - La prima voce è **«The instance's language»**, il default: nessun `language` nella richiesta, quindi il
+     comportamento di oggi non cambia e decide il backend.
+   - Poi le 4 lingue di `LANGUAGE_OPTIONS`, con bandiera e nome.
+   - I colori del campo nativo seguono la regola di T: `text-lf-primary` e i ruoli del campo accanto.
+2. `sendLinkByEmail({purpose, token, to, language})` manda `language` solo per l'invito, e solo se scelta.
+3. L'esito dice anche la lingua in cui è partita, da `answer.language`: «Sent to x@y, in Italiano».
+4. **i18n**: due chiavi nella sorgente `lib/i18n/email/`, nelle 4 lingue: l'etichetta e «la lingua dell'istanza».
+5. **Test**:
+   - i Vitest di `SendLinkByEmail`: il selettore c'è solo per l'invito; il default non manda `language`; una scelta
+     arriva nel payload; il reset non cambia;
+   - `sendLinkApi`;
+   - eventualmente un caso nella spec E2E `email-send-link`.
+6. **Docs**: `admin/email.en.md` («Send by email») e `developer/backend/email.md`. Poi E-8 ✅ nel backlog.
+
+**Decisioni** (consiglio in grassetto)
+- **D-E8-1, il default**: **«la lingua dell'istanza»**, cioè invariato. In alternativa, la lingua dell'interfaccia
+  dell'admin.
+- **D-E8-2, il perimetro**: **solo la lingua dell'email**.
+  - Farla diventare anche la lingua dell'account che si registra con l'invito chiederebbe di salvarla nel token
+    (`AccountToken`) e di leggerla alla registrazione.
+  - È codice di A, e merita una riga di backlog per A se la si vuole.
+- **D-E8-3**: **la lingua nell'esito**, sì.
+
+**Peso**: piccolo. 1 file `.svelte` di E, 1 file `.ts`, 2 chiavi i18n, Vitest e docs; nessun file di A, salvo che A8b
+non sposti il registro.
+
+**Quando**: dopo A8b, su una base che lo contiene.
+
+#### E-8.1 — Decisione N69 ✅ (2026-10-17, 04:00)
+> **Il coordinatore** (04:00) adotta le tre raccomandazioni come **decisione notturna N69**, da rivedere col
+> developer:
+> - **D-E8-1**: il default è la lingua dell'istanza, cioè invariato;
+> - **D-E8-2**: solo la lingua dell'email. Salvarla nel token per la registrazione è una riga di backlog di A, non ora;
+> - **D-E8-3**: la lingua compare nell'esito.
+>
+> Il codice viene dopo A8b, su una base che lo contiene. Questa analisi va col prossimo checkpoint del journal.
+
+### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
+> **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
+> `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
+> - **i miei file**, che rivedo io;
+> - **la sicurezza** del limite, che va a un `security-review` in background: `login_throttle.py`, `security.py`,
+>   `checks.py`, `end_sessions` in SQL, le chiamate in `auth.py`.
+
+> **I miei file** (05:03–05:15, in sola lettura): **corretti**.
+> - **`verification.py`**: l'integrazione segue le indicazioni che avevo dato.
+>   - `refusal()` sta dopo `RESEND_BY_ADDRESS` e prima della ricerca dell'account.
+>   - `record_failure()` sta nel ramo unico che copre account sconosciuto e password sbagliata, col commento sul perché:
+>     nessun oracolo d'esistenza, perché il conteggio non distingue.
+>   - `record_success()` viene subito dopo, prima dei controlli di stato.
+>   - Il rifiuto diventa `EmailRateLimitedError(refused.retry_after)`, con un `RateDecision` in secondi che
+>     `_rate_limited` arrotonda per eccesso: il 429 `EMAIL_RATE_LIMITED` e l'avviso «fra N minuti» non cambiano, e il
+>     frontend nemmeno.
+> - **`api/v1/email.py`**: solo la docstring del 429; rispetta la regola dei testi del client OpenAPI (niente `${` né
+>   `\`).
+> - **Le docs**:
+>   - `developer/backend/email.md`: il paragrafo fra i passi 1 e 2, la riga della tabella dei limiti, il 401 «contato
+>     come login fallito», il 429, il paragrafo «due 429 prima della password», `#rate-window` e la riga di
+>     `emailText.ts` con «il limite dei login falliti» fra i 429. Tutto vero contro il codice: `login_throttle` usa
+>     davvero `SlidingWindowLimiter`.
+>   - `admin/email.en.md`: la riga nella tabella dei limiti, col link `configuration.md` nello stile della pagina.
+> - **Il merge `125c19f0e` è pulito sui miei file**:
+>   - fra la punta di dev e `125c19f0e` ci sono solo gli hunk di A8a;
+>   - E-9 (`mailbox_budget_key`, i costruttori senza username) ed E-11 (il 401 codificato, la docstring) sono intatti;
+>   - dev non ha più toccato i miei file da `fd6886bb0`.
+> - **I test**: i miei non sono stati toccati.
+>   - `conftest.py` spegne il limite per ogni processo di test (`setdefault`, quindi un valore esplicito vince ancora), e
+>     `dev.py` lo spegne solo nel ramo `--test` del server.
+>   - Il resend sotto il limite lo fissano LT-API-16…19 di A, che controllano gli stati e non il corpo del 401: quindi
+>     compatibili col 401 codificato di E-11.
+> - **⚠️ La revisione combinata non ha girato le mie suite.**
+>   - Il codice di A8a (04:54) non conteneva E-11: alla sua base mancava EVA-017. Il merge con dev è arrivato dopo
+>     (05:02), mentre lo slot API di A (A8a.8, 04:38–04:53) era prima.
+>   - Infatti A registra `services email-verification` **125**, che è il conteggio di prima di E-9 (oggi 127), e `api
+>     email-verification` **49**, di prima di E-11 (oggi 50).
+>   - All'ingresso servono, sulla revisione combinata:
+>     - `services email-verification` (127), `api email-verification` (50), `api email`, `api email-change-notice`;
+>     - LT-API-16…19.
+
+> **La sicurezza di A8a** (05:20–05:40).
+>
+> **⚠️ Fuori pista: l'agente `security-review` è fallito** prima di leggere qualsiasi cosa: «400 The requested model is
+> not supported», un errore dell'infrastruttura. Rilanciarlo avrebbe dato lo stesso errore. Il diff di sicurezza è
+> piccolo (circa 270 righe), quindi la revisione l'ho fatta io, in sola lettura dagli oggetti git a `125c19f0e`.
+>
+> **Reperto 1 — MEDIUM, confidenza 8/10: dietro un reverse proxy non configurato, 50 tentativi sbagliati di chiunque
+> bloccano il login di tutti.**
+> - **Il codice**: `refusal()` (`login_throttle.py:34-46`) rifiuta **prima** della password se è pieno il conteggio
+>   dell'identificativo **o** quello dell'indirizzo (`client_rate_key(client_address(request))`). Il rifiuto blocca
+>   anche la password giusta, e non si conta.
+> - **Il default**: l'immagine avvia `uvicorn … --host 0.0.0.0 --port 6040` senza `--forwarded-allow-ips`
+>   (`Dockerfile:164`), e uvicorn si fida solo di `127.0.0.1`. `LIBREFOLIO_CLIENT_IP_HEADER` è vuoto, e nessun
+>   profilo lo imposta (`client_address.py`, docstring); il cloud lo mette dal pannello (P17).
+> - **Il proxy è la norma**: l'HTTPS è compito di un reverse proxy, per disegno (`security.md:21`). Dietro un proxy in
+>   un altro container, o sull'host verso la porta di Docker, il container vede l'indirizzo del proxy o del gateway
+>   del bridge per **tutti** i visitatori.
+> - **Lo sfruttamento**, da anonimo:
+>   - 50 password sbagliate in 15 minuti, e da lì ogni login dell'istanza è rifiutato (429 `TOO_MANY_ATTEMPTS`), come
+>     il cambio password, il cambio email e il mio «resend»;
+>   - lo tiene così con circa una richiesta al secondo: quelle rifiutate costano poco (niente bcrypt) e non si contano,
+>     e ogni volta che si libera un posto la sua richiesta successiva lo riprende. Chi accede davvero quasi mai lo
+>     trova libero.
+> - **Prima di A8a**, la stessa configurazione rallentava solo i limiti per indirizzo secondari, quelli di E e di H:
+>   ora spegne il login.
+> - **Già documentato, ma non dove guarda l'operatore**: la pagina developer lo dice (`security.md:427-428`, «its 50
+>   failures lock every sign-in through it»). La sezione admin «Failed Sign-ins» (`configuration.en.md:504-526`) non
+>   nomina il proxy, e nessun controllo della scheda Security se ne accorge.
+> - **La direzione**:
+>   1. un controllo nella scheda Security e all'avvio, di H in `client_address`: richieste con `X-Forwarded-For` o
+>      `Forwarded` da un peer di cui uvicorn non si fida, quindi «i visitatori condividono un indirizzo; imposta
+>      `LIBREFOLIO_CLIENT_IP_HEADER` o `FORWARDED_ALLOW_IPS`». Coprirebbe anche i limiti per indirizzo di E;
+>   2. contro il blocco, i *device cookie* di OWASP: un browser che ha già fatto login con quell'identificativo resta
+>      fuori dal limite per indirizzo e da quello per identificativo. Oppure un ritardo progressivo invece del rifiuto
+>      secco;
+>   3. l'avviso del proxy nella sezione admin «Failed Sign-ins» e nella guida d'installazione.
+>
+> **Note sotto la soglia**:
+> 1. **Il blocco di un nome utente noto**: 10 errori in 15 minuti, da qualsiasi indirizzo, bloccano l'identificativo,
+>    password giusta compresa.
+>    - Si tiene bloccato con una richiesta al secondo.
+>    - Il titolare può entrare con l'email, che è un'altra chiave. Il link di reset non aiuta: anche la password nuova
+>      viene rifiutata finché la chiave è piena.
+>    - È il compromesso di D-A5; per il cloud vale anche per l'admin pagante. La cura dei device cookie del reperto 1
+>      copre anche questo.
+> 2. **Lo sfratto LRU**: `LOGIN_BY_IDENTIFIER` ha `max_keys` 10 000 col default di `SlidingWindowLimiter`.
+>    - Una pioggia di 10 000 identificativi sconosciuti sbagliati sfratta il contatore di un identificativo bloccato e
+>      gli ridà 10 tentativi.
+>    - Costa 10 000 bcrypt per ogni 10 tentativi, e con un /48 IPv6 il limite per indirizzo non la ferma.
+>    - La direzione: non sfrattare le chiavi piene, o un `max_keys` più alto per questo limitatore.
+> 3. **I tentativi per account**: il conteggio va per identificativo scritto, quindi chi conosce username ed email ha
+>    20 tentativi ogni 15 minuti. Contare per account darebbe un oracolo d'esistenza, quindi è voluto.
+>    - Il cambio password, con un cookie rubato, conta sotto lo username: chi ruba il cookie può bloccare il login per
+>      username del titolare, che può comunque entrare con l'email.
+> 4. **Già prima, nel mio dominio**: i limiti per indirizzo di E (`RESEND_BY_ADDRESS`, `FORGOT_BY_ADDRESS`,
+>    `REGISTRATION_EMAILS_BY_ADDRESS`) hanno la stessa dipendenza dal proxy. Dietro un proxy non configurato,
+>    «resend» e «dimenticata» si spengono per tutti con 10 richieste; la doc lo dice (`admin/email.en.md:417-421`).
+>    Il controllo del reperto 1, direzione 1, li coprirebbe.
+>
+> **Sani**:
+> - **L'ordine**: il rifiuto arriva prima della ricerca e di bcrypt al login (`auth.py:155-157`), al cambio password,
+>   al profilo e nel mio «resend». I rifiuti sono veloci allo stesso modo per account noti e ignoti.
+> - **Nessun oracolo**: `record_failure` sta nel ramo unico (login `:167`, resend `:384`); il 429 ha lo stesso corpo;
+>   `Retry-After` dice solo quando scade il più vecchio errore di quella chiave.
+> - **Le pieghe**: la chiave è `email_fold(identifier.strip())`, solo A–Z. La ricerca (`user_service.py:161`) confronta
+>   lo username esatto e l'email con `lower()` di SQLite, cioè A–Z: la chiave non piega mai meno della ricerca, quindi
+>   nessun N× per maiuscole o spazi. NFC e alias non trovano l'account.
+> - **Il successo**: `record_success` azzera solo l'identificativo scritto e mai l'indirizzo, e solo dopo il cookie
+>   (`auth.py:191`). I 403 (disattivato, non verificato) non contano né azzerano.
+> - **`end_sessions`**: atomico, `UPDATE … SET session_version = session_version + 1 RETURNING` sulla connessione della
+>   sessione, nella transazione del chiamante; poi `set_committed_value`, quindi il cookie nuovo porta la versione
+>   giusta (A-34 chiuso).
+> - **L'interruttore**: `LIBREFOLIO_LOGIN_LIMIT` è acceso di default; un valore non valido ferma l'avvio; spento, dà un
+>   avviso. `dev.py` lo spegne solo nel ramo `--test`, `conftest.py` solo per i test (`setdefault`).
+> - **`GET /security/checks`**: `require_admin`; rende id, gravità, chiave i18n e parametri. Il controllo del limite
+>   mette nei parametri solo il valore non valido della variabile, che non è un segreto.
+
+> **R13-SEC6 committato ed entrato** (coordinatore, 05:13; dev `3f664ae37`; HEAD portato avanti con un fast-forward).
+> Lo smistamento:
+> - **A corregge dentro A8a**, decisione notturna **N70**: niente limite per indirizzo dietro un proxy non fidato, l'LRU
+>   che non sfratta le chiavi piene, la doc admin;
+> - **H** dà l'aiuto di rilevamento e il controllo della scheda Security (**H-36**);
+> - i device cookie vanno al developer;
+> - le suite email girano nello slot di A, sulla revisione combinata.
+>
+> Il prossimo compito è la revisione della correzione N70 (A più H), appena la consegnano.
+>
+> **Indicazioni mandate prima del codice** (05:1x), perché A e H le seguano:
+> 1. **Il rilevamento non deve dipendere dal client.** Un `X-Forwarded-For` mandato da un client diretto non deve
+>    spegnere il limite. Il segnale robusto: peer privato, di loopback o link-local, più un header di inoltro.
+> 2. I proxy pubblici, come Cloudflare, restano alla configurazione, con un avviso informativo.
+> 3. In alternativa, il valore più a destra di `X-Forwarded-For` dietro un peer privato: è la scelta di H.
+> 4. L'LRU deve dire cosa fa quando è saturo: prima le chiavi non piene, poi, se serve, la più vecchia piena; mai un
+>    rifiuto globale, mai una crescita senza limite.
+> 5. Lo skip va in `login_throttle`, così il mio «resend» lo eredita.
+>
+> Ho offerto un lotto piccolo di E per applicare l'aiuto di H-36 ai tre limiti per indirizzo di E, che hanno lo stesso
+> problema.
+
+### E-13 — I limiti per indirizzo di E dietro un proxy non fidato (aiuto di H-36)
+
+#### E-13.0 — Analisi e rossi ⏳ (2026-10-17, 05:15–)
+> **Il via del coordinatore** (05:15): un lotto piccolo di E. Appena H-36 è dentro, lo stesso aiuto si applica ai tre
+> limiti per indirizzo di E: `RESEND_BY_ADDRESS`, `FORGOT_BY_ADDRESS`, `REGISTRATION_EMAILS_BY_ADDRESS`. I rossi ora,
+> il codice dopo H-36. Le mie indicazioni su N70 sono diventate vincolanti per A e H.
+>
+> **Il problema**: dietro un reverse proxy non configurato, il default dell'immagine Docker, tutti i visitatori arrivano
+> dall'indirizzo privato del proxy. Con 10 richieste, «resend» e «dimenticata» si spengono per tutti, e le email di
+> registrazione restano trattenute.
+>
+> **I rossi, scritti sul comportamento e non sul nome dell'aiuto di H**, che ancora non c'è:
+> - **R (rosso)**: due visitatori dietro lo stesso proxy privato (`172.17.0.1`, `fd00::2`), con `X-Forwarded-For`
+>   diversi, non condividono il budget.
+>   - Vale sia se H salta il limite, sia se usa il valore più a destra di XFF.
+>   - Nessuna asserzione sulla seconda richiesta dello stesso visitatore, dove i due disegni divergono.
+> - **G1 (guardia)**: un peer pubblico che manda da sé `X-Forwarded-For`, `Forwarded` o `X-Real-IP` resta limitato.
+> - **G2 (guardia)**: un peer privato senza header di inoltro, cioè un dispositivo della LAN, tiene il suo budget.
+> - I limitatori sono privati, a limite 1. Le ID: EVA-018…, EMA-050…, EVH-014…
+>
+> **La cura** dipende dalla forma di H-36:
+> - se H cambia `client_address` o dà un aiuto per i limiti, le mie rotte (`email.py`: resend, forgot) lo usano;
+> - la chiamata di `registration_email_allowed` sta in `auth.py` di A (`/auth/register`): potrebbe servire una riga
+>   lì, col via del coordinatore.
+>
+> **Anche ad A, per N70 su `rate_window.py`** (05:1x), che è mio:
+> - decidere «pieno» sui colpi vivi, contro il `limit` del limitatore;
+> - una scansione limitata delle chiavi (al più K), perché i limiti di «dimenticata» contano prima di qualunque bcrypt;
+> - aggiornare il contratto 8 e RWL-014…016, e `email.md:1303` e `:1322-1323`.
+>
+> **Le scelte di H per H-36** (coordinatore, 05:25; da obiettare subito, altrimenti si verificano in revisione):
+> - **Locale** vuol dire `classify_ip` di `utils/runtime/network.py`: loopback, vpn e lan, CGNAT compresa.
+> - **Nessun valore XFF più a destra come chiave.** Dietro un proxy che non aggiunge la sua voce, quel valore lo
+>   sceglie il client, che potrebbe aggirare il limite o bloccare un altro visitatore. Lo skip non ha questo secondo
+>   buco.
+> - **Il controllo `platform.client_address` gira a runtime**: solo nomi di header, mai indirizzi.
+>
+> **Nessuna obiezione.**
+> - Verificato su dev: `classify_ip` usa elenchi espliciti e non `is_private`. Quindi i peer dei miei rossi cadono come
+>   serve: `172.17.0.1` in `172.16.0.0/12` e `fd00::2` in `fc00::/7` sono «lan»; `198.51.100.7`, un intervallo di
+>   documentazione che `is_private` di Python conterebbe come privato, resta «public»; `192.168.1.5` è «lan» senza
+>   header, quindi limitato.
+> - I rossi non fanno asserzioni sulla seconda richiesta dello stesso visitatore, quindi vanno bene anche con lo skip.
+
+#### E-13.1 — Rossi ✅ (2026-10-17, 05:17–05:33)
+> **Rossi scritti** (`test-author`, 05:17–05:29; l'agente ha eseguito solo `py_compile`, `ruff` e `black`, puliti a
+> carico 27). Ogni test porta il limitatore per indirizzo del suo file a limite 1, privato, sul suo orologio finto.
+> - **«resend»** (`test_email_verification_api.py`): EVA-018 (R, peer `172.17.0.1` e `fd00::2`), EVA-019 (G1, peer
+>   pubblico con `X-Forwarded-For`, `Forwarded` o `X-Real-IP`), EVA-020 (G2, LAN senza header); contratto 7.
+> - **«dimenticata»** (`test_email_api.py`): EMA-050 (R), EMA-051 (G1), EMA-052 (G2); contratto 8.
+> - **registrazione** (`test_email_verification_hooks_api.py`): EVH-014 (R, l'email di B nella casella finta), EVH-015
+>   (G1), EVH-016 (G2, l'email di B trattenuta, B inattivo con la sola trattenuta); contratto 5.
+> - **Aiuti estesi** in modo additivo, con parametri opzionali e gli stessi default: `headers=` per `_post` e
+>   `_resend` di EVA; `client=` per `_browser` di EVH, `client=` e `headers=` per `_post` e `_register` di EVH.
+>
+> **Rossi visti** (05:30–05:33, `files/tools/e9_suites.sh e13reds …`, carico sotto 50):
+>
+> | Suite | Falliti / passati |
+> |---|---|
+> | `api email-verification` | 2 / 54 |
+> | `api email` | 2 / 162 |
+> | `api email-verification-hooks` | 2 / 20 |
+>
+> - **I 6 rossi** sono i casi R, due peer ciascuno, tutti per la ragione giusta: «two visitors behind one private proxy
+>   (…) shared one per-address budget». B ha preso 429 `EMAIL_RATE_LIMITED`, oppure la sua email è rimasta trattenuta.
+> - **Tutte le guardie G1 e G2 sono verdi**, con le tre varianti di header.
+> - Porta 6188 libera.
+>
+> **La cura** aspetta H-36 (`client_address`, controllo a runtime, skip per un peer locale con un header di inoltro):
+> - in `api/v1/email.py`, le rotte resend e forgot useranno l'aiuto di H al posto di `client_address(request)`;
+> - in `auth.py` di A, la riga `/auth/register` che passa l'indirizzo a `registration_email_allowed()`, col via del
+>   coordinatore, a meno che H non cambi `client_address` stesso.
+>
+> **I file restano fuori dai commit**: rossi senza cura non devono entrare in dev.
+>
+> **L'ordine** (coordinatore, 05:33): H-36, poi l'ingresso di A8a più N70, poi E-13 su quella base. La riga
+> `/auth/register` di `auth.py` è mia in E-13, ma solo dopo l'ingresso, perché due scrittori sullo stesso file non sono
+> ammessi; A rivede la riga. I rossi restano non committati, senza nemmeno un commit di recupero.
+>
+> **Verificato** (05:35): i tre limiti di E trattano già un indirizzo `None` come «nessun conteggio per indirizzo».
+> - forgot: `flows.py:198-203`, `if key is None: continue`, fissato da EMA a `:2055-2062`;
+> - resend: `verification.py:369-370`;
+> - `registration_email_allowed`: `:291-292`.
+>
+> Anche `login_throttle` di A8a tratta `None` come «solo l'identificativo». Ho proposto il contratto uniforme: l'aiuto di
+> H-36 rende `None` per una richiesta che passa da un proxy locale non fidato, e ogni chiamata lo passa al posto di
+> `client_address(request)`. Così E-13 è una riga per chiamata.
+
+### R13-SEC7 — Revisione di sicurezza di ciò che è entrato in dev dopo le mie revisioni (2026-10-17, 05:40–)
+> **Il compito del coordinatore** (05:3x), mentre aspetto H-36 e poi A8a più N70, cioè E-13, ed E-8 dopo A8b:
+> - in sola lettura, dagli oggetti git, su dev `1a937b93e`, solo in `backend/app/**`: rotte, parsing dell'input,
+>   autenticazione, filesystem, subprocess;
+> - nessuna esecuzione, nessuna corsia;
+> - se `security-review` fallisce ancora sull'infrastruttura, la revisione la faccio io.
+>
+> **L'intervallo**: `db506eb21..1a937b93e`, perché `db506eb21` è la base di R13-SEC2.
+> - 41 commit toccano `backend/app`.
+> - Esclusi:
+>   - i lotti rivisti prima dell'ingresso: A7b `f99edbf6b` (SEC3), A7b-2 `53c064556` e `2a238cf0c` (SEC4), B4
+>     `df1f0d52c` (SEC4), X-R24/25 `e22251856` e X-R38 `80f5c65ff` (SEC5);
+>   - i miei: E-9 `3dd23eaa4`, E-11 `18d945d2e`;
+>   - un commit di sola docstring, `ef3f29f52`.
+> - Restano **33 commit**, circa 9 400 righe di diff. I due più grandi, `539351fd9` per i segnali e `b6d45f026` per il
+>   rischio, sono spostamenti di codice per tema.
+>
+> **Tre revisioni in parallelo**:
+> - **A, piattaforma e file**: le pulizie all'avvio di B4b (`964ecf434`, cancellano file), il sito statico (H-28,
+>   H-29), H-33, H-32, H-27, X-R35, X-R37, gli aiuti tolti;
+> - **B, limiti numerici e provider**: W-B58 (`7a4fdf024`), da verificare **punto per punto** sul reperto di
+>   R13-SEC2, più `de901f228`, `475bb9270`, X-R40, X-R50, X-R51, X-R52 e W-B59;
+> - **C, refactor e conti**: il rischio, i segnali, il portafoglio, la matematica e l'AI Export. Il fuoco è
+>   sull'autorizzazione che deve sopravvivere agli spostamenti (grep sulle righe tolte e aggiunte), sul perimetro fra
+>   utenti e sui parametri nuovi.
+
+> **Il piano d'ingresso di E-13** (coordinatore, 05:39): A8a più N70 ed E-13 entrano insieme.
+> 1. Dopo il checkpoint di A, con H-36 dentro, il coordinatore unisce il ramo di A al mio.
+> 2. Faccio E-13 su quella base: resend, forgot, e `/auth/register` con la revisione di A.
+> 3. Uno slot combinato sul mio ramo, poi i due ingressi nello stesso treno.
+>
+> **L'LRU nel mio `rate_window.py`**, applicato da A:
+> - `eviction_scan=32`, solo per parola chiave;
+> - «pieno» deciso sui colpi vivi; la più vecchia viene sfrattata solo se tutte e K sono piene;
+> - `utils rate-window` 39 su 39, e la descrizione in `_backend_utils.py` aggiornata.
+>
+> **Il costo dello sfratto di una chiave bloccata**, secondo il test-author di A: circa 310 errori (31 chiavi piene sue)
+> più il riempimento fino a `max_keys`, contro circa 100 000 senza il tetto. Dietro un proxy locale non fidato, dove il
+> limite per indirizzo è saltato, diventa fattibile.
+> - Per la revisione, i conti: su un'istanza piccola il riempimento costa circa 10 000 errori, cioè 10 000 bcrypt, per
+>   ogni giro.
+> - Il guadagno è di 10 tentativi per giro, quindi circa il triplo del tasso di 10 ogni 15 minuti, saturando la CPU.
+> - Un K più alto (64–128) moltiplica il costo delle chiavi piene, con una scansione sempre costante.
+> - L'alternativa strutturale: un insieme separato e limitato per le chiavi piene, che scadono solo con la finestra.
+>   Scelgo K in revisione.
+
+> **A, piattaforma e file**: **nessun reperto sopra la soglia.**
+> - **Sano**:
+>   - **B4b**: ogni cancellazione resta sotto cartelle fisse, con id di 32 caratteri esadecimali e genitori controllati
+>     con `lstat`. I link si saltano, e `rmtree` di 3.13 usa i descrittori. Si cancella solo dopo aver tentato il lock;
+>     la pulizia gira dopo `pending-restore` e `restore-commit`; lo stage confermato si tiene; nei log solo conteggi.
+>   - **H-28 e H-29**: `confined_path` risolve i link prima del controllo dei punti. `..`, `%2e`, i percorsi assoluti,
+>     NUL e i link fuori dalla build finiscono nel fallback o in un 404. Un nome nascosto e un file assente rispondono
+>     uguale.
+>   - **H-33**: nessun input, `msg` o `exc_info` nel log, e un 500 in testo semplice.
+>   - **H-32**: inf e NaN danno 422. **H-27**: `None` e i tipi sbagliati sollevano, e l'upload risponde 503.
+>   - **X-R35**: una `@` nel netloc è rifiutata, e l'errore non cita mai il valore.
+>   - **X-R37**: solo testo. Gli aiuti tolti non hanno più chiamanti.
+> - Note:
+>   1. **Un intero enorme nelle impostazioni di un plugin dà 500.** Il membro `int` non ha un tetto, quindi
+>      `math.isfinite` solleva `OverflowError` (`fields.py:324`), che `service.py:253-256` non prende. Chiunque può
+>      provocarlo su un campo d'utente; non scrive nulla. La direzione: prendere `OverflowError`.
+>   2. `get_job` cancella i file di lavoro senza controllare che la cartella non sia un link (`jobs.py:357-365`), a
+>      differenza della pulizia generale (`:398`). Servirebbe scrivere in `.jobs` (0700): difesa in profondità.
+>   3. Corse minime fra la pulizia e un job o un controllo appena partiti (`jobs.py:401-405`,
+>      `restore_jobs.py:429-444`); solo disponibilità.
+>   4. Il `loc` di H-33 può contenere chiavi dei dict di risposta: va solo nel log dell'operatore.
+>   5. `profile_default` dà 0, cioè nessun limite, se manca la voce `managed`; oggi c'è (500). Meglio fallire chiusi.
+>   6. `env_url` cita ancora i valori non validi senza `@`.
+
+> **C, refactor e conti**: **due reperti MEDIUM 8/10**, tutti e due DoS dell'istanza condivisa.
+> - **Il comportamento è vecchio**, ma sta nei cicli che i commit rivisti hanno riscritto.
+> - **Li ho verificati io nei punti chiave**, leggendo gli oggetti git.
+>
+> **Reperto 1: la fine dell'intervallo delle date non ha un tetto.**
+> - `OpenDateRangeModel` (`schemas/common.py:486-510`) controlla solo `end >= start`.
+> - Il motore prende `actual_to = date_to or today` senza tagliarlo (`engine.py:251`).
+> - `builder.build()` gira direttamente sul loop degli eventi (`engine.py:424`), senza `to_thread`.
+> - **Lo sfruttamento**: qualsiasi utente con una transazione manda `POST /portfolio/report {"date_range":{"end":
+>   "9999-12-30"}}`, e il motore rigioca circa 2,9 milioni di giorni con lo stato giornaliero e l'FX. L'istanza resta
+>   ferma per tutti, e il risultato finisce nelle cache.
+>   - Lo stesso succede con `/risk/query` sul portafoglio, `/portfolio/lots/analysis` e il `period` dell'AI Export.
+> - **La direzione**: tagliare `end` a oggi (o all'ultimo dato), limitare la durata nei modelli condivisi, e far girare
+>   il motore fuori dal loop.
+>
+> **Reperto 2: l'orizzonte degli investimenti programmati non ha un tetto.**
+> - Le date dei periodi (`schemas/assets/scheduled_investment.py:121-141`) sono controllate solo nell'ordine.
+>   `_accrual_days` (`scheduled_investment/plugin.py:168-211`, nuovo in `ec8a0b31e`) cammina un giorno alla volta, e
+>   l'interesse di mora COMPOUND è quadratico.
+> - **Lo sfruttamento**:
+>   - qualsiasi utente manda `POST /assets/provider/probe` (`providers.py:194`, una prova a vuoto) con un calendario
+>     dall'anno 1 al 9999 e maturazione DAILY;
+>   - sono due cammini di circa 3,65 milioni di giorni in thread che il timeout di 15 s non ferma, con circa 0,7 GB in
+>     cache per ogni calendario diverso;
+>   - salvato su un asset condiviso, blocca anche la sync.
+> - **La direzione**: limitare l'orizzonte (per esempio fra il 1900 e il 2200, al più 100 anni) e il numero di periodi,
+>   una forma chiusa per la mora COMPOUND, e niente cache per i risultati enormi.
+>
+> Note:
+> - **D-SEC2-1 di nuovo**: le scritture dei dati condivisi (prezzi, FX, provider) chiedono solo il login.
+> - Tassi e `grace_period_days` senza tetto finiscono in un overflow preso: nessun blocco.
+> - `broker_ids` senza lunghezza massima: i broker non accessibili cadono in silenzio.
+> - La chiave di `_wac_cache` non ha utente né impronta d'accesso; oggi ogni chiamante controlla l'accesso prima.
+> - Un secondo giro del motore in `get_positions_contribution`: solo tempo.
+>
+> **Sano**: nessun controllo d'accesso perso negli spostamenti.
+> - **Il rischio**: `scope.py:144-156` e `250-252` sono le righe tolte, invariate, verificate col grep sul diff; il 403
+>   è lo stesso per un broker mancante e uno altrui.
+> - **I segnali**: nelle rotte cambiano solo gli import, e `get_current_user` resta.
+> - **Il portafoglio**: i campi nuovi vengono dallo scope del motore, e le chiavi di cache tengono `user_id` e
+>   l'impronta d'accesso.
+> - **L'AI Export**: passa da `RiskService.execute(user_id)` e da `get_lots_analysis(user_id, …)`, con l'accesso
+>   ricontrollato all'ingresso.
+
+> **B, limiti numerici e provider** (05:40–05:58).
+>
+> **Il mio reperto di R13-SEC2 è chiuso.**
+> - **(a)**, la quantità `1E+60`: tetto di 15 cifre con arresto subito (`transaction_batch_stages.py:123-169`); la
+>   guardia sul bind (`real_decimal.py:94-102`); letture che non sollevano mai, con inf che diventa `None`
+>   (`:104-121`); `crud.py:284-288` salta il `None`.
+> - **(b)**, il prezzo corrente: passa da `storable_current_value` e `storable_price` (`price_query.py:110,120,896`).
+> - **Chiusi anche**: i `resolved_fields` della promozione; gli scrittori di eventi e `volume`; W-B59 (precaricamento
+>   solo col prewarm, `brim_parse_pool.py:98-101`); il doppio limite FX e l'underflow; `InvalidOperation` di BOE, SNB
+>   e FED; ECB, che salta un giorno solo.
+> - **In parte**: `1E+1000000` dà ancora un 500 a `promotion.py:127` (`abs()` va in Overflow); il tetto a ogni
+>   scrittore manca per il costo Auto (nota 2).
+> - **Aperto**: il serializzatore `format(v, "f")` di `schemas/common.py:18`, che diventa il reperto 3 qui sotto.
+
+> **Reperto 3 — MEDIUM, confidenza 8/10: la classe di J-27, raggiungibile da qualsiasi utente prima del controllo dei
+> limiti.**
+> - **Il codice**, verificato da me sugli oggetti git:
+>   - `SafeDecimal` è `Annotated[Decimal, PlainSerializer(...)]` e non ha un limite di grandezza;
+>   - `Currency.amount` fa solo `Decimal(str(v))` in un validatore before (`schemas/common.py:84-95`);
+>   - pydantic accetta `1E+999999999`, perché è finito.
+> - **I due punti**:
+>   - la creazione di un broker con saldi iniziali (`broker_service.py:173`): `format(currency_obj.amount, "f")`;
+>   - la promozione di un trasferimento (`promotion.py:141`): `format(req.cost_basis_override.amount, "f")`.
+>   - Tutti e due costruiscono il dict grezzo **prima** di `execute_batch`, dove W-B58 rifiuterebbe.
+> - **Lo sfruttamento**: una richiesta di 12 caratteri fa scrivere a `format` circa un miliardo di cifre, sul loop
+>   degli eventi.
+>   - Per misura, J aveva visto 121 MB per `1E+50000000`, quindi qui sono gigabyte.
+>   - Poche richieste insieme mandano l'istanza in OOM. J-27 era raggiungibile solo dagli admin; questa da chiunque
+>     abbia un account.
+> - **La direzione**:
+>   - nei dict grezzi passare `str(v)` (la notazione scientifica corta) o il `Decimal` stesso: il batch lo
+>     rivalida;
+>   - un limite di grandezza al confine, in `SafeDecimal` e `Currency` (per esempio l'esponente o le cifre totali);
+>   - `_decimal_fixed_point` che rifiuta o limita un esponente enorme anche in uscita.
+>
+> **Note**:
+> 1. **LOW, confidenza 9/10: id di altri utenti.** Il nuovo 409 `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` (`475bb9270`)
+>    rende `params.transaction_ids`, cioè ogni ADJUSTMENT senza costo collegato allo SPLIT, di **tutti** gli utenti,
+>    con il loro conteggio.
+>    - Va contro la regola del modulo stesso (`event_store.py:298`, «no transaction id: they may belong to other
+>      users»).
+>    - Chiunque può provocarlo su un asset globale, perché gli eventi sono modificabili da chiunque.
+>    - La direzione: solo gli id visibili più un conteggio dei nascosti, come fa `delete_events_bulk`.
+> 2. **`de901f228`, il costo Auto**: con due create dello stesso broker, asset, data e tipo senza `link_uuid`, la query
+>    di ripiego trova la riga più recente per tutte e due. La più vecchia resta così con l'importo mandato dal client,
+>    non controllato: lo limita solo la guardia sul bind, e l'effetto resta sui broker di chi lo manda.
+>    - La direzione: ignorare l'importo in modo Auto, e abbinare le righe create per indice.
+> 3. **Le righe vecchie non finite** nelle colonne `Numeric` (`asset_events.value`, `volume`, `transactions.amount`) si
+>    leggono come `Infinity` e falliscono più avanti; una chiusura `RealDecimal` letta come `None` fa fallire
+>    `FAPricePoint`. Nessuno scrittore di oggi le crea: basta una pulizia dopo la migrazione.
+> 4. I valori ostili finiscono per intero nei WARNING (gli skip di prezzi ed eventi; i debug di SNB ed ECB): solo
+>    volume di log.
+
+> **Esito di R13-SEC7**: **tre reperti MEDIUM 8/10**, tutti DoS, tutti raggiungibili da qualsiasi utente con un
+> account:
+> 1. la fine dell'intervallo delle date senza tetto, sul motore del portafoglio;
+> 2. l'orizzonte degli investimenti programmati senza tetto;
+> 3. `format(v, "f")` sull'input prima dei limiti.
+>
+> **Più le note**: l'id di altri utenti nel 409 dello SPLIT (LOW 9/10), l'intero enorme nelle impostazioni dei plugin
+> (500), il costo Auto, le righe vecchie, D-SEC2-1 di nuovo (le scritture dei dati condivisi).
+>
+> Nessuna correzione da parte mia.

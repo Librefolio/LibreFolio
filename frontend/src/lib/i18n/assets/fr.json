@@ -419,7 +419,8 @@
       "unknownType": "Rien n'a été enregistré : « {value} » (ligne du {date}) n'est pas un type d'événement. Utilisez DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT ou MATURITY_SETTLEMENT.",
       "generic": "Rien n'a été enregistré : {message}",
       "inUse": "Rien n'a été enregistré : l'événement {type} du {date} est lié à {n, plural, one {# transaction} many {# transactions} other {# transactions}} et ne peut pas être supprimé. Retirez d'abord le lien dans les transactions{more, plural, =0 {} one { (et # autre événement)} many { (et # autres événements)} other { (et # autres événements)}}.",
-      "notDeletable": "Rien n'a été enregistré : l'un des événements à supprimer n'existe plus ou ne peut pas être supprimé ici. Rechargez les données et réessayez."
+      "notDeletable": "Rien n'a été enregistré : l'un des événements à supprimer n'existe plus ou ne peut pas être supprimé ici. Rechargez les données et réessayez.",
+      "tooManyDigits": "Rien n'a été enregistré : la valeur de l'événement {type} du {date}{more, plural, =0 {} one { (et # autre)} many { (et # autres)} other { (et # autres)}} a trop de chiffres. La valeur d'un événement a au maximum {max} décimales, {significant} chiffres significatifs et {integer} chiffres avant la virgule."
     }
   },
   "providerErrors": {

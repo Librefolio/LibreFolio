@@ -1389,7 +1389,54 @@ it connects (`set_sqlite_pragma`, `db/session.py`), which a plain read-only conn
 refuses. The totals the manifest recorded go as they are to J's `ControlTotals.from_json()`, which reads an amount only
 as plain decimal text, at most 60 digits on each side of the point, and refuses any other before reading it (J-27): an
 exponent an archive recorded is never expanded, and the comparison is then `absent`. The rule has one home, J's:
-`compare_totals()` does not repeat it (B-22).
+`compare_totals()` does not repeat it (B-22). The copy's own totals go through the same reader: an amount J computes but
+cannot read back (more than 60 digits, as an exact huge quantity of an old or hand-edited database gives) makes the
+comparison `unreadable`, with the warning «The control totals of the copy cannot be read: they are not compared», never
+a failed check (B-29).
+
+### 🧱 Triggers, Views and Virtual Tables {: #backup-restore-foreign-objects }
+
+The database of an uploaded archive brings its own schema, and a schema can hold SQL that runs by itself (lot B-28,
+after E's security review of B3). A trigger fires when the check writes the copy: the post-migration fixes, the rekey
+of the plugin secrets. A view that takes the name of an app table runs whenever that name is read. A recursive one
+never ends: it would hold the lock of the checks until a restart, and keep a managed instance awake. After a restore,
+they would run in the server. LibreFolio's migrations create none of them, only tables and their indexes: such an
+object means that LibreFolio did not make the database, or that it was changed, so the check refuses it before
+anything of it can run.
+
+- **First, before anything else opens the copy.** `_refuse_foreign_objects()` (`staging.py`) runs in `_stage()` right
+  after the unpacking, and after a secure backup's decrypted archive is removed: before `describe_database()` (the
+  integrity check, the rows), the upgrade, the post-migration fixes, the rekey, the administrators and the totals. It
+  opens the copy read only (`mode=ro`), turns `trusted_schema` off, and reads `SELECT sql FROM sqlite_master`, every
+  row: it runs nothing of the archive, and writes nothing.
+- **By the SQL text.** `_schema_object_kind()` reads each object from its SQL, since SQLite builds its schema from that
+  text whatever the row's `type` says. It takes the first words, past spaces and SQL comments (`-- …`, `/* … */`),
+  case-insensitive: `CREATE TABLE` is a table, `CREATE INDEX` or `CREATE UNIQUE INDEX` an index, and SQL `NULL` one of
+  SQLite's own automatic indexes. Anything else is foreign: `CREATE TRIGGER` (`trigger`), `CREATE VIEW` (`view`),
+  `CREATE VIRTUAL TABLE` (`virtual`), and any other text, `CREATE TEMP …` included (`other`). A comment between the
+  keywords, as in `CREATE/**/TRIGGER`, hides nothing.
+- **The refusal.** One foreign object or more: `StagingError` `database_foreign_objects`,
+  `The backup's database holds triggers, views or other objects LibreFolio never creates: it cannot be restored`,
+  and one warning in the log, `A backup's database holds schema objects LibreFolio never creates`, with `objects`
+  (their count) and `kinds`: never a name nor any SQL, which are the archive's text. As for every refusal, the whole
+  copy is removed. The code is in `RestoreErrorCode`; the restore card shows
+  `backup.restore.errors.database_foreign_objects`, and the command line prints `❌ … (database_foreign_objects)`.
+- **A schema SQLite refuses to read** is `database_damaged`: any `sqlite3.DatabaseError` of that read, such as a row
+  whose SQL does not parse, or a row that disguises its object, a trigger whose row says `type = 'table'` (SQLite then
+  refuses the whole schema, «malformed database schema», checked on 3.54.0).
+- **`trusted_schema` off on every connection to the copy.** Every connection B opens on the copy runs
+  `PRAGMA trusted_schema=OFF` before any other statement: this read, `describe_database()` (`snapshot.py`, which also
+  describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), and the totals'
+  `aiosqlite` connection (`totals.py`). The SQL the schema keeps in its tables and indexes (a `CHECK`, a `DEFAULT`, a
+  generated column, an index's expression) may then call only the functions SQLite marks innocuous. The post-migration
+  fixes keep their own connection, shared code that runs after the refusal, and the upgrade runs `alembic upgrade head`
+  in a process of its own, stopped after an hour (`UPGRADE_TIMEOUT_SECONDS`).
+
+Tests: `./dev.py test services backup-staging` (`backend/test_scripts/test_services/test_backup_staging.py`, section
+(l): a trigger, a recursive view, an `fts5` virtual table and a comment between the keywords, each refused before
+`describe_database()` runs, the log with the count and the kinds and no name; a disguised row and a row that does not
+parse, `database_damaged`; the head database, tables and indexes only, a guard for the day a migration adds a trigger
+or a view; `trusted_schema` off first on every connection of a whole check).
 
 ### 🔐 The Routes {: #backup-restore-routes }
 

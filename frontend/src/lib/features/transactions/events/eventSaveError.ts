@@ -110,6 +110,22 @@ export function eventSaveErrorMessage(err: unknown, t: Translate, sent: SentEven
             }
             case 'EVENT_ASSET_NOT_FOUND':
                 return t('events.saveError.assetNotFound');
+            case 'EVENT_TOO_MANY_DIGITS': {
+                // C-97a and W-B58: the value of an event keeps 6 decimal places, 15 significant digits and 12 digits before
+                // the decimal point; past any of them the server refuses it and rounds nothing.
+                const events = Array.isArray(p.events) ? (p.events as Array<Record<string, unknown>>) : [];
+                const first = events[0] ?? {};
+                return t('events.saveError.tooManyDigits', {
+                    values: {
+                        date: dateLabel(text(first.date)),
+                        type: typeLabel(text(first.type)),
+                        max: text(p.max_decimal_places),
+                        significant: text(p.max_significant_digits),
+                        integer: text(p.max_integer_digits),
+                        more: Math.max(events.length - 1, 0),
+                    },
+                });
+            }
         }
         return t('events.saveError.generic', {values: {message: refusal.message || refusal.code}});
     }

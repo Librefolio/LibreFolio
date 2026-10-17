@@ -168,7 +168,7 @@ The Portfolio Engine always runs over the full scoped set. A Broker with no curr
 position remains in scope. A historical contributor can appear in the period count
 without appearing in the current-position count.
 
-## 📉 Drawdown Risk Context
+## 📉 Drawdown Risk Context {: #drawdown-risk-context }
 
 `portfolio.drawdown_context`, `broker.drawdown_context`, and
 `asset.drawdown_context` are optional analysis sections that expose the canonical
@@ -207,12 +207,35 @@ If the Risk result is `unavailable`/`failed` (or the call raises) the component
 still builds an honest `unavailable`/`failed` payload with a machine-readable
 `reason_code`, so an optional analysis section never fails closed.
 
+A total loss (a current drawdown of −1) is not a failure. Since version 2, an `ok`
+or `partial` `*.drawdown_summary` payload may leave `remaining_to_peak_ratio`
+`null` when `current_drawdown_ratio` is −1 or below, and only then: no finite gain
+recovers it. Every other metric stays, and Risk's `total_loss_no_recovery` warning
+travels in the payload's `warnings`
+([The Drawdown Episode](../../backend/risk/architecture.md#drawdown-episode)).
+Positive prices, or a TWRR above −1, reach −1 only through float rounding.
+Version 1 failed the section instead. The compact renderer lists versions 1 and 2
+of the four drawdown components (these three and the snapshot below) and prints
+the `null` as `null` ([Snapshot Data Tables](#snapshot-data-tables)).
+
 PAC Planning also uses `portfolio.asset_drawdown_snapshot`. It reuses the
 Portfolio's already-loaded observed native-price series and the canonical
 `drawdown_episodes` primitive to publish one compact row per eligible Asset:
 current Drawdown, maximum Drawdown, maximum-episode recovery status,
 remaining-to-peak, basis, observation count, available range, coverage, and
-data-quality status. It exports no Drawdown history.
+data-quality status. It exports no Drawdown history. Each per-Asset return comes
+from `float_price_return()` (`financial_math/returns.py`) on the Decimal closes,
+the function that builds the Risk series, so a row and `asset.drawdown_summary`
+agree on the same closes. Since version 2, a row with `current_drawdown_ratio`
+at −1 or below keeps its other metrics with `remaining_to_peak_ratio` `null`; a
+row has no `warnings` field, so that `null` alone marks the total loss. When
+`drawdown_episodes` refuses an Asset's series (a one-step fall of more than about
+2⁵³×, for example, takes the float wealth to 0), that row alone becomes `failed`
+with `risk_execution_error` and no metrics, the failure is logged, and the other
+rows and the section are kept: as for an undeclared Risk failure
+([Result Statuses](../../backend/risk/architecture.md#statuses)), it is reported
+as ours, never as a verdict on the data. Before, that row raised and the whole
+section failed.
 
 Unlike the `*.drawdown_summary` sections, this snapshot is window-relative: it reads
 only genuine observed prices (backward-filled points excluded) inside the requested

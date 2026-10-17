@@ -56,7 +56,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
 | `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
 | `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
-| `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
+| `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, carried points. The simple returns (`float_price_return()`) and the observed annualization factor (`observed_annualization()`) come from `financial_math/returns.py` ([Financial Math Layer](../financial_math.md#package-map)). |
 | `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
 | `backend/app/config/__init__.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
@@ -353,7 +353,9 @@ warning sets `degrades_result=False`: the drawdown itself is exact, only the gai
 recover it is undefined, so on its own the warning leaves the result `ok`. `asset_set_drawdown`
 emits a single warning for the whole set, with its own key, `risk.warnings.total_loss_no_recovery_assets`:
 it lists the assets concerned in `details.asset_ids`, and the service turns them into the
-sentence's `count` and `names`.
+sentence's `count` and `names`. AI Export's drawdown sections (component version 2) keep such a
+result: they carry the `null` and the warning instead of failing
+([AI Export Composition](../../architecture/patterns/ai_export_composition.md#drawdown-risk-context)).
 
 The trough-to-peak field, the `null` of `remaining_to_peak_ratio` and the `total_loss_no_recovery`
 warning came with `algorithm_version` 1.2.0 of `drawdown_summary` and 1.1.0 of

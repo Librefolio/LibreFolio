@@ -263,3 +263,37 @@ def storable_price(value: Decimal, column_name: str = "close") -> Optional[Decim
 def truncate_fx_rate(value: Decimal) -> Decimal:
     """Truncate value with the precision used in DB fx_rates.rate column."""
     return truncate_to_db_precision(value, FxRate, "rate")
+
+
+def storable_fx_rate(value: Decimal) -> Optional[Decimal]:
+    """An exchange rate as ``fx_rates.rate`` keeps it (``truncate_fx_rate``), or None when it cannot (X-R38, the FX side
+    of W-B58): not finite, more digits before the decimal point than the column declares (``max_integer_digits``: 14),
+    or 0 once truncated to its 10 decimal places (a rate is never 0: its inverse and the conversions divide by it).
+    Never raises; a negative rate is the caller's business (``upsert_rates_bulk`` refuses it).
+
+    The double SQLite keeps must stay below ``1E+14`` too (X-R50): a rate within about 0.008 of it, with more digits than
+    a double holds (``99999999999999.995``), has 14 digits before the point but is written as ``1E+14``, which every
+    read skips as unusable (``usable_fx_rate_bounds``); it is refused here, never answered «inserted».
+    """
+    stored = storable_value(value, FxRate, "rate")
+    if stored is None or stored == 0 or float(stored) >= float(usable_fx_rate_bounds()[1]):
+        return None
+    return stored
+
+
+def fx_rate_limits_text() -> str:
+    """``fx_rates.rate``'s limits in words, read from the model, for a refusal or a warning (X-R38). The bound below
+    ``1E+14`` is said too (X-R51): a rate of 14 digits within about 0.008 of it is refused (X-R50), and «at most 14
+    digits» alone did not say why."""
+    _precision, scale = get_model_column_precision(FxRate, "rate")
+    first_refused = usable_fx_rate_bounds()[1]
+    return f"an exchange rate keeps at most {max_integer_digits(FxRate, 'rate')} digits before the decimal point and {scale} decimal places, stays below {first_refused:f} (as the database stores it), and must stay above 0 once cut to them"
+
+
+def usable_fx_rate_bounds() -> Tuple[Decimal, Decimal]:
+    """``(smallest, first refused)``, ``1E-10`` and ``1E+14``: a stored rate ``storable_fx_rate`` keeps is at least the first
+    and below the second (X-R38). For the SQL of the reads, which skip a legacy rate outside them (an infinite one, 0,
+    ``1e19``) as a missing rate.
+    """
+    _precision, scale = get_model_column_precision(FxRate, "rate")
+    return Decimal(1).scaleb(-scale), Decimal(1).scaleb(max_integer_digits(FxRate, "rate"))

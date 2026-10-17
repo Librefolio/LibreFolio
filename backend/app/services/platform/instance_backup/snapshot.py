@@ -52,6 +52,8 @@ def snapshot_database(source: Path, target: Path) -> DatabaseDescription:
 def describe_database(path: Path) -> DatabaseDescription:
     """Describe the database file ``path``, opened read-only."""
     with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        # A schema's functions only if innocuous: the database may be an archive's (lot B-28).
+        conn.execute("PRAGMA trusted_schema=OFF")
         integrity = [str(row[0]) for row in conn.execute("PRAGMA integrity_check").fetchmany(_INTEGRITY_LINES)]
         violations = len(conn.execute("PRAGMA foreign_key_check").fetchall())
         names = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]

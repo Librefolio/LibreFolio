@@ -77,8 +77,8 @@ as an interest event: the value starts again from $V_0$, and $I$ and the sums re
 
 - **Before the first period**, the value is the Initial Value.
 - **After the last period**, it stays at its final amount, unless late interest is on. With
-  **Generate Coupon** on the last period and no late interest, a maturity settlement event closes
-  the asset at that amount.
+  **Generate Coupon** on the last period and no late interest, the last coupon is paid on the end
+  date and a maturity settlement event closes the asset at the value left after it: the Initial Value.
 - **The chart** gets a point on each **Frequency** date: choose **Daily** for a smooth line.
 
 ??? example "🧮 A €10,000 loan at 5%, with a coupon every month"
