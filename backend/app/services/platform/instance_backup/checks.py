@@ -1,8 +1,9 @@
 """Configuration checks of the backup, in the shape of the platform's (``config_audit.ConfigCheck``), lot B-9.
 
-Two checks: the hosting panel's token (``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`` or its ``_FILE``) and the largest archive a
-restore accepts (``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``). Without them, a value that cannot be used shows only at the
-panel's first request or at the first restore upload: a 503 and a line in the log. Like every configuration check, they
+Three checks: the hosting panel's token (``LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`` or its ``_FILE``), the largest archive a
+restore accepts (``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``) and the most it may unpack to (``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``,
+B-35). Without them, a value that cannot be used shows only at the panel's first request, or at the first restore upload
+or check: a 503 and a line in the log. Like every configuration check, they
 read the configuration, change nothing, never raise, and never put a secret in their result: never the token, never
 what a file holds. The i18n keys are ``backup.checks.*``.
 
@@ -16,7 +17,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from backend.app.config import ProfileDefaultError, SecretFileError
-from backend.app.config.backup import MAX_UPLOAD_VARIABLE, PANEL_TOKEN_MIN_LENGTH, PANEL_TOKEN_VARIABLE, BackupConfigError, backup_download_token, backup_max_upload_mb
+from backend.app.config.backup import MAX_RESTORE_VARIABLE, MAX_UPLOAD_VARIABLE, PANEL_TOKEN_MIN_LENGTH, PANEL_TOKEN_VARIABLE, BackupConfigError, backup_download_token, backup_max_restore_mb, backup_max_upload_mb
 
 if TYPE_CHECKING:
     from backend.app.services.platform.config_audit import ConfigCheck
@@ -26,6 +27,8 @@ _TOKEN_TOO_SHORT = "BACKUP_DOWNLOAD_TOKEN_TOO_SHORT"
 _PANEL_OFF_503 = "the hosting panel's backup routes answer 503 until it is fixed"
 #: H-27 and H-37: the table is code, so a missing entry or one of the wrong type is a bug; setting the variable bypasses it.
 _PROFILE_TABLE_SUMMARY = f"The profile's default for {MAX_UPLOAD_VARIABLE} is missing or of the wrong type, an error of LibreFolio itself: restore uploads answer 503 until {MAX_UPLOAD_VARIABLE} is set to a whole number of megabytes"
+#: The same for the restore limit, which follows the upload limit while unset outside the self-hosted profile (B-35).
+_RESTORE_PROFILE_TABLE_SUMMARY = f"The profile's default for {MAX_UPLOAD_VARIABLE}, which {MAX_RESTORE_VARIABLE} follows while unset, is missing or of the wrong type, an error of LibreFolio itself: restore checks answer 503 until {MAX_RESTORE_VARIABLE} is set"
 
 
 def check_panel_token() -> ConfigCheck:
@@ -65,4 +68,23 @@ def check_upload_limit() -> ConfigCheck:
     return ConfigCheck(check_id, "ok", "backup.checks.uploadLimit.limited", {"limit_mb": limit_mb})
 
 
-BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit)
+def check_restore_limit() -> ConfigCheck:
+    """``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``: the most an archive may unpack to in a restore's check (B-35). One that cannot
+    be read refuses every check (503) until it is fixed. Unset outside the self-hosted profile it follows the upload
+    limit, so an upload limit that cannot be read, or a broken profile entry of it, refuses them too: the error names
+    the variable at fault."""
+    from backend.app.services.platform.config_audit import ConfigCheck  # noqa: PLC0415 — config_audit imports this module
+
+    check_id = "backup.restore_limit"
+    try:
+        limit_mb = backup_max_restore_mb()
+    except BackupConfigError as exc:
+        return ConfigCheck(check_id, "error", "backup.checks.restoreLimit.invalid", {"variable": exc.variable}, f"{exc.variable} cannot be used: expected a whole number of megabytes, 0 for no limit; restore checks answer 503 until it is fixed")
+    except ProfileDefaultError:
+        return ConfigCheck(check_id, "error", "backup.checks.restoreLimit.profileTable", summary=_RESTORE_PROFILE_TABLE_SUMMARY)
+    if limit_mb == 0:
+        return ConfigCheck(check_id, "ok", "backup.checks.restoreLimit.unlimited")
+    return ConfigCheck(check_id, "ok", "backup.checks.restoreLimit.limited", {"limit_mb": limit_mb})
+
+
+BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit)

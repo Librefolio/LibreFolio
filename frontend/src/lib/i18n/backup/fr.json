@@ -173,6 +173,7 @@
         "backup_too_large": "L'archive est plus grande que ce que ce LibreFolio accepte ({limit} Mo).",
         "backup_no_space": "Pas assez d'espace libre sur le serveur pour cette archive.",
         "backup_upload_unavailable": "LibreFolio ne peut pas lire sa limite de téléversement pour l'instant : réessayez plus tard.",
+        "backup_restore_unavailable": "LibreFolio ne peut pas lire sa limite de restauration pour l'instant : réessayez plus tard.",
         "backup_upload_failed": "L'archive n'a pas pu être enregistrée sur le serveur : le journal du serveur donne la cause.",
         "backup_upload_not_found": "L'archive téléversée n'est plus là : envoyez-la de nouveau.",
         "restore_folder_unusable": "Le dossier de restauration du dossier de données n'est pas un dossier ordinaire : la personne qui gère le serveur doit le corriger.",
@@ -187,6 +188,7 @@
         "manifest_unreadable": "La description de l'archive ne peut pas être lue.",
         "manifest_too_large": "La description de l'archive est trop volumineuse.",
         "too_many_entries": "L'archive contient trop de fichiers.",
+        "unpacked_too_large": "Décompressée, l'archive est plus grande que ce que ce LibreFolio accepte pour une restauration.",
         "duplicate_entry": "L'archive contient deux fois le même fichier.",
         "unexpected_entry": "L'archive contient un fichier que sa description ne mentionne pas.",
         "not_a_file": "L'archive contient quelque chose qui n'est pas un fichier ordinaire.",
@@ -242,6 +244,12 @@
         "unlimited": "Une restauration accepte des archives de toute taille.",
         "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB est inutilisable (un nombre entier de mégaoctets, 0 pour aucune limite) : les téléversements pour une restauration sont refusés tant qu'il n'est pas corrigé.",
         "profileTable": "Les valeurs par défaut du profil de LibreFolio ne donnent aucune valeur à la limite de téléversement, ou une valeur du mauvais type, donc les téléversements pour une restauration sont refusés : définissez LIBREFOLIO_BACKUP_MAX_UPLOAD_MB à un nombre entier de mégaoctets et signalez l'erreur."
+      },
+      "restoreLimit": {
+        "limited": "Une vérification pour une restauration accepte des archives qui, décompressées, font jusqu'à {limit_mb} Mo.",
+        "unlimited": "Une vérification pour une restauration accepte des archives qui, décompressées, font n'importe quelle taille.",
+        "invalid": "{variable} est inutilisable (un nombre entier de mégaoctets, 0 pour aucune limite) : les vérifications pour une restauration sont refusées tant qu'il n'est pas corrigé.",
+        "profileTable": "Les valeurs par défaut du profil de LibreFolio ne donnent aucune valeur à la limite de téléversement, ou une valeur du mauvais type, donc les vérifications pour une restauration sont refusées : définissez LIBREFOLIO_BACKUP_MAX_RESTORE_MB à un nombre entier de mégaoctets et signalez l'erreur."
       }
     }
   }

@@ -1005,10 +1005,11 @@ part on its own, the locks held, the links, a part that raises, a clean data dir
 
 #### Configuration Checks of the Backup {: #backup-config-checks }
 
-`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives two checks in the shape of H's `ConfigCheck`
+`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives three checks in the shape of H's `ConfigCheck`
 ([Configuration Checks](#configuration-checks)), under the same rules: they change nothing, never raise, and never put
-the token or a file's content in a result. With them, an unusable token or upload limit shows in the start log, not only
-at the hosting panel's first call or at the first restore upload.
+the token or a file's content in a result. With them, an unusable token, upload limit or restore limit shows in the
+start log, not only at the hosting panel's first call, at the first restore upload or at the first check (the third,
+`backup.restore_limit`, since lot B-35).
 
 | `check_id` | State | `i18n_key` | `detail` | Severity |
 |------------|-------|------------|----------|----------|
@@ -1021,12 +1022,15 @@ at the hosting panel's first call or at the first restore upload.
 | `backup.upload_limit` | No limit: `0`, or unset in the self-hosted profile | `backup.checks.uploadLimit.unlimited` | — | `ok` |
 | `backup.upload_limit` | `BackupConfigError` `BACKUP_MAX_UPLOAD_MB_INVALID`: not a whole number | `backup.checks.uploadLimit.invalid` | — | `error` |
 | `backup.upload_limit` | `ProfileDefaultError`: the entry of `ENVIRONMENT_PROFILE_DEFAULTS`, asked only while the variable is unset, is missing or of the wrong type (H-27, H-37; [Settings](settings.md)) | `backup.checks.uploadLimit.profileTable` | — | `error` |
+| `backup.restore_limit` (reads `backup_max_restore_mb()`, [The Restore Limit](#backup-restore-limit)) | A limit: the value set, or, while it is unset outside `selfhosted`, 8 times the upload limit, 4000 in `managed` | `backup.checks.restoreLimit.limited` | `{"limit_mb": n}` | `ok` |
+| `backup.restore_limit` | No limit: `0`, unset in the self-hosted profile, or unset with an upload limit of `0` | `backup.checks.restoreLimit.unlimited` | — | `ok` |
+| `backup.restore_limit` | `BackupConfigError`: `BACKUP_MAX_RESTORE_MB_INVALID`, not a whole number; or, while it is unset outside `selfhosted`, the upload limit's `BACKUP_MAX_UPLOAD_MB_INVALID` | `backup.checks.restoreLimit.invalid` | `{"variable": …}`, from `exc.variable`: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, or `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` in the second case | `error` |
+| `backup.restore_limit` | `ProfileDefaultError`: while it is unset outside `selfhosted`, the upload limit's entry of `ENVIRONMENT_PROFILE_DEFAULTS` is missing or of the wrong type | `backup.checks.restoreLimit.profileTable` | — | `error` |
 
-- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit)` is unpacked in
+- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit)` is unpacked in
   `CONFIG_CHECKS` right after `check_log_level`, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
-  `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs the two
-  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of
-  [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
+  `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs their
+  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
   error line at each call.
 - **The import.** `config_audit` imports this module to build its tuple, so `checks.py` imports `ConfigCheck` only
   when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
@@ -1046,7 +1050,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 27 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 27 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose thirteen messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). The «Security» tab of Settings › Administration shows these messages, all four subsystems', from [`GET /security/checks`](#security-checks-endpoint) ([SecurityTab](../frontend/components/features/settings.md#securitytab)); the log has the English `summary` instead |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -1072,6 +1076,7 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.test_mode` | `LIBREFOLIO_TEST_MODE` is on (`is_test_mode()`: `1`, `true` or `yes`, in any case) outside a test lane, with `LIBREFOLIO_TEST_LANE_ID` unset, empty or blank (`owning_test_lane_id()`): `instance.checks.testMode.outsideTestLane`, `detail` `{"data_dir": …}`, the test data directory in use (`str(get_data_dir())`), summary `TEST_MODE_OUTSIDE_LANE_SUMMARY`, `LIBREFOLIO_TEST_MODE is on outside a test lane: test-only providers are served, the data are kept in the test data directory <data_dir> and .env is not read; unset it on a production instance`. The same in every profile (below) | `error`; with `LIBREFOLIO_PROFILE=managed`, `log_configuration_audit()` stops the startup first |
 | `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
+| `backup.restore_limit` | `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` cannot be used, or, while it is unset outside `selfhosted`, the upload limit it follows: `backup.checks.restoreLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
 | `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
 
@@ -1124,7 +1129,7 @@ never from `os.environ`: the rule of the configuration package ([Settings System
 `checks.py` imports `ConfigCheck` inside the check, when it runs, and under `TYPE_CHECKING` for its annotation:
 `config_audit` imports it to build its tuple, so either module can be imported first.
 
-So `CONFIG_CHECKS` is the platform's checks, then workstream B's two
+So `CONFIG_CHECKS` is the platform's checks, then workstream B's three
 ([Configuration Checks of the Backup](#backup-config-checks)), then A's, then E's three, which close it.
 
 At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
@@ -1155,7 +1160,7 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
-Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, B's two,
+Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, B's three,
 A's, then E's three; and the two checks of the managed profile's switches in every state, a `PROFILE_DEFAULTS` entry
 removed included); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
 `accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
@@ -1827,6 +1832,41 @@ Tests: `./dev.py test services backup-staging` (`backend/test_scripts/test_servi
 parse, `database_damaged`; the head database, tables and indexes only, a guard for the day a migration adds a trigger
 or a view; `trusted_schema` off first on every connection of a whole check).
 
+### 📏 The Restore Limit {: #backup-restore-limit }
+
+The upload limit bounds the archive as it travels, compressed. The check unpacks what the manifest declares: those
+sizes equal the zip's headers and the reads stop at them, so nothing unpacks past its declared size, but a small
+archive can declare far more than the disk holds, deflate reaching about 1000:1. `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`
+caps the declared total (lot B-35).
+
+- **The reader.** `backup_max_restore_mb()` (`config/backup.py`, beside the upload limit's), in megabytes, `0` for no
+  limit. A value set wins, `0` included; anything but a whole number of ASCII digits raises `BackupConfigError`
+  `BACKUP_MAX_RESTORE_MB_INVALID`. Unset or blank: `0` in the `selfhosted` profile; in any other,
+  `RESTORE_TO_UPLOAD_RATIO` (8) times `backup_max_upload_mb()`, `0` when that is `0`, raising what it raises
+  (`BackupConfigError`, `ProfileDefaultError`): it fails closed through the upload limit's own entry. It has no entry
+  of its own in `ENVIRONMENT_PROFILE_DEFAULTS` ([Settings](settings.md)): a multiple, it follows a provider's own
+  upload limit. In `managed`, 500 MB gives 4000 MB.
+- **Why 8.** SQLite databases deflate about 4:1 (measured: the test database 4.1×, a 52 MB synthetic price history
+  3.9×), uploads (images, PDF, XLSX) about 1:1. An archive heavy with its database sits near 4×: a ratio of 4 would
+  refuse it at the upload limit; 8 leaves it twice its room, and still cuts deflate's worst case by more than 100.
+- **The check.** `stage_archive(..., max_unpacked=)`, in bytes, `None` for no limit: `_stage` adds up the sizes of
+  `manifest.files` after `_checked_entries()`, which holds each entry to the manifest, and before `_check_space()`, so
+  a total above it is refused first, `StagingError` `unpacked_too_large`, «Unpacked, the archive is larger than this
+  LibreFolio accepts for a restore»: nothing unpacked, and the stage removed, as for any refusal. A secure archive is
+  decrypted first, about its own size, which the upload limit bounds, then measured the same way.
+  `unpacked_too_large` is one of `RestoreErrorCode` (`schemas/backup.py`).
+- **Its callers.** `POST /backup/restore/stage` reads it with `_restore_limit()`, as `_upload_limit()` reads the upload
+  limit, turns megabytes into bytes (× 1024²) and `0` into `None`, and passes it through
+  `restore_jobs.start_check(..., max_unpacked=)` and `_run_check()`; a limit it cannot read is logged as an error and
+  answered `503` `backup_restore_unavailable` ([The Routes](#backup-restore-routes)). `backup restore` reads the same
+  variable in `_check_on_a_copy()`: `❌ <message> (backup_restore_unavailable)` and exit `1` before the check, the usual
+  `❌ … (unpacked_too_large)` when it refuses; `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0` lifts it for one command. The
+  startup checks report a limit that cannot be read (`backup.restore_limit`,
+  [Configuration Checks of the Backup](#backup-config-checks)).
+
+Tests: `./dev.py test services backup-staging` (under, at and over the limit, refused before any byte is written, a
+secure archive, `None` as before) and `./dev.py test services backup-checks` (the reader in each profile, and its check).
+
 ### 🔐 The Routes {: #backup-restore-routes }
 
 Every route under `/backup/restore` requires an administrator (`require_admin`), but `GET /backup/restore/outcome`,
@@ -1836,7 +1876,7 @@ only one in `ALLOWED_WHEN_BLOCKED` ([Instance Block](#instance-block)). An error
 
 | Route | What it does |
 |-------|--------------|
-| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30) |
+| `PUT /backup/restore/upload`, `POST /backup/restore/stage`, `GET /backup/restore/stage/{stage_id}` | The upload of an archive and its check on a copy (lot B2); the password of a secure backup comes with `POST /backup/restore/stage`, tried in the request ([Secure Backups](#secure-backups)). At its start (its folders, its first state), `POST /backup/restore/stage` answers `507` `no_space`, the check's own code, on a full disk or quota, logged as a warning, `A check of a backup archive could not start: not enough free space`, and `500` `stage_failed` on any other failure of the file system (permissions, a read-only disk, `EIO`), logged as an error, `A check of a backup archive could not start`, with the error's type and the system's reason; either way the upload stays, for another try (lot B-30). When the restore limit cannot be read (`_restore_limit()`, [The Restore Limit](#backup-restore-limit)), it answers `503` `backup_restore_unavailable`, «The restore limit of this instance cannot be read», logged as an error: no check starts, and the upload stays (lot B-35) |
 | `DELETE /backup/restore/stage/{stage_id}` | Drops an ended check and its copy; `409` `restore_pending` for the copy of a restore not finished yet |
 | `POST /backup/restore/stage/{stage_id}/confirm` | Confirms the restore of a finished check: `202` `RestoreStatus`, with the administrator's username in `confirmed_by`. Refused with `404` `restore_stage_not_found`; `409` `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated` (LibreFolio was updated since the check) or `restore_already_pending`; `410` `restore_stage_expired`; `500` `restore_folder_unusable`. A full disk or quota anywhere in the confirmation (the `.restore` folder, the lock, the state's write) is `507` `backup_no_space`, logged as a warning, `A restore could not be confirmed: not enough free space`; any other failure of the file system is `500` `restore_confirm_failed`, logged as an error, `A restore could not be confirmed`, with the error's type and the system's reason. Either way nothing is confirmed, as the state is written last and atomically, and the check and its copy stay: the same confirmation answers `202` once the failure is gone (lot B-31). A state the file system cannot read, met under the lock, is `500` `restore_state_unreadable`, and nothing is written: the restore it holds may be half applied, and its journal must not be overwritten (lot B-32) |
 | `GET /backup/restore/status` | `RestoreStatus`: its `state` is `none`, `pending`, `in_progress` (`applying`, `applied` or `rolling_back`), `committed` or `rolled_back`, with `reason`, and `waiting` (`backup_running`, `other_data_directory`, `server_running` or `instance_blocked`) on a restore a start left waiting. `500` `restore_state_unreadable`, «The state of the restore cannot be read: the server's log has the cause», when the file system cannot read the state: it never answers `none` then (lot B-32) |
