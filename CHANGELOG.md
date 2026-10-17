@@ -221,6 +221,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Creating an asset from the Assets page syncs its prices once, not twice.** The asset form's full-history sync is now the only one, and the page shows its result. A scheduled investment created from the transaction form or the import wizard now gets its price history right away, instead of at the next sync.
 - On a blocked instance, the link pages no longer jump to the sign-in page on a 401 (the link was lost there), and the invitation says the instance is blocked instead of «Not authenticated».
 - **Dashboard Performance table**: each position's start and end value now comes from the same valuation as the portfolio (trade prices, splits, holdings valued at cost, the exchange rate of each boundary day), so the "Other" line no longer absorbs valuation differences; a transfer between your brokers during the period splits the result between them; a value that cannot be computed shows "—".
+- The asset's data editor now speaks your language when it saves: «12 prices saved, 1 event deleted» and its error message were in English in every language.
 
 #### 🔒 Security
 
