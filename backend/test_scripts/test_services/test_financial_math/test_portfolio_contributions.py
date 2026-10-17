@@ -26,6 +26,22 @@ is imported at module level, it exists on HEAD): ``TestCountedTract``, ``TestTra
 ``TestClosedPositionBase``, ``TestJsExample`` (the composition with ``closed_position_annualized``: 0.1250 on 1 000,
 HEAD's base gave 0.2500 on 500). Green on HEAD and after: ``TestTransferTractAdjustmentsUnchanged``.
 
+MF-A8 (J's review of MF-A5, the mirror on the receiving side). A row that received units by a counted tract measures
+their result from their value on arrival (its tract adjustment, ``−(V − C)``, takes back what they gained before), but
+its sales' and moves' costs are their historical cost: the base must add ``V − C`` too. J's example: 5 bought for 500
+at A, moved to B worth 600, sold at B for 660: B's realized 160 + tract −100 = P&L 60, on 600 (10 %), not on HEAD's 500
+(12 %). Product (HEAD 685d76dab + uncommitted):
+
+* ``transfer_tracts_moved_in(transfers, date_from, end)``: per **receiver** ``(broker_id, asset_id)``, Σ(V − C) of its
+  counted tracts — the same ``counted_tract`` rule; negative when the units arrived worth less than they cost;
+* ``closed_position_base(..., moved_in=None)``: adds ``moved_in`` to the base, and is None for a base that is not
+  **positive** (HEAD: None for 0 only).
+
+Red on HEAD: ``TestTransferTractsMovedIn`` and ``TestMovedInExamples`` (AttributeError: no
+``transfer_tracts_moved_in``), ``TestClosedPositionBaseMovedIn`` (TypeError: no ``moved_in`` parameter). Green on HEAD
+and after: ``TestClosedPositionBaseWithoutMovedInUnchanged`` (HEAD's function, verbatim, on the MF-A5 corpus) and every
+MF-A5 class above, which never pass ``moved_in``.
+
 The window (``holding_window.exits_in``) is tested in ``test_holding_window.py``; the whole chain through
 ``PortfolioService.get_positions_contribution`` in ``test_financial/test_positions_contribution_engine.py``
 (``TestClosedPositionBase``).
@@ -330,3 +346,271 @@ class TestJsExample:
         assert base == Decimal("1000")
         assert contributions.closed_position_annualized(Decimal("125"), base, date(2025, 1, 6), closed, FROM) == expected
         assert contributions.closed_position_annualized(Decimal("125"), Decimal("500"), date(2025, 1, 6), closed, FROM) == head, "HEAD's base"
+
+
+# =============================================================================
+# MF-A8 — transfer_tracts_moved_in: the receiving half of the tracts
+# =============================================================================
+
+UNCOUNTED = [
+    pytest.param(_transfer(departure=FROM), id="departs-on-the-start-day"),
+    pytest.param(_transfer(departure=BEFORE), id="in-transit-at-the-start"),
+    pytest.param(_transfer(arrival=AFTER_TO), id="in-transit-at-the-end"),
+    pytest.param(_transfer(value=None), id="value-unknown"),
+    pytest.param(_transfer(cost=None), id="cost-unknown"),
+]
+
+
+class TestTransferTractsMovedIn:
+    def test_sums_each_receiver(self):
+        """Two tracts into (B, X) from two senders, one into (C, X), one into (B, Y): one entry per receiver and asset,
+        Σ(V − C)."""
+        transfers = [
+            _transfer(value="600", cost="500"),  # A → B: +100
+            _transfer(departure=TO, arrival=TO, sender=C, receiver=B, value="330", cost="300"),  # C → B: +30
+            _transfer(receiver=C, value="450", cost="400"),  # A → C: +50
+            _transfer(asset=Y, value="300", cost="200"),  # A → B of Y: +100
+        ]
+
+        assert contributions.transfer_tracts_moved_in(transfers, FROM, TO) == {(B, X): Decimal("130"), (C, X): Decimal("50"), (B, Y): Decimal("100")}
+
+    def test_the_sender_is_never_a_key(self):
+        """What the units gained before arriving belongs to the receiver's base: the sender's row has nothing of it."""
+        assert contributions.transfer_tracts_moved_in([_transfer()], FROM, TO) == {(B, X): Decimal("100")}
+
+    def test_a_chain_gives_each_receiver_its_own_tract(self):
+        """A → B (600 − 500), then B → C of the same units (645 − 500): B received +100, C +145 — sending them on
+        takes nothing from what B received."""
+        transfers = [_transfer(), _transfer(departure=TO, arrival=TO, sender=B, receiver=C, value="645", cost="500")]
+
+        assert contributions.transfer_tracts_moved_in(transfers, FROM, TO) == {(B, X): Decimal("100"), (C, X): Decimal("145")}
+
+    @pytest.mark.parametrize(
+        ("value", "cost", "expected"),
+        [
+            # Arrived worth less than it cost: negative, kept.
+            pytest.param("400", "500", "-100", id="arrived-at-a-loss"),
+            # V = C: a tract of 0 still keys the receiver.
+            pytest.param("500", "500", "0", id="arrived-at-cost"),
+            # Received for free (a known cost of 0): the whole value.
+            pytest.param("600", "0", "600", id="cost-zero"),
+            pytest.param("0", "500", "-500", id="worthless-on-arrival"),
+        ],
+    )
+    def test_the_tract_is_value_minus_cost_whatever_its_sign(self, value, cost, expected):
+        assert contributions.transfer_tracts_moved_in([_transfer(value=value, cost=cost)], FROM, TO) == {(B, X): Decimal(expected)}
+
+    def test_a_gain_and_a_loss_into_one_row_net(self):
+        """+100 and −50 into (B, X): +50."""
+        assert contributions.transfer_tracts_moved_in([_transfer(value="600"), _transfer(value="450")], FROM, TO) == {(B, X): Decimal("50")}
+
+    @pytest.mark.parametrize("excluded", UNCOUNTED)
+    def test_an_uncounted_transfer_is_ignored(self, excluded):
+        """Alone it leaves no entry; beside a counted one it changes nothing: its units entered the row at their cost."""
+        counted = _transfer(value="650", cost="500")
+
+        assert contributions.transfer_tracts_moved_in([excluded], FROM, TO) == {}
+        assert contributions.transfer_tracts_moved_in([counted, excluded], FROM, TO) == {(B, X): Decimal("150")}
+
+    def test_without_a_start_every_departure_counts(self):
+        """``date_from`` None: the departure before FROM counts, the arrival after TO still does not."""
+        assert contributions.transfer_tracts_moved_in([_transfer(departure=BEFORE), _transfer(arrival=AFTER_TO)], None, TO) == {(B, X): Decimal("100")}
+
+    def test_nothing_moved_nothing_in(self):
+        assert contributions.transfer_tracts_moved_in([], FROM, TO) == {}
+
+    @pytest.mark.parametrize("conditions", TRUTH_TABLE, ids=TRUTH_IDS)
+    def test_it_counts_the_tracts_the_adjustments_count(self, conditions):
+        """The one rule (``counted_tract``): a transfer is in the moved-in tracts exactly when it is in the adjustments."""
+        transfer = _truth_case(*conditions)
+
+        assert bool(contributions.transfer_tracts_moved_in([transfer], FROM, TO)) is contributions.counted_tract(transfer, FROM, TO)
+
+    @pytest.mark.parametrize(("transfers", "date_from", "end", "expected"), list(TRACT_CORPUS.values()), ids=list(TRACT_CORPUS))
+    def test_it_is_what_the_adjustment_takes_back_from_the_receiver(self, transfers, date_from, end, expected):
+        """The mirror, on every case of the tract corpus (its adjustments are HEAD's): each row's adjustment is the
+        tracts it sent, +(V − C) each, minus exactly what it received by them."""
+        sent: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
+        for transfer in transfers:
+            if contributions.counted_tract(transfer, date_from, end):
+                sent[(transfer.sender_broker_id, transfer.asset_id)] += transfer.value_at_arrival - transfer.cost_moved
+
+        moved_in = contributions.transfer_tracts_moved_in(transfers, date_from, end)
+
+        assert set(moved_in) | set(sent) == set(expected)
+        assert {key: sent.get(key, ZERO) - moved_in.get(key, ZERO) for key in expected} == expected
+
+
+# =============================================================================
+# MF-A8 — closed_position_base with what moved in
+# =============================================================================
+
+
+def _head_closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decimal, int] | None, exits: int) -> Decimal | None:
+    """HEAD's closed_position_base (contributions.py @ 685d76dab), verbatim but for its name and the zero's."""
+    moved_cost, moved_count = moved_out or (ZERO, 0)
+    if exits != sales + moved_count:
+        return None
+    base = cost_sold + moved_cost
+    return base if base else None
+
+
+# MF-A5's cases, none with anything moved in: name -> (cost_sold, sales, moved_out, exits)
+A5_BASE_CORPUS: dict[str, tuple[str, int, tuple[str, int] | None, int]] = {
+    "sold-and-moved": ("500", 1, ("500", 1), 2),
+    "several-of-each": ("700", 2, ("900", 3), 5),
+    "sold-only": ("1000", 2, None, 2),
+    "sold-only-explicit-nothing-moved": ("1000", 2, ("0", 0), 2),
+    "moved-only": ("0", 0, ("1000", 1), 1),
+    "a-transfer-not-counted": ("500", 1, None, 2),
+    "a-third-exit": ("500", 1, ("500", 1), 3),
+    "moved-not-counted": ("0", 0, None, 1),
+    "fewer-exits-than-disposals": ("500", 2, None, 1),
+    "no-exit": ("0", 0, None, 0),
+    "no-exit-explicit": ("0", 0, ("0", 0), 0),
+    "sold-at-no-cost": ("0", 1, None, 1),
+    "moved-at-no-cost": ("0", 0, ("0", 1), 1),
+}
+
+
+def _a5_args(cost_sold: str, sales: int, moved_out: tuple[str, int] | None, exits: int) -> tuple[Decimal, int, tuple[Decimal, int] | None, int]:
+    return Decimal(cost_sold), sales, None if moved_out is None else (Decimal(moved_out[0]), moved_out[1]), exits
+
+
+class TestClosedPositionBaseWithoutMovedInUnchanged:
+    @pytest.mark.parametrize("case", list(A5_BASE_CORPUS.values()), ids=list(A5_BASE_CORPUS))
+    def test_the_base_is_heads(self, case):
+        """Guard. Called as MF-A5 calls it, the base is HEAD's on every MF-A5 case: covered or not, zero or not."""
+        args = _a5_args(*case)
+
+        assert contributions.closed_position_base(*args) == _head_closed_position_base(*args)
+
+
+class TestClosedPositionBaseMovedIn:
+    @pytest.mark.parametrize(
+        ("cost_sold", "sales", "moved_out", "exits", "moved_in", "expected"),
+        [
+            # J's example: B sold the 5 it received (cost 500), worth 600 on arrival.
+            pytest.param("500", 1, None, 1, "100", "600", id="received-then-sold"),
+            # Bought for 500, worth 400 on arrival, sold.
+            pytest.param("500", 1, None, 1, "-100", "400", id="received-at-a-loss-then-sold"),
+            # The middle of a chain A → B → C: nothing sold, moved out at the historical cost C₁ = 500, received
+            # V₁ − C₁ = 100: the base is V₁.
+            pytest.param("0", 0, ("500", 1), 1, "100", "600", id="passed-through"),
+            # 10 held at the start (cost 1000), 5 received (cost 500, worth 650), all 15 sold in two sales.
+            pytest.param("1500", 2, None, 2, "150", "1650", id="held-and-received-then-sold"),
+            # Received at cost: nothing gained before arriving, the base is the cost.
+            pytest.param("500", 1, None, 1, "0", "500", id="received-at-cost"),
+        ],
+    )
+    def test_the_base_adds_what_the_units_gained_before_arriving(self, cost_sold, sales, moved_out, exits, moved_in, expected):
+        moved = None if moved_out is None else (Decimal(moved_out[0]), moved_out[1])
+
+        assert contributions.closed_position_base(Decimal(cost_sold), sales, moved, exits, Decimal(moved_in)) == Decimal(expected)
+
+    @pytest.mark.parametrize(
+        ("cost_sold", "sales", "moved_out", "exits", "moved_in"),
+        [
+            # Worthless on arrival (V 0, C 500), sold: 500 − 500.
+            pytest.param("500", 1, None, 1, "-500", id="worthless-on-arrival"),
+            pytest.param("0", 0, ("500", 1), 1, "-500", id="passed-through-worthless"),
+            # Below zero: not a ledger the engine gives (V ≥ 0), the sign's guard.
+            pytest.param("100", 1, None, 1, "-300", id="below-zero"),
+        ],
+    )
+    def test_a_base_that_is_not_positive_is_no_base(self, cost_sold, sales, moved_out, exits, moved_in):
+        moved = None if moved_out is None else (Decimal(moved_out[0]), moved_out[1])
+
+        assert contributions.closed_position_base(Decimal(cost_sold), sales, moved, exits, Decimal(moved_in)) is None
+
+    @pytest.mark.parametrize(
+        ("cost_sold", "sales", "moved_out", "exits", "moved_in"),
+        [
+            # Received and sold, but a second exit not covered (a transfer outside the scope).
+            pytest.param("500", 1, None, 2, "100", id="an-exit-not-covered"),
+            # Received, then passed on by a transfer not counted (in transit at the end).
+            pytest.param("0", 0, None, 1, "100", id="passed-on-not-counted"),
+        ],
+    )
+    def test_what_moved_in_covers_no_exit(self, cost_sold, sales, moved_out, exits, moved_in):
+        """A unit that left another way: None, the general rule stands — whatever moved in."""
+        moved = None if moved_out is None else (Decimal(moved_out[0]), moved_out[1])
+
+        assert contributions.closed_position_base(Decimal(cost_sold), sales, moved, exits, Decimal(moved_in)) is None
+
+    @pytest.mark.parametrize("case", list(A5_BASE_CORPUS.values()), ids=list(A5_BASE_CORPUS))
+    def test_nothing_moved_in_is_no_moved_in(self, case):
+        """None or 0 moved in: the base without it, on every MF-A5 case."""
+        args = _a5_args(*case)
+        without = contributions.closed_position_base(*args)
+
+        assert contributions.closed_position_base(*args, None) == without
+        assert contributions.closed_position_base(*args, ZERO) == without
+
+
+# =============================================================================
+# MF-A8 — the composition, from the transfers themselves
+# =============================================================================
+
+MI_DEPARTURE = date(2025, 2, 17)
+MI_ARRIVAL = date(2025, 2, 19)  # the units reach B: its row opens
+MI_ONWARD = date(2025, 3, 31)  # the last leave B: 40 days later
+MI_ONWARD_ARRIVAL = date(2025, 4, 2)
+
+
+class TestMovedInExamples:
+    """B's row closed over MI_ARRIVAL → MI_ONWARD (40 days): its P&L from the tract adjustment and its realized, its base
+    from the moved cost and the moved-in tracts, as ``get_positions_contribution`` composes them."""
+
+    @staticmethod
+    def _closed_return(pnl: Decimal, base: Decimal) -> Decimal | None:
+        return contributions.closed_position_annualized(pnl, base, MI_ARRIVAL, MI_ONWARD, FROM)
+
+    @staticmethod
+    def _expected(ratio: str) -> Decimal:
+        days = (MI_ONWARD - MI_ARRIVAL).days
+        annualized = cumulative_to_annualized(Decimal(ratio), days)
+        assert days == 40 and annualized is not None, "precondition: an annualizable window"
+        return annualized
+
+    def _b_base(self, transfers: list[InternalAssetTransfer], cost_sold: str, sales: int, exits: int) -> Decimal | None:
+        moved_out = contributions.transfer_costs_moved_out(transfers, FROM, TO).get((B, X))
+        moved_in = contributions.transfer_tracts_moved_in(transfers, FROM, TO).get((B, X))
+        return contributions.closed_position_base(Decimal(cost_sold), sales, moved_out, exits, moved_in)
+
+    @pytest.mark.parametrize(
+        ("value", "proceeds", "pnl", "base", "ratio", "head_ratio"),
+        [
+            # J's example: 5 bought for 500 at A, worth 600 on reaching B, sold there for 660. Realized 160, tract
+            # −100: 60 on 600, HEAD on the 500 sold.
+            pytest.param("600", "660", "60", "600", "0.1000", "0.1200", id="js-example"),
+            # Worth 400 on reaching B, sold for 440. Realized −60, tract +100: 40 on 400, HEAD on 500.
+            pytest.param("400", "440", "40", "400", "0.1000", "0.0800", id="arrived-at-a-loss"),
+        ],
+    )
+    def test_received_then_sold(self, value, proceeds, pnl, base, ratio, head_ratio):
+        transfers = [_transfer(departure=MI_DEPARTURE, arrival=MI_ARRIVAL, value=value, cost="500")]
+        b_pnl = Decimal(proceeds) - Decimal("500") + contributions.transfer_tract_adjustments(transfers, FROM, TO)[(B, X)]
+        assert b_pnl == Decimal(pnl), "precondition: B's P&L"
+
+        b_base = self._b_base(transfers, "500", 1, 1)
+
+        assert b_base == Decimal(base)
+        assert self._closed_return(b_pnl, b_base) == self._expected(ratio)
+        assert self._closed_return(b_pnl, Decimal("500")) == self._expected(head_ratio) != self._expected(ratio), "HEAD's base, the cost sold"
+
+    def test_passed_through_the_base_is_the_value_on_arrival(self):
+        """A → B worth V₁ = 600 on arrival, B → C worth V₂ = 645: B's P&L −(V₁ − C₁) + (V₂ − C₁) = V₂ − V₁ = 45, on
+        C₁ + (V₁ − C₁) = V₁ = 600: 0.0750. HEAD on the cost moved out, C₁ = 500: 0.0900."""
+        transfers = [
+            _transfer(departure=MI_DEPARTURE, arrival=MI_ARRIVAL, value="600", cost="500"),
+            _transfer(departure=MI_ONWARD, arrival=MI_ONWARD_ARRIVAL, sender=B, receiver=C, value="645", cost="500"),
+        ]
+        b_pnl = contributions.transfer_tract_adjustments(transfers, FROM, TO)[(B, X)]
+        assert b_pnl == Decimal("45"), "precondition: B's P&L, V₂ − V₁"
+
+        b_base = self._b_base(transfers, "0", 0, 1)
+
+        assert b_base == Decimal("600")
+        assert self._closed_return(b_pnl, b_base) == self._expected("0.0750")
+        assert self._closed_return(b_pnl, Decimal("500")) == self._expected("0.0900") != self._expected("0.0750"), "HEAD's base, the cost moved out"
