@@ -1142,6 +1142,124 @@ class TestFeeTaxAllocation:
         assert "ASSET_COST_NO_ELIGIBLE_LOTS" in _issue_codes(orphan)
 
 
+#: date.min (0001-01-01) and the day after it, as the ``dt`` strings of the builders above.
+DATE_MIN = date.min.isoformat()
+DAY_AFTER_DATE_MIN = (date.min + timedelta(days=1)).isoformat()
+
+
+def _economic_group(result, economic_type: str):
+    """The one allocation group of ``economic_type`` (each case below builds exactly one pool of that type)."""
+    groups = [group for group in result.economic_allocation_groups if group.economic_type == economic_type]
+    assert len(groups) == 1, groups
+    return groups[0]
+
+
+class TestEconomicsOnDateMin:
+    """MF-SEC8-2b — income, FEE and TAX pools on date.min (0001-01-01: stored by an older version or a hand edit).
+
+    Every D-1 rule looks at the day before the pool, and date.min has none: nothing was held then, so a D-1 rule finds
+    nothing — the income pool is orphan, and a FEE/TAX pool is orphan unless a same-day rule applies. The same-day
+    rules keep working. On HEAD c0b4b6f05 the engine subtracts a day from date.min (the income cutoff, the cost pools'
+    ``previous_day`` computed before any rule): OverflowError. Each case runs on date.min and, as its guard, on an
+    ordinary day with the same shape, where today's allocation is the expected one.
+    """
+
+    @pytest.mark.parametrize("day", [pytest.param(DATE_MIN, id="date_min"), pytest.param("2025-01-20", id="ordinary_day")])
+    def test_dividend_with_only_a_same_day_lot_is_orphan_income(self, day):
+        """Red on HEAD c0b4b6f05 for ``date_min`` (OverflowError). The lot opened on the dividend's day was not held
+        the day before: orphan income, as for ``ordinary_day`` today."""
+        result = _run([_buy(1, "10", "100", dt=day)], economic_events=[_income(90, "DIVIDEND", "50", dt=day)], target_currency="EUR")
+
+        assert _lot_income(result, 1) == _d("0")
+        assert result.asset_orphan_income == _d("50")
+        assert "ASSET_INCOME_NO_ELIGIBLE_LOTS" in _issue_codes(result)
+        group = _economic_group(result, "DIVIDEND")
+        assert (group.rule, group.source_transaction_ids, group.operation_allocations, group.target_orphan) == ("ASSET_INCOME_HOLDINGS", (90,), (), _d("50"))
+
+    @pytest.mark.parametrize("economic_type", ["FEE", "TAX"])
+    @pytest.mark.parametrize("day", [pytest.param(DATE_MIN, id="date_min"), pytest.param("2025-01-01", id="ordinary_day")])
+    def test_cost_with_a_same_day_buy_goes_to_its_opening_lot(self, day, economic_type):
+        """Red on HEAD c0b4b6f05 for ``date_min`` (OverflowError, raised before any rule). A same-day BUY and no income:
+        SAME_DAY_TRADES, the whole pool on the lot the BUY opened — the rule an ordinary day applies today."""
+        result = _run([_buy(1, "10", "100", dt=day)], economic_events=[_cost(90, economic_type, "-5", dt=day)], target_currency="EUR")
+
+        accumulator = result.economic_accumulators_by_lot[1]
+        assert (accumulator.allocated_fees, accumulator.allocated_taxes) == ((_d("5"), _d("0")) if economic_type == "FEE" else (_d("0"), _d("5")))
+        assert _economic_group(result, economic_type).rule == "SAME_DAY_TRADES"
+        assert _group_contexts(result, economic_type) == ["OPENING"]
+        assert (result.asset_orphan_fees, result.asset_orphan_taxes) == (_d("0"), _d("0"))
+        assert _issue_codes(result) == []
+
+    @pytest.mark.parametrize("economic_type", ["FEE", "TAX"])
+    @pytest.mark.parametrize(
+        ("day", "buy_day"),
+        [pytest.param(DATE_MIN, DAY_AFTER_DATE_MIN, id="date_min"), pytest.param("2025-01-20", "2025-01-21", id="ordinary_day")],
+    )
+    def test_cost_without_a_same_day_match_is_orphan(self, day, buy_day, economic_type):
+        """Red on HEAD c0b4b6f05 for ``date_min`` (OverflowError). No income, no trade on the pool's day, and the lot is
+        opened the day after: the previous-day rules and the D-1 holdings find nothing, so the pool is orphan under
+        OPEN_LOTS_FALLBACK, the last level tried — as for ``ordinary_day`` today."""
+        result = _run([_buy(1, "10", "100", dt=buy_day)], economic_events=[_cost(90, economic_type, "-5", dt=day)], target_currency="EUR")
+
+        assert (result.asset_orphan_fees, result.asset_orphan_taxes) == ((_d("5"), _d("0")) if economic_type == "FEE" else (_d("0"), _d("5")))
+        assert (_lot_fees(result, 1), _lot_taxes(result, 1)) == (_d("0"), _d("0"))
+        assert "ASSET_COST_NO_ELIGIBLE_LOTS" in _issue_codes(result)
+        group = _economic_group(result, economic_type)
+        assert (group.rule, group.operation_allocations, group.target_orphan) == ("OPEN_LOTS_FALLBACK", (), _d("5"))
+
+    @pytest.mark.parametrize("day", [pytest.param(DATE_MIN, id="date_min"), pytest.param("2025-01-20", id="ordinary_day")])
+    def test_tax_on_a_same_day_orphan_income_is_orphan(self, day):
+        """Red on HEAD c0b4b6f05 for ``date_min`` (OverflowError). TAX follows the same-day income it taxes, held as of
+        D-1: there is none, so the dividend is orphan and so is the TAX, under SAME_DAY_INCOME — no fall-through to the
+        same-day BUY, as for ``ordinary_day`` today."""
+        result = _run(
+            [_buy(1, "10", "100", dt=day)],
+            economic_events=[_income(80, "DIVIDEND", "50", dt=day), _tax(90, "-10", dt=day)],
+            target_currency="EUR",
+        )
+
+        assert (result.asset_orphan_income, result.asset_orphan_taxes) == (_d("50"), _d("10"))
+        assert (_lot_income(result, 1), _lot_taxes(result, 1)) == (_d("0"), _d("0"))
+        assert {"ASSET_INCOME_NO_ELIGIBLE_LOTS", "ASSET_COST_NO_ELIGIBLE_LOTS"} <= set(_issue_codes(result))
+        group = _economic_group(result, "TAX")
+        assert (group.rule, group.operation_allocations, group.target_orphan) == ("SAME_DAY_INCOME", (), _d("10"))
+
+    @pytest.mark.parametrize(
+        ("income_day", "tax_day"),
+        [pytest.param(DATE_MIN, DAY_AFTER_DATE_MIN, id="income_on_date_min"), pytest.param("2025-01-19", "2025-01-20", id="ordinary_days")],
+    )
+    def test_tax_the_day_after_an_orphan_income_is_orphan(self, income_day, tax_day):
+        """Red on HEAD c0b4b6f05 for ``income_on_date_min`` (OverflowError), although the TAX is dated 0001-01-02:
+        PREVIOUS_DAY_INCOME reads the holdings of the day before the income, the day before date.min. The dividend's
+        only lot opened on its day, so it is orphan, and the TAX that follows it is orphan under PREVIOUS_DAY_INCOME
+        — as for ``ordinary_days`` today."""
+        result = _run(
+            [_buy(1, "10", "100", dt=income_day)],
+            economic_events=[_income(80, "DIVIDEND", "50", dt=income_day), _tax(90, "-10", dt=tax_day)],
+            target_currency="EUR",
+        )
+
+        assert (result.asset_orphan_income, result.asset_orphan_taxes) == (_d("50"), _d("10"))
+        assert _lot_taxes(result, 1) == _d("0")
+        group = _economic_group(result, "TAX")
+        assert (group.rule, group.operation_allocations, group.target_orphan) == ("PREVIOUS_DAY_INCOME", (), _d("10"))
+
+    def test_the_day_after_date_min_sees_the_lots_held_on_date_min(self):
+        """Guard (green on HEAD c0b4b6f05 and after): date.min is a day like any other for the day after it. A lot
+        bought on date.min is held as of D-1 for a dividend on 0001-01-02, and a FEE on 0001-01-02 with no trade that
+        day goes to the date.min BUY under PREVIOUS_DAY_TRADES."""
+        result = _run(
+            [_buy(1, "10", "100", dt=DATE_MIN)],
+            economic_events=[_income(80, "DIVIDEND", "50", dt=DAY_AFTER_DATE_MIN), _fee(90, "-5", dt=DAY_AFTER_DATE_MIN)],
+            target_currency="EUR",
+        )
+
+        assert (_lot_income(result, 1), _lot_fees(result, 1)) == (_d("50"), _d("5"))
+        assert (result.asset_orphan_income, result.asset_orphan_fees) == (_d("0"), _d("0"))
+        assert _economic_group(result, "FEE").rule == "PREVIOUS_DAY_TRADES"
+        assert _issue_codes(result) == []
+
+
 class TestAnalysisStatus:
     def test_clean_replay_is_complete(self):
         result = _run([_buy(1, "10", "100", dt="2025-01-01")])

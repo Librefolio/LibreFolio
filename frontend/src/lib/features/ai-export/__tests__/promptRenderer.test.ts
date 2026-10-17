@@ -20,7 +20,7 @@ describe('AI Export prompt renderer', () => {
             translate: probeTranslation('it'),
         });
 
-        // red until A9 (legal_notice)
+        // A9 (legal_notice)
         expect(diagnostics.sections.map((section) => section.id)).toEqual(['analysis_objective', 'shared_verification_instructions', 'response_contract', 'snapshot_metadata', 'snapshot_data', 'additional_librefolio_data', 'domain_notes', 'user_notes', 'legal_notice', 'response_language']);
         expect(diagnostics.rendered.mode).toBe('full_prompt');
         expect(diagnostics.sections.find((section) => section.id === 'user_notes')?.content).toContain('Focus on recovery duration.');
@@ -122,11 +122,11 @@ describe('AI Export prompt renderer', () => {
         });
 
         expect(diagnostics.rendered.mode).toBe('data_only');
-        // red until A9 (legal_notice)
+        // A9 (legal_notice)
         expect(diagnostics.sections.map((section) => section.id)).toEqual(['snapshot_metadata', 'snapshot_data', 'legal_notice']);
     });
 
-    // red until A9 (legal_notice)
+    // A9 (legal_notice)
     it('ends every analysis with response_language and every dataset with legal_notice', () => {
         const compatibility = compatibilityFixture();
         function sectionIds(selection: AiExportCompatibleSelection, userNotes?: string) {
@@ -147,13 +147,13 @@ describe('AI Export prompt renderer', () => {
 
         // response_language stays the analysis prompt's last word: the app's trusted instruction after the untrusted user notes.
         expect(analyses.map((selection) => [selection.id, lastSectionId(selection), lastSectionId(selection, 'Focus on recovery duration.')])).toEqual(analyses.map((selection) => [selection.id, 'response_language', 'response_language']));
-        // red until A9 (legal_notice)
+        // A9 (legal_notice)
         // legal_notice sits immediately before it, with and without user notes.
         expect(analyses.map((selection) => [selection.id, sectionIds(selection).at(-2), sectionIds(selection, 'Focus on recovery duration.').at(-2)])).toEqual(analyses.map((selection) => [selection.id, 'legal_notice', 'legal_notice']));
         expect(datasets.map((selection) => [selection.id, lastSectionId(selection)])).toEqual(datasets.map((selection) => [selection.id, 'legal_notice']));
     });
 
-    // red until A9 (legal_notice)
+    // A9 (legal_notice)
     it('renders legal_notice once, as its own heading over the disclaimer and outside any fence, in both modes', () => {
         const compatibility = compatibilityFixture();
         const analysis = selectionFixture('analysis', 'asset.market_analysis');

@@ -51,6 +51,10 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
    The portfolio replay runs in a worker thread under a copy of the request's context (J-45, `portfolio/engine.py`),
    and that copy shares the same `decimal.Context` object: a `getcontext().prec = …` in the replay would change the
    request's precision too, and the other way round.
+8. **A schema may import a pure function of the layer**, never a service or anything that does I/O. A contract
+   invariant reads the one formula instead of rewriting it: `schemas/risk.py` checks a result's annualization factor
+   with `returns.observations_per_year` (MF-D3). Pure means no session, no network, no file, no cache: a function of
+   its arguments only.
 
 ## Adding a calculation
 

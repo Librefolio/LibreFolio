@@ -86,6 +86,16 @@ async def _live_setup_token(session: AsyncSession, user_id: int, now: datetime) 
     return result.scalars().first()
 
 
+async def _latest_setup_withdrawn(session: AsyncSession, user_id: int) -> bool:
+    """Whether the account's latest setup link was revoked and never consumed: withdrawn, not expired (A-50).
+
+    The setup cancelled (A-43), or the address changed at an earlier start (A-33): either revokes the live links.
+    """
+    result = await session.execute(select(AccountToken.revoked_at, AccountToken.consumed_at).where(AccountToken.user_id == user_id, AccountToken.purpose == _SETUP).order_by(AccountToken.created_at.desc(), AccountToken.id.desc()).limit(1))  # type: ignore[union-attr]
+    latest = result.first()
+    return latest is not None and latest.revoked_at is not None and latest.consumed_at is None
+
+
 async def _token_known(session: AsyncSession, token: str) -> bool:
     """Whether ``token`` was ever stored, for any account or purpose: the same value is never stored twice."""
     result = await session.execute(select(AccountToken.id).where(AccountToken.token_hash == token_service.hash_token(token)))
@@ -171,6 +181,12 @@ async def _keep_pending_admin(session: AsyncSession, user: User, config: AdminBo
     username = user.username
     if config.token is not None and not await _token_known(session, config.token):
         await token_service.revoke_tokens(session, user_id=user_id, purpose=_SETUP, now=now)
+        # The revocation took SQLite's write lock: «waiting» is read again under it (A-42), so a setup completed
+        # since the first read leaves no live link behind
+        if not await registration_service.is_pending_admin(session, user):
+            await session.rollback()
+            logger.info("LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN not re-armed: the initial administrator was set up meanwhile", user_id=user_id)
+            return BootstrapResult(BootstrapAction.IGNORED)
         issued = await token_service.issue_token(session, _SETUP, user_id=user_id, token=config.token, now=now)
         expires_at = issued.record.expires_at
         await session.commit()
@@ -185,6 +201,8 @@ async def _keep_pending_admin(session: AsyncSession, user: User, config: AdminBo
     remedy = f"run {_SETUP_LINK_COMMAND}" + (f", or set a new {ADMIN_BOOTSTRAP_TOKEN_VARIABLE}" if config.token is not None else "")
     if moved:
         logger.warning(f"The initial administrator's address changed: the setup link handed over before no longer works; {remedy}", user_id=user_id, username=username)
+    elif await _latest_setup_withdrawn(session, user_id):
+        logger.warning(f"The initial administrator's setup link was withdrawn (cancelled, or its address changed): {remedy}", user_id=user_id, username=username)
     else:
         logger.warning(f"The initial administrator's setup link has expired: {remedy}", user_id=user_id, username=username)
     return BootstrapResult(BootstrapAction.EXPIRED, user_id=user_id, username=username)
@@ -270,6 +288,17 @@ async def startup_admin_bootstrap(engine: Optional[AsyncEngine] = None) -> Boots
     return result
 
 
+async def _setup_spent_before(session: AsyncSession, user_id: int, spent_id: int) -> bool:
+    """Whether a setup link of the account other than ``spent_id`` was consumed: its setup happened, or its links were retired."""
+    other = select(AccountToken.id).where(
+        AccountToken.user_id == user_id,
+        AccountToken.purpose == _SETUP,
+        AccountToken.id != spent_id,
+        AccountToken.consumed_at.is_not(None),  # type: ignore[union-attr]
+    )
+    return (await session.execute(other.limit(1))).first() is not None
+
+
 async def complete_admin_setup(session: AsyncSession, token: str, new_password: str, *, now: Optional[datetime] = None) -> Optional[User]:
     """Spend a setup link: the password set, the account active, its sessions ended, its other links revoked; commits.
 
@@ -292,6 +321,15 @@ async def complete_admin_setup(session: AsyncSession, token: str, new_password: 
         await session.commit()
         logger.warning("Setup link refused and retired: the account is already active", user_id=user_id)
         return None
+    if await _setup_spent_before(session, user.id, record.id):
+        # Another setup link of the account was consumed — the setup done, or its links retired —: one left behind (a
+        # race with a new link, a database of an earlier 1.3 build) must not set the password again (A-42)
+        user_id = user.id
+        await session.rollback()
+        await token_service.retire_tokens(session, user_id=user_id, purpose=_SETUP, now=moment)
+        await session.commit()
+        logger.warning("Setup link refused and retired: the account was set up before", user_id=user_id)
+        return None
     record.consumed_by_user_id = user.id
     session.add(record)
     # bcrypt is slow on purpose: it runs off the event loop.
@@ -313,7 +351,14 @@ async def issue_setup_link(session: AsyncSession, *, now: Optional[datetime] = N
     if user is None:
         return None
     moment = now or utcnow()
-    await token_service.revoke_tokens(session, user_id=user.id, purpose=_SETUP, now=moment)
-    issued = await token_service.issue_token(session, _SETUP, user_id=user.id, now=moment)
+    user_id = user.id
+    await token_service.revoke_tokens(session, user_id=user_id, purpose=_SETUP, now=moment)
+    # The revocation took SQLite's write lock: «waiting» is read again under it (A-42), so a setup completed since the
+    # first read gets no new link
+    if not await registration_service.is_pending_admin(session, user):
+        await session.rollback()
+        logger.info("No setup link issued: the initial administrator was set up meanwhile", user_id=user_id)
+        return None
+    issued = await token_service.issue_token(session, _SETUP, user_id=user_id, now=moment)
     logger.info("New setup link for the initial administrator", user_id=user.id, expires_at=issued.record.expires_at.isoformat())
     return issued

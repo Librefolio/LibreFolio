@@ -27,7 +27,7 @@ from backend.app.services.risk.eligibility import (
     suggested_replay_range,
 )
 from backend.app.services.risk.plan import AnalyticPlan
-from backend.app.services.risk.scope import ScopeInputs, prepare_asset_series
+from backend.app.services.risk.scope import ScopeInputs, bounded_range, prepare_asset_series
 
 
 async def prepare_historical_replay_context(
@@ -46,6 +46,9 @@ async def prepare_historical_replay_context(
             "Historical replay requires a valid replay range",
             code=RiskErrorCode.INVALID_PARAMETERS,
         )
+    # R13-SEC8-1b: the facts, the coverage, the suggested window and the series all read the window bounded; the
+    # parameters, and the output's echo of them, keep the request.
+    replay_range = bounded_range(replay_range)
 
     scope_asset_ids = set(scope_inputs.requested_asset_ids)
     proxy_assets = tuple(getattr(plan.params, "proxy_assets", ()))
