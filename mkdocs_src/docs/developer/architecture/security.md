@@ -1861,17 +1861,20 @@ removed an active administrator never demoted; and on a new instance, where the 
 account, `./dev.py user demote` removed the only administrator, while `./dev.py user deactivate` answered success and
 ended the new owner's sessions without deactivating it. The cure is the one of A-42, the write lock first:
 
-- `update_user_status()`, `set_user_active()` and `set_user_admin()` take SQLite's write lock
-  (`backend.app.db.session.begin_writes()`), read the account again (`session.refresh()`), and only then decide: a
+- `update_user_status()`, `set_user_active()` and `set_user_admin()` take SQLite's write lock and read the account
+  again (`user_service.refreshed_under_lock()`: `backend.app.db.session.begin_writes()`, then `session.refresh()`; an
+  account deleted meanwhile is not found, lot A-54), and only then decide: a
   deactivation or a demotion, the last active administrator, «waiting». On a new instance, the command line's two then
   refuse the administrator just set up as the last active one, nothing changed.
 - The Users tab cancels with `{is_active: false, cancel_setup: true}`: the cancellation and nothing else. An account
   that no longer waits answers `409` `SETUP_COMPLETED`, rolled back, with an INFO line. A plain `{is_active: false}`
   keeps its meaning, a deactivation decided on the account as the lock finds it, and its answer matches the database.
-- `DELETE /api/v1/users/{user_id}`, when its first read says «waiting», takes the lock, reads the account again and
-  asks once more: a setup completed in the meantime makes it `409` `DEMOTE_FIRST`, nothing deleted.
+- `DELETE /api/v1/users/{user_id}` reads under the lock, on the account read again, whether it is an administrator and
+  whether it still waits (every deletion since lot A-55, which also catches a promotion): a setup completed in the
+  meantime makes it `409` `DEMOTE_FIRST`, nothing deleted.
 
-The details, with the answers of each route: [A setup completed meanwhile](access_control.md#setup-completed-meanwhile).
+The details, with the answers of each route: [A setup completed meanwhile](access_control.md#setup-completed-meanwhile);
+every path decided this way: [Decided under the write lock](access_control.md#decided-under-the-lock).
 
 Tests: A42-001 to A42-006, A43-001 to A43-005, A50-001 to A50-004 (the WARNING of a start after a cancellation or
 an address change, and of an expiry) and A51-007 and A51-008 (`user deactivate` and `user demote` while the setup
