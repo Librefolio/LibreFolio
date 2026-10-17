@@ -17,7 +17,7 @@ import pycountry
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.db.models import OnboardingFlow, OnboardingStatus
-from backend.app.schemas.common import BaseListResponse
+from backend.app.schemas.common import BaseListResponse, IsoCurrencyCode
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # ============================================================================
@@ -38,7 +38,7 @@ class UserSettingsUpdate(BaseModel):
     """User settings update request. All fields optional."""
 
     language: Optional[str] = Field(None, min_length=2, max_length=5)
-    base_currency: Optional[str] = Field(None, min_length=3, max_length=3)
+    base_currency: Optional[IsoCurrencyCode] = Field(None, min_length=3, max_length=3)
     theme: Optional[Literal["light", "dark", "auto"]] = None
     avatar_url: Optional[str] = Field(None, max_length=500, description="URL to user avatar image")
 
@@ -93,7 +93,7 @@ class OnboardingWelcomeSettings(BaseModel):
     """Preferences committed atomically when the welcome flow finishes."""
 
     language: Literal["en", "it", "fr", "es"]
-    base_currency: str = Field(..., min_length=3, max_length=3)
+    base_currency: IsoCurrencyCode = Field(..., min_length=3, max_length=3)
     avatar_url: Optional[str] = Field(None, max_length=500)
 
     model_config = ConfigDict(extra="forbid")

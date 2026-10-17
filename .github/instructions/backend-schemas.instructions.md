@@ -49,6 +49,11 @@ The `common.py` module provides shared building blocks used across all subsystem
   4217 alphabetic code, any case. Never let the strict rule reach a model the read paths also build from stored rows:
   `FXConversionRouteReadItem` subclasses the request `FXConversionRouteItem`, so it turns the check off with its
   `ClassVar` `iso_currencies_required = False`.
+- **What a stored value stands for (E-19a).** `suggested_iso_currency(value)` gives the one ISO code a value means
+  (`"978"`, `"Euro"` → `EUR`; a valid code upper-cased), or `None`: no code, two codes (`"Bolívar Soberano"`), past 80
+  characters, or a subunit code of `NEVER_RELABELLED_CURRENCY_CODES` (`GBX`, `ZAC`, `ILA`: cents, never relabelled).
+  `is_canonical_iso_currency(value)` says whether a value is stored exactly as `iso_currency_code` stores it (`"eur"` is
+  not). Quote a refused or stored currency text through `shown_currency_text()` (16 characters), never whole.
 
 ### Response Base Classes (Generic)
 
