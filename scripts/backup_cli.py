@@ -713,9 +713,12 @@ def _check_on_a_copy(path: Path, data_dir: Path, key=None, instance_key: str | N
             shown.append(phase)
             print(f"   … {phase}")
 
+    readable, max_unpacked = _restore_limit()
+    if not readable:
+        return None
     print(f"🔎 Checking {path} on a copy, in {stages_dir(data_dir)}")
     try:
-        return stage_archive(path, data_dir, progress=progress, key=key, instance_key=instance_key)
+        return stage_archive(path, data_dir, progress=progress, key=key, instance_key=instance_key, max_unpacked=max_unpacked)
     except StagingBusyError:
         print("❌ Another archive is being checked (from the web interface or another command): try again when it ends")
     except StagingError as exc:
@@ -723,6 +726,21 @@ def _check_on_a_copy(path: Path, data_dir: Path, key=None, instance_key: str | N
     except BackupPathError as exc:
         print(f"❌ {exc.path} is not a plain folder (a link, or a file): the copy is made in a folder of the data directory")
     return None
+
+
+def _restore_limit() -> tuple[bool, int | None]:
+    """``LIBREFOLIO_BACKUP_MAX_RESTORE_MB`` in bytes (``None``: no limit), the rule of the server's checks (B-35): one
+    command overrides it with ``LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0``. ``(False, None)`` after saying why it cannot be
+    read."""
+    from backend.app.config import ProfileDefaultError  # noqa: PLC0415 — keep dev.py's start light
+    from backend.app.config.backup import BackupConfigError, backup_max_restore_mb  # noqa: PLC0415
+
+    try:
+        limit_mb = backup_max_restore_mb()
+    except (BackupConfigError, ProfileDefaultError) as exc:
+        print(f"❌ {exc} (backup_restore_unavailable)")
+        return False, None
+    return True, (limit_mb * 1024 * 1024 if limit_mb else None)
 
 
 def cmd_restore(args) -> int:

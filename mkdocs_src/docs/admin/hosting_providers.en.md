@@ -53,6 +53,7 @@ Today the profile changes eleven things:
 | The check for a newer LibreFolio release: at an administrator's sign-in, and **Check for updates** in the changelog | On | Off: you update the instance |
 | **Forgot Password?** on the sign-in page | The command that resets a password on the server, under the email form in a closed panel when emails with a link can go out | No command, but *Ask your administrator for a password-reset link: they can create one for your account.* The email form stays when emails with a link can go out |
 | The largest archive uploaded for a restore, while `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not set | No limit | 500 MB: see [The Upload Limit of a Restore](#restore-upload-limit) |
+| What an archive unpacks to while a restore checks it, while `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` is not set | No limit | 8 times the upload limit: 4000 MB with the 500 MB above, none when the upload limit is `0` |
 | Idle risk workers (simulations and optimizations) stop after | 600 seconds | 60 seconds |
 | Frame protection: only the app's own pages may show it in a frame | Off | On |
 | A report-only Content-Security-Policy on the pages of the web app | Off | On |
@@ -597,6 +598,34 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   and refuses a larger file before sending it.
 - On a [blocked instance](#instance-block), the upload is refused like the rest of the app, and so
   are the check and the restore: the block lets the data leave, never come in.
+
+The upload limit bounds the archive as it is sent, compressed: a zip can unpack to far more than its
+own size, and the check unpacks it on the disk of the data directory.
+`LIBREFOLIO_BACKUP_MAX_RESTORE_MB` bounds what an archive unpacks to, from the sizes its manifest
+declares, before the check unpacks anything.
+
+| `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` | Largest size an archive unpacks to |
+| --- | --- |
+| Not set, or empty | No limit on a `selfhosted` instance; in the [managed profile](#managed-profile), 8 times the upload limit: 4000 MB with its default 500 MB, 16384 MB with the `2048` above, none when the upload limit is `0` |
+| `0` | No limit, in both profiles |
+| A whole number, such as `16384` | That many megabytes, of 1024 × 1024 bytes each |
+
+- Why 8: a database shrinks to about a quarter of its size in an archive, and uploaded images, PDF
+  files and spreadsheets barely shrink. An archive heavy with its database unpacks to about four
+  times its size, so 8 leaves it twice that room, and still bounds what any archive unpacks to at
+  4000 MB with the default, where a zip can otherwise unpack to about a thousand times its size.
+- An archive over the limit is refused before anything is unpacked: the check fails with the code
+  `unpacked_too_large`, and nothing of its copy is left. A secure archive is decrypted first, which
+  takes about its own size, then measured the same way.
+- A value you set always wins, `0` included. `backup restore` on the command line follows the same
+  limit; whoever runs the server lifts it for one command with `LIBREFOLIO_BACKUP_MAX_RESTORE_MB=0`
+  in front of it («Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)).
+- A value other than a whole number does not stop the server: the start log already has an error,
+  `LIBREFOLIO_BACKUP_MAX_RESTORE_MB cannot be used: …` (`check` is `backup.restore_limit`), then each
+  check, `POST /api/v1/backup/restore/stage`, answers `503` with the code
+  `backup_restore_unavailable`, the archive kept, and the log has an error. While this variable is
+  unset in the managed profile, an upload limit that cannot be used refuses the checks the same way,
+  and the start log's line names `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` instead.
 
 ---
 
