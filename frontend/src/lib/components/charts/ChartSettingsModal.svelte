@@ -421,7 +421,7 @@
             <button class="px-4 py-2 text-sm font-medium text-lf-secondary bg-lf-panel rounded-lg hover:bg-lf-neutral transition-colors" onclick={handleClose} type="button">
                 {$t('common.cancel')}
             </button>
-            <button class="px-4 py-2 text-sm font-medium text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSave} type="button">
+            <button class="px-4 py-2 text-sm font-medium text-lf-on-action bg-lf-action rounded-lg hover:bg-lf-action-hover transition-colors" onclick={handleSave} type="button" data-testid="chart-settings-apply">
                 {$t('common.apply')}
             </button>
         </div>

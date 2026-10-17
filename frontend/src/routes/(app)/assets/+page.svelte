@@ -64,7 +64,7 @@
     import {createPairSlug, displayFxRate, ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
     import {computeDerivedPriceState} from '$lib/utils/assetPriceDerived';
-    import {fetchAssetPeriodChanges, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
+    import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
@@ -322,11 +322,12 @@
     );
 
     // The Δ columns (1D … 5Y): the backend computes them up to the end of the range and lists the periods (X-R53).
-    // Kept apart from the price flow, so a price refresh never wipes them, and replaced by the latest answer only.
+    // Kept apart from the price flow, so a price refresh never wipes them. Which answer is kept while several are in
+    // flight, the ledger says (X-R60); `periodChangesLoading` copies its `busy`.
     let periodSpecs = $state<PeriodSpec[]>([]);
     let periodDeltas = $state<Map<number, PeriodDeltas>>(new Map());
     let periodChangesLoading = $state(false);
-    let periodChangesVersion = 0;
+    const periodChangesLedger = new PeriodChangesLedger<number>();
 
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
@@ -413,7 +414,8 @@
     async function retryBackendSignals() {
         await pageBusy.track('assets-signals-retry', async () => {
             await loadAssetSignalDefinitions(true);
-            await fetchAllPriceData();
+            // The prices and the signals only: the Δ columns do not depend on the signals (X-R60).
+            await fetchPriceSeries();
         });
     }
 
@@ -628,7 +630,11 @@
         displayDateStart = 'min';
     }
 
-    /** Prices and signals (the price query, the cache) and the Δ columns (the backend's period changes), together. */
+    /**
+     * Prices and signals (the price query, the cache) and the Δ columns (the backend's period changes), together. The
+     * signals' retry and a settings change ask only the prices and signals (`fetchPriceSeries`): the Δ columns depend
+     * on neither (X-R60).
+     */
     async function fetchAllPriceData() {
         if (assets.length === 0) return;
         await Promise.all([fetchPriceSeries(), loadPeriodChanges()]);
@@ -636,22 +642,26 @@
 
     /** The Δ columns of every listed asset up to the end of the range, from the backend (X-R53). */
     async function loadPeriodChanges() {
-        const version = ++periodChangesVersion;
-        periodChangesLoading = true;
+        const ticket = periodChangesLedger.begin(dateEnd, true);
+        periodChangesLoading = periodChangesLedger.busy;
         try {
             const result = await fetchAssetPeriodChanges(
                 assets.map((asset) => asset.id),
-                dateEnd,
+                ticket.asOf,
             );
-            if (version !== periodChangesVersion) return;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByAssetId);
+            if (next === null) return;
             if (result.periods.length > 0) periodSpecs = result.periods;
-            periodDeltas = result.deltasByAssetId;
+            periodDeltas = next;
         } catch (e: any) {
-            if (version !== periodChangesVersion) return;
+            // The Δ computed up to the same day stay: only those of another range go (X-R60).
+            const next = periodChangesLedger.fail(ticket, periodDeltas);
+            if (next === null) return;
             console.error('Failed to fetch period changes:', e);
-            periodDeltas = new Map();
+            periodDeltas = next;
         } finally {
-            if (version === periodChangesVersion) periodChangesLoading = false;
+            periodChangesLedger.end(ticket);
+            periodChangesLoading = periodChangesLedger.busy;
         }
     }
 
@@ -1120,7 +1130,7 @@
             setGlobalSettings(s, 'assets');
         }
         if (shouldReloadBackend) {
-            void pageBusy.track('assets-settings', () => fetchAllPriceData());
+            void pageBusy.track('assets-settings', () => fetchPriceSeries());
         }
     }
 
