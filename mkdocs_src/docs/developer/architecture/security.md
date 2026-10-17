@@ -2327,13 +2327,38 @@ an `info` (H-39).
 | Switch | Header | Value | Sent on |
 |--------|--------|-------|---------|
 | `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response |
-| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every HTTP response |
+| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `PAGE_POLICY`: `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'` | HTML responses, whatever the path: the web app's pages, the documentation, Swagger UI and ReDoc |
+| `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every other response |
 | `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app |
 
-- **Frame protection** (`FRAME_HEADERS`) is enforced: only the app's own pages may frame it, so a hosting panel or a
-  dashboard on another origin that shows the app in a frame is refused by the browser. Its two headers go where
-  `ALWAYS_HEADERS` go: API answers, the web app, the documentation, the files, the CORS preflights (the `cors` entry is
-  inside this one) and the middleware's own 500.
+- **Frame protection** (`FRAME_HEADERS`, or `PAGE_FRAME_HEADERS` on an HTML response) is enforced: only the app's own
+  pages may frame it, so a hosting panel or a dashboard on another origin that shows the app in a frame is refused by
+  the browser. Its two headers go where `ALWAYS_HEADERS` go: API answers, the web app, the documentation, the files,
+  the CORS preflights (the `cors` entry is inside this one) and the middleware's own 500. `X-Frame-Options` is the
+  same on all of them; the `Content-Security-Policy` follows the response's type, which `_is_html()` reads at
+  `http.response.start`. A `Content-Type` that starts with `text/html`, in any case and with any parameters
+  (`; charset=utf-8`), gets `PAGE_FRAME_HEADERS`, whose policy is `PAGE_POLICY`, whatever the path: the web app's
+  pages, the client-side routes the SPA catch-all answers and the HTML files of the build, the documentation under
+  `/mkdocs`, Swagger UI and ReDoc, and the HTML 404 the catch-all answers for an unknown API path. Every other
+  response keeps `frame-ancestors 'self'` alone, the CORS preflights and the 500 included, which are plain text.
+  `_is_web_app_page()`, below, applies the same `_is_html()`, then the path.
+- **Three more directives on documents** (H-42). `PAGE_POLICY` adds to `frame-ancestors 'self'` three directives that
+  touch no script, so they can be enforced today while `script-src` stays report-only: `object-src 'none'`, no plugin
+  content (`<object>`, `<embed>`); `base-uri 'self'`, no injected `<base>` sending the page's relative URLs to another
+  origin; `form-action 'self'`, no form sending its data to another site. The report-only policy already listed the
+  three, and is unchanged. Nothing LibreFolio serves needs what they forbid: the app's sources, every page of the
+  built documentation and the pages FastAPI writes for Swagger UI and ReDoc hold no `<object>`, `<embed>` or
+  `<base>`, and no form of the app or of the documentation (its palette switch and its search) has an `action`. No
+  switch of their own: with `LIBREFOLIO_FRAME_PROTECTION` off, the self-hosted default, nothing changes; an install
+  that turns it on gets the three with `frame-ancestors`. A route's own `Content-Security-Policy` is still kept
+  alone, on an HTML page too: such a page carries only what its route's policy says.
+- **Why HTML only.** The three mean something only for a document. And Chromium shows an inline PDF with a viewer it
+  treats as a plugin, so `object-src 'none'` on the PDF's own answer could stop it showing the file. That comes from
+  documentation and reports, and no test here can verify it: headless Chromium has no PDF viewer. The app's preview
+  draws a PDF with EmbedPDF, its PDFium engine compiled to WebAssembly, without that viewer; the preview's fallback,
+  an `<iframe>` on the file's own URL, loads a PDF answer, which keeps `frame-ancestors 'self'` alone:
+  `/api/v1/uploads/file/{id}`, or `/api/v1/brokers/import/files/{id}/download?download=false` for a broker's file.
+  Not covered: `application/xhtml+xml` and `image/svg+xml`, documents too, get `frame-ancestors 'self'` alone.
 - **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
   report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
   is sent.
@@ -2378,16 +2403,31 @@ enforced policy would block.
 Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
 `nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
 still re-raised), `./dev.py test services managed-headers` (`backend/test_scripts/test_services/test_managed_headers.py`,
-on fresh apps holding the stack's `security_headers`, `gzip` and `cors` and a fake static site: frame protection once
-on every response when on and on none when off, `false` over `managed` included; the report-only policy on the web
+on fresh apps holding the stack's `security_headers`, `gzip` and `cors`, Swagger UI and ReDoc, and a fake static site:
+frame protection once on every response when on and on none when off, `false` over `managed` included, its policy
+exactly `PAGE_POLICY` on the HTML (the web app's pages, compressed too, the documentation, Swagger UI, ReDoc, the HTML
+404 of an unknown API path) and `frame-ancestors 'self'` on the rest; around the middleware alone, the type deciding
+whatever the path, `text/html` in four spellings of case and parameters against an inline PDF, an image, a script, a
+style sheet, JSON and a 204 without `Content-Type`; `PAGE_POLICY` pinned by value; the report-only policy on the web
 app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript chunk, a text file, a
 CORS preflight or a 500; the policy read directive by directive, each directive once, with no report endpoint; a
-route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
+route's own header kept alone and the others added, its own `Content-Security-Policy` on an HTML page never replaced by
+`PAGE_POLICY`; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
 `mime.types` file; no hidden file of either tree is sampled, since no route serves one,
 see [Server Startup](overview.md#server-startup)). The switches' values per profile are tested with the profile defaults,
 `./dev.py test services profile-defaults` (see [Settings System](settings.md)).
+
+In a browser, `./dev.py test front-utility page-policy` (`frontend/e2e/layout/page-policy.spec.ts`) checks that the
+app and the documentation need nothing `PAGE_POLICY` forbids. The test lane runs self-hosted and the runner cannot
+turn frame protection on in a lane, so the spec injects `PAGE_POLICY` by routing into every HTML document the lane
+serves, with service workers blocked (the app's answers navigations itself, out of the route's reach). Positive
+controls come first, on the sign-in page: an injected `<object>` typed `application/pdf`, a `<base>` aimed at another
+origin and a form posted to another origin must each be refused with an enforced violation. The `<object>` is plugin
+content on purpose: in Chromium 149, an untyped `<object>` of an image, inserted in the same task as the form's
+submission, is fetched as an image with no `object-src` check. Then a documentation page and its search, the PDF
+preview and the Dashboard must raise none.
 
 ## 🌐 HTTPS & Deployment Architecture
 

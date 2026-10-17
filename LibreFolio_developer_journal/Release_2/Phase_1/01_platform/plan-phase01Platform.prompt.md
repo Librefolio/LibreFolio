@@ -5784,7 +5784,7 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
    - Per H-42 vuole prima l'analisi, e per gli E2E preferisce un header vero se il runner lo permette in modo pulito,
      altrimenti `page.route`.
 
-### Lotto «H-42: tre direttive della CSP imposte accanto a `frame-ancestors`» (E, LOW, 2026-10-17, mattina) — analisi
+### Lotto «H-42: tre direttive della CSP imposte accanto a `frame-ancestors`» (E, LOW, 2026-10-17, mattina) — ✅ provato
 
 > Suggerimento di E dopo la chiusura di H-39: imporre già, nello stesso header di `frame-ancestors`, `object-src 'none';
 > base-uri 'self'; form-action 'self'` (iniezione di `<base>`, esfiltrazione con un form). `script-src` resta in sola
@@ -5842,6 +5842,154 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
 - Documenti: `security.md#managed-headers`, la riga di `LIBREFOLIO_FRAME_PROTECTION` in `configuration`,
   `hosting_providers`; CHANGELOG 🔒 (cambia anche il self-hosted di chi accende l'interruttore).
 - Serve: l'OK di scrittura sulla registrazione dello spec (`_frontend_utility.py`) e uno slot E2E.
+
+**Via del coordinatore** (17/10, mattina): «OK a 1 e 2».
+- Le tre direttive solo su `text/html`, `frame-ancestors` su ogni risposta.
+- L'E2E con `page.route` come guardia permanente: `serviceWorkers: 'block'`, prima i controlli positivi con `<object>`
+  e `<base>`, poi documenti, PDF e dashboard senza violazioni.
+- OK di scrittura su `_frontend_utility.py`, per una registrazione in aggiunta.
+- La corsia managed per gli E2E del cloud diventa una riga sua del backlog (**H-43**).
+- Lo slot E2E arriva più tardi, in coda.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla), in `test_managed_headers.py`, selettore
+   `services managed-headers` (puro, senza slot):
+   - `test_page_policy_is_pinned_by_value`: il valore esatto, direttiva per direttiva e nell'ordine. `PAGE_POLICY` si
+     legge per nome, con `getattr`: prima della cura fallisce lui solo, nominando H-42, e il resto del file si
+     raccoglie e gira;
+   - (g) `test_the_enforced_policy_follows_the_type_of_the_response`. I modi sono quelli con l'interruttore acceso
+     (managed, e self-hosted con `LIBREFOLIO_FRAME_PROTECTION=true`), per 10 risposte tipizzate:
+     - `text/html` in quattro forme (`charset`, maiuscolo, misto; su `/`, una rotta lato client, `/mkdocs/user/` e la
+       Swagger UI) prende `PAGE_POLICY`;
+     - un PDF dei broker, un'immagine, un chunk JavaScript, un CSS, il JSON delle API e una 204 senza `Content-Type`
+       tengono `frame-ancestors 'self'` soltanto;
+   - `test_an_html_page_keeps_the_policy_its_route_set`: una CSP messa dalla rotta su una pagina HTML vince ancora;
+   - (a) e i test della rotta, aggiornati: le pagine HTML con la politica intera, il resto come prima; l'interruttore
+     spento non mette nulla.
+   - Rosso (`files/runs/h42/red-managed-headers.log`): **29 failed / 227 passed**:
+     - 18 di (a), le pagine HTML;
+     - 8 di (g), le quattro forme HTML per due modi;
+     - 1 il pin;
+     - 2 di `test_a_header_the_route_set_is_kept_and_the_others_are_added`.
+   - Già verdi prima della cura, come devono: le 12 risposte non HTML e la CSP della rotta.
+2. ✅ **Cura** (`files/h42/apply.py`: prova, poi `--apply`, i tre file identici alle copie di prova):
+   - `security_headers.py`: `PAGE_POLICY` (`frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action
+     'self'`) e `PAGE_FRAME_HEADERS`;
+   - `_is_html(headers)`, per `content-type`, che ora usa anche `_is_web_app_page`;
+   - il middleware si costruisce `self.page_headers` una volta, accanto a `self.headers`, e a ogni risposta sceglie
+     `page_headers` se è HTML. Una CSP messa dalla rotta resta la sua, come prima;
+   - docstring del modulo: perché solo l'HTML (il visore PDF di Chromium è un plugin);
+   - i commenti di `LIBREFOLIO_FRAME_PROTECTION` in `config/__init__.py` (docstring e campo) e in `.env.example`.
+     Le righe non commentate di `.env.example` non cambiano.
+3. ✅ **Verdi** (`files/runs/h42-backend.sh`, cancello del carico):
+
+   | Selettore | Esito |
+   |---|---|
+   | `services managed-headers` | 256 passed |
+   | `services security-headers` | 15 |
+   | `services config-env-example` | 38 |
+   | `services config-package` | 863 |
+   | `services config-audit` | 156 |
+
+   - ruff e black puliti sui 3 file Python;
+   - porta 6181 libera.
+4. ✅ **Documenti per l'admin** (docs-writer, solo inglese, nessun timbro):
+   - `configuration.en.md`, la riga di `LIBREFOLIO_FRAME_PROTECTION`;
+   - `hosting_providers.en.md`, il punto «Frame protection», con il link alla sola pagina `configuration.md`. Una
+     pagina non tradotta che punta a un'ancora di `configuration` rompe la build stretta, perché le traduzioni non
+     hanno le ancore nuove.
+   - Il debito di traduzione di `configuration` va in H-5.
+5. ✅ **Spec E2E** (test-author), `frontend/e2e/layout/page-policy.spec.ts`:
+   - `serviceWorkers: 'block'`; la politica iniettata in ogni documento della corsia con `route.fetch({maxRedirects:
+     0})`; uno script d'avvio che registra ogni `securitypolicyviolation`, contando solo quelle imposte;
+   - **controlli positivi** sulla pagina d'accesso: il documento arriva con la politica; un `<base>` iniettato, un form
+     inviato a `https://example.invalid` e un `<object>` sulla corsia danno ciascuno la sua violazione (`base-uri`,
+     `form-action`, `object-src`); l'URL base resta quello della corsia; nessuna richiesta di controllo parte;
+     nient'altro viola;
+   - poi tre flussi, ciascuno con un solo documento che porta la politica e nessuna violazione alla fine:
+     - una pagina annidata dei documenti e la ricerca di Material di «conventions», con un risultato a schermo;
+     - un PDF di una pagina caricato e aperto in anteprima dalla pagina File, fino a `file-preview-pdf`
+       `data-state="ready"`, poi cancellato in `afterEach`;
+     - la vista principale della Dashboard (`dashboard-page` assestata, `dashboard-overview-tab`).
+6. ✅ **Registrazione** (dopo il ff a `9b23bdbfe`; `files/h42/register.py`: prova, `--apply`, `cmp`):
+   - `front_page_policy` dopo `front_docs_offline_math`;
+   - `add_test(cat, "page-policy", …)` dopo `docs-offline-math`, con il prerequisito dei documenti costruiti.
+
+   Controlli leggeri (`files/runs/h42-light.sh`, cancello del carico):
+   - Prettier pulito sullo spec;
+   - `tsc --noEmit`: 0 errori nello spec. Le 61 righe d'errore stanno tutte in file che H-42 non tocca, quindi c'erano
+     già;
+   - ruff e black puliti su `_frontend_utility.py`;
+   - `check-orphans`: 140 spec registrati, tutti raggiungibili da `all`;
+   - `front-utility --help` elenca `page-policy`.
+   > **⚠️ Fuori pista**: il test-author ha scritto le righe di registrazione senza toccare il file, perché
+   > `_frontend_utility.py` arrivava cambiato con il ff di H-19; le ho aggiunte io dopo il ff.
+7. ✅ **Documenti per sviluppatori** (docs-writer, solo inglese; `security.md` non ha traduzioni, quindi nessun
+   debito):
+   - `security.md#managed-headers`:
+     - la riga della CSP della tabella diventa due: `PAGE_POLICY` sulle risposte HTML, `frame-ancestors 'self'` sul
+       resto;
+     - il punto «Frame protection» spiega `_is_html()` (prefisso `text/html`, qualsiasi maiuscola, con parametri);
+     - due punti nuovi: «Three more directives on documents (H-42)» e «Why HTML only»;
+     - il paragrafo dei test di `managed-headers`, e uno nuovo sullo spec Playwright.
+   - Fuori da questa sezione `frame-ancestors` non compariva altrove.
+   - Due ritocchi miei:
+     - davanti al percorso dello spec il comando del runner, che il docs-writer non poteva citare prima della
+       registrazione;
+     - «Swagger UI and ReDoc» diventa «the pages FastAPI writes for Swagger UI and ReDoc». L'HTML di FastAPI l'ho
+       verificato (`get_swagger_ui_html`, `get_redoc_html`: niente `<object>`, `<embed>`, `<base>`, form né `action`);
+       i bundle che caricano da jsDelivr no.
+   - Controlli (`files/runs/h42-docs.sh`, cancello del carico):
+     - `mkdocs build` stretto: rc 0, nessun warning;
+     - `check-links`: 97 link validi;
+     - `git diff --check` pulito.
+   > **⚠️ Fuori pista: l'analisi, punto 3, era sbagliata sui file dei broker** (trovato dal docs-writer, verificato).
+   > `api/v1/brokers.py:750` costruisce lo stesso `source_url` dell'anteprima, `…/download?download=false`, e il
+   > frontend lo usa, nei dialoghi d'import dei broker (`BrokerImportFilesModal`, `ImportWizardModal`): il PDF arriva
+   > inline. Il caso di un PDF mostrato in un `<iframe>` esiste quindi già oggi, nel ripiego dell'anteprima, e la scelta
+   > «solo HTML» lo protegge davvero. Il test (g) usa proprio quella rotta. H-44 precisato nel backlog: riguarda solo la
+   > pagina File (`uploads/file`, sempre `attachment`).
+   > **Lacuna dichiarata nei documenti** (dal docs-writer): `image/svg+xml` e `application/xhtml+xml`, documenti
+   > anche loro, tengono il solo `frame-ancestors`. Gli SVG serviti sono quelli della build e dei documenti, e un SVG
+   > dell'utente arriva come `attachment`, dagli upload e dai broker (`INLINE_SAFE_MEDIA_TYPES` di `brokers.py` non ha
+   > `image/svg+xml`). Allargare `_is_html` non rientra nel disegno approvato: lo propongo a E come possibile seguito.
+8. ⏳ **Slot E2E** («GO 6181», 10:19–10:27, partito con il carico a 5 minuti a 47,7; `files/runs/h42-slot.sh`):
+   - la build di debug ricostruita dal runner (era vecchia dal ff);
+   - `--fresh-run front-utility page-policy`: **1 failed / 3 passed**; con `--workers 4`: lo stesso. Porta libera.
+   - **Verdi in tutti e due**: i tre flussi veri sotto la politica, senza nessuna violazione imposta (la ricerca dei
+     documenti, l'anteprima PDF fino a `data-state="ready"`, la Dashboard). È la verifica che conta per H-42.
+   - La regressione di `files-pdf-offline` e `docs-offline-math` è tolta (coordinatore: la ragione regge, la corsia
+     manda gli stessi header di prima).
+   - **Rosso**: il controllo positivo dell'`<object>`. `base-uri` e `form-action` scattano, `object-src` no.
+   > **⚠️ Fuori pista: un comportamento di Chromium 149, non della politica.** Sonde fuori corsia
+   > (`files/h42/probe/*.cjs`, Playwright 1.61, headless shell; nessuna porta, origine finta servita da `route`):
+   > - su una pagina banale ogni `<object>` è controllato, in ogni sequenza, anche fuori schermo
+   >   (`object-src.out`, `sequence.out`, `offscreen.out`);
+   > - sulla **build vera** della SPA servita dalle rotte (`realapp.out`, `realapp-bisect.out`):
+   >   - `<object>` di un'immagine da solo, o con il `<base>`: violazione, nessuna richiesta;
+   >   - **`<object>` di un'immagine più `form.submit()` nello stesso task**: nessuna violazione, e il PNG **parte come
+   >     immagine** (lo ferma solo la rotta dello spec);
+   >   - lo stesso `<object>` col form un secondo dopo: violazione;
+   >   - `<object>` tipizzato `application/pdf` o `text/html` nella sequenza esatta dello spec: violazione, nessuna
+   >     richiesta.
+   >
+   > La politica blocca quindi ciò per cui `object-src` esiste (plugin e documenti). Il buco riguarda solo
+   > un'immagine, che un `<img>` potrebbe caricare comunque (`img-src` non è nella politica imposta). Lo dico a E.
+   - **Riparazione** (test-author, che non ha lanciato nulla): il controllo diventa un `<object>` `application/pdf`
+     su `/lf-page-policy-control.pdf?lf-page-policy-control`, con il perché nella JSDoc di `CONTROL_OBJECT_PATH`.
+     Stesso ordine, stesse asserzioni. Per l'oggetto la prova è la violazione imposta: nessuna richiesta l'avrebbe
+     comunque mostrata, perché il headless non ha il visore PDF.
+   - Ritocchi miei:
+     - la frase dello spec in `security.md`, con il perché in una riga;
+     - la descrizione del runner («an <object> typed application/pdf»).
+   - Prettier pulito.
+9. ✅ **Secondo slot** («GO 6181», 10:47–10:51, carico a 5 minuti 36,9; `files/runs/h42-slot.sh`; i log del rosso
+   tenuti come `e2e-page-policy-{1,4}-red.log`):
+   - `--fresh-run front-utility page-policy`: **4 passed**;
+   - con `--workers 4`: **4 passed**;
+   - nessun retry; porta 6181 libera.
+   - Dopo la riparazione: `mkdocs build` stretto pulito, 97 link validi, ruff e black puliti su `_frontend_utility.py`,
+     `git diff --check` pulito (`files/runs/h42-docs2.sh`).
+   - Il comportamento di Chromium va nel checkpoint, come nota per la revisione di E (coordinatore).
 
 ### H-3, opzione A: il contesto per la decisione P24 (2026-10-17, mattina) — analisi, decisione del developer
 
