@@ -3159,3 +3159,30 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   approvata dal coordinatore. **CHECKPOINT READY** inviato, FROZEN. Poi MF-J45c (analisi: i quattro consumatori di
   `get_report` — `risk/scope.py`, `ai_export` `asset_resources`, `payloads/portfolio_broker`, `fx_core` — non
   modificano il report in luogo; l'API lo serializza: guardia sola, istantanea profonda prima e dopo).
+
+#### A7 entrato (dev `09d29671d`); MF-J45c — la guardia del report L2 condiviso (17/10, 19:1x)
+- Coordinatore: A7 **entrato** (dev `09d29671d`, merge `b7bf1ca6b`, CHANGELOG 🐛 `5af05312b`); worktree a `5af05312b`.
+- **MF-J45c**: guardia sola, nessun cambio di prodotto previsto. `get_report` restituisce l'oggetto in cache L2 tale e
+  quale (`return cached`, ~:1992). Consumatori: API (serializza), `risk/scope.py:178`, `load_portfolio_report`
+  (`ai_export/components/payloads/portfolio_broker.py:899`, memoizzato per richiesta, letto da `broker_financial`,
+  `broker_cost_efficiency`, `portfolio_broker_technical`, `portfolio_financial`, `portfolio_income`…),
+  `asset_resources.py:259`, `fx_core.py:313`. Lettura statica: nessuna scrittura in luogo trovata.
+- In corso: test-author `j45c-tests` — file nuovo in `test_financial/` (lo copre `roi-fifo-utils`), istantanea
+  strutturale profonda di ogni report memorizzato in L2 prima e dopo i consumatori, precondizione «hit» per ciascuno,
+  metatest che l'istantanea vede una scrittura, mutanti che scrivono nel report.
+- ✅ **Test J45c** (test-author `j45c-tests`): `test_financial/test_portfolio_l2_report_shared.py` (nuovo, 847 righe; base
+  SQLite privata, due broker, EUR e USD). `TestTheCachedReportIsShared` (due chiamate → lo stesso oggetto, letto dalla
+  cache); `TestTheCachedReportIsNotMutatedByItsConsumers` (`_L2Watch`: ogni report memorizzato con l'istantanea
+  all'ingresso; due passate, la seconda tutta da L2 — 33 di 42 chiamate; consumatori: la rotta vera `POST
+  /portfolio/report` con la serializzazione di FastAPI, `RiskService.execute` su tre perimetri (tutte le analitiche del
+  portafoglio tranne simulazione e ottimizzazione, in processi figli), `AiExportSnapshotService.build_snapshot` per gli
+  8 dataset pubblici e i 67 componenti dei quattro domini, `model_dump`/`model_dump_json`/`jsonable_encoder`);
+  `TestTheSnapshotSeesAWrite` (esponente d'un Decimal, append, inversione, campo annidato, dict; un tipo ignoto
+  solleva). 6 mutanti (loader AI Export che ordina o riscrive un Decimal, rischio che ordina, `serialize_response` che
+  ordina la storia, append d'una riga, `generated_at`): tutti rossi col percorso. **Nessuna scrittura di prodotto**.
+  Nota: i risultati del rischio portano l'oggetto `data_quality` del report in cache tale e quale (`merge_data_quality`
+  riusa le voci annidate): un secondo riferimento, oggi senza scritture.
+- ✅ **Corsia** (19:44, nessun cambio di prodotto, nessuno slot): `roi-fifo-utils test_portfolio_l2_report_shared` **4**;
+  `roi-fifo-utils` **1443**; `financial-math` **1474**. ruff, black, diff-check. Il runner raccoglie tutta
+  `test_financial/` (`_backend_services.py:994`, registrata a `:2399`): nessuna riga nuova. Porta libera.
+  **CHECKPOINT READY** inviato, FROZEN.
