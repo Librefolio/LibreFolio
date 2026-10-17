@@ -2598,3 +2598,152 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
 - ✅ **Verdi** (insieme): `utils datetime` 44, `roi-fifo-utils` **1345**, `portfolio-engine` 41, `financial-math` 1176,
   `lots-analysis-pure` 181, `portfolio-allocation-source` 98, `utils gate-i18n-catalog` 176; `check-orphans` 0;
   `git diff --check` pulito; porta 6190 libera.
+- ✅ **Committed**: `e864827d3` (2b), `871f75a38` (2a), `f252acb4a` (journal). **Slot** `api portfolio` **51** su
+  `f252acb4a`, porta libera (nessun test dell'API ha una riga prima del 1900: il passaggio dell'avviso nell'API non è
+  provato; il caso API va nel prossimo lotto, approvato dal coordinatore).
+
+#### MF-D3, MF-SI2, MF-J45a (17/10, 12:0x; decisioni del coordinatore)
+- **MF-D3**: uno schema può importare una funzione **pura** di `financial_math` (mai servizi o I/O). ✅ Codice:
+  `returns.observations_per_year(n_observations, calendar_days)` (ValueError per giorni ≤ 0), usata da
+  `observed_annualization` e dai due validatori di `schemas/risk.py` (prima `n_observations * 365 / calendar_days`
+  scritto a mano). Nome scelto per non urtare il campo `annualization_factor` degli schemi. Regola 8 in
+  `.github/instructions/financial-math.instructions.md`; `financial_math.md` (riga sotto `observed_annualization`).
+- **MF-SI2**: ✅ `SCHEDULE_MAX_EVENTS = 10_000` (`asset_events` `max_length`) accanto ai limiti N73; sonda: 30 al minuto
+  per utente, `PROBES_BY_USER = SlidingWindowLimiter(30, 60)` in `api/v1/assets/providers.py`, 429
+  `PROBE_RATE_LIMITED` con `Retry-After` (lo stile di `api/v1/email.py`), contato prima di chiamare il fornitore. Docs:
+  `provider_scheduled_investment.md` (tabella dei limiti), `assets/architecture.md` («Provider Probe»). Pagina utente
+  tradotta non toccata (limite raro: nessun debito di traduzione).
+  ⚠️ **Rischio dichiarato**: ogni scelta di un risultato di ricerca nel modale asset fa due sonde (prova + metadati);
+  il server di prova condiviso serve tutte le specifiche E2E con lo stesso utente: 30 al minuto può dare 429 falsi nelle
+  suite. Da dire al coordinatore (una variabile per alzarlo nel runner, se vuole).
+- **MF-J45a**: ✅ `_ENGINE_EXECUTOR` creato al primo uso da `_engine_executor()` (sotto un lucchetto);
+  `shutdown_engine_executor()` lo toglie e chiama `shutdown(wait=False, cancel_futures=True)`; un avvio dopo (un'app di
+  prova, lo stesso processo) ne crea uno nuovo. `app_lifespan.SHUTDOWN_STEPS`: `Step("portfolio-engine", …)` dopo
+  `quant-pools` (legato tardi). `test_app_lifecycle.py` controlla l'ordine relativo: un passo in mezzo è ammesso.
+  Docs: `financial_math.md` «Off the Event Loop».
+- ruff/black puliti; `import backend.app.main` ok. In corso: test-author `d3-tests`, `si2-tests`, `j45a-tests`.
+- ✅ **Test D3** (test-author `d3-tests`): `test_series_returns.py` (17 nuovi: valori, moltiplica-poi-divide, giorni ≤ 0,
+  delega con uno stub) e `test_risk_schemas.py` (i due validatori leggono la casa: con lo stub il vero fattore è
+  rifiutato; identità del nome). HEAD **17 + 3 rossi**; albero 39 e 91 verdi.
+  ⚠️ **Fuori pista** (test-author): `schemas/risk.py` caricava scipy attraverso `returns.py` → import di scipy spostato
+  dentro `_solve_xirr` (l'unica funzione che lo usa): `import backend.app.schemas.risk` non carica più scipy (verificato).
+- ✅ **Test SI2** (test-author `si2-tests`): `test_scheduled_investment_bounds.py` (10 000 accettati, 10 001 `too_long` →
+  `INVALID_PARAMS`) e NUOVO `test_services/test_probe_rate_limit.py` (puro: la rotta chiamata direttamente, limitatore
+  privato con orologio finto: 429, `Retry-After`, per utente, dopo la finestra). Registrato `services probe-rate-limit`
+  (`isolation="pure"`, righe del test-author). Su HEAD rossi, sull'albero 30/30. ⚠️ **Fuori pista**: il commento di
+  `SCHEDULE_MAX_EVENTS` sbagliava il conto («un secolo di cedole giornaliere»: sono 27 anni) → corretto.
+- ✅ **Test J45a** (test-author `j45a-tests`): `test_engine_off_the_loop.py` (`TestTheExecutorIsShutDownWithTheApp`) e
+  `test_app_lifecycle.py` (il passo `portfolio-engine` dopo `quant-pools`).
+- ✅ **Rossi nella corsia** (17/10, 12:21; `files/d3si2j45a.sh red`: per ogni lotto si toglie solo il suo prodotto, poi
+  lo stesso sha256 rimesso — d3 `1eb7b6af…`, si2 `b7aeb36e…`, j45a `95e72a63…`): D3 `services financial-math
+  series_returns` **17 rossi** / 22, `schemas risk` **3** / 88; SI2 `schemas scheduled-investment-bounds` **3** / 19,
+  `services probe-rate-limit` **1 rosso + 7 errori** (il fixture non trova `PROBES_BY_USER` da sostituire: la ragione
+  giusta); J45a `services roi-fifo-utils engine_off_the_loop` **3** / 6, `services app-lifecycle` **2** / 51.
+- ✅ **Verdi** (12:22–12:24, carico 25–40): `services financial-math` **1193** (confini dei livelli compresi),
+  `schemas risk` **91**, `schemas scheduled-investment-bounds` **22**, `services probe-rate-limit` **8**,
+  `services app-lifecycle` **53**, `services roi-fifo-utils` **1348**, `services portfolio-engine` **41**,
+  `services synthetic-yield` **24**.
+
+#### R13-SEC9 (E) — con X-R59, prima del suo ingresso (17/10, 12:1x; priorità sopra D3/SI2/J45a)
+- **SEC9-1** `POST /prices/current`: ✅ 422 `bulk_too_many_items` oltre `MAX_BULK_ITEMS` prima di ogni lettura; il
+  servizio recupera una volta per id distinto (`dict.fromkeys`), riscrive la riga di oggi una volta, risponde un elemento
+  per id richiesto nell'ordine; `_live_quote_item` rilegge la cache di 2 minuti dopo il semaforo; `range_change` sugli id
+  distinti. ⚠️ **Fuori pista**: la prima stesura restituiva solo gli id distinti → corretto il `return` finale.
+- **SEC9-2**: ✅ `convert_bulk` e `_first_rate_days_inside` a blocchi di `FX_PAIRS_PER_QUERY = 500` coppie.
+- **SEC9-3**: ✅ i 500 di `/prices/query` e `/prices/current` con un messaggio generico, l'eccezione nel log.
+- **SEC9-4**: ✅ `range_start` su `/current` fra 1900-01-01 e `latest_range_end()` (422).
+- Docs: `assets/architecture.md` («Current Quotes and Today's OHLC», il limite di `range_start`), `fx/architecture.md`
+  (`#convert-bulk-window`). Suite leggere esistenti col codice: `services fx-conversion` 44, `services period-changes` 54.
+- In corso: test-author `sec9-tests`, `j45a-tests`.
+- ✅ **Revisione di X su X-R59** (OK, nulla di bloccante; 17/10, 12:32), dentro questo lotto:
+  1. (LOW) test in-process: `live_range_changes` che solleva → 200, quotazioni presenti, ogni `range_change` tutto null
+     (guardia: verde anche su HEAD).
+  2. **Decisione sulla regola della casa** (N80, «nessun numero visibile cambia»): `range_change(reference, anchor)` con
+     **anchor = 0 e reference > 0 → `change_ratio` −1, `change_abs` −reference, inversi None** (un prezzo svalutato a
+     0: un prestito di crowdfunding, un titolo delistato; la card mostrava −100 %, «—» sarebbe stata una regressione).
+     None resta per reference ≤ 0 e anchor < 0. `fixed_period_changes` ora **delega** a `range_change` (una regola sola:
+     prima ripeteva il filtro `> 0` a mano). Descrizioni degli schemi (`FAPeriodChange`, `FARangeChange`,
+     `FXPeriodChange`, `FXRangeChange`) e doc (`financial_math.md`, `assets/architecture.md`, `fx/architecture.md`).
+     Nota: l'API non scrive mai un prezzo ≤ 0 né un cambio ≤ 0 (`close_must_be_positive`, `FXRateUpsert gt=0`); lo 0 viene
+     da righe scritte prima delle regole o da un fornitore. Il quoto live 0 passa.
+  3. Nit: `FARangeChange.change_ratio` «((Price on as_of or the live price) ÷ reference price) − 1».
+  4. Nit: `range_start` su `/current` limitato **dal parametro** (`Annotated[…, Query(…), AfterValidator(
+     _range_start_in_bounds)]`): 422 standard, `loc ["query","range_start"]` (provato in-process: 1899-12-31 e
+     domani+1 → 422; 1900-01-01 e domani → 200).
+- ✅ **Y D1** (coordinatore, 12:48): `POST /prices/current?range_start=&target_currency=` — `range_change` nella valuta
+  chiesta: il riferimento al cambio del suo `reference_date`, il prezzo al cambio di oggi (`today_date()`, la data UTC,
+  come la pagina converte il quoto live: `assetDetailLive.svelte.ts`), un solo `convert_bulk`; un'estremità già nella
+  valuta non si converte; cambio mancante → `reference_date` presente, variazioni null. Le quotazioni restano native.
+  Nessun campo `currency` nuovo in `FARangeChange` (romperebbe gli insiemi di chiavi fissati nei test API di
+  period-changes; Y sa la valuta che manda): proposta a X come opzione. Provato in-process con stub (USD 100→120 in EUR
+  a 0,5→0,4: −2, −4 %; GBP senza cambio: null; EUR: nessuna conversione).
+- In corso: test-author `sec9-tests` (SEC9 + X 1/2/4 + D1). Test-author `sec82a-api`: ✅ il caso API di 2a
+  (`TestTransactionsBeforeFloorDataQuality`, `test_portfolio_api.py` 2218–2359): l'API rifiuta le date prima del 1900
+  da N74 → due righe 1899 inserite con l'ORM dietro `verify_test_database()`, sommario e report; controllo con un
+  secondo broker; rosso atteso su `f4a1e374f` (nessun avviso).
+- ✅ **Test SEC9 + X + D1** (test-author `sec9-tests`, verificati in Python puro con HEAD da `git show`, nessuna corsia):
+  NUOVI `test_services/test_current_prices_bulk.py` (24: id ripetuto recuperato e riscritto una volta; una chiave di
+  cache in attesa dello slot → una chiamata; 1 001 id rifiutati prima di ogni lettura; `range_start`/`target_currency`
+  rifiutati dal parametro, 422 su `loc`/`type`; variazione una volta per id distinto e con la valuta passata; i 500 non
+  ripetono l'errore; guardie: X punto 1, 1 000 id, limiti inclusi) e `test_services/test_fx_pairs_per_query.py` (6:
+  1 000 e 1 035 coppie per `convert_bulk` e `_first_rate_days_inside`, coppie al principio/metà/fine lette; barriera:
+  questo SQLite rifiuta un OR così lungo). Modificati `test_fixed_period_changes.py` (`zero-anchor` tolto dai rifiutati,
+  `TestAnchorOfZero` 9) e `test_period_changes.py` (`TestWrittenDownToZero`: chiusura 0 seminata via ORM, nativa e in
+  BDT, quoto live 0; D1 in `TestLiveRangeChange`: riferimento al cambio del suo giorno, prezzo a quello di oggi, un'estremità
+  già nella valuta, cambio mancante su una delle due, riferimento interno all'intervallo). Righe del runner:
+  `services current-prices-bulk`, `services fx-pairs-per-query` (`isolation="pure"`).
+  ⚠️ **Fuori pista** (dal test-author): (a) un cambio 0 salvato non arriva mai a −1: `convert_bulk` salta un cambio sotto
+  1E-10 (X-R38) → tolte le promesse «−1» dalle descrizioni FX e dalla doc FX; (b) «come le pagine lo mostravano» era vero
+  solo per la card intera: le colonne 1G…5Y mostravano «—» → −100 % lì è un cambio voluto da X, dichiarato nei
+  docstring e nella doc; (c) la rilettura della cache dopo il semaforo reggeva solo perché nessun `await` separava il
+  rilascio dalla scrittura → la scrittura della cache è ora **dentro** il blocco del semaforo; (d) residui: MF-SEC9a/b/c
+  nel backlog (altri 500 con `str(e)` e `DELETE /prices` senza tetto; `Currency.validate_code` accetta nomi e numeri;
+  la sessione condivisa fra task paralleli nei ripieghi). Il test-author non ha fatto la variante FX di C (irraggiungibile).
+- ✅ **Rossi nella corsia** (13:02, carico 24–31; `files/sec9.sh red`, prodotto tolto = 9 file con `returns.py` e
+  `schemas/risk.py` insieme per non avere un ImportError; sha256 `7425c31e…` uguale dopo): `current-prices-bulk`
+  **16 rossi** / 8 guardie; `fx-pairs-per-query` **4** / 2 (OperationalError «Expression tree is too large»);
+  `financial-math fixed_period_changes` **9** / 52 (None dove −1); `period-changes` **6** / 54 (4 TypeError
+  `target_currency`, 2 None dove −1). Nessun ImportError.
+- ✅ **Verdi** (13:03–13:05): `current-prices-bulk` 24, `fx-pairs-per-query` 6, `financial-math` **1203**,
+  `period-changes` 60, `fx-conversion` 44, `schemas period-changes-bounds` 50, `schemas risk` 91,
+  `current-price-storable` 27, `current-price-bootstrap` 8, `range-ceiling` 50; `probe-rate-limit` 8 (dopo il 429
+  dichiarato nel decoratore della sonda, `responses={429: …}`: la docstring costruita con `.format()` non arrivava
+  all'OpenAPI).
+- ✅ `api sync` ×2 (OpenAPI: `range_start` e `target_currency` di `/current`, 429 della sonda, descrizioni);
+  `mkdocs build` stretto rc 0, `check-links` 97 validi; ruff/black puliti (il runner riformattato solo sulla riga mia);
+  `git diff --check` pulito.
+- Da fare nello slot (`files/sec9.sh slot`): rosso del caso API di 2a (`git diff 871f75a38^ 871f75a38` dei 5 file di
+  prodotto, tolto e rimesso), poi `api portfolio`, `api period-changes`, `api assets-price`,
+  `api current-price-persistence`, `api fx`.
+- ✅ **Slot** (13:10–13:20, `files/sec9.sh slot`, GO del coordinatore; HEAD `f252acb4a`): rosso del caso API di 2a con
+  il prodotto di `871f75a38` tolto (`git diff 871f75a38^ 871f75a38` dei 5 file, sha `35dad4f9…`): **1 rosso** (liste
+  degli avvisi vuote nelle tre sezioni); rimesso: `engine.py` + `app_lifespan.py` tornano allo sha di J45a
+  (`95e72a63…`), gli altri 4 puliti. Verdi: `api portfolio` **52**, `api period-changes` **36**, `api assets-price`
+  **21**, `api current-price-persistence` **5**, `api fx` **25**. Porta 6190 libera (`lsof` rc 1).
+- ✅ **SI2, l'interruttore** (coordinatore, 13:10: «yes», `0` = off, le corsie spente con lo stesso meccanismo di
+  `LIBREFOLIO_LOGIN_LIMIT`, documentato in configurazione e `.env.example`, test propri del limitatore; niente campo
+  `currency` in `FARangeChange`: il consumatore è ora Y, lo chiederà se serve):
+  `config/plugins.py` (sezione di X: la ricerca degli asset) `probe_rate_limit()` — 30 senza valore, `0` spento, intero
+  fino a 10 000, altrimenti `ValueError` col nome e il valore; `api/v1/assets/providers.py` `probe_limiter()` letto
+  all'avvio: `0` → None con un avviso nel log, un valore inutilizzabile → errore nel log e 30 (mai spento per sbaglio);
+  la rotta conta solo con un limitatore. `dev.py server --test`: `env["LIBREFOLIO_PROBE_RATE_LIMIT"] = "0"` accanto a
+  `LIBREFOLIO_LOGIN_LIMIT`. `.env.example` (riga commentata), `admin/configuration.en.md` (riga nella tabella delle
+  opzioni principali), `developer/backend/assets/architecture.md` («Provider Probe»), `developer/architecture/security.md`
+  (le impostazioni proprie delle corsie). 429 del decoratore: «più di quanto `LIBREFOLIO_PROBE_RATE_LIMIT` permette».
+  Provato in-process: `''`→30/60, `0`→None, `45`, ` 12 `, `abc`/`-1`/`1.5`/`10001`→30.
+  ⚠️ **Fuori pista**: `black` su `dev.py` l'ha riformattato tutto (il file non è in forma black): rimesso da HEAD (solo
+  mie modifiche) e riapplicate le tre righe; gli errori di ruff in `dev.py` sono quelli di HEAD.
+  Prove leggere: `services config-env-example` 38, `services probe-rate-limit` 8, `services config-misc` 12;
+  `api sync`, `mkdocs build` stretto, `check-links` 97. Debito di traduzione: `admin/configuration` ne aveva già (351
+  errori strutturali in `translate-validate`, preesistenti); la riga nuova si aggiunge, nessuno stamp.
+- In corso: test-author `si2-override-tests` (test propri del limitatore in `test_probe_rate_limit.py`).
+- ✅ **Test dell'interruttore** (test-author `si2-override-tests`): 11 funzioni / 41 casi in `test_probe_rate_limit.py`
+  (lettura del valore, `probe_limiter()` con avviso/errore registrati da un registratore al posto di `providers.logger`,
+  rotta col limite spento e con 2, l'avvio di una corsia: `dev.cmd_server` in-process con ogni lancio sostituito, il seam
+  di `test_dev_designer_lab_banner.start_server`; un avvio senza `--test` non lo tocca: guardia). 14 mutanti in memoria,
+  ognuno preso. Riga del runner `probe-rate-limit` aggiornata (descrizione, `print_info`, commento PURE).
+  **Corsia** (13:4x, carico 41–46; prodotto tolto = `config/plugins.py`, `providers.py`, `dev.py`, sha `987eae96…`
+  uguale dopo): rosso **38 falliti + 10 errori**, 1 guardia; verde **49**; `config-env-example` 38.
+- ✅ Chiusura: ruff pulito; black pulito tranne `test_portfolio_api.py` (hunk 1348–1834, preesistenti; la classe nuova
+  2218–2359 non toccata); `git diff --check` pulito; porta 6190 libera. Albero: 33 modificati, 3 nuovi (test).
+  **CHECKPOINT READY** inviato (due lotti), FROZEN.
