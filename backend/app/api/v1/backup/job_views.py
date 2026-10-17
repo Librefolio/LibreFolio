@@ -21,6 +21,7 @@ NOT_FOUND = {"description": "No backup job has this id, or its archive is gone (
 START_RESPONSES = {
     409: {"description": "Another backup is running (code `backup_busy`)"},
     500: {"description": "The backup could not start: the backups folder of the data directory is a link or a file (code `backup_folder_unusable`), or it cannot be written (code `backup_failed`)"},
+    507: {"description": "Not enough free space to start the backup (code `backup_no_space`)"},
 }
 FILE_RESPONSES = {
     200: {"content": {"application/zip": {}, "application/octet-stream": {}}, "description": "The backup archive: a .zip, or the .lfbk envelope of a secure backup"},
@@ -54,7 +55,8 @@ def job_view(job: jobs.BackupJob) -> InstanceBackupJob:
 
 
 def start_job(origin: BackupOrigin, password: str | None = None) -> InstanceBackupJob:
-    """Start a backup in the background; its first state. 409 while another runs, 500 when it cannot start.
+    """Start a backup in the background; its first state. 409 while another runs, 507 on a full disk, 500 when it cannot
+    start.
 
     ``password``: a secure backup (the Backup tab only; the hosting panel's backups never take one).
     """
@@ -66,6 +68,9 @@ def start_job(origin: BackupOrigin, password: str | None = None) -> InstanceBack
         logger.error("Instance backup could not start: the backups folder of the data directory is not a plain folder", origin=origin)
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "backup_folder_unusable", "The backups folder of the data directory is not a plain folder") from None
     except OSError as exc:
+        if jobs.out_of_space(exc):
+            logger.warning("Instance backup could not start: not enough free space", origin=origin)
+            raise backup_error(status.HTTP_507_INSUFFICIENT_STORAGE, "backup_no_space", "Not enough free space to start the backup") from None
         logger.error("Instance backup could not start", origin=origin, error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "backup_failed", "The backup could not start") from None
     return job_view(job)

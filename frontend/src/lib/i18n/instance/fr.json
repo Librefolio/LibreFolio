@@ -28,6 +28,16 @@
         "untrustedProxy": "Les requêtes passent par un proxy inverse auquel LibreFolio ne fait pas confiance ({headers}) : les limites par adresse de visiteur ne s'y appliquent pas. Ajoutez le proxy à FORWARDED_ALLOW_IPS, ou indiquez dans LIBREFOLIO_CLIENT_IP_HEADER l'en-tête qu'il définit.",
         "publicForwarding": "En-têtes de transfert reçus d'une adresse publique et ignorés ({headers}). Si un proxy à une adresse publique transmet les requêtes, ajoutez-le à FORWARDED_ALLOW_IPS ; sinon, il n'y a rien à faire."
       },
+      "frameProtection": {
+        "on": "Seules les pages de LibreFolio peuvent l'afficher dans un cadre.",
+        "offSelfHosted": "Des pages à une autre adresse, comme vos tableaux de bord, peuvent afficher LibreFolio dans un cadre : le réglage par défaut d'une installation personnelle.",
+        "offManaged": "La protection contre l'affichage dans un cadre est désactivée dans le profil managed : n'importe quel site peut afficher LibreFolio dans un cadre. Activez LIBREFOLIO_FRAME_PROTECTION, comme le fait par défaut le profil managed."
+      },
+      "cspReportOnly": {
+        "on": "Les pages de l'application portent une Content-Security-Policy en mode rapport seul : le navigateur liste dans sa console ce qu'elle bloquerait, et ne bloque rien.",
+        "offSelfHosted": "Aucune Content-Security-Policy en mode rapport seul : le réglage par défaut d'une installation personnelle.",
+        "offManaged": "La Content-Security-Policy en mode rapport seul est désactivée dans le profil managed : les navigateurs ne listent rien de ce qu'elle bloquerait. Activez LIBREFOLIO_CSP_REPORT_ONLY, comme le fait par défaut le profil managed."
+      },
       "logLevel": {
         "ok": "Le niveau de journalisation convient à la production.",
         "verbose": "Le niveau de journalisation est {log_level} : le journal enregistre des détails de fonctionnement ; INFO suffit en production."

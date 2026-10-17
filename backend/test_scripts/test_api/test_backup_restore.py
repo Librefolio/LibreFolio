@@ -15,6 +15,9 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     self-hosted instance, 500 MB in the managed profile; the variable wins over the profile. A value that cannot be read:
     503 ``backup_upload_unavailable``, nothing written, one error logged naming the variable. No room for the declared
     size (``shutil.disk_usage`` replaced), or a disk that fills during the upload: 507 ``backup_no_space``, no file left.
+    B-30: a full disk or a quota (``ENOSPC``, ``EDQUOT``) where a first upload creates ``.restore/upload``, or at the end
+    of the upload (its ``fsync``, or its ``close``, where a network file system reports it), is 507 ``backup_no_space``
+    too: no partial and no final file left, the partial's descriptor closed exactly once, a failing ``close`` included.
     Any other failure to write the archive (a write, its ``fsync`` or its rename failing): 500 ``backup_upload_failed``,
     one error logged, no file left, neither the system's words nor a path in the answer. An empty body: 400
     ``backup_upload_empty``; a client that leaves before the end: 400 ``backup_upload_incomplete``, no partial left. A
@@ -29,7 +32,10 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     ``restore_stage_not_found``); a malformed upload id: 422, from the pattern of ``RestoreStageRequest`` (the route never
     runs). Every code a check can end with is one ``RestoreStage.error_code`` declares, and no other. The end of a check
     is written before its lock is let go, and a poll judges a running state only on what it reads once it found the lock
-    free: a poll that comes as a check ends never reads it as interrupted.
+    free: a poll that comes as a check ends never reads it as interrupted. B-30, a check that cannot start (its folders,
+    its first state): a full disk or a quota is 507 with the check's own code, ``no_space``, and one warning; any other
+    ``OSError`` 500 ``stage_failed`` and one error naming its type and the system's words, which stay out of the answer.
+    Either way the upload is kept, no check is recorded, and the lock is let go: the next start answers 202.
 (c) One check at a time, the lock taken by the request: while it is held (by the test, or by a check still running) a
     start is 409 ``restore_busy`` and consumes nothing; a running check cannot be dropped (409 ``restore_stage_running``).
     A running state nobody holds the lock for (its server stopped) reads as failed ``restore_interrupted``, its copy and
@@ -41,7 +47,8 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     ``checks/`` or ``upload/`` at a start is 500 ``restore_folder_unusable``, and nothing is pruned.
 (d) Administrators only: a regular user gets 403 from each route, and nothing is received, started, read or dropped.
     None of the four routes is allowed on a blocked instance. OpenAPI: the upload's body is ``application/octet-stream``
-    binary and required, the four operations carry the ``Backup & Export`` tag and document their answers.
+    binary and required, the four operations carry the ``Backup & Export`` tag and document their answers; the stage's
+    start documents 507 (code ``no_space``), and its 500 names ``stage_failed`` beside ``restore_folder_unusable``.
 (e) ``backup_max_upload_mb()``: unset or blank, 0 self-hosted and 500 managed; a whole number of ASCII digits, spaces
     around allowed, wins over the profile; anything else raises ``BackupConfigError`` ``BACKUP_MAX_UPLOAD_MB_INVALID``,
     naming the variable. The managed value is the entry of H's profile table, read at each call (a guard of lot B4, which
@@ -144,6 +151,16 @@ STAGE_ITEM = f"{STAGE}/{{stage_id}}"
 STATUS = f"{API}/status"
 #: What the upload and the status log, once each, when the limit cannot be read.
 LIMIT_ERROR = "The upload limit of a restore cannot be read"
+#: B-30: what a check that cannot start answers (507, code ``no_space``; 500, code ``stage_failed``) and logs.
+NO_SPACE_TO_CHECK = "Not enough free space to check the archive"
+CHECK_NOT_STARTED = "The check could not start: the server's log has the cause"
+CHECK_NO_SPACE_WARNING = "A check of a backup archive could not start: not enough free space"
+CHECK_START_ERROR = "A check of a backup archive could not start"
+#: ``EDQUOT`` (quota exceeded) where the platform has it.
+EDQUOT = getattr(errno, "EDQUOT", None)
+needs_edquot = pytest.mark.skipif(EDQUOT is None, reason="this platform has no EDQUOT")
+#: B-30: the errno of a full disk, and of a quota.
+NO_SPACE = [pytest.param(errno.ENOSPC, id="ENOSPC"), pytest.param(EDQUOT, id="EDQUOT", marks=needs_edquot)]
 #: The variables of this lot, as .env.example and the deployments write them: spelled out here, so a rename shows.
 LIMIT_VARIABLE = "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"
 PROFILE_VARIABLE = "LIBREFOLIO_PROFILE"
@@ -681,6 +698,92 @@ async def test_any_other_failure_to_write_the_archive_is_500_and_leaves_nothing(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("error_number", NO_SPACE)
+async def test_a_first_upload_whose_folder_cannot_be_created_for_lack_of_space_is_507(instance, monkeypatch, error_number):
+    """(a) B-30 (1): the first upload of an instance creates ``.restore/upload``; a full disk or a quota there (mkdir(2):
+    ENOSPC, EDQUOT) is 507 ``backup_no_space``, as the same disk a byte later, never 500 ``backup_upload_failed``.
+    Nothing written; neither the system's words nor a path in the answer. Barriers: the folder did not exist, and the
+    failure came from its creation, through ``restore_jobs.ensure_private_dir`` (the real one for any other folder)."""
+    root = instance.root
+    folder = uploads_dir(root)
+    assert not folder.exists(), f"precondition: the first upload of the instance creates {folder.relative_to(root)}"
+    asked: list[Path] = []
+    real = restore_jobs.ensure_private_dir
+
+    def ensure_private_dir(path: Path, data_dir: Path) -> Path:
+        asked.append(Path(path))
+        if Path(path) == folder:
+            raise OSError(error_number, os.strerror(error_number))
+        return real(path, data_dir)
+
+    monkeypatch.setattr(restore_jobs, "ensure_private_dir", ensure_private_dir)
+    response = await upload(b"the first archive of an instance on a full disk")
+    assert folder in asked, f"barrier: the folder of the uploads is created through restore_jobs.ensure_private_dir: {asked}"
+    assert code(response) == (507, "backup_no_space"), f"{errno.errorcode[error_number]} creating the folder: 507 backup_no_space, not {shown(response)}"
+    written = sorted(path.relative_to(root).as_posix() for path in root.rglob("*") if not path.is_dir())
+    assert written == [], f"nothing written: {written}"
+    leaked = [word for word in (os.strerror(error_number), str(root)) if word in response.text]
+    assert leaked == [], f"the answer carries neither the system's words nor a path: {leaked}"
+
+
+#: B-30 (2): the end of an upload on a full disk or a quota: (the call of ``os`` that reports it, its errno). A network
+#: file system reports a failed write, or a quota, at ``close`` only (close(2)); others at ``fsync``.
+END_NO_SPACE = [
+    pytest.param("fsync", errno.ENOSPC, id="fsync-ENOSPC"),
+    pytest.param("close", EDQUOT, id="close-EDQUOT", marks=needs_edquot),
+    pytest.param("close", errno.ENOSPC, id="close-ENOSPC"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("failing", "error_number"), END_NO_SPACE)
+async def test_a_full_disk_at_the_end_of_the_upload_is_507_and_its_file_is_closed_once(instance, monkeypatch, failing, error_number):
+    """(a) B-30 (2): ``finish`` meets a full disk or a quota at ``fsync`` or at ``close``: 507 ``backup_no_space``, no
+    partial and no final file left, and the descriptor ``os.open`` gave for the partial closed exactly once, also when
+    ``close`` itself fails: close(2) releases the descriptor before it reports (Linux does), so ``abort`` must never close
+    it again, when its number may already be another file's. Through ``restore_jobs.os``, as the write tests above; a
+    second close of that descriptor is counted, never done. Barriers: the partial was opened through
+    ``restore_jobs.os``, and the failure came from the call the case names, once."""
+    root = instance.root
+    partials: list[int] = []
+    closes: dict[int, int] = {}
+    failed: list[str] = []
+
+    def open_(path: Any, flags: int, mode: int = 0o777, **kwargs: Any) -> int:
+        fd = os.open(path, flags, mode, **kwargs)
+        if Path(path).parent == uploads_dir(root):
+            partials.append(fd)
+        return fd
+
+    def fsync(fd: int) -> None:
+        if failing == "fsync" and fd in partials:
+            failed.append("fsync")
+            raise OSError(error_number, os.strerror(error_number))
+        os.fsync(fd)
+
+    def close(fd: int) -> None:
+        if fd not in partials:
+            os.close(fd)
+            return
+        closes[fd] = closes.get(fd, 0) + 1
+        if closes[fd] > 1:
+            return  # counted, never done: the number may already be another file's
+        os.close(fd)  # close(2) releases the descriptor first, then reports
+        if failing == "close":
+            failed.append("close")
+            raise OSError(error_number, os.strerror(error_number))
+
+    monkeypatch.setattr(restore_jobs, "os", Patched(os, open=open_, fsync=fsync, close=close))
+    response = await upload(b"an archive whose last bytes meet a full disk")
+    assert (len(partials), failed) == (1, [failing]), f"barrier: the partial opened through restore_jobs.os, and {failing} failed once: {partials}, {failed}"
+    assert code(response) == (507, "backup_no_space"), f"{errno.errorcode[error_number]} at {failing}: 507 backup_no_space, not {shown(response)}"
+    assert files_in(uploads_dir(root)) == [], f"neither the partial nor a final file left: {files_in(uploads_dir(root))}"
+    assert closes == {partials[0]: 1}, f"the partial's descriptor closed exactly once, never twice: {closes}"
+    leaked = [word for word in (os.strerror(error_number), str(root)) if word in response.text]
+    assert leaked == [], f"the answer carries neither the system's words nor a path: {leaked}"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("streamed", [False, True], ids=["content-length-0", "streamed-nothing"])
 async def test_an_empty_body_is_400_and_leaves_nothing(instance, streamed):
     response = await upload(pieces(b"") if streamed else b"")
@@ -1084,6 +1187,128 @@ async def test_a_check_that_ends_while_a_poll_probes_its_lock_keeps_its_result(i
     assert seen == (("done", None), ("done", True), True), f"(the poll that raced, the next one with a report, the copy): {seen}"
 
 
+#: B-30 (3), (3'): the steps of the check's start a failure is put in: the folders of the check (``stage/``, which the
+#: first check creates, through ``restore_jobs.ensure_private_dir``) and its first state (``restore_jobs._write_state``,
+#: its first call only: the start's own, under the lock).
+START_STEPS = ["its-folders", "its-first-state"]
+#: B-30 (3'): failures of the check's start that are not a lack of space.
+OTHER_START_FAILURES = [pytest.param(errno.EACCES, id="EACCES"), pytest.param(errno.EIO, id="EIO")]
+
+
+class StartFailure:
+    """A failure put in one step of the check's start: what it raised, and ``cured`` to let the next start through."""
+
+    def __init__(self) -> None:
+        self.raised: list[OSError] = []
+        self.cured = False
+
+
+def fail_the_start(monkeypatch: pytest.MonkeyPatch, root: Path, step: str, error_number: int) -> StartFailure:
+    """``step`` of the next check's start raises ``OSError(error_number)``, until ``cured``; everything else is the
+    module's own."""
+    failure = StartFailure()
+
+    def fail() -> None:
+        error = OSError(error_number, os.strerror(error_number))
+        failure.raised.append(error)
+        raise error
+
+    if step == "its-folders":
+        real_ensure = restore_jobs.ensure_private_dir
+
+        def ensure_private_dir(path: Path, data_dir: Path) -> Path:
+            if not failure.cured and Path(path) == stages_dir(root):
+                fail()
+            return real_ensure(path, data_dir)
+
+        monkeypatch.setattr(restore_jobs, "ensure_private_dir", ensure_private_dir)
+    else:
+        real_write = restore_jobs._write_state
+
+        def write_state(data_dir: Path, check: restore_jobs.RestoreCheck) -> None:
+            if not failure.cured and not failure.raised:
+                fail()
+            real_write(data_dir, check)
+
+        monkeypatch.setattr(restore_jobs, "_write_state", write_state)
+    return failure
+
+
+def refusal(response: httpx.Response) -> tuple[int, str | None, str | None]:
+    """Status, ``detail.code`` and ``detail.message``; None for an answer without them (a plain 500 is text)."""
+    if not response.headers.get("content-type", "").startswith("application/json"):
+        return response.status_code, None, None
+    detail = response.json().get("detail")
+    return (response.status_code, detail.get("code"), detail.get("message")) if isinstance(detail, dict) else (response.status_code, None, None)
+
+
+def loud(events: list[dict]) -> list[dict]:
+    """The events logged at WARNING or above."""
+    return [event for event in events if event.get("log_level") in ("warning", "error", "critical")]
+
+
+def assert_nothing_started(instance: Instance, upload_id: str, response: httpx.Response, error_number: int) -> None:
+    """What a start that failed leaves: its upload kept, for another try; no check recorded, no thread started; and the
+    answer without the system's words or a path."""
+    root = instance.root
+    assert upload_path(root, upload_id).is_file(), f"the upload is kept, for another try once there is room: {files_in(uploads_dir(root))}"
+    assert (files_in(checks_dir(root)), instance.threads.started) == ([], []), f"no check recorded, no thread started: {files_in(checks_dir(root))}, {instance.threads.started}"
+    leaked = [word for word in (os.strerror(error_number), str(root)) if word in response.text]
+    assert leaked == [], f"the answer carries neither the system's words nor a path: {leaked}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("step", START_STEPS)
+@pytest.mark.parametrize("error_number", NO_SPACE)
+async def test_a_check_that_cannot_start_for_lack_of_space_is_507_no_space_and_keeps_the_upload(instance, monkeypatch, step, error_number):
+    """(b) B-30 (3): a full disk or a quota while the check starts, creating its folders or writing its first state: 507
+    with the check's own code, ``no_space`` (as a check that runs out of room later: the restore card says «…to check the
+    archive»), never the plain 500 of an error escaping the route; one WARNING, «A check of a backup archive could not
+    start: not enough free space». The upload is kept, no check is recorded, and the lock is let go: once the disk has
+    room, the same start answers 202. Barrier: the start failed at that step, once."""
+    upload_id = await uploaded(b"an archive whose check meets a full disk")
+    failure = fail_the_start(monkeypatch, instance.root, step, error_number)
+
+    with capture_logs() as events:
+        response = await start(upload_id)
+
+    assert len(failure.raised) == 1, f"barrier: the start failed at {step}, once: {failure.raised}"
+    assert refusal(response) == (507, "no_space", NO_SPACE_TO_CHECK), f"{errno.errorcode[error_number]} at {step}: 507 no_space, not {shown(response)}"
+    assert [(event.get("log_level"), event.get("event")) for event in loud(events)] == [("warning", CHECK_NO_SPACE_WARNING)], f"one warning: {loud(events)}"
+    assert_nothing_started(instance, upload_id, response, error_number)
+    failure.cured = True
+    retry = await start(upload_id)
+    assert retry.status_code == 202, f"room again: the same start is 202 (the lock let go, the upload kept), not {shown(retry)}"
+    print_success(f"{errno.errorcode[error_number]} at {step}: 507 no_space, then 202")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("step", START_STEPS)
+@pytest.mark.parametrize("error_number", OTHER_START_FAILURES)
+async def test_a_check_that_cannot_start_otherwise_is_500_stage_failed_and_keeps_the_upload(instance, monkeypatch, step, error_number):
+    """(b) B-30 (3'): any other ``OSError`` while the check starts (EACCES, EIO): 500 with the check's code
+    ``stage_failed``, «The check could not start: the server's log has the cause», never Starlette's plain 500; one
+    ERROR, «A check of a backup archive could not start», whose ``error`` is the exception's type and its system's
+    words, which stay out of the answer with any path. The upload is kept, no check is recorded, the lock is let go: the
+    same start then answers 202. Barrier: the start failed at that step, once."""
+    upload_id = await uploaded(b"an archive whose check cannot start")
+    failure = fail_the_start(monkeypatch, instance.root, step, error_number)
+
+    with capture_logs() as events:
+        response = await start(upload_id)
+
+    assert len(failure.raised) == 1, f"barrier: the start failed at {step}, once: {failure.raised}"
+    raised = failure.raised[0]
+    assert refusal(response) == (500, "stage_failed", CHECK_NOT_STARTED), f"{errno.errorcode[error_number]} at {step}: 500 stage_failed, not {shown(response)}"
+    logged = [(event.get("log_level"), event.get("event"), event.get("error")) for event in loud(events)]
+    assert logged == [("error", CHECK_START_ERROR, f"{type(raised).__name__}: {raised.strerror}")], f"one error, with the type and the system's words: {loud(events)}"
+    assert_nothing_started(instance, upload_id, response, error_number)
+    failure.cured = True
+    retry = await start(upload_id)
+    assert retry.status_code == 202, f"the failure gone: the same start is 202 (the lock let go, the upload kept), not {shown(retry)}"
+    print_success(f"{errno.errorcode[error_number]} at {step}: 500 stage_failed, then 202")
+
+
 # =============================================================================
 # (c) One check at a time; interrupted checks; prune
 # =============================================================================
@@ -1380,9 +1605,19 @@ def test_openapi_documents_a_raw_upload_and_the_answers_under_the_backup_tag():
         ("GET", STAGE_ITEM): {"$ref": "#/components/schemas/RestoreStage"},
         ("DELETE", STAGE_ITEM): None,
     }, f"the model of each success: {models}"
-    refusals = {("PUT", UPLOAD): {"400", "413", "500", "503", "507"}, ("POST", STAGE): {"404", "409", "500"}, ("GET", STAGE_ITEM): {"404"}, ("DELETE", STAGE_ITEM): {"404", "409"}}
+    refusals = {("PUT", UPLOAD): {"400", "413", "500", "503", "507"}, ("POST", STAGE): {"404", "409", "500", "507"}, ("GET", STAGE_ITEM): {"404"}, ("DELETE", STAGE_ITEM): {"404", "409"}}
     undocumented = {key: sorted(statuses - set(operations[key]["responses"])) for key, statuses in refusals.items() if statuses - set(operations[key]["responses"])}
     assert undocumented == {}, f"refusals each route answers but does not document: {undocumented}"
+
+
+def test_openapi_names_the_codes_of_a_check_that_cannot_start():
+    """(d) B-30: the start of a check documents its 507, the check's own code ``no_space`` (never ``backup_no_space``,
+    the upload's), and its 500 names ``stage_failed`` beside ``restore_folder_unusable``."""
+    responses = restore_app().openapi()["paths"][STAGE]["post"]["responses"]
+    described = {status: responses.get(status, {}).get("description", "") for status in ("500", "507")}
+    expected = {"500": ["`restore_folder_unusable`", "`stage_failed`"], "507": ["`no_space`"]}
+    missing = {status: [code for code in codes if code not in described[status]] for status, codes in expected.items() if any(code not in described[status] for code in codes)}
+    assert missing == {}, f"POST {STAGE}: codes its answers do not name: {missing}, in {described}"
 
 
 # =============================================================================

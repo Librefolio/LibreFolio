@@ -32,7 +32,7 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     left-out entries.
 (h) Without ``fcntl`` (not POSIX) the run lock is a lock of the process: runs are still serialised within it, and a
     running job must still read as running.
-(i) ``_out_of_space``: true for an ``OSError`` with ``errno`` ``ENOSPC`` or ``EDQUOT`` and for an ``sqlite3.Error``
+(i) ``out_of_space``: true for an ``OSError`` with ``errno`` ``ENOSPC`` or ``EDQUOT`` and for an ``sqlite3.Error``
     whose ``sqlite_errorcode`` is ``SQLITE_FULL`` (SQLite's own, from a database capped by ``max_page_count``), itself
     or through ``__cause__`` / ``__context__`` up to the eighth exception of the chain; false otherwise: no ``errno``,
     another ``errno``, another SQLite code, SQLite's message without its code, a plain ``RuntimeError``, a ninth
@@ -324,7 +324,7 @@ def watch_cleanup(monkeypatch) -> list[list[str]]:
 #: ``EDQUOT`` (quota exceeded) where the platform has it.
 EDQUOT = getattr(errno, "EDQUOT", None)
 needs_edquot = pytest.mark.skipif(EDQUOT is None, reason="this platform has no EDQUOT")
-#: Seconds. The walk of ``_out_of_space`` is a handful of steps: a walk still going by then loops.
+#: Seconds. The walk of ``out_of_space`` is a handful of steps: a walk still going by then loops.
 WALK_DEADLINE_S = 10
 
 
@@ -1076,7 +1076,7 @@ NOT_OUT_OF_SPACE = [
 def test_a_full_disk_or_quota_is_a_lack_of_space_itself_or_as_a_cause(make):
     """(i) The file system's full disk or quota, or SQLite's SQLITE_FULL, as the failure or among its 8 first links."""
     error = make()
-    assert jobs._out_of_space(error) is True, f"{type(error).__name__}: {error} must count as a lack of space"
+    assert jobs.out_of_space(error) is True, f"{type(error).__name__}: {error} must count as a lack of space"
     print_success(f"{type(error).__name__} → lack of space")
 
 
@@ -1084,7 +1084,7 @@ def test_a_full_disk_or_quota_is_a_lack_of_space_itself_or_as_a_cause(make):
 def test_any_other_failure_is_not_a_lack_of_space(make):
     """(i) Neither another errno nor SQLite's words without its code: those end as backup_failed, with the cause logged."""
     error = make()
-    assert jobs._out_of_space(error) is False, f"{type(error).__name__}: {error} must not count as a lack of space"
+    assert jobs.out_of_space(error) is False, f"{type(error).__name__}: {error} must not count as a lack of space"
     print_success(f"{type(error).__name__} → not a lack of space")
 
 
@@ -1095,10 +1095,10 @@ def test_a_cycle_of_causes_ends_the_walk(link):
     setattr(first, link, second)
     setattr(second, link, first)
     answers: list[bool] = []
-    walker = threading.Thread(target=lambda: answers.append(jobs._out_of_space(first)), name="out-of-space-walk", daemon=True)
+    walker = threading.Thread(target=lambda: answers.append(jobs.out_of_space(first)), name="out-of-space-walk", daemon=True)
     walker.start()
     walker.join(WALK_DEADLINE_S)
-    assert not walker.is_alive(), f"_out_of_space was still walking a cycle of {link} after {WALK_DEADLINE_S}s: the walk must be bounded"
+    assert not walker.is_alive(), f"out_of_space was still walking a cycle of {link} after {WALK_DEADLINE_S}s: the walk must be bounded"
     assert answers == [False], f"a cycle without a full disk is no lack of space: {answers}"
     print_success(f"cycle of {link} → walk ended, False")
 

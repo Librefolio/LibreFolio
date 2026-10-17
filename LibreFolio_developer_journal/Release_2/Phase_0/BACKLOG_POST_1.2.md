@@ -3292,6 +3292,12 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - 17/10, H-36: un blocco nuovo in fondo a `#client-address` di `connection_checks` (un paragrafo, quattro punti, un
     paragrafo) e due frasi nel §2 di `docker_advanced`, che rimandano a `connection_checks.md#client-address`.
     **Ordine**: `docker_advanced` va tradotta insieme a `connection_checks` o dopo, per la stessa ancora.
+  - 17/10, H-39 e H-40:
+    - in `configuration`, «Startup Checks», due righe nuove (la protezione dai frame e la CSP report-only spente nel
+      profilo managed);
+    - in `connection_checks`, «Limits», il paragrafo «It cannot always see where visitors are» riscritto in parte
+      (IPv4 e IPv6 su Docker Engine), e una clausola nel punto «To fix it» di «The Visitor's Address».
+    - `hosting_providers` e le pagine per sviluppatori sono solo in inglese.
 
   Dettagli: piano H, §14 «CP5a passo 2», «CP6 passo 4» e «Lotto b-doc-notes».
 - ✅ **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
@@ -3728,8 +3734,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Stato al 17/10: la regola è scritta in `.github/instructions/backend.instructions.md`, e la riga accanto a C-99 la
     scrive il coordinatore. I due controlli, i test e le chiavi i18n aspettano l'ingresso di B-9, che scrive negli
     stessi file (`config_audit.py`, `test_config_audit.py`). La cura in prova è pronta in `files/h39/` della sessione H.
+  - Cura fatta il 17/10, dopo B-9 (lotto «H-39», piano H §14).
+    - `check_frame_protection` (warning) e `check_csp_report_only` (info) in `config_audit.py`, dopo
+      `check_client_address`.
+    - Sei chiavi `instance.checks.*` in 4 lingue, e i documenti: `security.md`, `settings.md`, `configuration`,
+      `hosting_providers`.
+    - Resta: un controllo a richiesta letto dopo una modifica di `.env` senza riavvio può mostrare il valore nuovo,
+      mentre il middleware porta ancora quello vecchio. I documenti dicono già di riavviare.
 
-  Dettagli: piano H, §14, lotto «Z-24» (la nota di H-39).
+  Dettagli: piano H, §14, lotti «Z-24» (la nota di H-39) e «H-39».
 - **H-40 · IPv6 su Docker Engine: il visitatore arriva dal gateway della rete** — basso, documentazione; E, via
   coordinatore, 17/10.
   - `connection_checks.en.md:328-329` dice che Docker Engine su Linux tiene l'indirizzo del visitatore. Vale per IPv4
@@ -3737,6 +3750,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     senza header di inoltro. N70 non può vederlo, e tutti i visitatori IPv6 condividono un solo conteggio per
     indirizzo (istanza esposta direttamente).
   - Una frase nei documenti, da verificare su un host Linux, come H-38. Va con i documenti di H-39.
+  - Frase scritta il 17/10 (lotto «H-39», piano H §14), come cautela, in `connection_checks#limits`; più due clausole,
+    in `connection_checks#client-address` e in «Why only a local peer» di `security.md`. Un visitatore IPv6 che passa
+    da `docker-proxy` può anche aggiungere un header di inoltro e lasciare i limiti per indirizzo, come con Docker
+    Desktop. Resta da verificare su un host Linux con Docker, insieme a H-38.
 - **H-41 · I `resolved_fields` di una promozione non sono validati** — medio, robustezza; W (trovato nel lotto H-34),
   17/10.
   - `TXPromoteBatchItem.resolved_fields: Dict[str, Any]` (`POST /transactions/validate` e `/commit`) è applicato così
@@ -6283,13 +6300,29 @@ sulla base `23f6578f3`.
   esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
   legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
   `absent`.
-- **B-30 · La cartella degli upload creata su un disco pieno dà 500, non 507** — minimo; TA-B, 17/10 (B-9, rilettura
-  delle etichette di `test_backup_restore.py`). `UploadWriter` crea la cartella degli upload con `ensure_private_dir`
-  fuori dal `try` che riconosce lo spazio esaurito: un `ENOSPC` lì (il primo upload su un disco pieno) diventa
-  `500 backup_upload_failed`, mentre la creazione del file e la scrittura danno già `507 backup_no_space`
-  (`restore_jobs.py`, `_out_of_space`). Cura: lo stesso controllo attorno alla creazione della cartella, più un test.
-  Dettagli: piano 07, «B-9».
+- ✅ **B-30 · Un disco pieno negli avvii brevi del backup e del ripristino risponde col codice sbagliato, o senza codice**
+  — piccolo; TA-B, 17/10 (B-9, rilettura delle etichette di `test_backup_restore.py`), allargato dall'analisi del 17/10.
+  Annotato per la cartella degli upload. `jobs._out_of_space` copre le fasi lunghe, non gli avvii brevi:
+  - la cartella degli upload e la fine dell'upload (`fsync`/`close`, dove NFS e le quote segnalano il disco pieno)
+    danno 500 `backup_upload_failed`, non 507;
+  - l'avvio di un controllo (`POST /restore/stage`) lascia uscire ogni `OSError` come 500 senza codice;
+  - l'avvio di un backup (scheda e pannello) dà 500 `backup_failed`, non `backup_no_space`.
+  Cura decisa dal coordinatore (17/10, 07:18), ambito 1+2+3+5: 507 `backup_no_space` per un disco pieno in tutti e
+  quattro; all'avvio del controllo, ogni altro `OSError` → 500 `stage_failed` con una riga nel log. Solo backend, con
+  codici e chiavi che esistono già. Dettagli: piano 07, «B-30».
 
+  ✅ **Fatto il 17/10** (checkpoint delle 08:00). Un disco pieno (ENOSPC o EDQUOT, anche fra le cause) risponde 507
+  `backup_no_space` alla cartella e alla fine dell'upload e all'avvio del backup (scheda e pannello), e 507 `no_space`
+  (il codice del controllo) all'avvio del controllo; lì ogni altro `OSError` dà 500 `stage_failed` con una riga nel log,
+  mai più il 500 senza codice. `jobs.out_of_space` è pubblica. Corretta anche la doppia `close` di `UploadWriter.finish()`
+  (trovata da TA-B). Test: 21 rossi API e 18 nei servizi, poi tutti verdi; 4 guardie Vitest.
+- **B-31 · Conferma, annullamento e riavvio di un ripristino: un guasto del disco senza codice o senza messaggio** —
+  basso; B, 17/10 (analisi di B-30). `POST /restore/stage/{id}/confirm` e `DELETE /restore/pending` lasciano uscire un
+  `OSError` come 500 senza codice; `restore_restart_failed` (il biglietto del riavvio non scritto) ha un codice ma
+  nessun messaggio nella UI (fuori da `ERROR_KEYS`: dice «unexpected») né una riga nella guida. Cura: un 500 con un
+  codice e un messaggio suo per ciascuno (3 chiavi × 4 lingue, `ERROR_KEYS`, l'elenco §5 di `restoreI18n.test.ts`) e
+  507 `backup_no_space` per un disco pieno alla conferma. Lotto separato, dopo B-30 (coordinatore, 07:18). Dettagli:
+  piano 07, «B-30» (punti 4, 6, 7).
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -6423,13 +6456,20 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Se il codice servirà, la strada è `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`, spenta di default, con un default per il
       profilo `managed`, in un lotto suo.
     - Dettagli: piano 08, «E-12.0» ed «E-12.1».
-- **E-14 · Uno sfratto mirato libera ancora un identificativo bloccato** — piccolo; E, 17/10 (revisione di N70, LOW).
+- ✅ **E-14 · Uno sfratto mirato libera ancora un identificativo bloccato** — piccolo; E, 17/10 (revisione di N70, LOW).
   Con `eviction_scan=32`, sfrattare dal limitatore in memoria un identificativo bloccato costa 10 279 richieste,
-  contro le 10 000 dell'LRU semplice (misurato). Il tetto ferma lo spruzzo ingenuo, non quello mirato, e alzare K
-  aggiunge solo 10 richieste per unità. Un indice O(1) delle chiavi non piene porta lo sfratto a 100 000 richieste e
-  il lock a 9,9 µs (prototipo nella cartella di sessione). Nello stesso lotto: la precisione dei docs su «310 contro
-  100 000» (`developer/backend/email.md`, e `security.md` con l'ok di A). Dettagli:
-  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «La revisione di N70 a posteriori».
+  contro le 10 000 dell'LRU semplice (misurato). Il tetto ferma lo spruzzo ingenuo, non quello mirato. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «La revisione di N70 a posteriori» ed «E-14».
+  - 17/10, E: fatta nella 1.3 (via del coordinatore).
+    - Il disegno proposto (un indice delle chiavi non piene) non bastava, e l'ho corretto prima del codice: chi si
+      ferma a 9 fallimenti non rende mai piena la chiave, e uno spruzzo la libera per circa 1 100 richieste a
+      tentativo, come oggi.
+    - Ora si sfratta la chiave con meno colpi nella finestra, e tra quelle la meno usata. La scadenza è esatta (un
+      heap), non c'è ricerca, e `eviction_scan` sparisce.
+    - Il caso migliore per l'attaccante costa ora circa 10 000 richieste per tentativo, e nessuno spruzzo libera una
+      chiave più pesante.
+    - I docs «310 contro 100 000» sono corretti.
+    - Commit al checkpoint di E-14.
 
 ## Y · Cruscotto e grafici (fase 01)
 

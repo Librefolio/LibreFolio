@@ -35,7 +35,7 @@ from backend.app.config import get_data_dir
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.instance_backup.apply import RestoreNotRestorableError, RestoreState, confirm_restore, protected_stage
 from backend.app.services.platform.instance_backup.envelope import EnvelopeKey, is_envelope, read_header, unlock
-from backend.app.services.platform.instance_backup.jobs import _lock_held, _out_of_space, _RunLock
+from backend.app.services.platform.instance_backup.jobs import _lock_held, _RunLock, out_of_space
 from backend.app.services.platform.instance_backup.paths import (
     STAGE_DECRYPTED_ARCHIVE,
     STAGE_LOCK_FILE,
@@ -136,13 +136,19 @@ class UploadWriter:
     """An archive received in pieces: ``write`` each one, then ``finish``; ``abort`` leaves nothing behind.
 
     ``max_bytes`` is the limit (``None``: no limit); ``declared`` the size the request announced, checked against the
-    limit and the free space before a byte is written.
+    limit and the free space before a byte is written. A full disk or quota, from the creation of its folder to the
+    end of the file, raises ``UploadNoSpaceError`` (B-30).
     """
 
     def __init__(self, data_dir: Path, *, max_bytes: int | None, declared: int | None):
         if max_bytes is not None and declared is not None and declared > max_bytes:
             raise UploadTooLargeError(max_bytes)
-        folder = ensure_private_dir(uploads_dir(data_dir), data_dir)
+        try:
+            folder = ensure_private_dir(uploads_dir(data_dir), data_dir)
+        except OSError as exc:
+            if out_of_space(exc):
+                raise UploadNoSpaceError("Not enough free space for the archive") from None
+            raise
         if declared is not None and shutil.disk_usage(folder).free < declared + _SPACE_MARGIN:
             raise UploadNoSpaceError("Not enough free space for the archive")
         self._data_dir = data_dir
@@ -153,7 +159,7 @@ class UploadWriter:
         try:
             self._fd: int | None = os.open(self._partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
         except OSError as exc:
-            if _out_of_space(exc):
+            if out_of_space(exc):
                 raise UploadNoSpaceError("Not enough free space for the archive") from None
             raise
         self.size = 0
@@ -169,22 +175,33 @@ class UploadWriter:
             while view:
                 view = view[os.write(self._fd, view) :]
         except OSError as exc:
-            if _out_of_space(exc):
+            if out_of_space(exc):
                 raise UploadNoSpaceError("Not enough free space for the archive") from None
             raise
         self.size += len(data)
 
     def finish(self) -> RestoreUploaded:
-        """Keep the archive under its id, and drop the uploads it replaces. ``UploadEmptyError`` for an empty body."""
+        """Keep the archive under its id, and drop the uploads it replaces. ``UploadEmptyError`` for an empty body;
+        ``UploadNoSpaceError`` when the disk reports itself full only now, as a network file system or a quota may, at
+        ``fsync`` or ``close``."""
         if self._fd is None:
             raise RuntimeError("the upload is closed")
         if self.size == 0:
             self.abort()
             raise UploadEmptyError("The upload carried no byte")
-        os.fsync(self._fd)
-        os.close(self._fd)
-        self._fd = None
-        os.replace(self._partial, self._final)
+        # The descriptor stops being the writer's before it is closed: ``abort`` never closes it twice, not even after
+        # a ``close`` that failed, which releases it all the same.
+        fd, self._fd = self._fd, None
+        try:
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            os.replace(self._partial, self._final)
+        except OSError as exc:
+            if out_of_space(exc):
+                raise UploadNoSpaceError("Not enough free space for the archive") from None
+            raise
         _remove_replaced_uploads(self._data_dir, keep=self.upload_id)
         kind: Literal["zip", "envelope"] = "envelope" if is_envelope(self._final) else "zip"
         logger.info("Backup archive received for a restore", upload_id=self.upload_id, size=self.size, kind=kind)

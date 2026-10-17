@@ -166,6 +166,12 @@ the why.
   instance-wide; for registration emails, that means emails silently held after 10 sign-ups an hour. The variable is
   safe only when every request crosses that proxy. The older `client_address()` of `utils/runtime/network.py`, which
   the connection indicator uses ([[features/F-102]]), is advice only, never a limit key.
+- **Eviction from the in-memory limiters** (lot E-14, from the review of N70): `SlidingWindowLimiter` evicts the key
+  with the fewest hits still in the window, the least recently used among them, with exact expiry (a heap of each
+  key's oldest hit) and no search. The lesson: any least-recently-used family, N70's «spare the full keys» included,
+  lets an attacker who stops one failure short of a lock reset the count with a spray of `max_keys` fresh keys
+  (about 1,100 requests per guess); only «fewest hits go» makes every other key carry as many hits (about 10,000 per
+  guess). Expiry must be exact, or keys at a stale high count shield the attacker's spray.
 - **No queue, no retry.** The emails sent after an answer (forgotten password, verification at sign-up, change notice)
   are FastAPI background tasks of the answering process. A verification email that does not go leaves the account
   waiting, and «Send the link again» recovers it; a forgotten-password email that does not go revokes its new link, and
