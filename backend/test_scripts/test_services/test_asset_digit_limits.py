@@ -47,6 +47,11 @@ checked for decimals and significant digits only, provider events for nothing. T
   provider event whose value cannot be stored is dropped by ``_upsert_asset_events``, the other events of the call
   written, nothing raised.
 
+R13-SEC7-3 (the exponent bound of ``Currency``, ±100): a manual event value past it (1E+400) never reaches that store's
+refusal — the schema refuses it first, ``value_error`` on ``events.<i>.value.amount`` naming the exponent, so
+``POST /assets/events`` answers 422 and nothing is written; a provider event the schema refuses (a value of 5 000 digits,
+or 1E+400) is dropped by ``_storable_events`` like an unstorable one, the others written, nothing raised.
+
 A call that raises today where the contract refuses or skips fails its test naming the exception, never as an error. The
 current-price tests drive ``_QuoteDouble``, a provider double the registry hands out for a code of the test's own, to
 which the PEPE asset is assigned for that test alone (``assigned``); they read today's row with raw SQL, past the column
@@ -93,6 +98,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -949,14 +955,15 @@ async def test_a_valid_current_quote_is_persisted_truncated_like_the_history(own
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("amount", [pytest.param("1E+13", id="1E+13"), pytest.param("1E+60", id="1E+60"), pytest.param("1E+400", id="1E+400")])
+@pytest.mark.parametrize("amount", [pytest.param("1E+13", id="1E+13"), pytest.param("1E+60", id="1E+60")])
 async def test_a_manual_event_beyond_12_integer_digits_is_refused_and_nothing_is_written(owned, amount):
     """Red today: the check counts decimals and significant digits only, so the dividend is accepted — 1E+60 stored as a
-    REAL 1e60, 1E+400 as a REAL inf (read back ``Decimal('Infinity')``).
+    REAL 1e60.
 
     Contract (R13-SEC2): ``EVENT_TOO_MANY_DIGITS``, the details gaining ``max_integer_digits`` 12 beside the existing
     maxima (6 decimal places, 15 significant digits) and naming event 1; nothing written, the valid event of the item
-    included.
+    included. Both values are inside the exponent bound of ``Currency`` (±100), so they reach the store's refusal; 1E+400,
+    past it, is refused before, by the schema (R13-SEC7-3): the next test.
     """
     data = [_event_item(owned.asset_id, [_event(0, "DIVIDEND", "1.5"), _event(1, "DIVIDEND", amount)])]
 
@@ -968,6 +975,34 @@ async def test_a_manual_event_beyond_12_integer_digits_is_refused_and_nothing_is
     assert maxima == {"max_decimal_places": 6, "max_significant_digits": 15, "max_integer_digits": 12}, f"the refusal's details give the maxima {maxima}: expected 6 decimal places, 15 significant digits, 12 integer digits ({details})"
     named = [(event.get("event_index"), event.get("date")) for event in details.get("events", [])]
     assert named == [(1, _day(1).isoformat())], f"the refusal names the events {named}: expected event 1, on {_day(1)} ({details})"
+    rows = await _stored_events(owned)
+    assert not rows, f"the request was refused, yet events were written: {_describe_events(rows)}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_event_past_the_exponent_bound_is_refused_by_the_schema_and_nothing_is_written(owned):
+    """R13-SEC7-3: a dividend of 1E+400 EUR (``adjusted()`` 400, past the ±100 of ``Currency``) never reaches the store.
+
+    Contract: the item, built as the endpoint validates its body (``_event_item``), is refused by the schema — exactly one
+    error, on ``events.1.value.amount``, ``value_error``, its message naming the exponent: ``POST /assets/events`` answers
+    422 before any work; nothing else raises; nothing is written for the asset, the valid event of the item included.
+    Before the bound, the request reached the store and was refused with ``EVENT_TOO_MANY_DIGITS`` (W-B58).
+    """
+    events = [_event(0, "DIVIDEND", "1.5"), _event(1, "DIVIDEND", "1E+400")]
+
+    try:
+        _event_item(owned.asset_id, events)
+    except ValidationError as exc:
+        refusal = exc
+    except Exception as exc:  # noqa: BLE001 — any other exception is the defect under test
+        pytest.fail(f"a PEPE dividend of 1E+400 EUR raised {exc!r} instead of the schema's ValidationError: POST /assets/events answers 500, not 422 (R13-SEC7-3)")
+    else:
+        pytest.fail("a PEPE dividend of 1E+400 EUR passed the schema: its exponent, 400, is past the ±100 of Currency, so POST /assets/events must answer 422 before any work (R13-SEC7-3)")
+
+    errors = [(".".join(str(part) for part in error["loc"]), error["type"]) for error in refusal.errors()]
+    assert errors == [("events.1.value.amount", "value_error")], f"R13-SEC7-3: the schema must refuse exactly the dividend's amount, value_error on events.1.value.amount; it answered {errors}"
+    message = refusal.errors()[0]["msg"]
+    assert "exponent" in message.lower(), f"R13-SEC7-3: the refusal must name the exponent; it reads {message!r}"
     rows = await _stored_events(owned)
     assert not rows, f"the request was refused, yet events were written: {_describe_events(rows)}"
 
@@ -1033,6 +1068,35 @@ async def test_a_provider_event_that_cannot_be_stored_is_dropped_and_the_others_
     written = [(row.date, str(row.type), row.value, row.provider_assignment_id) for row in rows]
     expected = [(_day(0), "DIVIDEND", Decimal("1.5"), assigned.assignment_id), (_day(2), "INTEREST", Decimal("2.25"), assigned.assignment_id)]
     assert written == expected, f"the provider events, one of them a dividend of {amount} EUR on {_day(1)}, were written as {_describe_events(rows)}: expected the two others alone"
+
+
+@pytest.mark.asyncio
+async def test_a_provider_event_the_schema_refuses_is_dropped_and_the_others_are_written(owned, assigned):
+    """R13-SEC7-3: a provider event whose value is a number of 5 000 digits (``adjusted()`` 4 999, past the ±100 of
+    ``Currency``) is refused by the schema as ``_storable_events`` parses it. Before the cure that parse raised out of
+    ``_upsert_asset_events``, and the refresh lost every event of the call.
+
+    Contract: that event (day 1) is dropped, the two others (days 0 and 2) are written under the assignment, nothing
+    raises. A message here gives the value's length, never the value.
+    """
+    huge = "9" * 5000
+    events = [
+        {"date": _day(0), "type": "DIVIDEND", "value": {"code": "EUR", "amount": "1.5"}},
+        {"date": _day(1), "type": "DIVIDEND", "value": {"code": "EUR", "amount": huge}},
+        {"date": _day(2), "type": "INTEREST", "value": {"code": "EUR", "amount": "2.25"}},
+    ]
+    story = f"the provider events of a refresh, one of them a dividend of a {len(huge)}-digit number of EUR on {_day(1)}"
+
+    try:
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            await EventStoreOperations._upsert_asset_events(session, owned.asset_id, events, assigned.assignment_id, "EUR")
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"{story}, raised {type(exc).__name__} ({str(exc)[:160]}…): the refresh reports «Event upsert failed» and keeps none of them (R13-SEC7-3: drop that one, write the others)")
+
+    rows = await _stored_events(owned)
+    written = [(row.date, str(row.type), row.value, row.provider_assignment_id) for row in rows]
+    expected = [(_day(0), "DIVIDEND", Decimal("1.5"), assigned.assignment_id), (_day(2), "INTEREST", Decimal("2.25"), assigned.assignment_id)]
+    assert written == expected, f"{story}, were written as {_describe_events(rows)}: expected the two others alone"
 
 
 # --------------------------------------------------------------------------- #
