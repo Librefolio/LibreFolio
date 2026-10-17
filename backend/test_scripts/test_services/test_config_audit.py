@@ -78,6 +78,23 @@ from backend.app.services.platform.config_audit import (
 from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, InstanceKeyError, derive_key, instance_key_path
 from backend.test_scripts.test_utils import print_section, print_success
 
+# B-9 (workstream B; H reviews): the two checks of instance_backup.checks, imported guarded while that module does not
+# exist yet, so that this file still collects; only its own absence is tolerated. Until then these stand-ins are what
+# CHECK_IDS lists, and (c) finds them missing from CONFIG_CHECKS.
+_BACKUP_CHECKS_MODULE = "backend.app.services.platform.instance_backup.checks"
+try:
+    from backend.app.services.platform.instance_backup.checks import check_panel_token, check_upload_limit
+except ModuleNotFoundError as missing:
+    if missing.name != _BACKUP_CHECKS_MODULE:
+        raise
+
+    def check_panel_token() -> ConfigCheck:
+        pytest.fail(f"{_BACKUP_CHECKS_MODULE} does not exist yet: lot B-9 is not written")
+
+    def check_upload_limit() -> ConfigCheck:
+        pytest.fail(f"{_BACKUP_CHECKS_MODULE} does not exist yet: lot B-9 is not written")
+
+
 POSIX = os.name != "nt"
 needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
 needs_permission_checks = pytest.mark.skipif(not POSIX or os.geteuid() == 0, reason="needs POSIX permissions, which root bypasses")
@@ -93,6 +110,8 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
     check_email_links: "email.links",
+    check_panel_token: "backup.panel_token",
+    check_upload_limit: "backup.upload_limit",
 }
 SEVERITIES = ("ok", "info", "warning", "error")
 I18N_PREFIX = "instance.checks."
@@ -146,6 +165,9 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
     # Workstream E: email off whatever the environment holds, so its two checks are ok
     for variable in [name for name in os.environ if name.startswith("LIBREFOLIO_SMTP_")]:
         monkeypatch.delenv(variable)
+    # Workstream B: no panel token and no upload limit whatever the environment holds, so its two checks are ok
+    for variable in ("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN", "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB"):
+        monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
     monkeypatch.setenv("LIBREFOLIO_DATA_DIR" if production else "LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "auto")
