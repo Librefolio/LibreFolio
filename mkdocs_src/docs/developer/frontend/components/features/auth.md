@@ -139,9 +139,19 @@ The `RegisterCard` handles new user registration with client-side validation.
 ## 🗝️ ForgotPasswordCard {: #forgotpasswordcard }
 
 The sign-in's **Forgot Password?** card, `lib/features/auth/ForgotPasswordCard.svelte` (`forgot-modal`). It calls
-`instanceConfig.load()` on mount, sharing the sign-in page's request. Until the server has answered
-(`instanceConfig.loaded`), and if it never does, the card shows **Back to Login** alone: the default configuration
-has no `email` and says `selfhosted`, and a managed instance must never show the server commands. Then:
+`instanceConfig.load()` on mount, sharing the sign-in page's request. Before any answer, the configuration in force is
+the default, which has no `email` and says `selfhosted`, and a managed instance must never show the server commands:
+
+- **While the request is pending** (`instanceConfig.loaded` and `instanceConfig.failed` both false), the card shows
+  **Back to Login** alone.
+- **If it failed before any answer** (`failed` true, `loaded` still false), the card shows `forgot-ask-admin`, the
+  advice that holds in both profiles, then **Back to Login**: no server command, no warning, and no email form, since
+  the default has no `email` (FPM-08, the A9 fix-forward: before it, the card was a dead end). The next `load()` that
+  gets an answer, such as the one of the card's next mount, brings that answer's branch.
+- **A request that fails after an answer** changes nothing: the store keeps that answer in force, `loaded` stays
+  true, and the card keeps its branch.
+
+Once the server has answered:
 
 | `profile` | `email.links` of `GET /system/instance` true | `email.links` false |
 |---|---|---|
@@ -155,8 +165,9 @@ has no `email` and says `selfhosted`, and a managed instance must never show the
   administrator creates the link in the Users tab ([UsersTab](settings.md#userstab)).
 - **Back to Login** dispatches `gotoLogin`.
 - Tests: `ForgotPasswordCard.managed.test.ts` (FPM-01…07: both profiles, with and without `email.links`, before
-  the answer and once it lands; CAT-01…02: the key a sentence in the four catalogues, naming no command), with
-  `./dev.py test front-utility component-unit`.
+  the answer and once it lands; FPM-08…10: the request failed before any answer, then an answer that says `managed`
+  or `selfhosted`; FPM-11: a request failed after a self-hosted answer, with and without `email.links`; CAT-01…02: the
+  key a sentence in the four catalogues, naming no command), with `./dev.py test front-utility component-unit`.
 
 ## 🔗 Account Link Pages {: #link-pages }
 
