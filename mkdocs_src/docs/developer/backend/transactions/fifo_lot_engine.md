@@ -403,7 +403,7 @@ numeric net breakdown).
 
 ### 📈 Net annualization handoff
 
-The engine returns realized P&L plus economic accumulators; `LotsAnalysisService._build_lot_summaries()` derives `total_pnl`, subtracts allocated FEE/TAX into `net_total_pnl`, computes `net_total_return`, and annualizes **that net figure** over `opening_date → closing_date` (closed lots) or `opening_date → analysis_end` (open lots). The shipped `LotSummarySchema.annualized_return` therefore annualizes `net_total_return`, not gross `total_return`.
+The engine returns realized P&L plus economic accumulators; `lot_summary_figures()` (`financial_math/lots/summary.py`), called by `LotsAnalysisService._build_lot_summaries()`, derives `total_pnl`, subtracts allocated FEE/TAX into `net_total_pnl`, computes `net_total_return`, and annualizes **that net figure** over `opening_date → closing_date` (closed lots) or `opening_date → analysis_end` (open lots). The shipped `LotSummarySchema.annualized_return` therefore annualizes `net_total_return`, not gross `total_return`.
 
 ---
 

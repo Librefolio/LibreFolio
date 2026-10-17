@@ -1127,7 +1127,7 @@ class TestAutomaticFxAndTechnicalCoverage:
         # MFI's shared volume-coverage gate (`validate_meaningful_volume_input`)
         # requires a sufficient *directly observed* (non-backward-filled)
         # fraction of the points MFI computes on - the sessions the service
-        # hands it (see `signal_plugins/base.py`). A native-currency asset
+        # hands it (see `signals/base.py`). A native-currency asset
         # (matching the scope's `target_currency`) avoids the FX-conversion
         # pass, whose converted quotes carry a backward-fill record whenever
         # the FX rate itself was carried: still sessions, but not "directly

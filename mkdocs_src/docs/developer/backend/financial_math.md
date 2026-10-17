@@ -32,7 +32,7 @@ one place. The details of each engine are on the pages listed under [Deep Pages]
 4. **Report copies.** Report any copy you meet, old or new. Before closing work that touched
    financial math, search the project for copies of what you changed.
 
-The technical indicators (`services/signal_plugins/`, `services/signal_runtime.py`), the
+The technical indicators (`services/signal_plugins/`, `services/signals/runtime.py`), the
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
@@ -76,6 +76,7 @@ backend/app/services/financial_math/
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price and performance histories
+    ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     └── average_cost_lines.py  per-broker and cumulative WAC history points
 ```
 

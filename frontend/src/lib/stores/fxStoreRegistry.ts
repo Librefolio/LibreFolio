@@ -8,11 +8,16 @@
  * Keys are slugs in alphabetical order (e.g., "EUR-USD"), matching the backend
  * convention where base < quote.
  *
+ * After a price catch-up on the server (`{kind: 'prices'}` on the portfolio bus) every store is marked stale: the
+ * next read of a range, or of a date through lookupFxRate, asks the server again, while the points stay readable
+ * (Z-14).
+ *
  * @module stores/fxStoreRegistry
  */
 
 import type {TimeSeriesPoint} from './core/TimeSeriesStore';
 import {TimeSeriesStore} from './core/TimeSeriesStore';
+import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
 import type {ChainStep} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
 import {schemas} from '$lib/api/generated';
@@ -92,6 +97,13 @@ export interface FxPairConfig {
 
 /** Global registry of FX TimeSeriesStore instances, keyed by pair slug */
 const fxStores: Map<string, TimeSeriesStore<FxDataPoint>> = new Map();
+
+// A catch-up may have filled or corrected any range a store holds (Z-14). The live poll's writes (`kind: 'mutation'`,
+// every 30 s) and the portfolio's Refresh (`kind: 'refresh'`) leave the stores alone.
+registerPortfolioMutationListener('fxStoreRegistry', (signal) => {
+    if (signal.kind !== 'prices') return;
+    for (const store of fxStores.values()) store.markStale();
+});
 
 /**
  * Create a pair slug from base and quote currencies.
@@ -468,7 +480,8 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
  */
 export async function lookupFxRate(base: string, quote: string, date: string): Promise<FxDataPoint | null> {
     const cached = lookupFxRateSync(base, quote, date);
-    if (cached) return cached;
+    // A point a price catch-up made stale is asked again (Z-14).
+    if (cached && getFxStoreByPair(base, quote).getMissingIntervals(date, date).length === 0) return cached;
 
     const slug = createPairSlug(base, quote);
     const {base: canonBase, quote: canonQuote} = parsePairSlug(slug);
@@ -486,6 +499,7 @@ export async function lookupFxRate(base: string, quote: string, date: string): P
         // Merge into cache
         const store = getFxStore(slug);
         store.merge([point]);
+        store.markFetched(date, date);
         // Return in requested direction
         if (canonBase === base.toUpperCase()) return point;
         return {...point, rate: displayFxRate(point.rate, true)};

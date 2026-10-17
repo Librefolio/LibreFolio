@@ -784,7 +784,7 @@ def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | 
 def api_email_change_notice(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the tests of the email-change notice that A's PUT /auth/profile schedules (lot E4b, on A6e), in-process."""
     print_section("Email Change Notice API Tests")
-    print_info("Testing PUT /auth/profile: an accepted email change answers as before (200, a new session cookie), then emails the old address with the new one masked; nothing without a change of mailbox, on a refused change or with email off (an info line)")
+    print_info("Testing PUT /auth/profile: an accepted email change answers as before (200, a new session cookie), then emails the old address, with nothing of the new address nor the username; nothing without a change of mailbox, on a refused change or with email off (an info line)")
     print_info("In-process: the real auth router on a private SQLite, SMTP variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_change_notice_api.py", test_names)
@@ -1128,7 +1128,7 @@ Tests for REST API endpoints (server auto-started):
         "email-change-notice",
         api_email_change_notice,
         name="Email Change Notice API",
-        desc="PUT /auth/profile (lot E4b, on A6e): an email change with the right current password answers as before (200, the new address, a new session cookie that signs in), then emails the old address only, in the account's language, the new one masked (***@domain), one budget unit; the work queued once, after the complete answer, with the account's id, both addresses and the request's own engine; nothing for a username-only change, the stored address sent again, an empty body or the same mailbox in other letters; email off: the same answer and an info line; a refused change (no or wrong current password, the address taken) sends nothing; the old address refused by the SMTP server: the answer unchanged and a warning; past 3 notices in the hour for the account, the change still answers 200 with a new cookie and no notice goes; E's log lines name neither address",
+        desc="PUT /auth/profile (lot E4b, on A6e): an email change with the right current password answers as before (200, the new address, a new session cookie that signs in), then emails the old address only, in the account's language, with nothing of the new address nor the username, one budget unit; the work queued once, after the complete answer, with the account's id, both addresses and the request's own engine; nothing for a username-only change, the stored address sent again, an empty body or the same mailbox in other letters; email off: the same answer and an info line; a refused change (no or wrong current password, the address taken) sends nothing; the old address refused by the SMTP server: the answer unchanged and a warning; past 3 notices in the hour for the account, the change still answers 200 with a new cookie and no notice goes; E's log lines name neither address",
         # PURE: the real auth router runs in-process on a private SQLite file under tmp_path, the SMTP variables are set with
         # monkeypatch in this process, the hourly budget is private on a fake clock and the fake SMTP server listens on
         # 127.0.0.1: the lane's backend is never called.

@@ -612,7 +612,7 @@ BROKER_RECONCILIATION_COMPONENT = ComponentSpec(
 
 BROKER_FIFO_SUMMARY_COMPONENT = ComponentSpec(
     component_id="broker.fifo_summary",
-    version=2,  # v2 (B3b): unvalued lot amounts are null
+    version=3,  # v2 (B3b): unvalued lot amounts are null; v3 (MF-E, T-B8): open value and unrealized P&L sum the same lots
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerFifoSummaryPayload,
     builder=_build_broker_fifo_summary,

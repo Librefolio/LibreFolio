@@ -12,8 +12,9 @@
  * what it has at once and refreshes it in background (page cache, phase 1, decision E1).
  * `requestPortfolioRefresh()` is the same signal for «Aggiorna», with `kind: 'refresh'`.
  * `notifyPricesCaughtUp()`, with `kind: 'prices'`, says the server caught up on prices and updated
- * something (lot Z5): the stores mark stale as for any signal, and the pages on screen that listen for it
- * (the Dashboard, a broker's page) reload in background (Z-13).
+ * something (lot Z5): the stores mark stale as for any signal, the asset price and FX registries — which ignore
+ * every other kind — mark their series stale (Z-14), and the pages on screen that listen for it (the Dashboard,
+ * a broker's page) reload in background (Z-13).
  */
 export type PortfolioMutation = {kind: 'mutation'; method: string; path: string} | {kind: 'refresh'} | {kind: 'prices'};
 

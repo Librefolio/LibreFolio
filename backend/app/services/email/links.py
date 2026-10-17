@@ -48,8 +48,9 @@ def _usable_base(base: str) -> bool:
     """Whether ``base`` can start an emailed link: http(s), a host and a valid port, no credentials, no whitespace, and
     no ``?`` or ``#`` at all (even an empty query or fragment would swallow the path that follows).
 
-    ``public_url()`` checks the scheme only, so ``https://`` alone or an address with a space passes it; an email would
-    then carry a link no client can open, or none at all. Credentials would travel in every link and every email.
+    ``public_url()`` (``config.env_url``) already refuses whitespace, any scheme but http(s), an address without a host
+    name and, since X-R35, user info. This check adds what it leaves, ``?``, ``#`` and an invalid port, and keeps the
+    others as a second guard: the base starts every link of every email, and credentials would travel in all of them.
     """
     if any(char.isspace() for char in base) or "?" in base or "#" in base:
         return False
