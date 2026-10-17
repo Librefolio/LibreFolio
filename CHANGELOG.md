@@ -237,6 +237,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Freezing an automatic average cost into a manual one no longer fails on a value with too many decimals.
 - Dashboard cash breakdown: cash moved between brokers or converted between currencies keeps the returns it carried, instead of being counted as contributed capital; a gain or loss between the two legs (exchange rate, ownership share) counts as a result.
 - AI Export: a drawdown section no longer fails on a total loss or on one implausible price — the −100 % stays in the export with no recovery gain, and only the affected asset's row is marked as failed.
+- Dashboard and broker page: the day's change under Total P&L, and its two percentages, compare with the calendar day before, even when the growth chart shows one point per week.
+- Exposure treemap: a broker's or an asset type's gain/loss % no longer counts a holding with an unknown gain/loss as if its value were cost; a group without a figure shows «—».
+- Scheduled investments with the ACT/ACT day count: late interest across a year end no longer loses one day per year end.
+- Scheduled investments: the maturity settlement no longer includes the last coupon, already paid the same day as interest; after maturity the asset is worth its principal.
+- Measure tool: the yearly rate (Δ%/yr) appears from 30 days, as in the rest of the app (`—` below); a measure that starts from 0 shows `—` instead of 0 % for Δ% and Δ%/yr, and a line that ends on the other side of zero has no yearly rate.
+- Growth chart: in the weekly and monthly views, a broker line that stops in the middle of a week or month keeps its last value for that period instead of leaving a gap.
 
 #### 🔒 Security
 
@@ -261,6 +267,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A restore ends every session and expires every invitation and link sent before it.** Users sign in again with the accounts and passwords of the backup.
 - **A restore is never applied while the hosting provider blocks the instance**: one confirmed before the block waits for the unblock. On a blocked instance every restore route answers 423, except reading the outcome of a restart with its ticket, which changes nothing.
 - **The outcome ticket stays out of logs and URLs**: the server keeps only its hash, it travels in a header and expires after an hour; `ticket` joins the query parameters the access log masks.
+- **A tampered backup cannot run code during a restore check** — a check now refuses an archive whose database holds triggers, views or virtual tables, which LibreFolio never creates, before anything of it can run (`database_foreign_objects`): a crafted backup can no longer keep the check busy forever or bring its own code into the server. The schema is read without running any of it, and the connections to the copy use SQLite's `trusted_schema=OFF`.
 
 #### 📚 Documentation
 

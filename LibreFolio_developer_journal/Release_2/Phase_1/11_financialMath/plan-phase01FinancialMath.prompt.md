@@ -1739,3 +1739,88 @@ Quattro commit, uno per lotto che cambia numeri:
   legge il fattore preparato (non è una copia); `risk/quant/resampling.py:235` converte una lunghezza di blocco (altro).
 - ✅ **Slot 1** (05:05–05:11, su `b05b80201`, patch D messa da parte e rimessa, sha `1895560c…`): `api portfolio-wac`
   **12**, `api portfolio` **51**; porta 6190 libera. W56 + J2 pronti all'ingresso.
+
+#### MF-D entrato; MF-P2 — analisi (17/10, 05:13)
+- Coordinatore: D1 `b8215253c`, D2 `4aa2d8cc3`, giornale `76510d787`; base aggiornata (dev `611b07074`), validazione
+  combinata verde su `e3e6632fd` (`financial-math` 851, `series-preparation` 22, `ai-export-pure` 323,
+  `front-ai-export unit` 585, `risk-all` parte del confronto 198); **MF-D entrato** in dev `aca75c7ca` + 🐛; HEAD
+  ff a **`1c37ad0f0`**. La sonda la fa J.
+- **MF-P2 — stato reale** (lettura, nessun codice):
+  - Asset: `frontend/src/lib/utils/assetPriceDerived.ts:105-201` — `DELTA_PERIODS` (1W 7, 1M 30, 3M 91, 6M 182,
+    1Y 365, 2Y 730, 3Y 1095, 5Y 1825) più `1D`; `computePeriodDelta` = ultimo punto vs il punto ≤ (data dell'ultimo
+    − N giorni di calendario), ×100, float; gira anche nel Web Worker (`priceProcessing.worker.ts:80`). Sorgente: la
+    serie densa e riempita all'indietro di `POST /assets/prices/query` (`services/assets/price_query.py:398`,
+    `_build_backward_filled_series`), sull'intervallo scelto; `target_currency` opzionale. Le colonne visibili
+    (`assets/+page.svelte:325`) sono i periodi ≤ l'intervallo caricato.
+  - FX: **seconda copia** di `DELTA_PERIODS` e di `computePeriodDelta` in `routes/(app)/fx/+page.svelte:174-210`, con
+    l'inversione della coppia (`displayFxDelta`, `fxStoreRegistry.ts:65`: con la coppia girata il rendimento è
+    `ref/last − 1`); i dati vengono da `POST /fx/currencies/convert` (conversioni per giorno), non da una serie.
+  - Consumatori: `components/assets/AssetTable.svelte:238-264`, `components/fx/FxTable.svelte`.
+  - Il Δ primo→ultimo sull'intervallo scelto (`deltaPercent`) resta misura interattiva (D-MF6 b), dichiarata.
+- **Proposta a X** (05:2x): funzione della casa sui punti datati (ancora = `as_of`; riferimento = ultimo prezzo ≤
+  `as_of − N`; None senza riferimento o con un valore ≤ 0; per l'FX anche il verso inverso) + un elenco dei periodi
+  nel backend restituito nella risposta; forma del campo da concordare (risposta esistente vs endpoint dedicato).
+- **X** (05:2x): Q1 (a) due endpoint dedicati, l'FX in `POST /fx/currencies/period-changes`; Q2 (a) `as_of` =
+  `dateEnd` (fissare con un test l'1D a 0 nel fine settimana); Q3 tiene la regola delle colonne (periodi ≤ intervallo
+  scelto: nessun cambio visibile in questo lotto; mostrare tutto è una proposta UX a parte) → `days` in ogni periodo e
+  `1D` nella lista; Q4 (a). Prestazioni: una query raggruppata per giorno, non una serie per asset. File: scrivo io il
+  backend, X rivede in sola lettura; moduli nuovi `services/assets/period_changes.py` e `services/fx/period_changes.py`,
+  rotte e schemi in coda ai file esistenti, `price_query.py` intatto. Il frontend è di X dopo il mio ingresso.
+- **Coordinatore** (05:2x): **MF-D4** dopo MF-P2 — uno SPLIT già salvato con rapporto ≤ 0 fa sollevare il motore
+  (`financial_math/portfolio/engine.py:226`) e il report risponde 500; deciso: rapporto non valido = split mancante (non
+  applicato) + avviso di qualità dei dati (codice da concordare con J, p. es. `INVALID_SPLIT_RATIO`), mai un'eccezione;
+  X-R47 chiude la scrittura. Rossi prima.
+- ✅ **Codice MF-P2** (2026-10-17):
+  - ⚠️ **Fuori pista — il cambio del giorno**: la conversione della serie di oggi (`price_query.py:483`) converte ogni
+    punto riempito **alla sua data di valutazione** `p.date`, non a quella del prezzo; l'FX della pagina è
+    `convert_bulk` per giorno (rotte CHAIN comprese). Quindi la regola comune è «un valore per ogni giorno valutato»:
+    la prima versione della casa (punti memorizzati + ricerca all'indietro, con `reference_date`) è stata riscritta prima
+    di ogni prova.
+  - Casa (`returns.py`): `FIXED_PERIODS` (1D…5Y con i giorni), `fixed_period_dates(as_of)`, `FixedPeriodChange(key, days,
+    change_ratio, inverse_change_ratio)`, `fixed_period_changes(values, as_of)` (ancora = valore su `as_of`, riferimento =
+    valore su `as_of − giorni`; None su mancante o ≤ 0). `_MIN_ANNUALIZATION_DAYS` intatto (J).
+  - `services/assets/period_changes.py`: una query raggruppata per giorno valutato (`MAX(date) ≤ giorno GROUP BY
+    asset_id` unito ai close), `_Valuation` per asset (nativo = valuta dell'ancora, un giorno in un'altra valuta → None +
+    errore; con `target_currency` → `convert_bulk` al giorno valutato, un lotto per tutta la richiesta; errori unici, al
+    massimo 10). `services/fx/period_changes.py`: un solo `convert_bulk` (1 base → quote a ogni giorno) per tutte le
+    coppie, i due versi dalla casa.
+  - Schemi in coda: `schemas/prices.py` (`FAPeriodChangesQueryItem`, `FAPeriodChange`, `FAPeriodChangesResult`,
+    `FAPeriodChangesResponse`), `schemas/fx.py` (`FXPeriodChangesRequest` con base ≠ quote, `FXPeriodChange`,
+    `FXPeriodChangesResult`, `FXPeriodChangesResponse`). Rotte in coda: `POST /assets/prices/period-changes`,
+    `POST /fx/currencies/period-changes` (login richiesto). `api sync` exit 0 (client non tracciato). Mappe della casa
+    aggiornate. ruff/black puliti.
+- In corso: test-author `mf-p2-tests` (casa, parità col `computePeriodDelta` del frontend su serie densa), test-author
+  `mf-p2-api-tests` (servizi e API, parità col price query e col convert), docs-writer `mf-p2-docs`.
+- ✅ **Test** (test-author):
+  - casa: `test_financial_math/test_fixed_period_changes.py`, 20 test — parità esatta (Decimal) col
+    `computePeriodDelta` della pagina Asset, con quello della pagina FX e col suo verso invertito, su serie dense
+    ricostruite (port di `_build_backward_filled_series`, col seme); l'1D a 0 nel fine settimana e nei festivi (X);
+    l'inverso `(1+c)(1+i)=1`; ≤ 0 → None; mutazioni (riferimento un giorno prima 16 rossi, inverso come −c 11, float 12…).
+  - servizi: `test_services/test_period_changes.py`, 20 test (DB condiviso, asset con nomi unici, coppie FX che nessun
+    altro usa — AMD/BDT, AMD/SZL, AMD/LSL, BBD/BZD, MVR/SCR — datate 1980–1987, pulite prima e dopo): parità col price
+    query reale (nativo e in valuta, cambio che si muove nel fine settimana) e col `convert_bulk` per giorno; ordine
+    della richiesta; asset sconosciuto; valuta estera; cambio mancante (un errore per giorno valutato: fissato così).
+  - API: `test_api/test_period_changes_api.py`, 4 test (401, 422 su base = quote, forma, numeri delle pagine via
+    `/assets/prices/query` e `/fx/currencies/convert`); aiutanti condivisi `fixtures/period_changes/`.
+  - **Righe del runner** (dichiarate): `_backend_services.py` — `services_period_changes` dopo `services_asset_signals`,
+    `add_test(cat, "period-changes", …)` dopo `asset-signals`; `_backend_api.py` — `api_period_changes` dopo
+    `api_assets_price`, `add_test(api, "period-changes", …)` dopo `assets-price`.
+- **Differenze dalla pagina di oggi** (lette nel codice dai due test-author, tutte miglioramenti, da dire a X):
+  1. **fuso orario**: le due pagine calcolano il giorno di riferimento nell'ora locale del browser (`setDate`,
+     `toISOString`): con l'ancora in ora solare e il riferimento in ora legale cade un giorno prima (Europa/Roma:
+     2025-11-15 − 30 → 2025-10-15 invece di 10-16); il backend usa giorni di calendario esatti;
+  2. valuta mista in nativo → null + errore (la pagina confrontava close in valute diverse);
+  3. conversione mancante con `target_currency` → null + errore (il price query tiene il close nativo);
+  4. prezzo ≤ 0 → null (la pagina Asset rifiutava solo lo 0);
+  5. intervallo caricato corto: l'1D c'è comunque (il backend legge lo storico).
+- **Per X** (docs-writer): `isPortfolioAffectingMutation()` (`frontend/src/lib/stores/portfolio/portfolioMutation.ts:102-107`)
+  conta ogni POST sotto `/api/v1/assets/prices` come scrittura tranne `/query` e `/sync`: `/period-changes` va aggiunto,
+  o ogni chiamata segnerebbe vecchie le viste del portafoglio (e la riga di `developer/frontend/state/domain-state.md`).
+- ✅ **Rossi** (`files/p2.sh red`, 05:47, patch `1f0a6268…`, moduli nuovi messi da parte e rimessi con lo stesso sha):
+  `financial-math test_fixed_period_changes` → `ImportError` di `FIXED_PERIODS`; `services period-changes` →
+  `ImportError` di `FXPeriodChangesRequest`. **Verdi**: `financial-math` **871**, `services period-changes` **20**,
+  `services fx-core` **42**. ruff/black (16 file) puliti; `git diff --check` pulito.
+- ✅ **Doc** (docs-writer): `assets/architecture.md` L21, L248–269 (`#fixed-period-changes`), L527; `fx/architecture.md`
+  L87–88, L143–162; `financial_math.md` L69, L124–134, L552. `mkdocs build` stretto exit 0, `check-links` exit 0. Due
+  docstring corretti dopo il suo appunto («routes»: `convert_bulk` non triangola).
+- **Da fare in slot**: `api period-changes`, `api assets-price` (le rotte nuove stanno nello stesso router).
