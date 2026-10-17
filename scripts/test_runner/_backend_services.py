@@ -963,6 +963,15 @@ def services_current_price_storable(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Current price storable tests", verbose=verbose)
 
 
+def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R47: a SPLIT event's ratio checked when it is written, manual SPLITs of 0 or below refused, a provider's dropped; and R13-SEC7: the P-10 refusal shows only the caller's transactions."""
+    print_section("Services: Event Split Ratio")
+    print_info("Testing: backend/app/services/assets/event_store.py (bulk_upsert_events, _upsert_asset_events, _reject_split_retype_without_costs), backend/app/api/v1/assets/events.py")
+    print_info("Tests: a manual SPLIT of ratio 0 or below refused with EVENT_INVALID_SPLIT_RATIO (HTTP 400) in every way it is written, nothing written; a provider's dropped with one warning; valid ratios accepted; the P-10 refusal naming only the caller's transactions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_event_split_ratio.py", test_names)
+    return run_command(cmd, "Event split ratio tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
@@ -2101,6 +2110,20 @@ Note: No backend server required.
         # wiped by asset id. The provider codes are unique per test, so the current-value cache entries and the
         # log-once keys are the test's own; the cache's set is patched for one test only (monkeypatch).
         # Nothing here counts or reads a row it did not write.
+    )
+    add_test(
+        cat,
+        "event-split-ratio",
+        services_event_split_ratio,
+        name="Event Split Ratio",
+        desc="X-R47: a manual SPLIT whose ratio is not valid (0, -2, -0.000001) refused with EVENT_INVALID_SPLIT_RATIO before anything of the request is written -- new (upsert or create), upserted on the key of a stored SPLIT, edited by id, or turned into a SPLIT by an edit -- its details naming the item and every offending event (event_index, date, type), HTTP 400 with each ratio as sent; a provider's SPLIT with an invalid ratio dropped by _upsert_asset_events (a stored SPLIT on its key kept), the other events written, one warning naming it and the asset; valid ratios (2, 0.5, 1.5, 0.000001) accepted manual in every way or from a provider, other event types of 0 and a SPLIT edited into a DIVIDEND of 0 accepted. R13-SEC7: given the caller (current_user_id, which POST /assets/events passes), the P-10 refusal EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST lists only the costless adjustments on a broker the caller holds an access to and counts the others in hidden_transactions_count, the message unchanged, nothing written; without a caller, every id as before",
+        # WRITE-SCOPED, the category default, as asset-digit-limits: every row is this unit's own -- two assets
+        # created under a unique name, the first assigned to a provider code of the unit's own that no provider has,
+        # two users and two brokers under the same marker with one access each, and only the events of those assets
+        # and the transactions on those brokers, written, read and wiped by asset and broker id; the log capture is the
+        # test's own (structlog's testing capture, proved live by a barrier event); the route runs in process on an app
+        # of the call's own, get_current_user overridden there and never on the shared app. Nothing here counts or
+        # reads a row it did not write.
     )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, one replay from the first movement")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")

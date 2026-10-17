@@ -126,6 +126,14 @@ export function eventSaveErrorMessage(err: unknown, t: Translate, sent: SentEven
                     },
                 });
             }
+            case 'EVENT_INVALID_SPLIT_RATIO': {
+                // X-R47: a split's ratio is its value, a number above 0; the server refuses any other, naming each split.
+                const events = Array.isArray(p.events) ? (p.events as Array<Record<string, unknown>>) : [];
+                const first = events[0] ?? {};
+                return t('events.saveError.invalidSplitRatio', {
+                    values: {date: dateLabel(text(first.date)), type: typeLabel(text(first.type)), ratio: text(first.ratio), more: Math.max(events.length - 1, 0)},
+                });
+            }
         }
         return t('events.saveError.generic', {values: {message: refusal.message || refusal.code}});
     }
