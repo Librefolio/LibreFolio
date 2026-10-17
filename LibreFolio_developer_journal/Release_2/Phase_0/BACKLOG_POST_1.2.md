@@ -5389,6 +5389,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   **Resta a W la metà del batch** (`autoCostUnreadable` sulla riga Auto e sulla divisione, i18n, il paragrafo di `wac.md`), dopo
   l'entrata di SEC7-3; i rossi sono parcheggiati in `files/wb69_mine/` della sessione di W. Nel frattempo un batch che incontra un insieme
   illeggibile risponde 500, non più un costo sbagliato. Dettagli: piano 04, «Revisione del lotto di MF».
+  ✅ 17/10: la metà del batch di W — `autoCostUnreadable` `{count}` sulla riga Auto e sulla divisione di una coppia TRANSFER (4
+  lingue), niente più 500; più il pavimento di N74 condiviso (`EARLIEST_RANGE_START` di MF-SEC8-2 al posto di `TRANSACTION_DATE_MIN`).
+  33 rossi verdi, `services transaction-cost-basis-rule` 137. Dettagli: piano 04, «W-B69 — la metà del batch».
 - **W-B70 · L'unione di una promozione propone una descrizione che il backend rifiuta, in inglese** — minimo, chiarezza; W, 17/10
   (H-41). La descrizione unita (`mergeStrings`, `frontend/src/lib/features/transactions/bulk/promoteHelpers.ts`: `a\nb`) di due
   descrizioni lunghe supera i 500 caratteri che create, update e (da H-41) i campi uniti accettano: il salvataggio la rifiuta con

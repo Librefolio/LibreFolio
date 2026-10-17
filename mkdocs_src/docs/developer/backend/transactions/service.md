@@ -204,7 +204,8 @@ whose `Currency.model_validate()` raised out of the batch: a 500.
 
 `check_dates()` (`transaction_batch_stages.py`; night decision N74 of R13-SEC7-3, pending
 the developer's review) runs right after `check_decimal_limits()`. A transaction's date
-must lie between 1900-01-01 (`TRANSACTION_DATE_MIN`) and today one year on:
+must lie between 1900-01-01 (`EARLIEST_RANGE_START`, `utils/datetime_utils.py`: the floor every
+replay and history walk starts from too) and today one year on:
 `transaction_date_bounds()` takes today from `today_date()`, in UTC, and maps a
 29 February to 28 February. The stage reads:
 
