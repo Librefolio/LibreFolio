@@ -5860,13 +5860,21 @@ sulla base `23f6578f3`.
   (`proxy_too_large`, «A proxy in front of LibreFolio refused an archive this large: ask whoever runs it, or restore
   from the command line»), con la chiave nelle quattro lingue e un caso in `restoreFlow.test.ts`. La guida
   (`backup_restore.en.md`, «What Settings › Backup Says») descrive già il caso. Dettagli: piano 07, §13, «B5b».
-- **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
+- ✅ **B-16 · Un server che dopo «Restore and restart» non si ferma lascia l'overlay in attesa senza fine** — piccolo; B,
   16/10 (docs-writer, B5b). Se la richiesta di riavvio è accettata ma il server non scende (segnale perso, un processo
   che non esce), la sonda lo vede sempre su, lo stato resta `pending`, e la pagina continua a dire «LibreFolio is
   restarting» senza il suggerimento «has not come back yet», che parte solo col server giù. La guida lo spiega (riga
   di risoluzione dei problemi: riavvialo a mano). Proposta: server su e stato `pending` oltre `slowAfterMs` → un
   messaggio suo nell'overlay («LibreFolio did not stop: restart it yourself»), deciso con il coordinatore (cambia un
   caso fissato di `restoreFlow.test.ts`). Dettagli: piano 07, §13, «B5b».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 06:35), con la strada (B) decisa dal coordinatore. Col server mai sceso e il
+  ripristino ancora in attesa un minuto dopo la richiesta (`slowAfterMs`, contato dalla risposta che accetta il
+  riavvio, dopo una lettura dell'esito), l'overlay dice «LibreFolio has not stopped. If it does not restart by itself,
+  restart it yourself: the restore is applied at that start.» (`restart-not-stopped`) e offre **Back to Backup**. Le
+  sonde continuano finché non lo si preme, e un arresto tardivo procede come prima. Il controller ha il flag
+  `notStopping`, che si azzera dove si azzera `slow` e col server visto giù. Ruoli e pulsante sono quelli che
+  esistevano già. La guida aggiorna la riga dei problemi.
 - ✅ **B-17 · «Cancel the restore» della scheda non toglie la copia di un ripristino confermato dalla CLI** — minimo; B,
   16/10 (docs-writer, B5b). **Fatto il 16/10 in B5c** (checkpoint delle 18:22): `DELETE /backup/restore/pending` chiama
   `cancel_restore(drop_copy=True)` come la CLI, e la copia si toglie dentro il lock del ripristino; la scheda non chiama
@@ -5908,9 +5916,9 @@ sulla base `23f6578f3`.
   H-27 nel ramo di B. Il test di guardia H-17 mette `123`, un intero: resta compatibile. Dettagli: piano 07, «B4
   committato; validazione combinata…».
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): le due rotte prendono anche `ProfileDefaultError`: l'upload
-  risponde 503 `backup_upload_unavailable`, lo stato 200 con `upload_limit_mb: null`. 8 casi in
-  `test_backup_restore.py`, rossi e poi verdi nello slot delle 04:44.
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): le due rotte prendono anche
+  `ProfileDefaultError`: l'upload risponde 503 `backup_upload_unavailable`, lo stato 200 con `upload_limit_mb: null`.
+  8 casi in `test_backup_restore.py`, rossi e poi verdi nello slot delle 04:44.
 - ✅ **B-22 · `totals.py` ripete la regola degli importi «testo decimale semplice» di J** — minimo; J tramite il
   coordinatore, 17/10 (J-27). J-27 è già nella base di B: `7336722ad`, entrato con `e221a0544`.
   `ledger_totals._as_amount` (la casa) rifiuta ogni testo che non sia decimale semplice prima di `Decimal()`, con la
@@ -5921,8 +5929,8 @@ sulla base `23f6578f3`.
   diventano «rifiutato da J»; il fixture `j_reads` resta la difesa contro l'espansione nel test. Nel lotto B4b, dopo
   l'ingresso di B4. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): via `_plain` e `_PLAIN_AMOUNT` da `totals.py`: decide
-  `ControlTotals.from_json` di J. Il test capovolto è
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): via `_plain` e `_PLAIN_AMOUNT` da
+  `totals.py`: decide `ControlTotals.from_json` di J. Il test capovolto è
   `test_what_is_not_plain_text_in_lines_of_objects_is_refused_by_j_and_absent`.
 - ✅ **B-23 · Dopo un crash restano file in chiaro, e nessuno li toglie all'avvio** — piccolo; E (R13-SEC4, piano 08 in
   dev `110125350`), 17/10, più il punto (c) di B. Oggi la pulizia gira solo quando parte un nuovo controllo
@@ -5939,16 +5947,16 @@ sulla base `23f6578f3`.
   Tocca la lista condivisa `STARTUP_STEPS` (`app_lifespan.py`, e i passi in `overview.md`): un passo nuovo dopo
   `restore-commit`, o dentro il suo. Lotto B4b. Dettagli: piano 07, «B4b — le note di E (R13-SEC4) e di J».
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): il passo `backup-leftovers` (N66) e il modulo
-  `instance_backup/leftovers.py`. La revisione delle 03:58 aggiunge `archive.zip.part`, i link su due livelli e
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): il passo `backup-leftovers` (N66) e il
+  modulo `instance_backup/leftovers.py`. La revisione delle 03:58 aggiunge `archive.zip.part`, i link su due livelli e
   `checks_interrupted`; `get_job()` toglie anche i file di lavoro. 44 casi in `test_backup_leftovers.py`.
 - ✅ **B-24 · Il messaggio di `backup decrypt` non dice che lo zip apre anche le chiavi salvate** — minimo; E (R13-SEC4),
   17/10. Oggi dice: «It holds every user's data in clear». Uno zip decifrato di un backup che portava la chiave
   d'istanza contiene anche quella chiave, che apre ogni chiave dei fornitori salvata. Da aggiungere al messaggio e alla
   guida (`admin/backup_restore.en.md`, sezione `backup decrypt`). Lotto B4b.
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): dopo `decrypt` c'è la riga 🔑 quando il manifesto annuncia la
-  chiave.
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): dopo `decrypt` c'è la riga 🔑 quando il
+  manifesto annuncia la chiave.
 - ✅ **B-25 · `--password-stdin` su un terminale mostra la password; i campi della creazione hanno `autocomplete="off"`** —
   minimo; E (R13-SEC4), 17/10. `--password-stdin` legge con `sys.stdin.readline()` (`scripts/backup_cli.py:100`) anche
   quando lo standard input è un terminale, e lì la password si vede mentre la si scrive: con `isatty()` va letta con
@@ -5956,15 +5964,15 @@ sulla base `23f6578f3`.
   backup sicuro passano a `autocomplete="new-password"`: i gestori delle password ignorano spesso `off` e proporrebbero
   quella dell'account. Lotto B4b.
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `--password-stdin` a un terminale prende la strada di
-  `getpass` (due volte per `create`), e i due campi del backup sicuro sono `new-password`.
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): `--password-stdin` a un terminale prende
+  la strada di `getpass` (due volte per `create`), e i due campi del backup sicuro sono `new-password`.
 - ✅ **B-26 · Un file della chiave oltre 4096 byte si esporta, poi ogni ripristino lo rifiuta** — minimo; E (R13-SEC4),
   17/10. La creazione legge `secrets/instance.key` con `read_secret_file` (fino a 64 KiB); la lettura dall'archivio si
   ferma a `INSTANCE_KEY_MAX_BYTES` (4096, `archive.py`). Va rifiutato già all'esportazione: chiave non inclusa e avviso
   `instance_key_unusable`, come per le altre chiavi inutilizzabili. Lotto B4b.
 
-  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55): `exportable_instance_key()` e `generated_key_unusable()` usano
-  il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
+  ✅ **Fatto il 17/10 in B4b** (checkpoint delle 04:55, commit `964ecf434`): `exportable_instance_key()` e
+  `generated_key_unusable()` usano il limite di 4096 byte in UTF-8 (`INSTANCE_KEY_MAX_BYTES`).
 - ✅ **B-27 · Dopo un ripristino riuscito la scheda Backup non dice nulla** — piccolo; G (G-20) tramite il coordinatore,
   17/10, decisione notturna N67 (la rivede il developer). Dopo un ripristino `committed` la pagina va al login senza
   dire niente (FBKP-107), e al rientro la scheda tace: `restore-last-result` c'è solo per `rolled_back`
@@ -5988,9 +5996,9 @@ sulla base `23f6578f3`.
   Direzione: un limite di tempo sulle scritture della copia (`set_progress_handler` di sqlite3, o un sottoprocesso con
   un tempo massimo), più `PRAGMA trusted_schema=OFF` sulle connessioni della copia. Dopo B4. Dettagli: piano 07, «B-27».
 
-  ✅ **Fatto il 17/10** (checkpoint delle 05:50), con la strada (B) decisa dal coordinatore. Subito dopo lo
-  spacchettamento, il controllo legge `sqlite_master` in sola lettura e classifica ogni oggetto dal suo testo SQL. Un
-  trigger, una vista o una tabella virtuale, che LibreFolio non crea mai, fanno rifiutare l'archivio con
+  ✅ **Fatto il 17/10** (checkpoint delle 05:50, commit `9403ecda0`), con la strada (B) decisa dal coordinatore. Subito
+  dopo lo spacchettamento, il controllo legge `sqlite_master` in sola lettura e classifica ogni oggetto dal suo testo
+  SQL. Un trigger, una vista o una tabella virtuale, che LibreFolio non crea mai, fanno rifiutare l'archivio con
   `database_foreign_objects` prima di ogni altro accesso; uno schema che SQLite non legge dà `database_damaged`. In
   più `trusted_schema=OFF` sulle cinque connessioni di B alla copia. L'`alembic upgrade` girava già in un processo a
   sé, col suo tempo massimo.
@@ -6001,11 +6009,12 @@ sulla base `23f6578f3`.
   totali `unreadable`. Correzione: leggere `current` dentro un `try` che risponde `unreadable`, con un WARNING come per
   i totali registrati. Dettagli: piano 07, «B-29».
 
-  ✅ **Fatto il 17/10** (checkpoint delle 06:10): `current` si legge dentro un `try`; un documento che J rifiuta dà
-  `unreadable` col WARNING «The control totals of the copy cannot be read: they are not compared», mai un controllo
-  fallito. Test: 5 casi in `test_backup_totals.py`, più uno di staging (un registro con una quantità esatta 1e70).
-  Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J legge accanto a
-  una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince `absent`.
+  ✅ **Fatto il 17/10** (checkpoint delle 06:10, commit `c96861834`): `current` si legge dentro un `try`; un documento
+  che J rifiuta dà `unreadable` col WARNING «The control totals of the copy cannot be read: they are not compared»,
+  mai un controllo fallito. Test: 5 casi in `test_backup_totals.py`, più uno di staging (un registro con una quantità
+  esatta 1e70). Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J
+  legge accanto a una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince
+  `absent`.
 
 ## E · Email (fase 01)
 
