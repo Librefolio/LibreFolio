@@ -240,6 +240,21 @@ event loop, and the replay would fail with `MissingGreenlet`. `test_engine_off_t
 (`test_financial/test_portfolio_engine/`) pins the worker thread, the loop running meanwhile, the parity with a replay
 on the loop, the copied context, and a guard that fails on any lazy load during the replay.
 
+**One build per key at a time** (MF-J45b). Two identical requests that miss the cache together — the same user in two
+tabs, a refresh during a cold build, the PAC planner's allocation source beside the report — used to pay the reads and
+one of the two workers each. `calculate()` now keeps the builds in flight in `_IN_FLIGHT`, by blob key and range
+(`(blob_key, actual_from, actual_to)`, the range the cache accepts):
+
+- the first request builds (`_compute_uncached()`: steps 6–12 above, unchanged), stores the result in the cache and
+  hands it to the requests that arrived meanwhile, which `await asyncio.shield()` it: they get the same object, as a
+  cache hit does, read-only;
+- if the build fails or its request is cancelled, the `finally` settles the entry with `_LeaderGone` **before** it
+  removes it, so no request waits on a build nobody will finish: the first waiting request to resume builds for
+  itself, the others wait for it; the leader's own error stays its own;
+- a waiting request that is cancelled leaves the build alone (`shield`); other keys or ranges never wait for each
+  other. The map is per process, like the cache.
+{: #single-flight }
+
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 
 `DailyStateBuilder.build()` runs one replay, with the same rules every day, from the earliest
