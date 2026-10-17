@@ -2748,7 +2748,7 @@ an `info` (H-39).
 | `LIBREFOLIO_FRAME_PROTECTION` | `X-Frame-Options` | `SAMEORIGIN` | Every HTTP response, a `304` included |
 | `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `PAGE_POLICY`: `frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'` | Documents, whatever the path (H-45): HTML (the web app's pages, the documentation, Swagger UI and ReDoc), XHTML, SVG and XML, any type ending with `+xml` included; never a `304` |
 | `LIBREFOLIO_FRAME_PROTECTION` | `Content-Security-Policy` | `frame-ancestors 'self'`, that directive only | Every other response but a `304` |
-| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below | The HTML pages of the web app (`text/html` exactly); never a `304` |
+| `LIBREFOLIO_CSP_REPORT_ONLY` | `Content-Security-Policy-Report-Only` | `CSP_REPORT_ONLY_POLICY`, below, with the hashes of the build's inline scripts in its `script-src` (`report_only_policy()`, H-52) | The HTML pages of the web app (`text/html` exactly); never a `304` |
 
 - **Frame protection** (`FRAME_HEADERS`, or `PAGE_FRAME_HEADERS` on a document) is enforced: only the app's own
   pages may frame it, so a hosting panel or a dashboard on another origin that shows the app in a frame is refused by
@@ -2813,6 +2813,10 @@ an `info` (H-39).
 - **The report-only policy blocks nothing**: the browser lists each violation in its developer console. There is no
   report endpoint: the policy has no `report-uri` or `report-to`, and no `Report-To` or `Reporting-Endpoints` header
   is sent.
+- **`'report-sample'`** (H-52). With it in `script-src`, Chromium puts the first 40 characters of a blocked script or
+  `eval` in the violation's `sample`. Today only the page's own `securitypolicyviolation` event sees them, since the
+  policy names no report endpoint; if one is ever added (`report-uri`, `report-to`), those characters leave the
+  browser with every report.
 - **Where the report-only policy goes.** `_is_web_app_page()` decides at `http.response.start`, from the response's
   `Content-Type` and `scope["path"]`: the media type `_media_type()` reads must be exactly `text/html` (`_is_html()`),
   and the path must be outside `/mkdocs` (bare or `/mkdocs/…`) and `/api` (bare or `/api/…`); a `304` never gets the
@@ -2824,17 +2828,27 @@ an `info` (H-39).
   path; every other document, an SVG or an XHTML page even on a web-app path, which gets `PAGE_POLICY` and no
   report-only header; and every response that is not a document: JavaScript, JSON, text files, and the CORS
   preflights and the 500, which are plain text.
+- **The inline scripts, by their hashes** (H-52). `spa_inline_script_hashes(build_dir)`
+  (`backend/app/services/platform/static_site.py`) reads every top-level `*.html` of the build, `frontend/build/`
+  (today `index.html`, `200.html` and `offline.html`; never a hidden one, which no route serves), and gives the CSP
+  source expression `'sha256-<base64>'` of every `<script>` without `src`, whatever its `type`: its text with the line
+  ends the HTML parser leaves (CR LF and a lone CR become LF), encoded in UTF-8, each expression once, sorted.
+  `report_only_policy(hashes)` (`security_headers.py`) appends them to the `script-src` of `CSP_REPORT_ONLY_POLICY`.
+  Without a build there is no hash, and a page that cannot be read is left out with a warning: the server starts all
+  the same, and the browser reports what the policy then lacks.
 - **Read once.** `SecurityHeadersMiddleware.__init__` reads both switches from `get_settings()`, so they are read when
   the middleware is built, never per request. Starlette builds the middleware stack lazily, at the app's first ASGI
   call: for the real app, the lifespan startup. Changing a switch takes a restart, and the tests build a fresh app for
-  each configuration.
+  each configuration. With the report-only policy on, `__init__` also builds that header, once, with the hashes of the
+  build it finds then; with the policy off, the build is never read. A new frontend build therefore takes a restart
+  too: SvelteKit's start script names the build's own chunks, so its hash changes with every build.
 
 `CSP_REPORT_ONLY_POLICY`, directive by directive:
 
 | Directive | Sources | Why |
 |-----------|---------|-----|
 | `default-src` | `'self'` | Every fetch directive the policy does not name falls back to the app's own origin |
-| `script-src` | `'self' 'wasm-unsafe-eval'` | Script files from the app's origin, no inline script; WebAssembly may compile, for the PDF viewer (its PDFium engine) |
+| `script-src` | `'self' 'wasm-unsafe-eval' 'report-sample'`, then the hashes of the build's inline scripts | Script files from the app's origin, and an inline script only by its hash; WebAssembly may compile, for the PDF viewer (its PDFium engine); a violation carries the first 40 characters of the blocked code (above) |
 | `style-src` | `'self' 'unsafe-inline'` | The app's inline styles are allowed |
 | `img-src` | `'self' data: blob: https:` | Images from any HTTPS address: asset and broker icons are set by URL |
 | `font-src` | `'self' data:` | Fonts from the app's origin, or inlined as `data:` URLs |
@@ -2846,16 +2860,20 @@ an `info` (H-39).
 | `form-action` | `'self'` | Forms submit to the app's origin only |
 | `frame-ancestors` | `'self'` | Only the app's own pages may frame the page, as with frame protection |
 
-Today a page of the web app reports at least its inline scripts: the one of `frontend/src/app.html`, which applies the
-theme before the first paint and registers the service worker, and the start script SvelteKit writes into the page
-(`frontend/svelte.config.js` has no `csp` option, so SvelteKit adds no hash or nonce to it);
-`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached, has one too. These
-reports are expected until the scripts move to files or get hashes: the report-only phase is there to list what an
-enforced policy would block. The managed lane's cloud smoke met two more, both recorded in the
+The inline scripts of the build's pages are all allowed by their hashes, so none of them is reported any more (H-52):
+the script of `frontend/src/app.html`, in `index.html` and `200.html`, which applies the theme before the first paint,
+keeps the PWA install prompt and registers the service worker; the start script SvelteKit writes into each of those two
+pages, a different one in `200.html`, the SPA fallback (`base: ""`, absolute imports), since
+`frontend/svelte.config.js` has no `csp` option and SvelteKit adds no hash or nonce itself; and the script of
+`frontend/static/offline.html`, the page the service worker shows when the server cannot be reached. That page's retry
+button listens through its script (`addEventListener`), not an inline `onclick`: an inline event handler falls under
+`script-src-attr`, which no hash of `script-src` covers, and the policy does not use `'unsafe-hashes'`. The managed
+lane's cloud smoke met two more violations, both recorded in the
 [E2E baseline](../test-walkthrough/e2e.md#csp-baseline): cheetah-grid's `eval`, a harmless probe of the global object,
-and the `connect-src` of the [address check](#address-probe) of a link, which fetches the address the administrator
-typed. That check is what an enforced `connect-src 'self'` would break: for an origin other than the page's it would
-read *unverifiable* (backlog H-53, workstream A for the experience).
+known only by its exact sample, so any other `eval` fails a test; and the `connect-src` of the
+[address check](#address-probe) of a link, which fetches the address the administrator typed. That check is what an
+enforced `connect-src 'self'` would break: for an origin other than the page's it would read *unverifiable* (backlog
+H-53, workstream A for the experience).
 
 Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
 `nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
@@ -2874,7 +2892,12 @@ an XHTML on a web-app path, with `PAGE_POLICY` and no report-only header; a `304
 of `StaticFiles` under `/_app`, an SVG whose `200` carries `PAGE_POLICY` and whose `304` no policy; the report-only
 policy on the web app's HTML only, compressed too, never on the documentation, the API's JSON or HTML, a JavaScript
 chunk, a text file, a CORS preflight or a 500; the policy read directive by directive, each directive once, with no
-report endpoint; a route's own header kept alone and the others added, its own `Content-Security-Policy` on an HTML
+report endpoint, its `script-src` exactly `'self' 'wasm-unsafe-eval' 'report-sample'` and then the hashes of the fake
+build's inline scripts (H-52: `spa_inline_script_hashes()` alone, on builds written for each of its rules, against a
+published vector, with no build or no page, and with a page that cannot be decoded, skipped with one warning;
+`report_only_policy()` appending the hashes in the order given; the header built once, when the middleware is built, a
+build changed afterwards leaving it as it was, and the build never read with the policy off); a route's own header kept
+alone and the others added, its own `Content-Security-Policy` on an HTML
 page never replaced by `PAGE_POLICY`; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
@@ -2893,7 +2916,10 @@ controls come first, on the sign-in page: an injected `<object>` typed `applicat
 origin and a form posted to another origin must each be refused with an enforced violation. The `<object>` is plugin
 content on purpose: in Chromium 149, an untyped `<object>` of an image, inserted in the same task as the form's
 submission, is fetched as an image with no `object-src` check. Then a documentation page and its search, the PDF
-preview and the Dashboard must raise none.
+preview and the Dashboard must raise none. `./dev.py test front-utility csp-collector` checks the hashes end to end: it
+computes the policy itself from the lane's three pages, requires a managed lane's header to equal it on each, and finds
+that the sign-in page and the offline page report nothing under it (see
+[CSP Collector](../test-walkthrough/front-utility.md#csp-collector)).
 
 ## 🌐 HTTPS & Deployment Architecture
 

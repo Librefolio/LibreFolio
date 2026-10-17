@@ -40,6 +40,11 @@
     "transferShareMismatch": "{count} trasferimento/i tra broker in cui la tua quota è diversa — la differenza conta come guadagno o perdita",
     "invalidSplitRatio": "{count} asset con un frazionamento dal rapporto non valido — ignorato finché non lo correggi negli eventi dell'asset",
     "transactionsBeforeFloor": "{count} transazioni datate prima del 1900 (la più vecchia il {earliest}) — lo storico parte dal 1° gennaio 1900: correggine le date",
-    "quoteInMinorUnit": "{count} asset quotati in pence (GBp) dal loro provider e valutati come sterline — imposta «Unità per singolo prezzo» a 100 in ciascuno"
+    "quoteInMinorUnit": "{count} asset quotati in pence (GBp) dal loro provider e valutati come sterline — imposta «Unità per singolo prezzo» a 100 in ciascuno",
+    "nonIsoCurrencySuggestion": "Importi in «{value}», che non è un codice valuta ISO (sta per {suggestion}) — le loro conversioni possono mancare, e le loro righe non si possono salvare di nuovo finché il codice non viene corretto",
+    "nonIsoCurrencyCandidates": "Importi in «{value}», che non è un codice valuta ISO (può stare per {candidates}) — le loro conversioni possono mancare, e le loro righe non si possono salvare di nuovo finché il codice non viene corretto",
+    "nonIsoCurrencyUnknown": "Importi in «{value}», che non è un codice valuta ISO — le loro conversioni possono mancare, e le loro righe non si possono salvare di nuovo finché il codice non viene corretto",
+    "nonIsoReportCurrency": "Questo rapporto converte in «{value}», che non è un codice valuta ISO (sta per {suggestion}) — scegli {suggestion} come «Valuta Predefinita» in Impostazioni › Preferenze",
+    "nonIsoReportCurrencyUnknown": "Questo rapporto converte in «{value}», che non è un codice valuta ISO — scegli di nuovo la «Valuta Predefinita» in Impostazioni › Preferenze"
   }
 }

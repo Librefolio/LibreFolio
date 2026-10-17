@@ -303,6 +303,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
             "src/lib/components/ui/feedback/ToastContainer.test.ts",
             "src/lib/components/ui/feedback/Tooltip.test.ts",
+            "src/lib/components/ui/feedback/DataQualityBanner.nonIso.test.ts",
             "src/lib/components/ui/tabs/TabBar.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
@@ -768,7 +769,7 @@ CLOUD_SMOKE_SPECS = [
 
 
 def front_csp_collector(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run H-43's collector of Content-Security-Policy violations: its helpers, synthetic pages with a policy of their own, and the app's two inline scripts as the baseline knows them."""
+    """Run H-43's collector of Content-Security-Policy violations: its helpers, synthetic pages with a policy of their own, and the app's pages under the managed report-only policy, their inline scripts allowed by hash (H-52)."""
     print_section("Frontend CSP Collector Tests")
     if not _ensure_frontend_build():
         return False
@@ -1180,7 +1181,7 @@ def populate_registry(registry: dict) -> None:
         "csp-collector",
         front_csp_collector,
         name="CSP Collector",
-        desc="H-43: the collector of Content-Security-Policy violations of e2e/fixtures/playwright.ts (e2e/fixtures/csp.ts, e2e/csp-baseline.json): its helpers, a report-only violation of a synthetic page recorded (the script still runs), one the baseline does not know failing the test, violations of two documents in a row, and on the app's index.html with the managed report-only policy exactly its two inline scripts, both known",
+        desc="H-43: the collector of Content-Security-Policy violations of e2e/fixtures/playwright.ts (e2e/fixtures/csp.ts, e2e/csp-baseline.json): its helpers, a report-only violation of a synthetic page recorded (the script still runs), one the baseline does not know failing the test, violations of two documents in a row, entries known by an exact sample (H-52), and the app under the managed report-only policy with the hashes of its inline scripts (computed by the spec, equal to a managed lane's header): the sign-in page and the offline page report nothing, no page has an inline event handler, and the offline page's retry button reloads it",
         prereq="Populated DB + test users",
         tests="layout/csp-collector.spec.ts",
     )

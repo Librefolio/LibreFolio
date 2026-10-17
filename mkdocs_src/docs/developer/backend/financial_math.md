@@ -86,7 +86,7 @@ backend/app/services/financial_math/
 │   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
-│   ├── period.py            a period's boundary states, its P&L and the identity that closes it; the day's P&L change
+│   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change
 │   ├── contributions.py     a position's row in the Dashboard's Performance table: return on the start value, annualized returns, the internal-transfer split (P22)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py

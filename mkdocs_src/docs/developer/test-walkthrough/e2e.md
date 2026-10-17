@@ -190,8 +190,8 @@ blocked, and the browser lists each violation in its console, where nobody reads
 something an enforced policy would block. The **collector** (lot H-43) turns them into reds:
 `cspViolations`, an automatic, test-scoped fixture of `e2e/fixtures/playwright.ts`, which every spec
 imports, records the violations of the test's pages and fails the test on any that the baseline
-does not know. Its pure logic is in `e2e/fixtures/csp.ts` (`cspCollectorEnabled`,
-`inlineScriptLines`, `isKnown`, `loadBaseline`).
+does not know. Its pure logic is in `e2e/fixtures/csp.ts` (`cspCollectorEnabled`, `isKnown`,
+`loadBaseline`).
 
 ### 🧾 What it records
 
@@ -216,9 +216,10 @@ What there is to record depends on the lane:
   `frontend/src/app.html` has no `<meta>` policy, so the collector records nothing, unless a spec
   adds a policy of its own (`layout/page-policy.spec.ts`, `layout/csp-collector.spec.ts`).
 - **Managed** (`--lane-setting LIBREFOLIO_PROFILE=managed`, see [Lane Settings](index.md#lane-settings)):
-  the app's pages carry `Content-Security-Policy-Report-Only` with `CSP_REPORT_ONLY_POLICY`
-  (`backend/app/services/platform/security_headers.py`, see
-  [Frame Protection and the Report-Only Policy](../architecture/security.md#managed-headers)). Its
+  the app's pages carry `Content-Security-Policy-Report-Only` with `CSP_REPORT_ONLY_POLICY` and the
+  hashes of the build's inline scripts (`backend/app/services/platform/security_headers.py`, see
+  [Frame Protection and the Report-Only Policy](../architecture/security.md#managed-headers)), so
+  the app's own inline scripts report nothing. Its
   violations, disposition `report`, are what an enforced policy would block. With frame protection
   on, the managed default, the enforced `PAGE_POLICY` is there too, and its violations are recorded
   as `enforce`.
@@ -226,30 +227,25 @@ What there is to record depends on the lane:
 ### 📒 The baseline {: #csp-baseline }
 
 `frontend/e2e/csp-baseline.json` lists the violations already known, each entry with an `id`, a
-`directive`, the blocked resource, an optional `indexInlineScript`, a `reason` and an `owner`. An
-entry knows a violation of its directive whose blocked resource it names, by exactly one of two
-keys:
+`directive`, the blocked resource, an optional `sample`, a `reason` and an `owner`. An entry knows
+a violation of its directive through three keys:
 
 - `blockedURI`: the violation's blocked URI, equal (`inline`, `eval`, an address);
 - `blockedPath`: the path of the blocked address, whole, whatever its origin and query, for an
   address the user typed. A blocked URI that is not an absolute URL (`inline`, `eval`) never
-  matches it.
+  matches it;
+- `sample`, optional: the violation's sample, equal. The policy has `'report-sample'`, so
+  Chromium reports the first 40 characters of a blocked script or `eval`; an entry without
+  `sample` knows the violation whatever its sample.
 
-With `indexInlineScript: n`, the violation's line must also fall inside the inline `<script>` at
-position `n` (0-based) of the app's `index.html` as the lane serves it at `/`, read once per worker
-(when it cannot be read, no inline script is known). So an edit of `frontend/src/app.html` that
-moves a script keeps it known, while a third inline script leaves a violation unknown. The lines
-come from `index.html`, which `/` serves, while a deep link is served `200.html`: its inline scripts
-sit on the same lines today, since SvelteKit generates both pages from `app.html`, and the later lot
-that hashes the inline scripts into the policy removes these entries.
+An entry has exactly one of `blockedURI` and `blockedPath`. The app's own inline scripts need no
+entry: the policy allows them by their hashes (lot H-52).
 
-Four entries today:
+Two entries today:
 
 | `id` | Matches | The violation, and who cures it |
 |------|---------|---------------------------------|
-| `index-inline-script-0` | `script-src-elem`, `inline`, inline script 0 | The inline script of `frontend/src/app.html`, in every page of the app: the theme before the first paint, the PWA install prompt, the service worker's registration. Removed by the lot of workstream H that hashes the inline scripts of `index.html` (D4) |
-| `index-inline-script-1` | `script-src-elem`, `inline`, inline script 1 | SvelteKit's inline bootstrap, which the SPA's `index.html` needs to start the app. Removed by the same lot |
-| `cheetah-grid-global-probe` | `script-src`, `eval` | cheetah-grid's bundled webpack probe of the global object, `new Function("return this")()`, inside a `try`/`catch` that falls back to `window`: harmless under an enforced policy. Found by the first cloud smoke in the BRIM table preview (`files.spec.ts`). Until the D4 lot narrows it (`'report-sample'` in `CSP_REPORT_ONLY_POLICY`, then a match on the sample `return this`), this entry knows **every** `eval`; it goes when cheetah-grid stops probing with `eval` |
+| `cheetah-grid-global-probe` | `script-src`, `eval`, `sample` `(function anonymous(\n) {\nreturn this\n})` (`\n` a line break) | cheetah-grid's bundled webpack probe of the global object, `new Function("return this")()`, inside a `try`/`catch` that falls back to `window`: harmless under an enforced policy. Found by the first cloud smoke in the BRIM table preview (`files.spec.ts`). The sample is the source Chromium reports for `new Function("return this")`; istanbul's coverage preamble is the same probe, so a run under JS coverage matches it too, and any other `eval` fails a test. Removed when cheetah-grid stops probing the global object with `eval` (an upgrade, or a bundler that rewrites the probe) |
 | `address-probe-other-origin` | `connect-src`, `blockedPath` `/api/v1/auth/address-probe` | The address check of a link, in the Users tab of Settings › Administration, fetches the address the administrator typed, whatever its origin (`admin-users.spec.ts` types other origins on purpose). Under an enforced `connect-src 'self'`, a check of another origin than the page's would be blocked. Owners: workstream A (the check's experience) and H (the enforcement lot: the configured public origin in `connect-src`, or a check made by the server) |
 
 The baseline is a ratchet: an entry is added only by a recorded decision, with its reason and its
@@ -270,9 +266,13 @@ the switch would no longer reach Playwright.
 ### 🚨 When the collector fails a test
 
 1. Read the test's `csp-violations` attachment in the report: each violation with its directive,
-   blocked URI, source file, line and page.
+   blocked URI, source file, line and page, and for a blocked script or `eval` its sample, the
+   first 40 characters of the code.
 2. Fix the page. A real fix changes what the app does (a script moved to a file, a resource served
-   from the app's own origin), and the violation is gone.
+   from the app's own origin), and the violation is gone. An inline `<script>` in a page of the
+   build is allowed by its hash, which the server computes when it starts: after a new build,
+   restart the server. An inline event handler (`onclick="…"`) is `script-src-attr`, which no hash
+   covers: listen from the page's script instead, as `frontend/static/offline.html` does.
 3. Add a baseline entry only by a recorded decision: the violation understood, its `reason`
    written, its `owner` the lot that will cure it.
 4. `test.use({cspFailOnUnknown: false})` belongs only to a test whose subject is the violations

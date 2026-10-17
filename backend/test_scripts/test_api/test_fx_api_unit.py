@@ -7,7 +7,9 @@ without live server/network dependency.
 X-R38 (the FX side of W-B58): POST /fx/currencies/rate and a rate no column can keep, served in process
 (``httpx.ASGITransport``) on the lane's test database: see its block at the end. X-R50 (E's review R13-SEC5 on X-R38): a
 rate whose double is 1E+14 and an inverse that underflows to 0, in the same block. X-R46: the same endpoint names the rates
-it refused, machine-readable (``rejected``; a 400 whose detail is an object): its block follows X-R38's.
+it refused, machine-readable (``rejected``; a 400 whose detail is an object): its block follows X-R38's. X-R41: POST
+/fx/currencies/convert of an amount of 0, a 500 today, converted as one unit of its currency: its block follows X-R46's,
+the handler called with ``convert_bulk`` patched, and one case on the wire.
 """
 
 import json
@@ -40,8 +42,8 @@ from backend.app.db.models import FxConversionRoute, FxRate
 from backend.app.db.precision import storable_fx_rate
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import fx as fx_schemas
-from backend.app.schemas.common import DateRangeModel
-from backend.app.schemas.fx import FXConversionRouteItem, FXConversionRouteReadItem, FXDeleteItem, FXUpsertItem
+from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.fx import FXConversionRequest, FXConversionRouteItem, FXConversionRouteReadItem, FXConvertResponse, FXDeleteItem, FXUpsertItem
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest, FXSyncPairResult, SyncDateRangeModel, SyncStatus
 from backend.app.services.fx import catalog as fx_catalog
 from backend.app.services.fx import storage as fx_storage
@@ -1141,3 +1143,237 @@ async def test_xr46_wire_400_of_upsert_rates_carries_an_object_detail():
     assert isinstance(detail, dict), f"X-R46: {story}: the 400's detail is a {type(detail).__name__}, not the object {{code, message, rejected}}: {detail!r}"
     assert (detail.get("code"), detail.get("rejected")) == ("fx_rates_refused", [{"index": 0, "date": XR38_DAYS[0].isoformat(), "reason": "rate_not_storable"}]), detail
     assert str(detail.get("message")).startswith("All rates failed: Rate 0:"), detail
+
+
+# ============================================================================
+# X-R41: POST /fx/currencies/convert of an amount of 0
+# ============================================================================
+#
+# The defect, on HEAD ab74aafbf: ``convert_currency_bulk`` gives each daily result between two currencies the rate
+# ``converted / from_amount`` (``api/v1/fx/currencies.py`` ~582). ``convert_bulk`` converts 0 to 0 (0 × the rate), so an
+# amount of 0 divides 0 by 0: ``decimal.InvalidOperation`` ([DivisionUndefined]) escapes the handler, which has no try
+# around the division, and the server answers 500 to the whole request, its other conversions with it. An amount of 0 is
+# not only typed: the asset detail converts its live native value as it is (``assetDetailLive.svelte.ts``).
+#
+# Contract (X-R41): a daily conversion of 0 reaches ``convert_bulk`` as one unit of its source currency,
+# ``Currency(code=<source>, amount=Decimal("1"))``, as the signal blocks already do, the request's amount staying in the
+# expansion. The answer: 200; each result's ``to_amount`` 0 in ``to_currency``, its ``from_amount`` the request's, its
+# ``rate`` the unit's converted amount (the pair's rate on that day), its date and ``backward_fill_info`` as for any
+# amount. Between the same currency: ``rate`` None and ``to_amount`` 0, as today. Any other amount is unchanged: handed to
+# ``convert_bulk`` as it is, its ``rate`` converted / amount.
+#
+# The handler is called directly, ``convert_bulk`` patched where it reads it (``_xr41_convert_bulk``): a recording double
+# that converts as the real one, the amount times its pair's fixed rate (the amount itself between the same currency), and
+# fills back the days it is told to; nothing reaches a database. One case reads the answer on the wire instead
+# (``_xr41_post``, as ``_xr38_post``), on the lane's test database and a BAM/SSP rate it stores.
+#
+# Isolation: the unit's default, write-scoped. BAM/SSP is this block's own (no seed and no other test uses either
+# currency): every BAM/SSP rate is wiped before and after the wire case, and no other rate is read or written.
+
+XR41_DAYS = (date(1987, 6, 1), date(1987, 6, 2))
+XR41_EUR_USD = Decimal("1.1")  # the double's EUR → USD rate
+XR41_PAIR = ("BAM", "SSP")  # the wire case's own pair, stored BAM/SSP (base < quote)
+XR41_STORED_RATE = Decimal("2471.25")  # 1 BAM = 2471.25 SSP: a double exactly, so the column reads it back as written
+_XR41_CONVERT_URL = "/api/v1/fx/currencies/convert"
+
+
+def _xr41_request(code: str, amount: str, to: str, days: tuple[date, ...] = XR41_DAYS) -> FXConversionRequest:
+    """One conversion of the request, as a client posts it: ``amount`` ``code`` → ``to``, from the first of ``days`` to the
+    last."""
+    return FXConversionRequest.model_validate({"from_amount": {"code": code, "amount": amount}, "to": to, "date_range": {"start": days[0].isoformat(), "end": days[-1].isoformat()}})
+
+
+def _xr41_converted(amount: Currency, to: str, rates: dict[tuple[str, str], Decimal]) -> Decimal:
+    """What the double converts ``amount`` to in ``to``, as ``convert_bulk`` does: the amount itself between the same
+    currency, else the amount times its pair's rate in ``rates``."""
+    return amount.amount if amount.code == to else amount.amount * rates[(amount.code, to)]
+
+
+def _xr41_convert_bulk(monkeypatch: pytest.MonkeyPatch, rates: dict[tuple[str, str], Decimal], filled: dict[date, date] | None = None) -> AsyncMock:
+    """``convert_bulk`` where the handler reads it, on no database: each conversion handed to it answered by
+    ``_xr41_converted``, dated the day asked or, between two currencies, the day ``filled`` maps it to, backward-filled; no
+    error. The mock keeps what reached it (``_xr41_handed``)."""
+    filled = filled or {}
+
+    async def _convert(_session, conversions, raise_on_error=True):
+        results = []
+        for amount, to, day in conversions:
+            rate_day = day if amount.code == to else filled.get(day, day)
+            results.append((Currency(code=to, amount=_xr41_converted(amount, to, rates)), rate_day, rate_day < day))
+        return results, []
+
+    double = AsyncMock(side_effect=_convert)
+    monkeypatch.setattr(fx_currencies_api, "convert_bulk", double)
+    return double
+
+
+def _xr41_handed(double: AsyncMock) -> list[tuple[str, Decimal, str, date]]:
+    """Every conversion handed to the double, in order: (source currency, amount, target currency, day)."""
+    return [(amount.code, amount.amount, to, day) for call in double.await_args_list for amount, to, day in call.args[1]]
+
+
+def _xr41_answers(response) -> list[tuple]:
+    """The results of the answer in order, each as plain values: ``from_amount`` and ``to_amount`` as (code, amount), the
+    conversion date, the rate, and the backward fill as (the rate's date, the days back), None without one."""
+
+    def _plain(result) -> tuple:
+        fill = result.backward_fill_info
+        return ((result.from_amount.code, result.from_amount.amount), (result.to_amount.code, result.to_amount.amount), result.conversion_date, result.rate, None if fill is None else (fill.actual_rate_date, fill.days_back))
+
+    return [_plain(result) for result in response.results]
+
+
+async def _xr41_convert(request: list[FXConversionRequest], double: AsyncMock, story: str):
+    """``POST /fx/currencies/convert`` of ``request``: the handler called directly, its session and its user stubbed. What
+    escapes it fails the test naming it, with what reached the double: an ``HTTPException`` its status, any other exception
+    the 500 the server answers."""
+    try:
+        return await fx_currencies_api.convert_currency_bulk(request, session=AsyncMock(), _current_user=Mock())
+    except HTTPException as exc:
+        pytest.fail(f"{story} answered {exc.status_code} {exc.detail!r}, convert_bulk received {_xr41_handed(double)}: expected 200 (X-R41)")
+    except Exception as exc:  # noqa: BLE001 — what escapes the handler is what the server answers 500 to
+        pytest.fail(f"{story} raised {exc!r}, the server answers 500; convert_bulk received {_xr41_handed(double)} (X-R41: 200, an amount of 0 converted as one unit)")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("zero", [pytest.param("0", id="0"), pytest.param("0.00", id="derived-0.00")])
+async def test_xr41_convert_currency_bulk_converts_an_amount_of_0_as_one_unit(monkeypatch, zero):
+    """X-R41: EUR ``zero`` → USD over two days, beside EUR 100 → USD over the same two days. The double converts EUR → USD
+    at 1.1 and has no rate of its own on the second day: it fills the first day's back.
+
+    Red on HEAD ab74aafbf: the double gets the 0 itself and answers USD 0; the handler divides that 0 by the amount, 0, and
+    ``decimal.InvalidOperation`` escapes it: the server's 500, the 100's conversions lost with it.
+    Contract: 200, no error. The double gets one unit, EUR 1 → USD, for each day of the 0, and EUR 100 for each day of the
+    100. The answer, in request order and days ascending: each day of the 0 is EUR 0 as requested → USD 0, at the rate of
+    the double's unit, 1.1, with the backward fill of the 100's same day; the 100's are USD 110 at 1.1, the first day not
+    filled, the second filled 1 day back. The ``derived-`` case reads the same rule with a 0 written 0.00.
+    """
+    rates = {("EUR", "USD"): XR41_EUR_USD}
+    double = _xr41_convert_bulk(monkeypatch, rates, filled={XR41_DAYS[1]: XR41_DAYS[0]})
+    unit = _xr41_converted(Currency(code="EUR", amount=Decimal("1")), "USD", rates)  # what the double answers one EUR: USD 1.1
+    story = f"POST /fx/currencies/convert of EUR {zero} → USD and EUR 100 → USD, each from {XR41_DAYS[0]} to {XR41_DAYS[1]}"
+
+    response = await _xr41_convert([_xr41_request("EUR", zero, "USD"), _xr41_request("EUR", "100", "USD")], double, story)
+
+    handed = sorted(_xr41_handed(double))
+    expected_handed = sorted(("EUR", amount, "USD", day) for amount in (Decimal("1"), Decimal("100")) for day in XR41_DAYS)
+    assert handed == expected_handed, f"X-R41: {story}: convert_bulk received {handed}, expected one unit, EUR 1 → USD, for each day of the {zero}, and EUR 100 for each day of the 100"
+    assert (response.success_count, response.errors) == (4, []), f"{story}: {response}"
+    answers = _xr41_answers(response)
+    filled_back = (XR41_DAYS[0], 1)
+    expected = [
+        (("EUR", Decimal(zero)), ("USD", Decimal("0")), XR41_DAYS[0], unit, None),
+        (("EUR", Decimal(zero)), ("USD", Decimal("0")), XR41_DAYS[1], unit, filled_back),
+        (("EUR", Decimal("100")), ("USD", Decimal("110")), XR41_DAYS[0], XR41_EUR_USD, None),
+        (("EUR", Decimal("100")), ("USD", Decimal("110")), XR41_DAYS[1], XR41_EUR_USD, filled_back),
+    ]
+    assert answers == expected, f"X-R41: {story} answered {answers}, expected {expected}"
+
+
+@pytest.mark.asyncio
+async def test_xr41_guard_convert_currency_bulk_answers_0_and_no_rate_for_the_same_currency(monkeypatch):
+    """X-R41 guard, green on HEAD ab74aafbf and after: EUR 0 → EUR on one day.
+
+    Green today: between the same currency the handler never divides, the rate None. Pinned for the cure, which may send
+    this 0 as a unit too (the double, as ``convert_bulk``, answers that unit EUR 1): 200, no error, one result, EUR 0 as
+    requested → EUR 0, ``rate`` None, no backward fill.
+    """
+    double = _xr41_convert_bulk(monkeypatch, {})
+    story = f"POST /fx/currencies/convert of EUR 0 → EUR on {XR41_DAYS[0]}"
+
+    response = await _xr41_convert([_xr41_request("EUR", "0", "EUR", XR41_DAYS[:1])], double, story)
+
+    assert (response.success_count, response.errors) == (1, []), f"{story}: {response}"
+    answers = _xr41_answers(response)
+    assert answers == [(("EUR", Decimal("0")), ("EUR", Decimal("0")), XR41_DAYS[0], None, None)], f"X-R41: {story} answered {answers}, expected EUR 0 and no rate"
+
+
+@pytest.mark.asyncio
+async def test_xr41_guard_convert_currency_bulk_keeps_the_rate_of_an_amount_that_is_not_0(monkeypatch):
+    """X-R41 guard, green on HEAD ab74aafbf and after: EUR 100 → USD on one day, the double converting at 1.1.
+
+    Pinned for the cure: an amount that is not 0 is unchanged. The double gets EUR 100 itself and no unit beside it; the
+    answer is 200, no error, EUR 100 → USD 110 at the rate converted / amount, 1.1, both exactly (``Decimal``), no
+    backward fill.
+    """
+    double = _xr41_convert_bulk(monkeypatch, {("EUR", "USD"): XR41_EUR_USD})
+    story = f"POST /fx/currencies/convert of EUR 100 → USD on {XR41_DAYS[0]}"
+
+    response = await _xr41_convert([_xr41_request("EUR", "100", "USD", XR41_DAYS[:1])], double, story)
+
+    handed = _xr41_handed(double)
+    assert handed == [("EUR", Decimal("100"), "USD", XR41_DAYS[0])], f"X-R41: {story}: convert_bulk received {handed}, expected EUR 100 alone"
+    assert (response.success_count, response.errors) == (1, []), f"{story}: {response}"
+    answers = _xr41_answers(response)
+    assert answers == [(("EUR", Decimal("100")), ("USD", Decimal("110")), XR41_DAYS[0], Decimal("1.1"), None)], f"X-R41: {story} answered {answers}, expected USD 110 at 1.1"
+
+
+async def _xr41_wipe() -> None:
+    """Drop every BAM/SSP rate: the pair is this block's own."""
+    async with AsyncSession(get_async_engine()) as session:
+        await session.execute(delete(FxRate).where(FxRate.base == XR41_PAIR[0], FxRate.quote == XR41_PAIR[1]))
+        await session.commit()
+
+
+@pytest_asyncio.fixture
+async def xr41_bam_ssp_rate():
+    """X-R41: during the test BAM/SSP holds one rate, ``XR41_STORED_RATE`` on the first of ``XR41_DAYS``; before and
+    after it, none."""
+    await _xr41_wipe()
+    try:
+        async with AsyncSession(get_async_engine()) as session:
+            session.add(FxRate(date=XR41_DAYS[0], base=XR41_PAIR[0], quote=XR41_PAIR[1], rate=XR41_STORED_RATE, source="MANUAL"))
+            await session.commit()
+        yield
+    finally:
+        await _xr41_wipe()
+
+
+async def _xr41_stored() -> dict[date, Decimal]:
+    """The BAM/SSP rates by date, read through the model, as the app reads them."""
+    async with AsyncSession(get_async_engine()) as session:
+        rows = (await session.execute(select(FxRate.date, FxRate.rate).where(FxRate.base == XR41_PAIR[0], FxRate.quote == XR41_PAIR[1]))).all()
+    return {row.date: row.rate for row in rows}
+
+
+async def _xr41_post(conversions: list[dict], story: str) -> httpx.Response:
+    """``POST /api/v1/fx/currencies/convert`` with ``conversions`` as JSON, served in process by the FX rate routes on the
+    lane's test database, a signed-in user stubbed, as ``_xr38_post``. An exception escaping the app fails the test naming
+    it: the server answers 500."""
+    app = FastAPI()
+    app.include_router(fx_currencies_api.router_currencies, prefix="/api/v1/fx")
+    app.dependency_overrides[get_current_user] = _xr38_signed_in_user
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        try:
+            return await client.post(_XR41_CONVERT_URL, json=conversions)
+        except Exception as exc:  # noqa: BLE001 — what escapes the app is what the server answers 500 to
+            pytest.fail(f"{story}: POST /fx/currencies/convert raised {exc!r}, the server answers 500 (X-R41: 200, an amount of 0 converted as one unit)")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("xr41_bam_ssp_rate")
+async def test_xr41_wire_convert_of_0_answers_0_at_the_stored_rate():
+    """X-R41 on the wire, on the lane's test database: BAM "0" → SSP over two days, as a client posts it, with one BAM/SSP
+    rate stored, 2471.25 on the first day, none on the second (``xr41_bam_ssp_rate``).
+
+    Red on HEAD ab74aafbf: the real ``convert_bulk`` converts the 0 to SSP 0 at the stored rate, the handler divides that 0
+    by the amount, 0, and ``decimal.InvalidOperation`` escapes the app: the server answers 500.
+    Contract: 200, no error; two results, days ascending, each BAM 0 → SSP 0 at the stored rate, which is what one BAM
+    converts to on that day: the first day not filled, the second filled 1 day back from the first.
+    """
+    first, second = XR41_DAYS
+    stored = await _xr41_stored()
+    assert stored == {first: XR41_STORED_RATE}, f"barrier: BAM/SSP holds {stored}, expected {XR41_STORED_RATE} on {first} alone"
+    story = f'POST /fx/currencies/convert of BAM "0" → SSP from {first} to {second}, BAM/SSP {XR41_STORED_RATE} stored on {first} alone'
+
+    response = await _xr41_post([{"from_amount": {"code": "BAM", "amount": "0"}, "to": "SSP", "date_range": {"start": first.isoformat(), "end": second.isoformat()}}], story)
+
+    assert response.status_code == 200, f"{story} answered {response.status_code} {response.text[:300]}: expected 200 (X-R41)"
+    body = FXConvertResponse.model_validate(response.json())
+    assert (body.success_count, body.errors) == (2, []), f"{story}: {response.text[:300]}"
+    answers = _xr41_answers(body)
+    expected = [
+        (("BAM", Decimal("0")), ("SSP", Decimal("0")), first, stored[first], None),
+        (("BAM", Decimal("0")), ("SSP", Decimal("0")), second, stored[first], (first, 1)),
+    ]
+    assert answers == expected, f"X-R41: {story} answered {answers}, expected SSP 0 on each day at the stored rate, the second day filled 1 day back"

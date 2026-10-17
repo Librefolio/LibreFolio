@@ -4,6 +4,7 @@ Portfolio Service for LibreFolio.
 Contains:
 - compute_wac_iterative(): WAC (PMC) of one (broker, asset) for the transaction preview, the
   WAC endpoint and the planner — a facade over financial_math.average_cost
+- wac_pool_holding(): what that WAC's pool holds — the units, and whether their cost is known (N88)
 - PortfolioService: Orchestrator for portfolio-level aggregation and reporting
 
 PortfolioService uses:
@@ -37,7 +38,7 @@ from backend.app.db.models import (
     TransactionType,
 )
 from backend.app.db.precision import round_computed_value
-from backend.app.schemas.common import Currency, FxBackwardFillInfo
+from backend.app.schemas.common import Currency, FxBackwardFillInfo, is_canonical_iso_currency
 from backend.app.schemas.portfolio import (
     AcquisitionFundingPoint,
     AcquisitionFundingSeries,
@@ -100,6 +101,7 @@ from backend.app.services.financial_math.returns import (
     calculate_simple_roi_series,
     calculate_twrr,
     calculate_twrr_series,
+    change_ratio,
     cumulative_to_annualized,
     gain_loss_ratio,
     group_gain_loss,
@@ -162,19 +164,8 @@ async def compute_wac_iterative(
     """
     excluded = set(excluded_tx_ids or [])
 
-    # 1. Query ALL transactions for this (broker, asset) with date <= as_of_date and qty != 0
-    stmt = select(Transaction).where(
-        Transaction.broker_id == broker_id,
-        Transaction.asset_id == asset_id,
-        Transaction.date <= as_of_date,
-        Transaction.quantity.is_not(None),
-        Transaction.quantity != 0,
-    )
-    db_rows = list((await session.execute(stmt)).scalars().all())
-
-    # 1b. Identify which rows are ADJUSTMENT linked to a SPLIT AssetEvent — a split
-    # rescales the pool (same cost, new quantity) instead of adding or reducing.
-    split_linked_row_ids = await split_linked_ids(session, db_rows)
+    # 1. The pool's rows, and the ones linked to a split
+    db_rows, split_linked_row_ids = await _wac_pool_rows(session, broker_id, asset_id, as_of_date)
 
     # WAC cache check: fingerprint from transaction IDs + updated_at
     import hashlib  # noqa: PLC0415
@@ -240,6 +231,63 @@ async def compute_wac_iterative(
         _wac_cache.set(wac_cache_key, result)
 
     return result
+
+
+async def _wac_pool_rows(session: AsyncSession, broker_id: int, asset_id: int, as_of_date: date_type) -> tuple[list[Transaction], set[int]]:
+    """The rows of the pool a WAC averages — every transaction of ``(broker, asset)`` up to ``as_of_date`` with a quantity
+    neither NULL nor zero — and those linked to a SPLIT AssetEvent, which rescale the pool (same cost, new quantity)
+    instead of adding or reducing."""
+    stmt = select(Transaction).where(
+        Transaction.broker_id == broker_id,
+        Transaction.asset_id == asset_id,
+        Transaction.date <= as_of_date,
+        Transaction.quantity.is_not(None),
+        Transaction.quantity != 0,
+    )
+    db_rows = list((await session.execute(stmt)).scalars().all())
+    return db_rows, await split_linked_ids(session, db_rows)
+
+
+@dataclass(frozen=True, slots=True)
+class WacPoolHolding:
+    """What the pool of a WAC holds on its date (N88, J-57): the units, and whether their cost is wholly known."""
+
+    quantity: Decimal
+    cost_complete: bool
+
+
+async def wac_pool_holding(
+    session: AsyncSession,
+    broker_id: int,
+    asset_id: int,
+    as_of_date: date_type,
+    asset_currency: str,
+    excluded_tx_ids: list[int] | None = None,
+    target_currency_override: str | None = None,
+) -> WacPoolHolding:
+    """The average-cost engine's own quantity and cost completeness for the pool :func:`compute_wac_iterative` averages
+    with the same arguments, uncached.
+
+    An average of 0 is no cost when the pool holds no units (never held, or sold out: the engine resets a pool that
+    empties) or holds only units of unknown cost (``ADD_UNKNOWN_COST`` counts at zero and leaves the cost incomplete);
+    a pool of free units holds units at a known cost of 0. The batch's Auto step reads it only when the average is 0.
+    """
+    excluded = set(excluded_tx_ids or [])
+    db_rows, split_linked_row_ids = await _wac_pool_rows(session, broker_id, asset_id, as_of_date)
+    rows = sorted((row for row in db_rows if row.id not in excluded), key=lambda row: (row.date, row.id))
+    movements = tuple(movement for row in rows if (movement := cost_movement_from_transaction(row, asset_currency=asset_currency, split_linked=row.id in split_linked_row_ids)) is not None)
+    if not movements:
+        return WacPoolHolding(quantity=Decimal("0"), cost_complete=True)
+    position_key = (broker_id, asset_id)
+    average_cost = (
+        await compute_average_costs(
+            session,
+            [CostPosition(key=position_key, asset_currency=asset_currency, movements=movements)],
+            report_currency=target_currency_override or determine_target_currency(movements, asset_currency),
+            asset_leg=False,
+        )
+    )[position_key]
+    return WacPoolHolding(quantity=average_cost.quantity, cost_complete=average_cost.report_complete)
 
 
 # Effects of the average-cost steps in the vocabulary of WACQualifyingTX.effect, which the
@@ -541,6 +589,12 @@ class PortfolioService:
         return listed
 
     @staticmethod
+    def _non_iso_currency_assets(facts: Sequence[HeldAssetQuoteFacts]) -> list[tuple[int, str, str]]:
+        """(asset_id, name, stored currency) of the held assets whose currency is not an ISO 4217 code as stored (E-19b):
+        ``978``, ``EURO`` or ``eur``, which an earlier version saved as written."""
+        return [(fact.asset_id, fact.name, fact.currency) for fact in facts if not is_canonical_iso_currency(fact.currency)]
+
+    @staticmethod
     def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
         merged: dict[str, set[date_type]] = defaultdict(set)
         for item in items:
@@ -742,7 +796,11 @@ class PortfolioService:
                         prev_price_base, mp = await self._convert_to_base(prev_raw, prev_ccy, base_currency, prev_date)
                         all_missing_pairs.extend(mp)
                     if prev_price_base is not None and prev_price_base != 0:
-                        price_change_1d = ((current_price - prev_price_base) / prev_price_base).quantize(Decimal("0.0001"))
+                        # MF-A12 (N92): the change over the size of the previous price, measured as the % column measures
+                        # the value's (the same association: a tie rounds as before); a negative price's change keeps the
+                        # move's sign, as the % column's does
+                        price_ratio_1d = change_ratio(current_price - prev_price_base, prev_price_base)
+                        price_change_1d = price_ratio_1d.quantize(Decimal("0.0001")) if price_ratio_1d is not None else None
                         # Bugfix: raw quoted prices (current_price/prev_price_base) are NOT
                         # 1 unit == 1 currency unit for every asset — e.g. bonds are quoted
                         # "per quote_base_quantity" (BTPs: quote_base_quantity=100, price=98.70
@@ -756,7 +814,8 @@ class PortfolioService:
                         previous_position_value = compute_holding_value(ps.quantity, prev_price_base, asset.quote_base_quantity)
                         gain_loss_change_1d = current_position_value - previous_position_value
                         if abs(previous_position_value) > Decimal("0.01"):
-                            gain_loss_change_1d_percent = (gain_loss_change_1d / abs(previous_position_value) * 100).quantize(Decimal("0.01"))
+                            value_ratio_1d = change_ratio(gain_loss_change_1d, previous_position_value)
+                            gain_loss_change_1d_percent = (value_ratio_1d * 100).quantize(Decimal("0.01")) if value_ratio_1d is not None else None
 
             if ps.valuation_source == "MISSING":
                 missing_price_assets.append(
@@ -1060,6 +1119,8 @@ class PortfolioService:
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
             invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
             quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
+            non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
+            report_currency=base_currency,
             rows_before_floor=getattr(engine_result, "rows_before_floor", None),
             valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
@@ -1851,7 +1912,7 @@ class PortfolioService:
             total_realized = sum(per_realized.values(), Decimal("0"))
             total_income = sum(per_income.values(), Decimal("0")) + sum(unalloc_income.values(), Decimal("0"))
             total_fees = sum(per_fees_taxes.values(), Decimal("0")) + sum(unalloc_fees.values(), Decimal("0"))
-            period_other_result = period_pnl_total - period_ugl_delta - total_realized - total_income + total_fees
+            period_other_result = period_math.period_other_result(period_pnl_total, period_ugl_delta, total_realized, total_income, total_fees)
 
         if period_other_result is not None:
             # FX on cash (financial_math.native_cash): each broker's exchange result on foreign
@@ -2158,6 +2219,8 @@ class PortfolioService:
                 missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
                 invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
                 quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
+                non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
+                report_currency=base_currency,
                 rows_before_floor=getattr(engine_result, "rows_before_floor", None),
                 mwrr_available=False,
                 share_mismatches=engine_result.share_mismatches,

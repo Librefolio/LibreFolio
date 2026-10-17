@@ -3868,3 +3868,12 @@ area output into runs at the points without a value, one series each with the sa
 the signals panel badge counts distinct dates (`renderedSignalPointCount`).
 Filed: section added to [[concepts/absence-sentinel-vs-nullable-type]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Yahoo bars of exchanges east of UTC were stored one day early (Z-33)
+Workstream Z, Z-33 (release 1.3, decision N86). yfinance stamps daily bars, dividends and splits at the exchange's
+local midnight, and `_normalize_yahoo_date` took their UTC date: every row of an exchange east of UTC was a day early,
+in every release up to 1.2.1. Fixed with migration 011 (`exchange_timezone`, a `'legacy-utc'` mark) and a one-time
+check in the refresh that moves old rows only where the full history, read as a calendar, confirms the session (D″).
+Replacing the closes from a fresh history (D′) was dropped: they are adjusted as of each fetch (Z-35). Fix `60170aae5`.
+Filed: [[problems/yahoo-bars-dated-one-day-early-east-of-utc]].
+Graph: not updated; graphify is not available in this worktree.

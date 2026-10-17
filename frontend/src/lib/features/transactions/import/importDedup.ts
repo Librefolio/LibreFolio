@@ -107,33 +107,134 @@ export function resolveDedupAssetIdentity(tx: TransactionCreateItem, resolutions
     return `fake:${assetId}`;
 }
 
-/** Normalise a currency leg (possibly wrapped in an array) to `{code, amount}`, or null when unusable. */
-export function getDedupCurrency(raw: unknown): {code: string; amount: number} | null {
+/** A decimal read exactly: `coefficient / 10^scale`, its trailing zeros removed (`12.50` is 125 at scale 1). */
+interface ExactDecimal {
+    coefficient: bigint;
+    scale: number;
+}
+
+/** A plain decimal text: an optional sign, digits, an optional point (`+5`, `.5`, `5.`); never an exponent. */
+const PLAIN_DECIMAL = /^([+-]?)(\d*)(?:\.(\d*))?$/;
+
+/** A finite number as JavaScript writes it: the shortest decimal that reads back as that number, maybe with an exponent (`1.5e-7`). */
+const NUMBER_TEXT = /^(-?)(\d+)(?:\.(\d+))?(?:e([+-]\d+))?$/;
+
+/** `sign integer.fraction × 10^exponent`, exactly, its trailing zeros removed. */
+function exactDecimal(sign: string, integer: string, fraction: string, exponent: number): ExactDecimal {
+    let coefficient = BigInt(`${integer || '0'}${fraction}`);
+    let scale = fraction.length - exponent;
+    if (scale < 0) {
+        coefficient *= 10n ** BigInt(-scale);
+        scale = 0;
+    }
+    while (scale > 0 && coefficient % 10n === 0n) {
+        coefficient /= 10n;
+        scale -= 1;
+    }
+    return {coefficient: sign === '-' ? -coefficient : coefficient, scale};
+}
+
+/**
+ * A decimal read exactly (W-B81): a plain decimal text, or a finite number as JavaScript writes it, its exponent expanded;
+ * null for anything else (`'n/a'`, `'Infinity'`, `'1e400'`, `''`): a parse report writes plain decimals only (`SafeDecimal`).
+ */
+function readExactDecimal(value: unknown): ExactDecimal | null {
+    if (typeof value === 'number') {
+        const match = Number.isFinite(value) ? NUMBER_TEXT.exec(String(value)) : null;
+        return match ? exactDecimal(match[1], match[2], match[3] ?? '', Number(match[4] ?? 0)) : null;
+    }
+    const match = typeof value === 'string' ? PLAIN_DECIMAL.exec(value.trim()) : null;
+    if (!match || (match[2] === '' && (match[3] ?? '') === '')) return null;
+    return exactDecimal(match[1], match[2], match[3] ?? '', 0);
+}
+
+/** A field of the payload read exactly, where a field left empty (missing, or blanks only) is `0`, the payload's default. */
+function readFieldDecimal(value: unknown): ExactDecimal | null {
+    return readExactDecimal(value === undefined || value === null || (typeof value === 'string' && value.trim() === '') ? '0' : value);
+}
+
+/** The exact text of a decimal, trailing zeros removed, in plain notation: what a key holds and a group is addressed by. */
+function exactText({coefficient, scale}: ExactDecimal): string {
+    const negative = coefficient < 0n;
+    const digits = (negative ? -coefficient : coefficient).toString().padStart(scale + 1, '0');
+    const text = scale === 0 ? digits : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
+    return negative ? `-${text}` : text;
+}
+
+/** The coefficient of `value` at `target` decimals: exact when `target` is finer, rounded half-up (away from zero) when coarser. */
+function atScale({coefficient, scale}: ExactDecimal, target: number): bigint {
+    if (target >= scale) return coefficient * 10n ** BigInt(target - scale);
+    const divisor = 10n ** BigInt(scale - target);
+    const magnitude = coefficient < 0n ? -coefficient : coefficient;
+    const quotient = magnitude / divisor + ((magnitude % divisor) * 2n >= divisor ? 1n : 0n);
+    return coefficient < 0n ? -quotient : quotient;
+}
+
+/** Whether `a` and `b` lie within `bound` of each other, computed exactly. */
+function withinExact(a: ExactDecimal, b: ExactDecimal, bound: ExactDecimal): boolean {
+    const scale = Math.max(a.scale, b.scale, bound.scale);
+    const gap = atScale(a, scale) - atScale(b, scale);
+    return (gap < 0n ? -gap : gap) <= atScale(bound, scale);
+}
+
+const QUANTITY_BOUND = readExactDecimal(QUANTITY_TOLERANCE) as ExactDecimal;
+const AMOUNT_BOUND = readExactDecimal(AMOUNT_TOLERANCE) as ExactDecimal;
+
+/**
+ * Whether two quantities (or two per-unit costs) are the same movement's: the rule of the backend's duplicate check (W-B51,
+ * decision D-W51-1), here for the wizard (W-B81). Equal once both are rounded half-up to the decimals of the less precise
+ * one, and never more than `QUANTITY_TOLERANCE` apart: a report that rounds (`0.00015`) still meets the value another states
+ * (`0.000153`), two crypto buys of one day (`0.00015123`, `0.00015098`) stay apart, and so do `10` and `10.4`. False when
+ * either is no plain finite decimal.
+ */
+export function sameDedupQuantity(a: unknown, b: unknown): boolean {
+    const left = readExactDecimal(a);
+    const right = readExactDecimal(b);
+    if (!left || !right || !withinExact(left, right, QUANTITY_BOUND)) return false;
+    const scale = Math.min(left.scale, right.scale);
+    return atScale(left, scale) === atScale(right, scale);
+}
+
+/** Whether two cash amounts are the same countervalue: within `AMOUNT_TOLERANCE`, exactly. False when either is unreadable. */
+function sameDedupAmount(a: string, b: string): boolean {
+    const left = readExactDecimal(a);
+    const right = readExactDecimal(b);
+    return !!left && !!right && withinExact(left, right, AMOUNT_BOUND);
+}
+
+/**
+ * Normalise a currency leg (possibly wrapped in an array) to `{code, amount}`, the amount as its exact text, an empty amount
+ * as `0`; null when unusable.
+ */
+export function getDedupCurrency(raw: unknown): {code: string; amount: string} | null {
     const cur = Array.isArray(raw) ? raw.find((entry) => entry && typeof entry === 'object') : raw;
     if (!cur || typeof cur !== 'object') return null;
     const code = String((cur as {code?: unknown}).code ?? '')
         .trim()
         .toUpperCase();
-    const amount = Number((cur as {amount?: unknown}).amount ?? 0);
-    if (!code || !Number.isFinite(amount)) return null;
-    return {code, amount};
+    const amount = readFieldDecimal((cur as {amount?: unknown}).amount);
+    if (!code || !amount) return null;
+    return {code, amount: exactText(amount)};
 }
 
 /** The cash leg of a transaction, normalised for comparison. */
-export function getDedupCash(tx: TransactionCreateItem): {code: string; amount: number} | null {
+export function getDedupCash(tx: TransactionCreateItem): {code: string; amount: string} | null {
     return getDedupCurrency(tx.cash);
 }
 
-/** Build the dedup identity of a row, or null when its quantity is not a finite number. */
+/**
+ * Build the dedup identity of a row, or null when its quantity is no plain finite decimal. An empty quantity reads as `0`,
+ * the payload's default: a cash row whose quantity was cleared still meets its pending twin.
+ */
 export function buildDedupKey(tx: TransactionCreateItem, resolutionsByFake: Map<number, AssetResolution>): DedupKey | null {
-    const quantity = Number(tx.quantity ?? 0);
-    if (!Number.isFinite(quantity)) return null;
+    const quantity = readFieldDecimal(tx.quantity);
+    if (!quantity) return null;
     const cash = getDedupCash(tx);
     return {
         broker: String(tx.broker_id ?? ''),
         type: String(tx.type ?? ''),
         date: String(tx.date ?? '').slice(0, 10),
-        quantity,
+        quantity: exactText(quantity),
         cashCode: cash?.code ?? null,
         cashAmount: cash?.amount ?? null,
         costOverride: getDedupCurrency((tx as {cost_basis_override?: unknown}).cost_basis_override)?.amount ?? null,
@@ -141,18 +242,18 @@ export function buildDedupKey(tx: TransactionCreateItem, resolutionsByFake: Map<
     };
 }
 
-/** Whether two dedup keys describe the same movement, within the quantity and amount tolerances. */
+/** Whether two dedup keys describe the same movement: the quantity and the per-unit cost by `sameDedupQuantity`, the cash within its tolerance. */
 export function dedupKeysMatch(a: DedupKey, b: DedupKey): boolean {
     if (a.broker !== b.broker || a.type !== b.type || a.date !== b.date || a.cashCode !== b.cashCode || a.assetIdentity !== b.assetIdentity) return false;
-    if (Math.abs(a.quantity - b.quantity) > QUANTITY_TOLERANCE) return false;
+    if (!sameDedupQuantity(a.quantity, b.quantity)) return false;
     if (a.cashAmount === null || b.cashAmount === null) {
         if (a.cashAmount !== b.cashAmount) return false;
-    } else if (Math.abs(a.cashAmount - b.cashAmount) > AMOUNT_TOLERANCE) return false;
+    } else if (!sameDedupAmount(a.cashAmount, b.cashAmount)) return false;
     // Per-unit cost override distinguishes cashless ADJUSTMENT legs of the same
     // security acquired at different book prices (e.g. succession transfers).
     if (a.costOverride === null || b.costOverride === null) {
         if (a.costOverride !== b.costOverride) return false;
-    } else if (Math.abs(a.costOverride - b.costOverride) > QUANTITY_TOLERANCE) return false;
+    } else if (!sameDedupQuantity(a.costOverride, b.costOverride)) return false;
     return true;
 }
 
@@ -175,9 +276,13 @@ export function pendingDuplicateStatusFor(a: TransactionCreateItem, b: Transacti
     return normalizeDedupDescription(a) === normalizeDedupDescription(b) ? 'pending_duplicate' : 'pending_possible_duplicate';
 }
 
-/** A stable string form of a dedup key — the identity a duplicate group is addressed by. */
+/** A stable string form of a dedup key — the identity a duplicate group is addressed by: the exact text of each number (W-B81), never `toFixed`. */
 export function describeDedupKey(key: DedupKey): string {
-    return [key.broker, key.type, key.date, key.quantity.toFixed(4), key.cashCode ?? '', key.cashAmount?.toFixed(2) ?? '', key.costOverride?.toFixed(4) ?? '', key.assetIdentity].join('|');
+    const exact = (value: string | null): string => {
+        const read = value === null ? null : readExactDecimal(value);
+        return read ? exactText(read) : (value ?? '');
+    };
+    return [key.broker, key.type, key.date, exact(key.quantity), key.cashCode ?? '', exact(key.cashAmount), exact(key.costOverride), key.assetIdentity].join('|');
 }
 
 /**

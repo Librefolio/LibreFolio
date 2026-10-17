@@ -726,6 +726,8 @@ def cmd_fe_build(args):
 
     # Generate favicon from logo before build
     generate_favicon()
+    # sw.js names the offline page it caches by its hash: a build ships the stamp of the offline.html it copies (H-52)
+    stamp_service_worker()
 
     # DIAGNOSTICS FOR GITHUB ACTIONS
     print(Colors.info("[DEBUG] Running svelte-check..."))
@@ -2504,7 +2506,11 @@ def stamp_service_worker():
     lines = [l for l in sw_content.splitlines() if not l.startswith('// build:')]
     # Prepend hash comment (any byte change in sw.js triggers browser SW update)
     lines.insert(1, f'// build: {offline_hash}')
-    sw_path.write_text('\n'.join(lines) + '\n')
+    stamped = '\n'.join(lines) + '\n'
+    # Written only when it changes: the frontend build watches static/ (H-52), and a rewrite at every docs build
+    # would leave sw.js newer than the build, for a needless rebuild at the next start
+    if stamped != sw_content:
+        sw_path.write_text(stamped)
 
 
 def copy_docs_assets():

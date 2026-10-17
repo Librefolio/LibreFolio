@@ -69,7 +69,7 @@ Its order is contractual:
 | 7 | `apply_creates()` | Add and flush valid creates so generated IDs are available |
 | 8 | `apply_promotes()` | Resolve saved or same-batch rows and promote them in place |
 | 9 | `resolve_create_links()` | Resolve unconsumed create correlation groups into reciprocal database links |
-| 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC, then give the giving leg of each split `TRANSFER` pair the Auto cost of its own broker ([Split & Promote](split_promote.md#transfer-giving-leg)); convert missing FX data into issues |
+| 10 | `compute_wac_and_fx_issues()` | Run create/update auto-WAC, then give the giving leg of each split `TRANSFER` pair the Auto cost of its own broker ([Split & Promote](split_promote.md#transfer-giving-leg)); convert missing FX data into issues, and refuse an Auto row whose average of 0 comes from a pool with nothing to average (`autoCostEmptyPool`, `autoCostUnknownPool`, N88: [Nothing to average](wac.md#nothing-to-average)) |
 | 11 | `validate_cost_basis()` | Flush and enforce required cost basis after WAC and promote handling |
 | 12 | `validate_balances()` | Flush and replay end-of-day balances from each broker's earliest affected date |
 | 13 | `finalize_response()` | Derive `committed`, result statuses, counts, and WAC output |

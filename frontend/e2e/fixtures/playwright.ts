@@ -21,7 +21,7 @@ import {mkdir, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {TEST_USER} from './test-users';
-import {cspCollectorEnabled, inlineScriptLines, isKnown, loadBaseline, type CspViolation, type LineSpan} from './csp';
+import {cspCollectorEnabled, isKnown, loadBaseline, type CspViolation} from './csp';
 
 const COVERAGE_ON = process.env.COVERAGE_JS === '1';
 
@@ -260,25 +260,6 @@ const CSP_BASELINE = loadBaseline();
 /** What a test reads of the collector: every violation of its pages, and those the baseline does not know. */
 type CspRecorder = {list(): CspViolation[]; unknown(): CspViolation[]};
 
-let indexInlineScripts: Promise<LineSpan[]> | null = null;
-
-/** The inline scripts of the app's `index.html`, read once per worker from the lane: where the baseline's entries are. */
-function appIndexInlineScripts(): Promise<LineSpan[]> {
-    indexInlineScripts ??= (async () => {
-        const api = await playwrightRequest.newContext({baseURL: `http://localhost:${process.env.TEST_PORT || '6041'}`});
-        try {
-            const response = await api.get('/');
-            return response.ok() ? inlineScriptLines(await response.text()) : [];
-        } catch {
-            // Unread: no inline script is known, and a violation of one fails the test that met it, naming it.
-            return [];
-        } finally {
-            await api.dispose();
-        }
-    })();
-    return indexInlineScripts;
-}
-
 function describeCspViolation(v: CspViolation): string {
     return `${v.directive} blocked ${v.blockedURI || '(nothing)'} at ${v.sourceFile || v.documentURI}:${v.lineNumber} (page ${v.page ?? v.documentURI}, ${v.disposition})`;
 }
@@ -429,8 +410,7 @@ const test = testBase.extend<{jsCoverage: void; txHygiene: void; cspFailOnUnknow
                     true,
                 );
             });
-            const spans = await appIndexInlineScripts();
-            const unknownOf = () => seen.filter((v) => !isKnown(v, CSP_BASELINE, spans));
+            const unknownOf = () => seen.filter((v) => !isKnown(v, CSP_BASELINE));
 
             await use({list: () => [...seen], unknown: unknownOf});
 

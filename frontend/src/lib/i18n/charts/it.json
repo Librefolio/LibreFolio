@@ -205,6 +205,10 @@
     "reference": {
       "zero": "Zero"
     },
+    "gapsJoined": {
+      "label": "vuoti uniti",
+      "warning": "Troppi vuoti da disegnare: la linea li unisce."
+    },
     "regions": {
       "oversoldDescription": "Estremo inferiore sotto la soglia configurata.",
       "neutralDescription": "Intervallo centrale tra le soglie configurate.",

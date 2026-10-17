@@ -200,14 +200,40 @@ which its ``link_uuid`` finds, is guarded already: ``TestAutoCost`` (100, stored
 ``TestWB69GuardsReadablePoolsAndRowsOutsideThePool::test_auto_row_over_a_readable_pool_takes_its_average`` (its
 ``wac_results`` item on index 1, and its stored cost).
 
+N88 (J-57; the coordinator's night decision N88, 17/10, approved) — an Auto cost with nothing to average, the
+``TestN88…`` class: RED until its cure but for the controls. The pool of an Auto row (``_auto_cost_source``: an ADJUSTMENT
+its own broker up to its date without itself, a receiving TRANSFER leg its partner's broker up to the partner's date)
+that holds no units on its date — the broker never held the asset, or sold it all before — averages to 0 in
+``compute_wac_iterative``, not to None; ``_write_auto_cost`` writes that 0, a ``Currency`` of 0 being truthy, and the
+batch's cost check skips Auto rows (``batch_costs.py``): the row is saved as a free acquisition, in silence. A pool whose
+units all entered at an unknown cost — an acquisition without a cost basis enters at zero, ``ADD_UNKNOWN_COST``, the
+pool's cost incomplete (``report_complete`` False) — averages to the same silent 0. The contract: the batch refuses such a
+row, ``autoCostEmptyPool`` when its pool holds no units on its date, ``autoCostUnknownPool`` when it holds units but none
+at a known cost (the average 0, the pool's cost incomplete); an issue on the row's operation and index, ``field``
+``cost_basis_override``, no params, ``ref_id`` None, as W-B69's ``autoCostUnreadable``; the refused row gets no
+``wac_results`` item, and nothing is committed. A pool of free units — held, every one at a known cost of 0
+(``ADD_ZERO_COST``) — keeps its average of 0, written; a Manual cost of 0 stays accepted. A pool only PART of whose units
+have an unknown cost averages the known cost over all of them, understated and not refused: that is J-58, the developer's
+to decide, pinned at today's value by a control.
+
+Reds, each an ADJUSTMENT in ``auto`` on ``MOVE_DAY``: +5 on ``dest``, which never held the asset (on /commit and /validate,
+in ``auto`` and ``auto-detail``); +5 on ``source`` after a SELL of the ``world``'s 10 units; +5 and +3 on ``dest`` in one
+batch — N84 keeps the first, refused, out of the second's pool, so both are refused (a cure that wrote the first at 0 would
+hand the second 5 free units, one that let it in without a cost 5 units of unknown cost); an update switching a stored
+ADJUSTMENT +5 at 42 EUR on ``dest`` to Auto, which must keep its 42; and +3 on ``dest`` over an ADJUSTMENT +5 planted
+without a cost basis (``autoCostUnknownPool``). Today each is saved, or answered, at 0. Controls: over the ``world``'s BUY,
+100 EUR; over 10 units planted at a cost of 0, 0 EUR, written; a Manual 0 on ``dest``, committed; over the BUY's 10 units
+for 1 000 EUR beside 10 planted without a cost, 1 000 / 20 = 50 EUR (J-58). The API side — the receiving leg of a TRANSFER
+from an empty pool, at /validate — is ``test_wac_inline.py``'s ``test_wacp27_empty_pool_is_refused``.
+
 Ownership. Every test builds its own asset and brokers under a unique marker, in a session rolled back at the end:
 ``execute_batch`` never commits (its caller does), so nothing reaches the lane's database. The two scaffolds that
 change module state — an entry of ``TX_TYPE_METADATA``, ``SWAP_GROUPS`` — go through ``monkeypatch``, which puts
-them back. W-B69's plants are raw SQL in the same session, rolled back with it.
+them back. W-B69's plants are raw SQL in the same session, rolled back with it, and N88's are ORM rows flushed in it.
 
 Run: ``./dev.py test services transaction-cost-basis-rule`` (the action ``services_transaction_cost_basis_rule``); W-B69's
 cases alone: ``./dev.py test services transaction-cost-basis-rule WB69``; N78's: ``… transaction-cost-basis-rule N78``;
-W-B67's: ``… transaction-cost-basis-rule WB67``.
+W-B67's: ``… transaction-cost-basis-rule WB67``; N88's: ``… transaction-cost-basis-rule N88``.
 """
 
 import ast
@@ -2587,3 +2613,310 @@ class TestWB67GuardsWhereTodaysSearchFindsTheRow:
             {1: post_split, 2: (None, None)},
             [("create", 1, post_split), ("create", 2, None)],
         ), f"N84 (c): the split-linked Auto row stays in the pool of the receiving leg, costed before it, so the leg holds the post-split {_wb67_cost(post_split)}, answered on create 1, and the split row none (100 EUR on the leg: the split row left out of its pool): {outcome.today}"
+
+
+# ============================================================================
+# RED AND CONTROLS — N88 (J-57): AN AUTO COST WITH NOTHING TO AVERAGE
+# ============================================================================
+
+# The cure's codes, as literals: the TXValidationCode members do not exist before it.
+AUTO_COST_EMPTY_POOL = "autoCostEmptyPool"
+AUTO_COST_UNKNOWN_POOL = "autoCostUnknownPool"
+# The day of the rows an N88 test plants in a pool — the SELL that empties it, the units it holds —: after the world's BUY,
+# before MOVE_DAY, the Auto rows' date.
+N88_POOL_DAY = LATER_BUY_DAY
+# A known cost of 0: the cost of free units (ADD_ZERO_COST), or a Manual cost of 0.
+ZERO_COST = Currency(code=EUR, amount=Decimal("0"))
+# What the SELL of the world's 10 units receives: any amount, the units are gone either way.
+N88_SELL_PROCEEDS = Decimal("1200")
+# The quantity of an N88 Auto row beside one of ADJUSTMENT_QUANTITY (5), or over a pool of 5.
+N88_OTHER_QUANTITY = Decimal("3")
+# What today's code makes of a pool with nothing to average, for the red messages.
+N88_TODAY_EMPTY = "the empty pool averages to 0 EUR (compute_wac_iterative), which _write_auto_cost writes — a Currency of 0 is truthy — and the cost check skips, the row being Auto: a free acquisition, in silence"
+N88_TODAY_UNKNOWN = "the units of unknown cost enter the average at zero (ADD_UNKNOWN_COST), so it is 0 EUR, which _write_auto_cost writes and the cost check skips: a free acquisition, in silence"
+
+
+async def _n88_plant(world: World, *, broker: Broker, tx_type: TransactionType, quantity: Decimal, cost: Currency | None = None, amount: Decimal = Decimal("0"), currency: str | None = None) -> int:
+    """A row of the ``world``'s asset on ``broker`` on ``N88_POOL_DAY``, written without the batch and its checks
+    (``_stored_row``, its date moved before the Auto rows'); its id.
+
+    An incoming row without ``cost`` is an acquisition of unknown cost (``ADD_UNKNOWN_COST``), which the batch refuses to
+    create (``costBasisRequired``): an older version left it (``test_db/legacy_cost_rows.py``). With ``ZERO_COST``, a free
+    acquisition (``ADD_ZERO_COST``).
+    """
+    row = _stored_row(world, broker=broker, tx_type=tx_type, quantity=quantity, cost=cost, amount=amount, currency=currency)
+    row.date = N88_POOL_DAY
+    world.session.add(row)
+    await world.session.flush()
+    return row.id
+
+
+async def _pool(world: World, broker: Broker, *, without: tuple[int, ...] = ()) -> list[tuple]:
+    """The rows an Auto ADJUSTMENT on ``broker`` on ``MOVE_DAY`` averages — the broker's rows of the ``world``'s asset up to
+    that day, but ``without`` (the row itself, when it is stored) —, read before the batch, in date order, as ``(type,
+    quantity, amount, cost_basis_override)``. What a pool holds is checked, never assumed."""
+    where = [Transaction.broker_id == broker.id, Transaction.asset_id == world.asset.id, Transaction.date <= MOVE_DAY]
+    if without:
+        where.append(Transaction.id.notin_(without))
+    statement = select(Transaction.type, Transaction.quantity, Transaction.amount, Transaction.cost_basis_override).where(*where).order_by(Transaction.date, Transaction.id)
+    return [tuple(row) for row in (await world.session.execute(statement)).all()]
+
+
+def _n88_issue(operation: str, index: int, code: str) -> dict:
+    """The issue of N88's cure, as ``_n88_view`` shows it: on the Auto row's operation and index, ``field``
+    ``cost_basis_override``, ``ref_id`` None and no params — W-B69's ``autoCostUnreadable`` without its count."""
+    return {"operation": operation, "index": index, "ref_id": None, "code": code, "field": "cost_basis_override", "params": None}
+
+
+def _n88_view(issue: TXValidationIssue) -> dict:
+    """``_issue_view``, the contract's «no params» — None or empty — read alike, as None."""
+    return {**_issue_view(issue), "params": issue.params or None}
+
+
+def _wac_items(response: TXBatchResponse, operation: str, index: int) -> list:
+    """The ``wac_results`` items on row ``operation`` ``index``, with a cost or without: a refused row has none."""
+    return [item for item in response.wac_results or [] if (item.operation, item.index) == (operation, index)]
+
+
+async def _n88_verdict(world: World, response: TXBatchResponse, rows: list[tuple[str, int]]) -> str:
+    """What a batch did with its Auto rows ``rows``, for a red's message: ``_verdict``, for one row or several, and on a
+    commit the cost basis each of them stores, read back by id."""
+    answered = ", ".join(f"{operation} {index}: {_wb67_cost(_answered(response, operation, index))}" for operation, index in rows)
+    if response.committed:
+        stored = []
+        for result in response.results:
+            if (result.operation, result.index) in rows:
+                for tx_id in result.ids:
+                    stored.append(f"id={tx_id} ({result.operation} {result.index}) stores {_wb67_cost(await _stored_cost(world, tx_id))}")
+        return f"the batch committed, answering the Auto cost(s) {answered}, and {', '.join(stored) or 'no row was stored'}"
+    if not response.issues:
+        return f"the batch validated clean, answering the Auto cost(s) {answered}, what /commit saves"
+    return f"the batch was refused with [{_render(response.issues)}] (Auto cost(s) answered: {answered})"
+
+
+async def _assert_nothing_to_average(world: World, response: TXBatchResponse, refused: list[tuple[str, int, str]], *, commit: bool, brokers: list[int], before: dict[int, dict], pool: str, today: str) -> None:
+    """N88's assertions: the issues are exactly those ``refused`` names — ``(operation, index, code)``, each as
+    ``_n88_issue`` shows it —; not committed; no ``wac_results`` item on a refused row; and every row of ``brokers`` as it
+    was (``before``): no Auto row stored, no stored cost changed. ``pool`` says what the pool holds, ``today`` what today's
+    code makes of it."""
+    rows = [(operation, index) for operation, index, _code in refused]
+    expected = [_n88_issue(operation, index, code) for operation, index, code in refused]
+    named = " and ".join(f"{code} on {operation} {index}" for operation, index, code in refused)
+    views = [_n88_view(issue) for issue in response.issues]
+    verdict = await _n88_verdict(world, response, rows)
+    assert (response.committed, _in_order(views)) == (
+        False,
+        _in_order(expected),
+    ), f"N88: an Auto cost over {pool} has nothing to average, so the batch must be refused ({_endpoint(commit)}) with exactly {named} — field cost_basis_override, no params, ref_id None —; today {verdict} — {today}"
+    answered = {row: _wac_items(response, *row) for row in rows}
+    assert all(items == [] for items in answered.values()), f"N88: a refused Auto row gets no wac_results item; wac_results answers {answered}"
+    changed = _changed(before, await _raw_rows(world, brokers))
+    assert changed == {}, f"N88: the refused batch changed rows of the test's brokers (before, after): {changed}"
+
+
+class TestN88AutoCostWithNothingToAverage:
+    """N88 (J-57) — RED until its cure but for the controls: an Auto row whose pool has nothing to average is refused on its
+    own coordinates — ``autoCostEmptyPool`` when the pool holds no units on its date, ``autoCostUnknownPool`` when it holds
+    units but none at a known cost —, and its batch saves nothing. Free units keep their average of 0, a Manual 0 is
+    accepted, and a pool in part of unknown cost keeps today's understated average (J-58, not N88's).
+
+    The Auto rows are ADJUSTMENTs on ``MOVE_DAY``, whose pool is their own broker up to that day without themselves
+    (``_auto_cost_source``): ``dest`` holds nothing of the asset but what a test plants, ``source`` the ``world``'s BUY, 10
+    units for 1 000 EUR. Each batch runs as ``POST /transactions/commit`` or ``/validate`` runs it, its transaction included
+    (``_as_the_endpoint``: a refusal is an issue, a batch that raises fails the test), and its rows are read back by id or by
+    raw SQL. What each pool holds is checked before the batch (``_pool``), never assumed.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    @pytest.mark.parametrize("mode", AUTO_MODES)
+    async def test_auto_adjustment_on_a_broker_that_never_held_the_asset_is_refused(self, world, mode, commit):
+        """R1 (/commit) and R2 (/validate), RED until N88: an ADJUSTMENT +5 in ``mode`` on ``dest``, which never held the
+        asset, gets one ``autoCostEmptyPool`` on create 0 — field ``cost_basis_override``, no params, ``ref_id`` None —, no
+        ``wac_results`` item, and nothing is committed: the row is not stored.
+
+        Today the empty pool averages to 0 EUR: /commit stores the row at a cost of 0, a free acquisition; /validate answers 0
+        on create 0, with no issue."""
+        pool = await _pool(world, world.dest)
+        assert pool == [], f"precondition broken: dest must never have held the asset; its pool on {MOVE_DAY} holds {pool}"
+        created = _created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode=mode)
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=[created])
+
+        await _assert_nothing_to_average(world, response, [("create", 0, AUTO_COST_EMPTY_POOL)], commit=commit, brokers=brokers, before=before, pool=f"dest, a broker that never held the asset (an ADJUSTMENT +{ADJUSTMENT_QUANTITY} in {mode})", today=N88_TODAY_EMPTY)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_auto_adjustment_after_its_broker_sold_every_unit_is_refused(self, world, commit):
+        """R3, RED until N88: ``source`` bought 10 units for 1 000 EUR (the ``world``'s BUY) and sold all 10 a week later (a
+        SELL planted on ``N88_POOL_DAY``); an ADJUSTMENT +5 in ``auto`` later still, on ``MOVE_DAY``, has a pool with no unit
+        on its date: one ``autoCostEmptyPool`` on create 0, no ``wac_results`` item, nothing committed. A pool emptied by
+        sales is as empty as one never filled.
+
+        Today the pool's average falls to 0 with its last unit: the row is stored, or answered, at 0."""
+        await _n88_plant(world, broker=world.source, tx_type=TransactionType.SELL, quantity=-BUY_QUANTITY, amount=N88_SELL_PROCEEDS, currency=EUR)
+        pool = await _pool(world, world.source)
+        assert pool == [(TransactionType.BUY, BUY_QUANTITY, -WORLD_PAID, None), (TransactionType.SELL, -BUY_QUANTITY, N88_SELL_PROCEEDS, None)], f"precondition broken: source's pool on {MOVE_DAY} must be the BUY of 10 units and the SELL of all 10: {pool}"
+        created = _created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=[created])
+
+        await _assert_nothing_to_average(world, response, [("create", 0, AUTO_COST_EMPTY_POOL)], commit=commit, brokers=brokers, before=before, pool=f"source after it sold every unit it bought (an ADJUSTMENT +{ADJUSTMENT_QUANTITY} in auto)", today=f"BUY 10, SELL 10: {N88_TODAY_EMPTY}")
+
+    @pytest.mark.asyncio
+    async def test_two_auto_adjustments_on_an_empty_broker_are_both_refused(self, world):
+        """R4, RED until N88 — its interplay with N84: an ADJUSTMENT +5 (create 0) and one +3 (create 1), both in ``auto``, on
+        ``dest`` on ``MOVE_DAY``, in one batch. N84 costs the first without the second, still to be costed: an empty pool,
+        refused. Refused, the first is never costed, so it stays out of the second's pool, empty too: two
+        ``autoCostEmptyPool``, on create 0 and on create 1; no ``wac_results`` item; nothing committed.
+
+        Today the first is written at 0 and leaves the rows still to be costed, so the second averages it as 5 free units
+        (``ADD_ZERO_COST``): both are stored at 0. A cure that refused the first yet wrote it at 0 would hand the second 5
+        free units and let it through at 0; one that wrote nothing on the first but let it into the second's pool would give
+        the second 5 units of unknown cost, ``autoCostUnknownPool``."""
+        pool = await _pool(world, world.dest)
+        assert pool == [], f"precondition broken: dest must never have held the asset; its pool on {MOVE_DAY} holds {pool}"
+        creates = [
+            _created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto"),
+            _created_adjustment(world, broker=world.dest, quantity=N88_OTHER_QUANTITY, cost_basis_mode="auto"),
+        ]
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=True, creates=creates)
+
+        await _assert_nothing_to_average(
+            world,
+            response,
+            [("create", 0, AUTO_COST_EMPTY_POOL), ("create", 1, AUTO_COST_EMPTY_POOL)],
+            commit=True,
+            brokers=brokers,
+            before=before,
+            pool=f"dest, a broker that never held the asset (two ADJUSTMENTs in auto, +{ADJUSTMENT_QUANTITY} and +{N88_OTHER_QUANTITY}, one day, one batch; N84 keeps the first, refused, out of the second's pool)",
+            today=f"{N88_TODAY_EMPTY}; then the second averages the first as {ADJUSTMENT_QUANTITY} free units, and is written at 0 too",
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_update_switching_to_auto_over_an_empty_pool_is_refused_and_keeps_its_cost(self, world, commit):
+        """R5, RED until N88: an ADJUSTMENT +5 stored on ``dest`` at a Manual 42 EUR, ``dest`` holding nothing else of the
+        asset; the update ``{id, cost_basis_mode: auto}`` recomputes its cost over ``dest`` without itself, an empty pool: one
+        ``autoCostEmptyPool`` on update 0 — ``ref_id`` None, as W-B69's on an update —, no ``wac_results`` item, nothing
+        committed, and the row keeps its 42 EUR.
+
+        Today the update overwrites the 42 EUR with 0: /commit stores it, /validate answers it."""
+        stored = await _store(world, "adjustment_in", cost=STORED_COST)
+        row_id = stored.subject.id
+        pool = await _pool(world, world.dest, without=(row_id,))
+        assert pool == [], f"precondition broken: dest must hold nothing of the asset but the ADJUSTMENT id={row_id}; its pool on {MOVE_DAY} without it holds {pool}"
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=commit, updates=[{"id": row_id, "cost_basis_mode": "auto"}])
+
+        await _assert_nothing_to_average(
+            world,
+            response,
+            [("update", 0, AUTO_COST_EMPTY_POOL)],
+            commit=commit,
+            brokers=brokers,
+            before=before,
+            pool=f"dest without the updated row, which holds nothing else of the asset (an update switching the ADJUSTMENT +{ADJUSTMENT_QUANTITY} at {STORED_COST.amount} {STORED_COST.code} to auto)",
+            today=f"{N88_TODAY_EMPTY}; the 0 overwrites the {STORED_COST.amount} {STORED_COST.code} the row was saved with",
+        )
+        stored_after = await _stored_cost(world, row_id)
+        assert stored_after == (STORED_COST.amount, STORED_COST.code), f"N88: the refused update must leave the ADJUSTMENT id={row_id} its {STORED_COST.amount} {STORED_COST.code}; it holds {_show(stored_after)}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_auto_adjustment_over_units_of_unknown_cost_is_refused(self, world, commit):
+        """R6, RED until N88: ``dest`` holds 5 units of unknown cost — an ADJUSTMENT +5 planted on ``N88_POOL_DAY`` without a
+        cost basis —; an ADJUSTMENT +3 in ``auto`` on ``MOVE_DAY`` has units to average but none at a known cost: one
+        ``autoCostUnknownPool`` on create 0, no ``wac_results`` item, nothing committed.
+
+        Today the 5 units enter the average at zero (``ADD_UNKNOWN_COST``, the pool's cost incomplete): the row is stored, or
+        answered, at 0."""
+        await _n88_plant(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=ADJUSTMENT_QUANTITY)
+        pool = await _pool(world, world.dest)
+        assert pool == [(TransactionType.ADJUSTMENT, ADJUSTMENT_QUANTITY, Decimal("0"), None)], f"precondition broken: dest's pool on {MOVE_DAY} must be one ADJUSTMENT +{ADJUSTMENT_QUANTITY} without a cost basis: {pool}"
+        created = _created_adjustment(world, broker=world.dest, quantity=N88_OTHER_QUANTITY, cost_basis_mode="auto")
+        brokers = await _world_brokers(world)
+        before = await _raw_rows(world, brokers)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=[created])
+
+        await _assert_nothing_to_average(world, response, [("create", 0, AUTO_COST_UNKNOWN_POOL)], commit=commit, brokers=brokers, before=before, pool=f"{ADJUSTMENT_QUANTITY} units of unknown cost on dest (an ADJUSTMENT +{N88_OTHER_QUANTITY} in auto)", today=N88_TODAY_UNKNOWN)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_auto_adjustment_over_bought_units_takes_their_average(self, world, commit):
+        """C1, control, green today and after N88: an ADJUSTMENT +5 in ``auto`` on ``source``, over the ``world``'s BUY of 10
+        units for 1 000 EUR, takes their average, 100 EUR, with no issue — answered on /validate, answered and stored on
+        /commit."""
+        pool = await _pool(world, world.source)
+        assert pool == [(TransactionType.BUY, BUY_QUANTITY, -WORLD_PAID, None)], f"precondition broken: source's pool on {MOVE_DAY} must be the world's BUY alone: {pool}"
+        batch = AutoBatch(operation="create", index=0, creates=[_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")], updates=[], row_id=None)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=batch.creates)
+
+        await _assert_takes(world, response, batch, cost=UNIT_COST, commit=commit, what=f"An Auto ADJUSTMENT +{ADJUSTMENT_QUANTITY} over the BUY of {BUY_QUANTITY} units for {WORLD_PAID} EUR")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_auto_adjustment_over_free_units_keeps_their_zero(self, world, commit):
+        """C2, control, green today and after N88: ``dest`` holds 10 free units — an ADJUSTMENT +10 planted at a Manual cost
+        of 0 EUR (``ADD_ZERO_COST``): held, every one at a known cost of 0 —; an ADJUSTMENT +5 in ``auto`` takes their
+        average, 0 EUR, with no issue — answered on /validate, answered and stored on /commit. N88 refuses a 0 with nothing
+        behind it, never the 0 a pool's known cost gives."""
+        await _n88_plant(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=BUY_QUANTITY, cost=ZERO_COST)
+        pool = await _pool(world, world.dest)
+        assert pool == [(TransactionType.ADJUSTMENT, BUY_QUANTITY, Decimal("0"), ZERO_COST.amount)], f"precondition broken: dest's pool on {MOVE_DAY} must be one ADJUSTMENT +{BUY_QUANTITY} at a cost of 0: {pool}"
+        batch = AutoBatch(operation="create", index=0, creates=[_created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")], updates=[], row_id=None)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=batch.creates)
+
+        await _assert_takes(world, response, batch, cost=ZERO_COST.amount, commit=commit, what=f"An Auto ADJUSTMENT +{ADJUSTMENT_QUANTITY} over {BUY_QUANTITY} free units (a known cost of 0)")
+
+    @pytest.mark.asyncio
+    async def test_manual_zero_cost_on_a_broker_that_never_held_the_asset_commits(self, world):
+        """C3, control, green today and after N88: an ADJUSTMENT +5 on ``dest``, which never held the asset, at a Manual cost
+        of 0 EUR — no mode, as the form sends a manual cost — commits with no issue and stores 0 EUR. N88 judges the Auto
+        cost alone: a 0 the user writes is the user's."""
+        pool = await _pool(world, world.dest)
+        assert pool == [], f"precondition broken: dest must never have held the asset; its pool on {MOVE_DAY} holds {pool}"
+        created = {**_created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY), "cost_basis_override": _cost_sent(ZERO_COST)}
+
+        response = await _as_the_endpoint(world, commit=True, creates=[created])
+
+        assert response.committed is True and response.issues == [], f"An ADJUSTMENT +{ADJUSTMENT_QUANTITY} at a Manual cost of 0 on a broker that never held the asset was refused: {_render(response.issues)}"
+        stored = await _stored_cost(world, _created_id(response, 0))
+        assert stored == (ZERO_COST.amount, ZERO_COST.code), f"The ADJUSTMENT +{ADJUSTMENT_QUANTITY} was committed with {_show(stored)}, not the Manual {ZERO_COST.amount} {ZERO_COST.code} it was sent with"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("commit", ENDPOINTS)
+    async def test_auto_adjustment_over_units_partly_of_unknown_cost_takes_todays_understated_average(self, world, commit):
+        """C4, control — it documents J-58, which N88 does not refuse: ``source`` holds the ``world``'s 10 units bought for
+        1 000 EUR and 10 more of unknown cost (an ADJUSTMENT +10 planted without a cost basis); an ADJUSTMENT +5 in ``auto``
+        takes today's average, the known cost over every unit, 1 000 / 20 = 50 EUR — not 0, so N88 leaves it alone —, with
+        no issue: answered on /validate, answered and stored on /commit.
+
+        J-58 (17/10): the average of a pool only part of whose units have a known cost is understated, in silence; refusing
+        it, as N88 refuses a 0, or warning in the preview, is the developer's decision, not taken. This control pins today's
+        value: a cure of N88 that changes it reaches past N88; a cure of J-58 updates it."""
+        await _n88_plant(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=BUY_QUANTITY)
+        pool = await _pool(world, world.source)
+        assert pool == [
+            (TransactionType.BUY, BUY_QUANTITY, -WORLD_PAID, None),
+            (TransactionType.ADJUSTMENT, BUY_QUANTITY, Decimal("0"), None),
+        ], f"precondition broken: source's pool on {MOVE_DAY} must be the BUY of 10 units for {WORLD_PAID} EUR and an ADJUSTMENT +{BUY_QUANTITY} without a cost basis: {pool}"
+        understated = _average(WORLD_PAID, 2 * BUY_QUANTITY)
+        assert understated == Decimal("50"), "the oracle: 1 000 / 20"
+        batch = AutoBatch(operation="create", index=0, creates=[_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")], updates=[], row_id=None)
+
+        response = await _as_the_endpoint(world, commit=commit, creates=batch.creates)
+
+        await _assert_takes(world, response, batch, cost=understated, commit=commit, what=f"J-58, today: an Auto ADJUSTMENT +{ADJUSTMENT_QUANTITY} over {BUY_QUANTITY} units bought for {WORLD_PAID} EUR and {BUY_QUANTITY} of unknown cost")

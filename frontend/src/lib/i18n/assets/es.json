@@ -71,7 +71,8 @@
     },
     "notFound": "Activo n.º {id} no encontrado",
     "loadFailed": "No se pudo cargar la información del activo",
-    "pricesLoadFailed": "No se pudieron cargar los precios"
+    "pricesLoadFailed": "No se pudieron cargar los precios",
+    "manualChip": "Manual"
   },
   "assets": {
     "create": "Nuevo activo",
@@ -99,15 +100,16 @@
     },
     "delete": {
       "confirmQuestion": "¿Eliminar \"{name}\"?",
-      "confirmWarning": "Las asignaciones de proveedores y el historial de precios serán eliminados. ⚠️",
+      "confirmWarning": "Las asignaciones de proveedores, el historial de precios y los eventos (dividendos, desdoblamientos…) serán eliminados. ⚠️",
       "toastOk": "{name} eliminado",
       "toastFailed": "Error al eliminar {name}",
       "hasTransactions": "No se puede eliminar \"{name}\": tiene transacciones existentes",
       "bulkOk": "{n} activos eliminados",
       "bulkPartial": "{failed} activos no eliminados (tienen transacciones)",
-      "bulkConfirmMessage": "Eliminar {n} activos? Las asignaciones de proveedores y el historial de precios se eliminaran.",
+      "bulkConfirmMessage": "¿Eliminar {n, plural, one {# activo} other {# activos}}? Las asignaciones de proveedores, el historial de precios y los eventos (dividendos, desdoblamientos…) se eliminarán.",
       "resultDeleted": "eliminado",
-      "resultHasTransactions": "tiene transacciones existentes"
+      "resultHasTransactions": "tiene transacciones existentes",
+      "itemsLabel": "{count, plural, one {# activo} other {# activos}}"
     },
     "merge": {
       "title": "Fusionar activos",
@@ -345,7 +347,8 @@
         "github": "Abre una incidencia pública en GitHub con los detalles de esta búsqueda: revísala antes de enviarla"
       },
       "reportCopied": "Detalles de la búsqueda copiados: pégalos en la página de soporte.",
-      "reportCopyFailed": "No se pudieron copiar los detalles de la búsqueda: describe tu búsqueda en la página de soporte."
+      "reportCopyFailed": "No se pudieron copiar los detalles de la búsqueda: describe tu búsqueda en la página de soporte.",
+      "failed": "La búsqueda ha fallado. Inténtalo de nuevo."
     },
     "comparison": {
       "title": "Comparación de datos del proveedor",

@@ -1703,6 +1703,15 @@ def services_scheduler_jobs(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Scheduler job body tests", verbose=verbose)
 
 
+def services_scheduler_last_fx_dates(verbose: bool = False, test_names: list = None) -> bool:
+    """Test X-R45 on the history sync's lookup: the real _last_fx_dates skips a stored rate no read may use (lane DB)."""
+    print_section("Services: Scheduler Last FX Dates (X-R45)")
+    print_info("Testing: backend/app/services/platform/scheduler/jobs.py (_last_fx_dates, _history_sync_start) on the lane database")
+    print_info("Tests: 1.5 on D1 and a legacy 0 / inf / 1E+14 on D2 → D1 for both slugs, the sync starting the day after D1; a legacy rate alone → nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) → D2")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_last_fx_dates.py", test_names)
+    return run_command(cmd, "Scheduler last FX dates tests", verbose=verbose)
+
+
 def services_scheduler_joblog_builders(verbose: bool = False, test_names: list = None) -> bool:
     """Test scheduler job log entry builders and the append/rotate/read round trip."""
     print_section("Services: Scheduler Job Log Builders")
@@ -2705,6 +2714,16 @@ Note: No backend server required.
         # without ever calling save_state(), so nothing global is written.
         isolation="read",
     )
+    add_test(
+        cat,
+        "scheduler-last-fx-dates",
+        services_scheduler_last_fx_dates,
+        name="Scheduler Last FX Dates (X-R45)",
+        desc="jobs._last_fx_dates, the real one on the lane database: a usable rate on D1 and a legacy 0, inf or 1E+14 on D2 answer D1 for both slugs of the pair, and the history sync (horizon a week) starts the day after D1, so D2 is fetched again; a pair whose only rate is unusable answers nothing; guard: a usable latest rate (2, 1E-10, 99999999999999) answers D2",
+        # WRITE_SCOPED: each test writes rows of its own pair XQD/XQE (used by no other test, checked free before writing)
+        # with raw SQL in its own session and never commits: the session rolls them back, no other connection sees them.
+        isolation="write-scoped",
+    )
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches, LIBREFOLIO_PROFILE validation")
     add_test(cat, "config-package", services_config_package, name="Config Package", desc="Env vars read only in backend/app/config/, section accessors keep their semantics", isolation="pure")
     add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
@@ -2810,7 +2829,7 @@ Note: No backend server required.
         "managed-headers",
         services_managed_headers,
         name="Managed Profile Headers",
-        desc="F15 (D5, managed): with frame protection on (managed, or LIBREFOLIO_FRAME_PROTECTION=true) every response carries X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' once each, with it off (selfhosted, or false over managed) neither; with the report-only policy on (managed, or LIBREFOLIO_CSP_REPORT_ONLY=true) Content-Security-Policy-Report-Only is on the web app's HTML only (/, a client-side route, also gzipped, /200.html), never on /mkdocs, the API's JSON or HTML (Swagger UI, the HTML 404 of an unknown API path), /_app JavaScript, a text file, a CORS preflight or a 500; its default-src 'self', object-src 'none', base-uri 'self', frame-ancestors 'self', script-src with 'self', each directive once, no report-uri nor report-to; a route's own X-Frame-Options, CSP or report-only CSP kept alone and the others added; the settings read when the middleware is built, never per request; nosniff and Referrer-Policy still on every response",
+        desc="F15 (D5, managed): with frame protection on (managed, or LIBREFOLIO_FRAME_PROTECTION=true) every response carries X-Frame-Options: SAMEORIGIN and Content-Security-Policy: frame-ancestors 'self' once each, with it off (selfhosted, or false over managed) neither; with the report-only policy on (managed, or LIBREFOLIO_CSP_REPORT_ONLY=true) Content-Security-Policy-Report-Only is on the web app's HTML only (/, a client-side route, also gzipped, /200.html), never on /mkdocs, the API's JSON or HTML (Swagger UI, the HTML 404 of an unknown API path), /_app JavaScript, a text file, a CORS preflight or a 500; its default-src 'self', object-src 'none', base-uri 'self', frame-ancestors 'self', script-src exactly 'self' 'wasm-unsafe-eval' 'report-sample' and the hashes of the build's inline scripts (H-52: spa_inline_script_hashes() on index.html, 200.html and offline.html, every script without src, newlines normalized, deduplicated and sorted, read once when the middleware is built, the build never read with the policy off), each directive once, no report-uri nor report-to; a route's own X-Frame-Options, CSP or report-only CSP kept alone and the others added; the settings read when the middleware is built, never per request; nosniff and Referrer-Policy still on every response",
         # Fresh FastAPI() apps holding the stack's security_headers, gzip and cors, a few routes and the static site of a
         # fake build and documentation under tmp_path (FRONTEND_BUILD_DIR and SITE_DIR swapped by monkeypatch); test mode,
         # a data directory under tmp_path and the profile variables set by monkeypatch before an app is built; raw ASGI
