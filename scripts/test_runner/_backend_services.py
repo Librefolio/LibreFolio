@@ -201,13 +201,23 @@ def services_asset_source_refresh(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Asset source refresh smoke test", verbose=verbose)
 
 
+#: X-R55's ceiling (N75) and Z-25's bulk caps (N77): one family of denial of service, one action, both files PURE.
+RANGE_CEILING_TEST_PATHS = (
+    "backend/test_scripts/test_services/test_range_ceiling.py",
+    "backend/test_scripts/test_services/test_bulk_limits.py",
+)
+
+
 def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bool:
-    """X-R55 (N75): date ranges capped at tomorrow (UTC) and 100 years for asset prices, FX conversions and the sync walk."""
-    print_section("Services: Date Range Ceiling (X-R55)")
+    """X-R55 (N75): date ranges capped at tomorrow (server calendar) and 100 years; Z-25 (N77): items and item-days per bulk request capped."""
+    print_section("Services: Date Range Ceiling (X-R55) and Bulk Limits (Z-25)")
     print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
     print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_range_ceiling.py", test_names)
-    return run_command(cmd, "Date range ceiling tests", verbose=verbose)
+    print_info("Bulk caps: 1 000 items per request, 5 M item-days (the fill's span, warm-up and comparisons included), lowered per case")
+    cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RANGE_CEILING_TEST_PATHS, "-v"]
+    if test_names:
+        cmd.extend(["-k", " or ".join(test_names)])
+    return run_command(cmd, "Date range ceiling and bulk limit tests", verbose=verbose)
 
 
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
@@ -1796,10 +1806,11 @@ Note: No backend server required.
         "range-ceiling",
         services_range_ceiling,
         name="Date Range Ceiling",
-        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 UTC, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 5 M item-days, counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
-        # with create_all; the FX handler is called directly with convert_bulk replaced by an in-process converter; the
-        # sync step runs with an in-process provider double and stand-ins for the two core caches, all by monkeypatch.
+        # with create_all (or on a stand-in session that reads nothing); the FX handler is called directly with
+        # convert_bulk replaced by an in-process converter; the sync step runs with an in-process provider double and
+        # stand-ins for the two core caches, all by monkeypatch.
         isolation="pure",
     )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")

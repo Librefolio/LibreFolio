@@ -6232,18 +6232,35 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   lock di produzione farebbe solo aspettare a turno i giri dei due server, senza toccare dati. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra processi:
   analisi».
-- **Z-25 · Un tetto alla lunghezza delle liste di `POST /assets/prices/query` e `POST /fx/currencies/convert`** —
-  basso, sicurezza; Z, 17/10 (X-R55, N75, punto 4; via coordinatore). Con X-R55 ogni voce ha un intervallo con un
-  tetto, ma le due API accettano liste di lunghezza qualsiasi (`List[FAPriceQueryItem]`, `List[FXConversionRequest]`),
-  e N voci moltiplicano il tetto per voce. Cura possibile: un `max_length` sui due corpi, con un 422 chiaro. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R55 — intervalli di date senza
-  tetto su prezzi e cambi: analisi».
+- ✅ **Z-25 · Un tetto alla lunghezza delle liste di `POST /assets/prices/query` e `POST /fx/currencies/convert`** —
+  basso, sicurezza; Z, 17/10 (X-R55, N75, punto 4; via coordinatore). **Chiusa il 17/10 col lotto Z-25** (il commit
+  è del coordinatore; decisione notturna N77, opzione C, da rivedere col developer).
+  - Al più 1 000 voci per richiesta (422 `bulk_too_many_items`, prima di ogni lettura) e 5 milioni di voci-giorno
+    (422 `bulk_too_many_days`). Costanti, errore e `detail` in `utils/date_range_limits.py`.
+  - Prezzi: `get_prices_bulk()` conta, dopo la lettura di prezzi e semi e prima dei riempimenti, i punti che ogni
+    riempimento emetterà (`_fill_span()`), serie di confronto comprese. Cambi: il gestore pianifica e conta ogni
+    blocco di giorni prima di costruirne uno; un rifiuto costa millisecondi (BL-API-03: 0,01 s).
+  - Restano: il web app (Z-27, sotto); rischio e AI Export ricevono `BulkTooManyDaysError` senza 422 (un 500): riga
+    a J dal coordinatore, che dovrà aggiornare anche la frase in `developer/backend/assets/architecture.md`
+    (`#bulk-request-limits`).
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
+  richieste di massa di prezzi e cambi: analisi».
 - **Z-26 · L'attesa del lock fra processi dello scheduler non ha un tempo massimo** — basso; E (R13-SEC8), via
   coordinatore, 17/10. `scheduler_run_lock()` (`scheduler/run_lock.py:83-91`, Z-11) aspetta il lock senza limite. Un
   job bloccato in un worker ferma i giri degli altri: lo scheduler resta occupato, e `wake-sync` risponde 409 a chi
   arriva dopo, dove prima rispondevano `not_leader`. Dopo X-R55 e Z-25; prima un'analisi: quanto aspettare, e cosa
   rispondere quando il tempo finisce. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
   sezione «Z-11 — lock dei job tra processi: analisi».
+- **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
+  (Z-25, N77; via coordinatore).
+  - La lista asset (`fetchAllPriceData` in `routes/(app)/assets/+page.svelte`) manda una voce per asset in un solo
+    `POST /assets/prices/query`; la lista e il registro dei cambi fanno lo stesso con le coppie.
+  - Con Z-25 un'istanza oltre 1 000 asset, o oltre 5 milioni di voci-giorno, riceve un 422. Oggi la pagina mostra
+    allora le carte senza prezzi: l'errore arriva solo alla console (il `catch` di `fetchAllPriceData`).
+  - Seguito: dividere la richiesta in lotti (Y, X). Il messaggio esplicito lo fa X (con X-R53), per non avere due
+    scrittori sulle stesse pagine.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
+  richieste di massa di prezzi e cambi: analisi».
 
 ## B · Backup e Docker (fase 01)
 

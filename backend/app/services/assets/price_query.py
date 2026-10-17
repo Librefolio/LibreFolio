@@ -49,6 +49,7 @@ from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.service import SignalService
+from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, BulkTooManyDaysError
 from backend.app.utils.datetime_utils import latest_range_end, utcnow
 
 logger = structlog.get_logger(__name__)
@@ -186,6 +187,27 @@ class PriceQueryOperations:
             # else: skip days before first known price
             current += timedelta(days=1)
         return results
+
+    @staticmethod
+    def _fill_span(
+        price_map: dict[date_type, PriceHistory],
+        start_date: date_type,
+        end_date: date_type,
+        stored_seed: Optional[PriceHistory],
+    ) -> int:
+        """How many points ``_build_backward_filled_series`` would emit for these arguments, without building them (Z-25).
+
+        With a seed (``stored_seed``, or a price of the map before ``start_date``, the one the caller hands the fill), one
+        per day of the range; without one, one per day from the first price; none with neither.
+        """
+        if end_date < start_date:
+            return 0
+        if stored_seed is not None or any(point_date < start_date for point_date in price_map):
+            return (end_date - start_date).days + 1
+        first = min(price_map, default=None)
+        if first is None or first > end_date:
+            return 0
+        return (end_date - first).days + 1
 
     @staticmethod
     def derive_signal_source_capability(prices: Sequence[FAPricePoint]) -> SignalSourceCapability:
@@ -361,6 +383,19 @@ class PriceQueryOperations:
                 seed_row = seed_result.scalars().first()
                 if seed_row:
                     seed_prices[aid] = seed_row
+
+        # Z-25: the per-day points the fills will build, comparison series included, against the request's budget. The
+        # count follows the fill, not the request: a full-history signal loads from date.min, and its fill emits from
+        # the first stored price even when the visible range is one day.
+        item_days = 0
+        for req, plan, (start, end) in zip(requests, signal_plans, load_ranges, strict=True):
+            item_days += PriceQueryOperations._fill_span(price_maps.get(req.asset_id, {}), start, end, seed_prices.get(req.asset_id))
+            if plan.requires_prepared_asset_series:
+                for comparison_asset_id in plan.comparison_asset_ids:
+                    if comparison_asset_id != req.asset_id:
+                        item_days += PriceQueryOperations._fill_span(price_maps.get(comparison_asset_id, {}), start, end, seed_prices.get(comparison_asset_id))
+        if item_days > MAX_BULK_ITEM_DAYS:
+            raise BulkTooManyDaysError(item_days=item_days, max_item_days=MAX_BULK_ITEM_DAYS)
 
         # Build backward-filled series per asset (preserving request order)
         results = []

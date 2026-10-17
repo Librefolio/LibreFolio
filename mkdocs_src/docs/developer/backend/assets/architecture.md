@@ -261,6 +261,45 @@ keeps the span limit: `RANGE_SPAN_LIMIT_DAYS` (36,525 days, 100 years) back from
 [FX conversion ranges](../fx/architecture.md#convert-range-ceiling).
 {: #price-query-range-ceiling }
 
+A request also has two caps (Z-25, night decision N77). X-R55 gives each range a ceiling, but no
+limit on how many ranges one request holds: 1,000 FX conversions of 100 years would build about
+36.5 million daily conversions. The caps live in `backend/app/utils/date_range_limits.py` too, with
+the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
+`bulk_too_many_days_detail()`; the modules that read them import them by name, where
+`test_bulk_limits.py` lowers the budget. The
+[conversion endpoint](../fx/architecture.md#convert-request-limits) has the same two caps.
+{: #bulk-request-limits }
+
+- **Items**: more than `MAX_BULK_ITEMS` (1,000) items get a 422
+  `{"code": "bulk_too_many_items", "message", "max_items", "items"}` from the route, before any
+  work: no database read. Exactly 1,000 pass.
+- **Item-days**: once the prices and the seeds are read, before the events query and the fills,
+  `get_prices_bulk()` sums the points each item's backward fill will emit. `_fill_span()` mirrors
+  `_build_backward_filled_series()` without building anything: with a seed (a stored one, or a
+  price of the map before the load start), one point per day of the load range; without one, one
+  per day from the first stored price to the end; none when the fill emits nothing (no price, or a
+  first price after the end). The comparison series of a signal that needs a prepared asset series
+  (a rolling beta against another asset) count too; a comparison against the item's own asset is
+  not counted twice. An item that starts after the ceiling counts zero. Over `MAX_BULK_ITEM_DAYS`
+  (5,000,000) the method raises `BulkTooManyDaysError`, its `item_days` the request's exact total,
+  and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
+
+The count follows the fill, not the requested range: a full-history signal (`RISK_DRAWDOWN`) loads
+from `date.min`, so its fill emits from the first stored price even when the visible range is one
+day. Without signals, 300 assets on the asset list's «All» (from 2000-01-01) fill at most about
+2.9 million points. The item cap is the route's, the budget `get_prices_bulk()`'s: the risk
+preparation and AI Export, which call the method directly, meet the budget too and get
+`BulkTooManyDaysError` itself, which only the price route turns into a 422.
+
+The web app does not split its requests yet. The asset list (`fetchAllPriceData()` in
+`frontend/src/routes/(app)/assets/+page.svelte`) sends a single `POST /assets/prices/query`, with
+one item per asset whose prices for the range are not cached, or that has backend signals. Past
+1,000 items it gets `bulk_too_many_items`: the assets whose prices it asked for get none, and
+nothing on the page names the cause. The error reaches only the browser console (`console.error`
+in the `catch` of `fetchAllPriceData()`); with backend signals selected, the signals section of the
+chart settings window shows its generic *Technical signals could not be updated*. An explicit
+message (workstream X) and splitting the request into batches (backlog Z-27) are follow-ups.
+
 With `target_currency`, the conversion pass converts every close not already in that currency
 through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
 the native values in the `original_*` fields, and records the rate's date in
