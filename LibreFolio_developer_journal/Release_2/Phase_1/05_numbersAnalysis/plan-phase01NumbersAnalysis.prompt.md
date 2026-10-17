@@ -6119,3 +6119,27 @@ prossimo checkpoint.
   Doc: la pagina teorica dello YoC (un punto, solo EN: la cache di traduzione era già indietro, nessun timbro) e
   `lots_analysis_service.md` («Yield on cost»); devWiki `decisions/yield-on-cost-definition.md`.
 - ⏳ **Checkpoint J-51** (FROZEN).
+- ✅ **Checkpoint J-51** (2026-10-17): entrato (dev `1becf502f`), CHANGELOG 🐛 `85b067b1b`; worktree in fast-forward.
+  Nessuno slot `api portfolio` (forma invariata; lo copre il prossimo cancello).
+
+#### J-36 — i due messaggi del prezzo di riferimento dei lotti (17/10, dalle 14:55; base `85b067b1b`)
+
+- **Analisi (sola lettura)**: `referencePriceUnavailable` diceva il rendimento relativo non calcolabile, mentre ripiega sul
+  costo unitario del lotto (`opening_reference_price`, sorgente `exact`) e manca solo senza costo d'acquisto;
+  `referencePriceFallback` diceva «ultimo prezzo noto {reference_price}», mentre il riferimento può essere anche il prezzo
+  degli scambi dello stesso giorno, e il parametro è un numero nativo senza valuta. **Scoperta**: il banner dei lotti
+  (`lotDataQualityHelpers.buildIssueGroups`) raggruppa per codice, un messaggio coi parametri della prima issue e un chip
+  per lotto: `{reference_price}` nominava il prezzo di un lotto davanti a più lotti. Deviazione dalla nota dell'indice
+  (prezzo convertito con la valuta): il prezzo esce dal testo.
+- **Coordinatore (15:0x)**: OK; **J-53** (lo stesso raggruppamento nasconde i fondi orfani dopo il primo) al frontend, una
+  riga per issue per i codici senza lotto, titolare Y, dopo X-R59 A/B, nella 1.3: scritta nella sezione J con Y titolare.
+- ✅ **Testi (15:0x)** con `dev.py i18n update`, 4 lingue, termini dell'interfaccia (Open Return / rendimento aperto /
+  rendement ouvert / rendimiento abierto; rettifica; costo d'acquisto). EN: «Lots opened by an adjustment on a day without
+  a market quote: their Open Return starts from the last price on or before that day, an earlier quote or the price of a
+  purchase or sale»; «Lots opened by an adjustment before any price: their Open Return starts from their own purchase
+  cost per unit, and is not available without one». Nessun cambio del backend (`reference_price` resta, non letto). Doc:
+  una frase in `lots_analysis_service.md` («Reference Price»). Nessun rosso: un test non asserisce testi.
+- ✅ **Verdi (14:57–15:00)**: `i18n check` stretto (5 051 chiavi), `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**,
+  `front check` 0/0 (comprende il formato dei JSON), `mkdocs build` stretto ✓, check-links ✓; nessun test né E2E cita i
+  testi vecchi. Porta 6185 libera.
+- ⏳ **Checkpoint J-36** (FROZEN).
