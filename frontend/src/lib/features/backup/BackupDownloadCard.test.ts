@@ -1090,3 +1090,28 @@ describe('B4 — BackupDownloadCard: clear or secure', () => {
         expect(events()).toEqual([{name: 'backup.created', detail: {job_id: JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted}}]);
     });
 });
+
+// =====================================================================================================================
+// B4b — the password of a secure backup is a new password (B-25; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract (B4b brief §3, frontend): both password fields of a secure backup say `autocomplete="new-password"`, so
+ * that a password manager offers to make a new password there and never fills in the account's own. `off` does not
+ * say so: password managers commonly ignore it on a password field. Red today: both fields say `off`.
+ */
+
+describe('B4b — BackupDownloadCard: the password fields of a secure backup are new-password fields (B-25)', () => {
+    it('backup-password and backup-password-confirm say autocomplete="new-password": a password manager fills in no account password there', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+        const fields = [passwordField(), confirmField()];
+
+        expect(
+            fields.map((field) => field.getAttribute('type')),
+            'precondition: the two password fields of a secure backup',
+        ).toEqual(['password', 'password']);
+        // One object, so that a red shows both fields at once.
+        expect(Object.fromEntries(fields.map((field) => [field.getAttribute('data-testid'), field.getAttribute('autocomplete')])), "new passwords, never the account's").toEqual({'backup-password': 'new-password', 'backup-password-confirm': 'new-password'});
+    });
+});

@@ -35,6 +35,7 @@ _REFUSAL_STATUS = {
     "EVENT_EXISTS": 409,
     "EVENT_NOT_DELETABLE": 400,
     "EVENT_IN_USE": 409,
+    "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST": 409,
 }
 
 
@@ -68,6 +69,10 @@ async def upsert_events_bulk(
       or type would land on a key another edit of the item ends on, or that a manual
       event the item does not edit holds; or an event without ``id`` would take a key
       an edit ends on;
+    - 409 ``EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST``: ``event_id``, ``date`` and
+      ``transaction_ids`` — an edit changes the type of a SPLIT while linked incoming
+      adjustments have no cost: without the split they would be acquisitions of unknown
+      cost (P-10). Give them a cost first;
     - 409 ``EVENT_EXISTS``, ``mode: "create"`` only: ``existing``, the events already
       on that date and type (manual or provider), with their values, ``is_auto`` and
       ``linked_transactions``;

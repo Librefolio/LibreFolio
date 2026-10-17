@@ -36,12 +36,25 @@
  * the period's own report is back. Each cascaded request is held by its body (the section it asks alone, no history),
  * and its sameness with the one on screen is checked.
  *
+ * And the asset pages, the last lot of Y11. An asset's detail page (`asset-detail-refresh-btn`): Refresh and a period
+ * change hold its button until the chart's prices they asked are back; the reload that follows the page's own Sync does
+ * not (P3) — from the chart's prices to the asset's metadata, every value of the button recorded as above, with a period
+ * change in the same page as the control. On the price chart of the Overview tab: on the Risk tab the risk panel reloads
+ * under a token of its own after a sync, as the Dashboard's panels do after its banner's. The Assets list on its
+ * Correlation tab: «Reload All» (`risk-reload-button`), the page's Refresh there, holds its button until the section it
+ * asked again is back — the correlation section's base wave, held by its shape. Each of these buttons is first checked to
+ * publish a `data-busy` at all, so that a button that follows nothing says so instead of timing out on an absent value.
+ *
  * Busy or idle is read only from `data-busy` and `disabled`: no class (the spin is one), no colour, no text.
  *
  * Read-only on the shared database: TEST_USER, nothing written. «Aggiorna» re-reads and syncs nothing
  * (`requestPortfolioRefresh` is a client-side mark); the period and the Files tab live in this context's own
  * sessionStorage and localStorage, and the filters the Transactions Refresh clears in this page's URL. The broker is the
- * mock's broker with positions, found by name through `page.request`, never by position.
+ * mock's broker with positions, found by name through `page.request`, never by position. On the asset pages nothing
+ * reaches a provider either: the live-price poll, a write (it stores today's candle), is refused at the network; the
+ * page's Sync is answered in the browser — accepted, nothing written — and so is the provider catalogue its dialog asks,
+ * empty; the laboratory's selection lives in this context's localStorage. The asset is the mock's Apple, found by name
+ * through `page.request`.
  */
 
 import type {APIResponse, Route} from '@playwright/test';
@@ -963,6 +976,364 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
 
             await gate.release();
             await expectIdle(refresh, 'the list of transactions is back, and the Refresh button still waits');
+        } finally {
+            await gate.dispose();
+        }
+    });
+});
+
+// ── The asset pages: an asset's detail page, and the Assets list on its Correlation tab ──────────────────────────────
+
+const ASSETS_QUERY_PATH = `${API}/assets/query`;
+const PRICE_QUERY_PATH = `${API}/assets/prices/query`;
+const LIVE_PRICES_PATH = `${API}/assets/prices/current`;
+const ASSET_SYNC_PATH = `${API}/assets/prices/sync`;
+const FX_SYNC_PATH = `${API}/fx/currencies/sync`;
+const FX_PROVIDERS_PATH = `${API}/fx/providers`;
+const ASSIGNMENTS_PATH = `${API}/assets/provider/assignments`;
+const RISK_QUERY_PATH = `${API}/risk/query`;
+/**
+ * The mock's asset with a price history and a provider, the one the asset specs open (asset-detail.spec.ts,
+ * `goToSeededAssetDetail`): found by name through `page.request`, never by position.
+ */
+const ASSET_WITH_PRICES = 'Apple Inc.';
+
+/** An asset as the list answers it: its id, and the provider that prices it — its page offers a Sync only with one. */
+interface ListedAsset {
+    id: number;
+    provider: string | null;
+}
+
+/** An asset TEST_USER sees, by name, read with `page.request`: no route of the page intercepts it. */
+async function assetByName(page: Page, name: string): Promise<ListedAsset> {
+    const response = await page.request.get(ASSETS_QUERY_PATH);
+    expect(response.ok(), `GET ${ASSETS_QUERY_PATH} → HTTP ${response.status()}`).toBe(true);
+    const items = (await response.json()) as Array<{id: number; display_name: string; provider_code?: string | null}>;
+    const asset = items.find((item) => item.display_name === name);
+    if (!asset) throw new Error(`${name} is the mock's asset with a price history: check populate_mock_data.py (populate_assets)`);
+    return {id: asset.id, provider: asset.provider_code ?? null};
+}
+
+/**
+ * Every live-price poll the page sends, refused at the network from now until the context closes. A poll is a write —
+ * `POST /assets/prices/current` asks the provider and stores today's candle — and an answer, even an empty one, goes
+ * through the client's interceptor as a portfolio mutation that marks the caches stale. A refused poll writes nothing,
+ * calls no provider and marks nothing: the poller notes the failure and waits longer before the next try. No button
+ * waits for it either way (P3: the live poller holds no token). Never unrouted: the next poll would reach the backend.
+ */
+async function refuseLivePrices(page: Page): Promise<void> {
+    await page.route(
+        (url) => url.pathname === LIVE_PRICES_PATH,
+        (route) => route.abort().catch(() => undefined),
+    );
+}
+
+/**
+ * The exchange-rate provider catalogue (`GET /fx/providers`), answered in the browser with an empty list. The page's
+ * sync dialog asks it when it opens, for provider icons (`getCurrencyGraph()`), and the backend builds it by asking the
+ * providers, some of them over the network (risk-lab.spec.ts, `answerFxProviderCatalog`). An empty list is valid for
+ * the client's schema, and the dialog here has no exchange-rate pair to draw an icon for. The bare path only:
+ * `/fx/providers/routes` is a read of the database the page needs.
+ */
+async function answerFxProviderCatalog(page: Page): Promise<void> {
+    await page.route(
+        (url) => url.pathname === FX_PROVIDERS_PATH,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            await route.fulfill({status: 200, contentType: 'application/json', body: '[]'}).catch(() => undefined);
+        },
+    );
+}
+
+/** What the page's own Sync sent, as the stub answered it. */
+interface SyncStub {
+    /** The asset ids of every `POST /assets/prices/sync`, one list per request, counted before its answer leaves. */
+    assets: number[][];
+    /** Every exchange-rate sync the page tried, refused: the page under test has no pair to sync. */
+    fx: Request[];
+}
+
+/**
+ * The page's own Sync, answered in the browser: every asset it asks for is `ok`, nothing fetched and nothing changed —
+ * a run that was accepted (`PageSyncModal` reports `{accepted: true}`) and wrote nothing. No provider is called and the
+ * shared database is not touched: the request never leaves the browser. An exchange-rate sync is refused at the network,
+ * and recorded.
+ */
+async function stubPageSync(page: Page): Promise<SyncStub> {
+    const stub: SyncStub = {assets: [], fx: []};
+    await page.route(
+        (url) => url.pathname === ASSET_SYNC_PATH,
+        async (route) => {
+            const body: unknown = route.request().postDataJSON();
+            const items = Array.isArray(body) ? (body as Array<{asset_id?: unknown}>) : [];
+            const ids = items.flatMap((item) => (typeof item?.asset_id === 'number' ? [item.asset_id] : []));
+            // Counted before the answer leaves: whatever the page sends because of it finds it counted already.
+            stub.assets.push(ids);
+            const results = ids.map((id) => ({asset_id: id, status: 'ok', provider_used: null, points_fetched: 0, points_changed: 0, errors: []}));
+            await route.fulfill({json: {results, success_count: results.length, errors: []}}).catch(() => undefined);
+        },
+    );
+    await page.route(
+        (url) => url.pathname === FX_SYNC_PATH,
+        async (route) => {
+            stub.fx.push(route.request());
+            await route.abort().catch(() => undefined);
+        },
+    );
+    return stub;
+}
+
+type PriceQueryItem = {asset_id?: number; date_range?: {start?: string; end?: string}};
+
+/** What a price query (`POST /assets/prices/query`) asks about asset `assetId`, if it asks about it at all. */
+function priceItemOf(request: Request, assetId: number): PriceQueryItem | undefined {
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== PRICE_QUERY_PATH) return undefined;
+    const body = request.postDataJSON() as PriceQueryItem[] | null;
+    return Array.isArray(body) ? body.find((item) => item?.asset_id === assetId) : undefined;
+}
+
+/** The chart of asset `assetId`'s page (`loadChartData`): a price query about that asset, with its prices or without. */
+function isChartOf(assetId: number): (request: Request) => boolean {
+    return (request) => priceItemOf(request, assetId) !== undefined;
+}
+
+/** The period a chart query asks for asset `assetId`, as one comparable string. */
+function chartPeriodOf(request: Request, assetId: number): string {
+    const range = priceItemOf(request, assetId)?.date_range;
+    return `${range?.start ?? ''}..${range?.end ?? ''}`;
+}
+
+/** Every request `picks` chooses that the page sends from now on, in order, the held ones included. */
+function recordRequests(page: Page, picks: (request: Request) => boolean): Request[] {
+    const sent: Request[] = [];
+    page.on('request', (request) => {
+        if (picks(request)) sent.push(request);
+    });
+    return sent;
+}
+
+type RiskQueryBody = {
+    scope?: {kind?: string; asset_ids?: number[]};
+    date_range?: {start?: string; end?: string | null};
+    target_currency?: string;
+    mode?: string;
+    analytics?: Array<{analytic_code?: string}>;
+};
+
+/**
+ * The correlation section's base wave on the Correlation tab (`POST /risk/query`): an asset-set question, historical,
+ * that asks the correlation alone. The replay section asks the very same wave, which `queryRisk` serves from one flight;
+ * the two levels ask their own codes beside it (risk-lab.spec.ts, `correlationRequestsFor`).
+ */
+function isCorrelationWave(request: Request): boolean {
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== RISK_QUERY_PATH) return false;
+    const body = request.postDataJSON() as RiskQueryBody | null;
+    const codes = new Set((body?.analytics ?? []).map((analytic) => analytic.analytic_code));
+    return body?.scope?.kind === 'asset_set' && body.mode === 'historical' && codes.size === 1 && codes.has('correlation');
+}
+
+/** What a risk wave asks about — its selection, its period, its currency — as one comparable value. */
+function riskQuestionOf(request: Request): unknown {
+    const body = request.postDataJSON() as RiskQueryBody | null;
+    return {scope: body?.scope, date_range: body?.date_range, target_currency: body?.target_currency};
+}
+
+/**
+ * The button says whether it waits: a `data-busy` is there, `true` or `false`. One that publishes none follows no busy
+ * state at all, and every reading of it would time out on a value that is not there.
+ */
+async function expectPublishesBusy(button: Locator, what: string): Promise<void> {
+    await expect(button, `${what} publishes no data-busy: it does not follow the big requests of its page (Y11)`).toHaveAttribute('data-busy', /^(?:true|false)$/);
+}
+
+/**
+ * An asset's detail page, loaded from scratch and settled: its chart in (the root's `data-busy`), and nothing of the
+ * page pending (the button's) — the first load holds the button until the asset, its chart, its classification and any
+ * comparison are all in. On the price chart of the Overview tab, where no risk panel adds loads of its own to the button.
+ */
+async function openAssetDetail(page: Page, assetId: number): Promise<Locator> {
+    await navigateTo(page, `/assets/${assetId}`);
+    await waitForSettled(page.getByTestId('asset-detail-page'), ROUND_TRIP_MS);
+    await expect(page.getByTestId('asset-detail-tab-overview'), `the page of asset ${assetId} did not open on its Overview tab`).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('asset-detail-chart'), `the page of asset ${assetId} did not open on its price chart`).toHaveAttribute('data-primary-mode', 'price');
+    const refresh = page.getByTestId('asset-detail-refresh-btn');
+    await expectPublishesBusy(refresh, "The asset's Refresh button");
+    await expectIdle(refresh, "the asset's page settled with its Refresh button still waiting");
+    return refresh;
+}
+
+/**
+ * The Assets list on its Correlation tab, loaded from scratch and settled: the laboratory's opening selection analysed
+ * — on a first visit, what TEST_USER holds — the correlation section's first base wave in (its own `data-busy`), the
+ * list's two waves in (the root's), and nothing of the page pending (the button's). «Reload All» is the page's Refresh
+ * on this tab: it takes the place of the list's in the toolbar.
+ */
+async function openCorrelationLab(page: Page): Promise<Locator> {
+    await navigateTo(page, '/assets?tab=correlation');
+    const correlation = page.getByTestId('asset-global-risk-panel').getByTestId('risk-correlation-content');
+    await expect(correlation, `the laboratory analyses nothing: on a first visit it opens on what ${TEST_USER.username} holds — check populate_mock_data.py`).toBeVisible({timeout: ROUND_TRIP_MS});
+    await expect(correlation, "the correlation section's capability catalogue never came").toHaveAttribute('data-catalog', 'ready', {timeout: ROUND_TRIP_MS});
+    await waitForSettled(correlation, ROUND_TRIP_MS);
+    await waitForSettled(page.getByTestId('assets-page'), ROUND_TRIP_MS);
+    const reload = page.getByTestId('assets-controls').getByTestId('risk-reload-button');
+    await expectPublishesBusy(reload, "The Correlation tab's «Reload All» button");
+    await expectIdle(reload, 'the laboratory settled with its «Reload All» button still waiting');
+    return reload;
+}
+
+test.describe("Page busy on the asset pages: the Refresh button waits for its own page's big requests, never for a sync's reload (Y11)", () => {
+    test.describe.configure({timeout: TEST_MS});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test("Asset detail: Refresh holds its button until the chart's prices it asked again are back", async ({page}) => {
+        const asset = await assetByName(page, ASSET_WITH_PRICES);
+        // After the sign-in, before the page loads: no poll of the document under test reaches the backend.
+        await refuseLivePrices(page);
+        const isChart = isChartOf(asset.id);
+        const charts = recordRequests(page, isChart);
+        const refresh = await openAssetDetail(page, asset.id);
+        expect(charts.length, "precondition: the asset's page asked its chart").toBeGreaterThan(0);
+        const onScreen = charts[charts.length - 1];
+
+        // Any chart query: nothing else on the settled page asks one.
+        const gate = await hold(page, PRICE_QUERY_PATH, isChart);
+        try {
+            await refresh.click();
+            const sent = await heldRequest(gate, "the chart's prices Refresh asks again");
+            expect(chartPeriodOf(sent, asset.id), 'Refresh asked the chart for another period than the one on screen').toBe(chartPeriodOf(onScreen, asset.id));
+            await expectBusy(refresh, "Refresh asked the chart's prices again, and its button does not wait for them");
+
+            await gate.release();
+            await expectIdle(refresh, "the chart's prices are back, and the Refresh button still waits");
+        } finally {
+            await gate.dispose();
+        }
+    });
+
+    test('Asset detail: a period change holds the Refresh button until the chart of the new period is back, with no click on it', async ({page}) => {
+        const asset = await assetByName(page, ASSET_WITH_PRICES);
+        await refuseLivePrices(page);
+        const isChart = isChartOf(asset.id);
+        const charts = recordRequests(page, isChart);
+        const refresh = await openAssetDetail(page, asset.id);
+        const asked = new Set(charts.map((request) => chartPeriodOf(request, asset.id)));
+        expect(asked.size, "precondition: the asset's page asked its chart for the period it opened on").toBeGreaterThan(0);
+        const sixMonths = page.getByTestId('asset-detail-filter-bar').getByTestId('date-preset-6m');
+        await expect(sixMonths, "precondition: 6M is a change of period (the asset's page opens on 3M)").toHaveAttribute('data-active', 'false');
+
+        // Only a chart query for a period the page had not asked yet: the one the click sends, with the prices or, on a
+        // cache hit, the events alone.
+        const gate = await hold(page, PRICE_QUERY_PATH, (request) => isChart(request) && !asked.has(chartPeriodOf(request, asset.id)));
+        try {
+            await sixMonths.click();
+            await expect(sixMonths).toHaveAttribute('data-active', 'true');
+            await heldRequest(gate, 'the chart of the new period');
+            await expectBusy(refresh, 'the chart of the new period is pending, and the Refresh button does not wait for it');
+
+            await gate.release();
+            await expectIdle(refresh, 'the chart of the new period is back, and the Refresh button still waits');
+        } finally {
+            await gate.dispose();
+        }
+    });
+
+    test("Asset detail: the reload after the page's own Sync never makes the Refresh button wait, while a period change in the same page does", async ({page}) => {
+        const asset = await assetByName(page, ASSET_WITH_PRICES);
+        if (asset.provider === null) throw new Error(`${ASSET_WITH_PRICES} has no provider, so its page offers no Sync: check populate_mock_data.py (populate_asset_provider_assignments)`);
+        // After the sign-in, before the page loads: nothing the document under test syncs or polls reaches the backend.
+        await refuseLivePrices(page);
+        await answerFxProviderCatalog(page);
+        const sync = await stubPageSync(page);
+        const isChart = isChartOf(asset.id);
+        const charts = recordRequests(page, isChart);
+        const holds: Hold[] = [];
+        try {
+            const refresh = await openAssetDetail(page, asset.id);
+            // The Edit button waits for the asset's metadata (`classificationLoaded`), which the reload after a sync asks
+            // again last: its state says where that reload is.
+            const edit = page.getByTestId('asset-detail-edit-btn');
+            await expect(edit, "precondition: the asset's metadata is in").toBeEnabled();
+            expect(charts.length, "precondition: the asset's page asked its chart").toBeGreaterThan(0);
+            const onScreen = charts[charts.length - 1];
+            const busySeen = await recordBusy(page, 'asset-detail-refresh-btn');
+
+            // 1. The page's own Sync, accepted. Held, once the stub has answered: the chart the reload asks again, then the
+            //    provider assignment its metadata reload asks once that chart is back — nothing else on the settled page
+            //    asks either.
+            const synced = (): boolean => sync.assets.length > 0;
+            const reload = await hold(page, PRICE_QUERY_PATH, (request) => isChart(request) && synced());
+            holds.push(reload);
+            const metadata = await hold(page, ASSIGNMENTS_PATH, (request) => isGet(request) && synced());
+            holds.push(metadata);
+            const syncButton = page.getByTestId('asset-detail-sync-btn');
+            await expect(syncButton, `precondition: ${ASSET_WITH_PRICES} has a provider and can be synced from its page`).toBeEnabled();
+            await syncButton.click();
+            const dialog = page.getByTestId('page-sync-modal');
+            await expect(dialog).toBeVisible();
+            const scope = dialog.getByTestId('sync-modal-count');
+            await expect(scope, 'precondition: the dialog syncs this asset alone').toHaveAttribute('data-item-count', '1');
+            await expect(scope, 'precondition: the dialog has no exchange-rate section to run').toHaveAttribute('data-section-count', '1');
+            await dialog.getByTestId('sync-modal-start').click();
+
+            const sent = await heldRequest(reload, "the reload after the page's own Sync");
+            expect(sync.assets, 'the dialog synced something else than this asset').toEqual([[asset.id]]);
+            expect(sent.postDataJSON(), 'the held query is not the chart on screen asked again').toEqual(onScreen.postDataJSON());
+            await expectNeverWaited(refresh, busySeen, "the reload after the page's own Sync (P3)");
+
+            await reload.release();
+            await heldRequest(metadata, "the asset's metadata the reload asks again once its chart is back");
+            await expect(edit, 'precondition: the metadata is being asked again, and the Edit button does not wait for it').toBeDisabled();
+            await expectNeverWaited(refresh, busySeen, "the metadata the reload after the page's own Sync asks again (P3)");
+
+            await metadata.release();
+            await expect(edit, "the asset's metadata, asked again after the Sync, never landed").toBeEnabled({timeout: ROUND_TRIP_MS});
+            await waitForSettled(page.getByTestId('asset-detail-page'), ROUND_TRIP_MS);
+            await expectNeverWaited(refresh, busySeen, "the reload after the page's own Sync, from the send of its chart to the landing of its metadata (P3)");
+            expect(sync.fx, 'the page tried an exchange-rate sync').toEqual([]);
+            // Closed before the control: its backdrop covers the toolbar.
+            await dialog.getByTestId('sync-modal-close').click();
+            await expect(dialog).toBeHidden();
+
+            // 2. The control, in the same page and under the same recording: a request the page waits for moves the
+            //    button, and the recording sees it move.
+            const asked = new Set(charts.map((request) => chartPeriodOf(request, asset.id)));
+            const sixMonths = page.getByTestId('asset-detail-filter-bar').getByTestId('date-preset-6m');
+            await expect(sixMonths, "precondition: 6M is a change of period (the asset's page opens on 3M)").toHaveAttribute('data-active', 'false');
+            const period = await hold(page, PRICE_QUERY_PATH, (request) => isChart(request) && !asked.has(chartPeriodOf(request, asset.id)));
+            holds.push(period);
+            await sixMonths.click();
+            await expect(sixMonths).toHaveAttribute('data-active', 'true');
+            await heldRequest(period, 'the chart of the new period');
+            await expectBusy(refresh, 'the control: the chart of the new period is pending, and the Refresh button does not wait for it');
+            expect(await busySeen(), 'the control: the recording missed the button waiting, so its silence above proves nothing').toContain('true');
+            await period.release();
+            await expectIdle(refresh, 'the control: the chart of the new period is back, and the Refresh button still waits');
+        } finally {
+            for (const gate of holds) await gate.dispose();
+        }
+    });
+
+    test('Assets list, Correlation tab: «Reload All» holds its button until the sections it asked again are back', async ({page}) => {
+        // After the sign-in, before the page loads: the list polls live prices while its period ends today.
+        await refuseLivePrices(page);
+        const waves = recordRequests(page, isCorrelationWave);
+        const reload = await openCorrelationLab(page);
+        expect(waves.length, 'precondition: the correlation section asked its base wave, of the shape held below').toBeGreaterThan(0);
+        const onScreen = waves[waves.length - 1];
+
+        // The correlation section's base wave, which the replay section shares: nothing else on the settled tab asks it.
+        const gate = await hold(page, RISK_QUERY_PATH, isCorrelationWave);
+        try {
+            await reload.click();
+            const sent = await heldRequest(gate, "the correlation section's base wave «Reload All» asks again");
+            expect(riskQuestionOf(sent), 'the reload asked about another selection, period or currency than the one on screen').toEqual(riskQuestionOf(onScreen));
+            await expectBusy(reload, '«Reload All» asked the correlation section again, and its button does not wait for it');
+
+            await gate.release();
+            await expectIdle(reload, 'the correlation section is back, and «Reload All» still waits');
         } finally {
             await gate.dispose();
         }

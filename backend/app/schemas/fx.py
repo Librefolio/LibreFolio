@@ -30,6 +30,7 @@ Covers provider info, currency conversion, rate upsert/delete, and pair sources.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import math
 from datetime import date as date_type
 from decimal import Decimal
 from typing import List, Optional
@@ -209,11 +210,13 @@ class FXUpsertItem(BaseModel):
     @field_validator("rate", mode="before")
     @classmethod
     def coerce_rate(cls, v):
-        """Coerce rate to Decimal."""
-        if isinstance(v, str):
-            return Decimal(v)
-        if isinstance(v, (int, float)):
-            return Decimal(str(v))
+        """A finite float as its shortest decimal text (``0.1`` → ``Decimal("0.1")``, never ``0.1000000000000000055…``);
+        anything else as it came. Pydantic's own parsing then refuses what is not a finite number with a 422 that echoes
+        the text sent: ``Decimal("abc")`` here raised ``InvalidOperation`` past Pydantic (a 500), and an echoed
+        ``Decimal('Infinity')`` or ``inf`` (the JSON number ``1E+400``) is a value the JSON renderer cannot write (X-R38).
+        """
+        if isinstance(v, float):
+            return Decimal(str(v)) if math.isfinite(v) else str(v)
         return v
 
     @field_validator("base", "quote", mode="before")

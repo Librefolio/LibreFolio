@@ -1221,3 +1221,23 @@ describe('B4 — RestoreCard: an envelope and its password', () => {
         expect(progressbar(progress)).toHaveAttribute('aria-valuenow', '25');
     });
 });
+
+// =====================================================================================================================
+// B4b — the password of an envelope is not the account's (B-25)
+// =====================================================================================================================
+
+/*
+ * The contract (B4b brief §3, frontend): the restore card's `restore-password` keeps `autocomplete="off"`. The password
+ * of an envelope is the one a backup was made with, and `current-password` would have a password manager offer the
+ * account's. Green today: the guard that keeps it so.
+ */
+
+describe('B4b — RestoreCard: the password of an envelope keeps autocomplete="off" (B-25)', () => {
+    it('restore-password says autocomplete="off": current-password would offer the password of the account (green today: the guard)', async () => {
+        await passwordCard();
+
+        const field = within(screen.getByTestId('restore-password-form')).getByTestId('restore-password');
+        expect(field, 'precondition: the password field of the envelope').toHaveAttribute('type', 'password');
+        expect(field, "an envelope's password, never the account's").toHaveAttribute('autocomplete', 'off');
+    });
+});

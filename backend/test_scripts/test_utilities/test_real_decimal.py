@@ -55,10 +55,27 @@ and has no magnitude limit (``1E+60``: one digit, no decimals). The cure's contr
 * ``storable_value(value, model, column)`` (new): a provider's value truncated to the column
   (``truncate_to_db_precision``), or None when ``integer_digits_issue`` is not None; it never raises.
 
+X-R38 (workstream X, the FX side of W-B58, reported as W-B61): an exchange rate no column can keep. Measured before the
+cure: ``truncate_fx_rate`` raises ``InvalidOperation`` from ``1E+50`` up and on ±Infinity, gives 0 for ``1E-11``, and
+nothing measures the 14 digits ``fx_rates.rate`` (``Numeric(24, 10)``) keeps before the decimal point; the new
+``storable_fx_rate`` is a stub raising ``NotImplementedError``. The cure's contract: ``storable_fx_rate(value)`` is the
+value as ``truncate_fx_rate`` gives it, or None when it is not finite, has more digits before the decimal point than
+``max_integer_digits`` gives for ``FxRate.rate`` (14), or is 0 once truncated to the 10 decimal places; a negative rate
+is the caller's business (``upsert_rates_bulk`` refuses it), not refused here; it never raises.
+
+X-R50 (E's review R13-SEC5 on X-R38): the double limit. SQLite keeps an exchange rate as a double, so a rate of 14 digits
+before the decimal point a few thousandths below ``1E+14`` is stored as ``1E+14``. Measured before the cure:
+``storable_fx_rate`` keeps it as ``truncate_fx_rate`` gives it (``float(Decimal("99999999999999.995")) == 1e14``, while
+``99999999999999.992`` is ``99999999999999.98``): a manual rate is answered «inserted» and a synced one stored, and every
+conversion then skips it (``convert_bulk`` reads only ``1E-10 <= rate < 1E+14``). The cure's contract: ``storable_fx_rate``
+also answers None when the double of the truncated rate, ``float(truncate_fx_rate(value))``, is ``1E+14`` or more; a rate
+whose double stays below it is kept as before. X-R50 reverses the X-R38 case ``14-integer-digits-cut-at-10-decimals``
+(``99999999999999.99999999999``, kept as ``99999999999999.9999999999``, whose double is ``1E+14``): it moved to the X-R50 reds.
+
 Reds fail at run time, never at collection: the column types are read from the models when a test
 runs (``Transaction.__table__.c.quantity.type``), and ``decimal_limit_issue``, ``round_computed_value``,
-``max_integer_digits``, ``integer_digits_issue``, ``storable_value`` and ``INTEGER_DIGITS_EXCEEDED`` are looked up on
-``backend.app.db.precision`` at call time, ``RealDecimal.process_bind_param`` on the column's type, so the guards
+``max_integer_digits``, ``integer_digits_issue``, ``storable_value``, ``storable_fx_rate`` and ``INTEGER_DIGITS_EXCEEDED``
+are looked up on ``backend.app.db.precision`` at call time, ``RealDecimal.process_bind_param`` on the column's type, so the guards
 of this file stay green before the cure. A red whose call raises today is turned into a failure that names the
 exception. Every red says what the user faces. A GUARD passes before and after the cure.
 
@@ -843,3 +860,145 @@ def test_storable_value_truncates_a_provider_value_or_answers_none(typed, model,
     assert found == expected, f"storable_value({typed}, {model.__name__}, {column!r}) = {found!r}: expected {expected!r}"
     if expected is not None:
         assert isinstance(found, Decimal), f"storable_value({typed}) returned a {type(found).__name__}, not a Decimal"
+
+
+# --------------------------------------------------------------------------- #
+# X-R38 (the FX side of W-B58): storable_fx_rate, an exchange rate as fx_rates.rate keeps it
+# --------------------------------------------------------------------------- #
+
+
+def _storable_fx_rate_never_raising(typed: str):
+    """``precision.storable_fx_rate(Decimal(typed))``, looked up when the test runs. Any exception fails the test naming
+    it, the stub's ``NotImplementedError`` included: a provider sync meeting the rate loses its pair, a manual rate
+    carrying it answers 500 (X-R38: it never raises)."""
+    storable_fx_rate = getattr(precision, "storable_fx_rate", None)
+    if storable_fx_rate is None:
+        pytest.fail("backend/app/db/precision.py has no storable_fx_rate: nothing says which exchange rate fx_rates.rate can keep, so 1E+400 is stored as a REAL inf and 1E-11 as 0")
+    try:
+        return storable_fx_rate(Decimal(typed))
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test, the stub's NotImplementedError included
+        pytest.fail(f"storable_fx_rate({typed}) raised {exc!r}: a provider sync meeting the rate loses its pair, a manual rate carrying it answers 500 (X-R38: it never raises)")
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        pytest.param("100000000000000", id="15-integer-digits"),
+        pytest.param("1E+14", id="1E+14-15-integer-digits"),
+        pytest.param("1E+15", id="1E+15"),
+        pytest.param("1E+50", id="1E+50-truncate_fx_rate-raises"),
+        pytest.param("1E+400", id="1E+400"),
+        pytest.param("1E+1000000", id="derived-1E+1000000"),
+        pytest.param("1E-11", id="1E-11-0-once-truncated"),
+        pytest.param("0.000000000099", id="derived-0.000000000099-0-once-truncated"),
+        pytest.param("1E-2000000", id="derived-1E-2000000-0-once-truncated"),
+        pytest.param("0", id="0"),
+        pytest.param("Infinity", id="Infinity"),
+        pytest.param("-Infinity", id="-Infinity"),
+        pytest.param("NaN", id="NaN"),
+        pytest.param("sNaN", id="derived-sNaN"),
+    ],
+)
+def test_xr38_storable_fx_rate_answers_none_for_a_rate_no_column_can_keep(typed):
+    """Red today: ``storable_fx_rate`` is a stub raising ``NotImplementedError``. What the FX writers call instead,
+    ``truncate_fx_rate``, raises ``InvalidOperation`` from ``1E+50`` up and on ±Infinity, and gives 0 for ``1E-11``.
+
+    Contract (X-R38): None, never an exception, when the rate is not finite, has more digits before the decimal point
+    than ``max_integer_digits(FxRate, "rate")`` (14: ``100000000000000`` and ``1E+14`` have 15), or is 0 once truncated to
+    the 10 decimal places of ``fx_rates.rate`` (a rate is never 0: its inverse and the conversions divide by it). The
+    ``derived-`` cases read the same rule.
+    """
+    found = _storable_fx_rate_never_raising(typed)
+
+    assert found is None, f"storable_fx_rate({typed}) = {found!r}: expected None, fx_rates.rate cannot keep it"
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        pytest.param("1.0850123456", "1.0850123456", id="10-decimals"),
+        pytest.param("1.08501234567890", "1.0850123456", id="cut-at-10-decimals-round-down"),
+        pytest.param("99999999999999", "99999999999999", id="14-integer-digits"),
+        pytest.param("1E+13", "10000000000000", id="1E+13-14-integer-digits"),
+        pytest.param("1E-10", "0.0000000001", id="1E-10-the-smallest-rate-kept"),
+        pytest.param("0.00000000019", "0.0000000001", id="cut-to-1E-10"),
+        pytest.param("1.50000000000000000000", "1.5", id="trailing-zeros"),
+        pytest.param("-1.25", "-1.25", id="negative-the-callers-business"),
+    ],
+)
+def test_xr38_storable_fx_rate_keeps_a_rate_as_truncate_fx_rate_gives_it(typed, expected):
+    """Red today: ``storable_fx_rate`` is a stub raising ``NotImplementedError``.
+
+    Contract (X-R38): a rate the column can keep comes back as ``truncate_fx_rate`` gives it, 10 decimal places
+    ``ROUND_DOWN``, its form included. 14 digits before the decimal point and ``1E-10`` are the limits, not past them. A
+    negative rate is not refused here: that is the caller's business (``upsert_rates_bulk`` refuses a rate of 0 or less).
+    X-R50 adds the double: the case ``14-integer-digits-cut-at-10-decimals`` (``99999999999999.99999999999``), whose
+    double is ``1E+14``, moved to ``test_xr50_storable_fx_rate_answers_none_for_a_rate_whose_double_is_1E14``.
+    """
+    found = _storable_fx_rate_never_raising(typed)
+
+    truncated = precision.truncate_fx_rate(Decimal(typed))
+    assert found == Decimal(expected), f"storable_fx_rate({typed}) = {found!r}: expected {expected}"
+    assert isinstance(found, Decimal) and found.as_tuple() == truncated.as_tuple(), f"storable_fx_rate({typed}) = {found!r}: expected the value as truncate_fx_rate gives it, {truncated!r}"
+
+
+# --------------------------------------------------------------------------- #
+# X-R50 (E's review R13-SEC5 on X-R38): storable_fx_rate and the double SQLite keeps
+# --------------------------------------------------------------------------- #
+
+
+def _xr50_double(typed: str) -> float:
+    """The double SQLite keeps for the rate as ``truncate_fx_rate`` gives it: ``fx_rates.rate`` is a REAL in the file."""
+    return float(precision.truncate_fx_rate(Decimal(typed)))
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        pytest.param("99999999999999.995", id="14-integer-digits-double-1E+14"),
+        pytest.param("99999999999999.9999999999", id="14-integer-digits-10-decimals-double-1E+14"),
+        pytest.param("99999999999999.99999999999", id="14-integer-digits-cut-at-10-decimals-double-1E+14-kept-by-X-R38"),
+        pytest.param("99999999999999.9921875", id="derived-halfway-below-1E+14-rounds-to-1E+14"),
+    ],
+)
+def test_xr50_storable_fx_rate_answers_none_for_a_rate_whose_double_is_1E14(typed):
+    """Red today: kept, as ``truncate_fx_rate`` gives it (``99999999999999.9950000000``): 14 digits before the decimal
+    point are the X-R38 limit, not past it. SQLite keeps the rate as a double, ``1E+14``: a manual rate is answered
+    «inserted» and a synced one stored, and every conversion then skips it as unusable (``convert_bulk`` reads only
+    ``1E-10 <= rate < 1E+14``). The case ``…-kept-by-X-R38`` is the X-R38 case ``14-integer-digits-cut-at-10-decimals``,
+    moved here from the test that keeps a rate: X-R50 reverses it.
+
+    Contract (X-R50): None, never an exception, also when the double of the truncated rate is ``1E+14`` or more. The
+    ``derived-`` case reads the same rule at its edge: halfway between the double below ``1E+14``
+    (``99999999999999.984375``) and ``1E+14``, the rate rounds to ``1E+14`` (to even).
+    """
+    integer_digits = Decimal(typed).adjusted() + 1
+    assert integer_digits == precision.max_integer_digits(FxRate, "rate"), f"barrier: {typed} has {integer_digits} digits before the decimal point, not the 14 X-R38 lets through: the digits would refuse it, not the double"
+    double = _xr50_double(typed)
+    assert double >= 1e14, f"barrier: the double of {typed}, cut to 10 decimal places, is {double!r}, below 1E+14"
+
+    found = _storable_fx_rate_never_raising(typed)
+
+    assert found is None, f"storable_fx_rate({typed}) = {found!r}: expected None, SQLite keeps it as {double!r}, a rate every conversion skips (X-R50)"
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        pytest.param("99999999999999.99", "99999999999999.99", id="14-integer-digits-double-99999999999999.98"),
+        pytest.param("99999999999999.9921874999", "99999999999999.9921874999", id="derived-just-below-halfway-double-99999999999999.98"),
+    ],
+)
+def test_xr50_guard_storable_fx_rate_keeps_a_rate_whose_double_stays_below_1E14(typed, expected):
+    """Guard: green today and after. A rate of 14 digits before the decimal point whose double stays below ``1E+14``
+    (``99999999999999.99`` is the double ``99999999999999.98``) comes back as ``truncate_fx_rate`` gives it, its form
+    included: X-R50 refuses from the double ``1E+14``, never a margin below it. The function alone, no round trip. The
+    ``derived-`` case reads the same rule at its edge, just below halfway."""
+    double = _xr50_double(typed)
+    assert double < 1e14, f"barrier: the double of {typed}, cut to 10 decimal places, is {double!r}, not below 1E+14"
+
+    found = _storable_fx_rate_never_raising(typed)
+
+    truncated = precision.truncate_fx_rate(Decimal(typed))
+    assert found == Decimal(expected), f"storable_fx_rate({typed}) = {found!r}: expected {expected}, its double {double!r} is below 1E+14 (X-R50 refuses from 1E+14 only)"
+    assert isinstance(found, Decimal) and found.as_tuple() == truncated.as_tuple(), f"storable_fx_rate({typed}) = {found!r}: expected the value as truncate_fx_rate gives it, {truncated!r}"
