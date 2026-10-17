@@ -6,6 +6,7 @@ import sys
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import Literal
 from uuid import uuid4
 
 import pytest
@@ -52,6 +53,7 @@ from backend.app.services.financial_math.yield_on_cost import (
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,
 )
+from backend.app.services.portfolio_service import PortfolioService
 
 AS_OF = date(2025, 12, 31)
 WINDOW_START = AS_OF - timedelta(days=364)
@@ -2208,3 +2210,304 @@ def test_portfolio_holding_requires_non_null_yield_on_cost():
     assert holding.yield_on_cost.value == Decimal("0")
     assert "yield_on_cost" in holding.model_dump()
     assert holding.yield_on_cost.provenance.net_zero is False
+
+
+# =============================================================================
+# J-51 — a receiver whose units came from a broker the user cannot see
+# =============================================================================
+#
+# Workstream J, lot J-51 (coordinator, 17/10). YoC replays the asset's rows at the brokers the user can see — their
+# BrokerUserAccess rows plus the positions' brokers (_load_transaction_context) —, adds the partner of every TRANSFER
+# whose partner was not loaded (_include_external_transfer_legs) and replays each transfer-connected component of
+# brokers (_broker_components). For a RECEIVER the user can see (B) whose units came from a broker the user cannot see
+# (A), the component {A, B} replays an A that holds only its departure — A's purchase is never loaded —: the FIFO engine
+# reports FIFO_SOURCE_QUANTITY_MISSING on it, the replay is FAILED (_component_replay_failure), B's key is failed and
+# _calculate_position returns REPLAY_INCONSISTENT. The SENDER side (A visible, B not) works and stays as it is.
+#
+# The fix: YoC replays with the arrivals read at the edge of the visible brokers (read_arrivals_at_scope_boundary,
+# financial_math/lots/scope_boundary.py): J-10's reading of an arrival, an ADJUSTMENT-in of its units on its date at its
+# own cost. The partner of a read arrival leaves the replay; a departure keeps its partner. The ledger as stored still
+# feeds compute_yield_on_cost_dependency_identity and the split links.
+#
+# THE BOOK. A belongs to one user, B to another; the viewer owns one of the two and has no access to the other. A buys
+# 10 X for 100 EUR on 1 Jan 2024 (10 EUR a unit) and sends 4 on 1 Mar 2025; B receives them on 5 Mar, its leg carrying
+# a cost basis of 16 EUR a unit — its own, not A's 10, so that a figure taken from the leg shows. The pair is linked both
+# ways; each test adds its income. Read on AS_OF, 31 Dec 2025: the trailing window starts on 1 Jan 2025.
+
+J51_PURCHASE_DAY = date(2024, 1, 1)
+J51_DEPARTURE_DAY = date(2025, 3, 1)  # A sends 4 X
+J51_ARRIVAL_DAY = date(2025, 3, 5)  # B receives them
+J51_INCOME_DAY = date(2025, 6, 1)
+J51_ARRIVAL_COST_BASIS = Decimal("16")  # per unit, in EUR, on B's leg
+
+
+@dataclass(frozen=True)
+class ArrivalBook:
+    ledger: Ledger  # broker A, asset X and A's owner
+    viewer_id: int  # the user whose figures are read: the owner of A or of B
+    receiver_broker_id: int  # B
+    departure: Transaction  # A's leg
+    arrival: Transaction  # B's leg
+
+
+async def _add_user(session: AsyncSession) -> int:
+    marker = uuid4().hex
+    user = User(
+        username=f"yoc_{marker}",
+        email=f"yoc_{marker}@test.invalid",
+        hashed_password="not-used",
+        is_active=True,
+    )
+    session.add(user)
+    await session.flush()
+    assert user.id is not None
+    return user.id
+
+
+async def _arrival_book(
+    session: AsyncSession,
+    *,
+    viewer: Literal["sender", "receiver"],
+    departure_quantity: str = "-4",
+    arrival_cost_basis: Decimal | None = J51_ARRIVAL_COST_BASIS,
+) -> ArrivalBook:
+    """THE BOOK above; ``viewer`` owns A (the sender) or B (the receiver) and cannot see the other broker."""
+    ledger = await _make_ledger(session)
+    receiver_owner_id = await _add_user(session)
+    receiver_broker_id = await _add_broker(session, user_id=receiver_owner_id)
+    departure = _transaction(ledger, TransactionType.TRANSFER, on=J51_DEPARTURE_DAY, quantity=departure_quantity)
+    arrival = _transaction(ledger, TransactionType.TRANSFER, on=J51_ARRIVAL_DAY, quantity="4", broker_id=receiver_broker_id)
+    # The model wants a cost basis and its currency together, or neither.
+    arrival.cost_basis_override = arrival_cost_basis
+    arrival.cost_basis_currency = None if arrival_cost_basis is None else "EUR"
+    session.add_all(
+        [
+            _transaction(ledger, TransactionType.BUY, on=J51_PURCHASE_DAY, quantity="10", amount="-100"),
+            departure,
+            arrival,
+        ]
+    )
+    await session.flush()
+    assert departure.id is not None
+    assert arrival.id is not None
+    departure.related_transaction_id = arrival.id
+    arrival.related_transaction_id = departure.id
+    await session.flush()
+    return ArrivalBook(
+        ledger=ledger,
+        viewer_id=ledger.user_id if viewer == "sender" else receiver_owner_id,
+        receiver_broker_id=receiver_broker_id,
+        departure=departure,
+        arrival=arrival,
+    )
+
+
+async def _add_income(session: AsyncSession, book: ArrivalBook, *, broker_id: int, on: date, amount: str) -> Transaction:
+    income = _transaction(book.ledger, TransactionType.DIVIDEND, on=on, amount=amount, broker_id=broker_id)
+    session.add(income)
+    await session.flush()
+    return income
+
+
+async def _yield_on_cost_of(session: AsyncSession, book: ArrivalBook, *, broker_id: int, wac: Decimal) -> YieldOnCostResult:
+    """The viewer's YoC of X at ``broker_id``, with ``wac`` given in the report currency, EUR."""
+    calculations = await calculate_yield_on_cost_for_positions(
+        session,
+        user_id=book.viewer_id,
+        positions=[
+            YieldOnCostPositionInput(
+                asset_id=book.ledger.asset_id,
+                broker_id=broker_id,
+                wac_per_unit=wac,
+                wac_currency="EUR",
+            )
+        ],
+        target_currency="EUR",
+        as_of_date=AS_OF,
+    )
+    return calculations[(book.ledger.asset_id, broker_id)].result
+
+
+def _yield_view(result: YieldOnCostResult) -> dict:
+    gross = result.provenance.gross_income_per_unit
+    return {
+        "status": result.status,
+        "value": result.value,
+        "reason": result.reason,
+        "gross income per unit": None if gross is None else (gross.code, gross.amount),
+    }
+
+
+async def _dashboard_holding_at_b(session: AsyncSession, book: ArrivalBook) -> PortfolioHolding:
+    """B's holding of X in the viewer's real Dashboard summary: PortfolioService.get_summary, in EUR, up to AS_OF."""
+    summary = await PortfolioService(session).get_summary(user_id=book.viewer_id, target_currency_override="EUR", date_to=AS_OF)
+    at_b = [holding for holding in summary.holdings if holding.asset_id == book.ledger.asset_id and holding.broker_id == book.receiver_broker_id]
+    assert len(at_b) == 1, f"B's holding of X must be in the viewer's summary once: {at_b}"
+    return at_b[0]
+
+
+def _holding_view(holding: PortfolioHolding) -> dict:
+    """What the Dashboard shows of B's holding: its quantity, its WAC and its YoC."""
+    yield_on_cost = holding.yield_on_cost
+    return {
+        "quantity": holding.quantity,
+        "wac_per_unit": holding.wac_per_unit,
+        "yield_on_cost": {"status": yield_on_cost.status, "value": yield_on_cost.value, "reason": yield_on_cost.reason},
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_receiver_whose_units_came_from_a_broker_it_cannot_see_yields_on_the_units_that_arrived(session):
+    """J-51 V1 (RED). The viewer sees B only. B's dividend of 8 EUR on 1 Jun is paid on the 4 X that arrived on 5 Mar:
+    8 / 4 = 2 EUR a unit, over the WAC the Dashboard gives B — its leg's own cost basis, 16 EUR, pinned through the real
+    path by test_dashboard_costs_the_arrived_units_at_their_legs_own_cost_basis_and_yields_on_them —: 2 / 16 = 0.125.
+
+    Today: unavailable, REPLAY_INCONSISTENT, no value. The viewer cannot see A, so A's purchase is never loaded; A's
+    departure is (the partner of B's arrival) and joins A to B's component, whose replay meets a departure from a
+    broker that holds nothing: FIFO_SOURCE_QUANTITY_MISSING, FAILED.
+    After: available, 0.125 — B's arrival read as an ADJUSTMENT-in of 4 on 5 Mar, A's departure out of the replay.
+    """
+    book = await _arrival_book(session, viewer="receiver")
+    await _add_income(session, book, broker_id=book.receiver_broker_id, on=J51_INCOME_DAY, amount="8")
+
+    result = await _yield_on_cost_of(session, book, broker_id=book.receiver_broker_id, wac=J51_ARRIVAL_COST_BASIS)
+
+    assert _oracle_yoc(incomes=[(Decimal("8"), Decimal("4"), Decimal("1"))], residual_wac_per_unit=J51_ARRIVAL_COST_BASIS) == Decimal("0.125")
+    assert _yield_view(result) == {
+        "status": YieldOnCostStatus.AVAILABLE,
+        "value": Decimal("0.125"),
+        "reason": None,
+        "gross income per unit": ("EUR", Decimal("2")),
+    }
+
+
+@pytest.mark.asyncio
+async def test_guard_a_sender_whose_units_went_to_a_broker_it_cannot_see_keeps_counting_them_in_transit(session):
+    """J-51 GUARD (green today and after). The viewer sees A only. A's dividend of 30 EUR on 3 Mar is paid during the
+    transit — its day before, 2 Mar, falls between the departure of 1 Mar and the arrival of 5 Mar — and YoC counts the
+    4 X in transit for the source: 30 / 10 = 3 EUR a unit. The dividend of 12 EUR on 1 Jun is paid on the 6 left:
+    12 / 6 = 2. Over A's WAC, 10 EUR: (3 + 2) / 10 = 0.5. A's departure is no arrival: the fix leaves it, with its
+    partner, in the replay (test_transfer_in_transit_counts_for_source_not_destination: the same rule, both brokers seen).
+    """
+    book = await _arrival_book(session, viewer="sender")
+    await _add_income(session, book, broker_id=book.ledger.broker_id, on=date(2025, 3, 3), amount="30")
+    await _add_income(session, book, broker_id=book.ledger.broker_id, on=J51_INCOME_DAY, amount="12")
+
+    result = await _yield_on_cost_of(session, book, broker_id=book.ledger.broker_id, wac=Decimal("10"))
+
+    assert _oracle_yoc(incomes=[(Decimal("30"), Decimal("10"), Decimal("1")), (Decimal("12"), Decimal("6"), Decimal("1"))], residual_wac_per_unit=Decimal("10")) == Decimal("0.5")
+    assert _yield_view(result) == {
+        "status": YieldOnCostStatus.AVAILABLE,
+        "value": Decimal("0.5"),
+        "reason": None,
+        "gross income per unit": ("EUR", Decimal("5")),
+    }
+
+
+@pytest.mark.asyncio
+async def test_guard_an_arrival_whose_invisible_partner_does_not_pair_back_stays_unavailable(session):
+    """J-51 GUARD (green today and after). V1's book, but A's leg sends 3 for B's 4: the pair does not match — the same
+    absolute quantity is one of the checks an arrival must pass to be read —, so the arrival is not read and the replay
+    keeps the pair, which the FIFO engine rejects (TRANSFER_PAIR_MISSING on A's leg, FAILED): unavailable,
+    REPLAY_INCONSISTENT, no value. Never a yield over 4 units no leg sent.
+    """
+    book = await _arrival_book(session, viewer="receiver", departure_quantity="-3")
+    await _add_income(session, book, broker_id=book.receiver_broker_id, on=J51_INCOME_DAY, amount="8")
+
+    result = await _yield_on_cost_of(session, book, broker_id=book.receiver_broker_id, wac=J51_ARRIVAL_COST_BASIS)
+
+    assert _yield_view(result) == {
+        "status": YieldOnCostStatus.UNAVAILABLE,
+        "value": None,
+        "reason": YieldOnCostUnavailableReason.REPLAY_INCONSISTENT,
+        "gross income per unit": None,
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("date", date(2025, 3, 2), id="partner-date"),
+        pytest.param("quantity", Decimal("-3"), id="partner-quantity"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_guard_the_invisible_partner_of_an_arrival_still_feeds_the_identity(session, field, value):
+    """J-51 GUARD (green today and after): the arrival's case of test_external_linked_transfer_leg_mutation_changes_identity.
+    The identity hashes the ledger as stored — the viewer's rows and the partners they name — whether or not YoC reads
+    the arrival. V1's viewer sees B only; its identity changes when A's leg, which it cannot see, changes its date, or
+    its quantity: the field that decides whether the arrival is read at all.
+    """
+    book = await _arrival_book(session, viewer="receiver")
+    income = await _add_income(session, book, broker_id=book.receiver_broker_id, on=J51_INCOME_DAY, amount="8")
+
+    async def identity() -> str:
+        return await compute_yield_on_cost_dependency_identity(
+            session,
+            user_id=book.viewer_id,
+            scope_transactions=[book.arrival, income],
+            as_of_date=AS_OF,
+        )
+
+    baseline = await identity()
+    assert await identity() == baseline, "precondition broken: the identity of an unchanged ledger must be stable"
+
+    setattr(book.departure, field, value)
+    await session.flush()
+
+    assert await identity() != baseline
+
+
+@pytest.mark.asyncio
+async def test_dashboard_costs_the_arrived_units_at_their_legs_own_cost_basis_and_yields_on_them(session):
+    """J-51 (RED), through the real Dashboard path. YoC's denominator is the Dashboard position's WAC
+    (PortfolioService.get_summary builds YieldOnCostPositionInput(wac_per_unit=position.wac, ...)). V1's book: B's 4 X
+    are costed at their leg's own cost basis, 16 EUR a unit — not A's 10, which the viewer cannot see — (the
+    average-cost pool costs a TRANSFER-in at its cost_basis_override, financial_math/average_cost.py), and the dividend
+    of 8 EUR yields 8 / 4 / 16 = 0.125 on them.
+
+    Today: WAC 16 already; YoC unavailable, REPLAY_INCONSISTENT, no value — V1's failed replay.
+    After: WAC 16; YoC available, 0.125.
+    """
+    book = await _arrival_book(session, viewer="receiver")
+    await _add_income(session, book, broker_id=book.receiver_broker_id, on=J51_INCOME_DAY, amount="8")
+
+    holding = await _dashboard_holding_at_b(session, book)
+
+    assert _holding_view(holding) == {
+        "quantity": Decimal("4"),
+        "wac_per_unit": J51_ARRIVAL_COST_BASIS,
+        "yield_on_cost": {"status": YieldOnCostStatus.AVAILABLE, "value": Decimal("0.125"), "reason": None},
+    }
+
+
+@pytest.mark.parametrize(
+    ("own_purchase", "held"),
+    [
+        pytest.param(False, Decimal("4"), id="the-arrival-alone"),
+        pytest.param(True, Decimal("10"), id="beside-a-purchase-of-6-at-B"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_guard_dashboard_never_yields_over_the_cost_a_costless_arrival_leaves_unknown(session, own_purchase, held):
+    """J-51 GUARD (green today and after), through the real Dashboard path: a costless arrival never gets a yield over a
+    partial or zero cost. V1's book, but B's leg carries no cost basis (old data). The average-cost pool adds its 4 X at
+    an unknown cost (financial_math/average_cost.py, ADD_UNKNOWN_COST) and stays incomplete while they are held, so B has
+    no WAC (DailyStateBuilder._build_position_state) — alone, and beside B's own purchase of 6 X for 72 EUR on
+    3 Jun 2024, whose cost covers only 6 of the 10. Without a WAC, YoC is unavailable, MISSING_WAC, with no value: no
+    yield over a zero cost for the 4, nor over an average that knows the cost of the 6 only. The fix reads that arrival
+    as a costless ADJUSTMENT-in — MISSING_COST_BASIS, a DEGRADED replay, not a FAILED one —: the missing WAC alone must
+    keep the yield away.
+    """
+    book = await _arrival_book(session, viewer="receiver", arrival_cost_basis=None)
+    if own_purchase:
+        session.add(_transaction(book.ledger, TransactionType.BUY, on=date(2024, 6, 3), quantity="6", amount="-72", broker_id=book.receiver_broker_id))
+    await _add_income(session, book, broker_id=book.receiver_broker_id, on=J51_INCOME_DAY, amount="8")
+
+    holding = await _dashboard_holding_at_b(session, book)
+
+    assert _holding_view(holding) == {
+        "quantity": held,
+        "wac_per_unit": None,
+        "yield_on_cost": {"status": YieldOnCostStatus.UNAVAILABLE, "value": None, "reason": YieldOnCostUnavailableReason.MISSING_WAC},
+    }

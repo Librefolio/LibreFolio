@@ -83,6 +83,8 @@ stores all state that must survive across stages. This includes:
 - `issues` and per-operation `results`;
 - preloaded transactions and the touched-broker set;
 - the earliest affected date per broker;
+- every row `apply_creates()` flushed, by its create index (`created_by_index`):
+  the row a create's Auto cost is written on (W-B67);
 - transient create-correlation groups and the groups consumed by promote;
 - the giving legs of the `TRANSFER` pairs the batch splits, each with its split's
   index (`handover_rows`), which the WAC stage prices;
@@ -343,7 +345,10 @@ Role hierarchy is `OWNER > EDITOR > VIEWER`; mutation requires at least `EDITOR`
 `TRANSFER`, `FX_CONVERSION`, and `CASH_TRANSFER` are two-row composite
 transactions. A create request uses `link_uuid` only as transient correlation:
 
-1. `apply_creates()` records each flushed row in `context.link_uuid_map`;
+1. `apply_creates()` records each flushed row by its create index in
+   `context.created_by_index` (where the Auto cost finds it, see
+   [Inline Batch Auto Modes](wac.md#inline-batch-auto-modes)), and one carrying a
+   `link_uuid` in `context.link_uuid_map` too;
 2. `resolve_create_links()` validates each unconsumed two-row group; and
 3. the stage writes reciprocal `related_transaction_id` values.
 

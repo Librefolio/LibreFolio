@@ -119,7 +119,9 @@ from backend.test_scripts.test_utils import print_section, print_success
 CHUNK = 500  # OR_TERMS_PER_QUERY: the contract's number, written here and not read from the module under test
 MAX_WRITE_ITEMS = 10_000  # MAX_BULK_WRITE_ITEMS, written here as well
 IMPORT_SIZED = 1_500  # items of one import-sized request: past SQLite's limit, past two chunk boundaries
-DAY0 = date(2001, 1, 1)  # the first day of every series; any day would do
+#: The first day of every series: far enough back that 10 000 daily items end before today, inside the stored bounds
+#: (X-R65: a rate dated after tomorrow is refused before the write).
+DAY0 = date(1990, 1, 1)
 FETCHED_AT = datetime(2025, 1, 1)
 SOURCE = "SEC9a"
 #: What a failing service raises in the failure cases: an SQL error names the schema.

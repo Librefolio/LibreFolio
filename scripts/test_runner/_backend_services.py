@@ -92,6 +92,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_eligibility.py",
     "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
     "backend/test_scripts/test_services/test_risk_price_day_budget.py",
+    "backend/test_scripts/test_services/test_risk_replay_range_bounds.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (
@@ -218,6 +219,7 @@ def services_range_ceiling(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: get_prices_bulk + _build_backward_filled_series, the POST /fx/currencies/convert handler, refresh._fetch_refresh_item")
     print_info("Extreme ranges (0001-01-01 … 9999-12-31) bounded by the wall clock and by fuses inside the per-day loops")
     print_info("Bulk caps: 1 000 items per request, 1 M item-days (R13-SEC9-2) (the fill's span, warm-up and comparisons included), lowered per case")
+    print_info("X-R65 (N83): stored date bounds, 1900-01-01 … tomorrow: the helpers, and the 422 date_out_of_range of POST /assets/prices and POST /fx/currencies/rate")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *RANGE_CEILING_TEST_PATHS, "-v"]
     if test_names:
         cmd.extend(["-k", " or ".join(test_names)])
@@ -1090,7 +1092,7 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     """Run the AssetSourceManager integrity guards and event FX conversion tests."""
     print_section("Services: Asset Source Guards")
     print_info("Testing: backend/app/services/assets/ (bulk_upsert_prices, get_prices_bulk, list_assets)")
-    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
+    print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass, X-R65 stored date bounds")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
 
@@ -1147,6 +1149,15 @@ def services_provider_wipe_split_guard(verbose: bool = False, test_names: list =
     print_info("Tests: a plan's new params or leaving it refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's adjustments named, nothing written; else the save is as before")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_wipe_split_guard.py", test_names)
     return run_command(cmd, "Provider wipe split guard tests", verbose=verbose)
+
+
+def services_provider_removal_link_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R62: removing a provider refuses while a transaction is linked to an event it generated."""
+    print_section("Services: Provider Removal Link Guard")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a removal refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (HTTP 409) while a generated event has a linked transaction, only the caller's transactions named, nothing written; a link the check missed is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
+    return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
 
 
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
@@ -1617,7 +1628,7 @@ def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX pair-sync orchestration branches in services/fx/sync.py."""
     print_section("Services: FX Sync Orchestration")
     print_info("Testing: backend/app/services/fx/sync.py")
-    print_info("Tests: _is_date_within_sync_range, sync_pairs_bulk._process_route/._compute_multi_step")
+    print_info("Tests: _is_date_within_sync_range (X-R65 floor 1900-01-01), sync_pairs_bulk._process_route/._compute_multi_step")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
     return run_command(cmd, "FX sync service tests", verbose=verbose)
 
@@ -1904,11 +1915,12 @@ Note: No backend server required.
         "range-ceiling",
         services_range_ceiling,
         name="Date Range Ceiling",
-        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built",
+        desc="X-R55 (N75): date_range_limits (100-year span, ceiling today+1 by the server calendar, floor); price queries end at the ceiling (series, signal input, events), an item past it empty in its place; the builder walks from the first price; FX conversions clamped to [floor, ceiling], warm-up included, a conversion past it empty with its signals on an empty series; the sync walk bounded to the span, never asking the provider less; 0001-01-01 … 9999-12-31 guards under a wall clock and in-loop fuses. Z-25 (N77): 1 000 items per price/FX request, refused before any read; 1 M item-days (R13-SEC9-2), counted as the span the price fill emits (warm-up and comparison series included) and as the daily + signal items a conversion builds, all counted before any is built; X-R65 (N83): stored_date_bounds (1900-01-01 … the ceiling, read at the call), DateOutOfRangeError and the 422 date_out_of_range detail; POST /assets/prices and POST /fx/currencies/rate refuse a date outside before any statement or write",
         # PURE: no lane DB, no server, no network. The price queries run on a private SQLite file under tmp_path built
         # with create_all (or on a stand-in session that reads nothing); the FX handler is called directly with
         # convert_bulk replaced by an in-process converter; the sync step runs with an in-process provider double and
         # stand-ins for the two core caches, all by monkeypatch.
+        # X-R65's handlers run the same way: the price route on a stand-in session that reads nothing, the rate route with upsert_rates_bulk replaced by an in-process writer.
         isolation="pure",
     )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
@@ -2436,11 +2448,12 @@ Note: No backend server required.
         "asset-source-guards",
         services_asset_source_guards,
         name="Asset Source Guards",
-        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion",
+        desc="bulk_upsert_prices OHLC policy, close-only widening, identifier filters, event FX conversion; X-R65 (N83): a manual price outside [1900-01-01, tomorrow] refuses the whole upsert before any statement (DateOutOfRangeError: items per asset, count), a provider's is dropped, named and logged, the others stored",
         # WRITE_GLOBAL: Asset, PriceHistory and AssetEvent carry no user_id, so the
-        # asset this unit creates and every price/event row written against it are
-        # visible to all concurrent tests. Rows are uniquely named and dropped in
-        # teardown, but the tables themselves are shared surfaces.
+        # assets this unit creates (one for the module, a second for one X-R65 test)
+        # and every price/event row written against them are visible to all
+        # concurrent tests. Rows are uniquely named and dropped in teardown, but the
+        # tables themselves are shared surfaces.
         isolation="write-global",
     )
     add_test(
@@ -2504,6 +2517,15 @@ Note: No backend server required.
         desc="X-R49: POST /assets/provider refused before any write of the request with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) when an item would wipe the events a parametric provider generated (new params of the plan, or leaving it for another provider) while a SPLIT among them has linked incoming ADJUSTMENTs without a purchase cost; details name the item (asset_id, item_index) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the items before the refused one are not written either. With a cost (0 included), a manual SPLIT, the same params, an online provider's params change or a new assignment the save is as before",
         # WRITE-SCOPED, the category default: four assets, three assignments, two users and two brokers under a unique
         # marker; each test restores the assignments by id and wipes by asset and broker id.
+    )
+    add_test(
+        cat,
+        "provider-removal-link-guard",
+        services_provider_removal_link_guard,
+        name="Provider Removal Link Guard",
+        desc="X-R62: DELETE /assets/provider refused before any write with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while an event the removed assignment generated (deleted with it, CASCADE) has a linked transaction (RESTRICT); details name the asset (asset_id, item_index: its first position) and each such event (event_id, date, type) with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the assets before the blocked one are not removed either. A link the check missed is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
+        # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
+        # brokers under a unique marker, dated 1984; each test writes its own assignments and wipes by asset and broker id.
     )
     add_test(
         cat,
@@ -2762,7 +2784,7 @@ Note: No backend server required.
         "backup-outcome",
         services_backup_outcome,
         name="Instance Backup Restore Outcome",
-        desc="The outcome of a restart's restore read with a one-time ticket, without a session (lot B5c): .restore/outcome-ticket.json (OUTCOME_TICKET_FILE, outcome_ticket_path), OUTCOME_TICKET_TTL one hour, OutcomeTicket frozen with its five fields only, RestoreOutcome state/reason/waiting only; issue_ticket: 43 URL-safe characters, a new one at each call, its file holding its SHA-256 and never the ticket, the stage, issued_at, expires_at an hour later, 0600, written beside then renamed, a link in its place replaced and never written through, .restore a link or a file BackupPathError, a stage id only, a second ticket replacing the first; read_outcome: the outcome of the restore of its stage (applying, applied, rolling_back in_progress; reason and waiting as recorded) until expires_at excluded, None alike for every other case (no, empty or malformed ticket, no file, a file unreadable or not a ticket, an extra key, a folder, a link never followed, another ticket compared in constant time, expired and its file removed, no restore, another stage), a wrong ticket never removing it, an expired one removed only by its own ticket; N53, one restore one ticket: every outcome, committed and rolled_back included, read again with the same answer and its file kept until expires_at; drop_ticket removes it, does nothing without one, never raises (logged), never through a link; neither a ticket nor its hash ever logged (structlog and stdlib); data_dir and now default to the configured data directory and the clock",
+        desc="The outcome of a restart's restore read with a one-time ticket, without a session (lot B5c): .restore/outcome-ticket.json (OUTCOME_TICKET_FILE, outcome_ticket_path), OUTCOME_TICKET_TTL one hour, OutcomeTicket frozen with its five fields only, RestoreOutcome state/reason/waiting only; issue_ticket: 43 URL-safe characters, a new one at each call, its file holding its SHA-256 and never the ticket, the stage, issued_at, expires_at an hour later, 0600, written beside then renamed, a link in its place replaced and never written through, .restore a link or a file BackupPathError, a stage id only, a second ticket replacing the first; read_outcome: the outcome of the restore of its stage (applying, applied, rolling_back in_progress; reason and waiting as recorded) until expires_at excluded, None alike for every other case (no, empty or malformed ticket, no file, a file unreadable or not a ticket, an extra key, a folder, a link never followed, another ticket compared in constant time, expired and its file removed, no restore, another stage), a wrong ticket never removing it, an expired one removed only by its own ticket; N53, one restore one ticket: every outcome, committed and rolled_back included, read again with the same answer and its file kept until expires_at; drop_ticket removes it, does nothing without one, never raises (logged), never through a link; neither a ticket nor its hash ever logged (structlog and stdlib); data_dir and now default to the configured data directory and the clock; B-41: the state may be a reader, called once and only for the ticket that opens, never for any other; B-42: a broken ticket file logged as an error once while the same failure lasts, again after it is written, removed or read, or fails otherwise, per data directory",
         # PURE: every data directory under tmp_path, with a production data directory of the test configured (which must
         # stay absent) but in the one case that configures the test's own instance; the restore's state is a model built
         # in the test. No lane DB, no server, no network.
@@ -2859,7 +2881,7 @@ Note: No backend server required.
         "fx-sync-service",
         services_fx_sync,
         name="FX Sync Orchestration",
-        desc="_is_date_within_sync_range, _process_route/_compute_multi_step",
+        desc="_is_date_within_sync_range (X-R65: no day before 1900-01-01, whatever the start), _process_route/_compute_multi_step",
         exclusive_because="an autouse fixture truncates fx_rates and fx_conversion_routes before every test, so any concurrent unit reading rates or routes loses them mid-test",
     )
     add_test(cat, "provider-registry-misc", services_provider_registry_misc, name="Provider Registry Helpers", desc="auto_discover, register, get_provider_instance, BRIM plugin detection")

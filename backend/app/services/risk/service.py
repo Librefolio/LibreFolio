@@ -40,7 +40,7 @@ from backend.app.services.risk.plan import AnalyticPlan, is_geography_hypothetic
 from backend.app.services.risk.registry import RiskAnalyticRegistry
 from backend.app.services.risk.replay import prepare_historical_replay_context
 from backend.app.services.risk.results import available_observations, build_execution_context, requires_valid_composition, result_metadata, success_result, unavailable_result, with_warning_asset_names
-from backend.app.services.risk.scope import RiskScopeNotFoundError, geography_group_members, load_asset_classifications, load_existing_asset_ids, load_never_priced_asset_ids, load_scope_inputs, prepare_asset_series, scope_exclusions
+from backend.app.services.risk.scope import RiskScopeNotFoundError, bounded_range, geography_group_members, load_asset_classifications, load_existing_asset_ids, load_never_priced_asset_ids, load_scope_inputs, prepare_asset_series, scope_exclusions
 
 logger = get_logger(__name__)
 
@@ -61,6 +61,8 @@ class RiskService:
         user_id: int,
         request: RiskQueryRequest,
     ) -> RiskQueryResponse:
+        # R13-SEC8-1b: the scope's prices and its report walk the range day by day, so every step reads it bounded.
+        request = request.model_copy(update={"date_range": bounded_range(request.date_range)})
         plans: dict[int, AnalyticPlan] = {}
         results: dict[int, RiskAnalyticResult] = {}
         for index, analytic_request in enumerate(request.analytics):
