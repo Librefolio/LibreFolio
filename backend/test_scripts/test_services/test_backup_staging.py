@@ -41,7 +41,9 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     nothing else tells), when the upgrade or a fix moved an amount, each difference listed (the first 20, all counted)
     and the warning ``control_totals_changed``; ``absent`` for a manifest without them, with ``null``, a value of
     another type, an amount that is not plain text or what J's reading refuses; ``other_version`` for totals of another
-    method; ``unreadable``, warned ``control_totals_unreadable``, when they cannot be read on the copy. Never a blocker:
+    method; ``unreadable``, warned ``control_totals_unreadable``, when they cannot be read on the copy, and when J cannot
+    read back what it wrote of the copy's ledger (B-29: a position of 1E+70, which J writes with 71 digits, past the 60
+    it reads): the check ends with its report, never ``stage_failed``. Never a blocker:
     ``restorable`` and ``blockers`` as they would be without them. ``_report`` without a comparison says ``absent``,
     with one carries it; a ``report.json`` written before lot B-13 still reads, its totals ``absent``.
 (l) The database's own schema objects (lot B-28): LibreFolio never creates a trigger, a view or a virtual table, so a
@@ -112,7 +114,7 @@ from structlog.testing import capture_logs
 
 from backend.app.config import get_data_dir
 from backend.app.db.post_migration.base import PostMigrationReport
-from backend.app.services.financial_math.ledger_totals import CONTROL_TOTALS_VERSION, control_totals
+from backend.app.services.financial_math.ledger_totals import CONTROL_TOTALS_VERSION, ControlTotals, control_totals
 from backend.app.services.platform.instance_backup import snapshot, staging
 from backend.app.services.platform.instance_backup.archive import BuiltArchive, build_archive
 from backend.app.services.platform.instance_backup.jobs import _RunLock
@@ -2085,6 +2087,36 @@ def test_totals_that_cannot_be_read_on_the_copy_are_unreadable_and_warned(instan
     assert totals_in(report) == ("unreadable", [], 0), f"unreadable: {totals_in(report)}"
     assert (report.warnings, report.blockers, report.restorable) == (["control_totals_unreadable"], [], True), f"warned, not blocked: {report.warnings}"
     print_success("unreadable, warned")
+
+
+#: A position of 1E+70 at broker 2 in asset 3, a pair no other row of ``LEDGER`` holds: stored as a double, which the
+#: quantity column (``RealDecimal``) reads back as exactly 10^70; J adds it exactly, and its ``to_json`` writes it in
+#: plain text, 71 digits, past the 60 its ``from_json`` reads back (B-29, E's R13-SEC2).
+HUGE_POSITION = (2, 3, "ADJUSTMENT", "2026-08-01", "1e70", "0", None)
+
+
+def test_totals_j_cannot_read_back_on_the_copy_are_unreadable_never_a_failed_check(instance, databases, tmp_path):
+    """(k) B-29 (E's R13-SEC2): the backup's ledger holds ``HUGE_POSITION``, which J adds exactly and writes with 71
+    digits that its own ``from_json`` refuses. The manifest's totals are rewritten without that line, so that J reads the
+    recorded side and the copy's is the one it refuses: a backup LibreFolio makes of this ledger records the line too,
+    and the recorded side, decided first, is then ``absent``. The check ends with its report: ``unreadable``, warned,
+    never blocking, instead of the ``ValueError`` that ends it ``stage_failed``."""
+    built = ledger_archive(tmp_path / "source", databases.head, rows=(*LEDGER, HUGE_POSITION))
+    real = recorded_totals(built.manifest)
+    huge = {"broker_id": 2, "asset_id": 3, "quantity": "1" + "0" * 70}
+    assert isinstance(real, dict) and huge in real["quantities"], f"precondition: J adds 1E+70 exactly and writes it with 71 digits: {real}"
+    with pytest.raises(ValueError):
+        ControlTotals.from_json(real)
+    recorded = {**real, "quantities": [line for line in real["quantities"] if line != huge]}
+    assert ControlTotals.from_json(recorded).version == CONTROL_TOTALS_VERSION, "precondition: J reads the recorded totals, that line left out"
+    archive = pack(tmp_path / "huge.zip", entries_of(built), manifest_with_totals(built, recorded))
+    try:
+        report = stage_archive(archive, instance.root)
+    except Exception as exc:
+        pytest.fail(f"the check ends with its report, the totals unreadable; it raised {type(exc).__name__}: {exc} (stage_failed through the API)")
+    assert totals_in(report) == ("unreadable", [], 0), f"what J cannot read back on the copy: unreadable: {totals_in(report)}"
+    assert (report.warnings, report.blockers, report.restorable) == (["control_totals_unreadable"], [], True), f"warned, not blocked: {report.warnings}, {report.blockers}"
+    print_success("a position of 1E+70: unreadable, warned")
 
 
 @pytest.mark.parametrize("status", ["changed", "unreadable"])
