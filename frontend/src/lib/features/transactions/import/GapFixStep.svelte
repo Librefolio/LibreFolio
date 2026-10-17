@@ -69,7 +69,7 @@
     let tables = $state<Record<string, DataTable<ProposalRow> | undefined>>({});
 
     function quantity(value: string): string {
-        return formatExactDecimal(value, {minFrac: 0, maxFrac: 8});
+        return formatExactDecimal(value, {minFrac: 0, maxFrac: 10});
     }
 
     function signedQuantity(value: string): string {
