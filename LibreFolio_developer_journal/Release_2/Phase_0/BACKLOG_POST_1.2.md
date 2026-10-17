@@ -5669,12 +5669,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   finché non si ricaricano. Da decidere con Y dopo Y11: per esempio i pannelli si ricaricano da soli su
   `{kind: 'prices'}`, fuori da `pageBusy`. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-13», passo 6.
-- **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). In
-  `filesystem.es.md` gli altri nove commenti dell'albero sono ancora in inglese, e gli alberi IT, FR ed ES non hanno le
-  tre righe aggiunte dopo in inglese (`backups/`, `secrets/` e `instance.key`). La pagina ha già debito di traduzione
-  (la cache di Aphra è del 10/10, l'inglese è cambiato dopo), quindi niente stamp: da chiudere col prossimo giro di
-  traduzione, verificando che i commenti dell'albero spagnolo vengano tradotti, oppure a mano in un lotto di doc.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-12».
+- ✅ **Z-16 · `admin/filesystem`: l'albero tradotto è indietro** — minimo, traduzione; Z, 16/10 (Z-12). **Chiusa il
+  17/10 a mano** (il commit è del coordinatore; via del 17/10 ~05:32, senza stamp): gli alberi IT, FR ed ES hanno le
+  tre righe (`backups/`, `secrets/`, `instance.key`), con la colonna dei commenti allineata all'inglese, e i nove
+  commenti dello spagnolo sono tradotti. La pagina resta con il suo debito di traduzione fuori dall'albero (la cache
+  di Aphra è del 10/10): il prossimo giro lo chiude. Era: in `filesystem.es.md` nove commenti in inglese, e i tre
+  alberi senza le tre righe aggiunte in inglese. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-16».
 - ✅ **Z-17 · `developer/backend/scheduler.md`: «The backend does not validate these values»** — minimo, doc;
   docs-writer di Z, 16/10 (Z-5). **Chiusa il 16/10 col mini-lotto Z-17** (il commit è del coordinatore): la frase dice
   ora che `PATCH /api/v1/settings/global/bulk` controlla ogni valore con `validate_global_setting_value()` contro

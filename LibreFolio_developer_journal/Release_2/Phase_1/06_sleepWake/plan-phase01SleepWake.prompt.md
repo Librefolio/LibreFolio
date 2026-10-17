@@ -3659,3 +3659,113 @@ Stima: mezza giornata, più gli slot.
 
 **Fatto quando**: i rossi sono verdi; i 7 E2E sono verdi nello slot, con i loro controlli; la ricarica non accende
 mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
+
+### Z-16 — l'albero tradotto di `admin/filesystem`, a mano (17/10)
+
+> **Via** (coordinatore, 17/10 ~05:32): «meanwhile, if it's quick: **Z-16** by hand (the translated tree of
+> `admin/filesystem`: the Spanish comments, plus the 3 missing rows in IT/FR/ES), no stamp, in your lane 6186 for the
+> strict build.» Base: HEAD `1a937b93e`.
+
+1. ✅ 17/10 05:30–05:33 — Gli alberi di `filesystem.it.md`, `.fr.md` ed `.es.md`:
+   - le tre righe, `backups/` dopo `logs/`, `secrets/` e `instance.key` dopo `scenario_catalog/`;
+   - a sinistra del `#` ogni riga è uguale all'inglese (controllo riga per riga con `paste`);
+   - in spagnolo i nove commenti tradotti, con «copias de seguridad» per gli archivi: «archivos» vorrebbe dire anche
+     file;
+   - termini: le pagine tradotte non nominano ancora la chiave d'istanza; scelti «chiave dell'istanza», «clé de
+     l'instance», «clave de la instancia». Lo spagnolo dà del tu, come il resto della pagina.
+2. ✅ 17/10 05:33–05:35 — `mkdocs build` stretto rc 0, nessun avviso (carico 28); `check-links` 97 validi. Nel sito
+   costruito le tre pagine hanno `instance.key` e `backups/`. Nessuno stamp: il resto della pagina tiene il suo
+   debito (cache di Aphra del 10/10).
+3. ✅ 17/10 05:37 — Backlog: Z-16 ✅. Checkpoint al coordinatore insieme all'analisi di Z-11.
+
+### Z-11 — lock dei job tra processi: analisi (17/10 ~05:40, sola lettura)
+
+> **Via** (coordinatore, 17/10 ~05:32): «**Z-11**, the job lock across processes (flock in the data folder, state
+> re-read inside the lock; coordinator decision D-Z3-3): **analysis first** (surfaces, interaction with leader
+> election, tests), send it to me, then reds and code».
+
+**Stato reale** (HEAD `1a937b93e`):
+- **Per processo.** Ogni worker uvicorn ha:
+  - il suo loop dello scheduler (`app_lifespan`);
+  - il suo `asyncio.Lock` (`_run_lock`, uno per event loop);
+  - la sua attività e il suo `PRICE_REFRESH`.
+- **Il giro.** `_run_locked` (`scheduler.py:463`) controlla nell'ordine:
+  - spento → `disabled`; bloccata → `blocked`;
+  - poi `am_i_leader()` (`leader.py`): leader è il PID più basso fra i figli del master; con `--reload`, senza
+    genitore o con un errore, il processo è leader. Altrimenti `not_leader`;
+  - poi le impostazioni, `load_state()`, e i job dovuti in sequenza, con `save_state()` dopo ciascuno (scrittura
+    atomica, `state.py`).
+- **Con `--workers N`** (D-Z3-3):
+  - un `wake-sync` che arriva a un altro worker risponde `not_leader` e non esegue nulla
+    (`admin/sleep_wake.en.md#wake-sync-workers`);
+  - il ritorno dopo un silenzio spinge il loop del worker che ha ricevuto la richiesta: se non è il leader, nulla
+    fino al tick del leader (≤ 60 s).
+- **Quanto è comune.** `--workers auto` è un'opzione documentata per chi gira dal sorgente (`admin/cli_tools`). Docker
+  e Fly hanno un worker. Il server di test del runner gira con `--workers 2`, ma con `--no-scheduler`.
+- **`fcntl` c'è già in quattro posti**: `instance_backup/jobs.py` (`_RunLock`: `LOCK_EX | LOCK_NB`, `O_NOFOLLOW`,
+  `0o600`, e senza `fcntl` un `threading.Lock` per processo), `instance_backup/apply.py`, `db/post_migration`,
+  `brim_provider.py`. La guida d'installazione copre anche Windows, dove `fcntl` non c'è.
+- **Chi legge lo stato fuori dallo scheduler**: `api/v1/settings.py:374`, che lo mostra; la sostituzione atomica basta.
+
+**Proposta** (decisioni N-Z11-1…4, «da rivedere»):
+- N-Z11-1 — il lock al posto del leader, dove c'è `fcntl`.
+  - Un modulo nuovo, `scheduler/run_lock.py`: un context manager asincrono sul file `<data_dir>/.scheduler.lock`.
+    Nascosto, `0o600`, `O_NOFOLLOW`, mai cancellato: cancellare un file di flock in uso rompe l'esclusione.
+  - Lo prende `_run_locked` dopo i controlli `disabled`/`blocked` e le impostazioni. Dentro il lock legge lo stato,
+    esegue i dovuti, salva e rilascia.
+  - Qualunque worker esegue: chi arriva secondo aspetta, rilegge lo stato e trova i job `not_due`.
+  - Un `wake-sync` gira su qualunque worker, o aspetta chi sta già eseguendo e risponde a lavoro finito. Il ritorno
+    parte subito nel worker che l'ha visto.
+- N-Z11-2 — l'attesa.
+  - Tentativi `LOCK_NB` ogni 0,2 s, con `asyncio.sleep`: cancellabile allo spegnimento, nessun thread bloccato.
+  - Dentro `busy("scheduler")` come oggi, con il rilascio nel `finally`.
+  - Un processo che muore col lock lo perde (lo rilascia il kernel): niente lock orfani.
+- N-Z11-3 — senza `fcntl` (Windows) resta l'elezione di oggi, con `am_i_leader()` e `not_leader`. Quindi `leader.py`,
+  i suoi test e lo stato `not_leader` restano per quel caso: nessun cambio d'API (`RunReport.status` uguale), nessun
+  `api sync`.
+- N-Z11-4 — il codice del lock: una copia piccola del modello di `_RunLock` (B), non un modulo condiviso, perché
+  estrarlo toccherebbe quattro proprietari. Nel backlog, una riga per un aiuto comune dopo la 1.3.
+
+**Limiti che restano** (fuori da Z-11, invariati):
+- Il tracker `PRICE_REFRESH`, l'attività e il monitor d'inattività sono per processo. Con più worker l'avviso
+  «Aggiornamento prezzi…» compare solo sulle risposte del worker che esegue: oggi è lo stesso, col leader.
+- La sospensione su Fly usa un worker.
+
+**Test** (test-author, rossi prima):
+- `test_scheduler_run_lock.py` (nuovo, `services`, puro):
+  - esclusione fra due processi veri: un figlio tiene il lock, e l'attesa del genitore finisce solo quando il figlio
+    lo rilascia;
+  - lock rilasciato alla morte del figlio (SIGKILL);
+  - un'attesa cancellata non lascia fd aperti né il lock;
+  - il file è `0o600`, e un symlink al suo posto viene rifiutato;
+  - senza `fcntl` (monkeypatch), il percorso del leader.
+- `test_scheduler_multiprocess.py` (nuovo, `services`): due processi veri su una cartella dati in `tmp_path` lanciano
+  insieme `run_due_jobs("wake")`, con job finti che scrivono ogni esecuzione in un file.
+  - Ogni job dovuto gira una volta sola, e il secondo processo risponde `not_due`.
+  - Nessun `not_leader`, nemmeno dal processo col PID più alto.
+- Da adattare, perché il ramo del leader vale solo senza `fcntl`:
+  - `test_scheduler_catchup.py`: il contratto dell'ordine dei controlli, il caso `not_leader` e (h), «off the loop»;
+  - `test_system_wake.py`: il caso `not_leader`;
+  - `test_scheduler_backoff.py` e `test_scheduler_price_refresh.py`, che sostituiscono `am_i_leader`.
+  `test_scheduler_leader.py` resta.
+- Nessun E2E: è solo backend.
+- Azioni:
+  - `services`: `scheduler-catchup`, `scheduler-backoff`, `scheduler-price-refresh`, `scheduler-leader`,
+    `scheduler-jobs`, `scheduler-state`, `scheduler-due`, `scheduler-loop`, più le due nuove;
+  - `api`: `system-wake`.
+
+**Superfici:**
+- Miei: `scheduler/scheduler.py`, il nuovo `scheduler/run_lock.py`, i test dello scheduler e di `wake-sync`.
+- Condiviso: `scripts/test_runner/_backend_services.py`, due voci.
+- Doc (docs-writer, solo inglese; `sleep_wake` non ha traduzioni):
+  - `admin/sleep_wake.en.md#wake-sync-workers`: con più worker esegue un worker qualunque, uno alla volta;
+    `not_leader` solo dove manca `fcntl`;
+  - `developer/backend/scheduler.md`: lo schema dei controlli e `#leader-election`;
+  - `developer/architecture/database/index.md#data-directory`: la riga di `.scheduler.lock`.
+- Nessun frontend, nessuna area dei colori, nessuna migrazione.
+
+**Rischi:**
+- I test con processi veri sotto carico: scambi su file, nessuna attesa fissa, limiti larghi.
+- `flock` su un file system di rete: non è un vincolo nuovo, perché SQLite in WAL vuole già una cartella dati locale.
+
+**Stima:** S–M, mezza giornata con i test. Nessuno slot E2E: azioni `services` leggere (sotto 50) e `api system-wake`.
