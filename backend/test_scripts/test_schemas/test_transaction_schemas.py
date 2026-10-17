@@ -19,6 +19,7 @@ from pydantic_core import PydanticCustomError
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXPromoteBatchItem, TXSplitBatchItem
+from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem, tags_to_csv, validate_tags_list, validate_transaction_business_rules
 from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA
 
@@ -1661,3 +1662,68 @@ class TestRules5To11VisibleMessages:
         returned = [(error.type, error.message_template, error.message(), error.context) for error in errors]
         expected = [("cashNonzero", "{type} requires cash.amount != 0", "CASH_TRANSFER requires cash.amount != 0", {"type": "CASH_TRANSFER"})]
         assert returned == expected, f"W-B36b (P6 case 4): a CASH_TRANSFER whose update changes its cash to 0 must get exactly cashNonzero, with the template, the rendered message and the params the user reads: expected {expected}, got {returned}"
+
+
+# ============================================================================
+# R13-SEC7-3 — THE PROMOTION'S QUANTITY AND COST BASIS: THE EXPONENT BOUND
+# ============================================================================
+#
+# E's R13-SEC7, finding 3. ``promote_transfer`` builds its raw rows with ``format(-abs(qty), "f")`` and
+# ``format(cost_basis_override.amount, "f")``: ``1E+999999999`` writes a billion digits, and ``abs()`` of ``1E+1000000``
+# raises ``decimal.Overflow`` (past the context's Emax), a 500. The cure bounds both at the boundary, as for every
+# ``Currency``: a ``quantity`` whose ``Decimal.adjusted()`` lies outside [-100, 100] is refused when
+# ``TXTransferPromoteRequest`` is built — a ``ValidationError`` on ``quantity``, the route's 422 — and so is a
+# ``cost_basis_override`` past it, on its amount. Reds today (accepted); the guards are green today and after.
+
+#: A promote quantity past the bound: just past either end, a negative one, the Overflow of today, the 5 MB expansion
+#: and the attack of the finding.
+QUANTITIES_PAST_THE_EXPONENT_BOUND = ["1E+101", "1E-101", "-1E+101", "1E+1000000", "1E+5000000", "1E+999999999"]
+#: Within it: both ends, and ordinary quantities.
+QUANTITIES_WITHIN_THE_EXPONENT_BOUND = ["1E+100", "1E-100", "123.45", "-0.000001", "0"]
+
+
+def _transfer_promotion(**fields) -> TXTransferPromoteRequest:
+    """A TRANSFER promotion of two saved rows (the ids are never looked up here), with ``fields`` on top."""
+    return TXTransferPromoteRequest(from_tx_id=1, to_tx_id=2, new_type=TransactionType.TRANSFER, asset_id=3, **fields)
+
+
+def _refused_on(build, loc: tuple, story: str) -> None:
+    """``build()`` raises a ``ValidationError`` with an error on ``loc``; anything else fails, naming ``story``. What
+    ``build`` returns is never bound nor printed: its value, expanded, is what the bound protects against."""
+    try:
+        build()
+    except ValidationError as exc:
+        locs = [tuple(error["loc"]) for error in exc.errors()]
+        assert loc in locs, f"R13-SEC7-3: {story} was refused, but not on {'.'.join(map(str, loc))}: {locs}"
+        return
+    pytest.fail(f"R13-SEC7-3: {story} was accepted; a value whose exponent lies outside [-100, 100] must be refused at the boundary: POST /transactions/transfers/promote answers 422")
+
+
+class TestTransferPromoteRequestExponentBound:
+    """R13-SEC7-3: ``TXTransferPromoteRequest.quantity`` and ``cost_basis_override`` are bounded at the boundary."""
+
+    @pytest.mark.parametrize("form", ["str", "Decimal"])
+    @pytest.mark.parametrize("quantity", QUANTITIES_PAST_THE_EXPONENT_BOUND)
+    def test_a_quantity_past_the_exponent_bound_is_refused_on_it(self, quantity, form):
+        """Red today: accepted. Contract: a ``ValidationError`` on ``quantity``, as a string (the wire) or a ``Decimal``."""
+        sent = quantity if form == "str" else Decimal(quantity)
+
+        _refused_on(lambda: _transfer_promotion(quantity=sent), ("quantity",), f"a promotion of quantity {sent!r} (adjusted() = {Decimal(quantity).adjusted()})")
+
+    @pytest.mark.parametrize("amount", ["1E+101", "1E+5000000"])
+    def test_a_cost_basis_past_the_exponent_bound_is_refused_on_its_amount(self, amount):
+        """Red today: accepted. Contract: the cost basis is a ``Currency``, refused on its amount."""
+        _refused_on(lambda: _transfer_promotion(quantity="10", cost_basis_override={"code": "EUR", "amount": amount}), ("cost_basis_override", "amount"), f"a promotion with a cost basis of {amount} EUR")
+
+    @pytest.mark.parametrize("quantity", QUANTITIES_WITHIN_THE_EXPONENT_BOUND)
+    def test_guard_a_quantity_within_the_exponent_bound_is_kept(self, quantity):
+        """Guard: green today and after. Both ends of the bound and ordinary quantities build, their value unchanged."""
+        request = _transfer_promotion(quantity=quantity, cost_basis_override={"code": "EUR", "amount": "1E+100"})
+
+        assert (request.quantity, request.cost_basis_override.amount) == (Decimal(quantity), Decimal("1E+100")), f"R13-SEC7-3: a promotion of {quantity} units at a cost basis of 1E+100 EUR must keep both; it holds {request.quantity!r} and {request.cost_basis_override.amount!r}"
+
+    def test_guard_an_fx_conversion_promotion_without_quantity_still_builds(self):
+        """Guard: green today and after. The bound applies to a quantity that is sent; an FX_CONVERSION sends none."""
+        request = TXTransferPromoteRequest(from_tx_id=1, to_tx_id=2, new_type=TransactionType.FX_CONVERSION)
+
+        assert (request.quantity, request.cost_basis_override) == (None, None)
