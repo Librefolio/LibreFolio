@@ -5522,6 +5522,60 @@ prossimo checkpoint.
   panel») e `front-portfolio data-quality-real`. La sonda resta decisione del coordinatore (la copia non ha
   trasferimenti).
 - **Checkpoint J-10 consegnato (17/10 ~09:27)**: FROZEN.
+- ✅ **Commit e merge (coordinatore)**: `fix(lots)…` + `docs(journal)…`, punta `229495c3c`. Merge di dev `d28a6d7df`
+  aperto con 2 conflitti, risolti da me e messi in stage (09:27–09:37):
+  - `LibreFolio_devWiki/log.md`: unione, prima la voce Y-25 di dev e poi la mia, ognuna con la sua riga `Graph:`;
+  - `lots_analysis_service.md`: tutte e due le parti, la frase di MF-D4 al passo 1 e la mia al passo 2.
+  Rivisti i file uniti in automatico (`fifo/engine.py`: lo SPLIT invalido di MF-D4 è ortogonale alla consegna
+  `ADJUSTMENT_OUT`). Sulla revisione combinata: mirati 16 + 1, `financial-math` 1133, `roi-fifo-utils` 1267,
+  `lots-analysis-pure` 177, `mkdocs build` stretto ok, `check-links` 97. Commit del merge `497aaa07c`.
+- ✅ **Slot di J-10 sul commit di merge `497aaa07c` (via 09:48, 09:49–10:04, corsia 6185; il test-author fermo)**:
+  `api portfolio` **51**, `api portfolio-wac` **12**, E2E `front-broker detail` **38**. Nessuna sonda (decisione del
+  coordinatore: la copia non ha trasferimenti).
+  - **`front-portfolio data-quality-real`: 2 verdi, 1 rosso (E2, P-10).** Motivo letto, non J-10: i parametri del 409
+    `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` portano ora `hidden_transactions_count: 0`.
+    - Il campo arriva da `5f68a8db0` di X (R13-SEC7, X-R47b). X aveva aggiornato i test backend, non l'attesa E2E di
+      `data-quality-real.spec.ts:735` (ultima modifica in `475bb9270`, il mio lotto P-10).
+    - È deterministico: la differenza è solo quella chiave. Dev è rossa su E2 da X-R47b.
+  - ⚠️ **Fuori pista**: il test-author aggiunge `hidden_transactions_count: 0` all'attesa, con un commento
+    (R13-SEC7: chi chiama possiede il broker e non c'è nulla di nascosto). Rilanciata nello slot
+    `front-portfolio data-quality-real`: **3 verdi**. Porta 6185 libera.
+  - Coordinatore (10:02): la riga entra con J-10, come checkpoint a sé (solo quel file) sopra `497aaa07c`.
+- **Checkpoint della riga E2 consegnato (10:04)**: FROZEN.
+- ✅ **J-10 entrata (coordinatore 10:04)**: `c21ea4b10` (la riga E2) → dev `ba612882a`; CHANGELOG 🐛 `4529ce9ad`.
+  Il worktree non è stato portato avanti, perché dev ha cambiato due miei file sporchi (`BACKLOG_POST_1.2.md`,
+  `wac.md`). Al checkpoint di J-47 il coordinatore committa e poi unisce dev nel mio ramo: i conflitti li risolvo io.
+  Ripreso J-47 alle 10:05.
+- **Domanda di A (09:38), `legal_notice` nei prompt di analisi**: risposto **(b)**, subito prima di «Response
+  Language». È l'unica istruzione fidata dopo le note utente (non fidate) e l'unica di cui si misura il rispetto;
+  in `data_only` l'avviso resta l'ultima sezione. Per A: aggiornare le due liste d'ordine di
+  `ai_export_composition.md` e un test «ultima sezione».
+- **Revisione di MF-SEC8-2 `ee440a5db` (09:45, sola lettura)**: OK.
+  - I due clamp a `EARLIEST_RANGE_START` (`computed_from`, `display_from`) sono giusti: una riga prima del pavimento
+    entra nel motore alla sua data.
+  - Il salto dei giorni quieti in `daily_state` (bisezione) atterra sul giorno sporco seguente.
+  - Nessun conflitto testuale con J-10: `git merge-tree`, 0 marcatori.
+  - Nota bassa: una gamba di trasferimento prima del pavimento non ha prezzo, quindi ferma la serie della
+    performance (comportamento di prima, solo righe vecchie N74); la frase del documento di MF va precisata.
+- **Revisione dopo l'ingresso di X-R48 (dev `2ea54ff76`, 09:50, sola lettura)**: OK. È la J-40 dell'indice, fatta da X.
+  - Il rifiuto `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` (409) arriva prima di ogni scrittura e usa
+    `costless_incoming_split_adjustments`, quindi la regola (d) non si rompe.
+  - La visibilità è quella di P-10. In `events.md` del docs-writer i fatti sono giusti; verificato «un costo 0 è un
+    costo»: `cost_basis_override IS NULL`.
+  - Nota bassa: la prova a vuoto non rifiuta mai, quindi il pannello di conferma non avvisa e l'utente vede il 409
+    solo dopo aver confermato.
+  - Il parente minore (`provider_management.py`) è X-R49, aperto. J-40 chiusa nell'indice.
+- ✅ **Allineamento dei documenti su P-10 (richiesta del coordinatore 09:43, fatto 09:52)**:
+  - `developer/frontend/data-quality-banner.md`: la riga `MISSING_COST_BASIS` (P-10 chiusa: retype 409, svuotamento
+    409, cancellazione `EVENT_IN_USE`; restano solo le righe vecchie) e la voce E2 (com'è oggi il test);
+  - `developer/backend/transactions/wac.md`: il secondo punto delle acquisizioni di costo sconosciuto;
+  - il test citato è ora `test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`.
+    Il vecchio nome resta in un commento di `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts:55`: è un
+    file di test fuori dal mio incarico, segnalato al coordinatore.
+  - Coordinatore (09:47): tutte e due OK. Il commento di `tx-bulk-promote-cost-basis.spec.ts:55` va al mio
+    test-author ed entra con J-47 (solo commento, nessuna corsa); affidato alle 09:48, con la verifica della frase
+    accanto («an update cannot clear a cost basis»), forse vecchia dalla decisione P5. La nota sulla prova a vuoto
+    va a X come **X-R48b**.
 
 #### J-47 — un trasferimento in viaggio alla fine dell'intervallo (analisi 17/10 ~09:05, sola lettura)
 
@@ -5551,6 +5605,44 @@ prossimo checkpoint.
   - guardia: con `date_to` dopo l'arrivo non cambia niente;
   - guardia: una riga dopo `date_to` non arriva alle linee WAC;
   - il modulo puro: `replay_until` nel motore.
+- ✅ **Rossi (test-author 09:40–10:25, fermato durante lo slot di J-10 09:48–10:05; motivi riletti da me 10:26)**:
+  **12 rossi e 5 guardie verdi**; nessun errore di preparazione. Ogni azione intera, senza filtri: nessun rosso oltre
+  ai nuovi.
+  - `test_financial_math/test_fifo_replay_until.py`: 7 rossi (`TypeError` su `replay_until`). Comprendono le guardie
+    None / ultimo giorno / dopo, che confrontano il risultato campo per campo; una versione che toglie anche gli
+    eventi del giorno stesso viene presa.
+  - `test_financial/test_lots_transfer_in_transit_at_date_to.py`: T1, T2, T3, T4 rossi; T5, T6 ×2, T7 ×2 guardie.
+    Motivi letti: `FAILED` con `TRANSFER_PAIR_MISSING`, il lotto fermo in A, nessuna partenza. In T4 U `[A]` ha roi
+    0.2 / 0.25 / 0.3 contro lo 0 / 0 / 0 di W.
+  - `test_ai_export_portfolio_fifo_summary_in_transit.py`: T8 rosso (riga presente, `has_in_transit_custody`
+    falso, custodia BROKER). Una riga nel runner (`AI_EXPORT_SERVICE_TEST_PATHS`).
+  - ⚠️ **Fuori pista (trovato dal test-author)**: togliere l'arrivo nel motore non basta. `_build_transfer_rows`
+    scriveva un `TRANSFER_ARRIVE` datato alla partenza per ogni frammento in viaggio senza fine. Va nel lotto.
+  - Il commento di `tx-bulk-promote-cost-basis.spec.ts` è corretto: il nome del test, e la frase
+    «an update cannot clear a cost basis», vecchia da P5 (oggi `null` toglie il costo e `costBasisRequired` lo
+    rifiuta).
+- ✅ **Codice (10:27–10:30)**:
+  > - `fifo/engine.py`: `replay_until` (costruttore e `run_fifo_lot_engine`). `classify_events` tiene solo gli
+  >   eventi fino a quel giorno; l'abbinamento legge comunque le due gambe.
+  > - `lots_analysis_service.py`:
+  >   - `_load_late_transfer_legs` carica le compagne nel perimetro datate dopo `date_to` (stesso asset, TRANSFER,
+  >     quantità ≠ 0) come copie staccate, e solo per il motore, nel rigioco principale e in quello sui broker
+  >     accessibili;
+  >   - `replay_until=actual_to` in tutte e due;
+  >   - `_build_transfer_rows` non scrive l'arrivo di un frammento ancora in viaggio;
+  >   - il commento di J-10 sul rigioco ora dice «a partner at a broker the user cannot see».
+  > - Mirati: service **25** (J-47 + J-10), AI Export **2**, puri **28**; ruff e black puliti.
+- ✅ **Documentazione**:
+  > - `lots_analysis_service.md`, sezione nuova «Transfers In Transit at the End»;
+  > - `fifo_lot_engine.md`, la firma e la riga di `replay_until`;
+  > - `positions.en.md`, una frase (solo EN, nessun timbro).
+- ✅ **Verdi interi (10:31–10:42, `files/j/j47/runs.sh full`)**:
+  - `services financial-math` **1140** (1133 + 7), `roi-fifo-utils` **1276** (1267 + 9), `lots-analysis-pure` **177**,
+    `portfolio-engine` **41**, AI Export **351 + 432 + 283 = 1066** (1065 + T8);
+  - `check-orphans` ok, `mkdocs build` stretto ok, `check-links` **97**; `git diff --check` pulito; porta 6185 libera.
+  - Nessun codice frontend cambiato (solo il commento della spec E2E): niente corse frontend.
+- **Checkpoint J-47 consegnato (17/10 ~10:44)**: FROZEN. Dopo il commit, il coordinatore unisce dev (che ha cambiato
+  `BACKLOG_POST_1.2.md` e `wac.md`): i conflitti sono miei.
 - **Revisione di MF, J-45 `43a7f0156` (08:20, sola lettura; `ae4f41297` è il merge di dev)**: OK. Verificati:
   `run_in_executor` + `copy_context().run` su un pool dedicato; la chiusura della sessione dell'API fa solo `close()`
   (niente rollback, niente scadenze), quindi una richiesta annullata non crea gare; nessun `gather`, `wait_for` o
