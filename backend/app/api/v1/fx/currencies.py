@@ -39,7 +39,7 @@ from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
-from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, bulk_too_many_days_detail, bulk_too_many_items_detail, range_span_floor
+from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail, range_span_floor, stored_date_bounds
 from backend.app.utils.datetime_utils import latest_range_end
 
 logger = get_logger(__name__)
@@ -120,9 +120,17 @@ async def upsert_rates_endpoint(
 
     Limit (MF-SEC9a): at most ``MAX_BULK_WRITE_ITEMS`` rates (422 ``bulk_too_many_items``, before any write): the FX
     page saves a CSV import in one request.
+
+    A date outside ``stored_date_bounds()`` (1900-01-01 to tomorrow) refuses the whole request with 422
+    ``date_out_of_range``, before anything is written (X-R65, N83).
     """
     if len(rates) > MAX_BULK_WRITE_ITEMS:
         raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(rates), MAX_BULK_WRITE_ITEMS))
+    earliest, latest = stored_date_bounds()
+    out_of_range = [{"index": idx, "date": item.rate_date.isoformat()} for idx, item in enumerate(rates) if not earliest <= item.rate_date <= latest]
+    if out_of_range:
+        raise HTTPException(status_code=422, detail=date_out_of_range_detail(out_of_range, len(out_of_range), earliest, latest))
+
     results = []
     errors = []
 

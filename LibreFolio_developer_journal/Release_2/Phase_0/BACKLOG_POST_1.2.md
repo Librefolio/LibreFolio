@@ -6608,6 +6608,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     Revisori: W (BRIM) e H (post-migrazione).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-28 — due file di lock
   aperti con `open()`».
+- **Z-30 · Le righe di prezzi e cambi già salvate prima del 1900** — basso; coordinatore, 17/10 (X-R65, decisione D3).
+  - Da X-R65 (N83) le scritture le rifiutano, ma una riga già nel database resta: il riempimento dei prezzi parte dal
+    primo prezzo salvato, e uno del 0001-01-01 fa camminare ~740 000 giorni per asset (sotto il budget di 1 milione).
+  - Strade: un pavimento in lettura nel riempimento (`_build_backward_filled_series` e `_fill_span` da
+    `max(primo prezzo, 1900)`), o una correzione post-migrazione che le segnala o le toglie. Da decidere.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «X-R65 (N83) — date assurde
+  nelle scritture manuali di prezzi e cambi: analisi».
 
 ## B · Backup e Docker (fase 01)
 
