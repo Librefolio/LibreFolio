@@ -6828,7 +6828,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       chiave più pesante.
     - I docs «310 contro 100 000» sono corretti.
     - Commit al checkpoint di E-14.
-- **E-15 · Nei run combinati il limite dei login si accende da solo, e i test di E vanno rossi** — piccolo; E, 17/10
+- ✅ **E-15 · Nei run combinati il limite dei login si accende da solo, e i test di E vanno rossi** — piccolo; E, 17/10
   (triage dell'`all-backend` di W, coordinatore).
   - `conftest.py` mette `LIBREFOLIO_LOGIN_LIMIT=off` una volta sola, all'avvio.
   - I 60 moduli che chiamano `setup_test_database()` all'import passano da `configure_test_runtime()`, che toglie ogni
@@ -6838,6 +6838,14 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     - Un fixture autouse nel `conftest.py` condiviso rimette `off` prima di ogni test, se la variabile manca.
     - Niente fixture per modulo.
     - Va dopo la revisione X-R44.
+  - 17/10, E: fatta.
+    - `restore_login_limit`, nel `conftest.py` radice, di funzione, con un `MonkeyPatch` suo: rimette il valore della
+      sessione (quello esplicito, o `off`) prima di ogni test che l'ha perso.
+    - I fixture di A, che tolgono la variabile, girano dopo e vincono ancora.
+    - `security.md` è allineato.
+    - Prova: il modulo più un modulo che configura la corsia, prima 21 rossi, ora 179 verdi. Tutti i 13 moduli di E in
+      un processo: 1 453 verdi.
+    - Commit al checkpoint di E-15.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-15».
 
 ## Y · Cruscotto e grafici (fase 01)
