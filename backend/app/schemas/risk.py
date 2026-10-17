@@ -15,6 +15,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
 )
+from backend.app.services.financial_math.returns import observations_per_year  # MF-D3: a pure house function, no service
 from backend.app.utils.json_utils import ensure_json_safe
 
 
@@ -512,7 +513,7 @@ class PreparedAssetSeriesSet(StrictModel):
         expected_days = (self.joint_return_dates[-1] - self.baseline_date).days
         if self.calendar_days != expected_days or self.calendar_days <= 0:
             raise ValueError("calendar_days must span baseline to final return")
-        expected_factor = self.n_observations * 365 / self.calendar_days
+        expected_factor = observations_per_year(self.n_observations, self.calendar_days)
         if self.annualization_factor is None or not math.isclose(self.annualization_factor, expected_factor, rel_tol=1e-12, abs_tol=1e-12):
             raise ValueError("annualization_factor must equal n_observations * 365 / calendar_days")
         return self
@@ -593,7 +594,7 @@ class RiskResultMetadata(StrictModel):
         else:
             if self.calendar_days <= 0:
                 raise ValueError("non-empty results require positive calendar_days")
-            expected_factor = self.n_observations * 365 / self.calendar_days
+            expected_factor = observations_per_year(self.n_observations, self.calendar_days)
             if self.annualization_factor is None or not math.isclose(self.annualization_factor, expected_factor, rel_tol=1e-12, abs_tol=1e-12):
                 raise ValueError("annualization_factor must equal n_observations * 365 / calendar_days")
         if self.mode == RiskMode.HISTORICAL and self.composition_policy is not None:

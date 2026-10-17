@@ -23,7 +23,7 @@ from backend.app.db.precision import usable_fx_rate_bounds
 from backend.app.schemas.common import Currency
 from backend.app.schemas.fx import FXPeriodChange, FXPeriodChangesRequest, FXPeriodChangesResult, FXRangeChange
 from backend.app.services.financial_math.returns import fixed_period_changes, fixed_period_dates, range_change
-from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.fx.conversion import FX_PAIRS_PER_QUERY, convert_bulk
 
 
 def _stored_pair(base: str, quote: str) -> tuple[str, str]:
@@ -32,20 +32,27 @@ def _stored_pair(base: str, quote: str) -> tuple[str, str]:
 
 
 async def _first_rate_days_inside(session: AsyncSession, pairs: set[tuple[str, str]], after: date, until: date) -> dict[tuple[str, str], date]:
-    """Each stored pair's first usable rate day after ``after`` and on or before ``until`` (X-R38's usable bounds)."""
+    """Each stored pair's first usable rate day after ``after`` and on or before ``until`` (X-R38's usable bounds).
+
+    In chunks of ``FX_PAIRS_PER_QUERY`` pairs (R13-SEC9-2), as ``convert_bulk``: SQLite refuses an OR of about a thousand.
+    """
     smallest_rate, first_refused_rate = usable_fx_rate_bounds()
-    stmt = (
-        select(FxRate.base, FxRate.quote, func.min(FxRate.date))
-        .where(
-            or_(*(and_(FxRate.base == base, FxRate.quote == quote) for base, quote in sorted(pairs))),
-            FxRate.date > after,
-            FxRate.date <= until,
-            FxRate.rate >= smallest_rate,
-            FxRate.rate < first_refused_rate,
+    ordered = sorted(pairs)
+    first_days: dict[tuple[str, str], date] = {}
+    for start in range(0, len(ordered), FX_PAIRS_PER_QUERY):
+        stmt = (
+            select(FxRate.base, FxRate.quote, func.min(FxRate.date))
+            .where(
+                or_(*(and_(FxRate.base == base, FxRate.quote == quote) for base, quote in ordered[start : start + FX_PAIRS_PER_QUERY])),
+                FxRate.date > after,
+                FxRate.date <= until,
+                FxRate.rate >= smallest_rate,
+                FxRate.rate < first_refused_rate,
+            )
+            .group_by(FxRate.base, FxRate.quote)
         )
-        .group_by(FxRate.base, FxRate.quote)
-    )
-    return {(base, quote): first_day for base, quote, first_day in (await session.execute(stmt)).all()}
+        first_days.update({(base, quote): first_day for base, quote, first_day in (await session.execute(stmt)).all()})
+    return first_days
 
 
 async def _range_references(session: AsyncSession, requests: Sequence[FXPeriodChangesRequest], on_start: list[Decimal | None]) -> list[tuple[date, Decimal | None] | None]:

@@ -329,7 +329,8 @@ change itself is the house's `fixed_period_changes()`
       more, so the cost of a request follows its distinct days, not its length.
 - **Response**: `items[]`, in request order, of `{asset_id, as_of, currency, periods[], range_change, errors[]}`. Each
   period is `{key, days, change_ratio}`, with `change_ratio = price(as_of) / price(as_of − days) − 1`: a fraction, null
-  when either price is missing or ≤ 0. `range_change` is null unless the item sends a `range_start` (below).
+  when either price is missing, the earlier one ≤ 0 or the one on `as_of` negative; a price of 0 on `as_of` (written
+  down to nothing) gives −1, −100 %. `range_change` is null unless the item sends a `range_start` (below).
 - **Price on a day**: the last stored price on or before it, the backward fill of `POST /assets/prices/query`, with
   no [ceiling](#price-query-range-ceiling) on `as_of`. One grouped query runs per valued day, for every asset of
   the request: a `MAX(date) … GROUP BY asset_id` subquery joined back to `PriceHistory`. No series is built per
@@ -345,7 +346,7 @@ cards (X-R59, decision N80); its limits are in the **Request** bullet above.
 - **`range_change`**: `{reference_date, change_abs, change_ratio}`, the house's `range_change()`
   ([Financial Math Layer](../financial_math.md#fixed-period-changes)). `change_abs = price(as_of) − reference price`,
   in the result's `currency`; `change_ratio = price(as_of) / reference price − 1`. Both are null when either price is
-  missing or ≤ 0.
+  missing, the reference ≤ 0 or the price on `as_of` negative; a price of 0 on `as_of` gives −reference and −1.
 - **Reference**: the price on `range_start`, the last stored price on or before it (one more day in the grouped
   `MAX(date)` queries above), with `reference_date = range_start`. An asset with no price on or before `range_start`
   takes its first stored price inside the range, after `range_start` and up to `as_of`, with that price's date: one
@@ -382,6 +383,15 @@ and the Δ columns stay empty. Splitting the request into batches (backlog Z-27,
 asset, `_live_quote_item()` reads the core current-price cache, or calls an assigned provider
 through `core.call_provider()`, and checks the quote; the asset falls back to the database when
 the provider fails, is [paused](#provider-pauses) or is absent, or when its quote is refused.
+
+The request is bounded like the other bulk requests (R13-SEC9-1): more than `MAX_BULK_ITEMS`
+(1,000) ids get the 422 `bulk_too_many_items` of [bulk request limits](#bulk-request-limits)
+before any read. A repeated id is fetched once — one provider call, one write-back of today's
+row — and the answer still has one item per requested id, in request order. `_live_quote_item()`
+reads the cache again once it holds the provider slot (the semaphore of five), so the requests
+that waited for the same quote take the one the first of them cached, instead of each calling
+the provider, which would end in a «too many requests» pause for every user. A failure past the
+checks answers 500 with a generic message, the error in the log only (R13-SEC9-3).
 
 That check, `storable_current_value()` in `price_store.py`, is the one check of a live quote: the
 [refresh](#data-flow-sync-pipeline) applies it too, to the value it adds for today (X-R40, W-B62).
@@ -444,15 +454,22 @@ it. `live_range_changes()` (`services/assets/period_changes.py`) values it after
   `range_start`, and, for the assets without a price there, a `MIN(date)` one up to the latest price day of the
   request.
 - **Change**: the house's `range_change()`, so `change_abs = price − reference` and
-  `change_ratio = price / reference − 1`, null when either is missing or ≤ 0. A reference stored in another currency
+  `change_ratio = price / reference − 1`, by the same rule: null when either is missing, the reference ≤ 0 or the
+  price negative, −reference and −1 for a price of 0. A reference stored in another currency
   than the price is not converted: `reference_date` is set, both changes are null.
+- **In another currency** (`&target_currency=`, Y's D1: the page's converted view): both ends are converted into it,
+  in one `convert_bulk()` batch, the reference at its own `reference_date`'s rate and the price at today's (the UTC
+  date, as the page converts the live quote); an end already in that currency is not converted. `change_abs` is then
+  in `target_currency`, while the quote's `value` and `currency` stay its own. A missing rate on either end leaves
+  `reference_date` set and both changes null, never a difference of two currencies. Without `range_start` the
+  parameter changes nothing; an invalid code is the standard 422 of the parameter.
 - **No change**: a result without a price, or whose price is dated before `range_start`, or with no stored price up to
   the price's day, gets a `range_change` with every field null. Without `range_start`, `range_change` is null.
 - **A failure** while valuing the changes never costs the quotes: it is logged, and every `range_change` is left with
   every field null (unavailable, never a guess).
 
-A `range_start` before 1 January 1900 is refused (422, with a plain-text `detail`), before any provider call; there is
-no upper bound, a `range_start` after the price's day giving an empty `range_change`. The asset detail page is to send
+A `range_start` outside 1 January 1900 … tomorrow (`latest_range_end()`) is refused by the parameter itself
+(the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day gives an empty `range_change`. The asset detail page is to send
 it with its range's start and read `range_change` for the live quote: it does not yet.
 
 ---
@@ -460,6 +477,13 @@ it with its range's start and read `range_change` for the live quote: it does no
 ## 🧪 Provider Probe
 
 `POST /assets/provider/probe` allows **dry-run testing** of a provider configuration without persisting anything.
+Any user may start one, so each user gets at most 30 probes a minute (`PROBES_BY_USER`, a `SlidingWindowLimiter` in
+`api/v1/assets/providers.py`, counted in each process; MF-SI2): past it the route answers 429
+`{"error_code": "PROBE_RATE_LIMITED", "retry_after", "message"}` with `Retry-After`, before the provider is called.
+`LIBREFOLIO_PROBE_RATE_LIMIT` (`probe_rate_limit()` in `config/plugins.py`) sets the number, read once when the
+server starts: `0` turns the limit off, with a warning in the log, and a value that is not a whole number up to
+10 000 is logged as an error and leaves 30. `dev.py server --test` sets it to `0` for every lane: the E2E suites pick
+search results as one user, two probes a pick.
 
 Operations (selectable per request):
 

@@ -22,9 +22,6 @@ from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import NamedTuple
 
-from scipy.optimize import brentq
-from scipy.optimize import newton as scipy_newton
-
 
 class CashFlowInput(NamedTuple):
     """External cash flow with date.
@@ -289,6 +286,18 @@ def float_price_return(start: Decimal, end: Decimal) -> float:
     return float(change)
 
 
+def observations_per_year(n_observations: int, calendar_days: int) -> float:
+    """The observed annualization factor of a return series: ``n_observations × 365 / calendar_days``.
+
+    The one home of the formula (MF-D3): ``observed_annualization`` computes it, and the risk schemas' validators check a
+    contract's factor against it (``schemas/risk.py``, which may import this pure module). ValueError for a span that is
+    not positive.
+    """
+    if calendar_days <= 0:
+        raise ValueError("calendar_days must be positive")
+    return n_observations * 365 / calendar_days
+
+
 def observed_annualization(n_observations: int, baseline_date: date | None, final_date: date | None) -> tuple[int, float | None]:
     """The calendar span of a return series and its observed annualization factor: observations × 365 / days.
 
@@ -304,7 +313,7 @@ def observed_annualization(n_observations: int, baseline_date: date | None, fina
     calendar_days = (final_date - baseline_date).days
     if calendar_days <= 0:
         raise ValueError("final_date must follow baseline_date")
-    return calendar_days, n_observations * 365 / calendar_days
+    return calendar_days, observations_per_year(n_observations, calendar_days)
 
 
 # The fixed periods of the Assets and FX tables (D-MF6 b): key and calendar days, in display order.
@@ -327,7 +336,10 @@ class FixedPeriodChange:
 
     ``change_ratio`` is ``anchor / reference − 1``; ``inverse_change_ratio`` is the change of the inverted quote,
     ``reference / anchor − 1`` (an FX pair read the other way round). Both are fractions, None when either value is
-    missing or ≤ 0.
+    missing, the reference ≤ 0 or the anchor < 0. An anchor of exactly 0 over a positive reference is a price written
+    down to nothing (a defaulted loan, a delisted share): ``change_ratio`` −1 (−100 %), and ``inverse_change_ratio``
+    None, since the inverted quote has no value (X's review of X-R59: the period columns showed «—» for it, the
+    whole-range Δ −100 %; both now show −100 %).
     """
 
     key: str
@@ -346,21 +358,14 @@ def fixed_period_changes(values: Mapping[date, Decimal | None], as_of: date, per
 
     ``values`` maps a day to the series' value on it — the caller's valuation of that day (the last stored price on or
     before it, a rate converted at it), None or absent when the day has none. The anchor is the value on ``as_of``, each
-    reference the value on ``as_of − days``: never a number from a missing or non-positive value.
+    reference the value on ``as_of − days``. The rule of :func:`range_change`: never a number from a missing value, a
+    reference ≤ 0 or a negative anchor; an anchor of 0 is −100 %, without an inverse.
     """
     anchor = values.get(as_of)
     changes = []
     for key, days in periods:
-        reference = values.get(as_of - timedelta(days=days))
-        usable = anchor is not None and reference is not None and anchor > 0 and reference > 0
-        changes.append(
-            FixedPeriodChange(
-                key=key,
-                days=days,
-                change_ratio=price_return(reference, anchor) if usable else None,
-                inverse_change_ratio=price_return(anchor, reference) if usable else None,
-            )
-        )
+        change = range_change(values.get(as_of - timedelta(days=days)), anchor)
+        changes.append(FixedPeriodChange(key=key, days=days, change_ratio=change.change_ratio, inverse_change_ratio=change.inverse_change_ratio))
     return tuple(changes)
 
 
@@ -372,7 +377,10 @@ class RangeChange:
     first day (backward-filled), or the first value inside the range when there is none on or before it — the first and
     last points of the series the page draws. ``change_abs`` is ``anchor − reference`` and ``change_ratio``
     ``anchor / reference − 1``; the inverse fields are the same for the inverted quote (an FX pair read the other way
-    round): ``1/anchor − 1/reference`` and ``reference / anchor − 1``. All None when either value is missing or ≤ 0.
+    round): ``1/anchor − 1/reference`` and ``reference / anchor − 1``. All None when either value is missing, the
+    reference ≤ 0 or the anchor < 0. An anchor of exactly 0 over a positive reference is a price written down to nothing
+    (a defaulted loan, a delisted share): ``change_abs`` −reference and ``change_ratio`` −1 (−100 %), as the Assets
+    cards showed it; the inverse fields None, since the inverted quote has no value.
     """
 
     change_abs: Decimal | None
@@ -383,8 +391,10 @@ class RangeChange:
 
 def range_change(reference: Decimal | None, anchor: Decimal | None) -> RangeChange:
     """The whole-range change from ``reference`` to ``anchor`` (see :class:`RangeChange`); unrounded Decimals."""
-    if reference is None or anchor is None or reference <= 0 or anchor <= 0:
+    if reference is None or anchor is None or reference <= 0 or anchor < 0:
         return RangeChange(change_abs=None, change_ratio=None, inverse_change_abs=None, inverse_change_ratio=None)
+    if anchor == 0:
+        return RangeChange(change_abs=-reference, change_ratio=Decimal(-1), inverse_change_abs=None, inverse_change_ratio=None)
     return RangeChange(
         change_abs=anchor - reference,
         change_ratio=price_return(reference, anchor),
@@ -594,6 +604,11 @@ def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None
     is never returned: the bare secant method used before could stop, after an overflow, on one of its
     own starting points and give it back as the rate.
     """
+    # Imported here: the module's other functions are plain arithmetic, and a schema importing one of them (MF-D3) does
+    # not load scipy for it.
+    from scipy.optimize import brentq  # noqa: PLC0415
+    from scipy.optimize import newton as scipy_newton  # noqa: PLC0415
+
     scale = sum(abs(amount) for _, amount in flows) or 1.0
     try:
         rate = float(scipy_newton(lambda r: _xirr_npv(flows, r), x0, fprime=lambda r: _xirr_npv_slope(flows, r), tol=1e-12, maxiter=100))

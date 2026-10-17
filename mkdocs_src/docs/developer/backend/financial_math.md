@@ -121,6 +121,10 @@ or annualization formula of its own.
   observations × 365 / days. An empty series gives `(0, None)`; a span of zero days or less raises `ValueError`. A
   caller that can meet a zero-day span picks its own fallback before calling: `portfolio_twrr_returns()`
   (`risk/results.py`) leaves the factor `None`, the `comparison` analytic takes the context's factor.
+- `observations_per_year(n_observations, calendar_days)` is the formula itself, the one home that
+  `observed_annualization()` computes with and that the risk contracts check a factor against: the validators of
+  `schemas/risk.py` import it (MF-D3), the one kind of import a schema may make from the layer — a pure function, never
+  a service (rule 8 of `.github/instructions/financial-math.instructions.md`).
 
 `fixed_period_dates()` and `fixed_period_changes()` (`returns.py`) hold the change of a price or rate over the fixed
 periods of the Assets and FX tables (developer decision D-MF6 b). `FIXED_PERIODS` lists their keys and calendar days,
@@ -130,7 +134,9 @@ price on or before each ([`POST /assets/prices/period-changes`](assets/architect
 the rate `convert_bulk()` gives on it ([`POST /fx/currencies/period-changes`](fx/architecture.md#fixed-period-changes)).
 `fixed_period_changes(values, as_of)` then gives each period both orientations, as fractions: `change_ratio`,
 `value(as_of) / value(as_of − days) − 1`, and `inverse_change_ratio`, `value(as_of − days) / value(as_of) − 1`, the
-change of the inverted quote. Both are None when either value is missing or ≤ 0.
+change of the inverted quote. Each period is the house's `range_change()` (below) between the two values: None when
+either is missing, the earlier one ≤ 0 or the one on `as_of` negative, and −1 (−100 %) with no inverse when the value
+on `as_of` is exactly 0.
 {: #fixed-period-changes }
 
 `range_change(reference, anchor)` (`returns.py`) holds the change of a price or rate over the whole range a page
@@ -141,7 +147,11 @@ shows, from its first point to its last (X-R59, decision N80): the whole-range �
 function returns a frozen `RangeChange` of unrounded Decimals: `change_abs`, `anchor − reference`; `change_ratio`,
 `anchor / reference − 1`; and the same for the inverted quote (an FX pair read the other way round),
 `inverse_change_abs`, `1 / anchor − 1 / reference`, and `inverse_change_ratio`, `reference / anchor − 1`. All four are
-None when either value is missing or ≤ 0. The same two endpoints value the ends, for an item that sends a
+None when either value is missing, the reference ≤ 0 or the anchor < 0. An anchor of exactly 0 over a positive
+reference is a price written down to nothing (a defaulted loan, a delisted share): `change_abs` is −reference and
+`change_ratio` −1 (−100 %), as the Assets cards showed it, while the inverse fields stay None (X's review of X-R59).
+The period columns showed «—» for it and now show −100 % too. An FX pair never meets it: `convert_bulk()` skips a
+stored rate of 0. The same two endpoints value the ends, for an item that sends a
 `range_start`: the anchor is the value on `as_of`, as for the periods; the reference is the value on `range_start`
 (backward-filled), or, when there is none on or before it, the first value inside the range — the first point of the
 page's series. `POST /assets/prices/current?range_start=…` applies the same function to the current price, live or
@@ -197,11 +207,13 @@ data-quality report with `build_data_quality_report()` (`data_quality.py`).
 
 `DailyStateBuilder.build()` is pure CPU, and a wide range makes it long: run on the event loop, one user's wide
 report held every other request until it ended (finding R13-SEC7, lot J-45). `calculate()` hands it to a worker
-thread instead, `await loop.run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)`:
+thread instead, `await loop.run_in_executor(_engine_executor(), contextvars.copy_context().run, builder.build)`:
 
-- **A dedicated executor.** `_ENGINE_EXECUTOR`, in `portfolio/engine.py`, is a module-level
-  `ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")`, not the default executor that every
-  `asyncio.to_thread()` call of the backend shares. Its two workers bound how many replays run at once; a third waits
+- **A dedicated executor.** `_engine_executor()`, in `portfolio/engine.py`, gives the module's
+  `ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")`, created on first use, not the default
+  executor that every `asyncio.to_thread()` call of the backend shares. The app's shutdown step `portfolio-engine`
+  (`app_lifespan.SHUTDOWN_STEPS`, after `quant-pools`) calls `shutdown_engine_executor()` (MF-J45a): a replay still
+  queued is cancelled, nothing is waited for, and a later start in the same process makes a new executor. Its two workers bound how many replays run at once; a third waits
   in its queue. The GIL still runs one replay at a time, but the loop gets its turn in between: the interpreter
   switches threads every 5 ms (`sys.getswitchinterval()`, which the backend leaves at its default).
 - **The copied context.** Unlike `asyncio.to_thread()`, `run_in_executor()` does not copy the context variables:

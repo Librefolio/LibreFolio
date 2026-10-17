@@ -6,6 +6,7 @@ import asyncio
 import contextvars
 import hashlib
 import json
+import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_type
@@ -42,8 +43,32 @@ _portfolio_blob_cache = get_ttl_cache("portfolio_blob", maxsize=30, ttl=86400)  
 
 # J-45 (R13-SEC7-1b): the daily replay is pure CPU and long on a wide range, so it runs here, off the event loop, and
 # never in the default executor the asyncio.to_thread callers share. Two workers bound how many replays run at once;
-# the GIL still serializes them, but the loop keeps answering other requests in between.
-_ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")
+# the GIL still serializes them, but the loop keeps answering other requests in between. Created on first use and shut
+# down by the app's shutdown (MF-J45a), so a later start (a test app, a restart in the same process) makes a new one.
+_ENGINE_EXECUTOR: ThreadPoolExecutor | None = None
+_ENGINE_EXECUTOR_LOCK = threading.Lock()
+
+
+def _engine_executor() -> ThreadPoolExecutor:
+    """The engine's executor, created on first use (after a shutdown, a new one)."""
+    global _ENGINE_EXECUTOR
+    with _ENGINE_EXECUTOR_LOCK:
+        if _ENGINE_EXECUTOR is None:
+            _ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")
+        return _ENGINE_EXECUTOR
+
+
+def shutdown_engine_executor() -> None:
+    """The ``portfolio-engine`` shutdown step (MF-J45a): a replay still queued is cancelled, nothing new is accepted.
+
+    A replay already running cannot be stopped (a thread cannot be cancelled): it ends in its thread, and its result is
+    dropped with its request. Never waits; the shutdown budget (``shutdown_budget.py``) still bounds the process.
+    """
+    global _ENGINE_EXECUTOR
+    with _ENGINE_EXECUTOR_LOCK:
+        executor, _ENGINE_EXECUTOR = _ENGINE_EXECUTOR, None
+    if executor is not None:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 # =============================================================================
@@ -450,7 +475,7 @@ class PortfolioCalculationEngine:
         # The builder reads only loaded column attributes of the transactions (no relationship, no deferred column) and no
         # session, and calculate() never commits or expires: nothing it touches loads lazily from the worker thread.
         # run_in_executor does not copy contextvars (to_thread does): the copied context keeps them, the secret mask included.
-        result = await asyncio.get_running_loop().run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_context().run, builder.build)
+        result = await asyncio.get_running_loop().run_in_executor(_engine_executor(), contextvars.copy_context().run, builder.build)
         # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
         result.share_mismatches = classification.share_mismatches
         result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)

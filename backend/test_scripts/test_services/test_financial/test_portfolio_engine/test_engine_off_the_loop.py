@@ -3,10 +3,12 @@
 The defect (MEDIUM, DoS): ``PortfolioCalculationEngine.calculate`` ran ``builder.build()`` (``DailyStateBuilder.build``,
 pure CPU, long on a wide range) directly on the event loop: while one user's wide report was being replayed, no other
 request was served. R13-SEC7-1 capped the range end; this lot moves the replay off the loop. The cure
-(``financial_math/portfolio/engine.py``): a module-level ``_ENGINE_EXECUTOR = ThreadPoolExecutor(max_workers=2,
-thread_name_prefix="portfolio-engine")`` and ``result = await loop.run_in_executor(_ENGINE_EXECUTOR,
-contextvars.copy_context().run, builder.build)`` — the copied context keeps the request's contextvars in the worker:
-today the secrets ``secrets_in_flight`` masks and the ``decimal`` context; no code binds a structlog context yet. Its
+(``financial_math/portfolio/engine.py``): the engine's own ``ThreadPoolExecutor(max_workers=2,
+thread_name_prefix="portfolio-engine")``, created on first use by ``_engine_executor()`` and kept in the module's
+``_ENGINE_EXECUTOR``, ``None`` until then and after an app shutdown (MF-J45a, below), and ``result = await
+loop.run_in_executor(_engine_executor(), contextvars.copy_context().run, builder.build)`` — the copied context keeps
+the request's contextvars in the worker: today the secrets ``secrets_in_flight`` masks and the ``decimal`` context; no
+code binds a structlog context yet. Its
 safety (MF plan, «SEC7-1b»): the builder reads only loaded column attributes of the ORM ``Transaction`` instances it is
 handed (``classified_txs[*].tx``, ``paired_tx``, the transit legs), never a relationship (``Transaction.related_transaction``,
 the only one, is lazy), there are no deferred columns, it reads only rows ``calculate()``'s own queries loaded, which
@@ -39,6 +41,16 @@ never commits, rolls back or expires, and no session enters the thread.
   3 units bought for 1000 and a KZT rate of 523.45678 make the figures depend on the decimal context.
   The ``native_cash_guard`` golden (``test_financial/test_native_cash_guard.py``) already pins the engine's numbers
   through the executor; it is not duplicated here.
+- ``TestTheExecutorIsShutDownWithTheApp`` (pure; MF-J45a, the executor J-45 never shut down) — red on HEAD f252acb4a
+  (no ``shutdown_engine_executor``, no ``_engine_executor``: both are looked up when the test runs, so the file still
+  collects there), green after. ``shutdown_engine_executor()``, the app's ``portfolio-engine`` shutdown step
+  (``test_app_lifecycle.py`` pins its place):
+  * before any replay: no error, and no executor created;
+  * with every worker held on a ``threading.Event`` and one more call queued behind them: the slot is emptied, the
+    queued call cancelled (it never runs), the old executor refuses a new call (``RuntimeError``), and the shutdown
+    returns while the held calls still run — it waits for none; released, they end normally;
+  * after it, ``_engine_executor()`` creates a new executor, as bounded as the first, that runs a call on a
+    ``portfolio-engine`` thread.
 
 The ledger (the DB tests and, as transient instances, the parity test), dated 2093 so that its EUR/KZT rates are its own;
 user U owns brokers A and B at 100 %, X is a EUR stock, read in EUR up to END:
@@ -55,12 +67,16 @@ other test uses and never committed; R13-SEC7-1's bound is lifted for those days
 collection the test does not own: the replay's inputs are read from the builder of the test's own calculation. The
 engine's blob cache is emptied around each test (a cached blob would answer without a replay). The patches
 (``DailyStateBuilder.build``, ``Transaction.related_transaction``, ``AttributeImpl._fire_loader_callables``) go through
-``monkeypatch`` and are undone at teardown. No server, no network; no wall-clock wait is an assertion (the ticker counts
-loop iterations; ``_RELEASE_TIMEOUT_S`` only bounds HEAD's failure).
+``monkeypatch`` and are undone at teardown. The MF-J45a tests empty the executor slot (``_ENGINE_EXECUTOR``) through
+``monkeypatch`` (``engine_executor_slot``): the executor an earlier calculation of the process created is neither used
+nor shut down by them and is given back at teardown; every executor they create is shut down, its workers joined. No
+server, no network; no wall-clock wait is an assertion (the ticker counts loop iterations; ``_RELEASE_TIMEOUT_S`` and
+``_HOLD_TIMEOUT_S`` only bound a failure: the held workers wait for events, the test for futures).
 
-Reference: backend/app/services/financial_math/portfolio/engine.py (calculate, step 11),
-backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder.build), LibreFolio_developer_journal/
-Release_2/Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md («SEC7-1b», «J-45 = R13-SEC7-1b»).
+Reference: backend/app/services/financial_math/portfolio/engine.py (calculate, step 11; _engine_executor,
+shutdown_engine_executor), backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder.build),
+backend/app/services/platform/app_lifespan.py (SHUTDOWN_STEPS), LibreFolio_developer_journal/Release_2/Phase_1/
+11_financialMath/plan-phase01FinancialMath.prompt.md («SEC7-1b», «J-45 = R13-SEC7-1b», «MF-J45a»).
 """
 
 import asyncio
@@ -125,6 +141,9 @@ _TICKS = 5
 #: How long a held replay waits for the ticker. On the cure the release comes after five loop iterations; on HEAD it
 #: never comes (the loop's thread is the one waiting), and this bound turns the hang into a failure.
 _RELEASE_TIMEOUT_S = 5.0
+#: MF-J45a: the longest a worker held by a test waits for its release, and the longest the test waits for a call it
+#: submitted. Only a failure reaches it: the release comes from the test's ``finally``, the calls end at once.
+_HOLD_TIMEOUT_S = 10.0
 #: A structlog context key the test binds (no request binds one today; logging_config's merge_contextvars would merge it).
 _LOG_CONTEXT_KEY = "request_id"
 
@@ -531,6 +550,18 @@ def no_cached_blob(request):
     request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
 
 
+@pytest.fixture
+def engine_executor_slot(monkeypatch) -> Iterator[None]:
+    """MF-J45a: the engine's executor slot (``_ENGINE_EXECUTOR``) empty for the test and given back after it, so the
+    executor an earlier calculation of the process created is neither used nor shut down here. Whatever executor the test
+    leaves in the slot is shut down at teardown, its workers joined (a test releases every worker it holds)."""
+    monkeypatch.setattr(portfolio_engine_module, "_ENGINE_EXECUTOR", None)
+    yield
+    left_in_the_slot = portfolio_engine_module._ENGINE_EXECUTOR
+    if left_in_the_slot is not None:
+        left_in_the_slot.shutdown(wait=True, cancel_futures=True)
+
+
 # =============================================================================
 # 1-2 — RED ON HEAD: THE REPLAY RUNS OFF THE EVENT LOOP
 # =============================================================================
@@ -692,3 +723,86 @@ class TestTheSameNumbersOnAnyThread:
         problems += [f"{name}: on the loop {getattr(on_loop, name)!r}, in a worker {getattr(in_worker, name)!r}" for name in _REPLAY_OUTPUTS if _canonical(getattr(on_loop, name)) != _canonical(getattr(in_worker, name))]
         assert problems == [], "the replay differs between the loop and a worker:\n" + "\n".join(problems)
         print_success(f"{len(on_loop.daily_states)} days identical")
+
+
+# =============================================================================
+# 6 — RED ON HEAD f252acb4a (MF-J45a): THE EXECUTOR IS SHUT DOWN WITH THE APP
+# =============================================================================
+
+
+def _engine_function(name: str) -> Callable[[], Any]:
+    """``engine.<name>``, looked up when the test runs: HEAD f252acb4a has neither function, and the file still collects."""
+    function = getattr(portfolio_engine_module, name, None)
+    assert callable(function), f"MF-J45a: engine.{name}() is missing: the engine's executor is not created on first use and shut down with the app"
+    return function
+
+
+class TestTheExecutorIsShutDownWithTheApp:
+    def test_a_shutdown_before_any_replay_does_nothing(self, engine_executor_slot):
+        """No executor created yet (the app stops before any report): the shutdown raises nothing and creates none."""
+        print_section("MF-J45a: a shutdown before any replay")
+        shutdown_engine_executor = _engine_function("shutdown_engine_executor")
+        assert portfolio_engine_module._ENGINE_EXECUTOR is None, "precondition: no executor in the slot"
+
+        shutdown_engine_executor()
+
+        assert portfolio_engine_module._ENGINE_EXECUTOR is None, f"the shutdown left an executor in the slot: {portfolio_engine_module._ENGINE_EXECUTOR!r}"
+        print_success("nothing to shut down, nothing created")
+
+    def test_a_shutdown_cancels_a_queued_replay_refuses_a_new_one_and_waits_for_none(self, engine_executor_slot):
+        """Every worker of the engine's executor held on a ``threading.Event``, one more call queued behind them: the
+        shutdown empties the slot, cancels the queued call, makes the executor refuse a new one, and returns while the
+        held calls still run; released, they end normally and the cancelled call never runs."""
+        print_section("MF-J45a: a shutdown with every worker busy and a replay queued")
+        engine_executor, shutdown_engine_executor = _engine_function("_engine_executor"), _engine_function("shutdown_engine_executor")
+        executor = engine_executor()
+        assert portfolio_engine_module._ENGINE_EXECUTOR is executor, "precondition: _engine_executor() keeps the executor it creates in the slot"
+        workers = executor._max_workers
+        started = [threading.Event() for _ in range(workers)]
+        releases = [threading.Event() for _ in range(workers)]
+        queued_ran = threading.Event()
+
+        def held(index: int) -> bool:
+            started[index].set()
+            return releases[index].wait(timeout=_HOLD_TIMEOUT_S)
+
+        try:
+            running = [executor.submit(held, index) for index in range(workers)]
+            assert all(event.wait(timeout=_HOLD_TIMEOUT_S) for event in started), f"precondition: each of the {workers} workers holds a call"
+            queued = executor.submit(queued_ran.set)
+            assert not queued.running() and not queued.done(), "precondition: with every worker held, the call waits in the queue"
+
+            shutdown_engine_executor()
+
+            # Sampled before anything else: the held calls are released only in the finally below.
+            held_still_running = [future.running() for future in running]
+            assert portfolio_engine_module._ENGINE_EXECUTOR is None, "the shutdown left the executor in the slot: the next calculation would submit to a shut-down executor"
+            assert queued.cancelled(), f"the replay queued behind the busy workers was not cancelled ({queued!r}): it would run after the app's shutdown"
+            with pytest.raises(RuntimeError, match="after shutdown"):
+                executor.submit(lambda: None)
+            assert all(held_still_running), f"the shutdown returned once the running calls had ended (running: {held_still_running}): it waited for them"
+        finally:
+            for release in releases:
+                release.set()
+        assert [future.result(timeout=_HOLD_TIMEOUT_S) for future in running] == [True] * workers, "a held call was not released by the test: it timed out instead"
+        assert not queued_ran.is_set(), "the cancelled call ran all the same"
+        executor.shutdown(wait=True)  # its workers joined: no thread outlives the test
+        print_success(f"{workers} running calls ended in their threads, the queued one cancelled, a new one refused")
+
+    def test_after_a_shutdown_the_next_use_creates_a_new_live_executor(self, engine_executor_slot):
+        """After a shutdown (a test app stopped, a restart in the same process) ``_engine_executor()`` creates a new
+        executor, as bounded as the first, kept in the slot, that runs a call on a ``portfolio-engine`` thread."""
+        print_section("MF-J45a: the executor after a shutdown")
+        engine_executor, shutdown_engine_executor = _engine_function("_engine_executor"), _engine_function("shutdown_engine_executor")
+        first = engine_executor()
+        assert engine_executor() is first, "precondition: until a shutdown, every use gets the same executor"
+
+        shutdown_engine_executor()
+        after = engine_executor()
+
+        assert after is not first, "after a shutdown _engine_executor() handed back the executor that was shut down"
+        assert portfolio_engine_module._ENGINE_EXECUTOR is after and engine_executor() is after, "the new executor is not the one kept in the slot"
+        assert after._max_workers == first._max_workers, f"the new executor has {after._max_workers} workers, the first {first._max_workers}: J-45's bound is lost"
+        thread_name = after.submit(lambda: threading.current_thread().name).result(timeout=_HOLD_TIMEOUT_S)
+        assert thread_name.startswith(_ENGINE_THREAD_PREFIX), f"the new executor ran a call on {thread_name!r}: expected a worker named {_ENGINE_THREAD_PREFIX}_N"
+        print_success(f"a new executor, its call on {thread_name}")

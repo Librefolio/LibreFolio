@@ -19,6 +19,10 @@ from backend.app.services.fx.base import RateNotFoundError
 
 logger = get_logger(__name__)
 
+#: How many pairs one rate query asks for (R13-SEC9-2): SQLite refuses an OR of about a thousand terms («Expression tree
+#: is too large»), so a request with more pairs reads them in several queries.
+FX_PAIRS_PER_QUERY = 500
+
 # ============================================================================
 # CHAIN COMPUTATION
 # ============================================================================
@@ -178,8 +182,8 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
 
         pairs_needed[pair_key]["indices"].append(idx)
 
-    # OPTIMIZATION: Single batch query for all needed rates
-    # Build OR clauses for all pairs
+    # OPTIMIZATION: one query for all needed rates — in chunks of pairs (R13-SEC9-2): SQLite refuses an OR of about a
+    # thousand terms («Expression tree is too large», a 500), so each query holds at most FX_PAIRS_PER_QUERY of them
     if pairs_needed:
         # Only the rates a conversion may use, in the anchor too: a legacy unusable rate is skipped like a date without
         # a row (X-R38)
@@ -203,17 +207,15 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
                 )
             )
 
-        # Single query fetching all rates needed (plain columns: no ORM object per row)
-        stmt = sql_select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(or_(*conditions)).order_by(FxRate.base, FxRate.quote, FxRate.date)
-
-        result = await session.execute(stmt)
-
-        # Build lookup: {(base, quote): ([dates ascending], [rates])} for bisect
+        # Build lookup: {(base, quote): ([dates ascending], [rates])} for bisect (plain columns: no ORM object per row)
         rates_lookup = {}
-        for rate_base, rate_quote, rate_date, rate_value in result.all():
-            dates, values = rates_lookup.setdefault((rate_base, rate_quote), ([], []))
-            dates.append(rate_date)
-            values.append(rate_value)
+        for start in range(0, len(conditions), FX_PAIRS_PER_QUERY):
+            stmt = sql_select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(or_(*conditions[start : start + FX_PAIRS_PER_QUERY])).order_by(FxRate.base, FxRate.quote, FxRate.date)
+            result = await session.execute(stmt)
+            for rate_base, rate_quote, rate_date, rate_value in result.all():
+                dates, values = rates_lookup.setdefault((rate_base, rate_quote), ([], []))
+                dates.append(rate_date)
+                values.append(rate_value)
     else:
         rates_lookup = {}
 

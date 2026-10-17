@@ -9,13 +9,16 @@ Now (``schemas/assets/scheduled_investment.py``):
     - every period date lies in [1900-01-01, 2200-12-31];
     - a schedule spans at most 36 525 days, from its first start to its last end;
     - a schedule holds at most 1 200 periods;
-    - the late interest's ``grace_period_days`` is at most 36 525.
-Each bound is a ``ValueError`` in a validator, so a pydantic ``ValidationError``, which
-``ScheduledInvestmentProvider.validate_params`` turns into ``AssetSourceError`` ``INVALID_PARAMS`` as it does for every
-other invalid schedule.
+    - the late interest's ``grace_period_days`` is at most 36 525;
+    - a schedule holds at most 10 000 manual ``asset_events`` (MF-SI2, E's review of R13-SEC7-2: every valuation replays
+      them, so their number is work too).
+Each N73 bound is a ``ValueError`` in a validator; the events bound is the list's ``max_length`` (pydantic ``too_long``).
+Either way a pydantic ``ValidationError``, which ``ScheduledInvestmentProvider.validate_params`` turns into
+``AssetSourceError`` ``INVALID_PARAMS`` as it does for every other invalid schedule.
 
-The numbers are written out here, not imported: they are the contract N73 fixed, and a test that read them from the
-module would follow any change of them. ``test_bounds_are_the_n73_values`` pins the module's constants to them.
+The numbers are written out here, not imported: they are the contract N73 (and MF-SI2) fixed, and a test that read them
+from the module would follow any change of them. ``test_bounds_are_the_n73_values`` and
+``test_events_bound_is_the_mf_si2_value`` pin the module's constants to them.
 
 Each refused input is otherwise valid (contiguous periods, valid rates), so the only rule it can break is the bound under
 test; the error's ``loc`` says which validator refused it. A refusal never matches the message text.
@@ -46,17 +49,24 @@ MAX_DATE = date(2200, 12, 31)
 MAX_SPAN_DAYS = 36_525
 MAX_PERIODS = 1_200
 MAX_GRACE_DAYS = 36_525
+# The MF-SI2 contract, written out the same way.
+MAX_EVENTS = 10_000
 
 
 def _period(start: date, end: date, frequency: str = "MONTHLY") -> dict:
     return {"start_date": start.isoformat(), "end_date": end.isoformat(), "annual_rate": "0.05", "maturation_frequency": frequency}
 
 
-def _params(periods: list[dict], *, grace_days: int | None = None) -> dict:
-    params = {"initial_value": {"code": "EUR", "amount": "10000"}, "day_count": "ACT/365", "schedule": periods, "asset_events": []}
+def _params(periods: list[dict], *, grace_days: int | None = None, events: list[dict] | None = None) -> dict:
+    params = {"initial_value": {"code": "EUR", "amount": "10000"}, "day_count": "ACT/365", "schedule": periods, "asset_events": events or []}
     if grace_days is not None:
         params["late_interest"] = {"annual_rate": "0.12", "grace_period_days": grace_days}
     return params
+
+
+def _daily_interest_events(count: int, first: date = date(2020, 1, 1)) -> list[dict]:
+    """``count`` valid INTEREST payouts, one a day from ``first``: a list whose only excess can be its length."""
+    return [{"date": (first + timedelta(days=offset)).isoformat(), "type": "INTEREST", "value": {"code": "EUR", "amount": "1"}} for offset in range(count)]
 
 
 def _one_day_periods(count: int, first: date = date(2020, 1, 1)) -> list[dict]:
@@ -64,12 +74,12 @@ def _one_day_periods(count: int, first: date = date(2020, 1, 1)) -> list[dict]:
     return [_period(first + timedelta(days=offset), first + timedelta(days=offset), "DAILY") for offset in range(count)]
 
 
-def _assert_refused_at(params: dict, loc: tuple) -> None:
-    """The schedule is refused, and among its errors is a ``value_error`` at ``loc``."""
+def _assert_refused_at(params: dict, loc: tuple, error_type: str = "value_error") -> None:
+    """The schedule is refused, and among its errors is one of ``error_type`` (a ``value_error`` by default) at ``loc``."""
     with pytest.raises(ValidationError) as excinfo:
         FAScheduledInvestmentSchedule(**params)
     errors = {tuple(error["loc"]): error["type"] for error in excinfo.value.errors()}
-    assert errors.get(loc) == "value_error", f"expected a value_error at {loc}, got {errors}"
+    assert errors.get(loc) == error_type, f"expected a {error_type} at {loc}, got {errors}"
 
 
 # ============================================================================
@@ -86,6 +96,13 @@ def test_bounds_are_the_n73_values():
     assert scheduled_investment.SCHEDULE_MAX_SPAN_DAYS == MAX_SPAN_DAYS
     assert scheduled_investment.SCHEDULE_MAX_PERIODS == MAX_PERIODS
     assert scheduled_investment.LATE_INTEREST_MAX_GRACE_DAYS == MAX_GRACE_DAYS
+
+
+def test_events_bound_is_the_mf_si2_value():
+    """Red: the module's events bound is the MF-SI2 value (before: the name does not exist)."""
+    from backend.app.schemas.assets import scheduled_investment  # noqa: PLC0415 — read here so the Guards import on HEAD
+
+    assert getattr(scheduled_investment, "SCHEDULE_MAX_EVENTS", None) == MAX_EVENTS
 
 
 # ============================================================================
@@ -181,6 +198,29 @@ def test_grace_of_36525_days_is_accepted():
 
 
 # ============================================================================
+# At most 10 000 manual events (MF-SI2)
+# ============================================================================
+
+# 2020-2049 MONTHLY: thirty years hold every event date below (10 001 days from 2020-01-01 end on 2047-05-19), so the
+# schedule itself is valid and the only rule the events can break is their number.
+_EVENTS_SCHEDULE = [_period(date(2020, 1, 1), date(2049, 12, 31))]
+_TOO_MANY_EVENTS_PARAMS = _params(_EVENTS_SCHEDULE, events=_daily_interest_events(MAX_EVENTS + 1))
+
+
+def test_10001_events_are_refused():
+    """Red: 10 001 valid daily INTEREST events are refused for their number: a ``too_long`` error at ``asset_events``,
+    the list itself, not one of its items (before: accepted)."""
+    _assert_refused_at(_TOO_MANY_EVENTS_PARAMS, ("asset_events",), "too_long")
+
+
+def test_10000_events_are_accepted():
+    """Guard: 10 000 events is valid, and every one of them is kept."""
+    schedule = FAScheduledInvestmentSchedule(**_params(_EVENTS_SCHEDULE, events=_daily_interest_events(MAX_EVENTS)))
+    assert len(schedule.asset_events) == MAX_EVENTS
+    assert (schedule.asset_events[0].date, schedule.asset_events[-1].date) == (date(2020, 1, 1), date(2020, 1, 1) + timedelta(days=MAX_EVENTS - 1))
+
+
+# ============================================================================
 # The report's schedule, and the provider's door
 # ============================================================================
 
@@ -200,6 +240,7 @@ def test_report_schedule_year_1_to_9999_daily_is_refused():
         pytest.param(_params([_period(MIN_DATE, date(2010, 1, 1))]), id="span-over-100-years"),
         pytest.param(_params(_one_day_periods(MAX_PERIODS + 1)), id="1201-periods"),
         pytest.param(_params([_period(date(2020, 1, 1), date(2024, 12, 31))], grace_days=MAX_GRACE_DAYS + 1), id="grace-36526"),
+        pytest.param(_TOO_MANY_EVENTS_PARAMS, id="10001-events"),
     ],
 )
 def test_provider_validate_params_refuses_with_invalid_params(params):

@@ -80,6 +80,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioLocalizedText,
     RiskScenarioMissingHistoryPolicy,
 )
+from backend.app.services.financial_math import returns as financial_math_returns
 from scripts.i18n_catalog import load_catalog
 
 
@@ -275,6 +276,91 @@ def test_risk_result_metadata_enforces_observed_annualization_and_mode():
             algorithm_version="risk-test@1.0.0",
             computed_at=datetime(2026, 1, 5),
         )
+
+
+# =============================================================================
+# MF-D3 (rule 10): the two annualization checks read the house formula
+# =============================================================================
+#
+# ``PreparedAssetSeriesSet.validate_alignment`` and ``RiskResultMetadata.validate_context`` check a contract's
+# ``annualization_factor`` against ``financial_math.returns.observations_per_year`` — imported by the schema, a pure
+# function of the layer — instead of writing ``n_observations * 365 / calendar_days`` a second and third time. Equal
+# values cannot tell a call from a copy, so the guard replaces the name the validators read with a stub answering a
+# different factor: the contract carrying the true factor must then be REFUSED, the one carrying the stub's ACCEPTED.
+# Red on HEAD (f252acb4a): ``schemas/risk.py`` has no such name, so ``monkeypatch.setattr`` (raising=True) fails.
+
+_GUARD_N_OBSERVATIONS = 3
+_GUARD_CALENDAR_DAYS = 7
+# 3 × 365 / 7 = 156.428…; the stub's answer is any other positive factor.
+_GUARD_TRUE_FACTOR = _GUARD_N_OBSERVATIONS * 365 / _GUARD_CALENDAR_DAYS
+_GUARD_STUB_FACTOR = 42.0
+
+
+def _guard_prepared_series_set(annualization_factor: float) -> PreparedAssetSeriesSet:
+    baseline = date(2026, 1, 1)
+    return_dates = [date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 8)]
+    return PreparedAssetSeriesSet(
+        requested_range=DateRangeModel(start=return_dates[0], end=return_dates[-1]),
+        baseline_date=baseline,
+        effective_range=DateRangeModel(start=return_dates[0], end=return_dates[-1]),
+        target_currency="EUR",
+        joint_valuation_dates=[baseline, *return_dates],
+        joint_return_dates=return_dates,
+        n_observations=_GUARD_N_OBSERVATIONS,
+        calendar_days=_GUARD_CALENDAR_DAYS,
+        annualization_factor=annualization_factor,
+        fx_fingerprint="0" * 64,
+    )
+
+
+def _guard_result_metadata(annualization_factor: float) -> RiskResultMetadata:
+    return RiskResultMetadata(
+        analyzed_range=DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 8)),
+        n_observations=_GUARD_N_OBSERVATIONS,
+        calendar_days=_GUARD_CALENDAR_DAYS,
+        annualization_factor=annualization_factor,
+        coverage=1.0,
+        currency="EUR",
+        return_basis=RiskReturnBasis.PRICE_ONLY,
+        algorithm_version="risk-test@1.0.0",
+        computed_at=datetime(2026, 1, 9, tzinfo=UTC),
+    )
+
+
+_GUARDED_CONTRACTS = [
+    pytest.param(_guard_prepared_series_set, id="prepared-series-set"),
+    pytest.param(_guard_result_metadata, id="risk-result-metadata"),
+]
+
+
+@pytest.mark.parametrize("build", _GUARDED_CONTRACTS)
+def test_the_annualization_check_reads_the_house_formula(monkeypatch, build):
+    # Presence barrier: unpatched, the contract takes the true factor and refuses the stub's, so what flips both below is
+    # the replacement and nothing else.
+    assert build(_GUARD_TRUE_FACTOR).annualization_factor == _GUARD_TRUE_FACTOR
+    with pytest.raises(ValidationError, match="annualization_factor"):
+        build(_GUARD_STUB_FACTOR)
+
+    calls: list[tuple[int, int]] = []
+
+    def stub(n_observations: int, calendar_days: int) -> float:
+        calls.append((n_observations, calendar_days))
+        return _GUARD_STUB_FACTOR
+
+    monkeypatch.setattr(risk_schemas, "observations_per_year", stub)
+
+    with pytest.raises(ValidationError, match="annualization_factor"):
+        build(_GUARD_TRUE_FACTOR)
+    assert build(_GUARD_STUB_FACTOR).annualization_factor == _GUARD_STUB_FACTOR
+    # Asked about the contract's own span, by both constructions.
+    assert len(calls) == 2
+    assert set(calls) == {(_GUARD_N_OBSERVATIONS, _GUARD_CALENDAR_DAYS)}
+
+
+def test_the_name_the_validators_read_is_the_house_function():
+    # The patch above proves the validators read ``observations_per_year`` from the schema module; this proves that
+    # name is the layer's own object, not a copy defined in the schema that a later edit could make drift.
+    assert risk_schemas.observations_per_year is financial_math_returns.observations_per_year
 
 
 def test_historical_replay_audit_is_strict_and_serializable():

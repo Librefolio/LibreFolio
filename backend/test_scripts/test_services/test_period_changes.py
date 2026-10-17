@@ -24,7 +24,8 @@ terminates and the service's ``last / ref − 1`` and the page's ``(last − ref
 
 Isolation. The assets are this file's (unique names) and leave with their prices at the end. FX rates are global by
 (date, pair): every pair here is one nothing else in the repository uses — AMD/BDT, AMD/SZL, AMD/LSL, BBD/BZD and the
-never-seeded MVR/SCR — dated 1980-1987, and its rows are deleted before seeding (a killed run's leftovers) and after.
+never-seeded MVR/SCR and AMD/MVR — dated 1980-1987, and its rows are deleted before seeding (a killed run's leftovers) and
+after.
 
 X-R59 (rule 10, decision N80) — the whole-range change, ``TestAssetRangeChange`` and ``TestFxRangeChange`` at the end.
 An item may ask ``range_start``; its result then carries ``range_change``: ``reference_date``, ``change_abs``,
@@ -42,6 +43,20 @@ range_start)``, behind ``POST /assets/prices/current?range_start=…``, gives ea
 The anchor is the result's own ``value`` in its ``currency`` — a live quote that may not be stored —, the reference the
 period changes' rule up to the result's ``as_of_date``. The tests hand it ``FACurrentPriceItem``s built here (no provider)
 on the seeded histories. RED on HEAD 46bbbb1e3: the function does not exist (looked up on the module when called).
+
+Y's D1 — ``live_range_changes(..., target_currency)``, the page's converted view: both ends in the target, the reference
+at ``reference_date``'s rate, the quote at today's (the UTC date), in one ``convert_bulk`` batch; an end already in the
+target is not converted; a rate missing on either end leaves both changes null, ``reference_date`` set. The tests read the
+AMD/BDT rates already seeded — today's is the last one, backward-filled, the pair being this file's —, AMD/SZL's one rate,
+and AMD/MVR, this file's and never seeded. RED on HEAD f252acb4a: the keyword does not exist (TypeError).
+
+``TestWrittenDownToZero`` — X's review, point 2 (decision on N80): a price written down to nothing is −100 %. A stored
+close of 0 on ``as_of`` (the ``written_off`` asset: positive closes from WRITE_OFF_FIRST, then a 0 on WRITE_OFF_DAY,
+seeded by the ORM like every row here — ``FAPricePoint`` refuses a close ≤ 0, the column does not) gives −1 to every
+period with a positive reference and ``range_change`` −reference / −1, natively and converted; a live quote of 0 gives the
+same through ``live_range_changes``. The asset is this file's and leaves with the others; its conversion reads the
+AMD/BDT rates already seeded. No FX case: a stored rate of 0 is a missing rate to ``convert_bulk`` (X-R38), so it never
+reaches the house as an anchor (the class says more). RED on HEAD f252acb4a: None where −1 is expected.
 """
 
 from __future__ import annotations
@@ -74,6 +89,7 @@ from backend.app.services.assets.period_changes import get_period_changes_bulk
 from backend.app.services.financial_math import returns as returns_module
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
+from backend.app.utils.datetime_utils import today_date
 from backend.test_scripts.fixtures.period_changes.page_ports import PAGE_PERIODS, asset_page_chart, asset_page_deltas, fx_page_deltas
 from backend.test_scripts.fixtures.period_changes.seeds import TERMINATING_PRICES, TERMINATING_RATES, first_carried_day, last_on_or_before, scattered_days, series
 from backend.test_scripts.test_utils import unique_id
@@ -88,7 +104,8 @@ FOREIGN = "SZL"  # a price row in another currency; AMD/SZL has one rate, after 
 PARTIAL = "LSL"  # an asset priced in LSL; AMD/LSL rates start inside the periods of one anchor
 FX_PAIR = ("BBD", "BZD")  # the FX service's pair, rates on scattered days
 EMPTY_PAIR = ("MVR", "SCR")  # never seeded
-OWNED_PAIRS = ((NATIVE, TARGET), (NATIVE, FOREIGN), (NATIVE, PARTIAL), FX_PAIR, EMPTY_PAIR)
+UNRATED_TARGET = EMPTY_PAIR[0]  # AMD/MVR is never seeded either: a target currency without any rate (Y's D1)
+OWNED_PAIRS = ((NATIVE, TARGET), (NATIVE, FOREIGN), (NATIVE, PARTIAL), FX_PAIR, EMPTY_PAIR, (NATIVE, UNRATED_TARGET))
 RATE_SOURCE = "MFP2-TEST"
 PRICE_SOURCE = "mfp2_test"
 
@@ -109,6 +126,10 @@ PARTIAL_AS_OF = date(1987, 4, 11)  # − 100 days = PARTIAL_RATES_FIRST: between
 UNCOVERED_AS_OF = date(1986, 12, 31)  # the day before the first AMD/LSL rate
 FX_EDGE_AS_OF = RATES_FIRST + timedelta(days=1824)  # its 5Y reference is the day before the pair's first rate
 FX_AS_OFS = (SUNDAY, MONDAY, date(1986, 7, 1), STALE, FX_EDGE_AS_OF)
+WRITE_OFF_DAY = date(1987, 5, 4)  # the written-off asset's close of 0, its last row
+WRITE_OFF_FIRST = WRITE_OFF_DAY - timedelta(days=400)  # older than 1Y at WRITE_OFF_DAY, younger than 2Y
+WRITE_OFF_RANGE_START = WRITE_OFF_DAY - timedelta(days=100)
+FOREIGN_RATE_DAY = SUNDAY + timedelta(days=1)  # the one AMD/SZL rate
 
 #: The price query's range for the page: ``[as_of − 5Y − a bit, as_of]``.
 PAGE_RANGE_DAYS = 1825 + 10
@@ -175,6 +196,14 @@ def _switched_rows() -> list[tuple[date, Decimal, str]]:
     return [*((day, close, NATIVE) for day, close in series(days, TERMINATING_PRICES, 5).items()), (SUNDAY, Decimal("80"), FOREIGN)]
 
 
+def _written_off_prices() -> dict[date, Decimal]:
+    """An AMD history of positive closes from WRITE_OFF_FIRST, then a close of 0 on WRITE_OFF_DAY (N80: written down to
+    nothing). The 0 goes in by the ORM, as every row here: ``FAPricePoint`` refuses a close ≤ 0, the column does not."""
+    prices = series(scattered_days(WRITE_OFF_FIRST, WRITE_OFF_DAY - timedelta(days=1), PRICE_GAPS), TERMINATING_PRICES, 7)
+    prices[WRITE_OFF_DAY] = Decimal("0")
+    return prices
+
+
 # ============================================================================
 # FIXTURE: seeded once for the module, removed at its end
 # ============================================================================
@@ -187,6 +216,7 @@ class _Seeded:
     young_prices: dict[date, Decimal]
     target_rates: dict[date, Decimal]
     fx_rates: dict[date, Decimal]
+    written_off_prices: dict[date, Decimal]
 
 
 def _owned_pairs_clause():
@@ -195,17 +225,18 @@ def _owned_pairs_clause():
 
 async def _seed() -> _Seeded:
     stamp = f"{unique_id('MFP2')}-{uuid4().hex[:8]}"
-    sparse_prices, young_prices, target_rates, fx_rates = _sparse_prices(), _young_prices(), _target_rates(), _fx_rates()
+    sparse_prices, young_prices, target_rates, fx_rates, written_off_prices = _sparse_prices(), _young_prices(), _target_rates(), _fx_rates(), _written_off_prices()
     rows_by_asset = {
         "sparse": [(day, close, NATIVE) for day, close in sparse_prices.items()],
         "young": [(day, close, NATIVE) for day, close in young_prices.items()],
         "mixed": _mixed_rows(),
         "switched": _switched_rows(),
         "partial": [(day, close, PARTIAL) for day, close in series(scattered_days(HISTORY_FIRST, LAST_PRICE, PRICE_GAPS), TERMINATING_PRICES, 7).items()],
+        "written_off": [(day, close, NATIVE) for day, close in written_off_prices.items()],
     }
     rates_by_pair = {
         (NATIVE, TARGET): target_rates,
-        (NATIVE, FOREIGN): {SUNDAY + timedelta(days=1): Decimal("2")},
+        (NATIVE, FOREIGN): {FOREIGN_RATE_DAY: Decimal("2")},
         (NATIVE, PARTIAL): series(scattered_days(PARTIAL_RATES_FIRST, RATES_LAST, (10,)), TERMINATING_RATES, 3),
         FX_PAIR: fx_rates,
     }
@@ -217,7 +248,7 @@ async def _seed() -> _Seeded:
         session.add_all(PriceHistory(asset_id=assets[name].id, date=day, close=close, currency=currency, source_plugin_key=PRICE_SOURCE) for name, rows in rows_by_asset.items() for day, close, currency in rows)
         session.add_all(FxRate(date=day, base=base, quote=quote, rate=rate, source=RATE_SOURCE) for (base, quote), rates in rates_by_pair.items() for day, rate in rates.items())
         await session.commit()
-        return _Seeded(assets={name: asset.id for name, asset in assets.items()}, sparse_prices=sparse_prices, young_prices=young_prices, target_rates=target_rates, fx_rates=fx_rates)
+        return _Seeded(assets={name: asset.id for name, asset in assets.items()}, sparse_prices=sparse_prices, young_prices=young_prices, target_rates=target_rates, fx_rates=fx_rates, written_off_prices=written_off_prices)
 
 
 async def _cleanup(asset_ids: Iterable[int]) -> None:
@@ -850,15 +881,16 @@ def _live(asset_id: int, as_of_date: date | None = SUNDAY, value: Decimal | None
     return FACurrentPriceItem(asset_id=asset_id, value=value, currency=currency, as_of_date=as_of_date, source="provider:x-r59-test")
 
 
-async def _live_changes(range_start: date, *items: FACurrentPriceItem) -> list[tuple[date | None, Decimal | None, Decimal | None]]:
+async def _live_changes(range_start: date, *items: FACurrentPriceItem, target_currency: str | None = None) -> list[tuple[date | None, Decimal | None, Decimal | None]]:
     """``live_range_changes`` on ``items``, as ``(reference_date, change_abs, change_ratio)`` per item, in item order.
 
     The function is looked up on the module when called: it does not exist on HEAD 46bbbb1e3. The brief fixes what each
     result gets, not the container: a mapping by asset id (an asset it leaves out has no change — the route then fills an
-    empty ``FARangeChange``) or a sequence in item order.
+    empty ``FARangeChange``) or a sequence in item order. ``target_currency`` (Y's D1) is passed only when given, so a
+    call without it is the one HEAD f252acb4a knows.
     """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        changes = await asset_period_changes.live_range_changes(session, list(items), range_start)
+        changes = await asset_period_changes.live_range_changes(session, list(items), range_start, **({} if target_currency is None else {"target_currency": target_currency}))
     per_item = [changes.get(item.asset_id) for item in items] if isinstance(changes, Mapping) else list(changes)
     assert len(per_item) == len(items), f"one change per result: {changes}"
     return [NO_CHANGE if change is None else (change.reference_date, change.change_abs, change.change_ratio) for change in per_item]
@@ -868,6 +900,19 @@ def _house(reference: Decimal, anchor: Decimal) -> tuple[Decimal | None, Decimal
     """The house's ``range_change(reference, anchor)``: its two direct fields."""
     change = returns_module.range_change(reference, anchor)
     return change.change_abs, change.change_ratio
+
+
+def _record_conversions(monkeypatch: pytest.MonkeyPatch) -> list[list[tuple[str, Decimal, str, date]]]:
+    """From now on, every ``convert_bulk`` batch ``live_range_changes`` sends — ``(from, amount, to, day)`` per
+    conversion, one list per batch — still converted by the real ``convert_bulk``."""
+    batches: list[list[tuple[str, Decimal, str, date]]] = []
+
+    async def recording(session, conversions, raise_on_error=True):
+        batches.append([(amount.code, amount.amount, to_currency, day) for amount, to_currency, day in conversions])
+        return await convert_bulk(session, conversions, raise_on_error=raise_on_error)
+
+    monkeypatch.setattr(asset_period_changes, "convert_bulk", recording)
+    return batches
 
 
 @pytest.mark.asyncio
@@ -982,3 +1027,127 @@ class TestLiveRangeChange:
         assert batch[0] != NO_CHANGE and batch[1] != NO_CHANGE and batch[2][1:] == (None, None)
         for item, change in zip(items, batch, strict=True):
             assert [change] == await _live_changes(YOUNG_RANGE_START, item), item.asset_id
+
+    # --- Y's D1: the change in a target currency -------------------------------------------------------------------
+
+    async def test_target_currency_converts_the_reference_at_its_day_and_the_quote_at_today(self, seeded, monkeypatch):
+        """In BDT: the reference, Friday's 160 AMD carried to SATURDAY, at SATURDAY's rate — 2, not Friday's —: 320; the
+        live 250 AMD at today's rate (the UTC date), which is the last AMD/BDT rate stored, backward-filled — the pair is
+        this file's, its rates end in 1987. Both in ONE ``convert_bulk`` batch; the change the house's.
+
+        Red on HEAD f252acb4a: ``live_range_changes`` takes no ``target_currency`` (TypeError).
+        """
+        prices, rates = seeded.sparse_prices, seeded.target_rates
+        assert last_on_or_before(rates, FRIDAY) != rates[SATURDAY] == Decimal("2"), "precondition: the rate moves between the price's day and range_start"
+        today_rate = rates[max(rates)]
+        reference, anchor = prices[FRIDAY] * rates[SATURDAY], LIVE_VALUE * today_rate
+        assert reference == Decimal("320") and anchor != reference, "precondition: a move once converted"
+        batches = _record_conversions(monkeypatch)
+        before = today_date()
+
+        [change] = await _live_changes(SATURDAY, _live(seeded.assets["sparse"]), target_currency=TARGET)
+
+        assert change == (SATURDAY, anchor - reference, anchor / reference - 1), change
+        assert change[1:] == _house(reference, anchor)
+        assert len(batches) == 1 and len(batches[0]) == 2, f"one batch of the two ends: {batches}"
+        assert (NATIVE, Decimal("160"), TARGET, SATURDAY) in batches[0], batches
+        [(code, amount, to_currency, day)] = [conversion for conversion in batches[0] if conversion[3] != SATURDAY]
+        assert (code, amount, to_currency) == (NATIVE, LIVE_VALUE, TARGET) and day in {before, today_date()}, f"the quote converted on {day}, not today (UTC)"
+
+    async def test_target_currency_an_end_already_in_it_is_not_converted(self, seeded, monkeypatch):
+        """An end already in the target currency stays as it is. In AMD, the sparse asset's own: nothing converted, the
+        change the native one. A quote of 250 BDT over the AMD reference, in BDT: only the reference converted, at
+        SATURDAY's rate — 320 —, so −70 and −0.21875 (natively, two currencies: no change).
+
+        Red on HEAD f252acb4a: no ``target_currency`` (TypeError).
+        """
+        asset_id = seeded.assets["sparse"]
+        native = await _live_changes(SATURDAY, _live(asset_id))
+        [native_bdt_quote] = await _live_changes(SATURDAY, _live(asset_id, currency=TARGET))
+        assert native_bdt_quote == (SATURDAY, None, None), "precondition: natively, a BDT quote over an AMD reference has no change"
+        batches = _record_conversions(monkeypatch)
+
+        same = await _live_changes(SATURDAY, _live(asset_id), target_currency=NATIVE)
+        assert same == native == [(SATURDAY, Decimal("90"), Decimal("0.5625"))], (same, native)
+        assert batches == [], f"nothing to convert, yet: {batches}"
+
+        [quote_in_target] = await _live_changes(SATURDAY, _live(asset_id, currency=TARGET), target_currency=TARGET)
+        assert quote_in_target == (SATURDAY, Decimal("-70"), Decimal("-0.21875")), quote_in_target
+        assert batches == [[(NATIVE, Decimal("160"), TARGET, SATURDAY)]], batches
+
+    async def test_target_currency_without_a_rate_gives_no_change(self, seeded):
+        """A rate missing on either end: ``reference_date`` set, both changes null — never a difference of two
+        currencies. AMD → MVR: no rate at all (AMD/MVR is this file's, never seeded). AMD → SZL: the pair's one rate is
+        on FOREIGN_RATE_DAY, after the reference's SATURDAY, so the quote converts (backward-filled to today) and the
+        reference does not.
+
+        Red on HEAD f252acb4a: no ``target_currency`` (TypeError).
+        """
+        assert SATURDAY < FOREIGN_RATE_DAY, "precondition: AMD/SZL has no rate on or before SATURDAY"
+        live = _live(seeded.assets["sparse"])
+
+        [no_pair] = await _live_changes(SATURDAY, live, target_currency=UNRATED_TARGET)
+        [no_reference_rate] = await _live_changes(SATURDAY, live, target_currency=FOREIGN)
+
+        assert no_pair == no_reference_rate == (SATURDAY, None, None), (no_pair, no_reference_rate)
+
+    async def test_target_currency_reference_inside_the_range_at_its_own_day(self, seeded):
+        """The young asset's history starts inside the range: the reference is its first price, converted at the rate of
+        ``reference_date`` — YOUNG_FIRST —, the quote at today's.
+
+        Red on HEAD f252acb4a: no ``target_currency`` (TypeError).
+        """
+        young, rates = seeded.young_prices, seeded.target_rates
+        assert min(young) == YOUNG_FIRST > YOUNG_RANGE_START, "precondition: the history starts inside the range"
+        reference, anchor = young[YOUNG_FIRST] * last_on_or_before(rates, YOUNG_FIRST), LIVE_VALUE * rates[max(rates)]
+
+        [change] = await _live_changes(YOUNG_RANGE_START, _live(seeded.assets["young"]), target_currency=TARGET)
+
+        assert change == (YOUNG_FIRST, *_house(reference, anchor)), change
+        assert change[1] == anchor - reference
+
+
+# ============================================================================
+# X'S REVIEW, POINT 2 (decision on N80) — A PRICE WRITTEN DOWN TO NOTHING IS −100 %
+# ============================================================================
+
+
+@pytest.mark.asyncio
+class TestWrittenDownToZero:
+    """A stored close of 0 on ``as_of``, and a live quote of 0, over a positive reference: ``change_ratio`` −1 (−100 %)
+    and ``change_abs`` −reference, the house's rule for an anchor of 0. RED on HEAD f252acb4a: None where −1 is expected.
+
+    No FX case, and none can be written with stored rates alone: a rate of 0 never reaches the house as an anchor.
+    ``convert_bulk`` reads only the rates ``usable_fx_rate_bounds()`` lets through (X-R38: 1E-10 ≤ rate < 1E+14), so a
+    stored 0 is a missing rate, backward-filled over — the periods and the range change are those of the last usable
+    rate before it (on a private database: a 0 on ``as_of`` over a rate of 4 gives a 1D of exactly 0, not −1). The FX
+    branch of the rule is pinned by the house tests (``test_fixed_period_changes.py::TestAnchorOfZero``).
+    """
+
+    async def test_asset_close_of_zero_on_as_of(self, seeded):
+        """WRITE_OFF_DAY's close is 0. Natively and in BDT: every period whose reference is a stored positive price —
+        1D … 1Y — is −1, the older ones (2Y, 3Y, 5Y, before the history) None; the range change from
+        WRITE_OFF_RANGE_START is that day, −reference and −1, the reference converted at its own day's rate in BDT."""
+        prices, rates = seeded.written_off_prices, seeded.target_rates
+        reference = last_on_or_before(prices, WRITE_OFF_RANGE_START)
+        assert prices[WRITE_OFF_DAY] == 0 and reference is not None and reference > 0, "precondition: a positive reference under an anchor of 0"
+        assert all(close > 0 for day, close in prices.items() if day != WRITE_OFF_DAY), "precondition: every other close is positive"
+        valued = {key for key, days in PAGE_PERIODS if WRITE_OFF_DAY - timedelta(days=days) >= WRITE_OFF_FIRST}
+        assert valued == {"1D", "1W", "1M", "3M", "6M", "1Y"}, f"precondition: the periods inside the history are {valued}"
+        asset_id = seeded.assets["written_off"]
+
+        native, converted = await _asset_changes(_item(asset_id, WRITE_OFF_DAY, range_start=WRITE_OFF_RANGE_START), _item(asset_id, WRITE_OFF_DAY, TARGET, range_start=WRITE_OFF_RANGE_START))
+
+        for result, reference_value in ((native, reference), (converted, reference * last_on_or_before(rates, WRITE_OFF_RANGE_START))):
+            assert result.errors == [], (result.currency, result.errors)
+            assert _by_key(result) == {key: Decimal(-1) if key in valued else None for key in ALL_PERIODS}, (result.currency, _by_key(result))
+            change = _range(result)
+            assert (change.reference_date, change.change_abs, change.change_ratio) == (WRITE_OFF_RANGE_START, -reference_value, Decimal(-1)), (result.currency, change)
+
+    async def test_live_quote_of_zero(self, seeded):
+        """A live quote of 0 on SUNDAY, over Friday's 160 carried to SATURDAY: SATURDAY, −160, −1."""
+        assert last_on_or_before(seeded.sparse_prices, SATURDAY) == Decimal("160"), "precondition: SATURDAY carries Friday's 160"
+
+        [change] = await _live_changes(SATURDAY, _live(seeded.assets["sparse"], value=Decimal("0")))
+
+        assert change == (SATURDAY, Decimal("-160"), Decimal("-1")), change
