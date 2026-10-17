@@ -5386,15 +5386,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-9».
-- **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
-  codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
-  `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
-  il server stesso, che muore senza il suo spegnimento: niente budget, worker BRIM orfani, scritture tagliate. Con
-  `--reload` muore solo il supervisore, e il server vero ha già ricevuto il suo SIGINT dal terminale. Docker e il
-  runner non c'entrano. Cura possibile: in `run_command_live`, un `Popen` che dopo il Ctrl+C aspetta il figlio fino al
-  budget più un margine. Superficie del coordinatore. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z6b — spegnimento con un tempo
-  massimo».
+- ✅ **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b).
+  **Chiusa il 17/10 col lotto Z-10** (il commit è del coordinatore; via da scrittore su `cli_base.py`, `dev.py:448` e
+  tre test di H e L). `dev.py server` lancia il server con `run_server_live` (`scripts/cli_base.py`):
+  - al Ctrl+C non inoltra nulla (il server ha già il SIGINT del terminale) e aspetta il suo spegnimento fino al
+    budget più 2 s;
+  - un SIGTERM a `dev.py` lo inoltra al server, con la stessa attesa;
+  - un secondo segnale, o la grazia finita, lo uccide; codici 130 e 143.
+  I gestori registrano i segnali senza sollevare eccezioni, e `run_command_live` resta com'è per gli altri comandi.
+  Era: con `subprocess.run` il server moriva di SIGKILL 0,25 s dopo il Ctrl+C, a metà del suo spegnimento (provato
+  il 17/10 con un finto server: uscita a 0,29 s, server ucciso), e un SIGTERM a `dev.py` lasciava il server orfano.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-10».
 - **Z-11 · Lock dei job tra processi (flock) per più worker** — basso; coordinatore, 15/10 (D-Z3-3). Con `--workers`
   i job girano solo nel worker leader: un altro worker che riceve `wake-sync` risponde `not_leader`, e la spinta del
   ritorno aspetta il giro del leader, entro 60 s. Cura: un lock su file nella cartella dei dati, preso da chiunque
