@@ -5366,6 +5366,96 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-43 + B-44 — una funzione sconosciuta nello schema dell'archivio diventa `database_damaged`; i testi di `trusted_schema` dopo H-51 (2026-10-17, 16:01-16:45) — ✅ 🧊 FROZEN (checkpoint delle 16:45)
+
+> **Assegnazione** (coordinatore, 15:50, dalla revisione H-51 di H): (1) un archivio il cui CHECK o indice chiama una
+> funzione sconosciuta si ferma come `sqlite3.OperationalError` grezzo, non come `StagingError`: l'API dice
+> `stage_failed`, la CLI finisce probabilmente in un traceback. «Translate it into `database_damaged`, as
+> `_refuse_foreign_objects` already does. Reds first; file it with an ID.» (2) Dopo l'ingresso di H-51: allineare la
+> docstring di `env.py` («before anything else») e il punto «`trusted_schema` off on every connection to the copy» a
+> `security.md#trusted-schema-server`.
+>
+> **Analisi** (15:52-16:15, in sola lettura mentre ero FROZEN; `files/b43-contract.md`):
+> - **Misura su SQLite 3.54.0** (`b43-wip/sqlite_probe*.py`, log `b43_sqlite_probe*.log`):
+>   - un'espressione di un indice o una colonna generata che chiama una funzione sconosciuta: `integrity_check` lancia
+>     `OperationalError: unknown function`, anche in sola lettura → `describe_database()` (`mode=ro`) lo lascia uscire;
+>   - un **CHECK**: in sola lettura SQLite **salta i vincoli `CHECK`** («ok», anche per un CHECK violato su una funzione
+>     predefinita). La descrizione passa; fallisce il primo `integrity_check` in lettura e scrittura, quello di
+>     `run_post_migration_fixes()._integrity_ok()`, e così pure una scrittura su quella tabella.
+>   - La frase nuova di H in `#trusted-schema-server` («A `CHECK` or an index's expression … stops the check at the
+>     `PRAGMA integrity_check` of `describe_database()`») è vera per indici e colonne generate, non per i CHECK.
+> - **Cura**: in `_stage`, tutta la fase del database (da `_refuse_foreign_objects` al report) dentro
+>   `except sqlite3.DatabaseError`, tranne `ProgrammingError` (un nostro difetto, che deve restare visibile) →
+>   `StagingError("database_damaged")`. Nel log solo la classe e `sqlite_errorname` (regola di B-28). Gli
+>   `StagingError` interni passano com'erano.
+> - **B-44**: gli import di `env.py` caricano `db/session.py`, quindi sulle connessioni di Alembic l'ordine è il
+>   listener di classe (H-51: `trusted_schema` spento per primo, `writable_schema=RESET` per ultimo), poi il dialetto
+>   (`regexp`, `floor`), poi `_schema_untrusted`. Il suo «before anything else» non è mai stato letterale.
+>
+> **Decisioni** (coordinatore, 15:58): **GO** dopo l'ingresso di X-R71. La frase di H si corregge nella doc di B-43, e H
+> la rivede. B-44 nello stesso checkpoint.
+>
+> **X-R71 entrato** (coordinatore, 16:01): combinato verde su `f0645ff98`, dev `1c7937984`, CHANGELOG 🐛 `e9746b959`;
+> HEAD portata in avanti. Nel merge, il conflitto della desc del runner con MF-SEC9e risolto dal coordinatore: il testo
+> di dev più la mia clausola sulla guardia del `ValueError`.
+>
+> - **Codice pronto**: `b43-wip/apply_b43.py` (2 operazioni in `staging.py`) e `apply_b44.py` (la docstring di `env.py`).
+>   ruff e black puliti sulle copie emesse; si applicano su `e9746b959`.
+> - **Rossi in scrittura** (TA-B43): `services backup-staging` (indice, colonna generata, CHECK; guardie: un CHECK su
+>   `abs`, nessun nome di funzione nei log) e `utils backup-cli-restore` (nessun traceback). Doc (DW-B43): la frase di H,
+>   le cause di `database_damaged`, il punto di B-44.
+> - **Backlog**: B-43 e B-44 registrate nella sezione B.
+> - ✅ **Rossi scritti** (TA-B43, 16:01-16:18), sezione (n) di `test_backup_staging.py` e (j) di
+>   `test_backup_cli_restore.py`:
+>   - **rossi**: indice, colonna generata (tipizzata, VIRTUAL), CHECK → `database_damaged`, senza resti. Il CHECK ha
+>     una barriera: `describe_database()` risponde «ok». Il log ha un solo avviso, con la classe e `sqlite_errorname`,
+>     e nessuna riga nomina la funzione. Più la CLI: `restore --dry-run` → ❌ `(database_damaged)`, uscita 1, nessun
+>     traceback;
+>   - **guardia**: un CHECK su `abs()` verificato come sempre.
+>   - Il costruttore: un backup vero alla head, il database modificato con la funzione registrata e
+>     `trusted_schema=ON`, il manifest aggiornato; precondizioni che non si confondono con il rosso.
+> - ✅ **Doc** (DW-B43, 16:01-16:15, più due ritocchi miei):
+>   - `security.md`: il punto nuovo «What the check cannot read.» (B-43), il punto di B-44 (sulle connessioni
+>     dell'upgrade, prima il listener di classe, poi `_schema_untrusted` dopo il dialetto), la frase di H corretta in
+>     `#trusted-schema-server`, la frase dei test.
+>   - **⚠️ Fuori pista**: DW ha misurato che una colonna generata semplice passa `integrity_check`. Rimisurato
+>     (`b43_sqlite_probe_generated.log`): falliscono solo una colonna VIRTUAL con un tipo dichiarato (INTEGER o TEXT) e
+>     una `NOT NULL`; una non tipizzata o una STORED passano. Le due frasi ora lo dicono così.
+>   - **⚠️ Fuori pista, la scoperta più grande di DW**: da H-51 alcuni schemi passano tutta la verifica e poi rompono il
+>     server. Misurato con segnaposto deterministici (`b43_sqlite_probe_standins.log`):
+>     - una colonna generata che chiama `regexp`, o un indice su `floor`, rendono illeggibile lo schema sulle
+>       connessioni del server, e così tutte le connessioni falliscono;
+>     - un `CHECK` o un `DEFAULT` passano anche la lettura con i segnaposto.
+>   - **Decisione** (coordinatore, 16:25): la parte 1 dentro B-43, con due rossi in più. Il resto in backlog, dopo la
+>     1.3: la parte 2 è **B-45**, il testo dell'archivio nel log dell'upgrade è **B-46**.
+> - **Patch** `apply_b43.py`, ora a 4 operazioni. `_refuse_foreign_objects()` registra i segnaposto
+>   (`_SERVER_FUNCTIONS`, `_register_server_functions`, `_stand_in`) e perde il suo `except`: ogni errore `sqlite3`
+>   della fase passa dall'involucro di B-43, con un solo avviso. ruff e black puliti sulla copia emessa.
+> - ✅ **I due rossi della parte 1** (TA-B43, seguito, 16:25-16:32):
+>   - `regexp` in una colonna generata non tipizzata e `floor` in un indice → `database_damaged`, rifiutati prima che
+>     `describe_database()` apra la copia (`never_described`);
+>   - il test del log esteso ai due casi;
+>   - una guardia: l'indice di LibreFolio su `lower()` si legge con i segnaposto, e il suo backup si verifica come
+>     sempre;
+>   - le precondizioni dicono che un lettore semplice passa i due schemi, e uno con i segnaposto no.
+> - ✅ **Rossi** (corsia 6187, 16:33-16:34): `services backup-staging` **11 falliti** e 170 passati, `utils
+>   backup-cli-restore` **1 fallito** e 108 passati. Esattamente i casi nuovi (`files/logs/b43_red_*.log`).
+> - ✅ **Patch applicate** (16:34:21): `apply_b43.py` (4 operazioni in `staging.py`) e `apply_b44.py` (la docstring di
+>   `env.py`); ruff e black puliti.
+> - ✅ **Verdi** (16:34-16:38):
+>   - `services backup-staging` **181**, `utils backup-cli-restore` **109**;
+>   - le regressioni: `utils dev-cli-db-path` 17 (il controllo AST di `env.py`), `services backup-secure` 77,
+>     `backup-apply` 255, `utils backup-cli` 102.
+>   - Porta 6187 libera.
+> - ✅ **La guardia dei codici**, senza slot: lo stesso confronto AST di `test_every_code_a_check_can_end_with…`, fatto a
+>   mano. Nessun codice prodotto da `staging.py` manca da `RestoreErrorCode`; `database_damaged` c'era già.
+> - ✅ **Doc e controlli** (16:38-16:44):
+>   - la frase dei test di `security.md` estesa alla parte 1;
+>   - `mkdocs build` strict, `check-links`, gate 63;
+>   - ruff e black puliti sui 6 file Python, `git diff --check` pulito;
+>   - una riga mia oltre i 120 caratteri, riavvolta dopo la build (solo a capo); la riga 2017 lunga è di H.
+> - **Backlog**: B-43 ✅, B-44 ✅; B-45 e B-46 aperte, dopo la 1.3. CHANGELOG: una riga 🔒 proposta nell'handoff.
+
 ### X-R71 (per X) — il caricamento manuale dei prezzi, tutto o niente; più le due note di H su B-36/B-37 (2026-10-17, 14:58-15:52) — ✅ 🧊 FROZEN (checkpoint delle 15:52)
 
 > **Assegnazione** (coordinatore, 14:58, dalla sezione di X): «a manual price upload (`POST /assets/prices` →
