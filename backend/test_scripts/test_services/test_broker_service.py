@@ -60,7 +60,7 @@ from backend.app.services.portfolio_service import compute_wac_iterative
 from backend.app.services.transactions import auto_cost, transaction_service
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
-from backend.test_scripts.test_services._tx_test_helpers import create_bulk
+from backend.test_scripts.test_services._tx_test_helpers import create_bulk, expanded_raw_decimals, raw_decimals, spy_on_execute_batch
 
 # ============================================================================
 # PYTEST FIXTURES
@@ -253,6 +253,68 @@ class TestCreateBulkInitialBalances:
 
         # Only EUR should create a deposit
         assert response.results[0].deposits_created == 1
+
+
+# ============================================================================
+# 4.2b R13-SEC7-3 — AN INITIAL BALANCE REACHES THE BATCH IN ITS SHORT FORM
+# ============================================================================
+#
+# E's R13-SEC7, finding 3 (MEDIUM 8/10). ``create_bulk`` builds each deposit's raw row with ``format(amount, "f")`` — the
+# expanded form — before ``execute_batch``, whose checks would refuse it: an initial balance of ``1E+999999999`` EUR
+# writes a billion digits on the event loop. The cure's contract (a): the raw row hands the batch the value's short
+# form, ``str(v)``, never the expanded one; the batch refuses the deposit and nothing is written.
+#
+# The large balance is built with ``model_construct()``: past the cure's boundary bound (``Currency.validate_amount``,
+# ``adjusted()`` within [-100, 100]) it can no longer be built normally, and the service must not expand it even if one
+# got through (defence in depth). 1E+5000000: 5 MB once expanded, so the red stays fast and cannot exhaust memory.
+# The batch, given the short form, refuses it where the bound refuses any Currency: at its lenient parse, as the
+# ``c-cash-amount--1E+1000000`` case of ``test_transaction_decimal_places.py`` (the brief's ``integerDigitsExceeded``
+# ``{max: 15}`` cannot reach a value the parse refuses). 1E+100, inside the bound, is built normally and still past
+# the integer digits: there the batch answers ``integerDigitsExceeded`` ``{max: 15}``. Expanded, it is 101 characters.
+
+#: (how the balance is built, its amount, the refusal of the batch on create 0 as (code, field, params), the word its
+#: English error must hold or None).
+SHORT_FORM_BALANCES = [
+    pytest.param("model_construct", Decimal("1E+5000000"), ("value_error", "cash.amount", None), "exponent", id="1E+5000000-past-the-boundary-bound"),
+    pytest.param("validated", Decimal("1E+100"), ("integerDigitsExceeded", "cash.amount", {"max": 15}), None, id="1E+100-inside-the-bound-past-the-integer-digits"),
+]
+
+
+class TestCreateBulkInitialBalanceShortForm:
+    """R13-SEC7-3: ``create_bulk`` hands ``execute_batch`` an initial balance in its short form."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("built", "amount", "refusal", "error_word"), SHORT_FORM_BALANCES)
+    async def test_an_initial_balance_reaches_the_batch_in_its_short_form_and_is_refused(self, session, test_user, monkeypatch, built, amount, refusal, error_word):
+        """Red today: the deposit's raw ``cash.amount`` is ``format(amount, "f")`` — 5 000 001 characters for 1E+5000000,
+        101 for 1E+100 — and the spy, which never hands an expanded value on, reports it.
+
+        Contract: the create answers; ``execute_batch`` is called once, the deposit's raw amount shorter than
+        ``RAW_DECIMAL_MAX_CHARS`` and equal to the balance; the batch refuses the deposit on create 0 with ``refusal``,
+        not committed; no deposit is created, and no row is written on the broker.
+        """
+        balance = Currency.model_construct(code="EUR", amount=amount) if built == "model_construct" else Currency(code="EUR", amount=amount)
+        name = f"R13-SEC7-3 short form {uuid4().hex}"
+        calls = spy_on_execute_batch(monkeypatch)
+
+        try:
+            response = await BrokerService(session).create_bulk([BRCreateItem.model_construct(name=name, initial_balances=[balance])], user_id=test_user.id)
+        except Exception as exc:  # noqa: BLE001 — any exception is a defect: POST /brokers would answer 500
+            pytest.fail(f"R13-SEC7-3: create_bulk with an initial balance of {amount} EUR raised {exc!r}")
+
+        assert len(calls) == 1, f"R13-SEC7-3: create_bulk must hand the deposit of {amount} EUR to execute_batch once; it called it {len(calls)} times"
+        expanded = expanded_raw_decimals(calls[0])
+        assert expanded == [], f"R13-SEC7-3: the deposit of {amount} EUR reached execute_batch expanded (index, path, length, head): {expanded}; the raw row must carry the short form, str(v)"
+        sent = {(index, path): Decimal(raw) for index, path, raw in raw_decimals(calls[0].creates_raw)}
+        assert sent == {(0, "cash.amount"): amount}, f"R13-SEC7-3: the deposit's raw amount must be the balance itself, in its short form; the batch received {sent}"
+        batch = calls[0].response
+        refusals = [(issue.operation, issue.index, issue.ref_id, issue.code, issue.field, issue.params) for issue in batch.issues]
+        assert refusals == [("create", 0, None, *refusal)] and batch.committed is False, f"R13-SEC7-3: the batch must refuse the deposit of {amount} EUR on its row with {refusal}; it answered committed={batch.committed}, issues {refusals}"
+        if error_word is not None:
+            assert error_word in batch.issues[0].error.lower(), f"R13-SEC7-3: the refusal's English error must name the {error_word}; it reads {batch.issues[0].error!r}"
+        assert [result.deposits_created for result in response.results] == [0], f"R13-SEC7-3: no deposit may be created; the create answered {response.results}"
+        written = (await session.execute(select(Transaction.id).join(Broker, Broker.id == Transaction.broker_id).where(Broker.name == name))).scalars().all()
+        assert written == [], f"R13-SEC7-3: the deposit was refused, yet the broker holds the rows {written}"
 
 
 # ============================================================================

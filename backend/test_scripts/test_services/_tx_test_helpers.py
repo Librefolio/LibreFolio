@@ -6,11 +6,76 @@ service-level tests.
 
 from __future__ import annotations
 
+import inspect
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import List, Optional
 
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationIssue
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
 from backend.app.services.transactions.transaction_service import TransactionService
+
+# =============================================================================
+# R13-SEC7-3 — A SPY ON WHAT A SERVICE HANDS THE BATCH
+# =============================================================================
+
+#: A raw decimal at least this long reached the batch expanded (``format(v, "f")``): the short form (``str(v)``) of
+#: every value the R13-SEC7-3 tests send is a dozen characters.
+RAW_DECIMAL_MAX_CHARS = 64
+#: The decimal fields of a raw create, as paths into its dict.
+RAW_DECIMAL_PATHS = (("quantity",), ("cash", "amount"), ("cost_basis_override", "amount"))
+
+
+@dataclass
+class BatchCall:
+    """One call of ``TransactionService.execute_batch`` the spy saw: the raw creates it received, and the real batch's
+    response when the spy handed them on (None when it did not)."""
+
+    creates_raw: list
+    response: Optional[TXBatchResponse] = None
+
+
+def raw_decimals(creates_raw: list) -> list[tuple[int, str, str]]:
+    """Every decimal value of the raw creates as ``(create index, dotted path, the value as a string)``."""
+    found: list[tuple[int, str, str]] = []
+    for index, raw in enumerate(creates_raw):
+        for path in RAW_DECIMAL_PATHS:
+            value = raw
+            for key in path:
+                value = value.get(key) if isinstance(value, dict) else None
+            if value is not None:
+                found.append((index, ".".join(path), value if isinstance(value, str) else str(value)))
+    return found
+
+
+def expanded_raw_decimals(call: BatchCall) -> list[tuple[int, str, int, str]]:
+    """The raw decimals of ``call`` at least ``RAW_DECIMAL_MAX_CHARS`` long, as ``(index, path, length, first 16
+    characters)``: what a failure message may print, never the value itself."""
+    return [(index, path, len(raw), raw[:16]) for index, path, raw in raw_decimals(call.creates_raw) if len(raw) >= RAW_DECIMAL_MAX_CHARS]
+
+
+def spy_on_execute_batch(monkeypatch) -> list[BatchCall]:
+    """Replace ``TransactionService.execute_batch`` with a spy for the rest of the test; the list of its calls.
+
+    Each call records its ``creates_raw``. When every raw decimal is short the real batch runs, and its response is
+    recorded; an expanded value is never handed on — the red is the expansion itself, not what the batch would make of
+    megabytes — and the spy answers a refusal of its own instead.
+    """
+    original = TransactionService.execute_batch
+    signature = inspect.signature(original)
+    calls: list[BatchCall] = []
+
+    async def spy(self, *args, **kwargs):
+        arguments = signature.bind(self, *args, **kwargs).arguments
+        call = BatchCall(creates_raw=list(arguments.get("creates_raw") or []))
+        calls.append(call)
+        if expanded_raw_decimals(call):
+            return TXBatchResponse(committed=False, issues=[TXValidationIssue(operation="create", index=-1, error="R13-SEC7-3 spy: an expanded value reached execute_batch, not handed on")], results=[], success_count=0)
+        call.response = await original(self, *args, **kwargs)
+        return call.response
+
+    monkeypatch.setattr(TransactionService, "execute_batch", spy)
+    return calls
 
 
 async def create_bulk(

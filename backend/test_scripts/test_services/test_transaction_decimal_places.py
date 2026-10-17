@@ -63,6 +63,28 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
    N63's 15) reads back -123456789012.345000, column by column and through the service (``get_by_ids``), and the control
    totals (``compute_control_totals``: what a backup records and a restore checks) give its broker's EUR line as
    -123456789012.345. What reads well today keeps its form: -100 EUR reads -100.000000.
+9. R13-SEC7-3 (E's R13-SEC7, 17/10; night decision N74): the date of a transaction is checked at write,
+   ``1900-01-01 <= date <= today + 1 year`` (today from ``today_date()``, UTC; one year on, 29 February falling back to
+   28 February). A new batch stage next to ``check_decimal_limits`` covers the creates (``TXCreateItem.date``), the
+   updates (``TXUpdateItem.date``, when given) and the promotes (``resolved_fields["date"]``, an ISO string): out of
+   range, the row gets ``dateOutOfRange`` on ``field="date"``, ``params={"min": "1900-01-01", "max": <ISO of today + 1
+   year>}``, and the batch stops right after the access check, as for the integer digits: not committed, nothing
+   written, no exception (a row of 0001-01-01 made the replay walk every day since year one; one of 9999-12-31 made it
+   overflow). ``TXValidationCode.DATE_OUT_OF_RANGE = "dateOutOfRange"``, listed by ``GET /transactions/types``. And the
+   bound R13-SEC7-3 puts on every ``Currency`` amount at the boundary (``adjusted()`` within [-100, 100]) reaches the
+   batch's own parse: a cash amount past it is refused by ``_parse_lenient`` (``value_error`` on ``cash.amount``), before
+   any limit of rule 6 is read. So does a promote's resolved cost basis that ``Currency`` refuses — past the bound, or no
+   number at all: it is the one issue of its promote, ``value_error`` on ``cost_basis_override.amount``, no params, and
+   the batch stops; no ``ValidationError`` leaves the batch.
+10. H-41 (same lot, R13-SEC7-3): the fields a promote resolves are typed like a create's. ``TXPromoteBatchItem
+    .resolved_fields`` becomes the ``StrictModel`` ``TXPromoteResolvedFields``: ``description`` a text of at most 500
+    characters, ``tags`` through ``validate_tags_list`` (a text split on its commas, a list's items as texts), ``date`` a
+    date (an explicit null refused), ``cost_basis_override`` a ``Currency``, no other key (``extra_forbidden``). A key left
+    out leaves the rows alone; an explicit null clears ``description``, ``tags`` and ``cost_basis_override``, as before. A
+    refusal is an issue of the batch's lenient parse on the promote — pydantic's type as the code, ``field`` the merged
+    field's own name without ``resolved_fields.`` (``description``, ``tags``, ``date``, ``cost_basis_override``,
+    ``cost_basis_override.code``, an unknown key's name), no params — and that promote is not applied: not committed,
+    nothing saved, nothing raised.
 
 Reds — fail today, pass once the contract holds:
 
@@ -92,8 +114,12 @@ Reds — fail today, pass once the contract holds:
   nothing written; an update of a quantity to 1E+60 too (today the 16 digits, the -1E+15 EUR, the 13-digit cost and the
   update pass unrefused, and the creates of 1E+60 and 1E+400 make ``validate_cost_basis`` raise as it reloads the row: a
   500). On an ordinary broker (no overdraft, no shorting), through ``/validate`` and ``/commit``: a BUY of 1E+1000000
-  units and one of -1E+1000000 EUR get ``integerDigitsExceeded`` ``{"max": 15}`` on their field and raise nothing
-  (today ``decimal.Overflow`` in ``decimal_limit_issue``'s ``normalize``: a 500); a BUY of 400 ones keeps
+  units gets ``integerDigitsExceeded`` ``{"max": 15}`` on its quantity and raises nothing (before W-B58,
+  ``decimal.Overflow`` in ``decimal_limit_issue``'s ``normalize``: a 500); one of -1E+1000000 EUR — the case
+  ``c-cash-amount--1E+1000000``, re-pinned by R13-SEC7-3 (rule 9): its cash amount is a ``Currency``, bounded at the
+  boundary — is refused by the batch's lenient parse instead, ``value_error`` on ``cash.amount``, no params, an English
+  error naming the exponent, and gets no limit issue (red until the bound: it still reaches ``check_decimal_limits``
+  and gets ``integerDigitsExceeded``), raising nothing, not committed, nothing saved; a BUY of 400 ones keeps
   ``significantDigitsExceeded`` ``{"max": 15}`` on its quantity and gets no issue without a code (today the row goes on
   as a float inf, and ``validate_cost_basis`` raises ``TypeError`` reloading it, before the balance replay could add its
   raw «Balance validation error»); nothing is saved;
@@ -106,6 +132,25 @@ Reds — fail today, pass once the contract holds:
 - ``TestACashAmountReadsBackExactly`` (rule 8, W-B60): today the BUY's cash amount reads back -123456789012.345001, and
   the control totals give -123456789012.345001: the double's noise;
 - ``TestTheCodesAreListed``: ``TXValidationCode.INTEGER_DIGITS_EXCEEDED``, and ``validation_codes`` lists it.
+- ``TestTheDateIsCheckedAtWrite`` (rule 9, R13-SEC7-3): a create dated 1899-12-31, 0001-01-01, today + 1 year + 1 day
+  or 9999-12-31 (on ``/validate`` and ``/commit``), an update moving a stored row to 1899-12-31, a promote resolving the
+  date 1899-12-31 — each refused on its own row with exactly ``dateOutOfRange`` and its ``{"min", "max"}``, the batch
+  stopped before applying anything (no result), nothing written, no exception (today they commit, or the replay refuses
+  them for another reason: a codeless «Balance validation error» on 9999-12-31, a short position on 1899-12-31);
+- ``TestAPromotedCostBasisCurrencyRefuses`` (rule 9): a promote (index 1, behind a valid one) resolving a cost basis of
+  1E+101, 1E+5000000, 0E-999999999 or «abc» EUR, on ``/validate`` and ``/commit``, gets exactly one issue,
+  ``value_error`` on ``cost_basis_override.amount``, no params, its English error naming the exponent (the text of «abc»
+  not pinned); nothing else, not committed, the four rows unchanged, nothing raised (today 1E+101 and 1E+5000000 get
+  ``integerDigitsExceeded`` ``{"max": 12}``, the zero commits, «abc» raises ``ValidationError`` out of the batch);
+- ``TestTheResolvedFieldsAreTyped`` (rule 10, H-41): a promote (index 1, behind a valid one) resolving a description of
+  123, ``inf``, ["a"] or 501 characters, tags of 123 or ``{"a": 1}``, the date «not-a-date», «2026-02-30» or an explicit
+  null, a cost basis «12» or without its code, or the unknown key ``quantity``, on ``/validate`` and ``/commit``, gets
+  exactly one issue, ``("promote", 1, <pydantic's type>, <the merged field>, None)``; the pair still reads as the list
+  builds it; nothing else, not committed, the four rows unchanged, nothing raised (today a number or ``inf`` as the
+  description commits and the pair's read fails with ``string_type``, a malformed date or tags raise out of the batch,
+  ``{"a": 1}`` commits the tag «a», the unknown key is ignored; the two cost bases already get their issue since
+  R13-SEC7-3). Tags «a, b» are stored «a,b» on both rows (today «a,,, ,b»: ``tags_to_csv`` joins a text's characters);
+- ``TestTheCodesAreListed``: ``TXValidationCode.DATE_OUT_OF_RANGE``, and ``validation_codes`` lists ``dateOutOfRange``.
 
 Guards — green today, and the cure must keep them green:
 
@@ -128,6 +173,15 @@ Guards — green today, and the cure must keep them green:
   receiving leg holds it exactly;
 - ``TestACashAmountReadsBackExactly`` (rule 8): cash amounts of -100 and -1234.5 EUR read back -100.000000 and
   -1234.500000, column by column and through the service, as ``Numeric(18, 6)`` reads them today.
+- ``TestTheDateIsCheckedAtWrite`` (rule 9): a create dated 1900-01-01, today + 1 year, or an ordinary day commits and
+  keeps its date; an update moving a stored row to 1900-01-01 commits.
+- ``TestAPromotedCostBasisCurrencyRefuses`` (rule 9): a resolved cost basis of 1E+100 EUR, inside the bound, keeps W-B58's
+  ``integerDigitsExceeded`` ``{"max": 12}`` on ``cost_basis_override``, nothing else, on ``/validate`` and ``/commit``.
+- ``TestTheResolvedFieldsAreTyped`` (rule 10): accepted on both endpoints, and committed on the second pair by
+  ``/commit`` — a description of 500 characters and the tags ["a", "b"] on both rows (stored «a,b»), a date inside N74 on
+  both rows, a cost basis of 12.5 EUR on the receiving leg only (decision 47), ``{"tags": ["a"]}`` without touching the
+  descriptions, ``{}`` changing nothing; an explicit null clears the description and the tags on both rows; an explicit
+  null cost basis clears the receiving leg's, which the TRANSFER then requires (``costBasisRequired`` on promote 1).
 
 Derived — read from the contract's general rule, not in the brief's list; drop them if the rule was meant narrower: a
 quantity over both limits gets ``decimalPlacesExceeded`` alone (the "otherwise"); a cash amount past 15 significant
@@ -160,6 +214,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -169,13 +224,14 @@ from backend.app.schemas.assets.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
+from backend.app.schemas.transactions.transactions import TXQueryParams
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.financial_math.ledger_totals import compute_control_totals
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.services.transactions.transaction_service import TransactionService
-from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.datetime_utils import today_date, utcnow
 
 EUR = "EUR"
 USD = "USD"
@@ -909,12 +965,14 @@ INTEGER_CREATE_REFUSALS = [
     pytest.param({"tx_type": "ADJUSTMENT", "quantity": "1", "cost": "1000000000000"}, [(INTEGER_DIGITS_EXCEEDED, "cost_basis_override", COST_INTEGER_MAX)], id="adjustment-in-cost-basis-13-integer-digits"),
 ]
 
-# A value of a million digits, or of 400, on an ordinary broker: the subject's fields, and the limit issue its row gets
-# as (code, field, params). The coordinator's (a) and (c); (b) has its own test.
+# A value of a million digits on an ordinary broker: the subject's fields, and the limit issue its row gets as
+# (code, field, params). The coordinator's (a); (b) has its own test, and so has (c) since R13-SEC7-3 — a cash amount is
+# a Currency, refused at the boundary before any limit is read (``test_a_cash_amount_of_a_million_digits_is_refused_at_the_boundary_without_raising``).
 MILLION_DIGIT_REFUSALS = [
     pytest.param({"quantity": "1E+1000000", "cash": "-10"}, (INTEGER_DIGITS_EXCEEDED, "quantity", QUANTITY_INTEGER_MAX), id="a-quantity-1E+1000000"),
-    pytest.param({"quantity": "1", "cash": "-1E+1000000"}, (INTEGER_DIGITS_EXCEEDED, "cash.amount", CASH_INTEGER_MAX), id="c-cash-amount--1E+1000000"),
 ]
+#: (c) since R13-SEC7-3: a BUY of 1 unit for -1E+1000000 EUR, whose cash amount the Currency's bound refuses at the parse.
+MILLION_DIGIT_CASH = {"quantity": "1", "cash": "-1E+1000000"}
 FOUR_HUNDRED_ONES = "1" * 400
 
 
@@ -1005,10 +1063,11 @@ class TestTooManyIntegerDigitsAreRefused:
         """Red today: ``decimal.Overflow`` in ``decimal_limit_issue``'s ``normalize`` (a context of 60 digits, ``Emax``
         999999): the endpoint answers 500.
 
-        Contract (the coordinator's (a) and (c), on an ordinary broker — no overdraft, no shorting — so nothing but the
-        digits can refuse the row): no exception; the subject's row, create 1, gets ``integerDigitsExceeded``
-        ``{"max": 15}`` (decision N63) on its field (``quantity`` for a BUY of 1E+1000000 units, ``cash.amount`` for one
-        of -1E+1000000 EUR), the only limit issue of the batch; not committed; nothing saved.
+        Contract (the coordinator's (a), on an ordinary broker — no overdraft, no shorting — so nothing but the digits
+        can refuse the row): no exception; the subject's row, create 1, gets ``integerDigitsExceeded`` ``{"max": 15}``
+        (decision N63) on its field (``quantity`` for a BUY of 1E+1000000 units), the only limit issue of the batch; not
+        committed; nothing saved. The coordinator's (c), a cash amount of -1E+1000000 EUR, has its own test since
+        R13-SEC7-3: ``test_a_cash_amount_of_a_million_digits_is_refused_at_the_boundary_without_raising``.
         """
         broker_id, deposit_id = await _ordinary_broker(world)
         code, field, params = refusal
@@ -1021,6 +1080,35 @@ class TestTooManyIntegerDigitsAreRefused:
         assert deposit_id in await _stored(world, [deposit_id]), f"scaffold: the read-back no longer sees the deposit id={deposit_id}, written before the batch, so finding no row of the batch would prove nothing"
         written = await _batch_rows(world)
         assert written == [], f"R13-SEC2: /{endpoint} refused the batch, yet the database holds its rows {written}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    async def test_a_cash_amount_of_a_million_digits_is_refused_at_the_boundary_without_raising(self, world, endpoint):
+        """The coordinator's (c), formerly the case ``c-cash-amount--1E+1000000`` of
+        ``test_a_value_of_a_million_digits_is_refused_without_raising``: re-pinned by R13-SEC7-3, a contract change.
+
+        Red until the bound: the cash amount reaches ``check_decimal_limits``, which answers ``integerDigitsExceeded``
+        ``{"max": 15}`` on ``cash.amount`` (W-B58's contract for this case).
+
+        Contract: a cash amount is a ``Currency``, whose amount's exponent is bounded (``adjusted()`` within [-100, 100]),
+        so the row fails the batch's lenient parse (``_parse_lenient``) and never reaches ``check_decimal_limits``: on
+        create 1, exactly one issue, ``value_error`` on ``cash.amount``, ``params`` None, an English error naming the
+        exponent; no limit issue in the batch. The case's purpose is unchanged: on an ordinary broker (no overdraft, no
+        shorting), through ``/validate`` and ``/commit``, no exception, not committed, nothing saved.
+        """
+        broker_id, deposit_id = await _ordinary_broker(world)
+
+        response = await _run_never_raising(world, f"a BUY of {MILLION_DIGIT_CASH['quantity']} unit for {MILLION_DIGIT_CASH['cash']} EUR on an ordinary broker", creates=_million_digit_batch(world, broker_id, MILLION_DIGIT_CASH), endpoint=endpoint)
+
+        on_its_row = [issue for issue in response.issues if (issue.operation, issue.index) == ("create", 1)]
+        refusal = [(issue.ref_id, issue.code, issue.field, issue.params) for issue in on_its_row]
+        assert refusal == [(None, "value_error", "cash.amount", None)], f"R13-SEC7-3, /{endpoint}: -1E+1000000 EUR must be refused by the batch's lenient parse, exactly value_error on cash.amount, no params; committed={response.committed}, issues: {_render(response.issues)}"
+        assert "exponent" in (on_its_row[0].error or "").lower(), f"R13-SEC7-3, /{endpoint}: the parse refusal's English error must name the exponent; it reads {on_its_row[0].error!r}"
+        assert _decimal_issues(response) == [], f"R13-SEC7-3, /{endpoint}: the row is refused before check_decimal_limits, so the batch holds no limit issue: {_render(response.issues)}"
+        assert response.committed is False, f"R13-SEC7-3: /{endpoint} refused the batch, yet answered committed"
+        assert deposit_id in await _stored(world, [deposit_id]), f"scaffold: the read-back no longer sees the deposit id={deposit_id}, written before the batch, so finding no row of the batch would prove nothing"
+        written = await _batch_rows(world)
+        assert written == [], f"R13-SEC7-3: /{endpoint} refused the batch, yet the database holds its rows {written}"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("endpoint", ENDPOINTS)
@@ -1148,6 +1236,282 @@ class TestAPromotedCostBasisIsChecked:
         state = await _pair_state(world, [giving_id, receiving_id])
         expected = {giving_id: (TransactionType.TRANSFER, receiving_id, None, None), receiving_id: (TransactionType.TRANSFER, giving_id, Decimal("0.000003457312"), EUR)}
         assert state == expected, f"The promoted pair reads back {state}: expected {expected}"
+
+
+# A promote's resolved cost basis that ``Currency`` refuses (R13-SEC7-3, rule 9), and whether its English error must name
+# the exponent: past the bound (``adjusted()`` outside [-100, 100]) — just past it, far past it, a zero whose exponent is
+# -999999999 (a zero's ``adjusted()`` is its exponent) — and no number at all, whose text is not pinned.
+PROMOTED_COSTS_CURRENCY_REFUSES = [
+    pytest.param("1E+101", True, id="1E+101"),
+    pytest.param("1E+5000000", True, id="1E+5000000"),
+    pytest.param("0E-999999999", True, id="0E-999999999"),
+    pytest.param("abc", False, id="abc"),
+]
+
+
+async def _two_promotes_resolving(world: World, amount: str | None = None, *, resolved_fields: dict | None = None) -> tuple[list[int], list[dict]]:
+    """``TestAPromotedCostBasisIsChecked``'s ground: two stored pairs, and their promotes, the second (index 1) resolving
+    ``resolved_fields`` — by default a cost basis of ``amount`` EUR. The four ids (giving, receiving, giving, receiving),
+    and the promotes."""
+    if resolved_fields is None:
+        resolved_fields = {"cost_basis_override": {"code": EUR, "amount": amount}}
+    await _seed_position(world, TransactionType.BUY, "2", amount="-200")
+    first = await _promotable_pair(world)
+    second = await _promotable_pair(world)
+    promotes = [{"id_a": first[0], "id_b": first[1]}, {"id_a": second[0], "id_b": second[1], "resolved_fields": resolved_fields}]
+    return [*first, *second], promotes
+
+
+class TestAPromotedCostBasisCurrencyRefuses:
+    """R13-SEC7-3 (rule 9): a resolved cost basis that ``Currency`` refuses is an issue of its promote, and the batch stops.
+
+    ``_promote_cost_amount`` reads ``resolved_fields.cost_basis_override`` through ``Currency.model_validate`` and answers
+    None when it is refused, so nothing checks the value; ``_apply_promote_cost_basis`` (``batch_creates.py``) validates it
+    again, unguarded, and its ``ValidationError`` leaves the batch: a 500. Today that is the fate of «abc». Once
+    ``Currency`` bounds the exponent it would be the fate of every value past the bound, which today get W-B58's
+    ``integerDigitsExceeded`` ``{"max": 12}`` (1E+101, 1E+5000000) or commit (a zero of exponent -999999999).
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize(("amount", "names_the_exponent"), PROMOTED_COSTS_CURRENCY_REFUSES)
+    async def test_a_resolved_cost_basis_currency_refuses_is_the_one_issue_of_its_promote(self, world, amount, names_the_exponent, endpoint):
+        """Red today: 1E+101 and 1E+5000000 get ``integerDigitsExceeded`` ``{"max": 12}`` on ``cost_basis_override``; the
+        zero of exponent -999999999 commits; «abc» raises ``ValidationError`` out of the batch.
+
+        Contract: exactly one issue, on ``operation="promote"``, index 1: ``value_error`` on ``cost_basis_override.amount``,
+        ``params`` None, its English error naming the exponent (for «abc» the text is not pinned); no limit issue, nothing
+        else; not committed; the four rows as they were stored; nothing raises.
+        """
+        ids, promotes = await _two_promotes_resolving(world, amount)
+        before = await _pair_state(world, ids)
+
+        response = await _run_never_raising(world, f"a promote resolving a cost basis of {amount} EUR", promotes=promotes, endpoint=endpoint)
+
+        issues = [(issue.operation, issue.index, issue.code, issue.field, issue.params) for issue in response.issues]
+        expected = [("promote", 1, "value_error", "cost_basis_override.amount", None)]
+        assert issues == expected, f"R13-SEC7-3, /{endpoint}: a resolved cost basis of {amount} EUR, which Currency refuses, must be the one issue of its promote, {expected}; committed={response.committed}, issues: {_render(response.issues)}"
+        if names_the_exponent:
+            assert "exponent" in (response.issues[0].error or "").lower(), f"R13-SEC7-3, /{endpoint}: the refusal of {amount} EUR must name the exponent in its English error; it reads {response.issues[0].error!r}"
+        assert response.committed is False, f"R13-SEC7-3: /{endpoint} refused the batch, yet answered committed"
+        after = await _pair_state(world, ids)
+        assert after == before, f"R13-SEC7-3: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    async def test_guard_a_resolved_cost_basis_at_the_bound_keeps_the_integer_digit_refusal(self, world, endpoint):
+        """Guard: green today and after. 1E+100 is inside the bound (``adjusted()`` 100), so ``Currency`` keeps it and W-B58's
+        check refuses it on its index, ``integerDigitsExceeded`` ``{"max": 12}`` on ``cost_basis_override``, nothing else;
+        not committed; the four rows as they were stored; nothing raises."""
+        ids, promotes = await _two_promotes_resolving(world, "1E+100")
+        before = await _pair_state(world, ids)
+
+        response = await _run_never_raising(world, "a promote resolving a cost basis of 1E+100 EUR", promotes=promotes, endpoint=endpoint)
+
+        expected = [("promote", 1, INTEGER_DIGITS_EXCEEDED, "cost_basis_override", COST_INTEGER_MAX)]
+        assert _limit_issues_without_ref(response) == expected, f"R13-SEC7-3, /{endpoint}: a resolved cost basis of 1E+100 EUR, inside the bound, must keep W-B58's refusal {expected}; committed={response.committed}, issues: {_render(response.issues)}"
+        assert _other_issues(response) == [], f"R13-SEC7-3, /{endpoint}: only the limit may refuse this batch: {_render(_other_issues(response))}"
+        assert response.committed is False, f"R13-SEC7-3: /{endpoint} refused the batch, yet answered committed"
+        after = await _pair_state(world, ids)
+        assert after == before, f"R13-SEC7-3: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+
+# ============================================================================
+# RED AND GUARDS — RULE 10 (H-41): A PROMOTE'S RESOLVED FIELDS ARE TYPED
+# ============================================================================
+
+# A promote's resolved fields the typed model refuses, and the issue its batch answers on the promote: pydantic's type, and
+# the merged field's own name, without ``resolved_fields.``. A value of the wrong kind (a JSON ``Infinity`` arrives as a
+# float), a text past 500 characters, tags that are neither a list nor a text, a date that is none or an explicit null, a
+# cost basis that is no currency, a key the model does not know.
+RESOLVED_FIELDS_REFUSED = [
+    pytest.param({"description": 123}, "string_type", "description", id="description-123"),
+    pytest.param({"description": float("inf")}, "string_type", "description", id="description-inf"),
+    pytest.param({"description": ["a"]}, "string_type", "description", id="description-list"),
+    pytest.param({"description": "x" * 501}, "string_too_long", "description", id="description-501-characters"),
+    pytest.param({"tags": 123}, "value_error", "tags", id="tags-123"),
+    pytest.param({"tags": {"a": 1}}, "value_error", "tags", id="tags-object"),
+    pytest.param({"date": "not-a-date"}, "date_from_datetime_parsing", "date", id="date-not-a-date"),
+    pytest.param({"date": "2026-02-30"}, "date_from_datetime_parsing", "date", id="date-2026-02-30"),
+    pytest.param({"date": None}, "value_error", "date", id="date-explicit-null"),
+    pytest.param({"cost_basis_override": "12"}, "model_type", "cost_basis_override", id="cost-basis-not-an-object"),
+    pytest.param({"cost_basis_override": {"amount": "1"}}, "missing", "cost_basis_override.code", id="cost-basis-without-code"),
+    pytest.param({"quantity": "5"}, "extra_forbidden", "quantity", id="unknown-key-quantity"),
+]
+
+# A promote's resolved fields the typed model keeps, and what ``/commit`` stores on the second pair: its merged fields
+# (``description``, the ``tags`` CSV, ``date``) on both rows, and the (cost, currency) of its receiving leg.
+RESOLVED_FIELDS_KEPT = [
+    pytest.param({"description": "d" * 500}, {"description": "d" * 500}, None, id="description-500-characters"),
+    pytest.param({"tags": ["a", "b"]}, {"tags": "a,b"}, None, id="tags-list"),
+    pytest.param({"date": DAY.isoformat()}, {"date": DAY}, None, id="date-inside-N74"),
+    pytest.param({"cost_basis_override": {"code": EUR, "amount": "12.5"}}, None, (Decimal("12.5"), EUR), id="cost-basis-on-the-receiving-leg-only"),
+    pytest.param({"description": None}, {"description": None}, None, id="description-explicit-null-clears-it"),
+    pytest.param({"tags": ["a"]}, {"tags": "a"}, None, id="tags-alone-leave-the-descriptions"),
+    pytest.param({}, None, None, id="empty-changes-nothing"),
+]
+# Where each merged field sits in ``_merged_fields``.
+MERGED_FIELD_POSITIONS = {"description": 0, "tags": 1, "date": 2}
+
+
+async def _merged_fields(world: World, ids) -> dict[int, tuple]:
+    """What a promote's resolved fields change on the rows ``ids``, as the database holds them: (description, tags, date)."""
+    statement = select(Transaction.id, Transaction.description, Transaction.tags, Transaction.date).where(Transaction.id.in_(list(ids)))
+    return {row.id: (row.description, row.tags, row.date) for row in await world.session.execute(statement)}
+
+
+async def _four_rows(world: World, ids) -> tuple[dict, dict]:
+    """The four rows of ``_two_promotes_resolving`` as the database holds them: ``_pair_state`` and ``_merged_fields``."""
+    return await _pair_state(world, ids), await _merged_fields(world, ids)
+
+
+def _promoted(before: tuple[dict, dict], ids: list[int], *, merged: dict | None = None, receiving_cost: tuple | None = None) -> tuple[dict, dict]:
+    """``before`` once both promotes committed: each pair a TRANSFER linked both ways, the giving leg without a cost basis
+    (decision 47), the receiving leg with its own — ``receiving_cost`` on the second's when given — and the second pair's
+    merged fields, on both rows, updated with ``merged``."""
+    pairs, fields = before
+    promoted_pairs = {}
+    for giving, receiving in ((ids[0], ids[1]), (ids[2], ids[3])):
+        promoted_pairs[giving] = (TransactionType.TRANSFER, receiving, None, None)
+        cost = receiving_cost if receiving == ids[3] and receiving_cost is not None else pairs[receiving][2:]
+        promoted_pairs[receiving] = (TransactionType.TRANSFER, giving, *cost)
+    promoted_fields = dict(fields)
+    for row_id in ids[2:]:
+        values = list(fields[row_id])
+        for key, value in (merged or {}).items():
+            values[MERGED_FIELD_POSITIONS[key]] = value
+        promoted_fields[row_id] = tuple(values)
+    return promoted_pairs, promoted_fields
+
+
+async def _read_as_the_list_does(world: World, ids: list[int]) -> tuple[str | None, list[int]]:
+    """The rows ``ids`` read as ``GET /transactions`` builds them — ``TransactionService.query``, each row through
+    ``TXReadItem.from_db_model`` — in the session that ran the batch: (None, the ids read) when they read, otherwise (the
+    refusal, which the endpoint answers with a 500, [])."""
+    try:
+        items = await TransactionService(world.session).query(TXQueryParams(ids=ids))
+    except ValidationError as exc:
+        return "; ".join(f"{'.'.join(str(part) for part in error['loc'])}: {error['type']} ({error['msg']})" for error in exc.errors()), []
+    return None, [item.id for item in items]
+
+
+def _shown(resolved_fields: dict) -> str:
+    """``resolved_fields`` for a message: a long text by its length."""
+    shown = {key: f"<{len(value)} characters>" if isinstance(value, str) and len(value) > 40 else value for key, value in resolved_fields.items()}
+    return f"resolved_fields {shown}"
+
+
+async def _tag(world: World, ids, tags: str) -> None:
+    """Store ``tags`` on the rows ``ids``, through their ORM objects: the session and the database then agree on them."""
+    for row_id in ids:
+        row = await world.session.get(Transaction, row_id)
+        row.tags = tags
+    await world.session.flush()
+
+
+async def _assert_accepted(world: World, ids: list[int], promotes: list[dict], endpoint: str, story: str, *, merged: dict | None = None, receiving_cost: tuple | None = None) -> None:
+    """The batch of ``promotes`` is accepted: no issue, nothing raised; ``/validate`` writes nothing, ``/commit`` commits
+    both pairs as ``_promoted`` reads them (``merged``, ``receiving_cost``)."""
+    before = await _four_rows(world, ids)
+
+    response = await _run_never_raising(world, story, promotes=promotes, endpoint=endpoint)
+
+    assert response.issues == [], f"H-41, /{endpoint}: {story} must be accepted; issues: {_render(response.issues)}"
+    assert response.committed is (endpoint == "commit"), f"H-41: /{endpoint} accepted {story}, yet answered committed={response.committed}"
+    expected = _promoted(before, ids, merged=merged, receiving_cost=receiving_cost) if endpoint == "commit" else before
+    after = await _four_rows(world, ids)
+    assert after == expected, f"H-41, /{endpoint}: after {story} the four rows read {after}; expected {expected}"
+
+
+class TestTheResolvedFieldsAreTyped:
+    """Rule 10 (H-41): the fields a promote resolves are typed like a create's.
+
+    ``TXPromoteBatchItem.resolved_fields`` is a ``Dict[str, Any]`` that ``batch_creates._apply_promote_resolved_fields``
+    applies as it is. A number in ``description`` reaches the Text column, and the list's read of the row
+    (``TXReadItem.description: Optional[str]``) is a 500; a malformed ``date`` or ``tags`` raises out of the batch, a 500;
+    an unknown key is ignored. It becomes the ``StrictModel`` ``TXPromoteResolvedFields`` — ``description`` a text of at
+    most 500 characters, ``tags`` through ``validate_tags_list``, ``date`` a date (an explicit null refused),
+    ``cost_basis_override`` a ``Currency``, no other key. A refusal is an issue of the batch's lenient parse on the promote,
+    pydantic's type, ``field`` the merged field's own name, no params; that promote is not applied, nothing is saved.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize(("resolved_fields", "code", "field"), RESOLVED_FIELDS_REFUSED)
+    async def test_a_resolved_field_the_model_refuses_is_the_one_issue_of_its_promote(self, world, resolved_fields, code, field, endpoint):
+        """Red today: a description of 123 or ``inf`` commits, and the pair no longer reads (``string_type``); a list
+        description, tags of 123 and the three dates raise out of the batch; 501 characters, tags ``{"a": 1}`` (stored
+        «a») and the unknown key commit. The cost basis cases already get their issue from ``check_decimal_limits``
+        (R13-SEC7-3), which reads the resolved cost basis through ``Currency``.
+
+        Contract: exactly one issue, ``("promote", 1, code, field, None)``; the pair still reads as the list builds it;
+        not committed; the four rows as they were stored; nothing raises.
+        """
+        ids, promotes = await _two_promotes_resolving(world, resolved_fields=resolved_fields)
+        before = await _four_rows(world, ids)
+        story = f"a promote resolving {_shown(resolved_fields)}"
+
+        response = await _run_never_raising(world, story, promotes=promotes, endpoint=endpoint)
+
+        refusal, read_ids = await _read_as_the_list_does(world, ids[2:])
+        assert refusal is None, f"H-41, /{endpoint}: after {story} (committed={response.committed}), the pair no longer reads as GET /transactions builds it, in the batch's session: {refusal}"
+        assert read_ids == ids[2:], f"scaffold: the list's read answered the rows {read_ids}, not the pair {ids[2:]}: its reading proves nothing"
+        issues = [(issue.operation, issue.index, issue.code, issue.field, issue.params) for issue in response.issues]
+        expected = [("promote", 1, code, field, None)]
+        assert issues == expected, f"H-41, /{endpoint}: {story} must be refused at the batch's parse with exactly {expected}; committed={response.committed}, issues: {_render(response.issues)}"
+        assert response.committed is False, f"H-41: /{endpoint} refused the batch, yet answered committed"
+        after = await _four_rows(world, ids)
+        assert after == before, f"H-41: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    async def test_a_tags_text_is_stored_as_its_csv_on_both_rows(self, world, endpoint):
+        """Red today on ``/commit``: ``tags_to_csv`` joins the characters of a text, so «a, b» is stored «a,,, ,b» (the
+        list's read splits it back to ["a", "b"], which hides it). Contract: a text goes through ``validate_tags_list`` as
+        on a create, and both rows store «a,b»; ``/validate`` accepts it and writes nothing."""
+        ids, promotes = await _two_promotes_resolving(world, resolved_fields={"tags": "a, b"})
+
+        await _assert_accepted(world, ids, promotes, endpoint, "a promote resolving the tags «a, b»", merged={"tags": "a,b"})
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize(("resolved_fields", "merged", "receiving_cost"), RESOLVED_FIELDS_KEPT)
+    async def test_guard_resolved_fields_the_model_keeps_are_applied(self, world, resolved_fields, merged, receiving_cost, endpoint):
+        """Guard: green today and after. Accepted; ``/commit`` stores the merged fields on both rows of the second pair, a
+        cost basis on its receiving leg only (decision 47); a key left out leaves the rows alone, an explicit null clears
+        it; ``{}`` changes nothing."""
+        ids, promotes = await _two_promotes_resolving(world, resolved_fields=resolved_fields)
+
+        await _assert_accepted(world, ids, promotes, endpoint, f"a promote resolving {_shown(resolved_fields)}", merged=merged, receiving_cost=receiving_cost)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    async def test_guard_an_explicit_null_clears_the_tags_of_both_rows(self, world, endpoint):
+        """Guard: green today and after. The second pair stored with the tags «old,tags»; ``{"tags": null}`` clears them on
+        both rows."""
+        ids, promotes = await _two_promotes_resolving(world, resolved_fields={"tags": None})
+        await _tag(world, ids[2:], "old,tags")
+
+        await _assert_accepted(world, ids, promotes, endpoint, "a promote resolving an explicit null tags", merged={"tags": None})
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    async def test_guard_an_explicit_null_clears_the_cost_basis_which_the_transfer_then_requires(self, world, endpoint):
+        """Guard: green today and after. ``{"cost_basis_override": null}`` clears the receiving leg's cost basis, and the
+        TRANSFER the promote makes requires one there: ``costBasisRequired`` on promote 1, ``ref_id`` that leg, nothing
+        else; not committed; the four rows as they were stored. A null read as «left out» would keep the 100 EUR and
+        commit."""
+        ids, promotes = await _two_promotes_resolving(world, resolved_fields={"cost_basis_override": None})
+        before = await _four_rows(world, ids)
+
+        response = await _run_never_raising(world, "a promote resolving an explicit null cost basis", promotes=promotes, endpoint=endpoint)
+
+        issues = [(issue.operation, issue.index, issue.ref_id, issue.code, issue.field, issue.params) for issue in response.issues]
+        expected = [("promote", 1, ids[3], TXValidationCode.COST_BASIS_REQUIRED.value, "cost_basis_override", {"type": "TRANSFER"})]
+        assert issues == expected, f"H-41, /{endpoint}: an explicit null cost basis clears the receiving leg's, which the TRANSFER requires: expected {expected}; committed={response.committed}, issues: {_render(response.issues)}"
+        assert response.committed is False, f"H-41: /{endpoint} refused the batch, yet answered committed"
+        after = await _four_rows(world, ids)
+        assert after == before, f"H-41: the batch was refused, yet the stored rows changed: before {before}, after {after}"
 
 
 # ============================================================================
@@ -1516,6 +1880,174 @@ class TestBrimParseDoesNotRefuse:
 
 
 # ============================================================================
+# RED AND GUARDS — RULE 9 (R13-SEC7-3, NIGHT DECISION N74): THE DATE AT WRITE
+# ============================================================================
+
+# Compared as a string: TXValidationCode has no member for it yet, and a red must fail when it runs, not when it is
+# collected.
+DATE_OUT_OF_RANGE = "dateOutOfRange"
+DATE_MIN = date(1900, 1, 1)
+
+# The dates a row may not carry: the day before 1900-01-01, the first day of the calendar (today's replay then walks every
+# day since year one), the day after today + 1 year (resolved when the test runs), the last day of the calendar (today's
+# replay overflows, adding a day to it).
+DATES_OUT_OF_RANGE = [
+    pytest.param("1899-12-31", id="1899-12-31"),
+    pytest.param("0001-01-01", id="0001-01-01"),
+    pytest.param("max+1", id="today-plus-one-year-plus-one-day"),
+    pytest.param("9999-12-31", id="9999-12-31"),
+]
+# The dates a create keeps: both ends of the range (the latest resolved when the test runs), and an ordinary day.
+DATES_WITHIN_RANGE = [
+    pytest.param("1900-01-01", id="1900-01-01-the-first-day"),
+    pytest.param("max", id="today-plus-one-year-the-last-day"),
+    pytest.param(DAY.isoformat(), id="an-ordinary-day"),
+]
+
+
+def _a_year_after(day: date) -> date:
+    """``day`` one year later; 29 February falls back to 28 February (N74)."""
+    try:
+        return day.replace(year=day.year + 1)
+    except ValueError:
+        return day.replace(year=day.year + 1, day=28)
+
+
+def _resolve_day(day: str) -> str:
+    """The ISO date a parameter names: ``max`` is today + 1 year, ``max+1`` the day after, any other an ISO date."""
+    latest = _a_year_after(today_date())
+    return {"max": latest.isoformat(), "max+1": (latest + timedelta(days=1)).isoformat()}.get(day, day)
+
+
+def _dated_deposit(world: World, broker_id: int, day: str) -> dict:
+    """A DEPOSIT of 10 EUR on ``broker_id`` dated ``day``, as the app sends it, with the test's batch description."""
+    return {"broker_id": broker_id, "type": "DEPOSIT", "date": day, "cash": {"code": EUR, "amount": "10"}, "description": world.batch_description}
+
+
+async def _run_dated(world: World, story: str, **batch) -> TXBatchResponse:
+    """``_run_as_the_endpoint(world, **batch)``; an exception fails the test and names it: the endpoint would answer 500."""
+    try:
+        return await _run_as_the_endpoint(world, **batch)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"R13-SEC7-3: {story}: execute_batch raised {exc!r}, so /transactions/{batch.get('endpoint', 'commit')} answers 500 instead of a refusal")
+
+
+def _assert_refused_on_its_date(response: TXBatchResponse, today_before: date, row: tuple, story: str, *, with_ref_id: bool = True) -> None:
+    """The batch answers exactly one issue, ``dateOutOfRange`` on ``field="date"`` of ``row`` (operation, index, ref_id),
+    ``params`` ``{"min": "1900-01-01", "max": <today + 1 year>}`` — today read before or after the batch, so that a UTC
+    midnight falling during it cannot fail the test — then nothing: not committed, no result (the batch stopped right after
+    the access check). ``with_ref_id=False`` leaves the ref_id out (a promote's: which row it names is not the subject)."""
+    maxima = sorted({_a_year_after(today_before).isoformat(), _a_year_after(today_date()).isoformat()})
+    operation, index, ref_id = row
+    accepted = [(operation, index, ref_id if with_ref_id else None, DATE_OUT_OF_RANGE, "date", {"min": DATE_MIN.isoformat(), "max": latest}) for latest in maxima]
+    issues = [(issue.operation, issue.index, issue.ref_id if with_ref_id else None, issue.code, issue.field, issue.params) for issue in response.issues]
+    assert len(issues) == 1 and issues[0] in accepted, f"R13-SEC7-3: {story} must be refused on its own row with exactly {accepted[-1]}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+    assert response.committed is False, f"R13-SEC7-3: {story}: the batch was refused, yet answered committed"
+    assert response.results == [], f"R13-SEC7-3: {story}: the batch must stop right after the access check, before applying any row; it reports {[(result.operation, result.index, result.status) for result in response.results]}"
+
+
+async def _dates(world: World, ids) -> dict[int, tuple]:
+    """The date and description of the rows ``ids``, as the database holds them, by id."""
+    statement = select(Transaction.id, Transaction.date, Transaction.description).where(Transaction.id.in_(list(ids)))
+    return {row.id: (row.date, row.description) for row in await world.session.execute(statement)}
+
+
+class TestTheDateIsCheckedAtWrite:
+    """Rule 9 (R13-SEC7-3, N74): a row's date lies within ``1900-01-01 .. today + 1 year`` (``today_date()``, UTC).
+
+    Today nothing checks it: a create, an update or a promote out of range commits — unless the balance replay refuses
+    it for another reason, a short position or, on 9999-12-31, a codeless «Balance validation error» (it overflows adding
+    a day). The subject row sits alone on ``main`` (the row before it on ``other``), so today's replay of 0001-01-01 is
+    one day long.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize("day", DATES_OUT_OF_RANGE)
+    async def test_a_create_dated_out_of_range_is_refused_on_its_row(self, world, day, endpoint):
+        """Red today: the DEPOSIT commits (on 9999-12-31 the replay refuses it without a code).
+
+        Contract: a valid DEPOSIT on ``other``, then the subject on ``main`` dated ``day``: exactly ``dateOutOfRange`` on
+        create 1, ``field="date"``, ``{"min", "max"}``; not committed, no result, nothing written, no exception.
+        """
+        barrier_id = await _insert(world, broker_id=world.other_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
+        today_before = today_date()
+        sent = _resolve_day(day)
+
+        response = await _run_dated(world, f"a DEPOSIT dated {sent}", creates=[_dated_deposit(world, world.other_id, DAY.isoformat()), _dated_deposit(world, world.main_id, sent)], endpoint=endpoint)
+
+        _assert_refused_on_its_date(response, today_before, ("create", 1, None), f"/{endpoint}: a DEPOSIT dated {sent}")
+        assert barrier_id in await _stored(world, [barrier_id]), f"scaffold: the read-back no longer sees row id={barrier_id}, written before the batch, so finding no row of the batch would prove nothing"
+        written = await _batch_rows(world)
+        assert written == [], f"R13-SEC7-3: /{endpoint} refused the batch, yet the database holds its rows {written}"
+
+    @pytest.mark.asyncio
+    async def test_an_update_moving_a_row_out_of_range_is_refused_on_its_row(self, world):
+        """Red today: the update commits.
+
+        Contract: behind a valid notes edit (update 0), the update of a stored DEPOSIT to 1899-12-31 (update 1) gets
+        exactly ``dateOutOfRange`` on its row, ``ref_id`` its id; not committed, no result; both rows read back as stored.
+        """
+        neighbour_id = await _insert(world, broker_id=world.other_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
+        subject_id = await _insert(world, broker_id=world.main_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
+        before = await _dates(world, [neighbour_id, subject_id])
+        today_before = today_date()
+
+        response = await _run_dated(world, f"the update of DEPOSIT id={subject_id} to 1899-12-31", updates=[{"id": neighbour_id, "description": f"{world.marker} neighbour edited"}, {"id": subject_id, "date": "1899-12-31"}])
+
+        _assert_refused_on_its_date(response, today_before, ("update", 1, subject_id), f"the update of DEPOSIT id={subject_id} to 1899-12-31")
+        after = await _dates(world, [neighbour_id, subject_id])
+        assert after == before, f"R13-SEC7-3: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    async def test_a_promote_resolving_a_date_out_of_range_is_refused_on_its_index(self, world):
+        """Red today: the promote applies 1899-12-31 to both legs, and the replay refuses the batch for the giving leg's
+        short position (``balanceAssetNegative``), not for its date.
+
+        Contract: behind a valid promote (index 0), the promote resolving the date 1899-12-31 (index 1) gets exactly
+        ``dateOutOfRange`` on its index; not committed, no result; all four rows as they were stored, dates included.
+        """
+        await _seed_position(world, TransactionType.BUY, "2", amount="-200")
+        first = await _promotable_pair(world)
+        second = await _promotable_pair(world)
+        ids = [*first, *second]
+        before = (await _pair_state(world, ids), await _dates(world, ids))
+        today_before = today_date()
+        promotes = [{"id_a": first[0], "id_b": first[1]}, {"id_a": second[0], "id_b": second[1], "resolved_fields": {"date": "1899-12-31"}}]
+
+        response = await _run_dated(world, "a promote resolving the date 1899-12-31", promotes=promotes)
+
+        _assert_refused_on_its_date(response, today_before, ("promote", 1, None), "a promote resolving the date 1899-12-31", with_ref_id=False)
+        after = (await _pair_state(world, ids), await _dates(world, ids))
+        assert after == before, f"R13-SEC7-3: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("day", DATES_WITHIN_RANGE)
+    async def test_guard_a_create_dated_within_the_range_commits_and_keeps_its_date(self, world, day):
+        """Guard: green today and after. A DEPOSIT dated 1900-01-01, today + 1 year or an ordinary day commits, and reads
+        back its date."""
+        sent = _resolve_day(day)
+
+        response = await _run_dated(world, f"a DEPOSIT dated {sent}", creates=[_dated_deposit(world, world.main_id, sent)])
+
+        assert response.committed is True and response.issues == [], f"R13-SEC7-3: a DEPOSIT dated {sent} is within 1900-01-01 .. today + 1 year, so it must commit; it was refused: {_render(response.issues)}"
+        created_id = _created_ids(response)[0]
+        stored = (await _dates(world, [created_id]))[created_id][0]
+        assert stored.isoformat() == sent, f"R13-SEC7-3: the DEPOSIT id={created_id} was sent dated {sent}; it reads back {stored}"
+
+    @pytest.mark.asyncio
+    async def test_guard_an_update_moving_a_row_to_1900_01_01_commits(self, world):
+        """Guard: green today and after. The first day of the range is a day a row may move to."""
+        subject_id = await _insert(world, broker_id=world.main_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
+
+        response = await _run_dated(world, f"the update of DEPOSIT id={subject_id} to 1900-01-01", updates=[{"id": subject_id, "date": DATE_MIN.isoformat()}])
+
+        assert response.committed is True and response.issues == [], f"R13-SEC7-3: 1900-01-01 is within the range, so the update must commit; it was refused: {_render(response.issues)}"
+        stored = (await _dates(world, [subject_id]))[subject_id][0]
+        assert stored == DATE_MIN, f"R13-SEC7-3: DEPOSIT id={subject_id} was moved to {DATE_MIN}; it reads back {stored}"
+
+
+# ============================================================================
 # RED — THE CODES ARE LISTED
 # ============================================================================
 
@@ -1554,3 +2086,18 @@ class TestTheCodesAreListed:
         listed = {info.code for info in response.validation_codes}
 
         assert INTEGER_DIGITS_EXCEEDED in listed, f"R13-SEC2: GET /transactions/types does not list {INTEGER_DIGITS_EXCEEDED!r} in validation_codes"
+
+    def test_validation_code_has_the_date_out_of_range_code(self):
+        """Red today: ``TXValidationCode`` has no ``DATE_OUT_OF_RANGE`` (rule 9, R13-SEC7-3): the app could not map the
+        refusal to ``transactions.errors.dateOutOfRange``."""
+        member = getattr(TXValidationCode, "DATE_OUT_OF_RANGE", None)
+
+        assert member is not None and member.value == DATE_OUT_OF_RANGE, f"R13-SEC7-3: TXValidationCode.DATE_OUT_OF_RANGE is {member!r}: expected the value {DATE_OUT_OF_RANGE!r}"
+
+    def test_transaction_types_lists_the_date_out_of_range_code(self):
+        """Red today: ``GET /transactions/types`` does not list ``dateOutOfRange`` in ``validation_codes``."""
+        response = TXTypesResponse(transaction_types=list(TX_TYPE_METADATA.values()), event_types=EVENT_TYPE_METADATA)
+
+        listed = {info.code for info in response.validation_codes}
+
+        assert DATE_OUT_OF_RANGE in listed, f"R13-SEC7-3: GET /transactions/types does not list {DATE_OUT_OF_RANGE!r} in validation_codes"
