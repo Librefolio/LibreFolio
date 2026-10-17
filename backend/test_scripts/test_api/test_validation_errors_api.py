@@ -23,18 +23,30 @@ does not change: FastAPI's ``ValidationError`` keeps ``input`` as an optional pr
    body that is not an object stands in for the missing field (its one error also carries the whole body).
 3. **Guards**, green today and after: a plain 422 keeps ``loc``, ``msg``, ``type`` and ``ctx`` exactly as before (what
    the frontend reads); the OpenAPI schema keeps FastAPI's ``ValidationError``.
+4. **Non-finite numbers** (A-35 follow-up, found by workstream X): Python's json reads ``1E+400`` and ``-1E+400`` as
+   infinities and takes ``NaN``, ``Infinity`` and ``-Infinity``, which RFC 8259 does not have. A ``Decimal`` field
+   refuses each (``finite_number``), and FastAPI's default 422 carried the value as the ``input`` that Starlette's
+   renderer (``allow_nan=False``) cannot write: the answer was a 500, on any route with a number in its body. In
+   process, on a plain and on a constrained ``Decimal``: without the install a 500, the renderer's ``ValueError`` (guard:
+   the premise); with it a 422 that a strict JSON parser reads, ``finite_number``, no ``input``. On the lane,
+   ``POST /fx/currencies/convert`` — a conversion, a read, refused before its handler runs — with ``1E+400`` and ``NaN``
+   as the amount: the same 422. Green on arrival: the handler was in when they were written.
 
 Isolation: write-scoped, parallel-safe. The in-process part touches nothing shared. On the lane every request but the
-sign-ins is malformed and refused by FastAPI before any handler runs: it writes nothing and spends no rate limit. The two
-routes that need a session get it from an account the test registers and signs in, deleted at teardown, after a red
-too; every username a request carries is named before the request, so a registration a red would let through is
-deleted as well. No global setting, no shared account, nobody else's password is touched.
+sign-ins is malformed and refused by FastAPI before any handler runs: it writes nothing and spends no rate limit. The
+routes that need a session (change-password, profile, the FX conversion) get it from an account the test registers and
+signs in, deleted at teardown, after a red too; every username a request carries is named before the request, so a
+registration a red would let through is deleted as well. No global setting, no shared account, nobody else's password
+is touched.
 """
 
+import json
+import math
 import uuid
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
-from typing import Annotated, Any
+from decimal import Decimal
+from typing import Annotated, Any, NoReturn
 
 import httpx
 import pytest
@@ -121,9 +133,12 @@ def _the_install() -> Callable[[FastAPI], None]:
     return install_validation_error_handler
 
 
-async def _send(app: FastAPI, method: str, path: str, **request: Any) -> httpx.Response:
-    """One request to ``app`` in process, through httpx's ASGI transport: no server, no database."""
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+async def _send(app: FastAPI, method: str, path: str, *, raise_app_exceptions: bool = True, **request: Any) -> httpx.Response:
+    """One request to ``app`` in process, through httpx's ASGI transport: no server, no database. With
+    ``raise_app_exceptions=False`` an error the app does not turn into an answer comes back as the 500 a client gets
+    (Starlette's ``ServerErrorMiddleware``), as on a server, instead of being raised in the test."""
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=raise_app_exceptions)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
         return await client.request(method, path, **request)
 
 
@@ -281,11 +296,14 @@ class _Lane:
         self.usernames.append(username)
         return username
 
-    async def call(self, method: str, path: str, *, json: Any = None, cookie: str | None = None) -> httpx.Response:
-        """One request from a client of its own: no cookie jar, the session sent explicitly."""
+    async def call(self, method: str, path: str, *, json: Any = None, content: bytes | None = None, cookie: str | None = None) -> httpx.Response:
+        """One request from a client of its own: no cookie jar, the session sent explicitly. ``content`` is a JSON body
+        written by hand, for what no JSON encoder writes (a non-finite number)."""
         headers = {"Cookie": f"{COOKIE}={cookie}"} if cookie else {}
+        if content is not None:
+            headers["Content-Type"] = "application/json"
         async with httpx.AsyncClient() as client:
-            return await client.request(method, f"{API_BASE}{path}", json=json, headers=headers, timeout=TIMEOUT)
+            return await client.request(method, f"{API_BASE}{path}", json=json, content=content, headers=headers, timeout=TIMEOUT)
 
     async def signed_in(self) -> str:
         """An account of this test, registered on the lane and signed in: its session token. Its own password is never sent malformed."""
@@ -495,3 +513,147 @@ async def test_the_openapi_schema_keeps_fastapis_validation_error(lane: _Lane):
     login_422 = openapi["paths"][f"{API_V1_PREFIX}/auth/login"]["post"]["responses"]["422"]
     assert login_422["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/HTTPValidationError"}, login_422
     print_success("ValidationError keeps input and ctx optional; a route's 422 is HTTPValidationError")
+
+
+# =============================================================================
+# 4. A-35 FOLLOW-UP: NON-FINITE NUMBERS (found by workstream X)
+# =============================================================================
+
+#: What Python's json reads beyond RFC 8259: a number past a float's range (an infinity), and the three constants of
+#: ``parse_constant``. A ``Decimal`` field refuses each with ``finite_number``.
+_NON_FINITE = ("1E+400", "-1E+400", "NaN", "Infinity", "-Infinity")
+#: Where a body written by hand puts the literal: ``json.dumps`` writes the document, the literal replaces this string.
+_LITERAL = "<the literal>"
+_JSON_CONTENT = {"Content-Type": "application/json"}
+
+
+class _Amount(BaseModel):
+    """A body with a plain ``Decimal``."""
+
+    amount: Decimal
+
+
+class _ConstrainedAmount(BaseModel):
+    """A body with a constrained ``Decimal``: digits and decimal places, as a money field has."""
+
+    amount: Decimal = Field(..., max_digits=12, decimal_places=4)
+
+
+#: The tiny app's routes with a ``Decimal`` body, by the kind of field.
+_AMOUNT_ROUTES = {"decimal": "/amount", "constrained-decimal": "/constrained-amount"}
+
+
+def _amount_app(install: Callable[[FastAPI], None] | None = None) -> FastAPI:
+    """The routes of ``_AMOUNT_ROUTES``, each answering the amount it read, with ``install`` applied first if given."""
+    app = FastAPI()
+    if install is not None:
+        install(app)
+
+    @app.post(_AMOUNT_ROUTES["decimal"])
+    async def amount(body: _Amount) -> dict[str, str]:
+        return {"amount": str(body.amount)}
+
+    @app.post(_AMOUNT_ROUTES["constrained-decimal"])
+    async def constrained_amount(body: _ConstrainedAmount) -> dict[str, str]:
+        return {"amount": str(body.amount)}
+
+    return app
+
+
+def _by_hand(document: Any, literal: str) -> bytes:
+    """``document`` as a JSON body, ``_LITERAL`` in it replaced by ``literal`` written bare: no JSON encoder writes a
+    non-finite number, httpx's ``json=`` included."""
+    text = json.dumps(document)
+    assert text.count(json.dumps(_LITERAL)) == 1, f"the document must hold {_LITERAL!r} once: {text}"
+    return text.replace(json.dumps(_LITERAL), literal).encode()
+
+
+def _refuse_constant(name: str) -> NoReturn:
+    raise ValueError(f"{name} is not JSON: RFC 8259 has no non-finite number")
+
+
+def _finite_float(literal: str) -> float:
+    value = float(literal)
+    if not math.isfinite(value):
+        raise ValueError(f"{literal} is past a float's range: not a finite number")
+    return value
+
+
+def _strict_json(response: httpx.Response) -> Any:
+    """The body of ``response`` read as RFC 8259 JSON: ``NaN``, ``Infinity``, ``-Infinity`` or a number past a float's
+    range fails the test."""
+    try:
+        return json.loads(response.text, parse_constant=_refuse_constant, parse_float=_finite_float)
+    except ValueError as error:
+        pytest.fail(f"the answer is not strict JSON ({error}): {response.text[:300]}")
+
+
+def _assert_a_finite_number_refusal(response: httpx.Response, loc: list[Any]) -> None:
+    """``response`` is a 422 a client can read: JSON a strict parser accepts, ``{"detail": [...]}`` with one error —
+    ``finite_number`` at ``loc`` — that keeps ``loc``, ``msg`` and ``type``, has no ``input``, and nothing but ``ctx``
+    besides."""
+    assert response.status_code == 422, f"expected a 422 a client can read, got {response.status_code} {response.headers.get('content-type')}: {response.text[:300]}"
+    assert response.headers.get("content-type") == "application/json", f"the 422 must be JSON: {response.headers.get('content-type')}"
+    body = _strict_json(response)
+    assert isinstance(body, dict) and set(body) == {"detail"} and isinstance(body["detail"], list), f"the 422 must be {{'detail': [...]}} and nothing else: {body}"
+    found = [(error.get("type"), error.get("loc")) for error in body["detail"]]
+    assert found == [("finite_number", loc)], f"one error, finite_number at {loc}: got {found}"
+    (error,) = body["detail"]
+    assert "input" not in error, f"the error must not carry the input: {error}"
+    assert set(error) - {"ctx"} == KEPT and isinstance(error["msg"], str) and error["msg"], f"the error keeps loc, msg and type, and nothing but ctx besides: {error}"
+
+
+# A-35 follow-up (non-finite numbers), guard: the premise — green with the handler or without it
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(_AMOUNT_ROUTES))
+@pytest.mark.parametrize("literal", _NON_FINITE)
+async def test_without_the_install_a_non_finite_number_is_a_500(literal: str, kind: str):
+    """The premise (workstream X): the ``Decimal`` field refuses ``literal``, and FastAPI's default 422 carries it as the
+    ``input`` that Starlette's renderer (``allow_nan=False``) cannot write: the client gets a 500, and the error under it
+    — raised to the test when the transport lets it through — is the renderer's ``ValueError``."""
+    print_section(f"A-35 follow-up guard: {literal} in a {kind} field, without the install")
+    request = {"content": _by_hand({"amount": _LITERAL}, literal), "headers": _JSON_CONTENT}
+
+    answered = await _send(_amount_app(), "POST", _AMOUNT_ROUTES[kind], raise_app_exceptions=False, **request)
+
+    assert answered.status_code == 500, f"Premise: FastAPI's default 422 cannot be written, the client gets a 500; got {answered.status_code} {answered.text[:300]}"
+    with pytest.raises(ValueError, match="Out of range float values are not JSON compliant"):
+        await _send(_amount_app(), "POST", _AMOUNT_ROUTES[kind], **request)
+    print_success("a 500: the renderer refuses the non-finite input")
+
+
+# A-35 follow-up (non-finite numbers): green on arrival, the handler is in
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", list(_AMOUNT_ROUTES))
+@pytest.mark.parametrize("literal", _NON_FINITE)
+async def test_a_non_finite_number_gets_a_422_a_client_can_read(literal: str, kind: str):
+    """The same request with the install: a 422 a strict JSON parser reads, one error, ``finite_number`` at
+    ``body.amount``, with its ``msg``, no ``input``, no ``ctx`` holding the number."""
+    print_section(f"A-35 follow-up: {literal} in a {kind} field, with the install")
+    install = _the_install()
+
+    answered = await _send(_amount_app(install), "POST", _AMOUNT_ROUTES[kind], raise_app_exceptions=False, content=_by_hand({"amount": _LITERAL}, literal), headers=_JSON_CONTENT)
+
+    _assert_a_finite_number_refusal(answered, ["body", "amount"])
+    print_success("422, finite_number, no input; strict JSON")
+
+
+#: ``POST /fx/currencies/convert`` takes a list of conversions, each amount a ``Decimal`` in a ``Currency``. A
+#: conversion is a read, and euros to euros needs no rate: even run, this one would read nothing.
+_CONVERSION = [{"from_amount": {"code": "EUR", "amount": _LITERAL}, "to": "EUR", "date_range": {"start": "2025-01-02"}}]
+
+
+# A-35 follow-up (non-finite numbers): green on arrival, the handler is in
+@pytest.mark.asyncio
+@pytest.mark.parametrize("literal", ("1E+400", "NaN"))
+async def test_a_non_finite_amount_gets_a_422_a_client_can_read_on_the_lane(lane: _Lane, literal: str):
+    """Through the whole app, signed in as an account of this test: ``POST /fx/currencies/convert`` with ``literal`` as
+    the amount is refused by FastAPI before its handler runs, with a 422 a strict JSON parser reads — one error,
+    ``finite_number`` at ``body.0.from_amount.amount``, no ``input``. Before the handler, the lane answered a 500."""
+    print_section(f"A-35 follow-up on the lane: POST /fx/currencies/convert, the amount {literal}")
+    cookie = await lane.signed_in()
+
+    response = await lane.call("POST", "/fx/currencies/convert", content=_by_hand(_CONVERSION, literal), cookie=cookie)
+
+    _assert_a_finite_number_refusal(response, ["body", 0, "from_amount", "amount"])
+    print_success("422, finite_number, no input; strict JSON")

@@ -598,11 +598,31 @@ def api_validation_errors(verbose: bool = False, test_names: list = None) -> boo
     """Run the API tests of the 422 without the request's input (A-35): no password or token ever comes back."""
     print_section("Validation Errors API Tests")
     print_info("Testing that a 422 drops the input of every error, on the routes that carry a password or a token")
-    print_info("In-process on a small app for the handler; on the lane's server only refusals, and five accounts of its own")
+    print_info("In-process on a small app for the handler; on the lane's server only refusals, and seven accounts of its own")
     print_info("Note: Server will be automatically started and stopped by test")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_validation_errors_api.py", test_names)
     return run_command(cmd, "Validation errors API tests", verbose=verbose)
+
+
+def api_login_throttle(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the API tests of the limit on failed sign-ins (F15) and of GET /security/checks, in-process."""
+    print_section("Login Throttle API Tests")
+    print_info("Testing the 429 TOO_MANY_ATTEMPTS of sign-in, change of password and change of address, and the Security checks")
+    print_info("In-process on private databases, the limit turned on with limiters of its own: never the lane's server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_login_throttle_api.py", test_names)
+    return run_command(cmd, "Login throttle API tests", verbose=verbose)
+
+
+def api_security_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the lane's tests of GET /security/checks: administrators only, the login limit off on the lane."""
+    print_section("Security Checks API Tests")
+    print_info("Testing GET /api/v1/security/checks on the lane's server: 200 admin, 403 member, 401 anonymous")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_security_checks_api.py", test_names)
+    return run_command(cmd, "Security checks API tests", verbose=verbose)
 
 
 def api_registration(verbose: bool = False, test_names: list = None) -> bool:
@@ -1112,7 +1132,24 @@ Tests for REST API endpoints (server auto-started):
         "validation-errors",
         api_validation_errors,
         name="Validation Errors API",
-        desc="A-35: every 422 keeps loc, msg, type and ctx and drops input, so no password or token comes back (login, register, change-password, password-reset, setup, tokens/inspect, profile, email resend); the OpenAPI schema unchanged",
+        desc="A-35: every 422 keeps loc, msg, type and ctx and drops input, so no password or token comes back (login, register, change-password, password-reset, setup, tokens/inspect, profile, email resend); a non-finite number (1E+400, NaN) on a Decimal is a readable 422, not a 500; the OpenAPI schema unchanged",
+    )
+    add_test(
+        api,
+        "login-throttle",
+        api_login_throttle,
+        name="Login Throttle API",
+        desc="F15 (A8a): 429 TOO_MANY_ATTEMPTS with an exact Retry-After before any password check, the same for an unknown identifier; per address; change of password and of address under the account's username; the switch; GET /security/checks admin-only, every check once, no secret in the body",
+        # PURE: in-process apps on private SQLite files under tmp_path, limiters of their own on a fake clock; no lane DB,
+        # no server.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "security-checks",
+        api_security_checks,
+        name="Security Checks API",
+        desc="GET /api/v1/security/checks on the lane: an administrator sees accounts.login_limit as a warning (the lane's server runs with LIBREFOLIO_LOGIN_LIMIT=off) and the platform checks; a member 403, anonymous 401",
     )
     # Write-scoped, no exclusive_because: a waiting administrator exists only in-process on private databases; on the
     # lane's server only refusals that write nothing.
@@ -1159,7 +1196,7 @@ Tests for REST API endpoints (server auto-started):
         "email",
         api_email,
         name="Email Administration API",
-        desc="GET /email/status (admin: off/ready/invalid, three checks, hourly budget, links from LIBREFOLIO_PUBLIC_URL, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); POST /email/links (admin: invite/reset link built from LIBREFOLIO_PUBLIC_URL alone, never the request; 409 email/links/token, 409 an inactive account's reset link, 422 recipient, 429, 502; token never logged); POST /email/password-reset (anonymous, open as shipped since lot E4: same 202 for every identifier, 409 without the problem, 429 per address (an IPv6 client by its /64, a mapped IPv4 as the IPv4)/identifier/budget, the background work emails a live link, makes nothing when the configuration went away, revokes a link it could not send and never raises; a client without an address is limited per identifier only); a public URL no link can start from is invalid on every route; on a blocked instance sending refuses (409 INSTANCE_BLOCKED) and /system/instance offers no email; GET /system/instance email.available/links (public, never the configuration nor the public URL, read off the event loop, optional in the OpenAPI)",
+        desc="GET /email/status (admin: off/ready/invalid, three checks, hourly budget, links from LIBREFOLIO_PUBLIC_URL, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); POST /email/links (admin: invite/reset link built from LIBREFOLIO_PUBLIC_URL alone, never the request; 409 email/links/token, 409 an inactive account's reset link, 422 recipient, 429, 502; token never logged); POST /email/password-reset (anonymous, open as shipped since lot E4: same 202 for every identifier, 409 without the problem, 429 per address (an IPv6 client by its /64, a mapped IPv4 as the IPv4)/identifier/budget, the background work emails a live link, makes nothing when the configuration went away, revokes a link it could not send and never raises; a client without an address is limited per identifier only); a public URL no link can start from is invalid on every route; on a blocked instance sending refuses (409 INSTANCE_BLOCKED) and /system/instance offers no email; GET /system/instance email.available/links (public, never the configuration nor the public URL, read off the event loop, optional in the OpenAPI); forgot password behind a reverse proxy LibreFolio does not trust, on a local address (172.17.0.1, fd00::2; X-Forwarded-For, Forwarded or X-Real-IP), no count per address, while a public client's own forwarding header or a LAN client without one is still counted (E-13, N70)",
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
@@ -1170,7 +1207,7 @@ Tests for REST API endpoints (server auto-started):
         "email-verification",
         api_email_verification,
         name="Email Verification API",
-        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 INVALID_CREDENTIALS (coded: any other 401 is the block's) and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, per recipient mailbox, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
+        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 INVALID_CREDENTIALS (coded: any other 401 is the block's) and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, per recipient mailbox, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs; the resend behind a reverse proxy LibreFolio does not trust, on a local address (172.17.0.1, fd00::2; X-Forwarded-For, Forwarded or X-Real-IP), no count per address, while a public client's own forwarding header or a LAN client without one is still counted (E-13, N70)",
         # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP, public URL,
         # block and user-limit variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
@@ -1181,7 +1218,7 @@ Tests for REST API endpoints (server auto-started):
         "email-verification-hooks",
         api_email_verification_hooks,
         name="Email Verification Hooks API",
-        desc="With require_email_verification on: register 201 verification_required + inactive + the email from LIBREFOLIO_PUBLIC_URL, login 403 EMAIL_NOT_VERIFIED (wrong password the 401 of an unknown account), resend, click, login 200; the first account never waits; an invited one waits and spends its invitation; no email with a link → 409 EMAIL_VERIFICATION_UNAVAILABLE, nothing created, the invitation live; option off as before. A waiting account takes a place while its link is live (GET /users usage, holds_place, a registration refused when full), none once expired; PATCH /users reactivation on a full instance accepted while the link is live, refused once expired, the old link then revoked; PATCH is_active false on a waiting account ends the wait (its links revoked, its place freed, holds_place false); the PATCH answer and GET /users carry holds_place, true while the link is live and false once it expired; past 10 registration emails from one client address the account waits without its email. Settings bulk: off → on 409 without email (nothing saved), 200 with email; on again or off always saved",
+        desc="With require_email_verification on: register 201 verification_required + inactive + the email from LIBREFOLIO_PUBLIC_URL, login 403 EMAIL_NOT_VERIFIED (wrong password the 401 of an unknown account), resend, click, login 200; the first account never waits; an invited one waits and spends its invitation; no email with a link → 409 EMAIL_VERIFICATION_UNAVAILABLE, nothing created, the invitation live; option off as before. A waiting account takes a place while its link is live (GET /users usage, holds_place, a registration refused when full), none once expired; PATCH /users reactivation on a full instance accepted while the link is live, refused once expired, the old link then revoked; PATCH is_active false on a waiting account ends the wait (its links revoked, its place freed, holds_place false); the PATCH answer and GET /users carry holds_place, true while the link is live and false once it expired; past 10 registration emails from one client address the account waits without its email. Settings bulk: off → on 409 without email (nothing saved), 200 with email; on again or off always saved. The registration emails behind a reverse proxy LibreFolio does not trust, on a local address (172.17.0.1, fd00::2; X-Forwarded-For, Forwarded or X-Real-IP), no count per address, while a public client's own forwarding header or a LAN client without one is still counted (E-13, N70)",
         # PURE: the real auth, users, settings and email routers run in-process on a private SQLite file under tmp_path, the
         # option set in that file only, the SMTP, public URL and user-limit variables set with monkeypatch in this process,
         # the limiters private on a fake clock, the fake SMTP server on 127.0.0.1: the lane's backend is never called.
