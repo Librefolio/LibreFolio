@@ -38,6 +38,7 @@ from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk.base import RiskAssetClassification
 from backend.app.services.risk.scenario_catalog import get_loaded_risk_scenario_catalog
 from backend.app.services.series_preparation import prepare_asset_series_set
+from backend.app.utils.datetime_utils import latest_range_end
 
 logger = get_logger(__name__)
 
@@ -154,13 +155,14 @@ async def load_scope_inputs(  # noqa: C901 — scope-variant dispatch + sequenti
         effective_broker_ids = accessible_broker_ids
         report_broker_ids = None
 
-    date_end = request.date_range.end or request.date_range.start
+    # R13-SEC7-1: the report (and the composition date) end by latest_range_end(); a start after that end moves to it
+    date_end = min(request.date_range.end or request.date_range.start, latest_range_end())
     report = await PortfolioService(db).get_report(
         user_id=user_id,
         query=PortfolioReportQuery(
             broker_ids=report_broker_ids,
             date_range=OpenDateRangeModel(
-                start=request.date_range.start,
+                start=min(request.date_range.start, date_end),
                 end=date_end,
             ),
             target_currency=request.target_currency,
