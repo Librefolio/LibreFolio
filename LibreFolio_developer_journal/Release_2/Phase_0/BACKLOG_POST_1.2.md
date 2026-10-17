@@ -5994,6 +5994,18 @@ sulla base `23f6578f3`.
   `database_foreign_objects` prima di ogni altro accesso; uno schema che SQLite non legge dà `database_damaged`. In
   più `trusted_schema=OFF` sulle cinque connessioni di B alla copia. L'`alembic upgrade` girava già in un processo a
   sé, col suo tempo massimo.
+- ✅ **B-29 · Un totale della copia che J non rilegge fa fallire tutto il controllo** — basso (robustezza, solo admin); E
+  (revisione R13-SEC2) tramite il coordinatore, 17/10. In `compare_totals` (`instance_backup/totals.py`)
+  `ControlTotals.from_json(current)` sta fuori dal `try`. Se i dati della copia danno un importo che il lettore di J
+  rifiuta (oltre 60 cifre, J-27), il `ValueError` esce, e il controllo finisce con `stage_failed` invece di dire i
+  totali `unreadable`. Correzione: leggere `current` dentro un `try` che risponde `unreadable`, con un WARNING come per
+  i totali registrati. Dettagli: piano 07, «B-29».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 06:10): `current` si legge dentro un `try`; un documento che J rifiuta dà
+  `unreadable` col WARNING «The control totals of the copy cannot be read: they are not compared», mai un controllo
+  fallito. Test: 5 casi in `test_backup_totals.py`, più uno di staging (un registro con una quantità esatta 1e70).
+  Nota di TA-B sulla gravità: il crollo richiedeva un manifesto riscritto (i totali registrati che J legge accanto a
+  una copia che J non rilegge), perché un backup vero registra la stessa riga, e allora vince `absent`.
 
 ## E · Email (fase 01)
 
