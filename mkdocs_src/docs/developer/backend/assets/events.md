@@ -98,6 +98,11 @@ asset's prices and that assignment's events, first unlinking the transactions th
 incoming adjustments without a cost, the change is refused with a 409 and nothing is deleted
 ([Parametric Provider Change](#parametric-provider-change)).
 
+Removing the asset's provider (**No Provider**) deletes the assignment and, with it, every event it
+generated, whatever the provider; manual events stay. It unlinks nothing: while a transaction is
+linked to one of those events, the removal is refused with a 409 and nothing is deleted
+([Provider Removal](#provider-removal)).
+
 The data editor shows these events read-only: the events of `POST /assets/prices/query` carry
 `is_auto` (`provider_assignment_id IS NOT NULL`). An edit would be overwritten by the next sync.
 The editor can still delete one, through `delete_ids` like a manual event (below), but the
@@ -345,6 +350,89 @@ switch-away confirmation (another provider), and the plain save, where `doSave()
 
 Tests: `backend/test_scripts/test_services/test_provider_wipe_split_guard.py`
 (`./dev.py test services provider-wipe-split-guard`); in the frontend,
+`currencyChangeErrors.test.ts` and `AssetModal.providerLifecycle.test.ts`, in the same folder.
+
+### 🗑️ Provider Removal {: #provider-removal }
+
+`DELETE /api/v1/assets/provider?asset_ids=…` (`remove_providers_bulk()` in
+`api/v1/assets/providers.py`, `bulk_remove_providers()` in `assets/provider_management.py`), which
+the asset form's **No Provider** calls, deletes the assignments of the listed assets in one
+`DELETE`, then commits. `asset_events.provider_assignment_id` is `ON DELETE CASCADE`
+(`db/models.py`), so the events each assignment generated go with it, whatever their type: a
+market provider's dividends and splits, a Scheduled Investment plan's coupons (`INTEREST` events).
+Manual events (`provider_assignment_id IS NULL`) stay, with their links. But
+`transactions.asset_event_id` is `ON DELETE RESTRICT`: until X-R62, as soon as a transaction was
+linked to one of the generated events (a `DIVIDEND` booked on the provider's dividend, the
+`INTEREST` a plan's coupon paid, the `ADJUSTMENT` of a split), the `DELETE` failed with an
+`IntegrityError`, and the route answered HTTP 500 with `detail=str(e)`: the database error's text,
+SQL statement included, shown as is in the asset form's error banner.
+
+Since X-R62, before the request's only write, `_reject_removals_of_linked_events()` follows
+`asset_ids` in order: an asset named twice is read once, at its first position, and an asset
+without an assignment has no generated event to read. For each other asset it reads the events of
+its assignment (joined through `AssetProviderAssignment`) and passes them, as
+`(event_id, date, type)`, to `events_with_linked_transactions()` of `assets/event_links.py`, which
+keeps those at least one transaction is linked to. Manual events are not read: they survive the
+removal. At the first asset with such an event the whole request is refused and nothing of it is
+removed, the assets before the refused one included. The route answers HTTP 409 with
+`detail = {error_code, message, params}`:
+
+- `error_code`: `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`;
+- `params.asset_id` and `params.item_index`: the refused asset and its first position in
+  `asset_ids`, from 0; an asset without an assignment still takes a position;
+- `params.events`: one `{event_id, date, type, transaction_ids, hidden_transactions_count}` per
+  event of that assignment with linked transactions, whatever its type, ordered by date, then id;
+  `type` is the event type's value (`DIVIDEND`, `SPLIT`…), `transaction_ids` lists, sorted, only
+  the transactions the caller can see (a `BrokerUserAccess` row for the transaction's broker), and
+  `hidden_transactions_count` counts the others. The route passes
+  `current_user_id=_current_user.id`; the service called without `current_user_id` names none and
+  counts them all;
+- `message`: the English text, which starts with the code, gives only the totals, how many events
+  and how many transactions, seen and hidden, and asks to unlink them first.
+
+The caller's view is the rule of the wipes' refusals above, which lives in
+`visible_transaction_ids()` of `event_links.py`: `split_guard.py` imports it to name the
+adjustments of its splits.
+
+The check and the `DELETE` are separate statements, so a transaction linked to one of those events
+after the check still makes the `DELETE` fail. `bulk_remove_providers()` then rolls the session
+back, logs a server-side warning and raises `PROVIDER_REMOVAL_CONFLICT`, which the route also
+answers HTTP 409, with empty `params` and a `message` without SQL: the provider could not be
+removed, because a row still refers to the events it generated; nothing was removed. Any other
+error of the service keeps its answer, a 500 with a string `detail`. Without a linked transaction
+the removal runs as before: the assignments and their events are deleted, and every asset of the
+request is answered a success (`deleted_count` 1), one without an assignment included.
+
+The removal and the [parametric provider change](#parametric-provider-change) treat linked
+transactions differently, by decision. New `provider_params` for a parametric provider, or moving
+the asset away from one, unlinks the transactions of the events the wipe deletes
+(`asset_event_id = NULL`) and refuses only while a `SPLIT` among them has linked incoming
+adjustments without a cost. The removal unlinks nothing: it refuses while any transaction is linked
+to an event it would delete, whatever the event's type and whether the transaction has a cost.
+
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`), `saveEdit()`
+removes the provider in step 2, the `providerNoProvider` branch, once step 1 has PATCHed the
+asset's fields. Its `catch` mirrors the assign branch's, just below it (X-R49): a refusal with
+either code is shown inline, in the form's error banner (`formError`, `data-form-error`), one
+sentence in the interface language built by `wipeRefusalMessage()` (`currencyChangeErrors.ts`):
+
+- `PROVIDER_REMOVAL_LINKED_TRANSACTIONS` maps to `assets.modal.providerRemovalLinkedTransactions`,
+  whose values come from `params.events` (the wipes' codes read `params.splits`): the first
+  event's type, named in the interface language through `assetDetail.eventType.<TYPE>` (empty when
+  `type` is not a string), its date, its transactions, the hidden ones among them, and how many
+  more events are linked. The sentence ends asking to unlink those transactions first;
+- `PROVIDER_REMOVAL_CONFLICT` maps to `assets.modal.providerRemovalConflict`, which takes no values
+  and names nothing: the provider was not removed, some data still refers to the events it
+  generated; reload the page and try again.
+
+Then the save stops there: `pendingSaveAssetId` is reset and the banner scrolled into view; no
+toast is shown, and the form stays open on the draft, still set to **No Provider**, so the save can
+be tried again. What step 1 saved stays saved: only the provider is unchanged. Without the `catch`,
+`doSave()` would read the 409 as a duplicate name. Any other error is thrown on and keeps its
+handling (`trySave()`).
+
+Tests: `backend/test_scripts/test_services/test_provider_removal_link_guard.py`
+(`./dev.py test services provider-removal-link-guard`); in the frontend,
 `currencyChangeErrors.test.ts` and `AssetModal.providerLifecycle.test.ts`, in the same folder.
 
 ---
