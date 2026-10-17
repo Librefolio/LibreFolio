@@ -5674,6 +5674,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `frontend/e2e/fx/fx-csv-import.spec.ts:56` l'asserzione dipende dalla parola «error» (testo tradotto). Cura: dopo il
   lotto W1-g di T (~07:30, che tocca quei file: `asset-data-editor.spec.ts:287`, `fx-csv-import.spec.ts:53,56,289`), coi
   `data-testid`/`data-state` che introduce. Dettagli: messaggio del coordinatore, 16/10 06:07.
+  ✅ 16/10 (riconciliato il 17/10): i due spec asseriscono invece di sondare, dev `d6a260c89` (`a59593570`). Restano W-B47 e
+  W-B48. Dettagli: piano 04, sezione W-B43.
 - **W-B44 · `PromoteMergeModal` senza `data-testid` univoci** — minimo, test; W, 16/10 (W-B39, test-author). Con la modale
   aperta `promote-merge-modal` trova due elementi, e il suo «Annulla» non ha `data-testid`: un test della promozione con campi
   diversi non li può prendere in modo stabile (oggi nessuno lo fa). Cura: un `data-testid` per elemento, in
@@ -5710,6 +5712,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   > 0)` che lo fanno passare senza asserire nulla (lo stesso difetto del test 21). Cura: i `data-testid` e gli attributi che
   esistono già, nessun codice di prodotto; tranne il ✕, che chiede un `data-testid` (file dell'area dei colori). Dettagli:
   piano 04, sezione W-B43.
+  ✅ 17/10: i due spec senza selettori per testo né classi (`data-import-confirm` con `data-valid-rows`, `asset-editor-save-btn`/
+  `-cancel-btn`, `tab-badge` con `data-badge`, `data-import-discard-confirm`, `data-import-cancel`), il test 14 asserisce, e i due glifi
+  su `data-testid` nuovi (`asset-detail-editor-close`, `fx-import-swap`, OK del coordinatore). Dettagli: piano 04, «W-B48».
 - **W-B49 · Svuotare il costo nel modulo: il rifiuto arriva solo a «Salva tutto», e tre testi dicono ancora «vuoto = Auto»**
   — minimo, chiarezza; W, 16/10 (W-B30, docs-writer). (1) Ogni modifica passa dalla Bulk, che apre il modulo; il controllo
   dal vivo del modulo su una coppia (`collectDualUpdates` → `diffDualItem`,
@@ -5740,6 +5745,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   giorno (0,00015 e 0,00008 BTC) coincidono sulla quantità, e un import che li ritrova li segna come doppioni probabili
   (deselezionati per default) se anche l'importo coincide a 0,01. Cura: una tolleranza relativa alla scala (o l'uguaglianza,
   ora che le quantità tornano esatte), con un rosso; dopo C-97a. Dettagli: piano 04, sezione C-97.
+  ✅ 17/10 (D-W51-1, coordinatore): uguali arrotondate half-up alla scala della meno precisa (`normalize()`) e mai oltre 0,0001
+  (`_same_quantity`); una quantità salvata illeggibile non è più un `TypeError`. 4 rossi, 7 guardie. Resta il gemello del wizard:
+  W-B81. Dettagli: piano 04, «W-B51».
 - **W-B52 · Svuotare il massimo di un prezzo rifiuta la data** — minimo, dati; W, 16/10 (C-97a, test-author). In
   `bulk_upsert_prices` (`backend/app/services/assets/price_store.py`, ~194–197) il controllo OHLC confronta i valori
   ricevuti, sentinella compresa: con `high = -1` (svuota il massimo), da solo o con `low = -1`, vale `low <= close <= -1`,
@@ -5791,10 +5799,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   promozione controllata, i blocchi dei provider senza eccezioni a metà. Da chiudere prima del rilascio. Cifre intere: 15 per
   quantità e importo (decisione notturna N63 del coordinatore, da rivedere col developer), le altre colonne come dichiarate (12
   prezzi, costo per unità e valore dell'evento; 24 il volume). Dettagli: piano 04, sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato): entrato con W-B59, dev `4e9d1815f` (`94fbd54fd`). Dettagli: piano 04, «W-B58 e W-B59».
 - **W-B59 · Il precaricamento del pool BRIM ferma il server al primo import (W-B53)** — medio, disponibilità; E, 17/10
   (R13-SEC2, nota 12, 9/10, provata). `_get_pool()` imposta il precaricamento anche col prewarm spento: su 3.13 il primo parse
   dopo un avvio blocca il loop per tutto l'import di BRIM (~4 s a riposo, 30–50 s sotto carico), contro N56. Cura: il
   precaricamento solo col prewarm acceso. Dettagli: piano 04, sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato): il pool si precarica solo col prewarm acceso, dev `4e9d1815f` (`e69544f79`). Dettagli: piano 04,
+  «W-B58 e W-B59».
 - **W-B64 · Il Form accetta 12 cifre intere per la quantità, il backend 15 (N63)** — minimo, chiarezza; W, 17/10 (C-97b). Le tre
   quantità del Form (`features/transactions/form/TxFormSingleSection.svelte` ×2, `TxFormPairSection.svelte`) hanno
   `maxIntegerDigits={12}`: una quantità da mille miliardi in su è segnata invalida nel Form, mentre il backend la accetta (N63:
@@ -5861,11 +5872,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `99999999999999.906250`). Gli importi interi (VND, IDR) tornano esatti. Cura: `RealDecimal(18, 6)` (stesso DDL, nessuna
   migrazione), dopo aver controllato le `SUM` in SQL su quelle colonne; rossi prima. Chiude anche metà di W-B63. Dettagli: piano 04,
   sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato): importi e valori degli eventi letti esatti, dev `484c71afb`. Dettagli: piano 04, «W-B60».
 - **W-B61 · I cambi senza limite di grandezza (classe di W-B58)** — medio, dati; W per X, 17/10 (W-B58). Il cambio manuale
   (`api/v1/fx/currencies.py:92` → `services/fx/storage.py:60`) non ha limite: `1E+400` si salva come REAL inf, e il suo inverso
   `1E-400` come 0; dei provider, `truncate_fx_rate` (`db/precision.py`) solleva `InvalidOperation` da `1E+50`. Codice di X (il
   coordinatore lo avvisa). Cura: `decimal_limit_issue` e `storable_value` di W-B58 sulla colonna `FxRate.rate`. Dettagli: piano 04,
   sezione «W-B58 e W-B59».
+  ✅ 17/10 (riconciliato), da X: i cambi che non si salvano rifiutati o saltati, `80f5c65ff`.
 - **W-B62 · `/prices/current` risponde per intero un prezzo enorme del provider** — basso, disponibilità; W, 17/10 (R13-SEC2, nota
   6). Il serializzatore `format(v, "f")` (`backend/app/schemas/common.py:47`) scrive per intero un `1E+50000000`: ~50 MB per
   risposta, che la cache di 2 minuti riserve. Dopo W-B58 il valore non si salva più, ma la risposta lo porta ancora. Cura: la
@@ -5873,6 +5886,7 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (17/10): anche la cache di 2 minuti e il delta del refresh la portano; proposta al confine del provider, mai nel serializzatore.
   **Passata a X** (coordinatore, 17/10 03:4x), con la sua X-R40; i rossi scritti da W gli vanno consegnati. Dettagli: piano 04,
   sezioni «W-B58 e W-B59» e «W-B62 e W-B63».
+  ✅ 17/10 (riconciliato), da X (X-R40): dev `fd6886bb0`. Resta W-B63 (D-W63-1).
 - **W-B63 · Un inf già salvato in una colonna `Numeric` rompe le risposte** — basso, dati; W, 17/10 (W-B58). Importo, valore di
   evento, volume e cambio si rileggono `Decimal('Infinity')` (formato `'%.Nf'`), che il JSON scrive `Infinity`. Solo dati scritti
   prima di W-B58 o a mano. Importo e valore dell'evento li chiude W-B60 (letti `None`, mai più scritti); volume e cambio restano.
@@ -5980,6 +5994,20 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   data e costo base, che `PromoteMergeModal` non offre più dal maggio 2026 (SP-C Step 5): la modale si apre senza campi e il corpo dice
   solo «Confirm promotion». Cura: la divergenza su descrizione e tag soltanto (come «Unisci» nel Bulk), altrimenti la conferma semplice;
   un rosso di componente o E2E prima. Dopo la 1.3. Dettagli: piano 04, «W-B70 (+ W-B77) — cura».
+- **W-B80 · I rifiuti `ledger_unreadable` del gap-fix arrivano in inglese in ogni lingua** — minimo, chiarezza; W, 17/10 (revisione
+  di E-19a). Il 409 del gap-fix (`backend/app/services/brim/brim_gap_fix.py`: le righe illeggibili di W-B74 e, da E-19a, i codici di
+  valuta non ISO, con i codici citati) è una frase inglese che il passo del wizard mostra com'è (`extractErrorMessage` →
+  `GapFixStep.svelte:337`, testo semplice, sicuro): l'utente italiano, francese o spagnolo la legge in inglese, mentre lo stesso caso nel
+  batch è tradotto (`transactions.errors.ledgerUnreadable`). Cura: il 409 con un codice e i parametri (`count`, i codici e il loro ISO),
+  tradotto nel wizard, come C-70 per i rifiuti dei plugin. Dopo la 1.3, salvo spazio. Dettagli: questa voce.
+- **W-B81 · I doppioni del wizard tra file usano la stessa tolleranza fissa di W-B51** — minimo, dati; W, 17/10 (W-B51). Il wizard
+  raggruppa le righe di file diversi e del pool in attesa con `dedupKeysMatch`
+  (`frontend/src/lib/features/transactions/import/importDedup.ts:145-157`): la quantità e il costo per unità a 0,0001
+  (`QUANTITY_TOLERANCE`, `importTypes.ts:105`) su `Number(...)`, e l'identità del gruppo con `toFixed(4)` (`describeDedupKey`). Due
+  acquisti ricorrenti di crypto in due file dello stesso import (o un file e il pool) finiscono nello stesso gruppo, «sicuro» se la
+  descrizione coincide. Cura: la regola di D-W51-1 sui testi decimali esatti (la scala del meno preciso, half-up, mai oltre 0,0001),
+  l'identità senza `toFixed(4)`; rossi Vitest in `importDedup.test.ts`; la pagina `import-wizard.md` («The dedup signature»). Subito dopo
+  W-B51, proposta. Dettagli: piano 04, «W-B51».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di

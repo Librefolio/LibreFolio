@@ -986,3 +986,184 @@ class TestMergedPairDuplicates:
             assert _verdicts(report) == {0: ("possible", [(out_id, TransactionType.CASH_TRANSFER, BRIMDuplicateLevel.POSSIBLE)])}
         finally:
             await _delete_transactions(async_session, [out_id, in_id])
+
+
+# =============================================================================
+# CATEGORY 4c: W-B51 — THE QUANTITY OF A DUPLICATE
+# =============================================================================
+#
+# A saved row stays a duplicate candidate while its quantity matches the incoming one. Until W-B51 that was a fixed
+# tolerance, |a − b| ≤ 0.0001 (QUANTITY_TOLERANCE in detect_tx_duplicates), coarse for crypto: two recurring buys of the
+# same 10 EUR of BTC on one day, 0.00015123 and 0.00015098, are 2.5e-7 apart, so the second comes back as a duplicate of
+# the first — LIKELY when the texts agree, and a likely duplicate starts deselected in the import wizard
+# (importDedup.duplicateStatusAllowsAutoSelect): a real buy is left out.
+#
+# D-W51-1 (coordinator, approved): two quantities match when, rounded half-up to the scale of the less precise of the two,
+# they are equal, AND |a − b| ≤ 0.0001 (the bound of before: never looser). The scale is read on normalize()d values: the
+# column reads a value back padded to 6 decimals (RealDecimal's READ_MIN_SCALE: 0.00015 reads 0.000150, 10 reads
+# 10.000000), and a padding zero is no precision.
+#
+# Each case saves one BUY and offers one BUY of the same broker, day, asset, cash and text: the quantity alone decides, and
+# a match is LIKELY_WITH_ASSET. RED until the cure: two quantities within 0.0001 that differ at their common scale, and a
+# saved quantity that reads None (W-B51 (unreadable quantity)). Every other case is a guard, green before and after.
+
+WB51_CASH = "-10.00"  # one cash on both sides: the quantity alone decides
+WB51_TEXT = "Recurring buy BTC · W-B51"  # one text on both sides: a match is LIKELY_WITH_ASSET
+WB51_BOUND = Decimal("0.0001")  # QUANTITY_TOLERANCE: the whole rule until W-B51, its outer bound after (D-W51-1)
+
+
+def _wb51_buy(broker_id: int, asset_id: int, day: date, quantity: str) -> TXCreateItem:
+    """A parsed BUY of ``quantity`` units for ``WB51_CASH`` EUR, as a plugin hands it to the duplicate check."""
+    return TXCreateItem(broker_id=broker_id, asset_id=asset_id, type=TransactionType.BUY, date=day, quantity=Decimal(quantity), cash=Currency(code="EUR", amount=Decimal(WB51_CASH)), description=WB51_TEXT)
+
+
+async def _wb51_save_buy(session: AsyncSession, broker_id: int, asset_id: int, day: date, quantity: str) -> int:
+    """The same BUY saved, as an earlier import left it; its id."""
+    row = Transaction(broker_id=broker_id, asset_id=asset_id, type=TransactionType.BUY, date=day, quantity=Decimal(quantity), amount=Decimal(WB51_CASH), currency="EUR", description=WB51_TEXT)
+    session.add(row)
+    await session.flush()
+    row_id = row.id  # read before the commit expires the instance
+    await session.commit()
+    return row_id
+
+
+async def _wb51_read_quantity(session: AsyncSession, row_id: int) -> Decimal | None:
+    """The quantity of row ``row_id`` as the duplicate check loads it: through ``RealDecimal``, past the identity map."""
+    from sqlalchemy import select  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    loaded = (await session.execute(select(Transaction).where(Transaction.id == row_id).execution_options(populate_existing=True))).scalar_one()
+    return loaded.quantity
+
+
+async def _wb51_make_quantity_unreadable(session: AsyncSession, row_id: int, literal: str, storage: str) -> None:
+    """W-B74's plant on the quantity of row ``row_id``: the SQLite literal ``literal`` written by raw SQL, as an older version
+    or another tool can leave it. Checks what the case rests on: SQLite keeps it as ``storage``, and the row loads None
+    there (``RealDecimal``, W-B58)."""
+    from sqlalchemy import text  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    await session.execute(text(f"UPDATE transactions SET quantity = {literal} WHERE id = :id"), {"id": row_id})
+    await session.commit()
+    kind = (await session.execute(text("SELECT typeof(quantity) FROM transactions WHERE id = :id"), {"id": row_id})).scalar_one()
+    assert kind == storage, f"setup: row id={row_id} must hold {literal} as {storage} in quantity; typeof = {kind}"
+    read = await _wb51_read_quantity(session, row_id)
+    assert read is None, f"setup: RealDecimal must read the {literal} of id={row_id} as None (W-B58); it reads {read!r}"
+
+
+async def _wb51_verdicts(session: AsyncSession, saved_id: int, reads_back: str, incoming: TXCreateItem, written: str) -> dict:
+    """The duplicate check's verdicts on ``incoming`` alone, once what the case rests on is checked: the saved row
+    ``saved_id`` reads back ``reads_back``, and the incoming BUY keeps ``written`` as written."""
+    read = await _wb51_read_quantity(session, saved_id)
+    assert (str(read), str(incoming.quantity)) == (reads_back, written), f"setup: the saved BUY id={saved_id} must read back {reads_back} and the incoming BUY keep {written}; they hold {read} and {incoming.quantity}"
+    report = await detect_tx_duplicates(transactions=[incoming], broker_id=incoming.broker_id, session=session)
+    return _verdicts(report)
+
+
+def _wb51_before(saved: str, incoming: str) -> str:
+    """What the fixed tolerance alone, the rule until W-B51, makes of the pair: for a failure message."""
+    difference = abs(Decimal(saved) - Decimal(incoming))
+    if difference <= WB51_BOUND:
+        return f"the fixed tolerance alone (the rule until W-B51) keeps the saved BUY a candidate, |a − b| = {difference} ≤ {WB51_BOUND}"
+    return f"the fixed tolerance alone (the rule until W-B51) drops the saved BUY too, |a − b| = {difference} > {WB51_BOUND}"
+
+
+class TestWB51QuantityOfADuplicate:
+    """W-B51: the quantity that keeps a saved BUY a duplicate candidate of an incoming one (D-W51-1)."""
+
+    @pytest_asyncio.fixture
+    async def wb51_asset(self, async_session: AsyncSession) -> int:
+        """A crypto asset of the test's own, for its BUYs; deleted after them."""
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+        asset = Asset(display_name=f"W-B51 Bitcoin {uuid.uuid4().hex}", asset_type=AssetType.CRYPTO, currency="EUR", active=True)
+        async_session.add(asset)
+        await async_session.commit()
+        await async_session.refresh(asset)
+        asset_id = asset.id
+        yield asset_id
+        leftover = await async_session.get(Asset, asset_id)
+        if leftover:
+            await async_session.delete(leftover)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("saved", "reads_back", "incoming", "why"),
+        [
+            # RED until the cure: within 0.0001 of each other, so today a LIKELY duplicate.
+            pytest.param("0.00008", "0.000080", "0.00015", "both have 5 decimals, and 0.00008 ≠ 0.00015", id="apart-at-5-decimals"),
+            pytest.param("0.00015098", "0.00015098", "0.00015123", "two recurring buys of the same 10 EUR: both have 8 decimals, and 0.00015098 ≠ 0.00015123", id="recurring-buys-at-8-decimals"),
+            # Guard, green before and after: 0.0001 stays the outer bound.
+            pytest.param("10", "10.000000", "10.4", "rounded half-up to 0 decimals, the scale of 10, both are 10, but |a − b| = 0.4 > 0.0001", id="integers-10-and-10.4"),
+        ],
+    )
+    async def test_wb51_quantities_apart_are_not_duplicates(self, async_session: AsyncSession, test_broker: int, wb51_asset: int, test_date: date, saved: str, reads_back: str, incoming: str, why: str):
+        """W-B51: a saved BUY whose quantity differs from the incoming one at the scale of the less precise of the two, or
+        by more than 0.0001, is no candidate: the incoming BUY is new (D-W51-1).
+
+        RED until the cure for the two pairs within 0.0001, which the fixed tolerance makes a LIKELY duplicate today. The
+        integers 10 and 10.4 are a guard: equal at their common scale, more than 0.0001 apart.
+        """
+        saved_id = await _wb51_save_buy(async_session, test_broker, wb51_asset, test_date, saved)
+        try:
+            verdicts = await _wb51_verdicts(async_session, saved_id, reads_back, _wb51_buy(test_broker, wb51_asset, test_date, incoming), incoming)
+
+            assert verdicts == {0: ("unique", [])}, f"W-B51: saved {saved} (it reads back {reads_back}) and incoming {incoming}: {why}, so the incoming BUY is new (D-W51-1); {_wb51_before(saved, incoming)}, and the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, [saved_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("saved", "reads_back", "incoming", "why"),
+        [
+            pytest.param("0.000153", "0.000153", "0.00015", "a report rounding to 5 decimals: 0.000153 rounded half-up to 5 decimals is 0.00015, and |a − b| = 0.000003", id="report-rounded"),
+            pytest.param("10", "10.000000", "10", "the same whole quantity: the padding of 10.000000 is no precision", id="integers-10"),
+            pytest.param("0.1234567891", "0.1234567891", "0.1234567891", "the same file imported again: the quantity reads back as written, all 10 decimals", id="identical-reimport"),
+            pytest.param("0.00015", "0.000150", "0.000153", "the column pads 0.00015 to 0.000150, but its scale stays 5 (normalize()): 0.000153 rounded half-up to 5 decimals is 0.00015", id="saved-read-back-padded"),
+            pytest.param("0.000153", "0.000153", "0.000150", "a report writing 0.000150 means 0.00015, scale 5 (normalize()): 0.000153 rounded half-up to 5 decimals is 0.00015", id="incoming-padded"),
+            pytest.param("0.000145", "0.000145", "0.00015", "a tie: 0.000145 rounded half-up to 5 decimals is 0.00015 (half-even would make it 0.00014)", id="half-up-tie"),
+        ],
+    )
+    async def test_wb51_quantities_equal_at_the_coarser_scale_are_duplicates(self, async_session: AsyncSession, test_broker: int, wb51_asset: int, test_date: date, saved: str, reads_back: str, incoming: str, why: str):
+        """W-B51, guards green before and after the cure: two quantities equal once rounded half-up to the scale of the
+        less precise of the two, and within 0.0001 of each other, are the same BUY (D-W51-1), here a LIKELY duplicate.
+
+        Each pins a part of the rule a cure could miss: rounding the more precise side (report-rounded), the integers,
+        the exact re-import, a trailing zero on either side (normalize()), and half-up on a tie.
+        """
+        saved_id = await _wb51_save_buy(async_session, test_broker, wb51_asset, test_date, saved)
+        try:
+            verdicts = await _wb51_verdicts(async_session, saved_id, reads_back, _wb51_buy(test_broker, wb51_asset, test_date, incoming), incoming)
+
+            expected = {0: ("likely", [(saved_id, TransactionType.BUY, BRIMDuplicateLevel.LIKELY_WITH_ASSET)])}
+            assert verdicts == expected, f"W-B51: saved {saved} (it reads back {reads_back}) and incoming {incoming}: {why}, so the incoming BUY is the saved one again (D-W51-1); the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, [saved_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("literal", "storage"), [("'n/a'", "text"), ("9e999", "real")], ids=["text", "inf"])
+    async def test_wb51_an_unreadable_quantity_is_no_candidate(self, async_session: AsyncSession, test_broker: int, wb51_asset: int, test_date: date, literal: str, storage: str):
+        """W-B51 (unreadable quantity): a saved BUY whose quantity reads None — a text, or a REAL +inf, planted in the
+        column: W-B74's case, which ``RealDecimal`` reads as None (W-B58) — is no candidate, and the check does not raise.
+
+        RED until the cure: ``abs(existing.quantity - tx.quantity)`` raises TypeError on it, where the cash side already
+        skips a None. Two BUYs of 0.5 are saved, the first made unreadable. Row 0 (0.5) is the presence barrier: the check
+        reaches the day and still matches the readable BUY, and it alone. Row 1 (0.7) finds the readable BUY 0.2 away and
+        the unreadable one: it is new.
+        """
+        saved_ids: List[int] = []  # whoever writes cleans up: every row saved so far, whatever fails next
+        try:
+            for _ in range(2):
+                saved_ids.append(await _wb51_save_buy(async_session, test_broker, wb51_asset, test_date, "0.5"))
+            unreadable_id, readable_id = saved_ids
+            await _wb51_make_quantity_unreadable(async_session, unreadable_id, literal, storage)
+            transactions = [_wb51_buy(test_broker, wb51_asset, test_date, "0.5"), _wb51_buy(test_broker, wb51_asset, test_date, "0.7")]
+            try:
+                report = await detect_tx_duplicates(transactions=transactions, broker_id=test_broker, session=async_session)
+            except Exception as error:  # the contract: a row that cannot be read is skipped, nothing raises
+                pytest.fail(f"W-B51 (unreadable quantity): the saved BUY id={unreadable_id} holds {literal} ({storage}) in its quantity, which reads None: detect_tx_duplicates must skip it, not raise; today it raises {type(error).__name__}: {error}")
+
+            verdicts = _verdicts(report)
+            expected = {0: ("likely", [(readable_id, TransactionType.BUY, BRIMDuplicateLevel.LIKELY_WITH_ASSET)]), 1: ("unique", [])}
+            assert verdicts == expected, f"W-B51 (unreadable quantity): the BUY id={unreadable_id}, whose quantity reads None, is no candidate, and the readable id={readable_id} still is: row 0 (0.5) a likely duplicate of {readable_id} alone, row 1 (0.7) new; the check answers {verdicts}"
+        finally:
+            await _delete_transactions(async_session, saved_ids)
