@@ -4514,6 +4514,77 @@ non sposti il registro.
 > **Non eseguiti**: la spec E2E `email-send-link` (ESL-E-01…05), che chiede uno slot, e le categorie Vitest intere.
 > **Resta**: l'allineamento dei percorsi «Settings › Email» (26 punti), dopo A8b nella mia base.
 
+#### E-8.4 — I percorsi «Settings › Email» dopo A8b ✅ (analisi 08:57–09:05; applicato 09:12–09:2x)
+> **Il punto di partenza** (coordinatore, 08:56): la parte 1 è committata (punta `443eda316`), la base è `86e2b05a7`
+> (la mia più dev `73443c6db`, pulita). Lo slot E2E è in coda, e la parte 2 aspetta l'ingresso di A8b.
+>
+> **A8b**, letto dagli oggetti git (`4fcf24e10`, punta del ramo di A `36ab58445`):
+> - L'etichetta del gruppo è `settings.administration`: Administration, Amministrazione, Administration,
+>   Administración.
+> - I docs di A8b scrivono sempre «Settings › Administration › <scheda>»: Backup 45 volte, Email 10, Global e Users 2,
+>   Security 1.
+> - **A8b ha già allineato 9 degli 11 punti di `admin/email.en.md`**, più `admin/index.en.md` e `security.md`.
+>
+> **I segmenti verificati** sulle etichette vere: `nav.settings` (Settings, Impostazioni, Paramètres, Configuración),
+> `settings.administration`, `email.tab.label` (Email, Email, E-mail, Correo).
+>
+> **Cosa resta dopo A8b**, con il testo esatto:
+> 1. **i18n**, 8 valori, con `./dev.py i18n update`:
+>    - `email.verification.settingNeedsEmail`: «(Settings › Email)» → «(Settings › Administration › Email)»;
+>      «(Impostazioni › Email)» → «(Impostazioni › Amministrazione › Email)»; «(Paramètres › E-mail)» → «(Paramètres ›
+>      Administration › E-mail)»; «(Configuración › Correo)» → «(Configuración › Administración › Correo)».
+>    - `email.verification.settingUnavailable`: lo stesso inserimento, alla fine della frase, nelle 4 lingue.
+>    - **I lettori**: `GlobalSettingsTab.svelte:284` e il suo hint. Il Vitest `GlobalSettingsTab.verification.test.ts`
+>      legge le chiavi, non il testo; l'E2E non ha un appiglio sul testo. Quindi nessun test cambia.
+> 2. **`admin/email.en.md`, i 2 punti che A8b non ha toccato** (`:480` e `:482` nella punta di A): citano parola per
+>    parola le due frasi inglesi, e vanno allineati insieme a queste.
+> 3. **devWiki** `domains/email.md:25` (il test email) e `:66` (l'etichetta del diagramma mermaid).
+> 4. **Commenti**: `EmailSettingsTab.svelte:2`, `EmailSettingsTab.test.ts:3`, `e2e/fixtures/galleryEmail.ts:2`.
+> 5. **`e2e/settings/email-tab.spec.ts`** `:2`, `:127`, `:137` e `:178` (due commenti e due titoli di `describe`):
+>    congelati finché A8b non entra (A tocca la `:167`).
+> 6. **Catalogo** `_frontend_utility.py` `:789`, `:910` e `:1076`: le descrizioni delle mie suite più una frase in
+>    quella di `core-unit`.
+> 7. **Del coordinatore**: `CHANGELOG.md:47` e `:48` («Settings › Email» → «Settings › Administration › Email»).
+> 8. **Lasciato com'è**: `TODO_Completati.md:19`, perché è storico.
+>
+> **Il peso**: piccolo, una ventina di righe. Nessun file di traduzione dei docs, perché quelle pagine esistono solo
+> in inglese.
+
+> **Applicato** (09:12, sulla base `5bbc0622e`):
+> - **Il merge**: il coordinatore ha portato A8b (dev `6e2b2c8b7`) nel mio ramo, e ha tolto il congelamento di
+>   `email-tab.spec.ts`. Il CHANGELOG lo ha allineato lui (i 3 punti).
+> - **Controllato dopo il merge automatico** (`email.en.md`, `users.en.md`, `security.md`, `email.md`, il catalogo):
+>   le frasi di E-8, E-13 ed E-14 sono intatte, e gli hunk di A8b toccano solo i percorsi.
+> - **i18n**, 8 valori (`files/e8/e8_i18n_paths.py`, con `./dev.py i18n update`): ogni valore nuovo è derivato dal
+>   vecchio, inserendo il gruppo nella sua lingua.
+> - **Testo**, 15 modifiche in 8 file (`files/e8/e8_paths.py`):
+>   - le 2 frasi citate di `admin/email.en.md`;
+>   - devWiki `:25` e `:66`;
+>   - i commenti di `EmailSettingsTab.svelte`, `EmailSettingsTab.test.ts` e `galleryEmail.ts`;
+>   - `email-tab.spec.ts`: 2 commenti e 2 titoli di `describe`;
+>   - il catalogo `:789`, `:910` e `:1076`. La `:910` è la frase di A8b sui link della scheda Sicurezza: il plugin non
+>     ha gruppo (`settingsTabs.ts:75`), quindi diventa «Settings › Administration › Email and Settings › Plugins».
+> - Più, in `users.en.md`, la lingua spostata nel punto «The result», per non dirla due volte.
+> - **Resta solo `TODO_Completati.md:19`**, storico, lasciato com'è.
+>
+> **⚠️ Fuori pista**: `i18n check`, prettier, ruff e black sono partiti con il carico a 68. Sono leggeri, ma la soglia è
+> 50: un secondo errore mio. Da qui in poi, solo script che aspettano il carico (`files/tools/e8p2_checks.sh`).
+>
+> **Prove** (09:14–09:21; `files/tools/e8p2_checks.sh`, che ha aspettato il carico sotto 50):
+>
+> | Controllo | Esito |
+> |---|---|
+> | Vitest `GlobalSettingsTab.verification.test.ts` ed `EmailSettingsTab.test.ts` | 54 / 54 |
+> | `i18n check` | stretto, pulito (5 015 chiavi) |
+> | prettier, ruff e black | puliti |
+> | `mkdocs build` stretto | 0 righe WARNING/ERROR |
+> | `check-links` | 97 link validi |
+> | `git diff --check` | pulito |
+> | porta 6188 | libera |
+>
+> **Non eseguite**: le spec E2E `email-send-link` (parti 1 e 2) e `email-tab` (titoli dei `describe` cambiati), nello
+> slot in coda.
+
 ### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
 > **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
 > `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
@@ -5378,3 +5449,16 @@ non sposti il registro.
 > - Le note: liste e `as_of` di MF-P2 → **MF-P2b**; il timeout del lock di Z-11 → **Z-26**; ±inf di W-B60 → **W-B63**
 >   (pulizia).
 > - **J-45**: OK. La mia regola «solo `localcontext()`» entra nelle istruzioni di financial-math (MF).
+
+> **La revisione di H-39 a posteriori** (`52adadc05`, più i docs di H-34 e H-40 in `a64fb8d07`; 09:1x, sola lettura):
+> **chiusa, nessun reperto.**
+> - Con `managed`, la protezione dei frame spenta dà `warning` e il CSP report-only spento dà `info`; acceso, o
+>   self-hosted, `ok`.
+> - L'attesa è una costante scritta nel controllo, non letta da `PROFILE_DEFAULTS`, come avevo chiesto a H-37.
+> - `LIBREFOLIO_PROFILE` è un `Literal` normalizzato.
+> - La mancata applicazione del CSP non è un reperto: è la tappa prevista (prima il report-only).
+> - **Suggerimento LOW per il cloud**: applicare già `object-src 'none'; base-uri 'self'; form-action 'self'` accanto
+>   a `frame-ancestors`. È difesa in profondità e non rompe niente. `script-src` viene dopo la fase di report-only.
+> - **I docs di H-40** (IPv6 su Docker, la mia nota di SEC8): corretti. Se non è stato verificato su un host Linux,
+>   basta scrivere nel piano di H che viene dalla documentazione di Docker.
+> - **I docs di H-34**: coerenti con il codice. `TXMixedBatch` è dichiarato onestamente fuori dalla visita.
