@@ -622,7 +622,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ✅ commit `55bced133`, entrato in `b58108665`: Vitest 179/179, `front check` 0 e 0, E2E 44/45; FM6 (TC-18, duplicato di W-B56) verde sulla punta, 10/10 |
 | 33 | Il caso (c) di `theme-roles.spec.ts`: una sonda nel contenuto della pagina invece di `dashboard-cash-balances`, migrata da DV | ✅ commit `5cac2d244`, entrato in `c1578a8bf` (11:51): desktop 13/13, mobile 11/11 + 2 saltati per costruzione |
 | 34 | Giro 3, R3-a: toast tenui, chip della (a) col bordo `X` (T3-b), qualità dei dati per gravità (e il `MISSING_PRICE` del rischio ad avviso, nel backend), opacità e link delle famiglie | ✅ commit `81a927681`; slot verde (23:31–23:51): gate 134, `component-unit` 4.959, E2E 299/299 |
-| 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ⏳ CHECKPOINT READY (00:0x): TSV m1 674 → 594; Vitest 449/449; `front check` 0 e 0; E2E da fare |
+| 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ✅ commit `fc0493eb9`, entrato in `7845fc3d3` (00:12): `component-unit` 4.959, `asset-list` 41/41, `asset-unit` 1.112 |
+| 36 | Giro 3, R3-c: lo skill `design-system` (regole 11 e 12, la tabella, le decisioni) e `palette.md` (i 36 ruoli dei tipi); TC-20, il caso del Lab su due sorgenti provate indipendenti | ⏳ CHECKPOINT READY (01:17), FROZEN: `front-designer-lab live` 12/12 desktop; commit del coordinatore |
 
 ## Avanzamento
 
@@ -3432,5 +3433,94 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > `roleColors`, `contrast`); Prettier pulito sugli 8 file; `front check` **0 e 0**; `diff --check` pulito. Due righe di
 > commento oltre 120 colonne nel test, come altre quattro già in quel file a HEAD: lo stile del file.
 
-> 🔄 **21 · Il checkpoint di R3-b** e la proposta delle E2E (`front-asset asset-list`, che disegna i badge nella tabella
-> e nelle card).
+> ✅ **21 · Il checkpoint di R3-b:** committato dal coordinatore come **`fc0493eb9`** (00:04; genitore `050741670`, 10
+> file). **La run breve** (`r3b/run.sh`, 00:05:17–00:10:42, carico 4, corsia 6155 e `/tmp/librefolio-r2-t`):
+> `component-unit` **4.959/4.959** su 187 file; `front-asset asset-list` **41/41** sul progetto desktop (il build del
+> frontend rifatto da R3-b), 0 rossi e 0 saltati; porta libera alle 00:10:42. In più, `assetTypeTables.test.ts` sta
+> nell'azione `front-asset asset-unit` (Vitest, senza server; il runner la chiama con `npx`): i suoi 24 file col binario
+> del lock, **1.112/1.112** (00:11, carico 5).
+
+> ✅ **22 · R3-b entrato:** **`7845fc3d3`** (00:12; genitori `050741670` e `fc0493eb9`); il ramo portato in avanti dal
+> coordinatore. Il flag di parità lo gira DV al suo ingresso, perché sono entrato prima io.
+
+> ✅ **23 · R3-c, le bozze su copie** (via del coordinatore, 00:12; da applicare dopo l'ingresso di DV;
+> `files/T-r2/r3c/transform_r3c.py`, bozze in `r3c/drafts/`). **`SKILL.md`:** la descrizione (categorie, toast e banner,
+> la gravità); il giro 3 fra le fonti dei temi; la tabella della cartella (138 ruoli, 134 utility; `bannerChip` e
+> `DATA_QUALITY_TONE` in `toneClasses.ts`); la famiglia «Categories» e gli stati (il bordo dei chip, i toast fra le
+> tinte); le coppie del giro 3 nella tabella della regola 5; la regola 11 riscritta (i ruoli dei tipi, la famiglia e il
+> pallino; niente verdi nelle categorie) e una **regola 12** nuova (le quattro gravità del developer, i toast tinte, i
+> chip della (a) col bordo `X`, niente opacità sul testo, i link, gli avvisi senza riquadro); cinque decisioni (R3 §1.1,
+> §1.9, §2, T3-b, §1.3); le domande 1 e 2 risposte (numeri tenuti, perché altri testi li citano); i valori in attesa
+> aggiornati (confermati i tre D-T6 del giro 2 in chiaro e il rosso e il verde scuri; la correzione di BOND da
+> confermare). La sezione «Charts» non è toccata: è di DV. **`palette.md`:** gli stati (toast tinte, `bannerChip`, il
+> bordo dei chip, l'hover della chiusura) e una sezione «Categories» coi 36 ruoli, i valori riempiti da `tokens.css` con
+> `design_system_tokens.py fill`; `check`: **138 righe per 138 ruoli, OK**. **Lo skill `theme-roles`**, una riga: i tipi
+> non sono più fra le categorie da lasciare. Prosa a 120 colonne, i link a parte.
+
+> ✅ **24 · R3-c nell'albero** dopo l'ingresso di DV: rigenerare le bozze dall'albero (la sezione «Charts» di DV
+> intatta), il nome del test di parità di DV nella regola 11, `check` della palette, il controllo dei link; poi il
+> checkpoint. Fatto nella sezione «R3-c e TC-20», qui sotto, passo 1 (18/10, 00:57–01:00).
+
+### Una verifica per l'ingresso di DV: `front-designer-lab live` — ✅ 18/10/2026 notte
+
+> **Richiesta** (coordinatore, 00:52): DV ha un rosso che attribuisce al target, `front-designer-lab live`, il caso
+> «export JSON, reset all, import back» (atteso il blu, arriva il rosa); lanciarlo sull'albero al target senza DV
+> (`7845fc3d3`), solo la run, nessuna correzione.
+
+> ✅ **La run** (00:53–00:54, carico 4, corsia 6155 e `/tmp/librefolio-r2-t`, 1 worker, build già aggiornata;
+> `files/T-r2/dlab/`): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6155
+> --data-dir /tmp/librefolio-r2-t --workers 1 front-designer-lab live` → **11 verdi, 1 rosso**: proprio
+> `designer-lab-live.spec.ts:673`, sul progetto desktop (l'azione gira solo quello), alla riga 692: `dt-header-date`
+> atteso `rgb(0, 170, 255)`, ricevuto `rgb(255, 0, 170)`. Porta libera alle 00:54.
+
+> **La causa, verificata in lettura:** il caso cambia, nella stessa run, la sorgente del colore del sottotitolo (L1,
+> rosa sulla variabile) e il letterale del foglio di stile dell'intestazione (L2, blu). Dal 16/10 le due sorgenti
+> coincidono: il sottotitolo è su `text-lf-muted` da `546204732` (14:32), e l'intestazione di `DataTable` legge
+> `var(--lf-text-muted)` dal **mio lotto delle tabelle** `77bfa6a39` (21:28; prima `--lf-cmp-datatable-header-text`).
+> L'override di L1 su `<html>` vince sul letterale riscritto da L2, e l'intestazione resta rosa. I casi L1 e L2 da soli
+> passano. Verdetto della triage: **un'assunzione del test** (due sorgenti diverse), non un difetto del prodotto; il
+> sesto slot non conteneva le spec del Lab, per questo non l'ha visto. Nessuna correzione, come chiesto.
+
+### R3-c e TC-20 — 🔄 18/10/2026 notte
+
+> **Avvio** (coordinatore, 00:56): DV è entrato, **`b238d5b6e`** (genitori `7845fc3d3` e `73fde8c00`; `--check` pulito,
+> m1 590), il ramo portato in avanti dal coordinatore. Via a due cose in un solo checkpoint: R3-c rigenerato dall'albero
+> con la «Charts» di DV (la regola 11, il nome del test di parità, la correzione di BOND scritta come decisa: l'ha
+> accettata il coordinatore in D-T6 e la porta lui al developer); TC-20, il caso del Lab, con test-author (la spec era
+> di L, archiviato: la prendo io, dichiarata), con la run mirata nella 6155.
+
+> ✅ **1 · R3-c nell'albero** (00:57–01:00): DV ha cambiato solo la sezione «Charts» dello skill (i colori del giro 3, le
+> sequenze per chiave, le scale, il PAC, «The type colours outside the canvas» col test di parità) e ha girato
+> `CATEGORY_ROLES_IN_TOKENS`: il test di parità è il `describe` «parity with T's category roles» di
+> `chartCategories.test.ts`. La trasformazione rigenerata dall'albero, con tre cambi: la regola 11 nomina il test di
+> parità (un colore di tipo vive in `chartCategories.ts` e in `tokens.css` finché il Lab non passa ai ruoli, DV-11: si
+> cambiano insieme); la correzione di BOND fuori dai valori in attesa e dentro la decisione R3 §1.9, «accettata dal
+> coordinatore (17/10)», e così la riga di `palette.md`; l'introduzione delle categorie di `palette.md` nomina il test.
+> Il commento di `--lf-cat-bond-on-soft` in `tokens.css` allineato («accepted by the coordinator, 17/10», non più «to
+> confirm with her»). Verifiche: `design_system_tokens.py check` **138 righe per 138 ruoli, OK**; 0 link rotti nei tre
+> file; prosa a 120 colonne (la riga YAML della descrizione è una sola, come prima); le altre menzioni di «palette
+> classes» riguardano `KIND_TONES` e `fileSet.combined`, ancora vere; `--check` pulito; `diff --check` pulito.
+
+> ✅ **2 · TC-20** (test-author, agente `tc20-lab-live`, 01:00–01:10): per il passo L2 del caso un elemento di sorgente
+> diversa da quella del sottotitolo, con la precondizione che lo provi; poi `front-designer-lab live` nella 6155. TC-20
+> nell'indice, nella mia sezione. **La cura** (`designer-lab-live.spec.ts`, il caso di riga ~677, e un helper in
+> `lab-helpers.ts`): per L2 la **radice della pagina delle transazioni** (`transactionsPageRoot`, `data-testid`
+> `transactions-page`, che colora il testo dei figli con `text-lf-primary`) al posto dell'intestazione della data, che
+> resta nel caso L2 da solo (riga ~625). Tre precondizioni, nell'ordine in cui decidono: la chiave della radice diversa
+> da quella del sottotitolo (un colore solo per due elementi vuol dire, quasi sempre, una sorgente sola); la radice
+> senza transizioni di colore (`transition-duration` e `transition-delay` a `0s`, così ciò che mostra quando L1 è a
+> schermo è definitivo); e, quando L1 ha fatto rosa il sottotitolo, la radice ancora col suo colore. Le asserzioni sul
+> rosa e sul blu stanno ora subito dopo ciascun cambio, non più in fondo ai tre. Il commento di testa della spec dice
+> dove vive oggi il letterale dell'intestazione (nella definizione del ruolo del sottotitolo) e che due sorgenti diverse
+> si provano, non si danno per buone. Prettier e `tsc` puliti sui due file (test-author). **La run** (01:11–01:14,
+> carico 2 all'avvio, corsia 6155 e `/tmp/librefolio-r2-t`, `files/T-r2/dlab2/`; la build rifatta per l'ingresso di DV e
+> il commento di `tokens.css`, `svelte-check` 0 errori e 0 avvisi): `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv
+> run python dev.py test --test-port 6155 --data-dir /tmp/librefolio-r2-t --workers 1 front-designer-lab live` → **12/12
+> verdi** sul progetto desktop (l'azione gira solo quello), il caso «export JSON, reset all, import back» compreso
+> (4,3 s); rc 0, porta 6155 libera alle 01:14. TC-20 chiusa nell'indice con ✅.
+
+> ✅ **3 · Il checkpoint** (01:17): `git diff --check` pulito, porta 6155 libera; i gate del tema, per il commento di
+> `tokens.css`, **158/158** (5 file: `themeRoles`, `themeTokens`, `themeColorMeta`, `themeComponentTokens`,
+> `themeModeReads`; `vitest run` col binario del lock, 01:17, carico 8, `files/T-r2/dlab2/gates.log`). CHECKPOINT READY
+> al coordinatore con i file, la run e le dichiarazioni (la spec di L presa da T; il commento di `tokens.css` oltre lo
+> skill); poi FROZEN.
