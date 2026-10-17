@@ -5,8 +5,8 @@ pages poll the bulk current-price endpoint themselves, through one shared helper
 nobody is using the page ([Pause and resume](#pause-and-resume)) and waits longer after a failed
 poll or during a provider's pause ([Failures and provider pauses](#backoff)); there is no ticker
 component. The Assets list fetches through a small service, `livePriceService`; the asset detail
-page calls the generated API client directly, with the service's helpers to read the answer, and
-one answer feeds both its price summary and its chart.
+page posts its one id itself, through the generated API client, and uses only the service's helpers
+to read the answer, one answer feeding both its price summary and its chart.
 
 The page also covers the notice **Updating prices…**, which the web app shows while the server
 catches up on prices, through the same helper: see [Updating prices…](#price-refresh).
@@ -23,7 +23,7 @@ catches up on prices, through the same helper: see [Updating prices…](#price-r
 
 | Export | Used by | Description |
 |---|---|---|
-| `fetchCurrentPrices(ids)` | Assets list | Wraps `POST /api/v1/assets/prices/current` and returns `LivePriceResult[]`: `{assetId, value, currency, source, error, errorCode, retryAfter}`, with `value` parsed to a number (`null` when the asset has no price). An empty `ids` list sends nothing. |
+| `fetchCurrentPrices(ids)` | Assets list | Wraps `POST /api/v1/assets/prices/current` and returns `LivePriceResult[]`: `{assetId, value, currency, source, error, errorCode, retryAfter}`, with `value` parsed to a number (`null` when the asset has no price). An empty `ids` list sends nothing. The endpoint refuses more than 1,000 ids (422 `bulk_too_many_items`, R13-SEC9-1), so the ids go through `sendBulkBatches(ids, () => 0, send)` (`lib/api/bulkBatches.ts`, Z-27; X-R64): consecutive batches of at most 1,000, in the order given, one request after the other, with no day estimate, and the items of every batch mapped in that order, as if one request had answered; up to 1,000 ids it is one request. All or nothing: a failed batch rejects the call with its own error, as axios raised it, so `livePollFailure` still reads its `Retry-After`, and nothing is sent after it. |
 | `toLivePriceResult(raw)` | both pages | One item of the answer as a `LivePriceResult`; `fetchCurrentPrices` maps every item through it. `errorCode` is the item's `error_code`: `RATE_LIMITED` while the asset's provider is paused. `retryAfter` is its `retry_after`, the seconds until that pause ends, `null` when absent or not a number. |
 | `livePollOutcome(results, now?)` | both pages | The [outcome](#backoff) of a poll that got an answer: `{ok: true, notBefore}` at the end of the shortest pause when every result is `RATE_LIMITED` with a `retryAfter`; `{ok: false}` when every result is `RATE_LIMITED` and one has no `retryAfter`; `{ok: true}` otherwise, an empty list included. |
 | `livePollFailure(error, now?)` | both pages | The [outcome](#backoff) of a request that failed: `{ok: false}`, with `notBefore` when the answer is a 429 or a 503 that carries a usable `Retry-After`, in seconds or as an HTTP date. |
@@ -38,7 +38,7 @@ outcome spaces the next poll.
 
 | Poll | Interval | Runs while | Asks for | Feeds |
 |---|---|---|---|---|
-| Assets list (`routes/(app)/assets/+page.svelte`) | at once, then every 60 s | the date range ends today or later, and the list is not empty | every asset of the list, in one request | `livePriceMap` → `AssetCard`, `AssetTable` |
+| Assets list (`routes/(app)/assets/+page.svelte`) | at once, then every 60 s | the date range ends today or later, and the list is not empty | every asset of the list: one request up to 1,000 assets, consecutive batches of at most 1,000 beyond ([The shared service](#live-price-service)) | `livePriceMap` → `AssetCard`, `AssetTable` |
 | Asset detail (`routes/(app)/assets/[id]/+page.svelte`) | at once, then every 30 s | the date range ends today or later, the asset is loaded, and it has a provider ([below](#asset-detail)) | the asset | `AssetPriceSummary`, then today's point of the price chart |
 
 Both polls run on `startActivePolling()`, so both pause while the tab is hidden and after two
@@ -358,11 +358,16 @@ Pausing does not turn the poll into a read. Every poll that runs is still
 runs only while someone uses the page, it is that user's active update of today's price, and
 `isPortfolioAffectingMutation()` keeps counting it as a portfolio mutation, so the portfolio views
 are marked stale and refreshed in the background ([Domain state](../../state/domain-state.md)).
+On the list a poll over more than 1,000 assets is one request per batch
+([The shared service](#live-price-service)), and each batch that succeeds persists today's candles
+of its assets and counts as a mutation: the views hear it once per batch, which since decision E1
+only marks them stale for a background refresh, nothing thrown away.
 What changed is how often it happens: on the detail page, two requests a minute instead of three
 for an asset with a provider, and none for an asset without one, which had two a minute until Z-8,
-each an echo of the stored price counted as a mutation; on the list, one instead of two; none on a
-range in the past, and none from a tab nobody uses; fewer still after failed polls, or while every
-provider asked about is paused ([Failures and provider pauses](#backoff)). Today's candle does not
+each an echo of the stored price counted as a mutation; on the list, one poll instead of two, each
+a request per batch of at most 1,000 assets; none on a range in the past, and none from a tab
+nobody uses; fewer still after failed polls, or while every provider asked about is paused
+([Failures and provider pauses](#backoff)). Today's candle does not
 depend on an open tab: the scheduler's current-price refresh calls the same service on its own
 schedule ([Scheduler](../../../backend/scheduler.md)).
 
@@ -547,7 +552,7 @@ sink at once.
 | Test | Runner action | What it pins |
 |---|---|---|
 | `lib/features/live-updates/activePolling.test.ts` (Vitest, node, fake timers) | `./dev.py test front-utility core-unit` | Every rule of [`startActivePolling`](#active-polling) on a clock and a tracker the test owns, [failures and provider pauses](#backoff) included, and the four numbers of `cadence.ts` |
-| `lib/services/livePriceService.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | `toLivePriceResult`, `fetchCurrentPrices` on a faked axios adapter, `livePollOutcome`, `livePollFailure` and `computeDirection` |
+| `lib/services/livePriceService.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | `toLivePriceResult`, `fetchCurrentPrices` on a faked axios adapter, its batches included (LPS-14 to LPS-16: 1,001 ids go as two requests, 1,000 then 1, in the order given, the results of both mapped as if one request had answered; exactly 1,000 as one request; a 429 with `Retry-After` on the second of three batches reaches the caller as axios raised it, nothing is sent after it, and `livePollFailure` still reads the header), `livePollOutcome`, `livePollFailure` and `computeDirection` |
 | `lib/features/live-updates/activityTracker.test.ts` (Vitest, node, fake clock) | `./dev.py test front-utility core-unit` | The five input events, `hidden` and `visible`, `touch()`, the subscribers, and no listener left after `dispose()` |
 | `lib/features/price-refresh/priceRefresh.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | [Updating prices…](#price-refresh): `readPriceRefreshHeader`; the tracking that a header starts, one at a time; the notice; the ends of a tracking (`idle`, ten `starting`, five failures); a `4xx`, after which the headers are ignored until `reset()`; the portfolio refresh, only after a job seen running and with `last_refreshed`; `stop()`, and `reset()` at a change of account; the defaults, the `fetch` of the status route included, and the refresh of the app's tracker: `notifyPricesCaughtUp()` once a catch-up that updated something is over, never `requestPortfolioRefresh()`, and neither signal when nothing was updated or no job was seen running; the default `notices`: importing the module or building a tracker loads no `instanceNotices.svelte.ts`, the first notice loads it, once, and a `show()` and a `hide()` issued while it is loading reach it in their order |
 | `lib/api/apiClientRuneFree.gate.test.ts` (Vitest, node) | `./dev.py test front-utility core-unit` | The rule behind the lazy `notices` ([the probe's frontend bridge](../../../architecture/patterns/ai_export_probe_workflow.md#frontend-bridge)): from `lib/api/index.ts` and from `frontend/scripts/ai-export-render-prompt-probe.ts`, no static import reaches a `.svelte.ts` module or a `.svelte` component, each one reported with the chain of imports that reaches it, and `lib/api/zodios-client.ts` imports none directly. Imports are read on TypeScript's syntax tree: `import type` and `export type` are erased, `import {type X}` counts, since `verbatimModuleSyntax` keeps it, and a dynamic `import()` is not followed. It reads the generated client (`lib/api/generated.ts`, from `./dev.py api sync`): a local import that names no file fails it instead of being skipped. Synthetic graphs, and a real site that imports the instance block's face (`lib/features/email/verificationApi.ts`), check that the scanner reports what it must |
