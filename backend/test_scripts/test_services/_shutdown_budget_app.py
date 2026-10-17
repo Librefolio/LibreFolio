@@ -23,9 +23,10 @@ The steps the test chooses, through the environment (``Z6B_APP_*``):
   writes its pid to ``child.pid``. The child sleeps two minutes at most: it ends by itself even if both the server and
   the test fail to end it.
 
-``GET /ping`` answers the server's pid, the budget it read, whether a watchdog is installed and the names of its live
-threads. ``GET /slow`` writes ``slow-started``, sleeps 30 s, then writes ``slow-finished`` — or ``slow-cancelled`` when it
-is cancelled. Logging goes to the console only (stdout, one JSON line per event, file logging off): the test reads it.
+``GET /ping`` answers the server's pid, the budget it read, whether a watchdog is installed — ``shutdown_budget._watchdog``,
+read here, the module having no function that returns it (N58) — and the names of its live threads. ``GET /slow`` writes
+``slow-started``, sleeps 30 s, then writes ``slow-finished`` — or ``slow-cancelled`` when it is cancelled. Logging goes
+to the console only (stdout, one JSON line per event, file logging off): the test reads it.
 
 Red until H's CP2b brings ``backend/app/services/platform/lifecycle.py``: this module does not import.
 """
@@ -44,10 +45,9 @@ from typing import Any
 from fastapi import FastAPI
 
 from backend.app.logging_config import configure_logging
-from backend.app.services.platform import lifecycle
+from backend.app.services.platform import lifecycle, shutdown_budget
 from backend.app.services.platform.shutdown_budget import (
     child_processes_step,
-    current_shutdown_watchdog,
     install_shutdown_watchdog,
     shutdown_budget_seconds,
     shutdown_deadline,
@@ -173,7 +173,7 @@ async def ping() -> dict[str, Any]:
     return {
         "pid": os.getpid(),
         "budget_seconds": shutdown_budget_seconds(),
-        "watchdog": current_shutdown_watchdog() is not None,
+        "watchdog": shutdown_budget._watchdog is not None,
         "threads": sorted(thread.name for thread in threading.enumerate()),
     }
 
