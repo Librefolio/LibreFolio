@@ -162,6 +162,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/reference/sectorStore.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
+            "src/lib/features/update-check/updateCheck.managed.test.ts",
+            "src/lib/features/support/donations.test.ts",
             "src/lib/features/onboarding/guideAnchors.test.ts",
             "src/lib/features/onboarding/onboardingTourSurfaces.test.ts",
             "src/lib/features/onboarding/guideCopy.test.ts",
@@ -346,6 +348,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/auth/LoginCard.test.ts",
             "src/lib/features/auth/AuthCard.test.ts",
             "src/lib/features/auth/AuthPageFrame.test.ts",
+            "src/lib/features/auth/AuthPageFrame.managed.test.ts",
+            "src/lib/features/auth/AuthPageFrame.legal.test.ts",
             "src/lib/features/auth/LinkStatusCard.test.ts",
             "src/lib/features/auth/ResetPasswordCard.test.ts",
             "src/lib/features/auth/SetupCard.test.ts",
@@ -356,6 +360,9 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/routes/verify-email/page.test.ts",
             "src/lib/features/support/DonationPopupModal.test.ts",
             "src/lib/features/support/SupportActions.test.ts",
+            "src/lib/features/support/SupportActions.managed.test.ts",
+            "src/lib/features/legal/LegalNotice.test.ts",
+            "src/lib/features/legal/LegalLinks.test.ts",
             "src/lib/features/support/SocialShareModal.test.ts",
             "src/lib/features/support/shareNavigation.test.ts",
             "src/lib/utils/clipboard.test.ts",
@@ -378,7 +385,11 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/import/FixFlaggedStep.test.ts",
             "src/lib/features/transactions/import/ReportSetCard.escape.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
+            "src/lib/components/layout/ChangelogModal.managed.test.ts",
             "src/lib/components/layout/Header.test.ts",
+            "src/lib/components/layout/Header.managed.test.ts",
+            "src/lib/components/layout/HelpMenu.managed.test.ts",
+            "src/lib/components/layout/Sidebar.legal.test.ts",
             "src/lib/components/layout/ConnectionSecurityIndicator.test.ts",
             "src/lib/features/update-check/UpdateAvailableModal.test.ts",
             "src/lib/features/settings/SettingControls.test.ts",
@@ -390,6 +401,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/settings/tabs/PreferencesTab.test.ts",
             "src/lib/features/settings/tabs/ProfileTab.test.ts",
             "src/lib/features/settings/tabs/AboutTab.test.ts",
+            "src/lib/features/settings/tabs/AboutTab.legal.test.ts",
             "src/lib/features/settings/tabs/GlobalSettingsTab.test.ts",
             "src/lib/features/settings/tabs/UsersTab.test.ts",
             "src/lib/features/settings/security/SecurityTab.test.ts",
@@ -406,6 +418,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/email/ForgotPasswordEmailForm.test.ts",
             "src/lib/features/email/linkShareRegistration.test.ts",
             "src/lib/features/auth/ForgotPasswordCard.email.test.ts",
+            "src/lib/features/auth/ForgotPasswordCard.managed.test.ts",
             "src/lib/features/auth/LoginCard.verification.test.ts",
             "src/lib/features/auth/RegisterCard.verification.test.ts",
             "src/lib/features/settings/tabs/GlobalSettingsTab.verification.test.ts",
@@ -466,6 +479,7 @@ def front_onboarding_component_unit(
             "src/lib/features/onboarding/components/OnboardingReplaySection.test.ts",
             "src/lib/features/onboarding/components/WelcomeForm.test.ts",
             "src/lib/features/onboarding/components/WelcomePage.test.ts",
+            "src/lib/features/onboarding/components/WelcomePage.legal.test.ts",
             "src/lib/features/onboarding/components/DeferredAppPopups.test.ts",
             "src/lib/features/onboarding/onboardingRouteSettlement.test.ts",
             "src/routes/(app)/layout.gate.test.ts",
@@ -530,6 +544,16 @@ def front_security_tab(verbose: bool = False, ui: bool = False, headed: bool = F
     if not _ensure_test_users():
         return False
     return _run_playwright("settings/security-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_legal_managed(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the instance's legal notice (F09) and the managed profile's account-side effects (F05), lot A9: GET /system/instance patched per page."""
+    print_section("Frontend Legal Notice & Managed Profile Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/legal-and-managed.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -904,6 +928,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "legal-managed",
+        front_legal_managed,
+        name="Legal Notice & Managed Profile E2E",
+        desc="The instance's legal notice (F09) and the managed profile's account-side effects (F05), lot A9 of workstream A, desktop: GET /system/instance answered with the real response, observed untouched or patched per page (profile, legal; fixtures/instance-config.ts serveInstanceConfig, checked against the generated schema); signed out on the lane's answer auth-legal-links under the login card (after it, below it) holding legal-links without legal-terms-link/legal-privacy-link, and auth-donate-link once the configuration is in; with legal stubbed to two https pages both links there, href exactly those pages, target _blank, rel noopener noreferrer, never clicked; signed in as e2e_test_user header-donate-link, sidebar-legal-links after sidebar-version, Settings › About's about-legal-card holding legal-notice, and the self-hosted contrast (changelog-check-update, help-donate-link, support-coffee); profile stubbed managed with legal set to the same two pages and signed in: first sidebar-legal-links holding legal-terms-link with exactly the stubbed href (the proof the managed answer is in force: the links come from the stubbed answer alone, which the store applies whole), then the changelog opened from sidebar-version without changelog-check-update, no header-donate-link, no help-donate-link in the open Help menu (its GitHub issues item, found by its link, stays), About's legal-notice linking the same pages and no support-coffee in its support card (its support-share-* buttons stay), no link to the donation page anywhere, the proof and every absence in one app runtime (a mark on window set before the proof); profile stubbed managed and signed out: the forgot card shows forgot-ask-admin, neither forgot-reset-commands nor forgot-email-unavailable, no auth-donate-link",
+        prereq="Test users created (e2e_test_user an ordinary member, grandfathered on every onboarding flow); the lane self-hosted (LIBREFOLIO_PROFILE unset) and without LIBREFOLIO_TOS_URL or LIBREFOLIO_PRIVACY_URL",
+        tests="layout/legal-and-managed.spec.ts",
+    )
+    add_test(
+        cat,
         "core-unit",
         front_utility_unit,
         test_names=True,
@@ -933,6 +966,7 @@ def populate_registry(registry: dict) -> None:
             "src/lib/features/onboarding/components/OnboardingReplaySection.test.ts",
             "src/lib/features/onboarding/components/WelcomeForm.test.ts",
             "src/lib/features/onboarding/components/WelcomePage.test.ts",
+            "src/lib/features/onboarding/components/WelcomePage.legal.test.ts",
             "src/lib/features/onboarding/components/DeferredAppPopups.test.ts",
             "src/lib/features/onboarding/onboardingRouteSettlement.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
