@@ -8601,6 +8601,8 @@ punto di partenza, l'audit dello stesso giorno:
   la polvere) lascia una riga tenuta con costo alla fine 0,0012, e l'annualizzato vale 1 774 600,33 (oggi): con la base
   proposta (0,0012 + il costo venduto) torna sensato. Dettagli: piano MF, «MF-A10».
 - **MF-A12 · La variazione d'un giorno delle posizioni scritta in linea** — minimo, nessun valore (salvo un pareggio
+  **Pronto (17/10, N92)**: `change_ratio` per le due colonne; identico al bit per ogni prezzo positivo, un prezzo negativo
+  prende il segno della mossa.
   d'arrotondamento); MF, 17/10 (analisi di J-14). In `get_summary` `price_change_1d = ((corrente − precedente) /
   precedente).quantize(0,0001)` (`portfolio_service.py` ~:745) e `gain_loss_change_1d_percent = (variazione / |valore
   precedente| × 100).quantize(0,01)` con la guardia `|precedente| > 0,01` (~:759), accanto a `returns.price_return`
