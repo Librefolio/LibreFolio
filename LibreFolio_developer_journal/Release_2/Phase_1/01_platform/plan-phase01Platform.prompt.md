@@ -5052,3 +5052,26 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
      `check-links` 97; `git diff --check` pulito.
    - Non eseguito: `api validation-errors` di A, un passo pesante che va nel cancello. Il gestore dei 422 è ancora al suo
      posto: lo controlla il caso 3.
+
+### Wiki-file delle scoperte della notte (2026-10-17, mattina presto) — ✅ fatto
+
+> Chiesto dal coordinatore (04:46), dopo l'ingresso di H-33 (dev `5bba93280`, base fast-forward verificata pulita):
+> un `wiki-file` delle scoperte della piattaforma, ognuna con il suo perché, con `check_source_paths.py` verde.
+
+- Sei pagine nuove in `LibreFolio_devWiki/wiki/`, in inglese, verificate sul codice a `5bba93280`:
+  - `problems/frontend-build-looked-stale-for-files-it-never-bundles` (H-24 e il residuo: l'elenco registrato al
+    posto delle date delle cartelle, con la tabella della prova reale);
+  - `problems/static-site-served-hidden-build-files` (H-28 e H-29);
+  - `decisions/test-runner-refuses-test-names-it-cannot-apply` (H-26, più la nota su H-30);
+  - `decisions/request-floats-refuse-inf-and-nan` (H-32: inventario, opzioni, decisione, H-34 e X-R43);
+  - `problems/response-validation-error-wrote-the-response-to-the-log` (H-33);
+  - `concepts/fastapi-0141-routing-and-validation-gotchas`: i cinque comportamenti di FastAPI 0.141 misurati in
+    processo, che stanno dietro H-32 e H-33.
+- `index.md`: righe in testa a Decisions, Concepts e Problems, più una riga del registro cronologico per il 17/10.
+  `log.md`: una voce `file`.
+- `check_source_paths.py`: **7 percorsi inesistenti (12 occorrenze) su 4149**, gli stessi 7/12 di prima (su 4114),
+  tutti preesistenti; nessuno in queste pagine.
+- **Grafo**: non aggiornato. graphify non è disponibile in questo worktree, e il passo 6 della skill punta al
+  checkout principale, che non leggo; la voce del log lo dice.
+- Due correzioni prima di consegnare: la rotta dei plugin usa il `NoInputEchoRoute` comune di `api/no_echo.py`
+  (portato da B4), non una copia sua; una frase poco chiara nella pagina dei file nascosti, riscritta.
