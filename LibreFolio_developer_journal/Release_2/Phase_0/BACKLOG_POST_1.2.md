@@ -6619,8 +6619,10 @@ da Y il 15/10.
   - Rimedio proposto: `test-author` ricattura il corpus con la procedura del file, annotando che la differenza viene da
     I-01.
   - Dettagli: piano di Y, §7 «Y3».
-- **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
-  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). **Serve una decisione del
+- ✅ **Y-12 · In `brokers-detail.spec.ts` il controllo dei bottoni di presentazione non gira da luglio** — medio, test che
+  passa senza provare; `test-author` di Y, 16/10 (durante il triage della corsa E2E unica). ✅ 16/10, `6ac6ead12`
+  («test(e2e): rewrite lots comparison toggles test»): il test morto riscritto in due test sui controlli di oggi (P25),
+  con `aria-pressed` e il contatore dei rendering. La ✅ qui mancava: aggiunta il 17/10. **Serve una decisione del
   developer sulla funzione**, che porta il coordinatore. **Decisa il 16/10 (P25): si riscrive** sui controlli di oggi;
   è il prossimo lotto di Y, dopo Y12a.
   - Il test «Value presentation toggle…» (`e2e/brokers/brokers-detail.spec.ts:582`, numero di riga dopo la correzione
@@ -6749,9 +6751,13 @@ da Y il 15/10.
     `canRequestPnlCandles` più `untrack`) toglie il ciclo, ma serve una «chiave di scope» perché un cambio di periodo
     o un Refresh dopo un errore chiedano di nuovo.
   - Dettagli: piano di Y, «Y-16».
-- **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
-  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). Comportamento preesistente, della stessa natura di
-  Y-8 ma su un gesto raro.
+- ✅ **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
+  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). ✅ 17/10: (a) la riscrittura parte solo se una freccia
+  gira di più di 0,01°; (b) i tre `ResizeObserver` riallineano all'assestamento (`LineChart` e `CandlestickChart` riarmano
+  quello delle etichette, `PriceChartFull` lascia fare al suo rinvio da 200 ms), mai a ogni callback; (d)
+  `noteArrowMarkers`, dopo ogni disegno completo, fa uscire `updateArrowRotations` prima di `getOption()` sui grafici senza
+  frecce, cioè quasi tutti. 16 rossi prima (unità, componenti, pin), la prova del morso sul verso pericoloso di (d).
+  Commit al checkpoint.
   - Il `ResizeObserver` di `LineChart`, `CandlestickChart` e `PriceChartFull` chiama `updateArrowRotations` a ogni
     callback, cioè a ogni frame mentre si trascina il bordo della finestra: una copia di `getOption()` e una riscrittura
     di tutte le serie ciascuna, oltre al `resize()`.
@@ -6762,6 +6768,20 @@ da Y il 15/10.
     nessun angolo cambia (il test di Y-8 sull'assestamento va allora rifatto con lo zoom vero del registratore di
     Y-8b, che cambia gli angoli).
   - Dettagli: piano di Y, «Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom».
+- **Y-26 · La vista percentuale dei grafici di prezzo, da un primo valore 0, mostra valori assoluti come percentuali** —
+  basso, numeri; Y, 17/10 (revisione di J-44). Comportamento preesistente; serve una scelta del developer.
+  - `toDisplaySeries` (`components/charts/priceChartHelpers.ts:369`) rende la serie intatta quando il primo valore è 0
+    (lo dice il suo JSDoc): nella vista `%` la linea **e** il Δ del tooltip (`(Δ ${formatPercent(value)})`) mostrano
+    valori assoluti come percentuali, cioè un 10 assoluto si legge «+10.00%». J-44 ha tolto lo 0 % solo dalla vista
+    assoluta.
+  - Altre copie dello stesso ribasamento, con tre comportamenti su una base nulla (regola 10): `computeGhostSeries`
+    (`priceChartHelpers.ts:469`, tutto 0 %); `candlestickChartHelpers.toPercent` (`:35`) e
+    `charts/signals/backendRenderer.ts::transformValue` (`:37`), il valore grezzo; `lotWacPriceChartHelpers.toPercentSeries`
+    (`:130`), che ribasa sul primo valore non nullo e lascia null prima.
+  - Da decidere: da un inizio a 0, (a) niente vista `%` (il commutatore spento, con una nota); (b) una serie vuota, `—`,
+    cioè `changePct` dappertutto; (c) ribasare sul primo valore non nullo, come il grafico dei lotti. Poi una copia sola
+    della regola per tutte.
+  - Raro: un prezzo o un cambio esattamente a 0 all'inizio. Dettagli: piano di Y, «J-44 · revisione a posteriori».
 
 ## MF · Matematica finanziaria (fase 01)
 
