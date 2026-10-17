@@ -1851,7 +1851,7 @@ class PortfolioService:
             total_realized = sum(per_realized.values(), Decimal("0"))
             total_income = sum(per_income.values(), Decimal("0")) + sum(unalloc_income.values(), Decimal("0"))
             total_fees = sum(per_fees_taxes.values(), Decimal("0")) + sum(unalloc_fees.values(), Decimal("0"))
-            period_other_result = period_pnl_total - period_ugl_delta - total_realized - total_income + total_fees
+            period_other_result = period_math.period_other_result(period_pnl_total, period_ugl_delta, total_realized, total_income, total_fees)
 
         if period_other_result is not None:
             # FX on cash (financial_math.native_cash): each broker's exchange result on foreign
