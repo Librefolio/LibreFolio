@@ -673,9 +673,10 @@ P-5 le ha trascritte il coordinatore. Dopo la 1.2:
 - ✅ **T-B6 · Lotti: la fonte del prezzo di riferimento dice «exact» anche quando il prezzo convertito manca** (chiusa 16/10 dal coordinatore: CP-7a di J, treno 107) — minimo;
   T, 11/10, dalla sonda di B3b. Senza cambio `reference_unit_price` è `None`, ma `reference_price_source` resta
   `exact`, e l'AI Export lo copia. Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Sonda».
-- **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
+- ✅ **T-B7 · AI Export: segnalare le colonne tolte perché nulle in ogni riga, in tutti i componenti** — medio-basso;
   coordinatore, 11/10. Il renderer compatto toglie una colonna nulla in ogni riga; solo i lotti ne hanno la traccia
   (`unavailable_amount_lot_count`, B3b). Dettagli: [piano della 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), sezione «B3b», «Scoperte sul renderer dell'AI Export».
+  ✅ **Fatto da J il 17/10** (`7184cb123`, dev `36d24e7d2`): le colonne con un `null` esplicito in ogni riga sono nominate dopo la tabella (`omitted_null_columns=…`), le etichette passano a `_v2`. Seguito: J-54 (i campi in cui `null` vuol dire «nessuno»).
 
 - **T-B8 · Sintesi FIFO dell'AI Export: valore aperto e P&L non realizzato sommano insiemi di lotti diversi** — basso;
   T, 11/10, dal docs-writer di B3b. Ognuna delle due somme prende i lotti aperti in cui quel campo è noto, mentre i
@@ -3391,7 +3392,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
 
   Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
-- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10. Metà ✅
+- ✅ **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10. Metà ✅
   15/10 (lotto «billing_url e rotte dei link»): `check_port_in_use` conta solo i listener, come il runner. Resta
   l'output scartato del server condiviso.
   - `scripts/test_runner/_server.py` avvia `dev.py server --test` con stdout e stderr su `DEVNULL`: il runner stampa
@@ -3404,6 +3405,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`-sTCP:LISTEN`), come fa il runner.
 
   Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
+  Chiusa il 16/10 (riconciliazione del 17/10): la prima metà il 15/10 (`87f9ed6b5`, solo i listener), il resto nel lotto «H-12, il resto» (`cca1c8b0a`, l'output del server condiviso nel messaggio d'errore).
 - **H-13 · `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD` non arriva al test: la corsia la toglie (C-96)** — basso; DV dei colori
   (DV-1), 15/10. ✅ 15/10: chiusa da J in CP-4, con la variabile rinominata `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`.
   - Il comando documentato per rigenerare `backend/test_scripts/fixtures/native_cash_guard/eur_only_golden.json`
@@ -3438,7 +3440,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
 
   Dettagli: piano H, §14 «Voci di backlog da X CP10».
-- **H-17 · I default del profilo gestito passano da due meccanismi** — basso; H (CP7b-2), 16/10.
+- ✅ **H-17 · I default del profilo gestito passano da due meccanismi** — basso; H (CP7b-2), 16/10.
   - `PROFILE_DEFAULTS` (`config/__init__.py`) copre solo i campi di `Settings`, con un test di guardia sulla tabella.
   - Il limite di upload del ripristino di B decide il suo default da sé: `MANAGED_MAX_UPLOAD_MB` (500) in
     `config/backup.py`, perché `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` si legge da `os.environ`.
@@ -3446,6 +3448,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     usano, così la guardia copre ogni default del profilo. Da concordare con B.
 
   Dettagli: piano H, §14 «CP7b-2», passo 2.
+  Chiusa il 16/10 (riconciliazione del 17/10): `fb4ecc18c` (`ENVIRONMENT_PROFILE_DEFAULTS` e `profile_default()` per i moduli di sezione, sotto la stessa guardia) e `8f7e086e9` di B (il limite di upload dalla tabella).
 - **H-18 · I toast non arrivano ai lettori di schermo** — basso; H (revisione del test-author sulla card della pagina di
   blocco), 16/10.
   - `ToastContainer` (`components/ui/feedback/`) non ha né `aria-live` né `role="status"`: nessun toast dell'app viene
@@ -3455,7 +3458,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     componente è condiviso: va al proprietario dell'interfaccia comune, con la regola dei colori per i file condivisi.
 
   Dettagli: piano H, §14 «La card del backup nella pagina di blocco».
-- **H-19 · `POST /users/address-probe` risponde 500 se la chiave d'istanza non si può usare** — basso; H (analisi di H-3),
+- ✅ **H-19 · `POST /users/address-probe` risponde 500 se la chiave d'istanza non si può usare** — basso; H (analisi di H-3),
   16/10.
   - `issue_probe_nonce()` (`services/accounts/address_probe.py`, di A) chiama `derive_key()` senza gestire
     `InstanceKeyError`. Con un file della chiave generato e poi rovinato, il server parte con un errore nel log, e la
@@ -3467,6 +3470,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura fatta il 17/10 da H, con l'OK di scrittura del coordinatore; A rivede (lotto «H-19», piano H §14).
     `issue_address_probe` risponde 503 `INSTANCE_KEY_UNAVAILABLE` per un `InstanceKeyError`, e scrive un warning con
     `admin_id`. Prima era un 500 con il traceback. Due test in processo in `test_address_probe_api.py`.
+  Chiusa il 17/10 (riconciliazione del 17/10): `48aa7a3ed` (503 `INSTANCE_KEY_UNAVAILABLE`), doc `139ca6129`.
 - **H-20 · L'output del runner rediretto su un file arriva solo alla fine** — molto basso; H (`all-backend` di H-12),
   16/10.
   - Con `> file`, ma anche con `--log-file`, lo stdout del runner è bufferizzato a blocchi, come ogni processo Python
@@ -3478,7 +3482,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     nei comandi documentati. Nessuna fretta: il run non ne soffre.
 
   Dettagli: piano H, §14 «Lotto «H-12, il resto»», passo 13.
-- **H-21 · Un'azione `api` lanciata da sola non rifà gli utenti di fixture** (W-B54) — basso, runner; W (C-97a, slot
+- ✅ **H-21 · Un'azione `api` lanciata da sola non rifà gli utenti di fixture** (W-B54) — basso, runner; W (C-97a, slot
   API), 16/10. Assegnata ad H dal coordinatore alle 18:39.
   - Il setup della categoria `api` (`_api_setup` in `scripts/test_runner/_backend_api.py`, `db_populate(force=True)`)
     parte da `run_category_setup("api")` solo con la categoria intera (`api_test`) o nel passaggio consolidato. Per
@@ -3492,7 +3496,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Registro del runner: superficie condivisa, lo scrittore lo assegna il coordinatore.
 
   Dettagli: piano 04 di W, sezione C-97a; piano H, §14 «Lotto «H-12, il resto»», passo 14.
-- **H-22 · Due funzioni di `client_address.py` servono solo ai test** — molto basso; H (nota di E dal rapporto
+  Chiusa il 16/10 (riconciliazione del 17/10): `74b420db8`.
+- ✅ **H-22 · Due funzioni di `client_address.py` servono solo ai test** — molto basso; H (nota di E dal rapporto
   dead-code, girata dal coordinatore), 16/10.
   - `mask_client_address()` (P17) non ha consumatori, né oggi né in programma: nessun log del codice scrive
     l'indirizzo di un client (verificato su `dev_release2` il 16/10). Cura proposta: toglierla, insieme al blocco (g)
@@ -3522,7 +3527,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     provata il 16/10. Resta il testo del selettore in `_backend_services.py` (MF e A): patch pronta, dal coordinatore.
 
   Dettagli: piano H, §14 «Revisioni della sera», punto 4, e lotto «H-22».
-- **H-23 · Un'azione `services` da sola ricrea il DB della corsia anche per un test `pure`** — basso, runner; H
+  Chiusa il 16/10 (riconciliazione del 17/10): `420cc6d13`.
+- ✅ **H-23 · Un'azione `services` da sola ricrea il DB della corsia anche per un test `pure`** — basso, runner; H
   (mini-lotto della docstring), 16/10.
   - `_run_exclusive_setups()` (`scripts/test_runner/_cli.py`) gira per ogni invocazione. `_categories_in_scope()`
     restituisce la categoria qualunque sia l'azione, quindi `dev.py test … services client-address`, un test `pure`
@@ -3539,7 +3545,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura fatta il 16/10 (lotto «H-23», piano H §14): `_inventory.declared_isolation()` e, in `_run_exclusive_setups()`,
     il salto per un'azione da sola dichiarata `pure`, con una riga. Provata: `services client-address` lascia il DB
     invariato (inode, mtime, dimensione), `services asset-sync-counts` lo ricrea come prima.
-- **H-24 · Un `.DS_Store` o un test cambiato in `frontend/src` fanno ricostruire il frontend** — basso, runner; E,
+  Chiusa il 16/10 (riconciliazione del 17/10): `9541c0667`.
+- ✅ **H-24 · Un `.DS_Store` o un test cambiato in `frontend/src` fanno ricostruire il frontend** — basso, runner; E,
   via coordinatore, 16/10.
   - `check_frontend_needs_build()` (`scripts/cli_base.py` ~609) confronta con la build ogni file sotto `frontend/src`
     (`rglob("*")`): un `.DS_Store` del Finder fa sembrare la build più vecchia dei sorgenti, e parte una ricostruzione
@@ -3563,7 +3570,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `__pycache__/` no. Senza la registrazione vale la regola vecchia, con le mtime delle cartelle.
     - Prova reale sul vero albero dopo una build vera: con un `.DS_Store` in `backend/app/schemas` la build resta
       fresca, dove la regola vecchia l'avrebbe data stale.
-- **H-25 · Con `--workers` sopra 1, un'azione da sola fa girare il pre-passaggio parallelo di tutta la categoria** —
+  Chiusa il 16/10 (riconciliazione del 17/10): `c53012fcb`.
+- ✅ **H-25 · Con `--workers` sopra 1, un'azione da sola fa girare il pre-passaggio parallelo di tutta la categoria** —
   basso, runner; H (analisi di H-23), 16/10.
   - `_run_parallel_prepass()` → `_parallel_for_scope()` → `plan(scope)` pianifica tutta la categoria, non l'azione
     indicata, a differenza dei pre-passaggi consolidati, che girano solo con `action in (None, "all")`. Con le classi
@@ -3574,7 +3582,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   Dettagli: piano H, §14, lotto «H-23», passo 1.
   - Cura fatta il 16-17/10 (lotto «H-25», piano H §14): `_parallel_prepass_applies()` in `_cli.py`, la regola dei
     pre-passaggi consolidati. Niente pre-passaggio parallelo con un'azione singola o con dei nomi di test.
-- **H-26 · I nomi di test dopo `all` vengono scartati in silenzio** — basso, runner; H (dal test-author di H-25),
+  Chiusa il 17/10 (riconciliazione del 17/10): `4f70eed78`.
+- ✅ **H-26 · I nomi di test dopo `all` vengono scartati in silenzio** — basso, runner; H (dal test-author di H-25),
   17/10.
   - Il parser accetta `test_names` dopo qualsiasi azione (`_cli.py` ~331, `nargs="*"`), ma le 16 azioni `all` sono
     tutte registrate con `test_names=False`. `run_test_from_registry()` chiama allora la funzione senza nomi
@@ -3591,7 +3600,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - Il controllo avviene prima di ogni effetto collaterale, in `_dispatch_test_command` e in `main()`, `--list`
       compreso.
     - Prova reale: 6 comandi rifiutati, nulla cambiato.
-- **H-27 · `profile_default` non controlla il tipo del valore del profilo** — basso, configurazione; E (R13-SEC3), via
+  Chiusa il 17/10 (riconciliazione del 17/10): `b34f5e990`, doc `30c5afa02`.
+- ✅ **H-27 · `profile_default` non controlla il tipo del valore del profilo** — basso, configurazione; E (R13-SEC3), via
   coordinatore, 17/10.
   - `profile_default(name, fallback)` (`backend/app/config/__init__.py` ~579) restituisce con un `cast` il valore di
     `ENVIRONMENT_PROFILE_DEFAULTS[<profilo>]`, senza controllarne il tipo. Oggi l'unica voce è `managed`:
@@ -3612,7 +3622,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - Nessun controllo all'avvio: il tipo atteso lo conosce solo il lettore.
     - Resta a B, se lo vuole: con una tabella sbagliata le due rotte di `restore.py` rispondono 500, perché catturano
       solo `BackupConfigError`; per il suo 503 basta catturare anche `ProfileDefaultError`.
-- **H-28 · Il catch-all della SPA serve i file nascosti di `frontend/build/`** — basso, sicurezza (informazione); H
+  Chiusa il 17/10 (riconciliazione del 17/10): `51dd43926`.
+- ✅ **H-28 · Il catch-all della SPA serve i file nascosti di `frontend/build/`** — basso, sicurezza (informazione); H
   (analisi del residuo di H-24), 17/10.
   - `frontend_catchall()` (`backend/app/services/platform/static_site.py` ~130) serve qualunque file che
     `confined_path` trova dentro la build, dotfile compresi. Rispondono `GET /.build-debug` (dice se la build è di
@@ -3626,7 +3637,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura fatta il 17/10: `_hidden_in_build()` in `static_site.py`.
     - Prova reale su un server della corsia: i quattro percorsi nascosti danno `200.html`; `robots.txt` e
       `manifest.json` restano serviti.
-- **H-29 · Il mount di `/_app` e `/mkdocs` servono ancora i file nascosti** — basso, sicurezza (informazione); H
+  Chiusa il 17/10 (riconciliazione del 17/10): `36dbc5174`, riga del CHANGELOG `5beecac3d`.
+- ✅ **H-29 · Il mount di `/_app` e `/mkdocs` servono ancora i file nascosti** — basso, sicurezza (informazione); H
   (residuo di H-28), 17/10.
   - H-28 ha chiuso il catch-all della SPA. `ImmutableStaticFiles` (`/_app`) e `mkdocs_static` (`/mkdocs`) non filtrano
     i nomi che iniziano con `.`.
@@ -3638,7 +3650,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura fatta il 17/10 (lotto «H-29 e H-30», piano H §14).
     - `ImmutableStaticFiles.get_response()` dà a un nome nascosto il 404 di un file mancante;
     - `mkdocs_static()` gli dà il 404 della documentazione, attraverso `_hidden_below()`, che usa anche il catch-all.
-- **H-30 · `python -m scripts.test_runner --log-file` non fotografa il DB se il corpo alza un'eccezione** — basso,
+  Chiusa il 17/10 (riconciliazione del 17/10): `44acd2317`.
+- ✅ **H-30 · `python -m scripts.test_runner --log-file` non fotografa il DB se il corpo alza un'eccezione** — basso,
   runner; H (test-author di H-26), 17/10.
   - Nel ramo `--log-file` di `main()` (`scripts/test_runner/_cli.py`), `_snapshot_log_dir_db()` segue
     `_timed_run(...)` senza `try/finally`, a differenza di `_dispatch_test_command` (il percorso di `dev.py test`).
@@ -3648,6 +3661,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   Dettagli: piano H, §14, «Residuo di H-24 e H-28».
   - Cura fatta il 17/10 (lotto «H-29 e H-30»): il `try/finally` dentro il `with` di `tee_output`, come in
     `_dispatch_test_command`.
+  Chiusa il 17/10 (riconciliazione del 17/10): `97b746696`.
 - **H-31 · `blocked` nel pubblico `/system/instance`** — basso, facoltativo; E (E-11) e coordinatore, 17/10.
   - Le pagine anonime dei link (A7b) deducono il blocco dal 401 di una rotta pubblica fuori lista. Un booleano
     `blocked` in `GET /system/instance`, che è permesso a istanza bloccata, lo direbbe senza deduzioni e senza
@@ -3657,7 +3671,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     allo stesso modo con o senza blocco.
 
   Dettagli: piano H, §14, lotto «H-29 e H-30».
-- **H-32 · Un `float` nel corpo di una richiesta accetta `1E+400`** — basso, API; A (A-35), via coordinatore, 17/10.
+- ✅ **H-32 · Un `float` nel corpo di una richiesta accetta `1E+400`** — basso, API; A (A-35), via coordinatore, 17/10.
   - Pydantic accetta `inf` e `nan` di default (`allow_inf_nan=True`): la richiesta riceve 200. Se una rotta
     restituisce il valore così com'è, il renderer di Starlette (`allow_nan=False`) fallisce con un 500.
   - Direzione: un inventario dei campi `float` degli schemi dei corpi; poi forse `allow_inf_nan=False` nel modello
@@ -3673,7 +3687,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
       rispondono `null`.
     - Trovato strada facendo: con il gestore standard dei 422, un valore non finito su un campo già finito dà un 500,
       perché l'errore ripete l'`input`. Lo cura il gestore globale di A7b-2, che toglie l'`input`.
-- **H-33 · Senza un gestore di `ResponseValidationError`, il log del server contiene la risposta** — basso,
+  Chiusa il 17/10 (riconciliazione del 17/10): `80676ed09`.
+- ✅ **H-33 · Senza un gestore di `ResponseValidationError`, il log del server contiene la risposta** — basso,
   sicurezza (log); E (R13-SEC4), via coordinatore, 17/10.
   - Quando una risposta non passa il suo `response_model`, FastAPI alza `ResponseValidationError`. Nessuno la gestisce,
     quindi il traceback che uvicorn scrive nel log porta l'`input`: la risposta stessa, con i dati che conteneva.
@@ -3688,7 +3703,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - La risposta è lo stesso 500 in testo semplice.
     - Resto latente: un endpoint generatore tipizzato (streaming di FastAPI) fallirebbe la convalida a risposta già
       iniziata, e Starlette scriverebbe ancora `str(exc)` nel traceback. Oggi LibreFolio non ne ha.
-- **H-34 · Il JSON libero di una richiesta accetta `Infinity` e `NaN` al suo interno** — basso, API; H (residuo di
+  Chiusa il 17/10 (riconciliazione del 17/10): `5a0060816`.
+- ✅ **H-34 · Il JSON libero di una richiesta accetta `Infinity` e `NaN` al suo interno** — basso, API; H (residuo di
   H-32, dal test-author e dal docs-writer), 17/10.
   - La regola di H-32 riguarda i campi `float`. I campi `Any` o `JsonValue` raggiungibili da una richiesta accettano
     numeri non finiti al loro interno:
@@ -3708,7 +3724,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - `ToolComputeItem.parameters` era già protetto: `JsonValue` rispetta l'`allow_inf_nan=False` del suo modello.
     - La guardia di H-32 elenca ora le 5 posizioni libere, ognuna con la sua sonda. Il paragrafo di
       `security.md#request-numbers` arriva con i documenti di H-39.
-- **H-35 · Dopo A8a: la docstring di `log_configuration_audit()` e la pulizia di `test_config_audit.py`** — minimo; H
+  Chiusa il 17/10 (riconciliazione del 17/10): `d5d080a84`, entrato in dev `75bfac237`.
+- ✅ **H-35 · Dopo A8a: la docstring di `log_configuration_audit()` e la pulizia di `test_config_audit.py`** — minimo; H
   (review di A8a), via coordinatore, 17/10.
   - La docstring non nomina il `ValueError` di `LIBREFOLIO_LOGIN_LIMIT` né l'`AdminBootstrapConfigError` di F02.
   - `test_config_audit.py`: togliere i 9 segni «updated in A8a (accounts check, H reviews)» e l'impalcatura «red until
@@ -3723,7 +3740,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - `_configure` svuota le note di H-36, con un test che prima era rosso.
 
   Dettagli: piano H, §14, «Review di A8a» e lotti «H-36» e «H-35».
-- **H-36 · Dietro un proxy che uvicorn non considera fidato, i limiti per indirizzo contano tutti i visitatori
+  Chiusa il 17/10 (riconciliazione del 17/10): `0836e834b`, entrato in dev `d28a6d7df`.
+- ✅ **H-36 · Dietro un proxy che uvicorn non considera fidato, i limiti per indirizzo contano tutti i visitatori
   insieme** — medio, sicurezza; E (R13-SEC6), via coordinatore, 17/10. Decisione notturna N70.
   - L'immagine Docker avvia uvicorn con i suoi default, che seguono `X-Forwarded-For` solo da `127.0.0.1`. Un proxy
     davanti al container si collega dalla rete Docker (per esempio `172.18.0.2`), e ogni visitatore prende il suo
@@ -3740,7 +3758,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     frasi nei documenti, in «Callers.» di `security.md`, `connection_checks`, `configuration` ed `email`.
 
   Dettagli: piano H, §14, lotto «H-36».
-- **H-37 · Se manca una voce del profilo `managed`, `profile_default` dà il fallback del codice, cioè nessun limite** —
+  Chiusa il 17/10 (riconciliazione del 17/10): `36cc0119d`, doc `b3e9f9c8a`.
+- ✅ **H-37 · Se manca una voce del profilo `managed`, `profile_default` dà il fallback del codice, cioè nessun limite** —
   basso, sicurezza; E (R13-SEC7), via coordinatore, 17/10.
   - `profile_default` (`config/__init__.py`, ~584) usa il fallback del codice quando il profilo `managed` non elenca la
     variabile, e per un limite il fallback 0 vuol dire «nessun limite».
@@ -3756,6 +3775,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `LIBREFOLIO_FRAME_PROTECTION` si torna in silenzio a spento, e oggi lo ferma solo il test (a).
 
   Dettagli: piano H, §14, lotto «H-37».
+  Chiusa il 17/10 (riconciliazione del 17/10): `373cb53e6`, entrato in dev `b37e926af`.
 - **H-38 · Tailscale Serve davanti al container, e Docker Desktop: cosa mettere in `FORWARDED_ALLOW_IPS`** — basso,
   documentazione; H (dal docs-writer di H-36), 17/10.
   - Tailscale Serve sull'host inoltra a `127.0.0.1:6040`. Con Docker su Linux il container vede probabilmente il gateway
@@ -3767,7 +3787,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `docker_advanced`.
 
   Dettagli: piano H, §14, lotto «H-36».
-- **H-39 · Il profilo managed senza protezione dai frame non si vede** — basso, sicurezza; E (review di H-37, decisione
+- ✅ **H-39 · Il profilo managed senza protezione dai frame non si vede** — basso, sicurezza; E (review di H-37, decisione
   su `PROFILE_DEFAULTS`), via coordinatore, 17/10.
   - Una voce managed persa in `PROFILE_DEFAULTS`, o un pannello che spegne `LIBREFOLIO_FRAME_PROTECTION`, riporta
     in silenzio al default del codice. E non vuole una chiusura a runtime, ma un controllo che si veda.
@@ -3790,6 +3810,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
       mentre il middleware porta ancora quello vecchio. I documenti dicono già di riavviare.
 
   Dettagli: piano H, §14, lotti «Z-24» (la nota di H-39) e «H-39».
+  Chiusa il 17/10 (riconciliazione del 17/10): `52adadc05`, entrato in dev `0403b5eb7`.
 - **H-40 · IPv6 su Docker Engine: il visitatore arriva dal gateway della rete** — basso, documentazione; E, via
   coordinatore, 17/10.
   - `connection_checks.en.md:328-329` dice che Docker Engine su Linux tiene l'indirizzo del visitatore. Vale per IPv4
@@ -3801,7 +3822,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     in `connection_checks#client-address` e in «Why only a local peer» di `security.md`. Un visitatore IPv6 che passa
     da `docker-proxy` può anche aggiungere un header di inoltro e lasciare i limiti per indirizzo, come con Docker
     Desktop. Resta da verificare su un host Linux con Docker, insieme a H-38.
-- **H-41 · I `resolved_fields` di una promozione non sono validati** — medio, robustezza; W (trovato nel lotto H-34),
+- ✅ **H-41 · I `resolved_fields` di una promozione non sono validati** — medio, robustezza; W (trovato nel lotto H-34),
   17/10.
   - `TXPromoteBatchItem.resolved_fields: Dict[str, Any]` (`POST /transactions/validate` e `/commit`) è applicato così
     com'è da `_apply_promote_resolved_fields` (`services/transactions/batch_creates.py`).
@@ -3815,7 +3836,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `TXMixedBatch` (righe validate dopo, una per una) entrano nella guardia delle posizioni libere.
 
   Dettagli: piano H, §14, lotto «H-34».
-- **H-42 · Tre direttive della CSP imposte sulle pagine accanto a `frame-ancestors`** — basso, sicurezza; E (dopo
+  Chiusa il 17/10 (riconciliazione del 17/10): `c0b67f4c8` (lotto R13-SEC7-3, «type promote fields»), con i rossi `61acbc16b`.
+- ✅ **H-42 · Tre direttive della CSP imposte sulle pagine accanto a `frame-ancestors`** — basso, sicurezza; E (dopo
   H-39), via coordinatore, 17/10.
   - Con la protezione dai frame accesa (il default di managed), le risposte HTML hanno `frame-ancestors 'self';
     object-src 'none'; base-uri 'self'; form-action 'self'`. Le altre tengono solo `frame-ancestors 'self'`: Chromium
@@ -3830,6 +3852,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     questo il controllo dello spec è un `<object>` `application/pdf`.
 
   Dettagli: piano H, §14, lotto «H-42».
+  Chiusa il 17/10 (riconciliazione del 17/10): `7903bbe72`, `84c71a0c7`, `fb8661dd2`, entrati in dev `3b0af4094`.
 - **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
   17/10.
   - `configure_test_runtime` toglie a ogni corsia ogni `LIBREFOLIO_*` dello sviluppatore, e un run ha un solo backend
@@ -3853,7 +3876,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     non deve ricevere `object-src 'none'`, che può fermare il visore integrato di Chromium.
 
   Dettagli: piano H, §14, lotto «H-42».
-- **H-45 · `image/svg+xml` e `application/xhtml+xml` fuori dalla politica delle pagine** — basso, sicurezza; seguito di
+- ✅ **H-45 · `image/svg+xml` e `application/xhtml+xml` fuori dalla politica delle pagine** — basso, sicurezza; seguito di
   H-42 per E, via coordinatore, 17/10. E lo giudica nella revisione di H-42.
   - Con la protezione dai frame accesa, `PAGE_POLICY` va solo sulle risposte `text/html`. Un SVG o un XHTML, documenti
     anche loro quando si aprono direttamente, tengono il solo `frame-ancestors 'self'`.
@@ -3869,7 +3892,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - Test: `services managed-headers`, 355.
 
   Dettagli: piano H, §14, lotti «H-42», passo 7, e «H-45».
-- **H-46 · `LIBREFOLIO_TEST_MODE` acceso fuori da una corsia di test non si vede** — basso, sicurezza; E (review di
+  Chiusa il 17/10 (riconciliazione del 17/10): `3553c7870`, `77e9611e0`, entrati in dev `5ee3f6fef`.
+- ✅ **H-46 · `LIBREFOLIO_TEST_MODE` acceso fuori da una corsia di test non si vede** — basso, sicurezza; E (review di
   X-R44), via coordinatore, 17/10.
   - `dev.py server` lo spegne sempre. Un server avviato in altro modo (`uvicorn` a mano, un'unità di servizio) lo
     prende dal suo ambiente, e nessun controllo lo dice. Effetti:
@@ -3887,6 +3911,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     posto del traceback di `PermissionError`.
 
   Dettagli: piano H, §14, lotto «H-46».
+  Chiusa il 17/10 (riconciliazione del 17/10): `3cce3a2b8`, `9292ef57b`, entrati in dev `b7dcd3a25`.
 - **H-47 · `read_secret_file`: un'opzione per leggere un segreto da root, solo da un file regolare e senza link sotto una
   radice data** — basso, sicurezza; B-38 della review BZ di B, via coordinatore, 17/10. Il disegno è rivisto il 17/10,
   dopo aver riletto B-38 entrato. Dopo la 1.3.
@@ -3956,7 +3981,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `api instance-block`, `api system`, `api instance-legal`.
 
   Dettagli: piano H, §14, «Review di A9» e lotto «H-49 e H-48».
-- **H-49 · `platform.test_mode`: un lane id nei limiti della sonda di prontezza** — basso; E (review di H-46), via
+- ✅ **H-49 · `platform.test_mode`: un lane id nei limiti della sonda di prontezza** — basso; E (review di H-46), via
   coordinatore, 17/10. Da fare con H-48.
   - H-46 conta come corsia ogni `LIBREFOLIO_TEST_LANE_ID` non bianco. Il runner ne crea uno di 32 caratteri, e la sonda
     `test-lane-health` accetta da 16 a 128 caratteri: un lane id fuori da quei limiti non è una corsia che funziona.
@@ -3968,6 +3993,7 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - Test: `services config-audit`, 220.
 
   Dettagli: piano H, §14, lotto «H-49 e H-48».
+  Chiusa il 17/10 (riconciliazione del 17/10): `d97d83b57`, `988f22860`, entrati in dev `96da36422`. H-48 resta aperta.
 - **H-50 · Le impostazioni di scope SYSTEM si leggono una volta per voce di `/prices/current`** — basso, prestazioni;
   E (R13-SEC9), via coordinatore, 17/10. Dopo la 1.3.
   - `configure_instance()` (`services/plugin_settings/runtime.py`) apre un `AsyncSession` sul motore asincrono per ogni
@@ -4420,7 +4446,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
 - ✅ **A-44 · L'admin iniziale che non ha mai fatto il setup non si può annullare** — unita ad **A-43** dal coordinatore
   (17/10, 03:09): disattivarlo è l'annullamento. Dettagli delle voci di E: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Revisione di E».
-- **A-45 · `developer/api/index.md`: `/auth` «token refresh» non esiste** — minimo (doc, solo inglese); dal
+- ✅ **A-45 · `developer/api/index.md`: `/auth` «token refresh» non esiste** — minimo (doc, solo inglese); chiusa il 17/10
+  (commit del coordinatore): la riga elenca le rotte vere; dal
   `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
   refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
   estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
@@ -4453,6 +4480,14 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
   no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-43.5».
+- ✅ **A-51 · Annullamento e cancellazione dell'admin in attesa decisi da letture prima del lock** — basso (classe A-42);
+  chiusa il 17/10 (commit del coordinatore): il PATCH con `cancel_setup` (409 `SETUP_COMPLETED`), `update_user_status`,
+  `set_user_active` e `set_user_admin` decidono sotto il lock, la DELETE rilegge sotto il lock (`DEMOTE_FIRST`);
+  dalla revisione di E di A-42/A-43 (17/10), tramite il coordinatore; prima della 1.3 (coordinatore, 14:44). Se il setup
+  si completa in quel millisecondo l'annullamento è un no-op con un 200 vecchio e la cancellazione toglie l'admin appena
+  attivato senza `DEMOTE_FIRST`; in più la scheda annulla con lo stesso corpo di una disattivazione (una riga vecchia
+  disattiva il proprietario nuovo), e `user deactivate` può disattivare l'unico admin. Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-51».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -5727,6 +5762,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   500 characters»; lo stesso per una create o un update troppo lunghi). Cura: la modale d'unione mostra il conteggio e avvisa oltre 500;
   `string_too_long` tradotto (con `max_length` dai `ctx` dell'errore, che il parse del batch oggi scarta). Dettagli: piano 04, sezione
   «H-41 dentro SEC7-3».
+  Allargata il 17/10 (nota di H nella revisione di W-B75): lo stesso vale per ogni errore di campo con un contesto di dati semplici,
+  che il batch (`_lone_error_params`, W-B72) e il parse BRIM (W-B75) passano con `params` nulli. Un `greater_than` su `id_a`/`id_b`
+  (split e promozione) o su `from_tx_id` (la vecchia promozione), solo da API, arriva senza `{gt}`, e
+  `transactions.pydantic.greaterThan` («Value must be greater than {gt}») resta senza il valore. Cura con questa voce: il contesto di
+  dati semplici anche per gli errori di campo, nelle due copie della regola, rossi prima (i rifiuti di H-41 e del batch che oggi
+  fissano `params` nulli cambiano contratto).
 - **W-B71 · Il suggerimento di promozione (ed eventi) va in 500 con una data ai bordi del calendario** — basso, disponibilità; W, 17/10
   (SEC7-3). `promote_suggest_bulk` (`backend/app/services/transactions/promotion.py`) calcola `inp.date ± timedelta(days=tolerance_days)`
   (0–30, 7 di default): con `0001-01-01` o `9999-12-31` un `OverflowError`, un 500 per quella richiesta sola (niente memoria né CPU); da
@@ -5765,10 +5806,20 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 - **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
   17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
   errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
-  `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
+  `PydanticSerializationError` (verificato). **Correzione di H**: non un 500 ma un 400 «Unable to serialize…», perché il dump di
+  `brokers.py:1047` sta dentro il `try`, e il file resta `PARSED` senza risultato salvato (`move_to_failed` sposta solo da
+  `UPLOADED`). Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
   rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
   (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
   ➡️ 17/10: passata a **H** (bilanciamento del coordinatore); io la rivedo al checkpoint di H.
+  ✅ 17/10 (H): `BRIMProvider._lone_error_params`, la regola di W-B72, più 18 test; commit `118bd39bf` + `21a2610c8` → dev
+  `9ba7ef9d3`. Rivista da W dopo l'ingresso: OK. Le note di H archiviate in W-B70 (il `{gt}` latente) e W-B77 (le due copie).
+- **W-B77 · La regola dei `params` e `_loc_to_field` esistono in due copie (batch e BRIM)** — minimo, pulizia; W con H, 17/10
+  (revisione di W-B75). `_lone_error_params`, `_PLAIN_PARAM_TYPES` e `_loc_to_field` stanno sia in
+  `backend/app/services/transactions/transaction_batch_stages.py` sia in `backend/app/services/brim/brim_provider.py`, e una
+  modifica a una sola delle due fa divergere i `params` di una riga rifiutata dal parse e dal batch. Cura: un modulo condiviso (per
+  esempio in `schemas/` o `utils/`), con i test delle due parti; con l'occasione, la docstring di BRIM che dice «made the parse answer
+  500» (era un 400, la correzione stessa di H). Dopo W-B70, che cambia la regola. Dettagli: questa voce.
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -6491,6 +6542,23 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   `metadata.params` ripetono la richiesta. Visibile solo fuori dai limiti. Da scegliere una convenzione sola, o da dire
   nella pagina. Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione
   «SEC8-1b».
+- **J-54 · Nell'AI Export `null` vuol dire anche «nessuno», e T-B7 lo nomina come «non disponibile»** — minimo,
+  chiarezza; J, 17/10 (rossi di T-B7, letto nel codice).
+  - Il backend scrive ogni `None` come `null` (`model_dump(mode="json")`, senza `exclude_none`), anche dove vuol dire
+    «nessuno» invece che «ignoto»:
+    - il `closing_date` di un lotto aperto;
+    - il `reason_code` di una riga senza problemi;
+    - il `component` di un'uscita scalare;
+    - `minimum`/`maximum` di un'uscita senza limiti (`IndicatorOutputColumn`).
+  - Il preambolo dice `null=explicitly unavailable`. Era già così in una tabella mista; da T-B7 una colonna così, nulla
+    in ogni riga, si nomina anche su `omitted_null_columns=`. Per esempio ogni OUTPUT DEFINITIONS di un segnale senza
+    limiti nomina `component,minimum,maximum`.
+  - Cure possibili (da decidere):
+    - (a) il preambolo allarga `null` a «non disponibile, o nessuno per quella riga»;
+    - (b) il renderer tratta come «non si applica» i metadati delle definizioni;
+    - (c) il backend omette quei campi, con un salto di versione dei componenti.
+  - Da guardare nella sonda mirata di T-B7. Dettagli:
+    [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «T-B7».
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -7189,12 +7257,16 @@ sulla base `23f6578f3`.
   - Con una correzione da applicare, il nome di un archivio ostile rompe la verifica (`stage_failed`). Su un database
     ripristinato, rompe un avvio successivo in cui una correzione si applica.
   - sqlite3 esegue un solo statement e non carica estensioni: nessuna fuga dalla copia.
-  - Cura: quotare come `snapshot._quoted`. Test: una tabella `x"y` con una correzione pendente.
+  - Cura: quotare come `snapshot._quoted` (oggi `snapshot._identifier`, dopo la nota di H). Test: una tabella `x"y`
+    con una correzione pendente.
   - **Il modulo non è di B**: passa dal coordinatore.
 - ✅ **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
   - Le connessioni sono quella delle correzioni post-migrazione (`PM:211`) e il motore di Alembic su `-x sqlalchemy.url`.
     Sono le uniche alla copia senza `PRAGMA trusted_schema=OFF`.
-  - Dopo B-28 restano solo tabelle e indici, e nessuna funzione dell'app è registrata lì: nessun exploit noto.
+  - Dopo B-28 restano solo tabelle e indici. La connessione `sqlite3` delle correzioni non registra funzioni, il
+    motore di Alembic sì: SQLAlchemy (dialetto pysqlite, 2.0.52) registra `regexp` e `floor` in Python a ogni
+    connessione. Senza `trusted_schema=OFF` un `CHECK` dell'archivio potrebbe eseguire `re.search` con un suo pattern
+    durante l'upgrade: il listener di `env.py` è una cura vera, non solo coerenza (revisione di H, 17/10).
   - Cura: spegnerlo in entrambe. **Proprietari fuori da B** (post_migration, `env.py`).
   ✅ **Fatto il 17/10** (B-36 + B-37, checkpoint delle 13:33), con il permesso del coordinatore sui due file.
   - `_row_counts` quota i nomi raddoppiando `"`.
@@ -7256,6 +7328,57 @@ sulla base `23f6578f3`.
   ✅ **Fatto il 17/10** (checkpoint delle 14:56).
   - `outcome._report`: un errore la prima volta per cartella dati e processo, poi `debug` finché dura lo stesso errore.
   - `_forget` lo dimentica quando il file viene scritto, tolto, trovato mancante o letto.
+- ✅ **B-43 · Una funzione che il lettore non ha, nello schema dell'archivio, ferma la verifica con un errore grezzo** —
+  basso; H, 17/10 (H-51, revisione; misurato da B su SQLite 3.54.0).
+  - B-28 rifiuta trigger, viste e tabelle virtuali per tipo, ma non legge le espressioni. Un'espressione di un indice o
+    una colonna generata che chiama una funzione sconosciuta fanno fallire `integrity_check` anche in sola lettura: la
+    verifica si ferma in `describe_database()`.
+  - Un `CHECK` così passa invece la descrizione, perché in sola lettura SQLite salta i vincoli `CHECK`. Fallisce al primo
+    `integrity_check` in lettura e scrittura, quello delle correzioni post-migrazione.
+  - In tutti e due i casi esce un `sqlite3.OperationalError` grezzo: la verifica dell'app dice `stage_failed`, e
+    `dev.py backup restore` finisce con un traceback.
+  - Cura: in `_stage`, ogni errore `sqlite3` (non un `ProgrammingError`) mentre si legge o si controlla il database della
+    copia diventa `database_damaged`. Nel log vanno solo la classe e il nome dell'errore di SQLite, mai la funzione, che
+    è testo dell'archivio. Rossi prima.
+  - **Parte 1, dentro B-43** (coordinatore, 16:25; trovata da DW-B43, misurata da B): da H-51 le connessioni del server
+    registrano `regexp` e `floor` di SQLAlchemy e rileggono lo schema con `trusted_schema` spento. Uno schema che li
+    chiama in un indice o in una colonna generata passa tutta la verifica, poi ogni connessione del server fallisce
+    («unsafe use of …»), e il primo avvio dopo il ripristino cade. Cura: `_refuse_foreign_objects()` legge lo schema con
+    i due nomi registrati come segnaposto, mai eseguiti.
+  Dettagli: piano 07, «B-43 + B-44».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 16:45).
+  - Ogni errore `sqlite3` della fase del database diventa `database_damaged`, con un solo avviso (classe e
+    `sqlite_errorname`).
+  - Lo schema si legge con i segnaposto di `regexp` e `floor`.
+  - Il resto in B-45 (CHECK e DEFAULT) e B-46 (stderr dell'upgrade).
+- ✅ **B-44 · I testi su `trusted_schema` dell'upgrade dopo H-51** — minimo, testo; H, 17/10 (H-51).
+  - La docstring di `_schema_untrusted` in `env.py` dice «before anything else». Il listener di classe di
+    `db/session.py`, che i suoi import caricano, gira però prima, e il dialetto registra `regexp` e `floor` dopo di lui.
+  - Da H-51 il listener di classe spegne `trusted_schema` per primo e chiude con `writable_schema=RESET`.
+  - Da allineare a `security.md#trusted-schema-server`: la docstring e il punto «`trusted_schema` off on every connection
+    to the copy». Nello stesso checkpoint di B-43 (coordinatore).
+  Dettagli: piano 07, «B-43 + B-44».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 16:45): la docstring di `_schema_untrusted` e il punto di `security.md`
+  dicono l'ordine vero (listener di classe, dialetto, `_schema_untrusted`).
+- **B-45 · Un `CHECK` o un `DEFAULT` dell'archivio che chiama `regexp` o `floor` passa la verifica, poi rompe le
+  scritture su quella tabella** — basso, dopo la 1.3; B, 17/10 (parte 2 della scoperta di DW-B43; H e il developer
+  decidono).
+  - SQLite risolve le funzioni di un `CHECK` o di un `DEFAULT` solo quando servono. Così la lettura dello schema con i
+    segnaposto di B-43 non li vede. Su SQLite 3.54 `floor()` esiste anche senza SQLAlchemy, quindi un `CHECK` su `floor`
+    passa anche il controllo d'integrità in lettura e scrittura.
+  - Dopo il ripristino, da H-51, le scritture che li usano falliscono («unsafe use of …»): niente codice dell'archivio
+    viene eseguito, ma quella tabella resta in parte inutilizzabile.
+  - Cura possibile, più grande: confrontare l'SQL di ogni tabella e indice con lo schema di LibreFolio alla sua
+    revisione (un elenco di ciò che è ammesso, invece del solo tipo di oggetto di B-28).
+  Dettagli: piano 07, «B-43 + B-44».
+- **B-46 · Il log dell'upgrade di una verifica contiene testo dell'archivio** — basso, dopo la 1.3; B, 17/10 (DW-B43).
+  - `_upgrade()` registra `stderr=result.stderr[-4000:]` di Alembic. Il traceback porta il messaggio di SQLite, con nomi
+    di oggetti e di funzioni dell'archivio. B-28 e B-43 tengono invece fuori dal log ogni testo dell'archivio.
+  - È precedente a B-43. Da decidere: tenerlo, perché serve a capire un upgrade fallito di un archivio vero, o ridurlo
+    alla classe dell'ultima eccezione.
+  Dettagli: piano 07, «B-43 + B-44».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -7464,6 +7587,34 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       prendere l'errore (oggi irraggiungibile).
     - Commit al checkpoint di E-18.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «MF-SEC9b» ed «E-18».
+- **E-19 · L'avviso dei codici di valuta non ISO salvati** — medio-piccolo (avviso), medio (correzione); coordinatore,
+  17/10 (seguito di E-18).
+  - Dopo E-18 una riga salvata con `978` o `EURO` non si salva più dopo una modifica, e l'utente non la vede: il
+    selettore mostra un campo vuoto.
+    - Gli asset danno 422 a ogni modifica, e correggerli dal modulo passa dal wipe della Policy D.
+    - Le rotte FX in modifica si perdono.
+    - Il cruscotto manda verso tassi che ora danno 422.
+  - Ci sono altre due fonti:
+    - il ripristino di un backup vecchio, sempre;
+    - un buco di E-18: la `base_currency` dell'utente controlla solo la lunghezza.
+  - Gap-fix del BRIM: i movimenti salvati con un codice non ISO restano fuori dal confronto, e propone un deposito
+    correttivo per denaro che c'è già. La cura è nello stile di W-B74.
+  - 17/10, E: analisi fatta. Decisioni dello sviluppatore aperte:
+    - D1, il modello di correzione: A guidato dall'utente, B da riga di comando, C automatico in `post_migration`;
+    - D2, la correzione degli asset senza wipe;
+    - D3, la gravità.
+  - 17/10, coordinatore: D3 deciso (`warning`); D1 e D2 allo sviluppatore. Via su E-19a (backend) ed E-19b (utente).
+  - 17/10, E: **E-19a fatto**.
+    - `base_currency` stretto; `suggested_iso_currency()` (limite 80, mai GBX/ZAC/ILA, ambiguo = nessuno); il 422 che
+      nomina il codice.
+    - `stored_currencies.py`: 14 posti, l'avviso d'avvio e `dev.py db currencies`.
+    - La guardia del gap-fix (W rivede) e il passo d'avvio (H rivede).
+    - 14 suite, 3 800 verdi; OpenAPI identico; build stretta e `check-links` puliti.
+    - Commit al checkpoint di E-19a.
+  - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
+    col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
+  - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19».
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -7769,6 +7920,24 @@ da Y il 15/10.
     lascia un segno durevole sulla riga di `?highlight=` (il test guarda la navigazione e la modale). Un `data-state` o un
     `data-highlighted` li renderebbe espliciti.
   - Dettagli: piano di Y, «J-12, la metà del pannello».
+- **Y-32 · Le card della lista degli asset: prezzo live, Δ della serie** — basso, coerenza, domanda di prodotto per il
+  developer; Y, 17/10 (X-R59, D2: il coordinatore ha scelto la parità per il lotto A).
+  - La card mostra il prezzo live (`livePriceMap`, dal poll di `/prices/current`), ma la sua Δ sull'intervallo è quella della
+    serie, fino al prezzo salvato su `as_of`: dopo X-R59, il `range_change` di `period-changes`. Finché il prossimo
+    caricamento non la rilegge, la Δ non segue il prezzo mostrato. Succedeva già prima, con la Δ calcolata nel browser.
+  - Rimedio possibile: quando l'intervallo finisce oggi, il poll della lista chiede `/prices/current?range_start=` e la card
+    usa quel `range_change`, come la pagina dell'asset (lotto B di X-R59).
+  - Attenzione, se si fa: le glob esatte `'**/api/v1/assets/prices/current'` delle spec che restano sulla lista (per esempio
+    `asset-list.spec.ts`) non vedono più la richiesta con la query, perché in Playwright la glob è ancorata alla fine. Vanno
+    allargate con un `*` finale, come il lotto B ha fatto per le spec che aprono la pagina dell'asset.
+  - Dettagli: piano di Y, «X-R59».
+- **Y-33 · `asset-detail.spec.ts`: 10 s per una navigazione a freddo sotto carico** — minimo, stabilità dei test; Y, 17/10
+  (slot E2E di X-R59, 16:05). `goToSeededAssetDetail()` (`frontend/e2e/assets/asset-detail.spec.ts:107-114`) clicca la card
+  di Apple e dà 10 s alla radice `asset-detail-page`. Al picco di carico dopo la build (carico a 1 minuto 93 alle 15:24) un
+  contesto nuovo importa a freddo il bundle grosso della pagina, e «edit button opens asset modal» (`:240`) è caduto lì,
+  ancora sulla lista; da solo, a carico normale, passa in 4,1 s, e gli altri test con lo stesso aiuto sono passati. La cura,
+  come Y-22: più tempo alla navigazione, oppure aspettare prima l'URL e poi la radice. Spec dell'area degli asset: a chi
+  la tocca. Dettagli: piano di Y, «X-R59».
 
 ## MF · Matematica finanziaria (fase 01)
 
@@ -7950,6 +8119,12 @@ punto di partenza, l'audit dello stesso giorno:
   `fx/sync.py:234` in blocchi (`utils/sql_chunks.OR_TERMS_PER_QUERY`), un tetto di scrittura `MAX_BULK_WRITE_ITEMS`
   (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
   verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
+- **MF-J45c · Il report in cache `portfolio_layer2` è un oggetto condiviso fra le richieste** — minimo, robustezza;
+  test-author di MF, 17/10 (MF-J45b). Come il risultato del motore (ora condiviso anche dal single-flight, con una
+  guardia che i consumatori non lo modificano), il report Pydantic di `_portfolio_l2_cache` (`portfolio_service.py`,
+  30 minuti) è restituito tale e quale a ogni richiesta: un consumatore che lo modificasse in luogo cambierebbe le
+  risposte degli altri. Nessun caso visto; una guardia simile (istantanea profonda prima e dopo) lo fisserebbe.
+  Dettagli: piano MF, «MF-J45b».
 - **MF-SEC9d · Nessun tetto globale alle chiamate concorrenti per fornitore** — basso, carico; E, 17/10 (revisione di
   R13-SEC9). Il semaforo di `get_current_prices_bulk` limita una richiesta, non il processo: 1 000 id distinti con un
   fornitore lento sono ~33 minuti di chiamate in uscita per richiesta, e più richieste si sommano. Proposta: un

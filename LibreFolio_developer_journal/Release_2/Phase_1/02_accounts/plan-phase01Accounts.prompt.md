@@ -6748,3 +6748,121 @@ la docstring di SC-LANE-01 dopo E-15.
 - API `auth`, `registration`, `account-deletion` (`work/slot_a46/slot.sh`): **95**, **102**, **9** → **206/206** (REG-002 e
   PROF-008, i 400 semplici, compresi). Impronta invariata; porta 6182 libera.
 - **A-46 + A-47 (+ la nota di J): definizione di fatto ✅** (revisione di E dopo l'ingresso; J per i commenti).
+
+## A-46 + A-47 — Entrato; A-45 e A-51 (17/10, 14:42–; base `f8e1f6aed`)
+- **Entrato**: dev `abbe19d37` (`521679986`), CHANGELOG 🐛 `f8e1f6aed`. Due messaggi in coda da prima, arrivati tardi:
+  la nota di H sul helper (già fatto ed entrato, `d7641f368`) e la revisione di E di A-42/A-43 (OK; una nota LOW → A-51).
+- **A-45** ✅ (14:45): `developer/api/index.md`, la riga di `/auth` («login, token refresh») → le rotte vere (accesso e
+  uscita: un cookie che dura `session_ttl_hours`, **nessun refresh token**, con il rimando a «Token Expiration»; `me`,
+  registrazione, profilo e password, la cancellazione del proprio account con l'anteprima; i link: `tokens/inspect`,
+  `password-reset`, `setup`; l'`address-probe`). Ancore verificate nel sito costruito (`#token-expiration`,
+  `#address-probe`). La build strict viaggia con la doc di A-51.
+
+### A-51 — Le decisioni su letture fatte prima del lock (analisi, 14:50)
+Dal coordinatore: «A-51: yes, before 1.3, right after A-45 … Reds first for both stale-read paths. The new 409 code gets
+its i18n keys in 4 languages, and run the HTML gate/`core-unit` with them. Add the A-51 line in that same lot.»
+- **Stato reale (nota di E)**: l'annullamento (PATCH) e la cancellazione diretta decidono da letture fatte prima del
+  lock: se l'admin in attesa completa il setup in quel millisecondo, l'annullamento è un no-op con un 200 vecchio
+  (`is_active: false` accanto a `pending_setup: false` fresco) e la cancellazione toglie l'admin appena attivato senza
+  `DEMOTE_FIRST`.
+- **Trovato in più**: il «Cancel setup link» della scheda manda `{is_active:false}`, lo stesso corpo di una
+  disattivazione: se il proprietario completa il setup mentre la scheda mostra ancora la riga in attesa, un clic minuti
+  dopo **disattiva il proprietario nuovo** (e il toast dice che il link è stato annullato). Il lock da solo non basta:
+  serve l'intenzione nella richiesta.
+- **Stesso tipo, CLI**: `set_user_active` decide l'ultimo admin con `user.is_active` letto prima (`_is_last_active_admin`):
+  un `user deactivate` nel millisecondo del setup su un'istanza F02 nuova può disattivare l'unico admin.
+- **Contratto proposto**: PATCH con il campo facoltativo `cancel_setup: true` (solo con `is_active:false`, altrimenti 422);
+  `update_user_status` prende prima il lock (`db.session.begin_writes(session, User)`, l'aiuto di W-B20), rinfresca
+  l'account e decide tutto sotto il lock; con `cancel_setup` e un account che non aspetta più → rollback, 409
+  `SETUP_COMPLETED`; un PATCH semplice resta «disattiva», deciso dallo stato fresco. DELETE: lo schema di A-42 (se la
+  prima lettura dice «in attesa»: lock, rinfresco, seconda lettura; se il setup ha vinto → rollback, 409 `DEMOTE_FIRST`).
+  CLI `user deactivate`: lock, rinfresco, poi la guardia dell'ultimo admin. UI: `SETUP_COMPLETED` in
+  `ACCOUNT_ERROR_CODES`, la chiave `settings.usersTab.errors.SETUP_COMPLETED` in 4 lingue, il corpo
+  `{is_active:false, cancel_setup:true}`; `api sync`. Rossi simulati come in A42 (la prima chiamata di
+  `is_pending_admin` dà la risposta vecchia). In attesa dell'OK del coordinatore sul campo e sul punto CLI.
+- **Coordinatore (14:52): OK** su `cancel_setup` e sul punto CLI: «The intent-carrying body is the right cure. Make the
+  field additive and optional, so existing API callers keep working. CHANGELOG 🐛 line in your checkpoint.»
+- Riga A-51 aggiunta al backlog (sezione A, prima di X).
+
+### A51.1 — Rossi (14:53–, due `test-author` in parallelo, file distinti)
+- Backend: A51-001…006 in `test_users_admin_api.py` (classi in processo: la scheda vecchia e il millisecondo con
+  `cancel_setup`, il caso vero di annullamento con il campo, il 422, la risposta uguale al database per il PATCH semplice,
+  la DELETE → `DEMOTE_FIRST`), A51-007 (`user deactivate`) e A51-008 (`user demote`, aggiunto: lo stesso difetto,
+  `_is_last_active_admin` legge `user.is_active` vecchio) in `test_admin_bootstrap.py`.
+- Frontend: UTAB-61/62 in `UsersTab.test.ts` (il corpo `{is_active:false, cancel_setup:true}`; il 409 →
+  `settings.usersTab.errors.SETUP_COMPLETED`), `accountErrors.test.ts` (il codice nuovo).
+- Codice pronto, non applicato: `work/a51/apply_a51.py` (schema con `cancel_setup` e il validatore; le due rotte;
+  `update_user_status`, `set_user_active`, `set_user_admin` con `begin_writes` + `refresh` prima di decidere; la scheda e
+  `ACCOUNT_ERROR_CODES`; dry-run pulito) e `work/a51/i18n_a51.py` (la chiave in 4 lingue). La sessione della richiesta
+  si chiude con `async with`: una transazione rimasta aperta senza cambi si annulla e libera il lock.
+- Frontend, osservati (15:04): `UsersTab.test.ts` **UTAB-61** (rosso: «expected { is_active: false } to deeply equal {…
+  cancel_setup }») e **UTAB-62** (rosso su `detail.code` `null`; il resto — nessun successo, la riga ridisegnata come la
+  dà il server — già passa oggi), 60 verdi; `accountErrors.test.ts` **AERR-13** (codice) e **AERR-14** (la frase nei
+  quattro cataloghi, senza segnaposto) rossi, 33 verdi. **UTAB-56** allentato (il corpo contiene `is_active: false`;
+  il corpo esatto lo fissa UTAB-61): approvato. La guardia «Deactivate» → `{is_active:false}` esatto c'era già (UTAB-32).
+- Backend, osservati (15:08): `test_users_admin_api.py` **A51-001/002/003** rossi (422 `extra_forbidden` su
+  `cancel_setup`), **A51-005** rosso («it answered {'is_active': False, 'pending_setup': False}, the database holds
+  {'is_active': True, …}»), **A51-006** rosso («409 DEMOTE_FIRST: got 204»), guardia **A51-004** verde (4 corpi); 89 di
+  prima verdi. `test_admin_bootstrap.py` **A51-007** e **A51-008** rossi; 216 di prima verdi.
+  > **Scelte del test-author, approvate**: la gara di PATCH/DELETE scatta dentro la prima lettura `is_pending_admin`
+  > della rotta (lettura vera, poi il setup completato su un'altra connessione, poi la risposta di prima): presuppone
+  > quella lettura prima del lock, come nel codice. La CLI usa un innesco indipendente dall'ordine (dopo il caricamento
+  > o prima della prima scrittura, gli aiuti di A42).
+  > **⚠️ Trovato dal test-author**: oggi `user deactivate` nel millisecondo **non** disattiva: risponde successo e chiude le
+  > sessioni del proprietario nuovo, ma non scrive `is_active` (il valore nuovo uguale a quello vecchio letto: SQLAlchemy
+  > non scrive la colonna). `user demote` toglie davvero l'unico admin.
+
+### A51.2 — Codice ✅ e verdi (15:09–15:23)
+- `work/a51/apply_a51.py` (5 file) e `work/a51/i18n_a51.py` (`settings.usersTab.errors.SETUP_COMPLETED`, 4 lingue;
+  `i18n check` stretto, 5 051 chiavi). `api sync` (il client generato ha `cancel_setup`); `front check` **0/0**;
+  Prettier ha ritoccato solo `UsersTab.test.ts`; ruff, black puliti.
+- In processo: `test_users_admin_api.py` **98/98** (34 della corsia deselezionati), `test_admin_bootstrap.py` **218/218**,
+  `test_admin_setup_api.py` **48/48**.
+- Vitest: `features/settings` più gli 11 cancelli dei sorgenti (`htmlInterpolation`, `htmlSink` compresi) → **37 file,
+  1 357/1 357**.
+- Corsia, servizi: `admin-bootstrap` 218, `user-profile` 52, `session-version` 56, `email-verification` 127,
+  `registration` 151, `username-rules` 52 → **656/656**; porta libera.
+- Doc: quinto giro del `docs-writer` in corso. Slot chiesto (API `users-admin`, `admin-setup`, `account-deletion`; E2E
+  `admin-users`; Vitest `core-unit`, `component-unit`), dopo la doc: `work/slot_a51/slot.sh`.
+
+### A51.3 — Slot, prima parte: Vitest ✅ (15:23–15:33; impronta `95113de0071535d5`)
+- Il coordinatore (15:23): API ed E2E in coda (quattro esecuzioni pesanti in corso), i Vitest subito. `core-unit`
+  **209 file, 8 459/8 459** (con `instanceProfile`, `htmlInterpolation`, `htmlSink` e gli altri cancelli);
+  `component-unit` **179 file, 4 802/4 802** (con `UsersTab.test.ts`). Impronta invariata; porta 6182 libera.
+
+### A51.4 — Doc ✅ (15:20–15:39, `docs-writer`, quinto giro; e A-45)
+- `access_control.md` (la riga PATCH con `cancel_setup?`, la DELETE e «Deleting an Account» punto 4, il punto nuovo
+  «Decided under the write lock» per `deactivate`/`demote` della CLI, «Cancelling the setup link» col corpo nuovo, il
+  paragrafo nuovo «A setup completed meanwhile» `#setup-completed-meanwhile`, i test A51); `security.md` («The Setup
+  Link's Lifecycle», la riga della tabella Revocation, «Session Revocation»); `admin/users.en.md` («Cancel Its Setup
+  Link»: il messaggio e la riga ricaricata; la DELETE nella stessa gara → *demote first*); `features/settings.md`
+  (UsersTab, Account Errors, i test). `admin/cli_tools` senza cambi (tutto ancora vero). La riga di A-45 verificata.
+  Build strict e `check-links` (97 validi) puliti; nessun timbro, nessun debito nuovo.
+- **Rilievo, curato**: `cancel_setup` su un account che non ha mai aspettato (solo da una chiamata API diretta: la scheda
+  manda il campo solo dalle righe in attesa) riceveva «This administrator completed its setup in the meantime». La frase
+  dell'API e la riga INFO ora sono neutre («This account does not wait for its setup: nothing was changed»; «Setup
+  cancellation refused: the account does not wait for its setup»); la frase della UI (chiave i18n) resta, giusta per le
+  righe in attesa. `access_control.md` allineata (la citazione e il perché). Nessun test fissava le due frasi; A51
+  ricontrollati in processo **9/9**; build strict pulita (78 s).
+- Rilievo lasciato: i controlli della rotta fuori dal lock (protezione, `PENDING_SETUP` di retrocessione e
+  riattivazione, il limite) usano la prima lettura; una lettura vecchia lì può solo rifiutare, mai permettere.
+
+### A51.5 — La revisione di E di A-46/A-47: `AccountError` copiabile ✅ (15:40–15:47)
+- E (OK, nessun rilievo; una cosa da poco per questo lotto): `AccountError` (sottoclasse di `str`) non si copia, né con
+  `deepcopy` né con `pickle`: `str.__getnewargs__` restituisce solo il messaggio e `AccountError.__new__` vuole
+  `(code, message)` → `TypeError`. Cura provata da E: `__getnewargs__` → `(self.code, str(self))`.
+- Rosso (`test-author`): **UNAME-032** in `test_username_rules.py` (3 casi: `copy.copy`, `copy.deepcopy`, pickle; su un
+  rifiuto vero di `create_user`), osservato rosso sul `TypeError` («AccountError.__new__() missing 1 required positional
+  argument: 'message'»), i 52 di prima verdi. Nota: i protocolli pickle 0 e 1 passano già (`copyreg._reconstructor`).
+- Cura applicata (con `# type: ignore[override]`: `str` dichiara `tuple[str]`); il file **55/55**; ruff, black puliti.
+- Slot (GO dalle 15:50): API `users-admin`, `admin-setup`, `account-deletion`, poi E2E `admin-users`. La frase sulla copia
+  in `security.md` («Refusals with a code») viene dopo lo slot (un `.md` più nuovo farebbe ricostruire il sito a ogni
+  avvio del server dello slot).
+
+### A51.6 — Slot, seconda parte ✅ (GO dalle 15:50; 15:50–16:02; impronta `915a562af5e1b986`)
+- API `users-admin` **132** (i 34 casi della corsia compresi), `admin-setup` **52**, `account-deletion` **9** → **193/193**;
+  E2E `admin-users` **10/10**. Impronta invariata prima e dopo; porta 6182 libera. (La prima parte, Vitest, era girata
+  sull'impronta `95113de0071535d5`: dopo sono cambiati solo file del backend — la frase neutra, `__getnewargs__`.)
+- Doc dopo lo slot: `security.md` («Refusals with a code»: `AccountError` sopravvive a copia, deepcopy e pickle con il
+  suo codice; UNAME-032 fra i test). Build strict e `check-links` (97 validi) puliti.
+- **A-51 (+ A-45, + la cura di E su A-47): definizione di fatto ✅** (revisione di E dopo l'ingresso).

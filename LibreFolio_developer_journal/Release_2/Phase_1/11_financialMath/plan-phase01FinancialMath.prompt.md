@@ -2925,3 +2925,40 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
 - ✅ **Slot** (GO col carico a 5 minuti < 50: atteso dalle 15:33, partito 15:40; HEAD `79d4ca239`): `api assets-price`
   **22**, `api current-price-persistence` **5**. Porta libera. Coordinatore: MF-A3 alle domande del developer; MF-A4 (doc)
   nel prossimo lotto. **CHECKPOINT READY** inviato, FROZEN.
+
+#### SEC9e + A2 entrati (dev `4507f7507`); MF-J45b + MF-A4 (17/10, 15:4x)
+- Coordinatore: SEC9e + A2 **entrati** (dev `4507f7507`, merge `1baa652a2`, CHANGELOG `98b364b45`; corsa combinata
+  verde); worktree portato a `98b364b45`. Revisioni a posteriori: E su SEC9e, J sulle pagine di teoria. Via a **J45b**
+  (J rivede `engine.py`) + **MF-A4** (`api sync`, unico scrittore). Da fissare nei test: il futuro chiuso nel `finally`
+  **prima** di togliere la chiave; il risultato condiviso mai modificato dai consumatori (report, sorgente PAC, AI Export).
+- **MF-J45b** ✅ codice `financial_math/portfolio/engine.py`: dopo il mancato colpo della cache, `_IN_FLIGHT[(blob_key,
+  actual_from, actual_to)]` (un `asyncio.Future`) — il primo costruisce, gli identici attendono con `asyncio.shield` e
+  ricevono lo stesso oggetto (come un colpo della cache); nel `finally` il futuro si chiude con `_LeaderGone` se non è
+  fatto (e `exception()` lo segna letto), **poi** la chiave si toglie; chi aspettava ricostruisce (il primo a ripartire
+  guida gli altri); un futuro d'un altro ciclo d'eventi è ignorato. Passi 6–12 spostati **invariati** in
+  `_compute_uncached` (14 argomenti per nome, trovati con `ast`; il diff è solo di aggiunte: il blocco resta al suo posto
+  sotto la nuova intestazione). Nessuna chiave sugli argomenti della richiesta: un ricaricamento dopo una modifica non
+  deve ricevere una costruzione di prima (le impronte sono nella chiave). Lettura in sola lettura: nessun consumatore
+  modifica il risultato in luogo (grep). Suite col codice: `portfolio-engine` 41, `roi-fifo-utils` 1386. Doc:
+  `financial_math.md` «Off the Event Loop» → «One build per key at a time» (`#single-flight`).
+- **MF-A4** ✅: la card **Unrealized change** in `user/dashboard/kpi-cards.{en,it,fr,es}.md` ora rimanda a `period-pnl`
+  (MV − OCB) invece di `book-value` (NAV − Book), con il titolo di ciascuna lingua; ritocco puntuale in tutte e quattro →
+  `translate-stamp --file user/dashboard/kpi-cards.en.md` (solo quella voce in `.translate-hashes.json`). Descrizioni di
+  `period_unrealized_gain_loss_{start,end,delta}` (`schemas/portfolio.py`): valore di mercato − costo aperto, transito
+  escluso. `api sync` (OpenAPI verificato), `mkdocs build` stretto, `check-links`.
+- In corso: test-author `j45b-tests`.
+- ✅ **Test J45b** (test-author `j45b-tests`): NUOVO `test_engine_single_flight.py` (in `test_financial/`: lo raccoglie
+  `services roi-fifo-utils`; nessuna riga di runner), 12 casi su costruzioni vere (SQLite privato, un registro di 15
+  transazioni), tenute e contate da `compute_average_costs` con un `asyncio.Event`, `_IN_FLIGHT` sostituito da un
+  dizionario che registra: 2 e 5 richieste → una costruzione, lo stesso oggetto (quello della cache); il capo fallisce o è
+  cancellato → un'altra costruzione guidata da un seguace, nessuna attesa infinita; un seguace cancellato non tocca il
+  volo; altro intervallo/perimetro/valuta → costruzioni separate; nessun «never retrieved»; **la chiave tolta sempre a
+  futuro già chiuso** (requisito 1); **guardia** (requisito 2): istantanea profonda di ogni risultato, uguale dopo
+  `get_report` (tutti i flag), `get_summary`, `get_history`, `get_positions_contribution`, la sorgente PAC e tre
+  componenti dell'AI Export. 7 mutanti presi. Nota → backlog MF-J45c (il report in cache `portfolio_layer2`, condiviso
+  allo stesso modo, senza guardia).
+- ✅ **Corsia** (16:20; prodotto tolto `engine.py`, sha `3604589d…` uguale dopo): rosso **9** / 12 (3 guardie); verdi
+  il file 12, `roi-fifo-utils` **1398**, `portfolio-engine` 41, `app-lifecycle` 53. Slot chiesto (`files/j45b.sh slot`:
+  `api portfolio`, `api portfolio-wac`).
+- ✅ **Slot** (16:22–16:27, GO del coordinatore, carico 22; HEAD `98b364b45`): `api portfolio` **52**, `api portfolio-wac`
+  **12**. Porta libera. CHANGELOG: 🔄 (prestazioni), non 🐛 (coordinatore). **CHECKPOINT READY** inviato, FROZEN.

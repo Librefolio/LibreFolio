@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- `./dev.py db currencies` lists stored currency codes that are not ISO codes (names or numbers saved by earlier versions), and the server warns about them at every start.
 - `GET /api/v1/transactions` accepts `asset_event_id` and lists the transactions linked to that asset event, within the brokers you can see.
 - `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
 - Secrets can be read from files: `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, as Docker and Kubernetes secrets mount them.
@@ -85,6 +86,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
+- **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
+- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently, so the AI can tell missing data from data that isn't part of the export.
+- A user's base currency is saved only as an ISO 4217 code, and a refused currency now names the ISO code it stands for (`'840'`: USD).
 - Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
 - The Dashboard warns when transactions are dated before 1900: they still count, but the history starts on 1 January 1900.
@@ -298,9 +303,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FX rates and prices: deleting more than a thousand separate days (or ranges) at once no longer fails; a write of more than 10,000 items is refused with a clear error; server errors no longer show internal details. The provider-probe limit (`LIBREFOLIO_PROBE_RATE_LIMIT`) applies without a restart.
 - Broker import: a report with about 90 or more different securities no longer fails while matching its assets. Large FX rate deletions no longer hold up the server, and the live-price fallback is read safely under load.
 - Prices: deleting several date ranges of an asset now reports each row once, also when ranges overlap or the asset is named twice, and an empty delete request no longer fails; large deletions count far faster.
+- A manual price upload for several assets is refused as a whole when one of its prices is in a currency other than its asset's: before, the assets before it were already saved. The refusal (422 `price_currency_mismatch`) names every asset at fault.
 - `./dev.py user create` now refuses a username shorter than 3 or longer than 50 characters, as registration does.
+- Settings › Administration › Users: cancelling the setup link of an administrator who completed its setup in the meantime no longer deactivates it: the tab says so and nothing changes.
+- The import's gap-fix refuses to compare a broker whose transactions hold currency codes that are not ISO codes, instead of proposing corrections for money already there.
+- `dev.py user deactivate`/`demote` run at the very moment of an administrator's setup no longer leave the instance without an active administrator.
 - A number pasted in scientific notation, like `1e-8` copied from a spreadsheet, is now read exactly instead of turning into another number; one that can't be read, or that has an exponent beyond ±100, is shown in red with an explanation. Pasting a very long text into a number field no longer freezes the page.
 - Dividends and other events that a price provider reports with more than 6 decimals are now stored as they are read back, cut to 6 decimals like prices, instead of being read back rounded differently from what was written.
+- Very small prices and costs, such as a crypto token worth a fraction of a cent, are now shown with their significant digits instead of «0.00», and quantities show all 10 decimals they are stored with (in transactions, the average-cost preview, import corrections, the data editor and the lots views; a lot of a few satoshis no longer reads «1e-7» or «0»).
 
 #### 🔒 Security
 
@@ -350,6 +360,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A price dated far in the past (e.g. year 1), stored by an older version, no longer makes an asset's full-history drawdown load hundreds of thousands of days: the history starts on 1 January 1900.
 - The restore outcome route, which answers without signing in, no longer fills the server log: it reads the restore's state only for the ticket of the restart, and a ticket file it cannot use is logged once, not at every request.
 - A restored backup's database can no longer make the server run code through its schema: every database connection turns SQLite's `trusted_schema` off first and reads the schema again last, so a `CHECK`, a `DEFAULT` or an index that calls a function the app registers is refused instead of run, in the server and in the restore check's upgrade.
+- A restore's check now refuses, as a damaged database, an archive whose schema calls a function LibreFolio's server cannot use. Before, such an archive ended the check with a generic error (`dev.py backup restore` stopped with a traceback), or passed the check and broke the first start after the restore.
 - Unexpected errors in the asset and exchange-rate requests (assets, their providers, events and market data; exchange-rate providers, routes and sync) no longer reveal internal details, such as database errors, in their answer: it says only which action failed, and the details go to the server log.
 
 #### 📚 Documentation

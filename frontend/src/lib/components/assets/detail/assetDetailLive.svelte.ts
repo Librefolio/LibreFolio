@@ -18,6 +18,8 @@ import {startActivePolling, type ActivePollingState} from '$lib/features/live-up
 import {ASSET_DETAIL_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
 import {computeDirection, livePollFailure, livePollOutcome, toLivePriceResult, type LivePriceDirection} from '$lib/services/livePriceService';
 import {invalidateAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
+import {todayIso} from '$lib/utils/dateOnly';
+import {assetRangeDelta, rangeStartFor, type RangeDelta} from '$lib/utils/rangeChange';
 import {mergeChartPointsIncremental} from './assetDetailChartPoints';
 
 /** How long the flash stays lit before decaying to the resting colour — kept in sync with the CSS animation duration in app.css (.lf-price-flash-*). */
@@ -39,6 +41,8 @@ export interface AssetDetailLiveInput {
     readonly loading: boolean;
     readonly primaryMode: 'price' | 'calendar-return';
     readonly calendarReturnView: {state: string};
+    /** The first day of the range on screen (the page's `dateStart`): the live price's Δ over the range is asked from it (X-R59). Absent: none is asked. */
+    readonly rangeStart?: string;
     chartData: any[];
     /** The page's chart load, forced. */
     loadChartData(force: boolean): Promise<void>;
@@ -49,6 +53,8 @@ export class AssetDetailLive {
     currentPrice = $state<number | null>(null);
     /** True when live price conversion to displayCurrency failed (pair exists but rate unavailable). */
     conversionFailed = $state(false);
+    /** The Δ over the range on screen to the live price, as the summary shows it, from the backend (X-R59); null while unknown for the current context. */
+    rangeDelta = $state<RangeDelta | null>(null);
     /** State of the live poll, for the page root (`data-live-updates`) and the «Updates paused» pill (F26). */
     updatesState = $state<ActivePollingState>('stopped');
     /** Direction of the latest live-price tick — drives the transient flash animation. Resets to 'neutral' once the flash decays. */
@@ -72,6 +78,9 @@ export class AssetDetailLive {
             const nativeCurrency = input.assetInfo?.currency;
             const targetCurrency = input.displayCurrency;
             const fxMissing = input.fxConversionMissing;
+            const rangeStart = input.rangeStart;
+            // The change belonged to the context that just changed (asset, currency, range): unknown until the next poll.
+            this.rangeDelta = null;
             // Without a provider `POST /assets/prices/current` only echoes the stored price, and every answer counts as
             // a portfolio mutation: no poller for a manual asset, nor before the assignment has loaded (Z-8).
             if (!input.isHeadToday || !id || !hasProvider) {
@@ -92,7 +101,7 @@ export class AssetDetailLive {
             // An answer that lands after this effect re-ran (another currency, another asset) writes nothing.
             let current = true;
             const poller = startActivePolling({
-                run: () => this.#pollLivePriceOnce(id, nativeCurrency ?? '', targetCurrency, fxMissing, () => current),
+                run: () => this.#pollLivePriceOnce(id, nativeCurrency ?? '', targetCurrency, fxMissing, () => current, rangeStart),
                 intervalMs: ASSET_DETAIL_LIVE_INTERVAL_MS,
                 onstatechange: (state) => (this.updatesState = state),
             });
@@ -109,10 +118,11 @@ export class AssetDetailLive {
         });
     }
 
-    /** The page reloads everything: no live price until the next poll. */
+    /** The page reloads everything: no live price, and no Δ to it, until the next poll. */
     resetPrice(): void {
         this.currentPrice = null;
         this.conversionFailed = false;
+        this.rangeDelta = null;
     }
 
     /**
@@ -120,11 +130,17 @@ export class AssetDetailLive {
      * the chart's last point. It replaced two loops on the same endpoint (every 30 s for the
      * summary, every 60 s with a 5 s warm-up for the chart), which made three writes of
      * today's candle a minute: the endpoint is not read-only, it stores the day's OHLC.
+     *
+     * With a range start the same request asks the Δ over the range to the quote (X-R59), in the display currency when
+     * the summary converts the price.
      */
-    async #pollLivePriceOnce(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean, isCurrent: () => boolean) {
+    async #pollLivePriceOnce(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean, isCurrent: () => boolean, rangeStart?: string) {
+        const start = rangeStartFor(rangeStart ?? '', todayIso());
+        const converting = !!targetCurrency && !!nativeCurrency && targetCurrency !== nativeCurrency && !fxMissing;
         let item: any;
         try {
-            const response = await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetId]);
+            const response =
+                start === null ? await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetId]) : await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetId], {queries: {range_start: start, ...(converting ? {target_currency: targetCurrency} : {})}});
             item = (response as any)?.results?.[0];
         } catch (error) {
             // Non-blocking: keep the last known value; the poller waits longer before the next try (Z7).
@@ -137,13 +153,19 @@ export class AssetDetailLive {
         if (!item || item.value == null) return outcome;
         const nativeValue = Number(item.value);
         if (!Number.isFinite(nativeValue)) return outcome;
-        await this.#applyLiveSummary(nativeValue, nativeCurrency, targetCurrency, fxMissing, isCurrent);
+        const liveDelta: RangeDelta = start === null ? {abs: null, pct: null} : assetRangeDelta(item.range_change);
+        await this.#applyLiveSummary(nativeValue, nativeCurrency, targetCurrency, fxMissing, isCurrent, liveDelta);
         if (isCurrent()) await this.#applyLiveChartHead(item, nativeValue);
         return outcome;
     }
 
-    /** The price summary's share of a live poll: the price, converted when the page shows another currency, and the flash of a tick. */
-    async #applyLiveSummary(nativeValue: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean, isCurrent: () => boolean) {
+    /** The Δ written with the price: none beside a price left native because its conversion failed (the change is in the display currency). */
+    #writeRangeDelta(liveDelta: RangeDelta): void {
+        this.rangeDelta = this.conversionFailed ? {abs: null, pct: null} : liveDelta;
+    }
+
+    /** The price summary's share of a live poll: the price, converted when the page shows another currency, its Δ over the range, and the flash of a tick. */
+    async #applyLiveSummary(nativeValue: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean, isCurrent: () => boolean, liveDelta: RangeDelta) {
         // Direction compares this tick's NATIVE value to the previous poll's
         // NATIVE value (never the day's open, never the display-converted
         // value) — reuses computeDirection from livePriceService.ts (same
@@ -166,6 +188,7 @@ export class AssetDetailLive {
         if (!targetCurrency || !nativeCurrency || targetCurrency === nativeCurrency || fxMissing) {
             this.currentPrice = nativeValue;
             this.conversionFailed = false;
+            this.#writeRangeDelta(liveDelta);
             return;
         }
 
@@ -191,11 +214,13 @@ export class AssetDetailLive {
                 this.currentPrice = nativeValue;
                 this.conversionFailed = true;
             }
+            this.#writeRangeDelta(liveDelta);
         } catch {
             if (!isCurrent()) return;
             // FX conversion failed — fallback to native price
             this.currentPrice = nativeValue;
             this.conversionFailed = true;
+            this.#writeRangeDelta(liveDelta);
         }
     }
 

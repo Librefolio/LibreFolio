@@ -16,7 +16,8 @@
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {fxProviderBadgeHtml} from '$lib/utils/providerHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
-    import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import type {RangeDelta} from '$lib/utils/rangeChange';
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
@@ -34,6 +35,8 @@
         manualOnly: boolean;
         providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}>;
         deltas?: Record<string, number | null>;
+        /** The pair's Δ over the range on screen, both ways, from the backend (X-R59): the Δ Abs and Δ % columns. */
+        rangeDeltas?: {direct: RangeDelta; inverse: RangeDelta} | null;
     }
 
     interface Props {
@@ -107,10 +110,12 @@
         return displayFxRate(last.rate, isCardInverted(row.slug));
     }
 
-    function getDelta(row: FxRow): {abs: number | null; pct: number | null} {
+    /** The backend's Δ over the range (X-R59), the way the row shows the pair. */
+    function getDelta(row: FxRow): RangeDelta {
         void inversionVersion;
-        if (row.data.length < 2) return {abs: null, pct: null};
-        return displayFxDelta(row.data[0].rate, row.data[row.data.length - 1].rate, isCardInverted(row.slug)) ?? {abs: null, pct: null};
+        const deltas = row.rangeDeltas;
+        if (!deltas) return {abs: null, pct: null};
+        return isCardInverted(row.slug) ? deltas.inverse : deltas.direct;
     }
 
     function formatDelta(val: number | null, suffix: string = ''): string {

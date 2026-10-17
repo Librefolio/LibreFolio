@@ -73,13 +73,21 @@ the message as today, a ``str``, nothing written — is asserted first and holds
 ``ACCOUNT_EXISTS`` to a username with an ``@`` once ``user_service`` words the refusal otherwise (UNAME-031, at the code:
 the reworded message reaching the refusal is asserted first). Each refusal of A-46 carries a barrier: the same call with
 the name one character nearer, at 3 or 50 characters, goes through. UNAME-023 is a GUARD, green today and to stay green.
+
+UNAME-032 — NEW, red until the A-47 review fix (A-51 lot; workstream E's review of A-47): an ``AccountError`` survives
+``copy.copy``, ``copy.deepcopy`` and ``pickle.loads(pickle.dumps(…))`` — the duplicate an ``AccountError``, equal as a
+``str`` to the original message, with the same ``code``. Today each raises a ``TypeError``: they rebuild a ``str``
+subclass from ``str.__getnewargs__``, the message alone, and ``AccountError.__new__`` asks for ``(code, message)``. The
+refusal duplicated is a real one, ``create_user``'s to a username taken in UNAME-030's scene, asserted first.
 """
 
 from __future__ import annotations
 
 import contextlib
+import copy
 import importlib
 import os
+import pickle
 import sqlite3
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -827,3 +835,44 @@ async def test_register_user_refuses_an_at_as_username_invalid_whatever_its_word
     created = await _register(engine, _without_at(name), _address("newcomer"), None)
     assert isinstance(created, User), f"barrier: the same registration with the @ replaced must go through: {created!r}"
     print_success(f"refused as {USERNAME_INVALID}, the reworded message carried; {_without_at(name)!r} registered")
+
+
+# =============================================================================
+# A-47, WORKSTREAM E'S REVIEW (A-51 lot) — AN AccountError SURVIVES copy AND pickle
+# =============================================================================
+
+Duplicate = Callable[[Any], Any]
+
+
+def _through_pickle(value: Any) -> Any:
+    """``value`` dumped by ``pickle`` and loaded back, at the default protocol: what a cache, a queue or another process gets."""
+    return pickle.loads(pickle.dumps(value))
+
+
+#: The three ways a refusal is duplicated — each rebuilds a ``str`` subclass from its ``__getnewargs__``: (how, as a failure names it).
+DUPLICATES = [
+    pytest.param(copy.copy, "copy.copy", id="copy.copy"),
+    pytest.param(copy.deepcopy, "copy.deepcopy", id="copy.deepcopy"),
+    pytest.param(_through_pickle, "pickle.loads(pickle.dumps(…))", id="pickle-dumps-then-loads"),
+]
+
+
+# red until the A-47 review fix (A-51 lot)
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("duplicate", "how"), DUPLICATES)
+async def test_an_account_error_survives_copy_deepcopy_and_pickle(engine: AsyncEngine, duplicate: Duplicate, how: str) -> None:
+    """UNAME-032 — A-47 as workstream E reviewed it: NEW, red until the A-47 review fix (A-51 lot) — today a ``TypeError``: ``copy.copy``, ``copy.deepcopy`` and ``pickle`` rebuild a ``str`` subclass from ``str.__getnewargs__``, which gives the message alone, and ``AccountError.__new__`` asks for ``(code, message)``. A real refusal of ``create_user`` — a username taken, in UNAME-030's scene: ``AccountError`` ``USERNAME_TAKEN``, «Username already taken» —, duplicated by ``copy.copy``, ``copy.deepcopy`` or ``pickle.loads(pickle.dumps(…))``, is an ``AccountError``, equal as a ``str`` to the original message, with the same ``code``. The refusal itself is asserted first: the test cannot pass by duplicating something else."""
+    print_section(f"UNAME-032: {how} of a refusal of create_user")
+    scene = await _scene(engine)
+    user, refusal = await _create_a_taken_username(engine, scene)
+    assert user is None and isinstance(refusal, user_service.AccountError) and (str(refusal), refusal.code) == (USERNAME_TAKEN_MESSAGE, "USERNAME_TAKEN"), f"setup: create_user of a taken username must answer (None, AccountError USERNAME_TAKEN), as in UNAME-030: {_shown((user, refusal))}"
+
+    try:
+        duplicated = duplicate(refusal)
+    except TypeError as error:
+        pytest.fail(f"red until the A-47 review fix (A-51 lot): {how} of the refusal raised TypeError: {error} — str.__getnewargs__ hands AccountError.__new__ the message alone, without its code: {_shown((None, refusal))}", pytrace=False)
+
+    assert isinstance(duplicated, user_service.AccountError), f"{how} must give an AccountError: it gave a {type(duplicated).__module__}.{type(duplicated).__qualname__}, {duplicated!r}"
+    assert isinstance(duplicated, str) and str(duplicated) == str(refusal) == USERNAME_TAKEN_MESSAGE, f"{how} must give the original message as a str, {USERNAME_TAKEN_MESSAGE!r}: {duplicated!r}"
+    assert getattr(duplicated, "code", None) == refusal.code, f"{how} must keep the code {refusal.code!r}: {_shown((None, duplicated))}"
+    print_success(f"{how}: an AccountError {refusal.code}, {str(duplicated)!r}")

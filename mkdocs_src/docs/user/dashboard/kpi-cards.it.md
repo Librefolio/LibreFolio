@@ -28,7 +28,7 @@ Quanto denaro hanno prodotto i tuoi investimenti nel periodo selezionato? La sch
 
 - **P&L periodo** — il numero grande: $\text{NAV}_{\text{end}} - \text{NAV}_{\text{start}} - \text{Net flows}$, dove i flussi netti sono il capitale che hai spostato dentro o fuori → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **La riga sotto di esso** — per esempio `+91,31 € (+16,36%)`: di quanto si è mosso il tuo P&L totale da ieri (pannello sottostante)
-- **Variazione non realizzata** — come si è mossa, nel periodo, la plusvalenza o minusvalenza latente delle tue posizioni, incluso l'effetto del tasso di cambio → [Valore contabile](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/book-value.md)
+- **Variazione non realizzata** — come si è mossa, nel periodo, la plusvalenza o minusvalenza latente delle tue posizioni, incluso l'effetto del tasso di cambio → [P&L periodo](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
 - **Vendite** — la plusvalenza o minusvalenza realizzata delle vendite del periodo, rispetto al prezzo medio di carico (PMC) delle unità vendute → [prezzo medio di carico (PMC)](../../financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md)
 - **Dividendi e interessi** — dividendi, cedole e interessi P2P ricevuti → [Dividendo e interesse](../../financial-theory/instruments/transaction-types/dividend-interest.md)
 - **Costi e imposte** — commissioni e imposte registrate come transazioni; passa il cursore sulla riga per vedere la ripartizione → [Commissione e imposta](../../financial-theory/instruments/transaction-types/fee.md)

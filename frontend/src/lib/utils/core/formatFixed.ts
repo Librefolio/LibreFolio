@@ -63,3 +63,51 @@ export function formatExactDecimal(value: string | number | null | undefined, {m
     const digits = plain.split('.')[1]?.length ?? 0;
     return new Intl.NumberFormat(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(plain as Intl.StringNumericLiteral);
 }
+
+/** The most decimals a price shows: what `price_history` keeps (C-97a). */
+const PRICE_MAX_DECIMALS = 12;
+/** The significant digits a price shows at least, so one under a cent never reads `0,00` (D-C97c-1). */
+const PRICE_SIGNIFICANT_DIGITS = 4;
+
+export interface PriceDecimalsOptions {
+    /** Decimals always shown, padded with zeros (default 2). */
+    minDecimals?: number;
+    /** Decimals a value may show before its trailing zeros drop, whatever its size, so a site keeps the range it showed
+     *  (the data editor 0–4, the running average 2–4). Defaults to `minDecimals`. */
+    floorDecimals?: number;
+}
+
+export interface FormatPriceOptions extends PriceDecimalsOptions {
+    /** Prefix positive values with `+`; zero and negatives carry no added sign. */
+    signed?: boolean;
+    /** Locale to write in; defaults to the interface locale. */
+    locale?: string;
+}
+
+/**
+ * The fraction digits a price shows (C-97c, decision D-C97c-1): as many as 4 significant digits need, never fewer than
+ * `floorDecimals`, never more than 12; `min` is `minDecimals`, the digits always shown. `0.0000034573` → 2…9, `123.45`
+ * → 2…2, `0.5` → 2…4. For a formatter that writes the amount itself, such as `formatCurrencyAmountPlain`.
+ */
+export function priceFractionDigits(value: number | string, {minDecimals = 2, floorDecimals = minDecimals}: PriceDecimalsOptions = {}): {min: number; max: number} {
+    const magnitude = Math.abs(Number(value));
+    const significant = magnitude > 0 && Number.isFinite(magnitude) ? PRICE_SIGNIFICANT_DIGITS - 1 - Math.floor(Math.log10(magnitude)) : 0;
+    const max = Math.min(PRICE_MAX_DECIMALS, Math.max(minDecimals, floorDecimals, significant));
+    return {min: Math.min(minDecimals, max), max};
+}
+
+/**
+ * A price written in the interface locale with the digits of `priceFractionDigits` (C-97c): `0.0000034573` →
+ * `0,000003457`, `1.23456` → `1,235`, `65000.123` → `65.000,12`, `0.5` → `0,50`; an exchange rate passes
+ * `minDecimals: 4`. A string is written exactly (Intl is handed it as a string literal), a number as the number it is;
+ * `-0` prints as `0`. `''` for a value that is empty, not a number or not finite: it never echoes its input, so all it
+ * writes is digits and the locale's marks.
+ */
+export function formatPrice(value: number | string | null | undefined, {signed = false, locale = uiLocale(), ...digits}: FormatPriceOptions = {}): string {
+    if (value === null || value === undefined || value === '') return '';
+    const number = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(number)) return '';
+    const {min, max} = priceFractionDigits(number, digits);
+    const literal = number === 0 ? 0 : typeof value === 'string' ? (value.trim() as Intl.StringNumericLiteral) : number;
+    return new Intl.NumberFormat(locale, {minimumFractionDigits: min, maximumFractionDigits: max, signDisplay: signed ? 'exceptZero' : 'auto'}).format(literal);
+}
