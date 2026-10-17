@@ -26,6 +26,11 @@ contract pinned here:
    caller's transaction. A rollback undoes an issue, a consumption and a revocation.
 7. Single use under concurrency: two sessions on two connections consume one token at the same time; exactly one wins.
 8. The plaintext never reaches the logs, structlog or stdlib, nor any column of the database.
+9. ``retire_tokens(session, *, user_id, purpose, now=None)`` (lot A7b-2, N60) ends one user's links of one purpose for
+   good: each one not consumed — live, expired or already revoked — is consumed at ``now``, with no consumer, and
+   revoked at ``now`` unless it already was (that first revocation keeps its moment); it says how many. The user's
+   consumed tokens, its tokens of the other purposes and every other user's are untouched; a second call finds nothing;
+   it flushes without committing. A retired token is ``REVOKED`` to ``inspect_token`` and refused by ``consume_token``.
 
 Every database is a private file under ``tmp_path``, built by ``SQLModel.metadata.create_all`` (contract 3 of
 ``test_migration_005_accounts`` keeps that schema equal to the migrated one) and opened the way production opens its own:
@@ -34,6 +39,9 @@ Every database is a private file under ``tmp_path``, built by ``SQLModel.metadat
 defaults, which are bracketed.
 
 Red until ``AccountToken`` and ``token_service`` exist: the module does not import.
+
+Red until lot A7b-2, contract 9: ``retire_tokens`` does not exist. It is read when each of its tests runs, so each fails
+on its own, saying so, and the module still imports.
 """
 
 from __future__ import annotations
@@ -41,9 +49,10 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import hashlib
+import inspect
 import logging
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
@@ -60,6 +69,7 @@ from structlog.testing import capture_logs
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
+from backend.app.services.accounts import token_service
 from backend.app.services.accounts.token_service import (
     DEFAULT_TTL,
     IssuedToken,
@@ -906,3 +916,168 @@ async def test_the_plaintext_never_reaches_the_logs_nor_the_database(engine: Asy
     assert leaked_records == [], f"stdlib records carrying a plaintext token: {leaked_records}"
     assert await _plaintext_in_database(engine, plaintexts) == []
     print_success(f"{len(events)} events and {len(caplog.records)} records checked, no plaintext; none in the database either")
+
+
+# =============================================================================
+# 9. RETIRE — LOT A7b-2 (N60)
+# =============================================================================
+# A link is retired when what it was for is done by another way — the waiting administrator activated, or given a
+# password, without its setup link (A-32) —: revoked AND consumed, so that it opens nothing and the account no longer
+# counts as waiting for it (``registration_service.pending_admin_filter`` reads «none consumed»). ``retire_tokens`` is
+# read when each test runs: until A7b-2 writes it, each fails on its own, saying so.
+
+POSITIONAL = inspect.Parameter.POSITIONAL_OR_KEYWORD
+KEYWORD_ONLY = inspect.Parameter.KEYWORD_ONLY
+EMPTY = inspect.Parameter.empty
+
+
+def _retire_tokens() -> Callable[..., Awaitable[int]]:
+    """``token_service.retire_tokens``; while lot A7b-2 has not written it, the test that needs it fails on its own, saying so."""
+    retire = getattr(token_service, "retire_tokens", None)
+    if retire is None:
+        pytest.fail("red until A7b-2: token_service.retire_tokens does not exist yet", pytrace=False)
+    return retire
+
+
+async def _retire(engine: AsyncEngine, **arguments: Any) -> int:
+    """``retire_tokens`` in a session of its own, committed afterwards — the service never commits, its caller does."""
+    retire = _retire_tokens()
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        retired = await retire(session, **arguments)
+        await session.commit()
+    return retired
+
+
+def _another_user_purpose(purpose: AccountTokenPurpose) -> AccountTokenPurpose:
+    """A purpose other than ``purpose`` whose tokens belong to a user: never the invite, which belongs to nobody yet."""
+    return next(other for other in USER_PURPOSES if other != purpose)
+
+
+def _moments(record: AccountToken) -> tuple[Optional[datetime], Optional[datetime], Optional[int]]:
+    """``(revoked_at, consumed_at, consumed_by_user_id)`` of a row, the moments in UTC."""
+    return ensure_utc(record.revoked_at), ensure_utc(record.consumed_at), record.consumed_by_user_id
+
+
+# red until A7b-2
+def test_retire_tokens_takes_one_user_one_purpose_and_an_optional_now() -> None:
+    """Contract 9 — NEW, red until A7b-2 (``retire_tokens`` does not exist): ``retire_tokens(session, *, user_id, purpose, now=None)``, a coroutine function like every write of the service; ``user_id`` and ``purpose`` keyword-only and required — one user's links of one purpose, never more by accident."""
+    print_section("Contract 9: retire_tokens' signature")
+    retire = _retire_tokens()
+
+    parameters = [(parameter.name, parameter.kind, parameter.default) for parameter in inspect.signature(retire).parameters.values()]
+
+    assert inspect.iscoroutinefunction(retire), "retire_tokens must be a coroutine function, like the service's other writes"
+    assert parameters == [("session", POSITIONAL, EMPTY), ("user_id", KEYWORD_ONLY, EMPTY), ("purpose", KEYWORD_ONLY, EMPTY), ("now", KEYWORD_ONLY, None)], f"expected retire_tokens(session, *, user_id, purpose, now=None): {parameters}"
+    print_success("retire_tokens(session, *, user_id, purpose, now=None)")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+@pytest.mark.parametrize("purpose", USER_PURPOSES)
+async def test_retire_spends_and_revokes_every_unconsumed_token_of_one_user_and_purpose(engine: AsyncEngine, users: dict[str, int], purpose: AccountTokenPurpose) -> None:
+    """Contract 9 — NEW, red until A7b-2: alice's tokens of ``purpose`` not consumed — live, expired, already revoked — are retired, and counted: 3. Each is consumed at ``now`` with no consumer, and revoked at ``now`` unless it was already: the earlier revocation keeps its moment. Her token of that purpose already consumed, her live token of another purpose, bob's live token of that purpose and an invitation she created keep their rows, to the letter.
+
+    Barrier first: at the moment of the retirement every token is worth what its name says.
+    """
+    print_section(f"Contract 9: retire alice's {purpose.value} tokens")
+    alice, bob = users["alice"], users["bob"]
+    first_revocation = NOW + timedelta(minutes=2)
+    retirement = NOW + timedelta(minutes=10)
+    live = await _issue(engine, purpose, user_id=alice, now=NOW)
+    expired = await _issue(engine, purpose, user_id=alice, now=NOW - DEFAULT_TTL[purpose] - timedelta(minutes=1))
+    revoked = await _issue(engine, purpose, user_id=alice, now=NOW)
+    spent = await _issue(engine, purpose, user_id=alice, now=NOW)
+    other_purpose = await _issue(engine, _another_user_purpose(purpose), user_id=alice, now=NOW)
+    bobs = await _issue(engine, purpose, user_id=bob, now=NOW)
+    invitation = await _issue(engine, INVITE, created_by_user_id=alice, now=NOW)
+    assert await _consume(engine, spent.token, purpose, consumed_by_user_id=alice, now=NOW + timedelta(minutes=1)) is not None, "setup: the spent token is consumed"
+    assert await _revoke(engine, token_id=revoked.record.id, now=first_revocation) == 1, "setup: the earlier revocation hits the token"
+    scene = {"live": live, "expired": expired, "revoked": revoked, "spent": spent}
+    statuses = {label: (await _inspect(engine, issued.token, purpose, now=retirement)).status for label, issued in scene.items()}
+    assert statuses == {"live": TokenStatus.VALID, "expired": TokenStatus.EXPIRED, "revoked": TokenStatus.REVOKED, "spent": TokenStatus.CONSUMED}, f"barrier: the scene is not what it claims: {statuses}"
+    untouched = {issued.record.id: await _stored(engine, issued.record.id) for issued in (spent, other_purpose, bobs, invitation)}
+
+    retired = await _retire(engine, user_id=alice, purpose=purpose, now=retirement)
+
+    assert retired == 3, f"alice's live, expired and revoked {purpose.value} tokens: 3 retired, got {retired}"
+    assert _moments(await _record(engine, live.record.id)) == (retirement, retirement, None), "the live token: revoked and consumed at now, without a consumer"
+    assert _moments(await _record(engine, expired.record.id)) == (retirement, retirement, None), "the expired token: revoked and consumed at now, without a consumer"
+    assert _moments(await _record(engine, revoked.record.id)) == (first_revocation, retirement, None), "the revoked token: consumed at now, its revocation keeping its own moment"
+    for token_id, row in untouched.items():
+        assert await _stored(engine, token_id) == row, f"token {token_id} must keep its row: the spent one, another purpose's, bob's and the invitation are not alice's unconsumed {purpose.value} tokens"
+    print_success(f"{purpose.value}: 3 retired; the spent one, another purpose's, bob's and the invitation untouched")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+@pytest.mark.parametrize("purpose", USER_PURPOSES)
+async def test_a_retired_token_is_revoked_and_can_no_longer_be_used(engine: AsyncEngine, users: dict[str, int], purpose: AccountTokenPurpose) -> None:
+    """Contract 9 — NEW, red until A7b-2: once retired, a token is ``REVOKED`` to ``inspect_token`` — the revocation is read before the consumption —, before its expiry and after, with its record; ``consume_token`` refuses it, and its row stays as the retirement left it."""
+    print_section(f"Contract 9: a retired {purpose.value} token")
+    issued = await _issue(engine, purpose, user_id=users["alice"], now=NOW)
+    retirement = NOW + timedelta(minutes=5)
+    assert (await _inspect(engine, issued.token, purpose, now=retirement)).status == TokenStatus.VALID, "barrier: the token is valid before the retirement"
+
+    assert await _retire(engine, user_id=users["alice"], purpose=purpose, now=retirement) == 1
+
+    for moment in (retirement + timedelta(minutes=1), NOW + DEFAULT_TTL[purpose] + timedelta(days=1)):
+        inspection = await _inspect(engine, issued.token, purpose, now=moment)
+        assert inspection.status == TokenStatus.REVOKED, f"at {moment}: {inspection.status}, expected revoked"
+        assert inspection.record is not None and inspection.record.id == issued.record.id
+    after_retirement = await _stored(engine, issued.record.id)
+    assert await _consume(engine, issued.token, purpose, consumed_by_user_id=users["bob"], now=retirement + timedelta(minutes=1)) is None, "a retired token must not be consumed"
+    assert await _stored(engine, issued.record.id) == after_retirement, "a refused consumption must leave the row as the retirement left it"
+    print_success(f"{purpose.value}: REVOKED, and refused")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+async def test_a_second_retirement_finds_nothing_and_keeps_the_first_moments(engine: AsyncEngine, users: dict[str, int]) -> None:
+    """Contract 9 — NEW, red until A7b-2: a second retirement of the same user and purpose counts 0 and leaves the row as the first one left it; a user without any token counts 0 too."""
+    print_section("Contract 9: retire twice")
+    issued = await _issue(engine, ADMIN_SETUP, user_id=users["alice"], now=NOW)
+    first = NOW + timedelta(hours=1)
+    assert await _retire(engine, user_id=users["alice"], purpose=ADMIN_SETUP, now=first) == 1, "barrier: the first retirement hits the token"
+    after_first = await _stored(engine, issued.record.id)
+
+    again = await _retire(engine, user_id=users["alice"], purpose=ADMIN_SETUP, now=first + timedelta(hours=1))
+    nobody = await _retire(engine, user_id=users["carol"], purpose=ADMIN_SETUP, now=first + timedelta(hours=1))
+
+    assert (again, nobody) == (0, 0), f"nothing left to retire: alice again {again}, carol {nobody}"
+    assert await _stored(engine, issued.record.id) == after_first, "a second retirement must not move the first one's moments"
+    print_success("1, then 0; the first moments kept")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+async def test_a_rolled_back_retirement_leaves_the_token_valid(engine: AsyncEngine, users: dict[str, int]) -> None:
+    """Contract 9 — NEW, red until A7b-2: ``retire_tokens`` does not commit, like the service's other writes: after a rollback the token is ``VALID`` again and its row is as before."""
+    print_section("Contract 9: retire, then rollback")
+    retire = _retire_tokens()
+    issued = await _issue(engine, ADMIN_SETUP, user_id=users["alice"], now=NOW)
+    before = await _stored(engine, issued.record.id)
+
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        assert await retire(session, user_id=users["alice"], purpose=ADMIN_SETUP, now=NOW + timedelta(minutes=5)) == 1, "barrier: the retirement hit the token"
+        await session.rollback()
+
+    assert (await _inspect(engine, issued.token, ADMIN_SETUP, now=NOW + timedelta(minutes=5))).status == TokenStatus.VALID
+    assert await _stored(engine, issued.record.id) == before
+    print_success("rolled back: VALID")
+
+
+# red until A7b-2
+@pytest.mark.asyncio
+async def test_retire_without_now_retires_at_the_current_time(engine: AsyncEngine, users: dict[str, int]) -> None:
+    """Contract 9 — NEW, red until A7b-2: without ``now`` the token is retired at the current UTC time — bracketed by two readings, never waited for —, one moment for ``revoked_at`` and ``consumed_at`` alike. A ``now`` left ``None`` on the way would leave it unconsumed, and its account still waiting."""
+    print_section("Contract 9: retire without now")
+    issued = await _issue(engine, ADMIN_SETUP, user_id=users["alice"], now=utcnow())
+
+    before = utcnow()
+    assert await _retire(engine, user_id=users["alice"], purpose=ADMIN_SETUP) == 1, "barrier: the retirement hits the token"
+    after = utcnow()
+
+    revoked_at, consumed_at, consumer = _moments(await _record(engine, issued.record.id))
+    assert consumed_at is not None and before <= consumed_at <= after, f"consumed_at {consumed_at} outside [{before}, {after}]"
+    assert (revoked_at, consumer) == (consumed_at, None), f"one moment for both, and no consumer: revoked_at {revoked_at}, consumed_at {consumed_at}, consumed_by_user_id {consumer}"
+    print_success("retired now, one moment for both")

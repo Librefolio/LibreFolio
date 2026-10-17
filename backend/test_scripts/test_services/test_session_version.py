@@ -28,9 +28,12 @@ Raising the account's version ends every session issued before, everywhere at on
    A–Z in capitals is another one) —, also revoke, in the commit of the change, every live password-reset link of the
    account (``PASSWORD_RESET``, neither consumed nor revoked), whoever issued it: a link the old mailbox asked for before
    the change opens nothing after it. Nothing else moves — the account's links of the other purposes (its email
-   verification, its admin setup, an invitation it issued), its reset links already spent or revoked, which keep their
-   own moments, every other account's links —, and a change that keeps the address (other A–Z capitals, the username
-   alone) or is refused (an address another account holds) revokes nothing.
+   verification, an invitation it issued), its reset links already spent or revoked, which keep their own moments, every
+   other account's links —, and a change that keeps the address (other A–Z capitals, the username alone) or is refused
+   (an address another account holds) revokes nothing.
+   Updated in A7b-2 (A-32/A-33), on every account, waiting for its setup or not: the account's admin setup link moves
+   too. ``reset_password`` retires it — revoked and consumed at the change's moment, without a consumer —; a real change
+   of the address revokes it, not consumed. A change that keeps the address, or a refused one, leaves it as it was.
 
 ``POST /auth/change-password``, which raises the version and re-issues the current device's cookie in the same response,
 is tested over HTTP in ``test_api/test_session_revocation_api.py``, with the reset links it and ``PUT /auth/profile``
@@ -55,6 +58,9 @@ refusal — are green today and must stay green.
 Red until A-27, contract 7: the account's live reset links still valid after ``reset_password`` or a real change of the
 address. Its guards — the address kept, the username alone, the refusal, and every other link — are green today and must
 stay green.
+
+Red until A7b-2 (A-32/A-33), in the same two tests of contract 7: the account's admin setup link still valid after
+``reset_password`` (it must be retired) and after a real change of the address (it must be revoked).
 """
 
 from __future__ import annotations
@@ -66,7 +72,7 @@ import json
 import threading
 import time
 from collections.abc import AsyncIterator, Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -80,10 +86,10 @@ from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
-from backend.app.db.models import AccountTokenPurpose, User
+from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.services.accounts import auth_service, token_service, user_service
 from backend.app.services.accounts.token_service import TokenStatus
-from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.test_scripts.test_utils import print_section, print_success
 
 #: The JWT secret of every test here (the ``secret`` fixture): known, so that a hand-made token is signed as the server signs.
@@ -705,7 +711,7 @@ class _Link:
 LIVE_RESET_LINKS = ("asked-for-by-the-account", "issued-by-an-administrator")
 #: What every link of contract 7's database is worth before any change, by label. Those after the first two stay as they
 #: are whatever the change: the account's reset links already spent and already revoked, its live links of the other
-#: purposes, an invitation it issued, and another account's live reset link.
+#: purposes, an invitation it issued, and another account's live reset link — but ITS_ADMIN_SETUP, since A7b-2.
 LINKS_BEFORE: dict[str, TokenStatus] = {
     "asked-for-by-the-account": TokenStatus.VALID,
     "issued-by-an-administrator": TokenStatus.VALID,
@@ -716,6 +722,11 @@ LINKS_BEFORE: dict[str, TokenStatus] = {
     "an-invitation-it-issued": TokenStatus.VALID,
     "another-accounts-reset-link": TokenStatus.VALID,
 }
+# updated in A7b-2 (A-32/A-33)
+#: The account's admin setup link, which a real change moves by design since A7b-2, on every account — retired by a
+#: password set, revoked by a new address —: left out of the «every other link as it was» guard of a real change, and
+#: asserted on its own (``_assert_its_admin_setup``). A change that keeps the address, or a refused one, still leaves it.
+ITS_ADMIN_SETUP = "its-admin-setup"
 
 
 async def _issue(engine: AsyncEngine, purpose: AccountTokenPurpose, **arguments: Any) -> _Link:
@@ -788,11 +799,13 @@ async def _account_with_links(engine: AsyncEngine, username: str) -> tuple[int, 
 
 async def _assert_only_the_live_reset_links_revoked(engine: AsyncEngine, links: dict[str, _Link], before: dict[int, tuple[Any, Any]], change: str) -> None:
     """After a real change of the password or the address. First the GUARD: no link added or deleted, every other link as it
-    was, its moments included. Last the contract, red until A-27: each live reset link of the account revoked — its row
-    has a revoked_at and inspect_token says so."""
+    was, its moments included — but ITS_ADMIN_SETUP, which moves by design since A7b-2 and which the caller asserts on its
+    own (``_assert_its_admin_setup``). Last the contract, red until A-27: each live reset link of the account revoked — its
+    row has a revoked_at and inspect_token says so."""
     after = await _link_moments(engine)
     assert after.keys() == before.keys(), f"{change} must neither add nor delete a link: token ids {sorted(before)} → {sorted(after)}"
-    moved = {label: (before[link.token_id], after[link.token_id]) for label, link in links.items() if label not in LIVE_RESET_LINKS and after[link.token_id] != before[link.token_id]}
+    # updated in A7b-2 (A-32/A-33): ITS_ADMIN_SETUP leaves this guard, its caller asserts its new state
+    moved = {label: (before[link.token_id], after[link.token_id]) for label, link in links.items() if label not in (*LIVE_RESET_LINKS, ITS_ADMIN_SETUP) and after[link.token_id] != before[link.token_id]}
     assert not moved, f"{change} must leave every other link as it was — the account's links of the other purposes, its reset links already spent or revoked with their own moments, another account's link —: (consumed_at, revoked_at) before → after {moved}"
     statuses = await _link_statuses(engine, links)
     live = {label: (statuses[label], after[links[label].token_id][1] is not None) for label in LIVE_RESET_LINKS}
@@ -808,26 +821,54 @@ async def _assert_no_link_moved(engine: AsyncEngine, links: dict[str, _Link], be
     assert statuses == LINKS_BEFORE, f"{change} must leave every link worth what it was, the account's live reset links valid: {statuses}"
 
 
+# updated in A7b-2 (A-32/A-33)
+async def _assert_its_admin_setup(engine: AsyncEngine, links: dict[str, _Link], window: tuple[datetime, datetime], *, retired: bool, change: str) -> None:
+    """Lot A7b-2 (A-32/A-33), on every account, waiting for its setup or not: after a password set the account's admin setup
+    link is retired — revoked and consumed at the change's moment, without a consumer —; after a real change of the address
+    it is revoked at that moment, not consumed. Either way inspect_token says ``revoked``. ``window`` brackets the change:
+    two readings of the clock around it, never a wait."""
+    link = links[ITS_ADMIN_SETUP]
+    async with AsyncSession(engine) as session:
+        record = await session.get(AccountToken, link.token_id)
+        assert record is not None, f"{ITS_ADMIN_SETUP} is not in the database"
+        revoked_at, consumed_at, consumer = ensure_utc(record.revoked_at), ensure_utc(record.consumed_at), record.consumed_by_user_id
+    status = (await _link_statuses(engine, {ITS_ADMIN_SETUP: link}))[ITS_ADMIN_SETUP]
+    start, end = window
+    what = "retired, revoked and consumed" if retired else "revoked, not consumed"
+    assert status == TokenStatus.REVOKED, f"{change} must leave the account's admin setup link {what}: inspect_token says {status}"
+    assert revoked_at is not None and start <= revoked_at <= end, f"{change} must revoke the account's admin setup link at the change's moment, within [{start}, {end}]: revoked_at {revoked_at}"
+    if retired:
+        assert consumed_at is not None and start <= consumed_at <= end, f"{change} must consume the account's admin setup link at the change's moment, within [{start}, {end}]: consumed_at {consumed_at}"
+    else:
+        assert consumed_at is None, f"{change} must revoke the account's admin setup link, not consume it: consumed_at {consumed_at}"
+    assert consumer is None, f"{change} must leave the account's admin setup link without a consumer: consumed_by_user_id {consumer}"
+
+
+# updated in A7b-2 (A-32/A-33)
 @pytest.mark.asyncio
 async def test_reset_password_revokes_the_accounts_live_reset_links(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> None:
     """Contract 7 — NEW, red until A-27 (both links stay valid): the CLI's ``user reset`` stores the new password and ends
     the account's sessions (contract 6: the barrier); its commit must also revoke every live reset link of the account, the
-    one it asked for and the one an administrator issued. Nothing else moves. bcrypt is not under test: hash_password is a
-    stand-in."""
+    one it asked for and the one an administrator issued. Nothing else moves, but the account's admin setup link: updated in
+    A7b-2 (A-32), a password set retires it — revoked and consumed at the change's moment, without a consumer —, on every
+    account, waiting for its setup or not (red until A7b-2). bcrypt is not under test: hash_password is a stand-in."""
     print_section("Contract 7: reset_password revokes the live reset links")
     monkeypatch.setattr(user_service, "hash_password", lambda password: STAND_IN_HASH)
     user_id, links = await _account_with_links(engine, "ivy")
     profiles, before = await _profiles(engine), await _link_moments(engine)
 
+    started = utcnow()
     async with AsyncSession(engine) as session:
         outcome = await user_service.reset_password(session, "ivy", NEW_PASSWORD)
+    ended = utcnow()
 
     assert outcome == (True, None), f"reset_password must succeed: {outcome}"
     assert (await _account(engine, "ivy")).hashed_password == STAND_IN_HASH, "barrier: the new password's hash is stored"
     username, email, version = profiles[user_id]
     assert await _profiles(engine) == {**profiles, user_id: (username, email, version + 1)}, "barrier: ivy's sessions end (contract 6), nobody else's"
     await _assert_only_the_live_reset_links_revoked(engine, links, before, "reset_password")
-    print_success("ivy's two live reset links revoked, every other link as it was")
+    await _assert_its_admin_setup(engine, links, (started, ended), retired=True, change="reset_password")
+    print_success("ivy's two live reset links revoked, its admin setup link retired, every other link as it was")
 
 
 #: Real changes of the address (contract 7), as (the account's username — its address is <username>@example.test —, the
@@ -838,13 +879,16 @@ REAL_ADDRESS_CHANGES: dict[str, tuple[str, str]] = {
 }
 
 
+# updated in A7b-2 (A-32/A-33)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", list(REAL_ADDRESS_CHANGES))
 async def test_a_real_change_of_the_address_revokes_the_accounts_live_reset_links(engine: AsyncEngine, case: str) -> None:
     """Contract 7 — NEW, red until A-27 (both links stay valid): ``update_profile`` to another address — behind ``PUT
     /auth/profile`` and the CLI's ``user set-email`` — stores it and ends the account's sessions (A6e: the barrier); its
     commit must also revoke every live reset link of the account: one the old mailbox asked for before the change no longer
-    opens the account. Nothing else moves."""
+    opens the account. Nothing else moves, but the account's admin setup link: updated in A7b-2 (A-33), a real change of the
+    address revokes it at the change's moment — not consumed, without a consumer —, on every account, waiting for its
+    setup or not (red until A7b-2)."""
     print_section(f"Contract 7: update_profile to another address ({case})")
     username, new_address = REAL_ADDRESS_CHANGES[case]
     user_id, links = await _account_with_links(engine, username)
@@ -852,13 +896,16 @@ async def test_a_real_change_of_the_address_revokes_the_accounts_live_reset_link
     old_address, version = profiles[user_id][1], profiles[user_id][2]
     assert not user_service.same_email(new_address, old_address), f"setup: {new_address} must be another address than {old_address}, under P18"
 
+    started = utcnow()
     async with AsyncSession(engine) as session:
         user, error = await user_service.update_profile(session, user_id, email=new_address)
+    ended = utcnow()
 
     assert user is not None and error is None, f"update_profile must accept {new_address}: {error}"
     assert await _profiles(engine) == {**profiles, user_id: (username, new_address, version + 1)}, "barrier: the new address stored and the account's sessions ended (A6e), nobody else's"
     await _assert_only_the_live_reset_links_revoked(engine, links, before, f"a real change of the address ({case})")
-    print_success(f"{case}: the address changed, the two live reset links revoked, every other link as it was")
+    await _assert_its_admin_setup(engine, links, (started, ended), retired=False, change=f"a real change of the address ({case})")
+    print_success(f"{case}: the address changed, the two live reset links and the admin setup link revoked, every other link as it was")
 
 
 #: Changes that keep the address (contract 7), as (the arguments of update_profile, the account's username and address

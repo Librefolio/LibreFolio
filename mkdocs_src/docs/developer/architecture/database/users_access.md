@@ -320,7 +320,8 @@ holds the SHA-256 of the token, never the token itself. How tokens are issued, c
   role. Only an invitation may set it: `issue_token()` refuses it for the other purposes.
 - ⏳ **`created_at`** and **`expires_at`** (`NOT NULL`), **`consumed_at`** and **`revoked_at`** (nullable): a token
   is valid while it is neither consumed nor revoked and `expires_at` has not been reached. Ending a token sets
-  `consumed_at` or `revoked_at`; the row stays.
+  `consumed_at` or `revoked_at`, or both when a setup link is retired
+  ([Revocation](../security.md#account-token-revocation)); the row stays.
 - 🧾 **`created_by_user_id`** and **`consumed_by_user_id`** (nullable): who issued the token and who spent it.
 
 The three foreign keys reference `users.id`:
@@ -342,8 +343,8 @@ Three purposes are in use, with the rules of
 | `grants_admin` | Whether the account it opens is an administrator | false | false |
 | `created_by_user_id` | The administrator who created it; `NULL` from the command line | The same | `NULL`: the startup or the command line issues it |
 | Issuing | While live, it takes a place of the user limit (`user_usage()` counts the live invitations) | First revokes the account's live reset links | By the startup that creates the administrator, with the token of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` or a generated one; a new value of that variable and `./dev.py user setup-link` first revoke the earlier setup links |
-| `consumed_at`, `consumed_by_user_id` | Set by the registration that creates the account, to that account, in the same transaction | Set by `POST /api/v1/auth/password-reset`; `consumed_by_user_id` stays `NULL`, as the account is `user_id` | Set by `POST /api/v1/auth/setup`, `consumed_by_user_id` to the account, in the commit that activates it |
-| `revoked_at` | Set by `DELETE /api/v1/users/invites/{invite_id}` | Set on the account's other live reset links when a new link is issued, or when one is spent | Set on the earlier setup links, expired ones included, when a new one is issued; on the other ones when one is spent; on a link presented for an account already active |
+| `consumed_at`, `consumed_by_user_id` | Set by the registration that creates the account, to that account, in the same transaction | Set by `POST /api/v1/auth/password-reset`; `consumed_by_user_id` stays `NULL`, as the account is `user_id` | Set by `POST /api/v1/auth/setup`, `consumed_by_user_id` to the account, in the commit that activates it. `consumed_at` alone, `consumed_by_user_id` staying `NULL`, on every setup link not yet consumed when the account is set up another way, or a link is presented for it while it is already active (retired) |
+| `revoked_at` | Set by `DELETE /api/v1/users/invites/{invite_id}` | Set on the account's other live reset links when a new link is issued, or when one is spent | Set on the earlier setup links, expired ones included, when a new one is issued; on the other ones when one is spent; on those neither consumed nor revoked, expired ones included, when the account's address really changes; on every one not consumed, unless already set, when the setup links are retired |
 
 Two indexes: `ix_account_tokens_purpose_expires_at` on `(purpose, expires_at)`, and `ix_account_tokens_user_id`
 on `user_id`, used by the revocation of an account's tokens and by the cascade when the account is deleted. The

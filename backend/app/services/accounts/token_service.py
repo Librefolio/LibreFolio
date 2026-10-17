@@ -217,3 +217,20 @@ async def revoke_tokens(
     if revoked:
         logger.info("Account tokens revoked", count=revoked, token_id=token_id, user_id=user_id, purpose=purpose.value if purpose else None)
     return revoked
+
+
+async def retire_tokens(session: AsyncSession, *, user_id: int, purpose: AccountTokenPurpose, now: Optional[datetime] = None) -> int:
+    """Retire the tokens of one user and purpose never consumed: revoked and consumed at once; how many. Not committed.
+
+    For links whose purpose was fulfilled another way — the initial administrator activated, or given a password,
+    without its setup link (A-32): such a link reads as withdrawn (``inspect_token`` reads the revocation first), can
+    no longer be consumed, and counts as used where that matters (``pending_admin_filter``: the account waits no more).
+    An earlier revocation keeps its moment; ``consumed_by_user_id`` stays empty, for nobody spent the link.
+    """
+    moment = now or utcnow()
+    unconsumed = (AccountToken.user_id == user_id, AccountToken.purpose == purpose, AccountToken.consumed_at.is_(None))  # type: ignore[union-attr]
+    await session.execute(update(AccountToken).where(*unconsumed, AccountToken.revoked_at.is_(None)).values(revoked_at=moment).execution_options(synchronize_session=False))  # type: ignore[union-attr]
+    retired = (await session.execute(update(AccountToken).where(*unconsumed).values(consumed_at=moment).execution_options(synchronize_session=False))).rowcount
+    if retired:
+        logger.info("Account tokens retired", count=retired, user_id=user_id, purpose=purpose.value)
+    return retired

@@ -8,14 +8,12 @@
 The rules live in ``services/plugin_settings/service.py``.
 """
 
-from collections.abc import Callable, Coroutine
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.exceptions import RequestValidationError
-from fastapi.routing import APIRoute
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.no_echo import NoInputEchoRoute
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
@@ -33,28 +31,8 @@ from backend.app.services.plugin_settings.service import (
     write_settings,
 )
 
-
-class _NoInputEchoRoute(APIRoute):
-    """A 422 without the ``input`` FastAPI echoes: the input of a malformed write may hold a secret.
-
-    The errors keep ``type``, ``loc``, ``msg`` and ``ctx``. The new error is raised outside the ``except`` block, so it
-    keeps no reference to the original one and its body.
-    """
-
-    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
-        handler = super().get_route_handler()
-
-        async def no_echo_handler(request: Request) -> Response:
-            try:
-                return await handler(request)
-            except RequestValidationError as error:
-                errors = [{key: value for key, value in detail.items() if key != "input"} for detail in error.errors()]
-            raise RequestValidationError(errors)
-
-        return no_echo_handler
-
-
-router = APIRouter(prefix="/settings/plugins", tags=["Plugin settings"], route_class=_NoInputEchoRoute)
+# A 422 never repeats the body: a malformed write may hold a secret (``api/no_echo.py``).
+router = APIRouter(prefix="/settings/plugins", tags=["Plugin settings"], route_class=NoInputEchoRoute)
 
 
 @router.get("", response_model=PluginSettingsCatalogResponse)
