@@ -46,9 +46,9 @@ So the code fix and a one-time repair ship together (decision N86).
 
 ## Solution
 
-1. **Plugin**: the index's own local date; the history declares the exchange timezone (the index's, else
-   `info["exchangeTimezoneName"]`) in `FAHistoricalData.exchange_timezone`; the current value is dated in that zone
-   and declares it too (`FACurrentValue.exchange_timezone`). Neither field is in OpenAPI.
+1. **Plugin**: the index's own local date; the history declares the exchange timezone (the index's when it names a
+   known zone, else `info["exchangeTimezoneName"]`) in `FAHistoricalData.exchange_timezone`; the current value is
+   dated in that zone and declares it too (`FACurrentValue.exchange_timezone`). Neither field is in OpenAPI.
 2. **Migration 011** adds `asset_provider_assignments.exchange_timezone` and marks every existing yfinance assignment
    `'legacy-utc'`. A NULL would not do as «to re-date»: an assignment removed and added again after the repair is
    born NULL and would be re-dated a second time.
@@ -63,9 +63,10 @@ So the code fix and a one-time repair ship together (decision N86).
    - Latest first. A price that meets a row already on its new date (any source) is dropped and that row stays. An
      event that meets one of the same source and type is merged into it: its transactions are re-pointed there, then
      it is deleted.
-   - Targets go forward only: latest first is safe only then, so `redate_provider_rows` refuses an earlier target
-     with a `ValueError` before anything moves (MF's review). Its per-row `flush()` is required: one flush at the end
-     would emit the UPDATEs sorted by primary key and collide on `(asset_id, date)`.
+   - Targets go forward only: latest first is safe only then, so both re-date helpers refuse an earlier target with a
+     `ValueError` before anything moves (MF's review for the prices, then the events). The price helper's per-row
+     `flush()` is required: one flush at the end would emit the UPDATEs sorted by primary key and collide on
+     `(asset_id, date)`; `asset_events` has no unique key, so the event helper flushes once.
    - A moved SPLIT carries along the ADJUSTMENTs linked to it and dated on its old day S, since Yield on Cost refuses
      a split link whose transaction date differs from the event's (`yield_on_cost.py:404`). It is the one place
      where the repair moves transactions.
@@ -73,6 +74,10 @@ So the code fix and a one-time repair ship together (decision N86).
    - The moves and the timezone (which clears the mark) are written in one transaction, before any other write of the
      asset. No calendar, no timezone or an error: nothing is written for that asset, it is reported failed, the mark
      stays, and the next refresh tries again.
+   - Two refreshes of one asset (the manual sync and the scheduler) can run at once. The settle step reads the mark
+     again and claims it with a conditional `UPDATE … WHERE exchange_timezone = 'legacy-utc'` before anything moves:
+     only the refresh that still finds it moves rows (H's review; the re-read alone would leave a window, since both
+     can read the mark before either commits).
    - Rows older than Yahoo's history are logged per asset, as a count only.
 
 ## Options rejected, and why
@@ -98,6 +103,9 @@ So the code fix and a one-time repair ship together (decision N86).
   prices already on their day: no downgrade past 011 once the server has synced.
 - The last two days before D_f never move: a release-era full sync on day D left session D's bar on D − 1, which the
   scheduler's first window rewrites.
+- A server without a timezone database (Windows outside Docker without `tzdata`, a minimal container) cannot resolve
+  the exchange's zone: a marked asset writes nothing until it can, and the log says so once per zone. Adding `tzdata`
+  from PyPI is a developer decision (Z-36).
 
 ## Prevention
 
