@@ -252,6 +252,36 @@ transactions have had the same floor since N74, with an end a year ahead
 The web app's data editors still show these 422s as a generic error; their coded message
 is a follow-up (workstream X).
 
+### 💷 The Provider's Own Quote Currency {: #reported-currency }
+
+`FAHistoricalData.currency` (`backend/app/schemas/prices.py`) is the quote currency as the
+provider reports it, never normalized: Yahoo reports a London line quoted in pence as `GBp`,
+while its price points carry `GBP` (`FAPricePoint.currency` goes through
+`Currency.validate_code()`, which upper-cases it) with the numbers unchanged — pence stored as
+pounds. FETCH keeps the code in `_FetchedRefreshData.reported_currency`, from the history call
+or from the core history cache, whose entry stores it as `"currency"` beside its dates and
+events for a later full hit; a provider without history, or a range that starts today, gives
+none. PERSIST writes it, stripped, next to `last_fetch_at`, in
+`asset_provider_assignments.reported_currency` (`VARCHAR(8)`, nullable, migration
+`010_provider_reported_currency`): no code, or one longer than 8 characters, leaves the last
+value. `bulk_assign_providers()` (`provider_management.py`) clears it when an assignment's
+provider, identifier or identifier type changes: another line, learnt again at its next history
+fetch. No API schema exposes the column.
+
+`MINOR_UNIT_FACTORS` (`backend/app/utils/currency_units.py`) maps each minor-unit code a
+provider may report, exactly as reported (the case tells `GBp` from `GBP`), to its factor:
+`{"GBp": 100}`; `minor_unit_factor()` gives the factor of a stripped code, or None. The
+portfolio data-quality report reads both: `PortfolioService._held_asset_quote_facts()` reads the
+assets held at the end of the period with their assignments once (`HeldAssetQuoteFacts`), a
+helper shared by the report's checks on held assets' quotes, and `_quote_in_minor_unit_assets()`
+lists those quoted in a minor unit whose quote base (`quote_base_quantity`, «Units per single
+price») is not its factor: the warning `QUOTE_IN_MINOR_UNIT`
+([Data Quality Banner](../../frontend/data-quality-banner.md)). The fix is a quote base of 100,
+which `compute_holding_value()` divides the prices by; the dividends stay in pence, since no
+event path reads it. The `test_z32_*` tests of `test_asset_source_refresh.py` and
+`test_assets_provider.py` pin the column, and two guards of `test_yahoo_finance_errors.py` the
+raw code.
+
 ---
 
 ## 📊 Data Flow: Price Query

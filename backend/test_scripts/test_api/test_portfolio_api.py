@@ -12,13 +12,13 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 from fastapi import FastAPI, HTTPException
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1 import portfolio_api
 from backend.app.api.v1.auth import get_current_user
 from backend.app.config import get_settings
-from backend.app.db.models import Transaction, TransactionType, UserRole
+from backend.app.db.models import Asset, AssetProviderAssignment, Transaction, TransactionType, UserRole
 from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
@@ -2357,3 +2357,234 @@ class TestTransactionsBeforeFloorDataQuality:
         assert {where: self._floor_issues(quality) for where, quality in floor_quality.items()} == {where: [expected] for where in self.WHERE}
         assert {where: self._floor_issues(quality) for where, quality in control_quality.items()} == {where: [] for where in self.WHERE}
         print_success(f"{len(self.SEEDED)} rows before 1900 (earliest {earliest}): one warning in every data_quality section; none from the floor on")
+
+
+# ---------------------------------------------------------------------------
+# Z-32 (c) — held assets quoted in pence while their quote base says units
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestQuoteInMinorUnitDataQuality:
+    """POST /portfolio/report warns about the assets held at the end of the period that their provider quotes in pence
+    while their quote base says units (Z-32 (c)).
+
+    Yahoo reports a London line in ``GBp``; the price schemas fold the code to ``GBP`` and keep the numbers, so the holding
+    is worth a hundred times too much until its quote base («Units per single price») is set to 100 by hand. The refresh
+    keeps the code as reported on the assignment (``reported_currency``). ``PortfolioService`` reads the assets held at the
+    end of the period (``position_states_end``, quantity above the dust threshold) once, with their assignment, and lists
+    an asset when its ``reported_currency``, stripped, is in the minor-unit table ``{"GBp": 100}`` — exactly, case
+    included — and its quote base (NULL or ≤ 0 counting as 1) is not that factor. One WARNING ``QUOTE_IN_MINOR_UNIT``:
+    ``count`` and ``message_params`` ``{count}``, the assets by id and name, a ``navigate_asset`` CTA to the first listed,
+    group ``quote_in_minor_unit``. The order of the list is not pinned. Proven on the HTTP pass-through, both ways the
+    report builds ``data_quality`` — with the summary (``summary.data_quality``, repeated as the top-level one) and without
+    it —, as ``TestTransactionsBeforeFloorDataQuality`` does.
+
+    One new user, three new brokers, reported in GBP over 2025; eight GBP assets of the test's own, each assigned to
+    mockprov under a ticker of its own, priced in pence on 2025-12-31, bought on 2025-03-03 (``HOLDINGS``: role → reported
+    code, quote base, sold before the end, listed). ``pence`` broker: all eight; ``twin`` broker: ``pence`` alone, so that
+    asset is held twice in the scope ``pence`` + ``twin`` (``position_states_end`` has one state per broker and asset) —
+    and the issue lists exactly the three listed assets, each once. ``control`` broker: the five never listed, bought (the
+    sold-out one sold) the same way, and no such issue at all. Presence barriers: the engine ran to 2025-12-31, and the
+    summary holds exactly the assets held at the end. The codes and the NULL and 0 bases are written with the ORM, in the
+    lane's test database only: no route writes ``reported_currency``, and the API turns a base ≤ 0 into 1. Cleanup: the
+    brokers (force: their transactions), the eight assets (their prices and assignments cascade), then the user.
+
+    Red on HEAD 80cef0e43: AssetProviderAssignment has no ``reported_currency`` — the barrier, before anything is written.
+    """
+
+    START, END = "2025-01-01", "2025-12-31"
+    BUY_DAY, SELL_DAY = "2025-03-03", "2025-06-02"
+    WHERE = ("summary.data_quality", "data_quality with the summary", "data_quality without the summary")
+    #: role: (reported_currency, quote base, sold out before the end, listed)
+    HOLDINGS = {
+        "pence": ("GBp", 1, False, True),
+        "pence, padded, no base": (" GBp ", None, False, True),
+        "pence, base 0": ("GBp", 0, False, True),
+        "pence, base 100": ("GBp", 100, False, False),
+        "pounds": ("GBP", 1, False, False),
+        "lower case": ("gbp", 1, False, False),
+        "never fetched": (None, 1, False, False),
+        "pence, sold out": ("GBp", 1, True, False),
+    }
+
+    @staticmethod
+    def _lane_engine():
+        """The engine of the runner's test database, never another: the seeded columns bypass every API check."""
+        is_test_db, database_url = verify_test_database()
+        assert is_test_db, f"Refusing to write outside the test database ({database_url})"
+        engine = get_async_engine()
+        assert engine.url.database and Path(engine.url.database).resolve() == get_test_db_path().resolve(), f"Refusing to write through a non-test engine ({engine.url})"
+        return engine
+
+    @staticmethod
+    def _reported_currency_column():
+        """``AssetProviderAssignment.reported_currency``; until the model has it the test fails here, before writing."""
+        column = getattr(AssetProviderAssignment, "reported_currency", None)
+        if column is None:
+            pytest.fail("red until Z-32 (c): AssetProviderAssignment has no reported_currency: nothing keeps the code the provider reported, so nothing can warn about it", pytrace=False)
+        return column
+
+    async def _create_assets(self, client: httpx.AsyncClient, marker: str, created_ids: list[int]) -> dict[str, tuple[int, str]]:
+        """The eight assets, in one request, found back by name: ``{role: (asset id, name)}``; every id created goes into
+        ``created_ids`` first, for the cleanup. The base 100 goes through the API, NULL and 0 are written later with the
+        ORM (the API turns them into 1)."""
+        names = {role: f"Z-32 {role} {marker}" for role in self.HOLDINGS}
+        payload = [{"display_name": name, "currency": "GBP", "asset_type": "STOCK", "quote_base_quantity": 100 if self.HOLDINGS[role][1] == 100 else 1} for role, name in names.items()]
+        resp = await client.post(f"{API_BASE}/assets", json=payload, timeout=TIMEOUT)
+        created = {row["display_name"]: row["asset_id"] for row in resp.json().get("results", []) if row.get("success")} if resp.status_code in (200, 201) else {}
+        created_ids.extend(created.values())
+        assert set(created) == set(names.values()), f"setup: every asset created: {resp.status_code} {resp.text}"
+        return {role: (created[name], name) for role, name in names.items()}
+
+    async def _assign_and_price(self, client: httpx.AsyncClient, assets: dict[str, tuple[int, str]], marker: str) -> None:
+        """Each asset assigned to mockprov under a ticker of its own (no fetch: saving asks the provider nothing), and
+        priced in pence on the last day."""
+        assignments = [{"asset_id": asset_id, "provider_code": "mockprov", "identifier": f"Z32-{marker[:8]}-{index}.L", "identifier_type": "TICKER", "provider_params": None} for index, (asset_id, _name) in enumerate(assets.values())]
+        resp = await client.post(f"{API_BASE}/assets/provider", json=assignments, timeout=TIMEOUT)
+        assert resp.status_code == 200 and resp.json()["success_count"] == len(assets), resp.text
+        prices = [{"asset_id": asset_id, "prices": [{"date": self.END, "close": "7250", "currency": "GBP"}]} for asset_id, _name in assets.values()]
+        resp = await client.post(f"{API_BASE}/assets/prices", json=prices, timeout=TIMEOUT)
+        assert resp.status_code == 200, resp.text
+
+    async def _seed_columns(self, assets: dict[str, tuple[int, str]]) -> None:
+        """Each assignment's ``reported_currency`` as ``HOLDINGS`` says, and the NULL and 0 quote bases, with the ORM."""
+        column = self._reported_currency_column()
+        async with AsyncSession(self._lane_engine()) as session:
+            for role, (code, base, _sold_out, _listed) in self.HOLDINGS.items():
+                asset_id = assets[role][0]
+                written = await session.execute(update(AssetProviderAssignment).where(AssetProviderAssignment.asset_id == asset_id).values({column: code}))
+                assert written.rowcount == 1, f"setup: asset {asset_id} ({role}) has {written.rowcount} assignment(s)"
+                if base is None or base <= 0:
+                    await session.execute(update(Asset).where(Asset.id == asset_id).values(quote_base_quantity=base))
+            await session.commit()
+
+    async def _trade(self, client: httpx.AsyncClient, broker_id: int, assets: dict[str, tuple[int, str]], roles: list[str]) -> None:
+        """A deposit, then 10 of each role bought; the sold-out ones sold whole before the end."""
+        creates = [{"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-03-01", "quantity": "0", "cash": {"code": "GBP", "amount": "100000"}}]
+        for role in roles:
+            asset_id = assets[role][0]
+            creates.append({"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": self.BUY_DAY, "quantity": "10", "cash": {"code": "GBP", "amount": "-725"}})
+            if self.HOLDINGS[role][2]:
+                creates.append({"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": self.SELL_DAY, "quantity": "-10", "cash": {"code": "GBP", "amount": "700"}})
+        await commit_batch(client, creates=creates)
+
+    async def _data_quality(self, client: httpx.AsyncClient, broker_ids: list[int], held: set[int]) -> dict[str, dict | None]:
+        """The scope's ``data_quality`` sections, keyed as ``WHERE``: one report with the summary, one without."""
+        found: dict[str, dict | None] = {}
+        for include_summary in (True, False):
+            response = await post_portfolio_report(
+                client,
+                {
+                    "broker_ids": broker_ids,
+                    "target_currency": "GBP",
+                    "date_range": {"start": self.START, "end": self.END},
+                    "include_summary": include_summary,
+                    "include_history": False,
+                    "include_allocation_history": False,
+                },
+            )
+            assert response.status_code == 200, response.text
+            report = response.json()
+            # Presence barriers: the engine ran to the period's end, and the summary holds exactly the assets held there.
+            assert report["metadata"]["computed_date_to"] == self.END, report["metadata"]
+            if include_summary:
+                assert {holding["asset_id"] for holding in report["summary"]["holdings"]} == held, report["summary"]["holdings"]
+                found["summary.data_quality"] = report["summary"]["data_quality"]
+                found["data_quality with the summary"] = report["data_quality"]
+            else:
+                assert report["summary"] is None, "include_summary=False built a summary: the report's own data_quality path is not reached"
+                found["data_quality without the summary"] = report["data_quality"]
+        return found
+
+    @staticmethod
+    def _quote_issues(quality: dict | None) -> list[dict] | None:
+        """The ``QUOTE_IN_MINOR_UNIT`` issues of a section, reduced to the contract's fields (None: no section). The
+        listed assets as sorted (id, name) pairs: the order is not pinned, the pairing is."""
+        if quality is None:
+            return None
+        reduced = []
+        for issue in quality["issues"]:
+            if issue["code"] != "QUOTE_IN_MINOR_UNIT":
+                continue
+            ids, names = issue["affected_asset_ids"], issue["affected_asset_names"]
+            reduced.append(
+                {
+                    "domain": issue["domain"],
+                    "severity": issue["severity"],
+                    "message_i18n_key": issue["message_i18n_key"],
+                    "message_params": issue["message_params"],
+                    "count": issue["count"],
+                    "listed": sorted(zip(ids, names, strict=True)) if len(ids) == len(names) else f"{len(ids)} ids, {len(names)} names",
+                    "cta_action": issue["cta_action"],
+                    "cta_target is the first listed": bool(ids) and issue["cta_target"] == str(ids[0]),
+                    "group_key": issue["group_key"],
+                }
+            )
+        return reduced
+
+    async def _cleanup(self, client: httpx.AsyncClient, broker_ids: list[int], asset_ids: list[int], cleanup_errors: list[str]) -> None:
+        """The brokers (force: their transactions), then the assets (their prices and assignments cascade). A failure is
+        recorded, never raised, so the user is still deleted."""
+        if broker_ids:
+            response = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+            if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
+                cleanup_errors.append(f"brokers {broker_ids}: {response.status_code} {response.text}")
+        if asset_ids:
+            response = await client.delete(f"{API_BASE}/assets", params={"asset_ids": asset_ids}, timeout=TIMEOUT)
+            if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
+                cleanup_errors.append(f"assets {asset_ids}: {response.status_code} {response.text}")
+
+    async def test_held_assets_quoted_in_pence_without_their_base_give_one_warning(self, test_server):
+        """RED until Z-32 (c): the scope ``pence`` + ``twin`` gets one QUOTE_IN_MINOR_UNIT listing exactly ``pence`` (held
+        at both brokers, listed once), ``pence, padded, no base`` and ``pence, base 0`` in each data_quality section; the
+        ``control`` scope, holding only assets never listed, none."""
+        print_section("Portfolio Report: held assets quoted in pence (Z-32 (c))")
+        self._reported_currency_column()
+        marker = uuid.uuid4().hex
+        cleanup_errors: list[str] = []
+        broker_ids: list[int] = []
+        asset_ids: list[int] = []
+        assets: dict[str, tuple[int, str]] = {}
+        pence_quality: dict[str, dict | None] = {}
+        control_quality: dict[str, dict | None] = {}
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                assets = await self._create_assets(client, marker, asset_ids)
+                await self._assign_and_price(client, assets, marker)
+                await self._seed_columns(assets)
+                roles_by_broker: dict[int, list[str]] = {}
+                for label, roles in (("pence", list(self.HOLDINGS)), ("twin", ["pence"]), ("control", [role for role, (*_rest, listed) in self.HOLDINGS.items() if not listed])):
+                    broker_id = await create_broker(client, f"Z-32 {label} {marker[:12]}")
+                    broker_ids.append(broker_id)
+                    roles_by_broker[broker_id] = roles
+                    await self._trade(client, broker_id, assets, roles)
+                pence_id, twin_id, control_id = broker_ids
+
+                def held(*scope: int) -> set[int]:
+                    return {assets[role][0] for broker_id in scope for role in roles_by_broker[broker_id] if not self.HOLDINGS[role][2]}
+
+                pence_quality = await self._data_quality(client, [pence_id, twin_id], held(pence_id, twin_id))
+                control_quality = await self._data_quality(client, [control_id], held(control_id))
+            finally:
+                await self._cleanup(client, broker_ids, asset_ids, cleanup_errors)
+                await delete_current_test_user(client, user_id)
+        assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
+
+        listed = sorted(assets[role] for role, (*_rest, is_listed) in self.HOLDINGS.items() if is_listed)
+        expected = {
+            "domain": "portfolio",
+            "severity": "warning",
+            "message_i18n_key": "dataQuality.quoteInMinorUnit",
+            "message_params": {"count": len(listed)},
+            "count": len(listed),
+            "listed": listed,
+            "cta_action": "navigate_asset",
+            "cta_target is the first listed": True,
+            "group_key": "quote_in_minor_unit",
+        }
+        assert {where: self._quote_issues(quality) for where, quality in pence_quality.items()} == {where: [expected] for where in self.WHERE}
+        assert {where: self._quote_issues(quality) for where, quality in control_quality.items()} == {where: [] for where in self.WHERE}
+        print_success(f"{len(listed)} held assets quoted in pence without their base: one warning in every data_quality section; none for the control")
