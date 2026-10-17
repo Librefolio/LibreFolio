@@ -4705,7 +4705,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Fatto: il limite è `MAX_SAFE_INTEGER` (2^53 − 1), quello che la pagina delle impostazioni tiene esatto; copre anche
     la variabile d'ambiente, la riga salvata e le dichiarazioni, che fallivano allo stesso modo. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
     sezione «X-R43».
-- ✅ **X-R44 · `mockprov` si può nominare e assegnare a un asset anche in produzione** (consegnata il 17/10, 10:20; SHA all'ingresso; chiude anche `MOCKFX`) — piccolo, **prima del rilascio,
+- ✅ **X-R44 · `mockprov` si può nominare e assegnare a un asset anche in produzione** (chiusa il 17/10: `59f5bcfdc`, entrata in dev `5a8c64c5c`, riga del CHANGELOG estesa dal coordinatore in `1c8eba6f5`; chiude anche `MOCKFX`) — piccolo, **prima del rilascio,
   dopo X-R38**; X, 17/10 (revisione R13-SEC5 di E su X-R24/25, girata dal coordinatore).
   - `mockprov` è nell'immagine di produzione e sempre registrato. Con X-R24 la ricerca senza `providers` lo salta, ma
     chiunque può nominarlo in una ricerca e **assegnarlo a un asset** con `POST /assets/provider`, che non controlla né
@@ -4713,6 +4713,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - Direzione: fuori dalla modalità di test, rifiutare i codici `test_only` in `configured_provider` e nell'assegnazione.
   - Per F05, quando arriva: l'elenco dei fornitori permessi deve chiudere anche il percorso di un fornitore *nominato*
     (`configured_provider`/`get_plugin`), non solo l'elenco e il default.
+- **X-R44b · Un controllo di qualità dei dati per i codici di fornitore che nessun registro serve** — basso, dopo la
+  1.3 se non costa poco; X, 17/10 (E, revisione di X-R44, girata dal coordinatore).
+  - Elencare le assegnazioni degli asset, le rotte dei cambi e le righe il cui codice di fornitore nessun registro
+    serve: copre le righe che i doppi di test hanno già scritto nelle istanze rilasciate, e i plugin rimossi.
+  - Nota informativa di E: `shutdown_all_providers` istanzia ancora i doppi; innocuo, nessuna azione.
 - **X-R45 · Cambi: chi legge `fx_rates` direttamente non salta i tassi vecchi inutilizzabili** — basso; X, 17/10 (da
   X-R38).
   - Con X-R38 nessuna scrittura salva più un tasso fuori dai limiti, e `convert_bulk` e `compute_chain_rate` saltano quelli
@@ -4855,6 +4860,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
      riscrive la coppia.
   2. Il nuovo tentativo dei segnali e il cambio delle impostazioni richiedono anche i periodi, che non ne dipendono.
   3. Un errore cancella le Δ ancora valide per lo stesso `dateEnd`.
+- **X-R61 · Il Sync di una sola card o riga sovrascrive i prezzi salvati senza l'avviso di C-66** — basso, domanda di
+  prodotto per il developer; X, 17/10 (il test-author di Y-28).
+  - `handleSyncAsset` (la card o la riga della lista) parte subito, senza la finestra: nessun avviso prima di
+    sostituire i prezzi salvati del periodo, modifiche manuali comprese. L'avviso c'è solo nella finestra (Sync all, il
+    Sync della selezione, la pagina dell'asset).
+  - Da decidere: aprire la finestra anche lì, o un avviso leggero, o lasciare com'è.
 - **X-R57 · Il commento C-66 di `asset-detail.spec.ts` dà una ragione superata** — minimo; X, 17/10 (Z, dopo Z-3).
   - Verso la riga 8672 di `e2e/assets/asset-detail.spec.ts` il commento dice «by its UTC reckoning…»; dopo Z-3 (dev
     `0f55265a1`) le pagine degli asset leggono il giorno dell'utente (`todayIso()`). Lo stub resta giusto: cambia solo
