@@ -1,8 +1,10 @@
 """Pure contract tests for per-run test port and data-directory isolation.
 
 Covered here: data-directory resolution and its production guards, lane runtime
-configuration (including the instance configuration a lane drops, and
-``Settings`` reading no dotenv file in test mode), CLI/runner wiring,
+configuration (including the instance configuration a lane drops, the few
+settings ``--lane-setting`` lets a lane set all the same (H-43), and
+``Settings`` reading no dotenv file in test mode), CLI/runner wiring (the
+managed lane's cloud smoke kept out of every ``all`` included, H-43),
 shared-backend ownership, the ``exec_unmasked`` spawn wrapper,
 ``mkdocs gallery --no-populate`` reusing a lane's test database, and the
 frontend build's staleness probe (``check_frontend_needs_build``): what it
@@ -21,6 +23,7 @@ from __future__ import annotations
 import argparse
 import ast
 import contextlib
+import inspect
 import json
 import os
 import re
@@ -49,6 +52,7 @@ from backend.test_scripts import test_server_helper as test_server_helper_module
 from scripts.test_runner import _backend_db as test_runner_backend_db
 from scripts.test_runner import _cli as test_runner_cli
 from scripts.test_runner import _common as test_runner_common
+from scripts.test_runner import _registry as test_runner_registry
 from scripts.test_runner import _server as test_runner_server
 
 # ── Shared fixtures, fakes and probes ──────────────────────────────────────
@@ -2966,3 +2970,609 @@ class TestToolContractInputsWithoutARecord:
         set_mtime(NEWER_MTIME, tool_contract_project.inputs["tool_plugins/demo/c.py"])
 
         assert cli_base.check_frontend_needs_build() is True
+
+
+# ── Test lane settings — what a lane may set: --lane-setting (H-43) ────────
+#
+# A test lane runs on the instance's defaults (Contract 2b): configure_test_runtime drops every LibreFolio setting of the
+# developer's dotenv file and shell, LIBREFOLIO_PROFILE included, in the runner and again in `dev.py server --test`, the
+# shared backend. So no lane could run as a managed instance, and no E2E saw the headers the managed profile turns on.
+# H-43 lets a lane ask for those settings, and for nothing else:
+#   - `--lane-setting NAME=VALUE`, repeatable, on both test entry points and on `dev.py server --test` (an error without
+#     `--test`), for the names of TEST_LANE_SETTABLE alone: the profile, the frame protection, the report-only CSP;
+#   - configure_test_runtime(..., lane_settings=[...]) writes them to LIBREFOLIO_TEST_LANE_SETTINGS, NAME=VALUE sorted by
+#     name and joined by ';' (none given removes it), which every process of the lane inherits through the kept
+#     LIBREFOLIO_TEST_ prefix; given no list, it reads the inherited variable. Either way it sets each pair after the
+#     drop, so that a nested call, the shared server's, sets them again;
+#   - a bad setting, given or inherited, refuses the whole lane, and a refused lane changes nothing;
+#   - a lane setting comes from the command line, never from a dotenv file: the variable found there is refused, or a
+#     forgotten line would turn every lane managed, silently — alone, and exported as well, as `pipenv run` exports it:
+#     it loads the file into the command it starts (override=True) unless PIPENV_DONT_LOAD_ENV is set, and there the
+#     variable looks inherited from a runner. Every child of the runner has the guard and reads no dotenv file, so it
+#     sets what its runner handed down whatever the file holds;
+#   - the runner prints the lane's settings, and Playwright hands the variable to its own webServer;
+#   - `front-utility cloud-smoke`, which refuses any lane but a managed one, runs when asked for by name, never in an `all`.
+# Without a lane setting nothing changes: a developer's LIBREFOLIO_PROFILE=managed is dropped, as before.
+#
+# The dotenv file is a synthetic one in tmp_path, named by PIPENV_DOTENV_LOCATION, holding a probe that proves it was
+# read: the repository's .env is never read. `dev.py server` runs in this process through capture_server_child, which
+# records the builds and the launch instead of running them. The names the cure adds are looked up when a test runs:
+# until they exist, the tests that need them fail on "H-43: …", never at collection.
+
+#: The variable a lane's settings travel in, to every process of the lane: spelled here, pinned to
+#: ``cli_base.TEST_LANE_SETTINGS`` by a test below.
+LANE_SETTINGS_ENV = "LIBREFOLIO_TEST_LANE_SETTINGS"
+#: The only names a lane may set: the managed profile and the two protections it turns on. Pinned to
+#: ``cli_base.TEST_LANE_SETTABLE`` by a test below.
+LANE_SETTABLE = frozenset({"LIBREFOLIO_PROFILE", "LIBREFOLIO_FRAME_PROTECTION", "LIBREFOLIO_CSP_REPORT_ONLY"})
+#: A developer's own managed configuration of those names, in the shell or the dotenv file.
+DEVELOPER_MANAGED = {"LIBREFOLIO_PROFILE": "managed", "LIBREFOLIO_FRAME_PROTECTION": "true", "LIBREFOLIO_CSP_REPORT_ONLY": "true"}
+#: A developer's configuration of those names with values no lane below asks for, so that a lane's value and a
+#: developer's can be told apart.
+DEVELOPER_SELFHOSTED = {"LIBREFOLIO_PROFILE": "selfhosted", "LIBREFOLIO_FRAME_PROTECTION": "true", "LIBREFOLIO_CSP_REPORT_ONLY": "true"}
+LANE_SETTINGS_PORT = 6175
+#: Not a LIBREFOLIO_* name, which a lane drops: hydrated from the dotenv file and left there, proof the file was read.
+LANE_SETTINGS_PROBE = "RUNTIME_ISOLATION_LANE_SETTINGS_PROBE"
+
+
+def lane_values(names) -> dict[str, str]:
+    """Those of ``names`` the environment holds, with their values."""
+    return {name: os.environ[name] for name in sorted(names) if name in os.environ}
+
+
+def lane_settings_name(name: str):
+    """``cli_base.<name>``, looked up when the test runs: a name the cure has not added yet fails the test, not its collection."""
+    value = getattr(cli_base, name, None)
+    if value is None:
+        pytest.fail(f"H-43: cli_base.{name} is missing")
+    return value
+
+
+def configure_lane(**lane):
+    """``cli_base.configure_test_runtime(**lane)``: a ``lane_settings`` it does not take yet fails the test, saying so, instead of a TypeError."""
+    if "lane_settings" in lane and "lane_settings" not in inspect.signature(cli_base.configure_test_runtime).parameters:
+        pytest.fail("H-43: configure_test_runtime takes no lane_settings: a --lane-setting has nowhere to go, and a lane can set nothing")
+    return cli_base.configure_test_runtime(**lane)
+
+
+def lane_refusal(what: str, **lane) -> ValueError:
+    """The ``ValueError`` ``configure_test_runtime(**lane)`` refuses ``what`` with: a lane it configures all the same fails the test."""
+    try:
+        configure_lane(**lane)
+    except ValueError as refusal:
+        return refusal
+    pytest.fail(f"H-43: configure_test_runtime accepted {what} and configured the lane")
+
+
+def parse_refusal(items) -> ValueError:
+    """The ``ValueError`` ``parse_lane_settings(items)`` refuses them with: items it parses fail the test, saying into what."""
+    parse = lane_settings_name("parse_lane_settings")
+    try:
+        parsed = parse(items)
+    except ValueError as refusal:
+        return refusal
+    pytest.fail(f"H-43: parse_lane_settings accepted {items!r} as {parsed!r}")
+
+
+def write_instance(lane, *, dotenv: dict[str, str], shell: dict[str, str]) -> None:
+    """Write ``dotenv`` and the probe to the lane's synthetic dotenv file, and export ``shell``."""
+    lane.dotenv = {LANE_SETTINGS_PROBE: "hydrated-from-dotenv", **dotenv}
+    lane.dotenv_file.write_text("".join(f"{name}={value}\n" for name, value in lane.dotenv.items()), encoding="utf-8")
+    lane.env.setenv("PIPENV_DOTENV_LOCATION", str(lane.dotenv_file))
+    for name, value in shell.items():
+        lane.env.setenv(name, value)
+
+
+@pytest.fixture
+def settings_lane(runtime_env, tmp_path) -> SimpleNamespace:
+    """The lane the runner configures, in an environment holding no LibreFolio setting, and a dotenv file holding the probe alone.
+
+    Every documented variable, kept name, instance secret and ``LIBREFOLIO_*`` name leaves the environment, the variable
+    of the lane settings and the names a lane may set included: what a test finds there, it put there. The dotenv file
+    is ``tmp_path/instance.env``, named by ``PIPENV_DOTENV_LOCATION``, until a test rewrites it with ``write_instance``:
+    the repository's own ``.env`` is never read. ``runtime_env`` restores the environment afterwards.
+    """
+    names = env_example_variables() | cli_base.TEST_LANE_KEEPS | set(backend_config.INSTANCE_TRUST_SECRETS) | LANE_SETTABLE | {LANE_SETTINGS_ENV, LANE_SETTINGS_PROBE}
+    for name in names | {name for name in os.environ if name.startswith("LIBREFOLIO_")}:
+        runtime_env.delenv(name, raising=False)
+    lane = SimpleNamespace(port=LANE_SETTINGS_PORT, data_dir=tmp_path / "lane-data", env=runtime_env, dotenv_file=tmp_path / "instance.env", dotenv={})
+    write_instance(lane, dotenv={}, shell={})
+    return lane
+
+
+class TestTestLaneSettings:
+    """``configure_test_runtime(..., lane_settings=...)``: a lane sets what it is given, after the drop, and nothing else."""
+
+    #: ``--lane-setting`` values a lane is refused for, by what makes them bad: a good one beside a bad one goes with it.
+    REFUSED_LANE_SETTINGS = {
+        "a-production-data-dir": ["LIBREFOLIO_DATA_DIR=/tmp/elsewhere"],
+        "an-instance-secret": ["JWT_SECRET=chosen-by-the-lane"],
+        "the-test-mode": ["LIBREFOLIO_TEST_MODE=0"],
+        "no-equals-sign": ["LIBREFOLIO_PROFILE"],
+        "an-empty-value": ["LIBREFOLIO_PROFILE="],
+        "a-semicolon-in-the-value": ["LIBREFOLIO_PROFILE=managed;LIBREFOLIO_DATA_DIR=/tmp/elsewhere"],
+        "a-name-given-twice": ["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_PROFILE=selfhosted"],
+        "a-good-one-beside-a-bad-one": ["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_DATA_DIR=/tmp/elsewhere"],
+    }
+
+    @staticmethod
+    def instance_a_refusal_must_leave(lane, shell: dict[str, str] | None = None) -> dict[str, str]:
+        """Export the developer's settings, which a drop would remove, beside the dotenv probe, which a hydration would add; return the environment."""
+        write_instance(lane, dotenv={}, shell={**DEVELOPER_SELFHOSTED, **(shell or {})})
+        return dict(os.environ)
+
+    def test_the_names_a_lane_may_set_and_the_variable_they_travel_in(self):
+        settable, variable = lane_settings_name("TEST_LANE_SETTABLE"), lane_settings_name("TEST_LANE_SETTINGS")
+
+        assert isinstance(settable, frozenset) and settable == LANE_SETTABLE, f"H-43: a lane may set {sorted(LANE_SETTABLE)} and nothing else, not {settable!r}"
+        assert variable == LANE_SETTINGS_ENV
+        assert cli_base.kept_in_a_test_lane(variable), f"{variable} must be kept in a lane, by its LIBREFOLIO_TEST_ prefix: every process of the lane reads it"
+        assert not any(map(cli_base.kept_in_a_test_lane, settable)), "a name a lane may set is not one it keeps: the developer's own value of it must still be dropped"
+
+    @pytest.mark.parametrize(
+        ("lane_settings", "variable", "settings"),
+        [
+            pytest.param(["LIBREFOLIO_PROFILE=managed"], "LIBREFOLIO_PROFILE=managed", {"LIBREFOLIO_PROFILE": "managed"}, id="the-managed-profile"),
+            pytest.param([" \tLIBREFOLIO_PROFILE =  managed "], "LIBREFOLIO_PROFILE=managed", {"LIBREFOLIO_PROFILE": "managed"}, id="name-and-value-stripped"),
+            pytest.param(["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_CSP_REPORT_ONLY=false"], "LIBREFOLIO_CSP_REPORT_ONLY=false;LIBREFOLIO_PROFILE=managed", {"LIBREFOLIO_CSP_REPORT_ONLY": "false", "LIBREFOLIO_PROFILE": "managed"}, id="two-sorted-by-name"),
+            pytest.param(
+                ["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_FRAME_PROTECTION=false", "LIBREFOLIO_CSP_REPORT_ONLY=false"],
+                "LIBREFOLIO_CSP_REPORT_ONLY=false;LIBREFOLIO_FRAME_PROTECTION=false;LIBREFOLIO_PROFILE=managed",
+                {"LIBREFOLIO_CSP_REPORT_ONLY": "false", "LIBREFOLIO_FRAME_PROTECTION": "false", "LIBREFOLIO_PROFILE": "managed"},
+                id="the-three",
+            ),
+        ],
+    )
+    def test_a_lane_sets_exactly_the_settings_it_is_given(self, settings_lane, lane_settings, variable, settings):
+        # The developer configured the three names otherwise: none of those values may reach the lane, set or not
+        write_instance(settings_lane, dotenv=DEVELOPER_SELFHOSTED, shell=DEVELOPER_SELFHOSTED)
+
+        configured = configure_lane(port=settings_lane.port, data_dir=settings_lane.data_dir, lane_settings=lane_settings)
+
+        assert configured == (settings_lane.port, settings_lane.data_dir.resolve()), "the lane settings change nothing of what configure_test_runtime returns"
+        assert os.environ.get(LANE_SETTINGS_ENV) == variable, f"H-43: the lane's settings travel to its children in {LANE_SETTINGS_ENV}, NAME=VALUE sorted by name and joined by ';'"
+        assert lane_values(LANE_SETTABLE) == settings, "H-43: the lane must hold exactly the settings it was given, set after the drop: none of the developer's own"
+
+    def test_a_nested_call_sets_them_again_after_its_drop_and_changes_nothing(self, settings_lane):
+        # The runner, given two --lane-setting: what it configures, its children inherit
+        configure_lane(port=settings_lane.port, data_dir=settings_lane.data_dir, lane_settings=["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_CSP_REPORT_ONLY=false"])
+        inherited, settings = dict(os.environ), {"LIBREFOLIO_CSP_REPORT_ONLY": "false", "LIBREFOLIO_PROFILE": "managed"}
+        assert lane_values(LANE_SETTABLE) == settings, "premise: the runner's lane holds its two settings"
+
+        # The child: `dev.py server --test` of the shared server passes no lane argument and no lane setting, and its drop
+        # removes every LIBREFOLIO_* name but the kept ones: the two settings with them
+        configured = cli_base.configure_test_runtime()
+
+        changes = environment_changes(inherited)
+        assert lane_values(LANE_SETTABLE) == settings, "H-43: the nested call dropped the lane's settings and set nothing back: the shared server would run on the instance's defaults"
+        assert configured == (settings_lane.port, settings_lane.data_dir.resolve())
+        assert not changes, f"a nested call changed the lane's environment: {changes}"
+
+    @pytest.mark.parametrize(
+        ("lane_settings", "variable", "settings"),
+        [
+            pytest.param([], None, {}, id="none-given"),
+            pytest.param(["LIBREFOLIO_CSP_REPORT_ONLY=false"], "LIBREFOLIO_CSP_REPORT_ONLY=false", {"LIBREFOLIO_CSP_REPORT_ONLY": "false"}, id="others-given"),
+        ],
+    )
+    def test_given_lane_settings_replace_the_inherited_ones(self, settings_lane, lane_settings, variable, settings):
+        # The environment a runner configured with the managed profile hands to its children
+        write_instance(settings_lane, dotenv={}, shell={LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_PROFILE": "managed"})
+
+        configure_lane(port=settings_lane.port, data_dir=settings_lane.data_dir, lane_settings=lane_settings)
+
+        assert os.environ.get(LANE_SETTINGS_ENV) == variable, f"H-43: lane settings given, even none, replace the inherited ones in {LANE_SETTINGS_ENV}: none given removes it"
+        assert lane_values(LANE_SETTABLE) == settings, "H-43: the lane must hold exactly the settings it was given, none of those it inherited"
+
+    @pytest.mark.parametrize("inherited", ["LIBREFOLIO_PROFILE=managed", ";LIBREFOLIO_PROFILE=managed;;"], ids=["from-the-runner", "empty-items-ignored"])
+    def test_lane_settings_inherited_from_the_runner_are_set(self, settings_lane, inherited):
+        # As the runner hands them to a child: the variable exported, beside the developer's own values of the three names
+        write_instance(settings_lane, dotenv={}, shell={**DEVELOPER_SELFHOSTED, LANE_SETTINGS_ENV: inherited})
+
+        configured = cli_base.configure_test_runtime(port=settings_lane.port, data_dir=settings_lane.data_dir)
+
+        assert configured == (settings_lane.port, settings_lane.data_dir.resolve())
+        assert LANE_SETTINGS_ENV in os.environ, f"{LANE_SETTINGS_ENV} stays in the lane, for its own children"
+        assert lane_values(LANE_SETTABLE) == {"LIBREFOLIO_PROFILE": "managed"}, "H-43: the lane must hold the settings it inherited from its runner, and only those: the drop removed them and nothing set them back"
+
+    def test_a_child_of_the_runner_reads_no_dotenv_file_and_sets_the_inherited_settings(self, settings_lane):
+        """A child of the runner reads no dotenv file: what the file holds, the variable included, is neither applied nor refused.
+
+        Every child of the runner holds ``PIPENV_DONT_LOAD_ENV=1``: ``configure_test_runtime`` exports it, and Playwright's
+        webServer env sets it as well. The child sets the settings its runner handed down, as the runner set them.
+        """
+        # The runner's lane as a child inherits it, the guard included, beside the developer's own values of the three
+        # names; the dotenv file holds another value of the variable, which must reach neither the lane nor a refusal
+        write_instance(settings_lane, dotenv={LANE_SETTINGS_ENV: "LIBREFOLIO_CSP_REPORT_ONLY=false"}, shell={**DEVELOPER_SELFHOSTED, LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed", "PIPENV_DONT_LOAD_ENV": "1"})
+
+        configured = cli_base.configure_test_runtime(port=settings_lane.port, data_dir=settings_lane.data_dir)
+
+        assert configured == (settings_lane.port, settings_lane.data_dir.resolve())
+        assert LANE_SETTINGS_PROBE not in os.environ, "PIPENV_DONT_LOAD_ENV hides the dotenv file from a child of the runner, yet the probe it holds was hydrated: the file was read"
+        assert os.environ.get(LANE_SETTINGS_ENV) == "LIBREFOLIO_PROFILE=managed", f"H-43: a child of the runner hands on in {LANE_SETTINGS_ENV} what its runner handed down, never the dotenv file's value"
+        assert lane_values(LANE_SETTABLE) == {"LIBREFOLIO_PROFILE": "managed"}, "H-43: a child of the runner must hold the settings its runner handed down, and only those: neither the developer's own nor the dotenv file's"
+
+    @pytest.mark.parametrize("origin", ["shell", "dotenv", "both"])
+    def test_without_a_lane_setting_the_developers_managed_profile_is_still_dropped(self, settings_lane, origin):
+        """Green before H-43 and after it: a lane's settings come from the lane, never from the developer's configuration."""
+        write_instance(settings_lane, dotenv=DEVELOPER_MANAGED if origin != "shell" else {}, shell=DEVELOPER_MANAGED if origin != "dotenv" else {})
+
+        configured = cli_base.configure_test_runtime(port=settings_lane.port, data_dir=settings_lane.data_dir)
+
+        reached = lane_values(LANE_SETTABLE | {LANE_SETTINGS_ENV})
+        assert configured == (settings_lane.port, settings_lane.data_dir.resolve())
+        assert os.environ.get(LANE_SETTINGS_PROBE) == "hydrated-from-dotenv", "the synthetic dotenv file was not loaded, so the absence below would prove nothing"
+        assert not reached, f"the developer's managed configuration reached a lane given no lane setting, from the {origin}: {reached}"
+
+    @pytest.mark.parametrize("lane_settings", list(REFUSED_LANE_SETTINGS.values()), ids=list(REFUSED_LANE_SETTINGS))
+    def test_a_bad_lane_setting_refuses_the_lane_and_changes_nothing(self, settings_lane, lane_settings):
+        before = self.instance_a_refusal_must_leave(settings_lane)
+
+        lane_refusal(f"--lane-setting {lane_settings!r}", port=settings_lane.port, data_dir=settings_lane.data_dir, lane_settings=lane_settings)
+
+        changes = environment_changes(before)
+        assert not changes, f"a lane refused for its settings changed the environment: {changes}"
+
+    @pytest.mark.parametrize(
+        "inherited",
+        ["LIBREFOLIO_DATA_DIR=/tmp/elsewhere", "LIBREFOLIO_PROFILE", "LIBREFOLIO_PROFILE=managed;LIBREFOLIO_PROFILE=selfhosted", "LIBREFOLIO_PROFILE=managed;JWT_SECRET=chosen-by-the-lane"],
+        ids=["a-production-data-dir", "no-equals-sign", "a-name-given-twice", "a-good-one-beside-a-bad-one"],
+    )
+    def test_a_bad_inherited_lane_setting_refuses_the_lane_and_changes_nothing(self, settings_lane, inherited):
+        before = self.instance_a_refusal_must_leave(settings_lane, shell={LANE_SETTINGS_ENV: inherited})
+
+        lane_refusal(f"{LANE_SETTINGS_ENV}={inherited!r} inherited from its runner", port=settings_lane.port, data_dir=settings_lane.data_dir)
+
+        changes = environment_changes(before)
+        assert not changes, f"a lane refused for its inherited settings changed the environment: {changes}"
+
+    @pytest.mark.parametrize("lane_settings", [None, ["LIBREFOLIO_PROFILE=managed"]], ids=["no-lane-setting", "a-lane-setting-as-well"])
+    def test_lane_settings_from_the_dotenv_file_are_refused(self, settings_lane, lane_settings):
+        # A line forgotten in the developer's dotenv file would turn every lane managed, silently
+        write_instance(settings_lane, dotenv={LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed"}, shell=DEVELOPER_SELFHOSTED)
+        before = dict(os.environ)
+        assert LANE_SETTINGS_ENV not in before, "premise: the variable is in the dotenv file alone"
+        lane = {"port": settings_lane.port, "data_dir": settings_lane.data_dir} | ({} if lane_settings is None else {"lane_settings": lane_settings})
+
+        refusal = lane_refusal(f"{LANE_SETTINGS_ENV} from the dotenv file", **lane)
+
+        # The hydration that finds the variable may stay; nothing else may happen: no drop, no export, no setting
+        hydration = {name: (None, value) for name, value in settings_lane.dotenv.items()}
+        beyond = {name: change for name, change in environment_changes(before).items() if hydration.get(name) != change}
+        assert "--lane-setting" in str(refusal) and ".env" in str(refusal), f"the refusal must say that lane settings come from --lane-setting only, never from .env: {refusal}"
+        assert not beyond, f"a lane refused for the lane settings of its dotenv file changed more than the hydration that found them: {beyond}"
+
+    @pytest.mark.parametrize("lane_settings", [None, ["LIBREFOLIO_PROFILE=managed"]], ids=["no-lane-setting", "a-lane-setting-as-well"])
+    def test_lane_settings_pipenv_loaded_from_the_dotenv_file_are_refused(self, settings_lane, lane_settings):
+        """``pipenv run`` loads the dotenv file into the command it starts, ``override=True``, unless ``PIPENV_DONT_LOAD_ENV`` is set.
+
+        So the variable a line of the developer's dotenv file holds reaches ``dev.py`` exported, as if a runner had handed
+        it down: refused all the same, first, before any hydration, drop or export — the environment stays as it was.
+        """
+        # What `pipenv run` exports from the file, beside the developer's own values of the three names, which a drop would
+        # remove. The probe stays in the file alone, so that a hydration would show as its arrival
+        loaded = {LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed"}
+        write_instance(settings_lane, dotenv=loaded, shell={**DEVELOPER_SELFHOSTED, **loaded})
+        before = dict(os.environ)
+        assert "PIPENV_DONT_LOAD_ENV" not in before, "premise: no guard, as in a command `pipenv run` starts from the developer's shell"
+        lane = {"port": settings_lane.port, "data_dir": settings_lane.data_dir} | ({} if lane_settings is None else {"lane_settings": lane_settings})
+
+        refusal = lane_refusal(f"{LANE_SETTINGS_ENV} that pipenv loaded from the dotenv file", **lane)
+
+        changes = environment_changes(before)
+        assert "--lane-setting" in str(refusal) and ".env" in str(refusal), f"the refusal must say that lane settings come from --lane-setting only, never from .env: {refusal}"
+        assert not changes, f"a lane refused for the lane settings pipenv loaded from its dotenv file changed the environment: {changes}"
+
+
+class TestParseLaneSettings:
+    """``cli_base.parse_lane_settings``: ``NAME=VALUE`` items, name and value stripped, for the names of ``TEST_LANE_SETTABLE`` alone."""
+
+    #: Items refused one by one, by what makes them bad.
+    REFUSED_ITEMS = {
+        "no-equals-sign": "LIBREFOLIO_PROFILE",
+        "an-empty-name": "=managed",
+        "a-blank-name": "   =managed",
+        "an-empty-value": "LIBREFOLIO_PROFILE=",
+        "a-blank-value": "LIBREFOLIO_PROFILE=   ",
+        "a-production-data-dir": "LIBREFOLIO_DATA_DIR=/tmp/elsewhere",
+        "an-instance-secret": "JWT_SECRET=chosen-by-the-lane",
+        "a-port": "TEST_PORT=6041",
+        "the-test-mode": "LIBREFOLIO_TEST_MODE=0",
+        "the-variable-of-the-lane-settings": "LIBREFOLIO_TEST_LANE_SETTINGS=LIBREFOLIO_PROFILE=managed",
+        "a-name-in-lower-case": "librefolio_profile=managed",
+        "a-semicolon-in-the-value": "LIBREFOLIO_PROFILE=managed;LIBREFOLIO_DATA_DIR=/tmp/elsewhere",
+        "a-newline-in-the-value": "LIBREFOLIO_PROFILE=managed\nLIBREFOLIO_DATA_DIR=/tmp/elsewhere",
+        "a-carriage-return-in-the-value": "LIBREFOLIO_PROFILE=man\raged",
+        "a-nul-in-the-value": "LIBREFOLIO_PROFILE=man\0aged",
+    }
+
+    @pytest.mark.parametrize(
+        ("items", "expected"),
+        [
+            pytest.param(["LIBREFOLIO_PROFILE=managed"], {"LIBREFOLIO_PROFILE": "managed"}, id="one"),
+            pytest.param([" \tLIBREFOLIO_PROFILE =  managed "], {"LIBREFOLIO_PROFILE": "managed"}, id="name-and-value-stripped"),
+            pytest.param(
+                ("LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_FRAME_PROTECTION=true", "LIBREFOLIO_CSP_REPORT_ONLY=false"),
+                {"LIBREFOLIO_PROFILE": "managed", "LIBREFOLIO_FRAME_PROTECTION": "true", "LIBREFOLIO_CSP_REPORT_ONLY": "false"},
+                id="the-three-from-a-tuple",
+            ),
+            pytest.param([], {}, id="none"),
+        ],
+    )
+    def test_reads_name_value_items(self, items, expected):
+        assert lane_settings_name("parse_lane_settings")(items) == expected
+
+    @pytest.mark.parametrize("item", list(REFUSED_ITEMS.values()), ids=list(REFUSED_ITEMS))
+    def test_refuses_a_bad_item(self, item):
+        parse_refusal([item])
+
+    @pytest.mark.parametrize("items", [["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_PROFILE=selfhosted"], ["LIBREFOLIO_PROFILE=managed", " LIBREFOLIO_PROFILE = managed"]], ids=["two-values", "the-same-one-once-stripped"])
+    def test_refuses_a_name_given_twice(self, items):
+        parse_refusal(items)
+
+    def test_a_name_it_refuses_is_named_beside_the_allowed_ones(self):
+        message = str(parse_refusal(["LIBREFOLIO_DATA_DIR=/tmp/elsewhere"]))
+
+        missing = sorted(name for name in LANE_SETTABLE if name not in message)
+        assert "LIBREFOLIO_DATA_DIR" in message, f"the refusal must name the item it refuses: {message!r}"
+        assert not missing, f"the refusal must list the names a lane may set: {missing} missing from {message!r}"
+
+
+#: Two lane settings on the command line, in the order they were typed.
+LANE_SETTING_ARGV = ["--lane-setting", "LIBREFOLIO_PROFILE=managed", "--lane-setting", "LIBREFOLIO_CSP_REPORT_ONLY=false"]
+
+
+def runtime_args_parser() -> argparse.ArgumentParser:
+    """A fresh parser holding the lane options alone, as ``_add_runtime_args`` adds them to both test entry points."""
+    parser = argparse.ArgumentParser(prog="lane")
+    test_runner_cli._add_runtime_args(parser)
+    return parser
+
+
+def run_dev_server(lane, *flags: str) -> tuple[int, dict]:
+    """``./dev.py server <flags>`` through the real parser: its exit code, and what it built and launched, recorded, never run."""
+    captured = capture_server_child(lane.env)
+    lane.env.setattr(sys, "argv", ["dev.py", "server", *flags])
+    try:
+        exit_code = dev.main()
+    except SystemExit as exited:  # argparse refusing an option it does not know
+        exit_code = exited.code
+    return exit_code, captured
+
+
+def argparse_note(exit_code) -> str:
+    """What exit code 2 of ``dev.main()`` means in the messages below."""
+    return " — exit 2 is argparse refusing an option, as when `dev.py server` has no --lane-setting" if exit_code == 2 else ""
+
+
+class TestLaneSettingsOnTheCommandLine:
+    """``--lane-setting``: on both test entry points, applied and printed by the runner, and on ``dev.py server --test`` alone."""
+
+    @staticmethod
+    def lane_args(lane, lane_settings) -> SimpleNamespace:
+        """The arguments of the runner's lane, as both parsers produce them."""
+        return SimpleNamespace(test_port=lane.port, data_dir=str(lane.data_dir), lane_settings=lane_settings)
+
+    @staticmethod
+    def printed_lane_settings(output: str) -> list[str]:
+        """Each line of ``output`` that reports the lane settings, from ``Test lane settings:`` on, without its colours."""
+        lines = (re.sub(r"\x1b\[[0-9;]*m", "", line).rstrip() for line in output.splitlines())
+        return [line[line.index("Test lane settings:") :] for line in lines if "Test lane settings:" in line]
+
+    @pytest.mark.parametrize(
+        ("parser_factory", "before", "after"),
+        [
+            pytest.param(runtime_args_parser, [], [], id="runtime-args"),
+            pytest.param(build_dev_test_parser, ["test"], ["utils", "runtime-isolation"], id="dev-test"),
+            pytest.param(test_runner_cli.create_parser, [], ["utils", "runtime-isolation"], id="runner"),
+        ],
+    )
+    def test_the_option_repeats_and_defaults_to_none(self, parser_factory, before, after):
+        parser = parser_factory()
+        try:
+            given = parser.parse_args([*before, *LANE_SETTING_ARGV, *after])
+        except SystemExit as exited:
+            pytest.fail(f"H-43: this entry point has no --lane-setting: argparse exited {exited.code} on {LANE_SETTING_ARGV}")
+        omitted = parser.parse_args([*before, *after])
+
+        assert given.lane_settings == ["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_CSP_REPORT_ONLY=false"], "every --lane-setting is kept, in the order given"
+        assert getattr(omitted, "lane_settings", "missing") is None, "without --lane-setting, lane_settings is None: the lane inherits its runner's"
+
+    @pytest.mark.parametrize(
+        ("lane_settings", "inherited", "value", "settings"),
+        [
+            pytest.param(["LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_CSP_REPORT_ONLY=false"], None, "LIBREFOLIO_CSP_REPORT_ONLY=false;LIBREFOLIO_PROFILE=managed", {"LIBREFOLIO_CSP_REPORT_ONLY": "false", "LIBREFOLIO_PROFILE": "managed"}, id="given"),
+            pytest.param(None, "LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_PROFILE=managed", {"LIBREFOLIO_PROFILE": "managed"}, id="inherited"),
+            pytest.param(None, None, None, {}, id="none"),
+        ],
+    )
+    def test_the_runner_applies_and_prints_the_lane_settings(self, settings_lane, capsys, lane_settings, inherited, value, settings):
+        write_instance(settings_lane, dotenv={}, shell={} if inherited is None else {LANE_SETTINGS_ENV: inherited})
+
+        configured = test_runner_cli._configure_runtime(self.lane_args(settings_lane, lane_settings))
+
+        printed, expected = self.printed_lane_settings(capsys.readouterr().out), [] if value is None else [f"Test lane settings: {value}"]
+        assert configured is True
+        assert printed == expected, f"H-43: the runner must print the lane's settings in one info line, {expected or 'none without any'}: it printed {printed or 'none'}"
+        assert lane_values(LANE_SETTABLE) == settings, "H-43: _configure_runtime must hand --lane-setting to configure_test_runtime"
+
+    @pytest.mark.parametrize(
+        ("lane_settings", "dotenv", "shell", "named"),
+        [
+            pytest.param(["LIBREFOLIO_DATA_DIR=/tmp/elsewhere"], {}, {}, "LIBREFOLIO_DATA_DIR", id="a-name-outside-the-list"),
+            pytest.param(None, {LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed"}, {}, "--lane-setting", id="the-variable-in-the-dotenv-file"),
+            # `pipenv run` exports what the file holds, unless PIPENV_DONT_LOAD_ENV is set: the variable looks inherited
+            pytest.param(None, {LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed"}, {LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed"}, "--lane-setting", id="the-variable-pipenv-loaded-from-the-dotenv-file"),
+        ],
+    )
+    def test_the_runner_refuses_a_bad_lane_setting_with_its_error(self, settings_lane, capsys, lane_settings, dotenv, shell, named):
+        write_instance(settings_lane, dotenv=dotenv, shell=shell)
+
+        configured = test_runner_cli._configure_runtime(self.lane_args(settings_lane, lane_settings))
+
+        output = capsys.readouterr().out
+        assert configured is False, f"H-43: the runner goes on with a bad lane setting ({lane_settings or dotenv}{', exported as well' if shell else ''}): _configure_runtime returned {configured}"
+        assert named in output, f"the runner must print the refusal, naming {named!r}: {output!r}"
+        assert (self.printed_lane_settings(output), lane_values(LANE_SETTABLE)) == ([], {}), "a refused lane prints no lane setting and sets none"
+
+    def test_dev_server_refuses_a_lane_setting_without_test(self, settings_lane, capsys):
+        flags = ["--lane-setting", "LIBREFOLIO_PROFILE=managed", "--port", str(LANE_SETTINGS_PORT + 1), "--data-dir", str(settings_lane.data_dir.parent / "synthetic-production-data")]
+
+        exit_code, captured = run_dev_server(settings_lane, *flags)
+
+        output = capsys.readouterr()
+        assert exit_code == 1, f"H-43: `dev.py server {' '.join(flags)}` without --test exited {exit_code}, not 1 with an error{argparse_note(exit_code)}"
+        assert "--lane-setting" in output.out + output.err, f"the error must name --lane-setting: {output!r}"
+        assert (captured["events"], "env" in captured) == ([], False), "a server refused for its options builds nothing and starts nothing"
+        assert lane_values(LANE_SETTABLE) == {}, "a server refused for its lane settings sets none of them"
+
+    @pytest.mark.parametrize("source", ["command-line", "inherited"], ids=["given-on-the-command-line", "inherited-from-the-runner"])
+    def test_dev_server_test_starts_with_the_lane_settings(self, settings_lane, source):
+        flags = ["--test", "--port", str(settings_lane.port), "--data-dir", str(settings_lane.data_dir)]
+        if source == "command-line":
+            flags += ["--lane-setting", "LIBREFOLIO_PROFILE=managed"]
+        else:
+            # As the runner's shared server and Playwright's webServer start it: the runner's lane exported, no lane argument
+            write_instance(settings_lane, dotenv={}, shell={LANE_SETTINGS_ENV: "LIBREFOLIO_PROFILE=managed", "LIBREFOLIO_PROFILE": "managed"})
+
+        exit_code, captured = run_dev_server(settings_lane, *flags)
+
+        child = captured.get("env", {})
+        assert exit_code == 0, f"H-43: `dev.py server {' '.join(flags)}` exited {exit_code}{argparse_note(exit_code)}"
+        assert (child.get("LIBREFOLIO_PROFILE"), child.get(LANE_SETTINGS_ENV)) == ("managed", "LIBREFOLIO_PROFILE=managed"), "H-43: the server must start with the lane's settings, and hand them on to its own children"
+
+
+# Playwright's webServer, `./dev.py server --test`, configures a lane of its own: whether its `env` merges into or replaces
+# the environment of `playwright test` was left unverified (H-43 analysis), so the config hands the variable over
+# explicitly. Checked as text, as the startup timeout is above: no node_modules needed.
+
+
+def braced_body(code: str, opening: re.Match | None) -> str | None:
+    """The text between the brace ``opening`` ends on and the brace that closes it (``None`` without an opening)."""
+    if opening is None:
+        return None
+    depth = 0
+    for index in range(opening.end() - 1, len(code)):
+        depth += {"{": 1, "}": -1}.get(code[index], 0)
+        if depth == 0:
+            return code[opening.end() : index]
+    return code[opening.end() :]
+
+
+def playwright_lane_settings_gaps(config_text: str) -> list[str]:
+    """Every way ``playwright.config.ts`` fails to hand ``LIBREFOLIO_TEST_LANE_SETTINGS`` to its webServer ([] = none).
+
+    Pure on text, so a control can feed it a config of its own. The webServer's env must be ``WEB_SERVER_ENV``, and that
+    object must be given the variable, read from ``process.env``: as a key of its object literal, or by an assignment
+    ``WEB_SERVER_ENV.<name> = …`` (or ``['<name>']``), as the config already gives it the coverage variables. Full-line
+    comments are not code.
+    """
+    code = re.sub(r"^[ \t]*//.*$", "", config_text, flags=re.M)
+    name = re.escape(LANE_SETTINGS_ENV)
+    web_server = braced_body(code, re.search(r"\bwebServer\s*:\s*\{", code)) or ""
+    given_env = [match for match in re.finditer(r"\benv\s*:\s*WEB_SERVER_ENV\b", web_server) if web_server.count("{", 0, match.start()) == web_server.count("}", 0, match.start())]
+    literal = braced_body(code, re.search(r"\bconst\s+WEB_SERVER_ENV\b[^=]*=\s*\{", code)) or ""
+    keyed = re.search(rf"(?<![.\w'\"]){name}\s*(?::|,|$)|['\"]{name}['\"]\s*:", literal)
+    assigned = re.search(rf"\bWEB_SERVER_ENV\s*(?:\.\s*{name}\b|\[\s*['\"]{name}['\"]\s*\])\s*=(?!=)", code)
+    read = re.search(rf"\bprocess\.env\s*(?:\.\s*{name}\b|\[\s*['\"]{name}['\"]\s*\])", code)
+    checks = [
+        (bool(given_env), "webServer is not given WEB_SERVER_ENV as its env: nothing that object carries reaches `dev.py server --test`"),
+        (bool(keyed or assigned), f"WEB_SERVER_ENV is not given {LANE_SETTINGS_ENV}: neither a key of its object literal nor an assignment WEB_SERVER_ENV.{LANE_SETTINGS_ENV} = …"),
+        (bool(read), f"process.env.{LANE_SETTINGS_ENV} is never read: the lane settings the runner exported never reach the webServer"),
+    ]
+    return [reason for holds, reason in checks if not holds]
+
+
+def synthetic_playwright_config(*, in_literal: str = "", after_literal: str = "", web_server_env: str = "WEB_SERVER_ENV") -> str:
+    """A ``playwright.config.ts`` cut down to what ``playwright_lane_settings_gaps`` reads, its webServer given ``web_server_env``."""
+    return (
+        "const WEB_SERVER_ENV: Record<string, string> = {\n"
+        "    TEST_PORT,\n"
+        "    PIPENV_DONT_LOAD_ENV: '1',\n"
+        f"{in_literal}"
+        "};\n"
+        f"{after_literal}"
+        "export default defineConfig({\n"
+        "    webServer: {\n"
+        "        command: `cd .. && exec ./dev.py server --test --workers ${SERVER_WORKERS}`,\n"
+        f"        env: {web_server_env},\n"
+        "        gracefulShutdown: {signal: 'SIGTERM', timeout: 10000},\n"
+        "    },\n"
+        "});\n"
+    )
+
+
+#: The handover the contract asks for, the way the config already gives WEB_SERVER_ENV the coverage variables.
+ASSIGNED_LANE_SETTINGS = "if (process.env.LIBREFOLIO_TEST_LANE_SETTINGS) {\n    WEB_SERVER_ENV.LIBREFOLIO_TEST_LANE_SETTINGS = process.env.LIBREFOLIO_TEST_LANE_SETTINGS;\n}\n"
+#: The shapes of the handover the check accepts, as parts of ``synthetic_playwright_config``.
+LANE_SETTINGS_HANDOVERS = {
+    "an-assignment": {"after_literal": ASSIGNED_LANE_SETTINGS},
+    "a-bracket-assignment": {"after_literal": "const laneSettings = process.env['LIBREFOLIO_TEST_LANE_SETTINGS'];\nif (laneSettings) WEB_SERVER_ENV['LIBREFOLIO_TEST_LANE_SETTINGS'] = laneSettings;\n"},
+    "a-key-of-the-literal": {"in_literal": "    ...(process.env.LIBREFOLIO_TEST_LANE_SETTINGS ? {LIBREFOLIO_TEST_LANE_SETTINGS: process.env.LIBREFOLIO_TEST_LANE_SETTINGS} : {}),\n"},
+}
+#: Configs the check rejects, each with the reason it must give.
+LANE_SETTINGS_NON_HANDOVERS = {
+    "only-in-a-comment": ({"after_literal": "// WEB_SERVER_ENV.LIBREFOLIO_TEST_LANE_SETTINGS = process.env.LIBREFOLIO_TEST_LANE_SETTINGS;\n"}, "WEB_SERVER_ENV is not given"),
+    "read-and-kept": ({"after_literal": "const laneSettings = process.env.LIBREFOLIO_TEST_LANE_SETTINGS;\n"}, "WEB_SERVER_ENV is not given"),
+    "given-to-another-object": ({"after_literal": ASSIGNED_LANE_SETTINGS, "web_server_env": "{TEST_PORT}"}, "webServer is not given WEB_SERVER_ENV"),
+}
+
+
+def test_playwright_hands_the_lane_settings_to_its_web_server():
+    gaps = playwright_lane_settings_gaps(PLAYWRIGHT_CONFIG.read_text(encoding="utf-8"))
+
+    assert gaps == [], f"H-43: playwright.config.ts does not hand {LANE_SETTINGS_ENV} to its webServer, `dev.py server --test`: {gaps}"
+
+
+@pytest.mark.parametrize("parts", list(LANE_SETTINGS_HANDOVERS.values()), ids=list(LANE_SETTINGS_HANDOVERS))
+def test_the_lane_settings_check_accepts_a_handover(parts):
+    # The control of the check above, green before H-43 and after it: each shape the cure may take passes it.
+    assert playwright_lane_settings_gaps(synthetic_playwright_config(**parts)) == []
+
+
+@pytest.mark.parametrize(("parts", "reason"), list(LANE_SETTINGS_NON_HANDOVERS.values()), ids=list(LANE_SETTINGS_NON_HANDOVERS))
+def test_the_lane_settings_check_rejects_a_config_without_one(parts, reason):
+    # The other control: a config that only seems to hand the variable over is rejected, for the reason that applies.
+    gaps = playwright_lane_settings_gaps(synthetic_playwright_config(**parts))
+
+    assert any(reason in gap for gap in gaps), f"{reason!r} not reported, gaps={gaps}"
+
+
+# The cloud smoke runs on a managed lane and refuses any other: `front_cloud_smoke` returns False, printing why, unless
+# LIBREFOLIO_PROFILE is `managed`, and a lane is self-hosted unless it is started with --lane-setting
+# LIBREFOLIO_PROFILE=managed. Run by an `all` — `front-utility all`, `all-frontend`, `all` — it would turn the category
+# red on the default lane: it runs when asked for by name only. The collector's own spec runs on any lane, and stays in
+# every `all`. `in_all=False` is not enough: the serial `all` reads it, but the consolidated pre-pass that runs first
+# (`_consolidate.group_frontend_units`) groups whatever the dry run of `_inventory.collect_launches` reports, whatever
+# `in_all` says — the AI Export and Designer Lab per-spec actions rely on it — and on a managed lane the cloud smoke
+# passes its check in that dry run: `front-utility all` would run it, `all-frontend` seven specs of other categories
+# twice. So it is registered `named_only`, which both passes read. Read from the registry, as they read it (`in_all`,
+# True when not given; `named_only`, False when not given); `utils test-runner-cli` pins what `add_test` stores and
+# what the consolidated pass does with it.
+
+#: The two front-utility actions of H-43: whether their category's `all` — and so `all-frontend` and `all` — runs them, and why.
+H43_ACTIONS_IN_ALL = {
+    "cloud-smoke": (False, "it refuses any lane but a managed one, and a lane is self-hosted unless given --lane-setting LIBREFOLIO_PROFILE=managed: in `all` it turns front-utility all, all-frontend and all red on the default lane. Register it with named_only=True"),
+    "csp-collector": (True, "it runs on any lane, and stays in front-utility all, all-frontend and all"),
+}
+#: The same two: whether they run only when named on the command line, which the consolidated pre-pass reads too, and why.
+H43_ACTIONS_NAMED_ONLY = {
+    "cloud-smoke": (True, "in_all=False keeps it out of the serial `all` alone: the consolidated pre-pass groups whatever the dry run reports, and on a managed lane front-utility all would run it, all-frontend seven specs of other categories twice. Register it with named_only=True"),
+    "csp-collector": (False, "it runs on any lane, so every `all` runs it, consolidated or serial, with a verdict of its own"),
+}
+
+
+@pytest.mark.parametrize(("action", "in_all", "why"), [(action, *rule) for action, rule in H43_ACTIONS_IN_ALL.items()], ids=list(H43_ACTIONS_IN_ALL))
+def test_the_cloud_smoke_is_left_out_of_every_all_and_the_collector_spec_is_not(action, in_all, why):
+    entry = test_runner_registry.TEST_REGISTRY["front-utility"].get(action)
+
+    assert entry is not None, f"H-43: front-utility {action} is not registered: `dev.py test front-utility {action}` cannot run it"
+    assert entry.get("in_all", True) is in_all, f"H-43: front-utility {action} is registered with in_all={entry.get('in_all', True)}, not {in_all}: {why}"
+
+
+@pytest.mark.parametrize(("action", "named_only", "why"), [(action, *rule) for action, rule in H43_ACTIONS_NAMED_ONLY.items()], ids=list(H43_ACTIONS_NAMED_ONLY))
+def test_the_cloud_smoke_runs_only_when_named_and_the_collector_spec_does_not(action, named_only, why):
+    entry = test_runner_registry.TEST_REGISTRY["front-utility"].get(action)
+
+    assert entry is not None, f"H-43: front-utility {action} is not registered: `dev.py test front-utility {action}` cannot run it"
+    assert entry.get("named_only", False) is named_only, f"H-43: front-utility {action} is registered with named_only={entry.get('named_only', False)}, not {named_only}: {why}"
