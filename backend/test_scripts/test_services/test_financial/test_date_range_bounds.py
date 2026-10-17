@@ -22,13 +22,19 @@ deselect that class in the red run (``-k "date_range_bounds and not TestExtremeR
 Every row is written on the test's own session and rolled back. The book is relative to today (first
 transaction 60 days ago), so the tests never age. ``today`` is read before and after the call under test: a
 run that crosses midnight may legitimately see either day, so an equality on today or tomorrow accepts both.
+
+J-49 — ``TestRangeBoundSeamCoversEveryReader``, pure (no database): the seam that lifts this bound for the far-future
+suites (``_range_bounds.lift_range_bound``) replaces ``latest_range_end`` by name; the class holds its list of modules
+to exactly the modules of ``backend/app`` that bind that name.
 """
 
+import ast
 import sys
 import time
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -56,6 +62,7 @@ from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache
 from backend.app.services.risk.scope import load_scope_inputs
 from backend.app.services.risk.service import RiskService
+from backend.test_scripts.test_services._range_bounds import RANGE_BOUND_CONSUMERS
 
 ONE_DAY = timedelta(days=1)
 FIRST_TX_DAYS_AGO = 60
@@ -548,3 +555,205 @@ class TestExtremeRangesFinishQuickly:
         assert elapsed < QUICK_SECONDS, f"the lots analysis took {elapsed:.1f}s for date_to={EXTREME_END}"
         assert result.calculation_metadata.computed_date_to in _tomorrows(before, after)
         assert max(_history_dates(result.value_history)) <= after + ONE_DAY
+
+
+# =============================================================================
+# J-49 — THE RANGE-BOUND SEAM COVERS EVERY READER (pure: no database)
+# =============================================================================
+
+#: The module that defines the ceiling, its package, and the name the seam replaces.
+_CEILING_MODULE = "backend.app.utils.datetime_utils"
+_CEILING_PACKAGE, _, _CEILING_MODULE_NAME = _CEILING_MODULE.rpartition(".")
+_CEILING_NAME = "latest_range_end"
+_APP_ROOT = PROJECT_ROOT / "backend" / "app"
+_DEFINING_FILE = _APP_ROOT / "utils" / "datetime_utils.py"  # defines the name: never a reader
+#: The dotted name the detector's fake sources pretend to have: a relative import resolves against it.
+_FAKE_MODULE = "backend.app.services.fake_reader"
+
+
+@dataclass(frozen=True)
+class _CeilingReading:
+    """How one module reaches ``latest_range_end``: the lines that bind the name at module level — the one form the seam
+    replaces — and every other way, each as ``(line, what)``."""
+
+    binding_lines: tuple[int, ...]
+    violations: tuple[tuple[int, str], ...]
+
+
+def _dotted_name(node: ast.expr) -> str | None:
+    """``a.b.c`` for a name and its chain of attributes; None for any other expression."""
+    parts: list[str] = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def _absolute_module(node: ast.ImportFrom, *, module: str, is_package: bool) -> str | None:
+    """The module a ``from … import`` reads from, its relative form resolved against ``module`` as Python resolves it."""
+    if node.level == 0:
+        return node.module
+    package = module.split(".") if is_package else module.split(".")[:-1]
+    if node.level - 1 >= len(package):
+        return None
+    base = package[: len(package) - (node.level - 1)]
+    return ".".join([*base, node.module] if node.module else base)
+
+
+def _nodes_with_scope(tree: ast.Module) -> list[tuple[ast.AST, bool]]:
+    """Every node of ``tree``, with whether it sits in a function or a class body: an import there binds no name of the
+    module."""
+    found: list[tuple[ast.AST, bool]] = []
+    pending = [(child, False) for child in ast.iter_child_nodes(tree)]
+    while pending:
+        node, nested = pending.pop()
+        found.append((node, nested))
+        inner = nested or isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda))
+        pending.extend((child, inner) for child in ast.iter_child_nodes(node))
+    return found
+
+
+def _what_is_wrong(alias: ast.alias, nested: bool) -> str | None:
+    """None for ``latest_range_end`` imported under its own name at module level: the one binding the seam replaces."""
+    if alias.asname not in (None, _CEILING_NAME):
+        return f"imported as {alias.asname}"
+    if nested:
+        return "imported inside a function or a class"
+    return None
+
+
+def _ceiling_imports(nodes: list[tuple[ast.AST, bool]], *, module: str, is_package: bool) -> tuple[set[str], list[tuple[int, str | None]]]:
+    """The names a module gives the ceiling's module object, and each import of the name itself as ``(line, what is
+    wrong)`` — None when it binds the name."""
+    module_object_names = {_CEILING_MODULE}  # the full dotted path, whatever import brought the package in
+    name_imports: list[tuple[int, str | None]] = []
+    for node, nested in nodes:
+        if isinstance(node, ast.Import):
+            module_object_names.update(alias.asname for alias in node.names if alias.name == _CEILING_MODULE and alias.asname)
+            continue
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        imported_from = _absolute_module(node, module=module, is_package=is_package)
+        for alias in node.names:
+            if imported_from == _CEILING_PACKAGE and alias.name == _CEILING_MODULE_NAME:
+                module_object_names.add(alias.asname or alias.name)
+            elif imported_from == _CEILING_MODULE and alias.name == _CEILING_NAME:
+                name_imports.append((alias.lineno, _what_is_wrong(alias, nested)))
+    return module_object_names, name_imports
+
+
+def _read_ceiling_use(source: str, *, module: str, is_package: bool = False) -> _CeilingReading:
+    """The detector. Binding: ``from backend.app.utils.datetime_utils import latest_range_end``, absolute or relative, at
+    module level. Violations: that import under another name, or inside a function or a class; and any use through the
+    module object — ``import backend.app.utils.datetime_utils [as x]`` or ``from backend.app.utils import datetime_utils
+    [as x]``, then ``<that name>.latest_range_end``. A docstring or a comment is no code: never found."""
+    nodes = _nodes_with_scope(ast.parse(source))
+    module_object_names, name_imports = _ceiling_imports(nodes, module=module, is_package=is_package)
+    violations = [(line, wrong) for line, wrong in name_imports if wrong is not None]
+    for node, _nested in nodes:
+        if isinstance(node, ast.Attribute) and node.attr == _CEILING_NAME:
+            owner = _dotted_name(node.value)
+            if owner in module_object_names:
+                violations.append((node.lineno, f"read as {owner}.{_CEILING_NAME}"))
+    return _CeilingReading(binding_lines=tuple(sorted(line for line, wrong in name_imports if wrong is None)), violations=tuple(sorted(violations)))
+
+
+def _module_of(path: Path) -> tuple[str, bool]:
+    """The dotted name of the module at ``path`` under the project root, and whether it is a package's ``__init__``."""
+    parts = path.relative_to(PROJECT_ROOT).with_suffix("").parts
+    if parts[-1] == "__init__":
+        return ".".join(parts[:-1]), True
+    return ".".join(parts), False
+
+
+def _fake_reader(import_line: str, call: str) -> str:
+    """A fake module: ``import_line`` on line 1, then a function that calls ``<call>()`` on line 5."""
+    return f"{import_line}\n\n\ndef window_end(day):\n    return min(day, {call}())\n"
+
+
+_IMPORT_INSIDE_A_FUNCTION = "def window_end(day):\n    from backend.app.utils.datetime_utils import latest_range_end\n\n    return min(day, latest_range_end())\n"
+_ONLY_MENTIONS = (
+    '"""The range ends at latest_range_end(), tomorrow: datetime_utils.latest_range_end is the one ceiling."""\n'
+    "\n"
+    "# latest_range_end() is read by the consumers, never here.\n"
+    "\n"
+    "\n"
+    "def latest_range_end():\n"
+    '    """An unrelated local helper that happens to share the name."""\n'
+    "    return None\n"
+    "\n"
+    "\n"
+    "LAST = latest_range_end()\n"
+)
+
+
+class TestRangeBoundSeamCoversEveryReader:
+    """J-49 — the range-bound seam reaches every module that reads the ceiling, through the one name it replaces.
+
+    The suites whose scenarios live in 2032–2091, so that they own their rows, run with ``_range_bounds.lift_range_bound``:
+    it makes ``latest_range_end()`` answer ``date.max`` by replacing the name in each module of ``RANGE_BOUND_CONSUMERS``,
+    and a seam by name reaches only a module that binds ``latest_range_end`` itself, with ``from
+    backend.app.utils.datetime_utils import latest_range_end`` at module level. That list is kept by hand — X-R55 added two
+    readers to it, SEC8-1b reused ``risk/scope.py`` — and nothing checked it against the code: a new reader nobody adds
+    cuts those suites at tomorrow, and a reader that reaches the ceiling another way (an alias, the module object, an
+    import inside a function) escapes the seam even when it is listed. Pure: an ``ast`` scan of ``backend/app``, no
+    database.
+    """
+
+    def test_the_seam_lists_exactly_the_modules_that_bind_the_ceiling_by_name(self):
+        """The rule: every ``.py`` under ``backend/app`` but ``utils/datetime_utils.py`` (it defines the name) is read by
+        the detector. No module may reach the ceiling but by the binding import (each violation named ``path:line``), and
+        the modules that bind it, as dotted names, are exactly ``RANGE_BOUND_CONSUMERS``: one missing from the list has
+        its far-future suites cut at tomorrow; one listed that binds nothing is a seam that patches nothing — its
+        ``monkeypatch.setattr`` would raise at run time, said here without running it.
+        """
+        files = sorted(_APP_ROOT.rglob("*.py"))
+        assert _DEFINING_FILE in files, f"the scan does not walk backend/app: {_DEFINING_FILE} is not under {_APP_ROOT}"
+        binding: set[str] = set()
+        violations: list[str] = []
+        for path in files:
+            if path == _DEFINING_FILE:
+                continue
+            module, is_package = _module_of(path)
+            reading = _read_ceiling_use(path.read_text(encoding="utf-8"), module=module, is_package=is_package)
+            if reading.binding_lines:
+                binding.add(module)
+            violations.extend(f"{path.relative_to(PROJECT_ROOT)}:{line}: {what}" for line, what in reading.violations)
+        listed = set(RANGE_BOUND_CONSUMERS)
+
+        findings = {
+            "violations: readers the by-name seam cannot reach": violations,
+            "binding but missing from RANGE_BOUND_CONSUMERS: their far-future suites are cut at tomorrow": sorted(binding - listed),
+            "listed but not binding: the seam patches nothing there (its setattr raises at run time)": sorted(listed - binding),
+        }
+        assert findings == dict.fromkeys(findings, [])
+
+    @pytest.mark.parametrize(
+        ("source", "expected"),
+        [
+            pytest.param(_fake_reader("from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end", "latest_range_end"), ([1], []), id="plain-import-binds"),
+            pytest.param(_fake_reader("from ..utils.datetime_utils import latest_range_end", "latest_range_end"), ([1], []), id="relative-import-binds"),
+            pytest.param(_fake_reader("from backend.app.utils.datetime_utils import latest_range_end as ceiling", "ceiling"), ([], [(1, "imported as ceiling")]), id="aliased-import"),
+            pytest.param(_IMPORT_INSIDE_A_FUNCTION, ([], [(2, "imported inside a function or a class")]), id="import-inside-a-function"),
+            pytest.param(_fake_reader("from backend.app.utils import datetime_utils", "datetime_utils.latest_range_end"), ([], [(5, "read as datetime_utils.latest_range_end")]), id="from-package-module-object"),
+            pytest.param(_fake_reader("from backend.app.utils import datetime_utils as dates", "dates.latest_range_end"), ([], [(5, "read as dates.latest_range_end")]), id="from-package-module-object-aliased"),
+            pytest.param(_fake_reader("import backend.app.utils.datetime_utils as du", "du.latest_range_end"), ([], [(5, "read as du.latest_range_end")]), id="import-module-object-aliased"),
+            pytest.param(_fake_reader("import backend.app.utils.datetime_utils", "backend.app.utils.datetime_utils.latest_range_end"), ([], [(5, "read as backend.app.utils.datetime_utils.latest_range_end")]), id="import-module-object-dotted"),
+            pytest.param(_fake_reader("from backend.app.utils import datetime_utils", "datetime_utils.utcnow"), ([], []), id="module-object-for-another-helper"),
+            pytest.param(_ONLY_MENTIONS, ([], []), id="docstring-comment-and-unrelated-local-function"),
+        ],
+    )
+    def test_the_detector_finds_exactly_what_a_fake_source_does_with_the_ceiling(self, source, expected):
+        """The detector's own proof, on fake sources and never on files: what it finds — the binding lines, and every
+        violation with its line — is asserted exactly, so a detector that finds nothing fails every case with something
+        to find, and one that finds too much fails the last two: a module reading another helper through the module
+        object, and one that only mentions the name (a docstring, a comment) or defines an unrelated function of that
+        name. A relative import binds as the absolute one does; an import inside a function or a class binds no name of
+        the module, so the seam cannot reach it.
+        """
+        reading = _read_ceiling_use(source, module=_FAKE_MODULE)
+
+        assert (list(reading.binding_lines), list(reading.violations)) == expected

@@ -6925,3 +6925,353 @@ Fatta durante W-B75, su richiesta del coordinatore. Sola lettura; sonde su file 
         regola usa str e int.
      4. Nel batch un `greater_than` di campo arriva senza `{gt}`, già prima di W-B72.
      5. Ci sono due copie della regola, come per `_loc_to_field`: unificarle si fa a parte.
+
+### Review dell'helper di profilo di A (`9db6cb0be`, doc `6700a04b4`; dev `d7641f368`) (2026-10-17, 14:55) — ✅ OK, nessun reperto
+
+Fatta mentre gli specialisti di H-51 lavoravano, in sola lettura. Chiude il mio nit della review di A9: la regola
+`loaded && profile === …` scritta a mano in più posti.
+
+- **Semantica**:
+  - `loaded` (`instanceConfig.svelte.ts`) diventa vero solo con una risposta riuscita e resta vero se un
+    ricaricamento fallisce dopo. Quindi `selfHostedConfirmed()` e `managedConfirmed()` sono falsi finché il server non
+    ha risposto;
+  - sono reattivi, perché leggono i getter di `$state`.
+- **Siti**: 5 sostituzioni meccaniche. `ForgotPasswordCard` tiene la sua alternativa `!loaded && failed`.
+- **Gate** (`instanceProfile.gate.test.ts`):
+  - lavora sull'albero sintattico (TypeScript e Svelte) e ha controlli positivi;
+  - `profile.ts` è l'unico file esente;
+  - dichiara i suoi limiti;
+  - è registrato in `core-unit`.
+- **Doc**: coerente con il codice.
+- **Evidenza**: Vitest del gate e di `profile.test.ts` alla HEAD `9ba7ef9d3`: 2 file, 19 passed.
+
+### Review dei doc di A-42/A-43 (`145adbf27`, dev `7156a24af`; seguito A-50 `6700a04b4`) (2026-10-17, 15:45) — ✅ OK, un nit facoltativo
+
+Fatta durante lo slot di H-51, in sola lettura. Riguarda le sezioni di A in `hosting_providers.en.md` (la riga
+«withdrawn», «🔁 A New Link», il punto ⏱️) e in `security.md` («♻️ The Setup Link's Lifecycle» e le righe della
+Revocation).
+
+- **Verificato sul codice di `59161e5e2`**:
+  - revoke e retire: `retire_tokens()` mette `revoked_at` e poi `consumed_at`;
+  - l'emissione sotto il lock, con la nuova lettura di `is_pending_admin()`, il rollback e le due righe INFO;
+  - la spesa rifiutata: prima `consume_token()`, poi «già attivo» e `_setup_spent_before()`, poi retire e la WARNING,
+    tutto prima di bcrypt;
+  - `_end_setup_links()`: revoca per l'admin in attesa, con la WARNING, retire per gli altri;
+  - i 409 `PENDING_SETUP` e `ACCOUNT_PROTECTED`;
+  - `account_tokens.user_id` è `ON DELETE CASCADE`.
+- Gli ID dei test e le ancore esistono. La WARNING «was withdrawn (cancelled, or its address changed)» citata nella
+  pagina per i provider è identica a quella del codice (`bootstrap_admin_service.py:205`).
+- **Nit**: «Another administrator … can do the same with **Cancel setup link**» non vale per un account protetto, cioè
+  l'amministratore che paga un'istanza gestita. La pagina linkata lo dice, e la CLI resta sopra la protezione.
+
+### Lotto «H-51: `trusted_schema` spento anche sui motori del server; la chiave d'istanza nel ripristino, com'è dopo B-18» (2026-10-17) — analisi e passi
+
+> Dal coordinatore (14:45, dopo la review di B-36/B-37), testuale:
+> - «`trusted_schema=OFF` nel listener globale di `db/session.py`: lo prendi tu, come lotto H. Rossi prima: l'archivio
+>   con `DEFAULT (regexp(…))` fa girare il `regexp` al primo insert. Nel tuo slot di verifica metti anche le suite delle
+>   migrazioni e `api backup-restore`, oltre ai tuoi test.»
+> - «`security.md`, r.706: la frase è superata, B-18 è entrato (`5c4d7456a`). Riscrivila col percorso vero»:
+>   - `dev.py backup restore --instance-key-file FILE`, solo da CLI, mai con un upload dalla UI;
+>   - il file è letto da root prima del cambio di utente (B-38);
+>   - `stage_archive(..., instance_key=…)` lo controlla prima di creare qualsiasi cosa (`instance_key_invalid`);
+>   - se l'archivio porta la sua chiave, vince quella (D1).
+>   Nello stesso lotto va la frase sul motore di Alembic.
+>
+> W-B75 è entrato (`21a2610c8`, dev `9ba7ef9d3`): parto da lì.
+
+**Analisi** (HEAD `9ba7ef9d3`):
+- `set_sqlite_pragma()` (`db/session.py`) è un listener `connect` sulla classe `Engine`, quindi vale per ogni motore
+  sincrono del processo, compreso quello sotto il motore async. Imposta `foreign_keys`, WAL e `busy_timeout`, ma non
+  `trusted_schema`, che vale 1 di default.
+- SQLAlchemy 2.0.52 (pysqlite, ereditato da aiosqlite) registra `regexp` e `floor` in Python su ogni connessione.
+- L'app non usa `regexp`, `floor` né `create_function` nelle sue query. In ogni caso `trusted_schema` limita solo le
+  chiamate che vengono dallo schema.
+- Lo schema di LibreFolio (head 009) chiama solo il built-in `lower()` (`ux_users_email_lower`).
+- Le prove sono le sonde della review di B-37 (`files/b36review/`).
+
+**Proposta**:
+- **Cura**: `PRAGMA trusted_schema=OFF` come prima istruzione di `set_sqlite_pragma()`, con una voce nella sua
+  docstring.
+- **Test** (test-author): un file nuovo, `test_db/test_session_pragmas.py`, `db session-pragmas`, isolamento pure.
+  - Rossi:
+    - ogni connessione nuova, sincrona e async, ha `trusted_schema` a 0;
+    - un archivio con `DEFAULT (regexp(…))`: l'insert che omette la colonna è rifiutato, e non gira il Python;
+    - un CHECK con `regexp`;
+    - `floor`.
+  - Guardie: gli altri pragma restano come sono; il genere dello schema di LibreFolio (`lower()` in un indice, i
+    built-in) funziona; `regexp` e `floor` funzionano ancora nelle query.
+- **Runner**: in `_backend_db.py`, la funzione, l'`add_test` e la voce in `db_order`.
+- **Doc** (docs-writer):
+  - `security.md`: la frase della chiave d'istanza nel ripristino (r. ~706); il punto di B-37 con Alembic e il server;
+  - `database/index.md`: r. 52, i pragma del motore.
+- **Verifica**:
+  - senza slot: `db session-pragmas`, `db migration-005…009`, `db post-migration`, `db autoincrement-schema`,
+    `utils dev-cli-db-path`, `services backup-staging`;
+  - nello slot: `api backup-restore`.
+
+**Passi**:
+
+1. ✅ (2026-10-17, 15:05) **Runner e doc**.
+   - **Runner**: `files/h51/apply.py --runner-only`, `cmp` OK. In `_backend_db.py`: `db_session_pragmas`, l'`add_test`
+     «session-pragmas» (isolamento pure) e la voce in `db_order`.
+   - **Doc** (docs-writer), verificata da me sul codice:
+     - `security.md`, la chiave d'istanza nel ripristino (r. ~707-731): la frase superata è riscritta con il percorso
+       vero (i quattro punti del coordinatore, più D2: una chiave abbastanza lunga ma sbagliata non è un errore e il
+       comando avvisa). Anche la frase prima è corretta: senza chiave, dell'archivio o data al ripristino;
+     - `security.md`, nel punto di B-37: un nuovo punto «Why the upgrade needs it», sul motore di Alembic;
+     - `security.md`: una sottosezione nuova, «`trusted_schema` Off in the Server's Engines» (`#trusted-schema-server`);
+     - `database/index.md` r. 53: una voce per il pragma.
+   - **Due scoperte di docs-writer**, verificate:
+     - `env.py` importa `db.base`, che passa per `db/__init__.py` e importa `session.py`. Quindi nelle connessioni
+       dell'upgrade il listener globale girava **prima** di `_schema_untrusted`: «before any other statement» non era
+       esatto. Con H-51 diventa vero. Le tre istruzioni di prima non valutano lo schema: nessun effetto.
+     - Nota per B (basso): `describe_database()` esegue `PRAGMA integrity_check` su una connessione semplice. Su un
+       archivio con un CHECK che chiama una funzione sconosciuta, come `regexp`, alza `sqlite3.OperationalError`
+       (provato dalla sonda di B-37). Non è uno `StagingError`: `stage_archive()` ripulisce lo stage e la rilancia.
+       L'API dice `stage_failed`; la CLI (`_check_on_a_copy()` prende solo `StagingBusyError`, `StagingError` e
+       `BackupPathError`) molto probabilmente finisce in un traceback. Cura di B: tradurre `sqlite3.DatabaseError` in
+       `database_damaged`, come fa `_refuse_foreign_objects`.
+2. ✅ (2026-10-17, 15:17) **Rossi** (test-author, nessuna esecuzione): `test_db/test_session_pragmas.py`, 15 casi.
+   - Rossi, per sync e async:
+     - H51-1, `trusted_schema` a 0;
+     - H51-2 e H51-3, un `DEFAULT` con `regexp` o con `floor`;
+     - H51-4, un CHECK con `regexp`, rifiutato a ogni istruzione.
+   - Guardie:
+     - H51-5, gli altri pragma;
+     - H51-6, il genere dello schema di LibreFolio;
+     - H51-7, l'SQL di primo livello;
+     - H51-8, un database alla head tramite il motore async.
+   - **Evidenza** (`files/runs/h51-reds.sh`): 8 failed / 7 passed, come previsto; ruff e black puliti sul test.
+   > **⚠️ Fuori pista**: test-author ha previsto, e una sonda (`files/h51/probe_order.py` / `.out`, tre varianti in
+   > processi separati) ha confermato, che la cura come l'avevo scritta non basta per il CHECK.
+   > - `set_sqlite_pragma()` è un listener di classe: gira **prima** dell'`on_connect` del dialetto che registra
+   >   `regexp` e `floor`.
+   > - Il suo `journal_mode=WAL` fa leggere lo schema subito, quando la funzione ancora non esiste. SQLite legge allora un
+   >   CHECK o un'espressione d'indice senza segnare la chiamata come dello schema, e poi non la ricontrolla.
+   > - Risultati:
+   >   - oggi, anche sul motore di Alembic con `_schema_untrusted`, un CHECK o un indice con `regexp` **fanno girare** il
+   >     Python; solo il DEFAULT è rifiutato;
+   >   - con il solo `trusted_schema=OFF` per primo, lo stesso;
+   >   - con `PRAGMA writable_schema=RESET` per ultimo, lo schema si rilegge all'istruzione successiva, a funzioni
+   >     registrate: CHECK e indice sono rifiutati alla prima istruzione, sui due motori.
+   > - Il rifiuto arriva a un'istruzione e non dentro il listener: un listener che alza lascerebbe aperta la connessione.
+   >   Il costo è una lettura dello schema in più per connessione (`NullPool`).
+   > - Questo corregge la mia review di B-37: la mia prima sonda non importava `db/session.py`, mentre il processo
+   >   dell'upgrade lo importa (`env.py` → `db.base` → `db/__init__.py`).
+   > - Oggi non si sfrutta attraverso il controllo del ripristino: un archivio così si ferma prima, all'`integrity_check`
+   >   di `describe_database()` («unknown function»), anche se con un errore non codificato (la nota per B).
+3. ✅ (2026-10-17, 15:38) **Cura e verdi senza slot**.
+   - Cura (`files/h51/apply.py --cure-only`, `cmp` OK): in `set_sqlite_pragma()`, `PRAGMA trusted_schema=OFF` per primo
+     e `PRAGMA writable_schema=RESET` per ultimo, con il commento che spiega l'ordine; una voce nella docstring.
+   - Doc (docs-writer, seconda passata sulla cura vera): in `security.md`, la sottosezione `#trusted-schema-server` con
+     «Why the reset, last» e «When SQLite refuses», poi il punto «In the upgrade's process too» e «Why the upgrade needs
+     it» corretti; in `database/index.md` r. 53, il reset.
+   - Ho corretto i testi rimasti alla prima versione: la docstring del test (r. 5 e 15) e le tre righe del runner, che
+     dicevano anche «CHECK con floor», non provato.
+   - **Evidenza** (`files/runs/h51-greens.sh`, poi `h51-recheck.sh`):
+     - ruff e black puliti. Il runner ha 3 PLC0415, gli stessi già alla HEAD;
+     - `db session-pragmas` 15 passed;
+     - `db migration-005` 25 (1 avviso già noto: SQLAlchemy non riflette l'indice d'espressione `lower(email)`), `006`
+       37, `007` 29, `008` 23, `009` 11;
+     - `db post-migration` 45, `db autoincrement-schema` 4, `utils dev-cli-db-path` 17, `services backup-staging` 168;
+     - `mkdocs build` stretto senza avvisi; `check-links` 97; `git diff --check` pulito.
+4. ✅ (2026-10-17, 15:48) **Slot** (GO del coordinatore alle 15:39, carico 35): `api backup-restore` sul server della
+   corsia con la cura, 161 passed. Porta 6181 libera dopo il run (lsof vuoto).
+5. ✅ (2026-10-17, 15:50) **Checkpoint**.
+   - Commit proposti:
+     - `fix(db): untrusted schema on every connection` (`session.py`, il test, il runner);
+     - `docs(security): untrusted schema, restore instance key` (`security.md`, `database/index.md`);
+     - `docs(journal): H-51, A profile and A-42/A-43 reviews` (piano e backlog).
+   - CHANGELOG 🔒, proposta: «A restored backup's database can no longer make the server run code through its
+     schema: every database connection turns SQLite's `trusted_schema` off first and reads the schema again last, so a
+     `CHECK`, a `DEFAULT` or an index that calls a function the app registers is refused instead of run, in the server
+     and in the restore check's upgrade.»
+   - Note per B, le passa il coordinatore: l'`OperationalError` grezzo di `describe_database()`; la docstring di
+     `env.py`.
+
+### Mini-lotto «H-47 col disegno giusto; la clausola di B-37 in `database/index.md`» (2026-10-17, 16:00) — solo giornale e doc
+
+> Dal coordinatore (15:55, dopo l'entrata di H-51: `2def8f7db`, dev `70ab2fcc6`, CHANGELOG 🔒 `6aa42af1a`): «Next: the
+> mini-lot (the H-47 line with the right design, plus the `database/index.md` r.203-204 clause), journal and docs only.
+> After it, propose your most valuable open 1.3 item, analysis first.» La riga «H-51» che X ha scritto nella mia
+> sezione (i 500 di `providers.py`) diventa X-R74, di X: non la tocco. In dev non c'è.
+
+1. ✅ **H-47** (backlog, sezione H): riscritta col disegno giusto, dopo aver riletto B-38 entrato (`_secret_path()` in
+   `scripts/backup_cli.py`).
+   - Cosa fa B-38, da root:
+     - il giro di `lstat` dentro la cartella dei dati;
+     - un'apertura `O_RDONLY|O_NONBLOCK` che **segue** i link, con `fstat` che chiede un file regolare;
+     - poi `read_secret_file` riapre per percorso.
+   - Il residuo sono quindi tre passi separati.
+   - Il disegno: `regular_only`, cioè controllo e lettura sullo stesso descrittore; `no_links_under=<radice>`, cioè
+     una discesa con `dir_fd` e `O_NOFOLLOW` per componente sotto la radice. Mai un `O_NOFOLLOW` secco (Kubernetes).
+   - Il punto «B mette `O_NOFOLLOW|O_NONBLOCK`» descriveva il piano, non quello che B ha consegnato: è corretto.
+2. ✅ **`database/index.md`** r.204: «`run_post_migration_fixes()` works on a direct `sqlite3` connection, with
+   `trusted_schema` off before anything else (lot B-37)».
+3. ✅ (2026-10-17, 15:54) Verifica (`files/runs/mini47.sh`): `mkdocs build` stretto senza avvisi, `check-links` 97,
+   `git diff --check` pulito. Dev è fermo alla HEAD `6aa42af1a`.
+   > **⚠️ Fuori pista**: rileggendo la mia sezione per scegliere «il lotto più utile», ho visto che molte righe H già
+   > entrate non sono chiuse con ✅, data e commit, come chiede la regola del backlog. Esempi con il commit che le nomina:
+   > H-17, H-21…H-25, H-27…H-30, H-32…H-34, H-37, H-39, H-42, H-45, H-46. Altre, come H-19 e H-49, hanno commit che
+   > non nominano l'ID. Propongo una riconciliazione, solo giornale.
+
+### Lotto «H-43: una corsia di test con il profilo managed, per gli E2E del cloud» (2026-10-17, 16:10) — analisi
+
+> Dal coordinatore (16:00, dopo l'entrata del mini-lotto, dev `13b6cfde1`): «H-43 analysis (read-only) first, the most
+> useful for Cloud». Deve coprire: come la corsia accende il profilo managed senza rompere l'isolamento del runner
+> condiviso; quale insieme di E2E ci gira; come le violazioni della CSP report-only si raccolgono e fanno fallire; lo
+> `<script>` inline di `app.html` come reperto a parte; il costo in tempo di corsia.
+
+**Stato reale** (sola lettura, HEAD `13b6cfde1`):
+1. **La corsia gira sui default.** `configure_test_runtime()` (`scripts/cli_base.py:264`) toglie:
+   - ogni variabile documentata in `.env.example`;
+   - i segreti dell'istanza (`INSTANCE_TRUST_SECRETS`);
+   - ogni `LIBREFOLIO_*`, salvo `TEST_LANE_KEEPS` e il prefisso `LIBREFOLIO_TEST_*` (`kept_in_a_test_lane()`).
+
+   Poi imposta porta, cartella dei dati, lane id e test mode.
+2. **La pulizia avviene due volte.** Una nel runner (`scripts/test_runner/_cli.py:547`), una in `dev.py server --test`
+   (`dev.py:205`). Quest'ultimo è il backend condiviso, ed è anche il comando del `webServer` di Playwright, che riceve
+   in `WEB_SERVER_ENV` solo le quattro variabili della corsia. Un `LIBREFOLIO_PROFILE` messo dal runner sparirebbe
+   quindi alla pulizia del server.
+3. **Cosa cambia il profilo managed** (`PROFILE_DEFAULTS` ed `ENVIRONMENT_PROFILE_DEFAULTS`, `config/__init__.py`):
+   - la protezione dai frame: `X-Frame-Options: SAMEORIGIN` più `PAGE_POLICY` imposta sui documenti;
+   - la CSP report-only sulle pagine dell'app;
+   - i worker del rischio che si fermano dopo 60 s;
+   - un ripristino fino a 500 MB;
+   - nel frontend, `selfHostedConfirmed()`/`managedConfirmed()` nascondono quello che vale solo per chi ospita da sé.
+4. **Il server managed parte in una corsia.** I blocchi dell'avvio esclusivi del managed sono due:
+   - `WeakSecretError`: il `JWT_SECRET` della corsia è generato lungo;
+   - `ManagedTestModeError`: la corsia ha il suo lane id di 32 caratteri.
+5. **Oggi la UI managed si prova con degli stub** di `/system/instance` (`fixtures/instance-config.ts`), in
+   `legal-and-managed`, `theme-roles`, `asset-modal`, `auth-forgot-password-email` e `files-uploader`: la UI è
+   coperta, gli header veri no.
+   - `page-policy` (H-42) **inietta** la politica con `context.route`.
+   - Nessun E2E vede l'header della CSP report-only: nessuno misura cosa romperebbe una CSP applicata.
+6. **142 file di spec** importano `test` da `e2e/fixtures/playwright.ts`: un raccoglitore si mette in un punto solo.
+   Ci sono circa 1.400 casi, con due progetti (desktop, mobile).
+
+**Disegno: la corsia managed senza rompere l'isolamento**
+- **Opzione**: `--lane-setting NOME=VALORE`, ripetibile, su `dev.py test` e su `dev.py server --test`.
+- **Lista ammessa**: `TEST_LANE_SETTABLE` in `cli_base.py`, accanto a `TEST_LANE_KEEPS`, con `LIBREFOLIO_PROFILE`,
+  `LIBREFOLIO_FRAME_PROTECTION` e `LIBREFOLIO_CSP_REPORT_ONLY`.
+  - Mai segreti, porte, cartelle dei dati o nomi `LIBREFOLIO_TEST_*` del runner.
+  - Un nome fuori dalla lista dà un errore prima che parta qualsiasi cosa. Il valore lo valida il server all'avvio,
+    con un rifiuto netto.
+- **Trasporto**: una sola variabile sotto il prefisso tenuto, `LIBREFOLIO_TEST_LANE_SETTINGS`
+  (`LIBREFOLIO_PROFILE=managed;…`), messa dal runner.
+  - `configure_test_runtime()` riapplica le coppie ammesse dopo la pulizia, in ogni processo dell'albero: runner,
+    Playwright, `dev.py server --test`, worker di uvicorn.
+  - `WEB_SERVER_ENV` la inoltra.
+- **Mai da `.env`**: un `LIBREFOLIO_TEST_*` si tiene dalla configurazione dello sviluppatore, quindi una riga dimenticata
+  renderebbe managed ogni corsia, in silenzio. `configure_test_runtime()` rifiuta la variabile quando viene da `.env`, e
+  il runner stampa le impostazioni della corsia alla partenza.
+- **Isolamento**:
+  - le altre corsie non vedono niente: l'ambiente è per albero di processi;
+  - la cartella dei dati e il DB della corsia non cambiano, perché il managed non scrive niente di suo;
+  - ogni run avvia il suo backend con un lane id nuovo (la sonda di prontezza), quindi un server di un altro profilo
+    non viene mai riusato;
+  - la build del frontend è la stessa: il profilo si legge a runtime.
+- **Test del runner**: la lista ammessa, il trasporto attraverso una pulizia annidata, il rifiuto da `.env`, un nome
+  sconosciuto. Nello stile di `utils runtime-isolation` e `test-runner-cli`.
+
+**Quale insieme di E2E**
+- **Fase 1**, un'azione «cloud smoke» (per esempio `front-utility cloud-smoke`): 10-12 spec esistenti che coprono le
+  pagine principali e le superfici a rischio per le politiche.
+  - Pagine: login e layout, dashboard, asset (lista, dettaglio, modale), transazioni e import, File con l'anteprima
+    PDF (le politiche su frame e oggetti), broker, impostazioni (utenti, sicurezza), rischio, AI Export,
+    `legal-and-managed`, `page-policy` (che, sulla corsia managed, legge l'header vero).
+  - Solo desktop, con `--lane-setting LIBREFOLIO_PROFILE=managed`.
+- **Fase 2**: tutta la suite sulla corsia managed, in uno slot.
+  - Le spec sensibili al profilo usano gli stub, quindi reggono.
+  - `gallery` resta self-hosted, perché fotografa i link di donazione.
+  - Una spec che si basasse sul profilo vero senza stub va trovata al primo run, e avrà un `test.skip` sul profilo
+    letto una volta per worker.
+
+**Le violazioni della CSP report-only: raccolta e fallimento**
+- **Un fixture automatico** in `e2e/fixtures/playwright.ts`:
+  - `context.addInitScript` registra un listener di `securitypolicyviolation`, che scatta anche in report-only
+    (`disposition: 'report'`);
+  - `context.exposeBinding` porta ogni violazione al processo del test, anche dopo una navigazione: direttiva, URI
+    bloccata, file e riga, campione, URL della pagina.
+- **Alla chiusura del test**, le violazioni che non sono in una baseline lo fanno fallire, con un elenco leggibile;
+  quelle note si contano.
+- **La baseline**: `e2e/csp-baseline.json` (direttiva, sorgente, motivo, proprietario), come un cricchetto: si possono
+  solo togliere voci.
+- **Su una corsia self-hosted** il fixture non fa niente (nessun header report-only, nessun evento): resta sempre
+  acceso, a costo zero. Le righe «[Report Only] Refused…» della console si contano come riserva.
+- **Non proposto ora**: un endpoint `report-to`/`report-uri` nel backend. Servirebbe alle operazioni del cloud, perché
+  oggi una violazione in produzione non si vede. Però la consegna è asincrona e non va bene per gli E2E, e un
+  endpoint non autenticato va irrobustito. È una voce futura a parte.
+
+**Reperto a parte: gli script inline**
+- L'`index.html` costruito ha due script inline:
+  - quello di `app.html` (1.459 caratteri): l'anti-FOUC del tema, la cattura del prompt d'installazione PWA, la
+    registrazione del service worker;
+  - quello di avvio di SvelteKit (373 caratteri): `__sveltekit_…` e l'`import()` dell'entry.
+- Entrambi violano `script-src 'self' 'wasm-unsafe-eval'`. Su un'istanza managed ogni caricamento di pagina segnala
+  oggi due violazioni, che non si vedono perché manca un endpoint, e bloccano una CSP applicata.
+- **Cura proposta** (lotto successivo, mio: `static_site.py` e `security_headers.py`): il backend calcola `sha256-…` di
+  ogni script inline dell'`index.html` servito, una volta per build (mtime), e lo aggiunge a `script-src` di tutte e
+  due le politiche.
+  - Non tocca `app.html`, che è del programma colori.
+  - Copre anche lo script di SvelteKit, che dall'HTML non può uscire.
+  - L'alternativa, spostare lo script di `app.html` in `static/`, lascerebbe comunque quello di SvelteKit.
+  - Con la fase 1 di H-43 queste due sono le prime voci della baseline; la cura con gli hash le toglie.
+
+**Costo**
+- **Implementazione**:
+  - opzione, trasporto e test del runner: mezza giornata;
+  - fixture, baseline e doc: mezza giornata;
+  - azione smoke e registrazione: un quarto di giornata.
+- **Superfici condivise**: `scripts/cli_base.py`, `scripts/test_runner/_cli.py`, `dev.py` (l'opzione di
+  `server --test`), `frontend/playwright.config.ts`, `frontend/e2e/fixtures/playwright.ts` (tocca ogni spec),
+  `_frontend_utility.py`, la doc dei test.
+- **Tempo di corsia**:
+  - fase 1: l'avvio del server (1-2 min) più 10-12 spec desktop a 2-4 worker, circa 6-12 min. È una stima, da misurare
+    al primo run;
+  - fase 2: quanto un run E2E completo self-hosted del treno, con un sovraccosto vicino a zero (un header e un
+    listener).
+- **Rischi**:
+  - il fixture condiviso tocca ogni spec, quindi si prova prima su un piccolo insieme, con un interruttore per
+    spegnerlo;
+  - se `webServer.env` di Playwright fonde o sostituisce l'ambiente è da verificare (si mette la variabile
+    esplicitamente).
+
+**Decisioni** (per il coordinatore):
+- D1: la lista ammessa, i tre nomi oppure altri.
+- D2: solo la fase 1 nella 1.3, oppure anche la fase 2.
+- D3: il raccoglitore sempre acceso (la mia proposta) oppure dietro un flag.
+- D4: la cura con gli hash, come lotto H dopo la fase 1.
+
+**Decisioni del coordinatore su H-43** (16:20), testuali in sostanza:
+- D1: i tre nomi.
+- D2: nella 1.3 la fase 1. La fase 2 gira una volta sola, nel cancello della release candidate, nella corsia del
+  coordinatore: non è una corsia ricorrente.
+- D3: il raccoglitore sempre acceso, **con un interruttore** (una variabile d'ambiente), provato prima su poche spec.
+  Il checkpoint deve mostrare un campione E2E self-hosted verde e l'azione cloud smoke verde.
+- D4: la cura con gli hash è un lotto H a parte dopo la fase 1, nella 1.3 se c'è tempo. I due script inline sono le
+  prime voci della baseline.
+- **OK di scrittura**: `scripts/cli_base.py`, `test_runner/_cli.py`, `dev.py` (l'opzione di `server --test`),
+  `playwright.config.ts`, `e2e/fixtures/playwright.ts`, `_frontend_utility.py`, la doc dei test.
+  - `dev.py` (E, E-19a) e `_frontend_utility.py` (W, C-97c) sono aperti altrove: le modifiche lì vanno solo aggiunte,
+    e per ultime.
+- Ordine: prima la riconciliazione del backlog, poi la fase 1 con i rossi. Lo slot va chiesto per il primo cloud smoke.
+
+### Riconciliazione del backlog H (2026-10-17, 16:30) — ✅ solo giornale
+
+- Chiuse con ✅, data e SHA (da `git log`, nella storia di dev, e dalle voci «Ingresso» del piano) le 25 righe già
+  entrate: H-12, H-17, H-19, H-21…H-30, H-32…H-37, H-39, H-41, H-42, H-45, H-46, H-49.
+  - Il diff cambia solo le loro prime righe (`- **H-NN ·` → `- ✅ **H-NN ·`) e aggiunge una riga di chiusura ciascuna.
+  - H-41 (di W, trovata nel lotto H-34) è chiusa da `c0b67f4c8` del lotto R13-SEC7-3, con i rossi in `61acbc16b`.
+- Restano aperte:
+  - H-3, bloccata da P24;
+  - H-5, la traduzione, solo su richiesta;
+  - H-7, H-8 e H-11, Docker e dipendenze;
+  - H-18, i toast, componente condiviso;
+  - H-20;
+  - H-31: `blocked` sta solo in `InstanceBlockResponse` (`/system/block`, dietro login), non nel pubblico
+    `/system/instance`;
+  - H-38 e H-40, Linux e Docker;
+  - H-43, in corso;
+  - H-44;
+  - dopo la 1.3: H-47, H-48 e H-50.

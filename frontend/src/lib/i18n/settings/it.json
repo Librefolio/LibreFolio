@@ -315,7 +315,8 @@
         "INVALID_INPUT": "Controlla i dati inseriti: l'indirizzo email potrebbe non essere valido.",
         "generic": "L'azione non è riuscita. Riprova.",
         "load": "Non è stato possibile caricare gli account.",
-        "PENDING_SETUP": "Questo amministratore aspetta il suo setup: da qui non si può né riattivare né retrocedere."
+        "PENDING_SETUP": "Questo amministratore aspetta il suo setup: da qui non si può né riattivare né retrocedere.",
+        "SETUP_COMPLETED": "Questo amministratore ha completato il suo setup nel frattempo: non è stato cambiato nulla."
       },
       "invite": {
         "button": "Invita",

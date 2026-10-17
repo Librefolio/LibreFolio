@@ -106,6 +106,44 @@ r_{\mathrm{ann}} =
 \operatorname{annualize}\left(\frac{\mathrm{PnL}_{period}}{\mathrm{ann\_base}},\ t_{\mathrm{end}}-t_{\mathrm{start}}\right)
 $$
 
+### 🔚 Positions Closed in the Period {: #closed-in-period }
+
+A position is closed when its quantity at $t_{\mathrm{end}}$ is at or below the dust threshold of $10^{-5}$ units, so a residual left by redemptions in tranches counts as closed. It has no end cost, and a start value says nothing about a holding sold a few weeks in. Its annualized return uses the capital it deployed and the time it was held inside the period:
+
+$$
+\mathrm{CostSold} = \sum_{s\,\in\,(t_{\mathrm{from}},\ t_{\mathrm{end}}]} C_s
+$$
+
+$$
+t_{\mathrm{start}} = \max(t_{\mathrm{from}},\ t_{\mathrm{first\ opening}}), \qquad t_{\mathrm{close}} = \text{last day its quantity fell to zero}
+$$
+
+$$
+r_{\mathrm{ann}} =
+\operatorname{annualize}\left(\frac{\mathrm{PnL}_{period}}{\mathrm{CostSold}},\ t_{\mathrm{close}}-t_{\mathrm{start}}\right)
+$$
+
+- $C_s$ is the historical cost, in $C^*$, of each disposal the period's Realized counts — a SELL, or an outgoing ADJUSTMENT with a cost basis ([Portfolio Engine — §8](index.md#8-realized-gain-loss)). A disposal left out of Realized adds no cost.
+- $t_{\mathrm{first\ opening}}$ is the position's first acquisition at that broker: a transfer opens it on its arrival there, a split never does. It is the first one ever, not the last lot's, so days at zero between two closes inside the period stay in the window.
+- The numerator is the row's whole $\mathrm{PnL}_{period}$: for a position held at $t_{\mathrm{from}}$, its $\Delta\mathrm{UGL}$ gives back the unrealized gain/loss it started with.
+- The displayed period percentage keeps $|\mathrm{StartValue}|$ as base: only the annualized value changes base and window.
+
+When this gives no value — no cost sold (the position left through a transfer or an outgoing ADJUSTMENT without a cost basis, or its disposals are out of Realized), fewer than 30 days held, a return of $-100\%$ or worse — the row keeps the rule above: $|\mathrm{StartValue}|$ over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, and no value for a position opened in the period.
+
+??? example "Example: a position sold 90 days into a one-year period"
+
+    At $t_{\mathrm{from}}$ the position is worth 1,100 for a cost of 1,000. All of it is sold 90 days later for 1,250:
+
+    $$
+    \mathrm{PnL}_{period} = (0 - 100) + (1{,}250 - 1{,}000) = +150
+    $$
+
+    $$
+    r_{\mathrm{ann}} = \operatorname{annualize}\left(\frac{150}{1{,}000},\ 90\right) = 1.15^{365/90} - 1 \approx +76.3\%
+    $$
+
+    The unrealized +100 it started with comes back out of $\Delta\mathrm{UGL}$, Realized adds +250. The period percentage stays $150 / 1{,}100 = 13.64\%$; annualized over the whole year on the start value, as an open position would be, the same +150 would read 13.64% as well.
+
 ## 🧬 FIFO Lots
 
 FIFO lot annualized return is net of allocated income, fees, and taxes:

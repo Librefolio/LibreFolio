@@ -2883,3 +2883,45 @@ i18n condiviso; quindi prima un'analisi (richiesta del coordinatore).
   base: X-R65 (dev `c726b9d89`) rifiuta date di cambi e prezzi dopo domani; nella revisione combinata `DAY0` di
   `test_bulk_writes_chunked.py` è passato al 1990 (`f6324af9e`) — da tenere alla fusione; i miei casi nuovi restano lontani
   da oggi (API dal 2003 per ~3 000 giorni, gli altri a pochi anni dal 2001–2004). **CHECKPOINT READY** inviato, FROZEN.
+
+#### Lotto entrato (dev `29e30b6cc`); MF-SEC9e → MF-A2 → riconciliazione del backlog, poi l'analisi di J45b (17/10, 15:0x)
+- Coordinatore: il lotto BRIM/WAC/SEC9c è **entrato** (corsa combinata verde su `e650780a0`; dev `29e30b6cc`,
+  CHANGELOG 🐛 `79d4ca239`); worktree portato a `79d4ca239`. Scelta: **1 → 2 → 3**, poi un'analisi breve di MF-J45b.
+- **MF-SEC9e** ✅ codice `price_store.bulk_delete_prices`: gli intervalli di ogni asset, da tutti gli elementi che lo
+  nominano, fusi in intervalli di giorni disgiunti (limiti inclusi, giorni adiacenti uniti); i conteggi con una
+  `COUNT … GROUP BY asset_id` per blocco di intervalli, la cancellazione con una DELETE per blocco, un commit: ~40
+  istruzioni al tetto invece di 10 000 `COUNT`. Ogni risultato porta il conteggio distinto del suo asset (una riga una
+  volta sola, un asset in due elementi contato su entrambi); la somma per asset = `total_deleted`. ⚠️ **Fuori pista**:
+  la richiesta vuota costruiva `FABulkDeleteResponse(deleted_count=0, …)` (campo inesistente, `success_count`
+  mancante) → un 500: corretta. Provato in memoria (`/tmp/libreFolio_mf_sec9e_probe.py`: sovrapposizione 7, asset in
+  due elementi 9 + 1 = 10, richiesta vuota). Doc: `assets/architecture.md` («Writes»). `bulk-writes-chunked` esistente
+  49 verde.
+- **MF-A2**: docs-writer `mf-a2-docs` in corso.
+- **Riconciliazione** ✅ della sezione MF del backlog: i lotti entrati con il loro merge in dev (da `git log --merges`):
+  A `536501541`; B, H `bcc644491`; C `0eb85aa9b`; D prima parte `8d244d1c6` (ondata 1 + 1b), resto `aca75c7ca`, D3
+  `482343eb3`, D4 `c2feaf3e4`; E1 `e43dfae68` (E2 aperto: developer); F1+F2, G1, K1+K2, M, N, O, O2 `8d244d1c6`; G2 aperto
+  (W); I1 `8d244d1c6`, I2 `3741b95b0`; J1 `d93de2899`, J2 `04a5088ff`; P `536501541`, P4b `d93de2899`, P2 `aa4370905`,
+  P2b `c9b1162d4` (consumo di Y); W56 `04a5088ff`; L aperto (D-MF1). Più SEC9a, SEC9c chiuse.
+- In corso: test-author `sec9e-tests`.
+- ✅ **MF-A2** (docs-writer `mf-a2-docs`): `portfolio-engine/index.en.md` §5 nuovo «🔀 Two Unrealized Figures»
+  (`#two-unrealized-figures`: NAV − Book = [MV − OCB] + [titoli in transito], la cassa in transito si annulla; dove
+  appare ciascuna cifra), §7 vi rimanda; `period-pnl.en.md` (ΔUGL = MV − OCB, transito escluso; il paragrafo delle
+  posizioni chiuse nel periodo); `net-annualized-return.en.md` nuovo «🔚 Positions Closed in the Period»
+  (`#closed-in-period`: CostSold, finestra da max(t₀, prima apertura) alla chiusura, minimo 30 giorni, ricaduta, esempio).
+  Riferimenti: `contributions.closed_position_annualized`, `holding_window.closed_position_window`,
+  `portfolio_service` `_period_realized_sales`, `daily_state.py` (`ug = nav − book`), `period.py`. `mkdocs build`
+  stretto 0, `check-links` 97. Debito di traduzione (it/fr/es, nessuno stamp): un H3 e un ancoraggio nuovi in `index`,
+  due link nuovi in `period-pnl`, la sezione nuova di `net-annualized-return`. ⚠️ **Fuori pista**: la ricaduta della
+  regola delle posizioni chiuse (meno di 30 giorni → annualizzato sull'intero periodo) → backlog MF-A3 (domanda);
+  la card «Unrealized change» collegata a `book-value` → backlog MF-A4 (doc).
+- ✅ **Test SEC9e** (test-author `sec9e-tests`, sezione 8 di `test_bulk_writes_chunked.py`): 8 funzioni / 20 casi —
+  una riga in due intervalli contata una volta (3), un asset in due elementi contato su entrambi (2), richiesta vuota
+  nel servizio e nella rotta (2), istruzioni contate dal motore (≤ ⌈intervalli/500⌉ + 2; HEAD 2 000), riferimento a forza
+  bruta su richieste casuali (5 semi); guardie: limiti inclusi, `end` = `start`, adiacenti, disgiunti casuali (6).
+  **Corsia** (15:21; prodotto tolto `price_store.py`, sha `9b485a18…` uguale dopo): rosso **14** / 55; verdi
+  `bulk-writes-chunked` **69**, `current-price-storable` 27 (attese a carico 100 e 51). ruff/black/diff-check,
+  `mkdocs build` stretto, `check-links`. Slot chiesto (`files/sec9e.sh slot`: `api assets-price`,
+  `api current-price-persistence`).
+- ✅ **Slot** (GO col carico a 5 minuti < 50: atteso dalle 15:33, partito 15:40; HEAD `79d4ca239`): `api assets-price`
+  **22**, `api current-price-persistence` **5**. Porta libera. Coordinatore: MF-A3 alle domande del developer; MF-A4 (doc)
+  nel prossimo lotto. **CHECKPOINT READY** inviato, FROZEN.
