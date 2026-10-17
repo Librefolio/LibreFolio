@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -106,7 +108,7 @@ from backend.app.services.financial_math.returns import (
     timing_effect,
 )
 from backend.app.services.financial_math.splits import split_linked_ids
-from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
 from backend.app.services.financial_math.weights import percent_of
 from backend.app.services.financial_math.yield_on_cost import (
     YieldOnCostPositionInput,
@@ -115,6 +117,7 @@ from backend.app.services.financial_math.yield_on_cost import (
 )
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.utils.currency_units import minor_unit_factor
 from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -367,6 +370,22 @@ _LOT_AFFECTING_TYPES = {TransactionType.BUY, TransactionType.SELL, TransactionTy
 _QUANTITY_DUST_THRESHOLD = QUANTITY_DUST_THRESHOLD
 
 
+@dataclass(frozen=True)
+class HeldAssetQuoteFacts:
+    """An asset held at the end of a report's period, with what the data-quality report's asset quote checks read: its
+    currency, quote base and provider assignment (Z-32's minor unit; E-19b's NON_ISO_CURRENCY reads the same facts)."""
+
+    asset_id: int
+    name: str
+    currency: str
+    #: ``quote_base_quantity`` normalized: NULL or not positive counts as 1, as every valuation reads it
+    quote_base_quantity: int
+    #: None for an asset without a provider
+    provider_code: str | None
+    #: The provider's own quote currency at the last history fetch (``AssetProviderAssignment.reported_currency``)
+    reported_currency: str | None
+
+
 class PortfolioService:
     """Orchestrator for portfolio-level calculations.
 
@@ -483,6 +502,40 @@ class PortfolioService:
             return []
         assets = await self._get_assets_map(set(asset_ids))
         return [(asset_id, assets[asset_id].display_name if asset_id in assets else f"Asset {asset_id}") for asset_id in asset_ids]
+
+    async def _held_asset_quote_facts(self, engine_result: Any) -> list[HeldAssetQuoteFacts]:
+        """The assets held at the end of the period (a position above the dust threshold), each with its currency,
+        quote base and provider assignment, read in one query: what the data-quality report's asset quote checks need
+        (Z-32; E-19b's NON_ISO_CURRENCY uses the same facts)."""
+        from backend.app.db.models import AssetProviderAssignment  # noqa: PLC0415 — the lazy model import of get_summary
+
+        asset_ids = sorted({ps.asset_id for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD})
+        if not asset_ids:
+            return []
+        stmt = select(Asset, AssetProviderAssignment).outerjoin(AssetProviderAssignment, AssetProviderAssignment.asset_id == Asset.id).where(Asset.id.in_(asset_ids)).order_by(Asset.id)
+        rows = (await self.db.execute(stmt)).all()
+        return [
+            HeldAssetQuoteFacts(
+                asset_id=asset.id,
+                name=asset.display_name,
+                currency=asset.currency,
+                quote_base_quantity=normalize_quote_base_quantity(asset.quote_base_quantity),
+                provider_code=assignment.provider_code if assignment is not None else None,
+                reported_currency=assignment.reported_currency if assignment is not None else None,
+            )
+            for asset, assignment in rows
+        ]
+
+    @staticmethod
+    def _quote_in_minor_unit_assets(facts: Sequence[HeldAssetQuoteFacts]) -> list[tuple[int, str]]:
+        """(asset_id, name) of the held assets whose provider quotes them in a minor unit (Yahoo's ``GBp``) while their
+        quote base is not its factor (Z-32): the prices are the minor unit read as the major one."""
+        listed: list[tuple[int, str]] = []
+        for fact in facts:
+            factor = minor_unit_factor(fact.reported_currency)
+            if factor is not None and fact.quote_base_quantity != factor:
+                listed.append((fact.asset_id, fact.name))
+        return listed
 
     @staticmethod
     def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
@@ -993,6 +1046,7 @@ class PortfolioService:
         configured_fx_pairs, real_provider_fx_pairs = await self._get_configured_fx_pair_sets()
         all_missing_pairs.extend(_engine_missing_fx_pairs(engine_result, date_from, valuation_date))
         merged_missing_fx_pairs = self._merge_missing_pairs(all_missing_pairs)
+        held_quote_facts = await self._held_asset_quote_facts(engine_result)
         data_quality = views.build_data_quality_report(
             missing_price_assets_dto=missing_price_assets,
             stale_prices_dto=stale_prices or None,
@@ -1000,6 +1054,7 @@ class PortfolioService:
             transaction_implied_assets_dto=transaction_implied_assets if transaction_implied_assets else None,
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
             invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
+            quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
             rows_before_floor=getattr(engine_result, "rows_before_floor", None),
             valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
@@ -2066,10 +2121,12 @@ class PortfolioService:
             data_quality = summary.data_quality
         else:
             configured_fx_pairs, real_provider_fx_pairs = await self._get_configured_fx_pair_sets()
+            held_quote_facts = await self._held_asset_quote_facts(engine_result)
             data_quality = views.build_data_quality_report(
                 missing_fx_pairs_dto=_engine_missing_fx_pairs(engine_result, date_from, effective_date_to) or None,
                 missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
                 invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
+                quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
                 rows_before_floor=getattr(engine_result, "rows_before_floor", None),
                 mwrr_available=False,
                 share_mismatches=engine_result.share_mismatches,
