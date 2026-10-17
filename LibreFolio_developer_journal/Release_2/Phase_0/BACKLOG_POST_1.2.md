@@ -3302,6 +3302,10 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     - una chiave configurata è casuale, non una passphrase.
 
   Dettagli: piano H, §14 «CP3 passo 2».
+  - 17/10: l'opzione A resta **P24**, una decisione del developer ancora aperta: voleva più contesto. Il contesto è nel
+    piano H, §14, «H-3, opzione A: il contesto per la decisione P24»: dove sta la chiave, che cosa protegge, che cosa
+    succede se il file sparisce, perché nel cloud è più sicuro, e l'opzione A con il suo peso. Il consiglio è
+    rimandarla dopo la 1.3: l'opzione B, già entrata, basta, e la A migliora solo il self-hosted.
 - ✅ **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
   minimo; H, 15/10.
   - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
@@ -3460,6 +3464,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     girare ad A.
 
   Dettagli: piano H, §14 «H-3, il resto».
+  - Cura fatta il 17/10 da H, con l'OK di scrittura del coordinatore; A rivede (lotto «H-19», piano H §14).
+    `issue_address_probe` risponde 503 `INSTANCE_KEY_UNAVAILABLE` per un `InstanceKeyError`, e scrive un warning con
+    `admin_id`. Prima era un 500 con il traceback. Due test in processo in `test_address_probe_api.py`.
 - **H-20 · L'output del runner rediretto su un file arriva solo alla fine** — molto basso; H (`all-backend` di H-12),
   16/10.
   - Con `> file`, ma anche con `--log-file`, lo stdout del runner è bufferizzato a blocchi, come ogni processo Python
@@ -3808,6 +3815,36 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `TXMixedBatch` (righe validate dopo, una per una) entrano nella guardia delle posizioni libere.
 
   Dettagli: piano H, §14, lotto «H-34».
+- **H-42 · Tre direttive della CSP imposte sulle pagine accanto a `frame-ancestors`** — basso, sicurezza; E (dopo
+  H-39), via coordinatore, 17/10.
+  - Con la protezione dai frame accesa (il default di managed), le risposte HTML hanno `frame-ancestors 'self';
+    object-src 'none'; base-uri 'self'; form-action 'self'`. Le altre tengono solo `frame-ancestors 'self'`: Chromium
+    tratta il visore PDF integrato come un plugin, e `object-src 'none'` sulla risposta di un PDF lo fermerebbe.
+  - E2E con `page.route` come guardia permanente, perché una corsia non può accendere la protezione (vedi H-43).
+  - In corso (17/10): cura e test backend fatti, spec E2E scritto. Restano lo slot E2E e i documenti di
+    `security.md`.
+
+  Dettagli: piano H, §14, lotto «H-42».
+- **H-43 · Una corsia di test con il profilo managed, per gli E2E del cloud** — basso, runner; H (analisi di H-42),
+  17/10.
+  - `configure_test_runtime` toglie a ogni corsia ogni `LIBREFOLIO_*` dello sviluppatore, e un run ha un solo backend
+    condiviso: oggi nessun E2E può girare con il profilo managed, o con la protezione dai frame accesa, e un header
+    vero.
+  - Strada possibile: un'opzione del runner, per esempio `--lane-setting NOME=VALORE` con una lista di nomi ammessi,
+    applicata dopo le rimozioni, con i suoi test e documenti. Così gli E2E esistenti girerebbero sul profilo del cloud.
+
+  Dettagli: piano H, §14, lotto «H-42», analisi punto 4.
+- **H-44 · Il ripiego dell'anteprima PDF probabilmente scarica il file invece di mostrarlo** — basso, file; trovato nel
+  lotto H-42 (dal docs-writer), via coordinatore, 17/10. Il proprietario lo assegna il coordinatore al prossimo treno.
+  - Quando il visore EmbedPDF fallisce, `FilePreviewModal.svelte` mostra il PDF in un `<iframe>` su
+    `/api/v1/uploads/file/{id}`, il `source_url` di `api/v1/uploads.py`.
+  - `serve_file` passa sempre `filename` a `FileResponse`, quindi la risposta è `Content-Disposition: attachment`, e un
+    iframe con un allegato fa partire uno scaricamento.
+  - È precedente a H-19 e H-42, e non è verificato in un browser.
+  - Legame con H-42: la CSP più stretta va solo sulle risposte `text/html` anche per questo caso. Un PDF mostrato inline
+    non deve ricevere `object-src 'none'`, che può fermare il visore integrato di Chromium.
+
+  Dettagli: piano H, §14, lotto «H-42».
 
 ## A · Account e accessi (fase 01)
 
