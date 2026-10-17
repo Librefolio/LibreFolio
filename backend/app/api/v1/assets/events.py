@@ -99,8 +99,8 @@ async def upsert_events_bulk(
     item, or an id in a create item is a 422.
     """
     try:
-        # A refusal names only the transactions the caller can see (R13-SEC7); a direct call without a caller (a test) keeps them all
-        result = await AssetSourceManager.bulk_upsert_events(assets, session, current_user_id=getattr(_current_user, "id", None))
+        # A refusal names only the transactions the caller can see (R13-SEC7, X-R47b)
+        result = await AssetSourceManager.bulk_upsert_events(assets, session, current_user_id=_current_user.id)
         results_list = [FAEventUpsertResult(**r) for r in result["results"]]
         return FABulkEventUpsertResponse(
             results=results_list,

@@ -1,5 +1,5 @@
-"""X-R47 (workstream X): a SPLIT asset event's ratio is checked when it is written; and R13-SEC7: the P-10 refusal
-shows only the caller's transactions.
+"""X-R47 (workstream X): a SPLIT asset event's ratio is checked when it is written; and R13-SEC7 with X-R47b: the P-10
+refusal shows only the caller's transactions, and none without a caller.
 
 Measured before the cure: a SPLIT's ratio is its ``value.amount`` (``FAAssetEventPoint.value``), and nothing checks it on
 the way in. ``FAEventUpsert`` (``POST /assets/events``) accepts a SPLIT of 0 or below, and ``bulk_upsert_events`` writes
@@ -31,6 +31,12 @@ The ratios refused are 0, -2 and -0.000001; -0.000001 and 0.000001 are derived: 
 drop seen here is about the ratio alone. A NaN or infinite ratio is refused earlier, with ``EVENT_TOO_MANY_DIGITS``
 (W-B58): not this lot's; a ratio already stored is MF-D4's.
 
+X-R47's layer fix (rule d of ``test_layer_boundaries.py``: ``AssetEventType.SPLIT`` is named only in the split loader):
+the event store asks ``financial_math.splits.is_split_event_type`` whether an event is a SPLIT — True for text that
+reads SPLIT once stripped and upper-cased, an ``AssetEventType`` member included (a StrEnum), False for anything else,
+never raising — and the ``type`` in EVENT_INVALID_SPLIT_RATIO's details is the event's own, normalised: still "SPLIT".
+Its tests read the name when they run, so before the fix they alone are red and the rest of the unit runs.
+
 R13-SEC7 (E's security review of 17/10, LOW): J's P-10 refusal, ``EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST``
 (``_reject_split_retype_without_costs``), names in ``details["transaction_ids"]`` every costless incoming ADJUSTMENT
 linked to the SPLIT, whoever's broker it is on, and any user can trigger it on an asset, which is global: against the
@@ -38,9 +44,12 @@ file's own rule (``_delete_item_events`` answers counts, never transaction ids: 
 cure's contract: ``bulk_upsert_events(data, session, *, current_user_id=None)``, and ``POST /assets/events`` passes the
 caller. With a ``current_user_id``, ``transaction_ids`` keeps the transactions that user can see — a ``BrokerUserAccess``
 row for the transaction's broker, as ``delete_events_bulk`` decides ``accessible_transactions`` — sorted, and a new key,
-``hidden_transactions_count``, counts the others; the message keeps the total count only. Without one (an internal
-caller, answering no user), the details stay as today: every id, no new key. The case: a SPLIT with a costless incoming
-ADJUSTMENT on each of two brokers of the unit's own, user A holding an access to broker A alone, user B to broker B.
+``hidden_transactions_count``, counts the others; the message keeps the total count only. X-R47b (E's security review
+of 5f68a8db0: fail closed, where R13-SEC7's cure still named every id without a caller): the details always carry both
+keys, and without a ``current_user_id`` no transaction is named — ``transaction_ids`` is [] and
+``hidden_transactions_count`` counts them all — while the route always passes its caller (``_current_user.id``, no
+fallback). The case: a SPLIT with a costless incoming ADJUSTMENT on each of two brokers of the unit's own, user A
+holding an access to broker A alone, user B to broker B.
 
 A refusal is looked for as the router meets it: nobody commits after a refused call, the session just closes, so
 "nothing written" sees exactly what the service committed by itself — read with raw SQL on a fresh connection, every
@@ -49,8 +58,8 @@ the exception, never as an error. The warning is looked for in a ``structlog`` c
 through ``event_store``'s own logger, proves live. The route tests post to ``POST /assets/events`` in process: the
 events router mounted as the app mounts it, on an app of the test's own, ``get_current_user`` overridden there to the
 unit's user, the session the real dependency opens; the answer read as the client reads it, JSON. Each red says what the
-user faces before its lot's cure («Red today» is that state, for X-R47 and R13-SEC7 alike); a guard passes before and
-after it.
+user faces before its lot's cure («Red today» is that state, for X-R47, R13-SEC7 and X-R47b alike); a guard passes
+before and after it.
 
 Isolation: WRITE-SCOPED, the services default (as ``asset-digit-limits``). Every row is this unit's own: two EUR STOCK
 assets created under a unique name, the first assigned to a provider code of the unit's own that no provider has (a
@@ -60,9 +69,12 @@ by asset and broker id. Nothing here counts or reads a row it did not write.
 """
 
 import asyncio
+import importlib
+import inspect
 import re
 import sys
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -757,15 +769,133 @@ async def test_guard_a_provider_split_with_a_valid_ratio_is_written_and_not_logg
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# R13-SEC7: the P-10 refusal shows only the caller's transactions
+# The split predicate: how the event store asks for a SPLIT without naming the member (rule d of the layer boundaries)
+#
+# Rule d of test_layer_boundaries.py: ``AssetEventType.SPLIT`` is named only in the split loader,
+# ``financial_math/splits.py``. The event store's two checks — ``_reject_invalid_split_ratios`` for a manual event,
+# ``_storable_events`` for a provider's — ask it instead: ``is_split_event_type(value)``, True for text that reads SPLIT
+# once stripped and upper-cased (an ``AssetEventType`` member is text: a StrEnum), False for anything else, and never an
+# exception. Red today by absence: the name is read when a test runs, never at import, so the rest of the unit runs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _is_split_event_type() -> Callable[[object], bool]:
+    """``financial_math.splits.is_split_event_type``, read when the test runs; missing, the test fails naming it."""
+    predicate = getattr(importlib.import_module("backend.app.services.financial_math.splits"), "is_split_event_type", None)
+    if predicate is None:
+        pytest.fail("backend.app.services.financial_math.splits has no is_split_event_type (X-R47 layer fix, rule d of test_layer_boundaries.py): the event store still names AssetEventType.SPLIT to tell a SPLIT, outside the split loader, instead of asking the layer")
+    return predicate
+
+
+def _split_predicate_answer(value: object) -> object:
+    """``is_split_event_type(value)``, asked as the event store asks it. An exception fails the test, naming it: the
+    predicate never raises."""
+    predicate = _is_split_event_type()
+    try:
+        return predicate(value)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"is_split_event_type({value!r}) raised {exc!r}: it never raises — asked by the event store, it would answer a save with a 500 (POST /assets/events) and make a refresh keep none of the provider's events («Event upsert failed»)")
+
+
+class _ReadsSplit:
+    """Not text, though its ``str()`` reads SPLIT: no event type, so no SPLIT."""
+
+    def __str__(self) -> str:
+        return "SPLIT"
+
+    def __repr__(self) -> str:
+        return "<an object whose str() is 'SPLIT'>"
+
+
+class _CannotBeRead:
+    """An object whose ``str()`` raises: the predicate answers it False, never with an exception."""
+
+    def __str__(self) -> str:
+        raise RuntimeError("this object has no text")
+
+    def __repr__(self) -> str:
+        return "<an object whose str() raises>"
+
+
+#: What is_split_event_type takes for a SPLIT: the member, and text that reads SPLIT once stripped and upper-cased.
+_SPLIT_TYPE_VALUES = [
+    pytest.param(AssetEventType.SPLIT, id="member-SPLIT"),
+    pytest.param("SPLIT", id="text-SPLIT"),
+    pytest.param("split", id="text-split"),
+    pytest.param("Split", id="text-Split"),
+    pytest.param(" SPLIT ", id="text-space-padded"),
+    pytest.param("\tsplit\n", id="text-tab-newline-padded"),
+]
+#: What it takes for no SPLIT: no value, blank text, another type (the text of one, and every other member, so a new
+#: one is covered), near misses, and what is not text — even an object whose str() reads SPLIT, or one whose str() raises.
+_NOT_SPLIT_TYPE_VALUES = [
+    pytest.param(None, id="None"),
+    pytest.param("", id="text-empty"),
+    pytest.param("   ", id="text-blank"),
+    pytest.param("DIVIDEND", id="text-DIVIDEND"),
+    *(pytest.param(kind, id=f"member-{kind.name}") for kind in AssetEventType if kind is not AssetEventType.SPLIT),
+    pytest.param("SPLITS", id="text-SPLITS"),
+    pytest.param("SPLIT_ADJUSTMENT", id="text-SPLIT_ADJUSTMENT"),
+    pytest.param("S PLIT", id="text-S-space-PLIT"),
+    pytest.param(5, id="int-5"),
+    pytest.param(0, id="int-0"),
+    pytest.param(b"SPLIT", id="bytes-SPLIT"),
+    pytest.param(["SPLIT"], id="list-SPLIT"),
+    pytest.param(_ReadsSplit(), id="object-whose-str-is-SPLIT"),
+    pytest.param(_CannotBeRead(), id="object-whose-str-raises"),
+]
+
+
+@pytest.mark.parametrize("value", _SPLIT_TYPE_VALUES)
+def test_the_split_predicate_takes_the_member_and_text_reading_split_for_a_split(value):
+    """Red today: ``financial_math.splits`` has no ``is_split_event_type``: the event store tells a SPLIT by naming
+    ``AssetEventType.SPLIT`` itself, which rule d of the layer boundaries forbids outside the split loader.
+
+    Contract (X-R47 layer fix): ``is_split_event_type(value)`` is True — the bool, not a truthy value — for the member and
+    for text that reads SPLIT once stripped and upper-cased, as ``_reject_invalid_split_ratios`` reads a type today.
+    """
+    answer = _split_predicate_answer(value)
+
+    assert answer is True, f"is_split_event_type({value!r}) answers {answer!r}: expected True — the event store would not take this SPLIT for one and would let a ratio of 0 through, which takes the Dashboard down (500) once a transaction links it"
+
+
+@pytest.mark.parametrize("value", _NOT_SPLIT_TYPE_VALUES)
+def test_the_split_predicate_takes_nothing_else_for_a_split_and_never_raises(value):
+    """Red today: ``financial_math.splits`` has no ``is_split_event_type`` (rule d of the layer boundaries).
+
+    Contract (X-R47 layer fix): ``is_split_event_type(value)`` is False — the bool — and raises nothing, for no value,
+    blank text, every other event type, a near miss, and anything that is not text: an object whose ``str()`` reads
+    SPLIT is still no event type, and one whose ``str()`` raises gets an answer, not an exception.
+    """
+    answer = _split_predicate_answer(value)
+
+    assert answer is False, f"is_split_event_type({value!r}) answers {answer!r}: expected False — taken for a SPLIT, its value would be judged as a ratio: a manual event of 0 refused with EVENT_INVALID_SPLIT_RATIO, a provider's dropped"
+
+
+def test_the_split_predicate_is_a_plain_function():
+    """Red today: ``financial_math.splits`` has no ``is_split_event_type`` (rule d of the layer boundaries).
+
+    Contract (X-R47 layer fix): a plain function — callable, not a coroutine function: the event store's checks are
+    synchronous and ask it in an ``if``, where a coroutine is always truthy.
+    """
+    predicate = _is_split_event_type()
+
+    assert callable(predicate), f"financial_math.splits.is_split_event_type is {predicate!r}, which the event store cannot call: every save and every refresh would raise"
+    assert not inspect.iscoroutinefunction(predicate), "financial_math.splits.is_split_event_type is a coroutine function: the event store's checks are synchronous, and a coroutine in their if is always truthy — every event, a dividend of 0 included, would be taken for a SPLIT"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# R13-SEC7 and X-R47b: the P-10 refusal shows only the caller's transactions, none without a caller
 #
 # J's P-10 refusal (EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST) lists in ``details["transaction_ids"]`` every costless incoming
 # ADJUSTMENT linked to the SPLIT, on any user's broker, and any user can trigger it: an asset is global. With the caller
 # given (``current_user_id``, which POST /assets/events passes), ``transaction_ids`` keeps the ones on a broker the
-# caller holds an access to, sorted, and ``hidden_transactions_count`` counts the others; without one, the details stay
-# as today. The case: a manual SPLIT of 2 with a costless ADJUSTMENT +10 linked on each of the unit's brokers — broker
-# B's created first, so the hidden one has the lower id and a positional filter shows the wrong one — user A holding an
-# access to broker A alone, user B to broker B alone (so broker B is another user's, not nobody's).
+# caller holds an access to, sorted, and ``hidden_transactions_count`` counts the others; without one, none is named
+# (X-R47b, E's security review of 5f68a8db0: fail closed): ``transaction_ids`` [] and ``hidden_transactions_count`` all
+# of them — the route always passes its caller. The case: a manual SPLIT of 2 with a costless ADJUSTMENT +10 linked on
+# each of the unit's brokers — broker B's created first, so the hidden one has the lower id and a positional filter
+# shows the wrong one — user A holding an access to broker A alone, user B to broker B alone (so broker B is another
+# user's, not nobody's).
 # ─────────────────────────────────────────────────────────────────────────────
 
 _RAW_TRANSACTIONS = text("SELECT id, broker_id, asset_id, type, date, quantity, amount, currency, cost_basis_override, cost_basis_currency, asset_event_id, updated_at FROM transactions WHERE broker_id IN :broker_ids ORDER BY id").bindparams(bindparam("broker_ids", expanding=True))
@@ -839,9 +969,9 @@ def _p10_details(owned: _Owned, case: _P10Case, offset: int, transaction_ids: li
 
 
 async def _p10_refused(owned: _Owned, data: list[FAEventUpsert], story: str, **caller: int) -> AssetSourceError:
-    """``bulk_upsert_events`` for a retype P-10 must refuse, ``caller`` the ``current_user_id`` it is given, if any (none:
-    an internal caller). As in the endpoint, nobody commits. Any exception but the refusal fails the test, naming it:
-    today a TypeError when a caller is given."""
+    """``bulk_upsert_events`` for a retype P-10 must refuse, ``caller`` the ``current_user_id`` it is given, if any (none: a
+    call without a caller, to which the refusal names no transaction since X-R47b). As in the endpoint, nobody commits.
+    Any exception but the refusal fails the test, naming it: before R13-SEC7, a TypeError when a caller is given."""
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
             result = await AssetSourceManager.bulk_upsert_events(data, session, **caller)
@@ -915,20 +1045,32 @@ async def test_the_events_endpoint_shows_the_caller_only_the_adjustments_on_thei
 
 
 @pytest.mark.asyncio
-async def test_guard_without_a_caller_the_p10_refusal_names_every_adjustment(owned):
-    """Guard: green today and after. An internal caller answers no user and gives no ``current_user_id``: the retype of the
-    SPLIT (day 320) is refused with EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, its details as today — exactly {asset_id,
-    item_index 0, event_id, date, ``transaction_ids`` both adjustments, sorted}, no ``hidden_transactions_count`` — and
-    nothing is written. J's service tests of P-10 rest on it."""
+async def test_without_a_caller_the_p10_refusal_names_no_adjustment_and_counts_them_all(owned):
+    """Red today (X-R47b): without a caller the refusal names both adjustments, broker B's too, and counts none: fail open.
+
+    Contract (X-R47b, E's security review of 5f68a8db0: fail closed): given no ``current_user_id``, ``bulk_upsert_events``
+    knows no user who may see either adjustment, so the retype of the SPLIT (day 320) is refused with
+    EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, its details exactly {asset_id, item_index 0, event_id, date, ``transaction_ids``
+    [], ``hidden_transactions_count`` 2} — no id named, both counted, no other key; nothing written, events and
+    transactions, ``updated_at`` included; its message the one user A gets for the same request, the total count only,
+    whoever asks (the SPLIT is still a SPLIT after a refusal, so user A's retype is refused too).
+    """
     case = await _p10_case(owned, 320)
     events_before, transactions_before = await _snapshot(owned), await _tx_snapshot(owned)
     data = [_item(owned.asset_id, _retype(owned, case, 320)["events"])]
-    story = f"an internal caller retyping the SPLIT {case.split_id}, linked to a costless adjustment on broker A ({case.seen}) and to one on broker B ({case.hidden})"
+    story = f"a call without a caller retyping the SPLIT {case.split_id}, linked to a costless adjustment on broker A ({case.seen}) and to one on broker B ({case.hidden})"
 
     refusal = await _p10_refused(owned, data, story)
 
     assert refusal.error_code == "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST", f"{story} was refused with {refusal.error_code} ({refusal.message}): {refusal.details}"
-    expected = _p10_details(owned, case, 320, sorted([case.seen, case.hidden]))
-    assert refusal.details == expected, f"{story}: the refusal's details are {refusal.details}: expected exactly {expected}, as before R13-SEC7 — every adjustment, sorted, and no hidden_transactions_count"
+    details = refusal.details or {}
+    shown = details.get("transaction_ids")
+    assert shown == [], f"{story}: the refusal hands whoever reads it the transactions {shown}: expected none — no caller is known to see either, and {case.hidden} is on broker B, another user's transaction (X-R47b: fail closed)"
+    hidden = details.get("hidden_transactions_count")
+    assert hidden == 2, f"{story}: the refusal counts {hidden!r} hidden adjustment(s): expected 2, both, so it still says the split has links without a cost: {details}"
+    expected = _p10_details(owned, case, 320, [], hidden_transactions_count=2)
+    assert details == expected, f"{story}: the refusal's details are {details}: expected exactly {expected} — no other key, which could carry an id"
     assert await _snapshot(owned) == events_before, f"{story} was refused, yet events were written: {_describe(await _rows(owned))}"
     assert await _tx_snapshot(owned) == transactions_before, f"{story} was refused, yet the transactions on the unit's brokers changed"
+    as_user_a = await _p10_refused(owned, data, f"user A retyping the SPLIT {case.split_id} after that refusal", current_user_id=owned.user_a_id)
+    assert refusal.message == as_user_a.message, f"{story}: the message is {refusal.message!r}, not the one user A gets for the same request, {as_user_a.message!r} (X-R47b: the total count only, whoever asks)"
