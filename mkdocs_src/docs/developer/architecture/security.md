@@ -1731,7 +1731,11 @@ before anything changes:
   account up, and the account keeps waiting, still `pending_setup` and still holding its place, for a new link from
   `./dev.py user setup-link` or from a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`. The same token at a restart re-arms
   nothing, its value being stored already (`_token_known()`): the start finds no live link and answers `expired`, with
-  its WARNING and its remedy. A cancellation that revokes a link logs the WARNING *Setup link of the initial
+  the WARNING *The initial administrator's setup link was withdrawn (cancelled, or its address changed)* and its remedy,
+  `run ./dev.py user setup-link`, followed by `, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` when the variable is
+  set. Since lot A-50 the start tells a withdrawn link from an expired one by the account's latest setup link (by
+  `created_at`, then `id`): revoked and never consumed, it was withdrawn; otherwise the WARNING still says *has
+  expired*. A cancellation that revokes a link logs the WARNING *Setup link of the initial
   administrator revoked: its setup was cancelled; ./dev.py user setup-link gives a new one* (`user_id`).
 - **Any other account**: its setup links not consumed are **retired**, so that none sets it up again. An account that
   holds a stray live setup link and no consumed one would otherwise start waiting for its setup once deactivated:
@@ -1751,7 +1755,8 @@ The waiting administrator keeps its role until its setup: its demotion is refuse
 `account_tokens.user_id`. The routes and their answers are in
 [The Initial Administrator](access_control.md#initial-admin).
 
-Tests: A42-001 to A42-006 and A43-001 to A43-005 of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
+Tests: A42-001 to A42-006, A43-001 to A43-005 and A50-001 to A50-004 (the WARNING of a start after a cancellation or
+an address change, and of an expiry) of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
 of `./dev.py test api admin-setup`, and UADM-072 to UADM-079 of `./dev.py test api users-admin` (UADM-079: the
 cancellation of a protected waiting administrator refused, its link still working); the Users tab's side, UTAB-55 to
 UTAB-60 and UPS-12 to UPS-23, is in

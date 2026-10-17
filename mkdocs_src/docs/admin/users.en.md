@@ -184,7 +184,8 @@ What happens:
   instance a hosting provider runs, ask the provider for a new one
   ([A New Link](hosting_providers.md#initial-admin-new-link)). Restarting the server with the same
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link, since the instance has already seen that
-  token: each start logs a warning that asks to run `dev.py user setup-link`, or to set a new token.
+  token: each start logs a warning that the setup link was withdrawn, and asks to run
+  `dev.py user setup-link`, or to set a new token.
 
 On the server, `user deactivate` on this account cancels its link the same way. A
 **Protected** account cannot have its link cancelled from this tab: **Cancel setup link** is off,
