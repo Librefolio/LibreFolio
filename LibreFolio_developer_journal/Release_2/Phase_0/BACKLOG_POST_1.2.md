@@ -6777,3 +6777,7 @@ punto di partenza, l'audit dello stesso giorno:
   massimo (costo lineare, solo il corpo della richiesta li limita), e `POST /assets/provider/probe` non ha un limite
   per utente. Proposta: un tetto agli eventi (p. es. 10 000) nello schema, e il limite della sonda dove vivono gli altri
   limiti delle richieste. Dettagli: piano MF, sezione «SEC7-2 entrato; MF-SI1».
+- **MF-J45a · L'esecutore del motore non è chiuso allo spegnimento** — minimo; docs-writer di MF, 17/10 (J-45).
+  `_ENGINE_EXECUTOR` (`financial_math/portfolio/engine.py`) non è nella sequenza di spegnimento dell'app: una
+  ricostruzione in corso tiene il processo fino alla fine, come l'esecutore predefinito di `asyncio.to_thread`.
+  Proposta, se serve: `shutdown(wait=False, cancel_futures=True)` nel lifespan. Dettagli: piano MF, sezione «J-45».
