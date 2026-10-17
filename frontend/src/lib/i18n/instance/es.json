@@ -45,6 +45,11 @@
       "pluginSecrets": {
         "ok": "Los secretos de plugins guardados se pueden leer con la clave de instancia.",
         "unreadable": "{count, plural, one {# secreto de plugin guardado no se puede leer con la clave de instancia: vuelve a introducirlo en Configuración → Plugins o restaura la clave de instancia con la que se guardó.} other {# secretos de plugins guardados no se pueden leer con la clave de instancia: vuelve a introducirlos en Configuración → Plugins o restaura la clave de instancia con la que se guardaron.}}"
+      },
+      "testMode": {
+        "off": "El modo de prueba está desactivado.",
+        "testLane": "El modo de prueba está activado, en una vía del ejecutor de pruebas.",
+        "outsideTestLane": "El modo de prueba está activado fuera del ejecutor de pruebas: se ofrecen los proveedores de datos hechos para las pruebas, los datos se guardan en {data_dir} y el archivo .env no se lee. Quita LIBREFOLIO_TEST_MODE."
       }
     },
     "block": {
