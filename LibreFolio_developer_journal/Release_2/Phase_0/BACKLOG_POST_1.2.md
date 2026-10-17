@@ -8202,13 +8202,25 @@ punto di partenza, l'audit dello stesso giorno:
   dei blocchi il parse falliva oltre 91; ora gira, e il fermo arriva più in là. Cura: la classificazione in
   `asyncio.to_thread` (gli oggetti ORM sono già caricati) più indici per ISIN e ticker esatti; i test di parità
   guardano la riscrittura. Revisore W. Sonde in `files/mfsec9a_rest/probe/` di E. Dettagli: piano MF, «MF-SEC9g».
-- **MF-A5 · Un trasferimento in uscita parziale falsa la regola delle posizioni chiuse** — basso-medio, numeri, nella
+- ✅ **MF-A5 · Un trasferimento in uscita parziale falsa la regola delle posizioni chiuse** — basso-medio, numeri, nella
+  **chiusa il 17/10**: il costo spostato nella base, la ricaduta per ogni altra uscita, dev `aa52a43f7`; la nota di
+  doc di J inclusa. Seguito MF-A8 (il lato ricevente).
   1.3; J, 17/10 (revisione di MF-A2). La base è il costo delle unità vendute, ma il numeratore porta anche il P&L delle
   unità uscite per trasferimento (ΔUGL e il ritocco del tratto). Esempio: 10 unità, costo 1 000, valore iniziale 1 100;
   vendute 5 a 625, 5 trasferite a un broker del perimetro che valgono 600 all'arrivo: P&L di riga +125, la regola dà
   25 %, il giusto ~12,5 %. Cura: la regola chiusa solo se ogni unità è uscita con una cessione che il Realizzato conta,
   altrimenti la ricaduta (o il costo uscito nella base). Rossi prima. Con la nota di doc di `net-annualized-return`
   («scesa alla soglia della polvere o sotto»). Dettagli: piano MF, «MF-A5».
+- **MF-A8 · Il lato ricevente della base delle posizioni chiuse** — medio-basso, numeri, nella 1.3; J, 17/10 (revisione
+  di MF-A5). Una riga che riceve unità da un tratto contato misura il suo P&L dal loro valore all'arrivo (−tratto), ma
+  la sua base (il costo delle vendite) resta il costo storico. Esempio: comprato a 500 da A, spostato a B quando vale
+  600, venduto da B a 660: +60 su 500 = 12 %, il giusto 60/600 = 10 %. **In corso (17/10)**: Σ(V_arrivo − C_spostato)
+  dei tratti ricevuti nella base (la scelta preferita da J). Dettagli: piano MF, «MF-A8».
+- **MF-A9 · Una riga ricevente ancora aperta annualizza sul costo storico** — basso, numeri (proposta); test-author di
+  MF, 17/10 (MF-A8). Una posizione aperta nel periodo che ha ricevuto unità da un tratto contato e le tiene alla fine è
+  annualizzata sul costo alla fine (storico), mentre il suo risultato le conta dal valore all'arrivo: nella catena
+  A→B→C la riga di C dà 5/500 invece di 5/645. Cura possibile, il rovescio di MF-A8 sul costo alla fine:
+  `annualized_period_return(..., end_cost + Σ(V_a − C_a))`. Rossi prima. Dettagli: piano MF, «MF-A8».
 - **MF-A6 · La polvere rompe l'identità del §7** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di MF-A2). Lo stato
   giornaliero valuta ogni quantità > 0, le righe considerano ≤ 1e-5 come non tenuta: la stessa soglia dai due lati, o il
   §7 dice «polvere a parte». Dettagli: piano MF, «MF-A5».
