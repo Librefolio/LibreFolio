@@ -2056,10 +2056,29 @@ anything of it can run.
   after a restore, the writes that need them fail, and nothing of the archive runs (backlog B-45). When the copy needs
   an upgrade, the upgrade runs first: a `CHECK` calling `regexp`, which its connections refuse since H-51 (below), or
   one on a table it writes, ends the check there, as `upgrade_failed`.
+- **Text that is not UTF-8** is `database_damaged` too (lot B-49). The server's driver decodes every text it reads,
+  and a value that is not UTF-8 makes it raise («Could not decode to UTF-8 column …»): the whole read fails, not the
+  row, so after a restore every list holding such a value would fail, and no page could correct what it cannot read
+  (checked in process through the app's own engine, on SQLite 3.54.0). LibreFolio writes UTF-8 only: such text means
+  that another program wrote to the database, or that the archive was changed. `_refuse_undecodable_text()` reads
+  every text value of the copy right after the manifest's counts are compared, before the upgrade, so no migration
+  meets it first: every table but SQLite's own, unknown ones included, every column, generated ones included
+  (`table_xinfo`: `table_info` hides them), values by storage class (`typeof(…) = 'text'`: dates and timestamps are
+  text in their `DATE` and `DATETIME` columns). It reads each table by keyset windows of its rowid, 200 000 rows a
+  query, each column's text values joined by SQLite with a comma and decoded once by a strict `text_factory` that
+  raises `UnicodeDecodeError`. The comma, a byte of its own, never completes a character split over two values. A
+  table without a rowid, or whose columns take all of `rowid`, `_rowid_` and `oid`, is read row by row, in constant
+  memory, and so is the rest of a table whose window SQLite cannot join (texts past its length limit, `DataError`).
+  On a 488 MB database (2 million prices, 1 million exchange rates, 200 000 transactions) it took 3.3 s, against
+  5.5 s for one `integrity_check` (checked at a normal load). The refusal says
+  `The backup's database holds text that is not UTF-8: it cannot be restored`, and logs one warning,
+  `A backup's database holds text that is not UTF-8`, with the number of tables (`tables`): never a text, its bytes,
+  a table or a column name, which are the archive's.
 - **`trusted_schema` off on every connection to the copy.** Every connection to the copy runs
   `PRAGMA trusted_schema=OFF` before any other statement: this read, `describe_database()` (`snapshot.py`, which also
-  describes the backup's own snapshot), `_plugin_secrets()` and `_administrators()` (`staging.py`), the totals'
-  `aiosqlite` connection (`totals.py`), the post-migration fixes and the upgrade. The SQL the schema keeps in its tables
+  describes the backup's own snapshot), `_refuse_undecodable_text()`, `_plugin_secrets()`, `_administrators()` and
+  E-19b1's `_holds_non_iso_currencies()` (`staging.py`), the totals' `aiosqlite` connection (`totals.py`), the
+  post-migration fixes and the upgrade. The SQL the schema keeps in its tables
   and indexes (a `CHECK`, a `DEFAULT`, a generated column, an index's expression) may then call only the functions
   SQLite marks innocuous. `run_post_migration_fixes()` (`db/post_migration/__init__.py`), shared code that runs after
   the refusal, turns it off first on its own connection, on the live database too, where nothing changes, since
