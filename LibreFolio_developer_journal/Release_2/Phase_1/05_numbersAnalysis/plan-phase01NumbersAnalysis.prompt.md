@@ -5334,3 +5334,17 @@ prossimo checkpoint.
   combinata dopo il suo commit e il merge di dev (la base `252835dce` è indietro di W-B60, MF SEC7-2, MF-P2, H-36/37,
   Z-11; tre file aperti cambiano anche su dev: l'indice, `financial_math.md`, `_backend_services.py`). `slot.sh` ha in
   testa `roi-fifo-utils`, `financial-math`, `portfolio-engine`. FROZEN fino al suo messaggio.
+- ✅ **J-43 + SEC7-1 committati** (coordinatore): `a46f85bda` (fix, un commit solo), `67639ced0` (diario); merge
+  `0fe56d2bf` = i miei + dev `38adbfde0` (W-B60, MF SEC7-2, MF-P2, H-36/37, Z-11, X-R47b): indice, `financial_math.md`
+  e runner fusi da soli, devWiki senza conflitti. Slot 1 su `0fe56d2bf` (07:02), `files/j/j43/slot.sh`.
+- **Revisione di X `1b6d65da7` (06:58)**: OK. `splits.py::is_split_event_type` (stringa normalizzata == membro
+  `StrEnum`; non solleva mai); regola (d) a zero righe in `event_store.py` ed `events.py` (scanner della guardia); P-10
+  chiude per difetto (senza chiamante `transaction_ids` [] e tutti contati nascosti; parametri sempre con entrambi i
+  campi); il mio blocco P-10 di `test_asset_event_store.py` chiede come il titolare e continua a fissare gli id.
+- ✅ **Slot 1 di J-43 + SEC7-1 (06:56–07:07, su `0fe56d2bf`)**: `roi-fifo-utils` **1178**, `financial-math` **1076**
+  (coi test di MF SEC7-2 arrivati col merge), `portfolio-engine` **41**; `db populate --force` exit 0; `api portfolio`
+  **51**, `api risk` **15**, `api ai-export` **15**; E2E `front-portfolio banners` **20**, `data-quality-real` **3**,
+  `stale-price-banner` **2**. Porte 6185 e 6195 libere alle 07:07.
+- **Coordinatore (07:00)**: X-R47 è entrato (dev `952c68cd5`): F5 dopo l'ingresso di J-43/SEC7-1, su una base che ha
+  entrambi; poi J-44. **J-45 (SEC7-1b) passa a MF** (`run_in_executor` con un pool dedicato, `max_workers=2`): dopo il mio
+  ingresso `engine.py` va a MF per MF-D4 + J-45, io rivedo.
