@@ -1,20 +1,21 @@
 /**
  * The fixed colour of every category the charts draw — asset types and sectors — and the two sequences for the charts
- * whose categories have no fixed colour. The designer's round 2, GR1–GR5, approved by the developer (D-T17,
- * 15/10/2026).
+ * whose categories have no key of their own. The designer's round 3, her final palette (developer, 17/10/2026, the
+ * decisions of `designer-feedback/2026-10-17-round3-grafici`, §1), on the rules of her round 2 (GR1–GR5, D-T17).
  *
  * - **GR1, a colour per key, never per rank.** A category keeps its colour between the pie («Ora») and the history, in
  *   every portfolio, broker and period: `ETF` is the cobalt blue wherever it is drawn.
- * - **GR2, no semantic red or green.** Loss red and gain green stay out of the categories; the brand green is the
- *   cash's alone (GR3).
- * - **The values are the designer's, as she wrote them.** The pairs measured close (CIEDE2000 under 10, the round-2
- *   analysis §4) go back to her in round 3: the distinguishability test lists them, nothing here corrects them.
+ * - **No green among the categories (§1.1).** No green, teal, olive, lime or greenish cyan in a type, a sector or a
+ *   country: green and red stay the gains' and losses', the brand green the primary actions'. The cash is a slate blue.
+ * - **The values are the designer's, as she wrote them.** No two colours of one table are under CIEDE2000 5; the pairs
+ *   between 5 and 8 (§1.8) are told apart by the legend and the tooltip, and the distinguishability test names them.
  *
- * The contract with the Designer Lab (C1–C3, round 3):
+ * The contract with the Designer Lab (C1–C3):
  * - **C1, one read point.** Every chart reads a category colour through {@link categoryColor}: the pie, the history,
  *   their legends and tooltips. The shades of a family (GR4, `./chartShades`) are derived from the colour it returns,
  *   so they follow an edit of it.
- * - **C2, one literal per line.** Each value sits on a line of its own: the Lab exports an edit by file and line.
+ * - **C2, one literal per line.** Each value sits on a line of its own: the Lab exports an edit by file and line. The
+ *   sequences name categories ({@link CategoryRef}), never colours: the tables are the only colours of the file.
  * - **C3, a hook in debug builds only.** {@link categoryColor} first asks the Lab for an edited colour; a release
  *   build drops that branch, and the app imports nothing of the Lab.
  *
@@ -33,149 +34,152 @@ import {themed, type ThemePair} from './themePair';
 /** The two kinds of category with a fixed colour. */
 export type CategoryKind = 'type' | 'sector';
 
-/** The asset-type families, in the designer's table order (table 3.2 A). Subtypes take their family's colour. */
+/** The asset-type families, in the designer's table order (§1.2). Subtypes take their family's colour. */
 const ASSET_TYPE_COLORS: Readonly<Record<string, ThemePair>> = {
-    // amethyst violet
+    // violet
     STOCK: {
-        light: '#6D28D9',
-        dark: '#A78BFA',
+        light: '#7041C6',
+        dark: '#B69AF0',
     },
     // cobalt blue
     ETF: {
-        light: '#1D5BD8',
-        dark: '#60A5FA',
+        light: '#2459B8',
+        dark: '#82ACF8',
     },
-    // petrol
+    // denim blue
     BOND: {
-        light: '#0E7490',
-        dark: '#22D3EE',
+        light: '#536A9E',
+        dark: '#9BAED8',
     },
     // amber, gold
     CRYPTO: {
-        light: '#D97706',
-        dark: '#FBBF24',
+        light: '#B87916',
+        dark: '#E8BD69',
     },
-    // indigo
+    // indigo (V1-dc)
     FUND: {
-        light: '#4338CA',
-        dark: '#818CF8',
+        light: '#5147B8',
+        dark: '#9280FF',
     },
-    // slate blue
+    // slate (G1-la, G1-db)
     HOLD: {
-        light: '#5F6B7A',
-        dark: '#94A3B8',
+        light: '#5D687B',
+        dark: '#C6D0E0',
     },
-    // teal
+    // mauve
     CROWDFUND: {
-        light: '#0D9488',
-        dark: '#2DD4BF',
+        light: '#8B547D',
+        dark: '#D5A0C7',
     },
-    // copper, terracotta
+    // terracotta
     COMMODITY: {
-        light: '#C25E00',
-        dark: '#FB923C',
+        light: '#B85E45',
+        dark: '#E99A82',
     },
-    // ochre, brick
+    // bronze, ochre
     REAL_ESTATE: {
-        light: '#B45309',
-        dark: '#F59E0B',
+        light: '#96602C',
+        dark: '#D6A36C',
     },
-    // plum, orchid
+    // raspberry, orchid
     INDEX: {
-        light: '#A21CAF',
-        dark: '#E879F9',
+        light: '#A33D79',
+        dark: '#E58BB9',
     },
-    // stone grey
+    // cool grey
     OTHER: {
-        light: '#6E7A74',
-        dark: '#7F8C87',
+        light: '#727B87',
+        dark: '#A9B0BB',
     },
 };
 
-/** The sectors, in the designer's table order (table 3.2 B). */
+/** The sectors, in the designer's table order (§1.3). */
 const SECTOR_COLORS: Readonly<Record<string, ThemePair>> = {
-    // steel, slate
+    // steel, slate (G3-da)
     Industrials: {
-        light: '#475569',
-        dark: '#94A3B8',
+        light: '#586579',
+        dark: '#ACC6DA',
     },
     // cobalt blue
     Technology: {
-        light: '#1D5BD8',
-        dark: '#60A5FA',
-    },
-    // teal
-    Financials: {
-        light: '#0F766E',
-        dark: '#2DD4BF',
+        light: '#2459B8',
+        dark: '#82ACF8',
     },
     // violet
+    Financials: {
+        light: '#6748A8',
+        dark: '#B9A0EB',
+    },
+    // orchid, purple
     'Consumer Discretionary': {
-        light: '#7C3AED',
-        dark: '#A78BFA',
+        light: '#8B4F9D',
+        dark: '#D2A0E0',
     },
     // cerulean
     'Health Care': {
-        light: '#0284C7',
-        dark: '#38BDF8',
+        light: '#2878A8',
+        dark: '#7CC0E8',
     },
-    // ochre, amber
+    // ochre, rust
     'Real Estate': {
-        light: '#B45309',
-        dark: '#FBBF24',
+        light: '#A45D2A',
+        dark: '#DDA16F',
     },
-    // terracotta, copper
+    // brick, terracotta
     'Basic Materials': {
-        light: '#9A3412',
-        dark: '#FB923C',
+        light: '#A84C36',
+        dark: '#E18E7B',
     },
-    // gold, yellow
+    // amber, gold
     Energy: {
-        light: '#D97706',
-        dark: '#FACC15',
+        light: '#B27A16',
+        dark: '#E7BD69',
     },
-    // olive, lime
+    // dusty mauve
     'Consumer Staples': {
-        light: '#4D7C0F',
-        dark: '#A3E635',
+        light: '#8B647A',
+        dark: '#C6A2B6',
     },
-    // indigo
+    // indigo (V1-dc)
     Telecommunication: {
-        light: '#4338CA',
-        dark: '#818CF8',
+        light: '#5147B8',
+        dark: '#9280FF',
     },
-    // petrol
+    // denim blue
     Utilities: {
-        light: '#0E7490',
-        dark: '#22D3EE',
+        light: '#526F9A',
+        dark: '#9CB8E3',
     },
-    // plum
+    // plum, raspberry
     'Corporate Bonds': {
-        light: '#86198F',
-        dark: '#E879F9',
+        light: '#993D79',
+        dark: '#E58BB9',
     },
-    // navy
+    // navy (B2-db)
     'Government Bonds': {
-        light: '#1E3A8A',
-        dark: '#93C5FD',
+        light: '#263F78',
+        dark: '#7A93CB',
     },
-    // stone grey
+    // cool grey
     Other: {
-        light: '#6E7A74',
-        dark: '#7F8C87',
+        light: '#727B87',
+        dark: '#A9B0BB',
     },
 };
 
-/** The cash (`Liquidity`), in every grouping: the brand's sage green, its alone (GR3). */
+/** The cash (`Liquidity`), in every grouping: a slate blue, no longer the brand's green (§1.1; B1-dc in dark). */
 const LIQUIDITY_COLOR: ThemePair = {
-    light: '#2D6A54',
-    dark: '#429E79',
+    light: '#3F628C',
+    dark: '#639BC0',
 };
 
-/** What has no category: the `Unknown` sector and asset type, the `Unknown` and `Other` country. A fog grey. */
+/**
+ * What has no category: the `Unknown` sector and asset type, the `Unknown` and `Other` country. A blue-grey (G2-la,
+ * G2-dc).
+ */
 const UNCLASSIFIED_COLOR: ThemePair = {
-    light: '#94A09B',
-    dark: '#52605B',
+    light: '#718C9F',
+    dark: '#83939D',
 };
 
 /** The keys of each table, in the designer's order, without the two buckets the engine adds. */
@@ -187,18 +191,49 @@ export const CATEGORY_KEYS: Readonly<Record<CategoryKind, readonly string[]>> = 
 /** The buckets the portfolio engine adds beside the types and the sectors: the cash, and what has no category. */
 export const CATEGORY_BUCKETS: readonly string[] = ['Liquidity', 'Unknown'];
 
-/**
- * The first eight asset types of the designer's table: the categories that have an order but no key of their own —
- * the owners of the semi-donut, the broker lines of the Growth chart (GR5.2). Read with {@link sequenceColor}.
- */
-export const CATEGORY_SEQUENCE: readonly string[] = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND', 'COMMODITY'];
+/** A category of one of the two tables, as a sequence lists it: its colour is read from the table, never copied. */
+export interface CategoryRef {
+    readonly kind: CategoryKind;
+    readonly key: string;
+}
+
+function typeRef(key: string): CategoryRef {
+    return {kind: 'type', key};
+}
+
+function sectorRef(key: string): CategoryRef {
+    return {kind: 'sector', key};
+}
 
 /**
- * The fourteen sectors of the designer's table, in its order: the categories ranked without a fixed colour, the
- * countries of the geography history (GR5). The unclassified ones keep their own colour. Read with
+ * The first eight asset types of the designer's table, in its order (§1.5): the categories that have an order but no
+ * key of their own — the owners of the semi-donut, the broker lines of the Growth chart. Read with
  * {@link sequenceColor}.
  */
-export const KEYLESS_SEQUENCE: readonly string[] = CATEGORY_KEYS.sector;
+export const CATEGORY_SEQUENCE: readonly CategoryRef[] = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'HOLD', 'CROWDFUND', 'COMMODITY'].map((key) => typeRef(key));
+
+/**
+ * The countries of the geography history, by rank among the classified ones (§1.4): fourteen categories of the two
+ * tables, so a country follows the designer's choice for the colour it shares with a type or a sector. Where a type
+ * and a sector have the same colour, the type. The unclassified countries keep their own colour
+ * ({@link isUnclassifiedCountry}). Read with {@link sequenceColor}.
+ */
+export const COUNTRY_SEQUENCE: readonly CategoryRef[] = [
+    typeRef('ETF'),
+    typeRef('STOCK'),
+    sectorRef('Basic Materials'),
+    sectorRef('Energy'),
+    sectorRef('Health Care'),
+    sectorRef('Corporate Bonds'),
+    sectorRef('Utilities'),
+    sectorRef('Consumer Discretionary'),
+    sectorRef('Real Estate'),
+    typeRef('FUND'),
+    typeRef('HOLD'),
+    sectorRef('Consumer Staples'),
+    sectorRef('Government Bonds'),
+    typeRef('OTHER'),
+];
 
 /** A key as the lookup compares it: case, spaces and underscores ignored (`Health Care`, `HEALTH_CARE`, `healthcare`). */
 export function lookupKey(key: string): string {
@@ -238,13 +273,13 @@ export function categoryColor(kind: CategoryKind, key: string, dark: boolean): s
 }
 
 /**
- * The colour of the category ranked `rank` (0-based) in a sequence of keys of `kind` (GR5): the sequence in order,
- * then the same sequence one shade further at each round (`familyShade`), never a silent repeat. A sequence of 14
- * gives 98 distinct colours before they cycle.
+ * The colour of the category ranked `rank` (0-based) in a sequence (GR5): the sequence in order, then the same sequence
+ * one shade further at each round (`familyShade`), never a silent repeat. A sequence of 14 gives 98 distinct colours
+ * before they cycle. Each colour is read through {@link categoryColor}, so it follows an edit of its table (C1).
  */
-export function sequenceColor(kind: CategoryKind, sequence: readonly string[], rank: number, dark: boolean, poles: ShadePoles): string {
-    const count = sequence.length;
-    return familyShade(categoryColor(kind, sequence[rank % count], dark), Math.floor(rank / count), poles);
+export function sequenceColor(sequence: readonly CategoryRef[], rank: number, dark: boolean, poles: ShadePoles): string {
+    const {kind, key} = sequence[rank % sequence.length];
+    return familyShade(categoryColor(kind, key, dark), Math.floor(rank / sequence.length), poles);
 }
 
 /** Whether a country key is the unclassified one of the geography: the engine's `Unknown`, or a provider's `Other`. */

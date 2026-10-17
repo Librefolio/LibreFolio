@@ -2,13 +2,15 @@
 /**
  * SemiDonutChart.test.ts — the colours the ownership half-donut hands ECharts, read off the real component.
  *
- * ## The subject: GR5.2 and the readable initial
+ * ## The subject: a colour per owner's key (§1.5) and the readable initial
  *
- * The owners of a broker have no key of their own to wear a colour by, so the designer's round 2 (D-T17,
- * GR5.2) gives them an order instead: owner `i` — its index in `data` — takes the `i`-th of the first
- * eight asset types (`CATEGORY_SEQUENCE`), then, past the eighth, the next round of the same colours one
- * GR4 shade further (`sequenceColor`), never a silent repeat. The colour is the slice's and the disc's
- * behind the owner's initial, and the initial is written in whichever text reads best on that disc:
+ * The owners of a broker have no category of their own to wear a colour by, so they take the first eight
+ * asset types of the designer's palette (`CATEGORY_SEQUENCE`) — by their **key**, never by the order of
+ * the data (round 3, §1.5): sorted by key — the user id, numbers by value, anything else as text — the
+ * owner of rank `r` takes the `r`-th of the eight, then, past the eighth, the next round of the same
+ * colours one GR4 shade further (`sequenceColor`), never a silent repeat. So the same owners keep each
+ * its colour whatever order the data lists them in. The colour is the slice's and the disc's behind the
+ * owner's initial, and the initial is written in whichever text reads best on that disc:
  * `chartRoles(dark, chart element).readableText(disc)`, the primary text or the inverse one.
  *
  * The donut is drawn again when the page's theme switches (backlog R-7: it used to keep the colours it
@@ -16,8 +18,9 @@
  * Lab, `notifyChartColorsChange`), the roles read again from its own element.
  *
  * Expectations come from the theme's own functions — `sequenceColor`, `categoryColor`, `familyShade`,
- * `chartRoles` — never from copied hex values, which the theme's tests pin. Role values are injected
- * through `setRoleReader`, reset after every test.
+ * `chartRoles` — never from copied hex values, which the theme's tests pin. Each owner's rank by key is
+ * spelled out in the fixture, then checked against the rule. Role values are injected through
+ * `setRoleReader`, reset after every test.
  *
  * ## What is replaced, and why
  *
@@ -99,11 +102,37 @@ import SemiDonutChart from './SemiDonutChart.svelte';
 /** The label of the share still available: a prop, so the test's own word. */
 const AVAILABLE = 'Still available';
 
+/** An owner as the donut receives it: its key (a user id), its name, its share, no avatar. */
+interface Owner {
+    key: string | number;
+    name: string;
+    percentage: number;
+    avatarUrl: null;
+}
+
 /**
  * Ten owners, no avatar, 9% each: two past the eight colours of the sequence, and a tenth of the donut
- * still available. Every name starts with a different letter, so every disc carries its own initial.
+ * still available. Every name starts with a different letter, so every disc carries its own initial. Their
+ * keys are user ids, listed out of their order, and sorted as numbers they are not sorted as text (2 and 5
+ * before 10 and 12): an order by position, or by text, would colour them otherwise.
  */
-const OWNERS = ['Alba', 'Bruno', 'Carla', 'Dario', 'Elena', 'Fabio', 'Gaia', 'Ivo', 'Luca', 'Marta'].map((name) => ({name, percentage: 9, avatarUrl: null}));
+const OWNERS: readonly Owner[] = (
+    [
+        ['Alba', 12],
+        ['Bruno', 3],
+        ['Carla', 25],
+        ['Dario', 1],
+        ['Elena', 10],
+        ['Fabio', 2],
+        ['Gaia', 40],
+        ['Ivo', 7],
+        ['Luca', 31],
+        ['Marta', 5],
+    ] as const
+).map(([name, key]) => ({key, name, percentage: 9, avatarUrl: null}));
+
+/** Each owner's rank by key, spelled out: the place of its colour in the sequence (checked against the rule below). */
+const RANK: Readonly<Record<string, number>> = {Dario: 0, Fabio: 1, Bruno: 2, Marta: 3, Ivo: 4, Elena: 5, Alba: 6, Carla: 7, Luca: 8, Gaia: 9};
 
 /** The two themes, as the donut reads them off the `dark` class of <html> when it draws. */
 const THEMES = [
@@ -140,15 +169,20 @@ function ownerSlices(): DrawnSlice[] {
 }
 
 /** Mounts the donut on `owners` and waits for its first draw. */
-async function mountDonut(owners = OWNERS) {
-    const view = render(SemiDonutChart, {props: {data: owners, availableLabel: AVAILABLE, height: '180px'}});
+async function mountDonut(owners: readonly Owner[] = OWNERS) {
+    const view = render(SemiDonutChart, {props: {data: [...owners], availableLabel: AVAILABLE, height: '180px'}});
     await waitFor(() => expect(chartInstances[0]?.setOptionCalls.length ?? 0, 'the donut never drew').toBeGreaterThan(0));
     return view;
 }
 
-/** The colour of owner `index` in `dark`, by GR5.2: the sequence, then a GR4 shade of it per round. */
-function ownerColour(index: number, dark: boolean, card = chartRoles(dark).color('--lf-surface-card')): string {
-    return sequenceColor('type', CATEGORY_SEQUENCE, index, dark, shadePoles(dark, card));
+/** The colour of the owner of rank `rank` by key in `dark` (§1.5): the sequence, then a GR4 shade of it per round. */
+function ownerColour(rank: number, dark: boolean, card = chartRoles(dark).color('--lf-surface-card')): string {
+    return sequenceColor(CATEGORY_SEQUENCE, rank, dark, shadePoles(dark, card));
+}
+
+/** Each owner's name and expected colour, in the order of `owners`: the colour of its rank by key. */
+function expectedByName(owners: readonly Owner[], dark: boolean, card?: string): string[] {
+    return owners.map(({name}) => `${name} ${ownerColour(RANK[name], dark, card)}`);
 }
 
 beforeAll(async () => {
@@ -166,38 +200,104 @@ afterEach(() => {
 });
 
 // =============================================================================
-// GR5.2 — the owners take the sequence in order
+// §1.5 — the owners take the sequence by their key, never by the order of the data
 // =============================================================================
 
-describe('SemiDonutChart — each owner in the colour of its place (GR5.2)', () => {
-    it.each(THEMES)('$theme theme: owner i in the i-th of the first eight asset types, the ninth and tenth a first-round shade of the first two — on its slice and on the disc of its initial', async ({dark}) => {
-        // Premise: the sequence is eight colours long, so the last two owners start its second round.
+describe('SemiDonutChart — each owner in the colour of its key (§1.5)', () => {
+    it('premises: the ranks spelled out are the owners sorted by key as numbers; the data lists them otherwise, and text would sort them otherwise', () => {
+        const byKey = [...OWNERS].sort((a, b) => Number(a.key) - Number(b.key)).map(({name}) => name);
+        expect(
+            Object.entries(RANK)
+                .sort(([, a], [, b]) => a - b)
+                .map(([name]) => name),
+        ).toEqual(byKey);
+        expect(
+            OWNERS.map(({name}) => name),
+            'the data in the order of the keys: a colour by position would pass',
+        ).not.toEqual(byKey);
+        expect(
+            [...OWNERS].sort((a, b) => String(a.key).localeCompare(String(b.key))).map(({name}) => name),
+            'the keys sorted as text come out as sorted as numbers: a comparison of text would pass',
+        ).not.toEqual(byKey);
+        // The sequence is eight colours long, so the two last owners by key start its second round.
         expect(CATEGORY_SEQUENCE).toHaveLength(8);
+    });
+
+    it.each(THEMES)('$theme theme: the first eight owners by key in the first eight asset types, the ninth and tenth a first-round shade of the first two — on the slice and on the disc of the initial', async ({dark}) => {
         document.documentElement.classList.toggle('dark', dark);
 
         await mountDonut();
         const slices = ownerSlices();
-        expect(slices.map((slice) => slice.name)).toEqual(OWNERS.map(({name}) => name));
+        expect(
+            slices.map((slice) => slice.name),
+            'the slices in the order of the data',
+        ).toEqual(OWNERS.map(({name}) => name));
 
         // Spelled out for the two rounds, then held to the function the donut is meant to call.
         const poles = shadePoles(dark, chartRoles(dark).color('--lf-surface-card'));
-        const expected = OWNERS.map((_owner, index) => (index < 8 ? categoryColor('type', CATEGORY_SEQUENCE[index], dark) : familyShade(categoryColor('type', CATEGORY_SEQUENCE[index - 8], dark), 1, poles)));
-        expect(expected).toEqual(OWNERS.map((_owner, index) => ownerColour(index, dark)));
-        expect(slices.map((slice) => `${slice.name} ${slice.itemStyle?.color}`)).toEqual(OWNERS.map(({name}, index) => `${name} ${expected[index]}`));
+        const base = (rank: number) => categoryColor(CATEGORY_SEQUENCE[rank].kind, CATEGORY_SEQUENCE[rank].key, dark);
+        const spelled = OWNERS.map(({name}) => `${name} ${RANK[name] < 8 ? base(RANK[name]) : familyShade(base(RANK[name] - 8), 1, poles)}`);
+        expect(spelled).toEqual(expectedByName(OWNERS, dark));
+        expect(slices.map((slice) => `${slice.name} ${slice.itemStyle?.color}`)).toEqual(spelled);
         // The disc behind each initial is the slice's own colour.
-        expect(slices.map((slice) => `${slice.name} ${String(slice.label?.rich?.avatar?.backgroundColor)}`)).toEqual(OWNERS.map(({name}, index) => `${name} ${expected[index]}`));
+        expect(slices.map((slice) => `${slice.name} ${String(slice.label?.rich?.avatar?.backgroundColor)}`)).toEqual(spelled);
         // Distinct, the second round included: no owner repeats another's colour in silence.
-        expect(new Set(expected.map((colour) => colour.toLowerCase())).size).toBe(OWNERS.length);
+        expect(new Set(slices.map((slice) => slice.itemStyle?.color?.toLowerCase())).size).toBe(OWNERS.length);
         // The colours are on the slices, never in a list ECharts would hand out by index.
         expect(chartInstances[0].setOptionCalls.filter(({option}) => 'color' in option)).toEqual([]);
     });
 
-    it('colours an owner by its index in data, whichever share it holds', async () => {
+    it('keeps each owner in its colour, on the slice and on the disc, when the data lists the same owners in another order', async () => {
+        const colours = (slices: DrawnSlice[]) => Object.fromEntries(slices.map((slice) => [slice.name, `${slice.itemStyle?.color} ${String(slice.label?.rich?.avatar?.backgroundColor)}`]));
+        const first = await mountDonut();
+        const asListed = colours(ownerSlices());
+        first.unmount();
+        chartInstances.length = 0;
+
+        const reordered = [...OWNERS.slice(5), ...OWNERS.slice(0, 5)].reverse();
+        expect(
+            reordered.map(({name}) => name),
+            'control: another order',
+        ).not.toEqual(OWNERS.map(({name}) => name));
+        await mountDonut(reordered);
+
+        expect(
+            ownerSlices().map((slice) => slice.name),
+            'the slices in the new order of the data',
+        ).toEqual(reordered.map(({name}) => name));
+        expect(colours(ownerSlices())).toEqual(asListed);
+        expect(ownerSlices().map((slice) => `${slice.name} ${slice.itemStyle?.color}`)).toEqual(expectedByName(reordered, false));
+    });
+
+    it('compares numeric keys by value: the owner with key 2 comes before the one with key 10, though "10" sorts first as text', async () => {
+        const owners: Owner[] = [
+            {key: 10, name: 'Zeno', percentage: 30, avatarUrl: null},
+            {key: 2, name: 'Yara', percentage: 30, avatarUrl: null},
+        ];
+        expect('10'.localeCompare('2'), 'control: as text, 10 comes first').toBeLessThan(0);
+
+        await mountDonut(owners);
+
+        expect(ownerSlices().map((slice) => `${slice.name} ${slice.itemStyle?.color}`)).toEqual([`Zeno ${ownerColour(1, false)}`, `Yara ${ownerColour(0, false)}`]);
+    });
+
+    it('compares keys that are not numbers as text', async () => {
+        const owners: Owner[] = [
+            {key: 'user-b', name: 'Zeno', percentage: 30, avatarUrl: null},
+            {key: 'user-a', name: 'Yara', percentage: 30, avatarUrl: null},
+        ];
+
+        await mountDonut(owners);
+
+        expect(ownerSlices().map((slice) => `${slice.name} ${slice.itemStyle?.color}`)).toEqual([`Zeno ${ownerColour(1, false)}`, `Yara ${ownerColour(0, false)}`]);
+    });
+
+    it('colours an owner by its key, whichever share it holds', async () => {
         // The shares reversed: the largest owner last. A colour handed out by share would move with them.
         const reversed = OWNERS.map((owner, index) => ({...owner, percentage: index + 1}));
         await mountDonut(reversed);
 
-        expect(ownerSlices().map((slice) => `${slice.name} ${slice.itemStyle?.color}`)).toEqual(reversed.map(({name}, index) => `${name} ${ownerColour(index, false)}`));
+        expect(ownerSlices().map((slice) => `${slice.name} ${slice.itemStyle?.color}`)).toEqual(expectedByName(reversed, false));
     });
 });
 
@@ -247,20 +347,20 @@ describe('SemiDonutChart — redrawn when the theme switches (R-7) or its colour
     it('a switch of the `dark` class of <html> draws the owners again, in the other theme’s colours — and back', async () => {
         await mountDonut();
         const [chart] = chartInstances;
-        expect(ownerSlices().map((slice) => slice.itemStyle?.color)).toEqual(OWNERS.map((_owner, index) => ownerColour(index, false)));
-        const dark = OWNERS.map((_owner, index) => ownerColour(index, true));
+        const named = () => ownerSlices().map((slice) => `${slice.name} ${slice.itemStyle?.color}`);
+        expect(named()).toEqual(expectedByName(OWNERS, false));
         // Control: the two themes differ on every owner, so a donut that kept its first colours fails below.
-        expect(OWNERS.filter((_owner, index) => ownerColour(index, false) === dark[index])).toEqual([]);
+        expect(OWNERS.filter(({name}) => ownerColour(RANK[name], false) === ownerColour(RANK[name], true))).toEqual([]);
 
         const beforeDark = chart.setOptionCalls.length;
         document.documentElement.classList.add('dark');
         await waitFor(() => expect(chart.setOptionCalls.length, 'the donut was not drawn again after the theme switched').toBeGreaterThan(beforeDark));
-        await waitFor(() => expect(ownerSlices().map((slice) => slice.itemStyle?.color)).toEqual(dark));
+        await waitFor(() => expect(named()).toEqual(expectedByName(OWNERS, true)));
 
         const beforeLight = chart.setOptionCalls.length;
         document.documentElement.classList.remove('dark');
         await waitFor(() => expect(chart.setOptionCalls.length, 'the donut was not drawn again after the theme switched back').toBeGreaterThan(beforeLight));
-        await waitFor(() => expect(ownerSlices().map((slice) => slice.itemStyle?.color)).toEqual(OWNERS.map((_owner, index) => ownerColour(index, false))));
+        await waitFor(() => expect(named()).toEqual(expectedByName(OWNERS, false)));
         expect(chartInstances, 'a theme switch made a new chart').toHaveLength(1);
     });
 
@@ -272,18 +372,21 @@ describe('SemiDonutChart — redrawn when the theme switches (R-7) or its colour
         setRoleReader((role, scope) => (scope !== null && scope === chartElement() ? (roles[role] ?? '') : ''));
         // The dark theme: its shades go toward the card, so the second round follows the card too.
         document.documentElement.classList.add('dark');
+        /** The owners of the second round, by key: the ninth and the tenth, wherever the data lists them. */
+        const secondRound = OWNERS.filter(({name}) => RANK[name] >= CATEGORY_SEQUENCE.length);
+        const secondRoundOf = (slices: DrawnSlice[]) => slices.filter((slice) => secondRound.some(({name}) => name === slice.name)).map((slice) => `${slice.name} ${slice.itemStyle?.color}`);
+        expect(
+            secondRound.map(({name}) => name),
+            'barrier: two owners past the eighth',
+        ).toHaveLength(2);
 
         await mountDonut();
         const [chart] = chartInstances;
         const textsOf = (slices: DrawnSlice[]) => slices.map((slice) => slice.label?.rich?.avatar?.color);
-        expect(
-            ownerSlices()
-                .map((slice) => slice.itemStyle?.color)
-                .slice(8),
-        ).toEqual([8, 9].map((index) => ownerColour(index, true, first['--lf-surface-card'])));
+        expect(secondRoundOf(ownerSlices())).toEqual(expectedByName(secondRound, true, first['--lf-surface-card']));
         expect(textsOf(ownerSlices()).every((text) => text === first['--lf-text-primary'] || text === first['--lf-text-on-inverse'])).toBe(true);
         // Control: the new card moves the second round, so the comparison below cannot pass on the old one.
-        expect([8, 9].map((index) => ownerColour(index, true, next['--lf-surface-card']))).not.toEqual([8, 9].map((index) => ownerColour(index, true, first['--lf-surface-card'])));
+        expect(expectedByName(secondRound, true, next['--lf-surface-card'])).not.toEqual(expectedByName(secondRound, true, first['--lf-surface-card']));
 
         roles = next;
         const before = chart.setOptionCalls.length;
@@ -291,7 +394,7 @@ describe('SemiDonutChart — redrawn when the theme switches (R-7) or its colour
 
         await waitFor(() => expect(chart.setOptionCalls.length, 'the donut was not drawn again after the notification').toBeGreaterThan(before));
         const slices = drawnSlices(chart.setOptionCalls.at(-1)!).filter((slice) => slice.name !== AVAILABLE);
-        expect(slices.map((slice) => slice.itemStyle?.color).slice(8)).toEqual([8, 9].map((index) => ownerColour(index, true, next['--lf-surface-card'])));
+        expect(secondRoundOf(slices)).toEqual(expectedByName(secondRound, true, next['--lf-surface-card']));
         expect(textsOf(slices)).toEqual(slices.map((slice) => chartRoles(true, chartElement()).readableText(String(slice.itemStyle?.color))));
         expect(
             textsOf(slices).filter((text) => text !== next['--lf-text-primary'] && text !== next['--lf-text-on-inverse']),
