@@ -6,8 +6,9 @@ counts while ``clock() - hit_time < window_seconds``; a refused hit is not recor
 does not push its own unlock further away.
 
 The counts live in this process: with N worker processes a limit is N times the configured one. The number of keys is
-bounded (``max_keys``): a new key beyond it evicts the key with the fewest hits still in the window, the least recently
-used among them (lot E-14). A key sprayed to make room holds one hit, so a spray never frees a key that holds more: not
+bounded (``max_keys``): a new key beyond it evicts the key with the fewest hits still in the window, and among those
+the one used or regrouped longest ago: a key goes to the end of its group when it is peeked, hit or counted, and when a
+hit of its leaves the window (lot E-14). A key sprayed to make room holds one hit, so a spray never frees a key that holds more: not
 a locked one, nor one a hit short of its limit, whose caller would otherwise get its count back for the price of the
 spray. To free a key with n hits, every other key must hold n hits too. Expiry is exact: a heap holds, for each key,
 when its oldest hit leaves the window, so a key whose hits left keeps no protection, read or not. Nothing is searched,
@@ -53,7 +54,7 @@ class SlidingWindowLimiter:
         self._clock = clock
         # The hits of each key still in the window, oldest first: a key without one is not here.
         self._hits: dict[Hashable, deque[float]] = {}
-        # The keys grouped by how many hits they hold, each group least recently used first.
+        # The keys grouped by how many hits they hold, each group in the order its keys were last used or regrouped, oldest first.
         self._by_count: dict[int, OrderedDict[Hashable, None]] = {}
         # (oldest hit, serial, key) per key; an entry whose serial is not the key's in _serials is stale and skipped
         self._expiry: list[tuple[float, int, Hashable]] = []
@@ -141,7 +142,7 @@ class SlidingWindowLimiter:
         return hits
 
     def _evict_one(self, keep: Hashable) -> bool:
-        """Forget the key with the fewest hits, the least recently used among them, never ``keep``; False when there is
+        """Forget the key with the fewest hits, the one used or regrouped longest ago among them, never ``keep``; False when there is
         no other key. Lock held."""
         for count in sorted(self._by_count):
             for key in self._by_count[count]:

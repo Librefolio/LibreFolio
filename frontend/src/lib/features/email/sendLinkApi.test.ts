@@ -1,5 +1,6 @@
 /**
- * sendLinkApi — «send by email» next to a shared link (workstream E, lot E4a): the seam over `POST /email/links`.
+ * sendLinkApi — «send by email» next to a shared link (workstream E, lot E4a; the language of the email, lot E-8): the
+ * seam over `POST /email/links`.
  *
  * The contract under test:
  *   - `tokenFromLink(link)`: the `token` parameter of the link's fragment — among other parameters, percent-decoded —,
@@ -7,16 +8,20 @@
  *     token. A token in the query is never read: no link carries one;
  *   - `sendByEmailVisible()`: true only when `GET /system/instance` said `email.links === true` — absent, false, or any
  *     other value is false;
- *   - `sendLinkByEmail({purpose, token, to})` posts once, through its alias, `{purpose, token}` — with `to` only when one
- *     is given (an empty one is no `to`) — and answers `{to, language}` alone; a refusal reaches the caller as raised;
+ *   - `sendLinkByEmail({purpose, token, to, language})` posts once, through its alias, `{purpose, token}` — with `to`
+ *     only when one is given (an empty one is no `to`), with `language` only when one is given (decision N69: no
+ *     `language` key otherwise, not even an undefined one) — and answers `{to, language}` alone, the language being the
+ *     one the server answered, not the one asked for; a refusal reaches the caller as raised;
  *   - `readLinkSendFailure(error)`: the `error_code` of a coded refusal — the route's own 422s (`EMAIL_RECIPIENT_REQUIRED`,
  *     `…_NOT_ALLOWED`, `…_INVALID`) included —, with `smtpCode` when `smtp_code` is non-empty text and `retryAfter` when
  *     `retry_after` is a finite number; a 422 without a `detail` object — FastAPI's own validation, a list, as for a `to`
  *     that is not an email address — is `EMAIL_RECIPIENT_INVALID`, the only field the dialog lets anyone type being the
  *     address; any other answer without a `detail` object (a plain-text `detail`, no body) and no answer at all are
  *     `UNKNOWN`; it reads an `AxiosError` (what the generated client rejects with) and an `ApiError` alike;
- *   - through the real client, only the transport faked: the requests reach it as described and each refusal of the
- *     route is read — FastAPI's validation body for an invalid `to` included.
+ *   - through the real client, only the transport faked: the requests reach it as described — an invitation in a
+ *     language as `{purpose, token, to, language}`, or `{purpose, token, language}` without an address, a reset link
+ *     as `{purpose, token}` — and each refusal of the route is read — FastAPI's validation body for an invalid `to`
+ *     included.
  *
  * Mocks: the instance configuration is a fake whose `config` the test sets; the alias is spied on the real generated
  * client (restored after each test); the last block replaces `axiosInstance.defaults.adapter` and puts it back. Node
@@ -146,6 +151,28 @@ describe('sendLinkByEmail — through its alias', () => {
         vi.spyOn(zodiosApi, ALIAS).mockRejectedValueOnce(refusal);
         await expect(sendLinkByEmail({purpose: 'invite', token: TOKEN})).rejects.toBe(refusal);
     });
+
+    it.each<{label: string; request: Parameters<typeof sendLinkByEmail>[0]; body: Record<string, unknown>}>([
+        {
+            label: 'an invitation to an address, in a language',
+            request: {purpose: 'invite', token: TOKEN, to: 'zq-guest@example.com', language: 'it'},
+            body: {purpose: 'invite', token: TOKEN, to: 'zq-guest@example.com', language: 'it'},
+        },
+        {label: 'an invitation in a language, without an address', request: {purpose: 'invite', token: TOKEN, language: 'fr'}, body: {purpose: 'invite', token: TOKEN, language: 'fr'}},
+        {label: 'an invitation in a language, with an empty address', request: {purpose: 'invite', token: TOKEN, to: '', language: 'es'}, body: {purpose: 'invite', token: TOKEN, language: 'es'}},
+        {
+            label: 'an invitation whose language is undefined: no language key',
+            request: {purpose: 'invite', token: TOKEN, to: 'zq-guest@example.com', language: undefined},
+            body: {purpose: 'invite', token: TOKEN, to: 'zq-guest@example.com'},
+        },
+    ])('SLA-15: $label — posts exactly its body, language only when one is given, once', async ({request, body}) => {
+        const alias = vi.spyOn(zodiosApi, ALIAS).mockResolvedValueOnce(ANSWER);
+
+        await sendLinkByEmail(request);
+
+        expect(alias).toHaveBeenCalledTimes(1);
+        expect(alias.mock.calls[0][0]).toStrictEqual(body);
+    });
 });
 
 // =====================================================================================================================
@@ -243,6 +270,27 @@ describe('through the real client, only the transport faked', () => {
 
         await expect(sendLinkByEmail({purpose: 'password_reset', token: TOKEN})).resolves.toStrictEqual({to: 'zq-alice@example.com', language: 'en'});
         expect(sentBody()).toStrictEqual({purpose: 'password_reset', token: TOKEN});
+    });
+
+    it.each<{label: string; request: Parameters<typeof sendLinkByEmail>[0]; body: Record<string, unknown>; answer: {purpose: 'invite'; to: string; language: string}}>([
+        {
+            label: 'an invitation to an address in Italiano: {purpose, token, to, language}',
+            request: {purpose: 'invite', token: TOKEN, to: 'zq-guest@example.com', language: 'it'},
+            body: {purpose: 'invite', token: TOKEN, to: 'zq-guest@example.com', language: 'it'},
+            answer: {purpose: 'invite', to: 'zq-guest@example.com', language: 'it'},
+        },
+        {
+            label: 'an invitation in Español without an address: {purpose, token, language}; written in Français, the answer’s language comes back',
+            request: {purpose: 'invite', token: TOKEN, language: 'es'},
+            body: {purpose: 'invite', token: TOKEN, language: 'es'},
+            answer: {purpose: 'invite', to: 'zq-written-in-the-invitation@example.com', language: 'fr'},
+        },
+    ])('SLA-16: $label', async ({request, body, answer}) => {
+        serverAnswers(200, answer);
+
+        await expect(sendLinkByEmail(request)).resolves.toStrictEqual({to: answer.to, language: answer.language});
+        expect(received.map(({method, url}) => `${method} ${url}`)).toEqual(['post /api/v1/email/links']);
+        expect(sentBody(), 'exactly that body: the language asked for, the address only when given').toStrictEqual(body);
     });
 
     it.each(REFUSALS)('SLA-11: $label, as the client raises it, is read', async ({status, detail, failure}) => {

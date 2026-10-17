@@ -110,8 +110,8 @@
       },
       "registered": "Account creato. Ti abbiamo mandato un'email con un link per attivarlo: aprilo entro 24 ore, poi accedi.",
       "signUpUnavailable": "Ora non è possibile registrarsi: questa istanza non riesce a spedire l'email di verifica. Riprova più tardi, o chiedi al suo amministratore.",
-      "settingNeedsEmail": "Serve che un'email con un link possa partire: configura prima SMTP e LIBREFOLIO_PUBLIC_URL (Impostazioni › Email).",
-      "settingUnavailable": "La verifica dell'email richiede che un'email con un link possa partire, e ora non può: controlla Impostazioni › Email."
+      "settingNeedsEmail": "Serve che un'email con un link possa partire: configura prima SMTP e LIBREFOLIO_PUBLIC_URL (Impostazioni › Amministrazione › Email).",
+      "settingUnavailable": "La verifica dell'email richiede che un'email con un link possa partire, e ora non può: controlla Impostazioni › Amministrazione › Email."
     },
     "sendLink": {
       "button": "Invia per email",
@@ -120,7 +120,7 @@
       "toPlaceholder": "nome@esempio.it",
       "resetTarget": "Il link va all'indirizzo email dell'account.",
       "publicUrlHint": "Il link nell'email inizia con l'indirizzo impostato in LIBREFOLIO_PUBLIC_URL, che può essere diverso da quello qui sopra.",
-      "sent": "Inviato a {to}.",
+      "sent": "Inviato a {to}. Lingua: {language}.",
       "errors": {
         "EMAIL_UNAVAILABLE": "L'email è spenta o non funziona su questa istanza.",
         "EMAIL_LINKS_UNAVAILABLE": "Le email non possono contenere link: LIBREFOLIO_PUBLIC_URL non è impostata, o non può iniziare un link.",
@@ -132,7 +132,9 @@
         "EMAIL_RATE_LIMITED": "Il limite orario di email è raggiunto: riprova tra {minutes} min.",
         "RECIPIENT_REFUSED": "Il server SMTP ha rifiutato l'indirizzo del destinatario.",
         "generic": "Non è stato possibile spedire l'email."
-      }
+      },
+      "languageLabel": "Lingua dell'email",
+      "languageInstance": "La lingua dell'istanza"
     },
     "forgot": {
       "label": "Nome utente o indirizzo email",

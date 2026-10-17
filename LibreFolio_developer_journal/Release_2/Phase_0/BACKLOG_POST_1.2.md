@@ -6499,7 +6499,7 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   come un account disattivo qualunque: l'admin lo può attivare a mano, ma non vede che aspetta la verifica. Serve un
   campo nella lista di A (`pending_verification`) e un badge in `UserRow`. Fuori dalla 1.3 per decisione del
   coordinatore. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E5.0».
-- **E-8 · «Invia per email» non sceglie la lingua dell'invito** — minimo; E, 15/10 (E4a, decisione notturna da
+- ✅ **E-8 · «Invia per email» non sceglie la lingua dell'invito** — minimo; E, 15/10 (E4a, decisione notturna da
   rivedere). L'azione manda l'invito sempre nella lingua predefinita dell'istanza; `POST /email/links` accetterebbe
   `language`, ma la 1.3 non mostra un selettore. Da aggiungere se serve invitare chi parla un'altra lingua.
   Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E4.1».
@@ -6508,6 +6508,13 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
     A8b, insieme all'allineamento del percorso «Settings › Email» all'etichetta del gruppo di A8b (coordinatore, 17/10:
     26 punti tra i18n, docs, `EmailSettingsTab.svelte` e devWiki, elencati nel piano). Dettagli: piano 08, «E-8.0»,
     «E-8.1» e la nota «Il percorso Settings › Email dopo A8b».
+  - 17/10, E: fatta nella 1.3, in due parti.
+    - **Parte 1**: il selettore della lingua dell'invito, cioè un `SimpleSelect` con la lingua dell'istanza come
+      default, senza `language` nella richiesta. L'esito «Sent to {to}. Language: {language}.» prende la lingua dalla
+      risposta.
+    - **Parte 2**, dopo A8b: i percorsi «Settings › Administration › Email». Sono 8 valori i18n più circa 15 righe;
+      A8b aveva già allineato il resto.
+    - Commit: la parte 1 fino a `443eda316`, la parte 2 al checkpoint. Dettagli: piano 08, da «E-8.2» a «E-8.4».
 - ✅ **E-9 · I limiti per casella non vedono gli alias (`+tag`, i punti di Gmail)** — piccolo; E, 16/10 (revisione di
   sicurezza finale, nota sotto la soglia). `strip().casefold()` fa di `victim+1@…` e `victim+2@…` caselle diverse:
   con la registrazione aperta si può puntare il budget orario dell'istanza su una casella sola, e ogni email porta lo
