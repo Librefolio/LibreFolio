@@ -3118,5 +3118,44 @@ basso; una lettura in più per intervallo dopo ogni recupero, nessuna fra un rec
      messaggio Z-14 dopo premesse e controllo; poi di nuovo B, impronta verificata. Porta 6186 libera.
    - I sei casi di Z5/Z-13/Z-18 erano verdi in B nel primo slot, sullo spec di prima del riparo, che ha toccato solo
      helper e commenti di Z-14: non rifatti in pieno.
-6. ✅ 17/10 01:40 — Backlog: Z-14 ✅, Z-14b nuova (domanda di UX del mattino). Checkpoint FROZEN inviato al
-   coordinatore. Nessun `.svelte`, nessuna area dei colori.
+6. ✅ 17/10 ~01:37 — Backlog: Z-14 ✅, Z-14b nuova (domanda di UX del mattino). Checkpoint FROZEN inviato al
+   coordinatore. Nessun `.svelte`, nessuna area dei colori. (L'ora era scritta «01:40» prima dell'invio: corretta.)
+7. ✅ 17/10 01:38–01:57 — Ingresso: commit `1f4986c70` e `3a776cc9e`; base aggiornata dal coordinatore (merge di
+   `b36e3873f`, `cf37fb03c`; il conflitto in `domain-state.md` risolto come proposto: il mio paragrafo, poi la riga
+   di Y). Revisione combinata, controlli leggeri sotto 50 (`files/z14_combined.sh`): `api sync`; `front check` 0/0;
+   `core-unit` 7708/7708; `fx-unit` 153/153; `asset-unit` 885/885; `mkdocs build` stretto senza avvisi; `check-links`
+   97. Slot 2: `front-portfolio price-refresh` intero 8/8. Entrato in dev (`2765773f5`), riga 🐛 in `6e02e56ec`.
+
+### Z-21 — N58: quattro nomi che solo i test leggono (17/10, backend, solo controlli leggeri)
+
+> **Via** (coordinatore, 16/10 ~23:55, poi 17/10 ~01:58): «Z-21 after that, if there's time.» — «Z-14 entered: dev
+> `2765773f5` […]. Your HEAD is ff'd to `6e02e56ec`, clean. Z-21: go (apply, light checks, checkpoint).»
+> Base: `6e02e56ec`, albero pulito; gli otto file di Z-21 identici a `cf37fb03c`, la base delle bozze.
+
+**Stato reale** (vulture, «Referenced only by tests», visto nel lotto A): `cooldown_snapshot()`
+(`provider_cooldown.py`, Z7a), `ShutdownWatchdog.armed_at` e `current_shutdown_watchdog()` (`shutdown_budget.py`, Z6b),
+`Activity.is_busy()` (`sleep_wake/activity.py`, Z2a). Nessun chiamante nel prodotto: `shutdown_deadline()` legge
+`_watchdog` direttamente, il prodotto legge `busy_reasons()`, nessuno legge le pause fuori dai test. Nomi anche in due
+descrizioni del runner (`services provider-cooldown`, `services sleep-wake-activity`); nessuna pagina di doc.
+
+**Decisione** N-Z21-1 («da rivedere»): via tutti e quattro (non un lettore di prodotto: il pannello delle pause non
+c'è, Z-21 non lo inventa). I test leggono l'istanza in uso (`cooldowns.snapshot()`), il `deadline` (al posto di
+`armed_at`), `shutdown_budget._watchdog` (stato privato, lecito in un test) e `busy_reasons()`.
+
+**Test** (test-author, bozze fuori dal repo, copie complete in `files/z21-draft/`): nessun caso tolto, nessun numero
+che resta scoperto. Tre asserzioni più strette di prima, accettate: SWA-021 (un controllo per lettura), PCD-012
+(`wait_before_call` prima dello scambio), SDB-018/026 (deadline fra due letture dell'orologio).
+
+**Passi.**
+1. ✅ 17/10 01:57–01:59 — Bozze dei test nel worktree (quattro file, copie: identici a `cf37fb03c` anche a
+   `6e02e56ec`), ruff e black puliti. Prima della modifica (`files/z21_run.sh before`, sotto 50): `services
+   provider-cooldown` 66/66, `shutdown-budget` 187/187, `shutdown-process` 7/7, `sleep-wake-activity` 111/111;
+   `lint --dead-code` elenca i quattro nomi.
+2. ✅ 17/10 01:59 — Prodotto (`files/z21-draft/apply_z21.py code`, inverso esatto provato su una copia):
+   `provider_cooldown.py` −6 (con l'import di `CooldownState`), `shutdown_budget.py` −10, `sleep_wake/activity.py`
+   −4, due descrizioni del runner. Ruff e black puliti; `git grep -w` dei quattro nomi in `backend`, `scripts`,
+   `mkdocs_src`, `frontend`, `.github`: nulla.
+3. ✅ 17/10 02:00–02:01 — Dopo (`files/z21_run.sh after`): le stesse quattro azioni con gli stessi numeri;
+   `lint --dead-code`: 49 → 45 risultati del backend, spariti esattamente i quattro, nessuno nuovo (rc 1 per i
+   risultati preesistenti). Porta 6186 libera.
+4. ✅ 17/10 ~02:02 — Backlog: Z-21 ✅. Checkpoint FROZEN inviato al coordinatore.
