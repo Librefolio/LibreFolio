@@ -122,7 +122,13 @@ def compare_totals(recorded: Any, current: dict[str, Any] | None) -> TotalsCompa
         return TotalsComparison("absent")
     if current is None:
         return TotalsComparison("unreadable")
-    differences = _differences(before, ControlTotals.from_json(current))
+    try:
+        after = ControlTotals.from_json(current)
+    except ValueError:
+        # What J computed on the copy but cannot read back, an amount past its bound: not compared (B-29).
+        logger.warning("The control totals of the copy cannot be read: they are not compared")
+        return TotalsComparison("unreadable")
+    differences = _differences(before, after)
     if not differences:
         return TotalsComparison("same")
     return TotalsComparison("changed", tuple(differences[:MAX_DIFFERENCES]), len(differences))
