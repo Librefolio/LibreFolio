@@ -410,7 +410,7 @@ item, with `holds_place` and `pending_setup` when they are sent: both optional i
   and `users-action-delete`.
 - **An account waiting for its setup** (`pending_setup`, the
   [initial administrator](../../../architecture/access_control.md#initial-admin) whose setup link was
-  never used): the badge `users-badge-pending-setup` (`settings.usersTab.badges.pendingSetup`,
+  never used, nor the account set up another way): the badge `users-badge-pending-setup` (`settings.usersTab.badges.pendingSetup`,
   *Waiting for setup*, in the tab's neutral style) in place of `inactive`; no
   `users-action-reactivate`, and so no `limit` reason on a full instance; under the buttons,
   `users-pending-setup-hint` (`settings.usersTab.pendingSetupHint`): the account activates through

@@ -6,8 +6,9 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``backend/app
 restore_jobs.py`` (the upload, the check in a thread followed through a state file, ``prune``),
 ``backend/app/config/backup.py`` (``backup_max_upload_mb``) and the ``Restore*`` models of ``backend/app/schemas/backup.py``.
 
-(a) ``PUT /backup/restore/upload``, the archive as the raw body: 201 with a new id (32 lowercase hex) and its size, the
-    bytes kept whole in ``.restore/upload/<id>`` (0600, its folders 0700), written in pieces of 1 MiB off the event loop.
+(a) ``PUT /backup/restore/upload``, the archive as the raw body: 201 with a new id (32 lowercase hex), its size and its
+    kind (``zip``; ``envelope`` for a file that starts with ``LFBK``, lot B4), the bytes kept whole in
+    ``.restore/upload/<id>`` (0600, its folders 0700), written in pieces of 1 MiB off the event loop.
     The limit (``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB``, decision 43): a ``Content-Length`` above it is 413
     ``backup_too_large`` with ``limit_mb`` before anything is created, whatever the body; a body without one is refused at
     the piece that passes it, and what was written of it removed; the limit itself is received. Unset: no limit on a
@@ -43,7 +44,8 @@ restore_jobs.py`` (the upload, the check in a thread followed through a state fi
     binary and required, the four operations carry the ``Backup & Export`` tag and document their answers.
 (e) ``backup_max_upload_mb()``: unset or blank, 0 self-hosted and 500 managed; a whole number of ASCII digits, spaces
     around allowed, wins over the profile; anything else raises ``BackupConfigError`` ``BACKUP_MAX_UPLOAD_MB_INVALID``,
-    naming the variable.
+    naming the variable. The managed value is the entry of H's profile table, read at each call (a guard of lot B4,
+    green from the start).
 (f) Found while writing the second round, RED until the product changes, each with the fix it suggests: an upload whose
     file cannot be created (a folder that cannot be written) is a plain 500 without a code, not ``backup_upload_failed``;
     a drop follows a link in place of ``.restore`` or ``checks/`` and removes the state of a check in the link's target;
@@ -179,7 +181,8 @@ class FakeThread:
 
     @property
     def lock(self) -> _RunLock:
-        """The lock of the checks the request took and handed to the thread: ``_run_check(data_dir, check, lock)``."""
+        """The lock of the checks the request took and handed to the thread: ``_run_check(data_dir, check, lock, key)``, its
+        third argument."""
         return self.args[2]
 
 
@@ -457,15 +460,17 @@ def too_large(response: httpx.Response, limit_mb: int) -> bool:
 @cases.needs_posix_modes
 @pytest.mark.asyncio
 async def test_an_archive_is_received_whole_under_a_new_id_for_the_server_only(instance):
-    """(a) 201 with a new id and the size; the bytes as sent, in ``.restore/upload/<id>``, nothing else beside them."""
+    """(a) 201 with a new id, the size and the kind (``zip``: the body does not start with ``LFBK``); the bytes as sent, in
+    ``.restore/upload/<id>``, nothing else beside them."""
     print_section("PUT /backup/restore/upload")
     root = instance.root
     body = bytes(range(256)) * (4 * 1024 + 3)  # 1 MiB and a bit: more than one piece written
     response = await upload(body)
     assert response.status_code == 201, f"an archive received is 201: {shown(response)}"
     answer = response.json()
-    assert set(answer) == {"upload_id", "size"} and AN_ID.fullmatch(answer["upload_id"]), f"the answer is an id of 32 lowercase hex digits and a size: {answer}"
+    assert set(answer) == {"upload_id", "size", "kind"} and AN_ID.fullmatch(answer["upload_id"]), f"the answer is an id of 32 lowercase hex digits, a size and a kind: {answer}"
     assert answer["size"] == len(body), f"the size is the body's: {answer['size']} != {len(body)}"
+    assert answer["kind"] == "zip", f"a body that does not start with LFBK is received as a zip, not {answer['kind']!r}"
     kept = upload_path(root, answer["upload_id"])
     assert cases.sha256(kept.read_bytes()) == cases.sha256(body), "the archive is kept byte for byte"
     assert files_in(uploads_dir(root)) == [answer["upload_id"]], f"one file under its id, no partial beside it: {files_in(uploads_dir(root))}"
@@ -922,7 +927,7 @@ async def test_a_check_that_fails_otherwise_ends_failed_with_its_code(instance, 
     the upload is removed in any case, and the lock its request took is let go. ``stage_archive`` is replaced: it raises,
     and, as it does with a lock it was given, leaves the lock to its caller."""
 
-    def stage_archive(archive_path: Path, data_dir: Path, *, stage_id=None, progress=None, lock=None) -> None:
+    def stage_archive(archive_path: Path, data_dir: Path, *, stage_id=None, progress=None, lock=None, key=None) -> None:
         raise error(data_dir)
 
     monkeypatch.setattr(restore_jobs, "stage_archive", stage_archive)
@@ -1382,6 +1387,26 @@ def test_the_variable_and_the_managed_default_are_the_documented_ones():
     managed = config.ENVIRONMENT_PROFILE_DEFAULTS.get("managed", {})
     assert (variable, managed.get(variable)) == (LIMIT_VARIABLE, 500), f"decision 43: {variable}, {managed.get(variable)} MB in ENVIRONMENT_PROFILE_DEFAULTS['managed']"
     assert not hasattr(backup_config, "MANAGED_MAX_UPLOAD_MB"), f"config/backup.py keeps a managed value of its own beside the table's, MANAGED_MAX_UPLOAD_MB = {getattr(backup_config, 'MANAGED_MAX_UPLOAD_MB', None)!r}: two sources that can disagree"
+
+
+def test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call(monkeypatch):
+    """(e) A GUARD, GREEN FROM THE START (lot B4, the note of H-17): not a red, it holds today and must keep holding. The
+    managed limit is whatever H's ``ENVIRONMENT_PROFILE_DEFAULTS["managed"]`` holds for the variable, read through
+    ``profile_default`` at each call. With the managed profile and ``LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`` unset, 123
+    written in the table's entry is the limit, and the entry removed gives the code's own fallback, 0 (no limit). A
+    managed value written by hand in ``config/backup.py``, or a copy of the table taken at import, would answer 500 both
+    times and fail here; the name check of the test above cannot see a value under another name."""
+    monkeypatch.setenv(PROFILE_VARIABLE, "managed")
+    monkeypatch.delenv(LIMIT_VARIABLE, raising=False)
+    managed = config.ENVIRONMENT_PROFILE_DEFAULTS["managed"]
+
+    monkeypatch.setitem(managed, backup_config.MAX_UPLOAD_VARIABLE, 123)
+    written = backup_max_upload_mb()
+    monkeypatch.delitem(managed, backup_config.MAX_UPLOAD_VARIABLE)
+    removed = backup_max_upload_mb()
+
+    assert written == 123, f"managed, {LIMIT_VARIABLE} unset, the table's managed entry at 123: the limit is the entry, got {written}"
+    assert removed == 0, f"managed, {LIMIT_VARIABLE} unset, no entry in the table: the code's own fallback 0 (no limit), got {removed}"
 
 
 @pytest.mark.parametrize(

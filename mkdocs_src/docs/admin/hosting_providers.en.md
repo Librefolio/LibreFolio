@@ -179,7 +179,9 @@ minute.
    this link: delivering it is up to you, for example in your own «set your password» email.
 
 - ⏱️ The link works once, for 72 hours from that first start. A restart changes nothing: the link
-  you sent keeps working until it is used or expires.
+  you sent keeps working until it is used or expires, unless you give the administrator a new
+  address ([A New Link](#initial-admin-new-link)) or the account is set up another way
+  ([Once the Account Is Active](#initial-admin-active)).
 - 🔒 The token travels after the `#` of the link, a part that browsers never send to the server, so
   it stays out of the access logs of the server and of every proxy on the way. Keep it as private as
   a password until your customer has used it.
@@ -214,7 +216,7 @@ When the setup cannot go through, the page says why:
 
 | The page shows | When | What to do |
 | --- | --- | --- |
-| *This link has expired.*, *This link has already been used.*, *This link has been withdrawn.*, *This link is not valid.* or *This link is incomplete: open it again from the message you received.*, then *Ask your hosting provider for a new link. On your own server, run `dev.py user setup-link`.* | The link is more than 72 hours old, was used, was replaced by a newer one, is unknown to the instance, or lost its token when it was copied; also a link that stops working while the form is open | Give your customer a new link: [A New Link](#initial-admin-new-link) |
+| *This link has expired.*, *This link has already been used.*, *This link has been withdrawn.*, *This link is not valid.* or *This link is incomplete: open it again from the message you received.*, then *Ask your hosting provider for a new link. On your own server, run `dev.py user setup-link`.* | The link is more than 72 hours old, was used, was replaced by a newer one, was withdrawn when the administrator's address changed or when the account was set up another way, is unknown to the instance, or lost its token when it was copied; also a link that stops working while the form is open | Give your customer a new link: [A New Link](#initial-admin-new-link). An account set up another way gets none: see [Once the Account Is Active](#initial-admin-active) |
 | *The link could not be checked. Try again in a moment.*, with **Retry** | The instance did not answer the check | **Retry** once the instance answers |
 | *Password does not meet security requirements* | The password misses one of the instance's rules | Choose a password that meets the rules shown under the field |
 | That the setup is refused while the instance is blocked, and no button to send the form any more | The instance is [blocked](#instance-block): the form opens, and the setup is refused once it is sent | Unblock the instance: your customer then opens the link again, within its 72 hours |
@@ -240,7 +242,17 @@ Both work before the link expires too, to replace a link that went astray.
 To change the address or the username before your customer activates the account, change
 `LIBREFOLIO_ADMIN_EMAIL` or `LIBREFOLIO_ADMIN_USERNAME` and restart: the waiting account takes the
 new value. If another account already holds it, the log has an error, and the account keeps its
-own.
+own; its link keeps working.
+
+A new address always needs a new link: the link you sent went to the old address, so it stops
+working at the start that gives the account its new one. Put a new token in
+`LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` together with the new `LIBREFOLIO_ADMIN_EMAIL`, restart, then
+send the new link to the new address. Without a new token, that start logs
+`The initial administrator's address changed: the setup link handed over before no longer works; run ./dev.py user setup-link, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`;
+the starts after it log the warning of an expired link, until you give a new link in one of the two
+ways above. The same address with other capitals of the letters A to Z, such as `Anna@example.com`
+for `anna@example.com`, is not a new address: the account takes the new spelling and its link keeps
+working, as it does when only the username changes.
 
 ### ✅ Once the Account Is Active {: #initial-admin-active }
 
@@ -248,6 +260,23 @@ Once your customer has chosen the password, the variables have done their work: 
 creates nothing and logs `LIBREFOLIO_ADMIN_* ignored: this instance already has accounts`. You can
 leave them set, or remove them. On an instance that already has accounts, they create nothing
 either.
+
+The setup link is not the only way to set the account up. On the server, `dev.py user activate`
+and `dev.py user reset` work on the waiting account as on any other, and so does a password-reset
+link made for it, by `dev.py user reset-link` or by another administrator in
+[Users & Invitations](users.md#reset-links) (see «Reset a Password or Lock an Account» and «Send a
+Password-Reset Link» in [CLI Admin Tools](cli_tools.md)). As soon as the account is activated, or
+gets a password, this way, it no longer waits for its setup:
+
+- every setup link it had stops working for good, the one you sent included: the setup page says
+  *This link has been withdrawn.*;
+- no new link replaces it: `dev.py user setup-link` stops with
+  `No administrator account is waiting for its setup link`, and every later start ignores the
+  variables, as above, a new token included;
+- your customer signs in with the password set that way, once the account is active. Activated
+  alone, the account has a password nobody knows until `dev.py user reset` or a reset link gives it
+  one; given a password alone, it stays inactive until `dev.py user activate`, or **Reactivate** in
+  [Users & Invitations](users.md#pending-setup).
 
 ---
 
@@ -322,8 +351,11 @@ After signing in, users get a full page instead of the app, **This instance is b
   their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
 
-The card makes the same archive as your [hosting panel](#panel-backups): it leaves out the logs and
-the instance key, and the card says so. Keep your copy of the instance's key, its
+The card makes, by default, the same archive as your [hosting panel](#panel-backups): it leaves out
+the logs and the instance key, and the card says so. An administrator may choose a secure backup
+instead, encrypted with a password of their own: it carries the instance key only when LibreFolio
+generated it (`secrets/instance.key`), never a key you configured
+([Secure Backups](backup_restore.md#secure)). Keep your copy of the instance's key, its
 `secrets/instance.key` or the key you configured, with the data: without it, what LibreFolio
 encrypted can no longer be read. See «The Instance Key» in [Environment Variables](configuration.md).
 
@@ -339,7 +371,7 @@ On a blocked instance, only these API calls answer as usual:
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
-| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
+| Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`, and `GET /api/v1/backup/instance/options`, the rules of a secure backup's password, so that the card can offer a secure backup too: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](#panel-jobs), with its token |
 | The outcome of a restore, for the page that asked the restart, with the one-time ticket of that request: when the block took effect at that restart, it says that the restore waits for the unblock, and starts nothing | `GET /api/v1/backup/restore/outcome` |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |

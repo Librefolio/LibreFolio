@@ -4976,3 +4976,205 @@ riga della scheda Utenti (C5), le 14 chiavi nelle 4 lingue (C6), le doc (C7). Da
 l'eccezione del 401 nell'intercettore e A-13 in `registrationErrors` (A-13 ✅), il 409 `PENDING_SETUP` della PATCH.
 Rossi prima del codice in tre giri, verdi dopo, E2E del link non valido, revisione di H fatta. Resta per dopo: A-29,
 A-30 (backlog); per E, il 401 di `confirm` su `/verify-email` (lo passa H).
+
+### Dopo A7b — A-31 (16/10, 23:40)
+
+- Dal coordinatore, per conto di B (ripristino, decisione N57): l'ordine d'avvio diventa `global-settings` →
+  `admin-bootstrap` → `restore-commit` → `plugin-secrets-check`. Il passo di A resta prima del commit del ripristino:
+  se solleva sui dati ripristinati, il ripristino torna indietro (B lo fissa nel suo test).
+- Verificato in sola lettura: sui dati ripristinati con altri account `run_admin_bootstrap` registra e salta; un link
+  di setup scaduto dà solo un avviso nel log; l'unica eccezione che lascia passare è un errore del database diverso da
+  un lock, e lì il ritorno indietro del ripristino è giusto.
+- Il caso limite di B, scritto come **A-31** nel backlog (A-29 e A-30 erano già presi): un archivio con l'admin in
+  attesa e un altro admin attivo, ripristinato con `LIBREFOLIO_ADMIN_EMAIL` e un token mai visto. Il bootstrap riarma
+  il link, il commit del ripristino revoca ogni link vivo e lo revoca subito; resta `./dev.py user setup-link`.
+  Cura possibile di B: il commit risparmia i link emessi dall'avvio in corso.
+
+## A7b-2 — Analisi e contratto (16/10, 23:50)
+
+Lotto piccolo di sicurezza, deciso dal coordinatore prima di A8: **A-32** (il cuore), **A-33** (naturale qui), **A-34**
+(solo se costa poco); **A-35** registrato, da collocare (decisione D2 sotto). Base: merge `ec73a49c1` (A7b + dev
+`db506eb21`). Prima i rossi.
+
+### Stato reale (codice a `ec73a49c1`)
+
+- **La nozione «in attesa»** (`registration_service.pending_admin_filter`): disattivo, con almeno un link
+  `ADMIN_SETUP`, nessuno consumato. Ignora di proposito scadenza e **revoca**: `user setup-link` e il riarmo del
+  bootstrap revocano i link vecchi prima di emetterne uno nuovo, e il ripristino (A-31) li revoca tutti — l'account
+  deve restare «in attesa» perché `setup-link` lo ritrovi.
+- **`complete_admin_setup`** (`bootstrap_admin_service.py:263`): consuma il link, poi rifiuta (e revoca) solo se
+  l'account è **attivo**.
+- **Le altre vie che attivano o danno una password**, nessuna tocca `ADMIN_SETUP`:
+  `user_service.update_user_status` (PATCH; per l'admin in attesa c'è già il 409 `PENDING_SETUP` di A7b, ma la funzione
+  no), `set_user_active` (`user activate`), `reset_password` (`user reset`), `complete_password_reset` (il link di
+  reset, che l'admin può emettere anche per l'account in attesa: la rotta non lo esclude), la rotta
+  `change-password` (`auth.py:352`, account attivo). La conferma dell'email di E (`verification.py:349`) attiva, ma
+  per l'admin in attesa **non è raggiungibile**: il bootstrap non emette link di verifica, e il «reinvio» chiede la
+  password, che nessuno conosce. Nessuna modifica nei file di E.
+- **A-33**: `_follow_variables` (`bootstrap_admin_service.py:140-157`) cambia l'indirizzo dell'account in attesa al
+  cambio di `LIBREFOLIO_ADMIN_EMAIL` (non per un cambio di sole maiuscole, P18) e non revoca nulla; il riarmo da
+  `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` avviene solo per un token mai visto. Anche `update_profile` (`user set-email`
+  sull'account in attesa) revoca i link di reset (A-27) ma non quelli di setup.
+- **A-34**: `end_sessions(user)` fa `user.session_version += 1` in memoria; 9 chiamate (6 in `user_service`, la rotta
+  `change-password`, `POST /users/{id}/sessions/revoke`, `complete_admin_setup`).
+- **A-35**: nessun gestore d'eccezione nell'app; il 422 di FastAPI 0.141.1 porta `input` (provato: `string_too_short`
+  → il valore; `missing` → **tutto il corpo**, password compresa). Già protette solo le impostazioni dei plugin
+  (`_NoInputEchoRoute`). Chi legge `input`: `eventSaveError.ts` (con un ripiego su `row.type`), un test di
+  `plugin_settings` (che ne vuole l'assenza), `test_tools_wire` (errori Pydantic grezzi, non HTTP).
+
+### Decisioni
+
+- **D1 · «Ritirare» il link, non solo revocarlo** (proposta): alla fine del setup per altra via, i link
+  `ADMIN_SETUP` non consumati dell'account prendono `revoked_at` **e** `consumed_at` (con `consumed_by_user_id` nullo:
+  speso senza il suo portatore). Perché non la sola revoca: la nozione «in attesa» ignora la revoca (sopra), quindi un
+  admin attivato per altra via e poi disattivato resterebbe per sempre «Waiting for setup», con «Reactivate»
+  rifiutato (409 `PENDING_SETUP`), `setup-link` che gli rilascerebbe un link nuovo e il bootstrap che lo tratterebbe
+  da admin in attesa. Con il ritiro: non è più «in attesa» (è un account come gli altri), `inspect_token` legge la
+  revoca per prima e la pagina dice «This link has been withdrawn», il consumo atomico lo rifiuta. Nessuna migrazione.
+- **D2 · A-35: un gestore globale o la sola `route_class` dell'auth** (da decidere col coordinatore, H): la cura
+  solida è un gestore di `RequestValidationError` per tutta l'app che toglie `input` da ogni errore (la stessa regola
+  di `_NoInputEchoRoute`), in un modulo nuovo di `api/` più **una riga** di registrazione in `main.py` (di H): copre
+  anche le rotte di E (reinvio con password, SMTP), di B e dei plugin. Il ripiego nei soli miei file: la stessa
+  `route_class` sul router `auth` (login, registrazione, cambio password, reset, setup, profilo, eliminazione), con la
+  classe spostata in un modulo comune invece di copiarla.
+
+### Contratto
+
+- **C1 · Ritiro alla fine del setup per altra via (A-32)**: `token_service.retire_tokens(session, *, user_id, purpose,
+  now=None) -> int` (revoca e consumo insieme, non committato). Chiamato con `ADMIN_SETUP`, nella stessa transazione:
+  all'attivazione in `update_user_status` e `set_user_active`; a ogni password data in `reset_password`,
+  `complete_password_reset`, `change-password`. Log «Setup links retired: the account was set up another way»
+  (`user_id`, `count`), nessun token.
+- **C2 · Effetti fissati dai test**: dopo ciascuna via, il vecchio link → `inspect` `revoked`, `POST /auth/setup` 400
+  `TOKEN_INVALID`, password e stato invariati; lo scenario completo (attiva per altra via → disattiva → il link non
+  riattiva). L'account non è più «in attesa»: `pending_setup` falso, PATCH di riattivazione 200, `setup-link` senza
+  account, bootstrap `IGNORED`. Guardie: il link dell'admin in attesa senza altro funziona; demozione e
+  `{is_active: false}` non ritirano (UADM-062/067).
+- **C3 · Indirizzo cambiato (A-33)**: in `_follow_variables` e in `update_profile`, un cambio **vero** dell'indirizzo
+  dell'account in attesa **revoca** (non ritira: resta in attesa) i suoi link di setup. Al riavvio con un token
+  d'ambiente nuovo il riarmo emette quello (già oggi); altrimenti il log dice, una volta, che il link non vale più e
+  come averne uno (`dev.py user setup-link`, o un token nuovo). Un cambio di sole maiuscole non revoca.
+- **C4 · A-34 (se costa poco, ultimo passo)**: `end_sessions(session, user)` asincrona con l'incremento in SQL e
+  rilettura del valore; le 9 chiamate; un test con due sessioni che arrivano a +2.
+- **C5 · A-35**: secondo D2; test API: per le rotte dell'auth, un 422 per campo e uno per campo mancante senza `input`
+  e senza il testo della password o del token; `loc`, `msg`, `type` restano.
+- **C6 · Doc**: `admin/hosting_providers` (cambio d'indirizzo, setup per altra via), `admin/users`, `admin/cli_tools`
+  (`user activate`/`reset` sull'admin in attesa), `developer/architecture/security`, `access_control`.
+
+**Selettori**: `services admin-bootstrap`, `services account-tokens`, `services session-version`, `services
+user-profile`, `api admin-setup`, `api users-admin`, `api auth`, `api registration` (+ `utils dev-cli-image` se cambia la
+CLI). **Rischi**: il ritiro deve stare nella stessa transazione del cambio; la PATCH resta col 409 prima (difesa in
+profondità sotto); A-34 tocca 9 punti delle sessioni, coperti da `session-version`.
+
+### A7b-2 — Decisioni del coordinatore e controlli preliminari (16/10, 23:55)
+
+- **D1 approvata** (decisione notturna N60): «ritiro» (`revoked_at` + `consumed_at`) nei 5 punti, nella stessa
+  transazione. **D2**: gestore globale, dentro A7b-2; la riga in `main.py` la scrivo io, H la rivede al checkpoint come
+  per `zodios-client`. A-33 come descritto; A-34 per ultimo se c'è tempo. CHANGELOG: una riga 🔒 per A-32+A-33, una per
+  A-35, senza dire come sfruttarle.
+- **I tre controlli chiesti prima dei rossi di A-35**:
+  1. test che leggono `input`/`ctx` in un 422: nel backend nessuno ne vuole la **presenza**; l'unico,
+     `test_plugin_settings_api.py:503`, ne vuole l'**assenza** e resta valido. Negli E2E nessuno. Nel frontend
+     `eventSaveError.ts` usa `issue.input ?? row.type` (ripiego già lì), i suoi Vitest simulano il 422 da soli;
+  2. lo schema OpenAPI `ValidationError` di FastAPI dichiara `input` e `ctx` **facoltativi**, e un gestore d'eccezione
+     non lo cambia: `api sync` non tocca `generated.ts` (lo ricontrollo dopo il codice);
+  3. `_NoInputEchoRoute` (`api/v1/plugin_settings.py`, commit `efa135c75` del filone plugin): col gestore globale è
+     un doppione. **Lo tolgo** (una regola sola, in un posto solo); il suo test resta com'è, perché passa dal server
+     vero della corsia (`httpx` senza transport) dove il gestore è registrato; aggiorno la riga di
+     `developer/architecture/patterns/plugin_settings.md:425`.
+- **Forma**: `backend/app/api/validation_errors.py` con `install_validation_error_handler(app)`, nello stile
+  `install_*` di `main.py`; il gestore toglie `input` e passa a quello predefinito di FastAPI
+  (`request_validation_exception_handler`), così il resto della risposta resta identico.
+- **Test**: tre `test-author` — servizi (A-32/A-33: `test_account_tokens.py`, `test_admin_bootstrap.py`,
+  `test_user_profile.py`), API (A-32: `test_admin_setup_api.py`, `test_users_admin_api.py`), A-35 (file nuovo
+  `test_validation_errors_api.py`, unità `api validation-errors` da registrare). I primi due **fermi in scrittura**
+  durante lo slot 1 (la validazione combinata deve raccogliere i file del commit), il terzo scrive un file nuovo che
+  lo slot non raccoglie.
+- **Aggiunta al contratto (C1, dal `test-author` delle API)**: quando `complete_admin_setup` rifiuta il link di un
+  account già attivo, **ritira** i link di setup dell'account invece di revocare solo quello: altrimenti, disattivato
+  dopo, tornerebbe «in attesa» (`pending_setup` vero, 409 alla riattivazione, `setup-link` che gli dà un link nuovo).
+  Nessuna migrazione: F02 non è mai uscito (1.3), non c'è una base installata con link vivi su account già attivati.
+- **Slot 1, validazione combinata di `ec73a49c1`** (23:48–): `api users-admin` **91**, `api admin-setup` **42**, `api
+  auth` **95**, `api registration` **102**, tutti verdi; poi l'E2E `auth-links`. I `test-author` ripartono (GO) dopo le
+  unità API: l'E2E non raccoglie i test del backend.
+- **Validazione combinata, controlli leggeri** (`work/a7b_merge/light*.sh`, 23:41–00:17): `api sync` ✓; `front check`
+  **0/0**; `mkdocs build` strict ✓ (3 084 URL); `check-links` ✓; Vitest dei file di A7b e vicini **32/34 file, 1 063
+  verdi**, 20 rossi in `(app)/layout.gate.test.ts` e `layout.authGate.test.ts` (`No "onNavigate" export is defined on
+  the "$app/navigation" mock`). Triage: verdetto **assunzione** del test, rotta da un cambio di prodotto di un altro
+  filone — il commit `ec018afdf` di dev (`feat(ui): page Refresh spins on big requests`) usa `onNavigate` nel layout
+  `(app)`, e i due test (di H) lo simulano senza. Verdi alle 21:56 su A7b prima del merge; non sono file miei:
+  segnalato al coordinatore con la cura (`onNavigate: vi.fn()` nei due `vi.mock`).
+- **A7b entrato** (17/10, 00:20): merge in dev `3e5336a0a`, CHANGELOG A7a+A7b in `0e83e1cd5` (4 ✨ dopo «Password-reset
+  links», 🐛 A-13 in fondo a Fixed). I due rossi del layout sono di Y (`ec018afdf`), che li cura. La base di A resta
+  `ec73a49c1` fino al prossimo checkpoint (worktree sporco con A7b-2).
+- **Correzione del controllo 3** (dal coordinatore, 00:30): B4 sposta `_NoInputEchoRoute` in
+  `backend/app/api/no_echo.py` (`NoInputEchoRoute`): per non collidere il mio gestore sta in un modulo mio
+  (`api/validation_errors.py`) e **non tocco** `plugin_settings.py` né la classe; toglierla dopo l'ingresso di entrambi
+  è **A-37** (backlog). Tolta da `work/a7b2/apply_a35.py` la parte su `plugin_settings.py`.
+- **Revisione in sola lettura di B4** (chiesta dal coordinatore: B scrive nei miei file): `password_policy.py`
+  (`failed_rules`/`password_rules_public` con `rules=`, `rules_with_minimum_length`, `_rules()` che legge
+  `PASSWORD_RULES` a ogni chiamata), `PasswordStrength.svelte` (prop `rules` facoltativa), i test B4-RULES-01..09 e la
+  descrizione `password-policy`: **OK**. Nota non bloccante: il componente legge una lista **vuota** come assente, il
+  backend come «nessuna regola»; innocuo, `rules_with_minimum_length` non dà mai una lista vuota.
+
+### A7b-2.1 — Rossi ✅ (17/10, 00:23–)
+
+- **Test** (tre `test-author`, sola scrittura):
+  - API (`test_admin_setup_api.py`, `test_users_admin_api.py`): SETUP-014 (×3: link di reset speso, `user reset`,
+    `user activate` → `deactivate`), SETUP-015 (cambio password, difesa in profondità), guardia SETUP-016 (×4);
+    UADM-068 (×3), UADM-070 (attivazione della PATCH), UADM-071 (link rifiutato di un account attivo: **tutti** i suoi
+    link ritirati), guardia UADM-069 (×4);
+  - servizi: `test_account_tokens.py` (C1, 10), `test_admin_bootstrap.py` (A32-001…007, A33-001…003: 21 rossi, 13
+    guardie; A32-007 è il caso del CLI con un link scaduto, dalla revisione di E), `test_user_profile.py` (UPROF-003…005);
+  - A-35: `test_validation_errors_api.py` (nuovo, registrato come `api validation-errors`, write-scoped): parte pura
+    (6 rossi, 1 guardia), corsia (22 rossi su 8 rotte, 2 guardie: forma del 422 e schema OpenAPI invariati).
+- **Osservati** (corsia, carico < 50): `api admin-setup` **4 rossi** (SETUP-014 ×3, SETUP-015: il setup risponde 200, la
+  presa di possesso), 46 verdi; `api users-admin` **5 rossi** (UADM-068 ×3, 070, 071), 95 verdi; `api
+  validation-errors` **28 rossi**, 3 verdi. Tutti per la ragione giusta.
+- **Revisione di E** su A7b (dal coordinatore): il percorso del CLI e i link scaduti sono già dentro D1; il CLI resta
+  permissivo (`user activate` + `user reset` è la via dell'operatore), da documentare in `cli_tools`.
+> **Scelta**: il ritiro (e la revoca al cambio d'indirizzo) valgono per **ogni** account, non solo per quello in
+> attesa: lo chiedono UADM-070 e SETUP-015. Così cambiano per costruzione cinque test esistenti, aggiornati dal
+> `test-author` dei servizi: BOOT-014 `[pending-both]`, `[pending-the-email]` (ora `EXPIRED` e il link revocato) e i tre
+> di A-27 in `test_session_version.py` (il link `its-admin-setup` della fixture ora si muove: ritirato dopo una
+> password, revocato dopo un indirizzo).
+- **Rossi dei servizi** (00:50–00:56): `services account-tokens` **10**, `admin-bootstrap` **23** (21 nuovi + BOOT-014 ×2
+  aggiornati), `user-profile` **2**, `session-version` **3** (i tre di A-27 aggiornati). In tutto A7b-2 ha **75 rossi**,
+  ciascuno sull'asserzione prevista.
+
+### A7b-2.2 — Codice ✅ (17/10, 00:57)
+
+- Applicati `work/a7b2/apply_a32_a33.py` (`token_service.retire_tokens`; il ritiro in `update_user_status`,
+  `set_user_active`, `reset_password`, `complete_password_reset`, `change-password`, e nel rifiuto di
+  `complete_admin_setup`; la revoca al cambio vero d'indirizzo in `_follow_variables` — che ora dice anche se
+  l'indirizzo è cambiato, per il messaggio del log — e in `update_profile`) e `work/a7b2/apply_a35.py`
+  (`api/validation_errors.py` con `install_validation_error_handler`, la riga in `main.py`; `plugin_settings.py`
+  intatto). `ruff` pulito, `black` ha unito una riga nuova di `token_service.py`.
+- Doc: `docs-writer` su `admin/hosting_providers`, `admin/users`, `admin/cli_tools`, `security`, `access_control` e
+  la pagina sul formato degli errori (non `patterns/plugin_settings.md`: A-37).
+- Dal `docs-writer` (9 pagine EN, solo lettura del codice): la docstring di `POST /auth/setup` diceva ancora «revoked»
+  → ora «setup links are then retired» (`auth.py`); `api sync` cambia `generated.ts` **solo** in quella descrizione (6
+  righe di diff), lo schema `ValidationError` resta. Lasciati per il coordinatore: `admin/configuration.en.md` (ha
+  traduzioni) dice che ogni avvio senza link scrive l'avviso di scadenza, ma l'avvio che applica un indirizzo nuovo
+  scrive quello del cambio d'indirizzo; `user activate` sull'admin in attesa, a istanza piena, avvisa del limite benché
+  il suo posto sia già contato (preesistente).
+
+### A7b-2.3 — Verdi ✅ (17/10, 00:58–01:34)
+
+- `api sync` dopo il codice: `generated.ts` identico (hash `0b13c243009e`); dopo la docstring, solo la descrizione di
+  `POST /auth/setup`.
+- **Servizi**: `account-tokens` **76**, `admin-bootstrap` **190**, `user-profile` **52**, `session-version` **54**.
+- **API**: `admin-setup` **50**, `users-admin` **100**, `validation-errors` **31**, `auth` **95**, `registration`
+  **102**, e i vicini del 422 globale: `plugin-settings` **14** (il loro test «no echo» passa col gestore globale e con
+  la `route_class` ancora lì), `email-verification` **49**, `email-verification-hooks` **16**, `tools` **12**.
+- `check-orphans` pulito; `mkdocs build` strict ✓ (3 084 URL); `check-links` ✓; `git diff --check` pulito; porta 6182
+  libera.
+- **A-34 non fatto, di proposito**: non è «poco costoso». `test_session_version.py` fissa `end_sessions` come funzione
+  semplice e sincrona (contratto 5, 30 riferimenti); l'incremento in SQL la rende asincrona con la sessione in 9
+  chiamate e riscrive quel contratto. Resta nel backlog, da proporre col lotto A8 (che tocca le sessioni) o da solo.
+
+### A7b-2 — Definizione di fatto ✅ (17/10, 01:35)
+
+A-32 (C1/C2, più il rifiuto di `complete_admin_setup`), A-33 (C3), A-35 (C5, gestore globale in `api/validation_errors.py`
+più la riga in `main.py`, da far rivedere ad H), doc (C6). Rossi prima del codice (75), verdi dopo, nessun file di altri
+toccato (`plugin_settings.py` intatto: A-37). Restano: A-34 (backlog), A-37 (dopo B4).

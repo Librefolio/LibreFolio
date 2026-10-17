@@ -4212,3 +4212,144 @@ il testo inglese.
 
 > **Al coordinatore**: l'esito, le note per B (cripto 2–3, ripristino 1–4) e per A (1–4, 6), le domande del cloud
 > (cripto 2, A7b-2 nota 3) e la nota 7 per chi tiene i gestori. Nessuna correzione da parte mia.
+
+> **R13-SEC4 committato ed entrato** (coordinatore, 03:08; dev `110125350`; HEAD portato avanti con un fast-forward).
+> Lo smistamento:
+> - B (B4b): i resti dopo un crollo, l'avviso di `decrypt`, `getpass`, `autocomplete`;
+> - A: la corsa, la disattivazione, il `msg` del 422, l'admin in attesa;
+> - H: `ResponseValidationError`, che diventa H-33;
+> - le 2 domande del cloud vanno al developer.
+
+### E-12 — Catch-all e sottodomini di Fastmail
+
+#### E-12.0 — Analisi ✅ (2026-10-17, 03:10–03:20)
+> **Il compito del coordinatore** (03:08): E-12, poi in attesa per R13-SEC5 (X-R38, C-97b, Z-20, J CP-10c).
+
+**Stato reale**: dopo E-9, `delivery.mailbox_budget_key()` unisce `+tag`, i punti di Gmail e `googlemail.com`. Restano
+due casi in cui ogni parte locale è una chiave nuova, e li limita solo il budget orario dell'istanza (50/h per
+processo):
+- **un dominio catch-all**, dove tutto `*@dominio` arriva a una casella;
+- **l'indirizzamento a sottodominio di Fastmail**: `qualsiasi@utente.fastmail.com` arriva a `utente@fastmail.com`.
+  - Una ricerca web lo conferma: vale per **tutti** i domini di Fastmail (`fastmail.com`, `fastmail.fm`,
+    `fastmail.co.uk`… sono decine) e per i domini personali dei clienti, con il DNS a posto.
+
+**Le strade**
+1. **Una regola Fastmail nella chiave** (`x@u.fastmail.com` → `u@fastmail.com`). È piccola, ma non si può fare
+   completa: decine di domini e i domini personali. Il catch-all resta. ✗
+2. **Un limite per dominio destinatario**, che coprirebbe catch-all e Fastmail insieme (`x@u.fastmail.com` ha dominio
+   `u.fastmail.com`). Ma su `gmail.com` unirebbe tutti gli utenti, e allora:
+   - (2a) un elenco di grandi provider esenti, che non è mai completo: un'istanza self-hosted pubblica con molti utenti
+     di un provider non in elenco verrebbe frenata;
+   - (2b) una variabile nuova, per esempio `LIBREFOLIO_SMTP_MAX_PER_DOMAIN`.
+     - Spenta di default, come chiede la regola della specifica.
+     - Il profilo `managed` avrebbe un default, per esempio 20/h, che sta largo sopra il traffico legittimo di
+       un'istanza piccola (`max_users`).
+     - È una scelta di prodotto, ed è un lotto piccolo-medio: variabile, controllo di configurazione, tre punti di
+       chiamata, test e docs con la riga di C-99.
+3. **Accettare il resto e chiudere E-12**, senza codice.
+
+**Proposta: (3).**
+- Dopo N62 queste email non portano testo dell'attaccante: sono messaggi di LibreFolio innocui, e il budget d'istanza
+  li limita.
+- Chi ha un catch-all è un utente tecnico, e il caso è raro.
+- La leva vera dell'abuso è la registrazione aperta. La domanda del cloud sul DoS del budget, già al developer
+  (captcha o proof-of-work, limiti alla registrazione), copre lo stesso terreno con una cura migliore.
+- La doc lo dice già, da E-9: in `admin/email.en.md`, «One mailbox, however its address is written», i catch-all e
+  Fastmail sono frenati solo dal limite orario.
+- **Se il coordinatore o il developer vogliono il codice**, la strada è la (2b), in un lotto suo.
+
+#### E-12.1 — Chiusa come accettata ✅ (2026-10-17, 03:10)
+> **Decisione del coordinatore** (03:10): chiudere E-12 come accettata, con la ragione nel backlog e un rimando a
+> **D-E9-1**, la domanda anti-abuso sulla registrazione aperta, che è col developer. Nessun codice. Il checkpoint del
+> journal lo committa lui al prossimo passaggio.
+>
+> **Fatto**: E-12 ✅ nel backlog, con le ragioni di «E-12.0», il rimando a D-E9-1 e la strada (2b) se il codice servirà.
+>
+> **Dopo**: in attesa degli SHA di R13-SEC5, verso le 04:00, a slot dopo il freeze finiti.
+>
+> **E-12 committato ed entrato** (coordinatore, 03:10; dev `dfb1fcafd`; HEAD portato avanti con un fast-forward).
+
+### R13-SEC5 — Revisione di sicurezza: C-97b, X-R24/25, poi X-R38 (2026-10-17, 03:11–)
+> **Il compito del coordinatore** (03:10): sui lotti già committati nei loro rami, letti dagli oggetti git e mai dai
+> worktree:
+> 1. **C-97b** (W, `24aa1d69b` più `527306638` del journal): l'input decimale, `ExactDecimalInput`, la grandezza nel
+>    Bulk, la mini-modale degli eventi. Solo frontend.
+> 2. **X-R24/25** (X, `e22251856`): i provider di default della ricerca, senza quelli di test.
+>
+> X-R38, i limiti FX, viene quando X lo committa. Due revisioni in parallelo, una per lotto.
+>
+> **C-97b** (`24aa1d69b`, 03:11–03:21): **nessun reperto sopra la soglia.**
+> - **Sano**:
+>   - il messaggio di `EVENT_TOO_MANY_DIGITS` usa solo `date` e `type`, validati, e la mini-modale lo mostra come testo;
+>   - il Form ha 10 decimali come la colonna `RealDecimal(22,10)`, e il payload nasce da stringhe esatte;
+>   - la mini-modale manda la stringa normalizzata, senza `parseFloat`;
+>   - la «grandezza» nel Bulk toglie solo gli zeri finali, ed `exactDecimalEqual` evita un diff falso;
+>   - le regex dell'input sono lineari, e il backend rifiuta sempre: il frontend aggiunge solo rifiuti;
+>   - le stringhe i18n sono testo.
+> - **In più, il lotto chiude un pozzo `{@html}`**: nel Bulk una quantità non numerica finiva cruda in `{@html}`
+>   (`DataTableCellContent.svelte:202`); ora la quantità è escapata.
+> - Note, minime, tutte self-DoS o di visualizzazione:
+>   - un `1e-8` incollato diventa `18`: si vede, e c'era già;
+>   - la cassa del Bulk e l'editor dell'asset passano ancora da `Number`, esatto dentro i limiti del backend;
+>   - una regex quadratica nella cella del Bulk;
+>   - un incolla enorme fa calcolare `10n ** places` quando ci sono `min` e `max`;
+>   - il toast di successo mostra 2 decimali.
+
+> **X-R24/25** (`e22251856`, 03:11–03:15): **nessun reperto sopra la soglia.** Il commit restringe solo l'insieme di
+> default della ricerca.
+> - **Sano**:
+>   - l'insieme di default è uguale a `GET /assets/provider`;
+>   - `NOT_CONFIGURED` si riporta, non si aggira;
+>   - i nomi dei provider si confrontano esatti col registro;
+>   - gli errori portano solo i codici.
+> - Note per X:
+>   1. **`mockprov` è nell'immagine di produzione, sempre registrato.** Ogni utente lo nomina in una ricerca
+>      (`search.py:216-217`) e lo assegna a un asset con `POST /assets/provider`, che non controlla né il registro né
+>      `test_only` (`schemas/provider.py:282`): un asset prende così una serie finta di 100 USD al giorno.
+>      - Non dà poteri nuovi, perché è la classe di D-SEC2-1: gli asset sono globali e chiunque ne cambia il provider.
+>      - L'irrobustimento costa poco: rifiutare i codici `test_only` fuori dalla modalità test, in
+>        `core.configured_provider` e nell'assegnazione.
+>   2. **F05 non c'è ancora a questo commit**: `registry.py` non ha `is_allowed`. Quando entra, deve chiudere anche la
+>      strada del provider nominato (`configured_provider` / `get_plugin`), non solo l'elenco e il default.
+>   3. Minima: `_default_search_codes` tratta un codice sconosciuto come permesso, mentre FX lo rifiuta. Qui è innocuo.
+>
+> **X-R38** (`80f5c65ff`, 03:44–03:58): **nessun reperto sopra la soglia nel diff.**
+> - **Sano**:
+>   - **gli scrittori**: i quattro insert in `fx_rates` (`storage.py:165`, `sync.py:366, 773, 848`) passano tutti dalla
+>     normalizzazione e da `storable_fx_rate`, col controllo sul valore **invertito**, e il ripristino è solo per gli
+>     admin;
+>   - **la colonna** è `Numeric(24,10) NOT NULL`, quindi NaN non entra. Il limite vuole un valore finito, con al più 14
+>     cifre intere e un troncamento non nullo; zero e negativi sono rifiutati;
+>   - **i casi limite**, provati in processo con pydantic 2.13.5:
+>     - NaN, sNaN, -Infinity, `1e400`, `0`, `-1` e `"0x10"` danno 422;
+>     - `1E+1000000` e `1E-1000000` danno 400 in O(1);
+>     - un MB di cifre dà 400 in 2 ms;
+>   - **i messaggi** di rifiuto non portano il valore;
+>   - **la sync** salta senza interrompersi e avvisa una volta per coppia, al più 10 date, senza valori;
+>   - **`convert_bulk`**: limiti come parametri legati; ±inf, 0 e 1e-11 sono esclusi, e il salto si riporta come
+>     backward fill.
+> - **Fuori dal diff, ma sopra la soglia per il profilo gestito: MEDIUM 8/10**, la classe di D-SEC2-1.
+>   - Le scritture FX chiedono solo il login: `POST` e `DELETE /fx/rate`, `POST /fx/sync`, le rotte dei provider
+>     (`currencies.py:45, 95, 167`, `providers.py:171, 352`).
+>   - Ogni utente può:
+>     - sovrascrivere un tasso con un valore falso ma nel limite;
+>     - cancellare lo storico di una coppia;
+>     - scrivere un `source` libero, senza limite di lunghezza, anche «ECB», che l'AI Export chiama «authoritative».
+>   - Va aggiunto alla domanda D-SEC2-1 del developer: solo admin o un interruttore d'istanza, e un `source` vincolato.
+> - Note:
+>   1. **X-R45**, già nel backlog: alcuni lettori interrogano `fx_rates` senza il filtro: `fx_quotes.py:100` accetta
+>      `Infinity`, gli export del backup danno le righe crude, lo scheduler conta come fresca una riga inutilizzabile.
+>      Vale solo per le righe vecchie.
+>   2. **Un doppio limite**: un tasso a meno di 0,008 da 1E+14 passa, e SQLite lo tiene come 1e14, che la conversione
+>      salta. Inganna solo chi l'ha scritto. La direzione: richiedere anche `float(v) < 1E+14`.
+>   3. **`normalize_storable_rate`** può rendere zero quando l'inverso va in underflow, contro la sua docstring. I
+>      chiamanti di oggi lo ricontrollano; la direzione: `> 0` dopo l'inversione.
+>   4. **I tassi manuali** si salvano senza troncamento, quelli della sync troncati; l'eco cresce in modo lineare, non
+>      come J-27.
+>   5. **BOE e SNB**: `Decimal(str)` non prende `InvalidOperation`, quindi un valore ostile fa fallire il fetch di quel
+>      provider. È solo disponibilità.
+>   6. A `80f5c65ff` il gestore globale dei 422 di A non c'è ancora: l'eco dell'`input` è solo il payload di chi
+>      chiama. Senza effetto.
+>
+> **R13-SEC5 chiusa**: nessun reperto sopra la soglia nei quattro lotti. Il punto fuori diff sulle scritture FX va al
+> coordinatore per la domanda D-SEC2-1.

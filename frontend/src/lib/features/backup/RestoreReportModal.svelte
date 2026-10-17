@@ -38,6 +38,8 @@
     const canConfirm = $derived(!busy && confirmable && confirmationMatches(typed, word));
     const changedTables = $derived(Object.entries(report.tables).filter(([, rows]) => (rows.before ?? 0) !== (rows.after ?? 0)));
     const hiddenDifferences = $derived(Math.max(0, report.control_totals_differences_count - report.control_totals_differences.length));
+    // Decision 39: the saved keys of the data providers this instance cannot read, to enter again after the restore.
+    const unreadableSecrets = $derived(report.secrets_unreadable.system + report.secrets_unreadable.user);
 
     function confirm() {
         if (canConfirm) onConfirm();
@@ -103,6 +105,18 @@
                 <KeyRound class="shrink-0" size={14} aria-hidden="true" />
                 {report.instance_key_included ? $_('backup.restore.report.keyIncluded') : $_('backup.restore.report.keyNotIncluded')}
             </p>
+            {#if report.secrets_rekeyed > 0}
+                <p class="flex items-start gap-2" data-testid="restore-report-secrets-rekeyed" data-count={report.secrets_rekeyed}>
+                    <KeyRound class="mt-0.5 shrink-0" size={14} aria-hidden="true" />
+                    <span>{$_('backup.restore.report.secretsRekeyed', {values: {count: report.secrets_rekeyed}})}</span>
+                </p>
+            {/if}
+            {#if unreadableSecrets > 0}
+                <p class="flex items-start gap-2 text-lf-warning" data-testid="restore-report-secrets-unreadable" data-count={unreadableSecrets}>
+                    <TriangleAlert class="mt-0.5 shrink-0" size={14} aria-hidden="true" />
+                    <span>{$_('backup.restore.report.secretsUnreadable', {values: {count: unreadableSecrets}})}</span>
+                </p>
+            {/if}
         </section>
 
         <section class="space-y-1 text-sm" data-testid="restore-report-totals" data-status={report.control_totals}>

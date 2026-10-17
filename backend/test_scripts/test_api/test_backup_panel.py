@@ -24,13 +24,14 @@ the administrators' routes of ``instance.py``.
 - PANEL-012, the token missing or wrong (no ``Authorization``, the token under ``Basic``, ``Bearer`` with nothing,
   another token, a prefix, an extension or the capitals of the token, the token in the query string): each route
   answers 401 ``backup_panel_unauthorized`` with ``WWW-Authenticate: Bearer``; the jobs are never reached.
-- PANEL-013..017, with the token, the panel's own jobs and nothing else. The start asks for a run of origin ``panel``
-  (202, its first state). The poll, the download and the deletion read the job first, and a job of another origin
-  (``ui``, ``cli``, ``pre-restore``) answers exactly as a job that does not exist, 404 ``backup_job_not_found``: its
-  archive is never read, the job never deleted. The calls: start → start_backup("panel"); poll → get_job; download →
-  get_job, job_archive; delete → get_job, delete_job. The download is the archive's exact bytes, ``application/zip``,
-  an attachment under its name, ``Cache-Control: no-store``. A running job of the panel: 409 ``backup_job_not_ready``
-  and ``backup_job_running``. The token read from its file opens the routes as the variable does, and the variable wins.
+- PANEL-013..017, with the token, the panel's own jobs and nothing else. The start asks for a run of origin ``panel``,
+  without a password (B4: the panel never encrypts) (202, its first state). The poll, the download and the deletion read
+  the job first, and a job of another origin (``ui``, ``cli``, ``pre-restore``) answers exactly as a job that does not
+  exist, 404 ``backup_job_not_found``: its archive is never read, the job never deleted. The calls: start →
+  start_backup("panel"); poll → get_job; download → get_job, job_archive; delete → get_job, delete_job. The download is
+  the archive's exact bytes, ``application/zip``, an attachment under its name, ``Cache-Control: no-store``. A running job
+  of the panel: 409 ``backup_job_not_ready`` and ``backup_job_running``. The token read from its file opens the routes as
+  the variable does, and the variable wins.
 - PANEL-018, a start that cannot run answers the administrators' codes (``job_views.start_job``): 409 ``backup_busy``,
   500 ``backup_folder_unusable``, 500 ``backup_failed``, never a path or the system's words.
 - PANEL-019, an administrator (``instance.py``, no origin) sees every job, the panel's included, with the calls of
@@ -131,12 +132,15 @@ def a_token() -> str:
 class FakeJobs:
     """``jobs.start_backup``, ``get_job``, ``job_archive`` and ``delete_job``, the service the routes call, replaced in this
     process. It holds jobs of the test, each finished one with a small archive of its own under ``folder``, and records
-    every call as ``(name, origin)`` for a start and ``(name, job id)`` for the others. It answers as the service does:
+    every call as ``(name, origin)`` for a start and ``(name, job id)`` for the others; the password each start received
+    (B4) is recorded apart, in ``start_passwords``, so the calls read as they did before. It answers as the service does:
     an unknown id raises ``BackupJobNotFoundError``; the archive of a job not done, and the deletion of a running one,
     ``BackupJobStateError``."""
 
     folder: Path
     calls: list[tuple[str, str]] = field(default_factory=list)
+    #: The ``password`` of each ``start_backup``, in order: None for a backup in the clear.
+    start_passwords: list[str | None] = field(default_factory=list)
     known: dict[str, jobs.BackupJob] = field(default_factory=dict)
     #: What ``start_backup`` raises instead of starting a run; None: it starts one.
     start_error: BaseException | None = None
@@ -169,8 +173,9 @@ class FakeJobs:
 
     # --- the service, as the routes call it ------------------------------------------------------------------------
 
-    def start_backup(self, *, origin: str = "ui", data_dir: Path | None = None) -> jobs.BackupJob:
+    def start_backup(self, *, origin: str = "ui", data_dir: Path | None = None, password: str | None = None) -> jobs.BackupJob:
         self.calls.append(("start_backup", origin))
+        self.start_passwords.append(password)
         if self.start_error is not None:
             raise self.start_error
         return self.running(origin)
@@ -624,9 +629,9 @@ async def test_without_the_token_each_route_answers_401_and_reaches_no_job(app, 
 
 @pytest.mark.asyncio
 async def test_with_the_token_the_panel_starts_polls_downloads_and_deletes_its_job(app, monkeypatch, service):
-    """PANEL-013: start 202 with its first state, a run of origin ``panel``; poll 200 done; download 200 with the archive's
-    exact bytes, ``application/zip``, an attachment, ``Cache-Control: no-store``; delete 204; then the job is gone. Each
-    route reaches the service with exactly the calls of the panel."""
+    """PANEL-013: start 202 with its first state, a run of origin ``panel`` without a password (the panel never encrypts);
+    poll 200 done; download 200 with the archive's exact bytes, ``application/zip``, an attachment, ``Cache-Control:
+    no-store``; delete 204; then the job is gone. Each route reaches the service with exactly the calls of the panel."""
     print_section("Backup panel: a backup, from the start to the deletion")
     token = a_token()
     monkeypatch.setenv(TOKEN_VARIABLE, token)
@@ -644,6 +649,7 @@ async def test_with_the_token_the_panel_starts_polls_downloads_and_deletes_its_j
 
     first = started.response.json()
     assert (first["status"], first["phase"], first["error_code"]) == ("running", "preparing", None) and start_calls == [("start_backup", "panel")], f"the start asks for one run of origin panel and answers its first state: {first}, calls {start_calls}"
+    assert service.start_passwords == [None], f"the panel never encrypts: its start carries no password: {service.start_passwords}"
     assert polled.response.status_code == 200 and poll_calls == [("get_job", job_id)], f"the poll reads the job: {polled.answer}, calls {poll_calls}"
     view = polled.response.json()
     assert (view["job_id"], view["status"], view["file_name"], view["file_size"]) == (job_id, "done", done.file_name, len(archive)), f"the poll answers the job done, with its archive: {view}"
@@ -758,6 +764,7 @@ async def test_a_panel_start_that_cannot_run_answers_the_shared_codes_and_nothin
     started = await send(app, "POST", PANEL, authorization=f"Bearer {token}", never=[token])
 
     assert service.calls == [("start_backup", "panel")], f"Precondition: the route asked for a run of origin panel: {service.calls}"
+    assert service.start_passwords == [None], f"the panel never encrypts: its start carries no password: {service.start_passwords}"
     assert started.code == (status_code, code), f"expected {status_code} with detail.code {code!r}: {started.answer}"
     leaked = [word for word in (str(DATA_DIR), *SYSTEM_WORDS) if word in started.response.text]
     assert leaked == [], f"the answer must not carry the server's path or the system's words: {leaked} in {started.response.text}"

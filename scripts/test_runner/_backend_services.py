@@ -1128,6 +1128,14 @@ def services_profile_defaults(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Profile defaults tests", verbose=verbose)
 
 
+def services_request_float_inputs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every float a request can carry refuses infinity and NaN in its schema (H-32)."""
+    print_section("Services: Request Float Inputs")
+    print_info("Testing: every route of backend.app.main (iter_route_contexts): bodies, nested models, query, path, header and cookie parameters")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_request_float_inputs.py", test_names)
+    return run_command(cmd, "Request float inputs tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -1270,6 +1278,30 @@ def services_backup_totals(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: backend/app/services/platform/instance_backup/totals.py (ledger_totals_of, compare_totals)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_totals.py", test_names)
     return run_command(cmd, "Instance backup ledger totals tests", verbose=verbose)
+
+
+def services_backup_envelope(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the envelope of a secure backup (.lfbk): scrypt and AES-256-GCM in chunks, its header, every tampering."""
+    print_section("Services: Secure Backup Envelope")
+    print_info("Testing: backend/app/services/platform/instance_backup/envelope.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_envelope.py", test_names)
+    return run_command(cmd, "Secure backup envelope tests", verbose=verbose)
+
+
+def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
+    print_section("Services: Secure Backup Rules")
+    print_info("Testing: backend/app/services/platform/instance_backup/secure.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_secure_rules.py", test_names)
+    return run_command(cmd, "Secure backup rules tests", verbose=verbose)
+
+
+def services_backup_secure(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a secure backup through the services: the job that encrypts it with the key, the check of an envelope, the secrets re-encrypted."""
+    print_section("Services: Secure Backup")
+    print_info("Testing: backend/app/services/platform/instance_backup/jobs.py, archive.py, staging.py, restore_jobs.py (lot B4)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_secure.py", test_names)
+    return run_command(cmd, "Secure backup tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1684,7 +1716,7 @@ Note: No backend server required.
         "password-policy",
         services_password_policy,
         name="Password Policy",
-        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points",
+        desc="the five rules of a new password in one place: published in order (GET /system/instance), failed_rules in the policy's order, Unicode classes Lu/Ll/Nd and symbols, length in code points; lists made from them (rules=, rules_with_minimum_length: a minimum raised, never lowered, the rules read at each call), as a secure backup's password takes them",
         # PURE: a module of plain functions; no database, no server, no environment variable.
         isolation="pure",
     )
@@ -2123,6 +2155,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "request-float-inputs",
+        services_request_float_inputs,
+        name="Request Float Inputs",
+        desc="H-32: every float a request can carry (body, nested model, query, path, header, cookie) refuses inf, -inf, NaN and 1E+400 in its schema; barriers on the number of routes walked",
+        # The app is imported, never served: its routes are walked with iter_route_contexts and each float judged with a
+        # TypeAdapter. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "client-address",
         services_client_address,
         name="Client Address",
@@ -2230,6 +2272,34 @@ Note: No backend server required.
         # PURE: every data directory under tmp_path, with a production data directory of the test configured (which must
         # stay absent) but in the one case that configures the test's own instance; the restore's state is a model built
         # in the test. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-envelope",
+        services_backup_envelope,
+        name="Secure Backup Envelope",
+        desc="The .lfbk envelope (lot B4, decisions 38 and P12): its constants; round trips at the chunk edges; the 52-byte header at its offsets; known answers built with cryptography's Scrypt and AESGCM; bounds refused before any derivation (envelope_unsupported), too short or not ours (envelope_damaged); wrong_password, also for changed key parameters; every tampering of the chunks (a byte, a tag, truncations, an appended, swapped, dropped or repeated chunk) envelope_damaged with nothing left; NFC, not NFKC; no overwrite, 0600, .part only while writing, progress; the key never in its repr; constant memory",
+        # PURE: files under tmp_path only. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-secure-rules",
+        services_backup_secure_rules,
+        name="Secure Backup Rules",
+        desc="The rules of a secure backup (lot B4, P12, decision 39): the password's, the accounts' rules with at least 12 characters and up to 1024, following a longer minimum of the accounts; the instance key a backup may carry, the generated one only, as its text, never a configured one, never an unusable one, never created",
+        # PURE: data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables. No DB, no server, no
+        # network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-secure",
+        services_backup_secure,
+        name="Secure Backup",
+        desc="A secure backup through the services (lot B4): run_backup with a password writes an .lfbk (encrypting phase; no clear zip, part or password left; the envelope's size and hash), the generated instance key inside (never a configured, missing or unusable one: instance_key_unusable), its failures (backup_no_space, backup_failed); the check of an envelope (decrypting first, the same report as its zip's, no archive.zip or secrets/ left), password_required and envelope_damaged, start_check keeping the upload on a missing or wrong password; the key entry's rules; the plugin secrets re-encrypted with this instance's key, or counted unreadable",
+        # PURE: data directories, databases and archives under tmp_path. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
