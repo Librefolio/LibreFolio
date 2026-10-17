@@ -13,7 +13,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/promotion.py` | `TransactionPromotionMixin`: transfer promotion, the split and promote type maps, promote suggestions |
 | `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
 | `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
-| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, preload/access, balance replay, response |
+| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, the decimal-limit and date checks, preload/access, balance replay, response |
 | `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
 | `backend/app/services/transactions/batch_creates.py` | Creates, promotes, and the links between the legs of new pairs |
 | `backend/app/services/transactions/batch_costs.py` | WAC and FX issues, and the required cost basis |
@@ -59,7 +59,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()`, then `check_decimal_limits()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)) |
+| 1 | `parse_inputs()`, then `check_decimal_limits()` and `check_dates()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), and a date outside 1900-01-01 … today + 1 year (N74, see [Transaction dates](#transaction-dates)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -97,9 +97,10 @@ Raw create, update, split, and promote rows are parsed leniently, and the mutati
 loops append row-level failures while continuing with other rows. This is not a
 promise that every possible error is collected:
 
-- any `accessDenied` issue, or a checked value past its column's digits before the
-  decimal point (see [Decimal limits](#decimal-limits)), causes an early response right
-  after the access check, before the mutation stages run: `committed=False`, the issues
+- any `accessDenied` issue, a checked value past its column's digits before the
+  decimal point (see [Decimal limits](#decimal-limits)), or a date out of range (see
+  [Transaction dates](#transaction-dates)), causes an early response right after the
+  access check, before the mutation stages run: `committed=False`, the issues
   collected so far, empty results;
 - inline WAC, and with it the cost of a split's giving leg, is skipped when a
   non-balance issue already exists; and
@@ -140,7 +141,8 @@ an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cos
 
 `check_decimal_limits()` (`transaction_batch_stages.py`; C-97, issue #43) reads every
 parsed create and update, and the cost basis each promote resolves
-(`resolved_fields.cost_basis_override`, the merged value of the PromoteMergeModal), on the
+(`resolved_fields.cost_basis_override`, a merged value only an API client sends: see
+[Request shape](split_promote.md#promote-request-shape)), on the
 same `cost_basis_override` column: until W-B58 a promote's cost skipped the check, and the
 REAL rounded it in silence. A `quantity` keeps 10 decimal places, a `cash.amount` 6 and a
 manual `cost_basis_override` — a per-unit price — 12, the scales of their `transactions`
@@ -159,8 +161,8 @@ value is over several, `integerDigitsExceeded` also for a value that is not fini
 params `{"max": N}` and `field` (`quantity`, `cash.amount` or `cost_basis_override`). A
 promote's issue has `operation` `promote` and the promote's index. The English `error`
 names the field and the limit, such as *Quantity: at most 15 digits before the decimal
-point*. The frontend puts the field label in front of the three codes
-(`FIELD_PREFIXED_CODES` in `resolveValidationMessage.ts`; the third is
+point*. The frontend puts the field label in front of the three codes, listed with
+`dateOutOfRange` in `FIELD_PREFIXED_CODES` (`resolveValidationMessage.ts`; the third is
 `transactions.errors.integerDigitsExceeded`, *At most {max} digits before the decimal
 point*): *Quantity: At most 10 decimal places*.
 
@@ -185,6 +187,51 @@ from a total, is rounded by the plugin (decision D6, see
 meets neither of the first two refusals; no rounding takes away digits before the decimal
 point, which are checked as for any other value. The column types are in
 [Decimal Columns](../../architecture/database/index.md#decimal-columns).
+
+Above these limits sits the exponent bound of the currency schema (R13-SEC7-3, see
+[Decimal Columns](../../architecture/database/index.md#decimal-columns)): a `Currency`
+amount — a cash amount, a cost basis, the cost basis a promote resolves (typed since
+H-41) — whose exponent (`Decimal.adjusted()`) is outside ±100, `0E-999999999` included,
+never reaches `check_decimal_limits()`. The lenient parse refuses its row, or its
+promote: a `value_error` issue on the field (`cash.amount`, `cost_basis_override.amount`),
+no `params`. As with any parse refusal, the batch's other operations are still checked,
+and nothing is committed. A quantity is no `Currency`: `1E+1000000` units still get
+`integerDigitsExceeded`. Before R13-SEC7-3, a promote's resolved cost basis that the
+currency schema refused, such as an amount that is no number, reached the promotion,
+whose `Currency.model_validate()` raised out of the batch: a 500.
+
+### 📅 Transaction dates {: #transaction-dates }
+
+`check_dates()` (`transaction_batch_stages.py`; night decision N74 of R13-SEC7-3, pending
+the developer's review) runs right after `check_decimal_limits()`. A transaction's date
+must lie between 1900-01-01 (`TRANSACTION_DATE_MIN`) and today one year on:
+`transaction_date_bounds()` takes today from `today_date()`, in UTC, and maps a
+29 February to 28 February. The stage reads:
+
+- the `date` of every parsed create;
+- the `date` of an update that sets one: an update that leaves an older row's date alone
+  is not refused for it;
+- the date a promote resolves (`resolved_fields.date`): typed since H-41, so one that is
+  no date, or an explicit `null`, is already refused at the parse (see
+  [Request shape](split_promote.md#promote-request-shape)).
+
+Out of the range, the row gets one issue: code `dateOutOfRange`
+(`TXValidationCode.DATE_OUT_OF_RANGE`, listed by `GET /transactions/types` →
+`validation_codes`), `field` `date`, `params` `{"min", "max"}` as ISO dates, and the
+English `error` *Date: between 1900-01-01 and 2027-10-17*. A promote's issue has
+`operation` `promote` and the promote's index; an update's has the row's id as `ref_id`.
+`check_dates()` then returns `True`, and `execute_batch()` stops right after
+`preload_and_authorize()`, as for the integer digits: the batch's usual 200, with
+`committed=False`, the issues collected so far and no results. It stops because the stages
+after it replay a broker's days and look rates up at a row's date. A broker import (BRIM)
+confirms through this batch, so its rows are checked here too, when the bulk workspace
+validates or saves them (as for the decimal limits, decision D2).
+
+The bound is one year ahead because the interface never offers a future date
+(`SingleDatePicker`, whose `allowFuture` is false by default), while a broker's report can
+put a row ahead of today: time zones, settlement dates. The frontend reads the code as
+`transactions.errors.dateOutOfRange`, *Between {min} and {max}*, behind the field label
+(`FIELD_PREFIXED_CODES`): *Date: Between 1900-01-01 and 2027-10-17*.
 
 ---
 
