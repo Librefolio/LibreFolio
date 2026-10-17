@@ -5400,6 +5400,19 @@ l'avviso, a base 100 no, la migrazione va su e giù, e X ha rivisto il plugin.
 9. ✅ 17/10 ~20:27 — Ingresso: dev `51b5c8db1`, CHANGELOG 🐛 `b8bcc8cd2`. Pagina devWiki
    `wiki/problems/yahoo-bars-dated-one-day-early-east-of-utc.md` (riga dell'indice, voce del log;
    `check_source_paths.py`: i 13 percorsi della pagina esistono, i 7 mancanti del controllo sono di altre pagine).
+10. ✅ 17/10 20:36–20:48 — Revisione di MF su `redate_provider_rows` (OK, due punti), dal coordinatore (~20:35):
+    - **LOW**: «latest first» regge solo con date in avanti; un `target_of` generico che desse una data prima
+      incontrerebbe una riga non ancora spostata e la riga in movimento verrebbe cancellata per sbaglio. Ora ogni
+      destinazione si calcola prima di toccare qualcosa, e una data prima della riga alza `ValueError` (asset e due
+      date, nessun valore) senza spostare nulla. L'unico chiamante dà S o S+1: niente cambia.
+    - **Nit**: commento sul `flush()` per riga (una sola flush alla fine manderebbe gli UPDATE in ordine di chiave
+      primaria, poi i DELETE, e un UPDATE cadrebbe su una data ancora occupata: `uq_price_history_asset_date`).
+      Verificato in SQLAlchemy 2.0.52: `persistence._sort_states` ordina le righe persistenti per chiave primaria.
+    - Rossi di test-author (`test_asset_source_refresh.py`, sezione «§3, MF»): 3 rossi per il motivo detto (il terzo
+      è la perdita di dati di MF, `(0, 1)`), 1 verde di guardia; la sessione si chiude con un commit, così una
+      correzione che spostasse e poi alzasse si vedrebbe. Codice: `files/mf-redate-draft/apply_mf_redate.py`
+      (provato su copia, inverso esatto); ruff e black puliti. `services asset-source-refresh` 62 (58 + 4).
+    - Pagina devWiki: la regola «solo in avanti» e il perché del `flush()` per riga.
 
 ### Z-29 — una scheda della lista asset e lo storico intero: analisi (17/10 ~20:35, sola lettura, HEAD `b8bcc8cd2`)
 
