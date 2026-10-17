@@ -4854,3 +4854,121 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
   - nuova **H-31** (bassa, facoltativa): `blocked` nel pubblico `/system/instance`;
   - nuova **H-32** (bassa, da A, A-35): i `float` dei corpi accettano `1E+400`.
   - nuova **H-33** (bassa, da E, R13-SEC4): un gestore di `ResponseValidationError` che registra senza il valore.
+
+### Lotto «H-32: i `float` delle richieste e i valori infiniti» (2026-10-17, notte) — ✅ provato
+
+> **Via** del coordinatore (03:11): «H-32 now, analysis first (inventory … and the proposal: `allow_inf_nan=False` in the
+> base or field by field), then reds». Da A (A-35): un `float` semplice nel corpo accetta `1E+400` e risponde 200; se
+> una rotta lo restituisce, il renderer di Starlette (`allow_nan=False`) fallisce con un 500. Base `8ef48dedb`. H-33
+> aspetta l'ingresso di A7b-2, perché tocca `main.py` accanto alla riga di A.
+
+1. ✅ **Analisi** (03:15–03:35, sola lettura; script in `files/h32/`).
+   - **Inventario sull'app vera** (`routes_inventory.py`, con `iter_route_contexts`, come `test_instance_block.py`):
+     177 rotte API, 67 con un corpo. I `float` raggiungibili da una richiesta (corpi, modelli annidati, parametri di
+     query e di percorso) sono **6**:
+     - 5 campi dei segnali (`SignalLineCrossoverRequest.epsilon` e `relative_epsilon`,
+       `SignalThresholdCrossingRequest.epsilon`, `relative_epsilon` e `threshold`;
+       `POST /assets/prices/query` e `POST /fx/currencies/convert`): hanno già `AllowInfNan(False)`, e rifiutano
+       `inf`, `nan` e `1E+400`;
+     - `PluginSettingWriteItem.value` (`str | int | float | bool | None`, `PATCH /settings/plugins/bulk`, di X): lo
+       schema accetta `inf` e `nan`, ma il servizio li rifiuta prima di salvare (`fields.validate_value`:
+       `math.isfinite` → `SettingValueError`).
+     - Nessun parametro `float` di query o di percorso. `Decimal` rifiuta `inf` e `nan` di default.
+     - Gli altri 11 campi `float` degli schemi (17 in tutto, `h32_inventory.py`) servono solo alle risposte o ai
+       modelli interni.
+   - **Il 500 di A, verificato**: con FastAPI 0.141.1 una rotta **con** `response_model` risponde **200 `{"x": null}`**
+     sia a `1E+400` sia a `NaN`, perché la serializzazione passa dal JSON di pydantic, che scrive `null`. Il 500 resta
+     solo per una rotta senza `response_model` che restituisce valori grezzi. Il rischio vero di un `float` infinito
+     in ingresso è quindi silenzioso: un valore salvato e usato che poi si legge `null`.
+   - **Conclusione**: oggi nessun `float` di una richiesta arriva a essere salvato o restituito. Il buco è uno solo, ed
+     è nello schema di X, coperto dal servizio.
+   - **Reperto per X**, fuori da H-32: un intero di 401 cifre in `value` arriva a `math.isfinite()`, che alza
+     `OverflowError`. Il percorso di scrittura (`service.py:255`) cattura solo `SettingValueError`, quindi
+     `PATCH /settings/plugins/bulk` risponde 500. Solo per un admin; basso.
+   - **Proposta**:
+     - (a) **Niente `allow_inf_nan=False` nella base.** `StrictModel` sta sotto centinaia di modelli, quasi tutti di
+       risposta o interni (AI Export, rischio): un `NaN` calcolato oggi diventerebbe un'eccezione dentro i servizi.
+       Molti rischi, nessun guadagno sulle richieste.
+     - (b) **Campo per campo**, più una **guardia generica** (mia): un test che percorre tutte le rotte con
+       `iter_route_contexts` e chiede che ogni `float` raggiungibile da una richiesta rifiuti `inf` e `nan` già nello
+       schema. Un `float` nuovo senza protezione diventa rosso al momento del test, e il messaggio nomina rotta,
+       modello e campo.
+     - (c) Per `PluginSettingWriteItem.value`: `AllowInfNan(False)` sul ramo `float` di `PluginSettingPlainValue`,
+       una riga nel file di X. Oppure la guardia lo tiene in un elenco di eccezioni motivate («controllato da
+       `validate_value`»). Consiglio la riga.
+   - Chiesti al coordinatore: chi scrive la riga di X; l'OK da writer per registrare il file nuovo della guardia
+     (`services request-float-inputs`, pure, in `_backend_services.py`).
+   - **Decisioni** del coordinatore (03:22): (a) no; (b) e (c) sì.
+     - La riga di X la scrivo io e X la rivede al checkpoint.
+     - Ho l'OK da writer su `_backend_services.py` per `request-float-inputs`, in aggiunta: anche A8a potrebbe
+       registrare qualcosa nel runner stanotte.
+     - L'`OverflowError` passa a X come X-R43.
+   - **Intermezzo, revisione di Z-20** (03:25, in sola lettura, `e-alfy-potential-sniffle` `3235837ad`): **OK**, le
+     quattro condizioni dell'opzione A sono rispettate e fissate dai test. Il controllo positivo del gate
+     (`verificationApi.ts → instanceBlock.svelte.ts`) regge anche dopo E-11, che è in dev ma non nella base di Z.
+     Nota facoltativa: con HMR, in sviluppo, si accumula un listener a ogni ricaricamento (`import.meta.hot?.dispose`).
+2. ✅ **Guardia, doc e prove a secco** (03:25–04:05).
+   - **Guardia** (test-author, file nuovo `backend/test_scripts/test_services/test_request_float_inputs.py`, 33 test):
+     - `collect_request_floats()` percorre tutte le rotte con `iter_route_contexts` e il dependant effettivo: corpi,
+       modelli annidati, parametri di query, percorso, header e cookie, alias PEP 695 compresi. Giudica ogni `float`
+       con un `TypeAdapter` su tutta l'annotazione, con i metadati del campo e la `allow_inf_nan` del modello.
+       Quello che non sa leggere è un «problema», mai saltato.
+     - **Barriere**: almeno 150 contesti sotto `/api/v1` e almeno 60 con un corpo; i cinque campi dei segnali
+       trovati; nessun problema.
+     - **La regola**: un caso per foglia trovata, più un elenco fisso delle sei di oggi come pavimento.
+     - **Autotest** su un'app sonda con router inclusi e annidati: 17 casi parametrizzati, più quelli che non sono
+       foglie e il caso dataclass.
+     - **4 casi end-to-end** in processo.
+     - Previsto oggi: 32 verdi e 1 rosso (`PluginSettingWriteItem.value`).
+   - **Doc** (docs-writer): `architecture/security.md:714–745`, nuova sottosezione «🔢 Numbers in Requests
+     {: #request-numbers }»: la regola, il perché, perché non nella base, la guardia, le sei di oggi. I segnali usano
+     `FiniteFloat` di pydantic. Ha due link interni verificati.
+   - **Registrazione** (OK da writer, in aggiunta): `services_request_float_inputs()` e
+     `add_test(cat, "request-float-inputs", …, isolation="pure")` accanto a `profile-defaults`. Applicata prima del
+     rosso, uguale alla prova a secco.
+   - **Prove a secco**: la riga di X e la registrazione, ruff e black 0 → 0. Impronta OpenAPI prima della cura:
+     `b91bc138f73c0ee0`.
+   > **⚠️ Fuori pista**, due reperti accanto a H-32:
+   > - **Un 500 al posto del 422** (verificato in processo): con il gestore standard dei 422 di FastAPI, un valore
+   >   non finito su un campo già finito (`FiniteFloat`, `AllowInfNan(False)`) dà **500**, perché l'errore ripete
+   >   l'`input` (`inf`) e il renderer di Starlette lo rifiuta. Oggi tocca le rotte dei segnali
+   >   (`POST /assets/prices/query` e `POST /fx/currencies/convert`, dopo l'autenticazione). Il gestore globale di A
+   >   (A7b-2), che toglie l'`input`, lo cura. La rotta dei plugin usa `_NoInputEchoRoute` (`plugin_settings.py:57`):
+   >   dopo la riga di X, un valore infinito lì riceve un 422 leggibile.
+   > - **JSON libero nelle richieste**: i campi `Any` o `JsonValue` raggiungibili accettano `Infinity` al loro
+   >   interno:
+   >   - `FAProviderAssignmentItem.provider_params` e `FAProviderProbeRequest.provider_params` (`dict[str, Any]`, di
+   >     X: `POST /assets/provider` e `/assets/provider/probe`);
+   >   - `RiskAnalyticRequest.parameters` (`JsonValue`, `POST /risk/query`, nessun validatore);
+   >   - `ToolComputeItem.parameters` sta in un modello con `allow_inf_nan=False`, da verificare;
+   >   - `SignalRequest.params` è già protetto (`ensure_json_safe`).
+   >   Sono fuori dalla regola sui `float`: li segnalo al coordinatore per i proprietari.
+3. ✅ **Rosso → cura → verdi → prova reale in processo** (04:05–04:16, ogni passo a carico < 50;
+   `files/runs/h32-green.sh`, log in `files/runs/h32/`).
+   - **Rosso**: `services request-float-inputs` **1 failed / 32 passed**: «PluginSettingWriteItem.value (str | int |
+     float | bool | None) lets inf, -inf, nan, 1E+400 through; reached by PATCH /api/v1/settings/plugins/bulk».
+     `check-orphans` verde, con il file nuovo registrato.
+   - **Cura** applicata, uguale alla prova a secco: `PluginSettingPlainValue = str | int | Annotated[float,
+     AllowInfNan(False)] | bool` (file di X; X la rivede).
+   - **Verdi**:
+
+     | Selettore | Risultato |
+     |---|---|
+     | `services request-float-inputs` | 33/33 |
+     | `services plugin-settings-contract` | 194 |
+     | `services plugin-settings-crypto` | 30 |
+     | `services plugin-settings-runtime` | 120 |
+     | `services plugin-settings-service` | 96 |
+     | `services plugin-settings-guards` | 25 |
+
+   - **OpenAPI invariato**: `b91bc138f73c0ee0`, 823 531 byte, prima e dopo. Niente `api sync`.
+   - **Prova sulla rotta vera, in processo** (`files/h32/real_route_probe.py`): `PATCH /api/v1/settings/plugins/bulk`
+     sull'app vera, con autenticazione e sessione sostituite. La validazione fallisce prima dell'endpoint, quindi
+     nessun DB. `Infinity`, `-Infinity`, `NaN` e `1E+400` → **422**, senza `input` ripetuto (`_NoInputEchoRoute`),
+     tipi `bool_type`, `finite_number` e `string_type`, cioè i rami dell'unione.
+   - **Statici**: ruff e black 0 → 0 su `plugin_settings.py` e `_backend_services.py`, e 0 sul file nuovo;
+     `mkdocs build` exit 0; `check-links` 97; `git diff --check` pulito.
+   - Non eseguito: `api plugin-settings`. È un passo pesante: farebbe ricostruire il frontend della corsia, e c'è il
+     blocco della galleria fino alle 04:45. Va nel cancello del coordinatore.
+- **Backlog**: **H-34** (bassa), il JSON libero delle richieste accetta `Infinity` al suo interno. I proprietari sono X
+  (`provider_params` ×2) e J (`RiskAnalyticRequest.parameters`); `ToolComputeItem.parameters` è da verificare.

@@ -903,6 +903,39 @@ All other endpoints — including Auth (profile, password), Settings (user setti
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
 
+### 🔢 Numbers in Requests {: #request-numbers }
+
+Every field typed `float` that a request fills, in the body or in a model nested in it, or as a query, path, header
+or cookie parameter, refuses infinity and NaN in its schema (lot H-32). It is `Annotated[float, AllowInfNan(False)]`,
+which pydantic names `FiniteFloat`, or it carries bounds that exclude both: an upper bound (`le`, `lt`) excludes
+infinity and any bound excludes NaN, so `ge=0` alone still lets infinity through. Money is `Decimal`, which refuses
+both by default; a finite value too large for its column is another matter: see
+[Decimal Columns](database/index.md#decimal-columns).
+
+- **Why.** Pydantic accepts `inf`, `-inf` and `nan` in a `float` by default (`allow_inf_nan=True`), and the request
+  body is parsed with Python's `json`, which reads `1E+400` as infinity and accepts the `NaN` and `Infinity` tokens.
+  A value the schema lets in can be saved and used, and reads back as `null`: FastAPI 0.141 serialises the answer of
+  a route with a `response_model` through pydantic, which writes infinity and NaN as `null`. A route without a
+  `response_model` that returns the value as it is fails with a `500` instead: Starlette's JSON renderer refuses them
+  (`allow_nan=False`).
+- **Field by field, not in the base model.** `allow_inf_nan=False` on `StrictModel` (`backend/app/schemas/common.py`)
+  would reach further than the requests: the same base backs the response models and the internal payloads
+  (AI Export, risk), where a computed NaN would become an exception inside a service. The rule is for requests only.
+- **The guard.** `./dev.py test services request-float-inputs`
+  (`backend/test_scripts/test_services/test_request_float_inputs.py`) walks every route of the app with
+  `fastapi.routing.iter_route_contexts`, which also sees the routes of included routers, unlike a plain loop over
+  `app.routes`. It judges each request float with a `TypeAdapter`: a float that accepts any of `inf`, `-inf`, `NaN`
+  or `1E+400` fails it, named by route, model and field. Two barriers keep it from passing empty: a minimum number of
+  routes walked, and at least one float found.
+- **Today: six request floats.** Five are signal parameters of the annotation requests that
+  `POST /assets/prices/query` and `POST /fx/currencies/convert` accept (`backend/app/schemas/signals.py`):
+  `epsilon` and `relative_epsilon`, declared in `SignalAnnotationRequestBase`, of both `SignalLineCrossoverRequest`
+  and `SignalThresholdCrossingRequest`, and `threshold` of the second, all `FiniteFloat` already. The sixth is the
+  plain value of a plugin setting (`PluginSettingWriteItem.value`, `PATCH /settings/plugins/bulk`):
+  `PluginSettingPlainValue` (`backend/app/schemas/plugin_settings.py`) now has `AllowInfNan(False)` on its `float`
+  branch, as `validate_value()` (`backend/app/services/plugin_settings/fields.py`) already refused a non-finite
+  number before saving: see [Types and Validation](patterns/plugin_settings.md#types).
+
 ### 📁 Uploaded Files: Common and Personal {: #upload-scope }
 
 Each uploaded static file (`<data directory>/custom-uploads/<uuid>.<ext>`, with its JSON sidecar `<uuid>.json`, see
