@@ -428,13 +428,14 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
   its two limiters. The limit's own tests turn it on with `monkeypatch`, on limiters of their own.
 - **Per process, in memory.** A restart forgets every count, and with N worker processes (`dev.py server --workers N`)
   each keeps its own, so the limits are N times these; the Docker image runs one worker. Each limiter holds at most
-  10,000 keys (the limiter's `max_keys`): a new key beyond them evicts, among the 32 least recently used
-  (`eviction_scan`), the first that is not full, and the least recently used only when those 32 are all full
-  ([The Sliding-Window Limiter](../backend/email.md#rate-window), decision N70). A locked identifier is full, so a
-  spray of fresh identifiers, one failure each, does not push it out; plain least-recently-used eviction let at most
-  10,000 of them hand it 10 new attempts, and behind a [proxy nobody trusts](#untrusted-proxy) no limit per address
-  slows such a spray. The bound on the search has a price: 31 identifiers locked just after the victim's, about 310
-  failures more, fill the search with full keys, and the fallback evicts the victim all the same.
+  10,000 keys (the limiter's `max_keys`): a new key beyond them evicts the key with the fewest failures still in the
+  window, the least recently used among them ([The Sliding-Window Limiter](../backend/email.md#rate-window), lot
+  E-14). So a spray of fresh identifiers, one failure each, never pushes out an identifier with more failures, locked
+  or one short of the lock, and behind a [proxy nobody trusts](#untrusted-proxy) no limit per address slows such a
+  spray. To push out an identifier with n failures, every other key must hold n failures too: about 90,000 failures
+  within 15 minutes buy 9 more guesses. The eviction of decision N70 (the first key not full among the 32 least
+  recently used) spared only locked identifiers: one stopped a failure short of the lock went for 10,000 fresh ones,
+  as with plain least-recently-used eviction.
 - **Behind a reverse proxy** the address must be the visitor's ([The Client's Address](#client-address)). Behind one
   that LibreFolio does not trust, every visitor has the proxy's address: counted together, 50 failures from anyone, at
   about one a second, would refuse every sign-in through it, the right password included (security review R13-SEC6).
