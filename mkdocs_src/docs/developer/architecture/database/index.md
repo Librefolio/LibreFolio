@@ -50,6 +50,7 @@ The database is organized into four logical subsystems. Each has its own detaile
 2. ✅ **Strict Constraints**:
     - `CHECK` constraints ensure logical consistency.
     - Foreign Keys are enforced (`PRAGMA foreign_keys=ON`).
+    - The schema's own SQL (a `CHECK`, a `DEFAULT`, an index's expression) may call only the functions SQLite marks innocuous (`PRAGMA trusted_schema=OFF` first on every SQLAlchemy connection, and `PRAGMA writable_schema=RESET` last, so that SQLite reads the schema again once SQLAlchemy has registered its functions; lot H-51): a restored archive's schema cannot run the Python functions SQLAlchemy registers on each connection ([`trusted_schema` Off in the Server's Engines](../security.md#trusted-schema-server)).
 3. 📦 **JSON for Flexibility**: Used for `classification_params` and `provider_params` to allow schema-less extension.
 
 ## 🔢 Decimal Columns {: #decimal-columns }
