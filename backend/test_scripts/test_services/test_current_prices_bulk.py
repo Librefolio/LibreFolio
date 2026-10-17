@@ -74,12 +74,44 @@ closed and disposed at teardown; the cache, the provider lookup, the service's t
 ceiling are replaced for the test only (``monkeypatch``); the app the requests reach is built per test and touches the
 process's app nowhere.
 
+MF-SEC9c, on HEAD d63558abb: the database fallback of ``get_current_prices_bulk`` read the session from inside the
+parallel lookups. ``_fetch_one`` ran per distinct id in ``asyncio.gather`` and, without a live quote (no provider, a
+provider that failed, one paused), awaited ``_last_readable_price(session, asset_id)`` there: several tasks on ONE
+``AsyncSession`` at once, which SQLAlchemy does not support (sporadic «This session is provisioning a new connection;
+concurrent operations are not permitted», ``IllegalStateChangeError``, or interleaved results) — and one paged read per
+asset. The cure's contract, pinned here:
+
+- The lookups never use the session: no statement of the session starts while another one is in flight.
+- The fallbacks are ONE grouped read of the latest row of every asset left without a live quote, once the lookups are
+  in; an asset whose latest close does not read (±inf, W-B62) is then looked up alone, older rows a page at a time —
+  that asset, and no other, by itself.
+- Guards, what the cure keeps: the latest close that reads a number is served, however deep under unreadable ones; an
+  asset with none, or with no row, answers "No price data available"; an unknown id "Asset not found"; the fallback of a
+  paused provider carries ``RATE_LIMITED`` and its ``retry_after``, the one of a failed provider neither; live quotes
+  and fallbacks come back in request order, a repeated id asked of its provider once.
+
+The way in is the service's, on the private database, through ``_WatchedSession``: the session itself, watching its own
+statements — how many are in flight at once, and which assets each statement on ``price_history`` reads. Each statement
+yields to the event loop once before it runs, as a driver handing it to a thread of its own does: a task ready to run
+meanwhile runs, so an overlap the code allows is an overlap observed, whatever the driver's timing. An unreadable close is
+written as ``test_current_price_storable.py`` writes it: raw SQL over a row the ORM wrote (``9e999``, a REAL +inf),
+checked as the file holds it.
+
+Red on HEAD d63558abb, each for the reason its docstring gives: ``test_mf_sec9c_the_session_is_never_used_concurrently``
+and ``test_mf_sec9c_the_fallbacks_are_one_grouped_read``. Green before and after:
+``test_mf_sec9c_guard_the_latest_close_that_reads_is_served``,
+``test_mf_sec9c_guard_a_paused_provider_falls_back_with_its_refusal``,
+``test_mf_sec9c_guard_live_quotes_and_fallbacks_in_request_order``.
+
 Reference: backend/app/api/v1/assets/prices.py (query_prices_bulk, get_current_prices_bulk),
-backend/app/services/assets/price_query.py (_live_quote_item, PriceQueryOperations.get_current_prices_bulk).
+backend/app/services/assets/price_query.py (_live_quote_item, _last_readable_prices,
+PriceQueryOperations.get_current_prices_bulk).
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import sys
 import threading
 import uuid
@@ -93,8 +125,10 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI, HTTPException
-from sqlalchemy import select
+from sqlalchemy import TableClause, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.sql import visitors
+from sqlalchemy.sql.elements import BinaryExpression, BindParameter
 
 from backend.app.api.v1.assets import prices
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
@@ -102,6 +136,7 @@ from backend.app.db.models import Asset, AssetProviderAssignment, AssetType, Pri
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FACurrentPriceItem, FACurrentPriceResponse, FACurrentValue, FAPriceQueryItem, FARangeChange
 from backend.app.services.assets import core, price_query
+from backend.app.services.assets.base import AssetRateLimitedError
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.utils.runtime.cache import NamedCache
 from backend.test_scripts.test_utils import print_section, print_success
@@ -119,17 +154,25 @@ LEAK = "SELECT secret_column FROM secret_table"
 # =============================================================================
 
 
-@pytest_asyncio.fixture
-async def session() -> AsyncIterator[AsyncSession]:
-    """This test's own in-memory database with the ORM schema: never the lane's database."""
+@contextlib.asynccontextmanager
+async def _private_session(session_class: type[AsyncSession] = AsyncSession) -> AsyncIterator[AsyncSession]:
+    """A session of ``session_class`` on the test's own in-memory database with the ORM schema: never the lane's
+    database. Closed, and its engine disposed, on the way out."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     try:
         async with engine.begin() as connection:
             await connection.run_sync(SQLModel.metadata.create_all)
-        async with AsyncSession(engine, expire_on_commit=False) as private_session:
+        async with session_class(engine, expire_on_commit=False) as private_session:
             yield private_session
     finally:
         await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def session() -> AsyncIterator[AsyncSession]:
+    """This test's own in-memory database with the ORM schema: never the lane's database."""
+    async with _private_session() as private_session:
+        yield private_session
 
 
 class _FrozenDate(date):
@@ -142,13 +185,16 @@ class _FrozenDate(date):
 
 class _Quotes:
     """The provider double, behind ``core.configured_provider`` for the test's own code: each identifier's quote, in EUR,
-    as of ``TODAY``; every call counted per identifier. Not a plugin (no settings, no pause): ``core.call_provider`` runs
-    it in a thread of its own, as it runs a plugin. With a ``gate`` it answers only once the gate is open, waiting in that
-    thread, ``GATE_SECONDS`` at most: a wait that ran out is counted, and fails the test as an unmet precondition."""
+    as of ``TODAY``; every call counted per identifier. An identifier of ``raises`` raises, instead of answering, the error
+    its factory builds: a provider that fails, or one paused (``AssetRateLimitedError``, as ``core.call_provider`` raises
+    it for a paused plugin). Not a plugin (no settings, no pause): ``core.call_provider`` runs it in a thread of its own,
+    as it runs a plugin. With a ``gate`` it answers only once the gate is open, waiting in that thread, ``GATE_SECONDS``
+    at most: a wait that ran out is counted, and fails the test as an unmet precondition."""
 
     def __init__(self, code: str) -> None:
         self.code = code
         self.quotes: dict[str, Decimal] = {}
+        self.raises: dict[str, Callable[[], Exception]] = {}
         self.calls: Counter[str] = Counter()
         self.gate: threading.Event | None = None
         self.gate_missed = 0
@@ -160,6 +206,8 @@ class _Quotes:
         if self.gate is not None and not self.gate.wait(GATE_SECONDS):
             with self._lock:
                 self.gate_missed += 1
+        if identifier in self.raises:
+            raise self.raises[identifier]()
         return FACurrentValue(value=self.quotes[identifier], currency="EUR", as_of_date=TODAY, source=self.code)
 
 
@@ -327,6 +375,296 @@ async def test_sec9_1_guard_lookups_of_distinct_keys_each_ask_their_provider(ses
     assert dict(quotes.calls) == {"SEC9X": 1, "SEC9Y": 1}
     assert [(item.asset_id, item.value) for item in items] == [(first, Decimal("10")), (second, Decimal("20"))]
     print_success("2 keys, 2 provider calls, each asset its own quote")
+
+
+# =============================================================================
+# MF-SEC9c — THE SERVICE: THE LOOKUPS NEVER USE THE SESSION; THE FALLBACKS, ONE GROUPED READ
+# =============================================================================
+
+RETRY_AFTER = 42.0  # the pause the paused double reports, in seconds
+UNREADABLE = "9e999"  # an SQLite literal for a REAL +inf: a close that reads None (W-B58, W-B62)
+NO_PRICE = "No price data available"
+
+
+def _provider_failure() -> Exception:
+    return RuntimeError("provoked: the provider failed")
+
+
+def _provider_paused() -> Exception:
+    return AssetRateLimitedError("provoked: paused after too many requests", retry_after=RETRY_AFTER)
+
+
+def _is_price_history_asset_id(column: Any) -> bool:
+    return getattr(column, "name", None) == "asset_id" and getattr(getattr(column, "table", None), "name", None) == PriceHistory.__tablename__
+
+
+def _price_history_reads(statement: Any) -> frozenset[int] | None:
+    """The asset ids a statement on ``price_history`` binds to ``price_history.asset_id`` (``=`` or ``IN``, its subqueries
+    included); None for a statement that names no ``price_history`` (a raw ``text()`` names no table)."""
+    on_price_history, asset_ids = False, set()
+    for element in visitors.iterate(statement):
+        if isinstance(element, TableClause) and element.name == PriceHistory.__tablename__:
+            on_price_history = True
+        elif isinstance(element, BinaryExpression) and isinstance(element.right, BindParameter) and _is_price_history_asset_id(element.left):
+            value = element.right.value
+            asset_ids.update(value if isinstance(value, (list, tuple)) else (value,))
+    return frozenset(asset_ids) if on_price_history else None
+
+
+class _WatchedSession(AsyncSession):
+    """The private database's session, watching its own statements: ``most_in_flight``, the most ``execute`` calls under
+    way at once — above 1, a statement started while another was still awaiting its rows, which one ``AsyncSession`` does
+    not support —, and ``price_reads``, for each statement on ``price_history`` in order, the asset ids it reads.
+
+    Each statement yields to the event loop once before it runs, as a driver handing it to a thread of its own does: a
+    task ready to run meanwhile runs, so an overlap the code allows is an overlap observed, whatever the driver's timing.
+    ``watch()`` forgets what was seen: what follows is the call under test."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.watch()
+
+    def watch(self) -> None:
+        self.in_flight = 0
+        self.most_in_flight = 0
+        self.price_reads: list[frozenset[int]] = []
+
+    async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> Any:
+        reads = _price_history_reads(statement)
+        if reads is not None:
+            self.price_reads.append(reads)
+        self.in_flight += 1
+        self.most_in_flight = max(self.most_in_flight, self.in_flight)
+        try:
+            await asyncio.sleep(0)
+            return await super().execute(statement, *args, **kwargs)
+        finally:
+            self.in_flight -= 1
+
+
+@pytest_asyncio.fixture
+async def watched() -> AsyncIterator[_WatchedSession]:
+    """This test's own in-memory database, its session a ``_WatchedSession``."""
+    async with _private_session(_WatchedSession) as private_session:
+        yield private_session
+
+
+def _day(days_ago: int) -> date:
+    return TODAY - timedelta(days=days_ago)
+
+
+async def _unassigned_asset(session: AsyncSession, label: str) -> int:
+    """An asset of the private database without a provider: its current price is always the database's."""
+    asset = Asset(display_name=f"MF-SEC9c {label} {uuid.uuid4().hex[:6]}", currency="EUR", asset_type=AssetType.STOCK)
+    session.add(asset)
+    await session.commit()
+    return asset.id
+
+
+async def _store_closes(session: AsyncSession, asset_id: int, closes: dict[int, str]) -> None:
+    """Price rows of ``asset_id`` in EUR, one per day ``days_ago`` before ``TODAY``, each close an SQLite literal written
+    with raw SQL over a row the ORM wrote (``UNREADABLE``: as an older release or another tool leaves it), then checked as
+    the file holds it. Each row is then dropped from the session's identity map: the service reads the close the file
+    holds, not the ORM's copy."""
+    for days_ago, literal in closes.items():
+        row = PriceHistory(asset_id=asset_id, date=_day(days_ago), close=Decimal("1"), currency="EUR", source_plugin_key="MANUAL")
+        session.add(row)
+        await session.flush()
+        await session.execute(text(f"UPDATE price_history SET close = {literal} WHERE id = :id"), {"id": row.id})
+        storage, held = (await session.execute(text("SELECT typeof(close), close FROM price_history WHERE id = :id"), {"id": row.id})).one()
+        assert storage in ("integer", "real") and float(held) == float(literal), f"scaffold: the close of {_day(days_ago)} is held as {storage} {held!r}, not {literal}"
+        session.expunge(row)
+    await session.commit()
+
+
+Served = tuple[int, Decimal | None, str | None, date | None, str | None, str | None, str | None, float | None]
+
+
+def _served(items: list[FACurrentPriceItem]) -> list[Served]:
+    """Each item as ``(asset_id, value, currency, as_of_date, source, error, error_code, retry_after)``."""
+    return [(item.asset_id, item.value, item.currency, item.as_of_date, item.source, item.error, item.error_code, item.retry_after) for item in items]
+
+
+def _refusal_of(paused: bool) -> tuple[str | None, float | None]:
+    return ("RATE_LIMITED", RETRY_AFTER) if paused else (None, None)
+
+
+def _last_known(asset_id: int, close: str, days_ago: int, *, paused: bool = False) -> Served:
+    return (asset_id, Decimal(close), "EUR", _day(days_ago), "db:last_known", None, *_refusal_of(paused))
+
+
+def _no_price(asset_id: int, *, paused: bool = False) -> Served:
+    return (asset_id, None, None, None, None, NO_PRICE, *_refusal_of(paused))
+
+
+@pytest.mark.asyncio
+async def test_mf_sec9c_the_session_is_never_used_concurrently(watched, quotes):
+    """20 assets, none with a live quote — 7 without a provider, 7 whose provider fails, 6 whose provider is paused —,
+    each with a stored close: no statement of the session ever starts while another is in flight, and every item is its
+    asset's stored close (``db:last_known``), the paused ones' with ``RATE_LIMITED`` and the pause's ``retry_after``.
+
+    The double runs in a thread of its own (``core.call_provider``): each lookup that reaches it suspends its task, and
+    the lookups interleave with one another and with whatever else runs meanwhile, as in production. Every one of the 13
+    asked its provider once (verified).
+
+    Red on HEAD d63558abb: each lookup read its fallback from inside the gather — all 20 statements in flight at once on
+    one ``AsyncSession``, the watcher's yield or not (aiosqlite hands each statement to a thread of its own).
+    """
+    print_section("MF-SEC9c: 20 fallbacks, the session never used by two at once")
+    requested: list[int] = []
+    expected: list[Served] = []
+    asked: dict[str, int] = {}
+    for n in range(20):
+        kind = ("no-provider", "failing", "paused")[n % 3]
+        close, days_ago = f"{100 + n}.5", 1 + n % 4
+        if kind == "no-provider":
+            asset_id = await _unassigned_asset(watched, f"fallback {n}")
+        else:
+            identifier = f"SEC9C{n}"
+            asset_id = await _assigned_asset(watched, quotes, identifier)
+            quotes.raises[identifier] = _provider_paused if kind == "paused" else _provider_failure
+            asked[identifier] = 1
+        await _store_closes(watched, asset_id, {days_ago: close})
+        requested.append(asset_id)
+        expected.append(_last_known(asset_id, close, days_ago, paused=kind == "paused"))
+    watched.watch()
+
+    items = await _current(watched, requested)
+
+    assert dict(quotes.calls) == asked, f"precondition not met: the lookups with a provider asked it {dict(quotes.calls)}"
+    assert watched.most_in_flight == 1, f"{watched.most_in_flight} statements in flight at once on one AsyncSession"
+    assert _served(items) == expected
+    print_success(f"{len(requested)} fallbacks served, never two statements at once")
+
+
+@pytest.mark.asyncio
+async def test_mf_sec9c_the_fallbacks_are_one_grouped_read(watched, quotes):
+    """9 assets without a live quote: 6 whose latest close reads (3 without a provider, 3 whose provider fails), 2 whose
+    latest close is +inf over an older one that reads, 1 with no row. The statements on ``price_history`` are ONE that
+    reads all 9, then lookups alone of the 2 unreadable — no statement reads a readable or row-less asset by itself.
+    Each item is the asset's latest close that reads.
+
+    Red on HEAD d63558abb: one paged read per asset, alone — 6 statements read the 6 readable fallbacks.
+    """
+    print_section("MF-SEC9c: the fallbacks, one grouped read")
+    expected: dict[int, Served] = {}
+    readable: list[int] = []
+    for n in range(6):
+        if n % 2:
+            identifier = f"SEC9CR{n}"
+            asset_id = await _assigned_asset(watched, quotes, identifier)
+            quotes.raises[identifier] = _provider_failure
+        else:
+            asset_id = await _unassigned_asset(watched, f"readable {n}")
+        await _store_closes(watched, asset_id, {3: "1", 1: f"{20 + n}.25"})
+        readable.append(asset_id)
+        expected[asset_id] = _last_known(asset_id, f"{20 + n}.25", 1)
+    unreadable: list[int] = []
+    for n in range(2):
+        asset_id = await _unassigned_asset(watched, f"unreadable {n}")
+        await _store_closes(watched, asset_id, {2: f"{30 + n}.75", 1: UNREADABLE})
+        unreadable.append(asset_id)
+        expected[asset_id] = _last_known(asset_id, f"{30 + n}.75", 2)
+    row_less = await _unassigned_asset(watched, "row-less")
+    expected[row_less] = _no_price(row_less)
+    requested = [*readable[:3], unreadable[0], row_less, *readable[3:], unreadable[1]]
+    watched.watch()
+
+    items = await _current(watched, requested)
+
+    reads = watched.price_reads
+    on_readable = [sorted(ids) for ids in reads if ids & set(readable)]
+    assert len(on_readable) == 1, f"{len(on_readable)} statements on price_history read the {len(readable)} readable fallbacks (assets {readable}): {on_readable}"
+    assert reads[:1] == [frozenset(requested)], f"the first statement on price_history does not read the {len(requested)} fallbacks: {[sorted(ids) for ids in reads]}"
+    assert set(reads[1:]) == {frozenset({asset_id}) for asset_id in unreadable}, f"after the grouped read, read alone: {[sorted(ids) for ids in reads[1:]]}; the unreadable: {unreadable}"
+    assert _served(items) == [expected[asset_id] for asset_id in requested]
+    print_success(f"1 grouped read for {len(requested)} fallbacks, {len(reads) - 1} lookup(s) alone for {len(unreadable)} unreadable")
+
+
+@pytest.mark.asyncio
+async def test_mf_sec9c_guard_the_latest_close_that_reads_is_served(session):
+    """Guard: the latest close that reads a number is served — under one unreadable close, under 35 (past the latest row
+    and a full page of older ones), or the latest of two that read; an asset whose closes are all ±inf, and one with no
+    row, answer "No price data available".
+
+    Green on HEAD d63558abb too.
+    """
+    print_section("MF-SEC9c guard: the latest close that reads")
+    one_over = await _unassigned_asset(session, "one over")
+    await _store_closes(session, one_over, {3: "10", 1: UNREADABLE})
+    deep = await _unassigned_asset(session, "deep")
+    await _store_closes(session, deep, {40: "7.5", **dict.fromkeys(range(1, 36), UNREADABLE)})
+    plain = await _unassigned_asset(session, "plain")
+    await _store_closes(session, plain, {5: "3", 2: "4"})
+    never = await _unassigned_asset(session, "never")
+    await _store_closes(session, never, {2: "-" + UNREADABLE, 1: UNREADABLE})
+    row_less = await _unassigned_asset(session, "row-less")
+
+    items = await _current(session, [one_over, deep, plain, never, row_less])
+
+    assert _served(items) == [_last_known(one_over, "10", 3), _last_known(deep, "7.5", 40), _last_known(plain, "4", 2), _no_price(never), _no_price(row_less)]
+    print_success("the latest readable close of each, or no price")
+
+
+@pytest.mark.asyncio
+async def test_mf_sec9c_guard_a_paused_provider_falls_back_with_its_refusal(session, quotes):
+    """Guard: a paused provider's asset falls back to its stored close with ``RATE_LIMITED`` and the pause's
+    ``retry_after``, or answers "No price data available" with them; a failed provider's, the same without them.
+
+    Green on HEAD d63558abb too.
+    """
+    print_section("MF-SEC9c guard: a paused provider's fallback says why")
+    assets: dict[str, int] = {}
+    for name, failure in (("SEC9CP1", _provider_paused), ("SEC9CP2", _provider_paused), ("SEC9CF1", _provider_failure), ("SEC9CF2", _provider_failure)):
+        assets[name] = await _assigned_asset(session, quotes, name)
+        quotes.raises[name] = failure
+    await _store_closes(session, assets["SEC9CP1"], {2: "55"})
+    await _store_closes(session, assets["SEC9CF1"], {2: "66"})
+
+    items = await _current(session, list(assets.values()))
+
+    assert dict(quotes.calls) == dict.fromkeys(assets, 1), f"precondition not met: the providers were asked {dict(quotes.calls)}"
+    assert _served(items) == [
+        _last_known(assets["SEC9CP1"], "55", 2, paused=True),
+        _no_price(assets["SEC9CP2"], paused=True),
+        _last_known(assets["SEC9CF1"], "66", 2),
+        _no_price(assets["SEC9CF2"]),
+    ]
+    print_success("paused: RATE_LIMITED and retry_after, with or without a stored close; failed: neither")
+
+
+@pytest.mark.asyncio
+async def test_mf_sec9c_guard_live_quotes_and_fallbacks_in_request_order(session, quotes):
+    """Guard: ``[live, stored, unknown, live, row-less, stored, paused, unknown]`` — one answer per requested id, in request
+    order: the live quote, the stored close, "Asset not found", "No price data available", the paused provider's stored
+    close with its refusal; each repeated id answered alike, its provider asked once.
+
+    Green on HEAD d63558abb too.
+    """
+    print_section("MF-SEC9c guard: live quotes and fallbacks, in request order")
+    live = await _assigned_asset(session, quotes, "SEC9CL")
+    quotes.quotes["SEC9CL"] = Decimal("101.5")
+    stored = await _unassigned_asset(session, "stored")
+    await _store_closes(session, stored, {1: "20"})
+    paused = await _assigned_asset(session, quotes, "SEC9CP")
+    quotes.raises["SEC9CP"] = _provider_paused
+    await _store_closes(session, paused, {4: "8"})
+    row_less = await _unassigned_asset(session, "row-less")
+    unknown = max(live, stored, paused, row_less) + 1  # the private database holds no other asset
+    expected = {
+        live: (live, Decimal("101.5"), "EUR", TODAY, f"provider:{quotes.code}", None, None, None),
+        stored: _last_known(stored, "20", 1),
+        unknown: (unknown, None, None, None, None, "Asset not found", None, None),
+        row_less: _no_price(row_less),
+        paused: _last_known(paused, "8", 4, paused=True),
+    }
+    requested = [live, stored, unknown, live, row_less, stored, paused, unknown]
+
+    items = await _current(session, requested)
+
+    assert dict(quotes.calls) == {"SEC9CL": 1, "SEC9CP": 1}, f"provider calls per identifier: {dict(quotes.calls)}"
+    assert _served(items) == [expected[asset_id] for asset_id in requested]
+    print_success(f"{len(requested)} answers in request order, each repeated id alike")
 
 
 # =============================================================================
