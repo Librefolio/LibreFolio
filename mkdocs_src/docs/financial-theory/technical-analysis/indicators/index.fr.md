@@ -83,7 +83,7 @@ Les indicateurs de risque transforment la série de prix elle-même en une mesur
 
 | Indicateur | Question principale | Données | Détails |
 |---|---|---|---|
-| **Repli depuis le sommet** | De combien le prix est-il inférieur à son plus haut cumulé ? | Clôture | [📖](../risk-metrics/max-drawdown.md) |
+| **Repli depuis le sommet** | De combien le prix est-il inférieur à son plus haut cumulé ? | Clôture | [📖](../risk-metrics/current-drawdown.md) |
 | **Rendement glissant** | À combien s'élève le rendement composé de la dernière fenêtre ? | Clôture | [📖](../../fundamentals/returns.md) |
 | **Volatilité glissante** | Quelle est la dispersion des rendements récents ? | Clôture | [📖](../risk-metrics/volatility.md) |
 | **Ratio de Sharpe glissant** | Le rendement excédentaire compense-t-il le risque pris ? | Clôture | [📖](../risk-metrics/sharpe-ratio.md) |

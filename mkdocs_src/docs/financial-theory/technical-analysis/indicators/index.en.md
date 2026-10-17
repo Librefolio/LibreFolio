@@ -82,7 +82,7 @@ Risk indicators turn the price series itself into a rolling risk read-out. They 
 
 | Indicator | Main Question | Data | Details |
 |---|---|---|---|
-| **Underwater Drawdown** | How far below the running peak is the price? | Close | [📖](../risk-metrics/max-drawdown.md) |
+| **Underwater Drawdown** | How far below the running peak is the price? | Close | [📖](../risk-metrics/current-drawdown.md) |
 | **Rolling Return** | How much did the price move over the last $N$ calendar days? | Close | [📖](../../fundamentals/returns.md#rolling-return) |
 | **Rolling Volatility** | How dispersed are recent returns? | Close | [📖](../risk-metrics/volatility.md) |
 | **Rolling Sharpe Ratio** | Is excess return paying for its risk? | Close | [📖](../risk-metrics/sharpe-ratio.md) |
