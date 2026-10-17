@@ -18,6 +18,19 @@
  * LanguageSelector does and put back to English after each case; Italian digits
  * come from `Intl.NumberFormat` in this runtime, never typed.
  *
+ * C-97c-2 (decision D-C97c-1 of the coordinator, 17/10): a quantity on screen loses no
+ * digit the database keeps, and a lot quantity keeps ten decimals. The Gantt's
+ * `formatQuantity` cuts it at the sixth today, and `quantityPluralCount` counts on the
+ * same six digits. The contract: ten for both, so the noun of the tooltip still follows
+ * the digits it shows. Reds: «caps at ten» (which pinned six) and 0.1234567891 (today
+ * 0.123457) in the `formatQuantity` block; 1.0000001, shown «1.0000001» at ten, counted
+ * 1.5 and worded in the plural (today shown «1» at six, counted 1, singular) in the O-16
+ * blocks. Guards, green today and after: the O-16 cases that pinned the cut at six read
+ * 1.00000000001 now, whose fraction lies past the tenth decimal (shown «1», counted 1,
+ * singular, before and after), and the count follows the digits `formatQuantity` shows,
+ * whatever their number. The M-18 block's quantities stay within six decimals, so they
+ * reach no cut before or after the cure and that block reads the notation alone.
+ *
  * @vitest-environment node
  */
 
@@ -174,8 +187,14 @@ describe('formatQuantity', () => {
         expect(formatQuantity(1000, 'en-US')).toBe('1,000');
     });
 
-    it('caps at six fraction digits', () => {
-        expect(formatQuantity(1.123456789, 'en-US')).toBe('1.123457');
+    it('caps at ten fraction digits: the tenth is shown, the eleventh is not (C-97c-2)', () => {
+        // Why: the eleventh decimal, 2, reads the same whether the cap rounds or cuts; the case pins where the cap is.
+        expect(formatQuantity(1.12345678912, 'en-US'), 'ten decimals, no more (today cut at the sixth: 1.123457)').toBe('1.1234567891');
+    });
+
+    // C-97c-2 — a lot quantity keeps every decimal of its column (D-C97c-1): red until the cure.
+    it('0.1234567891 reads 0.1234567891: the ten decimals of its column, not six (C-97c-2)', () => {
+        expect(formatQuantity(0.1234567891, 'en-US'), 'ten decimals (today cut at the sixth: 0.123457)').toBe('0.1234567891');
     });
 
     it('is callable without an explicit locale (default arg path)', () => {
@@ -184,9 +203,9 @@ describe('formatQuantity', () => {
 });
 
 describe('formatQuantity — without a locale, the interface language (M-18)', () => {
-    /** A quantity as Intl writes it in `locale`, with the formatter's options: up to six fraction digits. */
+    /** A quantity as Intl writes it in `locale`, with the formatter's options: up to ten fraction digits (C-97c-2). */
     function intlQuantity(locale: string, value: number): string {
-        return new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6}).format(value);
+        return new Intl.NumberFormat(locale, {minimumFractionDigits: 0, maximumFractionDigits: 10}).format(value);
     }
 
     /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
@@ -202,8 +221,10 @@ describe('formatQuantity — without a locale, the interface language (M-18)', (
 
     it('an Italian UI reads Italian digits without passing a locale; an explicit locale still wins', async () => {
         // 1234.5 is grouped in en-US only (Italian groups from five digits), 12345.678 in both, and
-        // 1.123456789 is capped at six fraction digits.
-        const quantities = [1234.5, 12345.678, 1.123456789];
+        // 1.123456 shows its six fraction digits. None reaches a cut — the sixth decimal before C-97c-2,
+        // the tenth after — so this case reads the notation alone: how many decimals a quantity keeps
+        // is the subject of the C-97c-2 cases of the `formatQuantity` block.
+        const quantities = [1234.5, 12345.678, 1.123456];
         const italian = quantities.map((value) => intlQuantity('it', value));
         const american = quantities.map((value) => intlQuantity('en-US', value));
         italian.forEach((text, index) => expect(text, `control: Italian writes ${quantities[index]} otherwise than en-US`).not.toBe(american[index]));
@@ -255,9 +276,18 @@ describe('quantityPluralCount — the plural count of a quantity as formatQuanti
         expect(pluralCount(value, locale)).toBe(count);
     });
 
-    it('counts 1.0000001 as 1 in en: six fraction digits round its fraction away, so it is shown «1»', () => {
-        expect(formatQuantity(1.0000001, 'en'), 'control: the digits shown').toBe('1');
-        expect(pluralCount(1.0000001, 'en')).toBe(1);
+    it('counts 1.00000000001 as 1 in en: ten fraction digits round its fraction away, so it is shown «1»', () => {
+        // C-97c-2: this case read 1.0000001, whose fraction six digits rounded away. At ten that fraction is shown (the
+        // C-97c-2 case below); the fraction past the cut is now an eleventh decimal's, shown «1» before and after the cure.
+        expect(formatQuantity(1.00000000001, 'en'), 'control: the digits shown').toBe('1');
+        expect(pluralCount(1.00000000001, 'en')).toBe(1);
+    });
+
+    it('counts 1.0000001 as 1.5 in en: at ten fraction digits its seventh is shown, «1.0000001», so the count keeps a fraction (C-97c-2)', () => {
+        // Why: the case where the seventh to tenth decimals decide the plural. The control is Intl's, not formatQuantity's,
+        // so the case is red for the count alone; that the count follows formatQuantity is the C-97c-2 guard below.
+        expect(new Intl.NumberFormat('en', {minimumFractionDigits: 0, maximumFractionDigits: 10}).format(1.0000001), 'control: at ten fraction digits, 1.0000001 shows its seventh').toBe('1.0000001');
+        expect(pluralCount(1.0000001, 'en'), 'the fraction shown is counted: 1.5, plural (today 1, singular: counted on six digits, «1»)').toBe(1.5);
     });
 
     it('counts 1.0004 as 1.5 in en: its fourth fraction digit is shown, so the count keeps a fraction (beyond the cases of the brief)', () => {
@@ -270,9 +300,28 @@ describe('quantityPluralCount — the plural count of a quantity as formatQuanti
 
     it('reads the integer part of a grouped French quantity whole: 1234.5 counts 1234.5', () => {
         // Why: French writes 1234.5 with a group separator, so the integer is shown in two parts; the count reads both.
-        const groups = new Intl.NumberFormat('fr', {minimumFractionDigits: 0, maximumFractionDigits: 6}).formatToParts(1234.5).filter((part) => part.type === 'group');
+        const groups = new Intl.NumberFormat('fr', {minimumFractionDigits: 0, maximumFractionDigits: 10}).formatToParts(1234.5).filter((part) => part.type === 'group');
         expect(groups, 'control: French groups the integer part of 1234.5').toHaveLength(1);
         expect(pluralCount(1234.5, 'fr')).toBe(1234.5);
+    });
+
+    it('follows the digits formatQuantity shows, whatever their number: a fraction is counted exactly when one is shown (C-97c-2 guard)', () => {
+        // Why: the count and the figure move together. A cure that moved one without the other would word the tooltip by
+        // digits it does not show. Green before the cure (six and six) and after it (ten and ten).
+        const decimalMark = (locale: string) => new Intl.NumberFormat(locale).formatToParts(0.5).find((part) => part.type === 'decimal')?.value ?? '.';
+        /** The count a reader takes from a figure as shown: its integer part, plus one half when it shows a fraction. */
+        const countOfShown = (shown: string, locale: string) => {
+            const [whole, fraction] = shown.split(decimalMark(locale));
+            return Number(whole.replace(/\D/g, '')) + (fraction === undefined ? 0 : 0.5);
+        };
+        expect([countOfShown('1,234.5', 'en'), countOfShown('1.234,5', 'it'), countOfShown('1', 'en')], 'control: the reading — a grouped integer part, a fraction, none').toEqual([1234.5, 1234.5, 1]);
+
+        for (const locale of ['en', 'it']) {
+            for (const value of [3, 1234.5, 1.0004, 1.0000001, 1.00000000001, 0.1234567891]) {
+                const shown = formatQuantity(value, locale);
+                expect(pluralCount(value, locale), `${value} in ${locale}, shown «${shown}»`).toBe(countOfShown(shown, locale));
+            }
+        }
     });
 
     it('counts NaN, which every locale reads as other, for a value that is not finite', () => {
@@ -341,13 +390,22 @@ describe('lotQuantityLine — the tooltip quantity line, worded by an ICU plural
         expect(quantityLine(t, input)).toBe(line);
     });
 
-    it('en: 1.0000001 open, shown «1», reads the singular: the count comes from the digits shown (rule 6)', async () => {
-        // Note: this case alone does not tell the digits shown from the double. Intl.PluralRules rounds 1.0000001 to three
+    it('en: 1.00000000001 open, shown «1», reads the singular: the count comes from the digits shown (rule 6)', async () => {
+        // Note: this case alone does not tell the digits shown from the double. Intl.PluralRules rounds 1.00000000001 to three
         // fraction digits too, so a count read off the double would also be singular here; the 1.0004 case below separates them.
+        // C-97c-2: this case read 1.0000001, shown «1» at six fraction digits; at ten it is shown whole (the case below).
         const t = await speak('en');
-        expect(formatQuantity(1.0000001), 'control: the digits the tooltip shows').toBe('1');
-        expect(new Intl.PluralRules('en').select(1.0000001), 'control (the note above): the double itself is read as one too').toBe('one');
-        expect(quantityLine(t, openLot(1.0000001, '1'))).toBe('1 share open out of 10');
+        expect(formatQuantity(1.00000000001), 'control: the digits the tooltip shows').toBe('1');
+        expect(new Intl.PluralRules('en').select(1.00000000001), 'control (the note above): the double itself is read as one too').toBe('one');
+        expect(quantityLine(t, openLot(1.00000000001, '1'))).toBe('1 share open out of 10');
+    });
+
+    it('en: 1.0000001 open, shown «1.0000001» at ten fraction digits, reads the plural: its seventh decimal is shown, so counted (rule 6, C-97c-2)', async () => {
+        // Why: the tooltip shows the seventh decimal after the cure, and the noun must follow it. Here the double itself
+        // is read as one, so a count read off the double would be singular too: only the digits shown make it plural.
+        const t = await speak('en');
+        expect(new Intl.PluralRules('en').select(1.0000001), 'control: the double itself is read as one').toBe('one');
+        expect(quantityLine(t, openLot(1.0000001, '1.0000001')), 'a fraction is shown, so the plural (today «1.0000001 share open out of 10»: counted on six digits, «1»)').toBe('1.0000001 shares open out of 10');
     });
 
     it('en: 1.0004 open, shown «1.0004», reads the plural, where a count read off the double would be singular (rule 6, beyond the cases of the brief)', async () => {
