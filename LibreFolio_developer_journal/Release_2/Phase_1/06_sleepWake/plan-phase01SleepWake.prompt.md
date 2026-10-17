@@ -4088,3 +4088,77 @@ corsia.
 > **Congelamento** (coordinatore, 17/10 ~07:29): fino all'ingresso di A8b non toccare
 > `frontend/e2e/settings/scheduler.spec.ts`. A cambia un clic alla riga 32 (il percorso della nuova scheda di A8b), e
 > io lo rivedo al checkpoint di A. X-R55 non cambia.
+
+**Allineamento con J e revisione di X** (17/10 ~07:57–08:05):
+- **Allineamento** (coordinatore, ~07:57): «X-R55 committed: `fix(prices)…` + journal, tip `79fe54183`. Base updated:
+  `4655adf3d` = yours + dev `7e6cf7914` (J's SEC7-1 included), clean. Now J's `datetime_utils.latest_range_end()`
+  (line 102) is in the base: align `date_range_limits.py` to it […] so there's a single helper; check that J's test
+  seam (`latest_range_end` patched in its consumers) still covers your modules, or say why not.»
+  - L'aiuto di J è `date.today() + 1`, cioè il **calendario del server**, non UTC, come i `date.today()` dei suoi
+    consumatori (e di `refresh.py`, X-R12).
+  - `date_range_limits.py` ora tiene solo `RANGE_SPAN_LIMIT_DAYS` e `range_span_floor`. `price_query.py` e
+    `currencies.py` importano `latest_range_end` da `datetime_utils`: controllato che sia proprio la funzione di J.
+  - Il seam di J (`test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`, «every module that reads
+    `latest_range_end`, imported by name») non copriva i miei due moduli. Oggi nessuna suite che alza il tetto ci
+    passa (le due righe di `test_portfolio_service.py` sono commenti), ma secondo la sua stessa definizione la lista
+    deve contenerli: li aggiunge test-author (file di J, solo aggiunte).
+  - I test che fermavano `date_range_limits.today_date` passano al seam di J; i casi API prendono il tetto da
+    `latest_range_end()` (stesso host e fuso del server della corsia); la doc dice «server's calendar» invece di UTC.
+- **Revisione di X** (~08:00): «X reviewed X-R55: **OK**. Two points: 1. **LOW, in your current commit** (the helper
+  alignment): `FXSignalQueryResult.date_range` echoes the requested range, not the one served. Echo the cut range
+  (keep the `DateRangeModel` per index) or say so in the field's description. Your choice; no frontend reads it.
+  2. **Z-25 promoted to 1.3, right after X-R55's entry** […] Cap the items per bulk request (and/or items × days) with
+  a 422 code, reds first, X reviews.»
+  - Punto 1, fatto: `served_ranges[conv_idx]` tiene il `DateRangeModel` servito, cioè quello tagliato, o quello chiesto
+    per una conversione tutta nel futuro. La descrizione del campo in `schemas/fx.py` dice entrambe le cose.
+  - La descrizione rispetta le regole del generatore del client (`test_openapi_client_text.py`): una riga, senza `"`,
+    `\` né `*/`. test-author fissa l'eco in tre casi.
+- ✅ 17/10 08:05–08:29 — Il commit dell'allineamento:
+  - **Test** (test-author):
+    - `test_range_ceiling.py` ferma il tetto col seam di J (`latest_range_end` sostituito per nome in `price_query`
+      e `currencies`, fixture `frozen_ceiling` non più automatica);
+    - RC-000 fissa l'aiuto unico, `36_525` e il pavimento a `date.min`;
+    - nuovi RC-001 (`lift_range_bound` toglie davvero il taglio dei due moduli) e RC-F06 (l'eco dei segnali dei
+      cambi: tagliato, pavimento, tutto nel futuro, non tagliato);
+    - i casi API leggono il tetto da `latest_range_end()`;
+    - `_range_bounds.py` di J ha i due moduli nuovi in coda, senza riordinare.
+  - **Doc** (docs-writer): «tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper
+    R13-SEC7-1 also uses)» nelle due pagine, il modulo citato solo per i 100 anni, un collegamento alla sezione di J
+    in `financial_math.md`, una frase sull'eco in `#convert-range-ceiling`. Build stretto e `check-links` puliti.
+  - **Prove** (sotto 50, uno alla volta):
+    - `services range-ceiling` 33/33, `fx-conversion` 44/44, `asset-source-refresh` 18/18;
+    - `schemas openapi-client-text` 78/78 (la descrizione nuova del campo rispetta il generatore);
+    - `api assets-price` 20/20, `api fx` 23/23;
+    - dalle prove di test-author: `services roi-fifo-utils` su `test_broker_cards.py`, 21 su 21, una suite che usa
+      `lift_range_bound` (il `setattr` sui due moduli nuovi non fallisce).
+    Porta 6186 libera.
+  - **Fuori**: nessun controllo obbliga un modulo futuro a entrare in `RANGE_BOUND_CONSUMERS`. test-author propone
+    un controllo statico: è di J, lo segnalo.
+> **Z-26 nuova** (coordinatore, 17/10 ~08:29, da R13-SEC8 di E): l'attesa del lock fra processi non ha un tempo
+> massimo; dopo X-R55 e Z-25, prima un'analisi. Riga nel backlog.
+
+### Z-25 — un tetto alle richieste di massa di prezzi e cambi: analisi (17/10 ~08:05, sola lettura)
+
+**Stato reale**:
+- I corpi sono `List[FAPriceQueryItem]` (`api/v1/assets/prices.py`) e `List[FXConversionRequest]`
+  (`api/v1/fx/currencies.py`), senza tetto. La convenzione del repo è `Field(..., min_length=1, max_length=N)` sulle
+  liste: `risk.asset_ids` 100, `analytics` 32, i membri degli scenari 300.
+- **Il web app** manda in una richiesta sola tutte le voci di una pagina:
+  - la lista asset, una per asset (`assets/+page.svelte`, `fetchAllPriceData`, `axiosInstance.post` dell'intera
+    `queryItems`);
+  - la lista e il registro dei cambi, una per coppia o per buco (`fxStoreRegistry.ts`).
+  Nessun lotto.
+- **Il costo dopo X-R55**: voci × giorni. Un tetto alle sole voci non basta: 500 voci di cambi × 36 525 giorni fanno
+  18 milioni di conversioni. L'uso vero: 300 asset × «All» (circa 9 000 giorni) fa 2,7 milioni di punti, che oggi il
+  server costruisce davvero.
+- I chiamanti interni di `get_prices_bulk` (rischio, AI Export) non passano dal corpo HTTP: un tetto sullo schema non
+  li tocca.
+
+**Opzioni** (decisione del coordinatore o del developer):
+- **A** — solo voci, per esempio 1 000 per richiesta: nessun cambio nel web app, ma il costo resta voci × 36 525.
+- **B** — un budget di voci-giorno per richiesta (la somma dei giorni tagliati, riscaldamento compreso): misura il
+  costo vero, ma la lista asset su «All» di un portafoglio grande va divisa in lotti nel web app (file di Y e X).
+- **C, la mia proposta** — entrambi, larghi: 1 000 voci e 5 milioni di voci-giorno, con un 422 dal codice chiaro
+  (`bulk_too_many_items`, `bulk_too_many_days`). L'uso reale (2,7 milioni) passa senza toccare il web app; 1 000 voci
+  di cambi su 100 anni (36,5 milioni) no. Il lotto nel web app resta un seguito, se un portafoglio vero arriva vicino
+  al budget.
