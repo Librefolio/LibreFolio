@@ -306,9 +306,14 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   `{"code": "bulk_too_many_items", "message", "max_items", "items"}` from the route, before any
   work: no database read. Exactly 1,000 pass.
 - **Writes** (MF-SEC9a): `DELETE /assets/prices` takes at most `MAX_BULK_WRITE_ITEMS` (10,000) date ranges, all
-  assets together, the same 422 with that `max_items`; the deletion runs one `DELETE` per chunk of
-  `OR_TERMS_PER_QUERY` (500) ranges (`utils/sql_chunks.py`), in one transaction: one `DELETE` with an `OR` of every
-  range failed from 1,000 ranges. A failure of `POST`, `DELETE /assets/prices` or `POST /assets/prices/sync` answers
+  assets together, the same 422 with that `max_items`. Each asset's ranges, from every item that names it, are merged
+  into disjoint day intervals (inclusive bounds, `end` defaulting to `start`), then counted with one
+  `COUNT … GROUP BY asset_id` and deleted with one `DELETE` per chunk of `OR_TERMS_PER_QUERY` (500) intervals
+  (`utils/sql_chunks.py`), in one transaction: one `DELETE` with an `OR` of every range failed from 1,000 ranges, and
+  one `COUNT` per range made 10,000 queries at the cap. Each result's `deleted_count` is the rows its asset lost, a
+  row counted once however many ranges cover it, an asset named by two items counted over both (MF-SEC9e: before,
+  overlaps counted twice and such an asset reported its last item only); the counts add up to `total_deleted`. An
+  empty request answers an empty result, no longer a 500. A failure of `POST`, `DELETE /assets/prices` or `POST /assets/prices/sync` answers
   500 with a fixed message, the error in the log.
 - **Item-days**: once the prices and the seeds are read, before the events query and the fills,
   `get_prices_bulk()` sums the points each item's backward fill will emit. `_fill_span()` mirrors

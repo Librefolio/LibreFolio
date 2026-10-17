@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import functools
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
@@ -431,76 +431,52 @@ class PriceStoreOperations:
         Bulk delete price ranges (PRIMARY bulk method).
 
         Args:
-            data: List of FAAssetDelete (asset_id + date_ranges)
+            data: List of FAAssetDelete (asset_id + date_ranges); each range is inclusive, ``end`` defaulting to ``start``
             session: Database session
 
         Returns:
-            FABulkDeleteResponse with results and deleted count
+            FABulkDeleteResponse: one result per item, its ``deleted_count`` the rows deleted for its asset; ``total_deleted``
+            the rows deleted in all
 
-        One COUNT per range (the per-asset counts), then one DELETE per chunk of ranges (``utils/sql_chunks``; MF-SEC9a),
-        in one transaction. The counts are up to ``MAX_BULK_WRITE_ITEMS`` awaited queries: slow, not a stall (MF-SEC9e).
-        Note: Cannot parallelize with gather - DB operations are sequential and interdependent
+        Each asset's ranges, from every item that names it, are merged into disjoint day intervals (MF-SEC9e): a row is
+        counted once however many ranges cover it, and an asset in two items is counted over both. The counts are one
+        grouped ``COUNT … GROUP BY asset_id`` per chunk of intervals, the deletion one ``DELETE`` per chunk
+        (``utils/sql_chunks``, MF-SEC9a), in one transaction: at the ``MAX_BULK_WRITE_ITEMS`` cap about forty statements,
+        where one ``COUNT`` per range made ten thousand. The counts per asset add up to ``total_deleted``.
         """
         if not data:
-            return FABulkDeleteResponse(deleted_count=0, results=[])
+            return FABulkDeleteResponse(results=[], success_count=0, total_deleted=0, errors=[])
 
-        # Build count per asset before deletion
-        asset_delete_counts = {}
-
+        # Each asset's ranges merged into disjoint intervals of days (inclusive bounds), adjacent days joined
+        ranges_by_asset: dict[int, list[tuple[date, date]]] = {}
         for item in data:
-            asset_id = item.asset_id
-            ranges = item.date_ranges
-            count = 0
-
-            for date_range in ranges:
-                start = date_range.start
-                end = date_range.end or start  # Single day if no end
-
-                # Count rows for this specific range
-                count_stmt = (
-                    select(func.count())
-                    .select_from(PriceHistory)
-                    .where(
-                        and_(
-                            PriceHistory.asset_id == asset_id,
-                            PriceHistory.date >= start,
-                            PriceHistory.date <= end,
-                        )
-                    )
-                )
-                result = await session.execute(count_stmt)
-                count += result.scalar()
-
-            asset_delete_counts[asset_id] = count
-
-        # Build complex OR conditions for all ranges
+            for date_range in item.date_ranges:
+                ranges_by_asset.setdefault(item.asset_id, []).append((date_range.start, date_range.end or date_range.start))
         conditions = []
-        for item in data:
-            asset_id = item.asset_id
-            ranges = item.date_ranges
+        for asset_id, ranges in ranges_by_asset.items():
+            merged: list[list[date]] = []
+            for start, end in sorted(ranges):
+                if merged and start <= merged[-1][1] + timedelta(days=1):
+                    merged[-1][1] = max(merged[-1][1], end)
+                else:
+                    merged.append([start, end])
+            conditions.extend(and_(PriceHistory.asset_id == asset_id, PriceHistory.date >= start, PriceHistory.date <= end) for start, end in merged)
 
-            for date_range in ranges:
-                start = date_range.start
-                end = date_range.end or start  # Single day if no end
-                conditions.append(
-                    and_(
-                        PriceHistory.asset_id == asset_id,
-                        PriceHistory.date >= start,
-                        PriceHistory.date <= end,
-                    )
-                )
+        # The rows each asset will lose: the intervals are disjoint, so no row is counted twice across chunks
+        asset_delete_counts: dict[int, int] = {}
+        for chunk in chunks(conditions):
+            counted = await session.execute(select(PriceHistory.asset_id, func.count()).where(or_(*chunk)).group_by(PriceHistory.asset_id))
+            for asset_id, count in counted.all():
+                asset_delete_counts[asset_id] = asset_delete_counts.get(asset_id, 0) + count
 
-        if not conditions:
-            return FABulkDeleteResponse(deleted_count=0, results=[])
-
-        # One DELETE per chunk of ranges, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
+        # One DELETE per chunk of intervals, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
         deleted_count = 0
         for chunk in chunks(conditions):
             result = await session.execute(delete(PriceHistory).where(or_(*chunk)))
             deleted_count += result.rowcount
         await session.commit()
 
-        # Build results per asset with exact counts
+        # One result per item, its asset's count
         results = [
             FAPriceDeleteResult(
                 asset_id=item.asset_id,
