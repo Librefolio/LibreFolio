@@ -25,7 +25,13 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 - **Persistence**: Page size, column order, widths and visibility overrides are saved to
   `localStorage` under per-user keys (`lf_{userId}_dataTable_{storageKey}_{suffix}`). Sorting and
   filters are not persisted; filters can round-trip through the URL (`initialFilters`,
-  `onFiltersChange`).
+  `onFiltersChange`). A column absent from `columns` for a while — the Assets and FX tables'
+  Δ period columns until the backend lists the periods, or those longer than a short date range —
+  keeps its saved place, visibility and width: the table adds only the columns it has never seen,
+  at their natural place (right after the last column that precedes them in `columns`), and a
+  reorder in `ColumnVisibilityToggle`, which lists only the columns present, puts an absent column
+  back right after the one it followed. `resetColumnLayout()` returns to the defaults of the
+  columns present and forgets the absent ones.
 - **Actions**: Per-row actions behind a **⋮** button in the actions column, and bulk actions on the
   selected rows. Actions with `requireConfirm` go through a [ConfirmModal](modals.md#confirmmodal).
 - **Context Menu**: Right-click on a row opens the same menu as **⋮**, built from `rowActions`.
@@ -351,9 +357,11 @@ The component uses Svelte 5 Runes for internal state:
 - `$state` for sorting, pagination, filters, selection and the column layout.
 - `$derived` for calculating filtered/sorted/paginated data efficiently.
 - Preferences are read from `localStorage` on mount and written back when they change.
-- The pure decision logic — cell value extraction, filter predicates, typed comparison, min/max and
-  enum options — lives in `dataTableLogic.ts`, unit-tested in `dataTableLogic.test.ts`;
-  `DataTable.test.ts` covers the wiring and the public methods.
+- The pure decision logic — cell value extraction, filter predicates, typed comparison, min/max,
+  enum options and the column-order rules (`withNewColumns` for the effect that syncs the order
+  with `columns`, `reorderKeepingAbsent` for `setColumnOrder`) — lives in `dataTableLogic.ts`,
+  unit-tested in `dataTableLogic.test.ts`; `DataTable.test.ts` covers the wiring and the public
+  methods.
 
 **Where DataTable's code lives.** Consumers use `DataTable.svelte` only. It renders two children
 that are internal — `table/index.ts` does not export them — and that hold markup and styles, but no
@@ -364,7 +372,7 @@ table state:
 | `DataTable.svelte` | The public API (the `Props` interface and the public methods), all the table's state (`$state`, `$derived`), its effects and its handlers. The structure of the table: `table`, `thead`, `tbody`, `tfoot`; the rows with their handlers (click, double click, middle click, context menu, long press); every `th` and `td` with its classes, sticky offsets and test ids; the selection and actions columns, the loading and empty rows, the pagination, the context menu and the two confirm modals. And the styles of all that, structural rules included: sticky columns, z-index, row states. |
 | `DataTableColumnHeader.svelte` | The content of one data-column header (`div.header-content` inside `th.th-data`): the sort button with the `header` text or the `headerHtml`, wrapped in the `headerTooltip` when there is one; with a `headerTooltipUrl` as well, the info icon — a link, or with `headerTooltipLinkMode: 'gesture'` a button that opens the URL on double click, Shift+Enter or long press; the filter button and its `DataTableColumnFilter` popover; the resize handle. The parent's state and handlers arrive as props under their parent names, and `openFilterColumnId` is bound, since the parent owns it; the header's only `$state` is `filterBtn`, the popover's anchor. The tooltip's long-press timer stays in the parent, whose `onDestroy` cancels it. |
 | `DataTableCellContent.svelte` | The switch over the kinds of `CellContent` listed above, with their styles and the input handling of the editable kinds. Footer cells render through it too — `FooterCellContent` (text, number or `html`) is a subset of `CellContent` — so a clickable `html` footer cell with a `testId` now carries its `data-testid`, exactly like a body cell. |
-| `dataTableLogic.ts` | The pure logic of the last bullet above. Each component imports what it uses: the parent the filter predicate and the comparison, the header the filter's boundaries and options, the cell `formatCellDate`. |
+| `dataTableLogic.ts` | The pure logic of the last bullet above. Each component imports what it uses: the parent the filter predicate, the comparison and the column-order rules, the header the filter's boundaries and options, the cell `formatCellDate`. |
 
 Like the parent, each child imports `$lib/theme/components/table.css`, the area file of the
 `--lf-cmp-datatable-*` tokens it reads: the token gate
