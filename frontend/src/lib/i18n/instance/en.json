@@ -45,6 +45,11 @@
       "pluginSecrets": {
         "ok": "The stored plugin secrets can be read with the instance key.",
         "unreadable": "{count, plural, one {# stored plugin secret cannot be read with the instance key: enter it again in Settings → Plugins, or restore the instance key it was saved with.} other {# stored plugin secrets cannot be read with the instance key: enter them again in Settings → Plugins, or restore the instance key they were saved with.}}"
+      },
+      "testMode": {
+        "off": "Test mode is off.",
+        "testLane": "Test mode is on, in a lane of the test runner.",
+        "outsideTestLane": "Test mode is on outside the test runner: data providers made for the tests are offered, the data are kept in {data_dir} and the .env file is not read. Unset LIBREFOLIO_TEST_MODE."
       }
     },
     "block": {

@@ -19,7 +19,8 @@ Data Directory Structure:
 Environment Variables (see .env):
     LIBREFOLIO_DATA_DIR: Override production data directory (default: ./backend/data/prod)
     LIBREFOLIO_TEST_DATA_DIR: Override test data directory (default: ./backend/data/test)
-    LIBREFOLIO_TEST_MODE: When "1", use the test data directory
+    LIBREFOLIO_TEST_MODE: When "1", use the test data directory; for a test lane only (H-46: outside one, an error of the
+        configuration checks, and the managed profile does not start)
     PORT: Production server port (default: 6040)
     TEST_PORT: Test server port (default: 6041)
     LOG_LEVEL: Logging level (default: INFO)
