@@ -38,7 +38,7 @@ from backend.app.db.models import (
     TransactionType,
 )
 from backend.app.db.precision import round_computed_value
-from backend.app.schemas.common import Currency, FxBackwardFillInfo
+from backend.app.schemas.common import Currency, FxBackwardFillInfo, is_canonical_iso_currency
 from backend.app.schemas.portfolio import (
     AcquisitionFundingPoint,
     AcquisitionFundingSeries,
@@ -588,6 +588,12 @@ class PortfolioService:
         return listed
 
     @staticmethod
+    def _non_iso_currency_assets(facts: Sequence[HeldAssetQuoteFacts]) -> list[tuple[int, str, str]]:
+        """(asset_id, name, stored currency) of the held assets whose currency is not an ISO 4217 code as stored (E-19b):
+        ``978``, ``EURO`` or ``eur``, which an earlier version saved as written."""
+        return [(fact.asset_id, fact.name, fact.currency) for fact in facts if not is_canonical_iso_currency(fact.currency)]
+
+    @staticmethod
     def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
         merged: dict[str, set[date_type]] = defaultdict(set)
         for item in items:
@@ -1107,6 +1113,8 @@ class PortfolioService:
             missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
             invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
             quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
+            non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
+            report_currency=base_currency,
             rows_before_floor=getattr(engine_result, "rows_before_floor", None),
             valued_at_cost_assets_dto=valued_at_cost_assets or None,
             mwrr_available=mwrr_result is not None,
@@ -2205,6 +2213,8 @@ class PortfolioService:
                 missing_cost_basis_assets=await self._missing_cost_basis_assets(engine_result) or None,
                 invalid_split_assets=await self._invalid_split_assets(engine_result) or None,
                 quote_in_minor_unit_assets=self._quote_in_minor_unit_assets(held_quote_facts) or None,
+                non_iso_currency_assets=self._non_iso_currency_assets(held_quote_facts) or None,
+                report_currency=base_currency,
                 rows_before_floor=getattr(engine_result, "rows_before_floor", None),
                 mwrr_available=False,
                 share_mismatches=engine_result.share_mismatches,
