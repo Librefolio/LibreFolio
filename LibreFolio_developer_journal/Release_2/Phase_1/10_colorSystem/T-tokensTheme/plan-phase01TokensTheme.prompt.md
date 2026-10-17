@@ -619,7 +619,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 29 | Le tabelle: i token di `table.css` sui ruoli in 8 componenti (`DataTable` e le sue parti, `OtherPeriodEffectsTable`, `RiskReturnLevel`), 231 token tolti, la regola di TC-15 in `DataTable` | ✅ commit `77bfa6a39`, base merge `9a02a02c7`; sesto slot (21:42–22:47): 298 E2E verdi e 3 rossi, tutti triati e rilanciati verdi alle 23:14–23:28 (righe 30, TC-17); entrato in `9016f47c3` (23:46) |
 | 30 | La spec del rischio sui ruoli: `risk-analysis.spec.ts` (L3), le righe confrontate con `--lf-surface-card` e `--lf-selected` risolti nella pagina; TC-17 nell'indice | ✅ commit `3c810cd04`, entrato in `9016f47c3`: `front-portfolio risk` 38/38, `tx-picker-pagination` 5/5 |
 | 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ✅ commit `a092cda38`, entrato in `9016f47c3`: Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
-| 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ⏳ CHECKPOINT READY (00:4x): Vitest 179/179, `front check` 0 e 0, E2E 44/45 (FM6 rosso anche senza il lotto: TC-18); la riga 59 dello skill |
+| 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ✅ commit `55bced133`, entrato in `b58108665`: Vitest 179/179, `front check` 0 e 0, E2E 44/45; FM6 (TC-18, duplicato di W-B56) verde sulla punta, 10/10 |
 
 ## Avanzamento
 
@@ -3138,4 +3138,16 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > quando non ha più token (il gate vuole che ogni file d'area ne definisca). Unica menzione dei file d'area nello skill;
 > la tabella resta a 5 colonne. Dopo questo ingresso lo skill lo tocca DV, nella sezione «Charts», per B4.
 
-> 🔄 **6 · Il checkpoint:** il componente, `table.css`, la riga 59 dello skill, TC-18 nell'indice, il piano.
+> ✅ **6 · Il checkpoint:** il componente, `table.css`, la riga 59 dello skill, TC-18 nell'indice e il piano; committato
+> dal coordinatore come `55bced133` (00:40), base merge con la punta `618563949` → `cdb816037`, **entrato** come
+> `b58108665` (00:45): gate 119/119, `api sync` senza cambi, `front check` 0 e 0. I token di componente letterali del
+> target scendono a **6**, tutti categoriali (i 4 di `RiskReturnLevel`, i 2 di AF-11).
+
+> ✅ **7 · FM6 sulla punta e TC-18 chiusa** (via del coordinatore alle 01:27, dopo lo slot di B4 di DV;
+> `files/T-r2/ccc/fm6_verify.sh`, `fm6-verify/`): la 1.3 ha segnalato che W aveva già corretto il difetto in `de901f228`
+> (23:31, «auto cost skips decimal check»: in modalità `auto` il controllo dei decimali salta `cost_basis_override`),
+> entrato nel target con `c91bd41b2` alle 23:46, subito dopo la mia base `9016f47c3`; il difetto è nell'indice come
+> **W-B56**. Rilancio di `front-transaction tx-wac-formmodal` da solo sulla punta `b58108665` (01:28–01:38, 1 worker,
+> carico 37–49, il build del frontend e della documentazione rifatto perché i sorgenti erano cambiati): **10/10**, FM6
+> verde in 8,7 s; porta libera alle 01:37:59. TC-18 chiusa nell'indice come duplicato di W-B56, con la segnalazione
+> originale; un commit solo docs.

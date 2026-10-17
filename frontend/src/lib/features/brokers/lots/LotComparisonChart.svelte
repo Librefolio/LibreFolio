@@ -58,8 +58,8 @@
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
-    import {CHART_GAIN_LOSS, LOT_CHART_COLORS, LOT_COMPARISON_COLORS} from '$lib/theme/chartTheme';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {CHART_GAIN_LOSS, chartNeutrals, LOT_COMPARISON_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -209,6 +209,13 @@
     let tooltipCleanup: (() => void) | null = null;
     let dataZoomTouchPanHandle: DataZoomTouchPanHandle | null = null;
     let isDark = $state(false);
+    /** Bumped by the Designer Lab's colour edits (C4): the chart's roles are read again at the next draw. */
+    let chartColorsRevision = $state(0);
+    /** The neutrals of the chart (B4), read on its own element: again when the theme or a Lab colour changes. */
+    let neutrals = $derived.by(() => {
+        void chartColorsRevision;
+        return chartNeutrals(isDark, chartContainer);
+    });
     let needsInitialLayoutStabilityPass = false;
     let lastHoverDotAxisValue: number | null = null;
     let zoomWindow = $state<{start: number; end: number} | null>(null);
@@ -1065,7 +1072,7 @@
             tooltip: {show: false},
             animation: false,
             legendHoverLink: false,
-            itemStyle: {borderColor: themed(LOT_CHART_COLORS.markerRing, isDark), borderWidth: 1.5},
+            itemStyle: {borderColor: neutrals.lots.markerRing, borderWidth: 1.5},
             emphasis: {disabled: true},
             z: 12,
             zlevel: 0,
@@ -1270,10 +1277,15 @@
             syncTheme();
             renderChart();
         });
+        const chartColors = onChartColorsChange(() => {
+            chartColorsRevision += 1;
+            renderChart();
+        });
 
         return () => {
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             resetResizeObserverState();
             dataZoomTouchPanHandle?.dispose();

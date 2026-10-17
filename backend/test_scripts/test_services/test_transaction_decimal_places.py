@@ -39,6 +39,23 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
    asset + qty)» (``frontend/e2e/transactions/tx-commit-all-types.spec.ts:532``): the Form sends back the preview's
    average, a repeating decimal (100 / 3) in full, and the commit was refused with ``decimalPlacesExceeded``
    ``{"max": 12}`` on ``cost_basis_override``.
+6. R13-SEC2 (W-B58, E's security review of 17/10): the integer digits. A quantity and a cash amount keep at most 15
+   digits before the decimal point (``REAL_SIGNIFICANT_DIGITS``: the coordinator's decision N63, 17/10), a manual cost
+   basis — a per-unit price — the ``precision - scale`` of its column, 12 (``max_integer_digits``); past that
+   ``check_decimal_limits`` adds ``integerDigitsExceeded`` with ``{"max": 15}`` or ``{"max": 12}`` on the field: the
+   third check, after the decimal places and the significant digits, so a value over two limits keeps the code of the
+   first. The promotion's ``resolved_fields.cost_basis_override`` (a ``{code, amount}`` currency dict) is checked against
+   the column ``cost_basis_override`` too: the issue sits on ``operation="promote"``, the promote's index,
+   ``field="cost_basis_override"``, with any of the three codes and its ``{"max": N}``. A checked value past its
+   column's integer digits — whichever code it gets — stops the batch right after ``check_decimal_limits``: the later
+   stages compute with the values (products, averages, the float a REAL takes), and a value of a million digits
+   overflows them. So such a batch raises nothing (no 500), every issue it answers carries a code (none reads «Balance
+   validation error»), and nothing is saved. ``TXValidationCode.INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"``,
+   listed by ``GET /transactions/types``.
+7. R13-SEC2: a row the file holds as a REAL today's read cannot turn into a Decimal — a quantity of 1e60, an infinite one
+   (SQLite reads the literal ``1e999`` as +inf), an infinite close — no longer breaks anyone: ``list_assets``, which reads
+   every user's quantities, raises nothing; the infinite quantity loads as None and its row can be deleted through the
+   batch; the quantity of 1e60 loads as 1E+60; the infinite close loads as None.
 
 Reds — fail today, pass once the contract holds:
 
@@ -61,7 +78,25 @@ Reds — fail today, pass once the contract holds:
   Auto cost, 100 / 3 read back 33.333333333333 EUR, not the amount sent (today refused on its row,
   ``decimalPlacesExceeded`` ``{"max": 12}`` or ``significantDigitsExceeded`` ``{"max": 15}``, and nothing is written);
 - ``TestBalancesAreSummedExactly.test_two_buys_of_ten_decimals_sum_exactly`` (today 199998.246914);
-- ``TestTheCodesAreListed``: ``TXValidationCode`` and ``GET /transactions/types``'s ``validation_codes`` carry both codes.
+- ``TestTheCodesAreListed``: ``TXValidationCode`` and ``GET /transactions/types``'s ``validation_codes`` carry both codes;
+- ``TestTooManyIntegerDigitsAreRefused`` (rule 6, R13-SEC2): a create past its integer digits — a quantity of 1E+60,
+  of 16 digits or of 1E+400, or a cash amount of -1E+15 (``{"max": 15}``), a cost basis of 1E+60 or of 13 digits
+  (``{"max": 12}``) — is refused on its row with exactly ``integerDigitsExceeded`` on ``/validate`` and ``/commit``,
+  nothing written; an update of a quantity to 1E+60 too (today the 16 digits, the -1E+15 EUR, the 13-digit cost and the
+  update pass unrefused, and the creates of 1E+60 and 1E+400 make ``validate_cost_basis`` raise as it reloads the row: a
+  500). On an ordinary broker (no overdraft, no shorting), through ``/validate`` and ``/commit``: a BUY of 1E+1000000
+  units and one of -1E+1000000 EUR get ``integerDigitsExceeded`` ``{"max": 15}`` on their field and raise nothing
+  (today ``decimal.Overflow`` in ``decimal_limit_issue``'s ``normalize``: a 500); a BUY of 400 ones keeps
+  ``significantDigitsExceeded`` ``{"max": 15}`` on its quantity and gets no issue without a code (today the row goes on
+  as a float inf, and ``validate_cost_basis`` raises ``TypeError`` reloading it, before the balance replay could add its
+  raw «Balance validation error»); nothing is saved;
+- ``TestAPromotedCostBasisIsChecked`` (rule 6): a promote whose resolved cost basis has 13 decimals, 16 significant
+  digits, 13 integer digits, or is 1E+60, is refused on its own index (1, behind a valid promote) with the code and the
+  ``{"max": N}`` of its limit (12 for the integer digits), nothing changed (today both promotes commit, the cost basis
+  unchecked);
+- ``TestCorruptRowsAreReadWithoutRaising`` (rule 7): today ``InvalidOperation`` (the REAL 1e60) and ``TypeError``
+  (the REAL inf) on every read, the asset list's and the delete's included;
+- ``TestTheCodesAreListed``: ``TXValidationCode.INTEGER_DIGITS_EXCEEDED``, and ``validation_codes`` lists it.
 
 Guards — green today, and the cure must keep them green:
 
@@ -77,6 +112,11 @@ Guards — green today, and the cure must keep them green:
 - ``TestAnAutoCostBasisIsNotChecked``'s manual cases (rule 5, D2): the same amounts with ``cost_basis_mode`` ``manual``
   are refused on their row, ``decimalPlacesExceeded`` ``{"max": 12}`` or ``significantDigitsExceeded`` ``{"max": 15}``;
   no mode with an explicit override is pinned by ``TestOverTheLimitIsRefusedAtConfirmation``.
+- ``TestTooManyIntegerDigitsAreRefused`` (rule 6): the integer limit is reached, not passed — a BUY of 999999999999999
+  units for -999999999999999 EUR (15 digits each), one of 13-digit units for -1E+13 EUR (accepted under N63), a cost
+  basis of 999999999999.999 (12 integer digits) commit;
+- ``TestAPromotedCostBasisIsChecked`` (rule 6): a promote whose resolved cost basis keeps 12 decimals commits, and the
+  receiving leg holds it exactly.
 
 Derived — read from the contract's general rule, not in the brief's list; drop them if the rule was meant narrower: a
 quantity over both limits gets ``decimalPlacesExceeded`` alone (the "otherwise"); a cash amount past 15 significant
@@ -84,7 +124,9 @@ digits gets ``significantDigitsExceeded``; a row over the limit on two fields ge
 
 Ownership. Every test builds its own asset and brokers under a unique marker, in one session rolled back at the end. A
 batch runs as the endpoint runs it, its transaction included (``_run_as_the_endpoint``), so a refused batch leaves the
-database as it found it, and nothing reaches the lane's database.
+database as it found it, and nothing reaches the lane's database. The corrupt rows of rule 7 are written the same way —
+with the ORM, then overwritten by raw SQL — inside that session, and rolled back with it: no other connection ever sees
+them.
 
 Run: ``./dev.py test services transaction-decimal-places`` (the action ``services_transaction_decimal_places``).
 """
@@ -107,10 +149,10 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetType, Broker, Transaction, TransactionType
+from backend.app.db.models import Asset, AssetType, Broker, PriceHistory, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import BRIMParseOutput
@@ -145,6 +187,18 @@ DIGITS_MAX = {"max": 15}
 COST_13_DECIMALS = "0.1234567890123"
 # A PEPE's per-unit cost: 10 decimals, within D5's 12, which a 6-decimal column reads 0.000003 and refuses.
 PEPE_UNIT_COST = "0.0000034573"
+# R13-SEC2 (rule 6): the third code, past the digits a column keeps before the decimal point — compared as a string, as
+# the two above. The coordinator's decision N63 (17/10): 15 for a quantity and a cash amount (REAL_SIGNIFICANT_DIGITS),
+# 12 for a per-unit cost basis (precision - scale of (24, 12)).
+INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
+QUANTITY_INTEGER_MAX = {"max": 15}
+CASH_INTEGER_MAX = {"max": 15}
+COST_INTEGER_MAX = {"max": 12}
+# Every code of a value over its column's limit: what _decimal_issues collects and _other_issues leaves out.
+LIMIT_CODES = (*DECIMAL_CODES, INTEGER_DIGITS_EXCEEDED)
+# R13-SEC2 (rule 7): what a corrupt file holds, as SQLite literals: a REAL of 1e60, and +inf (SQLite reads 1e999 as Inf).
+HUGE_REAL = "1e60"
+INFINITE_REAL = "1e999"
 
 ENDPOINTS = ("validate", "commit")
 # What a test reads back, column by column: through each column's type, as the user finds the row once the request is over.
@@ -258,7 +312,7 @@ def _row(world: World, tx_type: str, quantity: str, *, cash: str | None = None, 
     return row
 
 
-async def _run_as_the_endpoint(world: World, *, creates: list[dict] | None = None, updates: list[dict] | None = None, endpoint: str = "commit") -> TXBatchResponse:
+async def _run_as_the_endpoint(world: World, *, creates: list[dict] | None = None, updates: list[dict] | None = None, deletes: list[int] | None = None, promotes: list[dict] | None = None, endpoint: str = "commit") -> TXBatchResponse:
     """The batch as ``POST /transactions/<endpoint>`` runs it, its transaction included: ``/commit`` keeps it when the
     service answers committed and rolls it back otherwise, ``/validate`` always rolls it back (``api/v1/transactions.py``);
     no user, so no access check.
@@ -269,12 +323,21 @@ async def _run_as_the_endpoint(world: World, *, creates: list[dict] | None = Non
     SQLite's transaction, so the savepoint nests in it), and the session fixture still rolls everything back.
     """
     savepoint = await world.session.begin_nested()
-    response = await TransactionService(world.session).execute_batch(creates_raw=creates or [], updates_raw=updates or [], deletes=[], commit=endpoint == "commit")
+    response = await TransactionService(world.session).execute_batch(creates_raw=creates or [], updates_raw=updates or [], deletes=deletes or [], promotes_raw=promotes or [], commit=endpoint == "commit")
     if endpoint == "commit" and response.committed:
         await savepoint.commit()
     else:
         await savepoint.rollback()
     return response
+
+
+async def _run_never_raising(world: World, story: str, **batch) -> TXBatchResponse:
+    """``_run_as_the_endpoint(world, **batch)``; an exception fails the test and names it: the endpoint would answer 500
+    instead of a refusal (R13-SEC2). Whatever the batch left half-done goes with the session fixture's rollback."""
+    try:
+        return await _run_as_the_endpoint(world, **batch)
+    except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+        pytest.fail(f"R13-SEC2: {story}: execute_batch raised {exc!r}, so /transactions/{batch.get('endpoint', 'commit')} answers 500 instead of a refusal")
 
 
 async def _stored(world: World, ids) -> dict[int, dict]:
@@ -307,13 +370,14 @@ def _issue_order(issue: tuple) -> tuple:
 
 
 def _decimal_issues(response: TXBatchResponse) -> list[tuple]:
-    """The batch's decimal refusals, as ``(operation, index, ref_id, code, field, params)``, sorted."""
-    return sorted(((issue.operation, issue.index, issue.ref_id, issue.code, issue.field, issue.params) for issue in response.issues if issue.code in DECIMAL_CODES), key=_issue_order)
+    """The batch's refusals over a column's limit — decimal places, significant digits, integer digits (R13-SEC2) — as
+    ``(operation, index, ref_id, code, field, params)``, sorted."""
+    return sorted(((issue.operation, issue.index, issue.ref_id, issue.code, issue.field, issue.params) for issue in response.issues if issue.code in LIMIT_CODES), key=_issue_order)
 
 
 def _other_issues(response: TXBatchResponse) -> list[TXValidationIssue]:
-    """Every issue of the batch that is not a decimal refusal."""
-    return [issue for issue in response.issues if issue.code not in DECIMAL_CODES]
+    """Every issue of the batch that is not a refusal over a column's limit."""
+    return [issue for issue in response.issues if issue.code not in LIMIT_CODES]
 
 
 def _render(issues: list[TXValidationIssue]) -> str:
@@ -327,9 +391,10 @@ def _words(text: str) -> str:
 
 
 def _assert_errors_name_their_fields(response: TXBatchResponse) -> None:
-    """Each decimal refusal carries an English ``error`` that names its field, as sent (``cash.amount``) or in words."""
+    """Each refusal over a column's limit carries an English ``error`` that names its field, as sent (``cash.amount``) or
+    in words."""
     for issue in response.issues:
-        if issue.code in DECIMAL_CODES:
+        if issue.code in LIMIT_CODES:
             assert issue.error and _words(issue.field or "") in _words(issue.error), f"C-97a: the error of {issue.code} on {issue.operation}[{issue.index}] must be an English text naming its field {issue.field!r}; it reads {issue.error!r}"
 
 
@@ -817,6 +882,263 @@ class TestAnAutoCostBasisIsNotChecked:
 
 
 # ============================================================================
+# RED AND GUARDS — RULE 6 (R13-SEC2): THE INTEGER DIGITS
+# ============================================================================
+
+# A create past its integer digits on ``main`` — sent at index 1, behind a valid BUY — and the limit issues it gets, as
+# (code, field, params): few digits and no decimal, so only the integer digits refuse it — 15 for a quantity and a cash
+# amount, 12 for a cost basis (decision N63). 1E+400 is beyond a double too: before the cure it became a REAL inf.
+INTEGER_CREATE_REFUSALS = [
+    pytest.param({"tx_type": "BUY", "quantity": "1E+60", "cash": "-10"}, [(INTEGER_DIGITS_EXCEEDED, "quantity", QUANTITY_INTEGER_MAX)], id="quantity-1E+60"),
+    pytest.param({"tx_type": "BUY", "quantity": "1000000000000000", "cash": "-10"}, [(INTEGER_DIGITS_EXCEEDED, "quantity", QUANTITY_INTEGER_MAX)], id="quantity-16-integer-digits"),
+    pytest.param({"tx_type": "BUY", "quantity": "1E+400", "cash": "-10"}, [(INTEGER_DIGITS_EXCEEDED, "quantity", QUANTITY_INTEGER_MAX)], id="quantity-1E+400-beyond-a-double"),
+    pytest.param({"tx_type": "BUY", "quantity": "1", "cash": "-1E+15"}, [(INTEGER_DIGITS_EXCEEDED, "cash.amount", CASH_INTEGER_MAX)], id="cash-amount--1E+15"),
+    pytest.param({"tx_type": "ADJUSTMENT", "quantity": "1", "cost": "1E+60"}, [(INTEGER_DIGITS_EXCEEDED, "cost_basis_override", COST_INTEGER_MAX)], id="adjustment-in-cost-basis-1E+60"),
+    pytest.param({"tx_type": "ADJUSTMENT", "quantity": "1", "cost": "1000000000000"}, [(INTEGER_DIGITS_EXCEEDED, "cost_basis_override", COST_INTEGER_MAX)], id="adjustment-in-cost-basis-13-integer-digits"),
+]
+
+# A value of a million digits, or of 400, on an ordinary broker: the subject's fields, and the limit issue its row gets
+# as (code, field, params). The coordinator's (a) and (c); (b) has its own test.
+MILLION_DIGIT_REFUSALS = [
+    pytest.param({"quantity": "1E+1000000", "cash": "-10"}, (INTEGER_DIGITS_EXCEEDED, "quantity", QUANTITY_INTEGER_MAX), id="a-quantity-1E+1000000"),
+    pytest.param({"quantity": "1", "cash": "-1E+1000000"}, (INTEGER_DIGITS_EXCEEDED, "cash.amount", CASH_INTEGER_MAX), id="c-cash-amount--1E+1000000"),
+]
+FOUR_HUNDRED_ONES = "1" * 400
+
+
+async def _ordinary_broker(world: World) -> tuple[int, int]:
+    """A broker of the test with the default settings — no cash overdraft, no asset shorting — holding a DEPOSIT of 100
+    EUR on ``SEED_DAY``: a BUY of 10 EUR is valid there but for its digits, whatever ``main`` allows. Its id, and the
+    deposit's (a row written before the batch, which the read-back must still see)."""
+    now = utcnow()
+    broker = Broker(name=f"{world.marker} ordinary", description="R13-SEC2: a broker with the default settings", created_at=now, updated_at=now)
+    world.session.add(broker)
+    await world.session.flush()
+    assert (broker.allow_cash_overdraft, broker.allow_asset_shorting) == (False, False), f"scaffold: a broker's defaults changed, it allows (overdraft, shorting) = {(broker.allow_cash_overdraft, broker.allow_asset_shorting)}"
+    broker_id = broker.id
+    deposit_id = await _insert(world, broker_id=broker_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
+    return broker_id, deposit_id
+
+
+def _million_digit_batch(world: World, broker_id: int, subject: dict) -> list[dict]:
+    """A valid BUY of 1 unit for 10 EUR on ``broker_id``, then the subject: a BUY of ``subject["quantity"]`` units for
+    ``subject["cash"]`` EUR there, at index 1."""
+    return [_row(world, "BUY", "1", cash="-10", broker_id=broker_id), _row(world, "BUY", subject["quantity"], cash=subject["cash"], broker_id=broker_id)]
+
+
+class TestTooManyIntegerDigitsAreRefused:
+    """Rule 6 (R13-SEC2): a quantity or a cash amount past 15 integer digits, a manual cost basis past 12 (decision N63),
+    is refused at confirmation with ``integerDigitsExceeded`` and that ``{"max": N}``, never stored; and a checked value
+    past its column's integer digits, whichever code it gets, stops the batch right after ``check_decimal_limits``.
+
+    Today the limit has no magnitude, and the row goes on through the stages: created, flushed, then reloaded by
+    ``validate_cost_basis`` (``_check_result_create_cost_basis``) through the column's type — a quantity or a cost basis
+    of 1E+60 raises ``InvalidOperation`` there, one of 1E+400 or of 400 digits (a REAL inf) ``TypeError``: a 500 on
+    ``/validate`` and ``/commit``; a quantity of 16 digits, a cash amount of -1E+15, a cost basis of 13 digits and an
+    update to 1E+60 pass unrefused (``/commit`` commits them); ``decimal_limit_issue`` raises ``decimal.Overflow`` on
+    ``1E+1000000``. The refused row is not asserted in the results: the batch stops before applying it.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize(("subject", "expected"), INTEGER_CREATE_REFUSALS)
+    async def test_create_past_the_integer_digits_is_refused_on_its_row(self, world, subject, expected, endpoint):
+        """Red today: nothing refuses it — a quantity of 16 digits, a cash amount of -1E+15 and a cost basis of 13 digits
+        get no issue (``/commit`` commits them); a quantity or a cost basis of 1E+60 makes ``validate_cost_basis`` raise
+        ``InvalidOperation`` as it reloads the row, 1E+400 ``TypeError`` (a REAL inf): a 500.
+
+        Contract: exactly the expected issues on create 1 (``ref_id`` None), each with an English ``error`` naming its
+        field, nothing else; not committed; no row of the batch in the database.
+        """
+        barrier_id = await _seed_position(world, TransactionType.BUY, "1", amount="-100")
+        creates = [_row(world, "BUY", "1", cash="-100"), _row(world, **subject)]
+
+        response = await _run_never_raising(world, f"the create {subject}", creates=creates, endpoint=endpoint)
+
+        refusals = sorted((("create", 1, None, code, field, params) for code, field, params in expected), key=_issue_order)
+        assert _decimal_issues(response) == refusals, f"R13-SEC2, /{endpoint}: the create {subject} must be refused on its own row with exactly {refusals}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        assert _other_issues(response) == [], f"R13-SEC2, /{endpoint}: only the integer digits may refuse this batch: {_render(_other_issues(response))}"
+        assert response.committed is False, f"R13-SEC2: /{endpoint} refused the batch, yet answered committed"
+        _assert_errors_name_their_fields(response)
+        assert barrier_id in await _stored(world, [barrier_id]), f"scaffold: the read-back no longer sees row id={barrier_id}, written before the batch, so finding no row of the batch would prove nothing"
+        written = await _batch_rows(world)
+        assert written == [], f"R13-SEC2: /{endpoint} refused the batch, yet the database holds its rows {written}"
+
+    @pytest.mark.asyncio
+    async def test_update_of_a_quantity_past_the_integer_digits_is_refused_on_its_row(self, world):
+        """Red today: the update of a stored BUY's quantity to 1E+60 commits.
+
+        Contract: refused on update 1 (behind a valid notes edit), ``ref_id`` its id, ``integerDigitsExceeded``
+        ``{"max": 15}`` on ``quantity``, nothing else; not committed; both rows read back as they were stored.
+        """
+        neighbour_id = await _seed_position(world, TransactionType.BUY, "1", amount="-100")
+        subject_id = await _seed_position(world, TransactionType.BUY, "1", amount="-100")
+        before = await _stored(world, [neighbour_id, subject_id])
+        updates = [{"id": neighbour_id, "description": f"{world.marker} neighbour edited"}, {"id": subject_id, "quantity": "1E+60"}]
+
+        response = await _run_never_raising(world, f"the update of BUY id={subject_id} to 1E+60 units", updates=updates)
+
+        refusal = ("update", 1, subject_id, INTEGER_DIGITS_EXCEEDED, "quantity", QUANTITY_INTEGER_MAX)
+        assert _decimal_issues(response) == [refusal], f"R13-SEC2: the update of id={subject_id} to 1E+60 units must be refused on its own row with exactly {refusal}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        assert _other_issues(response) == [], f"R13-SEC2: only the integer digits may refuse this batch: {_render(_other_issues(response))}"
+        assert response.committed is False, "R13-SEC2: /commit refused the batch, yet answered committed"
+        _assert_errors_name_their_fields(response)
+        after = await _stored(world, [neighbour_id, subject_id])
+        assert after == before, f"R13-SEC2: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize(("subject", "refusal"), MILLION_DIGIT_REFUSALS)
+    async def test_a_value_of_a_million_digits_is_refused_without_raising(self, world, subject, refusal, endpoint):
+        """Red today: ``decimal.Overflow`` in ``decimal_limit_issue``'s ``normalize`` (a context of 60 digits, ``Emax``
+        999999): the endpoint answers 500.
+
+        Contract (the coordinator's (a) and (c), on an ordinary broker — no overdraft, no shorting — so nothing but the
+        digits can refuse the row): no exception; the subject's row, create 1, gets ``integerDigitsExceeded``
+        ``{"max": 15}`` (decision N63) on its field (``quantity`` for a BUY of 1E+1000000 units, ``cash.amount`` for one
+        of -1E+1000000 EUR), the only limit issue of the batch; not committed; nothing saved.
+        """
+        broker_id, deposit_id = await _ordinary_broker(world)
+        code, field, params = refusal
+
+        response = await _run_never_raising(world, f"a BUY of {subject['quantity']} units for {subject['cash']} EUR on an ordinary broker", creates=_million_digit_batch(world, broker_id, subject), endpoint=endpoint)
+
+        expected = [("create", 1, None, code, field, params)]
+        assert _decimal_issues(response) == expected, f"R13-SEC2, /{endpoint}: the BUY of {subject['quantity']} units for {subject['cash']} EUR must be refused on its own row with {expected}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        assert response.committed is False, f"R13-SEC2: /{endpoint} refused the batch, yet answered committed"
+        assert deposit_id in await _stored(world, [deposit_id]), f"scaffold: the read-back no longer sees the deposit id={deposit_id}, written before the batch, so finding no row of the batch would prove nothing"
+        written = await _batch_rows(world)
+        assert written == [], f"R13-SEC2: /{endpoint} refused the batch, yet the database holds its rows {written}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    async def test_a_quantity_of_400_digits_keeps_the_significant_digit_code_and_every_issue_has_a_code(self, world, endpoint):
+        """Red today: the quantity gets ``significantDigitsExceeded``, then its row goes on through the stages as a float
+        inf (a double holds no 400 digits): ``validate_cost_basis`` reloads it and raises ``TypeError`` (a 500) — measured
+        in this worktree, before the balance replay, which would otherwise add «Balance validation error: …», an issue
+        without a code that the app can only show as a raw English text.
+
+        Contract (the coordinator's (b), on an ordinary broker): no exception; the issue on ``quantity`` keeps the first
+        code in order, ``significantDigitsExceeded`` ``{"max": 15}`` (past 15 integer digits too, so the batch stops
+        right after ``check_decimal_limits``); every issue of the response has a code, none reads «Balance validation
+        error»; not committed; nothing saved.
+        """
+        broker_id, deposit_id = await _ordinary_broker(world)
+        subject = {"quantity": FOUR_HUNDRED_ONES, "cash": "-10"}
+
+        response = await _run_never_raising(world, "a BUY of 400 ones (a quantity of 400 digits) on an ordinary broker", creates=_million_digit_batch(world, broker_id, subject), endpoint=endpoint)
+
+        expected = [("create", 1, None, SIGNIFICANT_DIGITS_EXCEEDED, "quantity", DIGITS_MAX)]
+        assert _decimal_issues(response) == expected, f"R13-SEC2, /{endpoint}: a quantity of 400 digits must keep the first code in order, {expected}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        without_code = [issue for issue in response.issues if issue.code is None]
+        assert without_code == [], f"R13-SEC2, /{endpoint}: every issue must carry a code — the app translates the code, a raw text reaches the user in English; these have none: {_render(without_code)}"
+        raw_balance = [issue for issue in response.issues if "Balance validation error" in (issue.error or "")]
+        assert raw_balance == [], f"R13-SEC2, /{endpoint}: the batch must stop before the balance replay, which cannot replay a quantity of 400 digits: {_render(raw_balance)}"
+        assert response.committed is False, f"R13-SEC2: /{endpoint} refused the batch, yet answered committed"
+        assert deposit_id in await _stored(world, [deposit_id]), f"scaffold: the read-back no longer sees the deposit id={deposit_id}, written before the batch, so finding no row of the batch would prove nothing"
+        written = await _batch_rows(world)
+        assert written == [], f"R13-SEC2: /{endpoint} refused the batch, yet the database holds its rows {written}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "subject",
+        [
+            pytest.param({"tx_type": "BUY", "quantity": "999999999999999", "cash": "-999999999999999"}, id="quantity-and-cash-amount-15-integer-digits"),
+            pytest.param({"tx_type": "BUY", "quantity": "1000000000000", "cash": "-1E+13"}, id="quantity-13-and-cash-amount-14-integer-digits"),
+            pytest.param({"tx_type": "ADJUSTMENT", "quantity": "1", "cost": "999999999999.999"}, id="cost-basis-12-integer-digits-15-significant-digits"),
+        ],
+    )
+    async def test_guard_the_integer_digits_at_the_limit_commit(self, world, subject):
+        """Guard: green today and after. The integer limit is reached, not passed: 15 digits for a quantity and a cash
+        amount (decision N63: 13 and 14 commit too), 12 for a cost basis; the create commits with no issue."""
+        response = await _run_never_raising(world, f"the create {subject}", creates=[_row(world, **subject)])
+
+        assert response.committed is True and response.issues == [], f"R13-SEC2: {subject} is within the integer digits of its fields (15 for a quantity and a cash amount, 12 for a cost basis), so it must commit; it was refused: {_render(response.issues)}"
+
+
+# A promote's resolved cost basis over a limit of its column, ``cost_basis_override`` (24, 12): the code and params of
+# its refusal. The first two leave the batch going to its end, uncommitted; the last two, past the integer digits,
+# stop it right after ``check_decimal_limits``.
+PROMOTED_COSTS_OVER_A_LIMIT = [
+    pytest.param(COST_13_DECIMALS, DECIMAL_PLACES_EXCEEDED, COST_MAX, id="13-decimals"),
+    pytest.param("3333.333333333333", SIGNIFICANT_DIGITS_EXCEEDED, DIGITS_MAX, id="16-significant-digits"),
+    pytest.param("1000000000000", INTEGER_DIGITS_EXCEEDED, COST_INTEGER_MAX, id="13-integer-digits"),
+    pytest.param("1E+60", INTEGER_DIGITS_EXCEEDED, COST_INTEGER_MAX, id="1E+60"),
+]
+
+
+async def _promotable_pair(world: World) -> tuple[int, int]:
+    """A stored pair a promote turns into a TRANSFER (``promote_from``: same asset, other broker, opposite quantity): an
+    ADJUSTMENT −1 on ``main`` and an ADJUSTMENT +1 on ``other`` at a manual cost of 100 EUR a unit. Their ids (giving,
+    receiving); the caller seeds the unit ``main`` gives (it may not go short)."""
+    giving_id = await _seed_position(world, TransactionType.ADJUSTMENT, "-1")
+    receiving_id = await _insert(world, broker_id=world.other_id, asset_id=world.asset_id, type=TransactionType.ADJUSTMENT, date=SEED_DAY, quantity=Decimal("1"), amount=Decimal("0"), currency=None, cost_basis_override=Decimal("100"), cost_basis_currency=EUR)
+    return giving_id, receiving_id
+
+
+async def _pair_state(world: World, ids) -> dict[int, tuple]:
+    """What a promote changes on the rows ``ids``, as the database holds them: (type, related id, cost basis, currency)."""
+    statement = select(Transaction.id, Transaction.type, Transaction.related_transaction_id, Transaction.cost_basis_override, Transaction.cost_basis_currency).where(Transaction.id.in_(list(ids)))
+    return {row.id: (row.type, row.related_transaction_id, row.cost_basis_override, row.cost_basis_currency) for row in await world.session.execute(statement)}
+
+
+def _limit_issues_without_ref(response: TXBatchResponse) -> list[tuple]:
+    """The batch's refusals over a column's limit as ``(operation, index, code, field, params)``, sorted: which row a
+    promote's ``ref_id`` names is not the subject."""
+    return sorted((operation, index, code, field, params) for operation, index, _ref_id, code, field, params in _decimal_issues(response))
+
+
+class TestAPromotedCostBasisIsChecked:
+    """Rule 6 (R13-SEC2): the cost basis a promote resolves (``resolved_fields.cost_basis_override``, the PromoteMergeModal's
+    merged value) is checked against the column ``cost_basis_override`` like a create's.
+
+    Today ``_apply_promote_cost_basis`` writes it without a check: the REAL rounds what it cannot keep, and nothing limits
+    its magnitude.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ENDPOINTS)
+    @pytest.mark.parametrize(("amount", "code", "params"), PROMOTED_COSTS_OVER_A_LIMIT)
+    async def test_promote_with_a_resolved_cost_basis_over_a_limit_is_refused_on_its_index(self, world, amount, code, params, endpoint):
+        """Red today: no issue — ``/commit`` commits both promotes, the second with that cost basis on its receiving leg.
+
+        Contract: two promotes of stored pairs, the second (index 1) resolving a cost basis of ``amount`` EUR: exactly one
+        limit issue, ``operation="promote"``, index 1, ``field="cost_basis_override"``, ``code`` with ``params``, its
+        English ``error`` naming the field; nothing else; not committed; all four rows as they were stored.
+        """
+        await _seed_position(world, TransactionType.BUY, "2", amount="-200")
+        first = await _promotable_pair(world)
+        second = await _promotable_pair(world)
+        before = await _pair_state(world, [*first, *second])
+        promotes = [{"id_a": first[0], "id_b": first[1]}, {"id_a": second[0], "id_b": second[1], "resolved_fields": {"cost_basis_override": {"code": EUR, "amount": amount}}}]
+
+        response = await _run_never_raising(world, f"a promote resolving a cost basis of {amount} EUR", promotes=promotes, endpoint=endpoint)
+
+        expected = [("promote", 1, code, "cost_basis_override", params)]
+        assert _limit_issues_without_ref(response) == expected, f"R13-SEC2, /{endpoint}: the promote resolving a cost basis of {amount} EUR must be refused on its own index with {expected}; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        assert _other_issues(response) == [], f"R13-SEC2, /{endpoint}: only the limit may refuse this batch: {_render(_other_issues(response))}"
+        assert response.committed is False, f"R13-SEC2: /{endpoint} refused the batch, yet answered committed"
+        _assert_errors_name_their_fields(response)
+        after = await _pair_state(world, [*first, *second])
+        assert after == before, f"R13-SEC2: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    async def test_guard_a_promote_with_a_resolved_cost_basis_of_12_decimals_commits(self, world):
+        """Guard: green today and after. A resolved cost basis of 0.000003457312 EUR (12 decimals, the maximum) commits,
+        and the receiving leg holds it exactly; the giving leg holds none (decision 47)."""
+        await _seed_position(world, TransactionType.BUY, "1", amount="-100")
+        giving_id, receiving_id = await _promotable_pair(world)
+        promotes = [{"id_a": giving_id, "id_b": receiving_id, "resolved_fields": {"cost_basis_override": {"code": EUR, "amount": "0.000003457312"}}}]
+
+        response = await _run_never_raising(world, "a promote resolving a cost basis of 0.000003457312 EUR", promotes=promotes)
+
+        assert response.committed is True and response.issues == [], f"R13-SEC2: a resolved cost basis of 12 decimals is within the limit, yet the promote was refused: {_render(response.issues)}"
+        state = await _pair_state(world, [giving_id, receiving_id])
+        expected = {giving_id: (TransactionType.TRANSFER, receiving_id, None, None), receiving_id: (TransactionType.TRANSFER, giving_id, Decimal("0.000003457312"), EUR)}
+        assert state == expected, f"The promoted pair reads back {state}: expected {expected}"
+
+
+# ============================================================================
 # RED AND GUARDS — BALANCES SUMMED EXACTLY
 # ============================================================================
 
@@ -931,6 +1253,121 @@ class TestTheAssetListReadsHoldingsExactly:
 
 
 # ============================================================================
+# RED — RULE 7 (R13-SEC2): CORRUPT ROWS ARE READ WITHOUT RAISING
+# ============================================================================
+
+
+async def _raw(world: World, table: str, column: str, row_id: int) -> tuple[str, object]:
+    """SQLite's storage class and the raw value of ``column`` of row ``row_id`` in ``table``, read past every column type."""
+    row = (await world.session.execute(text(f"SELECT typeof({column}), {column} FROM {table} WHERE id = :id"), {"id": row_id})).one()
+    return row[0], row[1]
+
+
+async def _corrupt(world: World, row, table: str, column: str, literal: str) -> int:
+    """Write ``row`` with the ORM, drop it from the session, and overwrite its ``column`` with the SQLite literal ``literal``
+    by raw SQL — as an older version (nothing refused ``Decimal('1E+400')``) or another tool leaves it — so the next load
+    reads the file. Its id, once the file is shown to hold that REAL."""
+    world.session.add(row)
+    await world.session.flush()
+    row_id = row.id
+    world.session.expunge(row)
+    await world.session.execute(text(f"UPDATE {table} SET {column} = {literal} WHERE id = :id"), {"id": row_id})
+    held = await _raw(world, table, column, row_id)
+    assert held == ("real", float(literal)), f"scaffold: {table}.{column} of row {row_id} holds {held}, not the REAL {literal}"
+    return row_id
+
+
+async def _corrupt_quantity(world: World, broker_id: int, asset_id: int, literal: str) -> int:
+    """A BUY of ``asset_id`` on ``broker_id`` whose quantity the file holds as the REAL ``literal``; its id."""
+    now = utcnow()
+    row = Transaction(broker_id=broker_id, asset_id=asset_id, type=TransactionType.BUY, date=SEED_DAY, quantity=Decimal("1"), amount=Decimal("-1"), currency=EUR, description=f"{world.marker} corrupt", created_at=now, updated_at=now)
+    return await _corrupt(world, row, "transactions", "quantity", literal)
+
+
+async def _corrupt_close(world: World, literal: str) -> int:
+    """A price of the test's asset whose close the file holds as the REAL ``literal``; its id."""
+    row = PriceHistory(asset_id=world.asset_id, date=SEED_DAY, close=Decimal("1"), currency=EUR, source_plugin_key="MANUAL", fetched_at=utcnow())
+    return await _corrupt(world, row, "price_history", "close", literal)
+
+
+class TestCorruptRowsAreReadWithoutRaising:
+    """Rule 7 (R13-SEC2, E's attack): rows whose REAL today's read cannot turn into a Decimal — a quantity of 1e60
+    (``InvalidOperation``: padded to 6 decimals in 60 digits), an infinite quantity or close (``TypeError``: the exponent
+    ``'F'`` compared with an int). The asset list reads every user's quantities, so one such row answers 500 to every
+    user, and the row cannot be deleted through the app, since deleting it loads it.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_asset_list_reads_a_quantity_of_1e60_and_an_infinite_one_without_raising(self, world):
+        """Red today: ``list_assets`` raises — ``InvalidOperation`` on the REAL 1e60, ``TypeError`` on the inf.
+
+        Contract: no exception; the test's two assets are listed, and the one holding 1e60 on ``main`` reads as held (by
+        others, no user being passed): its quantity reads 1E+60. The infinite one, read as None, is not asserted.
+        """
+        infinite_asset_id = await _new_asset(world, "infinite coin")
+        await _corrupt_quantity(world, world.main_id, world.asset_id, HUGE_REAL)
+        await _corrupt_quantity(world, world.other_id, infinite_asset_id, INFINITE_REAL)
+
+        try:
+            listed = await AssetCRUDService.list_assets(FAAinfoFiltersRequest(search=world.marker), world.session)
+        except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+            pytest.fail(f"R13-SEC2: list_assets raised {exc!r} on a quantity the file holds as the REAL {HUGE_REAL} or {INFINITE_REAL}: GET /assets answers 500 to every user")
+
+        flags = {asset.id: (asset.held_by_me, asset.held_by_others) for asset in listed}
+        assert {world.asset_id, infinite_asset_id} <= set(flags), f"R13-SEC2: the list searched by the test's marker lacks its assets {world.asset_id} and {infinite_asset_id}: {sorted(flags)}"
+        assert flags[world.asset_id] == (False, True), f"R13-SEC2: asset id={world.asset_id} holds a quantity of 1e60 on broker {world.main_id}, which reads 1E+60: held by others (no user being passed); (held_by_me, held_by_others) = {flags[world.asset_id]}"
+
+    @pytest.mark.asyncio
+    async def test_a_quantity_of_1e60_loads_as_1e60_and_an_infinite_one_as_none(self, world):
+        """Red today: loading either row raises — ``InvalidOperation`` on 1e60, ``TypeError`` on the inf.
+
+        Contract: through ``TransactionService.get_by_ids`` (what the batch loads), the 1e60 row's quantity reads
+        ``1E+60`` and the infinite one's None.
+        """
+        huge_id = await _corrupt_quantity(world, world.main_id, world.asset_id, HUGE_REAL)
+        infinite_id = await _corrupt_quantity(world, world.other_id, world.asset_id, INFINITE_REAL)
+
+        try:
+            loaded = {row.id: row.quantity for row in await TransactionService(world.session).get_by_ids([huge_id, infinite_id])}
+        except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+            pytest.fail(f"R13-SEC2: loading the transactions id={huge_id} (quantity REAL {HUGE_REAL}) and id={infinite_id} (REAL {INFINITE_REAL}) raised {exc!r}")
+
+        assert loaded == {huge_id: Decimal("1E+60"), infinite_id: None}, f"R13-SEC2: the quantities load as {loaded}: expected 1E+60 for id={huge_id} and None for id={infinite_id}"
+
+    @pytest.mark.asyncio
+    async def test_a_transaction_of_infinite_quantity_can_be_deleted_through_the_batch(self, world):
+        """Red today: the delete loads the row first (``preload_and_authorize`` → ``get_by_ids``), and the load raises
+        ``TypeError``: the row cannot leave the database through the app.
+
+        Contract: ``/commit`` with the row's id in ``deletes`` commits with no issue, reports the delete, and the row is
+        gone.
+        """
+        infinite_id = await _corrupt_quantity(world, world.other_id, world.asset_id, INFINITE_REAL)
+
+        response = await _run_never_raising(world, f"the delete of transaction id={infinite_id}, whose quantity the file holds as the REAL {INFINITE_REAL}", deletes=[infinite_id])
+
+        assert response.committed is True and response.issues == [], f"R13-SEC2: the delete of id={infinite_id} must commit; the batch answered committed={response.committed}, issues: {_render(response.issues)}"
+        assert ("delete", 0) in _in_batch(response), f"R13-SEC2: the delete of id={infinite_id} is not reported: {response.results}"
+        remaining = list((await world.session.execute(select(Transaction.id).where(Transaction.id == infinite_id))).scalars())
+        assert remaining == [], f"R13-SEC2: the delete of id={infinite_id} was committed, yet the row is still there"
+
+    @pytest.mark.asyncio
+    async def test_a_price_whose_close_is_infinite_loads_without_one(self, world):
+        """Red today: loading the row raises ``TypeError``.
+
+        Contract: the price row loads, its close None.
+        """
+        price_id = await _corrupt_close(world, INFINITE_REAL)
+
+        try:
+            row = (await world.session.execute(select(PriceHistory).where(PriceHistory.id == price_id))).scalar_one()
+        except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
+            pytest.fail(f"R13-SEC2: loading the price id={price_id}, whose close the file holds as the REAL {INFINITE_REAL}, raised {exc!r}")
+
+        assert row.close is None, f"R13-SEC2: the price id={price_id} loads a close of {row.close!r}: expected None"
+
+
+# ============================================================================
 # GUARD — D2: BRIM PARSE DOES NOT REFUSE
 # ============================================================================
 
@@ -992,7 +1429,7 @@ class TestBrimParseDoesNotRefuse:
 
 class TestTheCodesAreListed:
     """RED: both codes are members of ``TXValidationCode`` — the frontend maps a code to ``transactions.errors.<code>`` —
-    so ``GET /transactions/types`` lists them in ``validation_codes``."""
+    so ``GET /transactions/types`` lists them in ``validation_codes``; and so is the integer-digit code of R13-SEC2."""
 
     def test_validation_code_has_both_decimal_codes(self):
         """RED: today ``TXValidationCode`` has neither value."""
@@ -1009,3 +1446,18 @@ class TestTheCodesAreListed:
         missing = sorted(set(DECIMAL_CODES) - {info.code for info in response.validation_codes})
 
         assert missing == [], f"C-97a: GET /transactions/types does not list {missing} in validation_codes"
+
+    def test_validation_code_has_the_integer_digits_code(self):
+        """Red today: ``TXValidationCode`` has no ``INTEGER_DIGITS_EXCEEDED`` (rule 6, R13-SEC2): the app could not map
+        the refusal to ``transactions.errors.integerDigitsExceeded``."""
+        member = getattr(TXValidationCode, "INTEGER_DIGITS_EXCEEDED", None)
+
+        assert member is not None and member.value == INTEGER_DIGITS_EXCEEDED, f"R13-SEC2: TXValidationCode.INTEGER_DIGITS_EXCEEDED is {member!r}: expected the value {INTEGER_DIGITS_EXCEEDED!r}"
+
+    def test_transaction_types_lists_the_integer_digits_code(self):
+        """Red today: ``GET /transactions/types`` does not list ``integerDigitsExceeded`` in ``validation_codes``."""
+        response = TXTypesResponse(transaction_types=list(TX_TYPE_METADATA.values()), event_types=EVENT_TYPE_METADATA)
+
+        listed = {info.code for info in response.validation_codes}
+
+        assert INTEGER_DIGITS_EXCEEDED in listed, f"R13-SEC2: GET /transactions/types does not list {INTEGER_DIGITS_EXCEEDED!r} in validation_codes"

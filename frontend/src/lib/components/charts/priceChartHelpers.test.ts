@@ -1495,16 +1495,19 @@ describe('buildDeltaHtml', () => {
 });
 
 // ===========================================================================
-// buildStaleTooltipHtml — the amber staleness warning line(s)
+// buildStaleTooltipHtml — the staleness warning line(s), in the caller's warning colour
 // ===========================================================================
 
 describe('buildStaleTooltipHtml', () => {
+    /** The caller's warning colour — in the product the warning role, `chartNeutrals().tooltip.staleWarning` — one no table holds. */
+    const WARNING = '#a1b2c3';
+
     it('emits nothing when the point is not stale', () => {
-        expect(buildStaleTooltipHtml(undefined, undefined)).toBe('');
+        expect(buildStaleTooltipHtml(undefined, undefined, WARNING)).toBe('');
     });
 
     it('emits a single price-stale line when FX is fresh', () => {
-        const html = buildStaleTooltipHtml(3, 0);
+        const html = buildStaleTooltipHtml(3, 0, WARNING);
         expect(html).toContain('⚠');
         expect(html).toContain('Stale: 3d');
         // Only one warning line.
@@ -1512,22 +1515,37 @@ describe('buildStaleTooltipHtml', () => {
     });
 
     it('adds a second line when the FX rate is itself stale', () => {
-        const html = buildStaleTooltipHtml(3, 5);
+        const html = buildStaleTooltipHtml(3, 5, WARNING);
         expect(html).toContain('Stale: 3d');
         expect(html).toContain('FX rate: 5d old');
         expect(html.match(/⚠/g)).toHaveLength(2);
     });
 
     it('substitutes {days} into a provided (translated) template', () => {
-        const html = buildStaleTooltipHtml(4, 0, 'Vecchio: {days}g');
+        const html = buildStaleTooltipHtml(4, 0, WARNING, 'Vecchio: {days}g');
         expect(html).toContain('Vecchio: 4g');
         expect(html).not.toContain('Stale:');
     });
 
     it('substitutes {days} into both provided templates when FX is stale', () => {
-        const html = buildStaleTooltipHtml(4, 7, 'P {days}', 'FX {days}');
+        const html = buildStaleTooltipHtml(4, 7, WARNING, 'P {days}', 'FX {days}');
         expect(html).toContain('P 4');
         expect(html).toContain('FX 7');
+    });
+
+    it("draws every warning line in the caller's colour, and still emits nothing when the point is not stale", () => {
+        const cases = {
+            'price only': buildStaleTooltipHtml(3, 0, WARNING),
+            'price and FX': buildStaleTooltipHtml(3, 5, WARNING),
+            'translated templates': buildStaleTooltipHtml(4, 7, WARNING, 'P {days}', 'FX {days}'),
+        };
+        for (const [name, html] of Object.entries(cases)) {
+            const lines = html.match(/⚠/g)?.length ?? 0;
+            expect(lines, `${name} barrier: a warning line was emitted, so the colour count is about something`).toBeGreaterThan(0);
+            expect(html.split(`color:${WARNING}`).length - 1, `${name}: a warning line in another colour than the caller's — a colour of its own ignores the theme the caller read`).toBe(lines);
+        }
+        expect(buildStaleTooltipHtml(undefined, undefined, WARNING), 'a colour handed over must not make a line out of nothing').toBe('');
+        expect(buildStaleTooltipHtml(undefined, 5, WARNING), 'a stale FX rate alone is no stale point: no line, in any colour').toBe('');
     });
 });
 
