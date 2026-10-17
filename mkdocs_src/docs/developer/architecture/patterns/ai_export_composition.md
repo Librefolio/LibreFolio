@@ -457,17 +457,37 @@ prints a `null` leaf as the literal `null`, which the format preamble declares a
 removed, and the renderer diagnostics count it in `empty_columns_removed`, and also in
 `empty_parent_columns_removed` when it is the parent of nested columns: an amount
 object that is `null` in some rows sits next to the `.code` / `.amount` columns of
-the rows that have it, and those columns read `null` in the other rows. A `null` is
-therefore visible only when another row of the same table has a value. SUMMARY rows —
-the payload's scalar fields outside its tables, in a `field|value` table — are never
-removed, so a fact that must survive a table whose values are all `null` belongs in a
+the rows that have it, and those columns read `null` in the other rows.
+
+A removed column does not vanish silently (T-B7). The line right after the table's last
+row, `omitted_null_columns=a,b`, names the removed columns that held an explicit `null`
+— the backend's "unavailable" — as their header cells would have been written; the
+preamble states the rule and the diagnostics count the names in `null_columns_declared`.
+Two kinds of removed column are not named:
+
+- a parent column, whose values live on in its `parent.child` columns;
+- a column that is empty only because the renderer has nothing for that scope
+  (`undefined`, such as `portfolio_weight_percent` in the price series of one Asset):
+  that column is "not applicable", not "unavailable".
+
+The line follows the table, never its title, so every reader that takes the rows right
+after a title — the probe's table audit and scope checks, the test helpers — keeps
+reading the same table. When a fixed-header table falls back from one payload field to
+another (the price series' `latest_close`, then `latest_rate`), the first field the
+payload carries wins, `null` included, so an unavailable value is never read as an
+absent one. The preamble labels these tables `compact_pipe_tables_v2` and
+`generic_pipe_tables_v2` since this rule (1.3).
+
+SUMMARY rows — the payload's scalar fields outside its tables, in a `field|value` table
+— are never removed, so a fact that has to be counted rather than named belongs in a
 scalar field.
 
 That is the role of `unavailable_amount_lot_count` in `asset.lot_detail`,
 `portfolio.fifo_lots` and `broker.fifo_lots`: always present, 0 included, it counts
 the lots with at least one amount that cannot be valued in the target currency (a
 missing FX rate). Those amounts are `null` — never 0, never the native amount. When
-every lot's amount is unknown, its column is removed and the count is the trace.
+every lot's amount is unknown, its column is removed and named on the
+`omitted_null_columns` line, and the count says how many lots.
 
 The FIFO summaries (`portfolio.fifo_summary`, `broker.fifo_summary`) are strict too:
 an Asset's original cost, residual cost basis, proceeds, realized P&L, income, fees,
