@@ -621,7 +621,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 31 | I 23 «ruolo-mancante»: 4 file (i chip su `bg-lf-neutral/50`, lo stato vuoto degli asset sull'accento, l'anello di `SocialShareModal`), il TSV (m1 697 → 674), la voce di `htmlSink`, lo skill (domanda 7) | ✅ commit `a092cda38`, entrato in `9016f47c3`: Vitest 300/300, `front check` 0 e 0, E2E 20/20 |
 | 32 | `CompactCashCell` sul percorso nuovo (`features/transactions/form/`): i 12 token di `table.css` sui ruoli, il segnaposto e il bordo del disabilitato come la select della cella | ✅ commit `55bced133`, entrato in `b58108665`: Vitest 179/179, `front check` 0 e 0, E2E 44/45; FM6 (TC-18, duplicato di W-B56) verde sulla punta, 10/10 |
 | 33 | Il caso (c) di `theme-roles.spec.ts`: una sonda nel contenuto della pagina invece di `dashboard-cash-balances`, migrata da DV | ✅ commit `5cac2d244`, entrato in `c1578a8bf` (11:51): desktop 13/13, mobile 11/11 + 2 saltati per costruzione |
-| 34 | Giro 3, R3-a: toast tenui, chip della (a) col bordo `X` (T3-b), qualità dei dati per gravità (e il `MISSING_PRICE` del rischio ad avviso, nel backend), opacità e link delle famiglie | ⏳ CHECKPOINT READY (23:2x): Vitest 389/389, `risk-asset-set` 55/55, `front check` 0 e 0; slot da fare |
+| 34 | Giro 3, R3-a: toast tenui, chip della (a) col bordo `X` (T3-b), qualità dei dati per gravità (e il `MISSING_PRICE` del rischio ad avviso, nel backend), opacità e link delle famiglie | ✅ commit `81a927681`; slot verde (23:31–23:51): gate 134, `component-unit` 4.959, E2E 299/299 |
+| 35 | Giro 3, R3-b: i ruoli `--lf-cat-*` dei 12 tipi, il risolutore `in srgb`, i badge col colore della famiglia e il pallino del contenuto | ⏳ CHECKPOINT READY (00:0x): TSV m1 674 → 594; Vitest 449/449; `front check` 0 e 0; E2E da fare |
 
 ## Avanzamento
 
@@ -3374,4 +3375,62 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > check-orphans` pulito (563 file del frontend, 491 del backend); Vitest **389/389** su 15 file (i quattro gate,
 > `htmlSink`, i test nuovi, le famiglie); `front check` **0 e 0**; `--check` pulito; `diff --check` pulito.
 
-> 🔄 **14 · Il checkpoint di R3-a** e la richiesta dello slot (`r3/slot.sh`, ~50 minuti).
+> ✅ **14 · Il checkpoint di R3-a:** committato dal coordinatore come **`81a927681`** (23:31; genitore `38b7e6313`, 17
+> file). **Lo slot** (`r3/slot.sh`, `LIMIT_MIN=70`) è partito alle 23:31:56, carico 4: `api sync`, `--check`, i gate,
+> `front check` e `component-unit` verdi entro le 23:34:51; poi le E2E.
+
+> ✅ **15 · Le risposte di R3-b** (coordinatore, 23:31 e 23:3x; decise dal developer e dalla designer sul foglio delle
+> opzioni): i sottotipi prendono il colore della **famiglia** (tutti gli `ETF_*` nel blu dell'ETF,
+> `CROWDFUND_REAL_ESTATE` nel malva del Crowdfunding) più **un pallino nel colore del contenuto**, come la pastiglia
+> dell'icona; quello di `ETF_MONETARY` è la Liquidità; il resto segue `primaryAssetType`. Il pallino è un ruolo
+> (`AssetTable` disegna i badge in una stringa HTML). La correzione D-T6 di BOND va bene (la porta il coordinatore al
+> developer). I file sono liberi (`assetTypes.ts`, `AssetTable`, `AssetCard`, `ProviderComparisonModal`,
+> `assetTypeTables.test.ts`); il flag di parità di DV lo gira chi entra per secondo, me lo dice il coordinatore.
+
+> ⚠️ **Fuori pista — il colore del pallino:** il colore del contenuto (`cat-X`) sul fondo della famiglia dà, in chiaro,
+> ETF_CRYPTO 2,84:1, sotto il 3:1 della designer per le icone (gli altri 3,48–5,04; `r3b/dots.log`). Il pallino va nel
+> colore del testo del badge del contenuto, `cat-X-on-soft`: stessa tinta, scurita in chiaro dove la sua tabella la
+> scurisce, ≥ 4,30:1 in chiaro e 4,52–7,71:1 in scuro. Approvato dal coordinatore, che lo annota per il developer.
+
+> ✅ **16 · Le bozze dei badge, su copie** (`r3b/transform_badges.py`): `BADGE_CLASS_MAP` sui ruoli, i sottotipi nel
+> colore della famiglia; `BADGE_DOT_CLASS_MAP` e l'export `assetTypeBadgeDotClass()`; il fallback sul chip neutro; il
+> pallino nei tre punti che disegnano il badge (`AssetTable`, nella stringa HTML; `AssetCard` e
+> `ProviderComparisonModal`, con un `{@const}`), `data-testid="asset-type-dot"` e `aria-hidden`. Prettier pulito,
+> commenti a 120 colonne. Il gate dell'HTML interpolato segnala i nomi che finiscono in `name`: la variabile è `dot`.
+> `r3b/apply_r3b.sh` rigenera le due trasformazioni dall'albero dopo lo slot e copia solo se uguali.
+
+> ✅ **Lo slot di R3-a** (23:31:56–23:51:34, carico 4, 2 worker; `files/T-r2/r3/slot/`): `api sync` rc 0, `--check`
+> pulito, i quattro gate **134/134**, `front check` **0 e 0**, `component-unit` **4.959/4.959** su 187 file; E2E, tutte
+> sul progetto desktop (le azioni del runner non girano il mobile), **299/299**, 0 rossi e 0 saltati: `front-portfolio
+> dashboard` 27, `banners` 20, `risk` 38, `front-broker detail` 40, `front-asset asset-detail` 39, `front-fx fx-detail`
+> 24, `transactions-modals` 25, `risk-lab` 44, `tx-brim-import` 8, `front-utility auth` 34. Porta libera alle 23:51:34.
+
+> ✅ **17 · R3-a entrato** (coordinatore, 23:52): **`050741670`** (genitori `ba8e06763` e `81a927681`); il ramo portato
+> in avanti a `050741670` dal coordinatore; arrivati solo `decisioni.md` e `palette-finale.json`, il piano intatto. DV
+> non ha ancora un checkpoint: il flag di parità lo gira chi entra per secondo.
+
+> ✅ **18 · R3-b applicato** (23:52, `r3b/apply_r3b.sh` con `TESTS_DIR` vuoto, perché test-author non aveva finito: le
+> bozze rigenerate da `050741670` sono uguali a quelle riviste): `tokens.css`, `theme-roles.mjs`, `assetTypes.ts`,
+> `AssetTable`, `AssetCard`, `ProviderComparisonModal`. **Prove leggere** (23:52–23:55, carico 4, sotto `nice`):
+> `--check` pulito con `assetTypes.ts` sotto il record, `--update`: **m1 674 → 594** (le 80 classi dei badge), m2 2 → 2;
+> Vitest 446/447 su 13 file (i quattro gate, `htmlInterpolation`, `htmlSink`, i test di `AssetTable`,
+> `ProviderComparisonModal`, `chartCategories`, `roleColors`, `contrast`): il solo rosso è quello atteso, la vecchia
+> regola «badge(x) is badge(primary(x))» di `assetTypeTables.test.ts`, che test-author riscrive; `front check` **0 e
+> 0**.
+
+> ✅ **19 · test-author** (agente `r3b-tests`, 23:37–00:02; prima su copie in `/tmp/libreFolio_TA_r8/`, poi nell'albero a
+> slot finito): `assetTypeTables.test.ts` 47 → 49 test (la regola «badge(x) = badge(famiglia(x))», nessuna famiglia ne
+> condivide un'altra, la mappa dei pallini esattamente i sottotipi nel colore della pastiglia,
+> `assetTypeBadgeDotClass()` nullo fuori dai sottotipi, i tre punti che disegnano il badge chiamano i due aiuti con un
+> argomento); nel gate C3 31 coppie nuove per tema (i 12 testi dei badge, i 12 colori sulla card, i 7 pallini) e le
+> righe `in srgb` del controllo positivo (`#808080` contro `#636363`; l'alfa premoltiplicata). Ogni controllo morde sul
+> codice di `81a927681` e su mutanti mirati (per esempio il testo di CRYPTO riportato a `#b87916`: 3,00:1 come testo,
+> 2,84:1 come pallino). 70/70.
+
+> ✅ **20 · Le prove leggere finali di R3-b** (00:02–00:05, carico 3): Vitest **449/449** su 13 file (i quattro gate,
+> `htmlInterpolation`, `htmlSink`, `assetTypeTables`, `AssetTable`, `ProviderComparisonModal`, `chartCategories`,
+> `roleColors`, `contrast`); Prettier pulito sugli 8 file; `front check` **0 e 0**; `diff --check` pulito. Due righe di
+> commento oltre 120 colonne nel test, come altre quattro già in quel file a HEAD: lo stile del file.
+
+> 🔄 **21 · Il checkpoint di R3-b** e la proposta delle E2E (`front-asset asset-list`, che disegna i badge nella tabella
+> e nelle card).
