@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import secrets
 import shutil
 import sqlite3
@@ -291,6 +292,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
         archive_path.unlink(missing_ok=True)
 
     database = data_root / DATABASE_ENTRY
+    _refuse_foreign_objects(database)
     before = describe_database(database)
     _check_against_manifest(before, manifest)
     action, migrations, head = _revision_plan(manifest.alembic_revision)
@@ -556,10 +558,64 @@ def _post_migration_fixes(database: Path, data_root: Path) -> list[str]:
     return sorted(fix_id for fix_id, outcome in report.outcomes.items() if outcome == "applied")
 
 
+#: A word of an SQL statement, or what comes between two: spaces and comments are skipped, anything else ends the words.
+_SQL_TOKEN = re.compile(r"(?P<skip>\s+|--[^\n]*|/\*.*?(?:\*/|\Z))|(?P<word>[A-Za-z_]+)|(?P<other>.)", re.S)
+#: The kinds of a schema object LibreFolio's migrations create: tables and their indexes, never anything else (B-28).
+_OWN_KINDS = ("table", "index")
+
+
+def _leading_words(sql: str, count: int) -> list[str]:
+    """The first ``count`` words of an SQL statement, upper-cased, past spaces and comments; fewer when something else
+    comes first."""
+    words: list[str] = []
+    for match in _SQL_TOKEN.finditer(sql):
+        if match.lastgroup == "skip":
+            continue
+        if match.lastgroup != "word":
+            break
+        words.append(match.group("word").upper())
+        if len(words) == count:
+            break
+    return words
+
+
+def _schema_object_kind(sql: object) -> str:
+    """What an object of ``sqlite_master`` is, read from its SQL as SQLite builds it, whatever its row's ``type`` says:
+    ``table``, ``index`` (SQL NULL: one of SQLite's own automatic indexes), or ``trigger``, ``view``, ``virtual``,
+    ``other``."""
+    if sql is None:
+        return "index"
+    words = _leading_words(sql, 3) if isinstance(sql, str) else []
+    if words[:2] == ["CREATE", "TABLE"]:
+        return "table"
+    if words[:2] == ["CREATE", "INDEX"] or words == ["CREATE", "UNIQUE", "INDEX"]:
+        return "index"
+    second = words[1] if len(words) > 1 and words[0] == "CREATE" else ""
+    return {"TRIGGER": "trigger", "VIEW": "view", "VIRTUAL": "virtual"}.get(second, "other")
+
+
+def _refuse_foreign_objects(database: Path) -> None:
+    """Refuse a database holding a trigger, a view or a virtual table (lot B-28): LibreFolio never creates one, and its SQL
+    would run as soon as the check writes or reads the copy, and in the server after a restore, a recursive one for
+    ever. Read from ``sqlite_master`` alone, read only, by each object's SQL; nothing of the archive runs."""
+    try:
+        with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema=OFF")
+            rows = conn.execute("SELECT sql FROM sqlite_master").fetchall()
+    except sqlite3.DatabaseError:
+        raise StagingError("database_damaged", "The backup's database cannot be read: it cannot be restored") from None
+    foreign = Counter(kind for (sql,) in rows if (kind := _schema_object_kind(sql)) not in _OWN_KINDS)
+    if foreign:
+        # The kinds only: the names and the SQL are the archive's text.
+        logger.warning("A backup's database holds schema objects LibreFolio never creates", objects=sum(foreign.values()), kinds=sorted(foreign))
+        raise StagingError("database_foreign_objects", "The backup's database holds triggers, views or other objects LibreFolio never creates: it cannot be restored")
+
+
 def _plugin_secrets(database: Path, archive_key: str | None) -> tuple[int, SecretCounts]:
     """The copy's plugin secrets after its upgrade: how many were re-encrypted with this instance's key, how many stay
     unreadable. X's functions, on a connection of the copy; this instance's key is derived only when there are secrets."""
     with closing(sqlite3.connect(database)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
         # A random key reads no secret: what it counts as unreadable is every secret the copy holds.
         if count_unreadable_secrets(conn, secrets.token_bytes(SUBKEY_LENGTH)).total == 0:
             return 0, SecretCounts()
@@ -589,6 +645,7 @@ def _archive_subkey(archive_key: str | None) -> bytes | None:
 def _administrators(database: Path) -> list[str]:
     """The user names of the copy's active administrators, in order."""
     with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
         rows = conn.execute("SELECT username FROM users WHERE is_superuser = 1 AND is_active = 1 ORDER BY username").fetchall()
     return [str(row[0]) for row in rows]
 

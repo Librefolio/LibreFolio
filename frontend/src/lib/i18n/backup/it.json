@@ -196,6 +196,7 @@
         "no_space": "Sul server non c'è abbastanza spazio libero per controllare l'archivio.",
         "stage_failed": "La copia non è stata scritta: la causa è nel log del server.",
         "database_damaged": "Il database del backup è danneggiato: non può essere ripristinato.",
+        "database_foreign_objects": "Il database del backup contiene trigger, viste o altri oggetti che LibreFolio non crea mai: non viene da LibreFolio, oppure è stato modificato, e non può essere ripristinato.",
         "manifest_mismatch": "Il database del backup non è quello indicato dalla sua descrizione.",
         "head_unknown": "Questo LibreFolio non riesce a leggere le sue migrazioni: la causa è nel log del server.",
         "revision_missing": "Il database del backup non ha una versione.",
