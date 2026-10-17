@@ -5517,6 +5517,22 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N78** (D-W72-1 → b, coordinatore 08:39, da rivedere col developer): la regola 12 estesa a `cost_basis_override` su ogni scrittura,
   codice `costBasisNotAllowed {type, qty}`, le righe già salvate restano; più la chiave mancante di `costBasisModeIncompatible` (oggi
   in inglese grezzo) e un cancello sui codici delle regole. Ordine: dopo W-B71. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  **N78 raffinata** (coordinatore, 17/10, dai rossi): **tranne un ADJUSTMENT a quantità < 0**, il costo di consegna della decisione 47,
+  che la decisione 4 lascia mettere a un update dello stesso batch dello split. Con la cura: un errore di regola da solo tiene i suoi
+  `params` (oggi solo quelli impacchettati), e il vecchio `promote_transfer` rifiuta un costo su un FX_CONVERSION invece di lasciarlo
+  cadere. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+  ✅ 17/10: regola 12b (`cost_basis_set`, `costBasisNotAllowed {type, qty}`, tranne un ADJUSTMENT −q) su create e update;
+  `_resolved_cost_issues` per il costo unito di una coppia di cassa; `_lone_error_params` in `_parse_lenient`; `promote_transfer`
+  rifiuta un costo su FX_CONVERSION; `costBasisNotAllowed` e `costBasisModeIncompatible` in 4 lingue, cancello su tutti i codici delle
+  regole (22). 21 rossi verdi: `transaction-cost-basis-rule` 164, `transaction` 125, `transaction-decimal-places` 201; BRIM
+  (`brim-create-transaction` 14, `brim-gap-fix` 115, `external brim-providers` 736) e gate i18n verdi. Dettagli: piano 04, sezione
+  «W-B72 — … (N78): cura».
+- **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
+  17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
+  errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
+  `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
+  rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
+  (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
 - **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
   `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra

@@ -89,6 +89,9 @@ class TransactionPromotionMixin:
                 errors.append(f"FX_CONVERSION requires different currencies (got {from_tx.currency}+{to_tx.currency})")
             if req.asset_id is not None:
                 errors.append("FX_CONVERSION promotion must not set asset_id")
+            # N78 (W-B72): the cash legs take no cost basis; it was dropped in silence.
+            if req.cost_basis_override is not None:
+                errors.append("FX_CONVERSION promotion must not set cost_basis_override")
 
         if errors:
             return TXTransferPromoteResponse(rolled_back=True, errors=errors)
