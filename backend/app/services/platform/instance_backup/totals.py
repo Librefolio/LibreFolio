@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -33,9 +32,6 @@ logger = get_logger(__name__)
 TotalsStatus = Literal["same", "changed", "absent", "other_version", "unreadable"]
 #: The differences a comparison keeps; ``differences_count`` counts them all.
 MAX_DIFFERENCES = 20
-#: An amount of a recorded document, as J writes it: plain decimal text. Checked before J reads it, since the document
-#: comes from an archive and an exponent would be expanded in full.
-_PLAIN_AMOUNT = re.compile(r"-?[0-9]{1,60}(\.[0-9]{1,60})?")
 
 
 class TotalsDifference(BaseModel):
@@ -116,8 +112,8 @@ def compare_totals(recorded: Any, current: dict[str, Any] | None) -> TotalsCompa
     if isinstance(recorded, dict) and type(recorded.get("version")) is int and recorded["version"] != CONTROL_TOTALS_VERSION:
         return TotalsComparison("other_version")
     try:
-        if not _plain(recorded):
-            raise ValueError("an amount is not plain decimal text")
+        # J's reader refuses an amount that is not plain decimal text before reading it (J-27): an exponent the archive
+        # recorded is never expanded. One rule, in J's home.
         before = ControlTotals.from_json(recorded)
     except ValueError:
         logger.warning("The control totals the backup recorded cannot be read: they are not compared")
@@ -128,19 +124,6 @@ def compare_totals(recorded: Any, current: dict[str, Any] | None) -> TotalsCompa
     if not differences:
         return TotalsComparison("same")
     return TotalsComparison("changed", tuple(differences[:MAX_DIFFERENCES]), len(differences))
-
-
-def _plain(recorded: Any) -> bool:
-    """Whether every amount of a recorded document is plain decimal text of bounded length, as J writes it."""
-    if not isinstance(recorded, dict):
-        return False
-    for lines, amount in (("cash", "balance"), ("quantities", "quantity")):
-        rows = recorded.get(lines)
-        if not isinstance(rows, list):
-            return False
-        if not all(isinstance(row, dict) and isinstance(row.get(amount), str) and _PLAIN_AMOUNT.fullmatch(row[amount]) for row in rows):
-            return False
-    return True
 
 
 def _differences(before: ControlTotals, after: ControlTotals) -> list[TotalsDifference]:

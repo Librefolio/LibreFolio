@@ -31,7 +31,6 @@ import contextlib
 import getpass
 import os
 import shutil
-import stat
 import sys
 import time
 from pathlib import Path
@@ -86,8 +85,9 @@ class _PasswordProblem(Exception):
 
 
 def _password(args, *, twice: bool) -> str:
-    """The password from ``--password-file``, from ``--password-stdin``, or typed at the terminal (``twice`` to choose
-    one). ``_PasswordProblem`` when there is none: no source, and no terminal to ask on."""
+    """The password from ``--password-file``, from ``--password-stdin`` (a pipe), or typed at the terminal without being
+    shown, ``--password-stdin`` at a terminal included (``twice`` to choose one). ``_PasswordProblem`` when there is
+    none: no source, and no terminal to ask on."""
     from backend.app.config import SecretFileError, read_secret_file  # noqa: PLC0415 — keep dev.py's start light
 
     password_file = getattr(args, "password_file", None)
@@ -96,7 +96,8 @@ def _password(args, *, twice: bool) -> str:
             return read_secret_file(_requested(password_file), "password file")
         except SecretFileError as exc:
             raise _PasswordProblem("password_unreadable", str(exc)) from None
-    if getattr(args, "password_stdin", False):
+    # At a terminal, a line read would show the password as it is typed: --password-stdin asks it there as without it.
+    if getattr(args, "password_stdin", False) and not sys.stdin.isatty():
         line = sys.stdin.readline().rstrip("\r\n")
         if not line:
             raise _PasswordProblem("password_required", "The standard input carried no password")
@@ -150,39 +151,23 @@ def _unlock(args, path: Path):
         return None
 
 
-#: The folders ``inspect`` decrypts a secure backup into, in ``backups/``: removed at the end of the run; one a killed run
-#: left behind, holding a clear archive, is removed by the next ``inspect`` once it is an hour old.
-_DECRYPT_PREFIX = ".decrypt-"
-_DECRYPT_STALE_SECONDS = 3600
-
-
 @contextlib.contextmanager
 def _private_folder(data_dir: Path):
-    """A new folder of the data directory that only its owner reads, removed with everything in it at the end."""
+    """A new folder of the data directory that only its owner reads, removed with everything in it at the end. The ones
+    killed runs left are removed first, once an hour old: the rule of ``leftovers.py``, which every start of the server
+    applies too (lot B4b)."""
     import tempfile  # noqa: PLC0415
 
+    from backend.app.services.platform.instance_backup.leftovers import DECRYPT_FOLDER_PREFIX, remove_stale_decrypt_folders  # noqa: PLC0415
     from backend.app.services.platform.instance_backup.paths import backups_dir, ensure_private_dir  # noqa: PLC0415
 
     parent = ensure_private_dir(backups_dir(data_dir), data_dir)
-    _remove_stale_decrypt_folders(parent)
-    folder = Path(tempfile.mkdtemp(prefix=_DECRYPT_PREFIX, dir=parent))
+    remove_stale_decrypt_folders(parent)
+    folder = Path(tempfile.mkdtemp(prefix=DECRYPT_FOLDER_PREFIX, dir=parent))
     try:
         yield folder
     finally:
         shutil.rmtree(folder, ignore_errors=True)
-
-
-def _remove_stale_decrypt_folders(parent: Path) -> None:
-    """Remove the decrypt folders older than an hour: a younger one may be another run's. A link or a file of that name
-    is never followed nor removed."""
-    cutoff = time.time() - _DECRYPT_STALE_SECONDS
-    for entry in parent.glob(f"{_DECRYPT_PREFIX}*"):
-        try:
-            info = entry.lstat()
-        except OSError:
-            continue
-        if stat.S_ISDIR(info.st_mode) and info.st_mtime < cutoff:
-            shutil.rmtree(entry, ignore_errors=True)
 
 
 def _requested(output: str) -> Path:
@@ -763,7 +748,22 @@ def cmd_decrypt(args) -> int:
         return 1
     print(f"✅ Decrypted: {target} ({_human(size)})")
     print("🔒 It holds every user's data in clear: keep it private, and remove it once used.")
+    if _carries_instance_key(target):
+        print("🔑 It also holds the instance key: with it, every saved provider key can be read.")
     return 0
+
+
+def _carries_instance_key(path: Path) -> bool:
+    """Whether the zip at ``path`` announces the instance key in its manifest; ``False`` when it cannot be read."""
+    import zipfile  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.archive import read_manifest  # noqa: PLC0415
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return read_manifest(archive).instance_key.included
+    except (OSError, ValueError, zipfile.BadZipFile):
+        return False
 
 
 def cmd_pending(args) -> int:
@@ -857,7 +857,7 @@ def _password_options(command) -> None:
     """Where the password of a secure backup comes from, never the command line."""
     sources = command.add_mutually_exclusive_group()
     sources.add_argument("--password-file", metavar="FILE", help="Read the password from FILE: its whole content, without a byte order mark and the line breaks at its end (a Docker secret works)")
-    sources.add_argument("--password-stdin", action="store_true", help="Read the password from the standard input, one line")
+    sources.add_argument("--password-stdin", action="store_true", help="Read the password from the standard input, one line; at a terminal, it is asked without being shown")
 
 
 def _dispatch(args) -> int:

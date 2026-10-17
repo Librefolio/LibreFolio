@@ -19,10 +19,11 @@ B's two functions around it, as the contract's §7 decided them (it overrides §
     name alone (no path, no value).
 (b) ``compare_totals(recorded, current)``: the status, in the contract's decision order: ``absent`` when nothing is
     recorded; ``other_version`` for an ``int`` version other than J's, checked before anything is read (malformed, or
-    nothing read on the copy, all the same); ``absent`` when an amount is not plain decimal text
-    (``-?[0-9]{1,60}(\\.[0-9]{1,60})?``), the lines not a list or a line not an object, decided before J's
-    ``from_json`` sees the document (an exponent such as ``1E+999999999`` is never expanded), and for what J refuses (a
-    version that is not an ``int``, such as ``"1"`` or ``true``; lines missing or malformed; not an object);
+    nothing read on the copy, all the same); ``absent`` for whatever J's ``from_json`` refuses, the one rule for a
+    recorded document (B-22: B keeps no copy of J-27's): an amount that is not plain decimal text
+    (``-?[0-9]{1,60}(\\.[0-9]{1,60})?``), the lines not a list or a line not an object, a version that is not an ``int``
+    (such as ``"1"`` or ``true``), lines missing or malformed, not an object. The recorded document reaches J's
+    ``from_json`` and J's ``from_json`` refuses it; an exponent such as ``1E+999999999`` is never expanded.
     ``unreadable`` when nothing was read on the copy; then the lines compared as maps, in J's canonical text, zero lines
     dropped: ``same`` without a difference (``10.50`` is ``10.5``; lines in another order, an explicit zero line),
     ``changed`` otherwise, always with one line at least. The differences: cash first, then quantities; by broker,
@@ -35,8 +36,9 @@ every file a test reads is a copy of it under ``tmp_path``. This process is conf
 of the test that must stay absent (``configure`` of ``test_backup_staging.py``). No lane database, no server, no
 network. ``instance_backup.totals`` is imported by each test (the ``totals`` fixture), never at collection: until lot
 B-13 writes it, each test fails on its own, saying so. J's ``ControlTotals.from_json`` is wrapped for the tests of plain
-amounts: every document it gets is kept, and one holding an amount that is not plain text is refused at once, without
-being expanded, so a comparison that hands it to J fails fast. Folder names with ``?`` are POSIX-only.
+amounts: every document it gets is kept with its answer, and one holding an amount that is not plain text is refused at
+once, with the ``ValueError`` J answers, before J's own code runs: nothing is expanded in this process, even if J's rule
+regressed. Folder names with ``?`` are POSIX-only.
 """
 
 from __future__ import annotations
@@ -194,18 +196,24 @@ def holds_text_that_is_not_plain(data: object) -> bool:
 
 
 @pytest.fixture
-def j_reads(monkeypatch) -> list[object]:
-    """Every document J's ``ControlTotals.from_json`` is given from now on, in order. One holding an amount that is not
-    plain text is refused at once (a ``ValueError``, as J refuses a malformed document), never expanded: a comparison
-    that hands ``1E+999999999`` to J fails here in a moment instead of building a string of a billion digits."""
-    given: list[object] = []
+def j_reads(monkeypatch) -> list[tuple[object, str]]:
+    """Every document J's ``ControlTotals.from_json`` is given from now on, in order, with its answer: ``"refused"`` (a
+    ``ValueError``) or ``"read"``. One holding an amount that is not plain text is refused at once, before J's own code
+    runs (a ``ValueError``, as J refuses it since J-27), never expanded: a comparison that hands ``1E+999999999`` to J
+    gets its refusal in a moment instead of building a string of a billion digits, even if J's own rule regressed."""
+    given: list[tuple[object, str]] = []
     real = ledger_totals.ControlTotals.from_json
 
     def from_json(cls, data):
-        given.append(data)
-        if holds_text_that_is_not_plain(data):
-            raise ValueError("refused by the test: an amount that is not plain text reached J's from_json")
-        return real(data)
+        try:
+            if holds_text_that_is_not_plain(data):
+                raise ValueError("refused by the test: an amount that is not plain text reached J's from_json")
+            answer = real(data)
+        except ValueError:
+            given.append((data, "refused"))
+            raise
+        given.append((data, "read"))
+        return answer
 
     monkeypatch.setattr(ledger_totals.ControlTotals, "from_json", classmethod(from_json))
     return given
@@ -446,8 +454,8 @@ async def test_inside_a_running_event_loop_it_is_none_and_one_error(totals, ledg
 
 
 #: (recorded, current, status): the decision order of contract §1 as §7 refines it, each step pinned against the next.
-#: What §7.3 decides before J reads the document (amounts not plain, lines not lists, rows not objects) is pinned by
-#: ``NOT_PLAIN`` below, with J's ``from_json`` watched.
+#: What J's ``from_json`` refuses for B (amounts not plain, lines not lists, rows not objects: one rule, J's, B-22) is
+#: pinned by ``NOT_PLAIN`` below, with J's ``from_json`` watched.
 DECISIONS = [
     pytest.param(None, CURRENT, "absent", id="1-nothing-recorded"),
     pytest.param(None, None, "absent", id="1-nothing-recorded-nothing-read"),
@@ -508,9 +516,9 @@ def test_the_status_follows_the_decision_order(totals, recorded, current, status
     print_success(status)
 
 
-#: Recorded documents §7.3 refuses before J reads them: ``CURRENT`` with one amount that is not plain decimal text (J
-#: would read most of them, and expand the first two), or lines that are not a list of objects. ``absent``, and J's
-#: ``from_json`` never sees them.
+#: Recorded documents J's ``from_json`` refuses (J-27), and B with it, keeping no rule of its own (B-22): ``CURRENT``
+#: with one amount that is not plain decimal text (before J-27, J read most of them, and expanded the first two in full),
+#: or lines that are not a list of objects. ``absent``: J gets the document, and refuses it.
 NOT_PLAIN = [
     pytest.param(with_amount("balance", "1E+999999999"), id="balance-an-exponent-of-a-billion-digits"),
     pytest.param(with_amount("quantity", "1E+999999999"), id="quantity-an-exponent-of-a-billion-digits"),
@@ -535,14 +543,16 @@ NOT_PLAIN = [
 
 
 @pytest.mark.parametrize("recorded", NOT_PLAIN)
-def test_what_is_not_plain_text_in_lines_of_objects_is_absent_before_j_reads_it(totals, j_reads, recorded):
-    """(b) §7.3: decided before J's ``from_json`` (which would expand an exponent such as ``1E+999999999`` in full): only
-    the status, and that J never got the document; nothing here expands it."""
+def test_what_is_not_plain_text_in_lines_of_objects_is_refused_by_j_and_absent(totals, j_reads, recorded):
+    """(b) B-22, one rule in one home, J's (J-27): B keeps no copy of it, so the recorded document reaches J's
+    ``from_json``, which refuses it, and the status is ``absent``, without a difference. An amount that is not plain text
+    is refused by the test's wrapper on J's behalf, before J's own code runs: nothing is expanded here, even if J
+    regressed."""
     comparison = totals.compare_totals(recorded, CURRENT)
-    assert (comparison.status, comparison.differences, comparison.differences_count) == ("absent", (), 0), f"not plain: absent, not {comparison.status}"
-    reached = [given for given in j_reads if given == recorded or holds_text_that_is_not_plain(given)]
-    assert reached == [], "decided before J's from_json reads the recorded document, or a copy of its amounts"
-    print_success("absent, J never asked")
+    assert (comparison.status, comparison.differences, comparison.differences_count) == ("absent", (), 0), f"refused by J: absent without a difference, not {comparison.status} with {comparison.differences_count}"
+    answers = [answer for given, answer in j_reads if given == recorded]
+    assert answers == ["refused"], f"the recorded document reaches J's from_json once, and J refuses it: J's answers to it {answers}, {len(j_reads)} documents given to J in all"
+    print_success("absent, refused by J")
 
 
 @pytest.mark.parametrize("amount", ["9" * 60, "-" + "9" * 60, "0." + "0" * 59 + "1", "9" * 60 + "." + "9" * 60], ids=["60-digits", "60-digits-negative", "60-decimals", "60-and-60"])
