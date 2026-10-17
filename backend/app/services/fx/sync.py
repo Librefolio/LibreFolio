@@ -24,6 +24,7 @@ from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import call_fx_provider, configured_fx_provider, settings_cache_part
 from backend.app.services.fx.storage import normalize_storable_rate
 from backend.app.utils.runtime.cache import clear_cache, get_ttl_cache
+from backend.app.utils.sql_chunks import chunks
 
 logger = get_logger(__name__)
 
@@ -108,6 +109,19 @@ def _storable_chain_rates(route, steps: list[dict], leg_rates: dict[tuple, Decim
 # base_currency routing belongs here. The persistence tests double as the
 # contract spec for that future wiring — remove the function only together
 # with them.
+async def _stored_rates(session: AsyncSession, conditions: list) -> list[FxRate]:
+    """The stored rates matching any of ``conditions`` (one per pair and range), in chunks of OR terms (MF-SEC9a).
+
+    SQLite refuses an OR of a thousand terms: a sync of about 46 currencies has that many pairs. The refusal was
+    caught by the caller as «table missing», so every rate was counted as new; read in chunks, the change detection holds.
+    """
+    rates: list[FxRate] = []
+    for chunk in chunks(conditions):
+        result = await session.execute(select(FxRate).where(or_(*chunk)))
+        rates.extend(result.scalars().all())
+    return rates
+
+
 async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeline, per-item checks only
     session,  # AsyncSession
     date_range: tuple[date, date],
@@ -231,8 +245,7 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
     fetch_task = asyncio.create_task(call_fx_provider(provider, lambda: provider.fetch_rates(date_range, currencies, base_currency=base_currency)))
 
     if all_pairs_conditions:
-        existing_stmt = select(FxRate).where(or_(*all_pairs_conditions))
-        db_task = asyncio.create_task(session.execute(existing_stmt))
+        db_task = asyncio.create_task(_stored_rates(session, all_pairs_conditions))
     else:
         # No pairs to query (shouldn't happen, but handle gracefully)
         db_task = None
@@ -241,8 +254,7 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
     # Handle case where fx_rates table doesn't exist yet (fresh database)
     if db_task:
         try:
-            rates_by_currency, db_result = await asyncio.gather(fetch_task, db_task)
-            existing_rates = db_result.scalars().all()
+            rates_by_currency, existing_rates = await asyncio.gather(fetch_task, db_task)
             existing_lookup = {(rate.base, rate.quote, rate.date): rate.rate for rate in existing_rates}
             logger.debug(f"Change detection: {len(existing_lookup)} existing rate(s) found in DB " f"for {len(all_pairs_conditions)} pair condition(s)")
         except Exception as e:
