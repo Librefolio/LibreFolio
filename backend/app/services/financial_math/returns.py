@@ -3,7 +3,8 @@ Returns: Simple ROI, TWRR, MWRR (XIRR) and annualization — pure math, no I/O.
 
 Also: rebasing to a period's start, net holding return, G/L ratio (of one holding or a group), a change as a fraction
 of its base, the timing effect (MWRR − TWRR), realized gain, price return (also as a float for a return series), the
-observed annualization factor of a return series, and the gain that recovers a drawdown (``required_recovery_return``).
+observed annualization factor of a return series, the fixed-period changes of a price or rate (1D … 5Y, both
+orientations), and the gain that recovers a drawdown (``required_recovery_return``).
 
 Provides TWRR, MWRR (XIRR), and Simple ROI calculations.
 
@@ -17,7 +18,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import NamedTuple
 
@@ -304,6 +305,63 @@ def observed_annualization(n_observations: int, baseline_date: date | None, fina
     if calendar_days <= 0:
         raise ValueError("final_date must follow baseline_date")
     return calendar_days, n_observations * 365 / calendar_days
+
+
+# The fixed periods of the Assets and FX tables (D-MF6 b): key and calendar days, in display order.
+FIXED_PERIODS: tuple[tuple[str, int], ...] = (
+    ("1D", 1),
+    ("1W", 7),
+    ("1M", 30),
+    ("3M", 91),
+    ("6M", 182),
+    ("1Y", 365),
+    ("2Y", 730),
+    ("3Y", 1095),
+    ("5Y", 1825),
+)
+
+
+@dataclass(frozen=True)
+class FixedPeriodChange:
+    """The change of a price or rate over one fixed period, from ``as_of − days`` to ``as_of``.
+
+    ``change_ratio`` is ``anchor / reference − 1``; ``inverse_change_ratio`` is the change of the inverted quote,
+    ``reference / anchor − 1`` (an FX pair read the other way round). Both are fractions, None when either value is
+    missing or ≤ 0.
+    """
+
+    key: str
+    days: int
+    change_ratio: Decimal | None
+    inverse_change_ratio: Decimal | None
+
+
+def fixed_period_dates(as_of: date, periods: Sequence[tuple[str, int]] = FIXED_PERIODS) -> tuple[date, ...]:
+    """The days a fixed-period table values: ``as_of``, then ``as_of − days`` for each period (calendar days)."""
+    return (as_of, *(as_of - timedelta(days=days) for _key, days in periods))
+
+
+def fixed_period_changes(values: Mapping[date, Decimal | None], as_of: date, periods: Sequence[tuple[str, int]] = FIXED_PERIODS) -> tuple[FixedPeriodChange, ...]:
+    """Each fixed period's change of a series valued on ``fixed_period_dates(as_of)``.
+
+    ``values`` maps a day to the series' value on it — the caller's valuation of that day (the last stored price on or
+    before it, a rate converted at it), None or absent when the day has none. The anchor is the value on ``as_of``, each
+    reference the value on ``as_of − days``: never a number from a missing or non-positive value.
+    """
+    anchor = values.get(as_of)
+    changes = []
+    for key, days in periods:
+        reference = values.get(as_of - timedelta(days=days))
+        usable = anchor is not None and reference is not None and anchor > 0 and reference > 0
+        changes.append(
+            FixedPeriodChange(
+                key=key,
+                days=days,
+                change_ratio=price_return(reference, anchor) if usable else None,
+                inverse_change_ratio=price_return(anchor, reference) if usable else None,
+            )
+        )
+    return tuple(changes)
 
 
 def required_recovery_return(drawdown: float) -> float | None:
