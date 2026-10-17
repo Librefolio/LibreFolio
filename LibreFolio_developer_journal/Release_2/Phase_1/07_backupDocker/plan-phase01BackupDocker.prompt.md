@@ -5366,6 +5366,68 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-39 — formule nei CSV esportati, con un ritorno esatto (2026-10-17, 12:43-13:09) — ✅ 🧊 FROZEN (checkpoint delle 13:09)
+
+> **B-35 entrato** (coordinatore, 12:43): merge `d7efb5805` → dev `9fafc79b5`, CHANGELOG 🔒; HEAD portata in avanti
+> a `e3ef5c9a6`. Via a B-39.
+>
+> **Stato reale** (12:44-12:52):
+> - `series_export.stream_rows_as_csv` scrive le celle così come sono: un testo che comincia con `=` diventa una
+>   formula in un foglio di calcolo. Le uniche colonne di testo libero sono le `notes` degli eventi; le altre sono
+>   codici, date e numeri.
+> - **L'export degli eventi è fatto per tornare indietro**: `EventDataImportModal` legge `value` come alias di `amount`
+>   e legge `notes`. Un `'` aggiunto solo all'export resterebbe nella nota dopo una reimportazione.
+> - `CsvColumnDef` ha già un `parse` per colonna, che `CsvEditor` chiama sulle celle non vuote e senza spazi ai bordi.
+> - L'altro scrittore di CSV (`brim_provider.write_combined_csv`) non è di B: contiene i dati del broker dell'utente
+>   stesso, quindi al più un danno a sé. Solo una nota.
+>
+> **Contratto** (approvato dal coordinatore, 12:55, con il permesso di scrivere sul modale per l'hook di `notes`;
+> rivede X):
+> 1. All'export, un testo che corrisponde a `'*[=+\-@\t\r]` all'inizio riceve un `'` in più, salvo un numero puro
+>    (`[+-]?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?`), di qualunque tipo. Il JSON non cambia.
+> 2. All'import, `notes` toglie esattamente un `'` iniziale davanti a quel motivo (`unescapeFormulaText`, nello script
+>    di modulo del modale). Il ritorno è esatto, anche per una nota che comincia già con apostrofi (`'=x` →
+>    `''=x` → `'=x`).
+>
+> - **Codice pronto** in `b39-wip/apply_b39.py`: 5 operazioni in 2 file; ruff, black e prettier puliti.
+>   Prova a mano sulla copia emessa: `=1+1` → `'=1+1`, `'=x` → `''=x`, `-1.5` resta, `a = b` resta.
+> - **Rossi in scrittura**:
+>   - TA-S: un file nuovo, `test_series_export_csv.py`, con la sua voce `services series-export-csv`;
+>   - TA-F: i casi di Vitest (finiti in `DataEditor.test.ts`, vedi sotto);
+>   - docs-writer: le pagine della doc.
+> - ✅ **Rossi scritti** (12:44-12:54):
+>   - **TA-S**: `test_series_export_csv.py`, nuovo, registrato come `services series-export-csv` (isolamento pure):
+>     6 funzioni e 30 casi (11 rossi, 19 guardie). Asserisce sulle celle rilette da `csv.reader`; un valore non di
+>     testo il cui testo sembra una formula viene scappato anche lui.
+>   - **TA-F**: 22 casi in `DataEditor.test.ts`, non in un file nuovo. Quel file è già registrato, e ha già il blocco
+>     del modale degli eventi; un file nuovo avrebbe chiesto una riga in `_frontend_utility.py`. I casi: la funzione,
+>     la tabella del ritorno (con anche `'\r=1`), e il modale che reimporta tre note.
+>   - **Docs-writer**:
+>     - `data-editor.md` (dev) l.123-128;
+>     - `user/assets/detail/data-editor.en.md` l.80, perché `events.en.md` non descrive il formato (debito di
+>       traduzione);
+>     - `security.md` «🧼 Output Escaping», l.2256-2267.
+> - **⚠️ Fuori pista — gli apostrofi già presenti (12:58)**: una nota che comincia già con `'=x` sarebbe tornata
+>   `=x`. L'export scappa ora anche una serie di apostrofi davanti a un carattere di formula (`'*[=+\-@\t\r]`, `'=x`
+>   → `''=x`), e l'import ne toglie esattamente uno: il ritorno è esatto per ogni testo.
+> - ✅ **Rossi** (corsia 6187, 12:54-12:55): `services series-export-csv` **11 falliti** e 19 passati; Vitest
+>   `DataEditor.test.ts` **22 falliti** e 88 passati.
+> - ✅ **Codice applicato** (12:55:44): 5 operazioni in 2 file.
+>   - `series_export.py`: `_FORMULA_LIKE`, `_PLAIN_NUMBER`, `_csv_cell`;
+>   - `EventDataImportModal.svelte`: `<script module>` con `unescapeFormulaText`, e `parse:` su `notes`.
+>   Ruff, black e prettier puliti.
+> - ✅ **Verdi**: `services series-export-csv` 30; Vitest su `ui/data-editor/` e `components/assets/`, **1560 su
+>   1560** in 38 file.
+> - ✅ **Doc** (12:57-12:59): `mkdocs build` strict (70 s), `check-links`, gate 63. Controlli statici puliti, porta
+>   6187 libera.
+> - ✅ **Slot 2** (coordinatore, 13:04), regressione API:
+>   - `api backup-export-extras` **8 passati** (13:04-13:07; il frontend ricostruito, svelte-check 0 errori con lo
+>     script di modulo del modale);
+>   - `api asset-prices-export` **5 passati**.
+>   Porta 6187 libera.
+> - Proposta di CHANGELOG 🔒 (docs-writer): «CSV exports are safe to open in a spreadsheet…».
+> - **Backlog**: B-39 ✅.
+
 ### B-35 — un tetto a quello che un archivio scompatta (2026-10-17, 11:59-12:36) — ✅ 🧊 FROZEN (checkpoint delle 12:36)
 
 > **Coordinatore** (11:59): BZ parte 1 va bene. Ordine:
@@ -5450,6 +5512,15 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   - la voce nella mappa di `test_config_audit.py`;
 >   - `developer/architecture/settings.md` l.79-84: inoltrato al coordinatore.
 > - **Backlog**: B-35 ✅, B-40 ✅ (le righe di B in «What It Lists»).
+> - **Merge di dev in B-35** (coordinatore, 12:36): dev `9e8f6e8dc` dentro `32739feaa`, con 3 conflitti di doc
+>   risolti tenendo entrambe le parti:
+>   - `configuration.en.md`, la riga `LIBREFOLIO_PROFILE`: quella di dev più la mia frase, verificata contro la base
+>     (stage 1);
+>   - `settings.en.md`, «What It Lists»: «Test mode» di H, poi le tre righe di B, nell'ordine del `CONFIG_CHECKS`
+>     fuso;
+>   - `security.md`, la riga `i18n_key`: il 4 → 7 di dev più il mio nine → thirteen.
+>   Cancelli sulla revisione combinata (12:37-12:42): `services config-audit` 204, `backup-checks` 93, `mkdocs build`
+>   strict (123 s), `check-links`, gate 63. Merge `d7efb5805` → dev `9fafc79b5`; CHANGELOG 🔒 dentro.
 
 ### B-18, riparazione — il cancello G rosso: `instance_key_invalid` non dichiarato (2026-10-17, 11:40-11:52) — ✅ 🧊 FROZEN
 

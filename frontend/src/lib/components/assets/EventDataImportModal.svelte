@@ -8,6 +8,17 @@
   Header slot shows an InfoBanner with valid event types and a link to docs.
   Uses Svelte 5 runes.
 -->
+<script lang="ts" module>
+    /**
+     * The series CSV export writes a formula-like text (`=`, `+`, `-`, `@`, a tab or a CR, after any apostrophes) with
+     * one more leading apostrophe, so that a spreadsheet shows it as text (B-39): an imported note drops exactly one
+     * again, and an exported events file imports back as it was.
+     */
+    export function unescapeFormulaText(raw: string): string {
+        return raw.replace(/^'(?='*[=+\-@\t\r])/, '');
+    }
+</script>
+
 <script lang="ts">
     import type {CsvColumnDef, ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
     import DataImportModal from '$lib/components/ui/data-editor/DataImportModal.svelte';
@@ -37,7 +48,7 @@
         {key: 'currency', label: 'currency', type: 'string', required: false},
         {key: 'type', label: 'type', type: 'string', required: true, matchKey: true},
         {key: 'amount', label: 'amount', aliases: ['value'], type: 'number', required: true},
-        {key: 'notes', label: 'notes', type: 'string', required: false},
+        {key: 'notes', label: 'notes', type: 'string', required: false, parse: unescapeFormulaText},
     ];
 
     function openDocs() {
