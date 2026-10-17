@@ -86,6 +86,16 @@ async def _live_setup_token(session: AsyncSession, user_id: int, now: datetime) 
     return result.scalars().first()
 
 
+async def _latest_setup_withdrawn(session: AsyncSession, user_id: int) -> bool:
+    """Whether the account's latest setup link was revoked and never consumed: withdrawn, not expired (A-50).
+
+    The setup cancelled (A-43), or the address changed at an earlier start (A-33): either revokes the live links.
+    """
+    result = await session.execute(select(AccountToken.revoked_at, AccountToken.consumed_at).where(AccountToken.user_id == user_id, AccountToken.purpose == _SETUP).order_by(AccountToken.created_at.desc(), AccountToken.id.desc()).limit(1))  # type: ignore[union-attr]
+    latest = result.first()
+    return latest is not None and latest.revoked_at is not None and latest.consumed_at is None
+
+
 async def _token_known(session: AsyncSession, token: str) -> bool:
     """Whether ``token`` was ever stored, for any account or purpose: the same value is never stored twice."""
     result = await session.execute(select(AccountToken.id).where(AccountToken.token_hash == token_service.hash_token(token)))
@@ -191,6 +201,8 @@ async def _keep_pending_admin(session: AsyncSession, user: User, config: AdminBo
     remedy = f"run {_SETUP_LINK_COMMAND}" + (f", or set a new {ADMIN_BOOTSTRAP_TOKEN_VARIABLE}" if config.token is not None else "")
     if moved:
         logger.warning(f"The initial administrator's address changed: the setup link handed over before no longer works; {remedy}", user_id=user_id, username=username)
+    elif await _latest_setup_withdrawn(session, user_id):
+        logger.warning(f"The initial administrator's setup link was withdrawn (cancelled, or its address changed): {remedy}", user_id=user_id, username=username)
     else:
         logger.warning(f"The initial administrator's setup link has expired: {remedy}", user_id=user_id, username=username)
     return BootstrapResult(BootstrapAction.EXPIRED, user_id=user_id, username=username)
