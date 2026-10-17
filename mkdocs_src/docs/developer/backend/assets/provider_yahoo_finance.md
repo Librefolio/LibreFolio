@@ -54,11 +54,14 @@ The public method now delegates its local work to focused helpers without changi
      the refresh keeps the raw code on the assignment
      ([The Provider's Own Quote Currency](architecture.md#reported-currency)). Two guards in
      `test_yahoo_finance_errors.py` pin both: no validator on that field, no conversion here.
-   - The exchange's timezone is the history index's own (yfinance localizes it to
-     `tz_exchange`), else `ticker.info["exchangeTimezoneName"]`, kept when `zoneinfo` knows it
-     (`exchange_zone()`, `backend/app/utils/exchange_dates.py`) and declared as
-     `FAHistoricalData.exchange_timezone` (`Europe/Rome`), `None` otherwise. The refresh keeps it
-     on the assignment ([The Exchange's Timezone](architecture.md#exchange-timezone)).
+   - The exchange's timezone is the history index's own (yfinance localizes it to `tz_exchange`)
+     when `zoneinfo` knows it (`exchange_zone()`, `backend/app/utils/exchange_dates.py`); else
+     (an index without a zone, or with one `zoneinfo` does not know, such as the fixed offset
+     `UTC+02:00`) `ticker.info["exchangeTimezoneName"]` when `zoneinfo` knows it; `None` otherwise.
+     It is declared as `FAHistoricalData.exchange_timezone` (`Europe/Rome`), and the refresh keeps
+     it on the assignment ([The Exchange's Timezone](architecture.md#exchange-timezone)). The
+     fixed-offset fallback is pinned by the `an-unnamed-index-zone-falls-back-to-info` case of
+     `test_z33_history_declares_the_exchange_timezone` (`test_yahoo_finance_errors.py`).
    - Dividend and split series are acquired independently and best-effort; one failing does not
      suppress the other or the prices.
 2. **Map — `_map_history_prices()`**
