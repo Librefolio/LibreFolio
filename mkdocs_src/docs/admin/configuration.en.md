@@ -358,6 +358,11 @@ Right after its `Starting LibreFolio` line, the server checks its configuration.
 each finding is one line of the log, at its level, with the name of the check in `check`, such as
 `platform.jwt_secret`.
 
+The same checks, on demand, are in the **Security** tab of **Settings › Administration**, for
+administrators: worded in the language of the app, errors and warnings counted by a number on the
+tab, and read again with **Check again** once you have fixed the configuration and restarted (see
+«Security» in [Global Settings](settings.md)).
+
 | Level | The log says | What to do |
 | --- | --- | --- |
 | ℹ️ `info` | `JWT_SECRET is not set: every start makes a new session signing key, …` | Nothing, if signing everyone out at every restart is fine. Otherwise see [Keep users signed in](index.md#session-persistence). |
@@ -371,7 +376,7 @@ each finding is one line of the log, at its level, with the name of the check in
 | ℹ️ `info` | `LIBREFOLIO_CSP_REPORT_ONLY is off in the managed profile: browsers list no Content-Security-Policy violation; the managed profile turns it on` (`check` is `platform.csp_report_only`; in the `managed` profile only) | Unless you turned it off on purpose, do the same for `LIBREFOLIO_CSP_REPORT_ONLY`. Nothing is blocked either way: the policy only reports, in the browser's developer console. |
 | ℹ️ `info` | `The log level is DEBUG: the log records operational detail; …` (or `TRACE`) | Go back to `INFO` once you are done troubleshooting. |
 | ❌ `error` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN is too short: use at least 32 random characters; the hosting panel's backup routes answer 503 until it is fixed`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN holds a space, a tab or a character outside visible ASCII: write it without them; …`, or `The hosting panel's backup token cannot be read: LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN_FILE: <path> does not exist` (or `cannot be read (…)`, `is empty or blank`, `is not UTF-8 text`, `is larger than 65536 bytes, too large for a secret`) (`check` is `backup.panel_token`) | The token of your hosting panel cannot be used. Generate a new one as in [Hosting for Others](hosting_providers.md#panel-token), or fix the file the line names, then restart. Only the panel's backup routes are off: they answer `503` until then. The server starts anyway. |
-| ❌ `error` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used: expected a whole number of megabytes, 0 for no limit; restore uploads answer 503 until it is fixed` (or, rarely, `The profile's default for LIBREFOLIO_BACKUP_MAX_UPLOAD_MB is missing or of the wrong type, an error of LibreFolio itself: …`) (`check` is `backup.upload_limit`) | Write a whole number of megabytes, `0` for no limit, or remove the variable, then restart ([The Upload Limit of a Restore](hosting_providers.md#restore-upload-limit)). (The rare line is a fault of LibreFolio's own profile table: set the variable yourself, and report it.) Until then Settings › Backup cannot upload an archive to restore it; the command line still restores one. The server starts anyway. |
+| ❌ `error` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used: expected a whole number of megabytes, 0 for no limit; restore uploads answer 503 until it is fixed` (or, rarely, `The profile's default for LIBREFOLIO_BACKUP_MAX_UPLOAD_MB is missing or of the wrong type, an error of LibreFolio itself: …`) (`check` is `backup.upload_limit`) | Write a whole number of megabytes, `0` for no limit, or remove the variable, then restart ([The Upload Limit of a Restore](hosting_providers.md#restore-upload-limit)). (The rare line is a fault of LibreFolio's own profile table: set the variable yourself, and report it.) Until then Settings › Administration › Backup cannot upload an archive to restore it; the command line still restores one. The server starts anyway. |
 | ⚠️ `warning` | `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` (`check` is `accounts.login_limit`) | Nothing, on an instance kept for tests. Otherwise remove the variable, or set it to `on`, then restart: see [Failed Sign-ins](#login-limit). |
 | ❌ `error` | `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` (`check` is `email.smtp`) | Email is off, nothing else is: fix the variable the line names, then restart. What each code means: [Configuration Problems](email.md#configuration-problems). The server starts anyway. |
 | ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
@@ -471,8 +476,8 @@ instance.
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **By invitation** on a new instance unless an administrator changed it (an instance upgraded from an earlier version keeps the mode it had). Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. Whatever the value, the first account of a new instance can be created from the login page, with **Register here**, and becomes the administrator: see [Who Can Sign Up](settings.md#registration). With `LIBREFOLIO_ADMIN_EMAIL`, LibreFolio creates that administrator itself instead: see [The Initial Administrator](#initial-admin). Set to `open`, it also gives the administrators who open the app at an address outside the local network a warning that names this variable: see [The Open-Registration Warning](settings.md#open-registration-warning). |
 | `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires, each account waiting for its email verification while its link is live, and the [initial administrator](#initial-admin) while it waits for its setup; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
-| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation, password-reset and setup links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link, setup link or forgotten-password email goes out ([Email](email.md)). An address that holds a user name or a password is refused, and LibreFolio then works as it does without it. |
-| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. An address that holds a user name or a password is refused: no such link either. |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings › Administration, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation, password-reset and setup links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link, setup link or forgotten-password email goes out ([Email](email.md)). An address that holds a user name or a password is refused, and LibreFolio then works as it does without it. |
+| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings › Administration, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. An address that holds a user name or a password is refused: no such link either. |
 | `LIBREFOLIO_LOGIN_LIMIT` | `on` | The limit on failed sign-ins: `on` or `off`, in any case; spaces around the value do not matter. `off` is for a test instance only: anyone can then try passwords without pause, and every start logs a [warning](#startup-checks). Unlike the four above, any other value, `true`, `1` and `yes` included, stops the server at startup. See [Failed Sign-ins](#login-limit). |
 
 An empty value counts as not set. A wrong value of the first four does not stop the server, unlike the
@@ -539,7 +544,9 @@ password after password until one works. The limit is on unless you turn it off.
   user changes their email address in the Profile tab ([Profile](../user/settings/profile.md)),
   counts as a failed sign-in with the account's username, from the same address. So 10 wrong
   current passwords also block signing in with that username, and failed sign-ins with the username
-  block those two checks. Deleting one's own account asks for no password: nothing to limit there.
+  block those two checks: **Change Password** and the Profile tab then say *Too many wrong
+  passwords: wait a few minutes and try again.* Deleting one's own account asks for no password:
+  nothing to limit there.
 - **Send the link again counts too.** On the login page, an account that waits for its email
   verification gets **Send the link again**, which checks the username or email address and the
   password as a sign-in does ([Email Verification](email.md#verification)). A wrong password there
@@ -574,6 +581,9 @@ password after password until one works. The limit is on unless you turn it off.
 automated tests sign in wrongly on purpose: nothing is counted and nothing is refused. Every start
 then logs a warning, with `accounts.login_limit` in `check`:
 `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance`.
+The same check, on demand, is in the **Security** tab of **Settings › Administration**: a warning,
+counted in the number on the tab, until the limit is back on (see «Security» in
+[Global Settings](settings.md)).
 Remove the variable, or set it to `on`, to turn the limit back on at the next start. Any other
 value stops the server at startup: see [Accounts and Sign-ups](#accounts).
 
@@ -587,7 +597,7 @@ registered becomes the administrator ([Who Can Sign Up](settings.md#registration
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `LIBREFOLIO_ADMIN_EMAIL` | _not set_ | The email address of the administrator. Setting it turns the initial administrator on. |
-| `LIBREFOLIO_ADMIN_USERNAME` | `admin` | The administrator's username: 3 to 50 characters, as at registration. |
+| `LIBREFOLIO_ADMIN_USERNAME` | `admin` | The administrator's username: 3 to 50 characters, without `@`, as at registration. |
 | `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | _not set_ | Optional: the token of the setup link, for a hosting panel that delivers the link itself. 32 to 200 characters, only letters, digits and `-` `.` `_` `~`, since it travels in a link: the output of `openssl rand -hex 32`, for example. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead: see [Secrets](#secrets). Not set: LibreFolio generates the token. |
 
 An empty value counts as not set. Spaces around the email and the username do not matter; the token
@@ -638,7 +648,9 @@ has accounts included:
 - `LIBREFOLIO_ADMIN_USERNAME` or `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` set without
   `LIBREFOLIO_ADMIN_EMAIL`;
 - an email that is not an address;
-- a username shorter than 3 or longer than 50 characters;
+- a username shorter than 3 or longer than 50 characters, or with an `@` in it: the sign-in reads a
+  name with `@` as an email address, and the administrator signs in with the address of
+  `LIBREFOLIO_ADMIN_EMAIL` anyway;
 - a token shorter than 32 or longer than 200 characters, or with a character other than letters,
   digits and `-` `.` `_` `~`, a space included;
 - a `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` that cannot give the token

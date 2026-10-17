@@ -15,6 +15,12 @@
  *     own check already shows: the server applies the same rules to every new password and refuses one that breaks
  *     them with a 400 `{error_code, message, rules}`, `rules` naming the codes it missed. The list does not change the
  *     key;
+ *   - accounts lot A-21a adds `USERNAME_INVALID` → `auth.validation.usernameNoAt` (red until A-21a): a new username may
+ *     not hold `@`, which the sign-in reads as an email address first, and the server refuses one with a 400
+ *     `{error_code, message}`. The key is the one the card's own check shows (`validateUsername`, pinned in
+ *     `RegisterCard.test.ts`): one rule, the same words, on the client or from the server. It comes with the code, so it
+ *     must be a sentence in the four catalogues — without it the card and the profile would show the key (red until
+ *     A-21a too);
  *   - a string `detail`, case-folded: naming the username → `auth.validation.usernameTaken`, the email →
  *     `auth.validation.emailTaken`, anything else → `{raw: detail}`;
  *   - a Pydantic list: the first entry's `loc` decides — `email` → `auth.validation.invalidEmailDomain` when its `msg`
@@ -72,8 +78,21 @@ describe('describeRegistrationError — the refusals A5a explains with a code', 
         [400, 'INVITE_INVALID', 'auth.link.unknown'],
         [409, 'USER_LIMIT_REACHED', 'auth.userLimitReached'],
         [400, 'PASSWORD_TOO_WEAK', 'auth.validation.passwordTooWeak'],
+        // red until A-21a: a new username holding @, which the sign-in would read as an email address
+        [400, 'USERNAME_INVALID', 'auth.validation.usernameNoAt'],
     ])('reads a %i %s as {key: %s}, never the server sentence', (status, code, key) => {
         expect(describeRegistrationError(coded(status, code))).toEqual({key});
+    });
+
+    // red until A-21a: the key USERNAME_INVALID reads as comes with the code
+    it.each(Object.entries({en, it: itCatalogue, fr, es}))('has auth.validation.usernameNoAt as a sentence in %s, or the sign-up card and the profile would show the key', (language, catalogue) => {
+        const validation = (catalogue as {auth?: {validation?: {usernameMinLength?: unknown; usernameNoAt?: unknown}}}).auth?.validation;
+        // The premise: the path reaches the validation keys — the length rule's, which the card already shows, is there.
+        expect(typeof validation?.usernameMinLength, `auth.validation.usernameMinLength in ${language}`).toBe('string');
+
+        const message = validation?.usernameNoAt;
+
+        expect(typeof message === 'string' && message.trim().length > 0, `auth.validation.usernameNoAt in ${language}`).toBe(true);
     });
 
     it.each([

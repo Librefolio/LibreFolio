@@ -22,7 +22,7 @@ import structlog
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.config.accounts import REGISTRATION_MODES, billing_url, public_url, registration_mode_override
+from backend.app.config.accounts import REGISTRATION_MODES, USERNAME_RESERVED_MESSAGE, billing_url, public_url, registration_mode_override
 from backend.app.config.accounts import max_users as configured_max_users
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.schemas.settings import SETTINGS_REGISTRY
@@ -257,7 +257,8 @@ async def register_user(
     user, error = await user_service.create_user(session, username, email, password, is_superuser=grants_admin, commit=False)
     if user is None:
         await session.rollback()
-        raise RegistrationError("ACCOUNT_EXISTS", error)
+        # A new username holding an @ (A-21a) is a refusal of its own, not an account that exists
+        raise RegistrationError("USERNAME_INVALID" if error == USERNAME_RESERVED_MESSAGE else "ACCOUNT_EXISTS", error)
     if invited and await token_service.consume_token(session, invite_token or "", AccountTokenPurpose.INVITE, consumed_by_user_id=user.id, now=moment) is None:
         await session.rollback()
         raise RegistrationError("INVITE_INVALID", "This invitation is not valid")
