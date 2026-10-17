@@ -17,8 +17,8 @@ from backend.app.schemas.prices import (
     FAPriceQueryResult,
 )
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.market_series import prepare_asset_series_set
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.services.series_preparation import prepare_asset_series_set
 
 
 def converted_point(
