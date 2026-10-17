@@ -129,6 +129,34 @@ async function goToPosizioniTab(page: Page): Promise<void> {
     await expect(page.getByTestId('broker-holdings')).toBeVisible({timeout: 5000});
 }
 
+/**
+ * The lots panel the "Analyze Lots" action opens, from the row actions or the context menu: the
+ * URL first, then the panel (Y-34).
+ *
+ * The action mounts nothing itself: the broker page's `openAssetPanel` starts a same-route `goto`
+ * to `buildAssetPanelUrl(…)` (`assetPanelUrl.ts`), which writes `?asset=<id>` into the URL. The
+ * URL wait covers that navigation, with a 30 s ceiling: under load it queues on a busy main
+ * thread. The page then reads the parameter back in a `$:` block (`getAssetPanelAssetId`) and
+ * mounts `LotsAnalysisPanel` under `{#if open && assetId != null}`: the panel wait covers that
+ * mount, with 10 s. On 17/10 (gate I) a single 5 s wait covering both expired once at a 1-minute
+ * load near 90, while the same test passed in a run alone at a load of 28 (40/40). Why the URL
+ * gets a ceiling of its own, and why the action is not retried: the Y-33 paragraph of
+ * `goToSeededAssetDetail`, in `assets/asset-detail.spec.ts`.
+ *
+ * `assetId`, when the caller knows it, pins the URL to that asset; without it any id will do.
+ */
+async function expectLotsPanelOpen(page: Page, assetId?: number): Promise<void> {
+    const assetParam = assetId === undefined ? /[?&]asset=\d+/ : new RegExp(`[?&]asset=${assetId}(?:[&#]|$)`);
+    await expect(page, `the "Analyze Lots" action opens the lots panel — the URL carries ?asset=${assetId ?? '<id>'}`).toHaveURL(assetParam, {timeout: 30_000});
+    await expect(page.getByTestId('lots-analysis-panel'), 'the lots panel mounts once ?asset= is in the URL').toBeVisible({timeout: 10_000});
+}
+
+/** The mirror of `expectLotsPanelOpen` for the panel's close (Y-34): the URL without `?asset=` first, with a 30 s ceiling, then the panel hidden, with 10 s. */
+async function expectLotsPanelClosed(page: Page): Promise<void> {
+    await expect(page, 'closing the lots panel clears ?asset= from the URL').not.toHaveURL(/[?&]asset=\d+/, {timeout: 30_000});
+    await expect(page.getByTestId('lots-analysis-panel'), 'the lots panel unmounts once ?asset= has left the URL').toBeHidden({timeout: 10_000});
+}
+
 // Earned parallel: this file's blocks own the data they touch and wait on published
 // state, so they share the backend with their neighbours instead of queueing behind
 // them. Verified by a green run of the whole category at 4 workers.
@@ -311,7 +339,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
             await expect(page.getByTestId('lots-analysis-panel-title')).toBeVisible();
 
             // ?asset=<id> reflected in the URL (bookmarkable panel state).
@@ -324,11 +352,10 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
 
             await page.getByTestId('lots-analysis-panel-close').click();
-            await expect(page.getByTestId('lots-analysis-panel')).not.toBeVisible({timeout: 5000});
-            await expect(page).not.toHaveURL(/[?&]asset=\d+/);
+            await expectLotsPanelClosed(page);
         });
 
         test('clicking the "View Asset" row action navigates to asset detail', async ({page}) => {
@@ -352,7 +379,7 @@ test.describe('Broker Detail Page', () => {
             await expect(page.getByTestId('context-menu-action-analyze-lots')).toBeVisible();
 
             await page.getByTestId('context-menu-action-analyze-lots').click();
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
         });
 
         test('WAC/Price chart EUR|% toggle switches without breaking the panel', async ({page}) => {
@@ -361,7 +388,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
             await expectChartCanvas(page, 'lot-wac-price-chart');
 
             await page.getByTestId('lot-wac-toggle-percentage').click();
@@ -377,7 +404,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
             await expectChartCanvas(page, 'lot-gantt-chart', 10_000);
 
             // Invisible per-lane hit target, absolutely positioned over the ECharts custom
@@ -404,7 +431,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
 
             const custodyCell = page.locator('[data-testid^="unified-lots-custody-"]').first();
             await expect(custodyCell, 'the unified lots table must render a custody cell').toBeVisible({timeout: 10_000});
@@ -428,7 +455,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
             await expect(tableRow, 'the unified lots table must have at least one lot row').toBeVisible({timeout: 10_000});
@@ -455,7 +482,7 @@ test.describe('Broker Detail Page', () => {
             await goToBrokerWithHoldings(page);
             const row = await firstHoldingRow(page);
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
             await expect(tableRow, 'the unified lots table must have at least one lot row').toBeVisible({timeout: 10_000});
@@ -494,7 +521,7 @@ test.describe('Broker Detail Page', () => {
             await goToBrokerWithHoldings(page);
             const row = await firstHoldingRow(page);
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
 
             const rows = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]');
             await expect(rows.first()).toBeVisible({timeout: 10_000});
@@ -529,7 +556,7 @@ test.describe('Broker Detail Page', () => {
             await goToBrokerWithHoldings(page);
             const row = await firstHoldingRow(page);
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
             await expect(tableRow).toBeVisible({timeout: 10_000});
@@ -552,7 +579,7 @@ test.describe('Broker Detail Page', () => {
             const row = await firstHoldingRow(page);
 
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
             await expectChartCanvas(page, 'lot-gantt-chart', 10_000);
 
             const tableRow = page.locator('[data-testid="unified-lots-table"] tbody tr[data-row-id]').first();
@@ -607,7 +634,7 @@ test.describe('Broker Detail Page', () => {
             await goToBrokerWithHoldings(page);
             const row = await firstHoldingRow(page);
             await clickRowAction(page, row, 'analyze-lots');
-            await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 5000});
+            await expectLotsPanelOpen(page);
             await expect(page).toHaveURL(/[?&]asset=\d+/);
 
             const url = new URL(page.url());
