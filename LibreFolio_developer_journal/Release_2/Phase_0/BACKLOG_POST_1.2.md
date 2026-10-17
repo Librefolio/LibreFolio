@@ -3584,6 +3584,15 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     base, o `Decimal` dove sono soldi.
 
   Dettagli: piano H, §14, lotto «H-29 e H-30».
+  - Cura fatta il 17/10 (lotto «H-32», piano H §14).
+    - Inventario sull'app vera: 6 `float` raggiungibili da una richiesta. 5 erano già finiti (i segnali,
+      `FiniteFloat`); il sesto, `PluginSettingPlainValue` di X, ora ha `AllowInfNan(False)`.
+    - Niente nella base `StrictModel`, che regge anche le risposte e i modelli interni.
+    - Guardia `services request-float-inputs`: percorre tutte le rotte con barriere.
+    - Il 500 di A vale solo per le rotte senza `response_model`: con FastAPI 0.141 quelle con `response_model`
+      rispondono `null`.
+    - Trovato strada facendo: con il gestore standard dei 422, un valore non finito su un campo già finito dà un 500,
+      perché l'errore ripete l'`input`. Lo cura il gestore globale di A7b-2, che toglie l'`input`.
 - **H-33 · Senza un gestore di `ResponseValidationError`, il log del server contiene la risposta** — basso,
   sicurezza (log); E (R13-SEC4), via coordinatore, 17/10.
   - Quando una risposta non passa il suo `response_model`, FastAPI alza `ResponseValidationError`. Nessuno la gestisce,
@@ -3592,6 +3601,20 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     errori senza il valore e risponde 500.
 
   Dettagli: piano H, §14, lotto «H-29 e H-30».
+- **H-34 · Il JSON libero di una richiesta accetta `Infinity` e `NaN` al suo interno** — basso, API; H (residuo di
+  H-32, dal test-author e dal docs-writer), 17/10.
+  - La regola di H-32 riguarda i campi `float`. I campi `Any` o `JsonValue` raggiungibili da una richiesta accettano
+    numeri non finiti al loro interno:
+    - `FAProviderAssignmentItem.provider_params` e `FAProviderProbeRequest.provider_params` (`dict[str, Any]`, X:
+      `POST /assets/provider` e `/assets/provider/probe`);
+    - `RiskAnalyticRequest.parameters` (`JsonValue`, J: `POST /risk/query`), senza validatore.
+    - `ToolComputeItem.parameters` sta in un modello con `allow_inf_nan=False`: da verificare che valga anche dentro
+      `JsonValue`.
+    - `SignalRequest.params` è già protetto (`ensure_json_safe`).
+  - Cura proposta, a ciascun proprietario: un validatore come `ensure_json_safe` sui campi liberi; la guardia di H-32
+    potrebbe poi elencarli.
+
+  Dettagli: piano H, §14, lotto «H-32».
 
 ## A · Account e accessi (fase 01)
 
