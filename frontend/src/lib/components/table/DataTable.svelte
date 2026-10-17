@@ -23,7 +23,7 @@
     import ContextMenu from '$lib/components/ui/ContextMenu.svelte';
     import type {ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
-    import {compareRowsByColumn, matchesColumnFilter} from './dataTableLogic';
+    import {compareRowsByColumn, matchesColumnFilter, reorderKeepingAbsent, withNewColumns} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
@@ -666,8 +666,10 @@
     }
 
     function reorderColumns(newOrder: string[]) {
-        columnOrder = newOrder;
-        saveToStorage(getStorageKey('columnOrder'), newOrder);
+        // The chooser lists only the columns on screen: a column away now keeps its place after the one it followed (Y-27).
+        const order = reorderKeepingAbsent(columnOrder, newOrder, defaultColumnOrder);
+        columnOrder = order;
+        saveToStorage(getStorageKey('columnOrder'), order);
     }
 
     function applyColumnFilter(columnId: string, filter: FilterValue | null) {
@@ -785,10 +787,11 @@
 
         // Load only explicit user overrides; effective visibility is derived from the
         // live `hiddenByDefault` default merged with these overrides (see declaration).
+        // Every stored override is kept, a column absent now included: the Δ period columns
+        // arrive after the first render, and their choice must hold when they do (Y-27).
         const storedOverrides = loadFromStorage<VisibilityState | null>(getStorageKey('columnVisibilityOverrides'), null);
         if (storedOverrides) {
-            const validIds = new Set(columns.map((c) => c.id));
-            columnVisibilityOverrides = Object.fromEntries(Object.entries(storedOverrides).filter(([id]) => validIds.has(id)));
+            columnVisibilityOverrides = {...storedOverrides};
         }
 
         columnWidths = loadFromStorage(getStorageKey('columnWidths'), defaultColumnWidths);
@@ -828,57 +831,23 @@
         }
     });
 
-    // Sync column order/visibility/widths when columns change dynamically
-    // (e.g. delta period columns added/removed when date range changes)
+    // Sync column order/widths when columns change dynamically (e.g. the Δ period columns, which
+    // arrive once the backend lists them and change with the date range). A column absent now
+    // keeps its place, its visibility override and its width, so they hold when it comes back:
+    // only a column never seen is added, at its natural place, and nothing is pruned (Y-27).
+    // Visibility needs no handling: it is derived from each column's live `hiddenByDefault`
+    // plus the user's overrides.
     $effect(() => {
-        const currentIds = new Set(columns.map((c) => c.id));
-        const orderedIds = new Set(columnOrder);
-
-        // Detect new columns (not in current order)
-        const newIds = columns.filter((c) => !orderedIds.has(c.id)).map((c) => c.id);
-        // Remove stale columns (no longer in definition)
-        const filtered = columnOrder.filter((id) => currentIds.has(id));
-
-        if (newIds.length > 0 || filtered.length !== columnOrder.length) {
-            // Insert new columns at their correct position based on the columns array order
-            // (not appended at end). This ensures delta columns stay grouped and ordered.
-            for (const newId of newIds) {
-                const colIndex = columns.findIndex((c) => c.id === newId);
-                // Find the last column in filtered that precedes newId in columns order
-                let insertAfterIdx = -1;
-                for (let i = 0; i < filtered.length; i++) {
-                    const existingColIdx = columns.findIndex((c) => c.id === filtered[i]);
-                    if (existingColIdx !== -1 && existingColIdx < colIndex) insertAfterIdx = i;
-                }
-                filtered.splice(insertAfterIdx + 1, 0, newId);
-            }
-            columnOrder = filtered;
+        const nextOrder = withNewColumns(columnOrder, defaultColumnOrder);
+        if (nextOrder.length !== columnOrder.length) {
+            const newIds = nextOrder.filter((id) => !columnOrder.includes(id));
+            columnOrder = nextOrder;
             saveToStorage(getStorageKey('columnOrder'), columnOrder);
 
-            // Visibility for new columns needs no handling here: it is derived from each
-            // column's live `hiddenByDefault` plus user overrides. We only prune overrides
-            // that belong to columns which no longer exist, to keep storage tidy.
-            const nextOverrides = {...columnVisibilityOverrides};
-            let prunedOverrides = false;
-            for (const id of Object.keys(nextOverrides)) {
-                if (!currentIds.has(id)) {
-                    delete nextOverrides[id];
-                    prunedOverrides = true;
-                }
-            }
-            if (prunedOverrides) {
-                columnVisibilityOverrides = nextOverrides;
-                saveToStorage(getStorageKey('columnVisibilityOverrides'), columnVisibilityOverrides);
-            }
-
-            // Update widths for new columns
+            // A width for the new columns only: a column that comes back keeps the one it had.
             const updatedWidths = {...columnWidths};
             for (const id of newIds) {
-                const col = columns.find((c) => c.id === id);
-                updatedWidths[id] = col?.width ?? 150;
-            }
-            for (const id of Object.keys(updatedWidths)) {
-                if (!currentIds.has(id)) delete updatedWidths[id];
+                if (updatedWidths[id] === undefined) updatedWidths[id] = columns.find((c) => c.id === id)?.width ?? 150;
             }
             columnWidths = updatedWidths;
         }

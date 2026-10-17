@@ -5366,6 +5366,250 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-20 — knip e `RESTORE_TICKET_HEADER` (2026-10-17, 10:50-10:54) — ✅ 🧊 FROZEN (checkpoint delle 10:54)
+
+> **B-18 committato** (coordinatore, 10:50): `7b1911fd6`, albero pulito, merge-tree con dev pulito. Il testo del
+> CHANGELOG è salvato; l'entrata aspetta la revisione di H. Via a B-20.
+>
+> **Stato reale**:
+> - `RESTORE_TICKET_HEADER` (`backupApi.ts:190`) è usato in produzione soltanto dentro il suo modulo (l.204).
+> - Il suo test (`backupApi.test.ts:815`, di B5c) lo legge con un cast sull'import a namespace, scritto quando era
+>   ancora rosso, e knip non lo conta come uso.
+> - **knip prima** (10:50:56-10:51:02, `frontend/node_modules/.bin/knip --no-progress`): uscita 1, «Unused exports
+>   (20)», con `RESTORE_TICKET_HEADER` fra loro. Era già rosso per voci di altri; non è un gate.
+>
+> **Correzione** (solo il test, a TA-F): `RESTORE_TICKET_HEADER` nell'import per nome (l.99), e l'asserzione diretta su
+> di esso. Nessun cambio di prodotto, nessuna riga di CHANGELOG.
+>
+> - ✅ **Test cambiato** (TA-F, 10:51): l.99 e l.815 di `backupApi.test.ts`; l'import a namespace resta per le ricerche
+>   della fase rossa degli altri casi. `prettier --check` pulito.
+> - ✅ **Vitest** su `backupApi.test.ts` (10:51:57): **198 su 198**.
+> - ✅ **knip dopo** (10:52:04): uscita 1 come prima. «Unused exports» passa da 20 a **19**. Il diff dei due log toglie
+>   soltanto la riga di `RESTORE_TICKET_HEADER`; il resto sono orari e il consiglio di dotenv.
+> - **Backlog**: B-20 ✅.
+
+### B-18 — `restore --instance-key-file`: i segreti di un archivio in chiaro con la chiave vecchia (2026-10-17, 10:29-10:51) — ✅ 🧊 FROZEN (checkpoint delle 10:51)
+
+> **B-32 entrato** (coordinatore, 10:29): dev `7af21a5c1` (commit `ca1343d6d`), CHANGELOG 🐛 `d11ac04d3`. HEAD portata
+> in avanti a **`d11ac04d3`**, pulita. Via a B-18 con D1 e D2 come decisi; solo run leggeri, revisione di H al
+> checkpoint.
+>
+> **Stato reale** (lettura, 09:45-10:35):
+>
+> - `staging._stage` ricifra i segreti dei plugin soltanto con la chiave che un archivio sicuro porta:
+>   `archive_key = … if INSTANCE_KEY_ENTRY in entries else None` → `_plugin_secrets` → `_archive_subkey` →
+>   `rekey_plugin_secrets(conn, old, current)`.
+> - `rekey_plugin_secrets` lascia stare le righe già sotto la chiave di questa istanza (contate `already_current`, non
+>   illeggibili). Ricifra quelle sotto la chiave vecchia e conta illeggibili le altre.
+> - Se la chiave di questa istanza non si può usare (`settings_subkey` solleva `InstanceKeyError`), la verifica non
+>   ricifra nulla e conta tutto illeggibile (test B4 «without a usable key of its own»).
+>   `instance_key_status().problem` lo dice senza sollevare e senza creare il file.
+> - La docstring di `derive_key_from` (H) descrive già questa strada: la copia dell'amministratore di
+>   `secrets/instance.key`, letta con `read_secret_file()`, o il vecchio `LIBREFOLIO_INSTANCE_KEY`.
+> - I test di ricifratura di B4 stanno in `test_backup_secure.py` (`services backup-secure`), non in
+>   `test_backup_staging.py`.
+> - La doc (`backup_restore.en.md` l.36) dà una sola strada: rimettere la chiave vecchia al posto di quella nuova. Non
+>   va bene per un'installazione che tiene la sua chiave, come un'istanza ospitata o una con segreti suoi.
+>
+> **Contratto congelato** (`b18-contract.md` nella cartella della sessione, 10:36):
+>
+> 1. `stage_archive(..., instance_key=None)` controlla la chiave per prima, prima del lock e di ogni cartella:
+>    `derive_key_from` → `StagingError("instance_key_invalid")`, senza mai il testo della chiave. In `_stage` vince
+>    la chiave dell'archivio; altrimenti si usa quella data. Le rotte API non cambiano, il report nemmeno (nessun
+>    OpenAPI).
+> 2. CLI `restore --instance-key-file FILE`, anche con `--dry-run`:
+>    - letto con `read_secret_file` da root, prima del cambio di utente e prima della password;
+>    - errori ❌ `instance_key_unreadable` e `instance_key_invalid`, uscita 1;
+>    - la riga «Instance key: not included; given with --instance-key-file».
+>    - **D1**: vince la chiave dell'archivio, con la riga ℹ️.
+>    - **D2**: la riga ⚠️ se la chiave data non ricifra nulla. Se invece è la chiave di questa istanza a non funzionare,
+>      un'altra ⚠️ che lo dice (raffinamento mio: la riga D2 accuserebbe la chiave sbagliata).
+> 3. Doc: `cli_tools.en.md` e `backup_restore.en.md`. Proposta di CHANGELOG ✨.
+>
+> - **Rossi in scrittura** (10:37):
+>   - TA-S: `test_backup_secure.py`, k1-k6;
+>   - TA-E: `test_backup_cli_restore.py` (h), con c8 accanto al finto root di B-19 se conviene;
+>   - docs-writer: le due pagine.
+> - **Codice pronto** (10:40) in `b18-wip/apply_b18.py`: 17 operazioni in 2 file.
+>   - `staging.py`: `instance_key`, `_refuse_unusable_instance_key` prima della cartella e del lock, e
+>     `archive_key = … else instance_key`.
+>   - `backup_cli.py`:
+>     - `_restore_keys`: prima il file della chiave, poi la password. Tiene `cmd_restore` sotto C901;
+>     - `_instance_key_from_file`;
+>     - `_print_given_key` per D1, D2 e l'eccezione;
+>     - l'opzione, una riga d'uso, un esempio.
+>   Ruff e black puliti sulla copia emessa, dopo aver rimesso la firma di `stage_archive` su una riga sola, come vuole
+>   black.
+> - ✅ **Rossi dei servizi scritti** (TA-S, 10:44): sezione (i) di `test_backup_secure.py`, 6 funzioni e 9 casi (7
+>   rossi, 2 guardie). k3 prova `""` e 31 caratteri, con e senza un `.restore` lasciato da una verifica precedente.
+>   `new_parameter` ha un argomento `by` facoltativo, che nomina B-18 nel messaggio.
+> - **⚠️ Fuori pista — `TypeError` (10:45)**, da TA-S: il contratto §1 mandava anche un `TypeError` (una chiave che non
+>   è un testo) su `instance_key_invalid`, con la frase «too short», che lì sarebbe falsa. La CLI passa sempre un testo:
+>   il contratto ora lascia il `TypeError` di `derive_key_from`, come fa la patch. Il controllo usa `is not None`, mai
+>   la verità del valore: `""` è rifiutato.
+> - ✅ **Doc scritta** (docs-writer, 10:50):
+>   - `cli_tools.en.md`: l.393, 441, 448 e 475; la nuova sottosezione «🗝️ The Instance Key of Another Installation»
+>     (`#backup-restore-instance-key`, l.546-561); debito di traduzione, niente stamp;
+>   - `backup_restore.en.md`: l.36, e i passi 1, 3 e 4 di «From a Hosted Instance to Your Server».
+>   Rivista contro la patch: le righe esatte, i messaggi di `read_secret_file` (il limite di 65536 byte), il percorso
+>   dei dati dell'immagine.
+>   Lasciato fuori dal docs-writer, da decidere: una clausola in `configuration.en.md` («Saved Secrets and the Instance
+>   Key», pagina tradotta).
+> - ✅ **Rossi della CLI scritti** (TA-E, 10:42): sezione (h) di `test_backup_cli_restore.py`, 8 funzioni e 10 casi.
+>   - c8, il caso da root, sta in (h) e importa il finto root di B-19 da `test_backup_cli_secure.py`;
+>   - l'archivio con i segreti viene dagli helper di `test_backup_secure.py`;
+>   - c3 vuole il file della chiave letto prima della password, come fa la patch.
+> - ✅ **Rossi** (corsia 6187, 10:43-10:44, carico 36):
+>   - `services backup-secure`: **7 falliti** e 70 passati; il motivo è il parametro mancante (`new_parameter`);
+>   - `utils backup-cli-restore`: **10 falliti** e 92 passati; argparse rifiuta l'opzione.
+> - ✅ **Codice applicato** (10:44:11): 17 operazioni in 2 file; ruff (con C901) e black puliti sui file veri.
+> - ✅ **Verdi** (10:44-10:47): `services backup-secure` 77, `utils backup-cli-restore` 102,
+>   `utils backup-cli-secure` 66, `utils backup-cli` 102, `services backup-staging` 161; porta 6187 libera.
+>   `dev.py backup restore --help` mostra l'opzione.
+> - ✅ **Doc** (10:47-10:49): `mkdocs build` strict pulito (80 s), `check-links` pulito, `utils gate-docs-links` 63.
+> - ✅ **Controlli statici** (10:49): ruff e black su tutti i 6 file Python cambiati; `git diff --check` pulito.
+> - Non eseguiti:
+>   - `api backup-restore`: nessuno slot chiesto. L'API non passa nessuna chiave, e `instance_key=None` è la strada di
+>     prima: la coprono `services backup-staging` (161) e `services backup-secure` (77);
+>   - `api sync`: il report non cambia, quindi l'OpenAPI nemmeno.
+> - Proposta di CHANGELOG ✨ (docs-writer): «**The old instance key at a restore** — `./dev.py backup restore ARCHIVE
+>   --instance-key-file FILE` takes the instance key of the installation that made a clear backup…».
+> - **Backlog**: B-18 ✅.
+
+### B-32 — dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile (2026-10-17, 09:25-10:29) — ✅ 🧊 FROZEN (checkpoint delle 10:29)
+
+> **B-19 entrato** (coordinatore, 09:25): dev `e96158e9b`, CHANGELOG 🐛 `67dd18676`; HEAD portata in avanti a
+> **`67dd18676`**, pulita, con A8b dentro. La revisione di `backup.spec.ts` di A8b è presa per buona. Ordine: B-32 →
+> B-18 → B-20, ognuno col suo checkpoint. Lo spike B7a passa **alla mattina, col developer presente**: Docker non lo
+> avvio io.
+>
+> **Stato reale** (lettura, 09:25-09:35):
+>
+> - `restoreFlow.cancelPending()`: `state = 'pending'` seguito da `#fail(...)`, che mette subito `failed`. La riga è
+>   morta: un annullamento rifiutato finisce sulla schermata d'errore. Il riavvio rifiutato resta invece su `pending`
+>   con l'errore (`#setError`), e la scheda sa già mostrare il blocco in attesa con l'errore accanto.
+> - `cmd_pending --cancel` prende solo `RestoreNotPendingError`. `cancel_restore` rende lo stato, non `copy_dropped`
+>   (i test fissano `cancel_restore(...) == pending`).
+> - `_read_state` rende `None` per ogni `OSError`. Lo leggono in 10 punti:
+>   - stato, annullamento, riavvio, conferma;
+>   - i due passi d'avvio;
+>   - l'esito;
+>   - `protected_stage` (pulizia, `remove_check`);
+>   - la CLI (`pending` e il controllo prima di `restore`).
+>   Con `O_NOFOLLOW`, uno stato che è un link dà ELOOP: oggi «nessun ripristino», e §10 lo fissa (`UNTRUSTED`, la
+>   conferma che sostituisce un link). Il contenuto non valido (`ValidationError`) è lo «stato illeggibile» dei test
+>   esistenti: resta «none».
+>
+> **Contratto congelato** (`b32-contract.md` nella cartella della sessione, 09:38):
+>
+> 1. Un annullamento rifiutato (tranne il 404 `restore_not_pending`) resta su **`pending`**. L'errore sta accanto
+>    (`failure` `cancel`), con lo stato invariato e un solo evento `failed`, e si può annullare o riavviare di nuovo:
+>    come il riavvio rifiutato.
+> 2. Le uscite di `pending --cancel`:
+>    - un `OSError` → `❌ The restore could not be cancelled: <strerror>. It still waits for the next start
+>      (restore_cancel_failed)`, uscita 1, senza traceback;
+>    - copia rimasta → `✅ …dropped: the data stays as it is` + `⚠️  Its checked copy could not be removed: it goes
+>      when its check expires`, uscita 0. La CLI lo capisce dalla cartella della copia ancora presente.
+> 3. Nuovo `RestoreStateUnreadableError`, codice `restore_state_unreadable`, con `reason` (lo `strerror`, mai un
+>    percorso). `_read_state` fa prima un `lstat`:
+>    - nessun file → `None`;
+>    - non un file regolare (link, cartella) → `None` registrato, come oggi;
+>    - ogni altro `OSError` → registrato e sollevato;
+>    - il contenuto non valido resta `None`.
+>    **Rigidi**:
+>    - status, `DELETE /pending`, riavvio e conferma → 500. La conferma rifiuta invece di scrivere sopra: dietro può
+>      esserci un ripristino applicato a metà;
+>    - la CLI `pending`, `pending --cancel` e il controllo prima di `restore` → ❌, uscita 1.
+>    `cancel_restore` legge prima senza lock, come `prepare_restart`: un `.restore/` che il server non può
+>    attraversare non passa più per «nessuno stato».
+>    **Indulgenti, come oggi**: i due passi d'avvio (con un helper), l'esito, `protected_stage`.
+> 4. Una chiave × 4 lingue, più `ERROR_KEYS`.
+> 5. I commenti «Settings › Administration › Backup»:
+>    - in `BackupTab.svelte`, `apply.py`, `backup_cli.py`, `RestoreCard.test.ts`;
+>    - e due descrizioni del runner di B5a.
+>
+> - **Coordinatore** (09:40): nessun veto su 1-4. Il residuo (un avvio che trova uno stato illeggibile va avanti) va
+>   nella lista del developer. Slot 2 di ~12 min in coda dopo E → J → Y.
+> - **Rossi in scrittura** (09:38), file distinti:
+>   - TA-S `test_backup_apply.py`;
+>   - TA-B `test_backup_restore_apply.py`;
+>   - TA-E `test_backup_cli_restore.py`;
+>   - TA-F `restoreFlow.test.ts`, `RestoreCard.test.ts`, `restoreI18n.test.ts`.
+> - **Codice pronto** in `b32-wip/apply_b32.py` (09:41): 31 operazioni in 8 file + 4 cataloghi, `--part front|back`.
+>   Sulla copia emessa:
+>   - ruff (con la configurazione del repo, `--stdin-filename`) e black puliti. `_RESTART_NOT_PREPARED` è scritto
+>     nella forma di black: oltre 300 caratteri;
+>   - prettier pulito sui 4 file del frontend e sui 4 cataloghi.
+> - ✅ **Rossi scritti** (09:38-09:53), file distinti, nessuno lanciato dagli autori:
+>   - **TA-S**, sezione (o) di `test_backup_apply.py`: 7 funzioni, 24 casi (14 rossi, 10 guardie). Tre modi di
+>     rendere illeggibile: `os.open` che rifiuta EACCES o EIO, e un vero `chmod 000`, saltato da root.
+>   - **TA-B**, sezione (j) di `test_backup_restore_apply.py`: 6 test, 16 casi (13 rossi; la guardia dell'esito ×3).
+>   - **TA-E**, sezione (g) di `test_backup_cli_restore.py`: 8 funzioni, 15 casi (13 rossi, 2 guardie).
+>   - **TA-F**: 11 casi rossi fra `restoreFlow.test.ts`, `RestoreCard.test.ts` e `restoreI18n.test.ts`. Ha girato anche
+>     la vecchia tabella di B5b, che fissava `failed` per un annullamento rifiutato, e ha allineato l'intestazione di
+>     `RestoreCard.test.ts`.
+>   - **Docs-writer**:
+>     - `backup_restore.en.md`: la riga dell'annullamento e la nuova riga `restore_state_unreadable`;
+>     - `cli_tools.en.md` l.538, 555 e 581 (debito di traduzione, niente stamp);
+>     - `security.md`: quattro righe della tabella e il punto «What cannot be read is not none».
+> - **⚠️ Fuori pista — `lexists` (09:55)**, da TA-E: `os.path.lexists` inghiotte EACCES. Con `.restore/stage` non
+>   attraversabile, la CLI direbbe «with its copy» mentre la copia resta. E `rmtree(ignore_errors=True)` di
+>   `remove_stage` può lasciare una copia in sola lettura senza sollevare nulla: il `copy_dropped` di B-31 non basta.
+>   Contratto §2 e patch corretti: un helper `_copy_left` fa `os.lstat`. `FileNotFoundError` vuol dire sparita; ogni
+>   altro `OSError` conta come ancora lì. TA-E ha aggiunto il caso `stage-folder-not-searchable`.
+> - **Note degli autori, già nella patch**:
+>   - TA-B: la conferma ha bisogno del suo `except` prima di quello generico, altrimenti risponderebbe 409 con le
+>     parole del sistema; l'esito deve leggere in modo indulgente.
+>   - TA-S: il `lstat` prima toglie anche una perdita di descrittore (uno stato che è una cartella: `os.fdopen` solleva
+>     senza chiudere) e un blocco su una FIFO. La FIFO non ha test: oggi resterebbe appesa.
+> - ✅ **Rossi** (corsia 6187):
+>   - `services backup-apply` (09:48-09:49, carico 18): **14 falliti**, 241 passati. I 14 sono i casi rigidi, per i
+>     motivi attesi (`None`, `restore_not_pending`, una conferma che scrive sopra); le guardie verdi;
+>   - Vitest, i 3 file (09:49-09:50): **11 falliti**, 394 passati, gli 11 attesi;
+>   - `utils backup-cli-restore` (09:50-09:51): **13 falliti**, 79 passati, i 13 attesi.
+>   - `api backup-restore-apply` aspetta lo slot: lì rosso, poi la metà backend, poi verde.
+> - ✅ **Metà frontend applicata** (09:51:27): `--part front`, 5 operazioni in 4 file più i 4 cataloghi.
+>   - `i18n build` (5014 chiavi) e `i18n check` strict puliti;
+>   - Vitest (09:52) sui 3 file: **405 su 405**;
+>   - Vitest su tutta la cartella `features/backup` (09:53): **867 su 867**, 8 file.
+> - **⚠️ Fuori pista — una frase della doc (09:54)**: in `cli_tools.en.md`, «The log above them has the warning…» non
+>   è sempre vero. Una copia lasciata senza errore (`rmtree(ignore_errors=True)` davanti a una cartella in sola lettura)
+>   non registra nessun avviso, e la pulizia allora riprova soltanto. Corretto io stesso: l'avviso c'è quando la
+>   rimozione ha sollevato un errore; LibreFolio «tries again» alla prima partenza dopo 24 ore.
+> - ✅ **Doc** (09:55-09:56, carico 32): `mkdocs build` strict pulito (55 s), `check-links` pulito,
+>   `utils gate-docs-links` 63 passati; porta 6187 libera.
+> - **Coordinatore** (09:57):
+>   - B-18, D1: vince la chiave dell'archivio, con la riga ℹ️. D2: la riga ⚠️ quando la chiave data non legge nessun
+>     segreto;
+>   - B-18 parte dopo il checkpoint di B-32, solo run leggeri, con H in revisione al checkpoint (consuma
+>     `derive_key_from` e `read_secret_file`);
+>   - lo slot di B-32 viene dopo Y-27.
+>   Contratto di B-18 pronto nella cartella della sessione (`b18-contract.md`); lo script dello slot di B-32 è
+>   `b32-wip/slot_after_red.sh`.
+> - ✅ **Slot 2** (coordinatore, 10:04; accanto girava l'E2E di Y):
+>   - **Rosso** `api backup-restore-apply` (10:04:51-10:09:28; il build del frontend rifatto con la metà frontend
+>     dentro, svelte-check 0 errori): **13 falliti**, 157 passati. Sono i 13 di TA-B: 200 `none`, 404, 409, 202 e
+>     l'OpenAPI.
+>   - **Metà backend applicata** (10:09:39): `--part back`, 26 operazioni in 4 file. Ruff e black puliti sui file veri.
+>   - **Verdi**:
+>     - `api backup-restore-apply` (10:09-10:10): **170 passati**;
+>     - `api backup-restore`: 146; `api security-checks`: 3;
+>     - lo script ha aspettato il carico ≥ 50 dalle 10:11 alle 10:14 (picco 104).
+>   - `api sync` (10:16-10:17), uscita 0: `openapi.json` e `generated.ts`, ignorati da git, nominano
+>     `restore_state_unreadable`.
+>   - Slot liberato alle 10:17:47; porta 6187 libera.
+> - ✅ **Verdi leggeri** (10:19-10:26, nella mia corsia; attesa del carico dalle 10:21 alle 10:25):
+>   - `services backup-apply` 255, `services backup-outcome` 97, `services backup-leftovers` 44;
+>   - `utils backup-cli-restore` 92, `utils backup-cli` 102, `utils backup-cli-secure` 66.
+>   Porta 6187 libera.
+> - ✅ **Controlli statici** (10:27): ruff e black puliti su tutti i 10 file Python cambiati, prettier pulito su tutti i
+>   file del frontend cambiati, `git diff --check` pulito.
+> - Lasciato com'è: il messaggio del `throw` in `RestoreCard.test.ts:180`, «Settings › Backup has no restore card».
+>   È il messaggio rosso di B5b per una scheda che non può più mancare; non tocco un test dopo il verde.
+> - Non eseguiti: `e2e` (lo slot non lo chiedeva; la scheda è coperta dai casi Vitest della carta e del flusso),
+>   `front check` separato (lo svelte-check del build del rosso API era pulito, con la metà frontend dentro).
+> - **Backlog**: B-32 ✅; **B-33** nuovo, i residui dichiarati, con la decisione del developer sul fail closed.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto

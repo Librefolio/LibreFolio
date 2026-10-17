@@ -215,6 +215,8 @@ once, and its place is freed.
 
 When someone forgot their password, send them a link to choose a new one themselves. With email,
 they can also ask for one from the login page: see [Forgotten Passwords](email.md#forgot-password).
+On a [managed instance](hosting_providers.md#managed-profile), the login page's
+**Forgot Password?** shows no server command: it tells them to ask you for this link.
 
 1. Open their row and click **Password-reset link**.
 2. The dialog explains: *A single-use link to set a new password, valid 30 minutes. The links

@@ -1,6 +1,6 @@
 <script lang="ts">
     import {createEventDispatcher, onMount} from 'svelte';
-    import {AlertTriangle, ArrowLeft, ChevronDown, Terminal} from 'lucide-svelte';
+    import {AlertTriangle, ArrowLeft, ChevronDown, Terminal, UserCog} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import ForgotPasswordEmailForm from '$lib/features/email/ForgotPasswordEmailForm.svelte';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
@@ -18,6 +18,8 @@
     });
 
     let commandsOpen = false;
+    // The server commands are for whoever runs the server: shown once the server said self-hosted. A managed instance's
+    // users have no terminal: they ask their administrator for a reset link (F05). Before the answer, neither.
 </script>
 
 <div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">
@@ -46,24 +48,37 @@
             </p>
         {/snippet}
 
+        {#snippet askAdmin()}
+            <div class="bg-lf-panel rounded-lg p-4 flex items-start space-x-3 text-sm text-lf-secondary" data-testid="forgot-ask-admin">
+                <UserCog class="text-lf-muted flex-shrink-0 mt-0.5" size={18} />
+                <p>{$_('auth.askAdminToResetPassword')}</p>
+            </div>
+        {/snippet}
+
         {#if instanceConfig.config.email?.links}
             <!-- Reset link by email (workstream E) -->
             <ForgotPasswordEmailForm />
 
-            <!-- The server commands, in a panel closed by default (developer's decision P1) -->
-            <details bind:open={commandsOpen} class="bg-lf-panel rounded-lg" data-testid="forgot-commands-panel">
-                <summary class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg p-4 text-lf-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" data-testid="forgot-commands-toggle">
-                    <span class="flex items-center space-x-2">
-                        <Terminal size={18} />
-                        <span class="font-medium text-sm">{$_('auth.serverTerminalInstructions')}</span>
-                    </span>
-                    <ChevronDown aria-hidden="true" class="shrink-0 transition-transform {commandsOpen ? 'rotate-180' : ''}" size={16} />
-                </summary>
-                <div class="px-4 pb-4 space-y-3">
-                    {@render commands()}
-                </div>
-            </details>
-        {:else}
+            {#if instanceConfig.loaded && instanceConfig.config.profile === 'managed'}
+                {@render askAdmin()}
+            {:else if instanceConfig.loaded}
+                <!-- The server commands, in a panel closed by default (developer's decision P1) -->
+                <details bind:open={commandsOpen} class="bg-lf-panel rounded-lg" data-testid="forgot-commands-panel">
+                    <summary class="flex cursor-pointer list-none items-center justify-between gap-2 rounded-lg p-4 text-lf-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus" data-testid="forgot-commands-toggle">
+                        <span class="flex items-center space-x-2">
+                            <Terminal size={18} />
+                            <span class="font-medium text-sm">{$_('auth.serverTerminalInstructions')}</span>
+                        </span>
+                        <ChevronDown aria-hidden="true" class="shrink-0 transition-transform {commandsOpen ? 'rotate-180' : ''}" size={16} />
+                    </summary>
+                    <div class="px-4 pb-4 space-y-3">
+                        {@render commands()}
+                    </div>
+                </details>
+            {/if}
+        {:else if instanceConfig.loaded && instanceConfig.config.profile === 'managed'}
+            {@render askAdmin()}
+        {:else if instanceConfig.loaded}
             <!-- Warning Box -->
             <div class="bg-lf-warning-soft border border-lf-warning-line rounded-lg p-4 flex items-start space-x-3" data-testid="forgot-email-unavailable">
                 <AlertTriangle class="text-lf-warning flex-shrink-0 mt-0.5" size={20} />

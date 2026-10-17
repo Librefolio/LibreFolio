@@ -167,7 +167,7 @@ This chart is the **selection-dependent economic comparison** view.
 
 The modal is the **deep audit view** for one lot.
 
-It shows summary metrics, current custody fragments, and a clickable chronology built from `EVENT_HISTORY`, with navigation to the active transaction when available. A closure row labels its value with `closureValueLabelKey(kind)` (`lotCustodyModalHelpers.ts`): "Value handed over at cost" (`brokers.lots.modal.historyDetail.handedOverAtCost`) on an `ADJUSTMENT_OUT` row — nothing was sold, the units left at their cost — and "Proceeds" (`brokers.lots.modal.historyDetail.proceeds`) on every other closure.
+It shows summary metrics, current custody fragments, and a clickable chronology built from `EVENT_HISTORY`, with navigation to the active transaction when available. A closure row labels its value with `closureValueLabelKey(kind)` (`lotCustodyModalHelpers.ts`): "Value handed over" (`brokers.lots.modal.historyDetail.handedOver`) on an `ADJUSTMENT_OUT` row — nothing was sold: the units left at their cost, at their own FIFO cost, or, for a transfer leg leaving the lots' scope, at that day's market value ([Transfers Across the Scope's Edge](../../../backend/transactions/lots_analysis_service.md#scope-edge-transfers)) — and "Proceeds" (`brokers.lots.modal.historyDetail.proceeds`) on every other closure.
 
 When the lot carries allocated FEE/TAX — or its fees or taxes could not be valued (`null`, shown as `—`) — it
 also renders a **net breakdown** block: gross total P&L → `− fees` → `− taxes` → **net total P&L** and

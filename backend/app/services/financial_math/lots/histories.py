@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -16,10 +17,11 @@ from backend.app.schemas.portfolio import (
     LotValueHistoryPoint,
     PerformanceHistoryPoint,
 )
-from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoLot, FragmentInterval, LotClosure
+from backend.app.services.financial_math.fifo.models import FifoEngineResult, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.lots.conversions import ConvertedClosure, FxRateResolver, convert_closure
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics
 from backend.app.services.financial_math.lots.prices import opening_reference_price
+from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
 from backend.app.services.financial_math.lots.summary import lot_value, residual_cost
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, calculate_simple_roi_series, calculate_twrr_series
@@ -28,12 +30,14 @@ from backend.app.services.financial_math.valuation import compute_holding_value
 
 @dataclass(frozen=True, slots=True)
 class PerformanceSourceContext:
-    transactions: Sequence[Transaction]
+    # The scope's rows, each transfer leg read at the scope's edge (``scope_boundary``) and named in ``boundary_legs``.
+    transactions: Sequence[Transaction | FifoInputTransaction]
     engine_result: FifoEngineResult
     lots_by_id: dict[int, FifoLot]
     fragments_by_lot: dict[int, list[FragmentInterval]]
     closures_by_lot: dict[int, list[LotClosure]]
-    tx_by_id: dict[int, Transaction]
+    tx_by_id: dict[int, Transaction | FifoInputTransaction]
+    boundary_legs: Mapping[int, BoundaryLeg] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +83,17 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
 
     for tx in sorted(context.transactions, key=lambda row: (row.date, row.id or 0)):
         if tx.broker_id not in scope_set:
+            continue
+        # A transfer leg read at the scope's edge moves its market value of the day across the scope, as the transfers
+        # whose two legs this replay holds do (below): money in for a leg that arrives, out for one that leaves (J-10).
+        boundary_leg = context.boundary_legs.get(tx.id) if tx.id is not None else None
+        if boundary_leg is not None:
+            leg_price = market_prices.get(tx.date)
+            if leg_price is None:
+                invalid_external_flow_from = tx.date if invalid_external_flow_from is None else min(invalid_external_flow_from, tx.date)
+                continue
+            leg_value = compute_holding_value(abs(tx.quantity), leg_price, quote_base_quantity)
+            cash_flows.append(CashFlowInput(date=tx.date, amount=-leg_value if boundary_leg.direction == "IN" else leg_value))
             continue
         tx_type = str(getattr(tx.type, "value", tx.type))
         if tx_type == "BUY":
@@ -560,7 +575,7 @@ def _known_prefix_on_date(values_by_date: dict[date_type, Decimal], unknown_from
     return _prefix_value_on_date(values_by_date, query_date)
 
 
-def _adjustment_native_cost(tx: Transaction, asset_currency: str) -> tuple[Decimal, str] | None:
+def _adjustment_native_cost(tx: Transaction | FifoInputTransaction, asset_currency: str) -> tuple[Decimal, str] | None:
     """The money an ADJUSTMENT moves, in its own currency; None for a quantity-only correction.
 
     With a cost basis, the quantity times the per-unit cost: negative for an ADJUSTMENT-out, which hands its units
@@ -575,7 +590,7 @@ def _adjustment_native_cost(tx: Transaction, asset_currency: str) -> tuple[Decim
 
 def adjustment_cash_flow_cost(
     *,
-    tx: Transaction,
+    tx: Transaction | FifoInputTransaction,
     asset_currency: str,
     fx_resolver: FxRateResolver,
 ) -> Decimal | None:

@@ -6019,3 +6019,91 @@ alla conferma e mostra `currencyChange.failed: <messaggio del server>` in ingles
   aperto e un test che non esiste più (di J). `mkdocs build` stretto ✅, `check-links` ✅.
 - **Consegna** (09:46, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
   `fix(assets): wipe refuses splits with costless adjustments` e `docs(journal): X-R48, X-R60`.
+
+### X-R44 — un fornitore di test (`mockprov`, `MOCKFX`) servito anche fuori dalla modalità di test ✅ (2026-10-17, 09:45–10:30; consegnato)
+
+**Base**: `2ea54ff76` (X-R48 entrato), albero pulito.
+
+**Stato verificato**: `test_only` (dal mixin delle impostazioni) nasconde `mockprov` e `MOCKFX` solo dagli elenchi
+(`api/v1/assets/providers.py:64`, `api/v1/fx/providers.py:81`, la ricerca senza `providers`, `search.py:29`). Ogni altra
+strada lo serve: la ricerca che lo nomina, l'assegnazione (`FAProviderConfigBase` controlla solo che il codice esista:
+`get_provider_instance`), il probe, il refresh, il prezzo corrente, i metadati, il catalogo delle impostazioni; e per i
+cambi `MOCKFX` come fonte di una coppia (i tassi sono globali). La modalità di test è `config.is_test_mode()`
+(`LIBREFOLIO_TEST_MODE`), letta alla chiamata; ogni corsa di pytest del runner la accende (`_executor`, `_common`,
+`_consolidate_backend`), e anche il server di test.
+
+**Disegno**: un punto solo, nel registro (`provider_registry.py`, le basi): fuori dalla modalità di test un plugin
+`test_only` non esiste — `get_plugin` dà `None` (quindi anche `get_plugin_instance`/`get_provider_instance`),
+`list_plugin_codes` e `list_providers` non lo elencano. Tutte le strade si chiudono insieme, per asset e cambi, come
+un codice sconosciuto (l'assegnazione: 422 «Unknown provider code»; il refresh di un asset già assegnato: il fornitore
+non c'è, nessuna cancellazione). Le famiglie senza `test_only` (BRIM, segnali, rischio, strumenti) non cambiano. È il
+primo pezzo del punto unico di F05 (`is_allowed`), che resta bloccato sull'helper di H.
+- **Rossi** (test-author, 09:47–10:02): file nuovo `test_test_only_providers.py` (507 righe, 29 voci, PURE; registrato
+  `services test-only-providers`). Produzione simulata in processo (`monkeypatch.context()` con `LIBREFOLIO_TEST_MODE=0`
+  in un blocco, dopo la scoperta in modalità di test) e il passo delle impostazioni (`configure_instance`) sostituito da
+  un registratore, così niente DB. In più della mia lista: `MOCKFX_FAIL`, la versione FX di `configured_provider`, e un
+  registro usa-e-getta sulla base (`AbstractPluginRegistry`). **Rossi confermati** (10:03): 9 falliti su 29, 20 guardie
+  verdi.
+- **Codice** (10:04): `xr44_code.py`, 6 sostituzioni in 3 file (`provider_registry.py`: `_withheld`, `get_plugin`,
+  `list_plugin_codes`, `list_providers`; le docstring di `test_only` in `contract.py` e `assets/base.py`).
+- **Verdi** (10:04–10:11): `test-only-providers` 29, `provider-registry`, `provider-registry-misc`,
+  `plugin-settings-{service,contract,runtime}`, `utils gate-plugin-layout`, `gate-plugin-i18n-ownership`,
+  `asset-source`, `fx-sync-service`, `brim-provider-base`, `signal-registry`.
+- Nel frattempo, dalla revisione di J su X-R48: **X-R48b** (la modale non avvisa prima della conferma), basso, nel
+  backlog.
+- **Slot 9** (10:11–10:18, cancello a 5 minuti): `api assets-provider` 24, `api fx-sync` 10; porta 6183 libera.
+- **CHANGELOG**: una riga sotto `#### 🔒 Security` (i doppi di test erano raggiungibili anche nelle istanze 1.2).
+- **Documentazione** (docs-writer, 10:19–10:27): `plugin_settings.md` (la sezione «Test-Only Plugins» riscritta: mai
+  elencato; fuori dalla modalità di test non servito; in modalità di test come prima; più il punto di «Configure»),
+  `asset_plugin_guide.md` e `fx_plugin_guide.md` (la riga di `test_only`), `registry_pattern.md` (una frase), e
+  `backend/assets/system_providers.md` (diceva che `mockprov` si registra solo in modalità di test: falso prima e
+  impreciso ora; corretto). Solo inglese. `mkdocs build` stretto ✅, `check-links` ✅.
+- **Consegna** (10:30, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti
+  `fix(plugins): no test-only provider outside test mode` e `docs(journal): X-R44, X-R48b`.
+
+> **⚠️ Fuori pista (10:30–10:40) — X-R44 committato, revisione di Z-25.** Il coordinatore ha committato X-R44
+> (`59f5bcfdc` fix con la riga del CHANGELOG, `bbbea9bcc` journal); l'ingresso aspetta la revisione di E.
+> Revisione di **Z-25** (`4b711e803`, i tetti dei bulk, N77): OK. Il `convert` dei cambi pianifica e conta i blocchi di
+> giorni prima di costruire: ordine e metadati invariati, i piani dei segnali oltre il tetto ancora preparati, il
+> controllo dentro il ciclo (rifiuto alla prima conversione che supera il budget: un segnale non valido più avanti dà
+> `bulk_too_many_days`). LOW: nel 422 dei cambi `item_days` è un minimo, non il totale («at least»). INFO: il `detail` usa
+> `code` (la convenzione di backup e broker), non `error_code`/`params`: X-R58 leggerà `detail.code`. INFO per J e l'AI
+> Export: rischio ed export ricevono `BulkTooManyDaysError` nudo; da controllare che non diventi un 500.
+> Revisione di **MF-P2b** (`58500cad0`, i limiti di `/period-changes`): OK sui quattro punti. `Body(max_length)` (10 000
+> asset, 1 000 coppie: `maxItems` e `.max()` di zod; oltre, il client rifiuta prima di mandare e il `catch` delle mie
+> pagine svuota le Δ: X-R60 (3) le terrà); al più 5 `as_of` distinti (stringa, le pagine ne mandano uno); `as_of` dal
+> 1900 (nessun rischio in alto: nessun servizio aggiunge giorni ad `as_of`); descrizioni dei rapporti ora non ambigue.
+
+### Y-28 — l'E2E C-66 «tutto riempito all'indietro» rosso in dev dopo X-R55 ✅ (2026-10-17, 10:33–11:05; consegnato)
+
+**Origine**: lo slot di Y. `asset-list.spec.ts:1084` (C-66, mio, `32c64bbd9`) usava il periodo da oggi+7 a oggi+14
+(«nessun giorno è avvenuto»); con X-R55 ogni intervallo della query dei prezzi finisce a domani in UTC, e una voce che
+comincia dopo dà un risultato vuoto: la precondizione fallisce. Verde su `039af67bb`, prima di X-R55.
+**Decisione** (proposta del coordinatore, che condivido): il tetto è il contratto; il test passa a un periodo passato.
+**Disegno**: un asset proprio con un fornitore e prezzi salvati solo un venerdì e il lunedì dopo, l'elenco ristretto a
+lui (token unico, come l'E2E di X-R53), il periodo = il fine settimana in mezzo, nel passato; precondizioni calcolate;
+pulizia nel `finally`. Nello stesso lotto **X-R57** (il commento C-66 di `asset-detail.spec.ts` ~8672: la ragione
+«UTC» è superata da Z-3). Test-author (solo scrittura) dalle 10:34.
+- **Riscrittura** (test-author, 10:34–10:55): «Sync all» sincronizza ogni asset con un fornitore dell'istanza (la ricerca
+  restringe solo quello che si vede), e Bitcoin ed Ethereum del seed salvano un prezzo ogni giorno, fine settimana
+  compresi: su qualunque fine settimana passato «Sync all» avvisa sempre. Il test passa al **Sync della selezione**
+  della tabella (`toolbar-action-sync`: la stessa finestra e lo stesso controllo, limitato alle righe scelte). Due asset
+  propri (token unico, `mockprov`): quello in prova salva solo venerdì e lunedì; un controllo salva anche il sabato.
+  Precondizioni lette dalla query dei prezzi della pagina; la cella dell'ultimo prezzo mostra la chiusura del venerdì;
+  con le due righe scelte la finestra avvisa 1 su 2 (il controllo), con la sola in prova nessun avviso, chiusa senza
+  partire, nessuna richiesta di sync. Pulizia nel `finally`. Il controllo va oltre il mio compito, lo tengo: senza, il
+  negativo non avrebbe denti. Nome nuovo: «syncing the selection over a past weekend whose prices are all filled
+  backward does not warn».
+- **X-R57** fatto: il commento C-66 di `asset-detail.spec.ts` (e lo stesso nel `beforeEach` della lista) dice ora il
+  giorno dell'utente (`todayIso()`, da Z-3).
+- Aggiornata la descrizione del runner `front-asset asset-list` (il file aveva già 25 segnalazioni di ruff e un diff di
+  black, uguali su HEAD: non mie).
+- Domanda di prodotto del test-author: il Sync di una card o riga sovrascrive senza l'avviso → **X-R61** nel backlog.
+- **Slot 10** (10:53–11:03, carico a 5 minuti 39,7): `front-asset asset-list` 31 passati, compreso il test riscritto;
+  porta 6183 libera. `asset-detail.spec.ts`: solo un commento, nessuna corsa.
+- Nel frattempo (10:32): **X-R59** a MF (la Δ sull'intervallo nel backend, `range_start` facoltativo e `range_change`
+  sulle rotte dei periodi); nessun mio veto; dopo il suo ingresso il passaggio del frontend è mio (le card degli asset,
+  tabella e card dei cambi, `fx/[pair]`). La pagina di dettaglio dell'asset usa la quotazione dal vivo: decide MF.
+- X-R44 entrato (dev `5a8c64c5c`, CHANGELOG esteso dal coordinatore in `1c8eba6f5`); da E: **X-R44b** nel backlog.
+- **Consegna** (11:05, FROZEN): `git diff --check` pulito, porta 6183 libera. Commit proposti `test(assets): C-66
+  weekend filled backward, past period` e `docs(journal): Y-28, X-R44b, X-R61, reviews`.

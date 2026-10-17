@@ -85,6 +85,19 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     ``pending``, ``instance_blocked`` — RED until workstream H's line puts it in ``ALLOWED_WHEN_BLOCKED``; every other
     restore route stays 423 for a signed-in administrator. OpenAPI documents the route, its header, its 404 code,
     ``RestoreOutcome`` and ``RestoreRestartAccepted``.
+(j) B-32, a state the file system cannot read: a regular ``restore.json`` whose opening fails, ``os.open`` refusing it
+    (EACCES, EIO) or, for real, its mode 000 (never as root, who reads it all the same). Not a state hidden: the routes
+    say so. ``GET /status``, ``DELETE /pending`` with a pending restore, ``POST /restart``, and the confirmation of a
+    fresh check while a pending restore's state cannot be read: 500 ``restore_state_unreadable`` (the status's message
+    «The state of the restore cannot be read: the server's log has the cause»), and the log has it: the reader's error
+    with the exception's type and its system's words, which stay out of the answer with any path. Nothing written: the
+    state, its copy, its check and its ticket as they were, no ticket issued, no restart requested, the state not
+    replaced by the confirmation (an unknown restore may be half applied); once the file can be read again, the restore
+    still waits. ``GET /outcome`` with that restore's ticket keeps today's one 404 ``restore_outcome_not_found`` and
+    leaves the ticket as it was (a guard): readable again, the same ticket opens the outcome. OpenAPI: the status
+    documents a 500 naming ``restore_state_unreadable``; the 500s of the cancel, the restart and the confirmation name
+    it too. Not the content: a state no restore can hold, the (c) case named «unreadable» included, stays ``none``
+    (§10).
 
 Pure, as ``test_backup_restore.py`` (lot B2b), whose fixtures and helpers are imported: an app of each test holds
 ``backup_router``, ``get_current_user`` overridden; the data directory of the routes under ``tmp_path`` (``apply``'s
@@ -100,7 +113,10 @@ cookie before any database) and no cookie at all; the database session of that a
 anything reaches it. A blocked instance is ``backup_router`` behind ``refuse_when_blocked``, as ``router.py`` mounts every
 route of ``/api/v1`` (``blocked_app``), ``LIBREFOLIO_BLOCKED`` set with ``monkeypatch``. ``refuse_when_blocked`` asks
 ``auth.get_current_user`` itself, outside FastAPI's overrides: where an administrator must be signed in, it is replaced
-for the test by a stand-in that signs in whoever carries a session cookie and leaves anyone else to the real one.
+for the test by a stand-in that signs in whoever carries a session cookie and leaves anyone else to the real one. A
+state the file system cannot read (j) is made so once the test's own setup is done: ``os.open`` replaced, refusing that
+one file and handing every other path to the real one, or the file's mode set to 000; readable again at the end of the
+test, whatever it did.
 """
 
 from __future__ import annotations
@@ -1987,3 +2003,232 @@ def test_openapi_documents_the_outcome_its_header_its_404_and_the_ticket_of_the_
     accepted = schemas.get("RestoreRestartAccepted", {})
     assert set(accepted.get("properties", {})) == RESTART_FIELDS and "outcome_ticket" in accepted.get("required", []), f"RestoreRestartAccepted: the status and the ticket, required: {accepted}"
     print_success("GET /outcome, its header, its 404; RestoreOutcome; RestoreRestartAccepted")
+
+
+# =============================================================================
+# (j) B-32: a state the file system cannot read
+# =============================================================================
+
+
+#: B-32: what the status answers, and what the reader logs, when the file system refuses the state file.
+STATE_UNREADABLE = "The state of the restore cannot be read: the server's log has the cause"
+STATE_READ_ERROR = "The state of the restore cannot be read"
+#: B-32: the error ``os.open`` raises for the state file, by way; with ``mode-000`` the real file system refuses it.
+REFUSED_WITH = {"EACCES": errno.EACCES, "EIO": errno.EIO}
+#: B-32: each test of (j) once for each way the state file is made unreadable. Root, and Windows, read a file of mode
+#: 000 all the same: that way is skipped there.
+UNREADABLE_WAYS = [
+    pytest.param("EACCES", id="EACCES"),
+    pytest.param("EIO", id="EIO"),
+    pytest.param("mode-000", id="mode-000", marks=pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="root, or Windows, reads a file of mode 000 all the same")),
+]
+
+
+class UnreadableState:
+    """The state file of the restore made unreadable at the moment the test chooses (``now``), until ``cure``: every
+    opening of it fails, the rest of the file system untouched. ``refused`` records each opening that failed: the barrier
+    that a route reached the file, and was refused."""
+
+    def __init__(self, root: Path, way: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.path = state_path(root)
+        self.way = way
+        self.monkeypatch = monkeypatch
+        self.refused: list[OSError] = []
+        self.unreadable = False
+
+    def now(self) -> None:
+        """From now on the state file cannot be opened: ``os.open`` refuses it, handing every other path to the real one;
+        or its mode is 000, and the real one refuses it."""
+        assert self.path.is_file() and not self.path.is_symlink(), f"precondition: a regular state file to make unreadable: {self.path.name}"
+        target = os.path.realpath(self.path)
+        real_open = os.open
+
+        def opening(path: Any, flags: int, mode: int = 0o777, *, dir_fd: int | None = None) -> int:
+            if not self.unreadable or dir_fd is not None or os.path.realpath(path) != target:
+                return real_open(path, flags, mode, dir_fd=dir_fd)
+            if self.way in REFUSED_WITH:
+                error = OSError(REFUSED_WITH[self.way], os.strerror(REFUSED_WITH[self.way]))
+                self.refused.append(error)
+                raise error
+            try:
+                return real_open(path, flags, mode)
+            except OSError as exc:
+                self.refused.append(exc)
+                raise
+
+        self.monkeypatch.setattr(os, "open", opening)
+        self.unreadable = True
+        if self.way == "mode-000":
+            self.path.chmod(0o000)
+            assert not os.access(self.path, os.R_OK), "precondition: with its mode 000, this process cannot read the state file"
+
+    def cure(self) -> None:
+        """The state file readable again, as it was; a file that replaced it is left as it is."""
+        if self.unreadable and self.way == "mode-000" and self.path.is_file() and not self.path.is_symlink():
+            self.path.chmod(0o600)
+        self.unreadable = False
+
+
+@pytest.fixture(params=UNREADABLE_WAYS)
+def unreadable(request: pytest.FixtureRequest, instance, monkeypatch: pytest.MonkeyPatch) -> Iterator[UnreadableState]:
+    """B-32: the state file of the test's data directory, made unreadable when the test says so (``now``), in one of the
+    ways; readable again at the end, whatever the test did, before ``instance`` looks at the data directory."""
+    state = UnreadableState(instance.root, request.param, monkeypatch)
+    yield state
+    state.cure()
+
+
+def cause_in_the_log(events: list[dict], unreadable: UnreadableState) -> bool:
+    """Whether the log has the cause as the reader logs it: its error, with the exception's type and its system's words."""
+    refused = unreadable.refused[0]
+    expected = ("error", STATE_READ_ERROR, f"{type(refused).__name__}: {refused.strerror}")
+    return expected in [(event.get("log_level"), event.get("event"), event.get("error")) for event in events]
+
+
+def answer_of(response: httpx.Response) -> tuple[int, Any]:
+    """Status and body: the JSON one, or the text of an answer that has none (a plain 500)."""
+    return response.status_code, response.json() if "json" in response.headers.get("content-type", "") else response.text
+
+
+@pytest.mark.asyncio
+async def test_a_state_the_file_system_cannot_read_is_a_500_of_the_status_and_nothing_changes(instance, unreadable):
+    """(j) B-32 (b1): a pending restore whose state file the file system refuses. ``GET /status``: 500
+    ``restore_state_unreadable``, «The state of the restore cannot be read: the server's log has the cause», never the
+    200 ``none`` that hid a restore which may well wait. The log has the cause (the reader's error, with the exception's
+    type and its system's words); the answer neither those words nor a path. Nothing written or removed. Barrier: the
+    status opened the state file, and was refused."""
+    print_section("B-32: a state the file system cannot read")
+    root = instance.root
+    write_state(root, "pending", api.UNKNOWN_ID)
+    before = api.tree(root)
+    unreadable.now()
+
+    with capture_logs() as events:
+        response = await restore_status()
+
+    assert unreadable.refused, f"barrier: the status opened the state file ({unreadable.way}), and was refused"
+    assert api.refusal(response) == (500, "restore_state_unreadable", STATE_UNREADABLE), f"{unreadable.way}: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert cause_in_the_log(events, unreadable), f"{unreadable.way}: the cause in the server's log: {api.loud(events)}"
+    nothing_shown(response, root)
+    unreadable.cure()
+    assert api.tree(root) == before, f"{unreadable.way}: nothing written or removed: {cases.changed(before, api.tree(root))}"
+    print_success(f"{unreadable.way}: 500 restore_state_unreadable, the cause logged, nothing changed")
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_of_a_restore_whose_state_cannot_be_read_is_500_and_touches_nothing(instance, head_archive, unreadable):
+    """(j) B-32 (b2): a pending restore, its checked copy, its check and the ticket of its restart; then its state file
+    refused by the file system. ``DELETE /pending``: 500 ``restore_state_unreadable``, never the 404
+    ``restore_not_pending`` that told the page nothing waited; the cause in the log, neither the system's words nor a
+    path in the answer. The state, the copy, the check's record and the ticket as they were, nothing else written;
+    readable again, the restore still waits. Barrier: the cancel opened the state file, and was refused."""
+    root = instance.root
+    stage_id = await confirmed(head_archive)
+    await restarted()
+    assert os.path.lexists(ticket_path(root)), "precondition: the ticket of the restart"
+    before = api.tree(root)
+    unreadable.now()
+
+    with capture_logs() as events:
+        response = await cancel()
+
+    assert unreadable.refused, f"barrier: the cancel opened the state file ({unreadable.way}), and was refused"
+    assert api.code(response) == (500, "restore_state_unreadable"), f"{unreadable.way}: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert cause_in_the_log(events, unreadable), f"{unreadable.way}: the cause in the server's log: {api.loud(events)}"
+    nothing_shown(response, root)
+    unreadable.cure()
+    assert api.tree(root) == before, f"{unreadable.way}: the state, the copy, the check's record and the ticket untouched, nothing written: {cases.changed(before, api.tree(root))}"
+    after = (await restore_status()).json()
+    assert (after["state"], after["stage_id"]) == ("pending", stage_id), f"{unreadable.way}: readable again, the restore still waits: {after}"
+    print_success(f"{unreadable.way}: 500 restore_state_unreadable, nothing touched, still pending")
+
+
+@pytest.mark.asyncio
+async def test_a_restart_of_a_restore_whose_state_cannot_be_read_is_500_without_a_ticket_or_a_restart(instance, signals, monkeypatch, unreadable):
+    """(j) B-32 (b3): a pending restore whose state file the file system refuses. ``POST /restart``: 500
+    ``restore_state_unreadable``, never the 409 ``restore_not_pending``; the cause in the log, neither the system's words
+    nor a path in the answer. No ticket written, no restart requested (``restore._restart`` never called, recorded as in
+    B-31), no signal; nothing else written. Barrier: the restart opened the state file, and was refused."""
+    root = instance.root
+    write_state(root, "pending", api.UNKNOWN_ID)
+    restarts: list[str] = []
+    monkeypatch.setattr(restore, "_restart", lambda: restarts.append("restart"))
+    before = api.tree(root)
+    unreadable.now()
+
+    with capture_logs() as events:
+        response = await restart(answered=signals)
+
+    assert unreadable.refused, f"barrier: the restart opened the state file ({unreadable.way}), and was refused"
+    assert api.code(response) == (500, "restore_state_unreadable"), f"{unreadable.way}: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert cause_in_the_log(events, unreadable), f"{unreadable.way}: the cause in the server's log: {api.loud(events)}"
+    assert (restarts, signals.sent, signals.around) == ([], [], []), f"{unreadable.way}: no restart requested, no signal: {restarts} {signals.sent} {signals.around}"
+    assert not os.path.lexists(ticket_path(root)), f"{unreadable.way}: no ticket written"
+    nothing_shown(response, root)
+    unreadable.cure()
+    assert api.tree(root) == before, f"{unreadable.way}: nothing written: {cases.changed(before, api.tree(root))}"
+    print_success(f"{unreadable.way}: 500 restore_state_unreadable, no ticket, no restart")
+
+
+@pytest.mark.asyncio
+async def test_a_confirmation_while_the_state_cannot_be_read_is_500_and_replaces_nothing(instance, head_archive, unreadable):
+    """(j) B-32 (b4): a pending restore whose state file the file system refuses, and a fresh check of another copy. Its
+    confirmation: 500 ``restore_state_unreadable``, never the 202 that wrote a new state over one it could not read (a
+    restore that may be half applied: its journal), nor a 409; the cause in the log, neither the system's words nor a
+    path in the answer. The state file's bytes as they were, nothing else written; readable again, the first restore
+    still waits. Barrier: the confirmation opened the state file, and was refused."""
+    root = instance.root
+    waiting = await confirmed(head_archive)
+    fresh = await checked(head_archive)
+    state_before = state_path(root).read_bytes()
+    before = api.tree(root)
+    unreadable.now()
+
+    with capture_logs() as events:
+        response = await confirm(fresh)
+
+    assert unreadable.refused, f"barrier: the confirmation opened the state file ({unreadable.way}), and was refused"
+    assert api.code(response) == (500, "restore_state_unreadable"), f"{unreadable.way}: 500 restore_state_unreadable, not {api.shown(response)}"
+    assert cause_in_the_log(events, unreadable), f"{unreadable.way}: the cause in the server's log: {api.loud(events)}"
+    nothing_shown(response, root)
+    unreadable.cure()
+    assert state_path(root).read_bytes() == state_before, f"{unreadable.way}: the state file's bytes as they were, not replaced"
+    assert api.tree(root) == before, f"{unreadable.way}: nothing written: {cases.changed(before, api.tree(root))}"
+    after = (await restore_status()).json()
+    assert (after["state"], after["stage_id"]) == ("pending", waiting), f"{unreadable.way}: readable again, the first restore still waits: {after}"
+    print_success(f"{unreadable.way}: 500 restore_state_unreadable, the state not replaced")
+
+
+@pytest.mark.asyncio
+async def test_the_outcome_of_a_restore_whose_state_cannot_be_read_is_the_one_404_its_ticket_kept(instance, unreadable):
+    """(j) B-32 (b5), a GUARD: green before the code, and it must stay so. The outcome reads the state leniently: a state
+    the file system refuses is no restore there, and ``GET /outcome`` with the ticket of the restart answers the one 404
+    ``restore_outcome_not_found``, the cause in the log; the ticket left as it was. Readable again, the same ticket opens
+    the outcome: ``pending``. Barrier: the outcome opened the state file, and was refused."""
+    root = instance.root
+    ticket = await restart_requested(root)
+    kept = ticket_path(root).read_bytes()
+    unreadable.now()
+
+    with capture_logs() as events:
+        response = await get_outcome(ticket)
+
+    assert unreadable.refused, f"barrier: the outcome opened the state file ({unreadable.way}), and was refused"
+    assert answer_of(response) == (404, NOT_FOUND), f"{unreadable.way}: the one 404 restore_outcome_not_found, not {api.shown(response)}"
+    assert cause_in_the_log(events, unreadable), f"{unreadable.way}: the cause in the server's log: {api.loud(events)}"
+    assert ticket_path(root).read_bytes() == kept, f"{unreadable.way}: the ticket as it was"
+    unreadable.cure()
+    again = await get_outcome(ticket)
+    assert answer_of(again) == (200, {"state": "pending", "reason": None, "waiting": None}), f"{unreadable.way}: readable again, the same ticket opens the outcome: {api.shown(again)}"
+    print_success(f"{unreadable.way}: the one 404, the ticket kept; readable again, pending")
+
+
+def test_openapi_documents_the_state_that_cannot_be_read():
+    """(j) B-32 (b6): ``GET /status`` documents a 500 whose description names ``restore_state_unreadable``; the 500s of
+    ``DELETE /pending``, ``POST /restart`` and the confirmation name it too, beside their own codes."""
+    document = api.restore_app().openapi()
+    operations = {("GET", STATUS): "get", ("DELETE", PENDING): "delete", ("POST", RESTART): "post", ("POST", CONFIRM): "post"}
+    described = {f"{method} {path}": document["paths"].get(path, {}).get(verb, {}).get("responses", {}).get("500", {}).get("description", "") for (method, path), verb in operations.items()}
+    undocumented = sorted(operation for operation, description in described.items() if "restore_state_unreadable" not in description)
+    assert undocumented == [], f"a 500 naming restore_state_unreadable, missing from: {undocumented}"
+    print_success("restore_state_unreadable documented: status, cancel, restart, confirmation")

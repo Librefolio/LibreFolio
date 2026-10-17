@@ -204,7 +204,8 @@ whose `Currency.model_validate()` raised out of the batch: a 500.
 
 `check_dates()` (`transaction_batch_stages.py`; night decision N74 of R13-SEC7-3, pending
 the developer's review) runs right after `check_decimal_limits()`. A transaction's date
-must lie between 1900-01-01 (`TRANSACTION_DATE_MIN`) and today one year on:
+must lie between 1900-01-01 (`EARLIEST_RANGE_START`, `utils/datetime_utils.py`: the floor every
+replay and history walk starts from too) and today one year on:
 `transaction_date_bounds()` takes today from `today_date()`, in UTC, and maps a
 29 February to 28 February. The stage reads:
 
@@ -525,7 +526,9 @@ Both count the broker's rows dated up to `as_of`, inclusive, and every row when
 
 Both sums run in Python, exactly, over the rows the query returns; the query keeps
 only the filters. `get_balances_at_end_of()` sums the same way, through
-`_get_balances_before_date()` — the starting balances of the
+`_get_balances_before_date(..., through=True)` — the rows dated up to `as_of` included, never
+the eve of `as_of` + 1 day, which the calendar's last day does not have (W-B71) — the starting
+balances of the
 [end-of-day replay](balance_validation.md), and LibreFolio's side of the BRIM gap-fix,
 without its excluded ids — and so does the asset list's set of held assets
 (`AssetCRUDService.list_assets()`, then `> QUANTITY_DUST_THRESHOLD`). Never an SQL

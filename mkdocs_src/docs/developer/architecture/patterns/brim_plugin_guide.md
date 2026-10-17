@@ -1440,6 +1440,11 @@ The preview reads the same history: `before_history_segment` warns about a segme
 history (it will not be imported), and `covers_gap_fix` about an earlier `gap_fix` correction that
 falls inside a segment of the set (it must be removed by hand, or the cash counts twice).
 
+The days around H0 and around a role's coverage (H0's eve, the day after a correction, the eve of
+the period a role must cover) are moved with `shift_date()` (`utils/datetime_utils.py`), which holds
+them at the calendar's ends: a report dated 0001-01-01 or 9999-12-31 is read, its rows then refused
+at **Save All** like any date out of range (N74), instead of failing the whole parse (W-B71).
+
 ### 🏷️ Tags
 
 Every transaction of a report-set plugin carries `import` and its `history_tag` (the generic suite

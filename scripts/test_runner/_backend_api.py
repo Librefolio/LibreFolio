@@ -263,6 +263,16 @@ def api_system(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "System API tests", verbose=verbose)
 
 
+def api_instance_config_legal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the legal block of GET /system/instance (A9, F09): in-process, the OpenAPI document, one live read."""
+    print_section("Instance Configuration: Legal Links (A9)")
+    print_info("Testing GET /api/v1/system/instance legal, LegalInstanceConfig, the OpenAPI document")
+    print_info("In-process on private databases; one anonymous read on the lane's server, which sets neither variable")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_config_legal_api.py", test_names)
+    return run_command(cmd, "Instance configuration legal tests", verbose=verbose)
+
+
 def api_system_wake(verbose: bool = False, test_names: list = None) -> bool:
     """Test the scheduled wake-up (POST /system/wake-sync) and its token, in an app of the test (no server reached)."""
     print_section("System API: the scheduled wake-up")
@@ -990,7 +1000,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
-    add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions")
+    add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of, as_of ≥ 1900")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
     add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
     add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
@@ -1015,6 +1025,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    # Read-only on the lane (one anonymous GET); every case with a variable runs in-process on a private database.
+    add_test(api, "instance-legal", api_instance_config_legal, name="Instance Configuration: Legal Links (A9)", desc="GET /system/instance legal {terms_url, privacy_url}: valid, unset, invalid (null, still 200), no secret; the schema and the OpenAPI document; live on the lane: both null")
     add_test(
         api,
         "system-wake",
@@ -1100,7 +1112,7 @@ Tests for REST API endpoints (server auto-started):
         "backup-restore-apply",
         api_backup_restore_apply,
         name="Backup API Restore Confirmation",
-        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI; lot B5c: the restart's one-time ticket (43 characters, only its hash on disk, 0600, no-store, replaced by a second restart, none on a 409), GET /outcome without a session, the ticket in X-Restore-Ticket only, every invalid ticket the same 404 restore_outcome_not_found, the outcome's three fields, read again until it expires, a final outcome included (decision N53), never logged, answered on a blocked instance (H's allow-list entry); B-17: DELETE /pending drops the copy and its check record, and the ticket",
+        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI; lot B5c: the restart's one-time ticket (43 characters, only its hash on disk, 0600, no-store, replaced by a second restart, none on a 409), GET /outcome without a session, the ticket in X-Restore-Ticket only, every invalid ticket the same 404 restore_outcome_not_found, the outcome's three fields, read again until it expires, a final outcome included (decision N53), never logged, answered on a blocked instance (H's allow-list entry); B-17: DELETE /pending drops the copy and its check record, and the ticket; B-32: a state the file system cannot read (os.open refusing restore.json alone with EACCES or EIO, or its mode 000 unless root): GET /status, DELETE /pending, POST /restart and the confirmation of a fresh check 500 restore_state_unreadable, the reader's error logged, no path or system words in the answer, nothing written (state, copy, check record, ticket untouched; no ticket issued, no restart), the restore still pending once readable; GET /outcome still the one 404, its ticket kept (guard); OpenAPI names restore_state_unreadable in the four 500s",
         # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory
         # of restore.py, restore_jobs.py and apply.py is under tmp_path and the process's own one is a folder of the
         # test that must stay absent; restart.send_signal and os.kill as restart sees them record and never signal;

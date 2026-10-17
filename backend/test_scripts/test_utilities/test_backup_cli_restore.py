@@ -39,6 +39,38 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     was. Nothing pending: one ❌ line ending with ``(restore_not_pending)``, exit 1; without a state file nothing is
     created, not even ``.restore/apply.lock``; a restore being applied or finished keeps its state as it was.
 (f) ``python scripts/backup_cli.py pending`` end to end; the help names ``--yes`` and ``--cancel``.
+(g) B-32 (red until it lands; contract §2, §3): a state the file system cannot read is said, never taken for «no
+    restore». ``pending``, ``pending --cancel`` and ``restore ARCHIVE --yes`` print one line, verbatim,
+    ``❌ The state of the restore cannot be read: <reason> (restore_state_unreadable)`` — the system's reason, never a
+    path — and exit 1, no traceback; the state, and a pending restore's copy, kept; ``restore`` checks nothing (no
+    copy made), while its ``--dry-run``, which never reads the state, works as before (a guard). In this process the
+    state is a file ``os.open`` refuses (EACCES, EIO), every other open the real one; for the script the file system
+    refuses it for real (the state file of mode 000, or ``.restore`` without its search permission, which ``lexists``
+    used to read as «no state»), skipped as root. ``pending --cancel`` refused before the restore is dropped (the
+    state's removal refused, EPERM; or ``.restore`` read-only for real, EACCES): one line, verbatim, ``❌ The restore
+    could not be cancelled: <strerror>. It still waits for the next start (restore_cancel_failed)``, exit 1, the
+    restore and its copy kept. Dropped, its copy left (its removal raising, which B-31 logs as a WARNING; leaving it
+    without a word, the copy's folder read-only for real; or ``.restore/stage`` not searchable for real, where a look at
+    the copy is refused too and counts as the copy still there, §2 amended): exactly ``✅ The restore waiting for the
+    next start was dropped: the data stays as it is`` then ``⚠️  Its checked copy could not be removed: it goes when its
+    check expires``, exit 0, the copy still there; the usual drop keeps its «with its copy» line (a guard). A mode changed
+    for a test is given back when the command ends, failed or not.
+(h) B-18 (red until it lands; contract §2): ``restore ARCHIVE --instance-key-file FILE`` gives the old instance key, so
+    that a clear archive's saved provider keys — under the key K1 of the instance it came from — are re-encrypted with
+    this instance's own key, K2 (the source and its secrets: ``test_backup_secure.py``'s ``secret_source``, on this
+    module's database at the head). A dry run: exit 0, ``   Instance key: not included; given with
+    --instance-key-file``, the «re-encrypted» line with their count, no ⚠️ line for them, the copy removed. Confirmed
+    (``--yes``): its copy waits, every saved key in it under K2, and ``pending`` shows it. A file that gives no key
+    (missing, blank, mode 000): ``❌ <its message> (instance_key_unreadable)``, exit 1, no copy, and the password of a
+    secure archive never asked: the file is read before it. A key shorter than 32 characters: ``❌ The instance key given
+    is too short: an instance key has at least 32 characters (instance_key_invalid)``, exit 1, no copy left. D1: a
+    secure archive carrying its own key uses it, ``ℹ️  The archive carries its own instance key: --instance-key-file is
+    not used`` right after the key line. D2: a wrong key of 32 characters or more, ``⚠️  The key given with
+    --instance-key-file reads none of the saved provider keys: …`` right before the ⚠️ line of the unreadable keys —
+    unless this instance's own key cannot be used (``LIBREFOLIO_INSTANCE_KEY`` too short), then ``⚠️  This instance's
+    own key cannot be used, so nothing was re-encrypted with the key given: <problem>`` in its place, the right key
+    given all the same. As root (B-19's fake identity, ``test_backup_cli_secure.py``), the file is read before the
+    switch to the owner: a file root alone could read works. No key text ever reaches standard output or error.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -49,12 +81,14 @@ and ``os.kill`` as ``restart`` sees it record, and must stay unused. States only
 (``waiting_for``), whatever the models accept, so that what ``pending`` prints is what fails. The block is
 ``LIBREFOLIO_BLOCKED`` in this process's environment, which ``config.platform.instance_blocked()`` reads at each call:
 the one a developer's shell may carry is removed before every test (``no_inherited_block``), and a test of the block
-sets its own with ``monkeypatch``. POSIX-only (pty, modes).
+sets its own with ``monkeypatch``; the instance key it may carry is removed too (``no_inherited_instance_key``).
+POSIX-only (pty, modes).
 """
 
 from __future__ import annotations
 
 import argparse
+import errno
 import importlib
 import json
 import os
@@ -70,9 +104,14 @@ from typing import Any
 
 import pytest
 
+from backend.app.config import SecretFileError, read_secret_file
 from backend.app.config.platform import instance_blocked
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_data_dir, stage_dir, stages_dir
+from backend.app.services.platform.instance_backup.staging import read_report
+from backend.app.services.platform.instance_key import instance_key_status
+from backend.test_scripts.test_services import test_backup_secure as secure_cases
 from backend.test_scripts.test_utilities import test_backup_cli as cli
+from backend.test_scripts.test_utilities import test_backup_cli_secure as secure_cli
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts import backup_cli
 
@@ -81,6 +120,9 @@ pytestmark = pytest.mark.skipif(os.name == "nt", reason="a terminal is a pty, an
 # The fixtures of the command line's tests, re-exported: ``app_version`` (autouse) and the real database at the head.
 app_version = cli.app_version
 head_database = cli.head_database
+# (B-18) Autouse, as in test_backup_secure.py: the instance key a developer's shell may carry (LIBREFOLIO_INSTANCE_KEY,
+# LIBREFOLIO_INSTANCE_KEY_FILE) is removed for every test; a check reads the key of the data directory it works on.
+no_inherited_instance_key = secure_cases.no_inherited_instance_key
 
 ACTIVE = ["pending", "applying", "applied", "rolling_back"]
 TERMINAL = ["committed", "rolled_back"]
@@ -676,3 +718,475 @@ def test_the_help_names_yes_and_cancel(monkeypatch, capsys):
     pending_help = cli.help_of(monkeypatch, capsys, "backup", "pending")
     assert "--cancel" in pending_help, f"pending --help: {pending_help}"
     print_success("--yes, --cancel")
+
+
+# =============================================================================
+# (g) B-32 — a state that cannot be read, a cancel refused or half done
+# =============================================================================
+
+
+#: (B-32, §2) What a cancel that dropped the restore says: with its copy (unchanged), or without it, then why.
+DROPPED_WITH_COPY = "✅ The restore waiting for the next start was dropped, with its copy: the data stays as it is"
+DROPPED = "✅ The restore waiting for the next start was dropped: the data stays as it is"
+COPY_KEPT = "⚠️  Its checked copy could not be removed: it goes when its check expires"
+#: How the command line starts a line it says; whatever else reaches standard output (a log record) is not one.
+SIGNS = ("✅", "⚠️", "❌", "ℹ️", "⏳")
+
+
+def unreadable_line(error: int) -> str:
+    """(B-32, §3) The line of a state the file system cannot read, ``error``'s reason in it: verbatim, never a path."""
+    return f"❌ The state of the restore cannot be read: {os.strerror(error)} (restore_state_unreadable)"
+
+
+def cancel_failed_line(error: int) -> str:
+    """(B-32, §2) The line of a cancel refused before the restore is dropped, ``error``'s reason in it: verbatim."""
+    return f"❌ The restore could not be cancelled: {os.strerror(error)}. It still waits for the next start (restore_cancel_failed)"
+
+
+def said(out: str) -> list[str]:
+    """The lines the command line said in ``out``, in their order: those starting with one of its signs."""
+    return [line for line in out.splitlines() if line.startswith(SIGNS)]
+
+
+def refused_for(path: Path, error: int, real: Any) -> Any:
+    """``real`` (``os.open``, ``os.unlink``, ``os.remove``) refusing ``path`` with ``error``, the real one for any other
+    path; a name relative to a folder descriptor is matched by its name."""
+
+    def refusing(target: Any, *args: Any, dir_fd: int | None = None, **kwargs: Any) -> Any:
+        name = os.fspath(target)
+        if name == os.fspath(path) or (dir_fd is not None and name == path.name):
+            raise OSError(error, os.strerror(error), name)
+        return real(target, *args, dir_fd=dir_fd, **kwargs)
+
+    return refusing
+
+
+def unreadable_state(monkeypatch, root: Path, error: int = errno.EACCES) -> None:
+    """``.restore/restore.json`` a file the file system will not open (``error``: EACCES, as for a file of mode 000, or
+    EIO): ``os.open`` of that path refuses, every other open is the real one, and the file stays on disk as it was.
+    Checked before the command runs."""
+    path = state_path(root)
+    monkeypatch.setattr(os, "open", refused_for(path, error, os.open))
+    try:
+        os.close(os.open(path, os.O_RDONLY))
+    except OSError as exc:
+        assert exc.errno == error, f"precondition: the state is refused with {errno.errorcode[error]}, not {exc!r}"
+    else:
+        pytest.fail("precondition: the state of the restore must be a file the file system will not open")
+
+
+def state_removal_refused(monkeypatch, root: Path, error: int = errno.EPERM) -> None:
+    """The removal of ``.restore/restore.json`` refused (``error``: EPERM, as for a file the system will not let go),
+    every other removal the real one: the cancel fails before the restore is dropped."""
+    path = state_path(root)
+    for name in ("unlink", "remove"):
+        monkeypatch.setattr(os, name, refused_for(path, error, getattr(os, name)))
+
+
+def copy_removal_raises(monkeypatch) -> list[str]:
+    """The removal of the checked copy raising (EACCES) once the restore is dropped, as B-31 meets it: ``remove_stage``
+    as ``cancel_restore`` calls it (through ``_remove_leftovers``), the copy left whole. The stages it was asked for."""
+    asked: list[str] = []
+
+    def refuse(data_dir: Path, stage_id: str) -> None:
+        asked.append(stage_id)
+        raise OSError(errno.EACCES, os.strerror(errno.EACCES))
+
+    monkeypatch.setattr(apply_module(), "remove_stage", refuse)
+    return asked
+
+
+@contextmanager
+def mode_for_a_while(path: Path, mode: int) -> Iterator[None]:
+    """``path`` given ``mode`` while the command runs — a refusal of the file system itself — then its own mode again,
+    the command failed or not, so that the test reads the state back and ``tmp_path`` can be removed."""
+    own = stat.S_IMODE(path.lstat().st_mode)
+    path.chmod(mode)
+    try:
+        yield
+    finally:
+        path.chmod(own)
+
+
+@pytest.mark.parametrize("error", [errno.EACCES, errno.EIO], ids=["permission-denied", "input-output-error"])
+def test_pending_says_that_the_state_cannot_be_read_and_exits_1(tmp_path, monkeypatch, capsys, error):
+    """(g) §3: today a state the file system cannot read reads as «no restore» (ℹ️, exit 0) though a restore may wait.
+    One line, verbatim, the system's reason in it and never the path; exit 1, no traceback; the state as it was."""
+    print_section("B-32: a state that cannot be read")
+    root = instance(tmp_path, monkeypatch)
+    before = write_state(root, "pending")
+    unreadable_state(monkeypatch, root, error)
+    code = run("pending")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [unreadable_line(error)]), f"exit 1 and one line, verbatim {unreadable_line(error)!r}, never «No restore waits»: exit {code}: {out}"
+    assert "Traceback" not in out and os.fspath(state_path(root)) not in out, f"no traceback, no path: {out}"
+    assert state_path(root).read_bytes() == before, "the state as it was"
+    print_success(f"{errno.errorcode[error]}: (restore_state_unreadable), exit 1")
+
+
+def test_cancel_of_a_state_that_cannot_be_read_says_so_and_keeps_the_restore(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §2, §3: today ``(restore_not_pending)`` — the restore that may wait taken for none. The unreadable line,
+    exit 1; the state and the copy of the pending restore as they were."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    before = (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage)))
+    unreadable_state(monkeypatch, root)
+    code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [unreadable_line(errno.EACCES)]), f"exit 1 and one line, verbatim {unreadable_line(errno.EACCES)!r}, never (restore_not_pending): exit {code}: {out}"
+    assert "Traceback" not in out, f"no traceback: {out}"
+    assert (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage))) == before, "the pending restore and its copy as they were"
+    print_success("--cancel: (restore_state_unreadable), the restore kept")
+
+
+#: (B-32, §2) A cancel refused before the restore is dropped, and the system's reason: the state's removal refused
+#: (EPERM); or ``.restore`` read-only for real (EACCES; skipped as root), which refuses the removal all the same.
+CANCEL_REFUSED = [
+    pytest.param("state-removal-refused", errno.EPERM, id="state-removal-refused"),
+    pytest.param("restore-folder-read-only", errno.EACCES, id="restore-folder-read-only", marks=cli.needs_permission_checks),
+]
+
+
+@pytest.mark.parametrize(("fault", "error"), CANCEL_REFUSED)
+def test_a_cancel_refused_before_the_drop_says_so_and_the_restore_still_waits(tmp_path, monkeypatch, capsys, head_database, fault, error):
+    """(g) §2: today the ``OSError`` reaches the user as a traceback. One line, verbatim, its reason in it; exit 1; the
+    restore still waits, with its copy."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    before = (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage)))
+    if fault == "state-removal-refused":
+        state_removal_refused(monkeypatch, root, error)
+        code = run("pending", "--cancel")
+    else:
+        with mode_for_a_while(restore_dir(root), 0o500):
+            code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [cancel_failed_line(error)]), f"{fault}: exit 1 and one line, verbatim {cancel_failed_line(error)!r}: exit {code}: {out}"
+    assert "Traceback" not in out, f"no traceback: {out}"
+    assert (state_path(root).read_bytes(), cli.listing(stage_dir(root, stage))) == before, f"{fault}: the restore still waits, with its copy"
+    print_success(f"{fault}: (restore_cancel_failed), the restore kept")
+
+
+#: (B-32, §2) How the copy's removal fails once the restore is dropped: raising (B-31 logs a WARNING), or leaving it
+#: without a word — ``remove_stage`` removes with its errors ignored — the copy's folder read-only for real (skipped as
+#: root); or ``.restore/stage`` without its search permission for real (skipped as root): ``remove_stage``'s lstat raises
+#: EACCES, and a look at the copy (§2 amended, ``os.lstat``) is refused too — an error other than «not found» counts as
+#: the copy still there. The command line tells each by the copy still there.
+COPY_LEFT = [
+    pytest.param("removal-raises", id="removal-raises"),
+    pytest.param("removal-leaves-it", id="removal-leaves-it", marks=cli.needs_permission_checks),
+    pytest.param("stage-folder-not-searchable", id="stage-folder-not-searchable", marks=cli.needs_permission_checks),
+]
+
+
+@pytest.mark.parametrize("fault", COPY_LEFT)
+def test_a_cancel_whose_copy_stays_says_the_restore_was_dropped_and_its_copy_was_not(tmp_path, monkeypatch, capsys, head_database, fault):
+    """(g) §2: today «dropped, with its copy» while the copy is still there. Exactly the dropped line without «with its
+    copy», then the ⚠️ line; exit 0; the restore dropped, its copy still there."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    if fault == "removal-raises":
+        asked = copy_removal_raises(monkeypatch)
+        code = run("pending", "--cancel")
+        assert asked == [stage], f"precondition: the removal of this restore's copy was refused: {asked}"
+    else:
+        locked, mode = (stage_data_dir(root, stage), 0o500) if fault == "removal-leaves-it" else (stages_dir(root), 0o600)
+        with mode_for_a_while(locked, mode):
+            code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (0, [DROPPED, COPY_KEPT]), f"{fault}: exit 0 and exactly {[DROPPED, COPY_KEPT]}, never «with its copy»: exit {code}: {out}"
+    assert not state_path(root).exists() and os.path.lexists(stage_dir(root, stage)), f"{fault}: the restore dropped, its copy still there: {cli.stages_left(root)}"
+    print_success(f"{fault}: dropped, then ⚠️ its copy stays")
+
+
+def test_a_cancel_that_removes_the_copy_still_says_with_its_copy(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §2, a guard (green before and after): the usual drop keeps its one line, «with its copy», and the copy goes."""
+    root = instance(tmp_path, monkeypatch)
+    stage = confirmed_with_yes(root, tmp_path, head_database, capsys)
+    code = run("pending", "--cancel")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (0, [DROPPED_WITH_COPY]), f"exit 0 and exactly {DROPPED_WITH_COPY!r}: exit {code}: {out}"
+    assert not os.path.lexists(stage_dir(root, stage)), "the copy is gone"
+    print_success("dropped, with its copy")
+
+
+def test_restore_with_yes_and_a_state_that_cannot_be_read_stops_before_its_check(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §3: today the archive is checked and confirmed over a state nobody could read — a restore that may still
+    wait. The unreadable line, exit 1, before the check: no copy made, the state as it was."""
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    before = write_state(root, "pending")
+    unreadable_state(monkeypatch, root)
+    code = run("restore", str(archive), "--yes")
+    out = capsys.readouterr().out
+    assert (code, said(out)) == (1, [unreadable_line(errno.EACCES)]), f"exit 1 and one line, verbatim {unreadable_line(errno.EACCES)!r}: exit {code}: {out}"
+    assert "🔎" not in out and cli.stages_left(root) == [], f"nothing checked, no copy made: {cli.stages_left(root)}: {out}"
+    assert state_path(root).read_bytes() == before, "the state as it was, never replaced"
+    print_success("restore --yes: (restore_state_unreadable) before the check")
+
+
+def test_a_dry_run_never_reads_the_state_and_works_as_before(tmp_path, monkeypatch, capsys, head_database):
+    """(g) §3, a guard (green before and after): ``--dry-run`` never reads the state of the restore, so one that cannot
+    be read changes nothing: exit 0, restorable, the copy removed, the state as it was."""
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    before = write_state(root, "pending")
+    unreadable_state(monkeypatch, root)
+    code = run("restore", str(archive), "--dry-run")
+    out = capsys.readouterr().out
+    assert code == 0 and cli.RESTORABLE_LINE in out, f"the dry run as before: exit {code}: {out}"
+    assert cli.stages_left(root) == [] and state_path(root).read_bytes() == before, f"its copy removed, the state as it was: {cli.stages_left(root)}"
+    print_success("--dry-run: as before")
+
+
+#: (B-32, §3) A state the file system itself refuses, for the script: the state file of mode 000, or ``.restore``
+#: without its search permission — which ``lexists`` read as «no state» — (the path, and the mode it is given).
+REAL_REFUSALS = [pytest.param("state-file-000", id="state-file-000"), pytest.param("restore-folder-not-searchable", id="restore-folder-not-searchable")]
+
+
+@cli.needs_permission_checks
+@pytest.mark.parametrize("fault", REAL_REFUSALS)
+@pytest.mark.parametrize("argv", [("pending",), ("pending", "--cancel")], ids=["pending", "pending-cancel"])
+def test_the_script_says_that_a_state_the_file_system_refuses_cannot_be_read(tmp_path, argv, fault):
+    """(g) §3, end to end: a real refusal of the file system, in a process of its own. The unreadable line, exit 1, no
+    traceback, the state kept."""
+    data = cli.make_data_dir(tmp_path / "instance").resolve()
+    before = write_state(data, "pending")
+    locked, mode = (state_path(data), 0o000) if fault == "state-file-000" else (restore_dir(data), 0o600)
+    with mode_for_a_while(locked, mode):
+        done = cli.script(*argv, env=cli.child_env(data), cwd=tmp_path)
+    expected = unreadable_line(errno.EACCES)
+    assert (done.returncode, said(done.stdout)) == (1, [expected]), f"{' '.join(argv)}, {fault}: exit 1 and one line, verbatim {expected!r}: exit {done.returncode}\n{done.stdout[-cli.TAIL:]}{done.stderr[-cli.TAIL:]}"
+    assert "Traceback" not in done.stderr, f"no traceback: {done.stderr[-cli.TAIL:]}"
+    assert state_path(data).read_bytes() == before, "the state kept"
+    print_success(f"script {' '.join(argv)}, {fault}: (restore_state_unreadable)")
+
+
+# =============================================================================
+# (h) B-18 — restore --instance-key-file
+# =============================================================================
+
+
+#: (B-18) Test keys, never a real one: this instance's own key (K2, generated), a key of 32 characters or more that is
+#: not the source's, and two shorter than an instance key may be — one given, one configured as this instance's. The
+#: source's key, K1, is ``secure_cases.SOURCE_KEY``.
+THIS_KEY = "LibreFolio-b18-this-instance-key-0123456789"
+WRONG_KEY = "LibreFolio-b18-not-the-source-key-9876543210"
+SHORT_KEY = "LibreFolio-b18-short-key"
+UNUSABLE_OWN_KEY = "LibreFolio-b18-own-key-short"
+#: (B-18, §2) The lines of the report, verbatim.
+KEY_GIVEN_LINE = "   Instance key: not included; given with --instance-key-file"
+KEY_INCLUDED_LINE = "   Instance key: included"
+KEY_NOT_USED_LINE = "ℹ️  The archive carries its own instance key: --instance-key-file is not used"
+WRONG_KEY_LINE = "⚠️  The key given with --instance-key-file reads none of the saved provider keys: it is not the key of the instance this backup came from"
+TOO_SHORT_LINE = "❌ The instance key given is too short: an instance key has at least 32 characters (instance_key_invalid)"
+#: The saved provider keys of a ``secure_cases.secret_source``, every one under its key.
+SAVED_KEYS = len(secure_cases.SECRET_ROWS)
+#: (B-18, §2) A key file that gives no key: missing, blank, or one the file system will not read (skipped as root).
+NO_KEY_GIVEN = [pytest.param("missing", id="missing"), pytest.param("blank", id="blank"), pytest.param("unreadable", id="unreadable", marks=cli.needs_permission_checks)]
+
+
+def rekeyed_line(count: int) -> str:
+    """The report's line of the saved provider keys re-encrypted with this instance's key (lot B4), verbatim."""
+    return f"   Saved provider keys: {count} re-encrypted with this instance's key"
+
+
+def unreadable_keys_line(count: int) -> str:
+    """The report's ⚠️ line of the saved provider keys this instance's key cannot read (lot B4), verbatim."""
+    return f"⚠️  {count} saved provider key{'s' if count != 1 else ''} cannot be read with this instance's key: enter {'them' if count != 1 else 'it'} again after the restore"
+
+
+def own_key_unusable_line(problem: str) -> str:
+    """(B-18, §2) D2's exception: this instance's own key cannot be used, ``problem`` as ``instance_key_status`` says it."""
+    return f"⚠️  This instance's own key cannot be used, so nothing was re-encrypted with the key given: {problem}"
+
+
+def from_k1(tmp_path: Path, monkeypatch, database: Path) -> Any:
+    """A source whose saved provider keys its generated key K1 encrypted — ``secure_cases.secret_source`` on this module's
+    database at the head (the staging tests' ``Databases`` holding it; ``secret_source`` reads ``head`` only),
+    configured as this process's data directory, as on the server it is backed up from."""
+    return secure_cases.secret_source(tmp_path / "source", secure_cases.cases.Databases(head=database, older=database), monkeypatch)
+
+
+def checked_on_k2(tmp_path: Path, monkeypatch) -> Path:
+    """The live instance a restore is checked on, configured, its own key K2 generated: its root."""
+    root = instance(tmp_path, monkeypatch)
+    secure_cases.write_key_file(root, THIS_KEY)
+    return root
+
+
+def key_given(tmp_path: Path, text: str) -> Path:
+    """The file given with ``--instance-key-file``, outside the data directories: ``text`` and a line break, 0600."""
+    return secure_cli.password_file(tmp_path / "keys", f"{text}\n", name="old-instance.key")
+
+
+def restored_with_key(capsys, archive: Path, key_file: Path, *flags: str) -> tuple[int, list[str], str]:
+    """``restore ARCHIVE <flags> --instance-key-file <key_file>``: its exit code, the lines of its standard output, and
+    both its streams as one text."""
+    code = run("restore", str(archive), *flags, "--instance-key-file", str(key_file))
+    captured = capsys.readouterr()
+    return code, captured.out.splitlines(), captured.out + captured.err
+
+
+def no_key_shown(text: str, *keys: str) -> None:
+    """(B-18) No key text reaches standard output or error."""
+    shown = [f"<a key of {len(key)} characters>" for key in keys if key in text]
+    assert shown == [], f"a key text reached the terminal: {shown}"
+
+
+def unreadable_keys_in(lines: list[str]) -> list[str]:
+    """The ⚠️ lines of saved provider keys this instance's key cannot read."""
+    return [line for line in lines if line.startswith("⚠️") and "cannot be read with this instance's key" in line]
+
+
+def test_a_dry_run_with_the_old_key_re_encrypts_the_saved_provider_keys(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c1: a clear archive whose saved provider keys are under K1, checked on an instance under K2, K1 given:
+    every saved key re-encrypted, none left unreadable, the report says the key was given; the copy removed."""
+    print_section("B-18: restore --instance-key-file")
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, source.key), "--dry-run")
+    assert code == 0 and cli.RESTORABLE_LINE in lines, f"a dry run with the old key: exit 0, restorable: exit {code}: {lines}"
+    assert KEY_GIVEN_LINE in lines and rekeyed_line(SAVED_KEYS) in lines, f"the key line, verbatim {KEY_GIVEN_LINE!r}, and {rekeyed_line(SAVED_KEYS)!r}: {lines}"
+    assert unreadable_keys_in(lines) == [] and WRONG_KEY_LINE not in lines, f"no saved key left unreadable: {lines}"
+    assert cli.stages_left(root) == [], f"the copy removed: {cli.stages_left(root)}"
+    no_key_shown(text, source.key, THIS_KEY)
+    print_success(f"--dry-run with K1: {SAVED_KEYS} re-encrypted")
+
+
+def test_a_confirmed_restore_with_the_old_key_waits_with_its_saved_keys_re_encrypted(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c2: the same without ``--dry-run``, with ``--yes``: confirmed, its copy waits with every saved key
+    re-encrypted under K2 (``secure_cases.assert_rekeyed_to`` on the copy's report), and ``pending`` shows it."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    own = secure_cases.own_subkey(root)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, source.key), "--yes")
+    assert code == 0 and any(line.startswith("✅") and "waits for the next start" in line for line in lines), f"confirmed: exit 0, the restore waits for the next start: exit {code}: {lines}"
+    assert KEY_GIVEN_LINE in lines and rekeyed_line(SAVED_KEYS) in lines, f"the report as with --dry-run: {lines}"
+    stages = cli.stages_left(root)
+    assert len(stages) == 1, f"the copy is kept, for the next start: {stages}"
+    secure_cases.assert_rekeyed_to(own, root, read_report(root, stages[0]), source)
+    assert run("pending") == 0, "pending: exit 0"
+    pending = capsys.readouterr()
+    assert "⏳ A restore waits for the next start of the server" in pending.out.splitlines(), f"pending shows the restore waiting: {pending.out}"
+    no_key_shown(text + pending.out + pending.err, source.key, THIS_KEY)
+    print_success("--yes with K1: confirmed, the copy under K2, pending shows it")
+
+
+@pytest.mark.parametrize("case", NO_KEY_GIVEN)
+def test_a_key_file_that_gives_no_key_stops_before_the_password_and_any_copy(tmp_path, monkeypatch, capsys, case):
+    """(h) B-18, c3: the file is read before anything else — before the password a secure archive asks at a terminal,
+    the right one ready to be typed: ``❌ <read_secret_file's message> (instance_key_unreadable)``, exit 1, no copy,
+    nothing asked, nothing read from standard input."""
+    root = instance(tmp_path, monkeypatch)
+    path = secure_cli.sealed(secure_cli.clear_archive(tmp_path / "backup"), tmp_path / "inputs")
+    key_file = tmp_path / "keys" / "old-instance.key"
+    if case != "missing":
+        key_file = key_given(tmp_path, " " if case == "blank" else secure_cases.SOURCE_KEY)
+    if case == "unreadable":
+        key_file.chmod(0o000)
+    try:
+        read_secret_file(key_file, "instance key file")
+    except SecretFileError as exc:
+        expected = f"❌ {exc} (instance_key_unreadable)"
+    else:
+        pytest.fail(f"precondition: the {case} key file must give no key")
+    asked = secure_cli.answering(monkeypatch, secure_cli.PASSWORD)
+    with secure_cli.terminal_holding(monkeypatch, secure_cli.TYPED_AHEAD) as stdin:
+        code = run("restore", str(path), "--dry-run", "--instance-key-file", str(key_file))
+    captured = capsys.readouterr()
+    refusals = [line for line in captured.out.splitlines() if line.startswith("❌")]
+    assert (code, refusals) == (1, [expected]), f"{case}: exit 1 and one line, verbatim {expected!r}: exit {code}: {captured.out}"
+    assert "🔎" not in captured.out and cli.stages_left(root) == [], f"{case}: nothing checked, no copy: {cli.stages_left(root)}"
+    assert (asked, stdin.reads) == ([], []), f"{case}: the password never asked: prompts {asked}, reads {stdin.reads}"
+    no_key_shown(captured.out + captured.err, secure_cases.SOURCE_KEY)
+    print_success(f"{case}: (instance_key_unreadable), nothing asked")
+
+
+def test_a_key_too_short_is_refused_before_any_copy_is_made(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c4: a key of fewer than 32 characters can be no instance's key: the ❌ line of the check, verbatim,
+    exit 1, no copy left; the key itself never said, nor its length."""
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, SHORT_KEY), "--dry-run")
+    assert (code, [line for line in lines if line.startswith("❌")]) == (1, [TOO_SHORT_LINE]), f"exit 1 and one line, verbatim {TOO_SHORT_LINE!r}: exit {code}: {lines}"
+    assert cli.stages_left(root) == [], f"no copy left: {cli.stages_left(root)}"
+    no_key_shown(text, SHORT_KEY)
+    print_success("a short key → (instance_key_invalid), no copy")
+
+
+def test_an_archive_carrying_its_own_key_uses_it_and_says_the_file_is_not_used(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c5 (D1): a secure archive that carries its key K1, and a wrong key given: the archive's key wins — every
+    saved key re-encrypted — and right after the key line, unchanged («included»), the ℹ️ line says the file is not
+    used."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    _job, envelope = secure_cases.secure_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    password = secure_cli.password_file(tmp_path / "inputs", f"{secure_cases.PASSWORD}\n")
+    secure_cli.answering(monkeypatch)
+    code, lines, text = restored_with_key(capsys, envelope, key_given(tmp_path, WRONG_KEY), "--dry-run", "--password-file", str(password))
+    assert code == 0 and KEY_INCLUDED_LINE in lines, f"a secure archive carrying its key: exit 0, {KEY_INCLUDED_LINE!r}: exit {code}: {lines}"
+    following = lines[lines.index(KEY_INCLUDED_LINE) + 1 : lines.index(KEY_INCLUDED_LINE) + 2]
+    assert following == [KEY_NOT_USED_LINE], f"right after the key line, verbatim {KEY_NOT_USED_LINE!r}, not {following}: {lines}"
+    assert rekeyed_line(SAVED_KEYS) in lines and unreadable_keys_in(lines) == [] and WRONG_KEY_LINE not in lines, f"the archive's key re-encrypts every saved key, the file's is not used: {lines}"
+    no_key_shown(text, source.key, WRONG_KEY, THIS_KEY)
+    print_success("D1: the archive's own key, ℹ️ the file not used")
+
+
+def test_a_wrong_key_reads_no_saved_key_and_says_so_before_the_unreadable_line(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c6 (D2): a key of 32 characters or more that is not K1 reads none of the saved keys: nothing
+    re-encrypted, and right before the ⚠️ line of the unreadable keys, the ⚠️ line that names the key given."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, WRONG_KEY), "--dry-run")
+    unreadable = unreadable_keys_line(SAVED_KEYS)
+    assert code == 0 and KEY_GIVEN_LINE in lines and unreadable in lines, f"exit 0, the key line and {unreadable!r}: exit {code}: {lines}"
+    before = lines[lines.index(unreadable) - 1]
+    assert before == WRONG_KEY_LINE, f"right before the unreadable line, verbatim {WRONG_KEY_LINE!r}, not {before!r}: {lines}"
+    assert rekeyed_line(SAVED_KEYS) not in lines and not any(line.startswith("⚠️  This instance's own key") for line in lines), f"nothing re-encrypted, and this instance's key is not blamed: {lines}"
+    no_key_shown(text, WRONG_KEY, source.key, THIS_KEY)
+    print_success("D2: ⚠️ the key given reads none, before the unreadable line")
+
+
+def test_when_this_instance_s_own_key_cannot_be_used_it_is_said_instead_of_blaming_the_key_given(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c7 (D2's exception): this instance's own key cannot be used (``LIBREFOLIO_INSTANCE_KEY`` too short), so
+    nothing is re-encrypted whatever the key given — here the right one, K1. In the place of D2's line, the one that
+    says so with ``instance_key_status``'s problem (its source named, never a key); never D2's."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    checked_on_k2(tmp_path, monkeypatch)
+    monkeypatch.setenv("LIBREFOLIO_INSTANCE_KEY", UNUSABLE_OWN_KEY)
+    problem = instance_key_status().problem
+    assert problem is not None and UNUSABLE_OWN_KEY not in problem, f"precondition: this instance's own key cannot be used, said without the key: {problem!r}"
+    code, lines, text = restored_with_key(capsys, archive, key_given(tmp_path, source.key), "--dry-run")
+    unreadable = unreadable_keys_line(SAVED_KEYS)
+    assert code == 0 and unreadable in lines, f"exit 0, every saved key left unreadable: exit {code}: {lines}"
+    before = lines[lines.index(unreadable) - 1]
+    assert before == own_key_unusable_line(problem), f"right before the unreadable line, verbatim {own_key_unusable_line(problem)!r}, not {before!r}: {lines}"
+    assert WRONG_KEY_LINE not in lines and rekeyed_line(SAVED_KEYS) not in lines, f"the right key is never blamed, nothing re-encrypted: {lines}"
+    no_key_shown(text, source.key, UNUSABLE_OWN_KEY, THIS_KEY)
+    print_success("D2's exception: this instance's own key named, not the key given")
+
+
+@secure_cli.needs_another_owner
+def test_the_key_file_is_read_before_the_switch_to_the_owner_of_the_data_directory(tmp_path, monkeypatch, capsys, head_database):
+    """(h) B-18, c8: started as root (B-19's fake identity), the key file is read before the switch to the owner, like
+    ``--password-file``: it is readable until the recorded ``setuid`` and never after it (a Docker secret root alone can
+    read), and K1 re-encrypts every saved key all the same."""
+    source = from_k1(tmp_path, monkeypatch, head_database)
+    archive = secure_cases.clear_backup(source.data)
+    root = checked_on_k2(tmp_path, monkeypatch)
+    secure_cases.own_subkey(root)
+    key_file = key_given(tmp_path, source.key)
+    identity = secure_cli.faked_identity(monkeypatch, 0, at_switch=lambda: key_file.chmod(0o000))
+    code, lines, text = restored_with_key(capsys, archive, key_file, "--dry-run")
+    assert identity.calls == secure_cli.owner_switch(root), f"as root, the owner of the data directory: {secure_cli.owner_switch(root)}, not {identity.calls}: exit {code}: {lines}"
+    assert code == 0 and KEY_GIVEN_LINE in lines and rekeyed_line(SAVED_KEYS) in lines, f"the key file read before the switch (nobody can read it after), K1 used: exit {code}: {lines}"
+    no_key_shown(text, source.key, THIS_KEY)
+    print_success("root: the key file read before the switch")

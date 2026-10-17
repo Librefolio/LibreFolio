@@ -207,7 +207,11 @@ direct `sqlite3` connection:
 1. It holds an exclusive `fcntl.flock` on `<db file>.post-migration.lock`, beside the database,
    from the integrity check to the cleanup, dry runs included: the workers of a multi-worker server
    and the offline script take turns, and the later runs find nothing to do. The lock file is never
-   deleted. On a non-POSIX system the runs are not serialised.
+   deleted. It is opened with `O_NOFOLLOW` and, when missing, created `0600`: a symbolic link in its
+   place raises `OSError` before the database is opened, and nothing behind the link is created or
+   locked. At startup that is logged as the WARNING *Post-migration fixes could not run; starting
+   normally* (`error`) and the server starts without the fixes; the offline script does not catch
+   it and ends with the traceback, exit code `1`. On a non-POSIX system the runs are not serialised.
 2. It touches nothing unless `PRAGMA integrity_check` answers `ok`.
 3. Every fix `detect()`s its anomaly without writing: nothing found, nothing written or logged.
 4. It checkpoints the WAL (`wal_checkpoint(TRUNCATE)`) and copies the database with SQLite's
@@ -429,7 +433,7 @@ The admin view of the same layout is [Filesystem Structure](../../../admin/files
 | Path | Written by (under `backend/app/`) | Content |
 |------|-----------------------------------|---------|
 | `sqlite/app.db` (+ `-wal`, `-shm`) | the engines of `db/session.py` | The database; every connection sets `journal_mode=WAL` and `foreign_keys=ON` |
-| `sqlite/app.db.post-migration.lock` | `db/post_migration/` | Empty lock of the [post-migration fixes](#post-migration-fixes), never deleted |
+| `sqlite/app.db.post-migration.lock` | `db/post_migration/` | Empty lock of the [post-migration fixes](#post-migration-fixes), created `0600` and opened with `O_NOFOLLOW`, never deleted |
 | `sqlite/app.db.pre-<fix ids>-<UTC>.bak` | `db/post_migration/` | Backup kept after a failed fix |
 | `custom-uploads/<uuid>.<ext>` + `<uuid>.json` | `services/files/static_uploads.py` | Uploaded file and its sidecar: `id`, `original_name`, `extension`, `mime_type`, `size_bytes`, `uploaded_at`, `uploaded_by_user_id`, `description` and `scope`, absent from older sidecars and from the seeded avatars' ([Uploaded Files: Common and Personal](../security.md#upload-scope)); the sidecar is written to a temporary file, then renamed ([File Upload](../../frontend/components/core-ui/file-upload.md)) |
 | `custom-uploads/.avatars_seeded` | `seed_default_avatars()` in `services/files/static_uploads.py` | Marker: the PNGs of `backend/staticResources/Avatars/` were copied, uploader `0` (system); without it the next start copies them again |

@@ -303,6 +303,7 @@
           "description": "Unión deduplicada de todos los conjuntos de datos FX aplicables."
         }
       }
-    }
+    },
+    "tooManyPriceDays": "Esta exportación leería demasiados días de precios. Elige un periodo más corto."
   }
 }

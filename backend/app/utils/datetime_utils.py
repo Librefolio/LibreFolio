@@ -99,6 +99,13 @@ def today_date() -> date:
     return datetime.now(UTC).date()
 
 
+#: The earliest day a replay or a history walks (R13-SEC8, N74): 1 January 1900. A transaction may not be written
+#: before it (N74's write floor), and one stored before it by an older version still counts — its movements are
+#: replayed, each converted at its own date — but no state, history day or per-day rate starts before it. No provider
+#: has history before 1900 (``FX_HISTORY_MIN_FALLBACK``, ``ASSET_HISTORY_MIN_FALLBACK``).
+EARLIEST_RANGE_START = date(1900, 1, 1)
+
+
 def latest_range_end() -> date:
     """The latest day a requested date range may reach: tomorrow, by the server's calendar (R13-SEC7-1).
 
@@ -111,6 +118,21 @@ def latest_range_end() -> date:
     The server's local date, like ``date.today()`` in those modules (``today_date()`` above is UTC's).
     """
     return date.today() + timedelta(days=1)
+
+
+def shift_date(value: date, days: int) -> date:
+    """``value`` moved by ``days``, held at the calendar's ends (``date.min``, ``date.max``) instead of raising
+    ``OverflowError`` (W-B71).
+
+    For a window around a date a request or a parsed report names — the promote and event suggestions (± a tolerance),
+    the days around a report set's coverage and checkpoints — whose date may sit at an edge of the calendar: such a date
+    is refused when a transaction is saved (N74), but a suggestion or a check reads it, and
+    ``date(1, 1, 1) - timedelta(days=1)`` raised (a 500).
+    """
+    try:
+        return value + timedelta(days=days)
+    except OverflowError:
+        return date.max if days > 0 else date.min
 
 
 def parse_ISO_date(v) -> date:

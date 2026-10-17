@@ -93,6 +93,7 @@ export const ERROR_KEYS: Record<string, string> = {
     restore_confirm_failed: 'backup.restore.errors.restore_confirm_failed',
     restore_cancel_failed: 'backup.restore.errors.restore_cancel_failed',
     restore_restart_failed: 'backup.restore.errors.restore_restart_failed',
+    restore_state_unreadable: 'backup.restore.errors.restore_state_unreadable',
     // No usable answer
     network: 'backup.restore.errors.network',
     unexpected: 'backup.restore.errors.unexpected',

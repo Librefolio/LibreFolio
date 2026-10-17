@@ -28,7 +28,7 @@ This section provides the technical deep-dive for each asset pricing provider in
 
 - **CSS Scraper** `get_asset_url` returns the identifier itself (which is the URL to scrape).
 - **Scheduled Investment** uses `AUTO_GENERATED` identifier type — no external identifier needed.
-- **Mock Provider** (`mockprov`) is only registered when `LIBREFOLIO_TEST_MODE` is enabled.
+- **Mock Provider** (`mockprov`) is test-only: always registered, but served only when `LIBREFOLIO_TEST_MODE` is on; outside test mode its registry withholds it, and naming it reaches nothing ([Test-Only Plugins](../../architecture/patterns/plugin_settings.md#test-only)).
 
 ---
 

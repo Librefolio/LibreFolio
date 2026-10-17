@@ -5375,3 +5375,238 @@ Approvato dal coordinatore alle 02:02, con P4 nello stesso lotto. Il testo compl
 >
 > 15 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. Dev `547545b8e` (55 commit avanti) tocca solo
 > `log.md` della devWiki (aggiunte in fondo: unione) e il backlog in altre sezioni (H, X, J, Z, B, E, MF).
+>
+> **Entrato**: 5 commit (punta `164a08220`), dev `73443c6db` (`log.md` della devWiki unito), niente CHANGELOG. HEAD avanzato a
+> `73443c6db`.
+
+## Y-27 · `DataTable` pota le preferenze delle colonne assenti — il rimedio (a) di X-R53 (dalle 08:55; HEAD `73443c6db`)
+
+> **Via del coordinatore** (08:55): lotto a parte, rosso prima, con il suo checkpoint; se un test fissa la potatura come
+> voluta, va detto prima di cambiarlo (nessuno la fissa: sopra).
+>
+> **Stato reale** (`components/table/DataTable.svelte`):
+> - `onMount` (`:780-795`) carica le scelte di visibilità **filtrate sulle colonne presenti** (`:788-791`), le larghezze e
+>   l'ordine;
+> - l'`$effect` di sincronizzazione (`:831-892`) toglie da `columnOrder` gli id assenti e **salva subito**, toglie le scelte
+>   di visibilità degli id assenti e salva, toglie le loro larghezze; gli id nuovi entrano al posto naturale;
+> - `reorderColumns` (`:668`), chiamato da `setColumnOrder` di `ColumnVisibilityToggle.handleReorder` con le sole colonne
+>   disegnate ed etichettate: salva quell'ordine, quindi un riordino perderebbe anche lui le colonne assenti;
+> - `orderedColumns` (`:336`) e `columnVisibility` (`:204`) leggono già solo le colonne presenti: tenere gli id assenti nello
+>   stato non cambia niente a schermo;
+> - gli id di colonna costruiti dai dati sono limitati (`delta_*` di `AssetTable` e `FxTable`): tenerli non fa crescere lo
+>   storage senza limite.
+>
+> **Scelta**:
+> - in `dataTableLogic.ts` (la logica pura della tabella) due funzioni: `withNewColumns(order, columnIds)` aggiunge solo
+>   gli id mai visti, al posto naturale (dopo l'ultima colonna che li precede in `columnIds`), e lascia dove sono gli id
+>   assenti; `reorderKeepingAbsent(previousOrder, newOrder, columnIds)` rimette ogni id assente dopo la colonna che seguiva
+>   (all'inizio se nessuna lo precede);
+> - in `DataTable.svelte`: `onMount` tiene tutte le scelte di visibilità salvate; l'`$effect` usa `withNewColumns`, salva solo
+>   quando l'ordine guadagna id, dà la larghezza predefinita solo a chi non ne ha una, e non pota niente; `reorderColumns`
+>   usa `reorderKeepingAbsent`. Il ripristino (`resetColumns`) resta com'è: torna ai predefiniti delle colonne presenti.
+> - Effetto: le colonne Δ di Asset e FX tengono posto, visibilità e larghezza fra un caricamento e l'altro; e anche quando un
+>   intervallo più corto le nasconde e uno più lungo le rimette (la perdita che c'era già prima di X-R53).
+>
+> **Passi**: rossi (`test-author`: unità in `dataTableLogic.test.ts`, componente in `DataTable.test.ts` con un `localStorage`
+> finto); correzione; prove leggere; E2E (`asset-list`, `fx-list` e qualche tabella col selettore delle colonne);
+> documentazione; checkpoint.
+>
+> **Passo 1 ✅, i rossi** (`test-author` `95dd2300`, 08:58–09:14; solo i due file di test, già registrati):
+> - **14 rossi**, ognuno per la ragione voluta, e 3 guardie verdi; tutti i casi di prima verdi (83 e 55):
+>   - unità (`dataTableLogic.test.ts:721-839`, 8 rossi alla barriera dell'import dinamico: le due funzioni mancano): un id
+>     assente resta al suo posto mentre uno nuovo va al posto naturale, anche all'inizio e in fila; niente di nuovo → stesso
+>     contenuto; il riordino rimette un id assente dopo quello che seguiva o all'inizio, più id assenti tengono il loro
+>     ordine, un id presente mancante dal nuovo ordine non si aggiunge. Gli array d'ingresso sono congelati. Le attese sono
+>     state provate in memoria contro un'implementazione d'appoggio della specifica;
+>   - componente (`DataTable.test.ts:1054-1289`, con un `localStorage` finto per caso, tolto dopo il `cleanup()`): l'ordine
+>     salvato riscritto senza `delta_1Y` al montaggio; `delta_1Y` che torna ultima invece che dopo `a`; nascosta che arriva
+>     visibile; la scelta persa salvando un'altra colonna; 80 px invece dei 222 salvati; il riordino mentre manca. Guardie:
+>     una colonna mai vista va al posto naturale; `resetColumnLayout()` rende i predefiniti; senza niente salvato, l'ordine
+>     dichiarato.
+> - **Osservazioni di `test-author`**: oggi l'`onMount` perde la scelta di visibilità di una colonna assente solo in memoria
+>   (lo storage la tiene, ignorata a ogni caricamento, e il primo salvataggio la cancella); il filtro di `orderedColumns`
+>   sugli id assenti non lavorava mai e lavora da adesso; `withNewColumns` mette un id nuovo fra il suo predecessore e un
+>   id assente che lo segue (`[a, delta_1Y, b]` + `x` dopo `a` → `[a, x, delta_1Y, b]`): scelta accettabile, non fissata.
+>
+> **Passo 2 ✅, la correzione** (09:15, `files/scripts/y27_apply.py --apply`, 5 sostituzioni esatte; 2 file, +72 −51):
+> `dataTableLogic.ts` con `withNewColumns` e `reorderKeepingAbsent`; `DataTable.svelte`: `onMount` tiene tutte le scelte di
+> visibilità, l'`$effect` usa `withNewColumns` e non pota niente (larghezza predefinita solo a chi non ne ha una),
+> `reorderColumns` passa da `reorderKeepingAbsent`.
+>
+> **Passo 3, prove leggere** (`files/scripts/y27_light.sh`, dalle 09:15): `dataTableLogic` **91**, `DataTable` **64**,
+> `DataTable.rowOrder` 12, `DataTableHeaderTooltip` 12, `DataTableColumnFilter` 59, `DataTablePagination` 20, `AssetTable` 12,
+> `AssetTable.privacy` 2, `assetBrowse` 22, `FxMissingRate` 2, `ExposureTable` 17, `AssetSetComparisonLevels` 57,
+> `htmlInterpolation.gate` 26 (tutti verdi, i 14 rossi compresi); svelte-check 0/0.
+> **Documentazione**: `docs-writer` (`0082f94b`) su `core-ui/data-table.md` («Persistence» e «State Management»).
+>
+> **Passo 3 ✅** (fine, 09:28): Prettier segnalava `DataTable.svelte`: le due chiamate con `columns.map((c) => c.id)` come
+> argomento andavano spezzate. Al loro posto `defaultColumnOrder`, che è già `$derived(columns.map((c) => c.id))`: gli id nel
+> loro ordine dichiarato. Riprova (`files/scripts/y27_light2.sh`, 09:29–09:37): `dataTableLogic` 91, `DataTable` 64,
+> `DataTable.rowOrder` 12, `AssetTable` 12, `ExposureTable` 17; svelte-check 0/0; Prettier pulito sui 4 file;
+> `theme-roles --check` pulito; `git diff --check` pulito.
+>
+> **Passo 4 ✅, documentazione e devWiki**:
+> - `docs-writer` (`0082f94b`): `core-ui/data-table.md`, il punto «Persistence» (una colonna assente per un po' tiene posto,
+>   visibilità e larghezza; si aggiungono solo le colonne mai viste; il riordino dal selettore rimette un'assente dopo quella
+>   che seguiva; il ripristino torna ai predefiniti delle presenti e dimentica le assenti), la lista «State Management» (le
+>   regole dell'ordine in `dataTableLogic.ts`) e, in più, la riga di `dataTableLogic.ts` nella tabella dei file, che elencava
+>   gli import vecchi. Pagina solo in inglese. Nota lasciata: «written back when they change» non vale per
+>   `setColumnWidth`, che non salva; è di prima.
+> - `mkdocs build` (strict) rc 0, 0 WARNING, 147,7 s; `check-links` 97 (`files/scripts/y27_docs_check.sh`).
+> - devWiki: `problems/datatable-pruned-preferences-of-absent-columns` (nuova, legata a
+>   `problems/datatable-net-columns-hidden-override-model`), la riga dell'indice, una voce del log. `check_source_paths.py`:
+>   i 7 mancanti di sempre, nessuno della pagina nuova.
+> - Backlog: Y-27 ✅ (commit al checkpoint).
+> - **Slot E2E** chiesto (`files/scripts/y27_e2e.sh`); in coda dopo E e J (coordinatore, 09:3x).
+>
+> **Passo 5, E2E** (slot, `files/scripts/y27_e2e.sh`, 10:01–10:19, HEAD `73443c6db` più i miei file; carico a 5 minuti 24,6 alla
+> partenza, poi fino a 100 a un minuto per le altre sessioni): `front-fx fx-list` **13/13**, `front-portfolio privacy-masking`
+> **18/18**, `risk-lab` **44/44**, `front-asset asset-detail` **35/35**, `front-asset asset-list` **30/31**. Porta 6189 libera
+> alle 10:19.
+>
+> **⚠️ Fuori pista: il rosso di `asset-list.spec.ts:1084`, non di Y-27** («sync all over a period whose prices are all filled
+> backward does not warn», C-66, `32c64bbd9`, 16/10). Triage:
+> - È una **precondizione** del test, non un'asserzione: nel periodo da oggi+7 a oggi+14 giorni nessun asset con un fornitore
+>   mostra un prezzo («0 stored of 0 shown» per tutti). Il test chiede `POST /assets/prices/query` su un periodo **futuro** e
+>   si aspetta prezzi portati avanti.
+> - Lo stesso test era **verde alle 08:43** (corsa di Y-25, stesso giorno, quindi stesso periodo) su `039af67bb`.
+> - In mezzo è entrato **X-R55** (`a71d23e7e`, «fix(prices): ceiling on query date ranges», fuso in dev alle 08:30 con
+>   `ab7711f04`): `price_query.py` taglia ogni intervallo a `latest_range_end()`, cioè domani, e un elemento che **comincia**
+>   dopo riceve un risultato vuoto. `a71d23e7e` non è antenato di `039af67bb`, lo è di `73443c6db`.
+> - Quindi un conflitto di contratto fra X-R55 e il test di C-66: rosso deterministico su dev per chiunque. Y-27 tocca solo la
+>   tabella del frontend e non può cambiare ciò che restituisce l'API. Nessuna ripetizione: non è un timeout, la causa si
+>   legge nel codice. Diventa **Y-28** nel backlog, da instradare dal coordinatore (X-R55 o il proprietario di C-66).
+>
+> **Entrato**: `8e3c58ccc`, `51ba3bc2e`, `2aa8a0753` → dev `542c0e8b5`; l'unione di `log.md` sistemata dal coordinatore in
+> `e9cd5d6ef`; niente CHANGELOG (la potatura nasceva con X-R53, non rilasciato); Y-28 passato a X. HEAD avanzato a
+> `bab5a8fb9`.
+
+## Y12b, il resto · V11 e P5 — analisi (10:25–10:40, sola lettura; HEAD `bab5a8fb9`)
+
+> **Perché adesso**: MF-E1 è in dev (`e43dfae68`, dopo CP-7b di J): `LotTimelineEventSchema.opening_value` c'è (piano MF,
+> `:1423`; nel client generato: «For the event that opens a lot (BUY, ADJUSTMENT_IN): the lot's original cost …, in the
+> currency of unit_price. None on every other kind and when the conversion is missing»).
+>
+> **Stato reale**:
+> - **V11**: `LotWacPriceChart.svelte:1418-1422`, il tooltip di un BUY calcola `|quantità| × prezzo unitario`; la bolla per
+>   lotto (`:1034`) legge già `original_cost`. Atteso a numeri uguali (il costo d'origine è quantità × prezzo del lotto,
+>   nella stessa valuta): è la regola della casa unica, non un numero sbagliato; senza conversione il campo è null → «—».
+> - **T-U8, il modale della custodia**: `LotCustodyModal.svelte:236` legge già `original_cost`. Fatto (da J).
+> - **P5**, decisione D-MF6(b) (gli aggregati dei lotti scelti sono misure interattive dichiarate nel codice, con il
+>   marcatore e il gate di Y):
+>   - `unifiedLotsTableHelpers.ts:107-185`: il piè della tabella sulle righe visibili (somme, medie pesate sul valore,
+>     rendimento totale e netto sul valore d'apertura sommato, `ratioOrNull`);
+>   - `lotComparisonChartHelpers.ts:130-174`: l'aggregato dei lotti scelti nel grafico di confronto (valore, e rendimento
+>     = Σ P&L con proventi ÷ Σ costo d'origine);
+>   - `lotWacPriceChartHelpers.ts:124-145` (`toPercentSeries`): la vista % del grafico WAC, ribasata sul primo valore non
+>     nullo (è anche una delle copie di Y-26: dichiararla non cambia il suo comportamento su una base nulla);
+>   - il totale fisso dei lotti c'è già nel backend (`LotSummarySchema`).
+> - `lotGanttChartHelpers.isSplitTransition` (`:288-298`) moltiplica quantità × prezzo solo per riconoscere uno split senza
+>   eventi: un'euristica non mostrata, nessuna dichiarazione.
+> - Nessun test di componente per `LotWacPriceChart` (solo gli aiuti); un file di test nuovo vorrebbe una riga in
+>   `_frontend_utility.py`, del programma colori.
+>
+> **Proposta**:
+> 1. **V11**: un aiuto in `lotWacPriceChartHelpers.ts` (il valore d'apertura di un evento, cioè il campo del backend) usato
+>    dal ramo BUY del tooltip; rosso d'unità in `lotWacPriceChartHelpers.test.ts` (il campo anche quando differisce da
+>    quantità × prezzo; null senza campo) e un pin sul sorgente: il ramo BUY non moltiplica più.
+> 2. **P5**: i tre moduli dichiarano la loro misura nel JSDoc d'apertura (`@financial-math-exception`, D-MF6(b)); il gate
+>    `financialMathExceptions.gate.test.ts` (mio, Y12a) li aggiunge a `DECLARED_EXCEPTIONS` — il rosso: (A) finché i tag
+>    mancano; `financial_math.md` regola 6 li nomina (`docs-writer`).
+> 3. Nessun numero cambia; nessuna classe di colore. CHANGELOG: niente (parità e dichiarazioni).
+> 4. Prove leggere: i test dei lotti, il gate, svelte-check, Prettier, `theme-roles`; E2E `front-broker detail` (i grafici
+>    dei lotti e la tabella).
+>
+> **Conflitti da verificare dal coordinatore**: i tre aiuti e `LotWacPriceChart.svelte` (`features/brokers/lots`, FE7, miei;
+> i colori ci sono passati con DV); `financial_math.md` (J l'ha toccato stamattina per J-44, MF lo usa); il gate è mio.
+>
+> **Via del coordinatore** (10:25): V11 + P5 come proposti, rossi prima; il valore di ADJUSTMENT_IN resta fuori; nessun ramo
+> dei colori o di J tocca i miei file; in `financial_math.md` (aperto da MF per X-R59) il `docs-writer` tocca solo l'elenco
+> della regola 6; lo slot E2E `front-broker detail` lo chiedo quando sono pronto.
+>
+> **Passo 1 ✅, i rossi** (`test-author` `1170c251`, 10:27–10:39; i due file di test, già registrati):
+> - **V11** (`lotWacPriceChartHelpers.test.ts:511-651`, 7 rossi, 69 di prima verdi): quattro casi d'unità per
+>   `eventOpeningValue`, fermi alla barriera dell'import dinamico (stringa decimale, zero compreso; 29,97 e mai 3 × 10 = 30;
+>   `null`/assente; non numerico: `'n/a'` e `'Infinity'`, perché `safeDecimal` legge un numero iniziale, `'12abc'` → 12);
+>   tre pin sul sorgente del ramo BUY di `buildMarkerTooltip` (chiama `eventOpeningValue(event)`, non moltiplica quantità ×
+>   prezzo, importa l'aiuto), con un controllo positivo.
+> - **P5** (`financialMathExceptions.gate.test.ts`, 3 rossi, 14 di prima verdi): tre voci nuove in `DECLARED_EXCEPTIONS`;
+>   la regola (A) fallisce per ciascun file («its leading JSDoc block … carries no @financial-math-exception block tag»). Il
+>   docblock del gate dice ora che le eccezioni sono misure interattive che l'utente plasma su un grafico o una tabella, e
+>   nomina gli aggregati di D-MF6(b).
+> - **Osservazioni**: senza selezione il piè somma tutte le righe filtrate, su ogni pagina, non solo quelle a schermo (la
+>   frase del tag è corretta di conseguenza); una dichiarazione esenta tutto il file anche dalla regola (C), quindi
+>   un'annualizzazione aggiunta un giorno a uno dei tre moduli passerebbe in silenzio → **Y-29** nel backlog (minimo).
+>
+> **Passo 2 ✅, la correzione** (10:40, `files/scripts/v11p5_apply.py --apply`, 6 sostituzioni esatte; 4 file, +28 −1):
+> `eventOpeningValue` in `lotWacPriceChartHelpers.ts` e il ramo BUY di `LotWacPriceChart.svelte` che lo usa; il tag
+> `@financial-math-exception` nel JSDoc d'apertura dei tre moduli (D-MF6(b)).
+>
+> **Passo 3 ✅, prove leggere** (`files/scripts/v11p5_light.sh`, 10:40–10:44): `lotWacPriceChartHelpers` **77**, il gate **17**,
+> `unifiedLotsTableHelpers` 64, `lotComparisonChartHelpers` 162, `lotChartShared` 25, `lotGanttChartHelpers` 117,
+> `LotCustodyModal` 3, `moneyRenderSites` 7; svelte-check 0/0; Prettier pulito sui 6 file; `theme-roles --check` pulito;
+> `git diff --check` pulito.
+>
+> **Documentazione ✅**: `docs-writer` (`f7b35c59`) ha riscritto solo l'elenco della regola 6 di `financial_math.md` (un solo
+> blocco, +5 −1): le misure dei lotti plasmate dalle scelte dell'utente (D-MF6(b)) e i tre file. `mkdocs build` (strict) rc 0,
+> 0 WARNING; `check-links` 97. Lo stesso elenco sta in due righe di istruzioni condivise
+> (`.github/instructions/financial-math.instructions.md:48`, `frontend.instructions.md:49`): chiesto al coordinatore.
+>
+> **Istruzioni condivise ✅** (via del coordinatore, 10:47): `.github/instructions/financial-math.instructions.md` regola 6 e
+> `.github/instructions/frontend.instructions.md` «Financial numbers» nominano ora, oltre al righello e alle curve
+> «what-if», gli aggregati dei lotti scelti dall'utente (D-MF6(b)); poche parole per riga, `git diff --check` pulito.
+> **Slot E2E** `front-broker detail`: in coda (coordinatore, 10:47).
+>
+> **Passo 4 ✅, E2E** (slot, `files/scripts/v11p5_e2e.sh`, 10:52–10:58, HEAD `bab5a8fb9` più i miei file; carico a 5 minuti 40):
+> `front-broker detail` **38/38** (2,1 minuti). Porta 6189 libera alle 10:58.
+>
+> ### V11 + P5 — checkpoint 🧊 FROZEN (10:5x)
+>
+> 11 file tracciati, nessuno nuovo; `git diff --check` pulito; nessun server. T-U8 (sezione T) lo riconcilia il coordinatore:
+> con V11 e P5 il suo inventario è chiuso.
+>
+> **Entrato**: `10345abac` + `c97b0c5ee` → dev `d4ecfb692`; HEAD avanzato. T-U8 lo riconcilia il coordinatore nella sezione T.
+
+## Y-29 · il gate delle eccezioni: un segnalino «annualizza» per voce (dalle 11:00; HEAD `d4ecfb692`)
+
+> **Via del coordinatore** (10:59): rossi prima, prove leggere; dopo, mi passa lavoro da un'altra sezione mentre le voci del
+> developer aspettano.
+>
+> **Stato reale**: la regola (C) del gate (`financialMathExceptions.gate.test.ts`, «annualization by exponent only where
+> declared») filtra i colpi con `!DECLARED_FILES.has(hit.file)`: ogni file dichiarato è esente. Oggi alzano a un esponente
+> con 365 solo `MeasureSignal.ts` (`Math.pow(growth, 365 / days)`, il Δ%/anno del righello) e `CompoundSignal.ts`
+> (`Math.pow(1 + rate, 1 / 365)`, il fattore giornaliero della curva composta); `LinearSignal.ts` ha `days / 365` (nessun
+> esponente), `SineSignal.ts` niente, e i tre moduli dei lotti di D-MF6(b) sommano, mediano e ribasano.
+>
+> **Scelta** (tutta nel file del gate, quindi `test-author` `c23643d5` fa rosso e cura): (1) il filtro di (C) in una funzione
+> pura, senza cambi; (2) il rosso, un colpo sintetico in un modulo dei lotti che deve contare come trasgressore; (3) un
+> segnalino obbligatorio `annualizes: boolean` per voce, vero solo per `MeasureSignal.ts` e `CompoundSignal.ts`; (C) ammette
+> esponenti solo lì; docblock e messaggi aggiornati; un controllo che anche il colpo vero di `MeasureSignal` venga trovato.
+>
+> **Documentazione**: `financial_math.md` descrive (C) in due punti («outside the listed files»: la frase del gate nella
+> regola 6, `:478-479`, e il terzo punto della sezione del gate, `:629`); chiesto al coordinatore se toccarli ora (MF ha la
+> pagina aperta).
+>
+> **Fatto ✅** (`test-author` `c23643d5`, 11:00–11:14; solo il gate, +90 −30):
+> - base 17/17; **passo 1**, il filtro in `annualizationOffenders(hits, allowedFiles)` e l'insieme `ANNUALIZING_FILES` (per
+>   ora uguale a `DECLARED_FILES`): 17/17; **passo 2**, il rosso: un controllo (D) che fa produrre allo scanner del gate un
+>   esponente con 365 in un file non dichiarato, nei tre moduli dei lotti, in `MeasureSignal` e in `CompoundSignal`, e vuole
+>   trasgressori i primi quattro → 1 rosso («Y-29: being declared does not exempt a file from (C)…»: venivano segnalati solo
+>   il file non dichiarato, non i tre moduli); **passo 3**, la cura: `annualizes: boolean` obbligatorio in ogni voce, vero
+>   solo per `MeasureSignal.ts` e `CompoundSignal.ts`; `ANNUALIZING_FILES` costruito dal segnalino; titolo e messaggio di (C)
+>   aggiornati; docblock ((C), (D), «Adding an exception», «Completeness»); una guardia nuova (i due file sono nell'insieme,
+>   e ogni file dell'insieme ha un esponente vero) → **19/19**.
+> - Prove che la guardia morde, poi ripristinate col checksum: `LinearSignal` a `true` → rossa la sola guardia; `MeasureSignal`
+>   a `false` → tre rossi, e la regola (C) nomina l'esponente vero di `MeasureSignal.ts:56`.
+> - Osservazioni: prima di Y-29 il verdetto di (C) non aveva un controllo positivo (un filtro che non segnalava niente
+>   sarebbe passato): il controllo del passo 2 lo copre; la concessione resta per file (una seconda annualizzazione dentro
+>   `MeasureSignal` passerebbe), ora scritto in «Completeness».
+> - **Documentazione** (`docs-writer` `bc90fe07`, via del coordinatore per le sole due righe): `financial_math.md:479-480`
+>   («outside the listed files that annualize») e `:630-631` (il segnalino `annualizes: true`, il righello e la curva
+>   composta); `git diff` di due blocchi, +4 −2.
+> - **Prove leggere** (`files/scripts/y29_light.sh` e `y29_docs_check.sh`, 11:14–11:18): il gate **19/19**; svelte-check 0/0
+>   (il campo obbligatorio è controllato); Prettier pulito; `theme-roles --check` pulito; `git diff --check` pulito;
+>   `mkdocs build` (strict) rc 0, 0 WARNING; `check-links` 97.
+> - **Backlog**: Y-29 ✅. Nessun E2E: cambia solo un test e una pagina per sviluppatori.
+>
+> ### Y-29 — checkpoint 🧊 FROZEN (11:1x)

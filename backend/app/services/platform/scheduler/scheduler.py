@@ -10,7 +10,9 @@ Nothing runs with the scheduler off (``LIBREFOLIO_NO_SCHEDULER`` or the setting)
 (``LIBREFOLIO_BLOCKED``: a blocked instance does not update its prices). With several workers any of them may run the
 jobs, one run at a time for the data directory: a run holds the lock of ``run_lock.py`` from the moment it reads the
 state, and one that waited reads what the first one saved (Z-11). Where that lock is not available (no ``fcntl``:
-Windows), only the leader worker runs them, and another answers ``not_leader``.
+Windows), only the leader worker runs them, and another answers ``not_leader``. A run waits at most
+``LOCK_WAIT_SECONDS`` (ten minutes) for another run, of this process or of another: then it runs nothing, logs a
+warning and answers ``not_leader`` as well, and the next tick tries again (Z-26). The jobs themselves have no limit.
 
 After a Fly resume the wall clock is corrected within a few hundred milliseconds, and a request may be served before:
 a run for ``"return"`` or ``"wake"`` waits ``CLOCK_SETTLE_SECONDS`` before it reads the time. A history-sync slot missed
@@ -36,7 +38,7 @@ import structlog
 from backend.app.config.platform import instance_blocked, scheduler_disabled
 from backend.app.services.platform.scheduler.jobs import run_current_price_refresh, run_history_sync
 from backend.app.services.platform.scheduler.leader import am_i_leader
-from backend.app.services.platform.scheduler.run_lock import cross_process_lock_available, scheduler_run_lock
+from backend.app.services.platform.scheduler.run_lock import LOCK_WAIT_SECONDS, SchedulerRunLockTimeout, cross_process_lock_available, scheduler_run_lock
 from backend.app.services.platform.scheduler.settings import SchedulerSettings, load_scheduler_settings
 from backend.app.services.platform.scheduler.state import JobState, SchedulerState, load_state, save_state
 from backend.app.services.platform.sleep_wake.activity import current_activity
@@ -463,7 +465,35 @@ async def _record_failure(job: _Job, state: SchedulerState, settings: SchedulerS
     return failed
 
 
-async def _run_locked(reason: str) -> RunReport:
+def _log_gave_up(reason: str, lock: str, deadline: float) -> None:
+    """The warning of a run that gave up waiting for another run (Z-26, N79): what an operator sees of a stuck run."""
+    waited_s = round(time_module.monotonic() - deadline + LOCK_WAIT_SECONDS, 1)
+    logger.warning("Scheduler run gave up waiting for another run", reason=reason, lock=lock, waited_s=waited_s, limit_s=LOCK_WAIT_SECONDS)
+
+
+async def _run_within_deadline(reason: str) -> RunReport:
+    """The run under this process's lock, its two waits for the locks ended by one deadline (Z-26, N79).
+
+    The deadline, ``LOCK_WAIT_SECONDS`` from now, ends the wait for this process's lock, then the one for the lock
+    across processes; never the jobs. A run that reaches it runs nothing and reads no state: it logs a warning and
+    answers ``not_leader``, as another run holds the jobs, and the next tick tries again.
+    """
+    deadline = time_module.monotonic() + LOCK_WAIT_SECONDS
+    lock = _run_lock()
+    try:
+        async with asyncio.timeout(max(0.0, deadline - time_module.monotonic())):
+            await lock.acquire()
+    except TimeoutError:
+        _log_gave_up(reason, "process", deadline)
+        now = utc_now()
+        return RunReport(reason, "not_leader", now, now, ())
+    try:
+        return await _run_locked(reason, deadline)
+    finally:
+        lock.release()
+
+
+async def _run_locked(reason: str, deadline: float) -> RunReport:
     started_at = utc_now()
 
     def report(status: str, jobs: tuple[JobOutcome, ...] = ()) -> RunReport:
@@ -481,8 +511,12 @@ async def _run_locked(reason: str) -> RunReport:
         return report("disabled")
     if not cross_process:
         return report(*await _run_due(reason, settings))
-    async with scheduler_run_lock():
-        return report(*await _run_due(reason, settings))
+    try:
+        async with scheduler_run_lock(deadline=deadline):
+            return report(*await _run_due(reason, settings))
+    except SchedulerRunLockTimeout:
+        _log_gave_up(reason, "data_dir", deadline)
+        return report("not_leader")
 
 
 async def _run_due(reason: str, settings: SchedulerSettings) -> tuple[str, tuple[JobOutcome, ...]]:
@@ -508,7 +542,8 @@ async def run_due_jobs(reason: RunReason) -> RunReport:
 
     A run for a return or a wake-up first gives the clock ``CLOCK_SETTLE_SECONDS``. The run is busy work from start to
     end, the waits for the locks included: this process's, then the one across processes (``run_lock.py``). A job that raises is reported as ``error`` with its class name, and the next
-    job still runs; a cancellation goes through.
+    job still runs; a cancellation goes through. After the settle, one deadline, ``LOCK_WAIT_SECONDS`` away, ends the
+    two waits: a run that reaches it gives up and answers ``not_leader`` (Z-26).
     """
     if reason not in get_args(RunReason):
         raise ValueError(f"unknown scheduler run reason {reason!r}")
@@ -519,8 +554,7 @@ async def run_due_jobs(reason: RunReason) -> RunReport:
         with current_activity().busy(BUSY_REASON):
             if reason in _SETTLING_REASONS:
                 await settle_clock()
-            async with _run_lock():
-                result = await _run_locked(reason)
+            result = await _run_within_deadline(reason)
     finally:
         if catch_up:
             PRICE_REFRESH.run_finished()

@@ -234,7 +234,7 @@
           "splitRatio": "Ratio de split",
           "sourceBroker": "De",
           "destinationBroker": "Vers",
-          "handedOverAtCost": "Valeur cédée au coût"
+          "handedOver": "Valeur cédée"
         },
         "openingValue": "Valeur d'ouverture",
         "cumulativeProceeds": "Produits cumulés"

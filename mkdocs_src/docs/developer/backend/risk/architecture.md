@@ -548,6 +548,7 @@ All these checks run after the service's parameter validation and observation ga
 | Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
+| Prices of the scope, every analytic: assets × days of the period (or of a replay window) | `MAX_BULK_ITEM_DAYS = 5_000_000` (Z-25) | `assets/price_query.py`, raised as `BulkTooManyDaysError` and turned into the refusal by `risk/scope.py::prepare_asset_series` (J-50) | `unavailable` · `resource_limit`, remedy `period_or_assets`, for every analytic of the request (a replay window: that analytic only) |
 
 `simulation` builds every `resource_limit` with `_resource_limit()` (`risk_plugins/simulation/plugin.py`).
 The builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
@@ -556,7 +557,9 @@ The builders call it directly; the three engine budgets raise `SimulationResourc
 three, plus the `remedy` that one table, `_REMEDY_BY_METRIC`, maps the metric to (`portfolio_cells`
 and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` → `period`,
 `assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`). A metric missing from the table
-still answers `resource_limit`, with no `remedy`. The plugin checks the assets and the observations
+still answers `resource_limit`, with no `remedy`. The scope's price budget is the one limit outside the plugin:
+`prepare_asset_series()` refuses with `metric` `price_item_days` and the remedy `period_or_assets`, and
+`RiskService.execute()` answers every planned analytic with that refusal (J-50). The plugin checks the assets and the observations
 itself, before it builds the request: the request's `asset_ids` and `historical_returns` carry the
 same ceilings as their `max_length`, but a pydantic `ValidationError` raised while the builder
 constructs it lands outside the plugin's `try`, where the service can only log a traceback and

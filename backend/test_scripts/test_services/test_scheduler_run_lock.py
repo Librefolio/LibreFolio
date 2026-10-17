@@ -22,6 +22,16 @@ then find them done. The contract pinned here:
 (e) The lock file stays: created 0o600, never deleted. A symbolic link at the path raises ``OSError`` at once, never
     retried, and nothing behind the link is created or locked.
 (f) ``os.open``, ``fcntl.flock`` and ``os.close`` of the lock never run on the event loop's thread.
+(g) Z-26 (night decision N79): ``LOCK_WAIT_SECONDS`` 600.0, the longest a scheduler run waits for another run, both of
+    its waits together; ``SchedulerRunLockTimeout``, a ``TimeoutError``, raised when another process held the lock past
+    the deadline; ``scheduler_run_lock(path=None, *, deadline=None)``, the deadline a keyword only, None by default.
+(h) ``deadline`` is an instant of ``time.monotonic()``. None waits as long as it takes, as in (b). With one, each attempt
+    is as in (b); once an attempt is refused at or past the deadline, ``SchedulerRunLockTimeout`` is raised — no attempt
+    in flight then, the refused attempt's descriptor already closed, the block never run, the other process's lock
+    untouched —; before it, the next attempt comes ``min(POLL_SECONDS, deadline - now)`` later, ``POLL_SECONDS`` read at
+    each wait. An attempt in flight when the deadline passes is awaited, never abandoned, and none follows it once it is
+    refused. At least one attempt always: a free lock is taken even with the deadline already past. A cancellation is as
+    in (d).
 
 Pure: no database, no server, no lane port, no network; every file under the test's ``tmp_path``. An autouse fixture
 points the data directory (``LIBREFOLIO_TEST_MODE``, ``LIBREFOLIO_TEST_DATA_DIR``) at ``tmp_path`` as well, for this
@@ -35,10 +45,14 @@ a new descriptor on the file competes as another process does (``flock`` locks b
 process), so the test also probes from here. The lock is watched through ``run_lock.fcntl`` and ``run_lock.os`` replaced
 by recorders that delegate to the real modules, each ``flock``, ``open`` and ``close`` recorded with its thread and its
 outcome: a refused attempt is the barrier that proves a wait, never a duration. Nothing sleeps but the polling of a
-condition; the one duration asserted, the gap between two attempts, is a lower bound set by a timer of the loop, which a
-loaded machine can only lengthen.
+condition; the durations asserted are lower bounds a loaded machine can only lengthen — the gap between two attempts, set
+by a timer of the loop; the moment a wait gives up, never before its deadline, which the lock reads on the same
+``time.monotonic()`` —, and the deadlines of (h) are either long past, ``NEAR_SECONDS`` away or ``FAR_SECONDS`` away,
+far inside or far outside the test's own bound on any wait, ``WAIT_SECONDS``.
 
-Red until Z-11 exists: the module does not import, and every test fails naming it.
+Red until Z-11 exists: the module does not import, and every test fails naming it. Red before Z-26 (N79): RL-010 on the
+names it reads; RL-011…RL-016 at their first line, naming what is missing — ``SchedulerRunLockTimeout``, the keyword
+``deadline`` — before any child is started or any lock taken.
 """
 
 from __future__ import annotations
@@ -47,6 +61,7 @@ import asyncio
 import contextlib
 import fcntl
 import importlib
+import inspect
 import json
 import os
 import signal
@@ -76,6 +91,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 LOCK_FILE_NAME = ".scheduler.lock"
 POLL_SECONDS = 0.2
 LOCK_MODE = 0o600
+#: Z-26 (N79): the longest a scheduler run waits for another run, both of its waits together.
+LOCK_WAIT_SECONDS = 600.0
 
 #: The longest the test waits for anything of this process: an attempt, the block, a task's end.
 WAIT_SECONDS = 60.0
@@ -97,6 +114,15 @@ LOOP_TURNS = 5
 #: What a file behind a symbolic link holds, and its mode: a lock that followed the link would show on them.
 BEHIND_THE_LINK = b"not a lock file: behind a symbolic link\n"
 BEHIND_THE_LINK_MODE = 0o644
+#: The deadlines of (h), Z-26: one already this far behind; one this close, which a wait reaches long before any holder
+#: lets go; one this far, which no wait reaches before its holder lets go, however loaded the machine.
+PAST_SECONDS = 1.0
+NEAR_SECONDS = 0.5
+FAR_SECONDS = 300.0
+#: ``POLL_SECONDS`` raised to an hour: only a wait cut to its deadline ends within ``WAIT_SECONDS``.
+POLL_HOUR = 3_600.0
+#: How long past a deadline crossed during an attempt in flight the test watches the wait go on waiting for that attempt.
+WATCH_SECONDS = 0.5
 
 #: A child that takes ``scheduler_run_lock(<lock>)`` and keeps it until ``<folder>/release`` appears, saying what it does
 #: with files of ``<folder>``: ``held`` once inside, ``released`` once out, ``gave-up`` after ``<hold seconds>``.
@@ -510,6 +536,97 @@ async def _waiting(run_lock: ModuleType, path: Path | None) -> AsyncIterator[Wai
         await waiting.close()
 
 
+# =============================================================================
+# THE DEADLINE (Z-26, N79)
+# =============================================================================
+
+
+def _bounded_wait(run_lock: ModuleType) -> type[BaseException]:
+    """``SchedulerRunLockTimeout``, once the lock has the bounded wait of Z-26 (N79); else a red naming what is missing,
+    before any child is started or any lock taken."""
+    timeout = getattr(run_lock, "SchedulerRunLockTimeout", None)
+    deadline = inspect.signature(run_lock.scheduler_run_lock).parameters.get("deadline")
+    missing: list[str] = []
+    if not (isinstance(timeout, type) and issubclass(timeout, TimeoutError)):
+        missing.append("SchedulerRunLockTimeout (a TimeoutError)")
+    if deadline is None or deadline.kind is not inspect.Parameter.KEYWORD_ONLY:
+        missing.append("keyword deadline in scheduler_run_lock(path=None, *, deadline=None)")
+    if missing:
+        pytest.fail(f"{RUN_LOCK_FILE} has no {' and no '.join(missing)}: the bounded wait of Z-26 (night decision N79) is not written")
+    return timeout
+
+
+@contextmanager
+def _held_here(path: Path) -> Iterator[int]:
+    """The lock held by this test from a descriptor of its own — one more open file, which competes as another process
+    would — until the block ends: the descriptor."""
+    mine = os.open(path, os.O_RDWR | os.O_CREAT, LOCK_MODE)
+    try:
+        fcntl.flock(mine, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        yield mine
+    finally:
+        os.close(mine)
+
+
+def _left_open(path: Path, mine: int | None = None) -> list[int]:
+    """The descriptors this process holds on the lock file, but the test's own."""
+    return [fd for fd in _descriptors_on(path) if fd != mine]
+
+
+class BoundedWait(Waiting):
+    """``async with scheduler_run_lock(path, deadline=deadline)`` in a task of the test, as ``Waiting`` (Z-26, N79). If the
+    wait gives up, the moment it did and what the recorders held are kept, read in the very step that raised, before the
+    loop runs anything else."""
+
+    def __init__(self, run_lock: ModuleType, path: Path, deadline: float, flocks: FlockRecorder, files: OsRecorder | None) -> None:
+        self.deadline = deadline
+        self.flocks = flocks
+        self.files = files
+        self.gave_up_at: float | None = None
+        self.flocks_then: list[Call] = []
+        self.files_then: list[Call] = []
+        super().__init__(run_lock, path)
+
+    async def _hold(self, run_lock: ModuleType, path: Path | None) -> None:
+        try:
+            async with run_lock.scheduler_run_lock(path, deadline=self.deadline):
+                self.entered.set()
+                await self.leave.wait()
+        except TimeoutError:
+            self.gave_up_at = time.monotonic()
+            self.flocks_then = self.flocks.recorded()
+            self.files_then = [] if self.files is None else self.files.recorded()
+            raise
+
+    async def gives_up(self, timeout: type[BaseException], what: str) -> None:
+        """Until the wait is over; a red naming ``what`` unless it raised ``timeout`` without running the block, within
+        ``WAIT_SECONDS``."""
+        await _until(lambda: self.entered.is_set() or self.task.done(), lambda: f"{what}: still waiting; attempts so far {self.flocks.attempts()}")
+        if self.entered.is_set():
+            pytest.fail(f"{what}: the block ran instead of the wait giving up; attempts {self.flocks.attempts()}")
+        error = None if self.task.cancelled() else self.task.exception()
+        if not isinstance(error, timeout):
+            pytest.fail(f"{what}: the wait {_ending(self.task)} instead of raising {timeout.__name__}; attempts {self.flocks.attempts()}")
+
+
+@asynccontextmanager
+async def _bounded(run_lock: ModuleType, path: Path, deadline: float, flocks: FlockRecorder, files: OsRecorder | None) -> AsyncIterator[BoundedWait]:
+    waiting = BoundedWait(run_lock, path, deadline, flocks, files)
+    try:
+        yield waiting
+    finally:
+        await waiting.close()
+
+
+def _assert_nothing_in_flight(waiting: BoundedWait) -> None:
+    """At the moment the wait gave up, one descriptor opened per exclusive attempt made, and each already closed: no
+    attempt was in flight then, and the refused one's descriptor was closed before the raise."""
+    opened = sum(1 for call in waiting.files_then if call.function == "open")
+    closed = sum(1 for call in waiting.files_then if call.function == "close")
+    attempts = sum(1 for call in waiting.flocks_then if call.operation & fcntl.LOCK_EX)
+    assert opened == closed == attempts >= 1, f"when the wait gave up every attempt was over, its descriptor closed: {opened} opened, {closed} closed, {attempts} attempt(s); {waiting.files_then}; {waiting.flocks_then}"
+
+
 @pytest.fixture(autouse=True)
 def data_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """The data directory of every test, and of its children, under its ``tmp_path``: no lock of these tests can reach the
@@ -840,3 +957,209 @@ async def test_where_fcntl_cannot_be_imported_the_module_imports_and_says_it_is_
     assert len(lines) == 1, f"the child printed what the module made of it once: {output[-2000:]}"
     assert json.loads(lines[0][len(WITHOUT_FCNTL_MARK) :]) == {"fcntl": "None", "available": False}
     print_success("imported; fcntl None; not available")
+
+
+# =============================================================================
+# (g), (h) THE DEADLINE (Z-26, N79)
+# =============================================================================
+
+
+def test_the_limit_the_timeout_and_the_deadline_keyword() -> None:
+    """RL-010 — contract (g), Z-26 (N79): ``LOCK_WAIT_SECONDS`` 600.0; ``SchedulerRunLockTimeout`` a class deriving from
+    ``TimeoutError``; ``scheduler_run_lock`` takes ``path``, None by default, then ``deadline``, a keyword only, None by
+    default.
+
+    Red before Z-26: neither name exists, and the lock takes no deadline."""
+    print_section("RL-010: LOCK_WAIT_SECONDS, SchedulerRunLockTimeout, the keyword deadline")
+    run_lock = _run_lock()
+
+    assert getattr(run_lock, "LOCK_WAIT_SECONDS", "<missing>") == LOCK_WAIT_SECONDS, "LOCK_WAIT_SECONDS, the longest a scheduler run waits for another run (Z-26, N79)"
+    timeout = getattr(run_lock, "SchedulerRunLockTimeout", None)
+    assert isinstance(timeout, type) and issubclass(timeout, TimeoutError), f"SchedulerRunLockTimeout, a TimeoutError raised when another process held the lock past the deadline (Z-26, N79): {timeout!r}"
+    signature = inspect.signature(run_lock.scheduler_run_lock)
+    shape = [(name, parameter.kind.name, parameter.default) for name, parameter in signature.parameters.items()]
+    assert shape == [("path", "POSITIONAL_OR_KEYWORD", None), ("deadline", "KEYWORD_ONLY", None)], f"scheduler_run_lock(path=None, *, deadline=None) (Z-26, N79): {signature}"
+    print_success(f"{LOCK_WAIT_SECONDS:.0f} s; {timeout.__name__}, a TimeoutError; scheduler_run_lock{signature}")
+
+
+@pytest.mark.asyncio
+async def test_a_deadline_reached_while_another_process_holds_the_lock_gives_up_and_leaves_nothing_behind(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RL-011 — contract (h), Z-26 (N79): a child holds the lock. Here a wait whose deadline is ``NEAR_SECONDS`` away is
+    refused at least once — every attempt ``LOCK_EX | LOCK_NB``, none granted — and gives up with
+    ``SchedulerRunLockTimeout``, never before its deadline and within ``WAIT_SECONDS``; the block never ran. At that very
+    moment one descriptor had been opened per attempt, and each was closed: no attempt in flight. After it this process
+    holds as many descriptors as before, none on the lock file, and the child still holds its lock; once the child lets
+    go, ``scheduler_run_lock()`` without a deadline takes the lock at its first attempt.
+
+    Red before Z-26: the module has no ``SchedulerRunLockTimeout``, and its lock no ``deadline``."""
+    print_section("RL-011: a deadline reached while another process holds the lock")
+    run_lock = _run_lock()
+    timeout = _bounded_wait(run_lock)
+    flocks = _record_flocks(monkeypatch, run_lock)
+    files = _record_os(monkeypatch, run_lock)
+    path = tmp_path / LOCK_FILE_NAME
+
+    with _children(tmp_path) as children:
+        holder = Holder(children, path)
+        await holder.holding()
+        before = _descriptors()
+        deadline = time.monotonic() + NEAR_SECONDS
+        async with _bounded(run_lock, path, deadline, flocks, files) as waiting:
+            await waiting.gives_up(timeout, "a wait whose deadline passed while another process held the lock")
+        outcomes = [call.outcome for call in flocks.attempts()]
+        assert outcomes and set(outcomes) == {"refused"}, f"Barrier: refused at least once, never granted: {flocks.attempts()}"
+        assert all(call.operation & fcntl.LOCK_NB for call in flocks.attempts()), f"every attempt is LOCK_EX | LOCK_NB: {flocks.attempts()}"
+        assert waiting.gave_up_at is not None and waiting.gave_up_at >= deadline, f"the wait gives up once its deadline is reached, never before: at {waiting.gave_up_at}, the deadline {deadline}"
+        _assert_nothing_in_flight(waiting)
+        await _until(lambda: _descriptors() == before and not _left_open(path), lambda: f"the wait that gave up left descriptors open: {_descriptors()} instead of {before}, {_left_open(path)} on the lock file")
+        assert _probe_here(path) == "refused", "the other process's lock is untouched by the wait that gave up"
+        holder.release()
+        await holder.ended()
+        mark = len(flocks.attempts())
+        async with _waiting(run_lock, path) as again:
+            await again.runs("once the other process let go, a wait without a deadline never took the lock")
+            assert [call.outcome for call in flocks.attempts()[mark:]] == ["granted"], f"the free lock is taken at the first attempt: {flocks.attempts()[mark:]}"
+    print_success(f"{len(outcomes)} attempt(s) refused, given up {waiting.gave_up_at - deadline:.3f} s past the deadline, nothing left; then taken once free")
+
+
+@pytest.mark.asyncio
+async def test_a_free_lock_is_taken_even_with_a_deadline_already_past(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RL-012 — contract (h), Z-26 (N79): nothing holds the lock, and the deadline is ``PAST_SECONDS`` behind. At least one
+    attempt always: that one takes the lock; the block runs, the lock refused to others meanwhile and free once it is
+    over; the wait ends without raising.
+
+    Red before Z-26: the module has no ``SchedulerRunLockTimeout``, and its lock no ``deadline``."""
+    print_section("RL-012: a free lock, a deadline already past")
+    run_lock = _run_lock()
+    _bounded_wait(run_lock)
+    flocks = _record_flocks(monkeypatch, run_lock)
+    path = tmp_path / LOCK_FILE_NAME
+    inside: list[str] = []
+
+    async with _bounded(run_lock, path, time.monotonic() - PAST_SECONDS, flocks, None) as waiting:
+        await waiting.runs("with a deadline already past, a free lock was never taken")
+        inside.append(_probe_here(path))
+
+    assert (_ending(waiting.task), waiting.gave_up_at) == ("returned", None), f"the block left, the wait over without raising: {_ending(waiting.task)}"
+    assert [call.outcome for call in flocks.attempts()] == ["granted"], f"at least one attempt always, and the free lock is taken at it: {flocks.attempts()}"
+    assert inside == ["refused"], f"while the block runs the lock is held: {inside}"
+    assert _probe_here(path) == "granted", "once the block is over the lock is free"
+    print_success("one attempt, granted; the block ran")
+
+
+@pytest.mark.asyncio
+async def test_a_held_lock_with_a_deadline_already_past_is_tried_once_then_given_up(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RL-013 — contract (h), Z-26 (N79): this test holds the lock from a descriptor of its own, and the deadline is
+    ``PAST_SECONDS`` behind: exactly one attempt, refused, then ``SchedulerRunLockTimeout``. The block never ran, nothing
+    was in flight when it raised, nothing is left open, and the test's lock is still held. Barriers only: no duration.
+
+    Red before Z-26: the module has no ``SchedulerRunLockTimeout``, and its lock no ``deadline``."""
+    print_section("RL-013: a held lock, a deadline already past")
+    run_lock = _run_lock()
+    timeout = _bounded_wait(run_lock)
+    flocks = _record_flocks(monkeypatch, run_lock)
+    files = _record_os(monkeypatch, run_lock)
+    path = tmp_path / LOCK_FILE_NAME
+
+    with _held_here(path) as mine:
+        before = _descriptors()
+        async with _bounded(run_lock, path, time.monotonic() - PAST_SECONDS, flocks, files) as waiting:
+            await waiting.gives_up(timeout, "a wait whose deadline was already past, the lock held")
+        assert [call.outcome for call in flocks.attempts()] == ["refused"], f"one attempt, refused, then the timeout: none after the deadline: {flocks.attempts()}"
+        _assert_nothing_in_flight(waiting)
+        await _until(lambda: _descriptors() == before and not _left_open(path, mine), lambda: f"the wait that gave up left descriptors open: {_descriptors()} instead of {before}, {_left_open(path, mine)} on the lock file")
+        assert _probe_here(path) == "refused", "the test's lock is untouched by the wait that gave up"
+    print_success("one attempt, refused, given up; nothing left")
+
+
+@pytest.mark.asyncio
+async def test_a_holder_that_lets_go_before_the_deadline_lets_the_block_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RL-014 — contract (h), Z-26 (N79): a child holds the lock. Here a wait whose deadline is ``FAR_SECONDS`` away is
+    refused three attempts in a row, each ``LOCK_EX | LOCK_NB``, at least ``POLL_SECONDS`` apart — far from the deadline,
+    ``min(POLL_SECONDS, deadline - now)`` is ``POLL_SECONDS`` —, the block not run; the child lets go: the block runs,
+    the lock refused to others while it runs and free once it is over, and the wait never gave up.
+
+    Red before Z-26: the module has no ``SchedulerRunLockTimeout``, and its lock no ``deadline``."""
+    print_section("RL-014: the holder lets go before the deadline")
+    run_lock = _run_lock()
+    _bounded_wait(run_lock)
+    flocks = _record_flocks(monkeypatch, run_lock)
+    path = tmp_path / LOCK_FILE_NAME
+
+    with _children(tmp_path) as children:
+        holder = Holder(children, path)
+        await holder.holding()
+        async with _bounded(run_lock, path, time.monotonic() + FAR_SECONDS, flocks, None) as waiting:
+            await waiting.refused(flocks, REFUSALS, "another process")
+            refused = flocks.refused()
+            gaps = [round(later.at - earlier.at, 3) for earlier, later in zip(refused, refused[1:], strict=False)]
+            assert all(gap >= POLL_SECONDS - TIMER_SLACK for gap in gaps), f"far from the deadline an attempt follows a refused one after POLL_SECONDS ({POLL_SECONDS} s) at least: gaps {gaps}"
+            assert all(call.operation & fcntl.LOCK_NB for call in flocks.attempts()), f"every attempt is LOCK_EX | LOCK_NB: {flocks.attempts()}"
+            holder.release()
+            await waiting.runs("the block never ran once the other process let go before the deadline")
+            assert _probe_here(path) == "refused", "while the block runs the lock is held"
+        assert (_ending(waiting.task), waiting.gave_up_at) == ("returned", None), f"the wait never gave up: {_ending(waiting.task)}"
+        assert _probe_here(path) == "granted", "once the block is over the lock is free"
+        await holder.ended()
+    print_success(f"{len(refused)} attempts refused {gaps} s apart, then the block ran; no timeout")
+
+
+@pytest.mark.asyncio
+async def test_an_attempt_in_flight_when_the_deadline_passes_is_awaited_and_none_follows_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RL-015 — contract (h), Z-26 (N79): this test holds the lock from a descriptor of its own. The wait's first attempt
+    is stopped in its thread just before its ``flock``, its descriptor open, until the deadline — ``NEAR_SECONDS`` away —
+    is ``WATCH_SECONDS`` past: all that time the wait is still on, waiting for its attempt. Let go, the attempt is refused
+    and the wait gives up with ``SchedulerRunLockTimeout`` without another one: a single attempt, nothing in flight when it
+    raised, nothing left open.
+
+    Red before Z-26: the module has no ``SchedulerRunLockTimeout``, and its lock no ``deadline``."""
+    print_section("RL-015: the deadline passes during an attempt")
+    run_lock = _run_lock()
+    timeout = _bounded_wait(run_lock)
+    flocks = _record_flocks(monkeypatch, run_lock)
+    files = _record_os(monkeypatch, run_lock)
+    path = tmp_path / LOCK_FILE_NAME
+    in_flight, go = flocks.hold_next_attempt()
+
+    try:
+        with _held_here(path) as mine:
+            before = _descriptors()
+            deadline = time.monotonic() + NEAR_SECONDS
+            async with _bounded(run_lock, path, deadline, flocks, files) as waiting:
+                await _until(lambda: in_flight.is_set() or waiting.task.done(), "the first attempt never reached its flock")
+                assert in_flight.is_set(), f"Precondition: the first attempt is in flight: {_ending(waiting.task)}"
+                await _until(lambda: time.monotonic() > deadline + WATCH_SECONDS or waiting.task.done(), "the deadline never passed")
+                assert not waiting.task.done(), f"the wait gave up with its attempt in flight, its descriptor open: {_ending(waiting.task)}; recorded then {waiting.files_then}"
+                go.set()
+                await waiting.gives_up(timeout, "once its attempt in flight across the deadline was refused, the wait")
+            assert [call.outcome for call in flocks.attempts()] == ["refused"], f"the attempt in flight was awaited, and none followed it past the deadline: {flocks.attempts()}"
+            _assert_nothing_in_flight(waiting)
+            await _until(lambda: _descriptors() == before and not _left_open(path, mine), lambda: f"the wait that gave up left descriptors open: {_descriptors()} instead of {before}, {_left_open(path, mine)} on the lock file")
+    finally:
+        go.set()
+    print_success("the attempt in flight awaited past the deadline, refused, then given up without another")
+
+
+@pytest.mark.asyncio
+async def test_the_wait_before_an_attempt_is_cut_to_the_deadline(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """RL-016 — contract (h), Z-26 (N79): ``POLL_SECONDS`` set to an hour — read at each wait — and the lock held by a
+    descriptor of this test: a wait whose deadline is ``NEAR_SECONDS`` away still gives up with
+    ``SchedulerRunLockTimeout`` within ``WAIT_SECONDS``, never before its deadline. The wait after a refused attempt is
+    ``min(POLL_SECONDS, deadline - now)``, never a whole ``POLL_SECONDS`` past the deadline.
+
+    Red before Z-26: the module has no ``SchedulerRunLockTimeout``, and its lock no ``deadline``."""
+    print_section("RL-016: the wait before an attempt cut to the deadline")
+    run_lock = _run_lock()
+    timeout = _bounded_wait(run_lock)
+    flocks = _record_flocks(monkeypatch, run_lock)
+    monkeypatch.setattr(run_lock, "POLL_SECONDS", POLL_HOUR)
+    path = tmp_path / LOCK_FILE_NAME
+
+    with _held_here(path):
+        deadline = time.monotonic() + NEAR_SECONDS
+        async with _bounded(run_lock, path, deadline, flocks, None) as waiting:
+            await waiting.gives_up(timeout, f"with POLL_SECONDS {POLL_HOUR:.0f} s, a wait whose deadline was {NEAR_SECONDS} s away: the wait before an attempt is min(POLL_SECONDS, deadline - now)")
+        outcomes = [call.outcome for call in flocks.attempts()]
+        assert outcomes and set(outcomes) == {"refused"}, f"Barrier: refused at least once, never granted: {flocks.attempts()}"
+        assert waiting.gave_up_at is not None and waiting.gave_up_at >= deadline, f"the wait gives up once its deadline is reached, never before: at {waiting.gave_up_at}, the deadline {deadline}"
+    print_success(f"{len(outcomes)} attempt(s) refused; given up {waiting.gave_up_at - deadline:.3f} s past the deadline, not an hour")

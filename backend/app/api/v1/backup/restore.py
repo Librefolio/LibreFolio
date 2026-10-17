@@ -49,7 +49,7 @@ from backend.app.schemas.backup import (
     RestoreUpload,
 )
 from backend.app.services.platform.instance_backup import outcome, restart, restore_jobs
-from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, cancel_restore, prepare_restart, read_restore
+from backend.app.services.platform.instance_backup.apply import RestoreNotPendingError, RestoreState, RestoreStateError, RestoreStateUnreadableError, cancel_restore, prepare_restart, read_restore
 from backend.app.services.platform.instance_backup.envelope import EnvelopeError
 from backend.app.services.platform.instance_backup.jobs import out_of_space
 from backend.app.services.platform.instance_backup.paths import BackupPathError
@@ -68,14 +68,22 @@ _FOLDER_UNUSABLE = {"description": "The restore folder of the data directory is 
 _UPLOAD_FAILED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the archive could not be written (code `backup_upload_failed`)"}
 _STAGE_NOT_STARTED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the check could not start: its folders or its state could not be written (code `stage_failed`)"}
 _STAGE_NOT_FOUND = {"description": "No check has this id (code `restore_stage_not_found`)"}
-_CONFIRM_FAILED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the confirmation could not be written (code `restore_confirm_failed`): nothing confirmed"}
-_CANCEL_FAILED = {"description": "The restore could not be dropped (code `restore_cancel_failed`): it still waits for the next start"}
+_CONFIRM_FAILED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), the confirmation could not be written (code `restore_confirm_failed`), or the state of the restore cannot be read (code `restore_state_unreadable`): nothing confirmed"}
+_CANCEL_FAILED = {"description": "The restore could not be dropped (code `restore_cancel_failed`): it still waits for the next start; or the state of the restore cannot be read (code `restore_state_unreadable`): nothing dropped"}
 _OUTCOME_NOT_FOUND = {"description": "No restore outcome for this ticket: none, malformed, unknown, expired, replaced or removed, or of another restore, all alike (code `restore_outcome_not_found`)"}
-_RESTART_NOT_PREPARED = {"description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), or the ticket of the outcome could not be written (code `restore_restart_failed`): no restart"}
+_RESTART_NOT_PREPARED = {
+    "description": "The restore folder of the data directory is a link or a file (code `restore_folder_unusable`), the ticket of the outcome could not be written (code `restore_restart_failed`), or the state of the restore cannot be read (code `restore_state_unreadable`): no restart"
+}
+_STATE_UNREADABLE = {"description": "The state of the restore cannot be read: its owner or permissions, a disk error (code `restore_state_unreadable`); whether a restore waits is not known"}
 
 
 def _folder_unusable() -> HTTPException:
     return backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_folder_unusable", "The restore folder of the data directory is not a plain folder")
+
+
+def _state_unreadable() -> HTTPException:
+    """A state of the restore the file system does not let be read (logged by the reader): never taken for none (B-32)."""
+    return backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_state_unreadable", "The state of the restore cannot be read: the server's log has the cause")
 
 
 def _declared_size(request: Request) -> int | None:
@@ -331,13 +339,16 @@ def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -
     """Confirm the restore of a checked archive. Nothing changes yet: the next start of the server applies it, and ends
     every session; ``POST /backup/restore/restart`` stops the server for that start. A full disk answers 507
     ``backup_no_space``, any other failure to write the confirmation 500 ``restore_confirm_failed``: either way nothing
-    is confirmed, since the state is written last and atomically (B-31)."""
+    is confirmed, since the state is written last and atomically (B-31). A state that cannot be read answers 500
+    ``restore_state_unreadable``: a restore that may be half applied is never written over (B-32)."""
     try:
         return _status_view(restore_jobs.confirm_check(stage_id, confirmed_by=admin.username, data_dir=get_data_dir()))
     except restore_jobs.CheckNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
     except restore_jobs.CheckRunningError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_stage_running", "The check still runs") from None
+    except RestoreStateUnreadableError:
+        raise _state_unreadable() from None
     except RestoreStateError as exc:
         raise backup_error(_CONFIRM_STATUS.get(exc.code, status.HTTP_409_CONFLICT), exc.code, str(exc)) from None
     except BackupPathError:
@@ -350,22 +361,29 @@ def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_confirm_failed", "The restore could not be confirmed: the server's log has the cause") from None
 
 
-@restore_router.get("/restore/status", response_model=RestoreStatus)
+@restore_router.get("/restore/status", response_model=RestoreStatus, responses={500: _STATE_UNREADABLE})
 def get_restore_status(_admin: User = Depends(require_admin)) -> RestoreStatus:
     """The restore waiting for the next start, the one being applied, or the last one that ended; ``none`` when there was
-    none."""
-    return _status_view(read_restore(get_data_dir()))
+    none. A state the file system does not let be read answers 500 ``restore_state_unreadable``, never ``none``: a
+    restore may wait behind it (B-32)."""
+    try:
+        return _status_view(read_restore(get_data_dir()))
+    except RestoreStateUnreadableError:
+        raise _state_unreadable() from None
 
 
 @restore_router.delete("/restore/pending", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": f"{_NOT_PENDING} (code `restore_not_pending`)"}, 500: _CANCEL_FAILED})
 def cancel_pending_restore(_admin: User = Depends(require_admin)) -> Response:
     """Drop the restore waiting for the next start, with its checked copy, as ``backup pending --cancel`` does: the data
     stays as it is. A failure before the restore is dropped answers 500 ``restore_cancel_failed`` and leaves it waiting;
-    a copy that cannot be removed afterwards is only logged (B-31)."""
+    a copy that cannot be removed afterwards is only logged (B-31). A state that cannot be read answers 500
+    ``restore_state_unreadable``, nothing dropped (B-32)."""
     try:
         cancel_restore(data_dir=get_data_dir(), drop_copy=True)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_not_pending", _NOT_PENDING) from None
+    except RestoreStateUnreadableError:
+        raise _state_unreadable() from None
     except OSError as exc:
         logger.error("A pending restore could not be cancelled", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_cancel_failed", "The restore could not be cancelled: the server's log has the cause") from None
@@ -389,6 +407,8 @@ def restart_for_restore(background_tasks: BackgroundTasks, response: Response, _
         state, ticket = prepare_restart(data_dir=data_dir)
     except RestoreNotPendingError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_not_pending", _NOT_PENDING) from None
+    except RestoreStateUnreadableError:
+        raise _state_unreadable() from None
     except BackupPathError:
         raise _folder_unusable() from None
     except OSError as exc:
@@ -406,7 +426,12 @@ def get_restore_outcome(response: Response, x_restore_ticket: str | None = Heade
     instead, never in the URL. The same 404 for every ticket that does not give it. The outcome can be read again until
     the ticket expires, a final one included (decision N53)."""
     data_dir = get_data_dir()
-    found = outcome.read_outcome(x_restore_ticket, read_restore(data_dir), data_dir=data_dir)
+    try:
+        state = read_restore(data_dir)
+    except RestoreStateUnreadableError:
+        # Logged by the reader: the holder of a ticket learns no more than with any other ticket (B-32).
+        state = None
+    found = outcome.read_outcome(x_restore_ticket, state, data_dir=data_dir)
     if found is None:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_outcome_not_found", "No restore outcome for this ticket")
     response.headers["Cache-Control"] = "no-store"

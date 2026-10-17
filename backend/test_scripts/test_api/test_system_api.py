@@ -13,7 +13,7 @@ Covers:
 - GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
-- GET /api/v1/system/instance: public, no session; {profile, accounts, email, support_url} live (the lane's default profile,
+- GET /api/v1/system/instance: public, no session; {profile, accounts, email, support_url, legal} live (the lane's default profile,
   no support address) and in-process (a profile set, a support address set); accounts.first_account_open a boolean,
   optional and false unless set (A6d); accounts.password_rules the backend's password rules, the same on every instance
   (A6c, decision 37); support_url what support_link() publishes, null unless LIBREFOLIO_SUPPORT_URL is an http(s) page
@@ -824,12 +824,14 @@ class TestConnectionSecurityInProcess:
 # ============================================================================
 #
 # What the app reads at startup, before anyone signs in: public by design, the same for
-# whoever asks, so behind no session. Four fields today: the profile from LIBREFOLIO_PROFILE
+# whoever asks, so behind no session. Five fields today: the profile from LIBREFOLIO_PROFILE
 # (selfhosted unless set); accounts — the registration mode, whether a variable locks it, whether the instance has
 # no account yet (first_account_open, A6d: what the login page reads instead of the global settings, which now want a
 # session) and the password rules (password_rules, A6c: what the registration, invitation and reset pages show before
-# anyone signs in) —; email, whether the instance can send emails (workstream E); and support_url, where users ask for
-# help (LIBREFOLIO_SUPPORT_URL, workstream H, CP13), null unless set to an http(s) page or mailto: and one address.
+# anyone signs in) —; email, whether the instance can send emails (workstream E); support_url, where users ask for
+# help (LIBREFOLIO_SUPPORT_URL, workstream H, CP13), null unless set to an http(s) page or mailto: and one address; and
+# legal, the instance's own legal pages (workstream A, F09: its content is pinned in test_instance_config_legal_api.py,
+# here only its presence).
 # Live on the lane's backend for the lane's default — the runner drops every LIBREFOLIO_* setting from a lane, so no
 # support address —, in-process for a profile or a support address set through the environment, which the lane's
 # server cannot be given from here. The lane's database is
@@ -840,7 +842,7 @@ class TestConnectionSecurityInProcess:
 
 INSTANCE_URL = f"{API_BASE}/system/instance"
 #: The public configuration, exactly these fields.
-INSTANCE_KEYS = {"profile", "accounts", "email", "support_url"}
+INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", "legal"}
 #: accounts, exactly these fields.
 ACCOUNTS_KEYS = {"registration_mode", "registration_locked", "first_account_open", "password_rules"}
 #: Decision 37 (lot A6c): accounts.password_rules as (code, value) — a value left out and a null one read alike.
@@ -899,7 +901,7 @@ class TestInstanceConfigLive:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("forged_cookie", [False, True], ids=["no-cookie", "forged-session-cookie"])
     async def test_anyone_gets_the_public_configuration(self, test_server, forged_cookie):
-        """No session, or a session cookie the server never issued: 200 and exactly the declared fields, the default profile beside accounts and email, and support_url null: the lane sets no support address."""
+        """No session, or a session cookie the server never issued: 200 and exactly the declared fields, the default profile beside accounts, email and legal, and support_url null: the lane sets no support address."""
         async with httpx.AsyncClient() as client:
             if forged_cookie:
                 client.cookies.set(SESSION_COOKIE_NAME, f"forged-{uuid4().hex}")
@@ -951,7 +953,7 @@ class TestInstanceConfigInProcess:
 
         assert response.status_code == 200, f"GET /system/instance with LIBREFOLIO_PROFILE={configured!r}: expected 200, got {response.status_code}: {response.text}"
         body = response.json()
-        assert set(body) == INSTANCE_KEYS and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts, email and support_url and nothing else: {response.text}"
+        assert set(body) == INSTANCE_KEYS and body["profile"] == profile, f"LIBREFOLIO_PROFILE={configured!r} must be answered as profile {profile!r}, beside accounts, email, support_url and legal and nothing else: {response.text}"
         accounts = body["accounts"]
         assert (
             set(accounts) == ACCOUNTS_KEYS and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)

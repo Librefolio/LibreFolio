@@ -96,6 +96,7 @@ backend/app/services/financial_math/
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price and performance histories
     ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
+    ├── scope_boundary.py    transfer legs whose partner sits outside the scope, read at its edge: in at their cost, out at market
     └── average_cost_lines.py  per-broker and cumulative WAC history points
 ```
 
@@ -149,10 +150,13 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    Its linked rows stay in `split_linked_tx_ids`, the split's rescale with their cost kept. Only the ratio is dropped:
    the event adds no `SplitRecord` to `split_history`, and goes once into `PortfolioCalculationResult.invalid_split_events`
    (`InvalidSplitEvent`, sorted by event id), which the data-quality report turns into `INVALID_SPLIT_RATIO`.
-   The range it replays starts no earlier than the first
+   The range of daily states it computes starts no earlier than the first
    transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
-   day, and an end far in the future held the instance (R13-SEC7-1). A range that ends before the first transaction
-   gives an empty result;
+   day, and an end far in the future held the instance (R13-SEC7-1). Nor does it start before `EARLIEST_RANGE_START`
+   (1 January 1900, same module, R13-SEC8): a transaction stored before it is still replayed on its own date (see
+   [The Days the Engine Recomputes](#recomputed-days)), but no state is emitted for a day before it, and none of the
+   per-day rates of steps 4 and 5 is asked before it — a movement's own conversion is still asked at its date. A
+   range that ends before the first transaction gives an empty result;
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options, data fingerprints and the day of
    `position_states_start` — that starts on or before the requested start and ends on the
@@ -200,8 +204,8 @@ thread instead, `await loop.run_in_executor(_ENGINE_EXECUTOR, contextvars.copy_c
   `portfolio_blob` cache is written on the loop, after the await.
 - **Cancellation.** A thread cannot be cancelled. When the request is cancelled while its replay runs — its client
   disconnected — the replay runs to its end and its result is dropped, since the cache write comes after the
-  await; a replay still waiting in the queue is cancelled before it starts. The range cap of step 2
-  (R13-SEC7-1) bounds the work.
+  await; a replay still waiting in the queue is cancelled before it starts. The range bounds of step 2
+  (R13-SEC7-1, R13-SEC8) bound the work.
 
 When you give the builder a new input, give it loaded data — a column already read, or a value an earlier step
 computed — never a lazy relationship or an expired attribute. The worker thread would try to load it outside the
@@ -248,6 +252,24 @@ of the formula changes». A replayed day is dirty when it has:
 - a split;
 - or it is the first replayed day, `date_from`, or `period_start` when it falls in the replay.
 
+Before `date_from` a quiet day is not even visited: no state is emitted there, and it would only
+carry the previous one, so the loop jumps straight to the next dirty day (`bisect.bisect_right()`
+over the sorted dirty days; `date_from` is always one). The output is the one a day-by-day walk
+gives, and the part of the replay before `date_from` costs its dirty days, not its calendar days.
+
+A movement stored before `EARLIEST_RANGE_START` (1 January 1900, `utils/datetime_utils.py`) is
+replayed exactly, on its own date and in its own order, never moved onto 1900; `calculate()` never
+passes a `date_from` before that floor, so the replay crosses the years between such a movement
+and `date_from` from dirty day to dirty day.
+
+!!! info "Why: R13-SEC8"
+
+    A transaction stored with a date far in the past — year 1, say — made every replay walk every
+    calendar day since: a state carried on each quiet day, a rate calendar for each currency, a rate
+    request for each day of each foreign currency it values (finding R13-SEC8, lot MF-SEC8-2). A row
+    dated `0001-01-01` could even raise `OverflowError`: a rate calendar starts the day before the
+    replay, and `date.min` has none.
+
 Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
 `native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its
 order, on which `read(currency, day)` gives one of `currencies` another rate than on the
@@ -255,11 +277,12 @@ calendar's previous day; a rate on the calendar's first day counts. The caller c
 and the calendar. The native cash reads the last rate known on or before the day, on the calendar
 of its rate points. The engine reads the rate `fx_rate_map` holds for that exact day
 (`_read_rate()`), on every replayed day — or day of the transit, for cash in transit — each
-compared with the day before (`_calendar()` starts one day early). `_read_rate()` reads only the
+compared with the day before (`_calendar()` starts one day early); its calendars start on
+`EARLIEST_RANGE_START` at the earliest, since no rate is loaded before it. `_read_rate()` reads only the
 map, which `_preload_fx_rates()` already fills for these currencies on every day of
 `[date_from, date_to]` (a day replayed before a later `date_from` may find none there, and its
-state is not emitted), and for cash in transit on every day of its transit: the rule asks the FX
-service for nothing more.
+state is not emitted), and for cash in transit on every day of its transit from
+`EARLIEST_RANGE_START` on: the rule asks the FX service for nothing more.
 
 When you add an input that can change a day's value — a rate, a price, a mark's source, an age —
 add its days to the dirty days, or show that the day cannot change.
@@ -439,7 +462,11 @@ flowchart LR
    (`MeasureSignal.ts`) and the what-if curves of the
    [synthetic benchmarks](../../financial-theory/technical-analysis/synthetic-benchmarks/index.md)
    (`CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`), all in
-   `frontend/src/lib/charts/signals/` — and each exception must be declared where it lives.
+   `frontend/src/lib/charts/signals/`; and the lot measures shaped by the user's choices (D-MF6(b)):
+   the lots table footer over the selection, else the filtered rows (`unifiedLotsTableHelpers.ts`),
+   the comparison chart's aggregate of the selected lots (`lotComparisonChartHelpers.ts`) and the
+   WAC chart's percentage view (`lotWacPriceChartHelpers.ts`), all in
+   `frontend/src/lib/features/brokers/lots/` — and each exception must be declared where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
    `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
    `measureSignal.test.ts`, so changing one without the other fails that test. Its `changePct` (null on a zero
@@ -449,7 +476,8 @@ flowchart LR
    followed by what the exception computes and why it stays in the browser. The [gate](#frontend-exceptions-gate)
    (`frontend/src/financialMathExceptions.gate.test.ts`) holds the list of declared files and
    fails when a listed file lacks the tag, an unlisted file carries it, or an annualizing
-   exponent with 365 (`Math.pow(…, …365…)`, `** …365…` or `**= …365…`) appears outside the listed files:
+   exponent with 365 (`Math.pow(…, …365…)`, `** …365…` or `**= …365…`) appears outside the listed
+   files that annualize:
    adding an exception means extending that list on purpose; otherwise, use the backend's field.
 
 ---
@@ -599,7 +627,8 @@ fails when:
 - a file of its list, `DECLARED_EXCEPTIONS`, lacks `@financial-math-exception` in its leading
   JSDoc block, followed by a description of at least 20 characters;
 - any other source contains the tag, even in a comment or a string;
-- a power whose exponent holds 365 (`Math.pow(…, …365…)`, `**`, `**=`) appears outside the list.
+- a power whose exponent holds 365 (`Math.pow(…, …365…)`, `**`, `**=`) appears outside the listed
+  files that annualize, flagged `annualizes: true` — the measuring tool and the compound curve.
   Powers are found with the TypeScript and Svelte parsers, so comments and strings never count.
 
 As in the layer guard, each detector proves, on synthetic sources, that it sees what it looks

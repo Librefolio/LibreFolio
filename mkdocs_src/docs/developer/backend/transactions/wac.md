@@ -238,7 +238,11 @@ All the conversions go to the FX service in **one**
 
 - every non-zero movement in a currency other than T, at its own date — for the flows;
 - one unit of each foreign currency on every day from its first movement through
-  `rates_until` — for the balances.
+  `rates_until` — for the balances. The days start on `EARLIEST_RANGE_START`
+  (1 January 1900, `utils/datetime_utils.py`) when the first movement is earlier: a
+  movement stored centuries back would otherwise ask one rate per day since
+  (R13-SEC8). Before the floor only the movements' own days are asked, so a balance
+  counted there still has a rate on or before every later day.
 
 When every non-zero amount is already in T, no call is made and `session` is not
 used: cash held only in the report currency never needs a rate.
@@ -585,11 +589,15 @@ unknown cost therefore comes from:
 
 - data the batch never checked: written outside it, or promoted by an earlier
   version, which did not check promoted pairs; or
-- an `ADJUSTMENT` linked to a `SPLIT` event that is later retyped. Auto stores no
-  cost on a split-linked row (see
-  [Split-linked adjustment skip](#split-linked-adjustment-skip)), so once the
-  event is no longer a `SPLIT` its units have an unknown cost
-  (`test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition`
+- an `ADJUSTMENT` linked to a `SPLIT` event retyped before release 1.3. Auto stores
+  no cost on a split-linked row (see
+  [Split-linked adjustment skip](#split-linked-adjustment-skip)), so without the
+  split its units would have an unknown cost. Since P-10 the app refuses to take
+  the split away while such a row has no cost: the retype answers 409
+  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, the market-data wipe of a currency change
+  409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`; once the row has a cost, 0
+  included, both go through
+  (`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`
   in `backend/test_scripts/test_api/test_portfolio_wac.py`).
 
 **An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
@@ -734,9 +742,11 @@ averaged from that pool is written:
 | `delete_by_broker()` | The deletion of that broker fails whole (see [Broker Deletion](service.md#broker-deletion)) |
 | `convert_lone_giving_legs()`, through `_handover_cost()` | That leg stays a `TRANSFER` without its partner, answered with the error's message as its reason; the other legs are converted (see [Lone giving legs](../../architecture/database/index.md#lone-transfer-legs)) |
 
-`compute_wac_and_fx_issues()` passes no list yet — the batch's own refusal is wired
-separately — so in a batch the error, like one from `_handover_cost()` on the giving
-leg of a split `TRANSFER`, propagates out of `execute_batch()`.
+`compute_wac_and_fx_issues()` (`batch_costs.py`) passes a list: each item in it becomes
+the issue `autoCostUnreadable` on its row — field `cost_basis_override`, `params`
+`{"count": N}`, no transaction id, since the pool can be another user's — and the giving
+leg of a split `TRANSFER` whose `_handover_cost()` raises gets the same issue on its
+split, with the leg's id as `ref_id`. The batch is not saved.
 
 ### 🔗 Promote boundary {: #promote-boundary }
 

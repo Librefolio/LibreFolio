@@ -30,7 +30,7 @@ from backend.app.services.financial_math.portfolio.models import ClassifiedTrans
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
-from backend.app.utils.datetime_utils import latest_range_end
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)
@@ -262,8 +262,10 @@ class PortfolioCalculationEngine:
         # R13-SEC7-1: the replay walks every day of the range, so neither end runs free. It starts no earlier than the
         # first transaction (before it there is nothing to replay, and a period starting earlier already starts empty)
         # and ends no later than latest_range_end(), tomorrow. A range that ends before the first transaction has no day.
+        # R13-SEC8: nor earlier than EARLIEST_RANGE_START (1900-01-01): a row stored before it is still replayed, on its
+        # own date, but no state is emitted, nor a per-day rate asked, for a day before it.
         first_tx_date = min(tx.date for tx in all_txs)
-        actual_from = max(date_from, first_tx_date) if date_from else first_tx_date
+        actual_from = max(date_from, first_tx_date, EARLIEST_RANGE_START) if date_from else max(first_tx_date, EARLIEST_RANGE_START)
         actual_to = min(date_to or date_type.today(), latest_range_end())
         if actual_from > actual_to:
             return PortfolioCalculationResult(
@@ -573,7 +575,7 @@ class PortfolioCalculationEngine:
         for interval in in_transit_intervals:
             dep = interval.departure_leg
             if interval.tx_type == "cash" and dep.currency and dep.currency != target_currency:
-                current = interval.start_date
+                current = max(interval.start_date, EARLIEST_RANGE_START)  # R13-SEC8: no rate is asked before the floor
                 while current <= interval.end_date:
                     fx_needs.add((dep.currency, current))
                     current += timedelta(days=1)
