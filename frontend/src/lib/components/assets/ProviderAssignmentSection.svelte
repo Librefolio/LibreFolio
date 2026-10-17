@@ -25,9 +25,9 @@
     import {getCurrencyInfo, currencyStoreVersion, ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {isSoftProbeFailure, summarizeProbeError, formatCurrencyForTooltip, buildProbeTooltipHtml} from './providerProbe';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
-    import {resolveProviderError} from './resolveProviderError';
+    import {probeRateLimitMessage, resolveProviderError} from './resolveProviderError';
     import {createProviderProbeState, providerConfigurationKey, type ProviderConfiguration, type ProviderProbeState} from './providerProbeState.svelte';
     import {safeScalar, safeString} from '$lib/types/common';
     import {extractErrorMessage} from '$lib/utils/trySave';
@@ -358,6 +358,9 @@
     function buildTestResults(): TestResult[] {
         if (probe.source !== 'manual') return [];
         if (probe.error) {
+            // The probe's own limit (X-R66): the translated sentence with the time the wait ends, as detail and summary
+            const limited = probeRateLimitMessage(probe.error, $t);
+            if (limited !== null) return [{success: false, operation: 'probe', status: 'error', label: $t('common.error'), detail: limited, summary: limited, execution_time_ms: 0}];
             const detail = extractErrorMessage(probe.error, $t('common.errorOccurred'));
             return [{success: false, operation: 'probe', status: 'error', label: $t('common.error'), detail, summary: summarizeProbeError(detail), execution_time_ms: 0}];
         }
@@ -378,7 +381,7 @@
             // I3: failures resolve code+details to a localized message; the
             // raw English `error` stays as fallback for unmapped codes.
             const cpError = cp.success ? null : resolveProviderError({error: safeString(cp.error), error_code: safeString(cp.error_code), error_details: safeScalar(cp.error_details)}, $t);
-            const detail = cp.success ? `${formatFixed(Number(cpValue), 2)} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
+            const detail = cp.success ? `${formatPrice(Number(cpValue))} ${ccyLabel}${cpDate ? ` (${formatDay(cpDate)})` : ''}` : (cpError ?? undefined);
             items.push({
                 success: cp.success,
                 operation: 'current_price',

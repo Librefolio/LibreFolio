@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
+- The Dashboard's data-quality banner now warns when Yahoo quotes a London asset you hold in pence (GBp) while LibreFolio values it as pounds: set its «Units per single price» to 100 (the dividends it shows stay in pence for now).
+- After an update, each user sees once what changed since their last version: the new changelog chapters, in their language where translated. New accounts never see it, and it never opens over a guide or another window. Same on self-hosted and managed instances.
 - `./dev.py db currencies` lists stored currency codes that are not ISO codes (names or numbers saved by earlier versions), and the server warns about them at every start.
 - `GET /api/v1/transactions` accepts `asset_event_id` and lists the transactions linked to that asset event, within the brokers you can see.
 - `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
@@ -88,7 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The same portfolio report requested twice at once (two tabs, a refresh during a slow load) is computed once.
 - **One change over the range, from the server.** The change over the selected range on the Assets cards, in the FX table and cards, on an FX pair's page and on an asset's page is now computed by the server, so the same figure appears everywhere; beside a live price it is the change up to that price. A price written down to 0 shows −100 %, and a change that cannot be computed in the display currency is left out instead of mixing currencies.
-- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently, so the AI can tell missing data from data that isn't part of the export.
+- AI Export: when a value is unavailable in every row of a table, the prompt now names that column right after the table instead of leaving it out silently (unless a null there only means "none", such as an open lot's closing date or a single asset's portfolio weight), so the AI can tell missing data from data that isn't part of the export.
 - A user's base currency is saved only as an ISO 4217 code, and a refused currency now names the ISO code it stands for (`'840'`: USD).
 - Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
 - After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
@@ -278,6 +280,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lots performance for a position entered before the asset's first price: the days before that price are now valued at cost, as on the Dashboard. The TWRR now includes the move from cost to the first price (it used to miss it and disagree with the ROI), and a transfer on such a day no longer empties the chart.
 - Yield on cost for a co-owner: units received from a broker you cannot see no longer make the yield "unavailable"; they count from their arrival, at the transfer's own cost basis.
 - Lots data-quality banner: the two messages about lots opened by an adjustment now say how their Open Return is measured, and no longer quote one lot's price for several lots.
+- **Lots panel: every unallocated income or cost is listed.** The data-quality banner of the lots panel shows each income or cost that no lot could take with its own amount and date, and both missing-exchange-rate notices; with several, it showed only the first.
+- Performance table: a position closed in the period that also moved units to another broker now annualizes on the cost of every unit that left (sold or moved), not only the units sold; one that left only by an internal transfer now annualizes over its own holding time; one that left any other way (a transfer outside the selection, still in transit, or with an unknown value) keeps the period's general rule; a position that received units from another broker and closed now counts them, in its annualized return, from their value on arrival, as its result does; a position opened in the period by a transfer from another broker, and still held, also counts the received units from their value on arrival in its annualized return.
+- Risk: a historical replay requested beyond the allowed dates now reports the window it actually replayed (the bounded one), while its parameters keep the request; the stress analytic moves to version 3.0.1.
 - The risk analysis no longer fails to open when a currency code saved before 1.3 is not a three-letter ISO code: the amount is shown followed by the code as saved.
 - A transaction dated far in the past (e.g. year 1) no longer makes every portfolio report recompute hundreds of thousands of days, nor fail: histories start no earlier than 1 January 1900.
 - A transaction dated in year 1 no longer breaks the lots and the yield on cost.
@@ -303,15 +308,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removing an asset's provider (No Provider) no longer fails with a server error showing database text when a transaction is linked to an event the provider generated: the removal is refused, and the form names the event and how many transactions to unlink first.
 - FX rates and prices: deleting more than a thousand separate days (or ranges) at once no longer fails; a write of more than 10,000 items is refused with a clear error; server errors no longer show internal details. The provider-probe limit (`LIBREFOLIO_PROBE_RATE_LIMIT`) applies without a restart.
 - Broker import: a report with about 90 or more different securities no longer fails while matching its assets. Large FX rate deletions no longer hold up the server, and the live-price fallback is read safely under load.
+- Broker import: matching a large report's assets no longer holds up the server for other users.
 - Prices: deleting several date ranges of an asset now reports each row once, also when ranges overlap or the asset is named twice, and an empty delete request no longer fails; large deletions count far faster.
 - A manual price upload for several assets is refused as a whole when one of its prices is in a currency other than its asset's: before, the assets before it were already saved. The refusal (422 `price_currency_mismatch`) names every asset at fault.
+- Editing a pair's conversion routes no longer loses them when the save fails, and removing every route keeps the pair as a manual one instead of deleting it. The route picker no longer fails when two providers cover the same currency direction.
+- Too many provider checks in a minute (Test Configuration, Ask Provider): the asset form now says, in your language, when you can try again, instead of an English sentence or "An error occurred".
 - `./dev.py user create` now refuses a username shorter than 3 or longer than 50 characters, as registration does.
 - Settings › Administration › Users: cancelling the setup link of an administrator who completed its setup in the meantime no longer deactivates it: the tab says so and nothing changes.
 - The import's gap-fix refuses to compare a broker whose transactions hold currency codes that are not ISO codes, instead of proposing corrections for money already there.
 - `dev.py user deactivate`/`demote` run at the very moment of an administrator's setup no longer leave the instance without an active administrator.
 - A number pasted in scientific notation, like `1e-8` copied from a spreadsheet, is now read exactly instead of turning into another number; one that can't be read, or that has an exponent beyond ±100, is shown in red with an explanation. Pasting a very long text into a number field no longer freezes the page.
 - Dividends and other events that a price provider reports with more than 6 decimals are now stored as they are read back, cut to 6 decimals like prices, instead of being read back rounded differently from what was written.
-- Very small prices and costs, such as a crypto token worth a fraction of a cent, are now shown with their significant digits instead of «0.00», and quantities show all 10 decimals they are stored with (in transactions, the average-cost preview, import corrections, the data editor and the lots views; a lot of a few satoshis no longer reads «1e-7» or «0»).
+- Very small prices and costs, such as a crypto token worth a fraction of a cent, are now shown with their significant digits instead of «0.00», and quantities show all 10 decimals they are stored with (in transactions, the average-cost preview, import corrections, the data editor, the lots views, the asset list, cards and detail, the price charts and the dashboard positions; a lot of a few satoshis no longer reads «1e-7» or «0»).
 - The data editors of assets and exchange rates no longer report as saved a value the server refused: a warning names each refused date and why, such as a close outside the day's low–high, and a refused save says what was wrong, such as a date before 1900 or after tomorrow, instead of «Request failed with status code 422».
 
 #### 🔒 Security

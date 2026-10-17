@@ -73,7 +73,7 @@ backend/app/services/financial_math/
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan
-├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window
+├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
 │   ├── models.py            input transactions, events, lots, fragments, closures, result
@@ -111,7 +111,7 @@ series' last point is the card. `calculate_mwrr()` and `calculate_mwrr_series()`
 rule, and every point of the series is the single solve ending on its snapshot (one starting guess).
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
-signal statistics read. `series_preparation.py`, which prepares those series, takes both from here and keeps no return
+signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
 or annualization formula of its own.
 
 - `float_price_return(start, end)` is `price_return()` as a float. It raises `ValueError` on a missing price or a zero
@@ -242,15 +242,18 @@ on the loop, the copied context, and a guard that fails on any lazy load during 
 
 **One build per key at a time** (MF-J45b). Two identical requests that miss the cache together — the same user in two
 tabs, a refresh during a cold build, the PAC planner's allocation source beside the report — used to pay the reads and
-one of the two workers each. `calculate()` now keeps the builds in flight in `_IN_FLIGHT`, by blob key and range
-(`(blob_key, actual_from, actual_to)`, the range the cache accepts):
+one of the two workers each. `calculate()` now keeps the builds in flight in `_IN_FLIGHT`, by blob key and exact range
+(`(blob_key, actual_from, actual_to)`). The cache also answers a request whose start is later than a stored blob's, but a
+flight does not: an identical request with a later start builds on its own.
 
 - the first request builds (`_compute_uncached()`: steps 6–12 above, unchanged), stores the result in the cache and
   hands it to the requests that arrived meanwhile, which `await asyncio.shield()` it: they get the same object, as a
   cache hit does, read-only;
-- if the build fails or its request is cancelled, the `finally` settles the entry with `_LeaderGone` **before** it
-  removes it, so no request waits on a build nobody will finish: the first waiting request to resume builds for
-  itself, the others wait for it; the leader's own error stays its own;
+- if the build fails, every waiting request gets the same error at once (MF-J45d): the same data fails the same way,
+  and retrying it one request after another made the k-th wait k builds before failing;
+- if the build's request is cancelled, the `finally` settles the entry with `_LeaderGone` **before** it removes it, so
+  no request waits on a build nobody will finish: the first waiting request to resume builds for itself, the others
+  wait for it;
 - a waiting request that is cancelled leaves the build alone (`shield`); other keys or ranges never wait for each
   other. The map is per process, like the cache.
 {: #single-flight }

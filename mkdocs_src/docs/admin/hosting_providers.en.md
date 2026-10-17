@@ -66,6 +66,12 @@ Today the profile changes eleven things:
   at an administrator's sign-in waits for the answer: a managed instance never shows them, not even
   for a moment, and never runs that check. On a managed instance, no variable brings back what
   those three rows take away.
+- After you update an instance, each of its users sees once, the next time they open it, what
+  changed since the version they last used: a **What's new in LibreFolio** window with those parts
+  of the changelog («What's new after an update» in
+  [Settings › About](../user/settings/about.md#changelog-modal)). It is the same in both profiles;
+  on a managed instance, which never checks for a newer release, it is how your customers learn
+  that you updated it. A new account never sees it.
 - Plugin settings and their variables: see «Plugin Settings» in
   [Environment Variables](configuration.md).
 - **Test mode** (`LIBREFOLIO_TEST_MODE`) is for LibreFolio's own test runs, which turn it on and off by themselves. A
@@ -270,7 +276,7 @@ To stop a link that went astray without sending a new one yet, cancel it from a 
 server, with the administrator's username (`admin` unless `LIBREFOLIO_ADMIN_USERNAME` names
 another): `docker compose exec librefolio python dev.py user deactivate <username>`. Another
 administrator of the instance can do the same with **Cancel setup link** in
-[Users & Invitations](users.md#cancel-setup). The link you sent stops working at once, and every
+[Users & Invitations](users.md#cancel-setup), but not for a protected account, whose button is off. The link you sent stops working at once, and every
 other setup link of the account with it, while the account keeps waiting for its setup: when you
 are ready, give a new link in one of the two ways above. Until then, each start logs the warning
 `The initial administrator's setup link was withdrawn (cancelled, or its address changed): run ./dev.py user setup-link, or set a new LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`.

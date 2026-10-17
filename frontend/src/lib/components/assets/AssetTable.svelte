@@ -23,7 +23,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
-    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatFixed, priceFractionDigits} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
@@ -216,7 +216,9 @@
                     // A market quote is the same figure for every user and reveals
                     // nothing about this one's holdings. No masked amount shares the
                     // row, so nothing can be reconstructed from it here.
-                    const inner = formatCurrencyAmountHtml(price, row.currency, {sensitivity: 'public'});
+                    // C-97c: a price under a cent keeps 4 significant digits instead of reading 0.00.
+                    const {min, max} = priceFractionDigits(price);
+                    const inner = formatCurrencyAmountHtml(price, row.currency, {minFraction: min, maxFraction: max, sensitivity: 'public'});
                     return {
                         type: 'html',
                         html: `<span class="font-mono transition-colors duration-300 ${colorCls}">${inner}</span>`,

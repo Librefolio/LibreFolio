@@ -1,36 +1,57 @@
-"""MF-J45b (workstream MF) — one portfolio build per key and range at a time, and the shared result stays read-only.
+"""MF-J45b, MF-J45d (workstream MF) — one portfolio build per key and range at a time, a failed build fails everyone
+waiting on it at once, and the shared result stays read-only.
 
-The defect: ``PortfolioCalculationEngine.calculate`` checked the blob cache, missed, and built. N identical requests
-arriving together (a Dashboard opened in two tabs, the AI Export's components, a report and a planner on the same
-scope) all missed, and each paid the reads, the preloads and a worker of the engine's two-worker executor (J-45) for
-the same result. The cure (``financial_math/portfolio/engine.py``): after the cache miss, ``calculate`` single-flights
-the build on ``(blob_key, actual_from, actual_to)`` in the module's ``_IN_FLIGHT``. The first request leads: it
-registers a future, runs ``_compute_uncached`` (steps 6–12, moved unchanged) and settles the future with the result.
-An identical request that arrives meanwhile follows: it awaits ``asyncio.shield(flight)`` and gets the same object (the
-one the cache holds, read-only like a cache hit). If the leader fails or is cancelled, its ``finally`` settles the
-future with ``_LeaderGone`` (marked retrieved), then removes the key; the first follower to resume leads a new build,
-the others follow it.
+The defect (J45b): ``PortfolioCalculationEngine.calculate`` checked the blob cache, missed, and built. N identical
+requests arriving together (a Dashboard opened in two tabs, the AI Export's components, a report and a planner on the
+same scope) all missed, and each paid the reads, the preloads and a worker of the engine's two-worker executor (J-45)
+for the same result. The cure (``financial_math/portfolio/engine.py``): after the cache miss, ``calculate``
+single-flights the build on ``(blob_key, actual_from, actual_to)`` in the module's ``_IN_FLIGHT``. The first request
+leads: it registers a future, runs ``_compute_uncached`` (steps 6–12, moved unchanged) and settles the future with the
+result. An identical request that arrives meanwhile follows: it awaits ``asyncio.shield(flight)`` and gets the same
+object (the one the cache holds, read-only like a cache hit).
 
-- ``TestOneBuildForIdenticalRequests`` — red on HEAD 98b364b45 (every request builds), green after: two and five
-  identical concurrent calculations make one build, every caller gets the identical object, the one the blob cache
+The defect (J45d, J's review of J45b, HEAD c5ff1f68d): a leader whose build raised settled its flight with
+``_LeaderGone`` too, so every follower rebuilt, one after another (the first to resume led, the others followed it):
+on data that fails deterministically the k-th follower waited about k builds before failing the same way. The cure:
+the build's own exception settles the flight (``except Exception``: ``set_exception(error)``, marked retrieved,
+re-raised), so the leader's caller and every follower raise that very object at once, and nothing rebuilds. A leader
+that is cancelled (``CancelledError`` is a ``BaseException``: outside that ``except``) still leaves the flight pending
+for its ``finally``, which settles it with ``_LeaderGone`` (marked retrieved): the first follower to resume leads a new
+build, the others follow it. Either way the flight is settled before its key is removed. A ``BaseException`` other
+than cancellation (``KeyboardInterrupt``, ``SystemExit``) is out of scope.
+
+HEAD 98b364b45 is before J45b (no single-flight), HEAD c5ff1f68d is J45b before J45d.
+
+- ``TestOneBuildForIdenticalRequests`` — red on 98b364b45 (every request builds), green on c5ff1f68d and after: two and
+  five identical concurrent calculations make one build, every caller gets the identical object, the one the blob cache
   holds; ``_IN_FLIGHT`` is empty after.
-- ``TestTheLeaderFailsOrIsCancelled`` — red on HEAD (each request builds), green after: the leader's build raises (its
-  caller gets that exception) or its task is cancelled (its caller is cancelled); the followers then make exactly one
-  new build among them, led by one of them, and all succeed with its object; none hangs; ``_IN_FLIGHT`` is empty.
-- ``TestAFollowerIsCancelled`` — red on HEAD (each request builds), green after: a follower cancelled while it waits
-  leaves the build, its leader and the other followers untouched (``asyncio.shield``): one build, all others succeed.
-- ``TestNoCoalescingAcrossKeysOrRanges`` — green on HEAD and after (a guard of the key): another range (``date_to``;
-  the blob key is the same, a precondition read from the registered flights), another broker scope, another currency:
-  one build each, no request waits for another.
-- ``TestTheSettledFlightIsRetrieved`` — red on HEAD (no flight is registered: the precondition fails), green after: a
-  leader that fails or is cancelled with nobody waiting leaves no «Future exception was never retrieved» once its
-  future is collected (the loop's exception handler captures it; a weak reference proves the future was freed).
-- ``TestTheFlightIsSettledBeforeItsKeyGoes`` — red on HEAD (no flight registered), green after: requirement (1). When
-  the leader's ``finally`` removes its key, its future is already done; no request ever reads a settled flight from
-  ``_IN_FLIGHT`` (the recorder raises if one does: a settled flight left under its key would make the follower loop
-  spin forever on the loop's thread, a hang no timeout could interrupt); the follower that resumes first finds the key
-  gone and leads, the others follow its new flight — none awaits the failed one twice.
-- ``TestTheSharedResultIsNotMutatedByItsConsumers`` — green on HEAD and after, a guard of requirement (2): with one
+- ``TestTheLeaderFails`` — red on c5ff1f68d (once the leader's build fails a follower starts a new build and the
+  others wait on it, instead of ending), green after: leader + 3 followers, the leader's build raises; before any build
+  is released again all four requests have ended, each raising that very exception object (``is``); one build in all;
+  one flight, settled with that exception before its key went (the ordering pin of this path), awaited once by each
+  follower, never read stale; a later identical request is not handed the failure: it builds anew and succeeds.
+- ``TestTheLeaderIsCancelled`` — red on 98b364b45 (each request builds), green on c5ff1f68d and after: the path J45d
+  keeps. The leader's task is cancelled (its caller is cancelled); the followers make exactly one new build among them,
+  led by one of them, and all succeed with its object; none hangs; ``_IN_FLIGHT`` is empty. Guards the ``except``'s
+  breadth: ``except BaseException`` would hand the ``CancelledError`` to the followers, cancelled with their leader.
+- ``TestAFollowerIsCancelled`` — red on 98b364b45 (each request builds), green on c5ff1f68d and after: a follower
+  cancelled while it waits leaves the build, its leader and the other followers untouched (``asyncio.shield``): one
+  build, all others succeed.
+- ``TestNoCoalescingAcrossKeysOrRanges`` — green on both HEADs and after (a guard of the key): another range
+  (``date_to``; the blob key is the same, a precondition read from the registered flights), another broker scope,
+  another currency: one build each, no request waits for another.
+- ``TestTheSettledFlightIsRetrieved`` — red on 98b364b45 (no flight is registered: the precondition fails), green on
+  c5ff1f68d and after: a leader that fails or is cancelled with nobody waiting leaves no «Future exception was never
+  retrieved» once its future is collected (the loop's exception handler captures it; a weak reference proves the
+  future was freed). Guards both ``flight.exception()`` calls: the one after ``set_exception(error)`` (fails), the one
+  after ``_LeaderGone`` (is cancelled).
+- ``TestTheFlightIsSettledBeforeItsKeyGoes`` — red on 98b364b45 (no flight registered), green on c5ff1f68d and after:
+  requirement (1) on the cancellation path, the one with two flights. When the cancelled leader's ``finally`` removes
+  its key, its future is already done; no request ever reads a settled flight from ``_IN_FLIGHT`` (the recorder raises
+  if one does: a settled flight left under its key would make the follower loop spin forever on the loop's thread, a
+  hang no timeout could interrupt); the follower that resumes first finds the key gone and leads, the other follows its
+  new flight — none awaits the cancelled one twice.
+- ``TestTheSharedResultIsNotMutatedByItsConsumers`` — green on both HEADs and after, a guard of requirement (2): with one
   object now served to every concurrent caller, a consumer that wrote into it would corrupt the others' answers. A deep
   structural snapshot (``_snapshot``: every dataclass field, container and Decimal exponent) of each result
   ``calculate`` returns, taken when it returns, equals the same snapshot after the consumers ran: the report
@@ -72,7 +93,7 @@ Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole
 
 Reference: backend/app/services/financial_math/portfolio/engine.py (calculate: the single-flight after step 5b;
 _compute_uncached; _LeaderGone; _IN_FLIGHT), LibreFolio_developer_journal/Release_2/Phase_1/11_financialMath/
-plan-phase01FinancialMath.prompt.md («MF-J45b»).
+plan-phase01FinancialMath.prompt.md («MF-J45b», «MF-J45d»).
 """
 
 from __future__ import annotations
@@ -472,7 +493,7 @@ def blob_stores(monkeypatch) -> _BlobStores:
 
 
 # =============================================================================
-# 1 — RED ON HEAD: IDENTICAL CONCURRENT REQUESTS MAKE ONE BUILD
+# 1 — RED ON HEAD 98b364b45: IDENTICAL CONCURRENT REQUESTS MAKE ONE BUILD
 # =============================================================================
 
 
@@ -481,7 +502,7 @@ class TestOneBuildForIdenticalRequests:
     @pytest.mark.parametrize("requests", [2, 5])
     async def test_identical_concurrent_requests_share_one_build_and_one_object(self, harness, blob_stores, requests):
         """N identical requests started together: one build; every caller gets the identical object, the one the blob
-        cache holds; no flight left. HEAD: every request builds (N builds, N objects)."""
+        cache holds; no flight left. HEAD 98b364b45: every request builds (N builds, N objects)."""
         print_section(f"MF-J45b: {requests} identical concurrent requests")
         for _ in range(requests):
             harness.start()
@@ -501,7 +522,7 @@ class TestOneBuildForIdenticalRequests:
 
 
 # =============================================================================
-# 2-3 — RED ON HEAD: THE LEADER FAILS OR IS CANCELLED, THE FOLLOWERS BUILD ONCE AND SUCCEED
+# 2 — RED ON HEAD c5ff1f68d: THE LEADER FAILS, EVERY FOLLOWER RAISES ITS EXCEPTION AT ONCE, NOTHING REBUILDS
 # =============================================================================
 
 
@@ -517,42 +538,76 @@ async def _leader_with_followers(harness: _Harness, followers: int) -> tuple[_He
     return leader_build, waiting
 
 
-class TestTheLeaderFailsOrIsCancelled:
+class TestTheLeaderFails:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("how", ["fails", "is_cancelled"])
-    async def test_the_followers_make_one_new_build_and_all_succeed(self, harness, blob_stores, how):
-        """Leader + 3 followers. The leader's build raises (its caller gets that exception) or its task is cancelled
-        (its caller is cancelled). The followers resume: one leads a new build, the other two wait on it; that build
-        released, the three succeed with its object. Two builds in all; no flight left."""
-        print_section(f"MF-J45b: the leader {how.replace('_', ' ')}, three followers")
+    async def test_every_waiting_request_raises_the_builds_own_exception_at_once_and_nothing_rebuilds(self, harness):
+        """Leader + 3 followers; the leader's build raises. Before any build is released again, all four requests have
+        ended, each raising that very exception object: one build in all. The one flight was settled with it before its
+        key went, each follower awaited it once. A later identical request is not handed the failure: it builds anew.
+        HEAD c5ff1f68d: the flight is settled with ``_LeaderGone``, a follower leads a new build, the others wait on it."""
+        print_section("MF-J45d: the leader's build fails, three followers")
+        leader_build, followers = await _leader_with_followers(harness, followers=3)
+        [(key, flight, _leader)] = harness.flights.registered
+        failure = _BuildFailed("corrupt data: the leader's build failed")
+        harness.gate.release(leader_build, failure=failure)
+        await harness.settle("the leader's failure reached its followers: each ended, or holds or awaits a new build")
+        rebuilds, still_running = len(harness.gate.builds) - 1, len(harness.live())
+        waiting_again = len(harness.waiting())
+        ended_at_once = rebuilds == 0 and still_running == 0
+
+        results = await harness.finish()
+
+        assert ended_at_once, f"once the leader's build failed, the followers started {rebuilds} new build(s) and {still_running} request(s) still ran ({waiting_again} waiting on a new flight), before any build was released: expected every follower to fail at once with the leader's exception"
+        wrong = {index: result for index, result in enumerate(results) if result is not failure}
+        assert wrong == {}, f"requests did not raise the leader's build's own exception (by start order): {wrong!r}"
+        assert [flight for _key, flight, _task in harness.flights.registered] == [flight], "a second flight was registered after the leader's build failed"
+        assert flight.exception() is failure, f"the flight was settled with {flight.exception()!r}, not the build's own exception"
+        assert harness.flights.removed == [(key, True)], f"(key, flight done) per removal: {harness.flights.removed} — expected the leader's key removed once, its flight already settled"
+        assert harness.flights.stale_reads == [], f"{len(harness.flights.stale_reads)} read(s) of a settled flight from _IN_FLIGHT: a key outlived its build"
+        assert all(harness.flights.awaited[task] == [flight] for task in followers), "a follower did not await the leader's flight exactly once"
+        assert len(harness.flights) == 0, f"{len(harness.flights)} flight(s) left in _IN_FLIGHT once every request ended"
+
+        later = harness.start()
+        outcome = (await harness.finish())[-1]
+
+        assert isinstance(outcome, PortfolioCalculationResult), f"a later identical request did not build anew: {outcome!r}"
+        assert len(harness.gate.builds) == 2 and harness.gate.builds[-1].task is later, "the later request was not served by a build of its own"
+        print_success("one build, its exception raised by the leader and its three followers at once; a later request builds")
+
+
+# =============================================================================
+# 3 — RED ON HEAD 98b364b45, GREEN ON c5ff1f68d AND AFTER: THE LEADER IS CANCELLED, THE FOLLOWERS BUILD ONCE
+# =============================================================================
+
+
+class TestTheLeaderIsCancelled:
+    @pytest.mark.asyncio
+    async def test_the_followers_make_one_new_build_and_all_succeed(self, harness, blob_stores):
+        """Leader + 3 followers; the leader's task is cancelled (its caller is cancelled): no failure of the build to
+        hand on. The followers resume: one leads a new build, the other two wait on it; that build released, the three
+        succeed with its object. Two builds in all; no flight left."""
+        print_section("MF-J45b: the leader is cancelled, three followers")
         leader_build, followers = await _leader_with_followers(harness, followers=3)
         leader = leader_build.task
-        failure = _BuildFailed("the leader's build failed")
-        if how == "fails":
-            harness.gate.release(leader_build, failure=failure)
-        else:
-            leader.cancel()
+        leader.cancel()
         await harness.settle("the followers resumed: one building, the others waiting on it")
         rebuilds = harness.held_builds()
 
         results = await harness.finish()
 
-        if how == "fails":
-            assert results[harness.tasks.index(leader)] is failure, f"the leader's caller did not get its build's exception: {results[harness.tasks.index(leader)]!r}"
-        else:
-            assert leader.cancelled(), f"the cancelled leader's caller was not cancelled: {results[harness.tasks.index(leader)]!r}"
+        assert leader.cancelled(), f"the cancelled leader's caller was not cancelled: {results[harness.tasks.index(leader)]!r}"
         follower_results = [results[harness.tasks.index(task)] for task in followers]
-        assert all(isinstance(result, PortfolioCalculationResult) for result in follower_results), f"a follower did not succeed after its leader {how}: {follower_results!r}"
-        assert len(harness.gate.builds) == 2, f"after the leader {how}, the followers made {len(harness.gate.builds) - 1} builds: expected one, the first to resume leading the others"
+        assert all(isinstance(result, PortfolioCalculationResult) for result in follower_results), f"a follower did not succeed after its leader was cancelled (a cancellation handed on as a failure?): {follower_results!r}"
+        assert len(harness.gate.builds) == 2, f"after the leader was cancelled, the followers made {len(harness.gate.builds) - 1} builds: expected one, the first to resume leading the others"
         assert len(rebuilds) == 1 and rebuilds[0].task in followers, "the new build is not led by one of the followers"
         assert all(result is follower_results[0] for result in follower_results), "the followers got different objects"
         assert blob_stores.holds(follower_results[0]), "the followers' object is not the one the blob cache holds"
         assert len(harness.flights) == 0, f"{len(harness.flights)} flight(s) left in _IN_FLIGHT once every request ended"
-        print_success(f"leader {how.replace('_', ' ')}: one rebuild, three followers served")
+        print_success("leader cancelled: one rebuild, three followers served")
 
 
 # =============================================================================
-# 4 — RED ON HEAD: A FOLLOWER CANCELLED WHILE WAITING TOUCHES NOTHING ELSE
+# 4 — RED ON HEAD 98b364b45: A FOLLOWER CANCELLED WHILE WAITING TOUCHES NOTHING ELSE
 # =============================================================================
 
 
@@ -584,7 +639,7 @@ class TestAFollowerIsCancelled:
 
 
 # =============================================================================
-# 5 — GREEN ON HEAD AND AFTER: NO COALESCING ACROSS KEYS OR RANGES
+# 5 — GREEN ON BOTH HEADS AND AFTER: NO COALESCING ACROSS KEYS OR RANGES
 # =============================================================================
 
 
@@ -625,7 +680,7 @@ class TestNoCoalescingAcrossKeysOrRanges:
 
 
 # =============================================================================
-# 6 — RED ON HEAD (NO FLIGHT): A SETTLED FLIGHT NOBODY AWAITED IS RETRIEVED
+# 6 — RED ON HEAD 98b364b45 (NO FLIGHT): A SETTLED FLIGHT NOBODY AWAITED IS RETRIEVED
 # =============================================================================
 
 
@@ -633,9 +688,10 @@ class TestTheSettledFlightIsRetrieved:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("how", ["fails", "is_cancelled"])
     async def test_a_lone_leader_that_ends_badly_leaves_no_never_retrieved_exception(self, harness, how):
-        """One request, no follower; its build raises or its task is cancelled. Once the request and its flight are
-        freed, the loop's exception handler has seen no «exception was never retrieved»."""
-        print_section(f"MF-J45b: a lone leader {how.replace('_', ' ')}")
+        """One request, no follower; its build raises (the flight holds that exception) or its task is cancelled (the
+        flight holds ``_LeaderGone``). Once the request and its flight are freed, the loop's exception handler has seen
+        no «exception was never retrieved»."""
+        print_section(f"MF-J45b/J45d: a lone leader {how.replace('_', ' ')}")
         loop = asyncio.get_running_loop()
         reported: list[dict] = []
         previous_handler = loop.get_exception_handler()
@@ -664,45 +720,42 @@ class TestTheSettledFlightIsRetrieved:
         task = harness.start()
         await harness.settle("the lone request held in its build")
         [build] = harness.gate.builds
+        failure = _BuildFailed("the lone build failed")
         if how == "fails":
-            harness.gate.release(build, failure=_BuildFailed("the lone build failed"))
+            harness.gate.release(build, failure=failure)
         else:
             task.cancel()
         outcome = (await harness.finish())[0]
-        assert isinstance(outcome, _BuildFailed if how == "fails" else asyncio.CancelledError), f"precondition: the request ended with {outcome!r}"
+        assert (outcome is failure) if how == "fails" else isinstance(outcome, asyncio.CancelledError), f"precondition: the request ended with {outcome!r}"
         flight_ref = weakref.ref(harness.flights.registered[0][1]) if harness.flights.registered else None
         assert len(harness.flights) == 0, f"{len(harness.flights)} flight(s) left in _IN_FLIGHT once every request ended"
         # Drop every strong reference: the recorder's, the gate's, the harness's tasks (their exceptions' tracebacks
-        # hold calculate's frame, and with it the flight).
+        # hold calculate's frame, and with it the flight; a failed flight holds the exception in turn: a cycle).
         harness.flights.forget()
         harness.gate.builds.clear()
         harness.tasks.clear()
-        del task, build, outcome
+        del task, build, outcome, failure
         return flight_ref
 
 
 # =============================================================================
-# 7 — RED ON HEAD (NO FLIGHT): THE FLIGHT IS SETTLED BEFORE ITS KEY GOES
+# 7 — RED ON HEAD 98b364b45 (NO FLIGHT): A CANCELLED LEADER'S FLIGHT IS SETTLED BEFORE ITS KEY GOES
 # =============================================================================
 
 
 class TestTheFlightIsSettledBeforeItsKeyGoes:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("how", ["fails", "is_cancelled"])
-    async def test_a_resuming_follower_finds_the_key_gone_and_never_awaits_the_failed_flight_again(self, harness, how):
-        """Leader + 2 followers; the leader fails or is cancelled. When its key was removed its flight was done; no
-        request read a settled flight; the first follower to resume registered the second flight (it leads), the other
-        awaited the leader's flight then the new one — never the failed one twice; the second flight's key was removed
-        done too."""
-        print_section(f"MF-J45b: the leader {how.replace('_', ' ')}: settle, then remove")
+    async def test_a_resuming_follower_finds_the_key_gone_and_never_awaits_the_failed_flight_again(self, harness):
+        """Leader + 2 followers; the leader is cancelled (a failing build's path is pinned in ``TestTheLeaderFails``).
+        When its key was removed its flight was done, settled with ``_LeaderGone``; no request read a settled flight;
+        the first follower to resume registered the second flight (it leads), the other awaited the leader's flight then
+        the new one — never the cancelled one twice; the second flight's key was removed done too."""
+        print_section("MF-J45b: the leader is cancelled: settle, then remove")
         leader_build, followers = await _leader_with_followers(harness, followers=2)
         assert harness.flights.registered, "precondition: the leader registered a flight in _IN_FLIGHT (no single-flight)"
         [(first_key, first_flight, first_leader)] = harness.flights.registered
         assert first_leader is leader_build.task, "precondition: the flight's leader is the request holding the build"
-        if how == "fails":
-            harness.gate.release(leader_build, failure=_BuildFailed("the leader's build failed"))
-        else:
-            leader_build.task.cancel()
+        leader_build.task.cancel()
         await harness.settle("the followers resumed: one building, the other waiting on it")
 
         results = await harness.finish()
@@ -714,16 +767,16 @@ class TestTheFlightIsSettledBeforeItsKeyGoes:
         [(_key, second_flight, second_leader)] = harness.flights.registered[1:]
         assert second_leader in followers, "the second flight is not led by a follower"
         [other] = [task for task in followers if task is not second_leader]
-        assert harness.flights.awaited[second_leader] == [first_flight], "the new leader awaited something else than the failed flight before leading"
-        assert harness.flights.awaited[other] == [first_flight, second_flight], "the other follower did not go from the failed flight to the new one"
-        assert isinstance(first_flight.exception(), portfolio_engine_module._LeaderGone), f"the failed flight was settled with {first_flight.exception()!r}, not _LeaderGone"
+        assert harness.flights.awaited[second_leader] == [first_flight], "the new leader awaited something else than the cancelled leader's flight before leading"
+        assert harness.flights.awaited[other] == [first_flight, second_flight], "the other follower did not go from the cancelled leader's flight to the new one"
+        assert isinstance(first_flight.exception(), portfolio_engine_module._LeaderGone), f"the cancelled leader's flight was settled with {first_flight.exception()!r}, not _LeaderGone"
         assert all(isinstance(results[harness.tasks.index(task)], PortfolioCalculationResult) for task in followers), f"a follower did not succeed: {results!r}"
         assert len(harness.flights) == 0, f"{len(harness.flights)} flight(s) left in _IN_FLIGHT once every request ended"
         print_success("settled, then removed; the first follower to resume led")
 
 
 # =============================================================================
-# 8 — GREEN ON HEAD AND AFTER (GUARD): THE SHARED RESULT IS NOT MUTATED BY ITS CONSUMERS
+# 8 — GREEN ON BOTH HEADS AND AFTER (GUARD): THE SHARED RESULT IS NOT MUTATED BY ITS CONSUMERS
 # =============================================================================
 
 

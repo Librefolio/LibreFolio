@@ -422,4 +422,28 @@ Sono tutti locali: la push la fa il developer.
 | 330 | 17/10 16:21 | X-R59 lots A/B range change from backend (Y) | `f317e3a9f` |
 | 331 | 17/10 16:28 | MF-J45b single-flight, A4 docs | `a228b9d30` |
 | 332 | 17/10 16:41 | B-43/B-44 unreadable copy refused | `fc4d5eab4` |
+| 333 | 17/10 16:55 | C-97c-2 lot digits | `016fe7af9` |
+| 334 | 17/10 17:00 | X-R74 generic 500s on asset and FX routes | `1c1456713` |
+| 335 | 17/10 17:04 | MF-SEC9g BRIM classification off the loop | `650c02b17` |
+| 336 | 17/10 17:08 | J-54 null-means-none columns | `f9aef5d99` |
+| 337 | 17/10 17:08 | docs(journal): close T-B9 as verified | `f5b17f06e` |
+| 338 | 17/10 17:11 | J-53 lot-less banner lines (Y) | `fb6d58d17` |
+| 339 | 17/10 17:11 | docs(changelog,journal): J-53 banner lines | `38be2102b` |
+| 340 | 17/10 17:28 | E-19a step-order fix-forward | `09fe3f470` |
+| 341 | 17/10 17:35 | MF-A5 closed position base | `aa52a43f7` |
+| 342 | 17/10 17:39 | J-52 stress replayed window | `df1194de4` |
+| 343 | 17/10 17:43 | Y-33 asset-detail navigation wait | `c5b347a46` |
+| 344 | 17/10 17:47 | C-54 what's new after an update (A) | `630c478cd` |
+| 345 | 17/10 17:48 | docs(changelog,journal): C-54 what's new | `7f2290ae0` |
+| 346 | 17/10 17:57 | MF-J45d failed build fails waiters | `685d76dab` |
+| 347 | 17/10 17:59 | Z-32 (c) pence quote warning | `46ea09b02` |
+| 348 | 17/10 18:02 | C-97c-3 asset and chart price digits | `e19f7c7e6` |
+| 349 | 17/10 18:03 | W-B55 decision 47 in USD (J) | `bea6b1ac0` |
+| 350 | 17/10 18:03 | docs(journal): close W-B55 | `1eeb297b2` |
+| 351 | 17/10 18:24 | MF-A8 received units at arrival value | `bc466d969` |
+| 352 | 17/10 18:26 | CP-10d market_series rename (J) | `0cf8eb4d5` |
+| 353 | 17/10 18:31 | X-R75 atomic route replace (B) | `6ee4d2ed4` |
+| 354 | 17/10 18:36 | X-R66 probe rate limit i18n (A) | `e50c23919` |
+| 355 | 17/10 18:36 | docs(changelog,journal): X-R66 probe limit | `c5b9cca75` |
+| 356 | 17/10 18:46 | MF-A9 open received rows | `130002b5c` |
 | — | 17/10 00:05–00:45 | Colori: AF file, media e menu `9d3607eb6`; T `CompactCashCell` `b58108665` | — |

@@ -45,7 +45,7 @@ frontend/
 │       │   ├── auth/            # LoginCard, RegisterCard, ForgotPasswordCard
 │       │   ├── backup/          # Instance backup (admins): Backup tab, job and download card
 │       │   ├── brokers/         # Broker cards, forms, import, sharing and the FIFO lots views (lots/) with their store
-│       │   ├── changelog/       # Bundled CHANGELOG.md and its translations, split into chapters
+│       │   ├── changelog/       # Bundled CHANGELOG.md and its translations, split into chapters; the «What's new» modal and its store
 │       │   ├── dashboard/       # Dashboard panels and charts, view store and date-range controller
 │       │   ├── email/           # Email tab, address verification, password-reset and shared-link emails
 │       │   ├── files/           # Files table and grid, preview modal and file-set badges

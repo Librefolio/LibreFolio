@@ -445,6 +445,9 @@
     "RATE_LIMITED_NO_TIME": "Troppe richieste: riprova più tardi",
     "RATE_LIMITED_DAY": "In pausa per troppe richieste fino al {time}",
     "NOT_CONFIGURED": "Questo provider va configurato prima dell'uso",
-    "PROVIDER_ERROR": "Il provider ha restituito un errore: {detail}"
+    "PROVIDER_ERROR": "Il provider ha restituito un errore: {detail}",
+    "PROBE_RATE_LIMITED": "Troppe verifiche: riprova alle {time}",
+    "PROBE_RATE_LIMITED_DAY": "Troppe verifiche: riprova il {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Troppe verifiche: riprova tra un minuto"
   }
 }

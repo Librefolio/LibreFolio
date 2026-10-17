@@ -42,6 +42,7 @@ erDiagram
         string provider_code
         string identifier
         json provider_params
+        string reported_currency "VARCHAR(8), nullable, as reported"
     }
 
     ASSET_EVENT {
@@ -94,12 +95,13 @@ Daily OHLCV (Open, High, Low, Close, Volume) price data for each asset, one row 
 
 The prices (`open`, `high`, `low`, `close`, `adjusted_close`) are `RealDecimal(24, 12)`: up to 12 digits before the decimal point and 12 decimal places, read back as written; `volume` is `Numeric(24, 0)`: up to 24 digits before the point. A provider's prices are truncated to 12 decimal places and 15 significant digits, and a date with a value no column can keep (a price not finite or past 12 digits before the point, a volume past 24) is skipped; a manual price over any of these limits, or a manual volume past 24 digits, is refused (see [Decimal Columns](index.md#decimal-columns)).
 
-### 🔌 `ASSET_PROVIDER_ASSIGNMENT`
+### 🔌 `ASSET_PROVIDER_ASSIGNMENT` {: #asset-provider-assignment }
 
 Decouples the asset from its data source. This table configures which provider to use for fetching prices and metadata.
 
 - 📋 Example: "Use Yahoo Finance (`yfinance`) for Apple (`AAPL`)"
 - ⚙️ **`provider_params`** (JSON): Provider-specific configuration (e.g., exchange suffix, custom identifier).
+- 🪙 **`reported_currency`** (`VARCHAR(8)`, nullable): the quote currency the provider reported with the asset's history, as it reported it, at the last history fetch that reported one — Yahoo's `GBp` for a London line quoted in pence, whose prices are stored as `GBP`. NULL until that fetch, and on every row right after migration `010_provider_reported_currency`; cleared when the assignment's provider, identifier or identifier type changes. The portfolio data-quality report warns from it (`QUOTE_IN_MINOR_UNIT`): see [The Provider's Own Quote Currency](../../backend/assets/architecture.md#reported-currency).
 
 The provider system uses the [Registry Pattern](../patterns/registry_pattern.md) for extensibility.
 

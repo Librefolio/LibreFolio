@@ -34,10 +34,10 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.financial_math.weights import share_of
+from backend.app.services.market_series import prepare_asset_series_set
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk.base import RiskAssetClassification, resource_limit_error
 from backend.app.services.risk.scenario_catalog import get_loaded_risk_scenario_catalog
-from backend.app.services.series_preparation import prepare_asset_series_set
 from backend.app.utils.date_range_limits import BulkTooManyDaysError, range_span_floor
 from backend.app.utils.datetime_utils import latest_range_end
 
