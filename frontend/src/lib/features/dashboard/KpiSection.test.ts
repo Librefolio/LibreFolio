@@ -41,6 +41,7 @@ import itCatalogue from '$lib/i18n/it.json';
 import * as Tweened from '$lib/components/ui/TweenedValue.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import KpiSection from './KpiSection.svelte';
 
@@ -72,6 +73,23 @@ function summary() {
         twrr_percent: '0.40',
         mwrr_cumulative_percent: '0.45',
         mwrr_annualized_percent: '0.30',
+        timing_effect_percent: '0.05', // mwrr_cumulative − twrr, as the backend sends it beside them (MF-P)
+    };
+}
+
+/**
+ * The day as the backend sends it in the summary (MF-P), made from two history points by its rule: the total P&L's
+ * change, and that change over |the day before's total P&L| and over |the day before's NAV| — fractions with the
+ * change's sign, null on a zero base. The V2 and M-18 blocks give the card both, the points and these fields, so what
+ * they pin holds whichever source the card reads; the R17 block at the end of the file pins which one it reads.
+ */
+function dayFields(prevTotalPnl: string, lastTotalPnl: string, prevNav: string) {
+    const change = parseFloat(lastTotalPnl) - parseFloat(prevTotalPnl);
+    const share = (base: number): string | null => (base === 0 ? null : String(change / Math.abs(base)));
+    return {
+        pnl_change_1d: EUR(String(change)),
+        pnl_change_1d_vs_total_pnl_percent: share(parseFloat(prevTotalPnl)),
+        pnl_change_1d_vs_nav_percent: share(parseFloat(prevNav)),
     };
 }
 
@@ -127,8 +145,14 @@ describe('KpiSection — absolute ROI next to total P&L (F5)', () => {
  *   percentage = day change / |previous value| × 100;
  *   sign and colour follow the direction (up → `+`, down → `-`), never «+-»;
  *   hidden ONLY when the previous value is exactly 0.
- * Card 1's base is yesterday's total P&L, Card 2's is yesterday's NAV. The change is the
- * difference between the total P&L of the last two history points on both cards.
+ * Card 1's base is yesterday's total P&L, Card 2's is yesterday's NAV. The change is the total
+ * P&L's from yesterday to today, the same on both cards.
+ *
+ * Since MF-P the backend applies this rule and sends the change and both shares with the summary
+ * (`pnl_change_1d`, `pnl_change_1d_vs_total_pnl_percent`, `pnl_change_1d_vs_nav_percent`). Each case
+ * gives the card yesterday and today twice — as the last two history points, and as the summary fields
+ * the rule makes of them (`dayFields`) — so the readings below hold whichever source the card reads;
+ * the R17 block at the end of the file pins that it reads the summary.
  *
  * Anchors: `kpi-pnl-delta-day-pct` carries exactly the formatted percentage (formatPercent: `+`
  * only above zero, two decimals); `data-direction` carries the direction, which is what drives
@@ -150,10 +174,11 @@ describe('KpiSection — daily change percentage (V2)', () => {
         };
     }
 
-    /** Yesterday then today, as the dashboard's history ends. */
+    /** Yesterday then today, as the dashboard's history ends — and as the summary carries them (MF-P). */
     function renderDay(prev: {totalPnl: string; nav?: string}, last: {totalPnl: string; nav?: string}) {
         const history = [point('2026-10-05', prev.totalPnl, prev.nav ?? '10000'), point('2026-10-06', last.totalPnl, last.nav ?? '10000')];
-        return render(KpiSection, {summary: summary(), history, loading: false, displayCurrency: 'EUR'});
+        const day = dayFields(prev.totalPnl, last.totalPnl, prev.nav ?? '10000');
+        return render(KpiSection, {summary: {...summary(), ...day}, history, loading: false, displayCurrency: 'EUR'});
     }
 
     async function dayLine() {
@@ -442,7 +467,9 @@ describe('KpiSection — unrealized change breakdown tooltip (P9)', () => {
  *   - a missing TWRR / MWRR cumulative / MWRR annualized reads «—» (U+2014) as its bar value: no digits;
  *   - Timing effect is `mwrr_cumulative − twrr` in percentage points, signed, two decimals; when either
  *     input is missing it reads «—», and its label claims nothing — neither favourable, neutral nor
- *     unfavourable;
+ *     unfavourable. Since MF-P the backend makes that difference, `timing_effect_percent`, null when
+ *     either input is missing: every fixture here carries the field the backend would send beside its
+ *     returns, so the readings hold whichever the card takes (the R17 block pins which);
  *   - MWRR annualized is not an input of Timing effect: its absence leaves Timing effect untouched;
  *   - `null` and an absent key are the same «missing»: every case runs with both.
  *
@@ -473,15 +500,18 @@ describe('KpiSection — Returns card: a missing return reads «—», never 0 (
 
     type ReturnField = 'twrr_percent' | 'mwrr_cumulative_percent' | 'mwrr_annualized_percent';
     type Missing = 'null' | 'absent';
-    /** The fixture as the schema types it: the three returns are optional and nullable. */
-    type ReturnsSummary = Omit<ReturnType<typeof summary>, ReturnField> & Partial<Record<ReturnField, string | null>>;
+    /** The fixture as the schema types it: the three returns and the timing effect are optional and nullable. */
+    type ReturnsSummary = Omit<ReturnType<typeof summary>, ReturnField | 'timing_effect_percent'> & Partial<Record<ReturnField | 'timing_effect_percent', string | null>>;
+    /** The two returns the timing effect is made of. */
+    const TIMING_INPUTS: readonly ReturnField[] = ['twrr_percent', 'mwrr_cumulative_percent'];
 
     const norm = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
 
-    /** The fixture with `fields` missing: set to null, or with their keys removed. */
+    /** The fixture with `fields` missing — set to null, or with their keys removed — and the timing effect with them when it loses an input, as the backend leaves it. */
     function summaryMissing(fields: readonly ReturnField[], how: Missing): ReturnsSummary {
         const s: ReturnsSummary = summary();
-        for (const field of fields) {
+        const missing = fields.some((field) => TIMING_INPUTS.includes(field)) ? [...fields, 'timing_effect_percent' as const] : fields;
+        for (const field of missing) {
             if (how === 'null') s[field] = null;
             else delete s[field];
         }
@@ -506,10 +536,10 @@ describe('KpiSection — Returns card: a missing return reads «—», never 0 (
     }
 
     it.each([
-        {reading: 'favourable', twrr: '0.40', mwrrCum: '0.45', twrrBar: '40.00%', mwrrCumBar: '45.00%', timing: PLUS_5_PP},
-        {reading: 'unfavourable', twrr: '0.45', mwrrCum: '0.40', twrrBar: '45.00%', mwrrCumBar: '40.00%', timing: MINUS_5_PP},
-    ])('control, every return present ($reading): each bar reads its value; Timing effect is mwrr_cum − twrr in pp, signed, with a claim', async ({twrr, mwrrCum, twrrBar, mwrrCumBar, timing}) => {
-        renderReturns({...summary(), twrr_percent: twrr, mwrr_cumulative_percent: mwrrCum});
+        {reading: 'favourable', twrr: '0.40', mwrrCum: '0.45', timingEffect: '0.05', twrrBar: '40.00%', mwrrCumBar: '45.00%', timing: PLUS_5_PP},
+        {reading: 'unfavourable', twrr: '0.45', mwrrCum: '0.40', timingEffect: '-0.05', twrrBar: '45.00%', mwrrCumBar: '40.00%', timing: MINUS_5_PP},
+    ])('control, every return present ($reading): each bar reads its value; Timing effect is mwrr_cum − twrr in pp, signed, with a claim', async ({twrr, mwrrCum, timingEffect, twrrBar, mwrrCumBar, timing}) => {
+        renderReturns({...summary(), twrr_percent: twrr, mwrr_cumulative_percent: mwrrCum, timing_effect_percent: timingEffect});
 
         await expectReturnsCard({twrrCum: twrrBar, mwrrCum: mwrrCumBar, mwrrAnn: '30.00%', timing, timingLabel: A_CLAIM});
     });
@@ -558,8 +588,9 @@ describe('KpiSection — Returns card: a missing return reads «—», never 0 (
  * through them; same digits and same signs — no `+` where today's text has none — only the notation moves.
  *
  * Fixture. The file's summary: ROI 50%, TWRR 40%, absolute ROI 5%. A day whose total P&L rises from
- * -558.10 to -466.79 on a NAV of 10 000: Card 1's share of yesterday's |P&L| and Card 2's share of
- * yesterday's NAV, both signed, both mirrored from the card's own arithmetic rather than restated.
+ * -558.10 to -466.79 on a NAV of 10 000, in the history and in the summary fields MF-P sends for it
+ * (`dayFields`): Card 1's share of yesterday's |P&L| and Card 2's share of yesterday's NAV, both signed,
+ * both mirrored from the rule (change / |base|) rather than restated.
  *
  * Expectations. French strings come from `Intl.NumberFormat('fr', {style: 'percent', …})` in this runtime,
  * never typed: Node puts U+00A0 before the `%`, a browser may put U+202F. English is today's exact text,
@@ -583,7 +614,7 @@ describe('KpiSection — percentages in the UI language (M-18)', () => {
     const LAST_TOTAL_PNL = '-466.79';
     const NAV = '10000';
 
-    /** The card's arithmetic: the day change as a share of |base|, in percent. */
+    /** The rule's arithmetic: the day change as a share of |base|, in percent. */
     const dayChange = Number(LAST_TOTAL_PNL) - Number(PREV_TOTAL_PNL);
     const SHARE_OF_PNL = (dayChange / Math.abs(Number(PREV_TOTAL_PNL))) * 100;
     const SHARE_OF_NAV = (dayChange / Math.abs(Number(NAV))) * 100;
@@ -626,7 +657,7 @@ describe('KpiSection — percentages in the UI language (M-18)', () => {
     function mountKpis(): void {
         expect(hydration.TWEEN_HYDRATION_CONTEXT, 'control: TweenedValue exports its hydration context').toBeDefined();
         render(KpiSection, {
-            props: {summary: summary(), history: [historyPoint('2026-10-05', PREV_TOTAL_PNL), historyPoint('2026-10-06', LAST_TOTAL_PNL)], loading: false, displayCurrency: 'EUR'},
+            props: {summary: {...summary(), ...dayFields(PREV_TOTAL_PNL, LAST_TOTAL_PNL, NAV)}, history: [historyPoint('2026-10-05', PREV_TOTAL_PNL), historyPoint('2026-10-06', LAST_TOTAL_PNL)], loading: false, displayCurrency: 'EUR'},
             context: new Map([[hydration.TWEEN_HYDRATION_CONTEXT, () => true]]),
         });
     }
@@ -705,7 +736,8 @@ describe('KpiSection — percentages in the UI language (M-18)', () => {
  * and zero carries no sign (CP1's rule); the unit stays `dashboard.pp`.
  *
  * Fixture. The file's summary: net worth 10 500 EUR; TWRR 40% and MWRR cumulative 45%, a timing effect of
- * +5 pp; and a variant with both returns at 40%, a timing effect of exactly zero.
+ * +5 pp; and a variant with both returns at 40%, a timing effect of exactly zero — each timing effect also
+ * sent as `timing_effect_percent`, as the backend does since MF-P.
  *
  * Subjects. Card 3's hero (`kpi-net-worth` → `kpi-value`), the net worth through
  * `formatCurrencyAmountPlain(…, 'EUR')`: no currency cache is loaded here, so the amount is followed by
@@ -817,9 +849,163 @@ describe('KpiSection — amounts and the timing effect in the UI language (M-18 
 
     it.each(['en', 'it'] as const)('a timing effect of exactly zero carries no sign (%s)', async (lang) => {
         await switchLanguage(lang);
-        // Both returns at 40%: mwrr_cum − twrr is exactly 0.
-        mountKpis({twrr_percent: '0.40', mwrr_cumulative_percent: '0.40'});
+        // Both returns at 40%: mwrr_cum − twrr is exactly 0, and so is the timing effect the backend sends.
+        mountKpis({twrr_percent: '0.40', mwrr_cumulative_percent: '0.40', timing_effect_percent: '0'});
 
         expect(shown(timingEffect())).toBe(`${twoDecimals(LOCALE_OF[lang], 0)} ${ppIn(lang)}`);
+    });
+});
+
+/**
+ * R17 / W8 / P4 — the day change, its two shares and the timing effect are the summary's (MF-P).
+ *
+ * The backend now sends with the summary what the cards used to work out:
+ *   - `pnl_change_1d`: the total P&L's change from the CALENDAR day before the valuation date to it;
+ *   - `pnl_change_1d_vs_total_pnl_percent` and `pnl_change_1d_vs_nav_percent`: that change over |the day
+ *     before's total P&L| and over |its NAV|, fractions with the change's sign, null on a zero base;
+ *   - `timing_effect_percent`: MWRR cumulative − TWRR, a fraction, null when either is missing.
+ * The cards write them — the change as money, the fractions ×100 — and derive none of them: not the change
+ * from the last two `history` points, which need not be a calendar day apart; not a share from its base; not
+ * the timing effect from the two bars. A null field shows nothing — no day line, no share — and Timing effect
+ * reads «—» and claims nothing, even where the history, or both returns, would give a figure.
+ *
+ * Fixture. The file's summary — TWRR 40% and MWRR cumulative 45%, bars that subtract to +5 pp — and a history
+ * whose last two points are a week apart: a fall of 100 on a total P&L of 1 000 and a NAV of 20 000, which the
+ * cards would show as -100.00, -10.00% and -0.50%, down. The summary's day says otherwise on every figure:
+ * +12.34, +5.00%, +0.10%, up, and a timing effect of -1.23 pp — so whatever the cards show names its source.
+ * Every missing field is tried null and absent: a report cached before MF-P has none of them.
+ *
+ * Read by `data-testid` in both cards, every figure at its value on the first frame (the page cache's hydration
+ * context), so no read waits on a tween. Card 1's hero and Card 2's ROI bar are the barrier that both cards are
+ * drawn, so a figure missing here is missing from a drawn card. Timing effect's unit and its label are
+ * translated: the value is matched on its sign and digits, the label only read as claiming something or not.
+ */
+describe('KpiSection — the day change and the timing effect come from the summary (R17 / W8 / P4)', () => {
+    const hydration = Tweened as unknown as {TWEEN_HYDRATION_CONTEXT?: unknown};
+    const EM_DASH = '\u2014';
+
+    type Missing = 'null' | 'absent';
+    type DayField = 'pnl_change_1d' | 'pnl_change_1d_vs_total_pnl_percent' | 'pnl_change_1d_vs_nav_percent' | 'timing_effect_percent';
+    /** The file's summary with the MF-P fields, optional and nullable as the schema types them. */
+    type DaySummary = Omit<ReturnType<typeof summary>, 'timing_effect_percent'> & {
+        pnl_change_1d?: {code: string; amount: string} | null;
+        pnl_change_1d_vs_total_pnl_percent?: string | null;
+        pnl_change_1d_vs_nav_percent?: string | null;
+        timing_effect_percent?: string | null;
+    };
+
+    /** The calendar day the backend reports: not one of these figures is what the history gives. */
+    const DAY = {pnl_change_1d: EUR('12.34'), pnl_change_1d_vs_total_pnl_percent: '0.05', pnl_change_1d_vs_nav_percent: '0.001'};
+
+    function historyPoint(date: string, totalPnl: string) {
+        return {
+            date,
+            cash_value: EUR('500'),
+            market_value: EUR('19500'),
+            nav_value: EUR('20000'),
+            capital_baseline: EUR('19000'),
+            book_asset_like: EUR('19000'),
+            cash_from_contributed_capital: EUR('400'),
+            cash_from_generated_returns: EUR('100'),
+            total_pnl: EUR(totalPnl),
+        };
+    }
+
+    /** The history's last two points, a week apart: a week's fall of 100, not the calendar day's change. */
+    const WEEK = [historyPoint('2026-10-09', '1000'), historyPoint('2026-10-16', '900')];
+
+    const norm = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** The file's summary with the backend's day, and `fields` missing: set to null, or with their keys removed. */
+    function summaryWithout(fields: readonly DayField[], how: Missing): DaySummary {
+        const s: DaySummary = {...summary(), ...DAY};
+        for (const field of fields) {
+            if (how === 'null') s[field] = null;
+            else delete s[field];
+        }
+        return s;
+    }
+
+    /** The KPI row over `s` and the week, every figure at its value on the first frame; then the barrier that both cards are drawn. */
+    function mountDay(s: DaySummary): void {
+        expect(hydration.TWEEN_HYDRATION_CONTEXT, 'control: TweenedValue exports its hydration context').toBeDefined();
+        render(KpiSection, {
+            props: {summary: s, history: WEEK, loading: false, displayCurrency: 'EUR'},
+            context: new Map([[hydration.TWEEN_HYDRATION_CONTEXT, () => true]]),
+        });
+        expect(norm(within(screen.getByTestId('kpi-period-pnl')).getByTestId('kpi-value').textContent), 'barrier: Card 1’s hero is drawn').toBe(norm(formatCurrencyAmountPlain(500, 'EUR', {showSign: true})));
+        expect(norm(within(screen.getByTestId('kpi-returns')).getByTestId('kpi-return-roi-value').textContent), 'barrier: Card 2’s ROI bar is drawn').toBe('50.00%');
+    }
+
+    /** What the cards show of the day, null where an element is not rendered. The day line's amount is its text without the bracketed share. */
+    function readDay() {
+        const line = screen.queryByTestId('kpi-pnl-delta-day');
+        const totalShare = screen.queryByTestId('kpi-pnl-delta-day-pct');
+        const navShare = screen.queryByTestId('kpi-returns-delta-pct');
+        return {
+            amount: line ? norm(line.textContent).replace(/\s*\([^()]*\)$/, '') : null,
+            direction: line ? line.getAttribute('data-direction') : null,
+            shareOfTotalPnl: totalShare ? norm(totalShare.textContent) : null,
+            shareOfNav: navShare ? norm(navShare.textContent) : null,
+            shareOfNavDirection: navShare ? navShare.getAttribute('data-direction') : null,
+            timing: norm(screen.getByTestId('kpi-timing-effect-value').textContent),
+        };
+    }
+
+    beforeEach(() => {
+        // Module-level state the other blocks move: amounts are read in the clear, every figure in English notation.
+        setPrivacyEnabled(false);
+        expect(uiLocale(), 'control: the interface locale is en-US').toBe('en-US');
+    });
+
+    it('shows the summary’s day change, its two shares and its timing effect — not the history’s, not the bars’ difference', () => {
+        mountDay({...summary(), ...DAY, timing_effect_percent: '-0.0123'});
+
+        expect(readDay()).toEqual({
+            amount: norm(formatCurrencyAmountPlain(12.34, 'EUR', {showSign: true})),
+            direction: 'up',
+            shareOfTotalPnl: '+5.00%',
+            shareOfNav: '+0.10%',
+            shareOfNavDirection: 'up',
+            timing: expect.stringMatching(/^-1\.23(?!\d)/),
+        });
+    });
+
+    describe.each<Missing>(['null', 'absent'])('a figure missing from the summary as %s', (how) => {
+        it('pnl_change_1d and its shares: no day line and no share, though the history’s last two points give a change', () => {
+            mountDay(summaryWithout(['pnl_change_1d', 'pnl_change_1d_vs_total_pnl_percent', 'pnl_change_1d_vs_nav_percent'], how));
+
+            const {amount, shareOfTotalPnl, shareOfNav} = readDay();
+            expect({amount, shareOfTotalPnl, shareOfNav}).toEqual({amount: null, shareOfTotalPnl: null, shareOfNav: null});
+        });
+
+        it('pnl_change_1d_vs_total_pnl_percent: the day line without its share, while the NAV share stays', () => {
+            mountDay(summaryWithout(['pnl_change_1d_vs_total_pnl_percent'], how));
+
+            // The day line and Card 2's share are drawn: only Card 1's share is missing.
+            const {amount, shareOfTotalPnl, shareOfNav} = readDay();
+            expect({amount, shareOfTotalPnl, shareOfNav}).toEqual({amount: expect.any(String), shareOfTotalPnl: null, shareOfNav: expect.any(String)});
+        });
+
+        it('pnl_change_1d_vs_nav_percent: no share on the Returns card, while the day line keeps its own', () => {
+            mountDay(summaryWithout(['pnl_change_1d_vs_nav_percent'], how));
+
+            // The day line and its share are drawn: only Card 2's share is missing.
+            const {amount, shareOfTotalPnl, shareOfNav} = readDay();
+            expect({amount, shareOfTotalPnl, shareOfNav}).toEqual({amount: expect.any(String), shareOfTotalPnl: expect.any(String), shareOfNav: null});
+        });
+
+        it('timing_effect_percent, both returns present: Timing effect reads «—» and claims nothing', () => {
+            mountDay(summaryWithout(['timing_effect_percent'], how));
+
+            // TWRR and MWRR cumulative are on screen with their values: only the timing effect is missing.
+            const card = within(screen.getByTestId('kpi-returns'));
+            expect({
+                twrrCum: norm(card.getByTestId('kpi-return-twrr-cum-value').textContent),
+                mwrrCum: norm(card.getByTestId('kpi-return-mwrr-cum-value').textContent),
+                timing: norm(card.getByTestId('kpi-timing-effect-value').textContent),
+                timingLabel: norm(card.queryByTestId('kpi-timing-effect-label')?.textContent),
+            }).toEqual({twrrCum: '40.00%', mwrrCum: '45.00%', timing: EM_DASH, timingLabel: ''});
+        });
     });
 });
