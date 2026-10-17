@@ -5410,3 +5410,77 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
    > - le etichette «B-21, RED until the routes catch it» nel blocco (e) sono vecchie;
    > - la docstring di `backup_max_upload_mb()` (`config/backup.py:73-74`), «else `0`, the self-hosted default», ora vale
    >   solo per `selfhosted`. Non l'ho toccata: è codice di produzione di B, e non ho l'OK.
+7. ✅ **Ingresso** (17/10, 06:47): `1ddd820c7` (fix, documenti, diario) è entrato in dev `b37e926af`, senza riga di
+   CHANGELOG. Il mio HEAD è avanzato a `b37e926af`, pulito.
+   - E ha rivisto H-37: «sound», nessuna correzione. Ha deciso su `PROFILE_DEFAULTS`: nessuna chiusura a runtime, ma un
+     controllo di visibilità, che diventa **H-39** (dopo Z-24).
+   - B riceve le mie due note.
+
+### Lotto «Z-24: `.scheduler.lock` fra i percorsi protetti della cartella dati di test» (2026-10-17, mattina) — in corso
+
+> Chiesto dal coordinatore mentre H-35 aspetta A8a. È una voce di Z (Z-11, dal suo test-author), «minimo,
+> facoltativo», sul mio file `config/__init__.py`. Prima i rossi.
+
+**Analisi** (sola lettura, HEAD `b37e926af`):
+
+1. `validate_test_data_dir()` (`config/__init__.py:450`) ha in `managed_paths` `scheduler_state.json`, ma non il
+   `.scheduler.lock` che Z-11 ha aggiunto (`services/platform/scheduler/run_lock.py`, `LOCK_FILE_NAME`, nella cartella
+   dati accanto allo stato).
+   - Un symlink al suo posto oggi passa la guardia; lo ferma solo l'`O_NOFOLLOW` di Z quando lo apre.
+   - Un hardlink al lock di produzione farebbe aspettare a turno i giri dei due server.
+2. **L'inventario dei percorsi fissi sotto la radice dati.** Sono tutti in `managed_paths` tranne il lock: `sqlite/`,
+   `custom-uploads/`, `broker_reports/`, `logs/` (anche `scheduler_jobs.jsonl`), `scheduler_state.json`,
+   `secrets/instance.key`, `scenario_catalog/`, `backups/` e `.restore/` (B).
+3. **Considerati e non aggiunti**: `sqlite/app.db-wal` e `-shm` (WAL attivo, `db/session.py`), e
+   `sqlite/app.db.post-migration.lock`. Un alias di uno di questi da solo non è un errore realistico: ogni modo di
+   condividere il DB fa alias anche di `app.db`, che è già rifiutato per primo. Se il coordinatore li vuole, sono due
+   righe.
+4. **Un buco nei test**: il ramo «Test data path aliases production data» (hardlink, `samefile`) non ha nessun test. Il
+   test dei symlink (`test_runtime_isolation.py`, `TestDataDirResolution`) copre solo `sqlite`, `sqlite/app.db`,
+   `secrets`, `secrets/instance.key`, `backups` e `.restore`.
+5. **Documenti**: `database/index.md#data-directory` elenca già `.scheduler.lock`, e descrive la guardia in modo
+   generico, come `test-walkthrough` e `security.md:502`. Non serve cambiarli.
+
+**Progetto**:
+- `Path(".scheduler.lock")` in `managed_paths`, subito dopo `scheduler_state.json`.
+- Rossi (test-author, `test_runtime_isolation.py`):
+  - il parametro `.scheduler.lock`, più `scheduler_state.json`, nel test dei symlink;
+  - un test nuovo dell'hardlink, con «aliases production data», su `sqlite/app.db`, `secrets/instance.key`,
+    `scheduler_state.json` (verdi: coprono il ramo scoperto) e `.scheduler.lock` (rosso);
+  - una barriera che il nome sia il `LOCK_FILE_NAME` di Z.
+- Backlog: Z-24 è nella sezione di Z, e non la tocco. Lo chiudo nel mio piano e lo segnalo al coordinatore.
+
+**Selettori**: `utils runtime-isolation` (puro), e `services config-package` perché il file è `config/__init__.py`.
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina), in `test_runtime_isolation.py`,
+   `TestDataDirResolution`:
+   - `scheduler_state.json` e `.scheduler.lock` aggiunti al test dei symlink;
+   - un test nuovo dell'hardlink («aliases production data»), su `sqlite/app.db`, `secrets/instance.key`,
+     `scheduler_state.json` e `.scheduler.lock`, con skip se il filesystem rifiuta gli hard link;
+   - la barriera `test_the_scheduler_lock_named_here_is_the_one_the_scheduler_takes`, sulla costante
+     `SCHEDULER_LOCK` della classe.
+   - Comando: `files/runs/z24-red.sh` (`utils runtime-isolation`). Esito: **2 failed, 296 passed**, i due
+     `[.scheduler.lock]`, tutti e due con «DID NOT RAISE ValueError».
+   > **⚠️ Fuori pista**: la barriera importava `run_lock`, e l'import si porta dietro l'`__init__` del pacchetto
+   > scheduler: 1246 moduli in ~1,9 s (misurato con `-X importtime`), modelli del DB compresi, dentro un'unità pura.
+   > Ora legge `LOCK_FILE_NAME` dal sorgente con `ast` (lo schema di `_assigned_value` in `test_test_runner_cli.py`),
+   > con `import ast` in cima al file.
+2. ✅ **Cura** (`files/z24/apply.py --apply`, identica alla copia di prova): `Path(".scheduler.lock")` in
+   `managed_paths` dopo `scheduler_state.json`, con un commento (Z-11, `run_lock.LOCK_FILE_NAME`).
+3. ✅ **Controlli leggeri** (`files/runs/z24-green.sh`): `utils runtime-isolation` 298 passed, `services
+   config-package` 857, `utils dev-cli-db-path` 15. Ruff e black puliti, `git diff --check` pulito.
+   - `git merge-file` contro dev `952c68cd5` (base comune `b37e926af`): 0 conflitti. Dev cambia
+     `backend.instructions.md` in un'altra tabella, e il backlog altrove.
+   - La voce Z-24 sta nella sezione di Z: la chiude il coordinatore.
+
+> **H-39, la parte già fatta, nello stesso checkpoint**: approvato dal coordinatore (06:52). In managed, la CSP
+> report-only spenta è un info e la protezione dei frame spenta un warning; il self-hosted è sempre ok.
+> - La regola di review è una riga nella voce «Config & Data Paths» di `.github/instructions/backend.instructions.md`:
+>   «un campo `Settings` di sicurezza nuovo dichiara il suo valore `managed` in `PROFILE_DEFAULTS` nello stesso lotto,
+>   o perché `managed` tiene il default del codice (H-39)».
+> - La riga accanto a C-99 è del coordinatore.
+> - I due controlli e le loro chiavi i18n aspettano B-9, che scrive in `config_audit.py`, `test_config_audit.py`,
+>   `security.md` e `settings.md`.
+>   - La cura in prova è pronta: `files/h39/apply.py`, che scrive le copie in `dry/`. Ruff e black puliti, 0 conflitti
+>     con A8a.
+>   - Le chiavi restano fuori dal worktree: senza il codice sarebbero morte, e un `instance/*.json` sporco potrebbe
+>     fermare l'avanzamento del ramo se B-9 lo tocca.
