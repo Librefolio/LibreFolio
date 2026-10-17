@@ -40,6 +40,7 @@ import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {
     addDays,
     ASSET_SET_DAILY_VAR_INSTANCE,
@@ -463,6 +464,137 @@ describe('formatCurrencyAmount', () => {
             // The formatter reads the flag per call: nothing is memoised, so a
             // toggle is visible on the next render without an invalidation.
             expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+        });
+    });
+
+    /**
+     * A code Intl rejects, stored before E-18 (MF-SEC9b). `Currency.validate_code`
+     * used to accept a name or a numeric code and save it; E-18 made the write
+     * schemas strict, but reads stay tolerant, so an install from before 1.3 can
+     * still hand this formatter `978`, `EURO` or `US DOLLAR`. `Intl.NumberFormat`
+     * throws a RangeError for any code that is not three ASCII letters, and this
+     * is the only currency-style `Intl` site without a fallback — the AI Export
+     * renderer, the PAC planner and the lot comparison axis all catch it — so one
+     * stored code takes the whole risk view down.
+     *
+     * The fallback pinned here: the amount written in the locale with exactly two
+     * fraction digits, one space, then the code exactly as given. Under privacy
+     * the number goes through `maskFormattedNumber`: the digits become the
+     * placeholder and the sign stays outside it (D8). Absence keeps its em-dash.
+     */
+    describe('with a code Intl rejects (stored before E-18)', () => {
+        /** Codes a pre-E-18 install may hold: a numeric code, a name, a name with a space. */
+        const LEGACY_CODES = ['978', 'EURO', 'US DOLLAR'] as const;
+
+        /**
+         * Spellings no legacy write stored — `validate_code` has upper-cased and
+         * stripped since before E-18 — here only to pin "as given": every legacy
+         * code above is already upper-case and trimmed, so a fallback that
+         * normalised the code would pass them all.
+         */
+        const UNNORMALISED_CODES = ['euro', ' EURO '] as const;
+
+        it('precondition: this runtime rejects every one of these codes', () => {
+            // Verified rather than assumed. If a future ICU accepted one of them,
+            // the cases below would run the Intl path instead of the fallback;
+            // this is the line that says so.
+            for (const currency of [...LEGACY_CODES, ...UNNORMALISED_CODES]) {
+                expect(() => new Intl.NumberFormat('en-US', {style: 'currency', currency}), `precondition: Intl rejects ${JSON.stringify(currency)}, so the fallback is the exit under test`).toThrow(RangeError);
+            }
+        });
+
+        it('falls back to the amount in the locale with two decimals, one space, then the code', () => {
+            expect(formatCurrencyAmount('1234.5', '978', 'en-US')).toBe('1,234.50 978');
+        });
+
+        it('keeps the sign of a loss with the amount, before the code', () => {
+            expect(formatCurrencyAmount('-0.5', 'EURO', 'en-US')).toBe('-0.50 EURO');
+        });
+
+        it('narrows an array to its first string, as on the Intl path', () => {
+            expect(formatCurrencyAmount(['1234.5', '99'], 'US DOLLAR', 'en-US')).toBe('1,234.50 US DOLLAR');
+        });
+
+        it('writes the amount in the locale it is given', () => {
+            // Control: this runtime has the de-DE separators, so the line below
+            // is about the formatter and not about missing locale data.
+            expect((1234.5).toLocaleString('de-DE', {minimumFractionDigits: 2, maximumFractionDigits: 2}), 'control: de-DE groups with a dot and decimals with a comma').toBe('1.234,50');
+
+            expect(formatCurrencyAmount('1234.5', '978', 'de-DE')).toBe('1.234,50 978');
+        });
+
+        it('writes the code exactly as given: neither upper-cased nor trimmed', () => {
+            const [lower, padded] = UNNORMALISED_CODES;
+            expect(formatCurrencyAmount('1234.5', lower, 'en-US')).toBe(`1,234.50 ${lower}`);
+            expect(formatCurrencyAmount('1234.5', padded, 'en-US')).toBe(`1,234.50 ${padded}`);
+        });
+
+        it('em-dash for an absent or non-finite value, without throwing', () => {
+            // Green before the fix: absence returns before Intl is reached. Pinned
+            // so the fallback cannot change that — formatting before these checks
+            // would print a figure the portfolio does not have (`NaN 978`, or
+            // `0.00 978` for a null).
+            expect(formatCurrencyAmount(null, '978', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount(undefined, '978', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount([null], '978', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount('not-a-number', '978', 'en-US')).toBe('—');
+        });
+
+        it('formatScopedCurrencyAmount: the same fallback on a portfolio scope', () => {
+            expect(formatScopedCurrencyAmount('1234.5', '978', 'portfolio', 'en-US')).toBe('1,234.50 978');
+        });
+
+        it('formatScopedCurrencyAmount: still an em-dash on an asset scope', () => {
+            // Green before the fix too: the scope guard answers before any formatting.
+            expect(formatScopedCurrencyAmount('1234.5', '978', 'asset', 'en-US')).toBe('—');
+        });
+
+        it('control: a well-formed but unassigned code (XYZ) still goes through Intl', () => {
+            // Three ASCII letters are well-formed whether or not ISO assigns them,
+            // so Intl accepts XYZ and keeps writing it: the fallback is for codes
+            // Intl rejects, not for codes it does not know. The expected string is
+            // Intl's own, computed here, so its spacing is ICU's and never typed.
+            const intl = new Intl.NumberFormat('en-US', {style: 'currency', currency: 'XYZ', maximumFractionDigits: 2}).format(1234.5);
+            expect(intl, 'control: Intl writes XYZ otherwise than the fallback would').not.toBe('1,234.50 XYZ');
+
+            expect(formatCurrencyAmount('1234.5', 'XYZ', 'en-US')).toBe(intl);
+        });
+
+        describe('with global privacy on', () => {
+            it('masks the number and keeps the code', () => {
+                // Control: the same call with the flag off, so the masked line is
+                // a substitution rather than a function that has always returned
+                // the placeholder.
+                expect(formatCurrencyAmount('1234.5', '978', 'en-US')).toBe('1,234.50 978');
+
+                setPrivacyEnabled(true);
+                expect(formatCurrencyAmount('1234.5', '978', 'en-US')).toBe(`${PRIVACY_PLACEHOLDER} 978`);
+                // This code is digits, so the usual "no digit left" check cannot
+                // apply; the magnitude is checked instead — a far larger amount
+                // gives the identical string.
+                expect(formatCurrencyAmount('9999999', '978', 'en-US')).toBe(`${PRIVACY_PLACEHOLDER} 978`);
+            });
+
+            it('keeps the sign of a loss outside the mask (D8)', () => {
+                // Control: the loss in the clear.
+                expect(formatCurrencyAmount('-1234.5', 'EURO', 'en-US')).toBe('-1,234.50 EURO');
+
+                setPrivacyEnabled(true);
+                expect(formatCurrencyAmount('-1234.5', 'EURO', 'en-US')).toBe(`-${PRIVACY_PLACEHOLDER} EURO`);
+            });
+
+            it('still says em-dash for an absent value', () => {
+                setPrivacyEnabled(true);
+
+                expect(formatCurrencyAmount(null, '978', 'en-US')).toBe('—');
+                expect(formatCurrencyAmount(undefined, '978', 'en-US')).toBe('—');
+                expect(formatCurrencyAmount([null], '978', 'en-US')).toBe('—');
+                expect(formatCurrencyAmount('not-a-number', '978', 'en-US')).toBe('—');
+
+                // Positive control for the flag, through a code Intl accepts so it
+                // holds before the fix: in this exact state a present value is masked.
+                expect(formatCurrencyAmount('0', 'USD', 'en-US')).toBe(`$${PRIVACY_PLACEHOLDER}`);
+            });
         });
     });
 });

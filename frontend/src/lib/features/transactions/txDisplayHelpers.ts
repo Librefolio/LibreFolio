@@ -6,7 +6,7 @@
  */
 
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatExactDecimal} from '$lib/utils/core/formatFixed';
 
 /**
  * Format a quantity string for display:
@@ -18,7 +18,8 @@ export function formatTxQuantity(qty: string | null | undefined): string {
     if (qty == null || qty === '') return '—';
     const n = parseFloat(qty);
     if (isNaN(n) || n === 0) return '—';
-    const formatted = n.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 6});
+    // C-97c: exact, up to the 10 decimals a quantity keeps (C-97a); 6, through a float, cut a satoshi to nothing.
+    const formatted = formatExactDecimal(qty, {maxFrac: 10});
     const emoji = n > 0 ? ' 📈' : ' 📉';
     return `${n > 0 ? '+' : ''}${formatted}${emoji}`;
 }

@@ -15,6 +15,11 @@ of a thousand («Expression tree is too large (maximum depth 1000)»). Four stat
 
 None of these routes had a cap, and their failures echoed ``str(e)``: an SQL error names the schema.
 
+MF-SEC9e, on HEAD 79d4ca239: ``bulk_delete_prices`` read its counts with one awaited ``COUNT`` per range — 10 000 at the
+cap —, an asset's count the sum over its item's ranges (a row in two overlapping ranges counted twice) and overwritten
+item by item (an asset named by two items answered the last item's count in both results); an empty request built a
+response without ``success_count``, a ``ValidationError``, and ``DELETE /assets/prices`` answered 500.
+
 The cure's contract, pinned here:
 
 1. ``utils/sql_chunks.chunks(items, size=500)``: consecutive slices of at most ``size``, in order, the last one partial;
@@ -42,10 +47,34 @@ The cure's contract, pinned here:
    ``POST /assets/prices/sync`` and of the FX bulk deletion, and the per-item error texts of the FX upsert and of an FX
    «delete all» (in a 200, and in the 400 when every item failed) hold none of the SQL; the error is logged, with its
    exception. ``POST /assets/prices``' 400 for a ``ValueError`` keeps its domain message (guard).
+8. ``bulk_delete_prices`` counts each row once (MF-SEC9e): each asset's ranges, from every item naming it, are merged
+   into disjoint inclusive day intervals (``end`` defaulting to ``start``). Each item's result answers its asset's rows
+   deleted — a row in two ranges once, an asset named by two items the same total in both —, the message its own
+   item's range count; the counts of the distinct assets add up to ``total_deleted``; every other price is kept: what a
+   brute-force enumeration of the covered days says, on random requests as well (ranges overlapping within and across
+   items, repeated, adjacent, out of order; an asset without prices; more intervals than one chunk). 2 000 ranges send
+   at most ⌈intervals / 500⌉ + 2 SELECTs and as many DELETEs, counted as the engine sends them (a step count). An empty
+   request answers an empty response (``success_count`` 0, ``total_deleted`` 0), 200 on ``DELETE /assets/prices``.
 
 The cases of 2-4 also run at 500 and 501 OR terms, the edge of one chunk. The barrier,
 ``test_barrier_this_sqlite_refuses_one_or_of_1500_terms``, proves the SQLite these tests run on answers one OR of 500
 terms and refuses one of 1 500: without it a build with a higher limit would let the import-sized cases pass untested.
+
+Red on HEAD 79d4ca239 (MF-SEC9e):
+
+- ``test_bulk_delete_prices_counts_a_row_in_two_ranges_once`` (every case): one COUNT per range, summed — 9, 12, 2 for
+  7, 10, 1 rows deleted;
+- ``test_bulk_delete_prices_counts_an_asset_over_every_item_naming_it`` (both cases): both results of A answer the last
+  item's count — 2 for 5, 4 for 7;
+- ``test_bulk_delete_prices_matches_a_brute_force_reference`` (every seed): both of the above;
+- ``test_bulk_delete_prices_of_nothing_answers_an_empty_response``: ``ValidationError`` building the response;
+- ``test_delete_prices_route_of_nothing_answers_200``: 500;
+- ``test_bulk_delete_prices_reads_its_counts_per_chunk_not_per_range`` (both cases): 2 000 SELECTs, one per range.
+
+Green on HEAD 79d4ca239 too (guards): ``test_guard_bulk_delete_prices_inclusive_bounds_and_adjacent_ranges`` and
+``test_guard_bulk_delete_prices_disjoint_ranges_match_a_brute_force_reference`` (every seed) — without a shared day or
+an asset named twice, a COUNT per range summed is exact; they hold the merging to inclusive ends, an end defaulting to
+the start, adjacent ranges losing or doubling no day, ranges out of order, counts summed across chunks.
 
 Red on HEAD d63558abb (the chunks in, the matching still a scan):
 ``test_delete_rates_bulk_matching_is_bisection_not_a_scan`` (both cases): every deletion compared with every date of its
@@ -84,12 +113,13 @@ backend/app/api/v1/assets/prices.py (upsert_prices_bulk, delete_prices_bulk, syn
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import math
 import random
 import sys
 from collections import Counter
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Iterator
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from types import ModuleType
@@ -98,7 +128,8 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
-from sqlalchemy import and_, insert, or_, select
+from pydantic import ValidationError
+from sqlalchemy import and_, event, insert, or_, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -1089,12 +1120,14 @@ async def test_a_failure_never_echoes_its_error(monkeypatch, arrange, module):
 
 @pytest.mark.asyncio
 async def test_guard_post_prices_value_error_keeps_its_domain_message(monkeypatch):
-    """``POST /assets/prices``: a ``ValueError`` of the service (a currency mismatch) answers 400 with its own message.
+    """``POST /assets/prices``: a ``ValueError`` of the service (the digits refusal of a manual upsert, C-97) answers 400
+    with its own message.
 
-    Green on HEAD 04955c498 too: only the 500 lost its echo.
+    A currency mismatch is no ``ValueError`` of a manual upsert since X-R71: it answers 422 ``price_currency_mismatch``
+    (``api prices-currency-coherence``). Green on HEAD 04955c498 too: only the 500 lost its echo.
     """
     print_section("MF-SEC9a guard: POST /assets/prices, a domain error")
-    message = "Currency mismatch for asset 1: the price is in USD, the asset in EUR"
+    message = "Too many digits in the prices of asset 1: 1 value(s): 1990-01-01 (close)"
 
     async def refuse(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError(message)
@@ -1108,3 +1141,351 @@ async def test_guard_post_prices_value_error_keeps_its_domain_message(monkeypatc
 
     assert (excinfo.value.status_code, excinfo.value.detail) == (400, message)
     print_success("400 with the domain message")
+
+
+# =============================================================================
+# 8. bulk_delete_prices(): EACH ROW COUNTED ONCE, EACH ASSET OVER EVERY ITEM NAMING IT (MF-SEC9e)
+# =============================================================================
+
+#: A range as these tests write it: day offsets from ``DAY0``, the end ``None`` for a single day sent without one.
+Span = tuple[int, int | None]
+
+
+async def _seed_prices(session: AsyncSession, rows: Iterable[tuple[int, int]]) -> set[tuple[int, date]]:
+    """A price for each (asset id, day offset), one statement per row (``executemany``); answers what is stored."""
+    values = [{"asset_id": asset_id, "date": _day(offset), "close": Decimal(offset + 1), "currency": "EUR", "source_plugin_key": SOURCE, "fetched_at": FETCHED_AT} for asset_id, offset in rows]
+    await session.execute(insert(PriceHistory), values)
+    await session.commit()
+    return await _stored_price_days(session)
+
+
+def _deletion(asset_id: int, *spans: Span) -> FAAssetDelete:
+    return FAAssetDelete(asset_id=asset_id, date_ranges=[DateRangeModel(start=_day(start), end=None if end is None else _day(end)) for start, end in spans])
+
+
+def _coverage(request: list[FAAssetDelete]) -> Counter[tuple[int, date]]:
+    """Brute force: how many ranges cover each (asset, day), over every item naming the asset, one day at a time."""
+    covered: Counter[tuple[int, date]] = Counter()
+    for item in request:
+        for date_range in item.date_ranges:
+            day, last = date_range.start, date_range.end or date_range.start
+            while day <= last:
+                covered[(item.asset_id, day)] += 1
+                day += timedelta(days=1)
+    return covered
+
+
+def _intervals(coverage: Counter[tuple[int, date]]) -> int:
+    """The disjoint intervals a request covers: per asset, the maximal runs of consecutive covered days."""
+    return sum(1 for asset_id, day in coverage if (asset_id, day - timedelta(days=1)) not in coverage)
+
+
+def _assert_deleted_as_the_reference(response: FABulkDeleteResponse, request: list[FAAssetDelete], before: set[tuple[int, date]], after: set[tuple[int, date]]) -> None:
+    """The answer and the database against brute force over ``before``: each item's result answers its asset's rows on
+    the days any item covers for it, each row once — an asset named by two items the same total in both —, success and
+    its own item's range count in the message; ``total_deleted`` the rows gone, which the counts of the distinct assets
+    add up to; ``after`` exactly the other rows."""
+    coverage = _coverage(request)
+    gone = {(asset_id, day) for asset_id, day in before if (asset_id, day) in coverage}
+    per_asset = Counter(asset_id for asset_id, _ in gone)
+    expected = Counter((item.asset_id, True, per_asset[item.asset_id], f"Deleted prices in {len(item.date_ranges)} range(s)") for item in request)
+    answered = Counter((result.asset_id, result.success, result.deleted_count, result.message) for result in response.results)
+    unexpected, missing = sorted((answered - expected).elements(), key=repr), sorted((expected - answered).elements(), key=repr)
+    assert answered == expected, f"(asset, success, deleted_count, message) answered and not expected: {unexpected[:5]}; expected and not answered: {missing[:5]}"
+    assert (response.total_deleted, response.success_count, response.errors) == (len(gone), len(request), []), f"total_deleted {response.total_deleted} (expected {len(gone)}), success_count {response.success_count}, errors {response.errors}"
+    by_asset = {result.asset_id: result.deleted_count for result in response.results}
+    assert sum(by_asset.values()) == response.total_deleted, f"the counts of the distinct assets add up to {sum(by_asset.values())}, total_deleted {response.total_deleted}"
+    kept = before - gone
+    assert after == kept, f"{len(kept - after)} prices deleted that should stay, e.g. {sorted(kept - after)[:5]}; {len(after - kept)} kept that should go, e.g. {sorted(after - kept)[:5]}"
+
+
+@contextlib.contextmanager
+def _statements_sent(session: AsyncSession) -> Iterator[Counter[str]]:
+    """The statements the session's engine sends while inside, counted by their first keyword (``SELECT``, ``DELETE``…)
+    as they reach the driver (``before_cursor_execute``)."""
+    sent: Counter[str] = Counter()
+
+    def count(_connection: Any, _cursor: Any, statement: str, _parameters: Any, _context: Any, _executemany: bool) -> None:
+        sent[statement.lstrip().split(None, 1)[0].upper()] += 1
+
+    engine = session.bind.sync_engine
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        yield sent
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+
+
+#: One item of asset A whose ranges cover some days twice, and the rows of A they delete, each once.
+OVERLAPPING_RANGES = [
+    pytest.param(((0, 4), (3, 6)), 7, id="d0-d4-and-d3-d6"),
+    pytest.param(((0, 9), (2, 3)), 10, id="d2-d3-inside-d0-d9"),
+    pytest.param(((5, None), (5, 5)), 1, id="d5-twice"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("spans", "count"), OVERLAPPING_RANGES)
+async def test_bulk_delete_prices_counts_a_row_in_two_ranges_once(session, spans, count):
+    """One item of asset A whose ranges overlap — [d0, d4] and [d3, d6]; [d2, d3] inside [d0, d9]; d5 without an end and
+    [d5, d5] —, A and B priced on d0 to d14: A's ``deleted_count`` and ``total_deleted`` are the rows deleted, each once
+    (7; 10; 1); every other price of A and all of B's kept.
+
+    Red on HEAD 79d4ca239: one COUNT per range, summed — a row in two ranges counted twice (9; 12; 2) while the DELETE
+    removed it once, ``deleted_count`` above ``total_deleted``.
+    """
+    print_section(f"MF-SEC9e: bulk_delete_prices, one asset's ranges {spans}")
+    asset_a, asset_b = await _assets(session, 2)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in (asset_a, asset_b) for offset in range(15)])
+    request = [_deletion(asset_a, *spans)]
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    answered = [(result.asset_id, result.deleted_count) for result in response.results]
+    assert (answered, response.total_deleted) == ([(asset_a, count)], count), f"answered (asset, deleted_count) {answered}, total_deleted {response.total_deleted}: expected A {count}, each row once"
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"{count} rows deleted and counted once")
+
+
+#: Three items — asset A, then B, then A again —, their ranges, and the rows A and B lose.
+ASSET_IN_TWO_ITEMS = [
+    pytest.param(((0, 2),), ((5, None),), ((10, 11),), 5, 1, id="A-d0-d2-B-d5-A-d10-d11"),
+    pytest.param(((0, 4),), ((5, None),), ((3, 6),), 7, 1, id="A-d0-d4-B-d5-A-d3-d6-overlapping"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("first", "other", "second", "count_a", "count_b"), ASSET_IN_TWO_ITEMS)
+async def test_bulk_delete_prices_counts_an_asset_over_every_item_naming_it(session, first, other, second, count_a, count_b):
+    """Three items, A [d0, d2], B d5, A [d10, d11] — or A [d0, d4], B d5, A [d3, d6], the two items of A overlapping —, A
+    and B priced on d0 to d14: both results of A answer A's rows over both items, each once (5 = 3 + 2; 7), B's its 1;
+    ``total_deleted`` their sum over the distinct assets (6; 8); the rows gone exactly those.
+
+    Red on HEAD 79d4ca239: the per-asset count overwritten item by item, both results of A answering the LAST item's
+    count (2; 4), the counts no longer adding up to ``total_deleted``.
+    """
+    print_section(f"MF-SEC9e: bulk_delete_prices, asset A in two items {first} and {second}")
+    asset_a, asset_b = await _assets(session, 2)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in (asset_a, asset_b) for offset in range(15)])
+    request = [_deletion(asset_a, *first), _deletion(asset_b, *other), _deletion(asset_a, *second)]
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    answered = Counter((result.asset_id, result.deleted_count) for result in response.results)
+    expected = Counter({(asset_a, count_a): 2, (asset_b, count_b): 1})
+    wanted = f"expected A {count_a} in both its results, B {count_b}, {count_a + count_b} in all"
+    assert (answered, response.total_deleted) == (expected, count_a + count_b), f"answered (asset, deleted_count) {sorted(answered.elements())}, total_deleted {response.total_deleted}: {wanted}"
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"A {count_a} in both its results, B {count_b}, total {response.total_deleted}")
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_prices_of_nothing_answers_an_empty_response(session):
+    """``bulk_delete_prices([])`` answers a valid empty response — no result, ``success_count`` 0, ``total_deleted`` 0, no
+    error — and deletes nothing.
+
+    Red on HEAD 79d4ca239: it built ``FABulkDeleteResponse(deleted_count=0, results=[])`` — no ``success_count``, no
+    ``total_deleted``, a field the model forbids —: ``ValidationError``.
+    """
+    print_section("MF-SEC9e: bulk_delete_prices of nothing")
+    (asset_a,) = await _assets(session, 1)
+    before = await _seed_prices(session, [(asset_a, offset) for offset in range(5)])
+
+    try:
+        response = await AssetSourceManager.bulk_delete_prices([], session)
+    except ValidationError as error:
+        pytest.fail(f"an empty request could not build its response: {[(e['type'], e['loc']) for e in error.errors()]}")
+
+    assert isinstance(response, FABulkDeleteResponse), f"answered {type(response).__name__}"
+    assert (response.results, response.success_count, response.total_deleted, response.errors) == ([], 0, 0, [])
+    assert await _stored_price_days(session) == before
+    print_success("an empty response, nothing deleted")
+
+
+@pytest.mark.asyncio
+async def test_delete_prices_route_of_nothing_answers_200(session):
+    """``DELETE /assets/prices`` with no item, its coroutine called directly on the private database: the empty response,
+    valid against the route's ``response_model`` (200); nothing deleted.
+
+    Red on HEAD 79d4ca239: the service's ``ValidationError`` caught by the route, 500 «Internal error while deleting
+    prices».
+    """
+    print_section("MF-SEC9e: DELETE /assets/prices with no item")
+    (asset_a,) = await _assets(session, 1)
+    before = await _seed_prices(session, [(asset_a, offset) for offset in range(5)])
+
+    try:
+        response = await prices.delete_prices_bulk(assets=[], session=session, _current_user=None)
+    except HTTPException as refused:
+        pytest.fail(f"{refused.status_code} for an empty request: {refused.detail!r}")
+
+    answered = FABulkDeleteResponse.model_validate(response.model_dump())  # what the route's response_model checks
+    assert (answered.results, answered.success_count, answered.total_deleted, answered.errors) == ([], 0, 0, [])
+    assert await _stored_price_days(session) == before
+    print_success("200: an empty response, nothing deleted")
+
+
+#: Statements beyond one per chunk of intervals the counting, and the deletion, may each take.
+STATEMENT_SLACK = 2
+STATEMENT_ASSETS = 4
+STATEMENT_RANGES_PER_ASSET = 500
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("length", "intervals"), [pytest.param(0, 2_000, id="2000-separate-days"), pytest.param(6, STATEMENT_ASSETS, id="2000-overlapping-weeks")])
+async def test_bulk_delete_prices_reads_its_counts_per_chunk_not_per_range(session, length, intervals):
+    """2 000 ranges, 500 for each of four assets priced on d0 to d999, one starting every other day — single days (2 000
+    disjoint intervals), or week-long ranges overlapping one another (one interval per asset) —: the call sends at most
+    ⌈intervals / 500⌉ + 2 SELECTs and as many DELETEs (6; 3), where one COUNT per range sends 2 000. The statements are
+    counted as the engine hands them to the driver: a step count, not a time. Barrier: a SELECT and a DELETE are seen —
+    the counter sees the call. The counts and the rows are the brute-force reference's; a fifth asset keeps its prices.
+
+    Red on HEAD 79d4ca239: 2 000 SELECTs, one awaited COUNT per range — 10 000 at the cap.
+    """
+    print_section(f"MF-SEC9e: bulk_delete_prices, {STATEMENT_ASSETS * STATEMENT_RANGES_PER_ASSET} ranges of {length + 1} day(s), statements sent")
+    asset_ids = await _assets(session, STATEMENT_ASSETS + 1)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in asset_ids for offset in range(2 * STATEMENT_RANGES_PER_ASSET)])
+    request = [_deletion(asset_id, *((2 * k, 2 * k + length) for k in range(STATEMENT_RANGES_PER_ASSET))) for asset_id in asset_ids[:STATEMENT_ASSETS]]
+    assert _intervals(_coverage(request)) == intervals, "the request's intervals, by brute force"
+    budget = math.ceil(intervals / CHUNK) + STATEMENT_SLACK
+
+    with _statements_sent(session) as sent:
+        response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    assert sent["SELECT"] >= 1 and sent["DELETE"] >= 1, f"statements seen {dict(sent)}: the counter does not see the call"
+    assert sent["SELECT"] <= budget, f"{sent['SELECT']} SELECTs for {intervals} interval(s) of 2 000 ranges: at most {budget}, one per chunk of 500 intervals (statements {dict(sent)})"
+    assert sent["DELETE"] <= budget, f"{sent['DELETE']} DELETEs for {intervals} interval(s): at most {budget} (statements {dict(sent)})"
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"statements {dict(sent)} for {intervals} interval(s) (at most {budget} of each kind)")
+
+
+@pytest.mark.asyncio
+async def test_guard_bulk_delete_prices_inclusive_bounds_and_adjacent_ranges(session):
+    """One item per asset, no two ranges sharing a day, A, B and C priced on d0 to d29: A [d3, d3] and d7 without an end
+    — 2, each range its day alone; B [d0, d2] and [d3, d4], adjacent — 5; C [d20, d25] and [d10, d12], out of order — 9;
+    D, without prices, [d0, d5] — 0. ``total_deleted`` 16, every other price kept, as the brute-force reference says.
+
+    Green on HEAD 79d4ca239 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
+    guard for the merging: inclusive ends, an end defaulting to the start, adjacent ranges losing or doubling no day,
+    ranges given out of order.
+    """
+    print_section("MF-SEC9e guard: bulk_delete_prices, inclusive bounds and adjacent ranges")
+    asset_a, asset_b, asset_c, asset_d = await _assets(session, 4)
+    before = await _seed_prices(session, [(asset_id, offset) for asset_id in (asset_a, asset_b, asset_c) for offset in range(30)])
+    request = [_deletion(asset_a, (3, 3), (7, None)), _deletion(asset_b, (0, 2), (3, 4)), _deletion(asset_c, (20, 25), (10, 12)), _deletion(asset_d, (0, 5))]
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    answered = sorted((result.asset_id, result.deleted_count) for result in response.results)
+    assert (answered, response.total_deleted) == (sorted([(asset_a, 2), (asset_b, 5), (asset_c, 9), (asset_d, 0)]), 16), f"answered (asset, deleted_count) {answered}, total_deleted {response.total_deleted}"
+    gone = {(asset_a, _day(3)), (asset_a, _day(7)), *((asset_b, _day(offset)) for offset in range(5)), *((asset_c, _day(offset)) for offset in (*range(10, 13), *range(20, 26)))}
+    after = await _stored_price_days(session)
+    assert after == before - gone, f"deleted {sorted(before - after)}, expected {sorted(gone)}"
+    _assert_deleted_as_the_reference(response, request, before, after)
+    print_success("2, 5, 9 and 0 deleted, 16 in all")
+
+
+#: The days the random cases' prices are drawn from; the asset ids priced, and one more without a price.
+PRICE_WINDOW = 2_000
+PRICED_ASSETS = 4
+PRICE_SEEDS = [pytest.param(seed, id=f"seed-{seed}") for seed in range(5)]
+
+
+def _random_prices(rng: random.Random, asset_ids: list[int]) -> list[tuple[int, int]]:
+    """About half of the window's days for each asset, drawn at random, and always its first and last day."""
+    return [(asset_id, offset) for asset_id in asset_ids for offset in range(PRICE_WINDOW) if offset in (0, PRICE_WINDOW - 1) or rng.random() < 0.5]
+
+
+def _random_disjoint_request(rng: random.Random, asset_ids: list[int]) -> list[FAAssetDelete]:
+    """One item per asset, its ranges walking forward from a little before the window to a little past it — single days
+    (with or without an end) or up to a week —, each next one starting the day after (adjacent) or after a gap, sent
+    shuffled: no day covered twice."""
+    request = []
+    for asset_id in asset_ids:
+        spans: list[Span] = []
+        start = rng.randint(-5, 5)
+        while start < PRICE_WINDOW + 5:
+            length = rng.choice((0, 0, 1, 3, 6))
+            spans.append((start, None) if length == 0 and rng.random() < 0.5 else (start, start + length))
+            start += length + rng.choice((1, 1, 2, 3, 5, 9))
+        rng.shuffle(spans)
+        request.append(_deletion(asset_id, *spans))
+    return request
+
+
+def _random_overlapping_request(rng: random.Random, asset_ids: list[int]) -> list[FAAssetDelete]:
+    """Items naming the assets at random — each asset in two items at least —, each of 20 to 40 ranges: single days (with
+    or without an end), ranges up to 11 days, starts reaching a little past the window, some ranges repeated; ranges
+    overlap within an item and across the items of an asset."""
+    owners = [*asset_ids, *asset_ids, *(rng.choice(asset_ids) for _ in range(40))]
+    rng.shuffle(owners)
+    request = []
+    for asset_id in owners:
+        spans: list[Span] = []
+        for _ in range(rng.randint(20, 40)):
+            start = rng.randrange(-10, PRICE_WINDOW + 10)
+            kind = rng.choice(("single", "single-with-end", "range", "range", "repeat"))
+            if kind == "repeat" and spans:
+                spans.append(rng.choice(spans))
+            elif kind == "single":
+                spans.append((start, None))
+            elif kind == "single-with-end":
+                spans.append((start, start))
+            else:
+                spans.append((start, start + rng.randint(1, 10)))
+        request.append(_deletion(asset_id, *spans))
+    return request
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("seed", PRICE_SEEDS)
+async def test_guard_bulk_delete_prices_disjoint_ranges_match_a_brute_force_reference(session, seed):
+    """Random requests without a shared day (``_random_disjoint_request``, a fixed seed each: reproducible) — one item per
+    asset, adjacent and separate ranges sent out of order, an asset without prices, more intervals than one chunk —:
+    counts, ``total_deleted`` and rows kept as the brute-force reference (``_assert_deleted_as_the_reference``).
+
+    Green on HEAD 79d4ca239 too: without a shared day or an asset named twice, one COUNT per range summed is exact. A
+    guard for the merging and for the counts summed across chunks.
+    """
+    rng = random.Random(seed)
+    asset_ids = await _assets(session, PRICED_ASSETS + 1)
+    before = await _seed_prices(session, _random_prices(rng, asset_ids[:PRICED_ASSETS]))
+    request = _random_disjoint_request(rng, asset_ids)
+    coverage = _coverage(request)
+    ranges, intervals = sum(len(item.date_ranges) for item in request), _intervals(coverage)
+    print_section(f"MF-SEC9e guard (seed {seed}): {ranges} disjoint ranges, {intervals} intervals, {len(before)} prices")
+    assert max(coverage.values()) == 1 and len({item.asset_id for item in request}) == len(request), "the draw must share no day and name each asset once"
+    assert CHUNK < intervals < ranges, f"{intervals} intervals of {ranges} ranges: the draw must join adjacent ranges and span two chunks"
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"{response.total_deleted} prices deleted as the reference")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("seed", PRICE_SEEDS)
+async def test_bulk_delete_prices_matches_a_brute_force_reference(session, seed):
+    """Random requests (``_random_overlapping_request``, a fixed seed each: reproducible) — every asset in two items or
+    more, ranges overlapping within and across items, repeated ranges, an asset without prices, more intervals than one
+    chunk —: each result its asset's distinct rows deleted, the counts of the distinct assets adding up to
+    ``total_deleted``, every other row kept, as the brute-force reference (``_assert_deleted_as_the_reference``).
+
+    Red on HEAD 79d4ca239 (every seed): rows in two ranges counted twice, and each asset answered its last item's count.
+    """
+    rng = random.Random(seed)
+    asset_ids = await _assets(session, PRICED_ASSETS + 1)
+    before = await _seed_prices(session, _random_prices(rng, asset_ids[:PRICED_ASSETS]))
+    request = _random_overlapping_request(rng, asset_ids)
+    coverage = _coverage(request)
+    ranges, intervals = sum(len(item.date_ranges) for item in request), _intervals(coverage)
+    print_section(f"MF-SEC9e (seed {seed}): {len(request)} items, {ranges} ranges, {intervals} intervals, {len(before)} prices")
+    named = Counter(item.asset_id for item in request)
+    assert min(named.values()) >= 2, f"every asset must be in two items: {named}"
+    assert any(times > 1 and key in before for key, times in coverage.items()), "the draw must cover a stored price twice"
+    assert intervals > CHUNK, f"{intervals} intervals: the draw must span two chunks"
+
+    response = await AssetSourceManager.bulk_delete_prices(request, session)
+
+    _assert_deleted_as_the_reference(response, request, before, await _stored_price_days(session))
+    print_success(f"{response.total_deleted} prices deleted as the reference, over {len(request)} items")

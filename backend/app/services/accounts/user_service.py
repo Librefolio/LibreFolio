@@ -17,6 +17,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE
 from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
+from backend.app.db.session import begin_writes
 from backend.app.services.accounts import token_service
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.brim import brim_provider
@@ -53,6 +54,10 @@ class AccountError(str):
         error = super().__new__(cls, message)
         error.code = code
         return error
+
+    def __getnewargs__(self) -> tuple[str, str]:  # type: ignore[override]
+        """``copy``, ``deepcopy`` and ``pickle`` rebuild it with its code: ``str``'s own hands back the message alone."""
+        return self.code, str(self)
 
 
 def _new_username_refusal(username: str) -> Optional[AccountError]:
@@ -401,11 +406,14 @@ async def update_user_status(
     *,
     is_active: Optional[bool] = None,
     is_superuser: Optional[bool] = None,
+    cancel_setup: bool = False,
 ) -> Optional[str]:
     """Change whether ``user`` is active and an administrator, all or nothing; commits.
 
-    Returns ``"LAST_ADMIN"``, changing nothing, when the change would deactivate or demote the last active
-    administrator; None otherwise. Deactivating or demoting ends every session of the account. A value equal to the
+    Every decision reads the account under SQLite's write lock, refreshed (A-51): a setup completed, or another change
+    committed, since the caller read it is seen here. Returns ``"LAST_ADMIN"``, changing nothing, when the change would
+    deactivate or demote the last active administrator; ``"SETUP_COMPLETED"``, changing nothing, when ``cancel_setup``
+    asks to cancel the setup link of an account that no longer waits; None otherwise. Deactivating or demoting ends every session of the account. A value equal to the
     current one changes nothing, except one thing: deactivating an account that waits for its email verification ends
     the wait, as ``user deactivate`` does. Activating or deactivating revokes the account's email-verification links:
     an administrator has decided, so the account no longer waits for one, and an old link cannot wake it (workstream E).
@@ -414,12 +422,20 @@ async def update_user_status(
     cancellation: it keeps waiting, and ``./dev.py user setup-link`` gives it a new one —; deactivating any other
     account retires the setup links it never used (A-43). Demoting the waiting administrator is refused by the caller.
     """
+    await begin_writes(session, User)
+    await session.refresh(user)
     deactivate = is_active is False and user.is_active
     demote = is_superuser is False and user.is_superuser
     if (deactivate or demote) and await _is_last_active_admin(session, user):
+        await session.rollback()
         return "LAST_ADMIN"
     # Read before any change: whether the account is the initial administrator waiting for its setup (F02)
     waiting = is_active is False and await _is_pending_admin(session, user)
+    if cancel_setup and not waiting:
+        user_id = user.id
+        await session.rollback()
+        logger.info("Setup cancellation refused: the account does not wait for its setup", user_id=user_id)
+        return "SETUP_COMPLETED"
     changed = False
     if is_active is not None and is_active != user.is_active:
         user.is_active = is_active
@@ -498,7 +514,12 @@ async def set_user_active(
     if not user:
         return False, f"User '{username}' not found"
 
+    # The decisions read the account under SQLite's write lock, refreshed (A-51): a setup completed since the read above
+    # has made the waiting administrator an active one
+    await begin_writes(session, User)
+    await session.refresh(user)
     if not active and await _is_last_active_admin(session, user):
+        await session.rollback()
         return False, f"User '{username}' is the last active administrator: promote or activate another administrator first"
 
     # Store user_id before commit (to avoid lazy load after commit)
@@ -553,10 +574,16 @@ async def set_user_admin(
         status = "already an admin" if is_admin else "not an admin"
         return False, f"User '{username}' is {status}"
 
+    # The decisions read the account under SQLite's write lock, refreshed (A-51): a setup completed since the read above
+    # has made the waiting administrator an active one
+    await begin_writes(session, User)
+    await session.refresh(user)
     if not is_admin and await _is_last_active_admin(session, user):
+        await session.rollback()
         return False, f"User '{username}' is the last active administrator: promote another user first"
 
     if not is_admin and await _is_pending_admin(session, user):
+        await session.rollback()
         return False, f"User '{username}' is the initial administrator waiting for its setup: it keeps its role until then; deactivate it to cancel its setup link, or delete it from Settings › Administration › Users"
 
     # Store user_id before commit (to avoid lazy load after commit)

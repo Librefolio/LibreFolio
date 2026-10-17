@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1.auth import deletion_preview_read, get_current_user
 from backend.app.api.v1.settings import require_admin
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
-from backend.app.db.session import get_session_generator
+from backend.app.db.session import begin_writes, get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.users import (
     AccountDeletionPreviewRead,
@@ -194,7 +194,9 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
     which already holds one. The initial administrator waiting for its setup (F02) is neither reactivated nor demoted
     here (409 ``PENDING_SETUP``): nobody knows its password, and it keeps its role until its setup. Deactivating it
     cancels its setup link (A-43): the link stops working and the account keeps waiting; a protected one refuses that
-    too. Deactivating or demoting ends every session of the account.
+    too. With ``cancel_setup`` the request is that cancellation and nothing else: an account that no longer waits — its
+    setup done since the caller looked — answers 409 ``SETUP_COMPLETED``, nothing changed (A-51). The service decides
+    under SQLite's write lock, from the account as it is then. Deactivating or demoting ends every session of the account.
     """
     user = await _user_or_404(session, user_id)
     pending = await registration_service.is_pending_admin(session, user)
@@ -215,8 +217,11 @@ async def update_account(user_id: int, request: AdminUserUpdateRequest, admin: A
         # An account waiting for its email verification already holds its place while its link is live (workstream E).
         if usage.full and not await email_verification.holds_place(session, user):
             raise _limit_reached(usage)
-    if await user_service.update_user_status(session, user, is_active=request.is_active, is_superuser=request.is_superuser) == "LAST_ADMIN":
+    outcome = await user_service.update_user_status(session, user, is_active=request.is_active, is_superuser=request.is_superuser, cancel_setup=request.cancel_setup)
+    if outcome == "LAST_ADMIN":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "LAST_ADMIN", "message": "The last active administrator can be neither deactivated nor demoted"})
+    if outcome == "SETUP_COMPLETED":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SETUP_COMPLETED", "message": "This account does not wait for its setup: nothing was changed"})
     logger.info("Account updated by an administrator", user_id=user.id, admin_id=admin.id, is_active=user.is_active, is_superuser=user.is_superuser)
     # The answer replaces the row in the Users tab: it carries the same flags as the list (workstream E, F02).
     return _admin_user_read(user, holds_place=await email_verification.holds_place(session, user), pending_setup=await registration_service.is_pending_admin(session, user))
@@ -241,15 +246,26 @@ async def delete_account(user_id: int, admin: Annotated[User, Depends(require_ad
     account (409 ``ACCOUNT_PROTECTED``, before any other answer: demoting it would be refused too) and for an
     administrator (409 ``DEMOTE_FIRST``: demote it first, so the last one never goes from here) — but the initial
     administrator waiting for its setup, which cannot be demoted and never was an active one: deleting it is the hard
-    cancellation of its setup (A-43). All or nothing; cannot be undone.
+    cancellation of its setup (A-43); whether it still waits is read again under SQLite's write lock, so one that has just
+    completed its setup answers ``DEMOTE_FIRST`` (A-51). All or nothing; cannot be undone.
     """
     user = await _user_or_404(session, user_id)
     if user.id == admin.id:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SELF_DELETION", "message": "Delete your own account from your profile"})
     if refusal := _protected(user):
         raise refusal
-    if user.is_superuser and not await registration_service.is_pending_admin(session, user):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "DEMOTE_FIRST", "message": "An administrator must be demoted before it can be deleted"})
+    demote_first = {"error_code": "DEMOTE_FIRST", "message": "An administrator must be demoted before it can be deleted"}
+    pending = await registration_service.is_pending_admin(session, user)
+    if user.is_superuser and not pending:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=demote_first)
+    if pending:
+        # Read again under SQLite's write lock (A-51): a setup completed since the read above has made it an active
+        # administrator, which goes only after its demotion
+        await begin_writes(session, User)
+        await session.refresh(user)
+        if not await registration_service.is_pending_admin(session, user):
+            await session.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=demote_first)
     # A failed deletion rolls the session back and expires every object in it, the caller's included: read them first
     username, admin_id = user.username, admin.id
     try:

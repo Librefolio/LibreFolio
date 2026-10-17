@@ -168,9 +168,13 @@ deletes.
 
 A provider's event never meets these refusals: `_upsert_asset_events()`, which a sync calls,
 first drops every event whose value `asset_events.value` cannot hold — not finite, or past 12
-digits before the decimal point (`_storable_events()`, `integer_digits_issue()`) — and, among the
-others, every `SPLIT` whose ratio is not above 0 (`is_valid_split_ratio()`, X-R47), then writes
-the rest (W-B58: a value past a double's range, stored as a REAL inf, broke every response of
+digits before the decimal point (`_storable_events()`, `storable_value()`) — and writes each of
+the others as the column keeps it: truncated (ROUND_DOWN) to 6 decimals, then to 15 significant
+digits, like a provider's price, and only when that changes it, so a value that fits keeps its
+form (W-B68: written whole, a value read back rounded, `784.0774475` as `784.077448`, so what was
+read differed from what was written). Among those, it drops every `SPLIT` whose ratio, as
+truncated, is not above 0 (`is_valid_split_ratio()`, X-R47; a ratio of `1E-7` truncates to 0), then
+writes the rest (W-B58: a value past a double's range, stored as a REAL inf, broke every response of
 the asset's events, for every user). A raw event the event schema itself refuses — a value that
 is no number, or whose exponent is past ±100 (`check_decimal_exponent()`, R13-SEC7-3) — is
 dropped the same way, one event at a time: parsed in one go, it made the sync lose every event

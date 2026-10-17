@@ -29,6 +29,7 @@
     import {buildBackendSignalRequestPlan, getLocalSignalDefinitions, mapSignalInstanceResults, renderBackendSignalResult, signalFromConfig, SignalResultState, type RenderedSignal, type SignalConfig, type SignalDefinition, type SignalInstanceResult} from '$lib/charts/signals';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
+    import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {extractDaysBack} from '$lib/utils/assetPriceDerived';
     import {fetchFxPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
@@ -549,7 +550,7 @@
             return;
         }
 
-        // Exactly one bulk call for every pair needing rates and/or signals.
+        // One bulk call for every pair needing rates and/or signals, in batches under the backend's caps (Z-27).
         signalRequestFailed = false;
         try {
             const bulkResult = await loadFxRatesAndSignalsBulk(bulkRequests);
@@ -571,6 +572,9 @@
         } catch (requestError) {
             if (!current()) return;
             console.error('Failed to fetch FX rates/signals bulk:', requestError);
+            // X-R58: a request the backend refused as too large is said, not left as cards without rates.
+            const refusal = bulkRefusalMessage(requestError, $_);
+            if (refusal !== null) toasts.error(refusal);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
             // Fallback: update with whatever is cached
             for (const nf of needFetch) {
@@ -634,6 +638,8 @@
             if (e?.response?.status !== 404) {
                 console.error(`Failed to fetch data for ${pair.config.slug}:`, e);
             }
+            const refusal = bulkRefusalMessage(e, $_);
+            if (refusal !== null) toasts.error(refusal);
         }
     }
 

@@ -55,8 +55,16 @@
  * switched in place it is the in-component control that the switch reached the table, so a red
  * after it is the quantity's own. The quantities below 1000 of the privacy cases read the same
  * before and after the cure.
+ *
+ * C-97c-1 (decision D-C97c-1 of the coordinator, 17/10; last block): no digit lost. A quantity
+ * keeps the ten decimals of its column, where the table cuts it at the eighth; a price — the unit
+ * cost, the running WAC, the FX tooltip's rate — the decimals its first four significant digits
+ * need (`formatPrice`), where the table writes a fixed two or four and a tiny price reads `0.00`.
+ * The M-18 block's quantities stay within eight decimals, so they reach no cut before or after
+ * the cure and that block reads the notation alone; the privacy cases' prices need no more than
+ * the decimals they show today, so they read the same before and after it too.
  */
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
 import {waitLocale} from 'svelte-i18n';
 
@@ -82,7 +90,7 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {fireEvent, render, screen, setupI18n} from '$test/component';
+import {fireEvent, render, screen, setupI18n, within} from '$test/component';
 import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled, togglePrivacy} from '$lib/stores/app/privacyStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -311,9 +319,13 @@ describe('WacPreviewSection — qualifying table: the quantity column in the int
     /** The interface locale of each language: jsdom's browser is en-US. */
     const LOCALE_OF: Readonly<Record<UiLanguage, string>> = {en: 'en-US', it: 'it'};
 
-    /** Quantities as the backend sends them: thousands with a ninth fraction digit the table cuts, a small fraction, trailing zeros. */
+    /**
+     * Quantities as the backend sends them: thousands with eight fraction digits, a small fraction, trailing zeros. None
+     * reaches a cut — the eighth decimal before C-97c-1, the tenth after — so this block reads the notation alone: how
+     * many decimals a quantity keeps is the C-97c-1 block's subject.
+     */
     const DECIMAL_ROWS = [
-        {...SAME_CURRENCY, tx_id: 7201, quantity: '1234567.123456789'},
+        {...SAME_CURRENCY, tx_id: 7201, quantity: '1234567.12345678'},
         {...SAME_CURRENCY, tx_id: 7202, quantity: '0.00012345'},
         {...SAME_CURRENCY, tx_id: 7203, quantity: '6.000000'},
     ];
@@ -322,9 +334,9 @@ describe('WacPreviewSection — qualifying table: the quantity column in the int
         return {wac: {code: 'EUR', amount: SAME_CURRENCY.running_wac}, qualifying_txs: DECIMAL_ROWS.map((row) => structuredClone(row)), missing_pairs: []};
     }
 
-    /** The quantity column as `locale` writes it: formatDecimalForDisplay's digits (the template's cut at eight), handed to Intl as a string. */
+    /** The quantity column as `locale` writes it: formatDecimalForDisplay's digits, up to the column's ten (C-97c-1), handed to Intl as a string. */
     function quantitiesIn(locale: string): Record<number, string> {
-        return Object.fromEntries(DECIMAL_ROWS.map((row) => [row.tx_id, norm(intlExact(locale, formatDecimalForDisplay(row.quantity)))]));
+        return Object.fromEntries(DECIMAL_ROWS.map((row) => [row.tx_id, norm(intlExact(locale, formatDecimalForDisplay(row.quantity, {maxFrac: 10})))]));
     }
 
     function observedQuantities(): Record<number, string> {
@@ -345,9 +357,9 @@ describe('WacPreviewSection — qualifying table: the quantity column in the int
         await uiLanguage('en');
     });
 
-    it('Italian UI: every quantity in Italian notation — formatDecimalForDisplay’s digits, cut at the eighth, never rounded', async () => {
+    it('Italian UI: every quantity in Italian notation — formatDecimalForDisplay’s digits', async () => {
         await uiLanguage('it');
-        expect(formatDecimalForDisplay(DECIMAL_ROWS[0].quantity), 'control: the template cuts at the eighth digit, it does not round').toBe('1234567.12345678');
+        expect(formatDecimalForDisplay(DECIMAL_ROWS[0].quantity, {maxFrac: 8}), 'control: no cut is reached, at the eighth decimal (before C-97c-1) nor at the tenth (after)').toBe(DECIMAL_ROWS[0].quantity);
         const italian = quantitiesIn('it');
         expect(italian[7201], 'control: Italian writes the quantity otherwise than English').not.toBe(quantitiesIn('en-US')[7201]);
         expect(italian[7201].replace(/\D/g, ''), 'control: and keeps its digits').toBe('123456712345678');
@@ -379,5 +391,104 @@ describe('WacPreviewSection — qualifying table: the quantity column in the int
         expect(unitCost(), 'control: the unit cost came back to English').toBe(unitCostEnglish);
 
         expect(observedQuantities(), 'back to English in place').toEqual(quantitiesIn('en-US'));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C-97c-1 — the qualifying table loses no digit
+// ---------------------------------------------------------------------------
+
+/**
+ * D-C97c-1 (the coordinator, 17/10). A quantity keeps the ten decimals of its column; a price keeps the decimals its
+ * first four significant digits need (`formatPrice`, formatFixed.ts): a unit cost at least two, a running WAC at least
+ * two and four whenever it has them (`{minDecimals: 2, floorDecimals: 4}`), an FX rate four (`{minDecimals: 4}`).
+ * Today the quantity is cut at the eighth decimal (`formatExactDecimal`'s default), a unit cost written at two, a
+ * running WAC at two to four, the FX tooltip's rate at four: a tiny price reads `0.00`.
+ *
+ * Reds: the quantity 0.1234567891; a unit cost of 0.000003457312 EUR; the running WAC 0.000003457312, on both branches
+ * of its cell — with a currency (the shared currency formatter) and without one (`formatFixed`); the FX tooltip's rate
+ * 0.000123456. Guards, green today and after: a running WAC of 123.4567 on both branches, an FX rate of 1.08345678.
+ *
+ * Reading. A cell by `rowOf`/`cellText` above: the transaction id this spec owns, the template's column order, checked.
+ * A price is matched as a whole number token in its cell's text — no digit, decimal mark or separator glued to either
+ * side — never as the full currency string, which stays the shared formatter's business. The FX rate is in the tooltip
+ * of a cross-currency unit cost, opened by a click on its trigger (the one `button` in that cell) and read from
+ * `tooltip-content`. English UI, set through the store: jsdom's browser is en-US, so the expected digits are typed.
+ */
+describe('WacPreviewSection — qualifying table: no digit lost (C-97c-1, D-C97c-1)', () => {
+    /** Ten decimals, as `Transaction.quantity` keeps them. */
+    const TEN_DECIMALS = {...SAME_CURRENCY, tx_id: 7301, quantity: '0.1234567891'};
+    /** A tiny unit cost, and the running WAC it leaves: their first four significant digits are 0.000003457. */
+    const TINY_PRICE = {...SAME_CURRENCY, tx_id: 7302, quantity: '1', unit_cost: '0.000003457312', running_wac: '0.000003457312'};
+    /** The same running WAC on a row that names no currency: the other branch of the WAC cell. */
+    const TINY_PRICE_NO_CURRENCY = {...TINY_PRICE, tx_id: 7303, currency: null};
+    /** A running WAC with four decimals keeps them, on both branches. */
+    const FOUR_DECIMAL_WAC = {...SAME_CURRENCY, tx_id: 7304, running_wac: '123.4567'};
+    const FOUR_DECIMAL_WAC_NO_CURRENCY = {...FOUR_DECIMAL_WAC, tx_id: 7305, currency: null};
+    /** Cross-currency rows, whose unit cost carries the FX tooltip with the rate used. Display only: nothing re-applies the rate. */
+    const TINY_RATE = {...CROSS_CURRENCY, tx_id: 7306, fx_rate_used: '0.000123456'};
+    const FOUR_DECIMAL_RATE = {...CROSS_CURRENCY, tx_id: 7307, fx_rate_used: '1.08345678'};
+    const C97_ROWS = [TEN_DECIMALS, TINY_PRICE, TINY_PRICE_NO_CURRENCY, FOUR_DECIMAL_WAC, FOUR_DECIMAL_WAC_NO_CURRENCY, TINY_RATE, FOUR_DECIMAL_RATE];
+
+    /** `digits` as a whole number in a text: no digit, decimal mark or group separator glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,])${digits.replace(/\./g, '\\.')}(?![.,]?\\d)`);
+    }
+
+    /** The English UI, set as LanguageSelector sets it: on jsdom's en-US browser it is written en-US. */
+    async function english(): Promise<void> {
+        currentLanguage.set('en');
+        await waitLocale('en');
+        flushSync();
+        await tick();
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    }
+
+    /** Every row of this block, as a validate response hands them over; the WAC already equals `value`, so nothing is auto-filled. */
+    function mountRows(): void {
+        const wac = {code: 'EUR', amount: SAME_CURRENCY.running_wac};
+        render(WacPreviewSection, {value: {...wac}, onChange: vi.fn(), mode: 'auto', testid: TESTID, externalResult: {wac, qualifying_txs: C97_ROWS.map((row) => structuredClone(row)), missing_pairs: []}});
+    }
+
+    /** Open the FX tooltip of a cross-currency row — a click on the one trigger of its unit cost cell — and read it. */
+    async function fxTooltipText(txId: number): Promise<string> {
+        expect(screen.queryAllByTestId('tooltip-content'), 'premise: no tooltip is open yet').toHaveLength(0);
+        const unitCost = rowOf(txId).cells[COLUMNS.indexOf('unitCost')];
+        await fireEvent.click(within(unitCost).getByRole('button'));
+        const open = await screen.findAllByTestId('tooltip-content');
+        expect(open, `one tooltip open: the FX tooltip of tx #${txId}`).toHaveLength(1);
+        return norm(open[0].textContent);
+    }
+
+    beforeEach(async () => {
+        await english();
+        mountRows();
+        await openQualifyingTable(C97_ROWS);
+    });
+
+    it('the quantity 0.1234567891 reads whole — the ten decimals of its column, not eight', () => {
+        expect(cellText(TEN_DECIMALS.tx_id, 'quantity')).toBe('0.1234567891');
+    });
+
+    it('a unit cost of 0.000003457312 EUR shows 0.000003457 — four significant digits, not 0.00', () => {
+        expect(cellText(TINY_PRICE.tx_id, 'unitCost')).toMatch(numberToken('0.000003457'));
+    });
+
+    it('a running WAC of 0.000003457312 shows 0.000003457 — with its currency (not 0.00) and without one (not 0.0000)', () => {
+        expect.soft(cellText(TINY_PRICE.tx_id, 'wac'), 'with its currency').toMatch(numberToken('0.000003457'));
+        expect.soft(cellText(TINY_PRICE_NO_CURRENCY.tx_id, 'wac'), 'without a currency').toMatch(numberToken('0.000003457'));
+    });
+
+    it('guard: a running WAC of 123.4567 still shows 123.4567, with and without a currency', () => {
+        expect.soft(cellText(FOUR_DECIMAL_WAC.tx_id, 'wac'), 'with its currency').toMatch(numberToken('123.4567'));
+        expect.soft(cellText(FOUR_DECIMAL_WAC_NO_CURRENCY.tx_id, 'wac'), 'without a currency').toMatch(numberToken('123.4567'));
+    });
+
+    it('the FX tooltip writes a rate of 0.000123456 as 0.0001235 — four significant digits, not 0.0001', async () => {
+        expect(await fxTooltipText(TINY_RATE.tx_id)).toMatch(numberToken('0.0001235'));
+    });
+
+    it('guard: the FX tooltip still writes a rate of 1.08345678 as 1.0835', async () => {
+        expect(await fxTooltipText(FOUR_DECIMAL_RATE.tx_id)).toMatch(numberToken('1.0835'));
     });
 });
