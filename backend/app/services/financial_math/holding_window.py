@@ -43,13 +43,27 @@ def quantity_moves(transactions: Iterable[Any], split_linked_ids: Collection[int
     return sorted(moves, key=lambda move: (move.date, move.order))
 
 
-def oldest_open_lot_date(moves: Sequence[QuantityMove]) -> date_type | None:
+def oldest_open_lot_date(moves: Sequence[QuantityMove], dust: Decimal = QUANTITY_DUST_THRESHOLD) -> date_type | None:
     """Opening date of the oldest lot still open, or None when nothing is open.
 
     A positive move opens a lot, a negative one consumes the oldest lots first, and a split rescales the open lots
     (``moves`` in replay order, as :func:`quantity_moves` gives them). This is the FIFO opening date, later than the
     first ever once sales have consumed the first lots.
+
+    MF-A7: the oldest lots that together hold ``dust`` or less — the residual a sale leaves — are set aside, as
+    :func:`closed_position_window` counts such a residual as closed: the date is that of the first lot past which more
+    than ``dust`` is open, and None when the whole position holds ``dust`` or less.
     """
+    held = _ZERO
+    for day, quantity in _open_lots(moves):
+        held += quantity
+        if held > dust:
+            return day
+    return None
+
+
+def _open_lots(moves: Sequence[QuantityMove]) -> deque[list]:
+    """The FIFO lots still open after ``moves``, oldest first, as ``[opening date, remaining quantity]``."""
     open_lots: deque[list] = deque()
     for move in moves:
         if move.split:
@@ -75,7 +89,7 @@ def oldest_open_lot_date(moves: Sequence[QuantityMove]) -> date_type | None:
                 else:
                     remaining -= lot[1]
                     open_lots.popleft()
-    return open_lots[0][0] if open_lots else None
+    return open_lots
 
 
 def closed_position_window(moves: Sequence[QuantityMove], dust: Decimal = QUANTITY_DUST_THRESHOLD) -> tuple[date_type | None, date_type | None]:
