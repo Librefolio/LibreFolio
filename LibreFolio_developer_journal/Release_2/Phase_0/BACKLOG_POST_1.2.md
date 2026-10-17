@@ -5757,11 +5757,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Dettagli: [piano J](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §1.2 «Copie nuove».
 - ↪ **J-2 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — spostata nella sezione C
   dal coordinatore il 15/10 (runner condiviso), come C-94.
-- **J-3 · Monte Carlo e ricampionamento a 365 giorni fissi** — da verificare; T, 11/10 (piano 43, §5, «da segnalare a
+- ✅ **J-3 · Monte Carlo e ricampionamento a 365 giorni fissi** — da verificare; T, 11/10 (piano 43, §5, «da segnalare a
   parte»), ripresa da J, che ora possiede il rischio. `risk/quant/quantlib_worker.py:116,195` e
   `risk/quant/resampling.py:235` contano 365 giorni all'anno, mentre il resto del rischio usa il fattore osservato. Può
   essere una convenzione di calendario coerente: prima un test che lo provi, poi l'eventuale cura in CP-10. Dettagli:
   [piano 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), §5.
+  - ✅ 17/10: **verificata da J, non è un difetto** (chiusa col checkpoint J-49). Il GBM cammina `horizon_days/365` anni
+    a passi di un giorno di calendario, con deriva e covarianza annue stimate col fattore osservato
+    (`quant/estimation.py:52-53`): dopo 365 giorni la varianza è quella di un anno, qualunque sia la frequenza della
+    storia. Il bootstrap (algoritmo 4.0.0) converte i giorni nei passi osservati (`calendar_days_to_observations`), e
+    `resampling.py:235` è solo la conversione inversa per dichiarare la lunghezza del blocco. Dettagli:
+    [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-49».
 - ✅ **G-8 · Il catalogo dei Tool sotto carico supera i 2 s d'ingresso** — basso; G (galleria del programma colori),
   assegnata a J dal coordinatore il 14/10, dopo CP-1. Sotto carico la lettura del catalogo supera
   `ToolRoute.ingress_timeout_ms` (2 000 ms, `schemas/tools.py:83`, applicato in `api/v1/tools.py:92`) e la pagina
@@ -6311,7 +6317,7 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     la finestra del rigioco, proposta compresa: prima un prezzo piantato all'anno 1 faceva proporre una finestra
     dall'anno 1 (~739 000 giorni). La cura alla fonte, un pavimento sulle date dei prezzi scritti a mano, è **N83** di X.
     Dettagli: piano 05, sezione «SEC8-1b».
-- **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
+- ✅ **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
   con X-R55, girata dal coordinatore (17/10 08:30), non ora. La cucitura di SEC7-1
   (`test_scripts/test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`) toglie il limite solo nei moduli della
   sua lista. Z ci ha aggiunto `price_query` e `currencies` a mano, e SEC8-1b porterà un altro lettore. Un modulo di
@@ -6320,6 +6326,10 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   (`from …datetime_utils import latest_range_end`) è uguale alla lista. Prima un rilevatore che vede un modulo finto,
   come le regole di `test_layer_boundaries.py`. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «R13-SEC7-1».
+  - ✅ 17/10: fatta da J (checkpoint J-49). `TestRangeBoundSeamCoversEveryReader` in `test_date_range_bounds.py`, con la
+    prova del rilevatore su 10 sorgenti finte. Il rosso ha trovato due lettori arrivati oggi e mancanti dalla lista:
+    `utils/date_range_limits.py` (X-R65) e `api/v1/assets/prices.py` (R13-SEC9-4). Erano una lacuna latente, nessuna
+    suite ci passava. Aggiunti alla lista. Dettagli: piano 05, sezione «J-49».
 - ✅ **J-50 · Il rifiuto dei troppi giorni di `get_prices_bulk` diventa un 500 nel rischio e nell'AI Export** — basso,
   chiarezza (è già un rifiuto, non un DoS); dal coordinatore (17/10 08:34), dopo SEC8-1b. Con Z-25 (N77)
   `get_prices_bulk` alza `BulkTooManyDaysError` (il nome lo darà Z all'ingresso di Z-25) oltre 5 M giorni-asset per
