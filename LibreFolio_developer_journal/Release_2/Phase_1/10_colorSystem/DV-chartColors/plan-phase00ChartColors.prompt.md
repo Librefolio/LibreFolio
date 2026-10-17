@@ -2000,6 +2000,27 @@ parte, dopo lo slot di B4: solo `roleColors.ts` e i suoi test; nessun grafico ca
   > - **Y-22/23 della 1.3** (due test del layout con molti `vi.mock`, sulla punta): nessuno finge un modulo dei grafici
   >   o del tema, e il layout `(app)` non li importa; nessun test, nel worktree o sulla punta, finge `chartTheme`,
   >   `roleColors` o gli helper dei grafici. Gli export nuovi non possono mancare sotto un mock.
+  > - Commit `9080122a9` (i ruoli) e `b1350a2ea` (i docs) del coordinatore, base merge `65fd0f0fb`, ingresso
+  >   `323c61b73` (17/10, 01:53): gate 119/119, test dei ruoli 91/91, `front check` 0 e 0; i letterali di
+  >   `chartTheme.ts` da 277 a 152, tutti serie, categorie, stati e segni (DV-10).
+- [x] ✅ (17/10/2026) B4b-4 Lo skill `design-system`, dopo l'ingresso di AF (`55b53d8c1`: `drawnColors.ts` sui
+  ruoli, `PENDING_READERS` vuoto).
+  > **Note implementazione** (03:33–03:40, solo docs, sulla base `55b53d8c1`, avuta per fast-forward dal
+  > coordinatore).
+  > - La riga di `roleColors.ts` nella tabella dei file: i 22 ruoli raggruppati; chi li legge (i grafici: i neutri, le
+  >   sfumature GR4 e le linee dei broker, la scala della correlazione, il peso ideale del PAC, `readableText`; e
+  >   `drawnColors.ts`, 18 ruoli); la promessa del ponte, sempre sRGB; la regola del primo lettore, con le chiamate
+  >   letterali e `PENDING_READERS`.
+  > - **Fuori area, col sì del coordinatore:** la riga di `drawnColors.ts`, che diceva ancora «Legacy values, written
+  >   by R». Ora: ogni colore è un ruolo letto con `chartRoles` al disegno (AF, 17/10); il foglio di calcolo in chiaro
+  >   resta sul tema `MATERIAL_DESIGN` di cheetah-grid coi soli due bordi sui ruoli (AF-14); le scelte provvisorie
+  >   stanno al punto 35 della raccolta; un ruolo traslucido si compone sul suo fondo (`over()`); il proprietario
+  >   resta T.
+  > - Verifiche: le due righe hanno le 5 colonne della tabella; nessun test o script legge `SKILL.md` (lo script del
+  >   giro della designer legge solo `palette.md`); `git diff --check` pulito.
+  > - **La terza riga, col sì del coordinatore** (03:38): in «Asking for a new role», passo 2, lo stand-in in
+  >   `roleColors.ts` serve «if a chart or a drawn colour reads it» (era «if a chart reads it»); il punto è riavvolto a
+  >   120 colonne.
 
 ## Definizione di fatto
 

@@ -1452,3 +1452,96 @@ Quattro commit, uno per lotto che cambia numeri:
   `PIPENV_PIPFILE` del mio worktree, nessun `Pipfile` vagante). Il resto è **E1b** (T-B8 + v3: `portfolio_broker.py`
   restante, `broker_financial.py`, `portfolio_financial.py`, `catalog.py`, `snapshotDataRenderer.ts` e il suo test, i due
   test dell'AI Export, `ai_export_composition.md`) + giornale.
+
+#### E1 committato; aggiornamento di base 5 (17/10, 01:49) — HEAD `0c198968c`
+- Coordinatore: `dc91c2ac0` (E1a, toppa `d7c950c6…`), `570af3d09` (E1b + giornale); merge di dev `5beecac3d` (CP-10b,
+  X-R35/37, H) pulito → HEAD `0c198968c` verificata. La sonda AI Export la esegue J su dev dopo l'ingresso (copia
+  privata e credenziali, come per J-26).
+- ✅ **Validazione combinata** (01:50-02:03, `files/e1.sh combined`): `front-ai-export unit` 568, `financial-math` 825,
+  `lots-analysis-pure` 177, `api portfolio` 51, `ai-export` 345 + 647. Verde → ingresso con la riga 🐛 di E1b.
+- **Y (P4)**: le percentuali dei componenti nel tooltip della Performance (`PerformanceChart.svelte:548`) → scelta
+  **(a)**: quattro frazioni in `AssetPeriodContribution` (`period_unrealized_delta_percent`,
+  `period_realized_gain_loss_percent`, `period_income_percent`, `period_fees_taxes_percent`; base |start_value|,
+  4 decimali come `period_pnl_percent`, None senza base o senza componente; costi positivi). **MF-P4b**, commit proprio,
+  prima di J1 (detto al coordinatore).
+- **E1 entrato** (coordinatore): dev `e43dfae68`, riga 🐛 `f32a04f46`; HEAD ff a `f32a04f46` verificata.
+
+##### MF-P4b — le frazioni dei componenti (17/10, dalle 02:05)
+- ✅ **Codice**: `AssetPeriodContribution` + `period_unrealized_delta_percent`, `period_realized_gain_loss_percent`,
+  `period_income_percent`, `period_fees_taxes_percent` (descrizioni: base |start_value|, 4 decimali, ognuno arrotondato
+  da sé — la somma può differire da `period_pnl_percent` nell'ultima cifra); `get_positions_contribution` li riempie con
+  `contributions.period_return_on_start` sui valori mostrati dalla riga; docstring della funzione della casa.
+- ✅ **Test** (test-author `mf-p4b-tests`): `TestComponentPercents` in `test_positions_contribution_engine.py` (3 × 2
+  percorsi: tenuto all'inizio — 0.0373 / 0.0500 / 0.0123 / 0.0026, uno arrotonda su e uno giù —, aperto nel periodo,
+  riga di soli proventi → None).
+- ✅ **Rossi** (02:08, `files/p4b.sh red`, toppa `4c08ae2b…`, ripristino identico): **6/6**. ✅ **Verde mirato**
+  (02:09): 6/6.
+- ⏸️ **Congelamento della galleria fino a ~03:30** (coordinatore): niente `api`, E2E, `all-backend` né `ai-export`
+  grande; leggere solo sotto 50. Il resto dei verdi (`roi-fifo-utils`, `financial-math`, poi `api portfolio` e
+  `ai-export` a pezzi) fermato a carico 163 e rimandato.
+
+##### MF-J1 — `DailyStateBuilder` più lineare (17/10, dalle 02:20; codice durante il congelamento, nessuna prova)
+- **Lettura**: il pre-frame (≈100 righe) è una seconda replica «solo contabile» con approssimazioni proprie (il ricavo
+  intero d'una SELL in K, un arrivo di cassa in K); `frame_start` non è mai passato dal motore, e **ogni chiamante di
+  produzione passa `date_from=None`** (il motore parte dal primo movimento): il pre-frame serve solo ai test che
+  chiamano il motore o il costruttore con un `date_from` più tardo.
+- ✅ **Codice**: `daily_state.py` — via `frame_start` e il pre-frame; **una replica sola**, con le stesse regole ogni
+  giorno, da `replay_from = min(date_from, primo movimento)` a `date_to`, **stati emessi da `date_from`**;
+  `period_start` di default `date_from`; `_collect_dirty_days(...)` (stessa raccolta, la soglia «inizio» ora
+  `replay_from`; i tre confini del transito in un insieme filtrato, per la complessità); `_apply_pool_rule(...)`
+  statico (le regole K/R/W d'un movimento, con W restituito e la spesa d'un BUY da K/R); giorno pulito con
+  `dataclasses.replace` (verificato: il vecchio giorno pulito passava **tutti** i campi del modello, quindi `replace`
+  dà lo stesso stato; i contenitori copiati come prima). `engine.py`: via il ramo vuoto «estensione in avanti» della
+  cache del blob. Ruff/black puliti, import verde. Copie pre-J1 in `files/j1/`.
+- **Numeri**: produzione nessuno (`replay_from` = `date_from` = primo movimento: stessi giorni sporchi, stessa
+  replica). Cambiano solo le chiamate con `date_from` più tardo (test): K/R/W esatti invece delle approssimazioni.
+- **Prova** (test-author `mf-j1-tests`): test con `frame_start` riscritti sul comportamento equivalente; invariante
+  «stati da D = stati della replica dal primo movimento» (rossa su HEAD dove il pre-frame approssimava);
+  contenitori non condivisi; `_apply_pool_rule`. Prove quando il carico e il congelamento lo permettono.
+- ✅ **Test J1** (test-author `mf-j1-tests`): riscritti sul comportamento equivalente (`date_from` più tardo) i test con
+  `frame_start` — `test_portfolio_engine_vnext.py` (classe `TestDateFromAfterTheFirstMovement`),
+  `test_broker_pnl_contributions.py`, `test_broker_internal_flows.py` (casi 09/10 `*_date_from`), e anche
+  `test_daily_state_builder.py`, `test_signed_income.py`, `test_acquisition_funding.py`, docstring di
+  `test_native_cash.py`, `test_foreign_cash_revaluation.py`, `test_fx_only_days.py`; nuovo
+  `test_portfolio_engine/test_single_replay.py` (50: finestra = replica intera su sette libri × D quieto/D di movimento,
+  tutti i campi; numeri esatti; contenitori non condivisi; `_apply_pool_rule` ×30). **Previsione smentita**: un arrivo
+  di cassa collegato prima di D è verde su HEAD (pre-frame e frame avevano la stessa regola «tutto in K», che è J2);
+  le differenze vere del pre-frame: l'ordine delle regole del giorno (caricamento invece di aggiunte prima) e la
+  mancata clamp di fine giorno — fissate entrambe.
+- ✅ **Rossi J1** (02:47, `files/j1.sh red`: `daily_state.py`/`engine.py` rovesciati, P4b tenuto; toppa `65ebdbfe…`,
+  ripristino identico): `test_single_replay` **39 rossi / 11 verdi**; `portfolio-engine` 41 verdi (riscritti, verdi
+  anche su HEAD).
+- ✅ **Verdi leggeri** (02:48-03:15): `portfolio-engine` 41; `financial-math` 825; `roi-fifo-utils` 1052 + **1 rosso
+  atteso**: il golden EUR-only. Classificato per percorso JSON: 56 aggiunte (i quattro `*_percent` di P4b in
+  `get_positions_contribution` e `get_report`, nulli perché `start_value` 0) + **4 valori di J1** in
+  `W2/engine.calculate` (la chiamata diretta col `date_from` della finestra, cioè il vecchio percorso del pre-frame):
+  contribuito 12047.586 → 12020.610, generato 9.590 → 36.566 — **ora uguali a `W2/get_history`** (replica da t=0) per
+  gli stessi giorni: J1 chiude una divergenza. Rigenerato (`golden.final` sha `696716ad…`); variante «solo P4b»
+  (`files/j1/golden.p4b.json`, sha `52d41ef3…`, generata coi due file di J1 messi da parte e ripristinati) per il commit
+  di P4b. Poi `roi-fifo-utils` **1053** verde.
+- Pesanti (`api portfolio`, `ai-export` a pezzi) dopo la fine del congelamento della galleria. Doc J1 al docs-writer
+  (`mf-j1-docs`): `financial_math.md:129,150`, `wac.md:302`, teoria `portfolio-engine/index.en.md:291-294` (debito di
+  traduzione). Due descrizioni del runner (`_backend_services.py` ~:959 e ~:2033) dicono ancora «pre-frame/frame»: al
+  coordinatore (superficie condivisa).
+
+##### MF-J2 — disegno (17/10, 03:0x; codice dopo il commit di J1)
+- **Regola (D-MF4 = (a))**: la gamba in partenza d'un CASH_TRANSFER / FX_CONVERSION interno collegato registra la sua
+  ripartizione (`from_r`, `from_k` sull'importo di partenza); la gamba d'arrivo la riprende in proporzione:
+  `R += importo_arrivo × from_r / importo_partenza`, il resto in K. Lo stesso broker (cambio valuta) o due broker.
+- **Ordine nel giorno**: un arrivo la cui partenza non è ancora stata vista quel giorno (ordine degli id) è rinviato
+  alla fine del giorno; senza partenza (dati incoerenti) resta il ripiego di oggi, tutto in K.
+- **Riscalamento dei pool** (`# 4g`, `scale = cash_like / pool_sum` quando la somma dei pool si scosta dalla cassa di
+  più di 0,01): dopo J2 misurare se scatta ancora sul corpus (golden, DB di prova popolato); se mai → toglierlo, con
+  un test che lo dimostri; altrimenti lasciarlo e documentare quando scatta.
+- **Numeri**: la scomposizione della cassa fra capitale versato e rendimenti generati (Dashboard) dopo trasferimenti
+  interni e cambi valuta: più rendimenti, meno capitale, totale invariato. CHANGELOG 🐛 già proposto nella carta.
+- ✅ **Doc J1** (docs-writer `mf-j1-docs`): `financial_math.md:118,128-137,155,163-168`, `wac.md:280,302,303`,
+  `portfolio-engine/index.en.md` §9 «One Daily Replay» (`:287-294`), `performance-metrics/index.en.md:28`. Debito: §9
+  e `:28` in it/fr/es. Nota del docs-writer verificata: `_preload_fx_rates()` carica i cambi da `date_from`; con un
+  `date_from` più tardo i giorni rigiocati prima non trovano i cambi di valutazione, ma non sono emessi e `date_from` è
+  sempre ricalcolato: nessun effetto sugli stati restituiti (in produzione `date_from` = primo movimento). Docstring di
+  `engine.calculate` (`period_start` senza nome → lo stato di `date_from`) corretto.
+- ✅ Statici: ruff/black (16 `.py`), `mkdocs build` strict 0, `git diff --check` pulito.
+- **Toppa P4b** (`files/j1/P4b.patch`, sha `7deeebc1…`, 5 file: schema, `contributions.py`, `portfolio_service.py`, test
+  di P4b, golden «solo P4b»): si applica a HEAD su un indice temporaneo. Il resto è J1 (+ golden finale).
+- Pesanti: slot 2 se avanza ≥ 20 min prima delle 03:50, altrimenti dopo le 04:45 (coordinatore).

@@ -55,7 +55,7 @@ date.
 | **You** | Your own account |
 | **Admin** | An administrator: it manages the instance, its settings, its users and its invitations |
 | **Deactivated** | The account cannot sign in, and takes no place — unless it is [waiting for its email](#waiting) |
-| **Waiting for setup** | The [initial administrator](hosting_providers.md#initial-admin), not active yet: nobody has used its setup link. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
+| **Waiting for setup** | The [initial administrator](hosting_providers.md#initial-admin), not active yet: nobody has used its setup link, nor set the account up another way. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
 | **Protected** | Nobody can deactivate, demote or delete it: see [When an Action Is Off](#action-off) |
 
 Click a row to open its actions, and again to close them. Your own row has none: it says *This is
@@ -115,7 +115,8 @@ How the verification works, and its limits: [Email Verification](email.md#verifi
 ### 👑 Waiting for Its Setup Link {: #pending-setup }
 
 When LibreFolio creates the administrator of `LIBREFOLIO_ADMIN_EMAIL` at its first start, the
-account waits, not yet active, until someone opens its setup link and chooses the password: see
+account waits, not yet active, until someone opens its setup link and chooses the password, or sets
+it up another way (below): see
 [The Initial Administrator](hosting_providers.md#initial-admin). Until then:
 
 - its row shows **Waiting for setup** instead of **Deactivated**, even once its link has expired;
@@ -136,6 +137,22 @@ This version has no button for a new setup link: on the server, `user setup-link
 «A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)), and on an
 instance a hosting provider runs, the provider gives it. Once the link is used, the account is
 active, like any other.
+
+The account also stops waiting when it is set up another way, without its link:
+
+- **activated on the server** with `user activate`: the command line does not refuse it, unlike
+  this tab. Its password is still the one nobody knows, until `user reset` or a reset link gives it
+  one;
+- **given a password**, with `user reset` on the server, or with a
+  [password-reset link](#reset-links) once it is used: one you create with
+  **Password-reset link** in its panel, or one `user reset-link` prints. The account stays inactive
+  until it is activated.
+
+From then on, every setup link it had stops working: the setup page says *This link has been
+withdrawn.*, and `user setup-link` finds no administrator waiting. The tab shows it as any other
+account: **Deactivated** while it is not active, with **Reactivate**, and `GET /api/v1/users` marks
+it `pending_setup: false`. Like any deactivated account it then takes no place, so **Reactivate**
+needs a free one. A reset link nobody uses, or **Remove administrator**, leaves it waiting.
 
 ---
 
