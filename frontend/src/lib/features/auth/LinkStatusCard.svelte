@@ -11,9 +11,11 @@
     interface Props {
         status: LinkPageStatus;
         onretry?: () => void;
+        /** The line under a link that cannot be used: who issues a new one. The setup link (F02) has no administrator yet. */
+        hintKey?: string;
     }
 
-    let {status, onretry}: Props = $props();
+    let {status, onretry, hintKey = 'auth.link.askAdmin'}: Props = $props();
 
     const MESSAGE_KEYS: Record<LinkPageStatus, string> = {
         checking: 'common.loading',
@@ -34,7 +36,7 @@
     <div class="space-y-5 text-center">
         <p class="text-sm text-lf-primary" data-testid="link-status-message">{$_(MESSAGE_KEYS[status])}</p>
         {#if NEEDS_NEW_LINK.has(status)}
-            <p class="text-xs text-lf-secondary">{$_('auth.link.askAdmin')}</p>
+            <p class="text-xs text-lf-secondary" data-testid="link-status-hint">{$_(hintKey)}</p>
         {/if}
 
         {#if status === 'error' && onretry}

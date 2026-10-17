@@ -74,6 +74,6 @@ Promote is the inverse of split.
 | Transaction service | `backend/app/services/transactions/transaction_service.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |
 | DB models (enum) | `backend/app/db/models.py` |
-| Frontend type store | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
-| PromoteMergeModal | `frontend/src/lib/components/transactions/modals/PromoteMergeModal.svelte` |
+| Frontend type store | `frontend/src/lib/features/transactions/transactionTypeStore.ts` |
+| PromoteMergeModal | `frontend/src/lib/features/transactions/bulk/PromoteMergeModal.svelte` |
 | Batch split/promote tests | `backend/test_scripts/test_api/test_transactions_batch_split_promote.py` |

@@ -167,7 +167,9 @@ stored value. The value is recorded in the restore's state (`session_version`). 
 !!! note "A request in flight during a password or email change"
 
     A request the same device sent with its old cookie, and that reaches the server after the change is committed,
-    gets `401`. The frontend's 401 interceptor (`frontend/src/lib/api/zodios-client.ts`) sends it to the login page,
+    gets `401`. The frontend's 401 interceptor (`frontend/src/lib/api/zodios-client.ts`) sends it to the login page
+    (from any page but `/` and the anonymous pages of a link:
+    [A 401 on a Link Page](../frontend/components/features/auth.md#link-page-401)),
     where the new cookie signs it straight back in. The race is benign, and the code does not try to close it.
 
 Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
@@ -212,7 +214,7 @@ the current password and ends the account's other sessions. No other route chang
   change carries on, and every other session gets `401` at its next request. A username-only change ends no session,
   nor does a refused one.
 - **The notice.** After a change of address, the route queues workstream E's `email_changed_work()` with the address
-  read before the change: a notice to that address, after the answer, with the new one masked
+  read before the change: a notice to that address, after the answer, showing nothing of the new one (decision N62)
   ([An Email Address Changes](../backend/email.md#flow-email-changed)). It changes neither the answer nor the cookie;
   with email off, nothing is sent.
 - **The log.** Neither the route nor `user_service.update_profile()` writes an address: *Profile updated* and *User
@@ -830,6 +832,30 @@ an instance that registers by invitation, the default of a new install. Publishi
   never empty while it serves, so the flag is false from the start, and nobody can register as the
   first account. Without the variable, a managed instance starts empty, like any other.
 
+### 📢 The Open-Registration Warning {: #open-registration-warning }
+
+The web app warns an administrator who reaches an instance whose
+[registration mode](access_control.md#registration-modes) is `open` through a host that is not local
+(lot A7b): anyone who finds the instance can create an account. The warning is advice, and nothing
+more:
+
+- **It blocks nothing.** The registration rule stays the server's (`register_user()`). The warning is
+  an [instance notice](../frontend/state/app-state.md#instance-notices), which the administrator can
+  close until the next page load.
+- **The browser decides, from the host of the page.** `isLocalHost(location.hostname)` classifies the
+  name or address the administrator used: `localhost` and `*.localhost`, the loopback, private and
+  carrier-grade NAT IPv4 ranges, `::1`, `fc00::/7` and `fe80::/10`, single-label names, and the names
+  under `.local`, `.lan`, `.home.arpa` and `.internal` are local; `*.ts.net` is not, since Tailscale
+  Funnel can publish those names. Nothing is sent to the server for it, and nothing tests whether the
+  instance can really be reached from the internet: a local name can still be published by a proxy or
+  a tunnel, a public one can sit behind a firewall.
+- **It tells nothing new.** It reads the account's `is_superuser`, and the mode and whether
+  `LIBREFOLIO_REGISTRATION` pins it, which `GET /system/instance` already publishes.
+
+The list of local hosts and the watcher:
+[Open-Registration Warning](../frontend/components/features/auth.md#open-registration-notice);
+administrator side: «The Open-Registration Warning» in [Global Settings](../../admin/settings.md).
+
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
 **`GET /system/info`** (`backend/app/api/v1/system/info.py`) runs the checks of `get_current_user` through its
@@ -994,7 +1020,9 @@ block page adds one field there and fills it in `block.py` with one call to its 
 **Changing the list.** The list is short on purpose. The two link endpoints joined it for someone who
 lost the password (see the table above): they read a link already sent or spend a reset link, and
 create no account. Registration (`POST /auth/register`) stays out: it is still one of the public routes
-that answer `401` on a blocked instance, so an invitation link can be read there but not accepted. The
+that answer `401` on a blocked instance, so an invitation link can be read there but not accepted (the
+`/invite` page then says that the instance is blocked, and so does `/setup` for the setup link: see
+[Links in Use](#account-token-links)). The
 full backup is on the list too, for the administrator (`backup_instance`: start, poll, download and
 delete; decision 12) and for the hosting panel (`backup_panel`: the same four, with the panel's token
 instead of a session), and so is the scheduled wake-up (`wake.wake_sync`), with its own token instead
@@ -1181,14 +1209,20 @@ email verification in [Email Verification](../backend/email.md#verification); th
   the administrator account: keep the log private, or give the token through the variable. A token from
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` is stored only as its hash and never logged nor emailed, and no error holds it:
   `AdminBootstrapConfigError` names the variable only.
-- **The link pages hide and keep the token.** `/invite`, `/reset-password` and `/verify-email` read the token when
-  they mount, then put the bare path in the address bar (`replaceState`), so the token stays out of the history and
-  of a bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
-  the page changes only the fragment and loads nothing, so the page reads the new token there. All three declare
-  `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
+- **The link pages hide and keep the token.** `/invite`, `/reset-password`, `/verify-email` and `/setup` read the
+  token when they mount, then put the bare path in the address bar (`replaceState`), so the token stays out of the
+  history and of a bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab
+  already on the page changes only the fragment and loads nothing, so the page reads the new token there. All four
+  declare `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
   components are in [Authentication Components](../frontend/components/features/auth.md#link-pages), except those
   of `/verify-email`, which spends its token at once, without inspecting it first:
   [In the Frontend](../backend/email.md#verification-frontend).
+- **A `401` never takes a link page to the sign-in.** The API client's response interceptor sends a `401` to the
+  sign-in page from any page but `/` and these four, matched on the exact path (a trailing slash allowed). Their
+  calls are public: a `401` there is the [instance block](#instance-block) refusing an anonymous caller, and the
+  sign-in would lose the token, already out of the address bar. The page answers it itself: `/setup` and `/invite`
+  say that the instance is blocked. Details:
+  [A 401 on a Link Page](../frontend/components/features/auth.md#link-page-401).
 
 ## 💾 Restoring a Backup {: #backup-restore }
 
@@ -1731,7 +1765,8 @@ CORS preflight or a 500; the policy read directive by directive, each directive 
 route's own header kept alone and the others added; the switches read when the middleware is built, never per request)
 and `./dev.py test utils nosniff-content-types` (`backend/test_scripts/test_utilities/test_nosniff_content_types.py`:
 the type of every extension of `frontend/build/` and `mkdocs_src/site/`, also in an interpreter that read no system
-`mime.types` file). The switches' values per profile are tested with the profile defaults,
+`mime.types` file; a hidden file of the build outside `_app/` is not sampled, since the SPA catch-all never serves it,
+see [Server Startup](overview.md#server-startup)). The switches' values per profile are tested with the profile defaults,
 `./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 
 ## 🌐 HTTPS & Deployment Architecture

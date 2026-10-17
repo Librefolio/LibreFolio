@@ -32,7 +32,8 @@ Modules:
 * ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series (the
   Dashboard's MWRR rule, one for the card and every point of the line, in
   ``period_mwrr`` and ``period_mwrr_series``), the conversion between cumulative and annualized returns, a period's start (rebasing), the
-  net return of a holding, a gain or loss as a fraction of its base, the gain or loss a
+  net return of a holding, a gain or loss as a fraction of its base (of one holding or a
+  group), a change as a fraction of its base, the timing effect (MWRR − TWRR), the gain or loss a
   disposal realizes, the return between two prices, and the gain that recovers a drawdown.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
@@ -42,11 +43,13 @@ Modules:
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.
 * ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
   allocation, gross weights, and concentration (largest weight, Herfindahl index).
+* ``holding_window`` — how long a position has been held at its broker: the oldest lot still
+  open and a closed position's flight time, from its quantity stream (a split rescales the lots).
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of
   income and costs to lots (``models``, ``eligibility``, ``engine``).
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
   and the views derived from it (``models``, ``classifier``, ``daily_state``,
-  ``derived_views``, ``data_quality``, ``period``, ``engine``).
+  ``derived_views``, ``data_quality``, ``period``, ``contributions``, ``engine``).
 * ``lots`` — the math of the lots analysis: price lookups, conversions (a closure's legs,
   each at its own date), economic events, lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
   ``histories``, ``average_cost_lines``).

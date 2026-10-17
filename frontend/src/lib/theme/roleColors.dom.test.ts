@@ -12,11 +12,14 @@
  * - **When it reads.** One `getComputedStyle` per `chartRoles` call, taken at the first read — never at creation,
  *   never twice for one draw — and never kept across draws: a role changed between two draws is read anew.
  * - **Any other notation goes through a canvas `fillStyle`**, written over black and over white: a colour the canvas
- *   takes comes back the same both times, as the canvas serialises it — `rgba()` when translucent, handed to the chart
- *   as it is, never flattened; one it ignores comes back as the two colours it was written over, and the stand-in takes
- *   its place. Each raw value is resolved once, valid or not. The installed context behaves as a browser's does: it
- *   takes the colours it knows and ignores the rest. The probe and the resolutions are module state, so each canvas
- *   case loads a fresh copy of the module.
+ *   takes comes back the same both times, as the canvas serialises it — in its own space, not always sRGB: Chromium
+ *   reports a `color-mix(in oklab, …)` as `oklab(…)` and one `in srgb` as `color(srgb …)` (AF). The bridge brings it
+ *   back to sRGB — a hex or an `rgba()` as it is; `oklab()`, `oklch()` and `color(srgb …)` converted, to `#rrggbb` when
+ *   opaque and `rgba()` when translucent, never flattened, as `parseRgba` reads it — and stands in for any other space.
+ *   One the canvas ignores comes back as the two colours it was written over, and the stand-in takes its place. Each
+ *   raw value is resolved once, valid or not. The installed context behaves as a browser's does: it takes the colours
+ *   it knows, reports each in the form it is given, and ignores the rest. The probe and the resolutions are module
+ *   state, so each canvas case loads a fresh copy of the module.
  *
  * The parity of the stand-ins with tokens.css, and the paths that need no page, are `roleColors.test.ts`'s (node).
  *
@@ -24,9 +27,10 @@
  */
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
+import {parseRgba} from './colorAlpha';
 import {chartRoles, type ChartRole, setRoleReader} from './roleColors';
 
-const ROLES: readonly ChartRole[] = ['--lf-surface-card', '--lf-surface-panel', '--lf-text-primary', '--lf-text-on-inverse', '--lf-danger', '--lf-info'];
+const ROLES: readonly ChartRole[] = ['--lf-surface-card', '--lf-surface-panel', '--lf-text-primary', '--lf-text-on-inverse', '--lf-danger', '--lf-info', '--lf-selected'];
 
 const html = document.documentElement;
 /** Every element a test adds to the page — sheets and subtrees — removed after it. */
@@ -135,13 +139,16 @@ describe('chartRoles — when it reads: one computed style per draw', () => {
 /**
  * A 2D context as far as the probe uses it: `fillStyle` takes a `#rrggbb` or a colour listed in `known` — stored in
  * the form the canvas serialises it to — and ignores anything else, keeping the colour it had, as a browser does.
- * `writes` records every assignment, so a test can tell a resolution from a remembered one.
+ * `writes` records every assignment, so a test can tell a resolution from a remembered one; `reads` every value the
+ * canvas reported, so a test can tell a report the bridge refused from a value the canvas ignored.
  */
 function installCanvas(known: Readonly<Record<string, string>>) {
     let current = '#000000';
     const writes: string[] = [];
+    const reads: string[] = [];
     const context = {
         get fillStyle(): string {
+            reads.push(current);
             return current;
         },
         set fillStyle(value: string) {
@@ -151,7 +158,7 @@ function installCanvas(known: Readonly<Record<string, string>>) {
         },
     };
     const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context as unknown as RenderingContext);
-    return {writes, getContext};
+    return {writes, reads, getContext};
 }
 
 /** A fresh copy of the module: its probe and its resolutions are module state, and each canvas case starts with none. */
@@ -184,6 +191,46 @@ describe('chartRoles — any other notation, painted by a canvas (a 2D context i
         installCanvas({[raw]: 'rgba(0, 0, 0, 0.5)'});
 
         expect(roles.chartRoles(true).color('--lf-surface-card')).toBe('rgba(0, 0, 0, 0.5)');
+    });
+
+    it('brings back to sRGB a translucent mix the canvas reports in OKLab: rgba(), whose channels and alpha parseRgba reads (AF’s sample)', async () => {
+        const roles = await freshRoleColors();
+        const raw = setOnPage('--lf-selected', 'color-mix(in oklab, #236b4d 12%, transparent)');
+        // What Chromium 149 reports for that mix (AF): the colour stays in OKLab, its alpha after the slash.
+        const painted = 'oklab(0.474452 -0.0824938 0.0265417 / 0.12)';
+        const {reads} = installCanvas({[raw]: painted});
+        const expected = 'rgba(35,107,77,0.12)';
+        expect(standIn('--lf-selected', true), 'barrier: the dark stand-in is another colour, so the dark read below can only come from the canvas').not.toBe(expected);
+
+        for (const dark of [false, true]) expect(roles.chartRoles(dark).color('--lf-selected'), `dark ${dark}: the page decides, not the flag`).toBe(expected);
+        expect(reads, 'barrier: the canvas took the mix and reported it in OKLab, over black and over white — once').toEqual([painted, painted]);
+        expect(parseRgba(roles.chartRoles(false).color('--lf-selected')), 'the contract of the colours drawn from the roles: parseRgba reads the channels and the alpha, for over()').toEqual({r: 35, g: 107, b: 77, alpha: 0.12});
+    });
+
+    it.each([
+        {space: 'an opaque mix in OKLab', page: 'color-mix(in oklab, #236b4d, #236b4d)', painted: 'oklab(0.474452 -0.0824938 0.0265417)', expected: '#236b4d'},
+        {space: 'an OKLCh colour', page: 'oklch(0.474452 0.0866574 162.16)', painted: 'oklch(0.474452 0.0866574 162.16)', expected: '#236b4d'},
+        {space: 'a translucent mix in sRGB', page: 'color-mix(in srgb, #236b4d 50%, transparent)', painted: 'color(srgb 0.137255 0.419608 0.301961 / 0.5)', expected: 'rgba(35,107,77,0.5)'},
+        {space: 'an opaque mix in sRGB', page: 'color-mix(in srgb, #ffffff, #ffffff)', painted: 'color(srgb 1 1 1)', expected: '#ffffff'},
+        {space: 'OKLab with a percentage lightness', page: 'oklab(100% 0 0)', painted: 'oklab(100% 0 0)', expected: '#ffffff'},
+        {space: 'OKLab with a percentage alpha', page: 'oklab(0 0 0 / 50%)', painted: 'oklab(0 0 0 / 50%)', expected: 'rgba(0,0,0,0.5)'},
+    ])('brings $space back to sRGB: the canvas reports $painted, the chart gets $expected', async ({page, painted, expected}) => {
+        const roles = await freshRoleColors();
+        const raw = setOnPage('--lf-surface-panel', page);
+        const {reads} = installCanvas({[raw]: painted});
+        expect(standIn('--lf-surface-panel', false), 'barrier: the stand-in is another colour, so the answer can only come from the canvas').not.toBe(expected);
+
+        expect(roles.chartRoles(false).color('--lf-surface-panel')).toBe(expected);
+        expect(reads, 'barrier: the canvas reported the colour in its own space, over black and over white').toEqual([painted, painted]);
+    });
+
+    it.each(['color(display-p3 1 0 0)', 'hsl(0 0% 0%)', 'oklab(0.5 0.1)'])('stands in when the canvas reports %s, which the bridge cannot bring back to sRGB — never the painted string', async (painted) => {
+        const roles = await freshRoleColors();
+        const raw = setOnPage('--lf-danger', painted);
+        const {reads} = installCanvas({[raw]: painted});
+
+        for (const dark of [false, true]) expect(roles.chartRoles(dark).color('--lf-danger'), `dark ${dark}`).toBe(standIn('--lf-danger', dark));
+        expect(reads, 'barrier: the canvas took the value and reported it both times — the stand-in is the bridge’s refusal, not a value the canvas ignored').toEqual([painted, painted]);
     });
 
     it('stands in for a value the canvas ignores: it comes back as the two colours it was written over', async () => {

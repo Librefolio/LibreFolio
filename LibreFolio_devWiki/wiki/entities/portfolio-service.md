@@ -82,9 +82,9 @@ The share of a broker comes from `effective_share()` everywhere (O2); the `UserR
 
 Since T-1 (2026-10-12) the engine's names are imported from the module that defines them, the engine imports staying
 lazy; the service's own `_normalize_fx_pair_slug` was removed for the public `normalize_fx_pair_slug` of
-`financial_math/portfolio/data_quality.py`. Still open (backlog T-R1): `risk/service.py` calls the private
-`_get_configured_fx_pair_sets()` of this service, and the service imports the private `_compute_tx_fingerprint` from
-the engine.
+`financial_math/portfolio/data_quality.py`. Still open (backlog T-R1): the service imports the private `_compute_tx_fingerprint` from the engine. *2026-10-16,
+CP-9a:* the risk service no longer calls this service's private `_get_configured_fx_pair_sets()`: `risk/data_quality.py`
+reads the routes with `load_configured_fx_pair_sets(db)` from the home.
 
 ## L2 TTL Cache
 

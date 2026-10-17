@@ -1,8 +1,9 @@
 """
 Returns: Simple ROI, TWRR, MWRR (XIRR) and annualization — pure math, no I/O.
 
-Also: rebasing to a period's start, net holding return, G/L ratio, realized gain, price return,
-and the gain that recovers a drawdown (``required_recovery_return``).
+Also: rebasing to a period's start, net holding return, G/L ratio (of one holding or a group), a change as a fraction
+of its base, the timing effect (MWRR − TWRR), realized gain, price return, and the gain that recovers a drawdown
+(``required_recovery_return``).
 
 Provides TWRR, MWRR (XIRR), and Simple ROI calculations.
 
@@ -210,6 +211,46 @@ def gain_loss_ratio(gain: Decimal | None, base: Decimal | None, *, positive_base
     if positive_base and base < 0:
         return None
     return gain / base
+
+
+def change_ratio(change: Decimal | None, base: Decimal | None) -> Decimal | None:
+    """A change as a fraction of the size of its base: ``change / |base|``, unrounded.
+
+    The sign is the change's, whatever the base's sign: a P&L that rises from −100 to −50 changed by +50 %. None when
+    either is missing or the base is 0.
+    """
+    if change is None or base is None or base == 0:
+        return None
+    return change / abs(base)
+
+
+def group_gain_loss(holdings: Iterable[tuple[Decimal | None, Decimal | None]]) -> tuple[Decimal | None, Decimal | None]:
+    """The gain or loss of a group of holdings and its fraction of their cost: ``(Σ gain, Σ gain / Σ cost)``.
+
+    ``holdings`` are ``(value, gain)`` pairs; a holding's cost is its value less its gain. Only the holdings whose value
+    and gain are both known count, on both sides — a holding without a gain never lends its value to the base. The
+    ratio follows :func:`gain_loss_ratio` (signed base, None on a zero cost); ``(None, None)`` when no holding counts.
+    """
+    gain_sum: Decimal | None = None
+    cost_sum = Decimal("0")
+    for value, gain in holdings:
+        if value is None or gain is None:
+            continue
+        gain_sum = (gain_sum or Decimal("0")) + gain
+        cost_sum += value - gain
+    if gain_sum is None:
+        return None, None
+    return gain_sum, gain_loss_ratio(gain_sum, cost_sum, positive_base=False)
+
+
+def timing_effect(mwrr_cumulative: Decimal | None, twrr: Decimal | None) -> Decimal | None:
+    """What the timing of deposits and withdrawals added to the period's return: cumulative MWRR − TWRR.
+
+    Both are fractions of the same period; None when either is missing.
+    """
+    if mwrr_cumulative is None or twrr is None:
+        return None
+    return mwrr_cumulative - twrr
 
 
 def realized_gain(proceeds: Decimal | None, cost: Decimal | None) -> Decimal | None:

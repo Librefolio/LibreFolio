@@ -13,7 +13,6 @@
     import DataTableColumnFilter from './DataTableColumnFilter.svelte';
     import type {ColumnDef, FilterValue, SortState} from './types';
     import {getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts} from './dataTableLogic';
-    import '$lib/theme/components/table.css';
 
     interface Props {
         column: ColumnDef<T>;
@@ -222,19 +221,15 @@
 
     .sort-icon {
         display: flex;
-        color: var(--lf-cmp-datatable-faint-text);
+        color: var(--lf-text-muted);
     }
 
     .header-tooltip-icon {
         display: flex;
         align-items: center;
-        color: var(--lf-cmp-datatable-icon-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         flex-shrink: 0;
-    }
-
-    :global(.dark) .header-tooltip-icon {
-        color: var(--lf-cmp-datatable-icon-text-dark);
     }
 
     .header-tooltip-link {
@@ -251,12 +246,7 @@
 
     .header-tooltip-link:hover,
     .header-tooltip-gesture:hover {
-        color: var(--lf-cmp-datatable-accent-text);
-    }
-
-    :global(.dark) .header-tooltip-link:hover,
-    :global(.dark) .header-tooltip-gesture:hover {
-        color: var(--lf-cmp-datatable-accent-text-dark);
+        color: var(--lf-link);
     }
 
     /* The same rules as the "show selected only" button of DataTable.svelte's selection header, which keeps its own copy. */
@@ -269,29 +259,19 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: var(--lf-cmp-datatable-faint-text);
+        color: var(--lf-text-muted);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .filter-btn:hover {
-        background: var(--lf-cmp-datatable-filter-btn-hover-bg);
-        color: var(--lf-cmp-datatable-filter-btn-hover-text);
+        background: var(--lf-surface-neutral);
+        color: var(--lf-text-primary);
     }
 
     .filter-btn.active {
-        background: var(--lf-cmp-datatable-accent-bg);
-        color: var(--lf-cmp-datatable-on-accent-text);
-    }
-
-    :global(.dark) .filter-btn:hover {
-        background: var(--lf-cmp-datatable-filter-btn-hover-bg-dark);
-        color: var(--lf-cmp-datatable-filter-btn-hover-text-dark);
-    }
-
-    :global(.dark) .filter-btn.active {
-        background: var(--lf-cmp-datatable-accent-bg-dark);
-        color: var(--lf-cmp-datatable-on-accent-text-dark);
+        background: var(--lf-checked);
+        color: var(--lf-on-checked);
     }
 
     .resize-handle {
@@ -312,20 +292,12 @@
     /* The th belongs to DataTable.svelte: its hover reaches the handle through :global. */
     :global(th:hover) .resize-handle {
         opacity: 1;
-        background: var(--lf-cmp-datatable-resize-handle-bg);
+        background: var(--lf-border-input);
     }
 
     .resize-handle.resizing,
     .resize-handle:active {
         opacity: 1;
-        background: var(--lf-cmp-datatable-accent-bg);
-    }
-
-    :global(.dark) :global(th:hover) .resize-handle {
-        background: var(--lf-cmp-datatable-resize-handle-bg-dark);
-    }
-
-    :global(.dark) .resize-handle.resizing {
-        background: var(--lf-cmp-datatable-accent-bg-dark);
+        background: var(--lf-checked);
     }
 </style>
