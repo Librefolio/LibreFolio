@@ -4,6 +4,7 @@ import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
@@ -230,11 +231,23 @@ async def assign_providers_bulk(
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """Bulk assign providers to assets (PRIMARY bulk endpoint)."""
+    """Bulk assign providers to assets (PRIMARY bulk endpoint).
+
+    Refused, nothing written: 409 ``detail = {"error_code", "message", "params"}`` with
+    ``PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`` (X-R49) when an item would wipe a parametric provider's events while
+    a SPLIT among them has linked incoming adjustments without a purchase cost; ``params`` holds ``asset_id``,
+    ``item_index`` and ``splits`` (``event_id``, ``date``, ``transaction_ids`` — only those the caller can see — and
+    ``hidden_transactions_count``).
+    """
     try:
-        results = await AssetSourceManager.bulk_assign_providers(assignments, session)
+        results = await AssetSourceManager.bulk_assign_providers(assignments, session, current_user_id=_current_user.id)
         success_count = sum(1 for r in results if r.success)
         return FABulkAssignResponse(results=results, success_count=success_count)
+    except AssetSourceError as e:
+        if e.error_code == "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST":
+            raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
+        logger.exception(f"Error in bulk assign providers: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
         logger.exception(f"Error in bulk assign providers: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
