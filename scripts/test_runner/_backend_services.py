@@ -1136,6 +1136,14 @@ def services_request_float_inputs(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Request float inputs tests", verbose=verbose)
 
 
+def services_response_validation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a response breaking its model is logged without its content, and answered 500 (H-33)."""
+    print_section("Services: Response Validation")
+    print_info("Testing: backend/app/api/response_validation.py (install_response_validation_handler) and its install in backend/app/main.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_response_validation.py", test_names)
+    return run_command(cmd, "Response validation tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -2161,6 +2169,15 @@ Note: No backend server required.
         desc="H-32: every float a request can carry (body, nested model, query, path, header, cookie) refuses inf, -inf, NaN and 1E+400 in its schema; barriers on the number of routes walked",
         # The app is imported, never served: its routes are walked with iter_route_contexts and each float judged with a
         # TypeAdapter. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "response-validation",
+        services_response_validation,
+        name="Response Validation",
+        desc="H-33: a response that breaks its response_model is logged with its route, endpoint, error types and locations, never its content, and answered 500 in plain text",
+        # Fresh FastAPI apps in process, and the real app's handler table; logs captured with structlog. No DB, no server.
         isolation="pure",
     )
     add_test(
