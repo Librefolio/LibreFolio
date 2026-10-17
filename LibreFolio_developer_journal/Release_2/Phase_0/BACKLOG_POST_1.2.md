@@ -5626,13 +5626,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   118 il 16/10, verdetto ambiente. Cura: il runner rifà il seed quando un'azione `api` singola trova il DB senza gli utenti
   di fixture, o lo dice prima di partire. Registro del runner: superficie condivisa, decide il coordinatore. Dettagli: piano 04,
   sezione C-97a.
-- **W-B55 · La 47 in un'altra valuta non ha una prova da capo a fondo** — minimo, test; W, 16/10 (decisione 47 con J-24).
+- ✅ **W-B55 · La 47 in un'altra valuta non ha una prova da capo a fondo** — minimo, test; W, 16/10 (decisione 47 con J-24).
   La gamba che cede prende il costo Auto del suo broker nella valuta dell'ultimo acquisto (`_handover_cost`,
   `compute_wac_iterative`), e con J-24 la Dashboard ne realizza la differenza di cambio nel giorno della consegna. Oggi è
   coperto in due metà: i test di W scrivono la riga in EUR (più i casi di cambio mancante), il «foreign book» di J
   (`test_adjustment_out_with_cost_numbers.py`) la legge in USD. Cura: un caso in `test_orphan_transfer_after_broker_delete.py`
   con un titolo comprato in USD e il rapporto in EUR, dalla cancellazione del broker che riceve ai numeri di lotti e
   Dashboard. Dettagli: piano 04, sezione «Decisione 47 in dev: la prova con J-24».
+  ✅ **Fatto da J il 17/10**: `TestOrphanOutgoingTransferInAnotherCurrency` (controllo a mano e orfana vera, in USD con report in EUR); riga, Dashboard, lotti e parità tornano ai valori derivati a mano. Nessun difetto.
 - **W-B56 · Il costo medio dell'anteprima esce senza arrotondamento** — minimo, numeri; W, 16/10 (C-97a, E2E di FE8b).
   `compute_wac_iterative` (`backend/app/services/portfolio_service.py`, casa di MF) rende la media con tutte le cifre del
   quoziente (100 / 3 = 33.333…): l'anteprima la mostra, il commit in Auto la scrive, e se un utente la «congela» in un
