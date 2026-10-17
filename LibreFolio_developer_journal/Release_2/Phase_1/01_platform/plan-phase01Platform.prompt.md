@@ -6459,3 +6459,102 @@ server parte. E lo vede nella revisione del checkpoint.
    >   documento: nessuna guardia, una nota sola.
    > - `/mkdocs/sitemap.xml.gz` esce come `text/xml`: per `mimetypes` il `.gz` è una codifica, e `FileResponse` tiene
    >   solo il tipo. Con H-45 prende `PAGE_POLICY`: innocuo, ed è documentato.
+
+### Lotto «H-49 e H-48: il lane id nei limiti della sonda; i link tengono la barra finale» (2026-10-17) — H-49 ✅ provato, H-48 rimandato
+
+> Dal coordinatore (17/10, dopo H-45): due voci piccole insieme, se costano poco.
+> - Il lane id di almeno 16 caratteri in `platform.test_mode`: è la nota di E su H-46; diventa **H-49**.
+> - La barra finale di `env_url` sui link: **H-48**.
+
+**Analisi** (sola lettura, HEAD `77e9611e0`):
+- **H-49**:
+  - il runner crea il lane id con `secrets.token_hex(16)`, cioè 32 caratteri (`ensure_test_lane_id`,
+    `scripts/cli_base.py`);
+  - la sonda di prontezza accetta un token da 16 a 128 caratteri (`Query(min_length=16, max_length=128)`,
+    `api/v1/system/health.py`);
+  - oggi H-46 conta come corsia ogni lane id non bianco: uno di 3 caratteri passerebbe, ma nessun runner potrebbe
+    usarlo.
+- **H-48**:
+  - `env_url` toglie una barra finale («so a path can be appended»). Serve solo a `LIBREFOLIO_PUBLIC_URL` (A, base
+    dei link delle email);
+  - i quattro lettori di link: `support_url` (H), `tos_url` e `privacy_url` (A9, nel mio `config/platform.py`),
+    `billing_url` (A, `config/accounts.py`);
+  - i test che fissano il taglio:
+    - `test_legal_links.py` (A): le righe `stripped-without-its-trailing-slash` e `ipv4-with-a-port`, più il confronto
+      con `env_url`;
+    - `test_instance_block.py` (mio, CP6): la riga `https-one-trailing-slash-removed` di `LIBREFOLIO_BILLING_URL`;
+  - la doc: `architecture/settings.md` riga ~141 (la regola) e `hosting_providers.en.md` riga ~637 (TOS e privacy).
+
+**Proposta**:
+- **H-49**:
+  - `TEST_LANE_ID_MIN_LENGTH = 16` e `TEST_LANE_ID_MAX_LENGTH = 128` in `config/platform.py`, accanto a
+    `owning_test_lane_id()`. Li usano la sonda (`health.py`, gli stessi valori: OpenAPI invariata, la rotta è fuori
+    dallo schema) e `_test_mode_outside_a_lane()`;
+  - è una corsia un lane id che, tolti gli spazi, sta fra 16 e 128 caratteri: quello che la sonda accetterebbe.
+    Fuori da quei limiti è «fuori corsia»: `error`, e nel profilo managed lo stop.
+- **H-48**:
+  - `env_link(name)` in `config/__init__.py`: la stessa regola di `env_url` (`http(s)`, host, niente credenziali né
+    spazi), ma l'indirizzo resta com'è scritto, tolti solo gli spazi intorno. `env_url` resta com'è per le basi;
+  - `support_url`, `tos_url`, `privacy_url` e `billing_url` passano a `env_link`. `public_url` resta su `env_url`.
+- **Test** (test-author):
+  - H-49 in `test_config_audit.py`;
+  - H-48 in `test_config_package.py` (`env_link` e il supporto) e in `test_instance_block.py` (la fatturazione);
+  - in `test_legal_links.py`, le due righe e il confronto con `env_link`, con l'OK di A.
+- **Doc**: `security.md` (la regola della corsia di H-46), `architecture/settings.md` (`env_link`),
+  `hosting_providers.en.md` (TOS e privacy).
+- **Selettori**: `services config-audit`, `config-package`, `legal-links`, `config-env-example`, `api instance-block`
+  (vuole un server di corsia? da verificare). Altrimenti tutti puri.
+- **Serve**: l'OK di scrittura di A su `config/accounts.py` (una riga in `billing_url`) e su `test_legal_links.py`.
+
+**Via del coordinatore** (~12:55): un lotto solo, con l'OK di scrittura di A su `config/accounts.py` (`billing_url`) e su
+`test_legal_links.py` (le due righe e `env_link`), e uno slot di ~3 min per `api instance-block`.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla):
+   - H-49: la sezione nuova (i) di `test_config_audit.py`:
+     - il pin dei due limiti;
+     - la sonda che usa gli stessi limiti, letta dai metadati di `Query`;
+     - gli id di 15 e 129 caratteri, e uno di 15 con spazi intorno: errore e stop managed;
+     - gli id di 16 e 128 caratteri, e uno di 16 con spazi intorno: corsia.
+   - H-48: in `test_config_package.py`, `test_instance_block.py` e `test_legal_links.py`.
+   > **⚠️ Fuori pista: H-48 non era piccolo.** Dalla test-author: la cura avrebbe fatto diventare rossi altri 9 test,
+   > fuori dall'OK:
+   > - di A: 2 in `test_legal_links.py`, 2 in `test_instance_config_legal_api.py` (`api instance-legal`) e 4 in
+   >   `test_registration_service.py`;
+   > - mio: 1 in `test_system_api.py` (`api system`).
+   >
+   > Più uno slot di ~8 min. **Decisione del coordinatore** (~13:00, la mia strada 2): H-49 da solo ora, H-48 dopo la
+   > 1.3, con l'elenco dei test nella sua riga del backlog.
+   > - Il lavoro in corso di H-48 (486 righe: i test, la doc e `apply_h48.py`) è salvato fuori dal repo, in
+   >   `files/h48-wip/`.
+   > - I 5 file sono tornati come in HEAD con `git show HEAD:<file> > <file>`, solo git in lettura: `test_config_package.py`,
+   >   `test_instance_block.py`, `test_legal_links.py` di A (toccato solo da me, sotto l'OK), `architecture/settings.md` e
+   >   `hosting_providers.en.md`.
+   > - La cura è stata divisa in `apply_h49.py` e `apply_h48.py`.
+   > **⚠️ Fuori pista: il messaggio dello stop managed** diceva «(no LIBREFOLIO_TEST_LANE_ID)», falso per un id presente
+   > ma fuori dai limiti. Ora dice «(no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters)», costruito dalle costanti.
+   > Aggiornati il pin `MANAGED_TEST_MODE_STOP`, `security.md`, `hosting_providers.en.md` e `configuration.en.md`
+   > (debito per H-5).
+2. ✅ **Run H-49** (`files/runs/h49-run.sh`, cancello del carico, nessuno slot):
+
+   | Passo | Esito |
+   |---|---|
+   | rosso `services config-audit` | **15 failed / 205 passed**: i 10 di (i), più i 5 stop di H-46 che fissano il messaggio |
+   | cura `files/h49/apply_h49.py --apply` | i tre file uguali alle copie di prova; `config/__init__.py` e `accounts.py` riscritti identici, verificato con `git diff` |
+   | verde `config-audit` | **220** |
+   | `config-package` | 866 |
+   | `config-env-example` | 38 |
+
+   - ruff pulito. black voleva andare a capo nel `raise` dello stop (più di 300 caratteri): applicato `black` al file,
+     poi ruff e black puliti e `config-audit` di nuovo **220**. Porta libera.
+   - La cura:
+     - `TEST_LANE_ID_MIN_LENGTH` e `TEST_LANE_ID_MAX_LENGTH` in `config/platform.py`;
+     - la sonda di `health.py` li usa: gli stessi valori, quindi niente cambia per la sonda;
+     - `_test_mode_outside_a_lane()`, l'id senza spazi fra i due limiti;
+     - la docstring di `check_test_mode`;
+     - il messaggio dello stop.
+3. ✅ **Documenti** (miei, solo inglese, nessun timbro): `security.md` (la riga, il paragrafo della corsia, le sezioni
+   (h) e (i), il messaggio), `hosting_providers.en.md` e `configuration.en.md` (il messaggio).
+- Note della test-author, nessuna azione:
+  - la sonda confronta il token grezzo, il controllo lo prende senza spazi;
+  - `ensure_test_lane_id()` tiene un id ereditato di qualsiasi lunghezza (in `scripts/cli_base.py`, condiviso), ma uno
+    fuori dai limiti fa fallire la sonda.
