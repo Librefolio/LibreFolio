@@ -273,3 +273,55 @@ describe('the price catch-up signal (Z-13)', () => {
         expect(kept, 'premise: the signal was sent').toHaveBeenCalledTimes(1);
     });
 });
+
+/**
+ * The Δ columns' read (workstream X, lot X-R53, MF-P2).
+ *
+ * The Assets and FX lists stop computing their fixed-period changes (1D … 5Y) in the browser and ask the backend for
+ * them on every load: `POST /assets/prices/period-changes` and `POST /fx/currencies/period-changes`. Both are reads — a
+ * POST only because a bulk body does not fit in a query string — so neither may reach the listeners: counted as a
+ * write, every visit to the Assets list would mark the Dashboard, Risk and lots answers stale and have them refreshed in
+ * background, after a request that changed nothing.
+ *
+ * Red first: every POST under `/api/v1/assets/prices` but `/query` and `/sync` is a write today, so the asset read is
+ * one, whatever its answer. The rest are guards, green before and after: the FX read already falls through every rule,
+ * `/query` stays a read, and the writes under `/api/v1/assets/prices` stay writes — the exception must not widen into the
+ * prefix rule.
+ */
+describe('the period changes are reads, not writes (X-R53)', () => {
+    /** An answer of `POST /assets/prices/period-changes` (`FAPeriodChangesResponse`): one asset. */
+    const assetAnswer = {items: [{asset_id: 6, as_of: '2026-10-16', currency: 'USD', periods: [{key: '1D', days: 1, change_ratio: '0.0125'}], errors: []}]};
+    /** An answer of `POST /fx/currencies/period-changes` (`FXPeriodChangesResponse`): one pair. */
+    const fxAnswer = {items: [{base: 'EUR', quote: 'USD', as_of: '2026-10-16', periods: [{key: '1D', days: 1, change_ratio: '0.0125', inverse_change_ratio: '-0.0123'}], errors: []}]};
+
+    it.each([
+        ['POST', '/api/v1/assets/prices/period-changes'],
+        ['post', 'http://librefolio.local/api/v1/assets/prices/period-changes?x=1'],
+        ['POST', '/api/v1/assets/prices/period-changes/'],
+    ])('%s %s — the Assets list’s Δ columns — is not a portfolio mutation', (method, url) => {
+        expect(classify(method, url, assetAnswer), `${method} ${url} reads the Δ columns of the Assets list: as a write, every visit to the list marks the Dashboard, Risk and lots answers stale`).toBe(false);
+        expect(classify(method, url), 'nor without its answer: a read is a read whatever it answered').toBe(false);
+    });
+
+    it('no listener hears the Δ columns being read, while a write still reaches them', () => {
+        const listener = vi.fn();
+        onTestFinished(registerPortfolioMutationListener('portfolioMutation.test:period-changes', listener));
+
+        notify('POST', '/api/v1/assets/prices/period-changes', assetAnswer);
+        notify('POST', '/api/v1/fx/currencies/period-changes', fxAnswer);
+        expect(listener, 'reading the Δ columns reached the listeners: every list load would refresh the Dashboard, Risk and lots answers').not.toHaveBeenCalled();
+
+        // The control: the same listener hears a write of the same family, so the silence above is the rule's.
+        notify('POST', '/api/v1/assets/prices', {results: [], success_count: 0, errors: []});
+        expect(listener, 'premise: the listener is live').toHaveBeenCalledTimes(1);
+        expect(listener.mock.calls[0][0]).toMatchObject({kind: 'mutation', method: 'POST', path: '/api/v1/assets/prices'});
+    });
+
+    it('guards: the FX read is no write either, /query stays a read, the writes under /api/v1/assets/prices stay writes', () => {
+        expect(classify('POST', '/api/v1/fx/currencies/period-changes', fxAnswer), 'the FX list’s Δ columns').toBe(false);
+        expect(classify('POST', '/api/v1/assets/prices/query'), 'the price read of the lists and the charts').toBe(false);
+        expect(classify('POST', '/api/v1/assets/prices'), 'storing prices (the data editor’s save)').toBe(true);
+        expect(classify('DELETE', '/api/v1/assets/prices'), 'deleting prices').toBe(true);
+        expect(classify('POST', '/api/v1/assets/prices/current'), 'today’s live price, which writes today’s candle (E1)').toBe(true);
+    });
+});
