@@ -3913,10 +3913,50 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     Quasi ovunque il server risponde con un redirect, quindi il danno è raro.
   - Cura: i link tengono il percorso com'è scritto, per esempio con un parametro di `env_url` o con una funzione
     sorella; `PUBLIC_URL` tiene il taglio. Gli stessi controlli (`http(s)`, nome dell'host, niente credenziali).
-  - Tocca lettori e test di A (`test_legal_links.py` confronta con quello che dà `env_url`): serve l'OK di A sui suoi
-    file.
+  - **Rimandata a dopo la 1.3** (coordinatore, 17/10). I rossi erano scritti, ma la cura toccava più di quanto stimato.
+    Il lavoro in corso (i test, la doc, `apply_h48.py`) è conservato fuori dal repo, nella cartella della sessione H
+    (`files/h48-wip/`); i file del repo sono tornati come prima.
+  - I test da cambiare (13), con l'OK di A sui suoi:
+    - miei:
+      - `test_config_package.py`: i sei test di `env_url` estesi a `env_link`; due test nuovi su `env_link`; la riga
+        `stripped-without-its-trailing-slash` di `support_url`; `test_support_link_is_the_support_address_and_logs_nothing[valid-is-the-address]`;
+      - `test_instance_block.py`: `BILLING_LINK`, la riga `https-one-trailing-slash-removed` e
+        `test_the_block_page_gives_a_regular_user_no_billing_link`;
+      - `test_system_api.py`: `test_the_configured_support_address_is_answered[set-without-its-trailing-slash]`;
+    - di A:
+      - `test_legal_links.py`: le righe `stripped-without-its-trailing-slash` e `ipv4-with-a-port`, il confronto con
+        `env_url` e `test_the_link_is_the_address_and_logs_nothing[terms|privacy-valid-is-the-address]`;
+      - `test_instance_config_legal_api.py`: `test_a_valid_address_is_published_as_env_url_gives_it[selfhosted|managed-both-stripped-…]`;
+      - `test_registration_service.py`: `test_a_url_variable_is_stripped_of_spaces_and_of_its_trailing_slash[trailing-slash|stripped-http-with-port|path-and-case-kept-billing_url]`
+        e `test_a_missing_url_or_a_valid_billing_url_is_no_problem_to_report`.
+  - Selettori: `services config-package`, `legal-links`, `registration`; e, con uno slot di ~8 min,
+    `api instance-block`, `api system`, `api instance-legal`.
 
-  Dettagli: piano H, §14, «Review di A9».
+  Dettagli: piano H, §14, «Review di A9» e lotto «H-49 e H-48».
+- **H-49 · `platform.test_mode`: un lane id nei limiti della sonda di prontezza** — basso; E (review di H-46), via
+  coordinatore, 17/10. Da fare con H-48.
+  - H-46 conta come corsia ogni `LIBREFOLIO_TEST_LANE_ID` non bianco. Il runner ne crea uno di 32 caratteri, e la sonda
+    `test-lane-health` accetta da 16 a 128 caratteri: un lane id fuori da quei limiti non è una corsia che funziona.
+  - Cura: i due limiti in costanti accanto a `owning_test_lane_id()`, usate dalla sonda e dal controllo.
+  - Cura fatta il 17/10 da H (lotto «H-49 e H-48», piano H §14); E rivede.
+    - `TEST_LANE_ID_MIN_LENGTH` (16) e `TEST_LANE_ID_MAX_LENGTH` (128) in `config/platform.py`, usati dalla sonda e da
+      `platform.test_mode`: è una corsia solo un id, senza spazi, fra quei limiti.
+    - Il messaggio dello stop managed dice «(no LIBREFOLIO_TEST_LANE_ID of 16 to 128 characters)».
+    - Test: `services config-audit`, 220.
+
+  Dettagli: piano H, §14, lotto «H-49 e H-48».
+- **H-50 · Le impostazioni di scope SYSTEM si leggono una volta per voce di `/prices/current`** — basso, prestazioni;
+  E (R13-SEC9), via coordinatore, 17/10. Dopo la 1.3.
+  - `configure_instance()` (`services/plugin_settings/runtime.py`) apre un `AsyncSession` sul motore asincrono per ogni
+    istanza di un plugin che ha campi SYSTEM o USER. `POST /api/v1/assets/prices/current` configura un'istanza per
+    voce: una connessione SQLite e una lettura per ogni asset della richiesta.
+  - Oggi solo `mockprov` (test-only) dichiara campi così, quindi in esercizio non costa nulla; costerà al primo plugin
+    vero con impostazioni.
+  - Cura: leggere le righe una volta per richiesta (per famiglia e plugin) e passarle alle istanze, oppure una cache
+    breve, invalidata da ogni scrittura delle impostazioni. Il codice è di X (impostazioni dei plugin): serve il suo
+    OK, o lo fa X.
+
+  Dettagli: questa riga.
 
 ## A · Account e accessi (fase 01)
 
@@ -4305,12 +4345,19 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - In parte già coperto: `test_validation_errors_api.py` vuole il segnale assente da **tutta** la risposta sulle otto
     rotte con credenziali, ma solo per le forme d'errore che esercita. Cura: una regola in `security.md#validation-errors`
     («un validatore non mette il valore nel messaggio») e, se serve, un test che la imponga per ogni campo segreto.
-- **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; dalla revisione di E di A7b-2 («R13-SEC4»).
+- ✅ **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; chiusa il 17/10 in A-42/A-43 (commit del
+  coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»). Cura: `issue_setup_link` e il riarmo revocano prima (un solo
+  UPDATE, che prende il lock) e rileggono «in attesa» sotto il lock; `complete_admin_setup` rifiuta (`TOKEN_INVALID`)
+  quando un altro link di setup dell'account è consumato, e ritira i suoi link.
   `issue_setup_link` e il riarmo all'avvio decidono «in attesa» da una lettura fatta prima del BEGIN differito: un
   `POST /auth/setup` chiuso in quella finestra lascia un link vivo all'account appena attivato. Cura proposta da E: rifiutare
   il consumo (e il rilascio) quando un altro link di setup dell'account è già consumato.
-- **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; dalla revisione
-  di E di A7b-2 («R13-SEC4»); A-44 unita qui dal coordinatore (17/10, 03:09). Dopo A8a.
+- ✅ **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; chiusa il
+  17/10 in A-42/A-43 (commit del coordinatore); dalla revisione di E di A7b-2 («R13-SEC4»); A-44 unita qui dal
+  coordinatore (17/10, 03:09). Cura: come sotto; in più la retrocessione dell'admin in attesa è rifiutata (409
+  `PENDING_SETUP`, `user demote`), la sua cancellazione diretta è permessa, la scheda Utenti ha «Annulla il link di
+  setup», e un account protetto rifiuta anche l'annullamento (la CLI no). Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-42 + A-43 — Implementazione».
   - Disattivare l'admin **in attesa** è l'annullamento: i suoi link si **revocano** (non si ritirano: resta in attesa,
     così `user setup-link`, la via dell'operatore, gli dà ancora un link nuovo; un ritiro lo toglierebbe dall'attesa e
     `setup-link` non lo troverebbe più).
@@ -4344,6 +4391,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   (`emailLinks.ts`, di E) «irraggiungibile»: col codice nuovo i due posti possono dire «questa istanza non può
   verificare gli indirizzi: vedi i controlli di configurazione». Condivisa con E. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Revisione di H-19».
+- **A-50 · Dopo un annullamento, l'avvio dice «scaduto»** — minimo; da A-43 (A, 17/10). Annullato il link dell'admin in
+  attesa, un riavvio con lo **stesso** `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` giustamente non lo riarma (il valore è noto),
+  ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
+  no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-43.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -4937,7 +4989,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `computeDerivedPriceState()` (`lib/utils/assetPriceDerived.ts`) e `FxTable.getDelta()` → `displayFxDelta()`
     (`lib/stores/fxStoreRegistry.ts`, anche nella card e nella pagina della coppia): ultimo / primo − 1, in float.
   - X-R53 ha portato nel backend solo le colonne dei periodi fissi (1D…5Y).
-- **X-R60 · Le colonne Δ: tre note della revisione di Y su X-R53** — piccolo, **dopo X-R48**; X, 17/10 (Y, girata dal
+- ✅ **X-R60 · Le colonne Δ: tre note della revisione di Y su X-R53** (chiusa il 17/10, in attesa del commit del coordinatore: un registro delle richieste in `periodChanges.ts`, 24 casi di unità e 8 E2E) — piccolo, **dopo X-R48**; X, 17/10 (Y, girata dal
   coordinatore). Prima il punto 1.
   1. Cambi, una coppia sola (`loadPairPeriodChanges`): nessun indicatore, quindi `data-busy` può dirsi finito mentre la
      Δ di quella coppia è in volo; e non avanza la versione, quindi una risposta completa più vecchia che arriva dopo
@@ -4959,6 +5011,22 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     che la modale mostra come errore generico.
   - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
     codice e i collegamenti. Prima un rosso che lo riproduca.
+- **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; X, 17/10
+  (il coordinatore; numerata X-R65 per lo scontro con X-R64).
+  - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
+    no: un prezzo prima del 1900 si può salvare, e «Tutto» risolve allora l'inizio dell'intervallo prima del 1900
+    (visto nella revisione di X-R59: un `range_start` così fa fallire tutta la richiesta di period-changes).
+  - Direzione (N83): lo stesso pavimento sulle scritture manuali, come per le transazioni (N74).
+- ✅ **X-R44c · Solo asset e cambi possono dichiarare `test_only`** (chiusa il 17/10, in attesa del commit del coordinatore: due guardie in `services test-only-providers`, provate con una mutazione) — piccolo, **subito** (il coordinatore, 17/10); X, 17/10.
+  - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
+    (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
+    sarebbe servito in produzione. Un test di guardia lo vieta fuori da asset e cambi.
+- **X-R64 · La richiesta di period-changes divisa in lotti da 1.000** — piccolo, **dopo l'ingresso di Z-27**, con il suo
+  aiuto e la sua costante; X, 17/10 (dalla revisione di X-R59: il limite scende da 10.000 a 1.000).
+  - Dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola risposta unita); poi
+    aggiornare i due passi della documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238), che
+    oggi la assegnano a Z-27, aggiungendo il flusso di X-R60 (quale risposta resta, l'indicatore, un errore che tiene le
+    Δ dello stesso giorno, inversione e impostazioni che non chiedono nulla). Insieme a X-R58.
 - **X-R63 · Due vuoti vecchi nella documentazione degli asset** — minimo, al prossimo tocco di quelle pagine; X, 17/10
   (il docs-writer di X-R49).
   - `developer/backend/assets/architecture.md`: la tabella dei moduli non elenca `provider_policy.py`.
@@ -5508,6 +5576,22 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N78** (D-W72-1 → b, coordinatore 08:39, da rivedere col developer): la regola 12 estesa a `cost_basis_override` su ogni scrittura,
   codice `costBasisNotAllowed {type, qty}`, le righe già salvate restano; più la chiave mancante di `costBasisModeIncompatible` (oggi
   in inglese grezzo) e un cancello sui codici delle regole. Ordine: dopo W-B71. Dettagli: piano 04, «W-B71, W-B72, W-B74 — analisi».
+  **N78 raffinata** (coordinatore, 17/10, dai rossi): **tranne un ADJUSTMENT a quantità < 0**, il costo di consegna della decisione 47,
+  che la decisione 4 lascia mettere a un update dello stesso batch dello split. Con la cura: un errore di regola da solo tiene i suoi
+  `params` (oggi solo quelli impacchettati), e il vecchio `promote_transfer` rifiuta un costo su un FX_CONVERSION invece di lasciarlo
+  cadere. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
+  ✅ 17/10: regola 12b (`cost_basis_set`, `costBasisNotAllowed {type, qty}`, tranne un ADJUSTMENT −q) su create e update;
+  `_resolved_cost_issues` per il costo unito di una coppia di cassa; `_lone_error_params` in `_parse_lenient`; `promote_transfer`
+  rifiuta un costo su FX_CONVERSION; `costBasisNotAllowed` e `costBasisModeIncompatible` in 4 lingue, cancello su tutti i codici delle
+  regole (22). 21 rossi verdi: `transaction-cost-basis-rule` 164, `transaction` 125, `transaction-decimal-places` 201; BRIM
+  (`brim-create-transaction` 14, `brim-gap-fix` 115, `external brim-providers` 736) e gate i18n verdi. Dettagli: piano 04, sezione
+  «W-B72 — … (N78): cura».
+- **W-B75 · Un errore di campo di un plugin BRIM può rendere la risposta del parse non serializzabile** — minimo, disponibilità; W,
+  17/10 (W-B72). `BRIMProvider._create_transaction` (`backend/app/services/brim/brim_provider.py`) copia in `params` il contesto di ogni
+  errore solo così com'è; quello di un `value_error` porta l'oggetto eccezione, e `BRIMValidationIssue.model_dump(mode="json")` alza
+  `PydanticSerializationError` (verificato): un 500 sul parse. Oggi non è raggiungibile: i plugin passano istanze di `Currency` (non
+  rivalidate) e liste di stringhe. È latente per un plugin nuovo. Cura: lo stesso filtro dei dati semplici di `_lone_error_params`
+  (W-B72), con un rosso su un plugin finto. Dettagli: piano 04, sezione «W-B72 — … (N78): cura».
 - **W-B73 · La pagina utente delle transazioni dice che l'unione sceglie anche data e costo** — minimo, doc; W, 17/10 (docs-writer).
   `mkdocs_src/docs/user/transactions/index.en.md` descrive il dialogo «Promote pair» con la scelta di data e costo; `PromoteMergeModal`
   offre solo descrizione e tag dal maggio 2026 (SP-C Step 5). La pagina ha già un debito di traduzione non timbrato (la cache di Aphra
@@ -6145,12 +6229,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   cioè un campo del backend sulle righe della cronologia, le 3 viste e l'i18n. In J-10 solo l'etichetta neutra della
   modale (scelta (a') del coordinatore, 17/10 08:05). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
-- **SEC8-1b (da R13-SEC8 di E) · Il rigioco storico del rischio cammina un intervallo senza limiti** — alto,
+- ✅ **SEC8-1b (da R13-SEC8 di E) · Il rigioco storico del rischio cammina un intervallo senza limiti** — alto,
   sicurezza (disponibilità); assegnata a J dal coordinatore (17/10 08:22), dopo J-10 e J-47. `replay_range` di
   `/risk/query` non ha limiti (`DateRangeModel` controlla solo `end >= start`) e arriva al caricamento dei prezzi e
   alla preparazione delle serie (`risk/replay.py`). Lo stesso clamp di SEC7-1, cioè `latest_range_end()` e un
   pavimento per l'inizio; l'ambito degli asset lo chiude X-R55 di Z. Prima i rossi, E rivede. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - ✅ 17/10: fatta da J (checkpoint SEC8-1b). `bounded_range()` in `risk/scope.py`: la fine al più domani, l'inizio al
+    più presto 100 anni prima della fine (`range_span_floor`). Vale per l'intervallo principale di ogni richiesta e per
+    la finestra del rigioco, proposta compresa: prima un prezzo piantato all'anno 1 faceva proporre una finestra
+    dall'anno 1 (~739 000 giorni). La cura alla fonte, un pavimento sulle date dei prezzi scritti a mano, è **N83** di X.
+    Dettagli: piano 05, sezione «SEC8-1b».
 - **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
   con X-R55, girata dal coordinatore (17/10 08:30), non ora. La cucitura di SEC7-1
   (`test_scripts/test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`) toglie il limite solo nei moduli della
@@ -6172,6 +6261,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
       convenzione D379 (200), al posto del 500.
     - AI Export: 422 `selection_not_applicable`, `reason_code` `too_many_price_days`, al posto del 503.
     - Una frase propria in 4 lingue per tutti e due. Dettagli: piano 05, sezione «J-50».
+    - 17/10 13:45: dev rosso sulla guardia dei rimedi (il rimedio era un letterale fuori dalla tabella): curato in
+      J-50b, una tabella e un costruttore in `risk/base.py` e una scansione che vieta un rimedio scritto altrove.
+      Dettagli: piano 05, sezione «J-50b».
 - **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
   J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
   al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza
@@ -6368,7 +6460,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   `scheduler/run_lock.py`. Un modulo comune li unirebbe; tocca file di più sessioni (fra cui B per il backup).
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-11 — lock dei job tra
   processi: analisi».
-- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H** (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo, facoltativo; Z, 17/10
+- ✅ **Z-24 · `.scheduler.lock` fra i percorsi protetti della cartella dati di test** — **chiusa il 17/10 da H**
+  (dev `36a487e84`): `managed_paths` di `validate_test_data_dir()` + test di symlink e hardlink. Era: minimo,
+  facoltativo; Z, 17/10
   (Z-11, segnalato da test-author). `validate_test_data_dir` (`backend/app/config/__init__.py`, file di H) elenca i
   percorsi gestiti che una cartella di test non può condividere con la produzione: c'è `scheduler_state.json`, non
   il nuovo `.scheduler.lock`. Rischio basso: un symlink al suo posto è già rifiutato (`O_NOFOLLOW`), e un hardlink al
@@ -6399,7 +6493,7 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   fermava i giri degli altri, e `wake-sync` rispondeva 409 a chi arrivava dopo. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-26 — l'attesa del lock fra
   processi senza tempo massimo: analisi».
-- **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
+- ✅ **Z-27 · Il web app manda una pagina intera in una richiesta di massa (per Y e X)** — basso, dopo Z-25; Z, 17/10
   (Z-25, N77; via coordinatore).
   - La lista asset (`fetchAllPriceData` in `routes/(app)/assets/+page.svelte`) manda una voce per asset in un solo
     `POST /assets/prices/query`; la lista e il registro dei cambi fanno lo stesso con le coppie.
@@ -6407,8 +6501,26 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
     allora le carte senza prezzi: l'errore arriva solo alla console (il `catch` di `fetchAllPriceData`).
   - Seguito: dividere la richiesta in lotti (Y, X). Il messaggio esplicito lo fa X (con X-R53), per non avere due
     scrittori sulle stesse pagine.
-  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-25 — un tetto alle
-  richieste di massa di prezzi e cambi: analisi».
+  - **Anche i cambi a periodo fisso** (MF, 17/10, X-R59; decisione del coordinatore): `POST /assets/prices/period-changes`
+    e `POST /fx/currencies/period-changes` hanno lo stesso tetto (`MAX_BULK_ITEMS`, 422 `bulk_too_many_items`), più
+    ≤ 5 giorni `as_of`/`range_start` distinti (422 `period_changes_too_many_days`): la stessa regola di divisione in
+    lotti da 1 000 vale per loro, con un `as_of` per richiesta.
+  - **Chiusa il 17/10 per la parte di Z** (il commit è del coordinatore; decisioni D1–D4): l'aiuto
+    `lib/api/bulkBatches.ts` e i chiamanti A (lista asset) e C (lista cambi), con R13-SEC9-2 (il budget a 1 000 000,
+    800 000 nel web app). Le colonne Δ (D/B) le passa X all'aiuto, con X-R59 e X-R60; il messaggio di X-R58 viene
+    dopo, negli stessi `catch`.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezioni «Z-25 — un tetto alle
+  richieste di massa di prezzi e cambi: analisi», «Z-27 — il web app e i tetti delle richieste di massa: analisi» e
+  «Z-27 — le richieste di massa divise in lotti: lavoro».
+- **Z-29 · Una scheda della lista asset carica lo storico giornaliero intero** — **alto** (coordinatore, 17/10, da
+  R13-SEC9-2 di E: «it's the real cure, post-1.3»), progetto, dopo la 1.3; Z, 17/10 (dall'analisi di Z-27).
+  - Su «All» la lista chiede per ogni asset tutti i giorni dal 2000 (~9 800 punti): 300 asset sono ~2,9 milioni di
+    punti, centinaia di MB di JSON, elaborati dal pool di worker. I lotti di Z-27 ne limitano il picco per risposta,
+    non il totale.
+  - Una scheda ne mostra un riassunto (ultimo prezzo, mini grafico): servirebbe una serie ridotta dal backend
+    (campionata) o un'altra fonte per le schede. Da progettare dopo la 1.3; tocca la lista (X) e la query dei prezzi.
+  Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-27 — il web app e i tetti
+  delle richieste di massa: analisi».
 - ✅ **Z-28 · Due file di lock aperti con `open()`, che segue un symlink** — basso, sicurezza; Z, 17/10
   (dall'analisi di Z-23; via coordinatore, che l'ha assegnata). **Chiusa il 17/10 col lotto Z-28** (il commit è del
   coordinatore).
@@ -6810,7 +6922,7 @@ sulla base `23f6578f3`.
   - Il controllo dello staging viene prima dello spazio (`unpacked_too_large`). L'avvio della verifica risponde 503
     `backup_restore_unavailable`, e la CLI segue la stessa regola.
   - Controllo della configurazione `backup.restore_limit`. Dettagli: piano 07, «B-35».
-- **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
+- ✅ **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
   - `post_migration._row_counts` (`backend/app/db/post_migration/__init__.py:70-72`) costruisce
     `f'SELECT count(*) FROM "{name}"'` senza raddoppiare `"`. B-28 lascia passare tabelle con qualsiasi nome.
   - Con una correzione da applicare, il nome di un archivio ostile rompe la verifica (`stage_failed`). Su un database
@@ -6818,11 +6930,15 @@ sulla base `23f6578f3`.
   - sqlite3 esegue un solo statement e non carica estensioni: nessuna fuga dalla copia.
   - Cura: quotare come `snapshot._quoted`. Test: una tabella `x"y` con una correzione pendente.
   - **Il modulo non è di B**: passa dal coordinatore.
-- **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
+- ✅ **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
   - Le connessioni sono quella delle correzioni post-migrazione (`PM:211`) e il motore di Alembic su `-x sqlalchemy.url`.
     Sono le uniche alla copia senza `PRAGMA trusted_schema=OFF`.
   - Dopo B-28 restano solo tabelle e indici, e nessuna funzione dell'app è registrata lì: nessun exploit noto.
   - Cura: spegnerlo in entrambe. **Proprietari fuori da B** (post_migration, `env.py`).
+  ✅ **Fatto il 17/10** (B-36 + B-37, checkpoint delle 13:33), con il permesso del coordinatore sui due file.
+  - `_row_counts` quota i nomi raddoppiando `"`.
+  - `run_post_migration_fixes` spegne `trusted_schema` per primo; `env.py` lo fa con un listener `connect`, per ogni URL.
+  Dettagli: piano 07, «B-36 + B-37».
 - **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
   BZ parte 1, F4.
   - `read_secret_file` apre con `path.open("rb")`.
@@ -6834,18 +6950,29 @@ sulla base `23f6578f3`.
       `read_secret_file`, che è di H);
     - nella guida, la chiave fuori dalla cartella dei dati.
     Test: un link o una FIFO come `--instance-key-file` da root → ❌, niente letto.
-- **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
+- ✅ **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
   - Ogni utente può scrivere le `notes` degli eventi di un asset (`POST /assets/events`), e ogni utente può esportarle
     in CSV (`GET /backup/asset/{id}/events`, `series_export.stream_rows_as_csv`).
   - Una nota che comincia con `=`, `+`, `-`, `@`, tab o CR diventa una formula quando un altro utente apre il file in un
     foglio di calcolo.
   - Cura: un `'` davanti ai valori di testo che cominciano così, mai ai numeri (`-1.5` resta). Test: `=1+1` diventa
     `'=1+1`.
+  ✅ **Fatto il 17/10** (B-39). All'export, un testo come una formula (`'*[=+\-@\t\r]` all'inizio, mai un numero
+  puro) riceve un `'` in più; l'import degli eventi toglie esattamente quell'apostrofo dalle `notes`, quindi il ritorno
+  è esatto. Dettagli: piano 07, «B-39».
 - ✅ **B-40 · La tabella «What It Lists» della scheda Sicurezza non ha i due controlli di B-9** — minimo; H con H-46, 17/10.
   `admin/settings.en.md` («What It Lists») non elenca `backup.panel_token` e `backup.upload_limit`, e la pagina dice che
   i risultati seguono l'ordine della tabella. Le due righe vanno nel prossimo lotto, nel loro posto dell'ordine.
   ✅ **Fatto il 17/10** in B-35 (checkpoint delle 12:36): le tre righe di B (`backup.panel_token`,
   `backup.upload_limit`, `backup.restore_limit`) fra il «Log level» della piattaforma e il primo controllo di A.
+- **B-41 · `/restore/outcome` registra un errore a ogni chiamata quando lo stato è illeggibile** — basso; E, R13-SEC9,
+  17/10.
+  - Con uno stato del ripristino illeggibile, la rotta anonima `GET /backup/restore/outcome` legge lo stato prima del
+    biglietto, e la lettura indulgente registra un errore a ogni chiamata. Un client anonimo può ripeterlo.
+  - È rumore, com'era prima di B-32.
+  - Cura economica: la rotta controlla prima il biglietto (forma, registro, impronta, scadenza) e legge lo stato
+    soltanto per un biglietto valido; oppure un solo log per stato, o a livello debug.
+  Dopo la 1.3, se non costa poco.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
@@ -7477,3 +7604,20 @@ punto di partenza, l'audit dello stesso giorno:
   MF-SEC8-2). Una coppia con l'arrivo datato `0001-01-01` (`portfolio/classifier.py:217`, `arrival.date − 1`) e un
   provento datato `0001-01-01` (`financial_math/yield_on_cost.py:631`) sollevano `OverflowError`. Cura: confrontare prima
   di sottrarre, o partire da `EARLIEST_RANGE_START`. Rossi prima. Dettagli: piano MF, sezione «MF-SEC8-2».
+- **MF-SEC9a · Altri 500 dei prezzi che ripetono l'errore; `DELETE /prices` senza tetto** — basso, sicurezza;
+  test-author di MF, 17/10 (R13-SEC9). In `api/v1/assets/prices.py` restano `detail=str(e)` sui 500 di `POST /prices`
+  (~:90), `DELETE /prices` (~:104) e `POST /prices/sync` (~:249). `DELETE /prices` costruisce un termine OR per
+  intervallo senza tetto agli elementi: da ~1000 intervalli SQLite risponde «Expression tree is too large», un 500 che
+  ripete l'SQL. Altre query con un termine OR per elemento, da verificare se raggiungibili con tanti elementi:
+  `fx/storage.py:262`, `brim_provider.py:2030`, `fx/sync.py:234`, `pac_allocator/source/wac.py:44`. Cura: messaggio
+  generico + log, `MAX_BULK_ITEMS`, blocchi come `FX_PAIRS_PER_QUERY`. Dettagli: piano MF, sezione «R13-SEC9».
+- **MF-SEC9b · `Currency.validate_code` accetta nomi e codici numerici** — basso, preesistente, tutta l'app;
+  test-author di MF, 17/10 (Y D1). La ricerca generale di pycountry accetta `EURO`, `978`, `US Dollar` e restituisce
+  l'input in maiuscolo (`EURO`, `978`, `US DOLLAR`), non il codice a tre lettere: ogni campo valuta li lascia passare
+  (con D1 finiscono in `convert_bulk`, nessun cambio, variazioni null; nessun 500). Cura: solo alpha-3, cambio di
+  contratto da decidere. Dettagli: piano MF, sezione «R13-SEC9».
+- **MF-SEC9c · Il ripiego dal DB del prezzo corrente usa una sessione sola da task paralleli** — basso, preesistente;
+  test-author di MF, 17/10 (R13-SEC9). `get_current_prices_bulk` (`services/assets/price_query.py` ~:929) lancia i recuperi
+  con `asyncio.gather`, e i ripieghi sul prezzo salvato interrogano la stessa `AsyncSession`, che SQLAlchemy non
+  ammette fra task concorrenti. La deduplica degli id (SEC9-1) lo rende più raro, non lo toglie. Cura: le letture del
+  ripiego in una query sola dopo il `gather`. Dettagli: piano MF, sezione «R13-SEC9».

@@ -55,8 +55,9 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     to read — a trigger whose row claims ``type = 'table'`` (revision 05:30 of the contract: «malformed database
     schema»), a row whose SQL does not parse — is ``database_damaged``, also before anything else opens the copy. This
     LibreFolio's own schema, the head made by alembic, holds only tables and indexes, which the refusal lets through.
-    Every connection a check opens on its copy through ``staging``, ``snapshot`` and ``totals`` turns ``trusted_schema``
-    off before any other statement; the first of them reads the schema, read only, and runs nothing of it.
+    Every connection a check opens on its copy through ``staging``, ``snapshot``, the post-migration fixes (lot B-37)
+    and ``totals`` turns ``trusted_schema`` off before any other statement; the first of them reads the schema, read
+    only, and runs nothing of it. The upgrade's own process is read in ``test_dev_cli_db_path.py`` (its ``env.py``).
 (m) Lot B-35, a cap on what an archive unpacks to (``stage_archive(..., max_unpacked=)``, bytes): the declared total
     (the manifest's sizes, which the zip's headers equal) at the cap or under it is checked as without one; above it,
     ``unpacked_too_large`` in the contract's words, once the entries are checked and before the free space is asked or a
@@ -73,8 +74,9 @@ process, for one test: ``staging.subprocess`` (an ``alembic`` that ends badly, t
 ``staging.MAX_ENTRIES`` and ``ledger_totals_of`` (as ``staging`` and ``totals`` name it). ``instance_backup.totals`` is
 imported by the tests that need it, never at collection: until lot B-13 writes it, each of them fails on its own.
 (l) replaces ``describe_database`` as ``staging`` imports it with a function that fails the test, and wraps ``connect``
-where ``staging`` and ``snapshot`` look up ``sqlite3`` and ``totals`` looks up ``aiosqlite``, to record the statements
-of each connection from its very first (a trace set as the connection is made). Two of its archives are a real backup
+where ``staging``, ``snapshot`` and ``post_migration`` look up ``sqlite3`` and ``totals`` looks up ``aiosqlite``, to
+record the statements of each connection from its very first (a trace set as the connection is made); the fixes'
+backup copy, a new file beside the copy, is no connection to it. Two of its archives are a real backup
 whose database was then edited through ``writable_schema``: SQLite refuses their schema, so no backup is made of them.
 ``staging._refuse_foreign_objects`` is looked up by the test that needs it, never at collection. (m) replaces
 ``staging._unpack`` with a function that fails the test, and ``staging._check_space`` with a disk without room; each
@@ -121,6 +123,7 @@ import pytest
 from structlog.testing import capture_logs
 
 from backend.app.config import get_data_dir
+from backend.app.db import post_migration
 from backend.app.db.post_migration.base import PostMigrationReport
 from backend.app.services.financial_math.ledger_totals import CONTROL_TOTALS_VERSION, ControlTotals, control_totals
 from backend.app.services.platform.instance_backup import envelope, snapshot, staging
@@ -2502,13 +2505,16 @@ class RecordingConnect:
 
 
 def recorded_connections(patch: pytest.MonkeyPatch) -> list[Opened]:
-    """Every connection opened through ``connect`` where ``staging`` and ``snapshot`` look up ``sqlite3`` and ``totals``
-    looks up ``aiosqlite``, in the order they open. The post-migration fixes and the upgrade connect on their own, which
-    §2 of the contract leaves out: not recorded."""
+    """Every connection opened through ``connect`` where ``staging``, ``snapshot`` and the post-migration fixes
+    (``post_migration``, lot B-37) look up ``sqlite3`` and ``totals`` looks up ``aiosqlite``, in the order they open.
+    The upgrade runs in a process of its own: not recorded here (``test_dev_cli_db_path.py`` reads its ``env.py``). The
+    fixes' backup copy (a new ``.bak`` file beside the copy) is recorded too, and is no connection to the copy:
+    ``on_the_copy`` leaves it out by its path."""
     opened: list[Opened] = []
     totals = totals_module()
     patch.setattr(staging, "sqlite3", RecordingConnect(sqlite3, "staging", opened))
     patch.setattr(snapshot, "sqlite3", RecordingConnect(sqlite3, "snapshot", opened))
+    patch.setattr(post_migration, "sqlite3", RecordingConnect(sqlite3, "post_migration", opened))
     patch.setattr(totals, "aiosqlite", RecordingConnect(totals.aiosqlite, "totals", opened))
     return opened
 
@@ -2607,9 +2613,11 @@ def test_this_librefolio_s_own_schema_holds_only_tables_and_indexes_which_the_re
 
 def test_every_connection_a_check_opens_on_its_copy_turns_trusted_schema_off_before_anything_else(instance, older_archive, monkeypatch):
     """(l) §2 A whole check of an older backup, every phase run (its upgrade simulated, as in (c): the upgrade's own
-    process is not this lot's). Every connection opened on the copy where ``staging`` and ``snapshot`` look up
-    ``sqlite3`` and ``totals`` looks up ``aiosqlite`` runs ``PRAGMA trusted_schema=OFF`` before any other statement: the
-    copy's schema (its views, triggers, checks, defaults) can reach no function or virtual table that is not harmless."""
+    process is read in ``test_dev_cli_db_path.py``). Every connection opened on the copy where ``staging``,
+    ``snapshot`` and the post-migration fixes (lot B-37) look up ``sqlite3`` and ``totals`` looks up ``aiosqlite`` runs
+    ``PRAGMA trusted_schema=OFF`` before any other statement: the copy's schema (its views, triggers, checks, defaults)
+    can reach no function or virtual table that is not harmless. Red before B-37: the fixes' connection begins with
+    their integrity check."""
     opened = recorded_connections(monkeypatch)
     monkeypatch.setattr(staging, "_upgrade", stamp_head)
     stage_id = new_stage_id()
@@ -2617,8 +2625,8 @@ def test_every_connection_a_check_opens_on_its_copy_turns_trusted_schema_off_bef
     report = stage_archive(older_archive.path, instance.root, stage_id=stage_id, progress=progress)
     assert (report.action, progress.phases, report.control_totals) == ("upgrade", PHASES, "same"), f"precondition: a whole check, the totals read on the copy: {report.action}, {progress.phases}, {report.control_totals}"
     on_copy = on_the_copy(opened, instance.root, stage_id)
-    silent = {"staging", "snapshot", "totals"} - {record.by for record in on_copy}
-    assert not silent, f"precondition: each of the three opens the copy during a check, yet {sorted(silent)} opened nothing recorded: {first_statements(opened)}"
+    silent = {"staging", "snapshot", "post_migration", "totals"} - {record.by for record in on_copy}
+    assert not silent, f"precondition: each of the four opens the copy during a check, yet {sorted(silent)} opened nothing recorded: {first_statements(opened)}"
     trusting = [record for record in on_copy if not turns_trust_off_first(record)]
     assert not trusting, f"every connection to the copy turns trusted_schema off first: {len(trusting)} of {len(on_copy)} did not: {first_statements(trusting)}"
     print_success(f"{len(on_copy)} connections to the copy, each trusted_schema=OFF first")

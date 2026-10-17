@@ -85,6 +85,12 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
     field's own name without ``resolved_fields.`` (``description``, ``tags``, ``date``, ``cost_basis_override``,
     ``cost_basis_override.code``, an unknown key's name), no params — and that promote is not applied: not committed,
     nothing saved, nothing raised.
+11. N78 (W-B72; night decision N78), the promote's side of a cost basis on a type and side that take none: a resolved
+    non-null ``cost_basis_override`` where NEITHER leg can take one under the target type — ``cost_basis_allowed(target,
+    leg.quantity)`` False for both, a WITHDRAWAL and a DEPOSIT promoted into a CASH_TRANSFER or an FX_CONVERSION — is
+    refused: one ``costBasisNotAllowed`` on the promote, ``field`` ``cost_basis_override``, ``params`` ``{type: <target>,
+    qty: …}``, and the promote is not applied. Today ``_apply_promote_cost_basis`` puts it on both legs of such a pair. N78's
+    creates, updates, messages and gate are ``test_transaction_cost_basis_rule.py``'s.
 
 Reds — fail today, pass once the contract holds:
 
@@ -154,6 +160,9 @@ Reds — fail today, pass once the contract holds:
   ``{"a": 1}`` commits the tag «a», the unknown key is ignored; the two cost bases already get their issue since
   R13-SEC7-3). Tags «a, b» are stored «a,b» on both rows (today «a,,, ,b»: ``tags_to_csv`` joins a text's characters);
 - ``TestTheCodesAreListed``: ``TXValidationCode.DATE_OUT_OF_RANGE``, and ``validation_codes`` lists ``dateOutOfRange``.
+- ``TestN78APromotedCostBasisWhereNoLegTakesOne`` (rule 11): a WITHDRAWAL/DEPOSIT pair promoted into a CASH_TRANSFER or an
+  FX_CONVERSION resolving 12.5 EUR, behind a valid promote, is refused on promote 1 (today it commits, both legs holding
+  12.5 EUR).
 
 Guards — green today, and the cure must keep them green:
 
@@ -185,6 +194,8 @@ Guards — green today, and the cure must keep them green:
   both rows, a cost basis of 12.5 EUR on the receiving leg only (decision 47), ``{"tags": ["a"]}`` without touching the
   descriptions, ``{}`` changing nothing; an explicit null clears the description and the tags on both rows; an explicit
   null cost basis clears the receiving leg's, which the TRANSFER then requires (``costBasisRequired`` on promote 1).
+- ``TestN78APromotedCostBasisWhereNoLegTakesOne`` (rule 11): an asset pair promoted into a TRANSFER resolving 12.5 EUR, in
+  either order, commits with it on the receiving leg only (decision 47); a cash pair resolving an explicit null commits.
 
 Derived — read from the contract's general rule, not in the brief's list; drop them if the rule was meant narrower: a
 quantity over both limits gets ``decimalPlacesExceeded`` alone (the "otherwise"); a cash amount past 15 significant
@@ -203,7 +214,7 @@ import sys
 import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import pytest
 import pytest_asyncio
@@ -228,7 +239,7 @@ from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import TXQueryParams
-from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
+from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse, cost_basis_allowed
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.financial_math.ledger_totals import compute_control_totals
@@ -1517,6 +1528,127 @@ class TestTheResolvedFieldsAreTyped:
         assert response.committed is False, f"H-41: /{endpoint} refused the batch, yet answered committed"
         after = await _four_rows(world, ids)
         assert after == before, f"H-41: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+
+# ============================================================================
+# RED AND GUARDS — RULE 11 (N78, W-B72): A PROMOTED COST BASIS WHERE NO LEG TAKES ONE
+# ============================================================================
+
+# N78's code, as a literal: no rule answers it before its cure.
+COST_BASIS_NOT_ALLOWED = "costBasisNotAllowed"
+# The pair types a WITHDRAWAL and a DEPOSIT are promoted into (promote_from): on neither leg, both at quantity 0, does
+# TX_TYPE_METADATA let a cost basis in.
+CASH_PAIR_TARGETS = (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION)
+# The cost basis a promote resolves: the PromoteMergeModal's merged value.
+RESOLVED_COST = {"code": EUR, "amount": "12.5"}
+
+
+async def _cash_pair(world: World, target: TransactionType) -> tuple[int, int]:
+    """A stored pair a promote turns into ``target`` (``promote_from``), neither row with a cost basis: a WITHDRAWAL of 100
+    EUR on ``main``, and a DEPOSIT of 100 EUR on ``other`` (CASH_TRANSFER: same currency, other broker, opposite amounts) or
+    of 110 USD on ``main`` (FX_CONVERSION: other currency, same broker). Their ids (withdrawal, deposit)."""
+    withdrawal_id = await _seed_cash(world, TransactionType.WITHDRAWAL, "-100", EUR, day=SEED_DAY)
+    if target == TransactionType.CASH_TRANSFER:
+        deposit_id = await _insert(world, broker_id=world.other_id, asset_id=None, type=TransactionType.DEPOSIT, date=SEED_DAY, quantity=Decimal("0"), amount=Decimal("100"), currency=EUR)
+    elif target == TransactionType.FX_CONVERSION:
+        deposit_id = await _seed_cash(world, TransactionType.DEPOSIT, "110", USD, day=SEED_DAY)
+    else:
+        raise ValueError(f"no cash pair is promoted into {target.value}")
+    return withdrawal_id, deposit_id
+
+
+async def _quantities(world: World, ids) -> list[Decimal]:
+    """The quantity of each row ``ids`` as the database holds it, in id order."""
+    statement = select(Transaction.quantity).where(Transaction.id.in_(list(ids))).order_by(Transaction.id)
+    return list((await world.session.execute(statement)).scalars())
+
+
+def _type_and_qty(params: dict | None) -> tuple | dict | None:
+    """N78's params ``{type, qty}`` as ``(type, quantity)``, the quantity read as a number: a stored row's quantity may print
+    0 or 0.000000. Anything else as it is, for the message."""
+    if isinstance(params, dict) and set(params) == {"type", "qty"}:
+        try:
+            return params["type"], Decimal(str(params["qty"]))
+        except InvalidOperation:
+            return params
+    return params
+
+
+class TestN78APromotedCostBasisWhereNoLegTakesOne:
+    """Rule 11 (N78, W-B72): a promote's resolved non-null cost basis where neither leg can take one under the target type
+    is refused on the promote, and the promote is not applied.
+
+    Today ``_apply_promote_cost_basis`` (``batch_creates.py``) puts a resolved cost basis on the leg of positive quantity,
+    or on BOTH legs when neither has one: a cash pair's, whose new type takes none on either side. Decision 47's rule for
+    an asset pair, the receiving leg only, stays; an explicit null is never refused.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("target", CASH_PAIR_TARGETS, ids=lambda target: target.value)
+    async def test_promote_of_a_cash_pair_resolving_a_cost_basis_is_refused(self, world, target):
+        """RED until N78. Two promotes — an asset pair into a TRANSFER (index 0, valid) and a WITHDRAWAL/DEPOSIT pair into
+        ``target`` resolving 12.5 EUR (index 1) — get exactly one ``costBasisNotAllowed`` on promote 1, ``field``
+        ``cost_basis_override``, ``params`` ``{type: <target>, qty}`` (``qty`` a leg's, 0 for both, compared as a number);
+        nothing else; promote 1 has no result (not applied); not committed; the four rows as they were stored. Today the
+        batch commits, both cash legs holding 12.5 EUR."""
+        await _seed_position(world, TransactionType.BUY, "1", amount="-100")
+        asset_pair = await _promotable_pair(world)
+        cash_pair = await _cash_pair(world, target)
+        quantities = await _quantities(world, cash_pair)
+        assert [cost_basis_allowed(target, quantity) for quantity in quantities] == [False, False], f"precondition broken: neither leg of the cash pair may take a cost basis as a {target.value}; their quantities read {quantities}"
+        ids = [*asset_pair, *cash_pair]
+        before = await _pair_state(world, ids)
+        promotes = [{"id_a": asset_pair[0], "id_b": asset_pair[1]}, {"id_a": cash_pair[0], "id_b": cash_pair[1], "resolved_fields": {"cost_basis_override": RESOLVED_COST}}]
+
+        response = await _run_never_raising(world, f"a promote of a cash pair into a {target.value} resolving a cost basis", promotes=promotes)
+
+        refusal = f"{COST_BASIS_NOT_ALLOWED} {{type: {target.value}, qty: 0}} on promote 1, field cost_basis_override"
+        found = [issue for issue in response.issues if issue.code == COST_BASIS_NOT_ALLOWED]
+        if not any((issue.operation, issue.index) == ("promote", 1) for issue in found):
+            today = await _pair_state(world, cash_pair)
+            pytest.fail(
+                f"N78 (W-B72): a promote of a WITHDRAWAL/DEPOSIT pair into a {target.value}, whose legs take no cost basis, resolving {RESOLVED_COST['amount']} {RESOLVED_COST['code']} must be refused with {refusal}; "
+                f"today committed={response.committed}, issues [{_render(response.issues)}], and the cash pair reads {today} (type, related id, cost basis, currency)"
+            )
+        assert [(issue.operation, issue.index, issue.field, _type_and_qty(issue.params)) for issue in found] == [("promote", 1, "cost_basis_override", (target.value, Decimal("0")))], f"N78: expected exactly one {refusal}: {_render(found)}"
+        assert [issue for issue in response.issues if issue.code != COST_BASIS_NOT_ALLOWED] == [], f"N78: only the cost basis may refuse this batch: {_render(response.issues)}"
+        assert ("promote", 1) not in _in_batch(response), f"N78: the refused promote is not applied, so it has no result: {response.results}"
+        assert response.committed is False, "N78: the batch was refused, yet answered committed"
+        after = await _pair_state(world, ids)
+        assert after == before, f"N78: the batch was refused, yet the stored rows changed: before {before}, after {after}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("giving_first", [pytest.param(True, id="giving-leg-as-id-a"), pytest.param(False, id="receiving-leg-as-id-a")])
+    async def test_guard_a_promote_of_an_asset_pair_puts_the_resolved_cost_basis_on_the_receiving_leg_only(self, world, giving_first):
+        """Guard: green today and after N78 (decision 47). An ADJUSTMENT −1 and an ADJUSTMENT +1 promoted into a TRANSFER, in
+        either order, resolving 12.5 EUR: the receiving leg takes a cost basis, so the promote commits; the receiving leg
+        holds 12.5 EUR, the giving leg none."""
+        await _seed_position(world, TransactionType.BUY, "1", amount="-100")
+        giving_id, receiving_id = await _promotable_pair(world)
+        first, second = (giving_id, receiving_id) if giving_first else (receiving_id, giving_id)
+        promotes = [{"id_a": first, "id_b": second, "resolved_fields": {"cost_basis_override": RESOLVED_COST}}]
+
+        response = await _run_never_raising(world, "a promote of an asset pair resolving a cost basis", promotes=promotes)
+
+        assert response.committed is True and response.issues == [], f"N78: a TRANSFER's receiving leg takes a cost basis, so the promote must commit; it was refused: {_render(response.issues)}"
+        state = await _pair_state(world, [giving_id, receiving_id])
+        expected = {giving_id: (TransactionType.TRANSFER, receiving_id, None, None), receiving_id: (TransactionType.TRANSFER, giving_id, Decimal(RESOLVED_COST["amount"]), EUR)}
+        assert state == expected, f"Decision 47: the resolved cost basis goes on the receiving leg only; the promoted pair reads {state}, expected {expected}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("target", CASH_PAIR_TARGETS, ids=lambda target: target.value)
+    async def test_guard_a_promote_of_a_cash_pair_resolving_an_explicit_null_commits(self, world, target):
+        """Guard: green today and after N78. A WITHDRAWAL/DEPOSIT pair promoted into ``target`` resolving
+        ``{"cost_basis_override": null}`` — clearing — commits: both rows ``target``, linked both ways, without a cost basis."""
+        withdrawal_id, deposit_id = await _cash_pair(world, target)
+        promotes = [{"id_a": withdrawal_id, "id_b": deposit_id, "resolved_fields": {"cost_basis_override": None}}]
+
+        response = await _run_never_raising(world, f"a promote of a cash pair into a {target.value} resolving a null cost basis", promotes=promotes)
+
+        assert response.committed is True and response.issues == [], f"N78: an explicit null cost basis is never refused, yet the promote into a {target.value} was: {_render(response.issues)}"
+        state = await _pair_state(world, [withdrawal_id, deposit_id])
+        expected = {withdrawal_id: (target, deposit_id, None, None), deposit_id: (target, withdrawal_id, None, None)}
+        assert state == expected, f"The promoted cash pair reads {state}, expected {expected}"
 
 
 # ============================================================================

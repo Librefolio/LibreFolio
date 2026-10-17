@@ -108,6 +108,7 @@ pipenv run ./dev.py user activate <username>
 - 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 📬 With email verification on, `activate` lets an account that waits for its email in at once — with no limit warning while its link is live, since its place is already counted — and `deactivate` ends its wait: either way, the verification links it was sent stop working. See *Email Verification* in [Email](email.md).
 - 🏁 On the [initial administrator](configuration.md#initial-admin) still waiting for its setup link, `reset` and `activate` work as on any account: they set it up without its link. Either one ends the wait for good: its setup links stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included, and neither [`user setup-link`](#setup-link) nor a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives it another one. `activate` alone leaves an active account whose password nobody knows, until `reset` or a [reset link](#reset-link) gives it one; `reset` alone leaves it inactive, until `activate`.
+- 🚫 On that administrator still waiting, `deactivate` sets nothing up: it cancels the setup link, as **Cancel setup link** does in [Users & Invitations](users.md#cancel-setup). The command prints `✅ User '<username>' deactivated`; every setup link of the account stops working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included, and the account keeps waiting for a new one: [`user setup-link`](#setup-link) gives it one, and so does a new `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` at the next start. The same token at a restart gives none, as the instance has already seen it.
 - 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front. When your instance can email a reset link, the screen shows the email form first and keeps the commands in a panel closed by default ([Forgotten Passwords](email.md#forgot-password)). In the `managed` profile it shows no command: it tells users to ask their administrator for a password-reset link ([Hosting for Others](hosting_providers.md#managed-profile)).
 
 ### 🔗 Send a Password-Reset Link {: #reset-link }
@@ -128,14 +129,15 @@ Instead of choosing a new password for someone with `user reset`, send them this
 pipenv run ./dev.py user setup-link
 ```
 
-When LibreFolio created the administrator from `LIBREFOLIO_ADMIN_EMAIL` at its first start ([The Initial Administrator](configuration.md#initial-admin)) and nobody has used its setup link yet, this command prints a new one: the administrator opens it, chooses the password and is signed in. Use it when the link has expired or got lost.
+When LibreFolio created the administrator from `LIBREFOLIO_ADMIN_EMAIL` at its first start ([The Initial Administrator](configuration.md#initial-admin)) and nobody has used its setup link yet, this command prints a new one: the administrator opens it, chooses the password and is signed in. Use it when the link has expired, got lost or was cancelled.
 
 - ⏱️ The link works once, for 72 hours. The setup links issued before stop working, the one of `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` included.
+- 🚫 A cancelled link — **Cancel setup link** in [Users & Invitations](users.md#cancel-setup), or `user deactivate` on the waiting administrator — leaves the administrator waiting: this command gives it a new link.
 - 📮 A new address for the waiting administrator — `LIBREFOLIO_ADMIN_EMAIL` changed before a restart, or [`user set-email`](#set-email) — stops its setup links, which went to the old address. The administrator still waits: this command gives it a link for the new address. The same address with other capitals of the letters A to Z is no change, and the link keeps working.
 - 🔚 Set up another way — activated with `user activate`, or given a password with `user reset` or a [reset link](#reset-link) — the administrator waits no more: its setup links stop working for good, and this command stops with the error below.
 - 🌐 As for [invitations](#invite), the link is complete when `LIBREFOLIO_PUBLIC_URL` is set, and the path only (`/setup#token=…`) when it is not.
 - 📧 The command only prints the link: it sends no email.
-- ❌ When no administrator is waiting for its setup, the command stops with the error `No administrator account is waiting for its setup link` and exits with `1`.
+- ❌ When no administrator is waiting for its setup, the command stops with the error `No administrator account is waiting for its setup link` and exits with `1`. It does so too when the administrator completes its setup while the command runs: the command checks again just before it issues the link, and gives none to an account already set up.
 
 ### 📧 Change the Email Address of an Account {: #set-email }
 
@@ -158,6 +160,8 @@ pipenv run ./dev.py user demote <username>
 ```
 
 `demote` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote another user first` and exits with `1`. A demotion signs the account out of every device.
+
+`demote` also refuses the [initial administrator](configuration.md#initial-admin) still waiting for its setup link, which keeps its role until then: it stops with the error `User '<username>' is the initial administrator waiting for its setup: it keeps its role until then; deactivate it to cancel its setup link, or delete it from Settings › Administration › Users` and exits with `1`, changing nothing. To cancel its link, run `user deactivate` (see «Reset a Password or Lock an Account» above); to remove the account, delete it in [Users & Invitations](users.md#delete), with no demotion first: the command line deletes no account.
 
 ### 🧭 Restart the Guides of a User {: #reset-onboarding }
 
