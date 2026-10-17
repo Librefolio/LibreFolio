@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- On very large instances the asset and FX lists load their prices in several requests, each within the server's limits, instead of one oversized request.
 - **Lots with a broken history**: when an asset's lots cannot be rebuilt (for example a sale of more units than were held), the lots panel no longer draws lots it cannot trust. It says why, lists each transaction to fix (day, broker, a link) and keeps only the average-cost lines; AI Export lists the asset as failed instead of adding wrong figures to the totals.
 - On a managed instance (`LIBREFOLIO_PROFILE=managed`) the app no longer invites users to donate (no coffee links, no popup) and never checks for updates (no «Check for updates» in the changelog). «Forgot password?» asks users to contact their administrator instead of showing server commands. None of this shows before the server has said which kind of instance it is.
 - An empty or blank secret counts as not set, as if the variable were absent.
@@ -286,7 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A username can no longer contain `@`, and an email address can no longer be another account's username. Sign-in reads an identifier with `@` as an email address first, so an account named after someone else's address can no longer take over their sign-in or lock them out. Existing usernames with `@` stay; their owners sign in with their email address.
 - Price and FX queries no longer accept date ranges without a ceiling: the end stops at tomorrow and the FX start at 100 years before it; a range reaching year 9999, which previously exhausted the server and ended in an error, now answers at once.
-- Price and FX queries now refuse at once, with an explicit error, a request of more than 1,000 items or one that would build more than 5 million daily points; such a request could previously hold the server for minutes.
+- Price and FX queries now refuse at once, with an explicit error, a request of more than 1,000 items or one that would build more than 1 million daily points; such a request could previously hold the server for minutes.
 - A risk analysis or an AI Export over a very long period with many assets no longer fails with a server error: it tells you to choose a shorter period (or fewer assets).
 - A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
 - The test doubles shipped in the image (`mockprov` for prices, `MOCKFX` and `MOCKFX_FAIL` for exchange rates) are no longer reachable outside test mode. Before, any signed-in user could assign `mockprov` to an asset, which is shared, and give everyone a made-up price series, or route a currency pair through `MOCKFX` and give every conversion a made-up rate. To check an existing instance, look for an asset whose price source is `mockprov` and for an exchange-rate route that names `MOCKFX`.
