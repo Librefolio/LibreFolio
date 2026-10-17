@@ -5520,7 +5520,11 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - la liquidazione senza mora va in **CP-14b**, coi valori dichiarati, il rosso prima e una riga 🐛;
     - la parte della mora aspetta il developer (la domanda è nella lista del mattino);
     - `get_current_value` contro `get_history_value` dopo la scadenza si verifica nell'analisi di CP-14b.
-  - Dettagli: piano J, §10 «CP-14a».
+  - **Liquidazione senza mora: curata in CP-14b (17/10)** — è il capitale quando l'ultima cedola cade alla scadenza,
+    altrimenti il valore del giorno; `get_current_value` e `get_history_value` dopo la scadenza la seguono. Rosso prima,
+    8 punti della rete dichiarati (le liquidazioni di `s4_annual_settlement` al capitale). **Resta aperta la parte
+    della mora**: base, liquidazione che si sposta con `end_date`, cedole della mora senza azzeramento (developer).
+  - Dettagli: piano J, §10 «CP-14a» e «CP-14b».
 - **J-40 · Lo svuotamento dei dati di mercato toglie gli SPLIT e lascia rettifiche senza costo (il buco di P-10 dal
   lato asset)** — medio, numeri, da decidere; test-author di J (CP-14a, V-4), 17/10, letto nel codice. Area di X.
   - `POST /assets/{id}/market-data/wipe` (`market_data.py:46-71`) è il flusso del cambio di valuta
@@ -5546,6 +5550,19 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   Area di X. Un rapporto 0 o negativo si salva (P-10 lascia passare la modifica, il tipo non cambia). Quando una
   transazione lo lega, il motore solleva `ValueError` (`engine.py:226-227`) e il rapporto della Dashboard risponde
   500. `is_valid_split_ratio` della casa (`splits.py`) esiste già. **→ X** (coordinatore, 17/10).
+- **J-43 · L'avviso delle quote diverse fra le due gambe di un trasferimento tace se cadono lo stesso giorno** —
+  minimo, qualità dei dati; MF (MF-J4), assegnata a J dal coordinatore il 17/10, dopo CP-14b.
+  - In `financial_math/portfolio/classifier.py:131-149` l'avviso `share mismatch` sta dentro il ramo
+    `if pair_key not in processed_pairs and tx.date != paired.date:`, quello che costruisce l'intervallo in transito.
+  - Due gambe collegate dello stesso giorno, fra broker con quote di proprietà diverse, non producono nessun avviso
+    (`share_mismatch_warnings`, `schemas/portfolio.py:239`).
+  - Cura: l'avviso esce dal ramo delle date diverse e resta una volta per coppia. Prima il rosso.
+- **J-44 · Il Δ% del tooltip del grafico dà 0 % quando il primo valore è 0** — minimo, numeri; J, 17/10, letto nel
+  codice durante CP-14b. `components/charts/priceChartHelpers.ts::buildDeltaHtml` calcola il Δ% dal primo valore del
+  grafico e, per scelta scritta nel suo JSDoc, dà 0 % su un primo valore 0. È lo stesso numero sbagliato che la
+  decisione N65 toglie al righello (CP-14b: `—`), in una seconda copia del Δ% nel frontend (regola 10: va segnalata).
+  Da instradare: il file ha storia dei colori (lotto B) e di X (helper della pagina asset). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «CP-14b».
 
 ## Z · Sospensione e risveglio (fase 01)
 
