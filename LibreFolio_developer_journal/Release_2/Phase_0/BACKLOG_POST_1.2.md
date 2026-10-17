@@ -6559,6 +6559,26 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
     - (c) il backend omette quei campi, con un salto di versione dei componenti.
   - Da guardare nella sonda mirata di T-B7. Dettagli:
     [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «T-B7».
+  - **Deciso dal coordinatore (17/10, ~16:15): opzione (b), prima del rilascio.** Una costante sola,
+    `NULL_MEANS_NONE_COLUMNS`, con 11 voci (erano 8; poi i rossi hanno corretto l'insieme):
+    - ovunque: `closing_date`, `reason_code`, `conversion_reason`;
+    - solo in OUTPUT DEFINITIONS: `component`, `minimum`, `maximum`;
+    - in ogni tabella del calendario dei redditi: `asset_ref`;
+    - nel PERIOD SUMMARY di `asset.indicators` e `fx.indicators`: `portfolio_weight_percent` e
+      `technical_normalized_weight_percent`.
+
+    `partial_reason_code` è uscito: in ENTITY STATUS un null vuol dire «motivo ignoto». Nulla in ogni riga, una colonna
+    dell'insieme si toglie in silenzio. Le celle delle tabelle miste restano `null` (J-55). Dettagli: piano 05, sezione
+    «J-54».
+- **J-55 · Le celle «nessuno» delle tabelle miste dell'AI Export si stampano `null` («explicitly unavailable»)** —
+  minimo, chiarezza; J, 17/10 (J-54). **Dopo la 1.3** (coordinatore, 17/10).
+  - Esempio: in una tabella di lotti con lotti aperti e chiusi, la cella `closing_date` di un lotto aperto dice
+    `null`, che il preambolo definisce «explicitly unavailable». È così dalla 1.1; J-54 toglie solo il nome di una
+    colonna nulla in ogni riga.
+  - Per stampare quelle celle vuote serve, nel preambolo, una definizione della cella vuota («non si applica a quella
+    riga»). Quella definizione coprirebbe anche le altre celle vuote, e non tutte vogliono dire «nessuno»: per esempio
+    un `bucket_count` `undefined` delle INSTANCES.
+  - Dettagli: [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-54».
 
 ## Z · Sospensione e risveglio (fase 01)
 

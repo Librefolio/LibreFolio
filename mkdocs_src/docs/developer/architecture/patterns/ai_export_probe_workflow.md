@@ -216,7 +216,9 @@ amounts without an FX rate. The counters are part of each prompt's
 `format_diagnostics`, and the public table audit, which reads only `|…|` rows, still
 rejects a prompt that contains an all-empty column. When reading a prompt, check that
 each `omitted_null_columns` line names fields the payload really leaves unavailable,
-and that no column the scope does not apply to is named.
+and that no column the scope does not apply to is named — neither an `undefined` one nor
+one whose `null` means "none" (`NULL_MEANS_NONE_COLUMNS`, such as an open lot's
+`closing_date`).
 
 ## 🏦 Broker Universe Diagnostics
 

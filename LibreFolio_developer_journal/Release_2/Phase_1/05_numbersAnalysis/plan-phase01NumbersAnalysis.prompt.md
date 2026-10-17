@@ -6338,3 +6338,110 @@ prossimo checkpoint.
 - **devWiki**: `decisions/ai-export-versioned-snapshot-boundary.md` (un punto nella «Decision», data, fonti), indice,
   registro. Il grafo non è aggiornato: graphify non c'è in questo worktree.
 - ⏳ **Checkpoint T-B7** (FROZEN).
+- ✅ **Checkpoint T-B7** (2026-10-17): entrato (dev `36d24e7d2`, `7184cb123`), CHANGELOG 🔄 `066c54dc6`; worktree in
+  fast-forward. T-B7 nella sezione T e la nota E-19 li chiude il coordinatore.
+
+#### Revisione di MF-A2 (17/10 ~16:20, sola lettura; `0ac117bff`, letto a `066c54dc6`)
+
+- Richiesta del coordinatore: le tre pagine teoriche di MF-A2 (`portfolio-engine/index.en.md` §5 «Two Unrealized Figures»,
+  `period-pnl.en.md`, `net-annualized-return.en.md` «Positions Closed in the Period») corrispondono al motore?
+- **Esito: corrispondono.** Verificato:
+  - `UGL = NAV − Book = (MV − OCB) + (MV^tr − CB^tr)`, con la cassa che si annulla (`daily_state.py:510-514`);
+  - il non realizzato del periodo è MV − OCB ai due bordi (`period.py:114,119`);
+  - il P&L del periodo è ΔNAV − flussi: un titolo in viaggio a un bordo va nel residuo;
+  - campi, rotta e riepiloghi dell'AI Export;
+  - la regola delle posizioni chiuse: polvere `1e-5`, il costo venduto su (t_from, t_end] con proventi e costo noti,
+    la finestra, 30 giorni, ≤ −100%;
+  - l'esempio (+76,27%).
+- **Una svista di testo**: «t_close = last day its quantity fell to zero» va letto «fell to the dust threshold or
+  below».
+- **Tre reperti di codice, di MF** (girati al coordinatore):
+  1. un trasferimento in uscita parziale falsa la regola delle chiuse: la base è il solo costo venduto, mentre il
+     numeratore porta anche il risultato delle unità trasferite (esempio: 25% invece di circa 12,5%);
+  2. la polvere rompe l'identità del §7: lo stato giornaliero valuta ogni quantità > 0, le righe no;
+  3. `oldest_open_lot_date` non ha soglia di polvere.
+
+#### J-54 — le colonne il cui `null` vuol dire «nessuno» (17/10, dalle 16:17; base `066c54dc6`)
+
+- **Decisione del coordinatore** (opzione (2), prima del rilascio): il renderer tratta un insieme piccolo e nominato
+  di campi «null = nessuno» come «non si applica», non come «non disponibile».
+  - L'elenco sta in una costante esportata, descritta in `ai_export_composition.md`, con un test per voce.
+  - Nessun salto di componente; le etichette restano `_v2`, perché è lo stesso rilascio.
+- **L'insieme (8), ciascuno con la prova nel backend; OK del coordinatore, `asset_ref` compreso**:
+  - **ovunque**:
+    - `closing_date`: un lotto aperto (`map_fifo_lot_row` la scrive solo se il lotto è chiuso);
+    - `reason_code`: una riga senza problemi (`PortfolioAssetDrawdownRow`);
+    - `partial_reason_code`: un risultato non parziale (ENTITY STATUS);
+    - `conversion_reason`: un importo convertito (`IncomeTimelineRow`, che spiega solo un vuoto);
+  - **solo in OUTPUT DEFINITIONS**: `component`, `minimum` e `maximum` (`IndicatorOutputColumn`);
+  - **solo in `portfolio.income_timeline` › `TABLE rows`**: `asset_ref`, un reddito senza asset (`asset_id=tx.asset_id`
+    di una cedola sulla cassa).
+
+  Esclusi perché lì `null` vuol dire anche «ignoto»: gli importi dei lotti (B3b), `value_source` (nessun prezzo),
+  i campi di `PortfolioAssetDrawdownRow` diversi dal codice (null quando la riga non è disponibile).
+- ✅ **Rossi, primo giro (16:4x)**: 663 test, **21 rossi**, 642 verdi; controlli verdi. Il test-author ha trovato 4 punti,
+  verificati da J nel backend.
+  > **⚠️ Fuori pista (l'insieme cambia: da 8 a 11 voci)**:
+  > - **`partial_reason_code` esce.** ENTITY STATUS elenca solo i risultati PARTIAL (`technical_shared.py:939` esporta
+  >   OK/PARTIAL), e lì il campo è null solo per un PARTIAL senza motivo noto (`:1072`): vuol dire «ignoto», e resta
+  >   nominato (controllo).
+  > - **`asset_ref` vale per ogni tabella di `portfolio.income_timeline`.** In COMPACT i redditi stanno in `TABLE
+  >   aggregated_rows` (`AggregatedIncomeRow.asset_id` null per una cedola sulla cassa), negli altri dettagli in `TABLE
+  >   rows`.
+  > - **Entrano i due pesi del PERIOD SUMMARY di `asset.indicators` e `fx.indicators`** (4 voci): un solo Asset o una
+  >   sola coppia non hanno un portafoglio in cui pesare, e `SingleTargetIndicatorsPayload` lascia i pesi a `None`. È il
+  >   fatto che T-B7 lascia già muto in SERIES. Nei componenti a più asset (`portfolio.technical_indicators`) un peso
+  >   nullo vuol dire un valore mancante: resta nominato (controllo).
+  > - **Restano nominati**: `conversion` del calendario dei redditi (null solo senza cambio; le conversioni identiche
+  >   sono compilate) e `remaining_to_peak_percent` (perdita totale).
+- ✅ **Rossi, secondo giro (16:5x)**, sull'insieme di 11: 674 test, **27 rossi**, 647 verdi; 12 controlli verdi.
+  - Fra i controlli: `partial_reason_code` nominato dopo ENTITY STATUS; i pesi nominati nel PERIOD SUMMARY a più asset
+    (portafoglio e broker); `asset_ref` nominato nelle righe del drawdown; 6 tabelle miste che stampano ancora `null`.
+  - Il test-author ha controllato nel backend: ogni `reason_code` annullabile è null solo con lo stato OK o registrato (i
+    validatori lo impongono); `asset.indicators` e `fx.indicators` sono alla v1, già compatti.
+- ✅ **Codice (17:00)**: le due patch applicate dopo il rosso.
+  - `NULL_MEANS_NONE_COLUMNS` esportata, con la ricerca `meansNoneWhenNull`.
+  - `pipeTable` riceve un contesto (titolo, componente) da OUTPUT DEFINITIONS e dal PERIOD SUMMARY.
+  - `renderGenericPayload` riceve il componente, e la tabella è `TABLE <path>`.
+  - Doc: la terza specie di colonna non nominata, con la tabella delle voci (`ai_export_composition.md`), e una frase
+    nel flusso della sonda.
+- ✅ **Verdi (17:01–17:07)**:
+  - `front-ai-export unit` **674**;
+  - `utils ai-export-probe-helpers` **73**;
+  - prettier pulito;
+  - `front check` 0/0;
+  - `mkdocs build` stretto ✓, check-links ✓.
+
+  Porta 6185 libera; solo Vitest.
+  > **⚠️ Fuori pista**: il primo `front check` ha dato 1 errore in `UsersTab.svelte:174` (`cancel_setup` sconosciuto).
+  > Il client generato e ignorato (`generated.ts`, 14:20) era più vecchio del fast-forward (`AdminUserUpdateRequest`
+  > di un'altra corsia). `dev.py api sync`, che non tocca nessun file tracciato, l'ha rigenerato: poi 0/0. È lo stesso
+  > caso di J-12; nessuna modifica di J-54 c'entra.
+- **devWiki**: il punto di T-B7 in `decisions/ai-export-versioned-snapshot-boundary.md` ora descrive la lista; una voce
+  nel registro.
+- ⏳ **Checkpoint J-54** (FROZEN).
+- **Celle delle tabelle miste**: restano `null` (decisione del coordinatore); il seguito, dopo la 1.3, è **J-55**.
+- ⏳ **Rossi** (test-author, brief 16:2x).
+- Patch pronte, non applicate: `files/j/j54/apply_fix.py` (7 ancore: la costante, la ricerca, `pipeTable` col contesto,
+  il titolo di OUTPUT DEFINITIONS, `renderGenericPayload` col componente e i suoi due chiamanti) e `apply_docs.py`
+  (2 pagine). Prova a secco OK.
+
+#### T-B9 — analisi (17/10 ~16:35, sola lettura; base `066c54dc6`)
+
+- **La voce** (sezione T): il renderer stampa `0` un residuo monetario sotto l'unità minima della valuta
+  (`MONETARY_RESIDUAL_FIELDS`: `residual`, `period_other_result`, `reconciliation_diff`, `snapshotDataRenderer.ts:262`),
+  mentre `reconciled` tollera solo `CONVERSION_DUST`, cioè 1e-9 (C-53). Un residuo fra le due soglie darebbe
+  `reconciled=false` accanto a `residual.amount=0`.
+- **Verificato: non può nascere dal servizio.**
+  - Il residuo (`portfolio_financial.py:491`, `broker_financial.py:432`) è `pnl − (ΔUGL + realized + income − fees +
+    other_result)`.
+  - `period_other_result` è calcolato da `period_math.period_other_result` (`portfolio_service.py:884`) sugli stessi
+    `Decimal` che il riepilogo espone (`:1054-1065`), senza arrotondamenti: `Currency.amount` è `SafeDecimal`, che
+    cambia solo la stampa JSON. Il broker passa dallo stesso rapporto (`load_portfolio_report`, `BROKER_REPORT_RESOURCE`).
+  - Il residuo è quindi solo l'arrotondamento del contesto `Decimal` predefinito, a 28 cifre: l'app non lo cambia; i
+    contesti di `db/precision.py` e `ledger_totals.py` sono locali.
+  - L'errore vale circa 1e-27 × la grandezza degli importi: per toccare 1e-9 servono importi di circa 1e17, anche in
+    VND o IDR.
+  - Lo fissa già `test_engine_closing_term_reconciles_despite_decimal_rounding` (`1E-24`, reconciled).
+- **Proposta**: chiudere T-B9 come verificata, senza codice. Una regola del renderer che non azzera `residual` quando
+  `reconciled` è falso aggiungerebbe un caso speciale per una combinazione che il servizio non produce.
