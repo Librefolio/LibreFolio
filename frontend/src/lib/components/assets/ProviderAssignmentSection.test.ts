@@ -32,7 +32,8 @@
  * literals. Every expected figure is written by `Intl` itself. Its days (T-ISO) —
  * the current price's day and the history's range as the backend writes it — are
  * written in the house notation of a tooltip day, every expected day written by
- * `Intl` too.
+ * `Intl` too. The current price keeps its significant digits (C-97c-3): the
+ * describe after the M-18 one.
  *
  * The probe's scope note (C-90): the manual probe reads only the last few days of
  * history, while creating the asset downloads all of it. Once a manual probe has
@@ -58,6 +59,17 @@
  * program the read gets the Proxy's `undefined`: the read fails on it, and the
  * panel takes a failed read as «no settings». The lifecycle cases route it
  * explicitly, answering no settings.
+ *
+ * The probe refused for too many probes (workstream X, X-R66) — red until
+ * X-R66. Past `LIBREFOLIO_PROBE_RATE_LIMIT` probes a minute the endpoint
+ * answers 429: `detail.error_code` PROBE_RATE_LIMITED with its `retry_after`
+ * and the server's English, and `Retry-After`. Today the manual probe's one
+ * `probe` row shows that English, as its one line and as its detail. Once
+ * `probeRateLimitMessage` answers, both are its sentence: the catalogue's
+ * PROBE_RATE_LIMITED with the time the pause ends — read through `$_`, the
+ * clock pinned (Date only), never as a literal; the detail is read where the
+ * row hands it over, its copy button (PAS-RL1). Any other failure of the probe
+ * call keeps today's one line and detail (PAS-RL2, green before and after).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
@@ -134,6 +146,7 @@ import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+import {formatResumeTime, resumesToday} from './resolveProviderError';
 
 // --- Provider fixtures --------------------------------------------------
 // mockprov must be filtered out of the options; yahoo has an icon + help url +
@@ -562,6 +575,8 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
     function expected({price, count, resultMs, totalMs}: ProbeInput, locale: string): Figures {
         const time = `(${fixed(resultMs / 1000, 2, locale)}s)`;
         return {
+            // Two decimals: since C-97c-3 a price shows as many as its first four significant digits need, two at
+            // least; every price this block reads is 100 or more, so it shows exactly two before and after that cure.
             price: fixed(Number(price), 2, locale),
             count: fixed(count, 0, locale),
             times: [time, time],
@@ -806,6 +821,66 @@ describe('ProviderAssignmentSection — the probe figures in the interface langu
         await probeWith({price: '123.456', count: 6, resultMs: 1234, totalMs: 2468, dateRange: range});
 
         expect(historyRange(), 'a range the backend does not write was rewritten').toBe(range);
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe’s current price keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /*
+     * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits. The
+     * current price that opens its result's detail is written with two fixed decimals, `formatFixed(Number(cpValue),
+     * 2)`: a provider quoting 0.0000034573 USD reads `0.00`, one quoting 1.234 reads `1.23`. The contract:
+     * `formatPrice(Number(cpValue))` — two decimals at least, as many as the first four significant digits need
+     * (`priceFractionDigits`, formatFixed.ts). The M-18 cases above read prices of 100 and more, which do not move.
+     *
+     * Reds: 0.0000034573 (today `0.00`) and 1.234 (today `1.23`). Guard, green today and after: 123.45. The probe
+     * answers the current price alone, as the backend sends it (a decimal string). Its row is the one publishing
+     * `data-operation="current_price"`, its detail the second of the row's three spans (as the M-18 cases read it);
+     * the figure is matched as a whole number token, since the detail also holds the currency and the day. English UI on
+     * jsdom's en-US browser, checked before each case: the digits are typed.
+     */
+    type ProbeResponse = z.infer<typeof schemas.FAProviderProbeResponse>;
+
+    /** `digits` as a whole number in a text: no digit, decimal mark, group separator or sign glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,+\\-\\u2212])${digits.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    /** The probe's answer: a current price of `price` dollars, as the backend sends it, and nothing else. */
+    function answer(price: string): ProbeResponse {
+        return {provider_code: 'yahoo', identifier: 'AAPL', total_execution_time_ms: 120, current_price: {success: true, value: price, currency: 'USD', as_of_date: '2024-01-02', execution_time_ms: 120}};
+    }
+
+    /** Runs the manual probe that answers `price`, once it has settled, and returns the current price's detail. */
+    async function currentPriceDetailFor(price: string): Promise<string> {
+        probeFn().mockResolvedValue(answer(price));
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'passed'));
+
+        const rows = screen.getAllByTestId('provider-test-result').filter((row) => row.getAttribute('data-operation') === 'current_price');
+        expect(rows, 'barrier: one current_price result').toHaveLength(1);
+        const spans = [...rows[0].children].filter((child) => child.tagName === 'SPAN');
+        expect(spans, 'a result row is its label, its detail and its time: three spans').toHaveLength(3);
+        return (spans[1].textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the section writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('a current price of 0.0000034573 USD opens its detail as 0.000003457, not 0.00', async () => {
+        expect(await currentPriceDetailFor('0.0000034573'), 'the current price (today 0.00)').toMatch(numberToken('0.000003457'));
+    });
+
+    it('a current price of 1.234 USD reads 1.234 — four significant digits — not 1.23', async () => {
+        expect(await currentPriceDetailFor('1.234'), 'the current price (today 1.23)').toMatch(numberToken('1.234'));
+    });
+
+    it('guard: a current price of 123.45 USD still reads 123.45', async () => {
+        expect(await currentPriceDetailFor('123.45'), 'the current price').toMatch(numberToken('123.45'));
     });
 });
 
@@ -1599,5 +1674,93 @@ describe('ProviderAssignmentSection — the provider’s plugin settings (workst
         await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('justetf')));
         expect(await screen.findByTestId('provider-settings-status'), 'justetf’s own state').toHaveAttribute('data-configured', 'false');
         expect(screen.queryByTestId('plugin-settings-modal'), 'and the dialog stays closed').toBeNull();
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe refused for too many probes (workstream X, X-R66)', () => {
+    /** «Now» when the refusal lands: 10 June 2026, 14:30:20 local time — a month with no daylight-saving change. */
+    const NOW = new Date(2026, 5, 10, 14, 30, 20);
+    /** The refusal's wait, in whole seconds as the server counts them: the pause ends at 14:31:02, written 14:32. */
+    const WAIT = 42;
+    const KEY = 'providerErrors.PROBE_RATE_LIMITED';
+    /** The server's own English for the refusal (`backend/app/api/v1/assets/providers.py`): what the row shows today. */
+    const SERVER_MESSAGE = 'Too many provider probes: try again later';
+
+    /** A failed request as a zodios (axios) call rejects with it: the answer's status, its `detail` as sent, its headers. */
+    function httpFailure(status: number, detail: unknown, headers: Record<string, string> = {}) {
+        return Object.assign(new Error(`Request failed with status code ${status}`), {response: {status, data: {detail}, headers}});
+    }
+
+    /** The probe's refusal: 429, its code with the wait and the server's English, and `Retry-After` with the same seconds. */
+    function probeRateLimited() {
+        return httpFailure(429, {error_code: 'PROBE_RATE_LIMITED', retry_after: WAIT, message: SERVER_MESSAGE}, {'retry-after': String(WAIT)});
+    }
+
+    /** Whitespace as one space: Intl writes some times with a narrow no-break space, and the DOM is read as text. */
+    function squash(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Runs the manual probe `failure` refuses; ends on the one row of the probe call's own failure, the probe settled. */
+    async function refusedProbeRow(failure: unknown): Promise<HTMLElement> {
+        probeFn().mockRejectedValue(failure as never);
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
+        const rows = screen.getAllByTestId('provider-test-result');
+        expect(operationStatuses(rows), 'barrier: one row, the probe call’s own failure — probe, an error, as today').toEqual(['probe:error']);
+        return rows[0];
+    }
+
+    /** The row's one line, after its label: its summary. The row is its label, that line and its time — three spans, in that order. */
+    function oneLineOf(row: HTMLElement): string {
+        const spans = [...row.children].filter((child) => child.tagName === 'SPAN');
+        expect(spans, 'a result row is its label, its one line and its time: three spans').toHaveLength(3);
+        return squash(spans[1].textContent);
+    }
+
+    /** The row's detail, where the row hands it over: its copy button, on plain HTTP — the text of the legacy copy. */
+    async function copiedDetail(row: HTMLElement): Promise<string | undefined> {
+        const http = onPlainHttp();
+        await fireEvent.click(within(row).getByTestId('provider-test-result-copy'));
+        await waitFor(() => expect(http.execCommand).toHaveBeenCalledTimes(1));
+        expect(http.captured, 'one copy, of the row’s detail').toHaveLength(1);
+        return http.captured[0];
+    }
+
+    beforeEach(() => {
+        // Only the clock: the moment the pause ends is computed from «now», by the section and by the expectation alike.
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(NOW);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('PAS-RL1: a manual probe refused with 429 PROBE_RATE_LIMITED — its row’s one line and its detail are the catalogue’s PROBE_RATE_LIMITED with the time the pause ends, not the server’s English', async () => {
+        const row = await refusedProbeRow(probeRateLimited());
+        expect(resumesToday(WAIT, NOW), 'premise: the pause ends today').toBe(true);
+        const time = formatResumeTime(WAIT, NOW);
+        const sentence = get(_)(KEY, {values: {time}});
+
+        const oneLine = oneLineOf(row);
+        expect(oneLine, 'the one line is no longer the server’s English').not.toBe(SERVER_MESSAGE);
+        expect(oneLine, 'the one line is the catalogue’s PROBE_RATE_LIMITED, with the time the pause ends').toBe(squash(sentence));
+        expect(oneLine, 'the time the pause ends, rounded up to the minute').toContain(squash(time));
+        expect(await copiedDetail(row), 'the detail is the same sentence').toBe(sentence);
+        expect(get(_)(KEY), `premise: the catalogue has ${KEY}`).not.toBe(KEY);
+    });
+
+    it.each<{when: string; failure: () => unknown; shown: string}>([
+        {when: 'a 429 the probe’s limiter did not send, another code', failure: () => httpFailure(429, {error_code: 'SYNTHETIC_OTHER_LIMIT', retry_after: WAIT, message: 'Synthetic limit of another kind'}, {'retry-after': String(WAIT)}), shown: 'Synthetic limit of another kind'},
+        {when: 'a request that got no answer', failure: () => new Error('Synthetic connection dropped'), shown: 'Synthetic connection dropped'},
+    ])('PAS-RL2: guard — $when: as today, the row’s one line and its detail are the failure’s own message', async ({failure, shown}) => {
+        const row = await refusedProbeRow(failure());
+
+        expect(oneLineOf(row), 'the one line, as today').toBe(shown);
+        expect(await copiedDetail(row), 'the detail, as today').toBe(shown);
     });
 });

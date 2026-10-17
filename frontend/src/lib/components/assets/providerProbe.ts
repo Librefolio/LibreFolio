@@ -15,7 +15,7 @@
  * caller keeps ownership of the translated strings.
  */
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPrice} from '$lib/utils/core/formatFixed';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
@@ -121,7 +121,7 @@ export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeT
         let html = '<table style="font-size:12px;border-collapse:collapse;">';
         html += `<tr><th style="${thStyle}">📅 ${labels.date}</th><th style="${thStyle}">💰 ${labels.currentPrice}</th></tr>`;
         html += `<tr><td style="${tdStyle}">${result.priceDate ? formatDay(result.priceDate) : '—'}</td>`;
-        html += `<td style="${tdRight}">${formatFixed(Number(result.priceValue), 2)} ${ccyLabel}</td></tr>`;
+        html += `<td style="${tdRight}">${formatPrice(Number(result.priceValue))} ${ccyLabel}</td></tr>`;
         html += '</table>';
         return html;
     }
@@ -132,7 +132,7 @@ export function buildProbeTooltipHtml(result: ProbeTooltipResult, labels: ProbeT
         let html = '<table style="font-size:12px;border-collapse:collapse;">';
         html += `<tr><th style="${thStyle}">📅 ${labels.date}</th><th style="${thStyle}">💰 ${labels.close}${ccyLabel ? ` (${ccyLabel})` : ''}</th></tr>`;
         for (const p of result.samplePrices) {
-            html += `<tr><td style="${tdStyle}">${formatDay(p.date)}</td><td style="${tdRight}">${formatFixed(Number(p.close), 2)}</td></tr>`;
+            html += `<tr><td style="${tdStyle}">${formatDay(p.date)}</td><td style="${tdRight}">${formatPrice(Number(p.close))}</td></tr>`;
         }
         html += '</table>';
         return html;

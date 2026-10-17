@@ -20,6 +20,9 @@
  * Also the names of the Δ columns — the fixed 1D one and the period ones —
  * which come from the catalogues: read in a marker locale on the
  * `dt-header-*` testids, never in a language.
+ *
+ * C-97c-3 (the last describe): a quote keeps its significant digits — the
+ * table's Last Price column, the card's live price and its absolute Δ.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 
@@ -36,8 +39,9 @@ vi.mock('$lib/api', () => ({
 
 import {get} from 'svelte/store';
 import {addMessages} from 'svelte-i18n';
-import {render, screen, setupI18n, waitFor} from '$test/component';
+import {render, screen, setupI18n, waitFor, within} from '$test/component';
 import {_ as t} from '$lib/i18n';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
@@ -306,5 +310,108 @@ describe('AssetTable — the Δ period columns are labelled from the catalogues 
             '3M': `Δ ${marked('datePicker.presets.months', {n: 3})}`,
             '2Y': `Δ ${marked('datePicker.presets.years', {n: 2})}`,
         });
+    });
+});
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10): a price on screen keeps its significant digits.
+ *
+ * The asset list writes a quote with two fixed decimals in three places: the table's Last Price column
+ * (`formatCurrencyAmountHtml(price, row.currency, {sensitivity: 'public'})`), the card's live price
+ * (`formatFixed(Number(livePrice), 2)`) and the card's absolute Δ over the range (`asset-range-delta`,
+ * `data-mode="absolute"`: `formatFixed(Number(deltaAbs), 2, {signed: true})`). A token quoted 0.0000034573 USD reads
+ * `0.00`, one quoted 1.234 reads `1.23`, a Δ of 1.2e-7 `+0.00`. The contract: the column keeps its formatter, given
+ * `{minFraction, maxFraction}` from `priceFractionDigits(price)`; the card's price is `formatPrice(livePrice)` and its Δ
+ * `formatPrice(deltaAbs, {signed: true})` — two decimals at least, as many as the first four significant digits need
+ * (`priceFractionDigits`, formatFixed.ts), a `+` on a rise and no sign on a zero.
+ *
+ * Reds: 0.0000034573 and 1.234 in the column and on the card (today `0.00` and `1.23`), the card's Δ of 1.2e-7 and of
+ * -0.0000012 (today `+0.00` and `-0.00`). Guards, green today and after: 123.45 in the column and on the card, Δs of 1.5
+ * (`+1.50`), -12.5 (`-12.50`) and 0 (`0.00`).
+ *
+ * Reading. The column's cell: in the row of the id this test gave it (`data-row-id`), the cell DataTable stamps with
+ * the column's id (`data-column-id="lastPrice"`). The card's live price has no handle of its own: it is read in its
+ * card (`asset-card-<id>`), mounted with no Δ, no transaction count and no chart, so the price is the only figure there.
+ * The card's Δ: `asset-range-delta`, its mode checked. Each figure is matched as a whole number token, since the cell
+ * and the card also hold the currency. English UI on jsdom's en-US browser, checked before each case: the digits are
+ * typed.
+ */
+describe('AssetTable and AssetCard — a price keeps its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** `digits` as a whole number in a text: no digit, decimal mark, group separator or sign glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,+\\-\\u2212])${digits.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    /** A table row of this block: asset `id`, quoted `lastPrice` USD. */
+    function quoted(id: number, lastPrice: number): AssetRow {
+        return {...row(id, 0, 'analysis'), currency: 'USD', lastPrice};
+    }
+
+    /** Mount the table on `rows` and wait for each of them. */
+    async function mountTable(rows: AssetRow[]): Promise<void> {
+        render(AssetTable, {data: rows});
+        await waitFor(() => {
+            for (const {id} of rows) expect(document.querySelector(`tbody tr[data-row-id="${id}"]`), `barrier: row ${id} is rendered`).not.toBeNull();
+        });
+    }
+
+    /** The Last Price cell of row `id`, as text. */
+    function lastPriceOf(id: number): string {
+        const cell = rowEl(id).querySelector<HTMLElement>('td[data-column-id="lastPrice"]');
+        if (!cell) throw new Error(`row ${id} has no lastPrice cell`);
+        return (cell.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Mount the card of asset `id` (USD, manual, active) with `props`, and return its root. */
+    function mountCard(id: number, props: {livePrice?: number | null; deltaAbs?: number | null; globalViewMode?: 'percentage' | 'absolute'}): HTMLElement {
+        render(AssetCard, {asset: {id, display_name: 'Quoted asset', currency: 'USD', asset_type: 'STOCK', provider_code: null, active: true}, ...props});
+        return screen.getByTestId(`asset-card-${id}`);
+    }
+
+    /** The card's text: its live price is the only figure in it when it is mounted with no Δ. */
+    function livePriceCardText(id: number, livePrice: number): string {
+        return (mountCard(id, {livePrice}).textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** The card's absolute Δ over the range, as text: `asset-range-delta`, checked to be in the absolute mode. */
+    function absoluteDeltaOf(id: number, deltaAbs: number): string {
+        const delta = within(mountCard(id, {deltaAbs, globalViewMode: 'absolute'})).getByTestId('asset-range-delta');
+        expect(delta, 'barrier: the Δ shown is the absolute one').toHaveAttribute('data-mode', 'absolute');
+        return (delta.textContent ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the list writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+    });
+
+    it('the Last Price column: 0.0000034573 USD reads 0.000003457 and 1.234 USD reads 1.234, not 0.00 and 1.23', async () => {
+        await mountTable([quoted(61, 0.0000034573), quoted(62, 1.234)]);
+
+        expect.soft(lastPriceOf(61), 'a quote of 0.0000034573 USD (today 0.00)').toMatch(numberToken('0.000003457'));
+        expect.soft(lastPriceOf(62), 'a quote of 1.234 USD (today 1.23)').toMatch(numberToken('1.234'));
+    });
+
+    it('guard: the Last Price column still reads 123.45 for 123.45 USD', async () => {
+        await mountTable([quoted(63, 123.45)]);
+
+        expect(lastPriceOf(63)).toMatch(numberToken('123.45'));
+    });
+
+    it('the card’s live price: 0.0000034573 reads 0.000003457 and 1.234 reads 1.234, not 0.00 and 1.23', () => {
+        expect.soft(livePriceCardText(71, 0.0000034573), 'a live price of 0.0000034573 (today 0.00)').toMatch(numberToken('0.000003457'));
+        expect.soft(livePriceCardText(72, 1.234), 'a live price of 1.234 (today 1.23)').toMatch(numberToken('1.234'));
+    });
+
+    it('the card’s absolute Δ over the range: +1.2e-7 reads +0.00000012 and -0.0000012 reads -0.0000012, not +0.00 and -0.00', () => {
+        expect.soft(absoluteDeltaOf(81, 1.2e-7), 'a rise of 1.2e-7 (today +0.00)').toMatch(numberToken('+0.00000012'));
+        expect.soft(absoluteDeltaOf(82, -0.0000012), 'a fall of 1.2e-6 (today -0.00)').toMatch(numberToken('-0.0000012'));
+    });
+
+    it('guard: the card’s live price 123.45 reads 123.45; its Δs of 1.5, -12.5 and 0 read +1.50, -12.50 and 0.00', () => {
+        expect.soft(livePriceCardText(73, 123.45), 'the live price').toMatch(numberToken('123.45'));
+        expect.soft(absoluteDeltaOf(83, 1.5), 'a Δ of 1.5').toMatch(numberToken('+1.50'));
+        expect.soft(absoluteDeltaOf(84, -12.5), 'a Δ of -12.5').toMatch(numberToken('-12.50'));
+        expect.soft(absoluteDeltaOf(85, 0), 'a Δ of 0, no sign').toMatch(numberToken('0.00'));
     });
 });

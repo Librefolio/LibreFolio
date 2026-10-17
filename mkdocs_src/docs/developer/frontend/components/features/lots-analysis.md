@@ -39,6 +39,7 @@ graph LR
 |---|---|---|
 | `LotsAnalysisPanel` | Orchestrating parent | Owns fetch lifecycle, shared selection, shared zoom, open/closed lot filter, and custody modal state. |
 | `LotAnalysisFailedNotice` | `FAILED`-analysis notice | Rendered only when `calculation_status === 'FAILED'`. Consumes the blocking `issues` (the `failure` half of `partitionLotIssues`) and `brokers`, builds its rows with `buildFailureRows` (both in `lotDataQualityHelpers.ts`), and emits `onGotoTransaction(transactionId)`. |
+| `LotDataQualityBanner` | Data-quality banner | Rendered when issues remain for it. Consumes `issues` (the `banner` half of `partitionLotIssues`) and `lotDates` (lot id → opening date, for the visible lots), groups the issues with `buildIssueGroups` (also in `lotDataQualityHelpers.ts`), and emits `onLotClick(lotId)`. |
 | `LotWacPriceChart` | **Block 1**: PMC / market price | Consumes `visibleLots`, WAC histories, market price history, lot events, income events, `quoteBaseQuantity`, and shared zoom. Emits `onSelectionChange`, `onZoomChange`, and `onEventDoubleClick`. |
 | `LotGanttChart` | **Block 2**: lot life & custody | Consumes `visibleLots`, `ganttSegments`, lot events, shared zoom, and open/closed toggle state. Emits `onSelectionChange`, `onZoomChange`, and `onRowDoubleClick`. |
 | `UnifiedLotsTable` | Tabular lot inspection | Consumes `visibleLots`, `selectedLotIds`, brokers, and currency. Emits `onSelectionChange`, `onCustodyCellClick`, `onViewGanttLot`, and `onGotoOpeningTransaction`. |
@@ -50,7 +51,7 @@ graph LR
 The template renders the feature group in this exact order:
 
 1. `LotAnalysisFailedNotice` (only on a `FAILED` analysis)
-2. `LotDataQualityBanner` (when issues remain for it; on a `FAILED` analysis, only those that did not break the replay)
+2. `LotDataQualityBanner` (when issues remain for it; on a `FAILED` analysis, only those that did not break the replay): one block per issue code, with its message lines and its lot chips — see the `LotDataQualityBanner` notes below
 3. `LotWacPriceChart`
 4. `LotGanttChart` (not on a `FAILED` analysis)
 5. `UnifiedLotsTable` (not on a `FAILED` analysis)
@@ -126,6 +127,18 @@ The parent is intentionally thin in business logic and heavy in orchestration:
     - `partitionLotIssues(issues, failed)` sends the issues flagged `message_params.fails_analysis === true` to `LotAnalysisFailedNotice`, rendered first, and leaves the others to `LotDataQualityBanner`, rendered after it — on a `FAILED` answer, the WAC lines' gaps (missing rates, `MISSING_COST_BASIS`). The backend flag decides: the frontend keeps no copy of `_QUANTITATIVE_FAILURE_CODES`;
     - `LotAnalysisFailedNotice` (red, `role="alert"`, `lots-analysis-panel-failed`) explains the failure (`brokers.lots.analysisFailed`), then lists the rows of `buildFailureRows` under `brokers.lots.analysisFailedFix`: one per (code, `transaction_id`), the first occurrence winning, ordered by `transaction_date` (undated last), then transaction id (none last), then code — all read from `message_params`;
     - a row shows the day, the broker named from the panel's `brokers` through `resolveBrokerName` (whose `#<id>` default only covers a broker outside that list), the message, and a **Go to transaction** button to `/transactions?highlight=<id>` (`handleGotoTransaction`) when the issue names a transaction. `related_transaction_id` is never offered: it may name a partner leg the user cannot see. `missing_quantity` is written as a lot quantity (`formatExactDecimal` on the backend's decimal string, up to the 10 decimals of its column) and masked under privacy (`maskableQuantity`), following the toggle in place; `dataQuality.shortTransferNotSupported`, `shortAdjustmentNotSupported` and `fifoSourceQuantityMissing` no longer print `(broker {broker_id})`.
+
+### `LotDataQualityBanner`
+
+The banner shows the issues `partitionLotIssues` leaves to it, folded when it mounts:
+
+- the header (`lot-data-quality-toggle`, `aria-expanded`) counts **categories** — issue codes — not issues: `dataQuality.headerErrors` and/or `dataQuality.headerWarnings`, or `dataQuality.headerInfoOnly` when every category is info;
+- unfolded, it draws one block per code (`lot-data-quality-issue-{code}`), errors first, then warnings, then info, without call-to-action buttons;
+- `buildIssueGroups()` (`lotDataQualityHelpers.ts`, beside `partitionLotIssues` and `buildFailureRows`) gives each block its message lines: `IssueGroup.messages`, each `{key, messageKey, params}` and drawn as a `lot-data-quality-message`, in the order their issues came (J-53):
+    - the code's issues **on a lot** — a finite `message_params.lot_id`, the lot visible or not — share **one** line, the first one's: they say the same thing of different lots, and the visible ones are the chips;
+    - each issue **without a lot** — `lot_id` null, absent or not a number — gets a line of its own, with its own params: each orphan income or cost pool (`ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS`, one issue per pool) with its amount, currency and day, and each `MISSING_FX_RATES` notice (`dataQuality.missingFxRates` for the pairs with a provider, with their date range; `dataQuality.missingFxRatesManual` for the manual pairs). The same message key with the same params makes one line;
+    - the banner adds no total: two pools may be stated in different currencies, and each has its own day;
+- the code's visible lots become chips (`lot-data-quality-chip-{lotId}`, labelled `brokers.lots.lotLabel` with the opening date) after `dataQuality.affectedLots`, ordered by opening date then id, with a `#index` when several share an opening day; a lot hidden by the **Open / Closed** filter has no chip. A click emits `onLotClick(lotId)`, and the panel pulses that lot's bubble in `LotWacPriceChart` (`pulseLot`).
 
 ### `LotWacPriceChart`
 
@@ -210,6 +223,7 @@ The list below reflects the literal `data-testid` strings present in the compone
 |---|---|
 | `LotsAnalysisPanel` | `lots-analysis-panel`, `lots-analysis-panel-title`, `lots-analysis-panel-asset-link`, `lots-analysis-panel-close`, `lots-analysis-panel-error`, `lots-analysis-panel-loading` |
 | `LotAnalysisFailedNotice` | `lots-analysis-panel-failed`, `lots-analysis-failed-explanation`, `lots-analysis-failed-list`, `lots-analysis-failed-row-{code}-{transactionId}` (`none` in place of `{transactionId}` when the issue names no transaction), `lots-analysis-failed-date`, `lots-analysis-failed-broker`, `lots-analysis-failed-message`, `lots-analysis-failed-goto-{transactionId}` |
+| `LotDataQualityBanner` | `lot-data-quality-banner`, `lot-data-quality-toggle`, `lot-data-quality-issue-{code}`, `lot-data-quality-message` (one per message line of a block), `lot-data-quality-chip-{lotId}` |
 | `LotWacPriceChart` | `lot-wac-price-chart` (`data-state` is `drawn` when the chart draws, `empty` when it shows «No data available» instead), `lot-wac-yaxis-toggle`, `lot-wac-yaxis-auto`, `lot-wac-yaxis-zero`, `lot-wac-toggle-absolute`, `lot-wac-toggle-percentage` |
 | `LotGanttChart` | `lot-gantt-chart`, `lot-gantt-state-filter`, `lot-gantt-filter-open`, `lot-gantt-filter-closed`, `lot-gantt-scroll`, `lot-gantt-echart`, `lot-gantt-segment-{lotId}`, `lot-gantt-sticky-axis`, `lot-gantt-legend`, `lot-gantt-legend-broker-{brokerId}`, `lot-gantt-legend-transit` |
 | `UnifiedLotsTable` | `unified-lots-table`, `unified-lots-custody-{lotId}` |

@@ -613,6 +613,16 @@ def services_username_lookup(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Username lookup tests", verbose=verbose)
 
 
+def services_whats_new(verbose: bool = False, test_names: list = None) -> bool:
+    """Test C-54, «What's new since your last version»: the base release, who has something new to see, create_user and mark_seen."""
+    print_section("Services: What's New (C-54)")
+    print_info("Testing: backend/app/services/accounts/whats_new_service.py, user_service.create_user")
+    print_info("Tests: the base release of a version (git describe, tags, hashes), the running one read at each call, LIBREFOLIO_DISABLE_WHATS_NEW, pending_for by release (NULL, older, newer, unknown), create_user writes the running release, mark_seen commits it, idempotent")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_whats_new_service.py", test_names)
+    return run_command(cmd, "What's new service tests", verbose=verbose)
+
+
 def services_password_policy(verbose: bool = False, test_names: list = None) -> bool:
     """Test the password rules in one place: what a new password must meet, for the API, the CLI and the app."""
     print_section("Services: Password Policy")
@@ -1020,9 +1030,9 @@ def services_probe_rate_limit(verbose: bool = False, test_names: list = None) ->
 def services_bulk_reads_chunked(verbose: bool = False, test_names: list = None) -> bool:
     """MF-SEC9a (rest): bulk reads of the BRIM candidate search and of the WAC FX evidence in statements SQLite can parse (private in-memory DB)."""
     print_section("Services: Bulk Reads Chunked (MF-SEC9a)")
-    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
+    print_info("Testing: services/brim/brim_provider.py (search_asset_candidates_bulk, _classify_candidates, _contains_matcher vs search_asset_candidates), services/pac_allocator/source/wac.py (_load_wac_fx_rows)")
     print_info(
-        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term"
+        "Tests: 300 isin+symbol+name and 150 name-only triples without «Expression tree is too large», each answer == the per-asset search (ids, confidences, order, auto-select), 50 triples guard; 1 500 WAC keys + 10 missing exact (500/501 at the chunk edge); barriers: one OR of 1 500 refused, a nested OR counts every term; MF-SEC9g: classification off the loop (thread + loop handshake), compiles ≤ needles and dumps ≤ assets, 300×1 011 parity guard, exact-hit order guard"
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_bulk_reads_chunked.py", test_names)
     return run_command(cmd, "Bulk reads chunked tests", verbose=verbose)
@@ -2094,6 +2104,16 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "whats-new",
+        services_whats_new,
+        name="What's New (C-54)",
+        desc="release_of: the base release X.Y.Z of a version (tag, git describe, pre-release, X.Y), None for a hash, dev, unknown; current_release reads backend.app.config.get_version at each call; LIBREFOLIO_DISABLE_WHATS_NEW; pending_for by release, as numbers (NULL or unreadable: since None; older; newer; unknown running release; switched off); create_user writes the running release (NULL when unknown); mark_seen commits it, nobody else's, idempotent",
+        # PURE: every database is a private file under tmp_path built with create_all; the running version patched with
+        # monkeypatch in this process, get_async_engine a tripwire, variables removed. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "password-policy",
         services_password_policy,
         name="Password Policy",
@@ -2422,7 +2442,7 @@ Note: No backend server required.
         "bulk-reads-chunked",
         services_bulk_reads_chunked,
         name="Bulk Reads Chunked (MF-SEC9a)",
-        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted",
+        desc="search_asset_candidates_bulk over 100 (first size past HEAD's 91) and 300 isin+symbol+name and 150 name-only triples (1 100 / 3 300 / 1 200 OR terms) == search_asset_candidates per triple, 50/90-triple guards; _load_wac_fx_rows with 500, 501 and 1 510 keys exact; barriers: one OR of 1 500 refused, a nested OR's terms counted; MF-SEC9g: the candidate classification's LIKE matching runs off the event loop's thread and the loop answers a coroutine mid-classification (100 generic names × 300 funds); ≤ 1 LIKE compile per needle and ≤ 1 identifier_other dump per stored asset (counted, not timed); 300 extractions over 1 011 assets == search_asset_candidates (wildcard bond names, codes stored in either case, duplicate holders); exact ISIN/ticker hits in display-name order",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no service replaced.
         isolation="pure",
     )

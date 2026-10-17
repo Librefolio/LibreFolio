@@ -814,6 +814,136 @@ class TestTransactionsBeforeFloorIssue:
 
 
 # =============================================================================
+# QUOTE_IN_MINOR_UNIT (Z-32 (c))
+# =============================================================================
+
+QUOTE_IN_MINOR_UNIT = "QUOTE_IN_MINOR_UNIT"
+#: Two London lines, in an order that is not the ids': the issue lists them as given.
+QUOTED_IN_PENCE = [(9, "Vodafone Group"), (4, "Lloyds Banking Group")]
+
+
+def _quote_report(quote_in_minor_unit_assets, views: DerivedViewsBuilder | None = None):
+    """The report of one complete day (or of ``views``), given ``quote_in_minor_unit_assets``: a TypeError (no such
+    parameter) fails the test."""
+    views = views or _make_views([_complete_state("2025-06-30")])
+    try:
+        return views.build_data_quality_report(quote_in_minor_unit_assets=quote_in_minor_unit_assets)
+    except TypeError as exc:
+        pytest.fail(f"build_data_quality_report(…, quote_in_minor_unit_assets=…) raised {exc!r}: it takes the held assets whose provider quotes them in a minor unit the quote base does not account for (Z-32 (c) §6)")
+
+
+def _quote_issues(report) -> list:
+    """The report's QUOTE_IN_MINOR_UNIT issues, matched on the code's value (HEAD has no enum member to name)."""
+    return [i for i in report.issues if i.code == QUOTE_IN_MINOR_UNIT]
+
+
+class TestQuoteInMinorUnitIssue:
+    """Z-32 (c) §6: Yahoo quotes a London line in pence (``GBp``); the price schemas fold the code to ``GBP``
+    and keep the numbers, so a holding is worth a hundred times too much until its quote base is set to 100 by hand, and
+    nothing told the user. ``build_data_quality_report(quote_in_minor_unit_assets=[(asset_id, name), …])`` — the held
+    assets whose provider reported a minor unit the quote base does not account for (``PortfolioService`` decides who,
+    pinned end to end in ``test_portfolio_api.py::TestQuoteInMinorUnitDataQuality``) — gives one issue shaped exactly as
+    INVALID_SPLIT_RATIO's: domain ``portfolio``, code ``QUOTE_IN_MINOR_UNIT``, WARNING, key
+    ``dataQuality.quoteInMinorUnit``, params ``{count}``, ``count``, the assets by id and name in the order given, a
+    ``navigate_asset`` CTA to the first one, group ``quote_in_minor_unit``. None or an empty list gives none. Like
+    INVALID_SPLIT_RATIO it fills no legacy field: every other field of the report, ``data_quality_status`` included, is
+    what it is without it.
+
+    On HEAD 80cef0e43 ``IssueCode`` has no ``QUOTE_IN_MINOR_UNIT`` and the builder no ``quote_in_minor_unit_assets``
+    (TypeError): each test that needs one of them fails on that alone, and the module still collects.
+    """
+
+    def test_quote_in_minor_unit_is_a_portfolio_issue_code(self):
+        """Red on HEAD: IssueCode has no QUOTE_IN_MINOR_UNIT (the frontend keys on the string)."""
+        assert getattr(IssueCode, QUOTE_IN_MINOR_UNIT, None) == QUOTE_IN_MINOR_UNIT, "schemas.portfolio.IssueCode has no QUOTE_IN_MINOR_UNIT (Z-32 (c))"
+
+    def test_listed_assets_produce_one_warning_with_their_shape(self):
+        """Red on HEAD (TypeError: no ``quote_in_minor_unit_assets``). Vodafone (9) then Lloyds (4): one WARNING with
+        the contract's shape — the assets in the order given, the CTA to the first given, not to the lowest id."""
+        report = _quote_report(QUOTED_IN_PENCE)
+
+        matching = _quote_issues(report)
+        assert len(matching) == 1, [i.code for i in report.issues]
+        issue = matching[0]
+        assert {
+            "domain": issue.domain,
+            "severity": issue.severity,
+            "message_i18n_key": issue.message_i18n_key,
+            "message_params": issue.message_params,
+            "count": issue.count,
+            "affected_asset_ids": issue.affected_asset_ids,
+            "affected_asset_names": issue.affected_asset_names,
+            "affected_fx_pairs": issue.affected_fx_pairs,
+            "cta_action": issue.cta_action,
+            "cta_target": issue.cta_target,
+            "group_key": issue.group_key,
+        } == {
+            "domain": IssueDomain.PORTFOLIO,
+            "severity": IssueSeverity.WARNING,
+            "message_i18n_key": "dataQuality.quoteInMinorUnit",
+            "message_params": {"count": 2},
+            "count": 2,
+            "affected_asset_ids": [9, 4],
+            "affected_asset_names": ["Vodafone Group", "Lloyds Banking Group"],
+            "affected_fx_pairs": [],
+            "cta_action": "navigate_asset",
+            "cta_target": "9",
+            "group_key": "quote_in_minor_unit",
+        }
+
+    def test_the_issue_is_shaped_as_invalid_split_ratio_s(self):
+        """Red on HEAD (TypeError). The same two assets given to INVALID_SPLIT_RATIO (green on HEAD: the barrier) and to
+        the new list: the two issues are the same object but for the code, the key and the group (§6: «exactly like
+        INVALID_SPLIT_RATIO's shape»)."""
+        views = _make_views([_complete_state("2025-06-30")])
+        split = views.build_data_quality_report(invalid_split_assets=QUOTED_IN_PENCE)
+        assert [i.code for i in split.issues] == [IssueCode.INVALID_SPLIT_RATIO], "barrier: the comparison is INVALID_SPLIT_RATIO, alone"
+
+        matching = _quote_issues(_quote_report(QUOTED_IN_PENCE, views))
+
+        assert len(matching) == 1, matching
+        expected = split.issues[0].model_dump(mode="json") | {"code": QUOTE_IN_MINOR_UNIT, "message_i18n_key": "dataQuality.quoteInMinorUnit", "group_key": "quote_in_minor_unit"}
+        assert matching[0].model_dump(mode="json") == expected
+
+    def test_one_asset_counts_one(self):
+        """Red on HEAD (TypeError). One asset: count 1, its id the CTA's target — the params follow the list, they are
+        not a constant."""
+        issues = _quote_issues(_quote_report([(31, "Tesco")]))
+
+        assert [(i.count, i.message_params, i.affected_asset_ids, i.affected_asset_names, i.cta_target) for i in issues] == [(1, {"count": 1}, [31], ["Tesco"], "31")], issues
+
+    @pytest.mark.parametrize("listed", [pytest.param(None, id="none"), pytest.param([], id="empty")])
+    def test_nothing_listed_produces_no_issue(self, listed):
+        """Red on HEAD only by construction (TypeError: no ``quote_in_minor_unit_assets``). After the cure it guards that
+        nothing to report gives no issue, not one counting 0."""
+        report = _quote_report(listed)
+
+        assert _quote_issues(report) == []
+        assert report.issues == [], [i.code for i in report.issues]
+
+    def test_guard_the_default_call_gives_no_issue(self):
+        """Green on HEAD and after: a caller that does not pass the parameter gets no such issue."""
+        report = _make_views([_complete_state("2025-06-30")]).build_data_quality_report()
+
+        assert _quote_issues(report) == []
+
+    def test_the_rest_of_the_report_moves_as_with_an_invalid_split_ratio(self):
+        """Red on HEAD (TypeError). Barrier first, green on HEAD: INVALID_SPLIT_RATIO alone leaves every other field of
+        the report — the legacy lists, the counters, ``data_quality_status`` (``ok``) — as the report without it. Then
+        the new warning alone leaves them exactly as INVALID_SPLIT_RATIO does."""
+        views = _make_views([_complete_state("2025-06-29"), _complete_state("2025-06-30")])
+        plain = views.build_data_quality_report()
+        split = views.build_data_quality_report(invalid_split_assets=QUOTED_IN_PENCE)
+        assert split.model_dump(mode="json", exclude={"issues"}) == plain.model_dump(mode="json", exclude={"issues"}), "barrier: INVALID_SPLIT_RATIO moves no other field"
+        assert split.data_quality_status == DataQualityStatus.OK, "barrier: INVALID_SPLIT_RATIO alone leaves the status ok"
+
+        quote = _quote_report(QUOTED_IN_PENCE, views)
+
+        assert [i.code for i in quote.issues] == [QUOTE_IN_MINOR_UNIT], [i.code for i in quote.issues]
+        assert quote.model_dump(mode="json", exclude={"issues"}) == split.model_dump(mode="json", exclude={"issues"})
+
+
+# =============================================================================
 # THE REPORT'S SENTENCES (MF-SEC8-2a) — every key the builder writes has one in each language
 # =============================================================================
 
