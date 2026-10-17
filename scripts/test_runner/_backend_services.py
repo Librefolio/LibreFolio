@@ -376,6 +376,15 @@ def services_asset_signals(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Asset signal service tests", verbose=verbose)
 
 
+def services_period_changes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MF-P2 fixed-period changes of asset prices and FX rates."""
+    print_section("Services: Period Changes (MF-P2)")
+    print_info("Testing: assets/period_changes.py (get_period_changes_bulk), fx/period_changes.py (get_fx_period_changes_bulk)")
+    print_info("Parity: the Assets page's computePeriodDelta on the price query's series, the FX page's on per-day conversions")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_period_changes.py", test_names)
+    return run_command(cmd, "Period changes service tests", verbose=verbose)
+
+
 def services_provider_contracts(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider interface contracts (FX, Asset, BRIM)."""
     print_section("Services: Provider Contract Tests")
@@ -1667,6 +1676,9 @@ Note: No backend server required.
     add_test(cat, "signal-plugins-volume", services_signal_plugins_volume, name="Volume Signal Plugins", desc="OBV rebasing and MFI zero/missing volume, levels and TA-Lib delegation")
     add_test(cat, "signal-plugin-matrix", services_signal_plugin_matrix, name="Full Signal Plugin Matrix", desc="Uniform 22-plugin domains, fields, gaps, boundaries and isolation gate")
     add_test(cat, "asset-signals", services_asset_signals, name="Asset Signals", desc="Extended bulk load, FX-before-compute, signal-only response and isolation")
+    # Write-scoped (the category default): unique-name assets deleted with their prices; FX rows only on AMD/BDT, AMD/SZL,
+    # AMD/LSL, BBD/BZD (MVR/SCR never seeded), pairs no other test uses, dated 1980-1987, wiped before and after.
+    add_test(cat, "period-changes", services_period_changes, name="Period Changes", desc="MF-P2: 1D … 5Y asset and FX changes from stored data, equal to the Assets/FX pages' numbers; order, weekend 1D = 0, gaps")
     add_test(cat, "provider-contracts", services_provider_contracts, name="Provider Contracts", desc="ABC compliance for ALL registered providers")
     add_test(
         cat,

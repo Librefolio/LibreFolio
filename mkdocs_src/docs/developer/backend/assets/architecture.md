@@ -18,6 +18,7 @@ responsibility:
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
+| `period_changes.py` | The fixed-period changes of the Assets table: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
 | `crud.py` | Asset create, list, patch, delete, and merge operations. |
 | `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution; for each provider that did not answer, the reason the client needs ([Interactive Search Stack](#interactive-search)). |
@@ -243,6 +244,28 @@ native price and currency, and the result's `errors` lists the failures, dedupli
 ten plus one "… and N more" line. The query never registers an FX pair: the asset page reports
 the pair through its `requiredFxPairs` banners, and its comparison loader drops those points (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-page-sync-and-comparison-sync)).
+
+### 📅 Fixed-Period Changes {: #fixed-period-changes }
+
+`POST /assets/prices/period-changes` returns the fixed-period changes of the Assets table: 1D, 1W, 1M, 3M, 6M, 1Y,
+2Y, 3Y and 5Y (developer decision D-MF6 b). `get_period_changes_bulk()` in `period_changes.py` values the days. The
+change itself is the house's `fixed_period_changes()`
+([Financial Math Layer](../financial_math.md#fixed-period-changes)).
+
+- **Request**: a list of `{asset_id, as_of, target_currency?}`.
+- **Response**: `items[]`, in request order, of `{asset_id, as_of, currency, periods[], errors[]}`. Each period is
+  `{key, days, change_ratio}`, with `change_ratio = price(as_of) / price(as_of − days) − 1`: a fraction, null when
+  either price is missing or ≤ 0.
+- **Price on a day**: the last stored price on or before it, the backward fill of `POST /assets/prices/query`. One
+  grouped query runs per valued day, for every asset of the request: a `MAX(date) … GROUP BY asset_id` subquery
+  joined back to `PriceHistory`. No series is built per asset.
+- **With `target_currency`**: each day's price is converted at that day's rate, the way the price query converts each
+  day of its series. One `convert_bulk()` batch serves the whole request. A day without a rate is null, with an error.
+- **Native**: `currency` is the anchor's currency, null when `as_of` has no price. A day priced in another currency
+  is null, with an error.
+
+`errors` is deduplicated and capped at ten plus one "… and N more" line. The endpoint reads the stored history
+directly, so a 5Y change exists whatever range the page has loaded.
 
 ### 💹 Current Quotes and Today's OHLC
 
@@ -501,6 +524,7 @@ cost unknown it stays `MISSING`.
 | `POST /api/v1/assets/prices` | POST | Bulk upsert prices; a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400) |
 | `DELETE /api/v1/assets/prices` | DELETE | Bulk delete price ranges |
 | `POST /api/v1/assets/prices/query` | POST | Bulk price query (DB-only, backward-fill) |
+| `POST /api/v1/assets/prices/period-changes` | POST | Bulk fixed-period changes, 1D … 5Y, of the Assets table (DB-only, backward-fill, optional `target_currency`) |
 | `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
