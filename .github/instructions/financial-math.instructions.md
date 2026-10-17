@@ -45,8 +45,8 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
    make the patch mute.
 5. **One implementation.** Before writing a calculation, search the layer; if it exists, call it, with parameters when
    your case differs. Never keep a local or partial copy elsewhere, and report any copy you find.
-6. **The frontend computes none of these quantities.** Interactive measures (the measuring tool, what-if) are the only
-   exceptions, and each must be declared where it lives.
+6. **The frontend computes none of these quantities.** Interactive measures (the measuring tool, what-if, and the
+   aggregates of the lots the user chooses, D-MF6(b)) are the only exceptions, and each must be declared where it lives.
 7. **Change Decimal precision or rounding only inside `decimal.localcontext()`**, never by mutating `getcontext()`.
    The portfolio replay runs in a worker thread under a copy of the request's context (J-45, `portfolio/engine.py`),
    and that copy shares the same `decimal.Context` object: a `getcontext().prec = …` in the replay would change the
