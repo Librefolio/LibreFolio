@@ -5,19 +5,26 @@
  *
  * `backend/app/services/financial_math/` is the one home of LibreFolio's financial calculations (developer decision of
  * 2026-10-11, decision 10). The frontend shows the fields the backend computes — cost, P&L, capital, NAV, returns, FX
- * value, yields — and computes none of them. The only exceptions are the interactive measures, which work on what the
- * user does on the chart and so have no backend field to read:
+ * value, yields — and computes none of them. The only exceptions are the interactive measures, which the user shapes on
+ * a chart or a table and so have no backend field to read:
  *   - the measuring tool (R18, `MeasureSignal.ts`): Δ, Δ% and annualized between the two points the user picks;
  *   - the what-if curves of the synthetic benchmarks (R19, `CompoundSignal.ts`, `LinearSignal.ts`, `SineSignal.ts`),
- *     drawn from the parameters the user sets.
+ *     drawn from the parameters the user sets;
+ *   - the lot aggregates of developer decision D-MF6(b) (`plan-phase01FinancialMath.prompt.md:381`), over the lots the
+ *     user chooses: the footer of the lots table — a table, not a chart — over the rows the user selects, else those the
+ *     filters leave visible (`unifiedLotsTableHelpers.ts`, fed by `DataTable.svelte`); the aggregate of the lots
+ *     selected in the comparison chart (`lotComparisonChartHelpers.ts`); and the WAC chart's percentage view, its value
+ *     series rebased on the first known value (`lotWacPriceChartHelpers.ts`).
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and
- * keeps the declarations and the code in step from then on.
+ * keeps the declarations and the code in step from then on. The three lot modules joined the list the same way (Y12b,
+ * P5): red while they computed their aggregates undeclared. (C) cannot find them — a sum, a weighted average or a
+ * rebase raises nothing to 365 — so the list alone holds them to their declaration.
  *
  * The rule lives in `.github/instructions/frontend.instructions.md` («Financial numbers»),
  * `.github/instructions/financial-math.instructions.md` (rule 6) and `mkdocs_src/docs/developer/backend/financial_math.md`
- * (rule 6, which names the four files).
+ * (rule 6, which names every declared file).
  *
  * ## The rule, as this file checks it
  *
@@ -48,12 +55,13 @@
  *
  * ## Adding an exception
  *
- * Only an interactive measure qualifies: a value the user produces on the chart, which no backend field can hold.
- * Anything else shows the backend's field. To add one, in the same change: the tag and its description in the module's
- * leading JSDoc block, the file in DECLARED_EXCEPTIONS below, and the file named in rule 6 of `financial_math.md`. A tag
- * without an entry fails (B); an entry without a tag fails (A), and so does an entry whose file is gone. The form is
- * defined for modules: a component (`.svelte`) has no leading JSDoc block, so a measure computed in a component moves
- * into a module — or the form for components is decided first, and taught to this gate.
+ * Only an interactive measure qualifies: a value the user shapes on a chart or a table (the points picked, the
+ * parameters set, the lots chosen), which no backend field can hold. Anything else shows the backend's field. To add
+ * one, in the same change: the tag and its description in the module's leading JSDoc block, the file in
+ * DECLARED_EXCEPTIONS below, and the file named in rule 6 of `financial_math.md`. A tag without an entry fails (B); an
+ * entry without a tag fails (A), and so does an entry whose file is gone. The form is defined for modules: a component
+ * (`.svelte`) has no leading JSDoc block, so a measure computed in a component moves into a module — or the form for
+ * components is decided first, and taught to this gate.
  *
  * ## Completeness, stated honestly
  *
@@ -86,6 +94,9 @@ const MEASURE = 'src/lib/charts/signals/MeasureSignal.ts';
 const COMPOUND = 'src/lib/charts/signals/CompoundSignal.ts';
 const LINEAR = 'src/lib/charts/signals/LinearSignal.ts';
 const SINE = 'src/lib/charts/signals/SineSignal.ts';
+const LOTS_TABLE = 'src/lib/features/brokers/lots/unifiedLotsTableHelpers.ts';
+const LOT_COMPARISON = 'src/lib/features/brokers/lots/lotComparisonChartHelpers.ts';
+const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
 
 interface DeclaredException {
     /** Relative to `frontend/`. */
@@ -103,6 +114,9 @@ const DECLARED_EXCEPTIONS: readonly DeclaredException[] = [
     {file: COMPOUND, measure: 'R19, a what-if curve: compound growth at the annual rate the user sets'},
     {file: LINEAR, measure: 'R19, a what-if curve: linear growth at the annual rate the user sets'},
     {file: SINE, measure: 'R19, a what-if curve: a sine wave of the amplitude and period the user sets'},
+    {file: LOTS_TABLE, measure: 'D-MF6(b), the lots table footer: sums, weighted averages and returns over the rows the user selects, else those left visible'},
+    {file: LOT_COMPARISON, measure: 'D-MF6(b), the lot comparison aggregate: value and return of the lots the user selects'},
+    {file: LOT_WAC, measure: "D-MF6(b), the WAC chart's percentage view: the value series rebased on its first known value"},
 ];
 
 const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((entry) => entry.file));
@@ -506,7 +520,7 @@ const inScript = (rows: readonly string[]): string => ['<script lang="ts">', ...
 /** What (A) prints when a listed file does not declare its measure: the form, and where the rule lives. */
 const HOW_TO_DECLARE = [
     '',
-    'The frontend computes no financial quantity; an interactive measure (the measuring tool, a what-if curve) is the only exception,',
+    'The frontend computes no financial quantity; an interactive measure (the measuring tool, a what-if curve, an aggregate of the lots the user chooses) is the only exception,',
     'and it is declared where it lives (frontend.instructions.md «Financial numbers»; financial-math.instructions.md, rule 6):',
     "a line of the module's leading JSDoc block — its first /** comment, before any code — opens with the tag, then describes the measure:",
     '',
@@ -557,7 +571,7 @@ describe('Financial math exceptions: the browser computes only the interactive m
             const rule = [
                 'The frontend computes no financial quantity (frontend.instructions.md «Financial numbers»; financial-math.instructions.md, rule 6).',
                 "A power whose exponent holds 365 annualizes a return, and returns are the backend's (backend/app/services/financial_math/returns.py): call the field the backend computes instead.",
-                `Or, if this is an interactive measure (the measuring tool, a what-if curve), declare the file: ${TAG} in its leading JSDoc block, and an entry in DECLARED_EXCEPTIONS of src/financialMathExceptions.gate.test.ts.`,
+                `Or, if this is an interactive measure (the measuring tool, a what-if curve, an aggregate of the lots the user chooses), declare the file: ${TAG} in its leading JSDoc block, and an entry in DECLARED_EXCEPTIONS of src/financialMathExceptions.gate.test.ts.`,
             ];
             expect(offenders, ['', ...rule, `${offenders.length} power(s) outside the declared files:`, '', ...offenders, ''].join('\n  ')).toEqual([]);
         });
