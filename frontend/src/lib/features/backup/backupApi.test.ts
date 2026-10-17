@@ -96,7 +96,7 @@ const zodios = vi.hoisted(() => ({
 const generatedSchemas = vi.hoisted((): Record<string, unknown> => ({}));
 vi.mock('$lib/api', () => ({zodiosApi: zodios, schemas: generatedSchemas}));
 
-import {backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, instanceBackupFileUrl, startInstanceBackup, type InstanceBackupJob} from './backupApi';
+import {backupErrorCode, backupFailureCode, deleteInstanceBackupJob, getInstanceBackupJob, instanceBackupFileUrl, RESTORE_TICKET_HEADER, startInstanceBackup, type InstanceBackupJob} from './backupApi';
 import * as backupApiModule from './backupApi';
 
 type Alias = keyof typeof zodios;
@@ -812,7 +812,7 @@ describe('probeServer and restoreOutcome: a plain fetch on this origin, never Zo
         }
 
         it('RESTORE_TICKET_HEADER is X-Restore-Ticket, the header the ticket travels in', () => {
-            expect((backupApiModule as unknown as Record<string, unknown>).RESTORE_TICKET_HEADER, 'backupApi.ts exports no RESTORE_TICKET_HEADER (B5c)').toBe('X-Restore-Ticket');
+            expect(RESTORE_TICKET_HEADER, 'backupApi.ts exports no RESTORE_TICKET_HEADER (B5c)').toBe('X-Restore-Ticket');
         });
 
         it('with a ticket: one GET /api/v1/backup/restore/outcome on this origin — same-origin credentials, never cached, JSON asked, the ticket in X-Restore-Ticket and nowhere in the URL —, nothing through Zodios', async () => {

@@ -5366,6 +5366,28 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-20 — knip e `RESTORE_TICKET_HEADER` (2026-10-17, 10:50-10:54) — ✅ 🧊 FROZEN (checkpoint delle 10:54)
+
+> **B-18 committato** (coordinatore, 10:50): `7b1911fd6`, albero pulito, merge-tree con dev pulito. Il testo del
+> CHANGELOG è salvato; l'entrata aspetta la revisione di H. Via a B-20.
+>
+> **Stato reale**:
+> - `RESTORE_TICKET_HEADER` (`backupApi.ts:190`) è usato in produzione soltanto dentro il suo modulo (l.204).
+> - Il suo test (`backupApi.test.ts:815`, di B5c) lo legge con un cast sull'import a namespace, scritto quando era
+>   ancora rosso, e knip non lo conta come uso.
+> - **knip prima** (10:50:56-10:51:02, `frontend/node_modules/.bin/knip --no-progress`): uscita 1, «Unused exports
+>   (20)», con `RESTORE_TICKET_HEADER` fra loro. Era già rosso per voci di altri; non è un gate.
+>
+> **Correzione** (solo il test, a TA-F): `RESTORE_TICKET_HEADER` nell'import per nome (l.99), e l'asserzione diretta su
+> di esso. Nessun cambio di prodotto, nessuna riga di CHANGELOG.
+>
+> - ✅ **Test cambiato** (TA-F, 10:51): l.99 e l.815 di `backupApi.test.ts`; l'import a namespace resta per le ricerche
+>   della fase rossa degli altri casi. `prettier --check` pulito.
+> - ✅ **Vitest** su `backupApi.test.ts` (10:51:57): **198 su 198**.
+> - ✅ **knip dopo** (10:52:04): uscita 1 come prima. «Unused exports» passa da 20 a **19**. Il diff dei due log toglie
+>   soltanto la riga di `RESTORE_TICKET_HEADER`; il resto sono orari e il consiglio di dotenv.
+> - **Backlog**: B-20 ✅.
+
 ### B-18 — `restore --instance-key-file`: i segreti di un archivio in chiaro con la chiave vecchia (2026-10-17, 10:29-10:51) — ✅ 🧊 FROZEN (checkpoint delle 10:51)
 
 > **B-32 entrato** (coordinatore, 10:29): dev `7af21a5c1` (commit `ca1343d6d`), CHANGELOG 🐛 `d11ac04d3`. HEAD portata
