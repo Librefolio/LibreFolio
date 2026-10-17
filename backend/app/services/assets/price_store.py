@@ -326,6 +326,8 @@ class PriceStoreOperations:
             # Integrity guard errors accumulated across all dates (surfaced via
             # the same `results[].message` the currency-mismatch check uses).
             rejected_dates: list[str] = []
+            # X-R46: (date, reason) of every date left out, for results[].rejected — the editors name them
+            rejections: list[tuple[date, str]] = []
             upserted_count = 0
 
             # W-B58: a provider's value no column can keep loses its date, here, before any slice is written: a value
@@ -339,6 +341,7 @@ class PriceStoreOperations:
                     if not earliest <= date_key <= latest:
                         del valid_inputs[date_key]
                         out_of_range_dates.append(date_key.isoformat())
+                        rejections.append((date_key, "date_out_of_range"))
                 if out_of_range_dates:
                     logger.warning("Provider prices skipped: date out of range", asset_id=asset_id, source=source_plugin_key, dates=out_of_range_dates[:5], count=len(out_of_range_dates), earliest=earliest.isoformat(), latest=latest.isoformat())
                 for date_key, price in list(valid_inputs.items()):
@@ -346,6 +349,7 @@ class PriceStoreOperations:
                     if reason is not None:
                         del valid_inputs[date_key]
                         unstorable_dates.append(f"{date_key.isoformat()} ({reason})")
+                        rejections.append((date_key, "value_not_storable"))
                 if unstorable_dates:
                     logger.warning("Provider prices skipped: no price column can keep them", asset_id=asset_id, source=source_plugin_key, dates=unstorable_dates[:5], count=len(unstorable_dates))
 
@@ -387,9 +391,14 @@ class PriceStoreOperations:
                     #   the justETF/scheduled-investment case and the original
                     #   production incident alike. In that branch we widen the merged
                     #   [low, high] bounds around the new close instead.
-                    if price.low is not None and price.high is not None:
-                        if price.low > price.high or not (price.low <= price.close <= price.high):
+                    # An erased bound (the -1 sentinel, SET NULL) is no bound: only two real incoming bounds are
+                    # held to the close (X-R46: the data editor's erase of High or Low was refused as inconsistent)
+                    incoming_low = None if price.low == Decimal("-1") else price.low
+                    incoming_high = None if price.high == Decimal("-1") else price.high
+                    if incoming_low is not None and incoming_high is not None:
+                        if incoming_low > incoming_high or not (incoming_low <= price.close <= incoming_high):
                             rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
+                            rejections.append((date_key, "ohlc_inconsistent"))
                             continue
                     elif merged_low is not None and merged_high is not None:
                         merged_low = min(merged_low, price.close)
@@ -471,6 +480,7 @@ class PriceStoreOperations:
                     "asset_id": asset_id,
                     "count": upserted_count,
                     "message": msg,
+                    "rejected": [{"date": day, "reason": reason} for day, reason in sorted(rejections)],
                 }
             )
         # update_count = 0 because SQLite doesn't distinguish

@@ -433,8 +433,27 @@ def _iso_currency_candidates(code: str) -> tuple[str, ...]:
     return tuple(sorted({currency.alpha_3 for currency in pycountry.currencies if code in (getattr(currency, "numeric", None), currency.name.upper())}))
 
 
+def iso_currency_candidates(value: Any) -> tuple[str, ...]:
+    """The ISO 4217 alphabetic codes a currency value may stand for, sorted (E-19b1).
+
+    The text is stripped (NBSP included) and upper-cased. A valid code gives itself (``"eur"``: EUR); a numeric code or
+    a currency name gives the codes whose numeric code or name it is — one for most (``"978"``, ``"EURO"``: EUR), two
+    for a name ISO 4217 gives two currencies (``"Bolívar Soberano"``: VED and VES). None (an empty tuple) for anything
+    else: not a text, empty, past 80 characters, or a subunit code of ``NEVER_RELABELLED_CURRENCY_CODES``.
+    """
+    if not isinstance(value, str):
+        return ()
+    code = value.strip().upper()
+    if code in NEVER_RELABELLED_CURRENCY_CODES:
+        return ()
+    if _is_iso_alpha_3(code):
+        return (code,)
+    return _iso_currency_candidates(code)
+
+
 def suggested_iso_currency(value: Any) -> Optional[str]:
-    """The ISO 4217 alphabetic code a currency value stands for, or None (E-19a).
+    """The ISO 4217 alphabetic code a currency value stands for, or None (E-19a): ``iso_currency_candidates`` when it
+    names exactly one.
 
     The text is stripped (NBSP included) and upper-cased. A valid code comes back as such — ``"eur"`` gives ``"EUR"``,
     ``"GBp"`` gives ``"GBP"``, as ``iso_currency_code`` stores them. A value the old lenient validation stored, a numeric
@@ -442,14 +461,7 @@ def suggested_iso_currency(value: Any) -> Optional[str]:
     text, empty, past 80 characters, standing for no code or for two (``"Bolívar Soberano"``: VED and VES), or one of
     ``NEVER_RELABELLED_CURRENCY_CODES``.
     """
-    if not isinstance(value, str):
-        return None
-    code = value.strip().upper()
-    if code in NEVER_RELABELLED_CURRENCY_CODES:
-        return None
-    if _is_iso_alpha_3(code):
-        return code
-    candidates = _iso_currency_candidates(code)
+    candidates = iso_currency_candidates(value)
     return candidates[0] if len(candidates) == 1 else None
 
 

@@ -53,7 +53,11 @@ It is important to keep the single-item form state apart from the workspace's st
   forces a rebuild even when `open` never went back to `false`) and may be incomplete or invalid
   while the user types.
 * **Staging state** — on **Apply**, `TransactionBulkModal` writes the pushed payload into the row's
-  `DraftFields` (`applyFormPayload`) and keeps the row as a `PendingOp`. Read more in the
+  `DraftFields` (`applyFormPayload`) and keeps the row as a `PendingOp`. The payload is signed, as
+  a create is sent, while the workspace holds a value whose type rule demands a negative (a
+  `SELL`'s quantity, a `BUY`'s cash) as its magnitude: `applyFormPayload` ends by bringing the
+  quantity and the cash back to that convention (`magnitudeForRule`), so an untouched **Apply**
+  leaves them as the row held them (W-B65). Read more in the
   **[Transaction Staging State](../../state/transaction-draft.md)** guide.
 
 ---
@@ -88,7 +92,7 @@ Shown when the type's rules allow them:
 | Field | Type | Description |
 |-------|------|-------------|
 | `asset_id` | `number \| null` | Selected asset (`AssetSelect`); **New asset** opens a stacked `AssetModal` |
-| `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 12 integer and 10 fraction digits); `'0'` when the type forbids a quantity |
+| `quantity` | `string` | Exact decimal string, edited with `ExactQuantityInput` (built on `ExactDecimalInput`; at most 15 integer and 10 fraction digits); `'0'` when the type forbids a quantity |
 
 ---
 
@@ -182,11 +186,12 @@ The form checks locally only what it can know without the ledger:
   quantity unless the type forbids it; the form also needs a date, and for a pair the destination
   side ([Pair validation](#pair-validation)). Until then there is no automatic validation and
   **⚡ Validate now** stays disabled.
-- **Quantity** — `ExactQuantityInput` checks the syntax, the 12 + 10 digit budget (the 10 decimals
-  the backend keeps for a quantity) and the type's sign rule, and reports its validity
-  (`onvaliditychange`); an invalid quantity disables the footer button. A fraction past 10 digits
-  is also said under the field (`tx-form-quantity-digits-error`, `common.decimalPlacesExceeded`),
-  and the value stays as typed.
+- **Quantity** — `ExactQuantityInput` checks the syntax, the 15 + 10 digit budget (the 15 integer
+  digits, decision N63, and the 10 decimals the backend keeps for a quantity; zeros that do not
+  change the value are not counted: `0.10000000000` has one decimal, `007` one integer digit) and
+  the type's sign rule, and reports its validity (`onvaliditychange`); an invalid quantity
+  disables the footer button. A fraction past those 10 decimals is also said under the field
+  (`tx-form-quantity-digits-error`, `common.decimalPlacesExceeded`), and the value stays as typed.
 - **Cash sign** — for a type whose cash rule is `negative` the user types a magnitude and the
   payload builder negates it (`applySignRules`). An amount that still breaks the rule
   (`computeSignHint`) disables the footer button.

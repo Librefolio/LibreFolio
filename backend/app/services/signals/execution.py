@@ -37,7 +37,7 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
-from backend.app.services.series_preparation import date_is_within_range
+from backend.app.services.market_series import date_is_within_range
 from backend.app.services.signals.annotations import SignalAnnotationService, attach_annotations
 from backend.app.services.signals.base import SignalUnavailableError
 from backend.app.services.signals.planning import PlannedSignal, SignalExecutionPlan

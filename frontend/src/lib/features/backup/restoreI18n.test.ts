@@ -217,7 +217,7 @@ describe('the keys §0 and §3 fix', () => {
 // =====================================================================================================================
 /** The codes §5 lists, each needing a message, by what they name. */
 const CODE_LISTS: Array<[string, string[]]> = [
-    ['a warning of the check', ['rows_changed', 'foreign_key_violations', 'foreign_key_violations_added', 'control_totals_changed', 'control_totals_unreadable']],
+    ['a warning of the check', ['rows_changed', 'foreign_key_violations', 'foreign_key_violations_added', 'control_totals_changed', 'control_totals_unreadable', 'non_iso_currencies']],
     ['the blocker', ['no_administrator']],
     ['a rollback reason', ['first_start_failed', 'swap_interrupted', 'swap_failed', 'stage_missing']],
     ['a phase of the check', ['checking', 'unpacking', 'upgrading', 'verifying']],

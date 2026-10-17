@@ -24,7 +24,10 @@ export function describeAccountError(error: unknown, action?: string): AccountEr
     const code = detail !== null && typeof detail === 'object' ? (detail as {error_code?: unknown}).error_code : undefined;
     if (typeof code === 'string' && (ACCOUNT_ERROR_CODES as readonly string[]).includes(code)) {
         const billingUrl = (detail as {billing_url?: unknown}).billing_url;
-        return {code: code as AccountErrorCode, key: `settings.usersTab.errors.${code}`, params: typeof billingUrl === 'string' && billingUrl ? {billingUrl} : undefined};
+        // On a deletion the last active administrator can only be the caller deleting their own account (another
+        // administrator's deletion answers DEMOTE_FIRST): a message of its own, which says what to do first (A-16)
+        const key = code === 'LAST_ADMIN' && action === 'delete' ? 'settings.usersTab.errors.LAST_ADMIN_DELETION' : `settings.usersTab.errors.${code}`;
+        return {code: code as AccountErrorCode, key, params: typeof billingUrl === 'string' && billingUrl ? {billingUrl} : undefined};
     }
     if (response?.status === 404) {
         return {code: 'NOT_FOUND', key: 'settings.usersTab.errors.NOT_FOUND'};
@@ -35,7 +38,7 @@ export function describeAccountError(error: unknown, action?: string): AccountEr
     if (response?.status === 500 && action === 'delete') {
         return {code: 'DELETION_FAILED', key: 'settings.usersTab.errors.DELETION_FAILED'};
     }
-    // A refusal without a code still says why (the only administrator deleting their own account answers 400 so)
+    // A refusal without a code still says why: the server's own sentence
     if ((response?.status === 400 || response?.status === 409) && typeof detail === 'string' && detail.trim()) {
         return {code: null, key: 'settings.usersTab.errors.generic', message: detail};
     }

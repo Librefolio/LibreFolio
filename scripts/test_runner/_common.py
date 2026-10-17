@@ -679,7 +679,7 @@ def ensure_category_setup(category: str) -> bool:
     return run_category_setup(category)
 
 
-def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None, in_all: bool = True, isolation: str = None, exclusive_because: str = None) -> None:
+def add_test(category: dict, action: str, func, *, test_names: bool = True, name: str, desc: str, prereq: str = None, tests: str = None, note: str = None, in_all: bool = True, named_only: bool = False, isolation: str = None, exclusive_because: str = None) -> None:
     """Add a single test entry to a category dict.
 
     ``in_all=False`` marks an action whose tests another action already runs —
@@ -687,6 +687,14 @@ def add_test(category: dict, action: str, func, *, test_names: bool = True, name
     The derived ``all`` skips it to avoid executing the same spec twice; the
     reachability check is unaffected, because it reasons about launched paths
     rather than actions.
+
+    ``named_only=True`` marks an action that runs only when named on the command
+    line: neither the serial ``all`` (it implies ``in_all=False``) nor the
+    frontend consolidated pass (``group_frontend_units``) runs it, whatever the
+    lane. For an action that needs a lane of its own — ``front-utility
+    cloud-smoke`` on a managed lane (H-43) — and whose files other actions
+    already run. The backend passes do not read it: no backend action needs it
+    today.
 
     ``isolation`` overrides the classifier, which defaults every pytest unit that
     touches a database to ``write-global``. Declaring ``read`` or
@@ -699,7 +707,9 @@ def add_test(category: dict, action: str, func, *, test_names: bool = True, name
     cannot be scoped — "it rewrites `global_settings`, a single row shared by
     every user" — not that sharing would be inconvenient.
     """
-    entry = {"func": func, "test_names": test_names, "name": name, "desc": desc, "in_all": in_all}
+    entry = {"func": func, "test_names": test_names, "name": name, "desc": desc, "in_all": in_all and not named_only}
+    if named_only:
+        entry["named_only"] = True
     if prereq:
         entry["prereq"] = prereq
     if tests:

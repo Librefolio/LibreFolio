@@ -50,6 +50,15 @@ class CurrencyNormalizationResponse(StrictModel):
     error: Optional[str] = Field(None, description="Error message if normalization failed")
 
 
+class CurrencySuggestionResponse(StrictModel):
+    """What a stored currency value stands for (E-19b1): the currency picker shows it beside a value that is no ISO 4217
+    code, such as the ``978`` or ``EURO`` an earlier version saved as written."""
+
+    canonical: bool = Field(..., description="The value is stored as an ISO 4217 alphabetic code: upper case, nothing around it")
+    suggestion: Optional[str] = Field(None, description="The one ISO 4217 code the value stands for, or null: none, or more than one")
+    candidates: List[str] = Field(default_factory=list, description="The ISO 4217 codes the value may stand for, sorted")
+
+
 class SectorItem(BaseModel):
     """A sector with its key and emoji icon."""
 

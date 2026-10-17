@@ -1863,7 +1863,9 @@ async def test_a_check_dropped_while_a_poll_probes_its_lock_is_not_found(instanc
 
 
 TOTALS_STATUSES = {"same", "changed", "absent", "other_version", "unreadable"}
-STAGE_WARNINGS = {"rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable"}
+#: Every warning code of ``RestoreStageReport.warnings``, in the order of its ``Literal``: the five of before E-19b1,
+#: then ``non_iso_currencies`` (E-19b1: the copy holds stored currency values that are not ISO 4217 codes).
+STAGE_WARNINGS = {"rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable", "non_iso_currencies"}
 TOTALS_DIFFERENCE_FIELDS = {"kind", "broker_id", "currency", "asset_id", "before", "after"}
 
 
@@ -1944,14 +1946,14 @@ def enum_of(schema: dict, schemas: dict) -> set:
 
 
 def test_openapi_documents_the_totals_of_the_report():
-    """(g) The generated client reads the three fields, the five statuses, the two warnings among the five, and each
-    difference as ``RestoreTotalsDifference`` with its six fields."""
+    """(g) The generated client reads the three fields, the five statuses, the two warnings among the six (E-19b1 added
+    ``non_iso_currencies``), and each difference as ``RestoreTotalsDifference`` with its six fields."""
     schemas = restore_app().openapi()["components"]["schemas"]
     report = schemas["RestoreStageReport"]["properties"]
     missing = [field for field in cases.TOTALS_FIELDS if field not in report]
     assert missing == [], f"RestoreStageReport documents the totals: {missing} missing"
     assert enum_of(report["control_totals"], schemas) == TOTALS_STATUSES, f"the five statuses: {report['control_totals']}"
-    assert enum_of(report["warnings"]["items"], schemas) == STAGE_WARNINGS, f"the warnings, the two of the totals included: {report['warnings']}"
+    assert enum_of(report["warnings"]["items"], schemas) == STAGE_WARNINGS, f"the six warnings, the two of the totals included: {report['warnings']}"
     assert report["control_totals_differences"].get("items") == {"$ref": "#/components/schemas/RestoreTotalsDifference"}, f"a list of RestoreTotalsDifference: {report['control_totals_differences']}"
     assert report["control_totals_differences_count"].get("type") == "integer", f"a count: {report['control_totals_differences_count']}"
     difference = schemas.get("RestoreTotalsDifference", {}).get("properties", {})

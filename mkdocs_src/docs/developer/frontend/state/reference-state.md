@@ -12,7 +12,7 @@ All these stores are located in `src/lib/stores/reference/` (with one exception)
 |:------|:-------------|:--------|
 | **`brokerStore`** | `/brokers?include_inaccessible=true` | Brokers the user can see: the accessible ones with their `user_role`, plus the inaccessible ones with `user_role: null`. Lookups by id from any component (tables, selectors, badges) and role helpers (`canEditBroker`, `getEditableBrokers`). |
 | **`assetStore`** | `/assets/query` | All accessible financial instruments (Stocks, ETFs, Crypto, …), looked up by id. |
-| **`currencyStore`** | `/utilities/currencies` | ISO 4217 currencies with symbols and flags; reloaded when the language changes. |
+| **`currencyStore`** | `/utilities/currencies` | ISO 4217 currencies with symbols and flags; reloaded when the language changes. `suggestCurrency(value)` asks `/utilities/currencies/suggest` what a stored value that is no ISO code stands for, once per value; a failure answers «no suggestion» and is asked again next time. |
 | **`countryStore`** | `/utilities/countries` | ISO 3166-1 countries (alpha-3 and alpha-2 codes, name, flag), looked up by alpha-3; reloaded when the language changes. |
 | **`sectorStore`** | `/utilities/sectors` | The standard financial sectors (GICS-based: Technology, Health Care, Financials, …) and their emoji. |
 | **`fxRoutesStore`** | `/fx/providers/routes` | The configured FX pairs and the currencies they reach — the two endpoints of each configured pair. Currency selectors with `configuredOnly`, the FX pair dialog and the risk panels use it to offer only what the user can actually convert. `invalidateFxRoutes()` forces a reload, e.g. after a pair is created. |

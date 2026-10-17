@@ -188,7 +188,7 @@ class TXPromoteResolvedFields(StrictModel):
     A key left out leaves both rows as they are; an explicit null clears the description, the tags or the cost basis.
     The description, the tags and the date go on both rows, the cost basis on the receiving leg only (decision 47).
     Applied by ``batch_creates._apply_promote_resolved_fields``. A value refused here is an issue of the promote at the
-    batch's parse, named by the field itself (``transaction_batch_stages._loc_to_field``). Before, the dict was applied
+    batch's parse, named by the field itself (``utils.pydantic_errors.loc_to_field``). Before, the dict was applied
     as it came: a description of any type or length reached the Text column, an unknown key was ignored, and a malformed
     date, tags or cost basis raised out of the batch.
     """

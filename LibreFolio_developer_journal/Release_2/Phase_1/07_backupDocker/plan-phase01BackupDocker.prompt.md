@@ -5366,6 +5366,250 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### W-B64 + W-B65 (per W) — il budget delle cifre contato come il backend; e un «Applica» senza modifiche nel Bulk (2026-10-17, 18:31-19:56) — ✅ 🧊 FROZEN (checkpoint delle 19:56)
+
+> **Assegnazione** (coordinatore, 18:31): «W-B64 + W-B65 as one small lot», dalla sezione di W (BACKLOG l.5660 e
+> l.5668; piano 04, «C-97b — i decimali in input: la cura»). Prima l'analisi; W rivede. Corsia 6187.
+>
+> **Analisi** (18:31-18:47, sola lettura, base `870d519bd`; `files/wb64-65-analysis.md`):
+> - **W-B64**:
+>   - le tre quantità del Form (`TxFormSingleSection.svelte` ×2, `TxFormPairSection.svelte`) hanno
+>     `maxIntegerDigits={12}`, mentre il backend ne prende 15 (N63, `db/precision.py`);
+>   - `ExactDecimalInput` (il budget e il messaggio) ed `ExactQuantityInput` (`withinDigitBudget`) contano i caratteri.
+>     Il backend (`_digit_counts`) non conta gli zeri iniziali dell'intero né quelli finali dei decimali. Così il Form
+>     rifiuta `0.10000000000` a 10 decimali, e i campi priorità del PAC rifiutano `5.0` con «Whole numbers only».
+> - **W-B65**: il Form, su «Applica», manda il payload col segno (`buildCreatePayload`), e `applyFormPayload` del Bulk lo
+>   copia com'è. Il Bulk invece tiene in grandezza i valori che il tipo vuole negativi (`fieldsFromTx`, e l'import). La
+>   guardia della chiusura confronta `serializeOps` così com'è. Due cause:
+>   - **C1, il segno** (come scritta): la quantità di una SELL mostra `-0.00000001`; la cassa di BUY, WITHDRAWAL, FEE e
+>     TAX torna col segno. La cella la ri-segna, quindi non si vede, ma la chiave cambia. E le SELL nuove create dal Form
+>     si vedono col segno;
+>   - **C2, trovata leggendo**: ogni «Applica» scrive `wacCurrencyHint = null` (l.777-778, e il partner l.2476) su una
+>     riga che quella chiave non l'aveva. `JSON.stringify` tiene una chiave `null` e ne butta una assente: qualunque
+>     tipo, anche un DEPOSIT, chiederebbe di scartare.
+> - Fuori dal lotto, per W: la cassa dell'import passa ancora da `Number`, e `isDraftReadyForValidation` legge
+>   `=== '0'`; un blur su una cassa positiva riscrive `0.010000` come `0.01`.
+>
+> **Decisioni** (coordinatore, 18:5x):
+> - **D1 = (a)+(b)**: N63 è una decisione notturna registrata, valida finché il developer non la rivede: 15 cifre intere;
+> - **D2 = sì**: non si contano neanche gli zeri iniziali dell'intero;
+> - **D3 = sì**, C2 dentro il lotto se il rosso del DEPOSIT la prova; se è verde prima della cura, non si cambia nulla.
+> - **Scrittura**: tutti i file elencati, solo script e logica, **tranne `TransactionBulkModal.svelte`**, che W sta
+>   cambiando per W-B70 (D-W70-4): la sua modifica (`fieldsFromTx`, `applyFormPayload`, il suggerimento WAC) va **per
+>   ultima**, quando il coordinatore dice che W-B70 è entrato. CHANGELOG 🐛 ×2. Slot E2E a richiesta.
+>
+> **Contratto** (`files/wb64-65-contract.md`):
+> - `decimalDigitCounts(value)` in `parseDecimalInput.ts`: le cifre intere senza gli zeri iniziali, i decimali senza
+>   quelli finali, e il numero senza quegli zeri (`stripped`); `null` per un testo non canonico. Lineare, due cicli
+>   (W-B66).
+> - `ExactDecimalInput`: budget e messaggio sui conteggi; `min`/`max` confrontati con `stripped`; una freccia su un
+>   valore il cui testo supera il budget, ma valido senza i suoi zeri, parte da `stripped` (`5.` e 40 000 zeri → `6`);
+>   ogni altro valore dal suo testo (`1.50` → `2.50`). `ExactQuantityInput`: `withinDigitBudget` sui conteggi.
+> - Il Form: `maxIntegerDigits={15}` sulle tre quantità.
+> - `magnitudeForRule(value, rule)` in `txPayloadHelpers.ts`: per la regola `negative`, un valore negativo diventa la
+>   sua grandezza esatta; tutto il resto torna com'è. Idempotente.
+> - Il Bulk, per ultimo: `fieldsFromTx` e `applyFormPayload` (per ultima cosa) passano quantità e cassa da
+>   `magnitudeForRule`; con D3, un suggerimento WAC `null` toglie la chiave invece di scriverla.
+>
+> - **Patch pronte** (`files/wb64-65-wip/`, tutte `--check` OK su `870d519bd`; le copie emesse passano prettier):
+>   - `apply_wb64.py`: 9 operazioni in 5 file (l'aiuto, i due campi, le tre quantità del Form);
+>   - `apply_wb65_helper.py`: 2 operazioni in `txPayloadHelpers.ts`;
+>   - `apply_wb65_bulk.py`: 3 operazioni in `TransactionBulkModal.svelte`, 5 con `--with-d3`. Da applicare dopo W-B70,
+>     con un `--check` nuovo.
+> - **Rossi in scrittura** (18:58): TA-WB64 (Vitest: `parseDecimalInput.test.ts`, `ExactDecimalInput.test.ts`,
+>   `ExactQuantityInput.test.ts`, `TransactionFormModal.test.ts`) e TA-WB65 (Vitest `txPayloadHelpers.test.ts`; E2E
+>   `tx-bulk-operations.spec.ts`: SELL, BUY e DEPOSIT, ognuno coi suoi dati).
+> - ✅ **Rossi scritti** (18:58-19:16):
+>   - **TA-WB64**:
+>     - `decimalDigitCounts`: 22 casi (7 `null`, 12 terne esatte, 3 lineari sotto 1 000 ms);
+>     - `ExactDecimalInput`: 5 rossi (`0.10000000000` a 10, `5.0` a 0, `0000000000001.5` a 12, la portata di `5.` e
+>       40 000 zeri, la freccia da quel valore a `6`) più 3 guardie;
+>     - `ExactQuantityInput`: 1 rosso e 1 guardia (`0.10000000001` resta intero, rifiutato);
+>     - il Form: 3 rossi, 15 cifre intere in BUY, ADJUSTMENT e TRANSFER; la guardia spostata a `1000000000000000.1`.
+>   - **TA-WB65**:
+>     - `magnitudeForRule`: 44 casi, compreso il giro del Form per SELL, BUY e FEE;
+>     - l'E2E: 3 test (SELL, BUY, DEPOSIT), con `seedSatoshiLedger` e `applyFormUntouched`. Il seme della guardia C-97b
+>       ora passa dallo stesso aiuto, con le stesse righe; la sua docstring rimanda ai test W-B65.
+>     - **C2 vera dal codice**: per TA-WB65, oggi il DEPOSIT è rosso solo per il `null` di `wacCurrencyHint`.
+>   - Note dei test-author, fuori dal lotto:
+>     - il Form a 15 + 10 accetta `999999999999999.5`, che il backend rifiuta per le 15 cifre significative (come già
+>       oggi a 12 + 10);
+>     - un commento vecchio in `e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` («12 integer digits, 6 decimals»).
+> - ✅ **Rosso Vitest** (corsia 6187, 19:17-19:18, carico 14): i 5 file, **75 falliti** e 444 passati
+>   (`files/logs/b_vitest_wb64_65_red.log`). Sono esattamente i casi nuovi, 22 + 5 + 1 + 3 + 44, ognuno all'asserzione
+>   attesa: `aria-invalid` `true` per il budget, `{digitsValid: false, rangeValid: true}` per la portata, il valore
+>   lasciato com'è dalla freccia; i due aiuti per assenza dell'export.
+> - ✅ **Patch W-B64 e aiuto W-B65 applicate** (19:19): `apply_wb64.py` (9 operazioni) e `apply_wb65_helper.py` (2).
+>   La patch del Bulk aspetta W-B70.
+> - ✅ **Verdi Vitest** (19:19-19:20, carico 21): i 5 file **519/519** (`files/logs/b_vitest_wb64_65_green.log`).
+>   `front check` **0/0** (`wb64_front_check.log`); `tsc -p tsconfig.e2e.json` **0 errori** (`wb65_tsc_e2e.log`).
+> - ⏳ **Rosso E2E**: slot chiesto (19:2x), `files/scripts/wb65_slot.sh red`: i 3 W-B65 e la guardia C-97b, col Bulk
+>   ancora senza patch. Atteso: 3 falliti e 1 passato.
+> - **W-B70 entrato, base aggiornata** (coordinatore, 19:23): avanzamento rapido `870d519bd` → `c9ebc1102`; i miei 13 file
+>   sporchi intatti, nessuna sovrapposizione. W-B70 cambia il Bulk solo in `mergeAllSuggestions` e negli import: lontano
+>   dalle mie righe. `api sync` (exit 0, nessun file tracciato cambiato); `apply_wb65_bulk.py --with-d3 --check` OK sulla
+>   base nuova. **GO** del coordinatore per il rosso E2E, dietro il cancello del carico a 5 minuti (19:2x).
+> - **Doc W-B64** (docs-writer, in corso): `core-ui/atoms.md` (`ExactDecimalInput`, `ExactQuantityInput`) e
+>   `features/transaction-form.md` (la quantità). La doc di W-B65 (`transaction-form.md` l.55,
+>   `state/transaction-draft.md`) solo dopo la patch del Bulk.
+> - ✅ **Rosso E2E** (slot del coordinatore, 19:24-19:37, carico a 5 minuti 34; ricostruzione del frontend di debug
+>   compresa, 12 minuti sotto il carico di J e Y): **3 falliti e 1 passato** (`files/logs/wb65_red_tx_bulk.log`):
+>   - SELL: la cella mostra `-0.00000001` (asserzione morbida) e, dopo «Annulla», l'editor resta aperto;
+>   - BUY: l'editor resta aperto;
+>   - DEPOSIT: l'editor resta aperto. **C2 provata**: i suoi valori non cambiano segno, quindi la causa è solo il `null`
+>     di `wacCurrencyHint`. D3 entra;
+>   - la guardia C-97b, col seme ora condiviso: passata.
+> - ✅ **Patch del Bulk applicata** (19:38): `apply_wb65_bulk.py --with-d3`, 5 operazioni; prettier pulito su tutti i 14
+>   file del lotto.
+> - ✅ **Verdi**:
+>   - `front check` **0/0** (19:39-19:41, dopo l'attesa del carico; `wb65_front_check.log`);
+>   - `vitest related` sui 7 moduli cambiati: **83 file, 3127 passati** (19:41-19:43; `b_vitest_wb64_65_related.log`):
+>     i test di ogni componente che importa i campi esatti o gli aiuti, PAC compreso;
+>   - E2E (19:46-19:49): `tx-bulk-operations`, i 3 W-B65, la guardia C-97b e «B1 regression»: **5 passati**, sulla build
+>     ricostruita con la patch (`wb65_green_tx_bulk.log`). Porta 6187 libera.
+> - **CHANGELOG** 🐛 ×2, dopo la voce di #43 (le cifre della quantità e gli zeri; l'«Applica» senza modifiche nel Bulk).
+> - **Backlog**, sezione B: **B-47** (un focus e un blur sulla cassa del Form riscrivono `0.010000` come `0.01`: la
+>   guardia chiede ancora di scartare; con la cassa dell'import da `Number`) e **B-48** (il Form a 15 + 10 contro le 15
+>   cifre significative del backend; il commento vecchio in `tx-bulk-promote-cost-basis.spec.ts`). Le righe W-B64 e
+>   W-B65 sono nella sezione di W: le chiude il coordinatore o W.
+> - **⚠️ Fuori pista — B-47 verificata sul codice** (19:5x): `READ_MIN_SCALE = 6` (`db/real_decimal.py`) rende le somme
+>   con almeno 6 decimali, `CompactCashCell.handleBlur` emette sempre, `setCash` non confronta.
+> - ✅ **Doc** (docs-writer, 19:05-19:53; solo inglesi, nessuna traduzione):
+>   - `core-ui/atoms.md`: `ExactDecimalInput` conta le cifre come il backend (`decimalDigitCounts`, gli esempi), `min`/`max`
+>     sul valore senza zeri, il messaggio, la regola delle frecce, la riga di W-B66; `ExactQuantityInput`: il valore del
+>     genitore mostrato canonico, «Used by» a 15 + 10;
+>   - `features/transaction-form.md`: il punto **Quantity** (15 + 10, gli zeri non contati), la riga `quantity` della
+>     tabella (l.91, ancora a 12, trovata dal grep), lo «Staging state» (il payload col segno, `magnitudeForRule`);
+>   - `state/transaction-draft.md`: la convenzione dei segni di `DraftFields`, l'«Applica» del Form, la guardia della
+>     chiusura (`serializeOps`, la chiave, il `null` contro l'assente). La tabella dello stato resta vera: lo stato non
+>     è mai stato sbagliato, solo la cella e la chiave.
+>   - **⚠️ Fuori pista**: il docs-writer ha trovato nella docstring di `magnitudeForRule` «a `free` ADJUSTMENT»: la regola
+>     della quantità di ADJUSTMENT è `nonzero`. Corretta (solo commento; prettier pulito).
+> - ✅ **Prove della doc** (19:54-19:55, carico 28): build stretta OK, `check-links` OK, `utils gate-docs-links` **63
+>   passati** (`b_docs.sh`). `git diff --check` pulito; porta 6187 libera.
+> - 🧊 **CHECKPOINT READY** (19:56): 19 file tracciati, nessun file nuovo; FROZEN.
+> - **E-19b1, a margine** (coordinatore, 18:48: dove mettere in `_stage` il controllo delle valute salvate di E). Risposta
+>   delle 18:5x:
+>   - dopo gli `except` del mio involucro B-43 e prima di `_write_report`;
+>   - la connessione aperta in `staging.py`, perché il registratore di B-37 guarda solo `staging`, `snapshot`,
+>     `post_migration` e `totals`;
+>   - un BLOB in un posto di valuta fa lanciare a `_as_text` un `TypeError`, non un `sqlite3.Error` (provato,
+>     `files/e19b-wip/probe_audit.py`): il controllo finirebbe;
+>   - nel log, la classe e `sqlite_errorname`, mai il testo (un UTF-8 non valido lo cita).
+
+### X-R75 (per X) — il modale delle rotte di cambio cancella prima di salvare; e togliere ogni rotta cancella la coppia (2026-10-17, 16:42-18:33) — ✅ 🧊 FROZEN (checkpoint delle 18:33)
+
+> **Assegnazione** (coordinatore, 16:42; trovata da E): «the FX route modal deletes before it posts
+> (`FxPairAddModal.svelte` ~325-339)… If the POST fails (a 422, a network error, a server restart), the routes are
+> lost.» Prima l'analisi; il frontend FX è di X, X rivede. Corsia 6187.
+>
+> **Analisi** (16:42-16:58, sola lettura; `files/xr75-analysis.md`):
+> - In modifica (il pulsante «Providers» della pagina della coppia) il modale fa due chiamate:
+>   1. `DELETE` di tutta la coppia, che si conferma da sola (`:326`);
+>   2. `POST` delle rotte nuove (`:339`).
+> - Un `DELETE` di tutta la coppia **non rimette la sentinella MANUAL** (`providers.py:434-478`, Test 17). Così, se il
+>   `POST` fallisce (400, 422, 409, 500, rete, riavvio), o non parte (sessione cambiata `:327`, scheda chiusa), o fallisce
+>   per una coppia intermedia, la coppia resta senza nessuna rotta.
+> - **Difetto 2**: togliere ogni rotta cancella la coppia. Il modale salta il `POST` credendo che la MANUAL torni da sé
+>   (`:333`), come dice `configuration.md:201`; il codice e il Test 17 dicono il contrario. La guida utente
+>   (`provider.en.md:44`) promette invece «The pair becomes manual».
+> - **Chi legge le rotte mentre mancano**:
+>   - le conversioni no: leggono i tassi salvati, e il motore usa le rotte solo nell'impronta della cache;
+>   - la sincronizzazione sì: né `sync_pairs_bulk` né il job dello scheduler vedono più la coppia, e i suoi tassi
+>     invecchiano;
+>   - la qualità dei dati segna la coppia come «non configurata»;
+>   - il frontend la toglie dalla lista dei cambi, e il PAC chiede di crearla.
+>
+> **Decisioni** (coordinatore, 16:47): **D1 = A**, il `replace=true` atomico sul server; **D2 = sì**, nello stesso
+> lotto. GO, rossi prima. Permesso di scrittura su `FxPairAddModal.svelte` (solo logica) e su `api/v1/fx/providers.py`,
+> **ma** `providers.py` solo dopo l'ingresso di X-R74, che lo sta cambiando ora. Da correggere `configuration.md:201`. La
+> riga del CHANGELOG nel checkpoint. Slot API ed E2E a richiesta.
+>
+> **Contratto** (`files/xr75-contract.md`):
+> - `POST …/routes?replace=true`: ogni coppia nominata tiene esattamente le priorità mandate, le altre cancellate nella
+>   stessa transazione, dopo la validazione e l'upsert. Le regole della MANUAL restano.
+> - Il modale in modifica fa un solo `POST` con `replace`. Senza rotte manda la voce MANUAL (priorità 999).
+>
+> - **Patch pronte**:
+>   - `xr75-wip/apply_xr75_fe.py`: 1 operazione nel modale; prettier non cambia nulla;
+>   - `apply_xr75_be.py`: 3 operazioni in `providers.py`, ruff e black puliti sulla copia. Da applicare dopo X-R74.
+> - **Doc** (mia):
+>   - `developer/backend/fx/configuration.md`: una nota «Replacing a pair's routes: `?replace=true`», e la frase del
+>     `DELETE` corretta (un `DELETE` di tutta la coppia non rimette la MANUAL; uno con la priorità sì);
+>   - `developer/frontend/fx-chain-algorithm.md:353`: il modo di salvare del modale. Anche questa diceva che la
+>     MANUAL torna sola.
+>   - Tutte e due solo inglesi.
+> - **Rossi in scrittura**: TA-XR75-BE (`api fx`) e TA-XR75-FE (Vitest del modale, E2E `front-fx fx-detail`).
+> - ✅ **Rossi scritti** (16:50-17:19):
+>   - **TA-XR75-BE**, `test_fx_api.py` 18a-18f, su coppie di valuta che nessun altro usa:
+>     - rossi: 18a, il replace tiene esattamente le priorità mandate (anche la coppia scritta al contrario); 18b, la sola
+>       voce MANUAL lascia la coppia manuale (e il ritorno a una rotta vera toglie la MANUAL); 18c, l'OpenAPI documenta
+>       `replace`;
+>     - guardie: 18d, un replace rifiutato (400, 422) non cambia nulla; 18e, senza `replace`, o con `replace=false`,
+>       l'upsert come prima; 18f, una coppia intermedia, e una coppia attraversata dalla catena ma non nominata resta
+>       intatta.
+>   - **TA-XR75-FE**:
+>     - Vitest: 8 rossi. Un solo `POST` con `replace`, mai un `DELETE`; senza rotte, la voce MANUAL; un `POST` rifiutato
+>       (503, 409) lascia l'errore sul modale aperto. Più tre casi riscritti che fissavano il `DELETE` prima del `POST`.
+>       E 3 guardie: la creazione non chiede `replace`.
+>     - E2E (`fx-detail.spec.ts`): un salvataggio fallito tiene la rotta della coppia; togliere ogni rotta la lascia
+>       manuale. La lista dei provider è risposta nel browser con MOCKFX, che quella reale nasconde.
+> - ✅ **Rosso Vitest** (corsia 6187, 17:19-17:20): `FxPairAddModal.test.ts` **8 falliti** e 16 passati, esattamente i
+>   casi nuovi (`files/logs/b_vitest_xr75_red.log`).
+> - **X-R74 entrato** (coordinatore, 17:01): `providers.py` libero. Il merge di dev lo fa il coordinatore: a quel punto
+>   gli mando «FROZEN for base update» (17:03, correzione del coordinatore: i figli non toccano la storia di git).
+> - ⏳ Rossi API ed E2E: slot chiesto alle 17:22.
+> - ✅ **Rosso API** (slot del coordinatore, 17:21-17:29): `api fx -k replace` **3 falliti** (18a, 18b, 18c) e 3 passati
+>   (le guardie), esattamente come previsto (`files/logs/xr75_red_api_fx.log`).
+> - **⚠️ Fuori pista — il rosso E2E per la ragione sbagliata** (17:29-17:31): i due test cadono nel loro aiuto
+>   `openProviderEditor`, prima del difetto. Lo screenshot mostra il modale con «Failed to load conversion routes»: con
+>   la lista dei provider risposta dal test, `FxProviderSelect.computeRoutes()` prende un'eccezione. Slot liberato
+>   alle 17:33. Il test torna a TA-XR75-FE: trovare la causa e mettere nel messaggio gli errori della console del
+>   browser. Poi un breve slot per rifare solo il rosso E2E.
+>   - La patch del frontend aspetta quel rosso: con lei sola, «a failed save keeps the route» passerebbe senza aver mai
+>     mostrato il suo rosso.
+> - ✅ **La causa vera** (TA-XR75-FE, 17:35-17:45): **un difetto latente del prodotto**, non soltanto il test.
+>   - `currencyGraph.ts` fa `import MultiDirectedGraph from 'graphology'`, ma l'export di default è il `Graph` semplice
+>     (`multi: false`, `type: 'mixed'`; misurato in Node).
+>   - Così due provider sulla stessa direzione (MOCKFX e MOCKFX_FAIL, tutti e due EUR→X) fanno lanciare
+>     `addDirectedEdge`, e il selettore delle rotte dice solo «Failed to load conversion routes». Il catalogo reale
+>     oggi lo evita solo perché ECB, FED, BOE e SNB hanno basi diverse.
+>   - Il test ora usa direzioni opposte, e le sue precondizioni riportano gli errori della console del browser.
+> - **Decisione** (coordinatore, 17:48): l'import con nome dentro X-R75, con il suo rosso Vitest; X rivede.
+> - ✅ **Rossi E2E di nuovo** (slot, 17:50-17:54): tutti e due cadono sul difetto. Dopo il salvataggio fallito la coppia
+>   non ha più rotte («what the save sent: DELETE (no query), POST (no query)»); togliere ogni rotta cancella la
+>   coppia (`files/logs/xr75_red_e2e2.log`).
+> - ✅ **Patch del modale applicata** (17:55:08); Vitest `FxPairAddModal.test.ts` **24 passati**.
+> - ✅ **Il grafo**:
+>   - TA-XR75-FE ha scritto il file nuovo `src/lib/utils/currency/currencyGraph.test.ts`: 2 rossi (due provider sulla
+>     stessa direzione) e 6 guardie. È registrato in `front-utility core-unit` (`_frontend_utility.py` l.129, più una
+>     frase nella desc).
+>   - Rosso (18:00): **2 falliti** e 6 passati, su «UsageGraphError … an edge linking "EUR" to "NIO" already exists».
+>   - Patch `apply_xr75_graph.py` applicata (18:00:37): l'import con nome, con un commento. Prettier non cambia nulla.
+>   - Verdi: i due file **32 passati**; i vicini che toccano il grafo (`FxProviderSelect`, `PageSyncModal`,
+>     `FxSyncModal`, `FxMissingRate`, `fxCreationSync`, `sanitizeHtml`) **97 passati**.
+> - ✅ **Controlli** (18:04): ruff e black puliti sui 3 file Python; prettier pulito sui 5 file del frontend;
+>   `git diff --check` pulito; porta libera.
+> - 🧊 **FROZEN for base update** (18:05): il frontend è finito. Il backend (`providers.py`) aspetta il merge di dev con
+>   X-R74, che fa il coordinatore.
+> - **Base aggiornata** (coordinatore, 18:04): il mio checkpoint `5cbc60844` più il diario, fino a `73627df26`; dev
+>   `1eeb297b2` entrato pulito, `087db9be5`. Porta X-R74 (`providers.py`: quattro 500 generici).
+> - ✅ **Patch del backend applicata** (18:05:18): `apply_xr75_be.py`, 3 operazioni in `providers.py`, ricontrollata dopo
+>   X-R74 (che non tocca i punti della patch). ruff e black puliti; `import backend.app.main` riuscito.
+> - ✅ **`api sync`** (18:10, nessun file tracciato cambiato: il client generato è ignorato da git) e **`front check`**
+>   (18:11): 0 errori, 0 avvisi. Il tipo di `{queries: {replace: true}}` ora esiste.
+> - ⏳ I verdi `api fx` ed E2E: slot chiesto alle 18:12.
+> - ✅ **Doc** (18:14-18:17, mentre lo slot era in coda): `mkdocs build` strict, `check-links`, gate 63.
+> - ✅ **Verdi** (slot del coordinatore, via libera alle 18:15 dopo la finestra di X; 18:18-18:31,
+>   `files/scripts/xr75_green_slot.sh`, ogni corsa ad attesa del carico a 5 minuti sotto 50):
+>   - `api fx`, tutto il file: **33 passati** (i 6 di X-R75 e le prove delle rotte 15-17);
+>   - `front-fx fx-detail`, i 2 test di X-R75: **2 passati**;
+>   - `front-fx fx-add-pair`, tutta la spec, per regressione (la chiamata di creazione condivide la riga cambiata):
+>     **11 passati**.
+>   - Porta 6187 libera.
+> - **Backlog**: X-R75 e il fratello dell'editor (che conta come salvate le date scartate) li scrive X nella sua
+>   sezione; il grafo non multiplo è entrato in X-R75 (coordinatore, 17:48). CHANGELOG: la riga 🐛 nell'handoff.
+
 ### B-43 + B-44 — una funzione sconosciuta nello schema dell'archivio diventa `database_damaged`; i testi di `trusted_schema` dopo H-51 (2026-10-17, 16:01-16:45) — ✅ 🧊 FROZEN (checkpoint delle 16:45)
 
 > **Assegnazione** (coordinatore, 15:50, dalla revisione H-51 di H): (1) un archivio il cui CHECK o indice chiama una

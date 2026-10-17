@@ -204,7 +204,12 @@ number of series in a fixed order, which the partial update relies on across zoo
   goes through `formatDay`; a `1D` bucket prints only its date.
 - **Candles**: the daily OHLC comes from the backend (see
   [Price Resolver](../../backend/transactions/price_resolver.md#intraday-range-open-high-low)),
-  requested through `onRequestPnlCandles` on entry while none is loaded. A bucket takes the first
+  requested through `onRequestPnlCandles` on entry while none is loaded. The effect calls it
+  tracked, on purpose: what the page's loader reads before its first `await` becomes a dependency,
+  so a saved Candles view asks again once the Dashboard knows its brokers (`canAsk`), and a failed
+  request is asked again when a retry falls due, at most three times, 2, 4 and 8 s later
+  ([Lazy sections after a failure](../state/domain-state.md#lazy-report-retry)); an `untrack`
+  around the call would silence both. A bucket takes the first
   open, the highest high, the lowest low and the last close of its days that have a candle
   (`ladderCandleMetric`); a bucket with none is a gap, whose tooltip prints `common.noData`. The
   disclosure caption (`dashboard.pnlCandlesHypotheticalShort`) stays on one line under the plot,

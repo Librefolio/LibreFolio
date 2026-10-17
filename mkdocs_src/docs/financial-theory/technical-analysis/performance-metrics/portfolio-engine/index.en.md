@@ -249,6 +249,8 @@ $$
 \sum_{(a,b) \in \mathcal{P}} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL} = \bigl[\mathrm{MV}(t_1) - \mathrm{OCB}(t_1)\bigr] - \bigl[\mathrm{MV}(t_0) - \mathrm{OCB}(t_0)\bigr]
 $$
 
+Dust aside: a row counts a position holding $10^{-5}$ units or fewer as not held — no value, no unrealized of its own —, while the portfolio state of §3 values every quantity above zero. The unrealized change of such a residual is in $\Delta\mathrm{UGL}$ and in no row (MF-A6).
+
 **Internal transfers.** $T(a,b)$ splits the result of a security moved between two brokers of $S$: each broker answers for its own stretch. For each linked TRANSFER of $a$ from broker $s$ to broker $d$ that departs after $t_0$ and arrives on or before $t_1$, with $V$ the value of the moved units on the arrival day (§3) and $C$ the historical cost the sender's pool gave up for them (§4):
 
 $$

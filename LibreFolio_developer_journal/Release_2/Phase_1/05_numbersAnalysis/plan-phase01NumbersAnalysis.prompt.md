@@ -6512,6 +6512,257 @@ prossimo checkpoint.
 
   Porta 6185 libera.
 - ⏳ **Checkpoint J-52** (FROZEN).
+- ✅ **Checkpoint J-52** (2026-10-17): entrato (dev `df1194de4`, merge `ae3f02530`, conflitto del backlog risolto dal
+  coordinatore con la chiusura di J-53, tenendo le due), CHANGELOG 🐛 `7cff26b61`; worktree in fast-forward.
 - Patch pronta, non applicata: `files/j/j52/apply_fix.py` (3 ancore: versione col commento, l'eco, la frase di «Replay
   Coverage» in `risk/architecture.md`). Prova a secco OK. Verdi previsti: lint, il file, `risk-all`, `schemas risk`,
   doc.
+
+#### Revisioni di J-53 e MF-A5; CP-10d in attesa (17/10 ~17:45, sola lettura; base `7cff26b61`)
+
+- **CP-10d: non ancora** (coordinatore). `assets/` è aperta in Z (`refresh.py`, `provider_management.py`) e in X
+  (`price_store.py`), i file del runner in sei worktree: ricontrolla dopo le due revisioni.
+  - Lo script è pronto, non applicato: `files/j/cp10d/apply_rename.py` (21 file, 43 menzioni, un `mv` semplice perché
+    `git mv` metterebbe in stage). A secco OK su `a3d4d60a7`: va rifatto prima di applicarlo.
+  - Restano col loro nome, come dice CP-10d («soli import e `applyTo`»): il file di test `test_series_preparation.py` e
+    l'azione `series-preparation` del runner, che quindi non si tocca. Fuori anche diari, `TODO_FUTURI.md` e le cache di
+    graphify.
+  - Due commenti sono nei file di Y (`assetSetLevels.ts`, `.test.ts`).
+- **J-53** (`fd8aeaf18`, Y): **OK**.
+  - Una riga per le issue su un lotto, coi chip; una riga per ogni issue senza lotto, deduplicata per chiave e parametri.
+  - I quattro codici senza lotto del motore (`TRANSFER_PAIR_MISSING`, `FIFO_SOURCE_QUANTITY_MISSING`, `SHORT_*`) fanno
+    fallire l'analisi, quindi vanno all'avviso. Al banner arrivano solo fondi orfani, «al costo» e cambi: nessuna riga
+    ripetuta.
+- **MF-A5** (`f7057cb2f`): **OK sul lato del mittente**.
+  - La base = costo venduto + costo spostato dalle tratte contate (`counted_tract`). Un'uscita non coperta fa
+    ripiegare; l'esempio dà 12,5%; il nit «fell to zero» è corretto.
+  - **Reperto (medio-basso, di MF), lo specchio sul lato del ricevente**: il P&L di una riga che riceve unità con una
+    tratta contata parte dal loro valore d'arrivo (`−tract`), mentre la base resta il costo storico. Comprato 500, vale
+    600 all'arrivo, venduto 660: 60/500 = 12% invece di 60/600 = 10%. Cura proposta: aggiungere alla base le tratte
+    ricevute, oppure ripiegare.
+- **J-53, le modifiche di Y a `lots_analysis_service.md`** (l.400 e l.600), verificate:
+  - «the issues of one code that name a lot» è esatto;
+  - i fondi orfani sono uno per fondo (`fifo/engine.py:899-913`, `:1015-1029`);
+  - `_report_gaps()` passa da `build_data_quality_report`: due `MISSING_FX_RATES` e un `MISSING_COST_BASIS`, senza
+    lotto;
+  - l'ancora `#degraded-economic-pools` esiste.
+- **CP-10d ancora fermo** (coordinatore, ~17:50): `assets/` aperta in X e Z, `_backend_services.py` in A ed E. In
+  coda, dalla sezione di W: W-B55.
+
+#### W-B55 — la decisione 47 in un'altra valuta, da capo a fondo (17/10, dalle 17:50; base `7cff26b61`; solo test, W rivede)
+
+- **La lacuna**: dalla cancellazione del broker che riceve fino ai numeri in un'altra valuta, nessun test fa tutto il
+  percorso.
+  - La gamba che cede diventa `ADJUSTMENT −q` al costo Auto del suo broker (`_handover_cost` → `compute_wac_iterative`,
+    nella valuta dell'ultimo acquisto).
+  - J-24 realizza D − C nel giorno della consegna.
+  - Oggi la cosa è coperta a metà: lo specchio di W (`TestOrphanOutgoingTransfer`) scrive la riga in EUR; il libro
+    estero di J (`TestForeignAdjustmentOutHandsOverAtItsDate`) legge una riga USD scritta a mano.
+- **Il caso** (brief al test-author): la classe `TestOrphanOutgoingTransferInAnotherCurrency` nel file di W, con il
+  controllo (riga scritta a mano) e l'orfano (cancellazione vera).
+  - X″ in USD, rapporto in EUR.
+  - Giorno 1: 1000 USD e 10 X″ a 100 USD, EUR/USD 1,25.
+  - Giorno 3: 4 X″ da A a B, EUR/USD 1,60, prezzo 110 USD; poi B cancellato. Lettura il giorno 3, su date FX che nessun
+    altro test scrive.
+- **Attesi (derivati da J)**:
+  - la riga: `ADJUSTMENT −4`, 100 `USD`;
+  - Dashboard: investito 550 (800 − 250), realizzato −70 (250 − 320), non realizzato −67,5, patrimonio 412,5, P&L
+    −137,5;
+  - lotti: costo 800, proventi 250, realizzato −70, valore aperto 412,5, P&L totale −137,5;
+  - Dashboard e lotti dicono −70.
+- ✅ **Esecuzione (18:0x)**: **verde sulle due origini**, al primo giro. File 27/27 (21 + 6 nuovi). Nessun valore
+  corretto dopo la corsa.
+  - **La riga** lasciata dalla cancellazione è esattamente quella del controllo: `ADJUSTMENT −4`, 100 `USD`, senza
+    partner.
+  - **Dashboard**: investito 550, realizzato −70, patrimonio 412,5, P&L −137,5; costo aperto 480; X″ 6 a 80 (valore
+    412,5, guadagno −67,5).
+  - **Lotti**: COMPLETE, un lotto di 10, costo 800, proventi 250, realizzato −70, valore aperto 412,5, P&L di mercato
+    −67,5, totale −137,5.
+  - **Parità**: −70 e −137,5 da una parte e dall'altra.
+  - **Date**: 3 e 5 dicembre 2018, libere in tutti i test (le altre scritture EUR/USD stanno nel 2018-11, nel 2046-47,
+    nel 2024 e nel 1990; il popolamento parte da oggi − 3 anni). Scritte con «cancella e poi aggiungi».
+  - **Aiuti di W toccati**, tutti con parole chiave e valori di oggi come predefiniti: `_user_and_asset(currency=)`,
+    `_lots(date_to=)`, `_dashboard(date_to=)`. I 21 test di prima restano verdi.
+- ✅ **Verifica di J (18:1x)**: `services orphan-transfer-numbers` **27**, check-orphans ✓, ruff e black puliti (corsa del
+  test-author); porta 6185 libera.
+- **Esito: la decisione 47 in USD è corretta da capo a fondo**, quindi nessun difetto. W-B55 si chiude con la consegna di
+  soli test; la riga è nella sezione di W e la chiude il coordinatore.
+- ⏳ **Checkpoint W-B55** (FROZEN; W rivede).
+- ✅ **Checkpoint W-B55** (2026-10-17): entrato (dev `bea6b1ac0`, `2a35c1b73`), W-B55 chiusa dal coordinatore
+  (`1eeb297b2`); worktree in fast-forward. Lo specchio di MF-A5 va a MF come **MF-A8**.
+
+#### MF-J45d (revisione) e CP-10d (17/10, dalle 18:05; base `1eeb297b2`)
+
+- **MF-J45d** (`7265de9e3`, il mio LOW di J45b): **OK così**, senza l'alternativa.
+  - Il codice: `except Exception` passa al volo l'errore del capo e lo segna come letto; una cancellazione
+    (`BaseException`) finisce nel `finally` con `_LeaderGone`, e i seguaci ricostruiscono.
+  - Il compromesso dichiarato (un errore transitorio fa fallire anche i seguaci) non pesa: la costruzione legge soltanto,
+    con `journal_mode=WAL` e `busy_timeout=30000` (`db/session.py:60-61`); lo spegnimento dell'executor avviene solo a
+    app ferma.
+- **CP-10d: GO del coordinatore** (~18:05), con una regola d'ordine che non mi tocca.
+  - La regola: un import in `price_store.py` o un percorso in `_backend_services.py` vanno fatti per ultimi.
+  - Il mio import è in `price_query.py`, e il runner non lo tocco.
+- ✅ **La rinomina (18:07)**: `services/series_preparation.py` → `services/market_series.py`, con un `mv` semplice; il
+  contenuto non cambia, quindi git la vede come rinomina al 100%.
+  - Script `files/j/cp10d/apply_rename.py`: 21 file, 43 menzioni.
+    - Codice: 4 import, più un commento in `drawdown_context.py`.
+    - Test: 6 file; in `test_series_returns.py` l'alias, `MARKET_SERIES_SOURCE` e i 4 nomi della guardia di parità;
+      il percorso in `test_data_quality_thresholds.py`.
+    - 2 commenti nei file di Y (`assetSetLevels.ts`, `.test.ts`).
+    - L'`applyTo` di `backend-risk` e di `backend-signals`, più una frase.
+    - 2 pagine MkDocs e 4 della devWiki.
+  - Restano col loro nome, apposta: il file `test_series_preparation.py` e l'azione `series-preparation` (nominano
+    l'operazione), più storia e cache (`TODO_FUTURI.md`, `graphify-out/`, i diari, un commento «moved from
+    test_series_preparation.py»).
+  - Nessuno shim, e nessun numero cambia.
+  > **⚠️ Fuori pista**: la rinomina ha spostato l'ordine alfabetico degli import (ruff I001) in `risk/scope.py`,
+  > `test_risk_asset_set.py` e `test_series_preparation.py`. `ruff check --select I001 --fix`, poi ruff e black puliti.
+- ✅ **Verdi (18:10–18:25)**:
+  - import di prova dei 5 moduli;
+  - `series-preparation` **22**;
+  - `financial-math` **1309**;
+  - `range-ceiling` **72** (`price_query`);
+  - `risk-all` **918**;
+  - segnali: registry **66**, runtime **6**, contracts **10**, service **69**, annotations **25**, plugin-matrix
+    **91**;
+  - `ai-export` **1083**;
+  - check-orphans ✓;
+  - `api sync` senza differenze tracciate;
+  - `mkdocs build` stretto ✓, check-links ✓;
+  - devWiki `check_source_paths.py`: gli stessi 7 percorsi mancanti di prima, nessuno nelle 4 pagine toccate;
+  - prettier pulito sui 2 file di Y.
+
+  Porta 6185 libera.
+- ✅ **CP-10d entrato** (17/10): dev `0cf8eb4d5` (`de5846a0b`), nessun import rimasto in dev; nessuna riga di
+  CHANGELOG. Il coordinatore comunica a tutti il nome nuovo del modulo.
+
+#### Revisione di MF-A8; la voce seguente (17/10 ~18:40, sola lettura; base `de5846a0b`)
+
+- ✅ **MF-A8** (dev `bc466d969`): `transfer_tracts_moved_in` con lo stesso predicato `counted_tract`;
+  `closed_position_base(..., moved_in)` con base > 0. Il mio esempio dà 60/600. OK, più una nota facoltativa:
+  `CostOut` ora contiene anche un termine di valore.
+- Ordine del coordinatore: **J-21 → documentazione (J-18, J-23, J-38) → J-16**; la contabilità del backlog nel
+  prossimo commit del diario.
+
+#### J-21 — la linea di un segnale del backend si interrompe dove il backend non manda un valore (17/10, dalle ~18:45; base `de5846a0b`)
+
+- ✅ **Analisi (sola lettura)**: il `connectNulls: false` approvato era sbagliato.
+  - Sul grafico giornaliero dell'asset l'asse contiene i giorni riportati, senza quotazione propria
+    (`backward_fill_info`, `assets/[id]/+page.svelte:330-334`).
+  - I plugin che contano le sessioni (`computes_on_quote_days = True`, `signals/base.py:86`; il filtro in
+    `signals/execution.py:365-368`, decisione del developer del 30/09) in quei giorni **non hanno punti**.
+    `buildOverlaySignalSeries` (`chartCoreHelpers.ts:312-313`) ci mette `null`, e oggi `connectNulls: true` li unisce,
+    giustamente. Con `false`, EMA, RSI, MACD e gli altri si interromperebbero a ogni fine settimana e festivo.
+  - I valori nulli **espliciti** il backend li manda solo dove il valore non c'è:
+    - `build_line_computation` (`signals/risk_adapters.py:298`) emette `SignalValuePoint(value=None)` per il
+      riscaldamento e per le finestre indefinite (Sharpe e Beta a varianza nulla);
+    - il Rolling Return a calendario, per `missing_reference` e per i prezzi non validi.
+  - Mi sono fermato prima dei rossi. Il coordinatore ha dato il via all'**alternativa precisa**: la linea si divide
+    solo nei punti che il backend manda senza valore; i giorni assenti dall'uscita restano uniti. Y rivede; nessun
+    cambio di colori o classi.
+- **Disegno** (solo `charts/signals/backendRenderer.ts`, file di Y con il via):
+  - `renderScalarSeries` divide una linea o un'area in **run** a ogni punto senza valore. Più nulli di fila fanno un
+    buco solo; quelli iniziali (riscaldamento) e finali non fanno run.
+  - Ogni run è un `RenderedSignal` con la stessa etichetta:
+    - una sola voce di legenda;
+    - date disgiunte, quindi nessuna riga doppia nel tooltip, che salta i null e deduplica per nome
+      (`PriceChartFull.svelte:985-987`);
+    - stesso asse (`assignOverlaySignalAxes` per `axisKey`).
+  - Gli indicatori d'inizio stanno sul primo run, quelli di fine sull'ultimo.
+  - Livelli e regioni stanno solo sul primo run: `buildSignalReferencePrimitives` disegna `markLine`/`markArea` per
+    serie, quindi su ogni run li ripeterebbe. Le linee a fette di stile restano senza, come prima.
+  - Le fette di stile si calcolano dentro ogni run. Il tetto di 100 fette resta per uscita, ma una fusione non
+    attraversa mai un buco.
+  - Un valore isolato fra due buchi diventa un run di un punto: c'è nei dati e nel tooltip, senza segmento. Il
+    confronto a calendario locale, che usa già `connectNulls: false` (`assets/[id]/+page.svelte:774`), fa lo stesso.
+  - Senza buchi l'uscita è identica a oggi. Barre invariate; bande fuori perimetro.
+  - Gli id dei run cominciano con `${config.id}:${series.key}:`. `previewPolicy`, i riassunti delle pagine e
+    `rollingRiskSignals` leggono il prefisso, quindi non cambiano.
+- **Ricaduta, decisione del coordinatore (a)**: il badge «📈N» del pannello dei segnali, nei file di X
+  (`assets/[id]/+page.svelte:915`, `fx/[pair]/+page.svelte:503`), conta `max(data.length)` sui segnali resi di una
+  configurazione, quindi mostrerebbe il run più lungo.
+  - È già sbagliato oggi per RSI, CCI, MFI e StochRSI: le fette di stile danno il tratto più lungo fra due
+    attraversamenti di soglia.
+  - Correzione: `renderedSignalPointCount` in `backendRenderer.ts` conta le date distinte, e le due pagine la
+    chiamano. Per le uscite non divise il valore resta quello di oggi.
+  - Per avere un rosso su un'asserzione, prima estraggo la funzione con la semantica di oggi (nessun cambio), poi il
+    rosso, poi la correzione. X rivede le due righe.
+- ✅ **Rossi** (test-author, 17/10 ~19:00–19:25), sul codice vecchio:
+  - `backendRendererSegments.test.ts` (`front-utility core-unit`), nuovo describe «a point the backend sent without a
+    value breaks the line»: **11 rossi** (a, b, e, f, g, h, i, j, k, più n — il buco esplicito accanto a un fine
+    settimana assente — e m — 120 tratti con stile: una fetta per tratto) e **3 controlli** verdi (c: il fine
+    settimana assente resta unito; d: nulli iniziali e finali; l: le barre). Ognuno cade su un'asserzione.
+  - `backendRenderer.test.ts` (`front-ai-export unit`): i due test del calendario portati al contratto nuovo
+    (tre tratti, il livello zero sul primo), **2 rossi**.
+  - Il badge, dopo l'estrazione a semantica invariata (`patch_extract.py`, applicata): describe «signals panel badge»,
+    **3 rossi** (linea con stile: `3` invece di `6`; tratti: premessa sui due tratti; uscite su date diverse: `4`
+    invece di `6`) e **3 controlli** (stesse date di due uscite → 4; linea semplice; vuoto → 0).
+  - Conteggi sul codice vecchio: core-unit 14 falliti / 8 865 passati; ai-export unit 2 / 672.
+- ✅ **Correzione** (`patch_fix.py`, 8 modifiche, identica all'uscita provata a secco): `splitLineSignal` al posto di
+  `applyValueRegionLineStyles`; `limitStyledSegments` con il tratto in ogni fetta e la fusione solo nello stesso
+  tratto (si ferma quando restano solo fusioni fra tratti); `renderScalarSeries` tiene i tratti mentre toglie i punti
+  senza valore; `renderedSignalPointCount` conta le date distinte. Per una linea senza buchi l'algoritmo del tetto è
+  quello di prima, scelta per scelta.
+- ✅ **Verdi (17/10 ~19:35–19:55)**:
+  - `front-utility core-unit` **8 879/8 879**;
+  - `front-ai-export unit` **674/674**;
+  - `front-asset asset-unit` **1 110/1 110** (contiene anche `chartCoreHelpers.test.ts` e `backendRenderer.test.ts`);
+  - `front check`: 0 errori, 0 avvisi;
+  - prettier pulito sui 6 file del frontend.
+- ✅ **Doc**: una frase nella guida dei plugin dei segnali («2. Execution»: un punto senza valore spezza la linea, i
+  giorni senza punto restano uniti); devWiki, sezione nuova in `concepts/absence-sentinel-vs-nullable-type.md` con le
+  righe delle fonti, e `log.md`.
+- Limite noto, da dire a Y: un valore isolato fra due buchi è un tratto di un punto, presente nei dati e nel tooltip
+  ma senza segmento né simbolo (`showSymbol: false`), come nel confronto a calendario locale. Alle risoluzioni
+  settimanali e mensili (`downsampleRenderedSignal` raggruppa ogni serie per conto suo) due tratti nello stesso
+  secchio vi hanno ciascuno un rappresentante: il buco non si vede, la linea fa un gradino, e il tooltip mostra il
+  primo. È la stessa proprietà delle fette di stile di oggi a ogni attraversamento: **J-56**, dopo la 1.3, a Y.
+- ✅ Nessuna prova E2E cambia: gli `📈N` di `e2e/assets/asset-detail.spec.ts` sono tutti di schede `calendar-peer-*`
+  (confronti fra asset), il cui conteggio viene da un ramo che non tocco.
+
+#### Documentazione: J-18, J-23, J-38 (17/10, dalle ~19:30; base `de5846a0b`)
+
+- ✅ **J-18 verificata, già coperta**: nessuna modifica. Le istruzioni del DB non contengono più «`Numeric(18, 6)`
+  for precision»; da C-97 e W-B60 importi, quantità e prezzi sono `RealDecimal` (al più 15 cifre significative,
+  valore oltre i limiti rifiutato), e la pagina dev del DB, «Decimal Columns», dice che SQLite tiene un `NUMERIC`
+  come double, con gli esempi di lettura. Resta solo un esempio illustrativo nella skill `wiki-file`
+  (`SKILL.md:125`: «need explicit Numeric(18,6) to avoid precision loss»): file condiviso, lo segnalo al coordinatore.
+- ✅ **J-23** (diretta, 4 lingue, due link):
+  - `technical-analysis/index.*.md`: il concetto del Rolling Return sta sotto Returns
+    (`../fundamentals/returns.md#rolling-return`);
+  - `indicators/index.*.md`: la riga Underwater Drawdown porta a `current-drawdown` (come il `docs_path` del plugin
+    e la pagina dei segnali).
+  - Timbrata `technical-analysis/index.en.md` (`translate-stamp`, MD5 `d3f0511d→18dfdafd`, it/fr/es).
+  - `indicators/index.en.md` **non** timbrata: ha già un debito vero da `af919560c` (CP-10a, solo EN: la frase delle
+    sessioni e le righe del Rolling Return e del Rolling Beta), che resta alla pipeline.
+- ✅ **J-38** (docs-writer, solo EN, nessuna traduzione):
+  - il diagramma taglia e assegna lo stato dentro il ciclo e tiene da parte le serie estese; le annotazioni girano
+    dopo, sulle serie estese, e tornano solo gli eventi visibili;
+  - «3. Annotations» riscritta: taglio per segnale, annotazioni dopo, regole degli avvisi `annotation_unavailable`
+    (sorgente senza serie, bersaglio non `ok`/`partial`, calcolo che solleva);
+  - «1. Planning»: un lotto incoerente solleva `SignalRequestValidationError`, ferma tutto il lotto, 422 sui tre
+    endpoint del grafico.
+  - Verificati nel codice i tre punti aggiunti dal docs-writer: le serie estese solo per `ok`/`partial`
+    (`execution.py`, unico ritorno con `tuple(computation.series)`); i percorsi `/assets/prices/query`,
+    `/fx/currencies/convert`, `/signals/preview`; l'avviso della sorgente senza serie (`annotations.py:99`).
+- ✅ **Verdi**: `mkdocs build` stretto ✓ (3 085 URL), `mkdocs check-links` ✓ (97), devWiki `check_source_paths.py`
+  i soliti 7 mancanti.
+
+#### J-16 — il messaggio del test del gemello compatto del PAC (17/10, dalle ~19:55; base `de5846a0b`; file di X)
+
+- ✅ **Fatta** (test-author, solo il messaggio; X rivede): in `test_api/test_pac_planner_tool_api.py`, il nuovo
+  `_batch_outcomes(payload, results, **items)` e il messaggio dell'asserzione dei conteggi di
+  `test_pac_compute_plans_the_compact_twin_like_the_explicit_request`.
+  - Il messaggio: `(status, error)` per elemento; `execution_id` e `metrics` di chi non è riuscito (startup, tempi,
+    picco di memoria osservato: dicono se il worker non è mai partito o è caduto dopo, utile per J-19);
+    `metrics.server_processing_ms` del lotto. Mai il piano. Solo `.get`, quindi il messaggio non solleva.
+  - Ritorna una stringa: pytest 9 accorcia a 240 caratteri un messaggio che non lo è.
+  - Campi verificati in `schemas/tools.py` (`execution_id`, `startup_ms`, `peak_observed_bytes`,
+    `server_processing_ms`).
+- ✅ **Prova**:
+  - `api pac-planner-tool` **12/12** (23,7 s);
+  - ruff e black puliti;
+  - condizioni invariate (albero sintattico confrontato con HEAD, messaggi e helper a parte);
+  - messaggio provato su un `(1, 1)` finto (`/tmp/libreFolio_j16_demo.py`, 638 caratteri);
+  - porta 6185 libera.
+- Il triage con `test-triage` resta per la prossima caduta.

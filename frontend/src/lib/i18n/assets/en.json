@@ -399,7 +399,8 @@
       "pricesSaved": "{count, plural, one {# price saved} other {# prices saved}}",
       "pricesDeleted": "{count, plural, one {# price deleted} other {# prices deleted}}",
       "pricesSkipped": "{count, plural, one {# row skipped (invalid)} other {# rows skipped (invalid)}}",
-      "eventsSaved": "{count, plural, one {# event saved} other {# events saved}}"
+      "eventsSaved": "{count, plural, one {# event saved} other {# events saved}}",
+      "pricesRefused": "{count, plural, one {# price refused} other {# prices refused}}"
     }
   },
   "events": {
@@ -444,6 +445,9 @@
     "RATE_LIMITED_NO_TIME": "Too many requests: try again later",
     "RATE_LIMITED_DAY": "Paused for too many requests until {time}",
     "NOT_CONFIGURED": "This provider must be configured before use",
-    "PROVIDER_ERROR": "The provider failed: {detail}"
+    "PROVIDER_ERROR": "The provider failed: {detail}",
+    "PROBE_RATE_LIMITED": "Too many checks: try again at {time}",
+    "PROBE_RATE_LIMITED_DAY": "Too many checks: try again on {time}",
+    "PROBE_RATE_LIMITED_NO_TIME": "Too many checks: try again in a minute"
   }
 }

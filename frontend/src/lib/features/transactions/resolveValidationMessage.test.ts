@@ -7,7 +7,11 @@ vi.hoisted(() => {
     vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
 });
 
-import {waitLocale} from 'svelte-i18n';
+import {getMessageFormatter, waitLocale} from 'svelte-i18n';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {resolveIssueMessage, translateFieldName, type ResolvableIssue, type ResolverContext} from './resolveValidationMessage';
@@ -522,4 +526,114 @@ describe('resolveIssueMessage — a missing exchange rate on a split (W-B39)', (
         const issue = {...missingRate, operation: 'split'};
         expect(resolveIssueMessage(issue, t)).toBe(GENERIC_TEXT);
     });
+});
+
+/**
+ * W-B70 (decision D-W70-2 of the coordinator, 17/10) — notes too long have words of their own, and the built-in branch
+ * escapes its field label.
+ *
+ * A transaction's notes hold 500 characters at most (`max_length=500`: a create, an update, a promote's
+ * `resolved_fields`). Past it pydantic answers `string_too_long`, and the backend now hands the error's context over as
+ * params (D-W70-1: `{max_length: 500}`). `PYDANTIC_BUILTIN_KEYS` maps pydantic's own codes to `transactions.pydantic.*`
+ * and has no entry for this one, so the message falls through to the raw English of `issue.error` («String should have
+ * at most 500 characters»), in whatever language the editor speaks. The contract: `string_too_long` maps to
+ * `transactions.pydantic.stringTooLong` («At most {max_length} characters», added by the cure), its `{max_length}`
+ * the param as sent, after the field label like every built-in message.
+ *
+ * The label. All three callers render the result with `{@html}`, and two of the module's three branches escape the
+ * field label; the built-in branch does not. With no translation the label is the field name itself (cleaned of `_`
+ * and `.`, first letter up) — for `extra_forbidden` any key of the request body — so a name carrying markup reaches the
+ * HTML as markup. The contract: escaped there too, and only the label: the text after it is the catalogue's own. A
+ * translated label is plain text, which escaping leaves as it is.
+ *
+ * Reds: `string_too_long` through its key with `max_length: 500`; a hostile field name, from `field` and from `loc`.
+ * Guards, green before and after: `greater_than` hands `{gt: 0}` to its key as the number it is (the frontend already
+ * passes the params on, D-W70-1 is what fills them); a translated label comes out unchanged, and the catalogue's text
+ * after it keeps its markup. The translator is `makeT`, wrapped in a spy where the values handed to a key are the
+ * subject.
+ */
+describe('resolveIssueMessage — notes too long, and the built-in branch escapes its label (W-B70, D-W70-2)', () => {
+    const STRING_TOO_LONG_KEY = 'transactions.pydantic.stringTooLong';
+    /** The issue the backend writes for a promote whose combined notes pass the limit, `params` filled (D-W70-1). */
+    const notesTooLong: ResolvableIssue = {code: 'string_too_long', field: 'description', params: {max_length: 500}, error: 'String should have at most 500 characters', operation: 'promote'};
+    /** Field names that are markup. Neither holds a `_` or a `.`, so the label's fallback keeps them as they are. */
+    const HOSTILE_FIELD = '<img src=x onerror=alert(1)>';
+    const BREAKOUT_FIELD = '"><img src=x onerror=alert(1)>';
+    /** The catalogue knows the code's text and no label for these names. */
+    const unexpectedField = makeT({'transactions.pydantic.extraForbidden': 'Unexpected field'});
+
+    it('string_too_long resolves through transactions.pydantic.stringTooLong, its max_length the number sent, after the field label', () => {
+        const t = vi.fn(makeT({'transactions.fields.description': 'Description', [STRING_TOO_LONG_KEY]: 'At most {max_length} characters'}));
+
+        const msg = resolveIssueMessage(notesTooLong, t);
+
+        expect(msg, 'the translated text after the field label, never the raw English of issue.error').toBe('Description: At most 500 characters');
+        expect(t, 'the key is asked with the limit as sent: the number 500').toHaveBeenCalledWith(STRING_TOO_LONG_KEY, {values: expect.objectContaining({max_length: 500})});
+    });
+
+    it('guard: greater_than hands {gt: 0} to transactions.pydantic.greaterThan as the number 0', () => {
+        const t = vi.fn(makeT({'transactions.fields.quantity': 'Quantity', 'transactions.pydantic.greaterThan': 'Value must be greater than {gt}'}));
+
+        const msg = resolveIssueMessage({code: 'greater_than', field: 'quantity', params: {gt: 0}, error: 'Input should be greater than 0'}, t);
+
+        expect(msg).toBe('Quantity: Value must be greater than 0');
+        expect(t).toHaveBeenCalledWith('transactions.pydantic.greaterThan', {values: expect.objectContaining({gt: 0})});
+    });
+
+    it('escapes a label that falls back to a hostile field name (extra_forbidden, the name in field)', () => {
+        expect(translateFieldName(HOSTILE_FIELD, unexpectedField), 'control: no translation, so the label is the name itself').toBe(HOSTILE_FIELD);
+
+        const msg = resolveIssueMessage({code: 'extra_forbidden', field: HOSTILE_FIELD, error: 'Extra inputs are not permitted'}, unexpectedField);
+
+        expect(msg).toBe('&lt;img src=x onerror=alert(1)&gt;: Unexpected field');
+        expect(msg).not.toContain('<img');
+    });
+
+    it('escapes it when the name comes from loc, a closing quote included', () => {
+        const msg = resolveIssueMessage({code: 'extra_forbidden', loc: `body.creates.0.${BREAKOUT_FIELD}`, error: 'Extra inputs are not permitted'}, unexpectedField);
+
+        expect(msg).toBe('&quot;&gt;&lt;img src=x onerror=alert(1)&gt;: Unexpected field');
+        expect(msg).not.toContain('<img');
+        expect(msg).not.toContain('"');
+    });
+
+    it('guard: a translated label is plain text, unchanged, and the catalogue’s text after it keeps its markup', () => {
+        const t = makeT({'transactions.fields.quantity': 'Quantità', 'transactions.pydantic.extraForbidden': 'Campo <em>inatteso</em>'});
+
+        expect(resolveIssueMessage({code: 'extra_forbidden', field: 'quantity'}, t)).toBe('Quantità: Campo <em>inatteso</em>');
+    });
+});
+
+/**
+ * W-B70, D-W70-2 — the key is in the four catalogues, naming the param the backend fills.
+ *
+ * The cases above hand the module a translator of their own. These read the catalogues the app ships
+ * (`$lib/i18n/<lang>.json`, generated from the sources before every Vitest run): `transactions.pydantic.stringTooLong`
+ * must be a message in each, naming the one placeholder the backend fills, `max_length`. Where it is missing, svelte-i18n
+ * answers with the key itself and the module falls back to the raw English; a placeholder named otherwise would not be
+ * filled. The wording is the translators': only the presence, the placeholder and that the message formats with the
+ * limit written are read. Red today in the four languages: the key is in no catalogue.
+ */
+describe('transactions.pydantic.stringTooLong — in the four catalogues, with {max_length} (W-B70, D-W70-2)', () => {
+    const KEY = 'transactions.pydantic.stringTooLong';
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** The value at a dotted key of a catalogue, or undefined. */
+    function messageAt(catalogue: unknown, key: string): unknown {
+        return key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    }
+
+    /** The placeholders a message names, `{name}` or `{name, …}`, each once. */
+    function placeholdersOf(message: string): string[] {
+        return [...new Set([...message.matchAll(/\{\s*([A-Za-z_]\w*)\s*[,}]/g)].map((match) => match[1]))].sort();
+    }
+
+    for (const lang of Object.keys(CATALOGUES)) {
+        it(`${lang}: a message naming {max_length} and nothing else, which writes the limit it is given`, () => {
+            const message = messageAt(CATALOGUES[lang], KEY);
+            expect(typeof message, `${lang}: ${KEY} is a message of the catalogue`).toBe('string');
+            expect(placeholdersOf(message as string), `${lang}: the placeholder the backend fills`).toEqual(['max_length']);
+            expect(String(getMessageFormatter(message as string, lang).format({max_length: 500})), `${lang}: the limit, written`).toMatch(/(?<![\d.,])500(?![.,]?\d)/);
+        });
+    }
 });

@@ -2791,7 +2791,7 @@
     }
   },
   "financial-theory/technical-analysis/index.en.md": {
-    "md5": "d3f0511d347e136057007f0588dee183",
+    "md5": "18dfdafd2c34f5ab1ea1c49cb2b4d380",
     "langs_done": [
       "es",
       "fr",
@@ -2811,7 +2811,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 49.9,
-        "stamped_at": "2026-09-04T15:08:58.710965+00:00",
+        "stamped_at": "2026-10-17T17:04:20.193096+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -2824,7 +2824,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 50.3,
-        "stamped_at": "2026-09-04T15:08:58.710965+00:00",
+        "stamped_at": "2026-10-17T17:04:20.193096+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -2837,7 +2837,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 49.6,
-        "stamped_at": "2026-09-04T15:08:58.710965+00:00",
+        "stamped_at": "2026-10-17T17:04:20.193096+00:00",
         "stamped_by": "translate-stamp"
       }
     }

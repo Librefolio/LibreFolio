@@ -6217,7 +6217,7 @@ Quel che c'è già:
 | `GapFixStep:72` | quantità a 8 | 10 |
 | `DataEditor:212`, riga di sola lettura | `Number(val)…max 4` | `formatPrice(Number(val), {minDecimals: 0, floorDecimals: 4})` |
 
-### C-97c-2 — quantità e prezzi dei lotti (BK): analisi e cura (2026-10-17, in corso)
+### C-97c-2 — quantità e prezzi dei lotti (BK): analisi e cura ✅ (2026-10-17) — entrato (`a8ec9d309` → `016fe7af9`)
 
 **Base**: HEAD `a84020b09` = dev con C-97c-1 (`7b251606a` → `f1bfa1e31`, CHANGELOG `a84020b09`; `theme-roles --check` pulito sulla
 punta). Via del coordinatore: «Go C-97c-2 (BK, lots); J reviews».
@@ -6386,3 +6386,316 @@ Il cancello del denaro non registra siti dei lotti.
 - **D-W70-5.** W-B77 dentro W-B70: una sola copia di `_loc_to_field` e della regola dei `params` in un modulo neutro
   (`backend/app/utils/pydantic_errors.py`; i due servizi lo importano senza cicli), con la riduzione di `resolved_fields.` (innocua
   per il BRIM, che non ha quel campo). Altrimenti due copie cambiate uguali e un test di parità, e W-B77 dopo con H.
+
+**Decisioni del coordinatore** (17/10 16:5x; ordine: C-97c-3 prima, poi W-B70):
+- **D-W70-1: OK.** Il cambio di contratto va bene prima del rilascio; i tre test che fissano `None` si riscrivono come rossi.
+- **D-W70-2: OK**, e l'`escapeHtml` del ramo dei built-in nello stesso lotto, con un rosso.
+- **D-W70-3: OK**; OK di scrittura su `PromoteMergeModal.svelte`, solo ruoli di colore.
+- **D-W70-4: (a)**: la coppia resta non promossa, con l'avviso; OK di scrittura su `TransactionBulkModal.svelte`. Mai perdere testo.
+- **D-W70-5: W-B77 dentro**, un modulo condiviso `utils/pydantic_errors.py`; rivede H (era co-proprietario). La SEC9g di MF tocca
+  `brim_provider.py` in `search_asset_candidates_bulk`, un'altra funzione: in BRIM la mia modifica resta all'import e ai siti di chiamata.
+
+### C-97c-3 — prezzi degli asset (AF) e dei grafici, quantità della dashboard (DV): analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `6e503e0f6` = dev con C-97c-2 (`4e02e5fee` → `016fe7af9`, CHANGELOG `6e503e0f6`), con X-R59 di Y (`f317e3a9f`).
+Via del coordinatore (17/10 16:5x): «C-97c-3 first (it closes C-97c), then W-B70». OK di scrittura sui `.svelte` di AF e DV dal
+D-C97c-1, solo per la formattazione dei numeri. Revisori: X (AF), Y (DV).
+
+**Siti** (riverificati sulla punta; X-R59 ha spostato le righe di 1–2):
+
+| Area | Sito | Oggi | Dopo |
+|---|---|---|---|
+| AF | `components/assets/AssetTable.svelte:219`, colonna `lastPrice` | `formatCurrencyAmountHtml(price, …, {public})`: 2 fissi | `minFraction`/`maxFraction` da `priceFractionDigits(price)` |
+| AF | `AssetPriceSummary.svelte:99`, prezzo | `formatFixed(lastPrice, 2)` | `formatPrice(lastPrice)` |
+| AF | `AssetPriceSummary.svelte:112`, Δ assoluto | `formatFixed(deltaAbs, 2, {signed})` | `formatPrice(deltaAbs, {signed: true})` |
+| AF | `AssetCard.svelte:226`, prezzo | `formatFixed(Number(livePrice), 2)` | `formatPrice(livePrice)` |
+| AF | `AssetCard.svelte:233`, Δ assoluto | `formatFixed(Number(deltaAbs), 2, {signed})` | `formatPrice(deltaAbs, {signed: true})` |
+| AF | `ProviderAssignmentSection.svelte:381`, prova: prezzo corrente | `formatFixed(Number(cpValue), 2)` | `formatPrice(Number(cpValue))` |
+| AF | `providerProbe.ts:124`, `:135`, tooltip della prova: prezzo, chiusure | `formatFixed(Number(…), 2)` | `formatPrice(Number(…))` |
+| DV | `features/dashboard/ExposureTable.svelte:154`, quantità | Intl a 6 | Intl a 10 |
+| DV | `ExposureTable.svelte:396` prezzo, `:412` PMC | `formatCurrencyAmountPlain(…, {public})`: 2 fissi | `priceFractionDigits` |
+| DV | `charts/candlestickChartHelpers.ts:94-97` `formatCandlePrice` (tooltip) | ≥100 → 2; ≥1 → 4; sotto 1 → fino a 6, almeno 1 | `formatPrice(v)`; `{minDecimals: 4}`; `{minDecimals: 1, floorDecimals: 6}` |
+| DV | `charts/priceChartHelpers.ts:608`, Δ del tooltip | `formatFixed(deltaAbs, 4, {signed})` | `formatPrice(deltaAbs, {minDecimals: 4, signed: true})` |
+| DV | `PriceChartFull.svelte:820`, `:823` (valore dell'evento, originale), `:888` (valore del secchio), `:1051` (valore della riga) | `formatFixed(…, 4)` | `formatPrice(…, {minDecimals: 4})` |
+| DV | `LineChart.svelte:826` (valore), `:837` (banda superiore e inferiore) | `formatFixed(…, 4)` | `formatPrice(…, {minDecimals: 4})` |
+| DV | `MeasurePanel.svelte:300-301` `fmtValue` | ≥1 → 4; sotto 1 → fino a 6 | `{minDecimals: 4}`; `{minDecimals: 0, floorDecimals: 6}` |
+| DV | `MeasurePanel.svelte:305` `fmtDelta`, `:534` valore d'inizio in attesa | 4 (col segno il Δ) | `{minDecimals: 4[, signed: true]}` |
+
+Ogni sostituzione tiene il minimo di oggi (`minDecimals`, `floorDecimals`): nessun valore mostra meno cifre, e sopra 0,001 le cifre
+non cambiano, salvo i prezzi a 2 fra 1 e 10, che mostrano la terza quando c'è (`1.234`, D-C97c-1: 4 cifre significative).
+
+**Restano**:
+- gli assi (`LineChart:744-746`), i volumi (`formatVolume`), i giorni (`PriceChartFull:825`), i conteggi e i secondi
+  (`ProviderAssignmentSection:402`, `:654`, `:686`), le percentuali;
+- `AssetTable.formatDelta`: il ramo a 2 decimali è morto (le due chiamate passano `'%'`). Non si tocca.
+
+**Scoperte**:
+- **Tre prezzi per unità fuori dall'elenco**, negli stessi file autorizzati: la colonna `lastPrice` di `AssetTable` e prezzo e PMC di
+  `ExposureTable`, scritti come valuta con 2 decimali fissi. Un PEPE si legge `0,00 €`. Stessa regola dei prezzi dei lotti (C-97c-2):
+  entrano. Fuori da AF e DV nessun altro prezzo `public` (il planner PAC tiene tutte le cifre).
+- **L'arrotondamento.** `formatFixed` arrotonda il valore binario (`toFixed`), `formatPrice` il decimale più corto (Intl): solo un
+  caso esattamente a metà può cambiare l'ultima cifra (`1.005` → `1.00` oggi, `1.01` dopo). È la regola già accettata in C-97c-1.
+- **Il `NaN`.** `formatFixed` scrive `NaN`, `formatPrice` niente: i siti escludono già `null`, e un prezzo non numerico non arriva.
+
+**Cancelli**:
+- HTML (`htmlInterpolation.gate.test.ts`): `LineChart:837` passa `upper[dataIdx]`, una lettura per chiave calcolata, che il cancello
+  accetta solo come primo argomento di un formattatore numerico. `formatPrice` entra in `NUMERIC_FORMAT_CALLS`, con la ragione: scrive
+  cifre, i segni della lingua e un segno; `''` per un valore non numerico, mai il suo input.
+- Denaro (`moneyRenderSites.test.ts`): il frammento di `PriceChartFull:1051` è registrato `public` e cambia: si aggiorna nella stessa
+  modifica. Nessun sito nuovo: le righe con `formatCurrencyAmount*` sono esenti, e nessun altro letterale cambiato unisce un `currency` a
+  un numero.
+
+**E2E**: nessuno fissa un prezzo che cambia (tutti sopra 10: `12.34`, `95`–`777`, `123.45`).
+
+**Test** (test-author): rossi in `candlestickChartHelpers`, `priceChartHelpers`, `providerProbe` (core-unit), `ProviderAssignmentSection`,
+`PriceChartFull`, `LineChart`, `MeasurePanel`, `AssetTable` (con `AssetCard`, già montato lì), `ExposureTable` (component-unit), e un
+file nuovo `AssetPriceSummary.test.ts` (registrato in component-unit); nel cancello HTML un caso della regola per `formatPrice`.
+
+**Passi**:
+1. ✅ **Cura pronta** (17/10): `files/scripts/c97c3_cure.py`, dry run pulito su 13 file (11 di prodotto più i due cancelli).
+2. ✅ **Rossi** (17/10, test-author `c97c3-reds`): **28 rossi, 447 verdi** in 11 file, uguali nella mia corsia (carico 31,
+   `files/logs/c97c3/10_my_reds.log`); tutti nei blocchi C-97c-3, ognuno sul suo motivo (oggi `0.00`, `0.0000`, `1.23`, `0.000003`,
+   `0.0`, `0.123457`, `0`; il cancello riporta le due letture).
+   - core-unit: `candlestickChartHelpers` 3, `priceChartHelpers` 2 (`buildDeltaHtml`), `providerProbe` 3, il cancello HTML 1 (più una
+     guardia: `formatPrice(row.display_name)` resta riportato dalla regola dei nomi, un'opzione calcolata dalla sua);
+   - component-unit: `AssetPriceSummary` 4 (file nuovo, registrato dopo `AssetTable.test.ts` in `front_component_unit`), `AssetTable` 3
+     (colonna `lastPrice`, prezzo e Δ di `AssetCard`), `ProviderAssignmentSection` 2, `PriceChartFull` 2, `LineChart` 1, `MeasurePanel` 3,
+     `ExposureTable` 4.
+   - Nessuna asserzione esistente fissava un comportamento che cambia; `providerProbe.test.ts` fissa ora il browser a en-US per tutto il
+     file (Node segue la lingua dell'host); `ExposureTable.test.ts`: i due oracoli della quantità passano a 10, stessi valori.
+   - Due letture senza testid (`AssetCard`, il prezzo vivo; `MeasurePanel`, la riga in attesa): lette dal contenitore, senza aggiungere
+     testid (nessun markup oltre la chiamata, regola del D-C97c-1).
+   > **Note del test-author**: (1) `formatPrice` scrive `''` per null, undefined, NaN, dove `formatFixed` scriveva `NaN`: un limite di
+   > banda o un valore di secchio mancante mostra vuoto; (2) la prova col prezzo nullo resta `0.00` (`Number(null)`); (3) svelte-check dà 6
+   > errori in file d'altri (`periodChanges.ts`, `assetDetailRangeChange.ts`, `assetDetailLive.svelte.ts`, `UsersTab.svelte`): il client
+   > generato è vecchio dopo l'avanzamento, `api sync` prima di `front check`; (4) i commenti del cancello che nominano i due formattatori:
+   > la riga 140 entra nella cura (quella a 57 dà esempi).
+3. ✅ **Cura applicata e verdi** (17/10, 17:3x–17:57): `c97c3_cure.py --apply` sui 13 file, più la riga 140 del cancello HTML
+   («`formatFixed`, `formatPercent` or `formatPrice`»). L'unico `formatPrice` locale, quello di `LotCustodyModal`, scrive un numero o `—`:
+   la fiducia per nome del cancello resta giusta. Gli 11 file e il cancello del denaro: **482/482** (carico 38). Poi
+   `files/scripts/c97c3_light.sh`, una prova alla volta, carico < 50 (log `files/logs/c97c3/light_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | `dev.py api sync` | uscita 0, nessun file tracciato cambiato |
+   | `dev.py test check-orphans` | ogni test registrato raggiungibile (il file nuovo compreso) |
+   | `front-utility core-unit` (i due cancelli, gli aiuti dei grafici, la prova) | 211 file, 8 795 verdi |
+   | `front-utility component-unit` | 180 file, 4 866 verdi |
+   | `front-portfolio chart-safety-unit` (l'escape dei tooltip) | 8 file, 91 verdi |
+   | `dev.py front check` | svelte-check 0/0 (i 6 errori visti dal test-author erano il client vecchio) |
+   | Prettier sui 24 file | pulito |
+
+4. ✅ **Doc** (17/10, modifica puntuale, pagina per sviluppatori senza traduzioni): `developer/frontend/i18n.md`, la frase sui due cancelli:
+   il cancello HTML si fida di `formatFixed`, `formatPercent` **o `formatPrice`** («only those three names»). Nessun'altra pagina fissa le
+   cifre di questi siti (grep dei nomi delle funzioni e di `2|4|6 dp`, `decimals`). Backlog: **W-B78** (le 10 cifre delle quantità scritte
+   a mano in 10 punti di 9 file; una costante in `utils/core`, dopo la 1.3).
+5. ✅ **Simulazione** (17/10, 17:58–18:01): `sim_cherry_pick.sh dev_release2 --docs` sui 27 file (il test nuovo, non tracciato,
+   compreso), dev `685d76dab` (HEAD `6e503e0f6` antenato, 42 commit avanti; tocca due miei file condivisi, il backlog e
+   `_frontend_utility.py`, in altre righe): 0 conflitti; `mkdocs build` stretto e `check-links` con uscita 0 sull'albero unito (log
+   `files/logs/c97c3/20_sim.log`). `git diff --check` pulito. Handoff FROZEN; revisori X (AF) e Y (DV). Chiude C-97c.
+
+### W-B70 (+ W-B77) — i parametri degli errori di campo, la descrizione unita oltre 500: cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Base**: HEAD `a5d615fd7` = dev con C-97c-3 (`164babac1` → `e19f7c7e6`, CHANGELOG `a5d615fd7`). Via e decisioni D-W70-1…5 del
+coordinatore (sopra, «W-B70 — analisi»). OK di scrittura: `PromoteMergeModal.svelte`, `TransactionBulkModal.svelte`; in BRIM solo
+l'import, i doppioni e i siti di chiamata (la SEC9g di MF è in `search_asset_candidates_bulk`).
+
+**Contratto — backend**:
+- **`backend/app/utils/pydantic_errors.py`** (nuovo, una sola copia, W-B77):
+  - `PLAIN_PARAM_TYPES = (str, int, float, bool, NoneType)`;
+  - `loc_to_field(loc)`: gli indici saltati, `resolved_fields.` tolto davanti a un campo (H-41; innocuo per il BRIM, che non ha quel
+    campo), `None` per un `loc` vuoto;
+  - `error_params(error)`: il `ctx` dell'errore copiato quando ogni valore è dato semplice, `None` se manca, è vuoto o ne tiene uno che
+    non lo è (l'eccezione di un `value_error`). Non guarda più `loc`: un errore di campo porta il suo contesto (D-W70-1).
+- **Batch** (`transaction_batch_stages._parse_lenient`) e **BRIM** (`BRIMProvider._create_transaction`): `error_params` per l'errore
+  solo **e per ogni sotto-errore impacchettato** (`multipleBusinessRuleErrors`, la nota di H), `loc_to_field` per il campo. Via
+  `_PLAIN_PARAM_TYPES`, `_loc_to_field` e `_lone_error_params` dai due moduli (BRIM: la riga 95 e i due metodi statici).
+- **L'effetto**, misurato su `TXPromoteResolvedFields` (17/10): `string_too_long` → `{max_length: 500}`; `greater_than` → `{gt}`;
+  `greater_than_equal` → `{ge}`; `date_from_datetime_parsing` → `{error: <testo di pydantic>}`; `model_type` → `{class_name}`;
+  `value_error`, `missing`, `extra_forbidden`, `string_type` → `None`. I testi in più sono innocui: il risolutore escapa ogni
+  parametro di testo e nessuna traduzione li legge.
+- La docstring di `schemas/transactions/batch.py:191` nomina la funzione nuova.
+
+**Contratto — frontend**:
+- `resolveValidationMessage.ts`: `string_too_long` → `transactions.pydantic.stringTooLong` («At most {max_length} characters», 4
+  lingue); nel ramo dei built-in l'etichetta del campo passa da `escapeHtml` come negli altri due rami.
+- `bulk/promoteHelpers.ts`: `TX_DESCRIPTION_MAX_LENGTH = 500` (il `max_length` di `TXCreateItem`, `TXUpdateItem` e
+  `TXPromoteResolvedFields.description`), `textLength(text)` in punti di codice (come `len()` di Python), e
+  `resolvePromoteAllFields(strategy, left, right)`: `{}` se i due lati non divergono, i campi del lato o l'unione, `null` quando
+  l'unione supererebbe il limite.
+- `PromoteMergeModal.svelte`: sotto la textarea il contatore `promote-merge-desc-counter` («{n} / {max}», `data-state` `ok`|`over`,
+  muto o rosso in un ternario); oltre il limite la textarea `aria-invalid` (`aria-invalid:border-lf-danger`), il messaggio
+  `promote-merge-desc-too-long` (`text-xs text-lf-danger`, `data-max`, `transactions.promote.descriptionTooLong`) e Conferma
+  disabilitato (`disabled:opacity-50 disabled:cursor-not-allowed`), come `EventCreateMiniModal`. Solo ruoli.
+- `TransactionBulkModal.svelte`, `mergeAllSuggestions`: `resolvePromoteAllFields`; una coppia `null` resta non promossa e si conta;
+  alla fine `notify({name: 'tx.bulk.promote-all.left-for-manual-merge', detail: {pairs}, toast: {variant: 'warning', …}})` con
+  `transactions.promote.mergeAllLeftTooLong` (plurale ICU). Mai un testo perso.
+
+**Test** (due test-author in parallelo, file distinti): backend (il modulo nuovo, `utils pydantic-errors`; i tre test che fissano
+`None` riscritti come rossi; i sotto-errori impacchettati filtrati) e frontend (Vitest: risolutore, aiuti, modale d'unione; un E2E
+di «promuovi tutto», scritto e girato nello slot).
+
+**Passi**:
+1. ✅ **Cura pronta** (17/10): `files/scripts/wb70_cure.py` (dry run pulito su 8 file, uno nuovo; più le tre descrizioni del runner
+   `_backend_services.py` che nominavano `_loc_to_field`) e `files/scripts/wb70_i18n.sh` (le tre chiavi con `dev.py i18n add`, poi
+   `i18n check`).
+2. ✅ **Rossi** (17/10):
+   - **backend** (test-author `wb70-backend-reds`, corsia 6184, log `files/logs/wb70/01`–`04`):
+
+     | Selettore | Rossi | Verdi | Oggi |
+     |---|---|---|---|
+     | `utils pydantic-errors` (file nuovo `test_utilities/test_pydantic_errors.py`, registrato in `_backend_utils.py`) | 51 | 10 | 49 casi: il modulo non c'è; 2 `TestOneCopy`: le due copie esistono ancora e nessuno importa il modulo |
+     | `services brim-create-transaction` | 2 | 16 | `params` nulli dove `{max_length: 500}`, `{max_length: 36}` (`link_uuid`) |
+     | `services transaction` | 5 | 125 | nulli dove `{max_length: 500}`, `{gt: 0}` ×2 (split, promote), `{ge: 0}` (update); l'impacchettato copia `object()` e un `ValueError` (risposta non serializzabile) |
+     | `services transaction-decimal-places` | 8 | 193 | H-41: 4 casi × validate/commit nulli dove il contesto semplice di pydantic (atteso calcolato dagli errori stessi, nessun testo fissato) |
+
+     Una cura simulata in memoria (`files/wb70_harness/`) porta tutto al verde salvo `TestOneCopy`, che vuole i file veri. Il ramo
+     impacchettato del BRIM con un contesto non semplice non si raggiunge senza toccare il modello (ogni regola di `TXCreateItem` impacchetta
+     dati semplici): coperto dal contratto di `error_params` e da `TestOneCopy`. Nessun `test_api` fissava `None` su un errore di campo.
+     > **⚠️ Fuori pista**: una chiamata `--run-status` del test-author (senza test) ha usato `.testLog` di default nella mia corsia e ha
+     > archiviato un log precedente in `.testLog/00_archive/logs_20261017_183605.tar.xz` (file ignorati, recuperabili).
+   - **frontend** (test-author `wb70-frontend-reds`; uguali nella mia corsia, carico 11, `files/logs/wb70/10_my_front_reds.log`):
+     **34 rossi, 97 verdi** in 3 file — `resolveValidationMessage.test.ts` 7 (la traduzione di `string_too_long`, l'etichetta escapata da
+     `field` e da `loc`, la chiave nei 4 cataloghi), `promoteHelpers.test.ts` 19 (i nomi nuovi; la logica di oggi come guardie),
+     `PromoteMergeModal.test.ts` 8 (contatore, `aria-invalid`, messaggio, Conferma disabilitato, punti di codice). Più l'E2E **PC7** in
+     `tx-bulk-promote-cost-basis.spec.ts` (scritto, non girato: rosso atteso «la coppia da 501 resta due righe: atteso 2, ricevuto 1»).
+3. ✅ **Cura applicata e verdi** (17/10, 18:3x–18:5x): `wb70_cure.py --apply` (9 file, uno nuovo), `wb70_i18n.sh` (le tre chiavi nelle
+   4 lingue, `i18n check` stretto: 5 063 chiavi). In BRIM solo i blocchi permessi: l'import (l. 84), la costante (l. 93-97), i due
+   metodi statici (l. 539-559), la docstring e i due siti di `_create_transaction`. Poi `files/scripts/wb70_light.sh`, una prova alla
+   volta, carico < 50 (log `files/logs/wb70/light_*.log`):
+
+   | Prova | Esito |
+   |---|---|
+   | `ruff check`, `black --check` sui 10 file Python | puliti |
+   | `utils pydantic-errors` | verde (51 rossi + 10 guardie) |
+   | `services brim-create-transaction` | verde (18) |
+   | `services transaction` | verde (130) |
+   | `services transaction-decimal-places` | verde (201) |
+   | Vitest dei 3 file | 131/131 |
+   | `front-utility core-unit` | verde |
+   | `front-transaction tx-unit` | verde |
+   | `utils gate-i18n-catalog`, `utils gate-i18n-usage` | verdi |
+   | `dev.py test check-orphans` | ogni test registrato raggiungibile |
+   | `dev.py front check` | 0/0, dopo un secondo `api sync` |
+
+   > **⚠️ Fuori pista**: il primo `front check` ha dato 2 errori in `features/changelog/whatsNewStore.svelte.ts` (C-54, entrato con
+   > l'avanzamento): il client generato, ignorato da git, era quello di prima dell'avanzamento. `api sync` (uscita 0, nessun file
+   > tracciato cambiato) e `front check` 0/0. Lezione: dopo ogni avanzamento della base, `api sync` prima del primo `front check`.
+4. ✅ **Doc** (17/10, docs-writer `46ade847`, solo EN, `mkdocs build` stretto e `check-links` verdi): `developer/backend/transactions/
+   service.md` (la regola e la sua casa), `split_promote.md` (i `params` del rifiuto, il limite nel frontend), `developer/frontend/state/
+   transaction-draft.md` (contatore, «Merge all», i test), `developer/architecture/patterns/brim_plugin_guide.md:456` (più una mia
+   correzione: il `field` solo per l'errore di un campo, un sotto-errore impacchettato non ne ha), `user/transactions/index.en.md` (l. 49:
+   **W-B73** chiuso, la modale offre descrizione e tag; l. 62: «Combine» lascia la coppia troppo lunga). Nessun timbro: la pagina utente
+   ha già un debito di traduzione.
+   > **Scoperte del docs-writer**: (1) un limite `Decimal` resta senza `params` (`Decimal` non è dato semplice; nei modelli delle
+   > transazioni ogni `gt`/`ge` è su un intero), scritto nella pagina; (2) **W-B79**: `onPromotePair` della pagina Transazioni apre la
+   > modale d'unione anche quando differiscono solo data o costo, che la modale non offre più (il corpo dice solo «Confirm promotion»):
+   > nel backlog, dopo la 1.3.
+5. ✅ **Slot** (via del coordinatore 18:5x, carico a 5 minuti < 50; `files/scripts/wb70_slot.sh`, log `files/logs/wb70_slot_*.log`,
+   18:58–19:15): `db populate --force` sulla mia cartella, poi uno alla volta:
+
+   | Prova | Esito |
+   |---|---|
+   | `front-transaction tx-bulk-promote-cost-basis` (con **PC7**) | 9/9 |
+   | `front-transaction tx-bulk-promote-exec` | 9/9 |
+   | `api transactions-validate` | 12/12 |
+   | `api batch-split-promote` | 38/38 |
+   | `api brim` | 118/118 |
+
+   Porta 6184 libera dopo. Il rosso di PC7 è ragionato dal codice (oggi la coppia da 501 si unisce in una riga), non visto: la cura era
+   già applicata quando lo slot è arrivato.
+6. ✅ **Simulazione** (17/10, 19:16–19:18): `sim_cherry_pick.sh dev_release2 --docs` sui 29 file (i due nuovi, non tracciati, compresi),
+   dev `a6adb0066` (HEAD `a5d615fd7` antenato; dev tocca solo il backlog, in altre sezioni): 0 conflitti; `mkdocs build` stretto e
+   `check-links` con uscita 0 (log `files/logs/wb70/31_sim.log`; la stessa a 18:56 su `d9e9a88b2`). `git diff --check` pulito.
+   Handoff FROZEN; H rivede W-B77.
+
+### Revisioni dopo l'ingresso: MF-SEC9g (di E) ed E-19a, la guardia del gap-fix ✅ (2026-10-17, sola lettura, HEAD `c9ebc1102`)
+
+W-B70 entrato: dev `41335f1e1` (`07fcf4303`), CHANGELOG `c9ebc1102`. `theme-roles --check` pulito sulla HEAD (le condizioni del
+coordinatore dei colori per C-97c: classi invariate, il cancello pulito a ogni checkpoint, un colore solo col suo via).
+- **MF-SEC9g** (`316f9c0d3`): **OK, nessun reperto**. Semantica identica: gli indici ISIN e ticker tengono i valori salvati nell'ordine
+  dell'universo e si leggono con `.upper()` come l'uguaglianza di prima; un matcher compilato per ago con la stessa regola del testo
+  vuoto; gli stessi campi del nome, nello stesso ordine, e le stesse porte di priorità. Il thread legge solo le viste semplici, costruite
+  sul loop dagli attributi già caricati; `_add_candidate` legge esattamente i quattro campi della vista. Osservazione: il confronto dei
+  nomi generici resta O(estrazioni × universo) di CPU, ora fuori dal loop.
+- **E-19a, la guardia del gap-fix** (`e4a4af4e2`, doc `180e7b20d`): **OK**. Le righe sono quelle che `get_balances_at_end_of` somma
+  (broker, data fino ad `as_of`, le stesse esclusioni; `amount` NOT NULL); il controllo di W-B74 prima; una query DISTINCT per
+  checkpoint o verifica; il messaggio è testo semplice in `GapFixStep` (`{group.error}`): i codici citati sono sicuri. Nota: il 409 arriva
+  in inglese in ogni lingua, come quello di W-B74 → **W-B80** (dopo la 1.3).
+- Backlog: chiusi con i loro commit W-B43, W-B58, W-B59, W-B60 (miei) e W-B61, W-B62 (di X), entrati senza la riga ✅.
+
+### W-B48 — gli ultimi selettori per testo nei due spec del data editor: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+Ogni sito della voce c'è ancora, circa 15 righe più in basso. Sostituzioni senza codice di prodotto:
+- `asset-data-editor.spec.ts`: `/Import \(N\)/` (308, 322, 345, 359, 385, 414, 478, 492) → `data-import-confirm` con `data-valid-rows`
+  (e `data-error-count`); `button:has-text("Save")` (231, 260, 279, 368, 423) → `asset-editor-save-btn`; `toHaveText(/Save \(\d+\)/)`
+  (372) → il `data-badge` della scheda dei prezzi (`asset-editor-prices-tab` → `tab-badge`), lo stesso conteggio delle righe modificate;
+  `button:has-text("Cancel")` (235, 292) → `asset-editor-cancel-btn`; `span.rounded-full` (274) → `tab-badge` con `data-badge` (li
+  pubblica `ui/tabs/TabBar.svelte:201`).
+- `fx-csv-import.spec.ts`: `'Import (2)'`/`'Import (1)'` (178, 196, 223, 264, 397, 479, 490) → `data-import-confirm` con
+  `data-valid-rows`; `text=Discard import` (280) → `data-import-discard-confirm`; `hasText: 'Cancel'` (291) → `data-import-cancel`; il
+  test 14 (315–336) senza i due `if (count() > 0)`: il banner c'è e nomina i due codici, prima e dopo lo scambio.
+- **Due glifi** restano, entrambi in file di X: il ✕ del pannello dell'editor (`routes/(app)/assets/[id]/+page.svelte:2650`) e il ⇄
+  dell'import FX (`FxDataImportModal.svelte:199-206`). Un selettore per ruolo leggerebbe titoli tradotti: chiesto l'OK per un
+  `data-testid` ciascuno (`asset-detail-editor-close`, `fx-import-swap`).
+- Prove: `front-asset asset-data-editor` e `front-fx fx-csv-import`, nello slot (circa 10 min).
+
+**Decisione** (coordinatore, 17/10 19:4x): **via, con i due `data-testid`** (`asset-detail-editor-close`, `fx-import-swap`), solo
+l'attributo, nient'altro nei due file di X (J ha la pagina dell'asset aperta alle righe 57/916, lontano da 2650). Slot di circa 10 minuti
+da chiedere quando pronto.
+
+**Passi**:
+1. ✅ **Selettori** (17/10, test-author `wb48-selectors`, scritti e non girati): le sostituzioni della lista, verificate sui componenti;
+   oltre la lista, con la sua ragione: il badge della scheda `'2'` esatto (le due righe importate), i due «non N righe» come
+   `data-valid-rows` `'0'` e disabilitato (aspettano invece di passare subito), e il test 14 con un `not.toHaveText(prima)` dopo lo
+   scambio (un banner che non si aggiorna non passa).
+2. ✅ **I due `data-testid`** (17/10): `asset-detail-editor-close` sul ✕ (`routes/(app)/assets/[id]/+page.svelte:2650`) e `fx-import-swap`
+   sul ⇄ (`FxDataImportModal.svelte`), solo l'attributo; poi il ✕ dello spec e **tutti gli otto** ⇄ dello spec FX su quei testid (sette
+   oltre la lista della voce, lo stesso glifo). Prettier pulito sui quattro file; `theme-roles --check` pulito; `front check` 0/0 dopo un
+   `api sync` (il client generato era di nuovo quello di prima dell'avanzamento: 7 errori nei file di X).
+3. ✅ **Slot** (via del coordinatore 19:4x, insieme a W-B51; `files/scripts/wb4851_slot.sh`, log `files/logs/wb4851_slot_*.log`):
+   `front-asset asset-data-editor` **30/30**, `front-fx fx-csv-import` **22/22** (dopo `db populate --force` sulla mia cartella).
+4. ✅ **Checkpoint** (17/10, 19:5x) — 🧊 FROZEN: simulazione su dev `2fbbf4c4c` con `--docs` pulita (0 conflitti, build stretta e
+   `check-links`), `theme-roles --check` pulito, `git diff --check` pulito, porta 6184 libera.
+
+### W-B51 — la tolleranza dei duplicati BRIM sulle quantità crypto: analisi e cura ✅ (2026-10-17) — 🧊 FROZEN
+
+**Stato reale**: `detect_tx_duplicates` (`backend/app/services/brim/brim_provider.py:2166`) cerca, per riga del report, le righe del broker
+dello stesso tipo e giorno (e dello stesso asset, se risolto), poi tiene quelle con `abs(existing.quantity - tx.quantity) <=
+QUANTITY_TOLERANCE` (`Decimal("0.0001")`, `:2207`, `:2256`) e la cassa uguale a `AMOUNT_TOLERANCE` (0,01).
+- **Il caso vero, più comune dell'esempio della voce**: due acquisti ricorrenti da 10 € di BTC lo stesso giorno, 0,00015123 e
+  0,00015098 BTC: stessa cassa, quantità a 2,5e-7 l'una dall'altra, quindi doppione: «probabile» se anche la descrizione coincide
+  (un piano d'accumulo la ripete), e allora la seconda riga parte **deselezionata**; «possibile» altrimenti, selezionata con un avviso
+  (`importDedup.ts`; la correzione è del test-author). Con le quantità esatte a 10 decimali (C-97a), 0,0001 è grosso per ogni token sotto il centesimo di unità.
+- **L'uguaglianza esatta** sistema il reimport dello stesso file (la quantità salvata torna com'era scritta), ma perde un report di
+  un altro formato che arrotonda (0,0002 contro 0,00015123 salvato): la riga tornerebbe «nuova», e un doppio import vero è peggio di un
+  doppione segnalato.
+
+**Proposta D-W51-1**: uguali alla precisione del meno preciso dei due: `|a − b| ≤ ½ unità dell'ultima cifra` della scala minore, la scala
+letta senza gli zeri finali (`normalize()`: la lettura della colonna aggiunge zeri, `10` torna `10.000000`). 0,00015123 contro 0,00015098:
+diversi; 0,0002 (un report a 4 decimali) contro 0,00015123: uguali; gli interi come oggi. La cassa resta a 0,01 (valuta, 2 decimali).
+Un aiuto puro (`_same_quantity`) accanto al rilevatore; rossi prima: i due acquisti ricorrenti (oggi doppioni), con guardie per il
+reimport identico, il report arrotondato e le quantità intere.
+
+**Decisione D-W51-1** (coordinatore, 17/10 19:4x): **approvata con una guardia**: due quantità coincidono quando, arrotondate (half-up)
+alla scala della meno precisa, sono uguali **e** `|a − b| ≤ 0,0001` (il limite di oggi: mai più largo di prima; 10 e 10,4 restano
+distinte); la scala misurata sui valori `normalize()`. Rossi prima: 0,00015 contro 0,00008 (oggi doppioni), un 0,00015 di un report
+arrotondato contro uno 0,000153 salvato (resta un doppione), il caso degli interi.
+
+**Passi**:
+1. ✅ **Cura pronta** (17/10): `files/scripts/wb51_cure.py`, dry run pulito; l'aiuto provato a parte su tutti gli esempi della decisione
+   (anche 25 cifre, `None`, inf).
+2. ✅ **Rossi** (17/10, test-author `wb51-reds`; uguali nella mia corsia, carico 32, `files/logs/wb51/10_my_reds.log`): `db brim`
+   **4 rossi, 35 verdi**, la classe nuova `TestWB51QuantityOfADuplicate` in `backend/test_scripts/test_db/test_brim_db.py`:
+   - rossi: 0,00015 contro 0,00008 e 0,00015123 contro 0,00015098 (oggi doppioni «probabili»); una quantità salvata illeggibile, testo
+     `'n/a'` o `9e999` (+inf), che si legge `None`: oggi `TypeError` a `brim_provider.py:2256` (la cassa guardava già `None`);
+   - guardie: il report arrotondato (0,00015 contro 0,000153 salvato), 10 e 10, la reimportazione identica, il valore salvato riletto
+     con gli zeri (0,00015 → `0.000150`) in entrambi i versi, il pareggio half-up (0,000145 contro 0,00015), 10 e 10,4 distinti.
+   > **⚠️ Fuori pista**: il mio esempio «`0.000153000` riletto» non esiste: la colonna completa a 6 decimali, e `0.000153` torna com'è;
+   > il test-author ha usato `0.00015` → `0.000150`.
+3. ✅ **Cura applicata e verdi** (17/10): `wb51_cure.py --apply` (`QUANTITY_MATCH_BOUND`, `_decimal_places`, `_same_quantity` accanto a
+   `detect_tx_duplicates`; la docstring del rilevatore); `ruff`, `black` puliti; `db brim` **39/39**; `utils gate-event-loop-io` 14/14.
+4. ✅ **Doc**: `developer/backend/brim/architecture.md`, la tabella della deduplicazione (la regola della quantità e della cassa).
+   > **Scoperta**: il wizard ha una **copia** della regola, sul float e a 0,0001, per i doppioni fra file e col pool in attesa
+   > (`importDedup.ts:145-157`, l'identità del gruppo con `toFixed(4)`): **W-B81**, proposta subito dopo.
+5. ✅ **Slot** (con W-B48): `api brim` **118/118**, `api brim-scalable` **2/2**. Checkpoint FROZEN con W-B48 (sopra).

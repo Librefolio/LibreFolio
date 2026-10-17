@@ -124,6 +124,28 @@
     "bulkRefusal": {
       "tooManyItems": "Alcuni valori non sono stati caricati: il server accetta al massimo {max, number} elementi per richiesta, e questa ne conteneva {count, number}.",
       "tooManyDays": "Alcuni valori non sono stati caricati: il server costruisce al massimo {max, number} valori giornalieri per richiesta, e questa ne chiedeva di più. Scegli un periodo più breve."
+    },
+    "nonIsoCurrency": {
+      "suggestion": "{value} non è un codice ISO: sta per {suggestion}",
+      "candidates": "{value} non è un codice ISO: può stare per {candidates}",
+      "unknown": "{value} non è un codice valuta ISO"
+    },
+    "writeRefusal": {
+      "dateOutOfRange": "{count, plural, one {# data è} other {# date sono}} fuori dall'intervallo {min} – {max}: {dates}. Non è stato salvato nulla.",
+      "currencyMismatch": "{count, plural, one {# prezzo è} other {# prezzi sono}} in {found}, non nella valuta dell'asset {expected}: {dates}. Non è stato salvato nulla.",
+      "notSaved": "{count, plural, one {# valore non è stato salvato} other {# valori non sono stati salvati}}: {items}",
+      "more": "e altre {n}",
+      "reason": {
+        "ohlc_inconsistent": "chiusura fuori da minimo–massimo",
+        "date_out_of_range": "data fuori intervallo",
+        "value_not_storable": "valore troppo grande o troppo piccolo da salvare",
+        "rate_not_storable": "tasso troppo grande o troppo piccolo da salvare",
+        "same_currency": "stessa valuta dai due lati",
+        "invalid_rate": "tasso non valido",
+        "internal_error": "errore del server",
+        "other": "rifiutato dal server"
+      },
+      "tooManyItems": "Non è stato salvato nulla: il server accetta al massimo {max, number} valori per salvataggio, e questo ne conteneva {count, number}. Salvali in più parti."
     }
   },
   "csvImport": {

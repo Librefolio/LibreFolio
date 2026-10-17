@@ -1,5 +1,6 @@
 """Frontend utility & component E2E tests: auth, settings, files, select, image-crop, utilities."""
 
+import os
 import subprocess
 
 from . import _common
@@ -36,6 +37,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
             "src/lib/api/bulkBatches.test.ts",
             "src/lib/api/bulkRefusal.test.ts",
+            "src/lib/api/writeRefusal.test.ts",
             "src/lib/utils/__tests__/urlFilters.test.ts",
             "src/lib/utils/__tests__/trySave.test.ts",
             "src/lib/utils/layout/headerScroll.test.ts",
@@ -126,6 +128,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/files/pdfViewerAssets.test.ts",
             "src/lib/utils/currency/fxConversionHelper.test.ts",
             "src/lib/utils/currency/currencyFormat.test.ts",
+            "src/lib/utils/currency/currencyGraph.test.ts",
             "src/lib/utils/privacy/maskable.test.ts",
             "src/lib/utils/privacy/moneyRenderSites.test.ts",
             "src/routes/documentTitle.guard.test.ts",
@@ -164,6 +167,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/reference/brokerStore.test.ts",
             "src/lib/stores/reference/brokerStoreIconHydration.test.ts",
             "src/lib/stores/reference/sectorStore.test.ts",
+            "src/lib/stores/reference/currencyStore.suggest.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/changelog/whatsNew.test.ts",
             "src/lib/features/changelog/whatsNewStore.test.ts",
@@ -224,6 +228,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/backup/backupJob.test.ts",
             "src/lib/features/backup/restoreFlow.test.ts",
             "src/lib/features/backup/restoreI18n.test.ts",
+            "src/lib/features/backup/restoreText.nonIso.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.languageSwitch.test.ts",
@@ -281,6 +286,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/select/SearchSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.reopen.test.ts",
             "src/lib/components/ui/select/CurrencySearchSelect.test.ts",
+            "src/lib/components/ui/select/CurrencySearchSelect.nonIso.test.ts",
             "src/lib/components/ui/select/FxProviderSelect.test.ts",
             "src/lib/components/ui/select/TreeSelect.test.ts",
             "src/lib/components/ui/select/AssetTypeSelect.test.ts",
@@ -319,6 +325,9 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/assets/detail/AssetCalendarWindowControls.test.ts",
             "src/lib/components/fx/FxSyncModal.test.ts",
             "src/lib/components/fx/FxMissingRate.test.ts",
+            "src/lib/components/fx/FxPriceSummary.test.ts",
+            "src/lib/components/fx/FxCard.test.ts",
+            "src/lib/components/fx/FxTable.test.ts",
             "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/features/files/FilePreviewModal.test.ts",
             "src/lib/features/files/FilesTable.test.ts",
@@ -379,6 +388,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/brokers/BrokerCard.test.ts",
             "src/lib/features/brokers/BrokerImportFilesModal.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
+            "src/lib/components/assets/AssetPriceSummary.test.ts",
             "src/lib/components/assets/AssetTable.privacy.test.ts",
             "src/lib/features/dashboard/KpiSection.test.ts",
             "src/lib/features/dashboard/ExposureTable.test.ts",
@@ -736,6 +746,54 @@ def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("layout/page-policy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+#: The cloud smoke (H-43): existing specs over the main pages and the surfaces the managed profile's policies touch (the
+#: PDF preview, forms, frames), run on a managed lane so that the report-only policy's violations reach the collector of
+#: e2e/fixtures/playwright.ts. Desktop only. layout/legal-and-managed.spec.ts stays out until its «lane's answer» tests
+#: (LGM-E-01, LGM-E-03) read the lane's profile: they pin a self-hosted lane, and fail on a managed one by design.
+CLOUD_SMOKE_SPECS = [
+    "auth.spec.ts",
+    "layout/page-policy.spec.ts",
+    "layout/csp-collector.spec.ts",
+    "portfolio/dashboard.spec.ts",
+    "portfolio/risk-analysis.spec.ts",
+    "assets/asset-modal.spec.ts",
+    "transactions/transactions-table.spec.ts",
+    "transactions/tx-brim-import.spec.ts",
+    "files.spec.ts",
+    "brokers/brokers.spec.ts",
+    "settings/security-tab.spec.ts",
+    "settings/admin-users.spec.ts",
+    "ai-export/ai-export-panel.spec.ts",
+]
+
+
+def front_csp_collector(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run H-43's collector of Content-Security-Policy violations: its helpers, synthetic pages with a policy of their own, and the app's two inline scripts as the baseline knows them."""
+    print_section("Frontend CSP Collector Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/csp-collector.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_cloud_smoke(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the cloud smoke (H-43) on a managed lane: CLOUD_SMOKE_SPECS, desktop, the collector failing on a violation of the report-only policy the baseline does not know."""
+    print_section("Frontend Cloud Smoke (managed lane)")
+    if os.environ.get("LIBREFOLIO_PROFILE") != "managed":
+        print_error("cloud-smoke runs on a managed lane: add --lane-setting LIBREFOLIO_PROFILE=managed")
+        return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright(CLOUD_SMOKE_SPECS, ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_datatable_mobile(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the DataTable's pinned selection and actions columns at phone width: header and cells scroll with the table, the header row still sticks (Y7, D-Y17)."""
     print_section("Frontend DataTable Mobile Tests")
@@ -980,7 +1038,7 @@ def populate_registry(registry: dict) -> None:
         front_utility_unit,
         test_names=True,
         name="Core Store Unit Tests",
-        desc="entityStore, option filter, date/decimal parsing, request concurrency, bulk request batches (Z-27: planned under the caps, sent in sequence, split after a bulk_too_many_days 422), HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, the stored-row question behind the sync dialog's overwrite warning (C-66: hasStoredPointInRange, a point inside [start, end] with both bounds included, a 'min' start unbounded, a point filled backward never a stored row), chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence, the storage-version-3 migration that turns a saved observation Rolling Return into the calendar one), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument, and the colour gates of workstream T: the ratchet on the legacy colour classes and literals (no total and no file rises above src/themeRoles.baseline.tsv, a swapped colour is a rise, a move keeps its record and a split is declared), the grammar of the role utilities (no dark: on a role, no unknown role, no element mixing roles with legacy classes, no arbitrary colour value), and the contract of tokens.css (the same base roles in both themes, every utility a declared role, the WCAG contrast pairs in both themes) with the legacy dark remap of app.css exempting migrated elements and losing each rule with its class's last use, and the Settings tab registry (plan A3): today's tabs with unique URL-safe ids and unique orders, their labels in all four catalogues, their icons and tab modules, admin visible to everyone with canEdit for an administrator only and alignEnd, users (order 110), backup and email for administrators only, and visibleSettingsTabs keeping what visible(ctx) allows, sorted by order, without touching its input, and the Email tab's words, colours and API seam (workstream E, lot E2): problem, SMTP and API codes to whole i18n keys present in the four catalogues with exactly the placeholders they are filled with (own entries only: constructor or __proto__ fall back to the unknown key), the minutes of a rate limit rounded up, class maps of declared colour roles only (a positive control proves the detectors), GET /email/status normalized to its five keys (an empty string or an array where the schema allows none dropped to null), and readTestFailure on each refusal of POST /email/test, carried by an AxiosError or an ApiError, also as the generated client really raises it through the real Zodios and axios stack with only the transport faked; the Users tab's pure helpers (lot A6b): linkShare (the prefilled base from url/path or the origin, the link composed) and addressProbe (normalizeBase, probeUrl, checkAddress: one bare GET without credentials or headers, match/mismatch/unverifiable, the timeout, never throws); and the rune-free gate (Z-20): from src/lib/api/index.ts and from scripts/ai-export-render-prompt-probe.ts (the graph the AI Export probe bridge loads without Svelte's compiler) no static import reaches a .svelte.ts module or a .svelte component, and zodios-client.ts imports none directly, with synthetic and real-site controls; and the Security tab's data (lot A8b): fetchSecurityChecks (the items of GET /security/checks through the generated client, a failure propagated), securityFindings (the checks not ok sorted error → warning → info in the server's order, the browser's open-registration warning from openRegistrationNoticeFor after the server's warnings, the links to Settings › Administration › Email and Settings › Plugins, the ok checks passed without a link, its inputs untouched) with attentionCount (errors and warnings, never info), and the createSecurityChecks store (idle → loading → ready or error, overlapping ensureLoaded() sharing one request, reload() keeping the last checks, nothing listed before the first answer, the browser's state read from instanceConfig only once it has answered and from the page's host)",
+        desc="entityStore, option filter, date/decimal parsing, request concurrency, bulk request batches (Z-27: planned under the caps, sent in sequence, split after a bulk_too_many_days 422), HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, the stored-row question behind the sync dialog's overwrite warning (C-66: hasStoredPointInRange, a point inside [start, end] with both bounds included, a 'min' start unbounded, a point filled backward never a stored row), chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence, the storage-version-3 migration that turns a saved observation Rolling Return into the calendar one), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument, and the colour gates of workstream T: the ratchet on the legacy colour classes and literals (no total and no file rises above src/themeRoles.baseline.tsv, a swapped colour is a rise, a move keeps its record and a split is declared), the grammar of the role utilities (no dark: on a role, no unknown role, no element mixing roles with legacy classes, no arbitrary colour value), and the contract of tokens.css (the same base roles in both themes, every utility a declared role, the WCAG contrast pairs in both themes) with the legacy dark remap of app.css exempting migrated elements and losing each rule with its class's last use, and the Settings tab registry (plan A3): today's tabs with unique URL-safe ids and unique orders, their labels in all four catalogues, their icons and tab modules, admin visible to everyone with canEdit for an administrator only and alignEnd, users (order 110), backup and email for administrators only, and visibleSettingsTabs keeping what visible(ctx) allows, sorted by order, without touching its input, and the Email tab's words, colours and API seam (workstream E, lot E2): problem, SMTP and API codes to whole i18n keys present in the four catalogues with exactly the placeholders they are filled with (own entries only: constructor or __proto__ fall back to the unknown key), the minutes of a rate limit rounded up, class maps of declared colour roles only (a positive control proves the detectors), GET /email/status normalized to its five keys (an empty string or an array where the schema allows none dropped to null), and readTestFailure on each refusal of POST /email/test, carried by an AxiosError or an ApiError, also as the generated client really raises it through the real Zodios and axios stack with only the transport faked; the Users tab's pure helpers (lot A6b): linkShare (the prefilled base from url/path or the origin, the link composed) and addressProbe (normalizeBase, probeUrl, checkAddress: one bare GET without credentials or headers, match/mismatch/unverifiable, the timeout, never throws); and the rune-free gate (Z-20): from src/lib/api/index.ts and from scripts/ai-export-render-prompt-probe.ts (the graph the AI Export probe bridge loads without Svelte's compiler) no static import reaches a .svelte.ts module or a .svelte component, and zodios-client.ts imports none directly, with synthetic and real-site controls; and the Security tab's data (lot A8b): fetchSecurityChecks (the items of GET /security/checks through the generated client, a failure propagated), securityFindings (the checks not ok sorted error → warning → info in the server's order, the browser's open-registration warning from openRegistrationNoticeFor after the server's warnings, the links to Settings › Administration › Email and Settings › Plugins, the ok checks passed without a link, its inputs untouched) with attentionCount (errors and warnings, never info), and the createSecurityChecks store (idle → loading → ready or error, overlapping ensureLoaded() sharing one request, reload() keeping the last checks, nothing listed before the first answer, the browser's state read from instanceConfig only once it has answered and from the page's host), and the FX route picker's currency graph a multigraph (X-R75: two providers on the same direction are two routes, not a crash; its path search guarded on opposite directions, no edge for MANUAL or a self-loop, unknown currencies, a two-step chain walked either way and a provider on at most two legs of a path)",
         tests=("src/lib/stores/core/entityStore.test.ts", "src/lib/features/onboarding/onboardingTourSurfaces.test.ts"),
     )
     add_test(
@@ -1113,9 +1171,28 @@ def populate_registry(registry: dict) -> None:
         "page-policy",
         front_page_policy,
         name="Page Policy",
-        desc="The page policy of H-42 (PAGE_POLICY of security_headers.py: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'), injected by the spec into every HTML document of the lane with service workers blocked, since the lane runs self-hosted; every securitypolicyviolation recorded in the page, only enforce counted. Positive controls first, on the sign-in page: the document reaches the browser with the policy, an injected <base> and a form posted to https://example.invalid and an <object> typed application/pdf on the lane each raise an enforced violation (base-uri, form-action, object-src), the base URL stays the lane's, no control request is made, and nothing else raises one. Then, each flow's page the only document, carrying the policy, and no enforced violation at its end: a nested documentation page and Material's search for 'conventions' (a result on screen), a one-page Latin PDF uploaded and previewed from the Files page to file-preview-pdf data-state=ready (deleted after the test), and the Dashboard's main view (dashboard-page settled, dashboard-overview-tab)",
+        desc="The page policy of H-42 (PAGE_POLICY of security_headers.py: frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'), injected by the spec into every HTML document of the lane with service workers blocked, on any lane (a self-hosted one sends none; on a managed one the same policy replaces the lane's own); every securitypolicyviolation recorded in the page, only enforce counted. Positive controls first, on the sign-in page: the document reaches the browser with the policy, an injected <base> and a form posted to https://example.invalid and an <object> typed application/pdf on the lane each raise an enforced violation (base-uri, form-action, object-src), the base URL stays the lane's, no control request is made, and nothing else raises one. Then, each flow's page the only document, carrying the policy, and no enforced violation at its end: a nested documentation page and Material's search for 'conventions' (a result on screen), a one-page Latin PDF uploaded and previewed from the Files page to file-preview-pdf data-state=ready (deleted after the test), and the Dashboard's main view (dashboard-page settled, dashboard-overview-tab)",
         prereq="Docs site built (dev.py mkdocs build), populated DB + test users (TEST_USER with no onboarding due)",
         tests="layout/page-policy.spec.ts",
+    )
+    add_test(
+        cat,
+        "csp-collector",
+        front_csp_collector,
+        name="CSP Collector",
+        desc="H-43: the collector of Content-Security-Policy violations of e2e/fixtures/playwright.ts (e2e/fixtures/csp.ts, e2e/csp-baseline.json): its helpers, a report-only violation of a synthetic page recorded (the script still runs), one the baseline does not know failing the test, violations of two documents in a row, and on the app's index.html with the managed report-only policy exactly its two inline scripts, both known",
+        prereq="Populated DB + test users",
+        tests="layout/csp-collector.spec.ts",
+    )
+    add_test(
+        cat,
+        "cloud-smoke",
+        front_cloud_smoke,
+        name="Cloud Smoke (managed lane)",
+        desc="H-43: CLOUD_SMOKE_SPECS (sign-in, page policy, CSP collector, dashboard, risk, asset modal, transactions, BRIM import, files, brokers, security and users settings, AI Export) on desktop, on a lane started with --lane-setting LIBREFOLIO_PROFILE=managed (refused otherwise): frame protection and the report-only policy for real, the collector failing on any violation e2e/csp-baseline.json does not know",
+        prereq="--lane-setting LIBREFOLIO_PROFILE=managed; populated DB + test users",
+        tests=CLOUD_SMOKE_SPECS,
+        named_only=True,  # refused on a self-hosted lane, the default; every spec it runs has an action of its own
     )
     add_test(
         cat,

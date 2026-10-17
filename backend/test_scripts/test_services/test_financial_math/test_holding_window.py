@@ -23,8 +23,8 @@ never at module level, so the file collects on HEAD and every test fails there o
 
 - ``TestParityOnSplitFreeStreams`` — on a corpus without splits the new functions give what HEAD's gave: each case
   pins the expected value, checks HEAD's algorithm gives it, then the new one. Same-day ordering by id, partial
-  consumption, full close and reopen, transfer in and out, an ADJUSTMENT in, an oversell, a dust residual, quantities
-  of None and 0;
+  consumption, full close and reopen, transfer in and out, an ADJUSTMENT in, an oversell, a dust residual (its window;
+  its oldest open lot is MF-A7's, below), quantities of None and 0;
 - ``TestSplitRescalesTheOpenLots`` — the change: a forward split keeps the date, a reverse split keeps it with lots
   5 / 5, a split with nothing open is ignored, a split then a full sale leaves nothing open; the same +10 without
   the split link is still an acquisition. Each case names HEAD's answer next to the new one;
@@ -37,6 +37,34 @@ MF-A5 adds ``exits_in(moves, date_from, end)``: how many outgoing quantity moves
 ``TestExitsIn``, red on HEAD by absence (AttributeError): the window's bounds (``date_from`` exclusive, ``end``
 inclusive, no ``date_from`` = from the beginning), each outgoing move counted once even on the same day, splits and
 incoming or zero moves never counted.
+
+MF-A7 gives ``oldest_open_lot_date(moves, dust=QUANTITY_DUST_THRESHOLD)`` the threshold ``closed_position_window``
+already has: walking the open lots oldest first, the date is that of the lot at which the accumulated open quantity
+first exceeds ``dust``, None when the whole position holds ``dust`` or less — the residual a sale leaves is set aside.
+Before it (HEAD 5726486bc) the first open lot counted whatever its quantity; on a split-free stream that is
+``_head_oldest_open_lot_date``, and with ``dust=0`` it is the new function. The two corpus cases of a dust residual now
+expect None (``DUST_SET_ASIDE_BY_MF_A7`` keeps HEAD's D1), their window unchanged.
+
+- ``TestDustResidualIsNotAnOpenLot`` — red on HEAD: a residual of 0.000001 before a new BUY gives the BUY's date, a
+  residual at the threshold itself (0.00001) or below with nothing after it gives None, the threshold applies to the
+  accumulated quantity of the oldest lots (0.000006 + 0.000006 open past it on the second lot, 0.000006 + 0.000004 does
+  not), a reverse split that shrinks an old lot to dust sets it aside; green on HEAD too: a residual of 0.000011 is an
+  open lot, a forward split that lifts a residual of 0.000004 above the threshold keeps its date;
+- ``TestTheDustIsAParameterOfTheOldestOpenLot`` — red on HEAD by absence (TypeError, no ``dust``): ``dust=0`` is HEAD's
+  rule on every stream above and on the corpus, a larger dust sets more aside, the default is the platform threshold.
+
+MF-A10 gives ``quantity_moves(transactions, split_linked_ids, share=Decimal("1"))`` the owner's share of the broker
+(``native_cash.effective_share``): every quantity is scaled by it, as the engine scales its own (``daily_state``:
+``tx.quantity * ctxn.share``), so the dust threshold the windows apply is the one the rows apply to the engine's
+quantity. Before it (HEAD ab74aafbf) the moves carried the raw quantity: on a broker owned at s < 1 a residual in
+(dust, dust / s] was dust for the row and an open lot for the window.
+
+- ``TestQuantityMovesAtTheOwnersShare`` — red on HEAD by absence (TypeError, no ``share``): the share scales every
+  quantity and keeps dates, order and split flags; J's case — BUY 10 (2015), SELL 9.999988, BUY 5 (2024): 0.000012
+  left, 0.000006 at half — dates from the 2024 BUY at half and from 2015 at the whole broker; BUY 10, SELL 9.999988
+  closes on the sale at half and never at the whole broker; the default share is the whole broker on the corpus; a
+  split at half still rescales and keeps the dates; a share of 0 moves nothing, as the engine's; ``exits_in`` counts
+  the same at any positive share.
 
 Pure: no database, no server, no network.
 """
@@ -164,19 +192,25 @@ SPLIT_FREE_CORPUS: dict[str, tuple[list[_Tx], date | None, tuple[date | None, da
     "adjustment-in": ([_tx(D1, 1, "10"), _tx(D2, 2, "5"), _tx(D3, 3, "-12")], D2, (D1, None)),
     # SELL more than held: every lot gone; the running quantity goes below zero, which counts as a close.
     "oversell": ([_tx(D1, 1, "10"), _tx(D2, 2, "-12")], None, (D1, D2)),
-    # BUY 1, SELL 0.999998: a residual of 0.000002 is a lot still open, and a close for the window.
-    "dust-residual": ([_tx(D1, 1, "1"), _tx(D2, 2, "-0.999998")], D1, (D1, D2)),
-    # The tranches of a CROWDFUND redemption: 8 × 0.031102 + 0.751182 against 1 bought, 0.000002 left.
-    "dust-residual-in-tranches": ([_tx(D1, 1, "1")] + [_tx(D2, 10 + index, "-0.031102") for index in range(8)] + [_tx(D3, 30, "-0.751182")], D1, (D1, D3)),
+    # BUY 1, SELL 0.999998: a residual of 0.000002 is a close for the window and, since MF-A7, no open lot — a residual
+    # of dust or less is set aside (HEAD: the D1 lot still open, see DUST_SET_ASIDE_BY_MF_A7).
+    "dust-residual": ([_tx(D1, 1, "1"), _tx(D2, 2, "-0.999998")], None, (D1, D2)),
+    # The tranches of a CROWDFUND redemption: 8 × 0.031102 + 0.751182 against 1 bought, 0.000002 left — set aside too.
+    "dust-residual-in-tranches": ([_tx(D1, 1, "1")] + [_tx(D2, 10 + index, "-0.031102") for index in range(8)] + [_tx(D3, 30, "-0.751182")], None, (D1, D3)),
     # Quantities of None and 0 move nothing.
     "none-and-zero-quantities": ([_tx(D1, 1, None), _tx(D2, 2, "0"), _tx(D3, 3, "4")], D3, (D3, None)),
 }
 
+# MF-A7: the corpus cases whose oldest open lot date departs from HEAD's, with HEAD's — a residual of dust or less set
+# aside. Their window is still HEAD's; their new date is checked by TestDustResidualIsNotAnOpenLot.
+DUST_SET_ASIDE_BY_MF_A7: dict[str, date] = {"dust-residual": D1, "dust-residual-in-tranches": D1}
+OLDEST_PARITY_CORPUS = {name: case for name, case in SPLIT_FREE_CORPUS.items() if name not in DUST_SET_ASIDE_BY_MF_A7}
+
 
 class TestParityOnSplitFreeStreams:
-    @pytest.mark.parametrize("txns, expected_oldest, expected_window", list(SPLIT_FREE_CORPUS.values()), ids=list(SPLIT_FREE_CORPUS))
+    @pytest.mark.parametrize("txns, expected_oldest, expected_window", list(OLDEST_PARITY_CORPUS.values()), ids=list(OLDEST_PARITY_CORPUS))
     def test_oldest_open_lot_date_is_heads(self, txns, expected_oldest, expected_window):
-        """The expected date, from HEAD's algorithm and from the new one."""
+        """The expected date, from HEAD's algorithm and from the new one (the dust residuals aside: MF-A7)."""
         assert _head_oldest_open_lot_date(txns) == expected_oldest, "the case is not what HEAD gave: fix the corpus"
         assert _oldest(txns) == expected_oldest
 
@@ -413,3 +447,297 @@ class TestExitsIn:
 
     def test_no_move_no_exit(self):
         assert _holding_window().exits_in([], D1, D5) == 0
+
+
+# =============================================================================
+# MF-A7: a dust residual is no open lot
+# =============================================================================
+
+
+def _oldest_with(txns: list[_Tx], dust: Decimal, split_ids: tuple[int, ...] = ()) -> date | None:
+    module = _holding_window()
+    return module.oldest_open_lot_date(module.quantity_moves(txns, set(split_ids)), dust=dust)
+
+
+def _tiny_lots(credited: str) -> list[_Tx]:
+    """BUY 1 (D1), SELL 0.999994 (D2): 0.000006 left of the D1 lot; an ADJUSTMENT in of ``credited`` (D3, a fractional
+    credit) opens a second tiny lot; BUY 5 (D4) a third."""
+    return [_tx(D1, 1, "1"), _tx(D2, 2, "-0.999994"), _tx(D3, 3, credited), _tx(D4, 4, "5")]
+
+
+# Split-free streams whose oldest open lot date MF-A7 moves; HEAD gave D1 for each.
+DUST_STREAMS: dict[str, list[_Tx]] = {
+    # 0.000001 left of the D1 lot, then BUY 5 (D3).
+    "residual-before-a-buy": [_tx(D1, 1, "10"), _tx(D2, 2, "-9.999999"), _tx(D3, 3, "5")],
+    "residual-alone": [_tx(D1, 1, "10"), _tx(D2, 2, "-9.999999")],
+    # 0.00001 left: the threshold itself.
+    "residual-at-the-threshold": [_tx(D1, 1, "10"), _tx(D2, 2, "-9.99999")],
+    "tiny-lots-past-the-threshold": _tiny_lots("0.000006"),
+    "tiny-lots-at-the-threshold": _tiny_lots("0.000004"),
+}
+
+
+class TestDustResidualIsNotAnOpenLot:
+    def test_a_dust_residual_before_a_new_buy_is_set_aside(self):
+        """BUY 10 (D1), SELL 9.999999 (D2), BUY 5 (D3): the D1 lot keeps 0.000001, dust; the oldest lot past the threshold
+        is the D3 BUY's. HEAD: D1, the residual's."""
+        txns = DUST_STREAMS["residual-before-a-buy"]
+        assert Decimal("10") - Decimal("9.999999") <= QUANTITY_DUST_THRESHOLD, "precondition: the residual is dust"
+
+        assert _oldest(txns) == D3
+        assert _head_oldest_open_lot_date(txns) == D1
+
+    @pytest.mark.parametrize(
+        "name, residual",
+        [
+            pytest.param("residual-alone", "0.000001", id="residual-below-the-threshold"),
+            # The boundary: the threshold itself is dust or less, so set aside.
+            pytest.param("residual-at-the-threshold", "0.00001", id="residual-at-the-threshold"),
+        ],
+    )
+    def test_a_position_holding_only_dust_has_no_open_lot(self, name, residual):
+        """BUY 10 (D1), then a SELL that leaves ``residual`` of the D1 lot (D2): nothing open, as closed_position_window
+        reads the same residual as a close on D2. HEAD: the D1 lot."""
+        txns = DUST_STREAMS[name]
+        assert sum((tx.quantity for tx in txns), Decimal("0")) == Decimal(residual) <= QUANTITY_DUST_THRESHOLD, "precondition: the residual"
+
+        assert _oldest(txns) is None
+        assert _window(txns) == (D1, D2)
+        assert _head_oldest_open_lot_date(txns) == D1
+
+    @pytest.mark.parametrize("name", list(DUST_SET_ASIDE_BY_MF_A7))
+    def test_the_corpus_dust_residuals_are_set_aside(self, name):
+        """The corpus's 0.000002 left of the D1 lot, by one SELL or in tranches: nothing open. HEAD: the D1 lot."""
+        txns, _expected_oldest, _expected_window = SPLIT_FREE_CORPUS[name]
+
+        assert _oldest(txns) is None
+        assert _head_oldest_open_lot_date(txns) == DUST_SET_ASIDE_BY_MF_A7[name]
+
+    @pytest.mark.parametrize("then_buy", [pytest.param(False, id="alone"), pytest.param(True, id="before-a-new-buy")])
+    def test_a_residual_just_above_the_threshold_is_an_open_lot(self, then_buy):
+        """BUY 10 (D1), SELL 9.999989 (D2): 0.000011 is left, more than dust — the D1 lot is open, alone or before a
+        BUY 5 on D3. The same on HEAD."""
+        txns = [_tx(D1, 1, "10"), _tx(D2, 2, "-9.999989")] + ([_tx(D3, 3, "5")] if then_buy else [])
+        assert Decimal("10") - Decimal("9.999989") > QUANTITY_DUST_THRESHOLD, "precondition: the residual is not dust"
+
+        assert _oldest(txns) == D1
+        assert _head_oldest_open_lot_date(txns) == D1
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            # 0.000006, then 0.000006 + 0.000006 = 0.000012 > 0.00001: past the threshold on the D3 lot.
+            pytest.param("tiny-lots-past-the-threshold", D3, id="past-the-threshold-on-the-second-lot"),
+            # 0.000006, then 0.000006 + 0.000004 = 0.00001, the threshold itself: past it only on the D4 BUY.
+            pytest.param("tiny-lots-at-the-threshold", D4, id="at-the-threshold-after-the-second-lot"),
+        ],
+    )
+    def test_the_threshold_applies_to_the_accumulated_quantity(self, name, expected):
+        """Open lots 0.000006 (D1), a credit (D3), 5 (D4), each tiny lot dust: the date is that of the lot at which the
+        quantity accumulated from the oldest first exceeds the threshold — D3 when the credit is 0.000006, not the D4
+        BUY as if each lot were tested alone. HEAD: D1 in both."""
+        txns = DUST_STREAMS[name]
+        assert max(Decimal("0.000006"), txns[2].quantity) <= QUANTITY_DUST_THRESHOLD, "precondition: each tiny lot is dust"
+
+        assert _oldest(txns) == expected
+        assert _head_oldest_open_lot_date(txns) == D1
+
+    def test_a_forward_split_lifts_a_dust_residual_above_the_threshold(self):
+        """BUY 10 (D1), SELL 9.999996 (D2): 0.000004 left, dust. A 10:1 split (ADJUSTMENT +0.000036, D3) rescales it to
+        0.00004, more than dust, and keeps its date: the D1 lot is open, alone or before BUY 5 (D4). The same on HEAD."""
+        txns = [_tx(D1, 1, "10"), _tx(D2, 2, "-9.999996"), _tx(D3, 3, "0.000036"), _tx(D4, 4, "5")]
+
+        assert _oldest(txns[:3], split_ids=(3,)) == D1
+        assert _oldest(txns, split_ids=(3,)) == D1
+
+    def test_the_same_credit_without_the_split_link_is_a_tiny_lot_of_its_own(self):
+        """The control of the forward split: without the link the +0.000036 opens a lot of D3, and 0.000004 + 0.000036
+        exceeds the threshold there: D3. HEAD: D1, the residual's."""
+        txns = [_tx(D1, 1, "10"), _tx(D2, 2, "-9.999996"), _tx(D3, 3, "0.000036"), _tx(D4, 4, "5")]
+
+        assert _oldest(txns) == D3
+        assert _head_oldest_open_lot_date(txns) == D1
+
+    def test_a_reverse_split_shrinks_an_old_lot_to_dust(self):
+        """BUY 1 (D1), SELL 0.99995 (D2): 0.00005 left, more than dust, so the D1 lot is open; BUY 10 (D3). A 1:10 split
+        (ADJUSTMENT −9.000045, D4) rescales both lots by 1.000005 / 10.00005 = 0.1: 0.000005 of D1, now dust, and 1 of
+        D3 — the D3 lot. HEAD: D1, the shrunken lot."""
+        before_split = [_tx(D1, 1, "1"), _tx(D2, 2, "-0.99995"), _tx(D3, 3, "10")]
+        txns = before_split + [_tx(D4, 4, "-9.000045")]
+        assert _oldest(before_split) == D1, "precondition: 0.00005 is more than dust"
+
+        assert _oldest(txns, split_ids=(4,)) == D3
+
+
+class TestTheDustIsAParameterOfTheOldestOpenLot:
+    @pytest.mark.parametrize("name", list(DUST_STREAMS))
+    def test_no_tolerance_is_heads_rule_on_the_dust_streams(self, name):
+        """``dust=0``: the first open lot whatever its quantity, HEAD's D1 on every stream MF-A7 moves."""
+        txns = DUST_STREAMS[name]
+
+        assert _oldest_with(txns, Decimal("0")) == _head_oldest_open_lot_date(txns) == D1
+
+    @pytest.mark.parametrize("txns, expected_oldest, expected_window", list(SPLIT_FREE_CORPUS.values()), ids=list(SPLIT_FREE_CORPUS))
+    def test_no_tolerance_is_heads_rule_on_the_corpus(self, txns, expected_oldest, expected_window):
+        """``dust=0`` on the split-free corpus, its dust residuals included: HEAD's date on every case."""
+        assert _oldest_with(txns, Decimal("0")) == _head_oldest_open_lot_date(txns)
+
+    def test_no_tolerance_keeps_a_lot_a_reverse_split_shrank_to_dust(self):
+        """The reverse split of TestDustResidualIsNotAnOpenLot with ``dust=0``: the D1 lot, 0.000005 of it, as on HEAD."""
+        txns = [_tx(D1, 1, "1"), _tx(D2, 2, "-0.99995"), _tx(D3, 3, "10"), _tx(D4, 4, "-9.000045")]
+
+        assert _oldest_with(txns, Decimal("0"), split_ids=(4,)) == D1
+
+    @pytest.mark.parametrize(
+        "dust, expected",
+        [
+            # 0.005 is left of the D1 lot: more than this dust.
+            pytest.param("0.004999", D1, id="below-the-residual"),
+            # The residual is this dust: set aside, the D3 BUY.
+            pytest.param("0.005", D3, id="at-the-residual"),
+            pytest.param("0.01", D3, id="above-the-residual"),
+            # 0.005 + 5 = 5.005 open in all: more than this dust on the D3 lot, not more than the next.
+            pytest.param("5.004999", D3, id="below-the-whole-position"),
+            pytest.param("5.005", None, id="at-the-whole-position"),
+        ],
+    )
+    def test_a_larger_dust_sets_more_aside(self, dust, expected):
+        """BUY 10 (D1), SELL 9.995 (D2), BUY 5 (D3): 0.005 left of the D1 lot, an open lot at the platform threshold."""
+        txns = [_tx(D1, 1, "10"), _tx(D2, 2, "-9.995"), _tx(D3, 3, "5")]
+        assert _oldest(txns) == D1, "precondition: 0.005 is more than the platform's dust"
+
+        assert _oldest_with(txns, Decimal(dust)) == expected
+
+    @pytest.mark.parametrize("name", list(DUST_STREAMS))
+    def test_the_default_is_the_platform_threshold(self, name):
+        """No ``dust`` given: ``QUANTITY_DUST_THRESHOLD``, 0.00001, the threshold closed_position_window and the rows use."""
+        txns = DUST_STREAMS[name]
+        assert QUANTITY_DUST_THRESHOLD == Decimal("0.00001")
+
+        assert _oldest(txns) == _oldest_with(txns, QUANTITY_DUST_THRESHOLD)
+
+
+# =============================================================================
+# MF-A10: the quantities at the owner's share of the broker
+# =============================================================================
+
+WHOLE = Decimal("1")
+HALF = Decimal("0.5")
+J_BUY = date(2015, 3, 2)
+J_SALE = date(2015, 9, 1)
+J_REBUY = date(2024, 4, 2)
+
+# J's case: BUY 10 (2015), SELL 9.999988 (2015) — 0.000012 left of the 2015 lot, 0.000006 at half — then BUY 5 (2024).
+J_RESIDUAL_THEN_BUY = [_tx(J_BUY, 1, "10"), _tx(J_SALE, 2, "-9.999988"), _tx(J_REBUY, 3, "5")]
+# The same sale with nothing bought after it: closed at dust over the share, not at dust.
+J_SOLD_DOWN = J_RESIDUAL_THEN_BUY[:2]
+
+
+def _at_share(txns: list[_Tx], share: Decimal, split_ids: tuple[int, ...] = ()) -> list:
+    return _holding_window().quantity_moves(txns, set(split_ids), share=share)
+
+
+class TestQuantityMovesAtTheOwnersShare:
+    def test_the_share_scales_every_quantity_and_keeps_the_rest(self):
+        """At half: each quantity halved — a None as 0 — with the replay order (date, then id, None as 0) and the split
+        flags of the whole broker's moves."""
+        txns = [_tx(D2, 5, "-3"), _tx(D1, 9, "10"), _tx(D1, None, "4"), _tx(D3, 7, "10"), _tx(D4, 8, None)]
+
+        whole = _holding_window().quantity_moves(txns, {7})
+        half = _at_share(txns, HALF, split_ids=(7,))
+
+        assert [(move.date, move.order, move.quantity, move.split) for move in half] == [
+            (D1, 0, Decimal("2"), False),
+            (D1, 9, Decimal("5"), False),
+            (D2, 5, Decimal("-1.5"), False),
+            (D3, 7, Decimal("5"), True),
+            (D4, 8, Decimal("0"), False),
+        ]
+        assert [(move.date, move.order, move.split) for move in half] == [(move.date, move.order, move.split) for move in whole]
+        assert [move.quantity for move in half] == [move.quantity * HALF for move in whole]
+
+    def test_a_residual_dust_at_the_share_is_set_aside(self):
+        """J's case: 0.000012 left of the 2015 lot is more than dust, 0.000006 — the owner's half of it — is not. At half
+        the oldest lot past the threshold is the 2024 BUY's, as the row reads the engine's 0.000006 as not held; at the
+        whole broker it is still the 2015 lot. HEAD's callers passed the raw quantity: 2015 at any share."""
+        raw_residual = Decimal("10") - Decimal("9.999988")
+        assert QUANTITY_DUST_THRESHOLD < raw_residual <= QUANTITY_DUST_THRESHOLD / HALF, "precondition: the residual is in (dust, dust / share]"
+        module = _holding_window()
+
+        assert module.oldest_open_lot_date(_at_share(J_RESIDUAL_THEN_BUY, HALF)) == J_REBUY, f"HEAD gave {J_BUY}"
+        assert module.oldest_open_lot_date(_at_share(J_RESIDUAL_THEN_BUY, WHOLE)) == J_BUY
+        assert _oldest(J_RESIDUAL_THEN_BUY) == J_BUY
+
+    def test_a_position_closed_at_dust_over_the_share_closes_on_the_sale(self):
+        """BUY 10, SELL 9.999988: at half 5 fall to 0.000006, dust — closed on the sale, nothing open. At the whole broker
+        0.000012 stays, more than dust: never closed, the 2015 lot open. HEAD's callers: (J_BUY, None) at any share."""
+        module = _holding_window()
+        half = _at_share(J_SOLD_DOWN, HALF)
+
+        assert module.closed_position_window(half) == (J_BUY, J_SALE), f"HEAD gave {(J_BUY, None)}"
+        assert module.oldest_open_lot_date(half) is None, f"HEAD gave {J_BUY}"
+        assert module.closed_position_window(_at_share(J_SOLD_DOWN, WHOLE)) == _window(J_SOLD_DOWN) == (J_BUY, None)
+        assert module.oldest_open_lot_date(_at_share(J_SOLD_DOWN, WHOLE)) == J_BUY
+
+    @pytest.mark.parametrize("txns, expected_oldest, expected_window", list(SPLIT_FREE_CORPUS.values()), ids=list(SPLIT_FREE_CORPUS))
+    def test_the_default_share_is_the_whole_broker(self, txns, expected_oldest, expected_window):
+        """No ``share`` given: the whole broker, the moves HEAD gave — on the corpus, its dates and windows unchanged."""
+        module = _holding_window()
+        default = module.quantity_moves(txns, set())
+
+        assert module.quantity_moves(txns, set(), share=WHOLE) == default
+        assert (module.oldest_open_lot_date(default), module.closed_position_window(default)) == (expected_oldest, expected_window)
+
+    def test_a_forward_split_at_the_share_keeps_the_buy_date(self):
+        """TestSplitRescalesTheOpenLots' forward split at half: BUY 5 (D1), split +5 (D2) doubles the D1 lot to 10, SELL
+        7.5 (D3) leaves 2.5 of it — D1, as at the whole broker. A split and a full sale still close on the sale."""
+        module = _holding_window()
+
+        assert module.oldest_open_lot_date(_at_share([_tx(D1, 1, "10"), _tx(D2, 2, "10"), _tx(D3, 3, "-15")], HALF, split_ids=(2,))) == D1
+        assert module.closed_position_window(_at_share([_tx(D1, 1, "10"), _tx(D2, 2, "10"), _tx(D3, 3, "-20")], HALF, split_ids=(2,))) == (D1, D3)
+
+    @pytest.mark.parametrize(
+        "sold, expected",
+        [
+            # 2.495 of the D1 lot of 2.5: 0.005 of it left, more than dust.
+            pytest.param("-4.99", D1, id="sell-less-than-the-first-lot"),
+            # The whole D1 lot of 2.5: the D2 lot is next.
+            pytest.param("-5", D2, id="sell-the-first-lot-exactly"),
+            pytest.param("-10", None, id="sell-everything"),
+        ],
+    )
+    def test_a_reverse_split_at_the_share_halves_the_lots_and_keeps_their_dates(self, sold, expected):
+        """TestSplitRescalesTheOpenLots' reverse split at half: BUY 5 (D1), BUY 5 (D2), split −5 (D3) → lots of 2.5 and
+        2.5, the factor (10 − 5) / 10 the same as at the whole broker; a SELL on D4, at half too, proves it."""
+        txns = [_tx(D1, 1, "10"), _tx(D2, 2, "10"), _tx(D3, 3, "-10"), _tx(D4, 4, sold)]
+
+        assert _holding_window().oldest_open_lot_date(_at_share(txns, HALF, split_ids=(3,))) == expected
+        assert _oldest(txns, split_ids=(3,)) == expected, "the same lots as at the whole broker"
+
+    def test_a_zero_share_moves_nothing(self):
+        """An owner's 0 % share: every quantity 0, so no lot is open, the position never opens nor closes and no unit
+        leaves it — as the engine, where a 0 % share moves nothing (``daily_state``: ``tx_qty == 0``)."""
+        module = _holding_window()
+        txns = J_RESIDUAL_THEN_BUY + [_tx(J_REBUY, 4, "-2")]
+
+        moves = _at_share(txns, Decimal("0"))
+
+        assert [move.quantity for move in moves] == [Decimal("0")] * len(txns)
+        assert module.oldest_open_lot_date(moves) is None
+        assert module.closed_position_window(moves) == (None, None)
+        assert module.exits_in(moves, None, J_REBUY) == 0
+
+    @pytest.mark.parametrize("share", ["1", "0.5", "0.333333", "0.000001"])
+    def test_exits_in_counts_the_same_at_any_positive_share(self, share):
+        """An exit is an outgoing move whatever its size: TestExitsIn's streams count the same at any positive share."""
+        module = _holding_window()
+        cases = [
+            (TestExitsIn.ONE_EXIT_A_DAY, D2, D4, ()),
+            (TestExitsIn.ONE_EXIT_A_DAY, None, D5, ()),
+            ([_tx(D1, 1, "10"), _tx(D2, 2, "-3"), _tx(D2, 3, "-3"), _tx(D2, 4, "-4")], D1, D2, ()),
+            ([_tx(D1, 1, "20"), _tx(D2, 2, "-5"), _tx(D3, 3, "-10"), _tx(D4, 4, "-5")], D1, D4, (3,)),
+        ]
+
+        counts = [module.exits_in(_at_share(txns, Decimal(share), split_ids), date_from, end) for txns, date_from, end, split_ids in cases]
+
+        assert counts == [_exits(txns, date_from, end, split_ids) for txns, date_from, end, split_ids in cases] == [2, 4, 3, 2]

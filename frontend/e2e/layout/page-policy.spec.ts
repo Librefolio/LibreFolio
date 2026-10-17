@@ -15,11 +15,14 @@
  * `services managed-headers`; this spec proves the other half: nothing in the app or the documentation needs what the
  * policy forbids — no `<object>`, `<embed>` or `<base>`, no form posted to another origin.
  *
- * Why routing, and not a lane with the real header: the lane runs self-hosted, frame protection off, and the runner
- * gives a lane no way to turn it on — it drops every `LIBREFOLIO_*` of the developer from a lane
- * (`configure_test_runtime`, scripts/cli_base.py), and a run has one backend, shared by every spec. A lane of its own
- * would run only when someone launched it; injected by the spec, the policy is checked by the normal suite, a permanent
- * guard.
+ * Why routing, and not a lane with the real header: a lane runs self-hosted, frame protection off, whatever the
+ * developer's own configuration (`configure_test_runtime`, scripts/cli_base.py, drops every `LIBREFOLIO_*` of it),
+ * unless it is started with `--lane-setting LIBREFOLIO_PROFILE=managed` or `LIBREFOLIO_FRAME_PROTECTION=true` (H-43,
+ * `TEST_LANE_SETTABLE`); and a run has one backend, shared by every spec. A managed lane runs only when someone
+ * launches it (`front-utility cloud-smoke`); injected by the spec, the policy is checked by the normal suite, on any
+ * lane, a permanent guard. On a managed lane the route sets the same `PAGE_POLICY` in place of the lane's own
+ * `Content-Security-Policy` on every HTML answer, and leaves the lane's `Content-Security-Policy-Report-Only` as it was
+ * sent.
  *
  * How, before the first navigation of every test:
  *   - the header is injected. Every document request to the lane — `resourceType()` `document`: a navigation or a frame
@@ -38,7 +41,8 @@
  *      the browser with the policy; a `<base>` aimed at another origin, a PDF `<object>` on the lane and a form posted
  *      to another origin each raise an enforced violation — `base-uri`, `object-src`, `form-action`. The base URL stays
  *      the lane's, and no request of a control is ever made: the spec refuses them besides, so a control the policy let
- *      through could not take the page away. Nothing but the controls raises one there;
+ *      through could not take the page away. Nothing but the controls raises one there. Raised on purpose and checked
+ *      here, they are not failed by the H-43 CSP collector: this test alone opts out (`cspFailOnUnknown: false`);
  *   2. the documentation: a nested page, the kind docs-offline-math picks, then Material's search finds a word of that
  *      page's own title;
  *   3. the PDF viewer, as files-pdf-offline drives it: a one-page Latin PDF uploaded by the spec and previewed from the
@@ -143,7 +147,10 @@ interface ServedDocument {
     path: string;
     status: number;
     contentType: string;
-    /** The Content-Security-Policy the lane sent itself — none, self-hosted — replaced on an HTML answer. */
+    /**
+     * The Content-Security-Policy the lane sent itself, replaced on an HTML answer all the same: none with frame protection off (a self-hosted lane);
+     * with it on (a managed lane), `PAGE_POLICY` on an HTML answer, `frame-ancestors 'self'` alone on any other answer it records (a redirect).
+     */
     lanePolicy: string | null;
     injected: boolean;
 }
@@ -437,63 +444,69 @@ test.describe('The page policy of H-42, injected as the managed profile sends it
         await testInfo.attach('page-policy.json', {body: JSON.stringify({policy: PAGE_POLICY, ...log, violations}, null, 1), contentType: 'application/json'});
     });
 
-    test('positive controls, on the sign-in page: the policy reaches the browser and is enforced — a <base> and a form aimed at another origin and an <object> each raise an enforced violation, and nothing else does', async ({page, context, baseURL}) => {
-        const origin = laneOrigin(baseURL);
-        const reached = await refuseControlRequests(context);
+    test.describe('with cspFailOnUnknown: false — the controls raise their violations on purpose, and the test checks them itself', () => {
+        // This test raises enforced violations on purpose and checks them itself: the H-43 collector of
+        // fixtures/playwright.ts still records them and attaches them to the report, but does not fail the test for them.
+        test.use({cspFailOnUnknown: false});
 
-        const response = await page.goto('/', {timeout: PAGE_TIMEOUT_MS});
-        expect(response?.headers()['content-security-policy'], 'the sign-in page reached the browser with the injected policy: without it, every green of this spec would be the injection’s silence').toBe(PAGE_POLICY);
-        await expect(page.getByTestId('login-page'), 'the app drew its sign-in page under the policy').toBeVisible({timeout: PAGE_TIMEOUT_MS});
+        test('positive controls, on the sign-in page: the policy reaches the browser and is enforced — a <base> and a form aimed at another origin and an <object> each raise an enforced violation, and nothing else does', async ({page, context, baseURL}) => {
+            const origin = laneOrigin(baseURL);
+            const reached = await refuseControlRequests(context);
 
-        // One breach per directive, at absolute addresses, so that each control stands alone whatever the <base> does.
-        const controls = {controlOrigin: CONTROL_ORIGIN, marker: CONTROL_MARKER, objectUrl: `${origin}${CONTROL_OBJECT_PATH}`};
-        await page.evaluate(({controlOrigin, marker, objectUrl}) => {
-            const base = document.createElement('base');
-            base.href = `${controlOrigin}/${marker}/`;
-            document.head.append(base);
+            const response = await page.goto('/', {timeout: PAGE_TIMEOUT_MS});
+            expect(response?.headers()['content-security-policy'], 'the sign-in page reached the browser with the injected policy: without it, every green of this spec would be the injection’s silence').toBe(PAGE_POLICY);
+            await expect(page.getByTestId('login-page'), 'the app drew its sign-in page under the policy').toBeVisible({timeout: PAGE_TIMEOUT_MS});
 
-            const object = document.createElement('object');
-            // Plugin content, not an image: see CONTROL_OBJECT_PATH.
-            object.type = 'application/pdf';
-            object.data = objectUrl;
-            object.width = '16';
-            object.height = '16';
-            document.body.append(object);
+            // One breach per directive, at absolute addresses, so that each control stands alone whatever the <base> does.
+            const controls = {controlOrigin: CONTROL_ORIGIN, marker: CONTROL_MARKER, objectUrl: `${origin}${CONTROL_OBJECT_PATH}`};
+            await page.evaluate(({controlOrigin, marker, objectUrl}) => {
+                const base = document.createElement('base');
+                base.href = `${controlOrigin}/${marker}/`;
+                document.head.append(base);
 
-            const form = document.createElement('form');
-            form.method = 'post';
-            form.action = `${controlOrigin}/${marker}`;
-            document.body.append(form);
-            form.submit();
-        }, controls);
+                const object = document.createElement('object');
+                // Plugin content, not an image: see CONTROL_OBJECT_PATH.
+                object.type = 'application/pdf';
+                object.data = objectUrl;
+                object.width = '16';
+                object.height = '16';
+                document.body.append(object);
 
-        const directives = () => enforcedByDirective(page);
-        await expect
-            .poll(directives, {
-                message: 'base-uri: the <base> aimed at another origin raised an enforced violation',
-                timeout: VIOLATION_TIMEOUT_MS,
-            })
-            .toContainEqual(expect.objectContaining({directive: 'base-uri', blockedURI: expect.stringContaining(CONTROL_ORIGIN)}));
-        await expect
-            .poll(directives, {
-                message: 'object-src: the <object> on the lane raised an enforced violation',
-                timeout: VIOLATION_TIMEOUT_MS,
-            })
-            .toContainEqual(expect.objectContaining({directive: 'object-src', blockedURI: expect.stringContaining(CONTROL_MARKER)}));
-        await expect
-            .poll(directives, {
-                message: 'form-action: the form posted to another origin raised an enforced violation',
-                timeout: VIOLATION_TIMEOUT_MS,
-            })
-            .toContainEqual(expect.objectContaining({directive: 'form-action', blockedURI: expect.stringContaining(CONTROL_ORIGIN)}));
+                const form = document.createElement('form');
+                form.method = 'post';
+                form.action = `${controlOrigin}/${marker}`;
+                document.body.append(form);
+                form.submit();
+            }, controls);
 
-        // Blocked, not merely reported: the page kept the lane as its base URL, never left, and no control's request was made.
-        expect(new URL(await page.evaluate(() => document.baseURI)).origin, 'the blocked <base> retargeted nothing: the page’s base URL is still on the lane').toBe(origin);
-        expect(reached, 'no request of a control was made: the policy stopped each one before it left').toEqual([]);
-        expectOneDocumentUnderPolicy(log, '/', 'the sign-in page');
-        // And nothing else: the sign-in page itself needs nothing the policy forbids.
-        const others = enforced(await readViolations(page)).filter((violation) => !isControl(violation));
-        expect(others, `the sign-in page raised enforced violations of its own under the policy:\n${listed(others)}`).toEqual([]);
+            const directives = () => enforcedByDirective(page);
+            await expect
+                .poll(directives, {
+                    message: 'base-uri: the <base> aimed at another origin raised an enforced violation',
+                    timeout: VIOLATION_TIMEOUT_MS,
+                })
+                .toContainEqual(expect.objectContaining({directive: 'base-uri', blockedURI: expect.stringContaining(CONTROL_ORIGIN)}));
+            await expect
+                .poll(directives, {
+                    message: 'object-src: the <object> on the lane raised an enforced violation',
+                    timeout: VIOLATION_TIMEOUT_MS,
+                })
+                .toContainEqual(expect.objectContaining({directive: 'object-src', blockedURI: expect.stringContaining(CONTROL_MARKER)}));
+            await expect
+                .poll(directives, {
+                    message: 'form-action: the form posted to another origin raised an enforced violation',
+                    timeout: VIOLATION_TIMEOUT_MS,
+                })
+                .toContainEqual(expect.objectContaining({directive: 'form-action', blockedURI: expect.stringContaining(CONTROL_ORIGIN)}));
+
+            // Blocked, not merely reported: the page kept the lane as its base URL, never left, and no control's request was made.
+            expect(new URL(await page.evaluate(() => document.baseURI)).origin, 'the blocked <base> retargeted nothing: the page’s base URL is still on the lane').toBe(origin);
+            expect(reached, 'no request of a control was made: the policy stopped each one before it left').toEqual([]);
+            expectOneDocumentUnderPolicy(log, '/', 'the sign-in page');
+            // And nothing else: the sign-in page itself needs nothing the policy forbids.
+            const others = enforced(await readViolations(page)).filter((violation) => !isControl(violation));
+            expect(others, `the sign-in page raised enforced violations of its own under the policy:\n${listed(others)}`).toEqual([]);
+        });
     });
 
     test('the documentation: a nested page, then Material’s search finds a word of the page’s own title — no enforced violation', async ({page, isMobile}) => {

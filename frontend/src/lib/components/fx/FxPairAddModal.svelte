@@ -319,24 +319,12 @@
                 },
             };
 
-            // In edit mode, delete all existing routes for this pair first
-            // to ensure stale routes don't persist (e.g., when user removes all providers).
-            // The backend auto-reinstates a MANUAL sentinel if no routes remain after delete.
-            if (editing) {
-                const deleteResult = await trySave(() => zodiosApi.delete_routes_bulk_api_v1_fx_providers_routes_delete([{base, quote}]), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
-                if (!sameSession()) return;
-                if (deleteResult.status === 'error') {
-                    reportConfigurationError(deleteResult.message);
-                    return;
-                }
-                // If user removed all providers, backend already reinstated MANUAL — skip POST
-                if (routes.length === 0) {
-                    void finishFxPairCreation(context);
-                    return;
-                }
-            }
-
-            const createResult = await trySave(() => zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post([...mainItems, ...intermediateItems]), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
+            // An edit replaces the pair's routes in one request (X-R75): the server keeps exactly the routes posted, in
+            // one transaction, so a refused or lost save leaves the pair as it was. With no route selected, mainItems is
+            // the MANUAL item, and the pair becomes manual. Deleting the routes first, as before, lost them whenever the
+            // POST that followed failed, and a whole-pair delete never brings the MANUAL route back.
+            const items = [...mainItems, ...intermediateItems];
+            const createResult = await trySave(() => (editing ? zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(items, {queries: {replace: true}}) : zodiosApi.create_routes_bulk_api_v1_fx_providers_routes_post(items)), {toast: false, fallback: get(_)('fx.addPair.createFailed')});
             if (!sameSession()) return;
             if (createResult.status === 'error') {
                 // A 409 is the concurrent-write conflict, and it is the one case

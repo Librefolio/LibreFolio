@@ -696,6 +696,12 @@ limits) can neither reach the tests nor change their outcome.
   on for every test. The same line sets `LIBREFOLIO_PROBE_RATE_LIMIT=0`: the per-user limit of the
   [provider probe](../backend/assets/architecture.md#provider-probe) is off on the lane's server, whose E2E
   suites probe many times as one user; its own tests build their limiters in-process.
+- Three settings a lane may set itself, on its command line: `--lane-setting NAME=VALUE` (lot H-43) takes
+  `LIBREFOLIO_PROFILE`, `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (`TEST_LANE_SETTABLE`), none of
+  them a secret, so that a suite can run on the managed profile. `configure_test_runtime()` sets them after the cleanup
+  and hands them down in `LIBREFOLIO_TEST_LANE_SETTINGS`, under the kept `LIBREFOLIO_TEST_*` prefix. That variable is
+  the runner's alone: found in `.env`, it stops the lane with an error, under `pipenv run` too. See
+  [Lane Settings](../test-walkthrough/index.md#lane-settings).
 
 ### 🧬 Instance Key {: #instance-key }
 
@@ -2845,7 +2851,11 @@ theme before the first paint and registers the service worker, and the start scr
 (`frontend/svelte.config.js` has no `csp` option, so SvelteKit adds no hash or nonce to it);
 `frontend/static/offline.html`, the page the service worker shows when the server cannot be reached, has one too. These
 reports are expected until the scripts move to files or get hashes: the report-only phase is there to list what an
-enforced policy would block.
+enforced policy would block. The managed lane's cloud smoke met two more, both recorded in the
+[E2E baseline](../test-walkthrough/e2e.md#csp-baseline): cheetah-grid's `eval`, a harmless probe of the global object,
+and the `connect-src` of the [address check](#address-probe) of a link, which fetches the address the administrator
+typed. That check is what an enforced `connect-src 'self'` would break: for an origin other than the page's it would
+read *unverifiable* (backlog H-53, workstream A for the experience).
 
 Tests: `./dev.py test services security-headers` (`backend/test_scripts/test_services/test_security_headers.py`:
 `nosniff` and `Referrer-Policy` exactly once on every kind of response, a route's own kept, the 500 with its exception
@@ -2873,9 +2883,12 @@ see [Server Startup](overview.md#server-startup)). The switches' values per prof
 `./dev.py test services profile-defaults` (see [Settings System](settings.md)).
 
 In a browser, `./dev.py test front-utility page-policy` (`frontend/e2e/layout/page-policy.spec.ts`) checks that the
-app and the documentation need nothing `PAGE_POLICY` forbids. The test lane runs self-hosted and the runner cannot
-turn frame protection on in a lane, so the spec injects `PAGE_POLICY` by routing into every HTML document the lane
-serves, with service workers blocked (the app's answers navigations itself, out of the route's reach). Positive
+app and the documentation need nothing `PAGE_POLICY` forbids. A test lane runs self-hosted, frame protection off,
+unless it turns it on with `--lane-setting` (the managed profile, or `LIBREFOLIO_FRAME_PROTECTION` itself: see
+[Lane Settings](../test-walkthrough/index.md#lane-settings)), so the spec does not rely on the lane: it injects
+`PAGE_POLICY` by routing into every HTML document the lane serves, in place of any `Content-Security-Policy` the lane
+sent (a report-only policy is left as the lane sent it), with service workers blocked (the app's answers navigations
+itself, out of the route's reach). Positive
 controls come first, on the sign-in page: an injected `<object>` typed `application/pdf`, a `<base>` aimed at another
 origin and a form posted to another origin must each be refused with an enforced violation. The `<object>` is plugin
 content on purpose: in Chromium 149, an untyped `<object>` of an image, inserted in the same task as the form's

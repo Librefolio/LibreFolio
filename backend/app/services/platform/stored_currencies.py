@@ -10,7 +10,8 @@ can bring such rows back at any time. This module finds them, read-only, on a ``
 
 A value is canonical when it is stored as ``iso_currency_code`` stores it (``is_canonical_iso_currency``): ``"EUR"`` is,
 ``"eur"`` is not (an exact SQL comparison misses it), nor ``"978"``. Each finding carries ``suggested_iso_currency``: the
-code the value stands for, or None (no code, two codes, a subunit code).
+code the value stands for, or None (no code, two codes, a subunit code). A BLOB in a column of text is a finding too,
+shown as ``X'…'`` (E-19b1).
 """
 
 from __future__ import annotations
@@ -76,8 +77,14 @@ class StoredCurrencyFinding:
 
 
 def _as_text(value: Any) -> str:
-    """A stored value as text: a JSON number or object read out of a parameter is shown as JSON."""
-    return value if isinstance(value, str) else json.dumps(value)
+    """A stored value as text: a JSON number or object read out of a parameter is shown as JSON; a BLOB, which a column of
+    text can hold (a hand-made or damaged database, a crafted backup), in SQLite's own notation, ``X'455552'``: never a
+    code, so always a finding, never a crash of the check (E-19b1)."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, bytes):
+        return f"X'{value.hex().upper()}'"
+    return json.dumps(value)
 
 
 def find_stored_currency_findings(connection: sqlite3.Connection) -> list[StoredCurrencyFinding]:
@@ -150,7 +157,8 @@ def log_stored_currency_audit(db_path: Optional[Path] = None) -> Optional[list[S
         with closing(_read_only(path)) as connection:
             findings = find_stored_currency_findings(connection)
     except Exception as error:  # noqa: BLE001 — the start never stops on a check
-        logger.warning("Stored currency codes could not be checked", error=str(error)[:200])
+        # The class and SQLite's error name only: for a stored text that is no UTF-8, sqlite3's message quotes it (E-19b1)
+        logger.warning("Stored currency codes could not be checked", error=type(error).__name__, sqlite_error=getattr(error, "sqlite_errorname", None))
         return None
     if findings:
         logger.warning(

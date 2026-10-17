@@ -1,5 +1,5 @@
 ---
-applyTo: "backend/app/services/risk/**,backend/app/services/risk_plugins/**,backend/app/services/series_preparation.py"
+applyTo: "backend/app/services/risk/**,backend/app/services/risk_plugins/**,backend/app/services/market_series.py"
 ---
 
 # Risk Engine (backend)

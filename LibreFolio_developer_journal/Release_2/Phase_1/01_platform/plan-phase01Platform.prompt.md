@@ -7275,3 +7275,227 @@ Revocation).
   - H-43, in corso;
   - H-44;
   - dopo la 1.3: H-47, H-48 e H-50.
+
+### Lotto «H-43, fase 1: la corsia managed, il raccoglitore della CSP report-only, l'azione cloud smoke» (2026-10-17, 16:40) — passi
+
+> Via del coordinatore (16:35): la riconciliazione è entrata (dev `c3600c247`); HEAD `a84020b09`. Decisioni D1-D4 e OK di
+> scrittura: vedi sopra.
+
+**Contratto**:
+- **A. La corsia**:
+  - `scripts/cli_base.py`: `TEST_LANE_SETTABLE` (i tre nomi), `TEST_LANE_SETTINGS = "LIBREFOLIO_TEST_LANE_SETTINGS"` e
+    `parse_lane_settings()`;
+  - `configure_test_runtime(…, lane_settings=None)` rifiuta la variabile se viene da `.env` e riapplica le coppie ammesse
+    dopo la pulizia;
+  - `_cli.py` `_add_runtime_args`: `--lane-setting NOME=VALORE`, ripetibile; `_configure_runtime` lo passa e stampa le
+    impostazioni in vigore;
+  - `dev.py server`: `--lane-setting`, solo con `--test`;
+  - `playwright.config.ts`: `WEB_SERVER_ENV` inoltra la variabile.
+- **B. Il raccoglitore**, in `e2e/fixtures/playwright.ts`:
+  - un fixture automatico `cspViolations`: `addInitScript` per `securitypolicyviolation` ed `exposeBinding`;
+  - l'opzione `cspFailOnUnknown`, vera di default;
+  - l'interruttore `E2E_CSP_COLLECTOR=0`;
+  - la baseline `e2e/csp-baseline.json`, con i due script inline dell'`index.html` riconosciuti per ordine e risolti
+    in righe dall'HTML servito;
+  - la logica pura in `e2e/fixtures/csp.ts`.
+- **C. Le azioni**, in `_frontend_utility.py`, solo aggiunte e per ultime:
+  - `front-utility csp-collector`, che gira anche su una corsia self-hosted perché la spec inietta i suoi header;
+  - `front-utility cloud-smoke`, che rifiuta di partire se la corsia non è managed. Contiene 14 spec, desktop: `auth`,
+    `layout/legal-and-managed`, `layout/page-policy`, `layout/csp-collector`, `portfolio/dashboard`,
+    `portfolio/risk-analysis`, `assets/asset-modal`, `transactions/transactions-table`,
+    `transactions/tx-brim-import`, `files`, `brokers/brokers`, `settings/security-tab`, `settings/admin-users`,
+    `ai-export/ai-export-panel`.
+- **D. Doc** (docs-writer): `test-walkthrough/runner_architecture.md` e `e2e.md`.
+
+**Passi**:
+1. Rossi (test-author, in parallelo):
+   - ✅ (2026-10-17, 16:35) **Python**: +68 test in `test_runtime_isolation.py`.
+     - Classi `TestTestLaneSettings`, `TestParseLaneSettings`, `TestLaneSettingsOnTheCommandLine`, più i controlli
+       statici di Playwright.
+     - Il `.env` è finto: `PIPENV_DOTENV_LOCATION` punta a `tmp_path`.
+     - `dev.main()` gira in processo con l'imbracatura `capture_server_child`.
+     - Evidenza: `utils runtime-isolation` 58 failed / 308 passed, come previsto, nessun ERROR; ruff e black puliti.
+     - Letture fissate dai test:
+       - si valida prima di toccare l'ambiente;
+       - il rifiuto da `.env` vale anche con `--lane-setting`;
+       - `dev.py server` senza `--test` esce con 1, prima di ogni build;
+       - una sola riga `Test lane settings: …`;
+       - la variabile non va in `.env.example` né in `TEST_LANE_KEEPS`.
+   - ✅ (2026-10-17, 16:45) **E2E**: la spec nuova `layout/csp-collector.spec.ts` (test-author), 9 test per progetto.
+     - Logica pura (4): `cspCollectorEnabled`, `inlineScriptLines`, `isKnown`, la baseline ben formata e senza id doppi.
+     - Documenti sintetici serviti da `page.route` con una loro `script-src 'self'` report-only (3): una violazione
+       registrata una volta e lo script gira lo stesso; due documenti di fila; una violazione ignota che fa fallire il
+       test al teardown, segnata `test.fail()`.
+     - L'app vera (1): la pagina di accesso con la policy report-only del profilo managed (iniettata dalla spec se la
+       corsia non la manda) riporta i suoi due script inline e nient'altro, e la baseline li conosce entrambi.
+     - L'interruttore (1): gira solo in un run con `E2E_CSP_COLLECTOR=0`.
+     - Evidenza: `front-utility csp-collector` rc=1 con «Test has unknown parameter "cspViolations"», cioè l'errore di
+       caricamento previsto prima della cura. Prettier: tre blocchi da riformattare (solo forma), sistemati con
+       `prettier --write` da `frontend/`.
+2. ✅ (2026-10-17, 16:55) **Cura**: script a secco in `files/h43/` (`apply_core.py`, `apply_shared.py`), poi `--apply`
+   e `cmp` file per file con le copie a secco: tutti uguali.
+   - `cli_base.py`: `TEST_LANE_SETTABLE`, `TEST_LANE_SETTINGS`, `parse_lane_settings()`; `configure_test_runtime(…,
+     lane_settings=None)` controlla l'origine `.env` e valida prima di caricare, poi pulisce, scrive la variabile di
+     trasporto ordinata e applica le coppie.
+   - `_cli.py`: `--lane-setting` (ripetibile) e la riga `Test lane settings: …`.
+   - `playwright.config.ts`: uno spread condizionale in `WEB_SERVER_ENV`.
+   - `e2e/fixtures/playwright.ts`: l'opzione `cspFailOnUnknown` e il fixture automatico `cspViolations` (binding e init
+     script del contesto, gli script inline di `index.html` letti una volta per worker, un giro nella pagina prima del
+     conto, l'allegato `csp-violations`, `expect(…).toEqual([])` sugli ignoti).
+   - Nuovi: `e2e/fixtures/csp.ts` (la logica pura) ed `e2e/csp-baseline.json` (le due voci `index-inline-script-0/1`).
+   - Per ultimi, solo aggiunte: `_frontend_utility.py` (le due azioni) e `dev.py` (`server --lane-setting`, rifiutato
+     senza `--test` prima di ogni build).
+   > **⚠️ Fuori pista**: `apply_shared.py` riapplicato dopo la parte del runner avrebbe raddoppiato le sue ancore (le
+   > ancore restano vere dopo l'inserimento). Reso idempotente: salta la parte del runner se trova `CLOUD_SMOKE_SPECS`.
+   > E un I001 mio in `cli_base.py` (l'import di `Iterable` dopo `pathlib`), corretto a mano.
+3. ✅ (2026-10-17, 17:10) **Verdi senza slot** (`files/runs/h43-greens.sh`, `h43-managed-preflight.sh`; log in
+   `files/runs/h43/`):
+   - ruff pulito su `cli_base.py`, `_cli.py`, `_frontend_utility.py` e sul test; `dev.py` ha gli stessi reperti di HEAD
+     (7 C901, 21 PLC0415…, debito vecchio, confrontati via stdin). Black: `cli_base.py` e `dev.py` non sono formattati
+     neanche a HEAD; nessun blocco di black tocca le mie righe, che seguono lo stile locale di `dev.py`.
+   - Prettier sui cinque file del frontend; `tsc -p tsconfig.e2e.json` 0 errori; `check-orphans` OK (142 spec).
+   - `utils runtime-isolation` **366/366** (i 58 rossi verdi), `utils test-runner-cli` 730, `utils dev-cli-image` 94.
+   - `front-utility csp-collector`, corsia self-hosted: **8 passed** (uno è il `test.fail()` atteso) e 1 skipped
+     (l'interruttore). Svelte-check 0 errori nella preparazione del runner.
+   - Pre-volo managed, una spec quindi senza slot: `--lane-setting LIBREFOLIO_PROFILE=managed front-utility
+     csp-collector`, 8 passed + 1 skipped; la riga `Test lane settings: LIBREFOLIO_PROFILE=managed`.
+     - L'avvio è pulito: niente `ManagedTestModeError` né `WeakSecretError`.
+     - L'allegato del test della pagina d'accesso dice «sent by the lane itself»: l'header è uguale a
+       `CSP_REPORT_ONLY_POLICY`, con `frame-ancestors 'self'`.
+     - Riportati i due script inline alle righe 14 (14–38) e 116 (116–131), entrambi noti; 0 ignoti.
+   > **⚠️ Fuori pista**: le due prime corse di `csp-collector` hanno ricostruito il frontend («Frontend sources
+   > changed»). Dopo la seconda costruzione `check_frontend_needs_build()` dice `False` e il pre-volo non ha ricostruito:
+   > un evento transitorio, non ricostruibile (le date della costruzione precedente sono sovrascritte). Lo guardo nelle
+   > corse dello slot.
+3b. ✅ (2026-10-17, 17:57) **Tre difetti trovati dal docs-writer**, leggendo il codice per la doc. Lo slot è rimandato
+   (via del coordinatore, che ha dato anche l'OK di scrittura su `page-policy.spec.ts`, solo per il describe annidato
+   e per il commento di testa):
+   1. **`page-policy.spec.ts`**, i controlli positivi (H-42, mio): alzano di proposito tre violazioni enforced
+      (`base-uri`, `object-src`, `form-action`) nel contesto del test. Il raccoglitore le registra e la baseline non le
+      conosce, quindi il test fallisce al teardown su ogni corsia.
+      - Provato: `front-utility page-policy` → 1 failed (quel test, «Content-Security-Policy violations
+        e2e/csp-baseline.json does not know (H-43)»), 3 passed. Gli altri tre test passano col raccoglitore.
+      - Cura: un `describe` annidato con `test.use({cspFailOnUnknown: false})` per quel test solo (test-author).
+   2. **`cloud-smoke` in `all`**: registrata con `in_all` vero di default. Su una corsia self-hosted rifiuta prima di
+      `_run_playwright`, quindi il passo consolidato non la copre e il passo seriale la lancia: `front-utility all`,
+      `all-frontend` e `all` rossi. Cura: `in_all=False`; ogni sua spec ha già un'azione sua.
+   3. **Il rifiuto da `.env` sotto `pipenv run`**: pipenv carica `.env` nell'ambiente (con `override=True`) prima di
+      `dev.py`, quindi la variabile sembrava ereditata da un runner e veniva applicata. Il parametro
+      `from-the-runner-over-the-dotenv-file` fissava proprio il buco.
+      - Cura (regola B): rifiuto ogni volta che `.env` la contiene. I figli del runner non leggono mai `.env`
+        (`PIPENV_DONT_LOAD_ENV=1`, messo da `configure_test_runtime` e dal webServer di Playwright).
+      - Test (test-author): il parametro riscritto come un figlio vero (con la guardia), più un test nuovo per pipenv
+        (`.env` e ambiente con lo stesso valore) e un controllo statico di `in_all`.
+   - Note del docs-writer passate nella doc: una frase vecchia di `security.md` (~r.2798, «the runner cannot turn
+     frame protection on in a lane»), da correggere.
+   - Residuo, da scrivere nel backlog: le voci con `indexInlineScript` si cercano nell'`index.html` servito su `/`,
+     mentre i link profondi ricevono `200.html`. Oggi gli script stanno alle stesse righe (stesso `app.html`); la cura
+     con gli hash (D4) toglie queste voci.
+   - Residuo per la fase 2: `group_frontend_units` (`_consolidate.py`) non guarda `in_all`. In un `all-frontend` su
+     una corsia managed, quindi, il gruppo di front-utility rilancia anche le 10 spec del cloud smoke di altre categorie
+     (doppioni, ~10–15 min).
+   - Previsto per il cloud smoke (lettura della build): il chunk di cheetah-grid include `webpack/buildin/global.js`,
+     che in un modulo ES (strict) arriva a `new Function("return this")()`. Ne esce una segnalazione `script-src` eval,
+     innocua: se una CSP applicata blocca la chiamata, il try/catch ripiega su `window`. ECharts `parseInput` usa
+     `JSON.parse`, quindi non conta. Con `--coverage`, il preambolo di istanbul (`coverageGlobalScopeFunc`, vero di
+     default) fa `new Function('return this')()` in ogni modulo, senza try/catch: lo stesso corpo della sonda di
+     cheetah-grid, quindi la voce F1 conosce anche quelle (ristretta con `'report-sample'`, conoscerebbe lo stesso
+     campione «return this»). Con una CSP applicata una build con copertura si romperebbe, ma è solo una build di test.
+   - **Rossi** (test-author, `files/runs/h43-reds2.sh`): `utils runtime-isolation` **4 failed / 367 passed**, esattamente
+     i previsti:
+     - `test_lane_settings_pipenv_loaded_from_the_dotenv_file_are_refused` ×2 (`.env` e ambiente con lo stesso valore,
+       come li esporta `pipenv run`; con e senza `--lane-setting`);
+     - `test_the_runner_refuses_a_bad_lane_setting_with_its_error[the-variable-pipenv-loaded-from-the-dotenv-file]`;
+     - `test_the_cloud_smoke_is_left_out_of_every_all_and_the_collector_spec_is_not[cloud-smoke]`.
+     - Il parametro `from-the-runner-over-the-dotenv-file` è diventato un test suo, un figlio vero con la guardia
+       (`test_a_child_of_the_runner_reads_no_dotenv_file_and_sets_the_inherited_settings`): verde prima e dopo.
+     - `page-policy.spec.ts`: il describe annidato e il commento di testa (`git diff -w`: il corpo del test è
+       invariato). Nessun riferimento al titolo completo del test altrove. Ruff, black, Prettier, tsc e2e puliti.
+   - **Cura** (`files/h43/apply_fix2.py`, a secco, `--apply`, `cmp` OK): in `cli_base.py` il rifiuto da `.env` viene
+     prima di tutto e non guarda più l'ambiente; in `_frontend_utility.py` `in_all=False` su `cloud-smoke`.
+   - **Verdi** (`h43-greens2.sh`): ruff OK; `utils runtime-isolation` **371/371**; `utils test-runner-cli` 730;
+     `check-orphans` OK; `front-utility page-policy` **4/4** su corsia self-hosted, con le tre violazioni dei controlli
+     registrate e allegate ma non fallite. Nessuna ricostruzione del frontend.
+   - **Quarto punto, dopo lo slot** (OK del coordinatore, 17:43, su `_common.py` e `_consolidate.py`): su una corsia
+     managed il passo consolidato chiama ogni azione, qualunque sia `in_all`, e lì il controllo del profilo passa.
+     `front-utility all` lancerebbe quindi il cloud smoke, e un `all-frontend` (fase 2) farebbe girare due volte 7 spec
+     di altre categorie (dashboard, risk-analysis, asset-modal, transactions-table, tx-brim-import, brokers,
+     ai-export-panel). Cura preparata: `add_test(..., named_only=True)`, saltato da `group_frontend_units`
+     (`files/h43/apply_fix3.py`). Con lei due commenti vecchi della stessa causa: `ServedDocument.lanePolicy` in
+     `page-policy.spec.ts` e la descrizione di `page-policy` in `_frontend_utility.py`.
+4. ✅ (2026-10-17, 17:59–19:04) **Slot, corsa 1: il cloud smoke** (`files/runs/h43-slot.sh`; rapporto e sintesi in
+   `files/runs/h43/slot-cloud.*`): `--lane-setting LIBREFOLIO_PROFILE=managed front-utility cloud-smoke`, **224 passed,
+   4 rossi, 1 skipped** (l'interruttore), 17,7 min.
+   - Avvio pulito, riga `Test lane settings: LIBREFOLIO_PROFILE=managed`. I due script inline dell'`index.html` sono
+     riportati su ogni pagina (`/`, `/dashboard`, `/transactions`, `/files`, `/assets`, `/settings`, `/brokers`…):
+     tutti noti.
+   - Nessuno dei 4 rossi sta nel codice di H. Il raccoglitore ha funzionato: ogni violazione ignota ha fatto fallire il
+     suo test con un elenco leggibile.
+   - **F1** `files.spec.ts` › «opens table preview for BRIM files»: `script-src` `eval` dal chunk di cheetah-grid
+     (`Cn5CY6Wr.js:758`), come previsto. Entrambe le build della 1.16.7 (es5 e UMD, nessuna ESM) contengono la sonda
+     di webpack `new Function("return this")()` dentro un try/catch che ripiega su `window`: innocua anche con una
+     policy applicata.
+   - **F2** `legal-and-managed.spec.ts` LGM-E-01 e LGM-E-03 (A, `b1b647edc`): «the lane's answer» con la corsia
+     self-hosted come precondizione (i link di donazione). Su una corsia managed falliscono per costruzione; le varianti
+     managed sono simulate (E-04, E-05) e girano su ogni corsia.
+   - **F3** `admin-users.spec.ts` AUSR-E-07 (A): la sonda dell'indirizzo prende l'indirizzo scritto dall'admin, e il test
+     ne scrive apposta di altre origini (127.0.0.1 invece di localhost, la porta 1, `probe-mismatch.invalid`). Ne escono
+     6 violazioni `connect-src` report-only, con un nonce nell'URL. Per l'applicazione futura della CSP è un reperto
+     vero: con `connect-src 'self'` applicata, la sonda di un'origine diversa dalla pagina viene bloccata.
+   - Portati al coordinatore (18:25) con le proposte: F1 una voce della baseline ora, ristretta nel lotto D4 con
+     `'report-sample'`; F2 la spec fuori da `CLOUD_SMOKE_SPECS` e una riga per A; F3 una voce con un confronto nuovo sul
+     percorso dell'URL bloccato e una riga per A e per il lotto dell'applicazione.
+   - **Decisioni del coordinatore** (18:30): F1 = la voce ora, ristretta nel lotto D4 (riga H-52); F2 come proposto (la
+     riga per A); F3 come proposto, proprietari A + il lotto dell'applicazione: la metà sicurezza è di H (riga H-53), la
+     metà esperienza di A.
+   - **Corse 2 e 3: il campione self-hosted**, col raccoglitore acceso: `front-broker all` **57 E2E** (2 + 55), ogni
+     azione ✓; `front-ai-export all` **18 E2E** (desktop + mobile) + Vitest 616, ogni azione ✓. Slot libero alle 18:29,
+     porta 6181 libera.
+   > **⚠️ Fuori pista**: la sintesi delle corse 2 e 3 rileggeva il rapporto del cloud smoke, perché il passo consolidato
+   > non riscrive `playwright-report/`. Gli esiti veri sono quelli del log del runner (`.testLog/<cat>__e2e-*.log`).
+   - **`named_only`** (OK del coordinatore, 17:43): rossi di test-author, `utils test-runner-cli` **14 failed / 737** e
+     `utils runtime-isolation` **1 failed / 372**, esattamente i previsti.
+     - `add_test` salva `named_only` e `in_all` falso;
+     - `group_frontend_units` lascia fuori un'azione `named_only` e tiene un alias `in_all=False` fra i reclamanti;
+     - sul catalogo vero, con una corsia managed simulata da entrambe le variabili, il gruppo di front-utility non ha le
+       7 spec di altre categorie.
+     - Cura `files/h43/apply_fix3.py` (a secco, `--apply`, `cmp` OK), con `# noqa: PLC0415` sull'import pigro nuovo
+       (ruff resta a 9, come HEAD). Verdi: `utils test-runner-cli` **751/751**, `utils runtime-isolation` **373/373**,
+       `check-orphans` OK.
+     > **⚠️ Fuori pista** (test-author): impostare solo `LIBREFOLIO_PROFILE=managed` non riproduce una corsia managed.
+     > La raccolta chiama `get_test_db_path()` (le azioni di `db`), che rifà `configure_test_runtime()`, e questo toglie
+     > il profilo se `LIBREFOLIO_TEST_LANE_SETTINGS` non lo porta. Il test mette entrambe le variabili, come una corsia
+     > vera, e salva e ripristina l'ambiente intero.
+   - **F1/F2/F3** (decisioni delle 18:30): rossi di test-author in `csp-collector.spec.ts`, `front-utility
+     csp-collector` **2 failed / 8 passed / 1 skipped**, esattamente i previsti: il confronto `blockedPath` e «la
+     baseline conosce i reperti del primo cloud smoke». Il controllo «ben formata» vuole ora esattamente uno fra
+     `blockedURI` e `blockedPath`.
+     - Cura `files/h43/apply_fix4.py` (a secco, `--apply`, `cmp` OK): `csp.ts` (`blockedPath`, `namesBlocked`), due voci
+       nella baseline (`cheetah-grid-global-probe`, `address-probe-other-origin`), la regola del cricchetto nel testo
+       («una voce si aggiunge solo con una decisione registrata, con ragione e proprietario, mai per zittire un rosso»),
+       `CLOUD_SMOKE_SPECS` a 13 (fuori `layout/legal-and-managed.spec.ts`).
+     - Verdi: Prettier e tsc e2e puliti, `front-utility csp-collector` **10 passed + 1 skipped**.
+   - **Corsa 4: il cloud smoke rifatto**, 13 spec, corsia managed: **225 passed, 0 inattesi, 1 skipped** (più il
+     fallimento atteso), 20,0 min. F1 e F3 sono conosciuti (allegati, non falliti); i due script inline su ogni pagina.
+     Porta 6181 libera alle 19:04.
+5. ✅ (2026-10-17, 19:15) **Doc e chiusura**:
+   - Doc (docs-writer, quattro giri): `test-walkthrough/index.md` («Lane Settings», `#lane-settings`, e la riga delle
+     opzioni), `e2e.md` (la sezione del raccoglitore `#csp-collector`, la baseline `#csp-baseline` con le quattro voci e
+     i due modi di nominare la risorsa), `front-utility.md` (le due azioni, la tabella dei test del raccoglitore, il
+     cloud smoke a 13 spec, «solo quando nominata, su ogni corsia»), `runner_architecture.md` (le chiavi `in_all` e
+     `named_only`, `#registry-entry-shape`, e il passo 5 della guida), `architecture/security.md` (il punto sulle
+     impostazioni di corsia, il paragrafo di `page-policy`, una frase sui reperti del cloud smoke con H-53).
+   - Commenti vecchi della stessa causa (OK del coordinatore): la testa e `ServedDocument.lanePolicy` in
+     `page-policy.spec.ts`, la descrizione di `page-policy` e la docstring di `add_test` («solo il passo consolidato del
+     frontend la legge»).
+   - Controlli finali (`files/runs/h43-final.sh`): ruff a 9 come HEAD, black OK sui file formattati, `utils
+     test-runner-cli` 751, `check-orphans` OK, `mkdocs build` stretto 0 avvisi, `check-links` 97 link validi,
+     `git diff --check` pulito.
+   - Previsione del merge con `dev_release2` (`b7f8ebeac`, 129 commit dopo la base): `git merge-file` a tre vie su
+     `dev.py`, `_frontend_utility.py`, `security.md` e il backlog, **0 conflitti**. Sul piano del significato: in
+     `cmd_server` dev aggiunge solo `LIBREFOLIO_DISABLE_WHATS_NEW=1` (C-54); `legal-and-managed` è invariata in dev;
+     l'unica spec di dev che inietta una CSP è `page-policy`, la mia. `asset-modal.spec.ts` (nel cloud smoke) è
+     cambiata in dev: la fase 2 la rivede comunque.
+   - Backlog: H-43 aggiornata (fase 1 fatta, note per la fase 2), H-52 (D4) e H-53 (F3, metà sicurezza). Le due righe di
+     A (F2 e la metà esperienza di F3) vanno al coordinatore: non scrivo nella sezione di A.
+5. Doc e checkpoint.

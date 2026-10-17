@@ -652,11 +652,12 @@ the translated `key` otherwise.
 
 | Answer | `code` | Shown |
 |---|---|---|
-| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`, `PENDING_SETUP`, `SETUP_COMPLETED` (`ACCOUNT_ERROR_CODES`) | that code | `settings.usersTab.errors.<code>`; a `detail.billing_url` is passed as `params.billingUrl`. `PENDING_SETUP` is the `409` of a reactivation or, since lot A-43, a demotion of the initial administrator waiting for its setup: a list loaded earlier may still offer either. `SETUP_COMPLETED` (lot A-51) is the `409` of a cancellation of a setup link that the administrator spent since the list was loaded |
+| `detail.error_code` among `LAST_ADMIN`, `USER_LIMIT_REACHED`, `REGISTRATION_DISABLED`, `ACCOUNT_PROTECTED`, `SELF_DELETION`, `DEMOTE_FIRST`, `PENDING_SETUP`, `SETUP_COMPLETED` (`ACCOUNT_ERROR_CODES`) | that code | `settings.usersTab.errors.<code>`, but for `LAST_ADMIN` on a deletion (next row); a `detail.billing_url` is passed as `params.billingUrl`. `PENDING_SETUP` is the `409` of a reactivation or, since lot A-43, a demotion of the initial administrator waiting for its setup: a list loaded earlier may still offer either. `SETUP_COMPLETED` (lot A-51) is the `409` of a cancellation of a setup link that the administrator spent since the list was loaded |
+| `detail.error_code` `LAST_ADMIN` on a deletion (`action` is `'delete'`, lot A-16) | `LAST_ADMIN` | `settings.usersTab.errors.LAST_ADMIN_DELETION`, which says to make another account an administrator first: on a deletion it can only be the `400` of `DELETE /auth/users/me`, the last active administrator deleting their own account, as another administrator's deletion answers `409` `DEMOTE_FIRST`. Without `'delete'`, the `409` `LAST_ADMIN` of a deactivation or a demotion keeps `settings.usersTab.errors.LAST_ADMIN` |
 | `404` | `NOT_FOUND` | `settings.usersTab.errors.NOT_FOUND` |
 | `422` | `INVALID_INPUT` | `settings.usersTab.errors.INVALID_INPUT` |
 | `500` of a deletion (`action` is `'delete'`) | `DELETION_FAILED` | `settings.usersTab.errors.DELETION_FAILED`: nothing was deleted |
-| `400` or `409` whose `detail` is a sentence | `null` | The server's sentence, such as *Cannot delete account: you are the only administrator* from `DELETE /auth/users/me` |
+| `400` or `409` whose `detail` is a sentence | `null` | The server's sentence, as it is: a fallback for a refusal that carries no code. Every `400` and `409` of the calls these components make carries one today |
 | Anything else | `null` | `settings.usersTab.errors.generic` |
 
 ### 🗑️ AccountDeletionDialog {: #accountdeletiondialog }
@@ -700,8 +701,10 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   (`settings.accountDeletion.deletedSelf`, or `deletedAdmin` with `{username, count}`), then calls
   `onDeleted`; `brokers_deleted` is counted from the preview, as the deletion answers no numbers. A
   failure shows `${p}-error`, with `data-error-code`, and notifies `accounts.action.failed` with an
-  error toast. The only active administrator deleting their own account gets the server's sentence,
-  a `400` without a code.
+  error toast. The last active administrator deleting their own account gets the `400` `LAST_ADMIN`
+  (lot A-16), shown as `settings.usersTab.errors.LAST_ADMIN_DELETION`, *You are the last active
+  administrator: make another account an administrator before deleting yours.*, and the dialog stays
+  open.
 
 ### 🧪 Users Tab and Account Deletion Tests {: #users-tests }
 
@@ -710,7 +713,9 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   the request options key by key, every verdict, the deadline on fake timers, never the network),
   `users/accountErrors.test.ts` (every code of `ACCOUNT_ERROR_CODES`, `PENDING_SETUP` included,
   the answers read from the status, and each key a sentence in the four catalogues; AERR-13 and
-  AERR-14, lot A-51: the `409` `SETUP_COMPLETED` worded by its key, never the server's sentence),
+  AERR-14, lot A-51: the `409` `SETUP_COMPLETED` worded by its key, never the server's sentence;
+  AERR-15 to AERR-19, lot A-16: the `400` `LAST_ADMIN` of a deletion worded by
+  `LAST_ADMIN_DELETION`, the `409` `LAST_ADMIN` of the other actions keeping `LAST_ADMIN`),
   and the `users` row of `settingsTabs.test.ts`.
 - `./dev.py test front-utility component-unit`: `tabs/UsersTab.test.ts` (the tab against a mocked
   server that changes as the backend would; UTAB-55 to UTAB-60, lot A-43: the cancellation of a
@@ -726,7 +731,9 @@ own from [ProfileTab](#profiletab) or another's from [UsersTab](#userstab). A `M
   `users-action-cancel-setup` in its place, turned off with `protected` on a protected account
   (UPS-23), `users-action-demote` off with `pending-setup`, `users-action-delete` enabled; every
   other row unchanged),
-  `AccountDeletionDialog.test.ts` (both modes) and `tabs/ProfileTab.test.ts`.
+  `AccountDeletionDialog.test.ts` (both modes; ADEL-28 and ADEL-29, lot A-16: a refused own
+  deletion worded in the interface language, the `400` `LAST_ADMIN` as `LAST_ADMIN_DELETION` with the
+  dialog left open, the `500` as `DELETION_FAILED`) and `tabs/ProfileTab.test.ts`.
 - `./dev.py test front-utility admin-users` (`frontend/e2e/settings/admin-users.spec.ts`): the tab
   on the lane's real backend, `e2e_test_admin` acting on disposable accounts only. Only an
   administrator has the tab; the own row has no action; deactivate and reactivate, promote and

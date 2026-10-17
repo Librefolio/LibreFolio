@@ -8,6 +8,8 @@
  *   visibility override.
  * - Privacy (decision D5′): the quantity beside a price is masked, while the
  *   price and the PMC it used to protect become public.
+ * - C-97c-3 (the last describe): a quantity keeps the ten decimals of its
+ *   column, the price and the PMC their significant digits.
  *
  * Rows are addressed by `data-row-id` (`makePositionKey(assetId, brokerId)`),
  * never by position: the table sorts by value descending.
@@ -658,7 +660,8 @@ describe('ExposureTable — privacy (D5′)', () => {
         setPrivacyEnabled(false);
         // Why (re-pin, M-18 CP2): the quantity is written in the interface locale — en-US here, the
         // English UI on jsdom's en-US browser — no longer in the host's.
-        quantityClear = `${QUANTITY.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 6})} 📈`;
+        // Why (C-97c-3): up to the ten decimals of its column, not six; 7.25 reads the same either way.
+        quantityClear = `${QUANTITY.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 10})} 📈`;
         priceClear = formatCurrencyAmountPlain(PRICE, 'EUR', {sensitivity: 'public'});
         pmcClear = formatCurrencyAmountPlain(WAC, 'EUR', {sensitivity: 'public'});
         valueClear = formatCurrencyAmountPlain(VALUE, 'EUR');
@@ -750,7 +753,8 @@ describe('ExposureTable — the quantity in the interface language (M-18)', () =
     function expectedIn(localeTag: string): {weight: string; quantity: string} {
         return {
             weight: formatPercent(WEIGHT, {signed: false, digits: 1, locale: localeTag}),
-            quantity: `${QUANTITY.toLocaleString(localeTag, {minimumFractionDigits: 0, maximumFractionDigits: 6})} 📈`,
+            // Why (C-97c-3): up to the ten decimals of its column, not six; QUANTITY's four read the same either way.
+            quantity: `${QUANTITY.toLocaleString(localeTag, {minimumFractionDigits: 0, maximumFractionDigits: 10})} 📈`,
         };
     }
 
@@ -860,5 +864,111 @@ describe('ExposureTable — the NAV weight is the backend’s (W7 / U8)', () => 
         const backend = formatPercent(12.34, {signed: false, digits: 1});
         expect(backend, 'control: the backend’s weight reads differently from value / NAV').not.toBe(formatPercent(10, {signed: false, digits: 1}));
         expect(cellText('weight')).toBe(backend);
+    });
+});
+
+/**
+ * C-97c-3 (decision D-C97c-1 of the coordinator, 17/10), on the dashboard's positions: a quantity on screen keeps the
+ * decimals of its column, a price its significant digits.
+ *
+ * Today the quantity cell writes up to six decimals (`toLocaleString(uiLocale(), {maximumFractionDigits: 6})`): a
+ * position of 0.1234567891 reads `0.123457`, one of 10 satoshis (0.0000001) reads `0`, beside its 📈. The price and the
+ * PMC (the WAC per unit) are written as money with two fixed decimals (`formatCurrencyAmountPlain(…, {sensitivity:
+ * 'public'})`): 0.0000034573 EUR reads `0.00 € 🇪🇺 EUR`, 1.234 EUR `1.23 € 🇪🇺 EUR`. The contract: the quantity with up to
+ * ten decimals, its column's (C-97a), through Intl on a number — never an exponent — and still masked under privacy
+ * (`maskableQuantity`); the price and the PMC with `{minFraction, maxFraction}` from `priceFractionDigits(value)`,
+ * still public.
+ *
+ * Reds: quantities of 0.1234567891 and 0.0000001 (today `0.123457` and `0`); a price of 0.0000034573 and a PMC of
+ * 0.0000041234 (today `0.00` both); a price of 1.234 (today `1.23`). Guards, green today and after: a quantity of 7.25,
+ * a price of 123.45 and a PMC of 98.76; and the 10-satoshi quantity under privacy, masked (`••• 📈`, no digit).
+ *
+ * Reading as the privacy describe reads: the row of asset 11 at broker 1, each cell through its column's header
+ * (`cellText`), price and PMC revealed through the user-scoped visibility override. A figure is matched as a whole number
+ * token, since the cell also holds the 📈 or the currency. English UI on jsdom's en-US browser, checked before each
+ * case: the digits are typed.
+ */
+describe('ExposureTable — a quantity keeps its column’s decimals, a price its significant digits (C-97c-3, D-C97c-1)', () => {
+    /** A number written in exponent notation: `1e-7`. */
+    const EXPONENT = /\d[eE][-+]?\d/;
+
+    /** `digits` as a whole number in a text: no digit, decimal mark, group separator or sign glued to either side. */
+    function numberToken(digits: string): RegExp {
+        return new RegExp(`(?<![\\d.,+\\-\\u2212])${digits.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![.,]?\\d)`);
+    }
+
+    /** One position of asset 11 at broker 1 with `figures`, as the backend sends them (decimal strings). */
+    function mountPosition(figures: {quantity: string; price: string; wac: string}): void {
+        render(ExposureTable, {holdings: [{...holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), quantity: figures.quantity, current_price: figures.price, wac_per_unit: figures.wac}], displayCurrency: 'EUR'});
+    }
+
+    /** Barrier: the row is rendered, and the stored override has revealed price and PMC. */
+    async function mounted(): Promise<void> {
+        await waitFor(() => expect(rowEl(11, 1)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('dt-header-price')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByTestId('dt-header-pmc')).toBeInTheDocument());
+    }
+
+    beforeEach(() => {
+        // The expected digits are typed: the premise that the table writes en-US, checked.
+        expect(uiLocale(), 'control: an English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
+        storage.set(getUserStorageKey('dataTable_dashboard-holdings-v5_columnVisibilityOverrides'), JSON.stringify({price: true, pmc: true}));
+    });
+
+    afterEach(() => {
+        // Module-level flag: a leftover `true` would mount the next table masked.
+        setPrivacyEnabled(false);
+    });
+
+    it('a quantity of 0.1234567891 reads whole: the ten decimals of its column, not six', async () => {
+        mountPosition({quantity: '0.1234567891', price: '123.45', wac: '98.76'});
+        await mounted();
+
+        expect(cellText('quantity'), 'the quantity (today cut at the sixth decimal: 0.123457)').toMatch(numberToken('0.1234567891'));
+    });
+
+    it('a quantity of 0.0000001, a position of 10 satoshis, reads 0.0000001 — not 0, never in exponent notation', async () => {
+        mountPosition({quantity: '0.0000001', price: '123.45', wac: '98.76'});
+        await mounted();
+        const quantity = cellText('quantity');
+
+        expect.soft(quantity, 'the quantity (today 0: the position reads empty)').toMatch(numberToken('0.0000001'));
+        expect.soft(quantity, 'no exponent notation').not.toMatch(EXPONENT);
+    });
+
+    it('a price of 0.0000034573 EUR and a PMC of 0.0000041234 EUR keep four significant digits: 0.000003457 and 0.000004123, not 0.00', async () => {
+        mountPosition({quantity: '7.25', price: '0.0000034573', wac: '0.0000041234'});
+        await mounted();
+
+        expect.soft(cellText('price'), 'the price (today 0.00)').toMatch(numberToken('0.000003457'));
+        expect.soft(cellText('pmc'), 'the PMC (today 0.00)').toMatch(numberToken('0.000004123'));
+    });
+
+    it('a price of 1.234 EUR reads 1.234 — four significant digits — not 1.23', async () => {
+        mountPosition({quantity: '7.25', price: '1.234', wac: '98.76'});
+        await mounted();
+
+        expect(cellText('price'), 'the price (today 1.23)').toMatch(numberToken('1.234'));
+    });
+
+    it('guard: a quantity of 7.25, a price of 123.45 and a PMC of 98.76 read as today', async () => {
+        mountPosition({quantity: '7.25', price: '123.45', wac: '98.76'});
+        await mounted();
+
+        expect.soft(cellText('quantity'), 'the quantity').toMatch(numberToken('7.25'));
+        expect.soft(cellText('price'), 'the price').toMatch(numberToken('123.45'));
+        expect.soft(cellText('pmc'), 'the PMC').toMatch(numberToken('98.76'));
+    });
+
+    it('guard: under privacy the 10-satoshi quantity stays masked — ••• 📈, no digit — while its price stays public', async () => {
+        setPrivacyEnabled(true);
+        flushSync();
+        await tick();
+        expect(isPrivacyEnabled(), 'control: the flag').toBe(true);
+        mountPosition({quantity: '0.0000001', price: '123.45', wac: '98.76'});
+        await mounted();
+
+        expect.soft(cellText('quantity'), 'the quantity, masked with its marker').toBe('••• 📈');
+        expect.soft(cellText('price'), 'the price, public').toMatch(numberToken('123.45'));
     });
 });

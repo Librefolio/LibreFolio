@@ -258,8 +258,9 @@ async def cmd_set_user_active(username: str, active: bool):
     async with AsyncSession(engine) as session:
         if active:
             user = await user_service.get_user_by_username(session, username)
-            # An account waiting for its email verification already holds its place while its link is live (workstream E).
-            if user is not None and not user.is_active and not await email_verification.holds_place(session, user):
+            # An account that already holds its place takes no new one: one waiting for its email verification while its
+            # link is live (workstream E), or the initial administrator waiting for its setup (A-40)
+            if user is not None and not user.is_active and not await email_verification.holds_place(session, user) and not await registration_service.is_pending_admin(session, user):
                 _warn_if_full(await registration_service.user_usage(session), "reactivates the account")
         success, error = await user_service.set_user_active(session, username, active)
 

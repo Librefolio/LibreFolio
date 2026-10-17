@@ -16,6 +16,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import {cashAmountsCancel, mergeStrings, mergeTagSets, type CashCancelable} from './promoteHelpers';
+import * as promoteHelpers from './promoteHelpers';
 import type {TypeRule} from '$lib/features/transactions/transactionTypeStore';
 
 /** Rule stub — only `cashSign` is read by the helper under test. */
@@ -225,5 +226,179 @@ describe('mergeTagSets', () => {
 
     it('returns [] when both are nullish', () => {
         expect(mergeTagSets(null as unknown as string[], null as unknown as string[])).toEqual([]);
+    });
+});
+
+/**
+ * W-B70 (decision D-W70-4 a of the coordinator, 17/10) — «Merge all» never writes notes past the limit.
+ *
+ * A transaction's notes hold 500 characters (`max_length=500` on the backend, counted by Python's `len()`, in code
+ * points). «Merge all» (`mergeAllSuggestions` in TransactionBulkModal.svelte) settles every suggested pair with one
+ * strategy, inline: nothing to resolve when the two rows have the same notes and the same tags; else the left row's
+ * notes and tags, the right row's, or by default both combined — `mergeStrings` of the notes, `mergeTagSets` of the
+ * tags. Combined, two notes of 250 characters become 501, written into both rows; the save is then refused on the
+ * promote (`string_too_long`) and nothing is saved. The decision: such a pair is left unmerged, and the editor says so;
+ * no text is ever cut.
+ *
+ * The contract lifts the inline logic into this module, where it can be tested:
+ *   - `TX_DESCRIPTION_MAX_LENGTH = 500`, the backend's `max_length` of a transaction's notes;
+ *   - `textLength(text)`, the length in code points, as Python's `len()` counts it: an emoji outside the BMP is one, a
+ *     precomposed é one, a decomposed é (e and a combining accent) two;
+ *   - `resolvePromoteAllFields(strategy, left, right)`: `{}` when both sides have the same notes and the same tags (in
+ *     order, `JSON.stringify` of the arrays, nullish tags read as none, as today); `'left'` and `'right'`: that side's
+ *     notes and a copy of its tags; `'merge'`: both combined — or `null` when the combined notes would pass the limit.
+ *     Exactly 500 is allowed, and the length is the combined text's: two identical notes collapse to one first.
+ *
+ * The first describe is today's behaviour of the inline code, lifted as it is (guards); the second is the limit
+ * (reds). All of them are red today on their own missing export: the names are read through the module's namespace,
+ * so the file still collects and the cases above keep running.
+ */
+type PromoteSide = {description?: string | null; tags?: string[] | null};
+type PromoteAllStrategy = 'left' | 'merge' | 'right';
+type ResolvePromoteAllFields = (strategy: PromoteAllStrategy, left: PromoteSide, right: PromoteSide) => Record<string, unknown> | null;
+
+const PROMOTE_ALL_STRATEGIES: readonly PromoteAllStrategy[] = ['left', 'merge', 'right'];
+
+/** An export W-B70 adds to promoteHelpers, or a failure naming it while it does not exist. */
+function wb70Export<T>(name: string): T {
+    const value = (promoteHelpers as unknown as Record<string, unknown>)[name];
+    if (value === undefined) throw new Error(`W-B70: promoteHelpers.${name} does not exist yet`);
+    return value as T;
+}
+
+const descriptionMaxLength = (): number => wb70Export<number>('TX_DESCRIPTION_MAX_LENGTH');
+const textLength = (text: string): number => wb70Export<(text: string) => number>('textLength')(text);
+const resolvePromoteAllFields: ResolvePromoteAllFields = (strategy, left, right) => wb70Export<ResolvePromoteAllFields>('resolvePromoteAllFields')(strategy, left, right);
+
+describe('TX_DESCRIPTION_MAX_LENGTH (W-B70)', () => {
+    it('is 500, the backend max_length of a transaction’s notes', () => {
+        expect(descriptionMaxLength()).toBe(500);
+    });
+});
+
+describe('textLength — code points, as Python’s len() counts them (W-B70)', () => {
+    it('counts 500 ASCII letters as 500, the newline that joins two notes as 1, and the empty string as 0', () => {
+        expect(textLength('a'.repeat(500))).toBe(500);
+        expect(textLength('\n')).toBe(1);
+        expect(textLength('')).toBe(0);
+    });
+
+    it('counts an emoji outside the BMP as 1, not its 2 UTF-16 units', () => {
+        expect('😀'.length, 'control: two UTF-16 units').toBe(2);
+        expect(textLength('😀')).toBe(1);
+        expect(textLength('😀'.repeat(300))).toBe(300);
+    });
+
+    it('counts a precomposed é as 1', () => {
+        expect('\u00e9'.length, 'control: one code point, one UTF-16 unit').toBe(1);
+        expect(textLength('\u00e9')).toBe(1);
+    });
+
+    it('counts a decomposed é as 2: e and its combining accent are two code points for the backend, not one grapheme', () => {
+        const decomposed = 'e\u0301';
+        expect(decomposed.normalize('NFC'), 'control: the same letter as the precomposed é').toBe('\u00e9');
+        expect(textLength(decomposed)).toBe(2);
+    });
+});
+
+describe('resolvePromoteAllFields — today’s «Merge all», lifted (W-B70 guards)', () => {
+    const OUT = {description: 'Savings out', tags: ['savings', 'monthly']};
+    const IN = {description: 'Savings in', tags: ['monthly', 'transfer']};
+
+    it('resolves nothing, {}, for every strategy when both sides have the same notes and the same tags — even notes of 500 characters', () => {
+        for (const description of ['Same notes', 'S'.repeat(500)]) {
+            for (const strategy of PROMOTE_ALL_STRATEGIES) {
+                expect(resolvePromoteAllFields(strategy, {description, tags: ['a', 'b']}, {description, tags: ['a', 'b']}), `${strategy}, notes of ${description.length}`).toEqual({});
+            }
+        }
+    });
+
+    it('reads nullish tags as no tags, as today: null, undefined and [] agree', () => {
+        for (const strategy of PROMOTE_ALL_STRATEGIES) {
+            expect(resolvePromoteAllFields(strategy, {description: 'Same', tags: null}, {description: 'Same', tags: []}), `${strategy}: null and []`).toEqual({});
+            expect(resolvePromoteAllFields(strategy, {description: 'Same'}, {description: 'Same', tags: null}), `${strategy}: undefined and null`).toEqual({});
+        }
+    });
+
+    it('compares the tags in order, as today: the same tags in another order differ', () => {
+        const left = {description: 'Same', tags: ['a', 'b']};
+        const right = {description: 'Same', tags: ['b', 'a']};
+        expect(resolvePromoteAllFields('left', left, right)).toEqual({description: 'Same', tags: ['a', 'b']});
+        expect(resolvePromoteAllFields('right', left, right)).toEqual({description: 'Same', tags: ['b', 'a']});
+        expect(resolvePromoteAllFields('merge', left, right), 'identical notes collapse to one copy; the union keeps the left order').toEqual({description: 'Same', tags: ['a', 'b']});
+    });
+
+    it("'left': the left row's notes and a copy of its tags", () => {
+        const resolved = resolvePromoteAllFields('left', OUT, IN);
+        expect(resolved).toEqual({description: 'Savings out', tags: ['savings', 'monthly']});
+        expect(resolved?.tags, 'a copy, not the row’s own array').not.toBe(OUT.tags);
+    });
+
+    it("'right': the right row's notes and a copy of its tags", () => {
+        const resolved = resolvePromoteAllFields('right', OUT, IN);
+        expect(resolved).toEqual({description: 'Savings in', tags: ['monthly', 'transfer']});
+        expect(resolved?.tags, 'a copy, not the row’s own array').not.toBe(IN.tags);
+    });
+
+    it("'merge': both notes, one per line, and the union of the tags", () => {
+        expect(resolvePromoteAllFields('merge', OUT, IN)).toEqual({description: 'Savings out\nSavings in', tags: ['savings', 'monthly', 'transfer']});
+    });
+
+    it("'merge': notes on one side only are that side's notes, whether the other is null or empty", () => {
+        expect(resolvePromoteAllFields('merge', {description: null, tags: ['a']}, {description: 'Savings in', tags: ['a']})).toEqual({description: 'Savings in', tags: ['a']});
+        expect(resolvePromoteAllFields('merge', {description: 'Savings out', tags: ['a']}, {description: '', tags: ['a']})).toEqual({description: 'Savings out', tags: ['a']});
+    });
+});
+
+describe('resolvePromoteAllFields — never past the notes’ limit (W-B70 reds, D-W70-4 a)', () => {
+    it("'merge' returns null when the combined notes would be 501 characters: the pair is left for a manual merge", () => {
+        const left = {description: 'L'.repeat(250), tags: []};
+        const right = {description: 'R'.repeat(250), tags: []};
+        expect(mergeStrings(left.description, right.description), 'control: combined, 501 characters').toHaveLength(501);
+
+        expect(resolvePromoteAllFields('merge', left, right)).toBeNull();
+    });
+
+    it("'merge' allows exactly 500", () => {
+        const left = {description: 'L'.repeat(250), tags: []};
+        const right = {description: 'R'.repeat(249), tags: []};
+        const combined = `${left.description}\n${right.description}`;
+        expect(combined, 'control: combined, 500 characters').toHaveLength(500);
+
+        expect(resolvePromoteAllFields('merge', left, right)).toEqual({description: combined, tags: []});
+    });
+
+    it('counts code points: 250 and 249 emoji combine into 500 code points (999 UTF-16 units), allowed', () => {
+        const left = {description: '😀'.repeat(250), tags: []};
+        const right = {description: '😃'.repeat(249), tags: []};
+        const combined = `${left.description}\n${right.description}`;
+        expect(combined.length, 'control: 999 UTF-16 units').toBe(999);
+
+        expect(resolvePromoteAllFields('merge', left, right)).toEqual({description: combined, tags: []});
+    });
+
+    it('and 250 and 250 emoji, 501 code points, are not', () => {
+        expect(resolvePromoteAllFields('merge', {description: '😀'.repeat(250), tags: []}, {description: '😃'.repeat(250), tags: []})).toBeNull();
+    });
+
+    it('counts the notes as combined: identical notes of 400 collapse to one copy, allowed, while the tags still merge', () => {
+        const notes = 'N'.repeat(400);
+
+        expect(resolvePromoteAllFields('merge', {description: notes, tags: ['a']}, {description: notes, tags: ['b']})).toEqual({description: notes, tags: ['a', 'b']});
+    });
+
+    it('counts the notes as combined: an empty side beside 500 characters leaves the 500, allowed', () => {
+        const notes = 'R'.repeat(500);
+
+        expect(resolvePromoteAllFields('merge', {description: '', tags: ['x']}, {description: notes, tags: []})).toEqual({description: notes, tags: ['x']});
+    });
+
+    it("'left' and 'right' never return null: each side alone fits, only the combination does not", () => {
+        const left = {description: 'L'.repeat(500), tags: []};
+        const right = {description: 'R'.repeat(500), tags: []};
+
+        expect(resolvePromoteAllFields('left', left, right)).toEqual({description: left.description, tags: []});
+        expect(resolvePromoteAllFields('right', left, right)).toEqual({description: right.description, tags: []});
+        expect(resolvePromoteAllFields('merge', left, right)).toBeNull();
     });
 });

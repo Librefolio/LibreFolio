@@ -6219,3 +6219,121 @@ Voce mia (slot E2E di X-R59); review di X. Base `38be2102b`.
 2. ✅ 17/10 — **E2E** (`files/scripts/y33_e2e.sh`, slot del coordinatore dalle 17:32, dopo B; partita alle 17:33 col carico
    a 5 minuti sotto 50): `front-asset asset-detail` **39/39** in 3,5 min, fine alle 17:42. Porta 6189 libera.
 3. ⏳ CHECKPOINT READY al coordinatore (la spec e il giornale); review di X. Y-33 ✅ nel backlog.
+> **Y-33 entrato** (17/10, 17:43): dev `c5b347a46` (`dc6e8aba7`); review di X dopo.
+
+## Y-24 · Candele e contributo: dopo un errore, al più tre nuove richieste (17/10)
+
+Proposta di Y (la voce più utile senza decisioni della sezione), via del coordinatore alle 17:47: «at most 3 automatic
+retries at 2/4/8 s, reset on a scope change or a Refresh; no UI change». La parte UX (l'indicatore e lo stato d'errore
+delle candele) resta con Y-18, al developer. Nessun'altra worktree ha le due pagine, `GrowthChart`, `PositionsPanel` o
+`stores/portfolio/` (coordinatore). Base `c5b347a46`.
+
+**Stato reale (verificato).** Quattro caricatori pigri fanno lo stesso giro: Dashboard (runes) `loadPnlCandles`
+(`dashboard/+page.svelte:676-687`) e `loadContribution` (`:637-665`); pagina del broker (legacy: `export let data`, `$:`)
+`loadPnlCandles` (`:354-364`) e `loadContribution` (`:366-375`). Se il report fallisce `requestReport` dà `null`
+(`portfolioStore.svelte.ts:345-347`), il `finally` rimette `loading` a false e l'`$effect` che chiede (`GrowthChart.svelte:980-984`,
+`PositionsPanel.svelte:112-116`) lo legge e riparte: una richiesta dopo l'altra, senza pausa, ognuna un report intero (per
+le candele il calcolo OHLC). Un successo non fa il giro: `get_pnl_candles` dà una serie vuota, mai `None`
+(`portfolio_service.py:1254+`). Sulla pagina del broker, legacy, i `let` riassegnati sono segnali: il giro c'è anche lì.
+
+**Contratto.** `lib/stores/portfolio/lazyReportRetry.svelte.ts`: `createLazyReportRetry(delaysMs = [2000, 4000, 8000])` →
+`canAsk(scope)` (lettura reattiva: un tick `$state` sveglia l'effetto quando scade un nuovo tentativo, e dopo `reset()`),
+`failed(scope)`, `succeeded(scope)`, `reset()`, `dispose()`. Al più 4 richieste per ambito (la prima e 3 tentativi, a 2, 4 e
+8 s da ogni errore), poi più nessuna finché cambia l'ambito (broker|inizio|fine|valuta) o arriva un Refresh. Nessun
+orologio letto: lo stato «scaduto» viene dal timer.
+
+**Passi.**
+1. Rossi (`test-author` `73198f94`): unità `lazyReportRetry.svelte.test.ts` (in `store-unit`); E2E nuova
+   `e2e/portfolio/lazy-report-retry.spec.ts` (azione `front-portfolio lazy-report-retry`), con l'orologio di Playwright:
+   candele della Dashboard (niente tempesta, 4 al più, un cambio di periodo richiede), recupero, contributo con Refresh,
+   candele della pagina del broker.
+2. Slot corto: l'E2E rossa sul codice di oggi (la prova che morde).
+3. Cura: il modulo; i quattro caricatori (guardia `canAsk`, dopo l'attesa `succeeded`/`failed` sullo stesso ambito); i due
+   Refresh chiamano `reset()`; `dispose()` alla distruzione; il commento di `GrowthChart.svelte:979`.
+4. Documentazione (`docs-writer`); prove leggere; slot: l'E2E nuova più `page-busy`, `dashboard`, `dashboard-cache`,
+   `front-broker detail`.
+5. CHECKPOINT READY con la riga 🐛 del CHANGELOG e la pulizia del giornale (Y-5…Y-22 ✅, già fatta).
+
+**Avanzamento.**
+1. ✅ 17/10 — **Rossi** (`test-author` `73198f94`): `lazyReportRetry.svelte.test.ts`, 20 test (il calendario 2/4/8 s, lo
+   sfinimento, un altro ambito, `succeeded`, `reset`, `dispose`, l'effetto svegliato anche se ha letto `canAsk` una volta
+   sola prima di ogni errore, nessun orologio letto); rossi: il modulo non esiste. E2E `lazy-report-retry.spec.ts`, 5 casi con
+   l'orologio di Playwright (candele della Dashboard, recupero, contributo con Refresh, candele e contributo della pagina
+   del broker); conteggi dalla rotta e dalla pagina. Runner: il file in `store-unit`, l'azione `lazy-report-retry`.
+   `tsc` delle E2E, Prettier, `check-orphans` puliti.
+   > **⚠️ Fuori pista**: sulla pagina del broker le **candele** oggi non fanno il giro: `pnlCandlesLoading` è un `let`
+   > che il template e i `$:` non leggono, quindi Svelte 5 legacy non lo rende reattivo (verificato dal `test-author`
+   > compilando la pagina). Dopo un errore nessun nuovo tentativo: una richiesta, poi niente. Il **contributo** invece fa il
+   > giro. La cura copre i due: `canAsk` registra il lettore in ogni stato, così il timer sveglia anche un effetto che l'ha
+   > letto una volta sola. Il caso (d) dell'E2E sarà rosso sul tentativo che non arriva.
+2. ✅ 17/10 — **E2E rossa sul codice di oggi** (slot 18:30–18:36, `files/scripts/y24red_e2e.sh`): 5/5 rossi, ognuno per il
+   motivo giusto — candele della Dashboard 6 richieste a orologio fermo (attesa 1), recupero un nuovo tentativo immediato,
+   contributo della Dashboard 5, candele della pagina del broker il tentativo a 2 s mai arrivato, contributo della pagina del
+   broker 4. Log `files/logs/y24red_e2e_*`.
+3. ✅ 17/10 — **Cura**. `lib/stores/portfolio/lazyReportRetry.svelte.ts` (unità 20/20 al primo colpo). Dashboard e pagina
+   del broker: due retry (candele, contributo), `reportScope()` (broker|inizio|fine|valuta), la guardia `canAsk` letta
+   prima del primo `await`, l'esito registrato prima del `finally`, la risposta di un altro ambito scartata; il Refresh
+   (`handleSync`, `handleRefresh`) chiama `reset()`; `dispose()` in `onDestroy`. Commento di `GrowthChart.svelte:979`.
+   > **Note implementazione**: Vitest 239/239 (il modulo, `portfolioStore`, `portfolioMutation`, i due `GrowthChart`);
+   > svelte-check 0/0; `theme-roles --check`, Prettier (formattato il modulo), `git diff --check` puliti.
+   > **⚠️ Fuori pista**: la risposta delle candele di un ambito già cambiato prima si applicava comunque (Dashboard e
+   > pagina del broker); ora si scarta, col controllo che serve anche per contare l'errore. Le modifiche spostano i
+   > riferimenti di riga di `app-state.md#page-busy` nelle due pagine: da riallineare dopo la documentazione.
+4. ✅ 17/10 — **Documentazione** (`docs-writer` `e3986f2f`): `domain-state.md` (riga della tabella degli store, sezione
+   «Lazy sections after a failure», `#lazy-report-retry`), `app-state.md` (la frase del `join`: di norma a pagina ferma),
+   `components/charts.md` (le Candele), `pages/index.md`, `backend/transactions/price_resolver.md`; riallineati i
+   riferimenti di riga spostati dalla cura in `app-state.md`, `risk-lab.md` (anche quelli già vecchi prima) e
+   `backend/risk/architecture.md:24` (controllato a occhio: `1101-1110`); corretti i quattro percorsi vecchi della
+   tabella degli store di `domain-state.md` (lotti, dashboard, rischio, transazioni: le mie mosse di cartella).
+5. ✅ 17/10 — **Verdi e regressioni** (slot 18:42–19:11, `files/scripts/y24green_e2e.sh`): `lazy-report-retry` 5/5,
+   `page-busy` 17/17, `dashboard` 27/27, `dashboard-cache` 6/6, `front-broker detail` 40/40. Porta libera.
+   > **⚠️ Fuori pista — un buco della cura, trovato da `docs-writer` leggendo il codice**: sulla pagina del broker
+   > `pnlCandlesLoading` è un `let` che il compilatore legacy non rende segnale, e la guardia esce su di lui prima di
+   > `canAsk`. (f) Un cambio di periodo con la richiesta delle candele in volo: la risposta vecchia scartata, nessuno
+   > sveglia l'effetto, le candele del periodo nuovo mai chieste (regressione della correzione sulle risposte scadute);
+   > (g) uscire dalle Candele e rientrare con la richiesta in volo che poi fallisce: il tentativo a 2 s non arriva. La
+   > Dashboard no (il suo flag è `$state`). Prova col compilatore (`files/y24_probe*.svelte`, `files/y24_probe.mjs`):
+   > con `$: void pnlCandlesLoading;` il flag diventa `$.mutable_source` e la guardia lo legge con `$.get`.
+6. ✅ 17/10 — **Il buco, chiuso** (slot 19:17–19:34). Rossi (f) e (g) (`test-author` `73198f94`, secondo giro) visti sul
+   codice di prima: «le candele del periodo nuovo mai chieste» e «il tentativo a 2 s mai mandato»; gli altri 5 verdi.
+   Correzione, solo nella pagina del broker: `$: void pnlCandlesLoading;` (il flag diventa un segnale, come sulla
+   Dashboard) e `canAsk` letto prima delle altre guardie nei due caricatori. Poi `lazy-report-retry` 7/7, `front-broker
+   detail` 40/40; svelte-check 0/0; Prettier pulito. Riferimenti di riga della pagina del broker riallineati
+   (`files/scripts/y24_brokerrefs.py`, istantanea → oggi): 9 nei backtick in `app-state.md` e `risk-lab.md`, più
+   `(l.751)`/`(l.753)` → `(l.759)`/`(l.761)` a mano in `risk-lab.md:265`; tutti verificati sul codice.
+7. ⏳ CHECKPOINT READY con la riga 🐛 del CHANGELOG; Y-24 ✅ nel backlog (la parte del giro), il resto con Y-18.
+> **Y-24 entrato** (17/10, 19:48): dev `ad5104c4f` (prove combinate verdi sull'albero fuso), CHANGELOG `c1bdc380b`.
+> Review a posteriori fatte nel frattempo: C-97c-3 parte DV (OK, una nota su una copia di formato in 5 componenti) e J-21
+> lato renderer (OK, una nota: le sequenze di un output con molti `null` non hanno tetto; J la verifica con un rosso).
+
+## Y-34 · `brokers-detail.spec.ts`: il pannello dei lotti sotto carico, più la nota di X su Y-33 (17/10)
+
+Voce di gate I, via del coordinatore; review di X. Base `ab74aafbf`.
+- **Il difetto**: 12 test di `brokers-detail.spec.ts` aspettano 5 s `lots-analysis-panel` dopo «analizza i lotti» (`:314`,
+  `:327`, `:355`, `:364`, `:380`, `:407`, `:431`, `:458`, `:497`, `:532`, `:555`, `:610`); `:355` è caduto una volta col
+  carico vicino a 90. L'azione scrive `?asset=<id>` nell'URL, la pagina lo legge in un `$:` e monta il pannello sotto
+  `{#if open && assetId != null}`: navigazione nella stessa rotta più montaggio.
+- **La nota di X su Y-33**: i quattro test «Live price direction flash» di `asset-detail.spec.ts` (`:8265`, `:8279`,
+  `:8316`, `:8351`) abbassano il timeout a 20 s, sotto il tetto di 30 s dell'URL di `goToSeededAssetDetail`.
+- **La cura (forma decisa)**: in `brokers-detail.spec.ts` un aiuto, prima l'URL con `?asset=` (tetto 30 s), poi il
+  pannello (10 s), per i 12 punti (e `:947`/`:2027` se sono la stessa sequenza); in `asset-detail.spec.ts` un
+  `test.describe.configure({timeout: 60_000})` sul describe dei flash al posto dei quattro `setTimeout(20_000)`.
+- **Passi**: 1. `test-author` (brief `files/y34_testauthor_prompt.md`); 2. `tsc` delle E2E e Prettier; 3. slot:
+   `front-broker detail` e `front-asset asset-detail` (i flash); 4. CHECKPOINT READY, review di X.
+
+**Avanzamento.**
+1. ✅ 17/10 — **Riparazione** (`test-author` `f5f41fd9`, due giri). `brokers-detail.spec.ts`: `expectLotsPanelOpen(page,
+   assetId?)` (URL con `?asset=` 30 s, poi il pannello 10 s, senza ripetere il clic) al posto delle 12 attese di 5 s;
+   `expectLotsPanelClosed(page)` per la chiusura (`:352-353`: URL senza `?asset=`, poi il pannello nascosto); `:947`/`:2027`
+   lasciate (deep link). `asset-detail.spec.ts`: `test.describe.configure({timeout: 60_000})` sul describe dei flash (al posto
+   dei quattro `setTimeout(20_000)`) e sul describe `Asset Detail Page` (19 test col default di 30 s, che non arrivavano al
+   tetto dell'URL; fra loro quello caduto in Y-33). Tutti i 27 chiamanti di `goToSeededAssetDetail` hanno almeno 60 s; i 13
+   test del pannello stanno in describe da 60 s.
+   > **Note implementazione**: `tsc -p tsconfig.e2e.json` e Prettier puliti; `git diff --check` pulito. Verdetto (test-triage):
+   > un'assunzione di tempo.
+   > **⚠️ Fuori pista**: allargato oltre la nota di X ai 19 test col default di 30 s e alla chiusura del pannello (stessa classe,
+   > stessi due file). Residuo da instradare: `dashboard-cache.spec.ts:295` (`analyzeLots`), stessa classe con un'attesa sola.
+2. ✅ 17/10 — **E2E** (slot 20:02–20:08, `files/scripts/y34_e2e.sh`): `front-broker detail` **40/40**, `front-asset
+   asset-detail` filtrato su «direction» **5/5** (i 4 flash e un test veloce). Porta 6189 libera. Il coordinatore approva i 60 s
+   sul describe `Asset Detail Page` e il residuo di `dashboard-cache.spec.ts:295` nella riga di Y-34.
+3. ⏳ CHECKPOINT READY (solo test e giornale, nessuna riga del CHANGELOG); review di X.

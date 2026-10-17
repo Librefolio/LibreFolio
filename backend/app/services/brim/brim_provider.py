@@ -40,7 +40,7 @@ import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Tuple
 
@@ -81,6 +81,7 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.pydantic_errors import error_params, loc_to_field
 from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
@@ -89,11 +90,6 @@ logger = structlog.get_logger(__name__)
 # without BOM) first; then Windows-1252, which Excel on Windows and many banks write;
 # Latin-1 last, because it decodes any byte sequence and so always succeeds.
 TEXT_ENCODINGS: Tuple[str, ...] = ("utf-8-sig", "cp1252", "latin-1")
-
-# What a lone validation error's context may hold to become its params (W-B75, the batch's rule of W-B72): a business
-# rule's ``{type, qty, …}``. pydantic's ``value_error`` holds the exception itself, which no response can carry.
-_PLAIN_PARAM_TYPES = (str, int, float, bool, type(None))
-
 
 # =============================================================================
 # EXCEPTIONS
@@ -536,27 +532,6 @@ class BRIMProvider(ABC):
     # Transaction construction helpers (parent responsibility)
     # -------------------------------------------------------------------------
 
-    @staticmethod
-    def _loc_to_field(loc: tuple) -> Optional[str]:
-        """Convert Pydantic loc tuple to a dot-separated field path, skipping indices."""
-        parts = [str(p) for p in loc if not isinstance(p, int)]
-        return ".".join(parts) if parts else None
-
-    @staticmethod
-    def _lone_error_params(err: dict) -> Optional[dict]:
-        """The ``params`` of a validation error met alone: the context of a model-level error, when it is plain data.
-
-        The rule of the transaction batch's ``_lone_error_params`` (W-B72), so a row the parse refuses and the same row
-        the batch refuses carry the same ``params`` (W-B75). A business rule keeps its context (``{type}``,
-        ``{type, qty}``, …); a field's error — pydantic's own, ``string_too_long``, a validator's ``value_error`` — keeps
-        ``None``: its ``field`` names it. A ``value_error``'s context holds the exception itself: copied as it was, it
-        made the parse answer 500.
-        """
-        context = err.get("ctx")
-        if err.get("loc") or not context or not all(isinstance(value, _PLAIN_PARAM_TYPES) for value in context.values()):
-            return None
-        return dict(context)
-
     def _create_transaction(
         self,
         row_num: int,
@@ -570,8 +545,8 @@ class BRIMProvider(ABC):
         On success: appends to ``transactions`` and returns the item.
         On ValidationError: extracts structured issues from Pydantic, appends to
         ``validation_issues``, and returns None. Each issue carries the error's code,
-        message and field; a packed business rule keeps its context as ``params``,
-        a lone error as ``_lone_error_params`` decides (W-B75).
+        message and field, and its plain context as ``params`` (``error_params``,
+        the transaction batch's rule: W-B72, W-B75, W-B70).
 
         Plugins should call this instead of ``TXCreateItem(...)`` directly so that
         the parent class owns the error-handling contract and the frontend receives
@@ -593,7 +568,7 @@ class BRIMProvider(ABC):
                                 row=row_num,
                                 code=sub_err.get("code", "unknown"),
                                 message=sub_err.get("msg", ""),
-                                params=sub_err.get("ctx") if sub_err.get("ctx") else None,
+                                params=error_params(sub_err),
                                 context=context,
                             )
                         )
@@ -603,8 +578,8 @@ class BRIMProvider(ABC):
                             row=row_num,
                             code=err_type,
                             message=err.get("msg", str(e)),
-                            field=self._loc_to_field(err.get("loc", ())),
-                            params=self._lone_error_params(err),
+                            field=loc_to_field(err.get("loc", ())),
+                            params=error_params(err),
                             context=context,
                         )
                     )
@@ -2187,6 +2162,31 @@ def _description_key(description: Optional[str]) -> str:
 # as a plain DEPOSIT or WITHDRAWAL and must still be recognised.
 _MERGED_LEG_TYPES = (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION)
 
+# The widest gap two quantities of one holding may have (the fixed tolerance before W-B51): the rule below is never looser.
+QUANTITY_MATCH_BOUND = Decimal("0.0001")
+
+
+def _decimal_places(value: Decimal) -> int:
+    """The decimals ``value`` states, trailing zeros not counted: a stored ``0.000153000`` (a column pads its reads) states 6."""
+    exponent = value.normalize().as_tuple().exponent
+    return max(0, -exponent) if isinstance(exponent, int) else 0
+
+
+def _same_quantity(stored: Optional[Decimal], incoming: Decimal) -> bool:
+    """Whether a stored quantity and a report's are the same holding (W-B51, decision D-W51-1).
+
+    Equal once both are rounded half-up to the decimals of the less precise one, and never further apart than
+    ``QUANTITY_MATCH_BOUND``: a report that rounds (``0.00015``) still matches the value stored from another
+    (``0.000153``), while two recurring crypto buys of one day (``0.00015123``, ``0.00015098``) stay two rows; ``10`` and
+    ``10.4`` stay apart as before. A stored quantity that reads back unreadable (``None``, W-B74) matches nothing.
+    """
+    if stored is None or not stored.is_finite() or not incoming.is_finite():
+        return False
+    if abs(stored - incoming) > QUANTITY_MATCH_BOUND:
+        return False
+    unit = Decimal(1).scaleb(-min(_decimal_places(stored), _decimal_places(incoming)))
+    return stored.quantize(unit, rounding=ROUND_HALF_UP) == incoming.quantize(unit, rounding=ROUND_HALF_UP)
+
 
 async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per-tx match evaluation from loop
     transactions: List[TXCreateItem],
@@ -2202,7 +2202,7 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
     - Same type; a DEPOSIT or WITHDRAWAL also looks at the legs of CASH_TRANSFER and
       FX_CONVERSION pairs, where a promote stored the same movement
     - Same date
-    - Same quantity (within tolerance for decimals)
+    - Same quantity, at the precision of the less precise of the two (``_same_quantity``, W-B51)
     - Same cash amount and currency (if present)
     - Same asset_id (only if asset was auto-resolved with 1 candidate)
 
@@ -2228,8 +2228,7 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
     tx_possible_duplicates = []
     tx_likely_duplicates = []
 
-    # Tolerance for decimal comparison
-    QUANTITY_TOLERANCE = Decimal("0.0001")
+    # Tolerance for the cash comparison (a currency's cents); quantities go through _same_quantity (W-B51)
     AMOUNT_TOLERANCE = Decimal("0.01")
 
     # Build fake_id -> real_asset_id mapping from asset_mappings
@@ -2277,9 +2276,7 @@ async def detect_tx_duplicates(  # noqa: C901 — TODO(P2-refactor): extract per
 
         matches = []
         for existing in existing_txs:
-            # Check quantity match (with tolerance)
-            qty_match = abs(existing.quantity - tx.quantity) <= QUANTITY_TOLERANCE
-            if not qty_match:
+            if not _same_quantity(existing.quantity, tx.quantity):
                 continue
 
             # Check cash match (if applicable)

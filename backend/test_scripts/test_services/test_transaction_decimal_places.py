@@ -83,8 +83,9 @@ The contract (the developer's decisions, 16/10; D5 and D6 the coordinator's, 16/
     out leaves the rows alone; an explicit null clears ``description``, ``tags`` and ``cost_basis_override``, as before. A
     refusal is an issue of the batch's lenient parse on the promote — pydantic's type as the code, ``field`` the merged
     field's own name without ``resolved_fields.`` (``description``, ``tags``, ``date``, ``cost_basis_override``,
-    ``cost_basis_override.code``, an unknown key's name), no params — and that promote is not applied: not committed,
-    nothing saved, nothing raised.
+    ``cost_basis_override.code``, an unknown key's name), ``params`` pydantic's own context when it is plain data (W-B70,
+    the coordinator's D-W70-1, 17/10: ``{max_length}``, a date's parsing error ``{error}``, ``{class_name}``), None
+    otherwise — and that promote is not applied: not committed, nothing saved, nothing raised.
 11. N78 (W-B72; night decision N78), the promote's side of a cost basis on a type and side that take none: a resolved
     non-null ``cost_basis_override`` where NEITHER leg can take one under the target type — ``cost_basis_allowed(target,
     leg.quantity)`` False for both, a WITHDRAWAL and a DEPOSIT promoted into a CASH_TRANSFER or an FX_CONVERSION — is
@@ -154,11 +155,13 @@ Reds — fail today, pass once the contract holds:
 - ``TestTheResolvedFieldsAreTyped`` (rule 10, H-41): a promote (index 1, behind a valid one) resolving a description of
   123, ``inf``, ["a"] or 501 characters, tags of 123 or ``{"a": 1}``, the date «not-a-date», «2026-02-30» or an explicit
   null, a cost basis «12» or without its code, or the unknown key ``quantity``, on ``/validate`` and ``/commit``, gets
-  exactly one issue, ``("promote", 1, <pydantic's type>, <the merged field>, None)``; the pair still reads as the list
-  builds it; nothing else, not committed, the four rows unchanged, nothing raised (today a number or ``inf`` as the
-  description commits and the pair's read fails with ``string_type``, a malformed date or tags raise out of the batch,
-  ``{"a": 1}`` commits the tag «a», the unknown key is ignored; the two cost bases already get their issue since
-  R13-SEC7-3). Tags «a, b» are stored «a,b» on both rows (today «a,,, ,b»: ``tags_to_csv`` joins a text's characters);
+  exactly one issue, ``("promote", 1, <pydantic's type>, <the merged field>, <pydantic's context when plain, else None>)``;
+  the pair still reads as the list builds it; nothing else, not committed, the four rows unchanged, nothing raised (today a
+  number or ``inf`` as the description commits and the pair's read fails with ``string_type``, a malformed date or tags
+  raise out of the batch, ``{"a": 1}`` commits the tag «a», the unknown key is ignored; the two cost bases already get
+  their issue since R13-SEC7-3; since H-41, W-B70's red: the four whose context is plain data — 501 characters, the two
+  dates, the cost basis «12» — carry no params). Tags «a, b» are stored «a,b» on both rows (today «a,,, ,b»:
+  ``tags_to_csv`` joins a text's characters);
 - ``TestTheCodesAreListed``: ``TXValidationCode.DATE_OUT_OF_RANGE``, and ``validation_codes`` lists ``dateOutOfRange``.
 - ``TestN78APromotedCostBasisWhereNoLegTakesOne`` (rule 11): a WITHDRAWAL/DEPOSIT pair promoted into a CASH_TRANSFER or an
   FX_CONVERSION resolving 12.5 EUR, behind a valid promote, is refused on promote 1 (today it commits, both legs holding
@@ -237,7 +240,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.assets.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXPromoteResolvedFields, TXValidationCode, TXValidationIssue
 from backend.app.schemas.transactions.transactions import TXQueryParams
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse, cost_basis_allowed
 from backend.app.services.assets.crud import AssetCRUDService
@@ -1336,24 +1339,28 @@ class TestAPromotedCostBasisCurrencyRefuses:
 # RED AND GUARDS — RULE 10 (H-41): A PROMOTE'S RESOLVED FIELDS ARE TYPED
 # ============================================================================
 
-# A promote's resolved fields the typed model refuses, and the issue its batch answers on the promote: pydantic's type, and
-# the merged field's own name, without ``resolved_fields.``. A value of the wrong kind (a JSON ``Infinity`` arrives as a
-# float), a text past 500 characters, tags that are neither a list nor a text, a date that is none or an explicit null, a
-# cost basis that is no currency, a key the model does not know.
+# A promote's resolved fields the typed model refuses, and the issue its batch answers on the promote: pydantic's type, the
+# merged field's own name, without ``resolved_fields.``, and whether it carries params — pydantic's own context, when it is
+# plain data (W-B70, D-W70-1): ``{max_length}``, a date's parsing error ``{error}``, ``{class_name}`` of a cost basis that is
+# no object; never a value_error's (the exception itself), nor an error without context. A value of the wrong kind (a JSON
+# ``Infinity`` arrives as a float), a text past 500 characters, tags that are neither a list nor a text, a date that is none
+# or an explicit null, a cost basis that is no currency, a key the model does not know.
 RESOLVED_FIELDS_REFUSED = [
-    pytest.param({"description": 123}, "string_type", "description", id="description-123"),
-    pytest.param({"description": float("inf")}, "string_type", "description", id="description-inf"),
-    pytest.param({"description": ["a"]}, "string_type", "description", id="description-list"),
-    pytest.param({"description": "x" * 501}, "string_too_long", "description", id="description-501-characters"),
-    pytest.param({"tags": 123}, "value_error", "tags", id="tags-123"),
-    pytest.param({"tags": {"a": 1}}, "value_error", "tags", id="tags-object"),
-    pytest.param({"date": "not-a-date"}, "date_from_datetime_parsing", "date", id="date-not-a-date"),
-    pytest.param({"date": "2026-02-30"}, "date_from_datetime_parsing", "date", id="date-2026-02-30"),
-    pytest.param({"date": None}, "value_error", "date", id="date-explicit-null"),
-    pytest.param({"cost_basis_override": "12"}, "model_type", "cost_basis_override", id="cost-basis-not-an-object"),
-    pytest.param({"cost_basis_override": {"amount": "1"}}, "missing", "cost_basis_override.code", id="cost-basis-without-code"),
-    pytest.param({"quantity": "5"}, "extra_forbidden", "quantity", id="unknown-key-quantity"),
+    pytest.param({"description": 123}, "string_type", "description", False, id="description-123"),
+    pytest.param({"description": float("inf")}, "string_type", "description", False, id="description-inf"),
+    pytest.param({"description": ["a"]}, "string_type", "description", False, id="description-list"),
+    pytest.param({"description": "x" * 501}, "string_too_long", "description", True, id="description-501-characters"),
+    pytest.param({"tags": 123}, "value_error", "tags", False, id="tags-123"),
+    pytest.param({"tags": {"a": 1}}, "value_error", "tags", False, id="tags-object"),
+    pytest.param({"date": "not-a-date"}, "date_from_datetime_parsing", "date", True, id="date-not-a-date"),
+    pytest.param({"date": "2026-02-30"}, "date_from_datetime_parsing", "date", True, id="date-2026-02-30"),
+    pytest.param({"date": None}, "value_error", "date", False, id="date-explicit-null"),
+    pytest.param({"cost_basis_override": "12"}, "model_type", "cost_basis_override", True, id="cost-basis-not-an-object"),
+    pytest.param({"cost_basis_override": {"amount": "1"}}, "missing", "cost_basis_override.code", False, id="cost-basis-without-code"),
+    pytest.param({"quantity": "5"}, "extra_forbidden", "quantity", False, id="unknown-key-quantity"),
 ]
+# The plain data a context may hold to become params (D-W70-1): str, int, float, bool, None.
+PLAIN_DATA = (str, int, float, bool, type(None))
 
 # A promote's resolved fields the typed model keeps, and what ``/commit`` stores on the second pair: its merged fields
 # (``description``, the ``tags`` CSV, ``date``) on both rows, and the (cost, currency) of its receiving leg.
@@ -1417,6 +1424,27 @@ def _shown(resolved_fields: dict) -> str:
     return f"resolved_fields {shown}"
 
 
+def _resolved_fields_error(resolved_fields: dict) -> dict:
+    """The one error pydantic itself reports for ``resolved_fields`` under ``TXPromoteResolvedFields``: what the promote's
+    issue is made of, read from pydantic so that no text of its is pinned here."""
+    try:
+        TXPromoteResolvedFields.model_validate(resolved_fields)
+    except ValidationError as exc:
+        errors = exc.errors()
+        assert len(errors) == 1, f"scaffold: {_shown(resolved_fields)} must be refused by one error of pydantic's; it answers {errors}"
+        return errors[0]
+    pytest.fail(f"scaffold: TXPromoteResolvedFields accepts {_shown(resolved_fields)}: the case refuses nothing")
+
+
+def _plain_params(error: dict) -> dict | None:
+    """The params D-W70-1 gives ``error``: a copy of its context when every value is plain data (``PLAIN_DATA``); None when
+    it has none, or holds one that is not (a value_error's exception)."""
+    context = error.get("ctx")
+    if not context or not all(isinstance(value, PLAIN_DATA) for value in context.values()):
+        return None
+    return dict(context)
+
+
 async def _tag(world: World, ids, tags: str) -> None:
     """Store ``tags`` on the rows ``ids``, through their ORM objects: the session and the database then agree on them."""
     for row_id in ids:
@@ -1448,21 +1476,29 @@ class TestTheResolvedFieldsAreTyped:
     an unknown key is ignored. It becomes the ``StrictModel`` ``TXPromoteResolvedFields`` — ``description`` a text of at
     most 500 characters, ``tags`` through ``validate_tags_list``, ``date`` a date (an explicit null refused),
     ``cost_basis_override`` a ``Currency``, no other key. A refusal is an issue of the batch's lenient parse on the promote,
-    pydantic's type, ``field`` the merged field's own name, no params; that promote is not applied, nothing is saved.
+    pydantic's type, ``field`` the merged field's own name, ``params`` pydantic's own context when it is plain data (W-B70,
+    D-W70-1), None otherwise; that promote is not applied, nothing is saved.
     """
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("endpoint", ENDPOINTS)
-    @pytest.mark.parametrize(("resolved_fields", "code", "field"), RESOLVED_FIELDS_REFUSED)
-    async def test_a_resolved_field_the_model_refuses_is_the_one_issue_of_its_promote(self, world, resolved_fields, code, field, endpoint):
+    @pytest.mark.parametrize(("resolved_fields", "code", "field", "carries_params"), RESOLVED_FIELDS_REFUSED)
+    async def test_a_resolved_field_the_model_refuses_is_the_one_issue_of_its_promote(self, world, resolved_fields, code, field, carries_params, endpoint):
         """Red today: a description of 123 or ``inf`` commits, and the pair no longer reads (``string_type``); a list
         description, tags of 123 and the three dates raise out of the batch; 501 characters, tags ``{"a": 1}`` (stored
         «a») and the unknown key commit. The cost basis cases already get their issue from ``check_decimal_limits``
-        (R13-SEC7-3), which reads the resolved cost basis through ``Currency``.
+        (R13-SEC7-3), which reads the resolved cost basis through ``Currency``. Since H-41, red for W-B70 (D-W70-1) where
+        pydantic's context is plain data — 501 characters (``{max_length: 500}``), the two dates (``{error: <pydantic's
+        text>}``), the cost basis «12» (``{class_name: "Currency"}``) —: today their issue carries no params.
 
-        Contract: exactly one issue, ``("promote", 1, code, field, None)``; the pair still reads as the list builds it;
-        not committed; the four rows as they were stored; nothing raises.
+        Contract: exactly one issue, ``("promote", 1, code, field, params)``, ``params`` the context pydantic itself
+        reports for these resolved fields when it is plain data (read from pydantic, never pinned), None otherwise; the
+        pair still reads as the list builds it; not committed; the four rows as they were stored; nothing raises.
         """
+        error = _resolved_fields_error(resolved_fields)
+        assert error["type"] == code, f"scaffold: pydantic refuses {_shown(resolved_fields)} with {error['type']}, not {code}"
+        params = _plain_params(error)
+        assert (params is not None) == carries_params, f"scaffold: pydantic's context for {_shown(resolved_fields)} is {error.get('ctx')!r}: the case expects {'plain params' if carries_params else 'no params'}"
         ids, promotes = await _two_promotes_resolving(world, resolved_fields=resolved_fields)
         before = await _four_rows(world, ids)
         story = f"a promote resolving {_shown(resolved_fields)}"
@@ -1473,8 +1509,8 @@ class TestTheResolvedFieldsAreTyped:
         assert refusal is None, f"H-41, /{endpoint}: after {story} (committed={response.committed}), the pair no longer reads as GET /transactions builds it, in the batch's session: {refusal}"
         assert read_ids == ids[2:], f"scaffold: the list's read answered the rows {read_ids}, not the pair {ids[2:]}: its reading proves nothing"
         issues = [(issue.operation, issue.index, issue.code, issue.field, issue.params) for issue in response.issues]
-        expected = [("promote", 1, code, field, None)]
-        assert issues == expected, f"H-41, /{endpoint}: {story} must be refused at the batch's parse with exactly {expected}; committed={response.committed}, issues: {_render(response.issues)}"
+        expected = [("promote", 1, code, field, params)]
+        assert issues == expected, f"H-41, W-B70 (D-W70-1), /{endpoint}: {story} must be refused at the batch's parse with exactly {expected}; committed={response.committed}, issues: {_render(response.issues)}"
         assert response.committed is False, f"H-41: /{endpoint} refused the batch, yet answered committed"
         after = await _four_rows(world, ids)
         assert after == before, f"H-41: the batch was refused, yet the stored rows changed: before {before}, after {after}"

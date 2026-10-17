@@ -776,8 +776,10 @@ describe('TransactionFormModal — exact quantity contract', () => {
     });
 
     // C-97b guard: the overflow is 11 decimals, past the quantity's 10. It was 7 decimals while the form
-    // allowed 6, a value C-97b makes valid; the limit itself must survive the cure.
-    it.each(['0.12345678912', '1000000000000.1'])('keeps precision overflow %j visible, invalid, and out of payloads', async (raw) => {
+    // allowed 6, a value C-97b makes valid; the limit itself must survive the cure. W-B64 guard, likewise:
+    // the integer overflow is 16 digits, past the 15 W-B64 gives the Form (N63, the backend's limit). It was
+    // 13 digits while the form allowed 12, a value W-B64 makes valid.
+    it.each(['0.12345678912', '1000000000000000.1'])('keeps precision overflow %j visible, invalid, and out of payloads', async (raw) => {
         const onPushDraft = vi.fn();
         mount({
             mode: 'create',
@@ -1021,6 +1023,113 @@ describe('TransactionFormModal — a quantity keeps ten decimals (C-97b)', () =>
         expect(message, 'tx-form-quantity-digits-error must say why eleven decimals are refused; no such element is rendered').not.toBeNull();
         expect(message).toBeVisible();
         expect(message, 'the message carries the quantity budget: ten decimals').toHaveAttribute('data-max', '10');
+    });
+});
+
+/**
+ * W-B64 — a quantity keeps fifteen integer digits. The backend keeps a quantity of up to 15 digits before the decimal
+ * point (decision N63, backend/app/db/precision.py); the Form gives the quantity's ExactQuantityInput
+ * `maxIntegerDigits={12}` — twice in TxFormSingleSection, once in TxFormPairSection — so a quantity the backend keeps is
+ * refused here, and Apply stays disabled.
+ *
+ * Pinned through the field (`tx-form-quantity`), in the three layouts that carry one: fifteen integer digits are a valid
+ * quantity, Apply is enabled, and the pushed draft carries them whole — the single layout beside cash (BUY), the single
+ * layout alone (ADJUSTMENT, its cash forbidden), the pair layout (TRANSFER: the sender's leg negative, the receiver's
+ * positive). The guard that sixteen stay refused and out of every payload is «keeps precision overflow» above.
+ */
+describe('TransactionFormModal — a quantity keeps fifteen integer digits (W-B64)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    const FIFTEEN_DIGITS = '9'.repeat(15);
+
+    /** A complete standalone BUY: the single layout, its quantity beside cash. */
+    function buyItems() {
+        return [txRow({type: 'BUY', quantity: '1', cash: {code: 'EUR', amount: '-100'}})];
+    }
+
+    /** A complete ADJUSTMENT, as «exact quantity contract» builds one: the single layout, its quantity alone. */
+    function adjustmentItems() {
+        return [txRow({type: 'ADJUSTMENT', quantity: '1', cash: null, cost_basis_mode: 'manual'})];
+    }
+
+    /** A TRANSFER pair, the sender (broker 17) first: the pair layout, its shared quantity in `tx-form-quantity`. */
+    function transferItems() {
+        const {sender, receiver} = transferPair();
+        return [sender, receiver];
+    }
+
+    /** The form on `items`, its Apply pushing the draft instead of committing it. */
+    async function mountForm(items: unknown[]) {
+        const onPushDraft = vi.fn();
+        mount({mode: 'create', items, commitOnSave: false, onPushDraft});
+        const input = (await screen.findByTestId('tx-form-quantity')) as HTMLInputElement;
+        return {input, onPushDraft};
+    }
+
+    /**
+     * Types the fifteen digits, presses Apply, and returns the draft it pushed. Red before the W-B64 cure at its second
+     * assertion: the field allows 12 integer digits, so it refuses the fifteen, and Apply stays disabled.
+     */
+    async function applyFifteenDigits(input: HTMLInputElement, onPushDraft: ReturnType<typeof vi.fn>): Promise<Record<string, unknown>> {
+        await fireEvent.input(input, {target: {value: FIFTEEN_DIGITS}});
+
+        expect(input, 'kept as typed').toHaveValue(FIFTEEN_DIGITS);
+        expect(input, 'fifteen integer digits are within the quantity the backend keeps (N63: 15)').toHaveAttribute('aria-invalid', 'false');
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        expect(commitTransactions).not.toHaveBeenCalled();
+        const pushed = onPushDraft.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
+        if (!pushed) throw new Error('Apply pushed no draft');
+        return pushed;
+    }
+
+    it('BUY (single layout, quantity beside cash): fifteen integer digits are a valid quantity, and reach the pushed draft whole', async () => {
+        const {input, onPushDraft} = await mountForm(buyItems());
+        expect(screen.getByTestId('tx-form-cash-wrap'), 'premise: the single layout, cash beside the quantity').toBeInTheDocument();
+
+        const pushed = await applyFifteenDigits(input, onPushDraft);
+
+        expect(pushed, 'the draft carries the fifteen digits, none cut').toMatchObject({type: 'BUY', quantity: FIFTEEN_DIGITS});
+    });
+
+    it('ADJUSTMENT (single layout, quantity alone): fifteen integer digits are a valid quantity, and reach the pushed draft whole', async () => {
+        const {input, onPushDraft} = await mountForm(adjustmentItems());
+        expect(screen.queryByTestId('tx-form-dual-split'), 'premise: the single layout').toBeNull();
+        expect(screen.queryByTestId('tx-form-cash-wrap'), 'premise: the quantity alone, its cash forbidden').toBeNull();
+
+        const pushed = await applyFifteenDigits(input, onPushDraft);
+
+        expect(pushed, 'the draft carries the fifteen digits, none cut').toMatchObject({type: 'ADJUSTMENT', quantity: FIFTEEN_DIGITS});
+    });
+
+    it('TRANSFER (pair layout): fifteen integer digits are a valid quantity, and reach both legs whole', async () => {
+        const {input, onPushDraft} = await mountForm(transferItems());
+        expect(screen.getByTestId('tx-form-dual-split'), 'premise: the pair layout').toBeInTheDocument();
+
+        const pushed = await applyFifteenDigits(input, onPushDraft);
+
+        expect(pushed._dual, 'premise: the pair pushes its two legs').toBe(true);
+        const legs = ((pushed._items ?? []) as Array<Record<string, unknown>>).map(({broker_id, quantity}) => ({broker_id, quantity}));
+        expect(legs, 'the sender gives the fifteen digits, the receiver gets them, none cut').toEqual([
+            {broker_id: 17, quantity: `-${FIFTEEN_DIGITS}`},
+            {broker_id: 23, quantity: FIFTEEN_DIGITS},
+        ]);
     });
 });
 

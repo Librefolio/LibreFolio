@@ -865,3 +865,154 @@ describe('ExactDecimalInput — a value over the digit budget costs no range che
         });
     });
 });
+
+/*
+ * W-B64 — the digit budget counts no zero the backend drops.
+ *
+ * The backend (`precision._digit_counts`) counts no leading zero of the integer part and no trailing zero of the
+ * fraction. The field counted characters (`normalizedParts`, `fractionOverflow`), and refused values the backend keeps:
+ * `0.10000000000`, one decimal, at 10 decimals; `5.0`, a whole number, at `maxFractionDigits={0}` (the PAC planner's
+ * priorities: «whole numbers only»); `0000000000001.5`, one integer digit, at 12.
+ *
+ * The contract (`decimalDigitCounts`, parseDecimalInput.ts):
+ * - `digitsValid` and the digits message count the digits the backend counts. The value is kept as typed while it is
+ *   edited, and a blur commits it as before (`formatDecimalForDisplay`): `0.1`, `5`.
+ * - A value whose TEXT is past the budget but which is within it once those zeros are dropped is range-checked and
+ *   stepped from the stripped value: never through a BigInt sized by its text (W-B66). A value within the text budget
+ *   still steps from its text, its typed places kept.
+ * - The validity `onvaliditychange` publishes keeps its seven fields.
+ *
+ * A digit that is not a zero still counts: `1.10000000001` has eleven decimals.
+ */
+const VALIDITY_FIELDS = ['normalized', 'empty', 'syntaxValid', 'requiredValid', 'digitsValid', 'rangeValid', 'valid'];
+
+/** The calls a BigInt spy saw that are sized by a text of HUGE characters: the text itself, or a power as large. */
+function bigintsSizedByTheText(spy: Recorded): number {
+    return spy.mock.calls.filter(([arg]) => (typeof arg === 'string' && arg.length >= HUGE) || (typeof arg === 'number' && arg >= HUGE)).length;
+}
+
+/** What a blur leaves, in one object: the text in the field, the last change emitted, the last value committed. */
+function committedState(input: HTMLInputElement, onchange: Recorded, oncommit: Recorded) {
+    return {dom: input.value, emitted: onchange.mock.calls.at(-1)?.[0], committed: oncommit.mock.calls.at(-1)?.[0]};
+}
+
+describe('ExactDecimalInput — the digit budget counts no zero the backend drops (W-B64)', () => {
+    // Red before the W-B64 cure: eleven characters after the point count as eleven decimals, past 10: invalid, and explained.
+    it('keeps 0.10000000000 as typed and valid at maxFractionDigits=10 — one decimal for the backend — and a blur commits 0.1', async () => {
+        const {input, onchange, oncommit, onvaliditychange} = setup({maxFractionDigits: 10});
+
+        await fireEvent.input(input, {target: {value: '0.10000000000'}});
+
+        expect(input, 'kept as typed while it is edited').toHaveValue('0.10000000000');
+        expectNoDigitsError(input, TID);
+        expect(lastValidity(onvaliditychange), 'one decimal is within a budget of ten').toMatchObject({digitsValid: true, valid: true});
+
+        await fireEvent.blur(input);
+
+        expect(committedState(input, onchange, oncommit), 'the blur commits the value without its zeros').toEqual({dom: '0.1', emitted: '0.1', committed: '0.1'});
+    });
+
+    // Red before the W-B64 cure: one character after the point counts as one decimal, past 0: invalid, and explained.
+    it('accepts 5.0 at maxFractionDigits=0 — a whole number for the backend — and a blur commits 5', async () => {
+        const {input, onchange, oncommit, onvaliditychange} = setup({maxFractionDigits: 0});
+
+        await fireEvent.input(input, {target: {value: '5.0'}});
+
+        expect(input, 'kept as typed while it is edited').toHaveValue('5.0');
+        expectNoDigitsError(input, TID);
+        expect(lastValidity(onvaliditychange), 'no decimal is within a budget of none').toMatchObject({digitsValid: true, valid: true});
+
+        await fireEvent.blur(input);
+
+        expect(committedState(input, onchange, oncommit), 'the blur commits the whole number').toEqual({dom: '5', emitted: '5', committed: '5'});
+    });
+
+    // Red before the W-B64 cure: thirteen characters before the point count as thirteen integer digits, past 12.
+    it('accepts 0000000000001.5 at the default 12 + 12: its leading zeros are no integer digits', async () => {
+        const {input, onvaliditychange} = setup();
+
+        await fireEvent.input(input, {target: {value: '0000000000001.5'}});
+
+        expect(input).toHaveValue('0000000000001.5');
+        expectNoDigitsError(input, TID);
+        expect(lastValidity(onvaliditychange), 'one integer digit is within a budget of twelve').toMatchObject({digitsValid: true, valid: true});
+    });
+
+    /*
+     * Red before the W-B64 cure: the 40 000 zeros count as 40 000 decimals, so the value is refused for its digits and its
+     * range is never asked (digitsValid false, rangeValid true). Reading it as the 5 it is must not cost what W-B66 saved:
+     * the bounds are compared with the stripped value, never through a BigInt of every pasted zero.
+     */
+    it('range-checks a paste of 5. and 40 000 zeros as the 5 it is: refused for its range, not its digits — no BigInt sized by its text, within 1 000 ms', async () => {
+        const {input, onvaliditychange} = setup({min: '0', max: '1'});
+        const pasted = `5.${'0'.repeat(HUGE)}`;
+        const bigint = vi.spyOn(globalThis, 'BigInt');
+        try {
+            const started = performance.now();
+            await fireEvent.input(input, {target: {value: pasted}});
+            const ms = performance.now() - started;
+
+            expect(input.value === pasted, `the paste is kept as typed; the field holds ${shown(input.value)}`).toBe(true);
+            const validity = lastValidity(onvaliditychange);
+            const counted = {bigintsSizedByTheText: bigintsSizedByTheText(bigint), digitsValid: validity?.digitsValid, rangeValid: validity?.rangeValid, valid: validity?.valid};
+            expect(counted, `5 and ${HUGE} zeros is 5 for the backend: within the digit budget, above max 1 (the paste took ${ms.toFixed(0)} ms)`).toEqual({bigintsSizedByTheText: 0, digitsValid: true, rangeValid: false, valid: false});
+            expect(input, 'refused, for its range').toHaveAttribute('aria-invalid', 'true');
+            const message = digitsError(TID);
+            if (message) expect(message, 'none of its decimals counts: the digits message must not show').not.toBeVisible();
+            expect(ms, `the paste took ${ms.toFixed(0)} ms`).toBeLessThan(BOUND_MS);
+        } finally {
+            bigint.mockRestore();
+        }
+    });
+
+    /*
+     * Red before the W-B64 cure: the value counts 40 000 decimals, past the budget, and the arrow leaves it as it is
+     * (W-B66). Within the budget once its zeros are dropped, it steps from the 5 it is. The step is 1 here: setup()'s
+     * own, 0.000000000001, would take it to 5.000000000001.
+     */
+    it('steps a value of 5. and 40 000 zeros from the 5 it is: ArrowUp at step 1 gives 6 — no BigInt sized by its text, within 1 000 ms', async () => {
+        const {input, onchange} = setup({value: `5.${'0'.repeat(HUGE)}`, step: '1'});
+        const bigint = vi.spyOn(globalThis, 'BigInt');
+        try {
+            const started = performance.now();
+            await arrow(input, 'ArrowUp');
+            const ms = performance.now() - started;
+
+            const emitted = onchange.mock.calls.at(-1)?.[0];
+            const stepped = {dom: shown(input.value), emitted: typeof emitted === 'string' ? shown(emitted) : emitted, bigintsSizedByTheText: bigintsSizedByTheText(bigint)};
+            expect(stepped, `today the value counts ${HUGE} decimals, and the arrow leaves it as it is (the arrow took ${ms.toFixed(0)} ms)`).toEqual({dom: shown('6'), emitted: shown('6'), bigintsSizedByTheText: 0});
+            expect(ms, `the arrow took ${ms.toFixed(0)} ms`).toBeLessThan(BOUND_MS);
+        } finally {
+            bigint.mockRestore();
+        }
+    });
+
+    // Guard: a digit that is not a zero still counts — 1.10000000001 has eleven decimals, past 10.
+    it('still refuses 1.10000000001 at maxFractionDigits=10, and says why: its last decimal is no zero', async () => {
+        const {input} = setup({maxFractionDigits: 10});
+
+        await fireEvent.input(input, {target: {value: '1.10000000001'}});
+
+        expect(input).toHaveValue('1.10000000001');
+        expectDigitsError(input, TID, 10);
+    });
+
+    // Guard: a value within the text budget steps from its text, its typed places kept.
+    it('still steps 1.50 from its text: ArrowUp at step 1 gives 2.50', async () => {
+        const {input, onchange} = setup({value: '1.50', step: '1'});
+
+        await arrow(input, 'ArrowUp');
+
+        expect(input).toHaveValue('2.50');
+        expect(onchange).toHaveBeenLastCalledWith('2.50');
+    });
+
+    // Guard: the count is the field's own business. What it publishes keeps its seven fields, none added.
+    it('publishes the same seven validity fields for a value whose zeros it drops', async () => {
+        const {input, onvaliditychange} = setup({maxFractionDigits: 10});
+
+        await fireEvent.input(input, {target: {value: '0.10000000000'}});
+
+        expect(Object.keys(lastValidity(onvaliditychange) ?? {}).sort()).toEqual([...VALIDITY_FIELDS].sort());
+    });
+});
