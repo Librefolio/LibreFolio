@@ -250,6 +250,8 @@
       "integerDigitsExceeded": "At most {max} digits before the decimal point",
       "dateOutOfRange": "Between {min} and {max}",
       "autoCostUnreadable": "Automatic cost unavailable: {count, plural, one {# transaction used} other {# transactions used}} for this asset's average cost {count, plural, one {holds} other {hold}} a value that is not a number. Enter the cost by hand.",
+      "autoCostEmptyPool": "Automatic cost unavailable: no units of this asset were held on that date to average. Enter the cost by hand (0 if they came free).",
+      "autoCostUnknownPool": "Automatic cost unavailable: the units of this asset held on that date have no known cost to average. Enter the cost by hand.",
       "ledgerUnreadable": "The balances of {brokerName} can't be checked: {count, plural, one {# of its transactions holds} other {# of its transactions hold}} a value that is not a number. Ask the administrator to repair the data.",
       "costBasisNotAllowed": "❌ {type} takes no cost basis here: remove it. Only units that come in through an Adjustment or an Asset Transfer carry one.",
       "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it."
