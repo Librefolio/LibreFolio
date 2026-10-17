@@ -58,6 +58,17 @@
  * program the read gets the Proxy's `undefined`: the read fails on it, and the
  * panel takes a failed read as «no settings». The lifecycle cases route it
  * explicitly, answering no settings.
+ *
+ * The probe refused for too many probes (workstream X, X-R66) — red until
+ * X-R66. Past `LIBREFOLIO_PROBE_RATE_LIMIT` probes a minute the endpoint
+ * answers 429: `detail.error_code` PROBE_RATE_LIMITED with its `retry_after`
+ * and the server's English, and `Retry-After`. Today the manual probe's one
+ * `probe` row shows that English, as its one line and as its detail. Once
+ * `probeRateLimitMessage` answers, both are its sentence: the catalogue's
+ * PROBE_RATE_LIMITED with the time the pause ends — read through `$_`, the
+ * clock pinned (Date only), never as a literal; the detail is read where the
+ * row hands it over, its copy button (PAS-RL1). Any other failure of the probe
+ * call keeps today's one line and detail (PAS-RL2, green before and after).
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
@@ -134,6 +145,7 @@ import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+import {formatResumeTime, resumesToday} from './resolveProviderError';
 
 // --- Provider fixtures --------------------------------------------------
 // mockprov must be filtered out of the options; yahoo has an icon + help url +
@@ -1599,5 +1611,93 @@ describe('ProviderAssignmentSection — the provider’s plugin settings (workst
         await waitFor(() => expect(settingsFn()).toHaveBeenCalledWith(readOf('justetf')));
         expect(await screen.findByTestId('provider-settings-status'), 'justetf’s own state').toHaveAttribute('data-configured', 'false');
         expect(screen.queryByTestId('plugin-settings-modal'), 'and the dialog stays closed').toBeNull();
+    });
+});
+
+// =========================================================================
+describe('ProviderAssignmentSection — the probe refused for too many probes (workstream X, X-R66)', () => {
+    /** «Now» when the refusal lands: 10 June 2026, 14:30:20 local time — a month with no daylight-saving change. */
+    const NOW = new Date(2026, 5, 10, 14, 30, 20);
+    /** The refusal's wait, in whole seconds as the server counts them: the pause ends at 14:31:02, written 14:32. */
+    const WAIT = 42;
+    const KEY = 'providerErrors.PROBE_RATE_LIMITED';
+    /** The server's own English for the refusal (`backend/app/api/v1/assets/providers.py`): what the row shows today. */
+    const SERVER_MESSAGE = 'Too many provider probes: try again later';
+
+    /** A failed request as a zodios (axios) call rejects with it: the answer's status, its `detail` as sent, its headers. */
+    function httpFailure(status: number, detail: unknown, headers: Record<string, string> = {}) {
+        return Object.assign(new Error(`Request failed with status code ${status}`), {response: {status, data: {detail}, headers}});
+    }
+
+    /** The probe's refusal: 429, its code with the wait and the server's English, and `Retry-After` with the same seconds. */
+    function probeRateLimited() {
+        return httpFailure(429, {error_code: 'PROBE_RATE_LIMITED', retry_after: WAIT, message: SERVER_MESSAGE}, {'retry-after': String(WAIT)});
+    }
+
+    /** Whitespace as one space: Intl writes some times with a narrow no-break space, and the DOM is read as text. */
+    function squash(text: string | null | undefined): string {
+        return (text ?? '').replace(/\s+/g, ' ').trim();
+    }
+
+    /** Runs the manual probe `failure` refuses; ends on the one row of the probe call's own failure, the probe settled. */
+    async function refusedProbeRow(failure: unknown): Promise<HTMLElement> {
+        probeFn().mockRejectedValue(failure as never);
+        mount({providerCode: 'yahoo', identifier: 'AAPL'});
+        await waitLoaded('Yahoo');
+        await fireEvent.click(testBtn());
+        await waitFor(() => expect(testBtn()).toHaveAttribute('data-status', 'failed'));
+        const rows = screen.getAllByTestId('provider-test-result');
+        expect(operationStatuses(rows), 'barrier: one row, the probe call’s own failure — probe, an error, as today').toEqual(['probe:error']);
+        return rows[0];
+    }
+
+    /** The row's one line, after its label: its summary. The row is its label, that line and its time — three spans, in that order. */
+    function oneLineOf(row: HTMLElement): string {
+        const spans = [...row.children].filter((child) => child.tagName === 'SPAN');
+        expect(spans, 'a result row is its label, its one line and its time: three spans').toHaveLength(3);
+        return squash(spans[1].textContent);
+    }
+
+    /** The row's detail, where the row hands it over: its copy button, on plain HTTP — the text of the legacy copy. */
+    async function copiedDetail(row: HTMLElement): Promise<string | undefined> {
+        const http = onPlainHttp();
+        await fireEvent.click(within(row).getByTestId('provider-test-result-copy'));
+        await waitFor(() => expect(http.execCommand).toHaveBeenCalledTimes(1));
+        expect(http.captured, 'one copy, of the row’s detail').toHaveLength(1);
+        return http.captured[0];
+    }
+
+    beforeEach(() => {
+        // Only the clock: the moment the pause ends is computed from «now», by the section and by the expectation alike.
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(NOW);
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('PAS-RL1: a manual probe refused with 429 PROBE_RATE_LIMITED — its row’s one line and its detail are the catalogue’s PROBE_RATE_LIMITED with the time the pause ends, not the server’s English', async () => {
+        const row = await refusedProbeRow(probeRateLimited());
+        expect(resumesToday(WAIT, NOW), 'premise: the pause ends today').toBe(true);
+        const time = formatResumeTime(WAIT, NOW);
+        const sentence = get(_)(KEY, {values: {time}});
+
+        const oneLine = oneLineOf(row);
+        expect(oneLine, 'the one line is no longer the server’s English').not.toBe(SERVER_MESSAGE);
+        expect(oneLine, 'the one line is the catalogue’s PROBE_RATE_LIMITED, with the time the pause ends').toBe(squash(sentence));
+        expect(oneLine, 'the time the pause ends, rounded up to the minute').toContain(squash(time));
+        expect(await copiedDetail(row), 'the detail is the same sentence').toBe(sentence);
+        expect(get(_)(KEY), `premise: the catalogue has ${KEY}`).not.toBe(KEY);
+    });
+
+    it.each<{when: string; failure: () => unknown; shown: string}>([
+        {when: 'a 429 the probe’s limiter did not send, another code', failure: () => httpFailure(429, {error_code: 'SYNTHETIC_OTHER_LIMIT', retry_after: WAIT, message: 'Synthetic limit of another kind'}, {'retry-after': String(WAIT)}), shown: 'Synthetic limit of another kind'},
+        {when: 'a request that got no answer', failure: () => new Error('Synthetic connection dropped'), shown: 'Synthetic connection dropped'},
+    ])('PAS-RL2: guard — $when: as today, the row’s one line and its detail are the failure’s own message', async ({failure, shown}) => {
+        const row = await refusedProbeRow(failure());
+
+        expect(oneLineOf(row), 'the one line, as today').toBe(shown);
+        expect(await copiedDetail(row), 'the detail, as today').toBe(shown);
     });
 });
