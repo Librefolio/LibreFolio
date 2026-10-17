@@ -373,8 +373,8 @@ routes of `auth.py`, `rate_limit_address(request)`, `None` behind a local [proxy
 The functions read the two limiters from the module when they run, so a test puts limiters of its own in their place
 (`monkeypatch.setattr`). Four checks of a password call them: three routes of `backend/app/api/v1/auth.py`, with the
 address `rate_limit_address(http_request)` gives, and workstream E's «send the link again» (`resend_verification()` in
-`backend/app/services/email/verification.py`, for `POST /email/verification/resend`), with the `client_address(request)`
-its route in `backend/app/api/v1/email.py` reads.
+`backend/app/services/email/verification.py`, for `POST /email/verification/resend`), with the same
+`rate_limit_address(request)`, which its route in `backend/app/api/v1/email.py` reads (lot E-13).
 
 | Route | Before the password is checked | A wrong password | The right password |
 |-------|--------------------------------|------------------|--------------------|
@@ -409,10 +409,9 @@ its route in `backend/app/api/v1/email.py` reads.
   its password is checked. Unlike the sign-in, whose `403`s neither count nor reset, the right password resets the
   identifier at once, as the password change and the email change do. E's own limits stay
   ([Sending the Link Again](../backend/email.md#verification-resend)); `RESEND_BY_ADDRESS` counts a request first,
-  whatever happens next. Its address is the `client_address()` its route reads, not `rate_limit_address()`: behind a
-  local [proxy nobody trusts](#untrusted-proxy), the resend's failures count, and its refusal looks, under the proxy's
-  address, which no sign-in through that proxy reads; there the resend and the sign-in share the identifier's count
-  alone.
+  whatever happens next. Its address is the `rate_limit_address()` its route reads since lot E-13, as at the sign-in:
+  behind a local [proxy nobody trusts](#untrusted-proxy) neither `RESEND_BY_ADDRESS` nor the sign-in's address count
+  the request, and the resend and the sign-in share the identifier's count alone.
 - **The switch.** `login_limit_enabled()` (`backend/app/config/accounts.py`) reads `LIBREFOLIO_LOGIN_LIMIT` at each
   call, through `login_limit_value()`: the value as set, stripped, or `None` when it is unset or blank. Unset, blank
   or `on` in any case, on; `off` in any case, off, and then `refusal()` answers `None` and `record_failure()` records
@@ -2299,11 +2298,11 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
   never hold a client's address (a refusal logs at most the account,
   never the address); uvicorn's access log, like any web server's, writes the connection's address on each request
   line (see [Request Logs](#request-logs)). The three per-address email limits read
-  their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
-  the registration email in `backend/app/api/v1/auth.py`. The [failed sign-in limit](#login-limit) takes
-  `rate_limit_address()` in `backend/app/api/v1/auth.py`, for the sign-in, the password change and the email change;
-  at «send the link again» it counts with the `client_address()` that `email.py` reads. Their key follows the rule of
-  `client_rate_key()`.
+  their address with `rate_limit_address()` too (lot E-13): «forgot password» and «send the link again» in
+  `backend/app/api/v1/email.py`, the registration email in `backend/app/api/v1/auth.py`. The
+  [failed sign-in limit](#login-limit) takes it in `backend/app/api/v1/auth.py`, for the sign-in, the password change
+  and the email change; at «send the link again» it counts with the address `email.py` reads. Their key follows the rule
+  of `client_rate_key()`.
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
   `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
   the last `X-Forwarded-For` value: advisory only, it gates nothing.

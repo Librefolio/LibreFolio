@@ -419,10 +419,20 @@ the instance holds those back.
   every request crosses that proxy: a visitor who reaches LibreFolio directly could write the header.
 - Otherwise it is the address the server (uvicorn) sees, which takes the visitor's address from the
   proxy's `X-Forwarded-For` header only when the proxy's address is listed in `FORWARDED_ALLOW_IPS`
-  (`127.0.0.1` when not set). List your proxy's exact addresses there, never `*`: with `*`, uvicorn
-  takes the first address of the header, which the visitor can write.
-- Behind a proxy LibreFolio does not trust, every visitor shares the proxy's address, and one count
-  of 10 requests every 15 minutes. The other limits still hold.
+  (`127.0.0.1` when not set). List your proxy's addresses or networks there, such as
+  `172.18.0.0/16`, never `*`: with `*`, uvicorn takes the first address of the header, which the
+  visitor can write.
+- **A proxy LibreFolio does not trust, on a local address** (a Docker network, your own network or
+  your VPN), such as a proxy container in front of the Docker image, the usual setup: these limits
+  per address leave the requests through it out, so that 10 requests from anyone cannot block
+  **Forgot password?**, **Send the link again** or the registration emails for everyone. The limits
+  per username or email address, per account and per mailbox, and the hourly limit of the instance,
+  still count them. The log warns once per server process, and the security checks report it as a
+  warning of `platform.client_address` (see *The Visitor's Address* above).
+- **A proxy LibreFolio does not trust, on a public address**, such as a CDN: every visitor shares
+  the proxy's address and its count, so 10 requests from anyone block those requests through the
+  proxy for everyone, for up to 15 minutes (an hour for the registration emails). Tell LibreFolio
+  about the proxy.
 
 ---
 
