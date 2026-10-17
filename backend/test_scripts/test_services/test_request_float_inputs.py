@@ -24,11 +24,10 @@ Under test: the app of ``backend/app/main.py``, its routes, and the schemas thei
     once per route. A *float leaf* is a position whose type is ``float`` or a subclass of it, alone or among the members
     of a union: a model field, named ``module.Model.field``; a parameter, ``param <name> (<where>) of
     <module.function>``; or a position inside one of them, ``[*]`` an item, ``[1]`` a tuple slot, ``{*}`` a dict value,
-    ``{key}`` a dict key. Out of scope, as they declare no float: ``Any``, ``object``, pydantic's ``JsonValue`` (any JSON
-    value: what it takes is the business of the validator that receives it, as ``ensure_json_safe`` is for
-    ``SignalRequest.params``), the values of a ``Literal``, and the classes pydantic validates through their own schema
-    (``Decimal``, which refuses ``inf`` and ``nan`` by default, dates, enums, uploads). Response models are not walked:
-    the rule is about what comes in.
+    ``{key}`` a dict key. Out of scope, as they declare no float: ``Any``, ``object`` and pydantic's ``JsonValue`` (any
+    JSON value), each a free-form position instead, which the walk notes and (g) judges; the values of a ``Literal``;
+    and the classes pydantic validates through their own schema (``Decimal``, which refuses ``inf`` and ``nan`` by
+    default, dates, enums, uploads). Response models are not walked: the rule is about what comes in.
 (b) How a leaf is judged. A ``TypeAdapter`` of the leaf's whole annotation, with the metadata of its field or parameter
     at the top level (``Annotated[annotation, *metadata]``), so that a union decides as a union
     (``str | int | float | bool | None`` takes a float as a float), and with ``ConfigDict(allow_inf_nan=...)`` when the
@@ -66,16 +65,46 @@ Under test: the app of ``backend/app/main.py``, its routes, and the schemas thei
     ``Annotated[float, AllowInfNan(False)]``, which answers 422 ``finite_number``. The probe app writes its 422 without
     the ``input`` of each error: FastAPI's own handler echoes it, and Starlette's renderer cannot write a number that is
     not finite.
+(g) H-34: free-form JSON. A position whose type is ``Any``, ``object`` or ``JsonValue``, alone or among the members of
+    a union, takes any JSON value, a number that is not finite among them, and declares no float (d) could judge: a
+    *free-form position*. The walk of (a) notes every one a request reaches, by owner, named as a leaf is (``{*}`` the
+    values of a mapping), with the routes that reach it; what it does for the float leaves does not change. The set is
+    exactly ``KNOWN_FREE_FORM``: a new one fails until it is added there with its probe, and one no request reaches any
+    more fails until it is removed. The five of today: ``FAProviderAssignmentItem.provider_params{*}`` (``Any``,
+    ``POST /api/v1/assets/provider``), ``FAProviderProbeRequest.provider_params{*}`` (``Any``,
+    ``POST /api/v1/assets/provider/probe``), ``RiskAnalyticRequest.parameters{*}`` (``JsonValue``,
+    ``POST /api/v1/risk/query``), ``SignalRequest.params{*}`` (``JsonValue``, ``POST /api/v1/assets/prices/query``,
+    ``/fx/currencies/convert`` and ``/signals/preview``) and ``ToolComputeItem.parameters`` (``JsonValue``,
+    ``POST /api/v1/tools/compute``). Each refuses a number that is not finite anywhere inside: ``inf``, ``-inf`` and
+    ``nan`` at the top of the mapping, in a list, in a nested mapping, in a mapping inside a list. The probe of a
+    position is the request model that holds it, validated in Python mode as FastAPI validates a parsed body, with the
+    mapping in the field of the position (the position itself for ``ToolComputeItem.parameters``, its values for the
+    others); the refusal is a ``ValidationError`` none of whose messages carries the number, since a 422 passes on the
+    message of each error (without its ``input``). Here a validator of the field counts, unlike (b): a free-form
+    position holds no float whose schema could refuse. The same body around a finite number is accepted: the barrier
+    that the probe body is otherwise valid, so that a refusal is the number's doing. The provider probes name
+    ``mockprov``, whose ``validate_params`` takes any parameters, and which must be registered: an unknown provider is
+    refused whatever its parameters. Today ``ToolComputeItem`` refuses (``allow_inf_nan=False`` in the config of
+    ``ToolTransportModel``, which ``JsonValue`` respects), and so does ``SignalRequest`` (``ensure_json_safe`` in a
+    validator of ``params``); the two provider requests (``FAProviderConfigBase``) and ``RiskAnalyticRequest`` take
+    every placement, and are red. Self-test, on an app of its own: ``Any``, ``object`` and ``JsonValue`` as a field, a
+    list item behind ``Annotated``, a mapping value and behind ``Optional``, each noted with its type and its route,
+    and the float beside them a leaf, not a free-form position.
 
 How to fix a red: make the float itself refuse them. ``Annotated[float, AllowInfNan(False)]`` (pydantic's
 ``FiniteFloat``) on the float, or on the float branch of its union; or bounds that exclude both, a lower and an upper one
 (``ge=0`` alone lets ``inf`` through); or ``allow_inf_nan=False`` in the config of a model only requests use, never in
 ``StrictModel``. For ``PluginSettingPlainValue``: ``str | int | Annotated[float, AllowInfNan(False)] | bool``, the
 probe's ``FixedValueBody``. A new leaf needs no change here: the walk finds it, and it is parametrised on its own.
+For a free-form position (g): ``ensure_json_safe`` (``backend/app/utils/json_utils.py``) in a ``mode="before"``
+validator of its field, as ``SignalRequest.params`` has, which refuses a number that is not finite anywhere inside and
+names its path, never its value; or ``allow_inf_nan=False`` in the config of a model only requests use, which
+``JsonValue`` respects and ``Any`` does not. A new free-form position goes into ``KNOWN_FREE_FORM`` with its probe.
 
 The app of ``backend/app/main.py`` is imported, as ``test_static_route_confinement.py`` imports it, and only read: no
 request reaches it, its lifespan never runs. The probe apps are built in this process; the one of (f) is called through
-``httpx.ASGITransport``. No DB, no server, no network.
+``httpx.ASGITransport``. The request models of (g) are validated in this process; the provider ones look ``mockprov`` up
+in the asset provider registry, which imports the provider plugins from their folders. No DB, no server, no network.
 """
 
 import functools
@@ -83,7 +112,7 @@ import json
 import math
 import warnings
 from collections import Counter, OrderedDict, defaultdict, deque
-from collections.abc import Collection, Iterable, Iterator, Mapping, MutableMapping, MutableSequence, MutableSet, Sequence, Set
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, MutableMapping, MutableSequence, MutableSet, Sequence, Set
 from dataclasses import dataclass, is_dataclass
 from types import UnionType
 from typing import Annotated, Any, ForwardRef, Literal, NewType, Self, TypeAliasType, TypeVar, Union, get_args, get_origin
@@ -101,6 +130,11 @@ from starlette.requests import Request
 
 import backend.app.main as app_main
 from backend.app.config import API_V1_PREFIX
+from backend.app.schemas.provider import FAProviderAssignmentItem, FAProviderProbeRequest
+from backend.app.schemas.risk import RiskAnalyticRequest
+from backend.app.schemas.signals import SignalRequest
+from backend.app.schemas.tools import ToolComputeItem
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
 
 #: (b): what the edge can hand to a float, by name: the three floats that are not finite, which Python's json also reads
@@ -120,6 +154,9 @@ UNIONS = (Union, UnionType)
 #: (a): a PEP 695 alias (``type X = ...``), and the class typing_extensions gives ``TypeAliasType("X", ...)``, as for
 #: pydantic's own ``JsonValue``.
 TYPE_ALIASES = (TypeAliasType, typing_extensions.TypeAliasType)
+#: (g): the types that take any JSON value without saying what it is: a position whose type is one of them, alone or among
+#: the members of a union, is a free-form position.
+FREE_FORM_TYPES = (Any, object, JsonValue)
 
 #: (c): what the walk must see on the real app (177 API routes, 67 with a body, when this guard was written): fewer means
 #: it no longer sees the app, and the rule would pass on nothing.
@@ -175,6 +212,19 @@ class FloatLeaf:
 
 
 @dataclass(frozen=True)
+class FreeFormPosition:
+    """(g) A place where a request can carry any JSON value, a number that is not finite among them."""
+
+    owner: str  # named as a leaf is: module.Model.field, or a parameter; then the position inside, if any
+    label: str  # the same without the modules: Model.field{*}; the test id
+    annotation: str  # the free-form type found there: Any, object or JsonValue
+    routes: tuple[str, ...]  # "METHOD /path" of every route whose request reaches it, sorted
+
+    def __str__(self) -> str:
+        return f"{self.owner} ({self.annotation}; reached by {', '.join(self.routes)})"
+
+
+@dataclass(frozen=True)
 class RequestFloats:
     """What the walk of an app found."""
 
@@ -182,6 +232,7 @@ class RequestFloats:
     routes: tuple[str, ...]  # every API route context walked, as "METHOD /path"
     routes_with_body: tuple[str, ...]  # those whose request has a body
     problems: tuple[str, ...]  # what the walk could not read or judge, in the order met (b)
+    free_form: dict[str, FreeFormPosition]  # the free-form positions, by owner (g)
 
     def labelled(self, label: str) -> FloatLeaf | None:
         """The leaf whose label is ``label``; None when the walk found none."""
@@ -300,11 +351,13 @@ def _lets_through(adapter: TypeAdapter[Any], value: float) -> bool:
 
 
 class _Walk:
-    """One walk of an app: the leaves found, each judged once, the routes that reach each, the problems met."""
+    """One walk of an app: the leaves found, each judged once, the free-form positions (g), the routes that reach each,
+    the problems met."""
 
     def __init__(self) -> None:
         self.judged: dict[str, tuple[str, str, tuple[str, ...], str | None]] = {}  # owner: (label, annotation, accepted, failure)
-        self.reached: dict[str, set[str]] = {}  # owner: the routes that reach it
+        self.free_form: dict[str, tuple[str, dict[str, None]]] = {}  # owner: (label, the free-form types met there, each once)
+        self.reached: dict[str, set[str]] = {}  # owner: the routes that reach it, a leaf or a free-form position
         self.problems: dict[str, None] = {}  # each once, in the order met
         self.route = ""  # the route being walked
         self.models: set[type[BaseModel]] = set()  # the models it has reached so far
@@ -316,7 +369,8 @@ class _Walk:
 
     def result(self, routes: tuple[str, ...], routes_with_body: tuple[str, ...]) -> RequestFloats:
         leaves = {owner: FloatLeaf(owner, label, annotation, accepted, failure, tuple(sorted(self.reached[owner]))) for owner, (label, annotation, accepted, failure) in self.judged.items()}
-        return RequestFloats(leaves, routes, routes_with_body, tuple(self.problems))
+        free_form = {owner: FreeFormPosition(owner, label, " | ".join(types), tuple(sorted(self.reached[owner]))) for owner, (label, types) in self.free_form.items()}
+        return RequestFloats(leaves, routes, routes_with_body, tuple(self.problems), free_form)
 
     def _dependant(self, dependant: Any, seen: set[int]) -> bool:
         """The parameters of a dependant and of its sub-dependants; whether any of them reads the body."""
@@ -363,8 +417,11 @@ class _Walk:
             self._inside(member, inner, allow_inf_nan)
 
     def _members(self, annotation: Any, owner: _Owner, opened: list[Any]) -> Iterator[Any]:
-        """What a value at this position may be; the type aliases it opens go to ``opened``, each once. ``JsonValue`` is out
-        of scope (a); a forward reference is a problem."""
+        """What a value at this position may be; the type aliases it opens go to ``opened``, each once. ``Any``, ``object``
+        and ``JsonValue`` make it a free-form position (g), and only that: nothing else changes for the leaves.
+        ``JsonValue`` is out of scope for them (a); a forward reference is a problem."""
+        if any(annotation is free_form for free_form in FREE_FORM_TYPES):
+            self._free_form(annotation, owner)
         if annotation is JsonValue or any(annotation is alias for alias in opened):
             return
         if isinstance(annotation, str | ForwardRef):
@@ -416,13 +473,18 @@ class _Walk:
             self._problem(owner, f"cannot be judged ({text}): {failure}")
         self.judged[owner.full] = (owner.label, text, accepted, failure)
 
+    def _free_form(self, annotation: Any, owner: _Owner) -> None:
+        """A free-form position (g), noted with the routes that reach it and each free-form type it holds."""
+        self.reached.setdefault(owner.full, set()).add(self.route)
+        self.free_form.setdefault(owner.full, (owner.label, {}))[1][_text(annotation)] = None
+
     def _problem(self, owner: _Owner, what: str) -> None:
         self.problems[f"{owner.full}: {what}"] = None
 
 
 def collect_request_floats(routes: Sequence[Any]) -> RequestFloats:
     """(a), (b) Every float leaf the requests of ``routes``, the routes of an app, reach: each judged, with the routes that
-    reach it; and what the walk could not read."""
+    reach it; (g) every free-form position they reach, with its routes; and what the walk could not read."""
     walk = _Walk()
     walked: list[str] = []
     with_body: list[str] = []
@@ -636,6 +698,108 @@ RAW_BODIES = {"1E+400": b'{"x": 1E+400}', "NaN": b'{"x": NaN}', "Infinity": b'{"
 JSON_HEADERS = {"content-type": "application/json"}
 
 
+class FreeFormBody(BaseModel):
+    """(g) Free-form JSON in each shape the walk opens: a field, a list item behind ``Annotated``, a mapping value, behind
+    ``Optional``; and a float beside them, which stays a leaf."""
+
+    anything: Any
+    notes: list[Annotated[object, "a note"]]
+    settings: dict[str, Any] | None = None
+    payload: JsonValue
+    maybe: Union[JsonValue, None] = None
+    ratio: float
+
+
+#: (g): the free-form positions of FreeFormBody, by label, each with its free-form type.
+FREE_FORM_PROBE_POSITIONS = {"FreeFormBody.anything": "Any", "FreeFormBody.notes[*]": "object", "FreeFormBody.settings{*}": "Any", "FreeFormBody.payload": "JsonValue", "FreeFormBody.maybe": "JsonValue"}
+
+
+# =============================================================================
+# (g) FREE-FORM JSON: THE PROBES
+# =============================================================================
+
+#: (g): the asset provider the provider probes name. Its ``validate_params`` takes any parameters, so the plugin refuses
+#: none of the placements and the request model decides alone; the registry discovers it from its folder in every mode
+#: (``test_only`` only keeps it out of the users' lists).
+PROBE_PROVIDER = "mockprov"
+
+
+def _provider_config(value: JsonValue) -> dict[str, JsonValue]:
+    """The body of a provider configuration (``FAProviderConfigBase``) with ``value`` as its ``provider_params``. A
+    barrier: ``PROBE_PROVIDER`` must be registered, since an unknown provider is refused whatever its parameters, and that
+    refusal would not be the number's doing."""
+    codes = AssetProviderRegistry.list_plugin_codes()
+    assert PROBE_PROVIDER in codes, f"barrier: the probe provider {PROBE_PROVIDER} is not registered ({codes}): every provider probe would be refused as an unknown provider, whatever its parameters"
+    return {"provider_code": PROBE_PROVIDER, "identifier": "X", "identifier_type": "TICKER", "provider_params": value}
+
+
+def probe_provider_assignment(value: JsonValue) -> BaseModel:
+    """``POST /api/v1/assets/provider``: one assignment of its list."""
+    return FAProviderAssignmentItem.model_validate({"asset_id": 1, **_provider_config(value)})
+
+
+def probe_provider_probe(value: JsonValue) -> BaseModel:
+    """``POST /api/v1/assets/provider/probe``: the configuration to probe, and one operation."""
+    return FAProviderProbeRequest.model_validate({**_provider_config(value), "operations": ["current_price"]})
+
+
+def probe_risk_analytic(value: JsonValue) -> BaseModel:
+    """``POST /api/v1/risk/query``: one analytic of its list."""
+    return RiskAnalyticRequest.model_validate({"instance_id": "a1", "analytic_code": "volatility", "parameters": value})
+
+
+def probe_signal_request(value: JsonValue) -> BaseModel:
+    """``POST /api/v1/assets/prices/query``, ``/fx/currencies/convert`` and ``/signals/preview``: a signal of a list."""
+    return SignalRequest.model_validate({"instance_id": "s1", "signal_code": "EMA", "params": value})
+
+
+def probe_tool_compute_item(value: JsonValue) -> BaseModel:
+    """``POST /api/v1/tools/compute``: one item of its batch, every field strict (``ToolTransportModel``)."""
+    return ToolComputeItem.model_validate({"correlation_id": "c1", "tool_code": "probe_tool", "contract_version": "1.0.0", "implementation_version": "1.0.0", "schema_fingerprint": "0" * 64, "parameters": value})
+
+
+#: (g): the free-form positions a request reached when this guard was written, by owner, each with its probe: the request
+#: model that holds the position, validated in Python mode around a mapping placed in the field of the position.
+KNOWN_FREE_FORM: dict[str, Callable[[JsonValue], BaseModel]] = {
+    "backend.app.schemas.provider.FAProviderAssignmentItem.provider_params{*}": probe_provider_assignment,
+    "backend.app.schemas.provider.FAProviderProbeRequest.provider_params{*}": probe_provider_probe,
+    "backend.app.schemas.risk.RiskAnalyticRequest.parameters{*}": probe_risk_analytic,
+    "backend.app.schemas.signals.SignalRequest.params{*}": probe_signal_request,
+    "backend.app.schemas.tools.ToolComputeItem.parameters": probe_tool_compute_item,
+}
+#: (g): where a probe puts a number that is not finite, by name: the number, and the mapping around it, which the probe
+#: places in the field of the position. Wherever it lies, the number is inside a free-form position: within a value of the
+#: mapping (``{*}``), or within the mapping itself (``ToolComputeItem.parameters``).
+PLACEMENTS: dict[str, tuple[float, Callable[[float], dict[str, JsonValue]]]] = {
+    "inf-at-the-top": (math.inf, lambda number: {"top": number}),
+    "minus-inf-at-the-top": (-math.inf, lambda number: {"top": number}),
+    "nan-at-the-top": (math.nan, lambda number: {"top": number}),
+    "inf-in-a-list": (math.inf, lambda number: {"deep": [1, number]}),
+    "nan-in-a-nested-mapping": (math.nan, lambda number: {"deep": {"x": number}}),
+    "minus-inf-in-a-mapping-in-a-list": (-math.inf, lambda number: {"deep": [1, {"x": number}]}),
+}
+#: (g): the number of the barrier: each mapping of PLACEMENTS around it is a body every probe accepts.
+FINITE = 2.5
+#: (g): every known free-form position with every placement; the id of a case is the label of the position
+#: (Model.field{*}) and the name of the placement.
+FREE_FORM_LABELS = {owner: ".".join(owner.split(".")[-2:]) for owner in KNOWN_FREE_FORM}
+FREE_FORM_CASES = [(owner, placement) for owner in KNOWN_FREE_FORM for placement in PLACEMENTS]
+FREE_FORM_IDS = [f"{FREE_FORM_LABELS[owner]}-{placement}" for owner, placement in FREE_FORM_CASES]
+#: (g): how to fix a red of a free-form position, in its message.
+FREE_FORM_FIX = (
+    "A free-form position a request reaches refuses a number that is not finite anywhere inside: ensure_json_safe "
+    "(backend/app/utils/json_utils.py) in a mode='before' field_validator of its field, as SignalRequest.params has, which "
+    "names the path and never the value; or allow_inf_nan=False in the config of a model only requests use, which "
+    "JsonValue respects and Any does not."
+)
+#: (g): what to do when the free-form positions a request reaches are not KNOWN_FREE_FORM, in its message.
+FREE_FORM_DRIFT = (
+    "A new one goes into KNOWN_FREE_FORM with its probe, the request model that holds it, and refuses a number that is "
+    "not finite anywhere inside (FREE_FORM_FIX). One no request reaches any more leaves KNOWN_FREE_FORM: the walk lost it "
+    "(see the barriers), or its field moved or no longer holds free-form JSON."
+)
+
+
 # =============================================================================
 # (c) BARRIERS ON THE REAL APP
 # =============================================================================
@@ -784,3 +948,80 @@ async def test_a_number_that_is_not_finite_reaches_a_plain_float_and_never_a_fin
     assert finite.status_code == 422, f"Annotated[float, AllowInfNan(False)] refuses {body.decode()} before its endpoint: {finite.status_code} {finite.text}"
     assert [error["type"] for error in finite.json()["detail"]] == ["finite_number"], f"the refusal must be finite_number: {finite.text}"
     print_success(f"✓ {body.decode()}: a plain float lets it in, a finite one answers 422 finite_number")
+
+
+# =============================================================================
+# (g) FREE-FORM JSON
+# =============================================================================
+
+
+def test_the_walk_finds_exactly_the_known_free_form_positions() -> None:
+    """(g) The free-form positions the requests of the app reach are exactly KNOWN_FREE_FORM: a new one fails until it is
+    added there with its probe, and one no request reaches any more fails until it is removed."""
+    print_section("H-34: the free-form positions")
+    found = real_walk().free_form
+
+    drift = [f"  new: {found[owner]}" for owner in sorted(set(found) - set(KNOWN_FREE_FORM))]
+    drift += [f"  vanished: {owner}" for owner in sorted(set(KNOWN_FREE_FORM) - set(found))]
+    assert not drift, "the free-form positions a request reaches are not KNOWN_FREE_FORM:\n" + "\n".join(drift) + f"\n{FREE_FORM_DRIFT}"
+    print_success(f"✓ {len(found)} free-form positions, each known: " + "; ".join(str(found[owner]) for owner in sorted(found)))
+
+
+@pytest.mark.parametrize(("owner", "placement"), FREE_FORM_CASES, ids=FREE_FORM_IDS)
+def test_each_free_form_position_refuses_a_non_finite_float_inside(owner: str, placement: str) -> None:
+    """(g) The request model of the position refuses a number that is not finite wherever it lies inside the free-form
+    value, and none of the messages of its refusal carries the number."""
+    print_section(f"H-34: {owner}, {placement}")
+    number, around = PLACEMENTS[placement]
+    value = around(number)
+
+    try:
+        KNOWN_FREE_FORM[owner](value)
+    except ValidationError as error:
+        refusal = error
+    else:
+        pytest.fail(f"{owner} takes a number that is not finite ({placement}): {value!r} validates. {FREE_FORM_FIX}")
+    messages = [detail["msg"] for detail in refusal.errors(include_input=False)]
+    carried = [message for message in messages if repr(number) in message]
+    assert not carried, f"the refusal of {owner} carries the number it refuses ({number!r}) in its message, which a 422 passes on: {carried}"
+    print_success(f"✓ {owner} refuses {value!r}: {'; '.join(messages)}")
+
+
+@pytest.mark.parametrize(("owner", "placement"), FREE_FORM_CASES, ids=FREE_FORM_IDS)
+def test_each_free_form_probe_body_is_valid_when_finite(owner: str, placement: str) -> None:
+    """(g) The barrier: the same body around a finite number is accepted, so that the refusal of a number that is not
+    finite is that number's doing, and not that of a body the request model refuses anyway."""
+    print_section(f"H-34 barrier: {owner}, {placement}")
+    _, around = PLACEMENTS[placement]
+    value = around(FINITE)
+
+    try:
+        KNOWN_FREE_FORM[owner](value)
+    except ValidationError as error:
+        pytest.fail(f"barrier: the probe of {owner} refuses a finite body ({placement}): {value!r}. Fix its probe in KNOWN_FREE_FORM until it validates: until then, a refusal of a number that is not finite proves nothing.\n{error}")
+    print_success(f"✓ {owner} accepts {value!r}")
+
+
+def test_the_walk_notes_each_free_form_position_and_nothing_else() -> None:
+    """(g) On an app of its own: ``Any``, ``object`` and ``JsonValue`` as a field, a list item behind ``Annotated``, a
+    mapping value and behind ``Optional``, each noted by its label with its type, reached by the route alone; the float
+    beside them a leaf, not a free-form position; and nothing the walk cannot read."""
+    print_section("H-34 self-test: the free-form positions of a probe app")
+    app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
+
+    @app.post(f"{API_V1_PREFIX}/free-form")
+    async def receive(body: FreeFormBody) -> dict[str, bool]:
+        return {"received": True}
+
+    walk = collect_request_floats(app.routes)
+    route = f"POST {API_V1_PREFIX}/free-form"
+    found = {position.label: position.annotation for position in walk.free_form.values()}
+    unreached = [str(position) for position in walk.free_form.values() if position.routes != (route,)]
+    leaves = [leaf.label for leaf in walk.leaves.values()]
+
+    assert walk.routes == (route,), f"barrier: the walk must read the route of the probe: {walk.routes}"
+    assert found == FREE_FORM_PROBE_POSITIONS, f"the free-form positions of FreeFormBody are {FREE_FORM_PROBE_POSITIONS}; the walk notes {found}"
+    assert not unreached, f"each must be reached by {route} alone: {unreached}"
+    assert leaves == ["FreeFormBody.ratio"], f"the float beside them is the one leaf of FreeFormBody, and no free-form position: {leaves}"
+    assert not walk.problems, f"FreeFormBody holds nothing the walk cannot read: {walk.problems}"
+    print_success(f"✓ {len(found)} free-form positions, one float leaf, no problem")

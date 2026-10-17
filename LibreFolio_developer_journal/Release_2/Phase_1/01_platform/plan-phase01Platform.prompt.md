@@ -5484,3 +5484,105 @@ backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check
 >     con A8a.
 >   - Le chiavi restano fuori dal worktree: senza il codice sarebbero morte, e un `instance/*.json` sporco potrebbe
 >     fermare l'avanzamento del ramo se B-9 lo tocca.
+4. ✅ **Ingresso** (17/10, 07:07): Z-24 e la regola di H-39 sono entrati in dev `36a487e84`. Z-24 è chiusa nel backlog
+   dal coordinatore (`b58f22357`), e il mio HEAD è avanzato lì, pulito.
+   - Nota di proprietà fino all'ingresso di B-9: B scrive in `config_audit.py`, `test_config_audit.py`, `security.md` e
+     `settings.md` (l. 68-70). Li rivedo al suo checkpoint, e non li tocco fino ad allora.
+   - Il coordinatore ha dato l'ordine: H-34, poi H-19, poi H-3 (solo l'analisi, se serve una decisione del developer).
+
+### Lotto «H-34: `Infinity` e `NaN` dentro il JSON libero di una richiesta» (2026-10-17, mattina) — in corso
+
+> Residuo di H-32, dal backlog (dal test-author e dal docs-writer di H-32). Ora è assegnato ad H dal coordinatore.
+
+**Analisi** (sola lettura, in processo, HEAD `b58f22357`; `files/h34/inventory.py` e `files/h34/probe.py`):
+
+1. **Inventario delle posizioni libere** (`Any`, `object`, `JsonValue`) che una richiesta dell'app vera raggiunge. Ho
+   usato il percorso di H-32 (`_Walk` di `test_request_float_inputs.py`), con un'aggiunta che le annota. Sono **5**,
+   nessun problema di percorso:
+
+   | Posizione | Tipo | Rotte |
+   |-----------|------|-------|
+   | `FAProviderAssignmentItem.provider_params{*}` (X) | `Any` | `POST /assets/provider` |
+   | `FAProviderProbeRequest.provider_params{*}` (X) | `Any` | `POST /assets/provider/probe` |
+   | `RiskAnalyticRequest.parameters{*}` (J) | `JsonValue` | `POST /risk/query` |
+   | `SignalRequest.params{*}` | `JsonValue` | `POST /assets/prices/query`, `/fx/currencies/convert`, `/signals/preview` |
+   | `ToolComputeItem.parameters` | `JsonValue` | `POST /tools/compute` |
+
+2. **La prova** (validazione in modalità Python, come fa FastAPI dopo `json.loads`, che trasforma `NaN`, `Infinity` e
+   `1e400` in float). Il valore usato è `{"top": inf, "deep": [1, {"x": nan}], "neg": -inf}`:
+   - `JsonValue` rispetta l'`allow_inf_nan=False` del modello: `ToolComputeItem` (`ToolTransportModel`, `strict=True,
+     allow_inf_nan=False`) dà 422, e in più `services/tools/wire.py` rifiuta le costanti già nel parsing (il campo era
+     segnato «da verificare»: è protetto);
+   - `SignalRequest.params` ha già `ensure_json_safe`;
+   - `RiskAnalyticRequest.parameters`: **accettato**;
+   - `FAProviderAssignmentItem`: **accettato** con `borsa_italiana`, `justetf`, `mockprov` e `yfinance`, il cui
+     `validate_params` accetta le chiavi in più; `css_scraper` e `scheduled_investment` rifiutano per altri motivi.
+     I valori finiscono nel DB come `Infinity` (il JSON di SQLAlchemy usa `json.dumps`), e una lettura con
+     `response_model` li ridà come `null` (H-32).
+   - `FAProviderProbeRequest`: stessa base, `FAProviderConfigBase`, quindi stesso esito. Nella mia sonda l'operazione
+     era sbagliata, e il 422 veniva da quella.
+3. Nessun codice interno costruisce questi modelli con valori Python non JSON: l'unico `RiskAnalyticRequest(...)`
+   interno (`ai_export/components/drawdown_context.py:348`) non passa `parameters`.
+4. Nessun ramo locale cambia `schemas/provider.py` o `schemas/risk.py` rispetto alla sua base con dev.
+
+**Progetto**:
+- `FAProviderConfigBase` (`schemas/provider.py`, X) e `RiskAnalyticRequest` (`schemas/risk.py`, J) ricevono un
+  `field_validator(mode="before")` che chiama `ensure_json_safe(value, "<campo>")`, come `SignalRequest.params`.
+  Risposta 422; il gestore globale di A7b-2 non ripete il valore. Va in tutti e due il proprietario: OK di scrittura
+  dal coordinatore, poi review di X e J.
+- La guardia nel mio `test_request_float_inputs.py` (lavoro del test-author):
+  - la passata trova esattamente le 5 posizioni libere, e una nuova fallisce («aggiungila con la sua sonda»);
+  - per ognuna, un corpo minimo valido con un valore non finito annidato dà `ValidationError`, mentre lo stesso corpo
+    finito passa (barriera).
+- Documenti: il paragrafo va in `security.md#request-numbers`, che è chiuso fino all'ingresso di B-9. Proposta:
+  arriva con i documenti di H-39.
+
+> **Approvazione** (coordinatore, 07:2x): OK di scrittura su `schemas/provider.py` (rivede X) e su `schemas/risk.py`
+> (rivede J). Il paragrafo di `security.md#request-numbers` arriva con i documenti di H-39, dopo B-9. Questo checkpoint
+> è solo codice e test. Per la CHANGELOG il coordinatore vuole una voce 🔒 breve: un `Infinity` o un `NaN` annidato
+> nei parametri di un provider veniva salvato e riletto come `null`.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina), solo in `test_request_float_inputs.py`:
+   - il paragrafo (g) «H-34: free-form JSON», e la passata ora annota le posizioni libere (`free_form` in
+     `RequestFloats`);
+   - `KNOWN_FREE_FORM` con le 5 posizioni e le loro sonde. Il provider scelto è `mockprov`, il cui `validate_params`
+     non fa nulla per costruzione, con una barriera che sia registrato;
+   - 6 posizionamenti: in cima `inf`, `-inf` e `nan`, `inf` in una lista, `nan` in un dizionario annidato, `-inf` in
+     un dizionario dentro una lista;
+   - 62 casi nuovi: la passata trova esattamente le 5 posizioni; ognuna rifiuta (30); lo stesso corpo finito passa
+     (30, la barriera); un autotest della passata su un'app sua.
+   - Comando: `files/runs/h34-red.sh`. Esito: **18 failed, 77 passed**, cioè le due posizioni dei provider e quella
+     del rischio, ognuna per 6 posizionamenti. Ruff e black puliti.
+   > **⚠️ Fuori pista** (dal test-author, poi verificato): `TXMixedBatch` (W) ha i corpi in `List[dict]`, e la
+   > passata non apre un contenitore nudo. Le righe vengono validate dopo, una per una, in `TXCreateItem`,
+   > `TXUpdateItem`, `TXSplitBatchItem` e `TXPromoteBatchItem` (`files/h34/tx_probe.py`):
+   > - nessuna foglia float, e gli importi sono `SafeDecimal`, che rifiuta anche `"Infinity"` scritto come testo;
+   > - resta una posizione libera, `TXPromoteBatchItem.resolved_fields{*}`, applicata così com'è:
+   >   - `description` va nella colonna `Text` senza controllo di tipo né di lunghezza, e un numero renderebbe ogni
+   >     lettura un 500;
+   >   - `cost_basis_override` e `date` hanno errori che probabilmente escono come 500.
+   >
+   > È più largo dei numeri non finiti ed è di W: registrato come **H-41**, da passare a W. Non lo tocco.
+2. ✅ **Cura** (`files/h34/apply.py --apply`, identica alla copia di prova): un `field_validator(mode="before")`
+   chiama `ensure_json_safe`, in `FAProviderConfigBase.provider_params` e in `RiskAnalyticRequest.parameters`.
+3. ✅ **Controlli leggeri** (`files/runs/h34-green.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services request-float-inputs` | 95 passed |
+   | `schemas assets` | 70 passed |
+   | `schemas risk` | 88 passed |
+   | `services risk-asset-set` | 55 passed |
+   | `services asset-source-refresh` | 18 passed |
+   | `services plugin-settings-runtime` | 120 passed |
+   | `utils provider-core-cache` | 46 passed |
+   | ruff, black (3 file) | puliti |
+   | `git diff --check` | pulito |
+
+   - **OpenAPI invariato.** Ho confrontato, chiave per chiave, il documento dell'app su HEAD (copiata da
+     `git archive` nella cartella di sessione) con quello attuale. L'unica differenza è `/info/version` (il
+     `git describe` del worktree).
+   - Non eseguito: le rotte vere (`api assets…`, `api risk…`), passi pesanti che spettano al cancello.
+   - Documenti: il paragrafo di `security.md#request-numbers` arriva con H-39 (deciso dal coordinatore).
+   - Backlog: la nota della cura in H-34; nuove **H-40** (IPv6 su Docker Engine, la frase di E) e **H-41**
+     (`resolved_fields`, W).
