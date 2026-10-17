@@ -7,6 +7,7 @@
 
 import {applySign, buildSignedCash, exactDecimalEqual, exactDecimalSign, type CashValue} from '../txPayloadHelpers';
 import type {TypeRule} from '$lib/features/transactions/transactionTypeStore';
+import type {PromoteAllStrategy} from './PromoteAllModal.svelte';
 
 /** Minimal shape required by cashAmountsCancel (subset of PendingOp).
  *  `type` is mandatory: without it the sign of a DB-sourced amount cannot be recovered. */
@@ -65,4 +66,39 @@ export function mergeStrings(a: string, b: string): string {
 /** Union of two tag lists, de-duplicated and order-preserving; nullish lists are treated as empty. */
 export function mergeTagSets(a: string[], b: string[]): string[] {
     return [...new Set([...(a ?? []), ...(b ?? [])])];
+}
+
+/**
+ * The most characters a transaction's description keeps: the `max_length` of `TXCreateItem.description`,
+ * `TXUpdateItem.description` and `TXPromoteResolvedFields.description` (backend `schemas/transactions/`). Merged notes
+ * past it are refused at save (`string_too_long`), so the merge dialog and «promote all» stop before it (W-B70).
+ */
+export const TX_DESCRIPTION_MAX_LENGTH = 500;
+
+/** A text's length as the backend counts it, in Unicode code points (Python's `len()`): an emoji counts one. */
+export function textLength(text: string): number {
+    return [...text].length;
+}
+
+/** The two rows of a pair, as «promote all» reads them. */
+export interface PromoteSideFields {
+    description?: string | null;
+    tags?: string[] | null;
+}
+
+/**
+ * The merged fields «promote all» sends for one pair, by the strategy chosen for every pair: `{}` when the two rows
+ * agree on description and tags, one side's, or both combined (`mergeStrings`, `mergeTagSets`: the merge dialog's
+ * default). `null` when the combined notes would pass `TX_DESCRIPTION_MAX_LENGTH`: the pair is then left for the merge
+ * dialog, where the user shortens them, and never saved with one side's notes only (W-B70).
+ */
+export function resolvePromoteAllFields(strategy: PromoteAllStrategy, left: PromoteSideFields, right: PromoteSideFields): Record<string, unknown> | null {
+    const leftTags = left.tags ?? [];
+    const rightTags = right.tags ?? [];
+    if (left.description === right.description && JSON.stringify(leftTags) === JSON.stringify(rightTags)) return {};
+    if (strategy === 'left') return {description: left.description, tags: [...leftTags]};
+    if (strategy === 'right') return {description: right.description, tags: [...rightTags]};
+    const description = mergeStrings(left.description ?? '', right.description ?? '');
+    if (textLength(description) > TX_DESCRIPTION_MAX_LENGTH) return null;
+    return {description, tags: mergeTagSets(leftTags, rightTags)};
 }

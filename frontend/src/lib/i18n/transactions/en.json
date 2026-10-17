@@ -190,7 +190,9 @@
       "concat": "Concatenate",
       "union": "Union",
       "promoteSubtitle": "2 standalone → 1 paired",
-      "target": "Target"
+      "target": "Target",
+      "descriptionTooLong": "The merged description is over {max} characters: shorten it to confirm.",
+      "mergeAllLeftTooLong": "{count, plural, one {# pair was left} other {# pairs were left}} to merge by hand: the combined description would be over {max} characters."
     },
     "validate": {
       "now": "Validate now",
@@ -262,7 +264,8 @@
       "decimalParsing": "Must be a valid number",
       "intParsing": "Must be a valid integer",
       "valueError": "Invalid value",
-      "extraForbidden": "Unexpected field"
+      "extraForbidden": "Unexpected field",
+      "stringTooLong": "At most {max_length} characters"
     },
     "fields": {
       "broker_id": "Broker",
