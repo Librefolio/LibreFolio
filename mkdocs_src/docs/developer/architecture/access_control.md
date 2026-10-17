@@ -186,11 +186,14 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   ([Password Rules](security.md#password-rules)), checked before anything is read from the
   database. Each rule missed prints a line that starts with its code, such as
   `digit: the password must contain a digit`, and the command exits with `1`.
-- **Usernames and addresses** (lot A-21a): `create` refuses a username holding `@`, and `create`
-  and `set-email` an address that is another account's username, in any A–Z case, as registration
-  and the Profile do: through `user_service.create_user()` and `user_service.update_profile()`. The
-  command prints the service's message after `❌` — *A username cannot contain @: the sign-in
-  reads it as an email address*, or *Email already registered* — and exits with `1`. See
+- **Usernames and addresses** (lot A-21a): `create` refuses a username holding `@` and, since lot
+  A-46, one outside 3 to 50 characters, as registration and the Profile do; `create` and
+  `set-email` refuse an address that is another account's username, in any A–Z case: through
+  `user_service.create_user()` and `user_service.update_profile()`. The command prints the
+  service's message after `❌` — *A username cannot contain @: the sign-in reads it as an email
+  address*, *A username must be 3 to 50 characters long*, or *Email already registered* — and
+  exits with `1`, writing nothing. The service's refusal is an `AccountError`, a `str` that also
+  carries a `code` (lot A-47), which the API reads instead of the message. See
   [Which Account an Identifier Names](security.md#sign-in-identifier).
 
 The admin commands are in [Command-Line Tools](../../admin/cli_tools.md).
@@ -248,8 +251,8 @@ it, so `PASSWORD_TOO_WEAK` comes first:
 | A valid invitation | Created in the invitation's role (`grants_admin`; the first account is an administrator whatever it says). The account and the consumption of the invitation (`consumed_by_user_id`) are committed together. The limit is not checked: the invitation already holds its place |
 | Mode `open`, no `invite_token` | Created as a regular account, within the [user limit](#user-limit) |
 | `require_email_verification` on, any account but the first | Created inactive, with a verification token that holds its place; the answer says `verification_required: true`, and the email goes after it — unless the client address already had the emails of 10 registrations in the hour: the account then waits without it, and its owner asks for the link again from the sign-in. With no email with a link able to go out, `409` `EMAIL_VERIFICATION_UNAVAILABLE`, and nothing is created: an invitation stays unspent. See [Email Verification](../backend/email.md#verification) |
-| A `username` holding `@` (lot A-21a: the sign-in reads it as an email address, see [Which Account an Identifier Names](security.md#sign-in-identifier)) | `400` `USERNAME_INVALID`, the first check of `create_user()`, after the mode and the invitation; the first account included. Nothing is written, and an invitation given with it stays unspent |
-| Username or email already taken, or an email that is another account's username, in any A–Z case (lot A-21a) | `400`, with the plain-string `detail` it always had: *Username already taken*, *Email already registered* |
+| A `username` holding `@` (lot A-21a: the sign-in reads it as an email address, see [Which Account an Identifier Names](security.md#sign-in-identifier)) | `400` `USERNAME_INVALID`, the first check of `create_user()`, after the mode and the invitation; the first account included. `register_user()` raises it from the code of the service's refusal, `USERNAME_INVALID`, never from its wording (lot A-47). Nothing is written, and an invitation given with it stays unspent. A username outside 3 to 50 characters never reaches it: `AuthRegisterRequest` answers `422` first |
+| Username or email already taken, or an email that is another account's username, in any A–Z case (lot A-21a) | `400`, with the plain-string `detail` it always had: *Username already taken*, *Email already registered*. Any refusal of `create_user()` but `USERNAME_INVALID` (`USERNAME_TAKEN`, `EMAIL_TAKEN`) becomes the `RegistrationError` `ACCOUNT_EXISTS`, which `_REGISTRATION_REFUSALS` does not list |
 
 The refusals with a code answer `{"error_code": …, "message": …}` in `detail`, plus `rules` for
 `PASSWORD_TOO_WEAK`. Two requests racing for one invitation cannot both spend it: `consume_token()`
@@ -471,7 +474,7 @@ unset or blank: without the variables, an install is unchanged.
 | Variable | Rule | Refused with (`AdminBootstrapConfigError.code`) |
 |----------|------|-------------------------------------------------|
 | `LIBREFOLIO_ADMIN_EMAIL` | An email address (pydantic `EmailStr`), surrounding spaces ignored. Turns F02 on | `ADMIN_EMAIL_INVALID` |
-| `LIBREFOLIO_ADMIN_USERNAME` | `admin` when unset (`DEFAULT_ADMIN_USERNAME`); 3 to 50 characters and no `@`, the rules of registration (`ADMIN_USERNAME_MIN_LENGTH`, `ADMIN_USERNAME_MAX_LENGTH`; `USERNAME_RESERVED_CHARACTER` since lot A-21a, see [Which Account an Identifier Names](security.md#sign-in-identifier)); surrounding spaces ignored | `ADMIN_USERNAME_INVALID`, for the length and for the `@`; the message of the `@` names it and says that the administrator signs in with `LIBREFOLIO_ADMIN_EMAIL` anyway. `ADMIN_USERNAME_WITHOUT_EMAIL` without the email |
+| `LIBREFOLIO_ADMIN_USERNAME` | `admin` when unset (`DEFAULT_ADMIN_USERNAME`); 3 to 50 characters and no `@`, the rules of every new username (`USERNAME_MIN_LENGTH`, `USERNAME_MAX_LENGTH`, which `user_service` applies too since lot A-46; `USERNAME_RESERVED_CHARACTER` since lot A-21a, see [Which Account an Identifier Names](security.md#sign-in-identifier)); surrounding spaces ignored | `ADMIN_USERNAME_INVALID`, for the length and for the `@`; the message of the `@` names it and says that the administrator signs in with `LIBREFOLIO_ADMIN_EMAIL` anyway. `ADMIN_USERNAME_WITHOUT_EMAIL` without the email |
 | `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN`, or its `_FILE` ([`env_secret()`](security.md#secrets-from-files)) | Optional: the token of the setup link, given by a hosting panel; `None` for a generated one. 32 to 200 characters (`ADMIN_BOOTSTRAP_TOKEN_MIN_LENGTH`; `ADMIN_BOOTSTRAP_TOKEN_MAX_LENGTH`, the longest token the link's requests accept), each one in `ADMIN_BOOTSTRAP_TOKEN_CHARACTERS`, the unreserved characters of a URL (`A–Z a–z 0–9 - . _ ~`): it travels in `/setup#token=…` as written. Not trimmed: like every secret `env_secret()` reads, it is used as written | `ADMIN_BOOTSTRAP_TOKEN_INVALID_CHARACTERS` (a space included), `ADMIN_BOOTSTRAP_TOKEN_TOO_SHORT`, `ADMIN_BOOTSTRAP_TOKEN_TOO_LONG`; `ADMIN_BOOTSTRAP_TOKEN_WITHOUT_EMAIL` without the email. A `_FILE` that cannot give it raises `SecretFileError` |
 
 `AdminBootstrapConfigError(variable, code, message)`, a `ValueError`, names the variable in
