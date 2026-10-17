@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode
+from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode, LotTimelineEventSchema
 from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.services.portfolio_service import PortfolioService
@@ -2930,3 +2930,165 @@ async def test_an_adjustment_before_the_first_buy_is_at_cost_until_that_buy(sess
         "at-cost warnings": [_at_cost_warning(asset, date(2025, 9, 1), date(2025, 9, 5))],
         "summaries": {adjustment.id: ("MARKET_PRICE", Decimal("300")), buy.id: ("MARKET_PRICE", Decimal("150"))},
     }
+
+
+# --------------------------------------------------------------------------- #
+# MF-E1 (V11) — an opening event states the lot's opening value
+# --------------------------------------------------------------------------- #
+#
+# ``LotTimelineEventSchema.opening_value``: on a BUY and an ADJUSTMENT_IN event — the two that open a lot — the lot's
+# original cost converted to the analysis currency at the opening date: the very figure of that lot's
+# ``LotSummarySchema.original_cost``, in the currency of the event's ``unit_price``. None on every other kind (SELL,
+# SPLIT, TRANSFER_*), and None when the opening's conversion is missing. Before MF-E1 the schema has no such field.
+#
+# Every test owns its user, broker(s) and asset (the fixtures, or an asset of its own), and the rates it reads, in
+# 2048, a year no other test writes (_own_fx_rate); the session fixture rolls everything back.
+
+
+def _assert_the_event_schema_has_an_opening_value() -> None:
+    assert "opening_value" in LotTimelineEventSchema.model_fields, "LotTimelineEventSchema has no opening_value field (MF-E1, V11)"
+
+
+@pytest.mark.asyncio
+async def test_an_opening_event_states_its_lots_original_cost_in_the_analysis_currency(session, test_user, asset, broker):
+    """(V11) An EUR asset analysed in EUR, three lots opened three ways, then a SELL, a 2:1 SPLIT and a TRANSFER:
+
+    * 2 Mar 2048, BUY 10 for 1 000 EUR — original cost 1 000 EUR;
+    * 3 Mar, BUY 4 for 500 USD at 1.25 USD a euro — 400 EUR;
+    * 4 Mar, ADJUSTMENT-in 5 at a cost basis of 30 USD a unit, at 1.6 USD a euro — 150 USD, 93.75 EUR;
+    * 5 Mar, SELL 3 of the first lot; 7 Mar, SPLIT 2:1; 8→9 Mar, TRANSFER of 4 to a second broker; read on 10 Mar.
+
+    Each opening event's ``opening_value`` is its lot's ``original_cost``: converted at the opening date (two different
+    rates), and in the currency of the event's ``unit_price`` — quantity × unit price, no fees. The SELL, SPLIT and
+    TRANSFER events have none. Before MF-E1: no ``opening_value`` on the event schema at all.
+    """
+    _assert_the_event_schema_has_an_opening_value()
+    broker_b = Broker(name=f"LotsBrokerB_{uuid4().hex}")
+    session.add(broker_b)
+    await session.flush()
+    session.add(BrokerUserAccess(broker_id=broker_b.id, user_id=test_user.id, role="OWNER", share_percentage=Decimal("1")))
+    await session.flush()
+    await _own_fx_rate(session, on=date(2048, 3, 3), base="EUR", quote="USD", rate=Decimal("1.25"))
+    await _own_fx_rate(session, on=date(2048, 3, 4), base="EUR", quote="USD", rate=Decimal("1.6"))
+    split_event = AssetEvent(asset_id=asset.id, date=date(2048, 3, 7), type=AssetEventType.SPLIT, value=Decimal("2"), currency="EUR")
+    session.add(split_event)
+    await session.flush()
+
+    buy_eur = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2048, 3, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    buy_usd = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2048, 3, 3), quantity=Decimal("4"), amount=Decimal("-500"), currency="USD")
+    received = Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=date(2048, 3, 4),
+        quantity=Decimal("5"),
+        amount=Decimal("0"),
+        currency=None,
+        cost_basis_override=Decimal("30"),
+        cost_basis_currency="USD",
+    )
+    sell = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2048, 3, 5), quantity=Decimal("-3"), amount=Decimal("390"), currency="EUR")
+    # 16 held at the split (7 + 4 + 5): the 2:1 split adds 16.
+    split = Transaction(
+        broker_id=broker.id,
+        asset_id=asset.id,
+        type=TransactionType.ADJUSTMENT,
+        date=date(2048, 3, 7),
+        quantity=Decimal("16"),
+        amount=Decimal("0"),
+        currency="EUR",
+        asset_event_id=split_event.id,
+    )
+    transfer_out = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=date(2048, 3, 8), quantity=Decimal("-4"), amount=Decimal("0"), currency="EUR")
+    transfer_in = Transaction(broker_id=broker_b.id, asset_id=asset.id, type=TransactionType.TRANSFER, date=date(2048, 3, 9), quantity=Decimal("4"), amount=Decimal("0"), currency="EUR")
+    session.add_all(
+        [
+            buy_eur,
+            buy_usd,
+            received,
+            sell,
+            split,
+            transfer_out,
+            transfer_in,
+            PriceHistory(asset_id=asset.id, date=date(2048, 3, 2), close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date(2048, 3, 10), close=Decimal("60"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+    transfer_out.related_transaction_id = transfer_in.id
+    transfer_in.related_transaction_id = transfer_out.id
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id, broker_b.id],
+        date_from=None,
+        date_to=date(2048, 3, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "EVENT_HISTORY"],
+    )
+
+    # Precondition: the three lots, each cost converted at its own opening date (GUARD: the summary as before MF-E1).
+    original_costs = {lot.lot_id: lot.original_cost for lot in result.lots or []}
+    assert original_costs == {buy_eur.id: Decimal("1000"), buy_usd.id: Decimal("400"), received.id: Decimal("93.75")}, f"precondition: three lots of known cost, got {result.lots}"
+    assert result.lot_events is not None
+    events_by_kind: dict[str, list[LotTimelineEventSchema]] = {}
+    for row in result.lot_events:
+        events_by_kind.setdefault(str(row.kind), []).append(row)
+    # Presence first: every kind this ledger produces is there, so the Nones below are about rows that exist.
+    assert set(events_by_kind) == {"BUY", "ADJUSTMENT_IN", "SELL", "SPLIT", "TRANSFER_DEPART", "TRANSFER_ARRIVE"}, f"precondition: the ledger's event kinds, got {sorted(events_by_kind)}"
+
+    openings = {row.lot_id: (str(row.kind), row.opening_value) for row in events_by_kind["BUY"] + events_by_kind["ADJUSTMENT_IN"]}
+    assert openings == {
+        buy_eur.id: ("BUY", Decimal("1000")),
+        buy_usd.id: ("BUY", Decimal("400")),
+        received.id: ("ADJUSTMENT_IN", Decimal("93.75")),
+    }
+    assert {lot_id: opening_value for lot_id, (_kind, opening_value) in openings.items()} == original_costs
+    # The currency of the event's unit price: quantity × unit price, a BUY without fees and a priced ADJUSTMENT.
+    assert {row.lot_id: row.quantity * row.unit_price for row in events_by_kind["BUY"] + events_by_kind["ADJUSTMENT_IN"]} == original_costs
+
+    others = [(str(row.kind), row.lot_id, row.opening_value) for kind in ("SELL", "SPLIT", "TRANSFER_DEPART", "TRANSFER_ARRIVE") for row in events_by_kind[kind]]
+    assert [(kind, lot_id) for kind, lot_id, opening_value in others if opening_value is not None] == []
+
+
+@pytest.mark.asyncio
+async def test_an_opening_event_has_no_opening_value_when_its_conversion_is_missing(session, test_user, broker):
+    """(V11) A VND asset bought in VND on 9 Jun 2048, analysed in EUR with no VND/EUR rate or route.
+
+    The lot's original cost is unknown in EUR (B3a), and so is its opening event's ``opening_value``: None, never the
+    native 2 500 000 VND. The absence of the pair is owned as in B3a's test: ``fx_rates`` and ``fx_conversion_routes``
+    are emptied for EUR/VND inside this test's transaction, which the ``session`` fixture rolls back.
+    Before MF-E1: no ``opening_value`` on the event schema at all.
+    """
+    _assert_the_event_schema_has_an_opening_value()
+    marker = uuid4().hex
+    vnd_asset = Asset(display_name=f"LotsOpeningVND_{marker}", identifier_ticker=f"LOVN{marker[:4]}", currency="VND", asset_type=AssetType.STOCK)
+    session.add(vnd_asset)
+    await session.flush()
+    base, quote = sorted(("VND", "EUR"))
+    await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote))
+    await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+    buy = Transaction(broker_id=broker.id, asset_id=vnd_asset.id, type=TransactionType.BUY, date=date(2048, 6, 9), quantity=Decimal("100"), amount=Decimal("-2500000"), currency="VND")
+    session.add_all([buy, PriceHistory(asset_id=vnd_asset.id, date=date(2048, 6, 9), close=Decimal("25000"), currency="VND", source_plugin_key="TEST")])
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=vnd_asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date(2048, 6, 10),
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "EVENT_HISTORY"],
+    )
+
+    # Precondition: the BUY opened the only lot, of unknown cost in EUR.
+    assert [(lot.lot_id, lot.original_cost) for lot in result.lots or []] == [(buy.id, None)], f"precondition: one lot of unknown EUR cost, got {result.lots}"
+    openings = [(row.lot_id, row.opening_value) for row in result.lot_events or [] if row.kind == "BUY"]
+    assert openings == [(buy.id, None)]

@@ -454,7 +454,10 @@ that LibreFolio emails to the address of the account. The switch is in **Setting
 - **While a hosting provider blocks the instance**, the page of the link says so and offers no
   retry: the link is not used up, and works again once the instance is unblocked, as long as it has
   not expired; otherwise signing in offers a new one
-  ([Hosting for Others](hosting_providers.md#instance-block)).
+  ([Hosting for Others](hosting_providers.md#instance-block)). Signing in still offers
+  **Send the link again**, which then says *This instance is blocked by its hosting provider: try
+  again once it is unblocked.*, never that the password is wrong, and works once the instance is
+  unblocked. Nobody can sign up meanwhile: the registration page says the same.
 
 ### 🔀 Turning It On and Off {: #verification-switch }
 
@@ -470,11 +473,11 @@ that LibreFolio emails to the address of the account. The switch is in **Setting
   ([Waiting Accounts](#verification-waiting)).
 - **While it is on, saving the other settings always works**, even when email has stopped working
   since.
-- **If email stops working while it is on** — the server or a variable breaks, or the instance is
-  blocked — nobody can sign up any more, not even with an invitation, which stays valid: the
-  registration page says *Sign-up is not possible right now: this instance cannot send the
-  verification email. Try again later, or ask its administrator.*, and no account is created. Only
-  the first account of a new instance is let through. **Send the link again** fails the same way.
+- **If email stops working while it is on** — the server or a variable breaks — nobody can sign up
+  any more, not even with an invitation, which stays valid: the registration page says *Sign-up is
+  not possible right now: this instance cannot send the verification email. Try again later, or ask
+  its administrator.*, and no account is created. Only the first account of a new instance is let
+  through. **Send the link again** fails the same way.
   Fix email ([When It Does Not Work](#troubleshooting)), or turn the switch off.
 
 ### ⏳ Waiting Accounts {: #verification-waiting }

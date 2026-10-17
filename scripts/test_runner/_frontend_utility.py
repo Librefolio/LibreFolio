@@ -104,6 +104,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/assetSearchSelection.test.ts",
             "src/lib/components/assets/assetSearchSections.test.ts",
             "src/lib/components/assets/assetSearchReport.test.ts",
+            "src/lib/components/assets/assetDataSaveSummary.test.ts",
             "src/lib/components/assets/assetMetadataComparison.test.ts",
             "src/lib/components/assets/assetFormState.test.ts",
             "src/lib/components/assets/scheduleSerialization.test.ts",
