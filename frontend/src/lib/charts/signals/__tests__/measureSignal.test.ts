@@ -522,3 +522,31 @@ describe('MeasureSignal — the annualisation floor', () => {
         expect(MIN_ANNUALIZATION_DAYS).toBe(backendFloor);
     });
 });
+
+/*
+ * The Δ% rule of night decision N65 — a change measured from a start of 0 has
+ * no percentage: the move is unknown, not 0 % — has a second copy outside the
+ * ruler: `buildDeltaHtml` in components/charts/priceChartHelpers.ts, the
+ * «(Δ …)» suffix of the price chart's tooltip, which still gives 0 % from a zero
+ * start (backlog J-44). The ruler's `changePct` becomes the one copy, exported
+ * for the tooltip to read. It is imported inside the test, not at the top of
+ * the file, so that while the export is missing only this test fails and the
+ * rest of the file still loads.
+ */
+describe('MeasureSignal — the Δ% rule, one copy exported (J-44)', () => {
+    it('exports changePct: (end − start) ÷ start in %, null when the span opens at zero', async () => {
+        // Red (J-44, N65). Before: `changePct` is private to MeasureSignal.ts, so
+        // the import reads undefined; getMeasurement and getMeasurementForSignal
+        // already give the values below.
+        const {changePct} = await import('../MeasureSignal');
+        expect(changePct, 'barrier: MeasureSignal.ts exports changePct').toBeTypeOf('function');
+
+        expect(changePct(100, 110), 'a gain').toBeCloseTo(10, 10);
+        expect(changePct(100, 0), 'a fall to exactly zero is a known move').toBe(-100);
+        expect(changePct(0, 8), 'a span that opens at zero has no percentage (N65)').toBeNull();
+        expect(changePct(0, 0), 'nor has one that stays at zero').toBeNull();
+        // −50 → −25 reads −50 %: the plain formula over the signed start, not
+        // +50 % over its absolute value.
+        expect(changePct(-50, -25), 'a negative start keeps the plain formula, (end − start) ÷ start').toBeCloseTo(-50, 10);
+    });
+});

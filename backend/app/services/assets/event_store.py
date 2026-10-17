@@ -27,7 +27,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
-from backend.app.services.financial_math.splits import costless_incoming_split_adjustments
+from backend.app.services.financial_math.splits import costless_incoming_split_adjustments, is_split_event_type, is_valid_split_ratio
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
 
@@ -94,17 +94,24 @@ class EventStoreOperations:
 
     @staticmethod
     def _storable_events(asset_id: int, events: list[dict | FAAssetEventPoint]) -> list[FAAssetEventPoint]:
-        """The events of ``events`` whose value ``AssetEvent.value`` can keep, parsed; the others are logged (W-B58)."""
+        """The events of ``events`` whose value ``AssetEvent.value`` can keep, parsed; the others are logged (W-B58).
+        A SPLIT whose ratio is not a number above 0 is dropped and logged too (X-R47): linked to a transaction, it made
+        the portfolio engine raise."""
         storable: list[FAAssetEventPoint] = []
         dropped: list[str] = []
+        invalid_splits: list[str] = []
         for raw in events or []:
             evt = raw if isinstance(raw, FAAssetEventPoint) else FAAssetEventPoint(**raw)
-            if integer_digits_issue(evt.value.amount, AssetEvent, "value") is None:
-                storable.append(evt)
-            else:
+            if integer_digits_issue(evt.value.amount, AssetEvent, "value") is not None:
                 dropped.append(f"{evt.date.isoformat()} {evt.type!s}={evt.value.amount}")
+            elif is_split_event_type(evt.type) and not is_valid_split_ratio(evt.value.amount):
+                invalid_splits.append(f"{evt.date.isoformat()} ratio {evt.value.amount}")
+            else:
+                storable.append(evt)
         if dropped:
             logger.warning("Events skipped: no event value can keep them", asset_id=asset_id, events=dropped[:5], count=len(dropped))
+        if invalid_splits:
+            logger.warning("Splits skipped: a split's ratio must be a number above 0", asset_id=asset_id, events=invalid_splits[:5], count=len(invalid_splits))
         return storable
 
     @staticmethod
@@ -202,7 +209,7 @@ class EventStoreOperations:
         return [*stored[: len(incoming)], *added]
 
     @staticmethod
-    async def bulk_upsert_events(data: list, session: AsyncSession) -> dict:
+    async def bulk_upsert_events(data: list, session: AsyncSession, *, current_user_id: Optional[int] = None) -> dict:
         """
         Bulk upsert manual events (provider_assignment_id = NULL), all or nothing.
 
@@ -232,6 +239,8 @@ class EventStoreOperations:
         Args:
             data: List of FAEventUpsert objects (asset_id + mode + events[])
             session: Database session
+            current_user_id: The user the request answers (the route passes the caller): a refusal names only the
+                transactions that user can see (R13-SEC7). Without one it names none, counting them (X-R47b: fail closed).
 
         Returns:
             dict with results list (``event_ids``: the row each event wrote, in request
@@ -247,9 +256,11 @@ class EventStoreOperations:
                 (date, type) another manual event keeps, or an event without id would take
                 the key an edit ends on (see ``_reject_event_key_conflicts``).
             AssetSourceError(code="EVENT_EXISTS"): ``create`` on a (date, type) already taken.
+            AssetSourceError(code="EVENT_INVALID_SPLIT_RATIO"): a SPLIT, new or edited, whose ratio is not a number
+                above 0 (see ``_reject_invalid_split_ratios``).
         """
         try:
-            results = [await EventStoreOperations._write_manual_item(session, item_index, item) for item_index, item in enumerate(data)]
+            results = [await EventStoreOperations._write_manual_item(session, item_index, item, current_user_id) for item_index, item in enumerate(data)]
             await session.commit()
         except Exception:
             await session.rollback()
@@ -257,7 +268,7 @@ class EventStoreOperations:
         return {"results": results, "success_count": sum(1 for r in results if r["count"] > 0 or r["deleted_ids"])}
 
     @staticmethod
-    async def _write_manual_item(session: AsyncSession, item_index: int, item) -> dict:
+    async def _write_manual_item(session: AsyncSession, item_index: int, item, current_user_id: Optional[int] = None) -> dict:
         """Check one item of ``bulk_upsert_events``, then write and flush it. A refusal names the item."""
         asset_id = item.asset_id
         try:
@@ -269,11 +280,12 @@ class EventStoreOperations:
             deleted_ids = await EventStoreOperations._delete_item_events(session, asset_id, list(getattr(item, "delete_ids", None) or []))
             EventStoreOperations._reject_currency_mismatches(asset, item.events)
             EventStoreOperations._reject_too_many_digits(item.events)
+            EventStoreOperations._reject_invalid_split_ratios(item.events)
             points = EventStoreOperations._as_upsert_points(item.events)
             edits, new_events = EventStoreOperations._split_manual_events(points)
             if getattr(item, "mode", "upsert") == "create":
                 await EventStoreOperations._reject_existing_events(session, asset_id, new_events)
-            await EventStoreOperations._apply_manual_event_edits(session, asset_id, edits, new_events, default_currency)
+            await EventStoreOperations._apply_manual_event_edits(session, asset_id, edits, new_events, default_currency, current_user_id)
             new_ids = iter(await EventStoreOperations._write_asset_events(session, asset_id, new_events, None, default_currency, commit=False))
         except AssetSourceError as exc:
             exc.details = {"asset_id": asset_id, "item_index": item_index, **exc.details}
@@ -383,6 +395,40 @@ class EventStoreOperations:
             )
 
     @staticmethod
+    def _reject_invalid_split_ratios(events: Optional[list]) -> None:
+        """X-R47: refuse a SPLIT, new or edited in place, whose ratio is not a number above 0, naming each one.
+
+        A SPLIT's ratio is its value (``is_valid_split_ratio``: present, finite, above 0). One of 0 or below was saved,
+        and the portfolio engine raised as soon as a transaction linked that split: the Dashboard answered 500. A value
+        too big or not finite is refused before, by ``_reject_too_many_digits``.
+
+        Raises:
+            AssetSourceError(code="EVENT_INVALID_SPLIT_RATIO"): ``details["events"]``, per event, its index, date, type
+                and ratio.
+        """
+
+        def field(raw: object, name: str) -> object:
+            return raw.get(name) if isinstance(raw, dict) else getattr(raw, name, None)
+
+        offending: list[dict] = []
+        for index, raw_evt in enumerate(events or []):
+            event_type = field(raw_evt, "type")
+            if not is_split_event_type(event_type):
+                continue
+            value_obj = field(raw_evt, "value")
+            amount = field(value_obj, "amount") if value_obj is not None else None
+            ratio = amount if amount is None or isinstance(amount, Decimal) else Decimal(str(amount))
+            if not is_valid_split_ratio(ratio):
+                offending.append({"event_index": index, "date": str(field(raw_evt, "date")), "type": str(event_type).strip().upper(), "ratio": str(amount)})
+        if offending:
+            shown = ", ".join(f"#{e['event_index']}={e['date']} ratio {e['ratio']}" for e in offending[:5]) + (f" (+{len(offending) - 5} more)" if len(offending) > 5 else "")
+            raise AssetSourceError(
+                f"EVENT_INVALID_SPLIT_RATIO: a split's ratio must be a number above 0, got [{shown}]",
+                "EVENT_INVALID_SPLIT_RATIO",
+                {"events": offending},
+            )
+
+    @staticmethod
     async def _reject_existing_events(session: AsyncSession, asset_id: int, new_events: list[FAEventUpsertPoint]) -> None:
         """A ``create`` item may not land on a (date, type) the asset already has, manual or from a provider (decision 20).
 
@@ -443,6 +489,7 @@ class EventStoreOperations:
         edits: dict[int, FAEventUpsertPoint],
         new_events: list[FAEventUpsertPoint],
         default_currency: str,
+        current_user_id: Optional[int] = None,
     ) -> None:
         """Validate the edits by id of one manual upsert item, then apply them in place.
 
@@ -463,7 +510,7 @@ class EventStoreOperations:
         if refused:
             raise AssetSourceError(f"EVENT_NOT_EDITABLE: no manual event of asset {asset_id} has id {', '.join(str(i) for i in refused)}", "EVENT_NOT_EDITABLE", {"ids": refused})
         await EventStoreOperations._reject_event_key_conflicts(session, asset_id, edits, rows, new_events)
-        await EventStoreOperations._reject_split_retype_without_costs(session, edits, rows)
+        await EventStoreOperations._reject_split_retype_without_costs(session, edits, rows, current_user_id)
 
         now = utcnow()
         for event_id, point in edits.items():
@@ -515,7 +562,7 @@ class EventStoreOperations:
             raise AssetSourceError(f"EVENT_KEY_CONFLICT: asset {asset_id} would have two manual {kind} events on {day.isoformat()}", "EVENT_KEY_CONFLICT", {"date": day.isoformat(), "type": kind})
 
     @staticmethod
-    async def _reject_split_retype_without_costs(session: AsyncSession, edits: dict[int, FAEventUpsertPoint], rows: dict[int, AssetEvent]) -> None:
+    async def _reject_split_retype_without_costs(session: AsyncSession, edits: dict[int, FAEventUpsertPoint], rows: dict[int, AssetEvent], current_user_id: Optional[int] = None) -> None:
         """P-10 (decision 27): refuse an edit that changes a SPLIT's type while a linked incoming adjustment has no cost.
 
         Retyped, the event no longer rescales the position, and such a row would become an acquisition of unknown cost
@@ -525,7 +572,11 @@ class EventStoreOperations:
 
         Raises:
             AssetSourceError(code="EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST"): ``details`` names the first such edit in
-                request order: ``event_id``, ``date`` (the stored event's) and ``transaction_ids``, sorted.
+                request order: ``event_id``, ``date`` (the stored event's), ``transaction_ids`` (only the transactions
+                ``current_user_id`` can see: a ``BrokerUserAccess`` row for their broker, as ``delete_events_bulk``
+                decides; sorted) and ``hidden_transactions_count`` (the others). A SPLIT of a global asset may carry
+                other users' adjustments, and anyone could provoke the refusal (R13-SEC7); without a
+                ``current_user_id`` no transaction is named, all are counted (X-R47b). The message gives the total count.
         """
         retyped = [event_id for event_id, point in edits.items() if str(point.type) != str(rows[event_id].type)]
         costless = await costless_incoming_split_adjustments(session, retyped)
@@ -534,10 +585,15 @@ class EventStoreOperations:
                 continue
             day = rows[event_id].date.isoformat()
             transaction_ids = costless[event_id]
+            visible: list[int] = []
+            if current_user_id is not None:
+                visible_stmt = select(Transaction.id).join(BrokerUserAccess, Transaction.broker_id == BrokerUserAccess.broker_id).where(Transaction.id.in_(transaction_ids), BrokerUserAccess.user_id == current_user_id)
+                visible = sorted({int(row[0]) for row in (await session.execute(visible_stmt)).all()})
+            details = {"event_id": event_id, "date": day, "transaction_ids": visible, "hidden_transactions_count": len(transaction_ids) - len(visible)}
             raise AssetSourceError(
                 f"EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST: the split of {day} (event {event_id}) has {len(transaction_ids)} linked adjustment(s) without a cost; give them a cost before changing its type",
                 "EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST",
-                {"event_id": event_id, "date": day, "transaction_ids": transaction_ids},
+                details,
             )
 
     @staticmethod

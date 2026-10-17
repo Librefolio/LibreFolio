@@ -36,8 +36,11 @@ export interface MeasurementResult {
     annualizedPct: number | null;
 }
 
-/** The change in %, or null when the span opens at zero: the move is then unknown, not 0 %. */
-function changePct(startValue: number, endValue: number): number | null {
+/**
+ * The change in %, or null when the start is zero: the move is then unknown, not 0 % (night decision N65). The one Δ%
+ * rule of the charts: the ruler and the main tooltip's delta (`priceChartHelpers.ts::buildDeltaHtml`, J-44) read it.
+ */
+export function changePct(startValue: number, endValue: number): number | null {
     return startValue !== 0 ? ((endValue - startValue) / startValue) * 100 : null;
 }
 

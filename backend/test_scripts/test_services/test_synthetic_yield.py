@@ -717,6 +717,11 @@ def test_j39_guard_a_schedule_with_late_interest_settles_nothing_at_maturity():
 #     move: a one-day step over a year end was already right.
 #   - The maturity settlement is the value after the final coupon (J-39): the 8 MATURITY_SETTLEMENT amounts of
 #     s4_annual_settlement (4 day counts x 2 interest types) are now the principal, 12345.67.
+# R13-SEC7-2 (workstream MF, night decision N73) regenerated it once more, with the change declared: COMPOUND late interest
+# is the closed form of the daily product (financial_math.interest.compound_growth) instead of a step per day rounded at
+# every step, so 44 late_interest_value_at entries moved in their last digits, at most 1.05e-25 relative — the 8 s2 cases
+# (their late interest is COMPOUND) and the 4 s3 compound cases. Nothing else moved: values, value_at, auto_events and
+# every SIMPLE late value (ACT/ACT keeps its year-by-year sum, digit for digit) are as before.
 # The COMPOUND base (it leaves out the manual events) is still frozen as it is: it waits for the developer, and the lot
 # that changes it regenerates this file the same way, with the change declared.
 

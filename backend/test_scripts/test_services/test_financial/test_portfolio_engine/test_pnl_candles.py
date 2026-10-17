@@ -68,6 +68,7 @@ from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
+from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 # =============================================================================
 # HELPERS — mirror the established conventions in this test directory
@@ -707,6 +708,15 @@ class TestPortfolioServiceGetPnlCandlesPure:
 #
 # Real DB integration tests (AsyncSession against the test database, no HTTP server),
 # mirroring TestPortfolioBlobCacheFxSensitivity in test_financial/test_portfolio_service.py.
+
+
+@pytest.fixture(scope="module", autouse=True)
+def range_bound_lifted():
+    """R13-SEC7-1: the real-DB scenarios below live in 2034, after tomorrow, so the range bound is lifted for the whole
+    module, before any fixture builds data (see ``lift_range_bound``); the pure builder tests above never reach it."""
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        lift_range_bound(monkeypatch)
+        yield
 
 
 @pytest.fixture(scope="module")

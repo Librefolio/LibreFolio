@@ -23,10 +23,11 @@ from backend.app.services.financial_math.native_cash import cash_movement_from_t
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, PortfolioCalculationResult, SplitHistory, SplitRecord
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)
@@ -220,12 +221,16 @@ class PortfolioCalculationEngine:
         # ── 3b. Load ADJUSTMENT rows linked to unique SPLIT AssetEvents ──
         # A split rescales the average-cost pool instead of adding or reducing it: it
         # redistributes existing cost over a new quantity, it never adds/removes cost.
+        # MF-D4: a stored ratio the layer cannot use counts as missing — the linked rows stay the rescale, no ratio
+        # restates the trade prices before it, and the event is reported — never an exception (the report answered 500).
         split_linked_tx_ids: set[int] = set()
         split_records_by_event_id: dict[int, SplitRecord] = {}
+        invalid_split_events: dict[int, InvalidSplitEvent] = {}
         for link in await load_split_links(self.db, all_txs):
-            if not is_valid_split_ratio(link.ratio):
-                raise ValueError(f"SPLIT AssetEvent {link.event_id} must have a positive finite ratio")
             split_linked_tx_ids.add(link.transaction_id)
+            if not is_valid_split_ratio(link.ratio):
+                invalid_split_events.setdefault(link.event_id, InvalidSplitEvent(event_id=link.event_id, asset_id=link.event_asset_id, date=link.event_date))
+                continue
             split_records_by_event_id[link.event_id] = SplitRecord(event_id=link.event_id, asset_id=link.event_asset_id, date=link.event_date, ratio=link.ratio)
 
         split_history_lists: dict[int, list[SplitRecord]] = defaultdict(list)
@@ -246,9 +251,20 @@ class PortfolioCalculationEngine:
         classification = classifier.classify(external_paired)
 
         # ── 5. Determine date range ──
+        # R13-SEC7-1: the replay walks every day of the range, so neither end runs free. It starts no earlier than the
+        # first transaction (before it there is nothing to replay, and a period starting earlier already starts empty)
+        # and ends no later than latest_range_end(), tomorrow. A range that ends before the first transaction has no day.
         first_tx_date = min(tx.date for tx in all_txs)
-        actual_from = date_from or first_tx_date
-        actual_to = date_to or date_type.today()
+        actual_from = max(date_from, first_tx_date) if date_from else first_tx_date
+        actual_to = min(date_to or date_type.today(), latest_range_end())
+        if actual_from > actual_to:
+            return PortfolioCalculationResult(
+                daily_states=[],
+                scope_broker_ids=list(scope_broker_ids),
+                target_currency=target_currency,
+                date_from=actual_to,
+                date_to=actual_to,
+            )
 
         # ── 5b. Blob cache check (range-aware) ──
         tx_fingerprint = compute_tx_fingerprint(all_txs)
@@ -422,6 +438,9 @@ class PortfolioCalculationEngine:
             period_start=period_start,
         )
         result = builder.build()
+        # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
+        result.share_mismatches = classification.share_mismatches
+        result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)
 
         # ── 12. Store in blob cache ──
         _portfolio_blob_cache.set(blob_key, result)

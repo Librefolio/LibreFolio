@@ -16,8 +16,16 @@ Raising the account's version ends every session issued before, everywhere at on
 4. ``auth.get_current_user``: after its checks of the account, unchanged (it exists, it is active, with their details), a
    cookie whose version differs from the account's, behind or ahead, is 401 «Session expired or invalid»: the detail of
    an invalid token, so nothing tells the holder why.
-5. ``user_service.end_sessions(user)`` raises ``user.session_version`` by one, at once, and does not commit: the caller
-   commits it with the change that ends the sessions.
+5. Updated in A8a (A-34): ``await user_service.end_sessions(session, user)``, a coroutine function, raises the account's
+   stored version by one in the caller's transaction, at once — one SQL increment, ``UPDATE users SET session_version =
+   session_version + 1 WHERE id = :id RETURNING session_version`` —, and answers None. ``user.session_version`` then
+   holds the value returned, set as committed (``set_committed_value``): the version alone does not mark the object
+   changed, and nothing else of it is flushed or refreshed — a field the caller set before, a new hash, stays pending
+   for the caller's commit, neither written early nor lost. It does not commit: the caller commits it with the change
+   that ends the sessions; until then a fresh connection reads the old version, and a rollback leaves it there. Two
+   requests that end the same account's sessions, each from the account as it loaded it before the other committed,
+   raise it by two (A-34): the cookie the first one re-issued does not survive the second. Two sessions on the private
+   file, one after the other in a set order: nothing is raced.
 6. Raised by exactly one, and committed, by ``reset_password`` (the CLI ``user reset``, later the reset link), which also
    hashes the new password in a worker thread instead of the event loop (backlog A-3); by ``set_user_active(..., False)``,
    so that a reactivation does not bring the old sessions back; and by ``set_user_admin(..., False)``. Activation and
@@ -61,6 +69,17 @@ stay green.
 
 Red until A7b-2 (A-32/A-33), in the same two tests of contract 7: the account's admin setup link still valid after
 ``reset_password`` (it must be retired) and after a real change of the address (it must be revoked).
+
+Red until A8a (A-34), from workstream E's security review: ``end_sessions(user)`` adds one to the object's own copy, so
+two requests that loaded the account before either committed — an administrator's «sign out everywhere» while the user
+changes the password, which re-issues the device's cookie at the new version — store the same value, and the cookie
+issued between them survives the second. Every test that calls end_sessions fails today on its shape, a plain function
+of ``(user)``, asserted where it is looked up (``_end_sessions``): contract 5's three tests, and the two of contract 4
+that end the sessions through ``_end_sessions_of`` — and ``test_backup_apply.py``'s test (i), which calls that helper
+too. Behind the shape, an asynchronous end_sessions that still adds one to the object fails on what A-34 is about: the
+object marked changed by the version, the increment missing from the caller's transaction, v+1 stored by the race
+instead of v+2. The other tests reach end_sessions only through the services, unchanged until A8a: green today, and
+after.
 """
 
 from __future__ import annotations
@@ -68,10 +87,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import dataclasses
+import inspect
 import json
 import threading
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional, Union
@@ -82,6 +102,7 @@ import pytest_asyncio
 from fastapi import HTTPException, Request
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.orm.attributes import get_history
 from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
@@ -142,10 +163,15 @@ def _claims(user_id: int, session_version: int) -> Any:
     return _claims_type()(user_id=user_id, session_version=session_version)
 
 
-def _end_sessions() -> Callable[[User], None]:
-    """``user_service.end_sessions``, looked up by the test that needs it, like _claims_type."""
+# updated in A8a (A-34): the shape is asserted where the function is looked up
+def _end_sessions() -> Callable[[AsyncSession, User], Awaitable[None]]:
+    """``user_service.end_sessions``, looked up by the test that needs it, like _claims_type; since A8a (A-34) checked for
+    its shape too, a coroutine function of ``(session, user)``, so that a test calling it fails on that, and says so,
+    rather than on a TypeError at the call."""
     end_sessions = getattr(user_service, "end_sessions", None)
     assert end_sessions is not None, "[new] user_service.end_sessions does not exist: nothing raises an account's session version"
+    shape = f"{'a coroutine function' if inspect.iscoroutinefunction(end_sessions) else 'a plain function'} of ({', '.join(inspect.signature(end_sessions).parameters)})"
+    assert shape == "a coroutine function of (session, user)", f"red until A8a (A-34): end_sessions must be a coroutine function of (session, user), one SQL increment in the caller's transaction: it is {shape}"
     return end_sessions
 
 
@@ -206,14 +232,24 @@ async def _account(engine: AsyncEngine, username: str) -> User:
         return (await session.execute(select(User).where(User.username == username))).scalar_one()
 
 
+# updated in A8a (A-34): end_sessions awaited, with the session. test_backup_apply.py's test (i) calls this helper too.
 async def _end_sessions_of(engine: AsyncEngine, user_id: int) -> None:
     """end_sessions on the user, committed by its caller as the services that call it commit."""
     end_sessions = _end_sessions()
     async with AsyncSession(engine) as session:
         user = await session.get(User, user_id)
         assert user is not None, f"user {user_id} is not in the private database"
-        end_sessions(user)
+        await end_sessions(session, user)
         await session.commit()
+
+
+async def _rows_seen_by(session: AsyncSession) -> dict[int, dict[str, Any]]:
+    """Every column of every user, by id, as ``session``'s own transaction reads them — what it wrote, committed or not —,
+    in the form of ``_user_rows``. A Core read on the session's connection, which flushes nothing: what is still pending
+    on an object stays pending."""
+    connection = await session.connection()
+    rows = (await connection.execute(text("SELECT * FROM users"))).mappings().all()
+    return {row["id"]: dict(row) for row in rows}
 
 
 def _request(token: str) -> Request:
@@ -428,6 +464,7 @@ async def test_a_cookie_without_sv_signs_in_an_account_at_version_zero(engine: A
     print_success("no sv, version 0: signed in")
 
 
+# red until A8a (A-34): it ends the sessions through _end_sessions_of, which awaits end_sessions(session, user)
 @pytest.mark.asyncio
 async def test_a_cookie_without_sv_is_refused_once_the_sessions_are_ended(engine: AsyncEngine) -> None:
     """Contracts 4 and 5 — NEW, red today (no end_sessions): ending the sessions moves the account to version 1; a cookie without ``sv``, worth 0, is then refused like any older session."""
@@ -443,6 +480,7 @@ async def test_a_cookie_without_sv_is_refused_once_the_sessions_are_ended(engine
     print_success("no sv, after end_sessions: refused")
 
 
+# red until A8a (A-34): it ends the sessions through _end_sessions_of, which awaits end_sessions(session, user)
 @pytest.mark.asyncio
 async def test_a_cookie_issued_at_the_accounts_version_works_until_its_sessions_end(engine: AsyncEngine) -> None:
     """Contracts 2, 4 and 5 — NEW, red today (create_jwt_token takes no session_version): a password change in-process.
@@ -483,30 +521,115 @@ async def test_an_inactive_accounts_cookie_is_told_the_account_is_disabled(engin
 # =============================================================================
 
 
+# updated in A8a (A-34)
+# red until A8a (A-34)
 @pytest.mark.asyncio
 async def test_end_sessions_raises_the_version_by_one_and_leaves_the_commit_to_the_caller(engine: AsyncEngine) -> None:
-    """Contract 5 — NEW, red today (no end_sessions): the version is one higher at once, in memory; nothing is committed — a fresh connection still reads the old version, and a rollback undoes it —; the caller's commit stores it, for that account only."""
+    """Contract 5 — updated in A8a (A-34), red until A8a (end_sessions is a plain function of ``(user)``: its shape fails in
+    ``_end_sessions``). A coroutine function of ``(session, user)`` answering None, whose increment is in the caller's
+    transaction at once: that transaction reads the account's version one higher, and nothing else of anybody changed;
+    ``user.session_version`` holds it, set as committed, so the version alone does not mark the object changed. Nothing
+    is committed: a fresh connection still reads the old version, and a rollback leaves it there. The caller's commit
+    stores it, for that account only, and ``user.session_version`` is then the stored version."""
     print_section("Contract 5: end_sessions")
     end_sessions = _end_sessions()
     user_id = await _add_user(engine, "gus", version=4)
     await _add_user(engine, "hana", version=2)
+    rows = await _user_rows(engine)
 
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
         user = await session.get(User, user_id)
         assert user is not None, "gus is in the private database"
-        assert end_sessions(user) is None, "end_sessions is a plain function answering None"
-        assert user.session_version == 5, f"end_sessions must raise the version by one, at once: {user.session_version}"
-        assert await _versions(engine) == {"gus": 4, "hana": 2}, "end_sessions must not commit: the caller commits, with the change that ends the sessions"
+        assert await end_sessions(session, user) is None, "end_sessions answers None"
+        assert user.session_version == 5, f"user.session_version must hold the new version at once: {user.session_version}"
+        assert user not in session.dirty, f"the version alone must not mark gus changed: set as committed (set_committed_value), its increment is already in the transaction; history of session_version: {get_history(user, 'session_version')}"
+        assert await _rows_seen_by(session) == {**rows, user_id: {**rows[user_id], "session_version": 5}}, "the increment must be in the caller's transaction at once, written by end_sessions itself: gus's version one higher, nothing else of anybody"
+        assert await _versions(engine) == {"gus": 4, "hana": 2}, "end_sessions must not commit: a fresh connection still reads the old version; the caller commits, with the change that ends the sessions"
         await session.rollback()
-    assert await _versions(engine) == {"gus": 4, "hana": 2}, "a rollback must undo it"
+    assert await _versions(engine) == {"gus": 4, "hana": 2}, "a rollback must leave the stored version as it was"
 
-    async with AsyncSession(engine) as session:
+    async with AsyncSession(engine, expire_on_commit=False) as session:
         user = await session.get(User, user_id)
         assert user is not None, "gus is in the private database"
-        end_sessions(user)
+        await end_sessions(session, user)
         await session.commit()
     assert await _versions(engine) == {"gus": 5, "hana": 2}, "committed by the caller: gus one higher, nobody else"
-    print_success("4 → 5 in memory, rolled back, then committed by the caller")
+    assert user.session_version == 5, f"after the caller's commit user.session_version must be the stored version: {user.session_version}"
+    print_success("4 → 5 in the caller's transaction, the object not marked changed, rolled back, then committed by the caller")
+
+
+# red until A8a (A-34)
+@pytest.mark.asyncio
+async def test_end_sessions_leaves_what_the_caller_set_before_to_the_callers_commit(engine: AsyncEngine) -> None:
+    """Contract 5 — NEW in A8a (A-34), red until A8a (the shape, in ``_end_sessions``). What the caller set on the user
+    before ending its sessions — a new hash, as a password change does — is neither written by end_sessions nor lost: in
+    the caller's transaction the row has the version one higher and still the old hash, the new hash is still pending on
+    the object, and the version is not among its changes; the caller's commit writes the two. end_sessions writes the
+    version alone and touches nothing else of the object: no flush, which would write the caller's hash before its
+    commit, no refresh, which flushes first or throws pending values away."""
+    print_section("Contract 5: end_sessions beside a change the caller has not written yet")
+    end_sessions = _end_sessions()
+    user_id = await _add_user(engine, "ines", version=3)
+    await _add_user(engine, "jon", version=7)
+    rows = await _user_rows(engine)
+
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        user = await session.get(User, user_id)
+        assert user is not None, "ines is in the private database"
+        user.hashed_password = STAND_IN_HASH
+        await end_sessions(session, user)
+        assert await _rows_seen_by(session) == {**rows, user_id: {**rows[user_id], "session_version": 4}}, "end_sessions must write the version alone: in the caller's transaction ines's version is one higher and her hash still the old one"
+        assert user.hashed_password == STAND_IN_HASH and list(get_history(user, "hashed_password").added) == [STAND_IN_HASH], f"the new hash must stay pending on the object, for the caller's commit: {get_history(user, 'hashed_password')}"
+        assert user.session_version == 4 and not get_history(user, "session_version").has_changes(), f"the version must be set as committed, at its new value: {user.session_version}, history {get_history(user, 'session_version')}"
+        await session.commit()
+    assert await _user_rows(engine) == {**rows, user_id: {**rows[user_id], "hashed_password": STAND_IN_HASH, "session_version": 4}}, "the caller's commit must write the new hash and the version one higher, and nothing else of anybody"
+    print_success("3 → 4 by end_sessions, the new hash left pending, both written by the caller's commit")
+
+
+# red until A8a (A-34)
+@pytest.mark.asyncio
+async def test_two_requests_ending_the_same_accounts_sessions_raise_its_version_by_two(engine: AsyncEngine) -> None:
+    """Contract 5, A-34 — NEW in A8a, red until A8a (the shape, in ``_end_sessions``; behind it, the increment of the object
+    stores v+1). Workstream E's race: two requests load the same account at version v before either commits — the user
+    changing the password, an administrator signing the account out everywhere —, two sessions on two connections to the
+    private file. The password change sets a new hash, ends the sessions, commits and re-issues its device's cookie at
+    ``user.session_version``, as ``POST /auth/change-password`` does; then the «sign out everywhere» ends them from the
+    account as it loaded it before, and commits. Each ends every session issued before it: the stored version is v+2,
+    the second request writes nothing else, its ``user.session_version`` is the stored one, and the cookie re-issued
+    between the two is refused. Raised on the object, both stored v+1 and that cookie survived the «sign out
+    everywhere». The order is set, not raced: both accounts loaded, then the first request's call and commit, then the
+    second's. Nobody else's version moves."""
+    print_section("Contract 5, A-34: two requests end the same account's sessions")
+    end_sessions = _end_sessions()
+    user_id = await _add_user(engine, "kim", version=6)
+    await _add_user(engine, "lou", version=1)
+
+    async with AsyncSession(engine, expire_on_commit=False) as password_change, AsyncSession(engine, expire_on_commit=False) as sign_out:
+        changing = await password_change.get(User, user_id)
+        signing_out = await sign_out.get(User, user_id)
+        assert changing is not None and signing_out is not None, "kim is in the private database"
+        assert (changing.session_version, signing_out.session_version) == (6, 6), "barrier: both requests loaded kim at version 6, before either committed"
+
+        changing.hashed_password = STAND_IN_HASH
+        await end_sessions(password_change, changing)
+        await password_change.commit()
+        reissued = auth_service.create_jwt_token(user_id=user_id, ttl_hours=1, session_version=changing.session_version)
+        between = await _user_rows(engine)
+        assert await _versions(engine) == {"kim": 7, "lou": 1}, "barrier: the password change is committed, kim at version 7"
+        assert _signed_in_as(await _current_user(engine, reissued), user_id), "barrier: the cookie the password change re-issued signs kim in"
+
+        await end_sessions(sign_out, signing_out)
+        await sign_out.commit()
+
+    versions = await _versions(engine)
+    assert versions == {"kim": 8, "lou": 1}, f"red until A8a (A-34): the «sign out everywhere» must raise kim's version once more, to 8 — the increment of the account it loaded at 6 stores 7 a second time: {versions}"
+    assert await _user_rows(engine) == {**between, user_id: {**between[user_id], "session_version": 8}}, "the second request must write kim's version alone: nothing it loaded before the password change, nothing of anybody else"
+    assert signing_out.session_version == 8, f"the second request's user must hold the stored version, the one a cookie it re-issued would carry: {signing_out.session_version}"
+    outcome = await _current_user(engine, reissued)
+    assert _refusal(outcome) == SESSION_EXPIRED, f"the cookie the password change re-issued must not survive the «sign out everywhere» that followed it: {_describe(outcome)}"
+    latest = await _current_user(engine, auth_service.create_jwt_token(user_id=user_id, ttl_hours=1, session_version=signing_out.session_version))
+    assert _signed_in_as(latest, user_id), f"a cookie at the stored version must sign kim in: {_describe(latest)}"
+    print_success("6 → 7 → 8: the cookie re-issued at 7 refused after the «sign out everywhere», 8 signs in")
 
 
 # =============================================================================

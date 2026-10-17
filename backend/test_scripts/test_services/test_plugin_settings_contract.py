@@ -35,6 +35,10 @@ Modules under test: ``services/plugin_settings/fields.py`` and ``contract.py``, 
    ``plain_values``; the ``repr`` names the secret fields and never shows their values; an unbound instance sees the
    declared defaults and no secret. The test doubles declare what the other suites rely on.
 
+**X-R43** (workstream X): an integer above ``MAX_SAFE_INTEGER`` (2**53 - 1) in absolute value is «too large» for a number
+field, judged before its bounds, never an ``OverflowError``; a bound or a default past it is a declaration error. «Red
+today» is the state before the cure; a guard passes before and after.
+
 Pure: no database, no server, no network, no environment read. The registries that refuse or store plugins here are
 throwaway subclasses with their own storage; every claim a test makes is released at its teardown, and the test proves
 the real registries untouched.
@@ -52,6 +56,7 @@ from backend.app.services.asset_source_providers.mockprov.plugin import SETTINGS
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.mockfx.plugin import MockFXFailProvider, MockFXProvider
+from backend.app.services.plugin_settings import fields as fields_module
 from backend.app.services.plugin_settings import resolver
 from backend.app.services.plugin_settings.contract import BoundSettings, PluginSettingsMixin
 from backend.app.services.plugin_settings.fields import (
@@ -82,11 +87,23 @@ SYSTEM, USER = SettingScope.SYSTEM, SettingScope.USER
 STRING, NUMBER, INTEGER, BOOLEAN, SELECT = SettingType.STRING, SettingType.NUMBER, SettingType.INTEGER, SettingType.BOOLEAN, SettingType.SELECT
 #: Every plugin code of this module starts with it: the teardown releases the claims of exactly these owners.
 LAB = "lab_"
+#: The largest integer a double — and the settings page, a JavaScript number — holds with its successor: X-R43's
+#: ``fields.MAX_SAFE_INTEGER``, written out here so that the module still imports before the cure.
+SAFE_INTEGER = 2**53 - 1
+#: What X-R43's refusal of an integer past it says.
+TOO_LARGE = "too large"
 
 
 def _marker(prefix: str = "LFMARK") -> str:
     """A value no message, bound or default of this module can contain by chance."""
     return f"{prefix}{uuid.uuid4().hex[:12]}"
+
+
+def _shows_digits_of(value: int, text: str) -> bool:
+    """Whether ``text`` shows ``value``: its digits whole, or any run of 20 of them (all of them when it has fewer)."""
+    digits = str(abs(value))
+    width = min(20, len(digits))
+    return any(digits[start : start + width] in text for start in range(len(digits) - width + 1))
 
 
 def _field(key: str = "api_key", type: SettingType = STRING, scope: SettingScope = SYSTEM, **extra) -> PluginSettingField:  # noqa: A002 — mirrors the dataclass field
@@ -378,6 +395,95 @@ def test_a_default_must_be_a_value_the_field_accepts(declared):
         validate_declaration((declared,), family="asset")
 
 
+# -----------------------------------------------------------------------------
+# X-R43: a bound or a default past what a double holds
+# -----------------------------------------------------------------------------
+
+
+def _declaration_refusal(declared: PluginSettingField) -> str:
+    """The message of the refusal of a declaration of ``declared`` alone. Any other outcome fails the test, naming it."""
+    try:
+        validate_declaration((declared,), family="asset")
+    except SettingsDeclarationError as refused:
+        return str(refused)
+    except Exception as error:  # noqa: BLE001 — any other exception is the defect under test
+        pytest.fail(f"validate_declaration raised {type(error).__name__} ({error}) for the field {declared.key!r} instead of SettingsDeclarationError (X-R43): a registry passes it on unwrapped, so the plugin's import fails with an error that names neither the plugin nor the field")
+    pytest.fail(f"the declaration of the field {declared.key!r} was accepted (X-R43): past {SAFE_INTEGER} in absolute value, the settings page, a JavaScript number, no longer tells an integer from the next")
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        pytest.param(_field("count", INTEGER, maximum=10**400), id="integer-maximum-of-401-digits"),
+        pytest.param(_field("count", INTEGER, minimum=-(10**400)), id="integer-minimum-of-401-digits"),
+        pytest.param(_field("ratio", NUMBER, maximum=10**400), id="number-maximum-of-401-digits"),
+    ],
+)
+def test_a_bound_past_the_double_range_is_refused_not_an_overflow(declared: PluginSettingField):
+    """Red today (X-R43): ``OverflowError`` — ``math.isfinite`` cannot convert a bound of 401 digits to a double — instead
+    of ``SettingsDeclarationError``: a registry passes it on as it is, and the plugin's import fails with «int too large
+    to convert to float», naming neither the plugin nor the field.
+
+    Contract: a bound is a finite float or an integer within ``MAX_SAFE_INTEGER``; any other is refused «bounds are
+    finite numbers, an integer within 9007199254740991», naming the field."""
+    print_section(f"X-R43: a bound of 401 digits on {declared.key}")
+    message = _declaration_refusal(declared)
+
+    assert f"field {declared.key!r}: bounds are finite numbers" in message, message
+    print_success(message)
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        pytest.param(_field("count", INTEGER, maximum=2**53), id="integer-maximum-2**53"),
+        pytest.param(_field("ratio", NUMBER, minimum=-(2**53)), id="number-minimum-minus-2**53"),
+    ],
+)
+def test_a_bound_just_past_the_safe_limit_is_refused(declared: PluginSettingField):
+    """Red today (X-R43): accepted — 2**53 is a finite number — although past ``MAX_SAFE_INTEGER`` the settings page, a
+    JavaScript number, no longer tells an integer from the next (2**53 + 1 reads 2**53).
+
+    Contract: refused like any bound past ``MAX_SAFE_INTEGER`` in absolute value: «bounds are finite numbers, an integer
+    within 9007199254740991», naming the field."""
+    message = _declaration_refusal(declared)
+
+    assert f"field {declared.key!r}: bounds are finite numbers" in message, message
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        pytest.param(_field("count", INTEGER, minimum=-SAFE_INTEGER, maximum=SAFE_INTEGER, default=SAFE_INTEGER), id="integer-bounds-and-default-at-the-limit"),
+        pytest.param(_field("ratio", NUMBER, minimum=-SAFE_INTEGER, maximum=SAFE_INTEGER, default=-SAFE_INTEGER), id="number-bounds-and-default-at-the-limit"),
+        pytest.param(_field("ratio", NUMBER, minimum=-1e300, maximum=1e300, default=1e300), id="number-float-bounds-and-default-of-1e300"),
+    ],
+)
+def test_bounds_and_a_default_at_the_safe_limit_declare_cleanly(declared: PluginSettingField):
+    """Guard: green today and after (X-R43). ``MAX_SAFE_INTEGER`` of either sign is a valid bound and a valid default; a
+    float bound or default is judged by its finiteness only, 1e300 included."""
+    validate_declaration((declared,), family="asset")
+
+
+@pytest.mark.parametrize(
+    "declared",
+    [
+        pytest.param(_field("count", INTEGER, default=10**400), id="integer-default-of-401-digits"),
+        pytest.param(_field("ratio", NUMBER, default=-(10**400)), id="number-default-of-401-digits-negative"),
+        pytest.param(_field("count", INTEGER, default=2**53), id="integer-default-2**53"),
+    ],
+)
+def test_a_default_past_the_safe_limit_is_an_invalid_default(declared: PluginSettingField):
+    """Red today (X-R43): ``OverflowError`` for a default of 401 digits — the default goes through ``validate_value``,
+    whose refusals alone are caught — and a default of 2**53 is accepted.
+
+    Contract: ``SettingsDeclarationError`` «invalid default (too large: …)», naming the field, never the value."""
+    message = _declaration_refusal(declared)
+
+    assert f"field {declared.key!r}: invalid default ({TOO_LARGE}" in message, message
+    assert not _shows_digits_of(declared.default, message), f"the refusal repeats the default: {message!r}"
+
+
 # =============================================================================
 # 2. REGISTRATION AND VARIABLE CLAIMS
 # =============================================================================
@@ -479,6 +585,33 @@ def test_the_decorator_refuses_the_same_way():
             settings_fields = (_field("x", NUMBER, minimum=3, maximum=1),)
 
     assert _AssetLabRegistry.list_plugin_codes() == []
+
+
+@pytest.mark.parametrize(
+    ("fields", "rule"),
+    [
+        pytest.param((_field("limit", INTEGER, SYSTEM, default=1, maximum=10**400),), "bounds are finite numbers", id="a-bound-of-401-digits"),
+        pytest.param((_field("limit", INTEGER, SYSTEM, default=10**400),), "invalid default", id="a-default-of-401-digits"),
+    ],
+)
+def test_a_registry_refuses_a_number_past_the_safe_limit_like_any_bad_declaration(fields, rule):
+    """Red today (X-R43): ``register`` lets the ``OverflowError`` of the finiteness check through as it is («int too
+    large to convert to float»): the plugin is not stored, but the discovery log names neither the plugin nor the field.
+
+    Contract: ``SettingsDeclarationError`` naming the class, the field and the rule, as for any bad declaration; the
+    plugin is not stored and claims nothing."""
+    plugin = _plugin_class("lab_huge", fields)
+    try:
+        _AssetLabRegistry.register(plugin)
+    except SettingsDeclarationError as refused:
+        message = str(refused)
+    except Exception as error:  # noqa: BLE001 — any other exception is the defect under test
+        pytest.fail(f"register raised {type(error).__name__} ({error}) instead of SettingsDeclarationError (X-R43): the discovery log names neither the plugin nor the field")
+    else:
+        pytest.fail("the plugin was registered with a number past the safe limit in its declaration (X-R43)")
+
+    assert plugin.__qualname__ in message and "field 'limit'" in message and rule in message, message
+    assert _AssetLabRegistry.get_plugin("lab_huge") is None and not _owned_by("asset", "lab_huge"), "a refused plugin is not stored and claims nothing"
 
 
 def test_a_registered_plugin_claims_its_variables_and_one_without_fields_registers_anywhere():
@@ -677,6 +810,128 @@ def test_a_refused_number_is_not_in_its_message():
     """3: a number out of bounds is named by its bound only."""
     assert "987654.321" not in _refusal(_field("ratio", NUMBER, maximum=10), 987654.321)
     assert "8642" not in _refusal(_field("count", INTEGER, minimum=10000), 8642)
+
+
+# -----------------------------------------------------------------------------
+# X-R43: an integer past what a double holds
+# -----------------------------------------------------------------------------
+
+#: A number field of each type without bounds: whatever refuses an integer there is not a bound.
+_UNBOUNDED = [pytest.param(_field("count", INTEGER), id="integer"), pytest.param(_field("ratio", NUMBER), id="number")]
+
+
+def _too_large(declared: PluginSettingField, value: int) -> str:
+    """The message of the refusal of ``value``. Any other outcome fails the test, naming it: an exception that is no
+    ``SettingValueError`` (a write of it answers 500, a variable or a row holding it breaks its plugin), or the value accepted."""
+    digits = len(str(abs(value)))
+    try:
+        accepted = validate_value(declared, value)
+    except SettingValueError as refused:
+        return str(refused)
+    except Exception as error:  # noqa: BLE001 — any other exception is the defect under test
+        pytest.fail(
+            f"validate_value raised {type(error).__name__} ({error}) for an integer of {digits} digits on the {declared.type.value} field {declared.key!r}, instead of SettingValueError «too large» (X-R43): "
+            "a write of it answers 500, and a variable or a stored row holding it makes the resolution of its plugin raise"
+        )
+    pytest.fail(
+        f"validate_value accepted an integer of {digits} digits on the {declared.type.value} field {declared.key!r} (it returned a {type(accepted).__name__}), instead of refusing it «too large» (X-R43): "
+        f"past {SAFE_INTEGER} the settings page, a JavaScript number, no longer tells an integer from the next"
+    )
+
+
+@pytest.mark.parametrize("value", [pytest.param(10**400, id="10**400"), pytest.param(-(10**400), id="minus-10**400")])
+@pytest.mark.parametrize("declared", _UNBOUNDED)
+def test_an_integer_past_the_double_range_is_too_large_not_an_overflow(declared: PluginSettingField, value: int):
+    """Red today (X-R43): ``OverflowError`` — ``math.isfinite`` cannot convert an integer of 401 digits to a double (the
+    range ends near 309 digits) — and nobody catches it: a member's write of it answers 500, and a variable or a stored
+    row holding it makes the resolution of its plugin raise.
+
+    Contract: ``SettingValueError`` «too large: at most 9007199254740991 in absolute value», on an integer field and a
+    number field alike: the limit named, the value never."""
+    print_section(f"X-R43: the {declared.type.value} field given {'minus ' if value < 0 else ''}10**400")
+    message = _too_large(declared, value)
+
+    assert TOO_LARGE in message and str(SAFE_INTEGER) in message, f"the refusal says {message!r}: expected «too large», naming the limit {SAFE_INTEGER}"
+    assert not _shows_digits_of(value, message), f"the refusal repeats the value: {message!r}"
+    print_success(message)
+
+
+@pytest.mark.parametrize("value", [pytest.param(2**53, id="2**53"), pytest.param(-(2**53), id="minus-2**53")])
+@pytest.mark.parametrize("declared", _UNBOUNDED)
+def test_the_first_integer_past_the_safe_limit_is_too_large(declared: PluginSettingField, value: int):
+    """Red today (X-R43): accepted and returned as it is — 2**53 is well inside the double range, so no check refuses
+    it — although past ``MAX_SAFE_INTEGER`` the settings page, a JavaScript number, no longer tells an integer from the
+    next (2**53 + 1 reads 2**53).
+
+    Contract: «too large», as any integer above ``MAX_SAFE_INTEGER`` in absolute value, on both types; the message holds
+    the limit, 9007199254740991, never the value, 9007199254740992."""
+    message = _too_large(declared, value)
+
+    assert TOO_LARGE in message, f"the refusal says {message!r}: expected «too large»"
+    assert not _shows_digits_of(value, message), f"the refusal repeats the value: {message!r}"
+
+
+@pytest.mark.parametrize(
+    ("declared", "value", "bound"),
+    [
+        pytest.param(_field("count", INTEGER, minimum=1, maximum=50), 10**400, "above the maximum", id="integer-1-to-50-given-10**400"),
+        pytest.param(_field("count", INTEGER, minimum=1, maximum=50), -(10**400), "below the minimum", id="integer-1-to-50-given-minus-10**400"),
+        pytest.param(_field("ratio", NUMBER, minimum=0, maximum=10), 2**53, "above the maximum", id="number-0-to-10-given-2**53"),
+    ],
+)
+def test_on_a_bounded_field_too_large_is_judged_before_the_bounds(declared: PluginSettingField, value: int, bound: str):
+    """Red today (X-R43): ``OverflowError`` for the integers of 401 digits — the finiteness check comes before the
+    bounds —; 2**53 on a number field of maximum 10 is refused «above the maximum of 10».
+
+    Contract: «too large» is judged before the bounds: the user learns that the number cannot be held at all, not that
+    it passes a bound."""
+    message = _too_large(declared, value)
+
+    assert TOO_LARGE in message and bound not in message, f"the refusal says {message!r}: expected «too large», judged before the bounds"
+
+
+@pytest.mark.parametrize("value", [pytest.param(SAFE_INTEGER, id="2**53-1"), pytest.param(-SAFE_INTEGER, id="minus-2**53-1")])
+@pytest.mark.parametrize("declared", _UNBOUNDED)
+def test_the_largest_safe_integer_is_accepted_as_it_is(declared: PluginSettingField, value: int):
+    """Guard: green today and after (X-R43). ``MAX_SAFE_INTEGER`` itself, of either sign, comes back unchanged — the very
+    int — on an integer field and a number field without bounds."""
+    accepted = validate_value(declared, value)
+
+    assert accepted == value and type(accepted) is int, f"{value} came back as {accepted!r}"
+
+
+def test_a_float_is_judged_by_its_finiteness_only():
+    """Guard: green today and after (X-R43). 1e300, a finite float far past 2**53, is accepted as it is by a number
+    field without bounds; on an integer field it is «expected a whole number», never «too large»."""
+    assert validate_value(_field("ratio", NUMBER), 1e300) == 1e300
+    message = _refusal(_field("count", INTEGER), 1e300)
+    assert "expected a whole number" in message and TOO_LARGE not in message, message
+
+
+@pytest.mark.parametrize(
+    ("declared", "value", "reason"),
+    [
+        pytest.param(_field("ratio", NUMBER), math.inf, "expected a finite number", id="number-inf"),
+        pytest.param(_field("ratio", NUMBER), -math.inf, "expected a finite number", id="number-minus-inf"),
+        pytest.param(_field("ratio", NUMBER), math.nan, "expected a finite number", id="number-nan"),
+        pytest.param(_field("ratio", NUMBER), True, "expected a number", id="number-given-true"),
+        pytest.param(_field("count", INTEGER), True, "expected a number", id="integer-given-true"),
+    ],
+)
+def test_the_checks_before_too_large_keep_their_reasons(declared: PluginSettingField, value: object, reason: str):
+    """Guard: green today and after (X-R43). The type and finiteness checks come first and keep their reasons: a
+    boolean — an int to Python — is «expected a number», an infinite or NaN float «expected a finite number»."""
+    message = _refusal(declared, value)
+
+    assert reason in message and TOO_LARGE not in message, message
+
+
+def test_fields_publishes_the_safe_limit():
+    """Red today (X-R43): ``fields`` has no ``MAX_SAFE_INTEGER``.
+
+    Contract: ``fields.MAX_SAFE_INTEGER`` is 2**53 - 1, 9007199254740991, the limit of every number field, bound and
+    default. Read when the test runs, so that before the cure this test alone fails on the name."""
+    assert getattr(fields_module, "MAX_SAFE_INTEGER", None) == SAFE_INTEGER == 9007199254740991, "fields.MAX_SAFE_INTEGER must be 2**53 - 1 (X-R43)"
 
 
 @pytest.mark.parametrize(

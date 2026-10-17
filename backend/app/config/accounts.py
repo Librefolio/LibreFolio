@@ -62,6 +62,29 @@ def max_users() -> int | None:
     return limit
 
 
+LOGIN_LIMIT_VARIABLE = "LIBREFOLIO_LOGIN_LIMIT"
+
+
+def login_limit_value() -> str | None:
+    """``LIBREFOLIO_LOGIN_LIMIT`` as set, stripped, or None when it is unset or blank: the value its check names."""
+    return _blank_to_none(LOGIN_LIMIT_VARIABLE)
+
+
+def login_limit_enabled() -> bool:
+    """``LIBREFOLIO_LOGIN_LIMIT``: the limit on failed sign-ins (F15) is on unless this says ``off``.
+
+    Unset, blank or ``on``, in any case: on. ``off``, in any case: off — for test instances, whose suites sign in
+    wrongly on purpose from one address; the configuration checks then warn. Any other value raises ``ValueError``, naming
+    it: the start stops on it. Read at each call.
+    """
+    value = login_limit_value()
+    if value is None or value.lower() == "on":
+        return True
+    if value.lower() == "off":
+        return False
+    raise ValueError(f"{LOGIN_LIMIT_VARIABLE}={value!r}: expected on or off")
+
+
 def public_url() -> str | None:
     """``LIBREFOLIO_PUBLIC_URL``: the address users reach the instance at, for links built outside a browser (CLI, email)."""
     return env_url("LIBREFOLIO_PUBLIC_URL")
