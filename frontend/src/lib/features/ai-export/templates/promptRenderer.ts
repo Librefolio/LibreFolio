@@ -47,7 +47,7 @@ export interface RenderedAiExportPrompt {
     readonly stats: AiExportPromptStats;
 }
 
-export type AiExportPromptSectionId = 'analysis_objective' | 'shared_verification_instructions' | 'response_contract' | 'snapshot_metadata' | 'snapshot_data' | 'additional_librefolio_data' | 'domain_notes' | 'user_notes' | 'response_language';
+export type AiExportPromptSectionId = 'analysis_objective' | 'shared_verification_instructions' | 'response_contract' | 'snapshot_metadata' | 'snapshot_data' | 'additional_librefolio_data' | 'domain_notes' | 'user_notes' | 'legal_notice' | 'response_language';
 
 export interface AiExportPromptDiagnosticTextBlock {
     readonly id: string;
@@ -336,6 +336,16 @@ function renderUserNotes(notes: string): string {
     });
 }
 
+/**
+ * The instance's legal notice (F09, workstream A), in the interface language: local, allow-listed copy under its own
+ * heading — never a fenced data block, never a URL or anything the instance or the snapshot provides — so the UI and
+ * the probe, which translate from the same catalogue, render the same bytes.
+ */
+function renderLegalNotice(input: RenderAiExportPromptInput): string {
+    const translate = input.translate ?? ((key: string) => key);
+    return [`## ${translate('legal.title')}`, '', translate('legal.disclaimer')].join('\n');
+}
+
 function isTrustedResponseLanguage(value: string): value is AiExportResponseLanguageDisplayName {
     return AI_EXPORT_RESPONSE_LANGUAGE_DISPLAY_NAMES.some((language) => language === value);
 }
@@ -367,6 +377,8 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
         sections.push({id: 'additional_librefolio_data', content: renderAdditionalData(input)});
         sections.push({id: 'domain_notes', content: renderDomainNotes(input.snapshot)});
         if (notes) sections.push({id: 'user_notes', content: renderUserNotes(notes)});
+        // Before the response language: the app's trusted instruction stays the prompt's last word (J, A9)
+        sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
         sections.push({
             id: 'response_language',
             content: `## Response Language\n\nPlease provide your answer in: ${input.responseLanguage}.`,
@@ -374,6 +386,7 @@ function buildAiExportPrompt(input: RenderAiExportPromptInput, diagnostics: bool
     } else {
         sections.push({id: 'snapshot_metadata', content: snapshotMetadata.content});
         sections.push({id: 'snapshot_data', content: snapshotData.content});
+        sections.push({id: 'legal_notice', content: renderLegalNotice(input)});
     }
 
     const prompt = sections.map((section) => section.content).join(SECTION_SEPARATOR);
