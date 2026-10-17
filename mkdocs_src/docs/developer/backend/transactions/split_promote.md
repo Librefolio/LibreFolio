@@ -92,6 +92,10 @@ broker**, at which the lots hand its units over (decision 47 of release 1.3; see
   giving leg, `field` `cost_basis_override`, with `pairs` and `pair_details` in
   `params` as for an Auto row. Nothing commits, and `/transactions/validate`
   reports the same issue.
+- When the leg's broker pool holds a row that cannot be read — a quantity, amount or
+  stored cost basis that reads `None` (see [Unreadable pool](wac.md#unreadable-pool)) —
+  the split is refused the same way: one `autoCostUnreadable` issue on operation
+  `split`, `ref_id` the giving leg, `params` `{"count": N}`, no id of those rows (W-B69).
 - Like the inline WAC, the stage prices the leg only when no non-balance issue
   exists yet.
 
@@ -329,6 +333,7 @@ their stage loops continue. Common stable codes are:
 | `splitIdsMismatch` | Split IDs are not reciprocal partners |
 | `typeCannotSplit` | The current pair type has no split mapping |
 | `wacFxUnavailable` | On operation `split`: the giving leg of a `TRANSFER` pair has no Auto cost, a conversion is missing ([The giving leg of a `TRANSFER`](#transfer-giving-leg)) |
+| `autoCostUnreadable` | On operation `split`: the pool of the giving leg's Auto cost holds rows that cannot be read, `params` `{"count": N}` ([Unreadable pool](wac.md#unreadable-pool), W-B69) |
 | `promoteRefNotFound` | A saved or same-batch promote reference cannot be resolved |
 | `alreadyPaired` | A promote candidate already has a persistent partner |
 | `noPromoteRule` | No metadata rule and constraint set matches the two rows |

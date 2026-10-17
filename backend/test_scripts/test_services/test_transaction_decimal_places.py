@@ -137,6 +137,9 @@ Reds — fail today, pass once the contract holds:
   date 1899-12-31 — each refused on its own row with exactly ``dateOutOfRange`` and its ``{"min", "max"}``, the batch
   stopped before applying anything (no result), nothing written, no exception (today they commit, or the replay refuses
   them for another reason: a codeless «Balance validation error» on 9999-12-31, a short position on 1899-12-31);
+- ``TestTheDateFloorIsTheReplayFloor`` (rule 9, MF-SEC8-2): N74's 1900-01-01 is ``EARLIEST_RANGE_START`` of
+  ``utils/datetime_utils``, the replay floor, imported — ``transaction_batch_stages`` keeps no ``TRANSACTION_DATE_MIN``
+  of its own (today it does, a copy);
 - ``TestAPromotedCostBasisCurrencyRefuses`` (rule 9): a promote (index 1, behind a valid one) resolving a cost basis of
   1E+101, 1E+5000000, 0E-999999999 or «abc» EUR, on ``/validate`` and ``/commit``, gets exactly one issue,
   ``value_error`` on ``cost_basis_override.amount``, no params, its English error naming the exponent (the text of «abc»
@@ -230,7 +233,9 @@ from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.financial_math.ledger_totals import compute_control_totals
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
+from backend.app.services.transactions import transaction_batch_stages
 from backend.app.services.transactions.transaction_service import TransactionService
+from backend.app.utils import datetime_utils
 from backend.app.utils.datetime_utils import today_date, utcnow
 
 EUR = "EUR"
@@ -2045,6 +2050,33 @@ class TestTheDateIsCheckedAtWrite:
         assert response.committed is True and response.issues == [], f"R13-SEC7-3: 1900-01-01 is within the range, so the update must commit; it was refused: {_render(response.issues)}"
         stored = (await _dates(world, [subject_id]))[subject_id][0]
         assert stored == DATE_MIN, f"R13-SEC7-3: DEPOSIT id={subject_id} was moved to {DATE_MIN}; it reads back {stored}"
+
+
+class TestTheDateFloorIsTheReplayFloor:
+    """Rule 9 (N74) and MF-SEC8-2: the first day a transaction may carry is the first day every replay and history walk
+    starts from, ``EARLIEST_RANGE_START`` (``utils/datetime_utils``) — the same constant, never a copy that could drift."""
+
+    def test_the_date_floor_is_the_replay_floor_never_a_copy(self):
+        """Red today: ``transaction_batch_stages`` defines its own ``TRANSACTION_DATE_MIN = date(1900, 1, 1)`` and has no
+        ``EARLIEST_RANGE_START``.
+
+        Contract: no ``TRANSACTION_DATE_MIN``; ``transaction_batch_stages.EARLIEST_RANGE_START`` is
+        ``datetime_utils.EARLIEST_RANGE_START`` (the object, imported); ``transaction_date_bounds`` starts there.
+        """
+        floor = datetime_utils.EARLIEST_RANGE_START
+        violations: list[str] = []
+        if hasattr(transaction_batch_stages, "TRANSACTION_DATE_MIN"):
+            violations.append(f"transaction_batch_stages still defines its own TRANSACTION_DATE_MIN = {transaction_batch_stages.TRANSACTION_DATE_MIN}")
+        imported = getattr(transaction_batch_stages, "EARLIEST_RANGE_START", None)
+        if imported is None:
+            violations.append("transaction_batch_stages has no EARLIEST_RANGE_START")
+        elif imported is not floor:
+            violations.append(f"transaction_batch_stages.EARLIEST_RANGE_START ({imported}) is not the object datetime_utils.EARLIEST_RANGE_START")
+        first = transaction_batch_stages.transaction_date_bounds(date(2026, 10, 17))[0]
+        if first != floor:
+            violations.append(f"transaction_date_bounds(2026-10-17) starts on {first}, not on {floor}")
+
+        assert violations == [], f"N74's floor is the replay floor, EARLIEST_RANGE_START (MF-SEC8-2), never a copy: {'; '.join(violations)}"
 
 
 # ============================================================================

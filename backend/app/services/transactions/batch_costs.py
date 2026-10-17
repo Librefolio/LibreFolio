@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.transactions.batch import TXValidationCode, TXValidationIssue
+from backend.app.services.transactions.auto_cost import UnreadablePoolError
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext, cost_fields
 
 if TYPE_CHECKING:
@@ -29,23 +30,17 @@ async def compute_wac_and_fx_issues(
         for issue in context.issues
     )
     if not has_non_balance_issues:
+        # W-B69: an Auto row whose pool holds rows that cannot be read is refused, never costed without them.
+        unreadable: list[tuple[str, int, int]] = []
         context.wac_results = await service._compute_wac_for_auto_items(
             context.parsed_creates,
             context.parsed_updates,
             context.link_uuid_map,
+            unreadable=unreadable,
         )
-        # Decision 47: the giving leg of a split TRANSFER pair leaves at its own broker's Auto cost, unless an update of
-        # the same batch gives it one. Without it (a missing conversion) the split is refused like an Auto row, rather
-        # than leave an ADJUSTMENT-out without a cost.
-        explicit = {item.id for _, item in context.parsed_updates if item.cost_basis_override is not None}
-        for split_index, row in context.handover_rows:
-            if row.id in explicit:
-                continue  # an update of the same batch gave this leg its cost: it stays
-            handover = await service._handover_cost(row)
-            if handover.wac:
-                service._write_auto_cost(row, handover)
-            elif handover.wac_missing_pairs:
-                context.issues.append(_wac_fx_unavailable("split", split_index, row.id, handover.wac_missing_pairs))
+        for operation, index, count in unreadable:
+            context.issues.append(_auto_cost_unreadable(operation, index, None, count))
+        await _cost_split_handovers(service, context)
 
     if context.wac_results:
         for wac_result in context.wac_results:
@@ -53,6 +48,40 @@ async def compute_wac_and_fx_issues(
                 operation = wac_result.operation or "create"
                 index = wac_result.index if wac_result.index is not None else 0
                 context.issues.append(_wac_fx_unavailable(operation, index, None, wac_result.wac_missing_pairs))
+
+
+async def _cost_split_handovers(service: TransactionService, context: TransactionBatchContext) -> None:
+    """Decision 47: the giving leg of a split TRANSFER pair leaves at its own broker's Auto cost, unless an update of the
+    same batch gives it one. Without it the split is refused like an Auto row, rather than leave an ADJUSTMENT-out without
+    a cost: a missing conversion (``wacFxUnavailable``), or a pool holding rows that cannot be read (``autoCostUnreadable``,
+    W-B69)."""
+    explicit = {item.id for _, item in context.parsed_updates if item.cost_basis_override is not None}
+    for split_index, row in context.handover_rows:
+        if row.id in explicit:
+            continue  # an update of the same batch gave this leg its cost: it stays
+        try:
+            handover = await service._handover_cost(row)
+        except UnreadablePoolError as exc:
+            context.issues.append(_auto_cost_unreadable("split", split_index, row.id, exc.count))
+            continue
+        if handover.wac:
+            service._write_auto_cost(row, handover)
+        elif handover.wac_missing_pairs:
+            context.issues.append(_wac_fx_unavailable("split", split_index, row.id, handover.wac_missing_pairs))
+
+
+def _auto_cost_unreadable(operation: Any, index: int, ref_id: int | None, count: int) -> TXValidationIssue:
+    """The issue of an Auto cost whose pool holds rows that cannot be read (W-B69): ``AUTO_COST_UNREADABLE`` on
+    ``cost_basis_override``, ``params`` ``{"count": N}``. No id of those rows: the pool can be another user's broker."""
+    return TXValidationIssue(
+        operation=operation,
+        index=index,
+        ref_id=ref_id,
+        error=f"Auto cost: {count} transaction(s) of the pool it averages cannot be read",
+        code=TXValidationCode.AUTO_COST_UNREADABLE.value,
+        params={"count": count},
+        field="cost_basis_override",
+    )
 
 
 def _wac_fx_unavailable(operation: Any, index: int, ref_id: int | None, missing_pairs: list) -> TXValidationIssue:
