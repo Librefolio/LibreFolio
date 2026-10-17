@@ -550,16 +550,19 @@ All these checks run after the service's parameter validation and observation ga
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
 | Prices of the scope, every analytic: assets × days of the period (or of a replay window) | `MAX_BULK_ITEM_DAYS = 1_000_000` (Z-25, lowered by R13-SEC9-2) | `assets/price_query.py`, raised as `BulkTooManyDaysError` and turned into the refusal by `risk/scope.py::prepare_asset_series` (J-50) | `unavailable` · `resource_limit`, remedy `period_or_assets`, for every analytic of the request (a replay window: that analytic only) |
 
-`simulation` builds every `resource_limit` with `_resource_limit()` (`risk_plugins/simulation/plugin.py`).
-The builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
+Every `resource_limit` with a remedy is built by `resource_limit_error()` (`risk/base.py`).
+`simulation`'s builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
 `quant/engine.py`, which the plugin catches around `run_simulation()` and re-raises through
-`_resource_limit()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
-three, plus the `remedy` that one table, `_REMEDY_BY_METRIC`, maps the metric to (`portfolio_cells`
-and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` → `period`,
-`assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`). A metric missing from the table
-still answers `resource_limit`, with no `remedy`. The scope's price budget is the one limit outside the plugin:
-`prepare_asset_series()` refuses with `metric` `price_item_days` and the remedy `period_or_assets`, and
-`RiskService.execute()` answers every planned analytic with that refusal (J-50). The plugin checks the assets and the observations
+`resource_limit_error()` with its `metric`, `actual` and `limit`. The refusal's `details` carry these
+three, plus the `remedy` that one table, `REMEDY_BY_METRIC` (`risk/base.py`), maps the metric to
+(`portfolio_cells` and `stochastic_cells` → `paths_or_horizon`, `history_cells` and `observations` →
+`period`, `assets` → `positions`, `sobol_dimension` → `horizon_or_sampling`, `price_item_days` →
+`period_or_assets`). A metric missing from the table still answers `resource_limit`, with no `remedy`.
+The scope's price budget is the one limit outside the plugin: `prepare_asset_series()` refuses through
+the same builder with `metric` `price_item_days`, and `RiskService.execute()` answers every planned
+analytic with that refusal (J-50). No other module writes a `remedy`, so the remedies the backend can
+name are exactly the table's values: `test_risk_schemas.py` holds them equal to the frontend's
+`RESOURCE_LIMIT_DISPLAY_CODES`, and fails on a `remedy` written anywhere else in the risk packages. The plugin checks the assets and the observations
 itself, before it builds the request: the request's `asset_ids` and `historical_returns` carry the
 same ceilings as their `max_length`, but a pydantic `ValidationError` raised while the builder
 constructs it lands outside the plugin's `try`, where the service can only log a traceback and

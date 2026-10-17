@@ -28,7 +28,6 @@ from backend.app.schemas.risk import (
     AssetSetRiskScope,
     PortfolioRiskScope,
     PreparedAssetSeriesSet,
-    RiskErrorCode,
     RiskExcludedAsset,
     RiskQueryRequest,
     RiskWarning,
@@ -36,7 +35,7 @@ from backend.app.schemas.risk import (
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.financial_math.weights import share_of
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.services.risk.base import RiskAssetClassification, RiskUnavailableError
+from backend.app.services.risk.base import RiskAssetClassification, resource_limit_error
 from backend.app.services.risk.scenario_catalog import get_loaded_risk_scenario_catalog
 from backend.app.services.series_preparation import prepare_asset_series_set
 from backend.app.utils.date_range_limits import BulkTooManyDaysError
@@ -356,10 +355,11 @@ async def prepare_asset_series(
     except BulkTooManyDaysError as exc:
         # J-50: the prices of these assets over this period are more per-day points than one request may build (Z-25):
         # a size limit, refused as every other one is (D379), with the settings that bring it back within reach.
-        raise RiskUnavailableError(
+        raise resource_limit_error(
             f"The prices of {len(asset_ids)} asset(s) over this period would build {exc.item_days} per-day points, more than {exc.max_item_days}",
-            code=RiskErrorCode.RESOURCE_LIMIT,
-            details={"metric": "price_item_days", "actual": exc.item_days, "limit": exc.max_item_days, "remedy": "period_or_assets"},
+            metric="price_item_days",
+            actual=exc.item_days,
+            limit=exc.max_item_days,
         ) from exc
     return prepare_asset_series_set(
         price_results,
