@@ -6145,12 +6145,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   cioè un campo del backend sulle righe della cronologia, le 3 viste e l'i18n. In J-10 solo l'etichetta neutra della
   modale (scelta (a') del coordinatore, 17/10 08:05). Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
-- **SEC8-1b (da R13-SEC8 di E) · Il rigioco storico del rischio cammina un intervallo senza limiti** — alto,
+- ✅ **SEC8-1b (da R13-SEC8 di E) · Il rigioco storico del rischio cammina un intervallo senza limiti** — alto,
   sicurezza (disponibilità); assegnata a J dal coordinatore (17/10 08:22), dopo J-10 e J-47. `replay_range` di
   `/risk/query` non ha limiti (`DateRangeModel` controlla solo `end >= start`) e arriva al caricamento dei prezzi e
   alla preparazione delle serie (`risk/replay.py`). Lo stesso clamp di SEC7-1, cioè `latest_range_end()` e un
   pavimento per l'inizio; l'ambito degli asset lo chiude X-R55 di Z. Prima i rossi, E rivede. Dettagli:
   [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), sezione «J-10».
+  - ✅ 17/10: fatta da J (checkpoint SEC8-1b). `bounded_range()` in `risk/scope.py`: la fine al più domani, l'inizio al
+    più presto 100 anni prima della fine (`range_span_floor`). Vale per l'intervallo principale di ogni richiesta e per
+    la finestra del rigioco, proposta compresa: prima un prezzo piantato all'anno 1 faceva proporre una finestra
+    dall'anno 1 (~739 000 giorni). La cura alla fonte, un pavimento sulle date dei prezzi scritti a mano, è **N83** di X.
+    Dettagli: piano 05, sezione «SEC8-1b».
 - **J-49 · Un controllo statico per i lettori di `latest_range_end`** — basso, test; proposta del test-author di Z
   con X-R55, girata dal coordinatore (17/10 08:30), non ora. La cucitura di SEC7-1
   (`test_scripts/test_services/_range_bounds.py`, `RANGE_BOUND_CONSUMERS`) toglie il limite solo nei moduli della
@@ -6172,6 +6177,9 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
       convenzione D379 (200), al posto del 500.
     - AI Export: 422 `selection_not_applicable`, `reason_code` `too_many_price_days`, al posto del 503.
     - Una frase propria in 4 lingue per tutti e due. Dettagli: piano 05, sezione «J-50».
+    - 17/10 13:45: dev rosso sulla guardia dei rimedi (il rimedio era un letterale fuori dalla tabella): curato in
+      J-50b, una tabella e un costruttore in `risk/base.py` e una scansione che vieta un rimedio scritto altrove.
+      Dettagli: piano 05, sezione «J-50b».
 - **J-51 · Lo YoC di un co-proprietario manca sulle unità ricevute da un broker che non vede** — medio, numeri;
   J, 17/10, letto nel codice durante J-10, non riprodotto. `yield_on_cost._include_external_transfer_legs` aggiunge
   al rigioco la sola gamba della compagna. Se quel broker non è visibile, il componente {A, B} parte da un A senza

@@ -5833,7 +5833,25 @@ prossimo checkpoint.
   > post-ingresso. Il rendering è provato dal renderer ufficiale sui payload della forma esatta del backend
   > (`snapshotDataRendererFailedLots.test.ts`); con un ticker il nome e il ticker vanno nella ENTITY DIRECTORY e la
   > tabella resta `row | asset_ref | failure_codes`.
-- ⏳ **Checkpoint J-12** (FROZEN, in attesa del commit del coordinatore).
+- ✅ **Checkpoint J-12** (2026-10-17): committato dal coordinatore (`4195fa857` fix, `fc8ab50ca` journal), entrato (dev
+  `2fa8ec1a8`); la metà del pannello di Y è entrata dopo (`46b5fbc0e`), con la riga 🔄 del CHANGELOG comune
+  (`4e11fabec`). Worktree in fast-forward a `4e11fabec`. La sonda reale «Portfolio smoke» (fifo_lots v3 e lot_detail v4
+  compatti) va nella lista del developer.
+- ✅ **Revisione di X-R49 `589f15607` (12:55, sola lettura)**: OK, con una nota bassa.
+  - Verificati: il controllo prima di ogni scrittura usa lo stesso `_wipe_reason()` del ciclo di scrittura e legge
+    esattamente gli eventi che il ciclo cancella; segue le voci in ordine come il ciclo (che modifica `existing` sul
+    posto); un rifiuto non scrive nulla; la regola di P-10 passa da `costless_incoming_split_adjustments`; i nomi si
+    limitano a ciò che il chiamante vede (X-R47b). Le pagine combaciano col codice. Corsia 6185:
+    `provider-wipe-split-guard` 12, `market-data-wipe-split-guard` 13.
+  - I cinque percorsi che scollegano o cancellano eventi: cambio di valuta (X-R48 ✓), cambio del piano (X-R49 ✓),
+    eccedenze della sincronizzazione (i collegamenti passano alla riga rimasta con la stessa data e lo stesso tipo ✓),
+    scollegamento esplicito (`asset_event_id=0`, modifica dell'utente sulla riga stessa: fuori perimetro), **rimozione
+    del provider**: la cancellazione dell'assegnazione arriva per CASCADE ai suoi eventi e una transazione collegata fa
+    fallire `RESTRICT` (provato su SQLite in memoria): nessuna perdita silenziosa, P-10 regge.
+  - **Bassa (preesistente, X)**: la rimozione finisce in un 500 grezzo con `detail=str(e)`, il testo di SQLAlchemy
+    con l'istruzione SQL; nel modale il passo 1 è già salvato e il passo 2 non ha un `catch`. Vale per ogni evento
+    generato con una transazione collegata (per esempio un INTEREST collegato alla sua cedola), non solo per gli split.
+    Domanda di prodotto per X: togliere il piano tiene la serie inventata, cambiare provider la cancella.
 - **Revisione di MF, J-45 `43a7f0156` (08:20, sola lettura; `ae4f41297` è il merge di dev)**: OK. Verificati:
   `run_in_executor` + `copy_context().run` su un pool dedicato; la chiusura della sessione dell'API fa solo `close()`
   (niente rollback, niente scadenze), quindi una richiesta annullata non crea gare; nessun `gather`, `wait_for` o
@@ -5856,3 +5874,111 @@ prossimo checkpoint.
 - **Coordinatore (08:34)**: **J-50** (basso, dopo SEC8-1b). Con Z-25 (N77) `get_prices_bulk` alza
   `BulkTooManyDaysError` oltre 5 M giorni-asset; nel rischio e nell'AI Export diventa un 500. Va tradotto in un
   rifiuto con codice. Z darà il nome della classe all'ingresso di Z-25.
+
+#### SEC8-1b — il rigioco storico del rischio con una finestra senza limiti (17/10, dalle 13:00; base `4e11fabec`)
+
+- **Analisi (13:00–13:15, sola lettura)**. Il rapporto di E (R13-SEC8, 08:2x) misurava il costo nel caricatore dei prezzi
+  (`_build_backward_filled_series`: 25,5 µs e ~1,9 KB per giorno; una fine nel 9999 ≈ 74 s e 5,2 GiB per asset). Da
+  allora sono entrati:
+  - X-R55: in `get_prices_bulk` la fine non supera `latest_range_end()`, e il cammino parte dal primo prezzo salvato;
+  - Z-25: al massimo 5 M giorni-asset per richiesta, contati sul cammino effettivo (`_fill_span`).
+  Il percorso del rigioco, oggi:
+  - `load_price_window_facts`: una query aggregata e due sonde FX per valuta (`convert_bulk` legge le righe salvate fra
+    le due date e cerca per bisezione): costo per riga salvata, non per giorno chiesto;
+  - `replay_coverage` / `suggested_replay_range`: aritmetica sulle date; `ensure_market_holidays()`: una tabella per
+    processo, indipendente dalla finestra;
+  - `prepare_asset_series(date_range=replay_range)` → `get_prices_bulk` (limitato come sopra) e
+    `prepare_asset_series_set(requested_range=…)`, che filtra i punti esistenti, senza calendario;
+  - il plugin: `analyzed_range = prepared.effective_range or params.replay_range` e l'eco `replay_range=params.replay_range`
+    (il frontend non lo legge: lo manda soltanto, `riskRequest.ts:153`).
+  **La leva che resta**: `POST /assets/prices` accetta da ogni utente autenticato, su ogni asset (gli asset sono globali),
+  una data qualsiasi. Una quotazione piantata al 0001-01-01 più un rigioco che parte il giorno dopo è coperto a tutte e
+  due le estremità e fa camminare ~740 000 giorni per asset (con i numeri di E, ~19 s e ~1,4 GB per asset; fino al budget
+  di Z-25, 5 M giorni-asset per richiesta). La stessa leva arriva all'ambito di asset dell'intervallo principale del
+  rischio (stessa `prepare_asset_series`) e a `POST /assets/prices/query` (di X).
+- **Disegno proposto**: un aiuto in `risk/scope.py` (già consumatore di `latest_range_end`, quindi nessuna voce nuova in
+  `RANGE_BOUND_CONSUMERS`): la fine al più `latest_range_end()`, l'inizio al più presto `range_span_floor(fine)` (la regola
+  di X-R55 per i cammini giornalieri, 100 anni, come il periodo dell'AI Export di SEC7-1), un inizio dopo la fine portato
+  su di essa. Il rigioco lo applica in testa a `prepare_historical_replay_context` e passa la finestra limitata a fatti,
+  copertura, proposta e preparazione; il plugin ricade su `prepared.requested_range` invece che su `params.replay_range`.
+  L'eco `RiskStressOutput.replay_range` resta la richiesta (nessun contratto cambia).
+  - Alternativa al pavimento: `EARLIEST_RANGE_START` (1900, N74 e SEC8-2 di MF). Scelto lo span: è la regola dei
+    cammini sui prezzi e lega la lunghezza del cammino da sola.
+- **Valori che cambiano (dichiarati prima del codice)**:
+  - una finestra che finisce dopo domani: fatti, copertura, proposta, prezzi e `analyzed_range` si fermano a domani. Oggi
+    ogni asset esce come «stale at window end» con una finestra più corta proposta; dopo, gli asset quotati nei 7 giorni
+    prima di domani si rigiocano fino alla loro ultima quotazione;
+  - una finestra che inizia più di 36 525 giorni prima della sua fine limitata: inizia lì. Conta solo con prezzi salvati
+    così indietro; un asset le cui quotazioni non arrivano al nuovo inizio esce come oggi per ogni finestra che inizia
+    prima delle sue quotazioni;
+  - una finestra tutta dopo domani: `[domani, domani]`;
+  - `analyzed_range` quando nulla è preparato: la finestra limitata invece di quella chiesta.
+- **Domande al coordinatore**: (1) lo stesso aiuto per l'intervallo principale dell'ambito di asset (una riga; per
+  l'ambito di portafoglio l'inizio va già al motore, col pavimento del 1900): dentro, salvo un no; (2) la cura alla
+  fonte, un pavimento sulle date dei prezzi scritti a mano (come N74 per le transazioni), è di X.
+- **Coordinatore (13:2x)**: disegno approvato, valori dichiarati. (1) Sì all'ambito di asset dell'intervallo principale con
+  lo stesso aiuto, in una classe rossa propria. (2) Il pavimento alla scrittura va a X come voce nuova, **N83**: le date
+  dei prezzi e dei cambi scritti a mano in [1900-01-01, `latest_range_end()`], come N74 per le transazioni.
+- ⏳ **Rossi (test-author, dalle 13:20)**: file nuovo `test_services/test_risk_replay_range_bounds.py`, registrato in
+  `RISK_SERVICE_TEST_PATHS`; R1 (fine dopo domani), R2 (inizio oltre 36 525 giorni con un prezzo piantato), R3 (finestra
+  tutta dopo domani), R4 (`TestAssetScopeMainRange`), guardie G1 (rigioco normale) e G2
+  (`TestExtremeReplayRangesFinishQuickly`, fuori dalla corsa dei rossi).
+  - **Prima corsa (codice vecchio)**: 2 rossi (R1, R2), 3 verdi (R3, R4, G1). Motivi letti: R1 → oggi la stress è
+    `unavailable` (A esclusa `stale_at_window_end`, proposta [27/09, 16/10]); R2 → oggi B è coperta e rigiocata
+    (`calendar_days` 39 999).
+    > **⚠️ Fuori pista (il codice contraddice il brief, 5 punti del test-author)**:
+    > 1. R3 non può essere rosso: con [oggi+10, oggi+20] A esce `no_prices_in_window` prima della preparazione, e il
+    >    ripiego del plugin (`plugin.py:630`) non si usa mai (solo con rendimenti, cioè con `effective_range`). Il
+    >    cammino vero «dopo domani» è la **proposta** → R3 sostituito: C quotata da oggi−10, finestra [oggi−20, oggi+3],
+    >    proposta oggi [prima+1, oggi+3], dopo [prima+1, domani].
+    > 2. R4 e la parte `analyzed_range` di R2 non dicono nulla: `analyzed_range` va fra date di rendimento (giorni di
+    >    quotazione), P è solo la base e si vede in `calendar_days` → R4 fissa `calendar_days ≤ 36 526`; R2 tiene
+    >    l'esclusione e aggiunge la proposta dopo la cura ([prima quotazione nella finestra + 1, ieri]).
+    > 3. Con un solo asset escluso la stress è `unavailable` e il motivo sta nei dettagli dell'errore senza prefisso:
+    >    letto in tutti e due i posti.
+    > 4. Le due eco della finestra (`output.replay_range`, `metadata.params.replay_range`) restano la richiesta.
+    > 5. **La leva vera è la proposta**: un prezzo piantato al 0001-01-02 più quotazioni recenti fa proporre oggi
+    >    [0001-01-03, ieri], che l'interfaccia offre di applicare (~739 000 giorni, sotto i 5 M di Z-25) → **R5** rosso
+    >    (veloce sul codice vecchio: l'asset esce prima di ogni cammino); G2 (applicare quella proposta) e G3 (intervallo
+    >    principale dall'anno 1) nella classe estrema, fuori dalla corsa dei rossi.
+  - **Dove sta il limite dell'intervallo principale**: all'ingresso di `RiskService.execute` (una copia della richiesta),
+    perché la chiamata delle serie è comune a ogni tipo di ambito; dichiarato al coordinatore (portafoglio: nessun
+    cambio in pratica, solo un inizio oltre 100 anni prima della fine parte dal pavimento).
+- ✅ **Rossi, seconda corsa (codice vecchio, 13:3x)**: 5 rossi (R1, R2, R3, R5, R4), 1 verde (G1); G2 e G3 fuori dalla
+  corsa. Motivi letti: R1 → stress `unavailable`, A esclusa `stale_at_window_end`; R2 → B rigiocata, `calendar_days`
+  39 999; R3 → proposta [08/10, 20/10] invece di [08/10, 18/10]; R5 → G esclusa `stale_at_window_end`, proposta
+  [0001-01-03, 16/10] (0,06 s: nessun cammino); R4 → `calendar_days` 39 999 > 36 526. Tutti giusti.
+- ✅ **Codice (13:34)**: `bounded_range()` in `risk/scope.py` (la fine al più `latest_range_end()`, l'inizio al più presto
+  `range_span_floor(fine)`, un inizio dopo la fine portato su di essa, la stessa istanza se già dentro i limiti); una
+  copia della richiesta all'ingresso di `RiskService.execute`; la finestra limitata in testa a
+  `prepare_historical_replay_context` (fatti, copertura, proposta, preparazione); il ripiego del plugin della stress
+  su `prepared.requested_range`. L'eco della finestra resta la richiesta. Nessun nuovo lettore di `latest_range_end`
+  (resta `risk/scope.py`): `RANGE_BOUND_CONSUMERS` invariata.
+  > **⚠️ Fuori pista**: `risk-all` ha dato 1 rosso dichiarato: `test_risk_eligibility.py` fissava la prima lettura dei
+  > fatti alla finestra chiesta (1019-01-01); ora è quella limitata, `(1911-04-29, 2011-04-29)`. Lo spillo aggiornato dal
+  > test-author (letterale, con il commento); il resto del test invariato.
+- ✅ **Verdi (13:35–13:52)**: il file nuovo **8** (con G2 e G3), `risk-all` **916**, AI Export che chiama il rischio
+  **206**, `ai-export-period-bounds` **8**, i limiti di SEC7-1 **20**, `range-ceiling` **50**, `layer-boundaries` **52**,
+  `schemas all` **1907**, check-orphans ✓, `mkdocs build` stretto ✓, check-links ✓; ruff e black puliti. Porta libera.
+  Doc: `risk/architecture.md` («The range first», Replay Coverage).
+
+#### J-50b — dev rosso: la guardia dei rimedi non vedeva `period_or_assets` (17/10, dalle 13:45; urgente)
+
+- **Il rosso** (porta H del coordinatore, isolato, su `c2021cb52`): `schemas` →
+  `test_risk_schemas.py::test_resource_limit_remedies_agree_between_backend_and_frontend`, «worded-but-never-emitted=
+  ['period_or_assets']». La guardia confronta i valori di `_REMEDY_BY_METRIC` (plugin della simulazione) con
+  `RESOURCE_LIMIT_DISPLAY_CODES`; J-50 scriveva il rimedio come letterale in `risk/scope.py`, fuori dalla tabella.
+  > **⚠️ Fuori pista (lezione)**: i verdi di J-50 non comprendevano la categoria `schemas`. Da ora una modifica del
+  > rischio corre anche `schemas risk`.
+- ✅ **Cura**: una tabella e un costruttore in `risk/base.py`, `REMEDY_BY_METRIC` (la tabella di prima più
+  `price_item_days → period_or_assets`) e `resource_limit_error()` (il `_resource_limit` di prima, stessi dettagli);
+  il plugin della simulazione (4 chiamate) e `risk/scope.py` li usano; spariti `_REMEDY_BY_METRIC` e `_resource_limit`
+  (due import rimasti inutili in `scope.py` tolti). Test (test-author): la guardia legge la tabella nuova, confronto
+  invariato; test nuovo `test_the_backend_writes_a_remedy_only_through_resource_limit_error` (una scansione `ast` di
+  `services/risk/` e `services/risk_plugins/`: nessun `"remedy"` né `remedy=` fuori da `risk/base.py`) con la sua prova
+  `test_the_remedy_detector_names_every_hand_written_remedy`. Doc: il paragrafo dei rimedi di `risk/architecture.md`.
+- ✅ **Verdi**: `schemas risk` **90**, `risk-all` **916**, `schemas all` **1907**, `layer-boundaries` **52**, mkdocs ✓.
+- **Due commit dallo stesso albero**: `risk/scope.py` e `risk/architecture.md` portano tutti e due i cambi, quindi la cura
+  è anche una patch, `/tmp/libreFolio_j50_remedy_fix.patch`: solo i pezzi della cura, costruita da HEAD, controllata
+  (`git apply --cached --check` ok; ruff, black e la scansione dei rimedi sulle versioni della sola cura). Ciò che resta
+  dopo la patch è esattamente SEC8-1b.
