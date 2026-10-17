@@ -2526,8 +2526,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     2. la conferma con la parola da digitare (`restore-confirm-word`, `restore-confirm-input`, `restore-confirm`);
     3. l'overlay del riavvio (`restart-overlay`, `restart-detail`);
     4. l'esito. Il fallimento ha la sua schermata: l'overlay con `data-outcome="rolled_back"` e il motivo (es.
-       `first_start_failed`), poi l'avviso `restore-last-result` sulla card. Il successo (`committed`) no: la pagina
-       passa all'accesso senza dire niente (FBKP-107). Cosa fotografare per il successo va chiarito con la 1.3.
+       `first_start_failed`), poi l'avviso `restore-last-result` sulla card. Il successo (`committed`) oggi no: la
+       pagina passa all'accesso e la card non dice niente (FBKP-107; confermato da B il 17/10).
+  - **Il successo: B-27** (risposta di B, coordinatore, 17/10 03:13). La 1.3 l'ha deciso dopo B4b; il developer lo
+    rivede con N67.
+    - Sarà un avviso informativo sulla card: «applied on {date}, backup of {date} (LibreFolio {version}), confirmed by
+      {user}», visibile fino al ripristino successivo.
+    - Arriva con una E2E su uno stato finto, che dà anche lo scatto del successo. Lo scatto aspetta l'ingresso di
+      B-27, che segnala il coordinatore.
+    - Fino ad allora si fotografano l'overlay di fallimento (`rolled_back`) e l'avviso `restore-last-result`.
   - B ha già simulato il flusso in `frontend/e2e/settings/backup.spec.ts` (`0cd910a7e`). La fixture `restoreTest`,
     con la sua `lane`, risponde sempre nella pagina al riavvio (`POST /api/v1/backup/restore/restart`). Quando il caso
     lo chiede, risponde anche a upload, controllo, esito, stato e `GET /api/v1/system/ready`.
@@ -2538,14 +2545,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Proposta (test-author, perimetro G): gli scatti nel test di Settings, gli aiuti in
     `frontend/e2e/fixtures/galleryBackup.ts`, che già finge la card del backup. Solo intercept finti, come in
     FBKP-102…105: nessun archivio caricato, nessun ripristino in attesa sul server della corsia, nessun riavvio.
-  - Da decidere anche l'inquadratura mobile di `settings/backup-ready`. Con B la card del ripristino sta sotto quella
-    del backup, e su mobile resta tutta sotto il bordo dello schermo (`dh` en 1167 su 740): non si vede. Su desktop lo
-    schermo si allunga e mostra le due card intere.
+  - L'inquadratura mobile di `settings/backup-ready`. Con B la card del ripristino sta sotto quella del backup, e su
+    mobile resta tutta sotto il bordo dello schermo (`dh` en 1167 su 740): non si vede. Su desktop lo schermo si
+    allunga e mostra le due card intere.
+    - Decisione della 1.3 (coordinatore, 16/10 sera): uno scatto mobile a parte, scorso fino alla card del ripristino.
+    - Con B4 dei backup (`df1f0d52c`, 17/10) la card del backup si allunga ancora: c'è la scelta «Kind of backup».
   - Poi: un doppio lancio a/b filtrato, come per `settings/plugins` ed `email`, e le righe di
     `mkdocs_src/docs/gallery/*.en.md` scritte da docs-writer.
 
   Dettagli: [piano di G](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md),
   «Dopo G-18», `settings/backup-ready` per la 1.3.
+- **G-21 · Uno scatto delle sezioni premium della ricerca degli asset** — basso; 1.3 tramite il coordinatore, 16/10
+  notte. Non è per subito.
+  - La definizione di fatto del piano di X chiede uno scatto della ricerca con le sezioni premium (X-R32).
+  - Serve un provider premium instradato, come fa l'E2E `asset-modal.spec.ts` («Asset search — premium first…»).
+  - Si programma con G; lo scatto lo scrive test-author. Nel frattempo gli scatti degli import mostrano già la riga
+    «Can't find it? Let us know».
+
+  Dettagli: X-R32, nella sezione «X · Plugin, asset e ricerca (fase 01)» di questo file.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
