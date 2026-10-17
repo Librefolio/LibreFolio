@@ -6,8 +6,11 @@ the way in. ``FAEventUpsert`` (``POST /assets/events``) accepts a SPLIT of 0 or 
 it in every way a manual event is written: created (``mode`` "upsert" or "create"), upserted on the key of a stored
 manual SPLIT, edited in place by ``id``, or turned into a SPLIT by such an edit. A provider refresh
 (``_upsert_asset_events``) writes one as it comes. Stored, nothing shows yet; as soon as a transaction links that SPLIT,
-the portfolio engine raises ``ValueError("SPLIT AssetEvent … must have a positive finite ratio")``
-(``financial_math/portfolio/engine.py``) and the Dashboard report answers 500.
+the portfolio engine raised ``ValueError("SPLIT AssetEvent … must have a positive finite ratio")``
+(``financial_math/portfolio/engine.py``) and the Dashboard report answered 500 — until MF-D4. Since MF-D4 a stored ratio
+that is not valid counts as missing: the report names its asset with the ``INVALID_SPLIT_RATIO`` data-quality warning,
+and the lots analysis skips that SPLIT. X-R47 stays the guard on the write path, so that such a ratio is not stored in
+the first place: MF-D4 only covers the rows already stored.
 
 The cure's contract:
 
@@ -332,7 +335,9 @@ async def _upsert_refused(owned: _Owned, data: list[FAEventUpsert], story: str) 
         except Exception as exc:  # noqa: BLE001 — any other exception is the defect under test
             pytest.fail(f"{story} raised {exc!r} instead of an AssetSourceError: POST /assets/events answers 500")
     messages = [row["message"] for row in result["results"]]
-    pytest.fail(f"{story} was accepted ({messages}) and reads back as {_describe(await _rows(owned))}, instead of being refused with EVENT_INVALID_SPLIT_RATIO (X-R47): once a transaction links that SPLIT, the Dashboard answers 500 (the portfolio engine's ValueError)")
+    pytest.fail(
+        f"{story} was accepted ({messages}) and reads back as {_describe(await _rows(owned))}, instead of being refused with EVENT_INVALID_SPLIT_RATIO (X-R47, the write-path guard): once a transaction links that SPLIT, the Dashboard no longer answers 500 (MF-D4) but silently ignores that SPLIT's ratio, and the report only shows an INVALID_SPLIT_RATIO data-quality warning"
+    )
 
 
 def _assert_refused_for_the_ratio(refusal: AssetSourceError, story: str, *, asset_id: int, item_index: int, splits: list[tuple[int, int]]) -> None:

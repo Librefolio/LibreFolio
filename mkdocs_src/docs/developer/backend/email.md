@@ -503,7 +503,10 @@ judged as written, nothing is resolved: a tailnet name such as `relay.tailnet.ts
 The `detail` travels to the admin interface as the parameters of a translated message, so it never names the host,
 the user or the sender. The English `summary` is for the log only, and the plain-text warning's summary does name
 the host. [`GET /api/v1/email/status`](#api-status) never returns a `summary`. The keys are written whole, like the
-platform's; their messages are in the `email` i18n source of the frontend ([The Email Tab](#email-tab)).
+platform's; their messages are in the `email` i18n source of the frontend ([The Email Tab](#email-tab)). The «Security»
+tab of Settings › Administration lists the three checks too, from `GET /api/v1/security/checks`, with the platform's,
+and links a finding of theirs to the Email tab
+([SecurityTab](../frontend/components/features/settings.md#securitytab)).
 
 `EMAIL_CONFIG_CHECKS = (check_smtp_configuration, check_smtp_encryption, check_email_links)` closes the platform's
 `CONFIG_CHECKS` (`*EMAIL_CONFIG_CHECKS` at the end of the tuple in `backend/app/services/platform/config_audit.py`),
@@ -987,7 +990,7 @@ wrong credentials leave an event; the answer says the others. The email itself l
   nothing is counted or sent; the button stays enabled, and a click after the unblock works.
 - **In workstream A's components**: `RegisterCard` returns to the sign-in with `email.verification.registered` when
   the answer says `verification_required`; `describeRegistrationError()` turns 409
-  `EMAIL_VERIFICATION_UNAVAILABLE` into `email.verification.signUpUnavailable`. The Admin tab
+  `EMAIL_VERIFICATION_UNAVAILABLE` into `email.verification.signUpUnavailable`. The Global Settings tab
   (`GlobalSettingsTab.svelte`) disables the switch while its saved value is off and `email.links` of
   `GET /system/instance` is false, with the hint `email.verification.settingNeedsEmail` (once saved on, it can go
   off and on again until the next save), and shows a 409 `EMAIL_VERIFICATION_UNAVAILABLE` as
@@ -1166,8 +1169,8 @@ an `EmailInstanceConfig` (`backend/app/schemas/email.py`) with two booleans. `ge
 
 In the frontend, `email.links` decides three things: whether the share dialogs offer «Send by email»
 (`sendByEmailVisible()`), whether the sign-in's **Forgot Password?** card shows the «forgot password» form
-([Links by Email in the Interface](#link-actions)), and whether the Admin tab lets the switch of email verification
-turn on ([In the Frontend](#verification-frontend)).
+([Links by Email in the Interface](#link-actions)), and whether the Global Settings tab lets the switch of email
+verification turn on ([In the Frontend](#verification-frontend)).
 
 ---
 
@@ -1227,11 +1230,13 @@ The emails' own texts stay in the backend catalogue ([The Catalogue](#catalogue)
 registers the tab:
 
 ```ts
-{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
+{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser, group: 'administration'},
 ```
 
-Order 130 puts it after Admin (100), so in the right-hand group on a wide screen, and `visible` keeps it for
-administrators: a regular user never sees it in the bar, and a `?tab=email` they open is ignored.
+`group` puts it in the «Administration» group, on the right of the bar on a wide screen: the tab is in the group's
+second bar, where order 130 puts it after Global Settings (100), Users (110) and Backup (120), and `?tab=email` opens it
+inside the group. `visible` keeps it for administrators: a regular user never sees it, and a `?tab=email` they open is
+ignored.
 
 ---
 
@@ -1316,12 +1321,12 @@ too. A new limit of this kind uses it too, instead of a counter of its own.
 
 | Member | Contract |
 |--------|----------|
-| `SlidingWindowLimiter(limit, window_seconds, *, max_keys=10_000, eviction_scan=32, clock=time.monotonic)` | `ValueError` when `limit < 1`, `window_seconds <= 0`, `max_keys < 1` or `eviction_scan < 1`; `limit` and `window_seconds` are properties |
+| `SlidingWindowLimiter(limit, window_seconds, *, max_keys=10_000, clock=time.monotonic)` | `ValueError` when `limit < 1`, `window_seconds <= 0` or `max_keys < 1`; `limit` and `window_seconds` are properties |
 | `peek(key=None, *, limit=None)` | The `RateDecision` a hit would get now; counts nothing and never creates a key |
 | `hit(key=None, *, limit=None)` | The same decision; records the hit only when it is allowed |
 | `count(key=None)` | How many hits of `key` are in the window now |
 | `reset(key=None)`, `clear()` | Forget one key, or every key |
-| `len(limiter)` | The number of keys tracked |
+| `len(limiter)` | The number of keys holding a hit still in the window |
 | `RateDecision(allowed, remaining, retry_after)` | Frozen |
 
 - **The window**: a hit at `t` counts while `clock() - t < window_seconds`; exactly `window_seconds` later it no
@@ -1336,22 +1341,28 @@ too. A new limit of this kind uses it too, instead of a counter of its own.
   count, the wait is for enough hits to expire.
 - **Keys** are any hashable value, and `None`, the default, is a key like any other.
 - **Bounded memory**: at most `max_keys` keys, always, and a new key is never refused for want of room. A new key
-  beyond them evicts, among the `eviction_scan` least recently used keys (used meaning peeked, hit or counted), the
-  first that is not full; when those are all full, the least recently used one. Full means at least as many hits
-  still in the window, at that moment, as the limiter's own `limit`: a per-call `limit` changes nothing here, and a
-  key whose hits have left the window is not full. The new key is never the one evicted, and an evicted key's hits
-  are forgotten with it. Only an allowed hit creates a key, and a key whose hits have all expired is dropped when it
-  is next read.
-- **Why full keys are spared** (decision N70, from review R13-SEC6): a full key is the one refusing, and forgetting it
-  hands its caller a fresh allowance. With plain least-recently-used eviction, fresh keys sprayed at a limit freed a
-  locked one: at most 10,000 fresh identifiers, one failure each, unlocked an identifier of workstream A's
-  [limit on failed sign-ins](../architecture/security.md#login-limit).
-- **Why the search is bounded**: without `eviction_scan`, a map of full keys would make every new key walk all of it
-  under the lock. The «forgot password» limits are hit at every request, before anything else is read
-  ([`admit_forgotten_password()`](#flow-forgot)), so a cheap request would buy that walk: a CPU amplifier. The bound
-  has a price: a full key that is the least recently used, followed in that order by `eviction_scan - 1` other full
-  keys, is evicted all the same. For the sign-in limit per identifier, that is 31 more locked identifiers, about 310
-  failures, where a search without a bound would ask for every other key full, about 100,000.
+  beyond them evicts the key with the fewest hits still in the window at that moment, and among those the least
+  recently used (used meaning peeked, hit or counted). No limit, the limiter's own or a call's, enters the choice.
+  The new key is never the one evicted, and an evicted key's hits are forgotten with it. Only an allowed hit creates
+  a key, and a key whose hits have all left the window is dropped at the next call, read or not.
+- **Why the fewest hits go** (lot E-14, from workstream E's review of decision N70): a key sprayed to make room holds
+  one hit, so a spray of fresh keys never frees a key that holds more, locked or not. To free a key with n hits,
+  every other key must hold n hits too: for workstream A's
+  [limit on failed sign-ins](../architecture/security.md#login-limit) per identifier (10 in 15 minutes, 10,000
+  keys), about 90,000 failures within the window buy 9 more guesses. Measured on the limiter, the cheapest attack
+  costs about 10,000 requests per extra guess. N70's eviction (the first key not full among the 32 least recently
+  used, as `eviction_scan`) cost about 1,100, no better than plain least-recently-used eviction: an identifier
+  stopped one failure short of the lock is never full, so a spray of 10,000 fresh ones freed it.
+- **Exact expiry**: a heap holds, for each key, when its oldest hit leaves the window, and every call first takes the
+  hits that have left out of their keys. A key whose hits have left keeps no protection, read or not: with expiry
+  only on reading, a crowd of keys kept at a count they no longer hold would let a key with fewer hits go for one
+  request each.
+- **No search**: the keys are grouped by count, each group least recently used first, so a new key costs the same
+  however many keys there are: about 30 µs for a new key and its 10 hits beside 10,000 full keys, where a walk of
+  every key costs about 7 ms. The «forgot password» limits are hit at every request, before anything else is read
+  ([`admit_forgotten_password()`](#flow-forgot)), so a walk would make a cheap request a CPU amplifier. The heap keeps
+  at most two entries per key plus 64, and is rebuilt from the keys past that: memory stays bounded whatever the
+  rate of requests.
 - **Injectable clock**: tests move a fake clock instead of waiting.
 - **Thread-safe**: one lock; threads hitting a key with a limit of N get exactly N hits allowed.
 - **Per process**, in memory: with N worker processes a limit is N times the configured one, and a restart forgets
@@ -1367,7 +1378,7 @@ too. A new limit of this kind uses it too, instead of a counter of its own.
 | `./dev.py test services email-messages` | `test_services/test_email_messages.py` (EMM-001…041) | Languages and kinds, keyword-only builders, `http(s)` links only, escaping, no user value in a subject, Babel durations, the administrator invitation's extra sentence, the catalogue guard, the headers and parts of `compose_message()`, exactly one recipient; every shown value on one line in both parts (control characters and line or paragraph separators to spaces, the nine bidirectional controls removed), markup split across lines still escaped; the sixth kind `email_changed` in the four languages, without a link and without any part of the new address, which `build_email_changed()` cannot even receive, `masked_address()` gone (EMM-034…038); the three kinds a stranger can address taking no `username` and opening with `common.greeting_anonymous`, no `$username` in their sections, while `build_admin_setup()` and `build_test_message()` still greet by name (EMM-039…041) |
 | `./dev.py test services email-delivery` | `test_services/test_email_delivery.py` (EMD-001…051) | The fake server itself and `closed_port()`; `deliver()` and its error codes (TLS never falls back to plain text, a bad `QUIT` is a success, the certificate is verified, an address outside ASCII goes with `SMTPUTF8` and is `SEND_FAILED` without it); `email_config_state()` and its one-time log; the budget; `send_email()` off the event loop; a blocked instance (or an unreadable `LIBREFOLIO_BLOCKED`) refused before anything else, `sending_blocked()`; no secret and no full recipient address in the logs; `mailbox_budget_key()`: the `+tag` cut on every domain unless nothing is left before it, the dots of a Gmail local part removed, `googlemail.com` as `gmail.com`, dots kept on any other domain (a Gmail subdomain or look-alike included), a domain beyond ASCII case-folded and never IDNA-encoded, the aliases of one mailbox one key (EMD-050, EMD-051) |
 | `./dev.py test services email-checks` | `test_services/test_email_checks.py` (EMK-001…017) | The three checks in every state (`email.smtp`, `email.smtp_encryption` with local and public hosts, `email.links` off/ready/missing/invalid, invalid including an empty `?`, credentials and a bad port), `EMAIL_CONFIG_CHECKS`, no password in any field and no host, user or sender in a `detail`; the three checks closing the platform's `CONFIG_CHECKS` and `run_config_checks()`; the import orders, each in a fresh interpreter; the startup audit: one `email.smtp` error and no exception for an unusable configuration, one `email.smtp_encryption` warning for plain text to a public host, the `email.links` `info` and `warning`, nothing when email is off, never the password |
-| `./dev.py test utils rate-window` | `test_utilities/test_rate_window.py` (RWL-001…024) | The window edge, `peek` never counting, refused hits not recorded, `retry_after`, the per-call limit, independent keys, the eviction at `max_keys` that spares full keys (RWL-014…016, RWL-018…024: the least recently used key not full among `eviction_scan`, full measured on the hits still in the window against the limiter's own `limit`, the fallback to the least recently used, never the new key, never more than `max_keys`, a locked identifier kept through 1,000 fresh ones), exactly N allowed under concurrent threads |
+| `./dev.py test utils rate-window` | `test_utilities/test_rate_window.py` (RWL-001…029) | The window edge, `peek` never counting, refused hits not recorded, `retry_after`, the per-call limit, independent keys, `len` counting only the keys with a hit in the window (RWL-029), the eviction at `max_keys` of the key with the fewest hits still in the window, the least recently used among them (RWL-014…016, RWL-018…028: no limit enters the choice, the lightest key wherever it stands, never the new key, never more than `max_keys`, a locked identifier kept through 1,000 fresh ones, one a hit short of its limit too, a locked one behind 31 full ones too, expired hits protecting nothing even on a key read since, the expiry heap within two entries per key plus 64), exactly N allowed under concurrent threads |
 | `./dev.py test services email-links` | `test_services/test_email_links.py` (EML-001…012) | `links_state()` (ready, missing, invalid: no host, whitespace, a `?` or `#` even empty, an invalid port, an unclosed IPv6 bracket, credentials; an IPv6 literal and a capitalised scheme ready), `require_links()`, `email_link()` (the base plus the page path, the token in the fragment), `LinksState.instance`, `email_instance_config()` in every combination, a blocked instance included |
 | `./dev.py test services email-flows` | `test_services/test_email_flows.py` (EMF-001…062) | `supported_email_language()` and `account_language()` (the account's own language when the emails speak it, else `default_language`, else English, never creating a row, a row that no longer validates still giving its language); `send_test_email()`; `send_link_email()`: the order of its refusals, live tokens of the right purpose only, recipients and languages per purpose, a reset link of an inactive account refused, the link from `LIBREFOLIO_PUBLIC_URL` only; «forgot password» open as shipped, with nothing left to hold it (EMF-053); one home for the per-client key, workstream H's `client_rate_key()`, with no copy in `flows` (EMF-036); admission (configuration, 10 per address with an IPv6 client by its /64 and an IPv4 address sharing its count with its mapped form, 3 per identifier, the budget, no address no shared count), the background work (lookup as the login, active accounts only, nothing while an administrator's reset link is live, 3 emails an hour per mailbox, one reset every 5 minutes and 3 an hour per account, counted again inside the write transaction against a rival link made meanwhile, the link created only when the email can go and revoked when it does not, a blocked instance creating nothing, never raising, a failure logged with its type and without traceback or identifier); the email change notice (`email_changed_work()`: the old address only, the account's language, no username and no part of the new address, the public host or «LibreFolio», nothing for the same address, an `info` line with email off and a warning when configured but unusable, 3 an hour per account and per old mailbox in any letter case with a failed email counted for neither, no address in a log, never raising); the aliases of one mailbox — `+tag`s, Gmail's dots, `googlemail.com` — sharing the budget of the reset emails and of the notices, each email still at the address as stored, and two Outlook mailboxes apart in a dot keeping a budget each (EMF-060…062) |
 | `./dev.py test api email` | `test_api/test_email_api.py` (EMA-001…052) | Admin only: 401 without a session, 403 for a member, nothing sent or spent; the status in its three states with the three checks, `links` and, when ready, the budget, never the SMTP configuration or a check's `summary`, without a connection or a name lookup; the test email (409, 422 only for `EmailRecipientError`, 429 with `Retry-After`, 502 with the `SmtpErrorCode`); `POST /email/links` with every answer, `EMAIL_ACCOUNT_INACTIVE` included; `POST /email/password-reset` open as shipped, with every answer, the same 202 for any identifier, IPv6 clients counted by their /64, and one email to a member with a live reset link (EMA-049); every link equal to the `LIBREFOLIO_PUBLIC_URL` one whatever Host, Origin, X-Forwarded-Host or Referer the request forges, and an unparsable `LIBREFOLIO_PUBLIC_URL` never a 500; `GET /system/instance`: `email` exactly `{available, links}`, false on a blocked instance, never a value of the configuration; both routes reading the configuration off the event loop; behind a reverse proxy LibreFolio does not trust (lot E-13): two visitors through one local proxy share no per-address count and the limiter holds no key, while a public peer's own forwarding header or a LAN client without one is still counted |
@@ -1384,15 +1395,15 @@ too. A new limit of this kind uses it too, instead of a counter of its own.
 | `./dev.py test front-utility email-send-link` | `frontend/e2e/settings/email-send-link.spec.ts` (ESL-E-01…04) | In the browser: «Send by email» in the invitation and reset dialogs, with `email.links` true in `GET /system/instance` and `POST /email/links` simulated; absent without `email.links` |
 | `./dev.py test front-utility forgot-password-email` | `frontend/e2e/auth-forgot-password-email.spec.ts` (FPE-E-01…03) | In the browser, signed out: the sign-in's **Forgot Password?** card with and without `email.links`, the form against a simulated `POST /email/password-reset` |
 | `./dev.py test front-utility email-tab` | `frontend/e2e/settings/email-tab.spec.ts` | In the browser: an administrator's tab on the real backend in the `off` state, hidden from a member; the test email against a simulated API (200, 502, 429) |
-| `./dev.py test front-utility email-verification` | `frontend/e2e/auth-email-verification.spec.ts` (EVE-E-01…05) | In the browser, signed out on simulated answers: a sign-up that must wait goes back to the sign-in with a line of its own and signs nobody in; `EMAIL_VERIFICATION_UNAVAILABLE` keeps the register card with words of its own; `EMAIL_NOT_VERIFIED` draws the verification notice instead of the error box, and «send the link again» goes with the typed credentials. As an administrator, with `GET /system/instance` simulated: the switch of Settings › Admin off while `email.links` is false, usable when it is true; nothing saved |
+| `./dev.py test front-utility email-verification` | `frontend/e2e/auth-email-verification.spec.ts` (EVE-E-01…05) | In the browser, signed out on simulated answers: a sign-up that must wait goes back to the sign-in with a line of its own and signs nobody in; `EMAIL_VERIFICATION_UNAVAILABLE` keeps the register card with words of its own; `EMAIL_NOT_VERIFIED` draws the verification notice instead of the error box, and «send the link again» goes with the typed credentials. As an administrator, with `GET /system/instance` simulated: the switch of Settings › Administration › Global Settings off while `email.links` is false, usable when it is true; nothing saved |
 
 The backend files are under `backend/test_scripts/`. All thirteen backend entries are `pure` in the runner catalogue:
 no lane database, no server. The two E2 files build their database as a private SQLite file under `tmp_path`, and
 `api email` mounts the real auth and email routers under the API prefix in an app of its own: its accounts sign in
 through `POST /auth/login`, over `httpx.ASGITransport`. `api email-verification-hooks` does the same with the auth,
 users, settings and email routers, on a private SQLite file. The Settings tab registry's own test
-(`settingsTabs.test.ts`) pins the Email tab: administrators only, no props, after Admin. The gallery has a
-`settings/email` shot, with the state answered `ready` by the test.
+(`settingsTabs.test.ts`) pins the Email tab: administrators only, no props, in the «Administration» group after
+Backup. The gallery has a `settings/email` shot, with the state answered `ready` by the test.
 
 - **No inherited configuration.** Every module, the rate window's included, starts with an autouse fixture that
   removes every `LIBREFOLIO_SMTP_*` variable; each test then sets only what it needs with `monkeypatch`, and

@@ -158,6 +158,14 @@ without history (`supports_history = False`, such as the CSS Scraper) therefore 
 one sync at a time, one point per day; outside syncs, the
 [current-quote write-back](#current-quotes-and-todays-ohlc) stores the same day's point.
 
+Before asking a provider's history from a dated start, FETCH reads the core history cache
+(`core._asset_history_cache`): it asks from the first day the cached entry misses between the start
+and `history_end`, the last day asked as a price (yesterday when the range reaches today), and skips
+the call when the entry misses none. The walk that looks for the missing days covers at most
+`RANGE_SPAN_LIMIT_DAYS` (100 years) before `history_end` (`range_span_floor()`, X-R55): an older start
+counts as missing, so the provider is still asked from it, never for less than before.
+{: #history-cache-walk }
+
 Persistence intentionally does **not** claim one atomic transaction for the whole refresh.
 `bulk_upsert_prices()` commits bounded chunks of
 `PRICE_UPSERT_CHUNK_SIZE = 1000`; event upserts commit their own bounded chunks; and
@@ -236,6 +244,23 @@ Each query item can request:
 `refresh.py` through `POST /assets/prices/sync`; the query path remains DB-only while retaining
 its warm-up, event, FX-conversion, signal-computation, and final response-slicing passes.
 
+Each item's range has a ceiling (X-R55). Before any pass, `get_prices_bulk()` cuts it to end no later
+than tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper
+[R13-SEC7-1](../financial_math.md#portfolio-package) also uses), a day of margin for a user whose
+today is already the server's tomorrow. The series, the comparison series, the signals and
+the events see the cut range; an item that starts after it gets an empty result in its place (its
+`asset_id`, no price, event, error or signal), and the other items are unaffected.
+`POST /assets/prices/query`, the risk preparation and AI Export all read through this method, so a
+range of theirs that reaches past tomorrow stops there. Before, the last price was carried forward to
+the end, one point per day: about 2.9 million from a recent price to 9999-12-31, followed by a 500
+(`OverflowError`). Without a seed price (none stored before the range), `_build_backward_filled_series()`
+also starts its walk at the first stored price of the range instead of its start: the days before it
+cost nothing, and the points emitted are the same. X-R55's own module, `backend/app/utils/date_range_limits.py`,
+keeps the span limit: `RANGE_SPAN_LIMIT_DAYS` (36,525 days, 100 years) back from an end
+(`range_span_floor()`), which bounds the [history-cache walk](#history-cache-walk) of a sync and the
+[FX conversion ranges](../fx/architecture.md#convert-range-ceiling).
+{: #price-query-range-ceiling }
+
 With `target_currency`, the conversion pass converts every close not already in that currency
 through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
 the native values in the `original_*` fields, and records the rate's date in
@@ -256,9 +281,10 @@ change itself is the house's `fixed_period_changes()`
 - **Response**: `items[]`, in request order, of `{asset_id, as_of, currency, periods[], errors[]}`. Each period is
   `{key, days, change_ratio}`, with `change_ratio = price(as_of) / price(as_of − days) − 1`: a fraction, null when
   either price is missing or ≤ 0.
-- **Price on a day**: the last stored price on or before it, the backward fill of `POST /assets/prices/query`. One
-  grouped query runs per valued day, for every asset of the request: a `MAX(date) … GROUP BY asset_id` subquery
-  joined back to `PriceHistory`. No series is built per asset.
+- **Price on a day**: the last stored price on or before it, the backward fill of `POST /assets/prices/query`, with
+  no [ceiling](#price-query-range-ceiling) on `as_of`. One grouped query runs per valued day, for every asset of
+  the request: a `MAX(date) … GROUP BY asset_id` subquery joined back to `PriceHistory`. No series is built per
+  asset.
 - **With `target_currency`**: each day's price is converted at that day's rate, the way the price query converts each
   day of its series. One `convert_bulk()` batch serves the whole request. A day without a rate is null, with an error.
 - **Native**: `currency` is the anchor's currency, null when `as_of` has no price. A day priced in another currency
@@ -266,6 +292,11 @@ change itself is the house's `fixed_period_changes()`
 
 `errors` is deduplicated and capped at ten plus one "… and N more" line. The endpoint reads the stored history
 directly, so a 5Y change exists whatever range the page has loaded.
+
+The Assets list calls the endpoint through `fetchAssetPeriodChanges()` (`frontend/src/lib/utils/periodChanges.ts`):
+one request for every asset of the list, native (no `target_currency`), with `as_of` the end of the selected range.
+Besides its fixed 1D column, the table shows each period whose `days` fit in the range's whole calendar days
+(`visiblePeriodColumns()`).
 
 ### 💹 Current Quotes and Today's OHLC
 
@@ -461,7 +492,7 @@ What a caller returns while a provider is paused, or after it refused:
 
 Financial markets are closed on weekends and holidays. To provide a continuous price series for charts, LibreFolio uses a **backward-fill** strategy.
 
-If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`).
+If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`). The fill stops at tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper R13-SEC7-1 also uses), the query's [range ceiling](#price-query-range-ceiling).
 
 Backward fill reuses stored market prices only, and valuation adds no separate
 last-purchase-price fallback: the portfolio engine values each holding through the

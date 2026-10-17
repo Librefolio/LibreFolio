@@ -62,7 +62,10 @@ Today the profile changes seven things:
   for the idle risk workers, then `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY` (see
   «Main Options» and «Risk engine workers» in [Environment Variables](configuration.md)). A value you
   set always wins over the profile, even one equal to the `selfhosted` default:
-  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance.
+  `RISK_SIMULATION_IDLE_TIMEOUT_SECONDS=600` keeps 600 seconds on a managed instance. If your panel
+  or your environment turns `LIBREFOLIO_FRAME_PROTECTION` or `LIBREFOLIO_CSP_REPORT_ONLY` off, the
+  log says so at every start, a warning for frame protection and an `info` for the policy, and so do
+  the security checks: see «Startup Checks» in [Configuration](configuration.md).
 - **Frame protection** adds `X-Frame-Options: SAMEORIGIN` and
   `Content-Security-Policy: frame-ancestors 'self'` to every response: a browser then shows
   LibreFolio in a frame only inside LibreFolio's own pages. If your hosting panel, or any page at
@@ -128,9 +131,10 @@ your users sign in again after each restart. See
 - A restart policy that starts LibreFolio again when it stops by itself: `restart: unless-stopped`
   in Docker Compose (the compose files LibreFolio ships use it) or `always`, `Restart=always` with
   systemd, the `always` policy on a Fly.io Machine. An administrator who confirmed a restore can stop
-  the server so that its next start applies it, with **Restore and restart** in Settings › Backup
-  (`POST /api/v1/backup/restore/restart`): a clean stop, which a policy that restarts only after a
-  failure (`on-failure`, the default of `fly deploy`) does not follow with a start.
+  the server so that its next start applies it, with **Restore and restart** in
+  Settings › Administration › Backup (`POST /api/v1/backup/restore/restart`): a clean stop, which a
+  policy that restarts only after a failure (`on-failure`, the default of `fly deploy`) does not
+  follow with a start.
 
 ---
 
@@ -148,7 +152,7 @@ minute.
 | Variable | What it does |
 | --- | --- |
 | `LIBREFOLIO_ADMIN_EMAIL` | Your customer's email address, the administrator's. Setting it turns the initial administrator on |
-| `LIBREFOLIO_ADMIN_USERNAME` | The administrator's username, `admin` when not set: 3 to 50 characters |
+| `LIBREFOLIO_ADMIN_USERNAME` | The administrator's username, `admin` when not set: 3 to 50 characters, without `@` |
 | `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` | The token of the setup link, chosen by your panel: 32 to 200 characters, only letters, digits and `-` `.` `_` `~`. `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` reads it from a file instead, as Docker mounts its secrets |
 
 - Set them in the container's environment, or in `.env`, like the other variables of this page.
@@ -346,9 +350,9 @@ After signing in, users get a full page instead of the app, **This instance is b
   administrators also get a **Manage subscription** link to your subscription page, which opens in
   a new tab; the other users do not see it;
 - administrators also get a second card under the message, **Keep a copy of the data**: the backup
-  card of **Settings › Backup**, to back up the whole instance, follow the backup, download the
-  archive before the instance is gone, and delete it from the server. The other users do not see it:
-  their text tells them to ask their administrator for a backup;
+  card of **Settings › Administration › Backup**, to back up the whole instance, follow the backup,
+  download the archive before the instance is gone, and delete it from the server. The other users
+  do not see it: their text tells them to ask their administrator for a backup;
 - **Logout** signs out.
 
 The card makes, by default, the same archive as your [hosting panel](#panel-backups): it leaves out
@@ -515,7 +519,8 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `409` | A start while another backup runs | `backup_busy` |
 | `409` | A download of a job that has no archive: still running, or failed | `backup_job_not_ready` |
 | `409` | A delete while the job runs | `backup_job_running` |
-| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written. The log has the cause | `backup_folder_unusable`, `backup_failed` |
+| `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |
+| `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written for another reason. The log has the cause | `backup_folder_unusable`, `backup_failed` |
 
 The `code` comes in the `detail` of the answer, with a `message` in English:
 
@@ -527,8 +532,9 @@ The `code` comes in the `detail` of the answer, with a `message` in English:
 
 ## 📤 The Upload Limit of a Restore {: #restore-upload-limit }
 
-To check an archive for a restore, an administrator uploads it to the instance from Settings › Backup
-([Restore from Settings › Backup](backup_restore.md#restore-settings)), through
+To check an archive for a restore, an administrator uploads it to the instance from
+Settings › Administration › Backup
+([Restore from Settings › Administration › Backup](backup_restore.md#restore-settings)), through
 `PUT /api/v1/backup/restore/upload`; the instance then checks it on a copy, as
 `backup restore --dry-run` does on the [command line](cli_tools.md). On an instance you host, the
 administrator is your customer: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is how you cap the size of the
@@ -558,14 +564,15 @@ LIBREFOLIO_BACKUP_MAX_UPLOAD_MB=2048
   the log has an error that names the variable: `The upload limit of a restore cannot be read`.
 - The disk of the data directory needs room for the archive and, while it is checked, for its copy
   unpacked as well (how much: «Try a Restore on a Copy» in [CLI Admin Tools](cli_tools.md)): short of
-  space, the upload answers `507` with the code `backup_no_space`, and the check refuses the archive
-  with `no_space`.
+  space, the upload answers `507` with the code `backup_no_space`, also when the disk reports itself
+  full only at the end of the file, as a network file system or a quota may. The check answers with
+  its own code, `no_space`: a `507` when it cannot even start, a refusal of the archive once it runs.
   An upload that cannot be written for another reason answers `500` with the code
   `backup_upload_failed`, and the log has the cause.
 - An administrator reads the limit in force in `upload_limit_mb` of
   `GET /api/v1/backup/restore/status`: `0` for no limit, `null` when the value cannot be read.
-  Settings › Backup shows it on its restore card, such as *Archives up to 500 MB.*, and refuses a
-  larger file before sending it.
+  Settings › Administration › Backup shows it on its restore card, such as *Archives up to 500 MB.*,
+  and refuses a larger file before sending it.
 - On a [blocked instance](#instance-block), the upload is refused like the rest of the app, and so
   are the check and the restore: the block lets the data leave, never come in.
 

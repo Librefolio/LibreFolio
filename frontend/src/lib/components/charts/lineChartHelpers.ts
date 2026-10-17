@@ -574,6 +574,29 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
 // Arrow marker rotation
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** The smallest turn, in degrees, worth a write-back: below it an arrow looks the same (Y-25). */
+const ARROW_ROTATE_EPSILON_DEG = 0.01;
+
+/** The charts whose last full option drew no arrow marker: `updateArrowRotations` has nothing to aim on them (Y-25). */
+const chartsWithoutArrows = new WeakSet<object>();
+
+/** Whether a series option carries an arrow marker `updateArrowRotations` aims: a `markPoint` item drawn as an arrow, at a coord. */
+function hasArrowMarker(series: unknown): boolean {
+    const items = (series as {markPoint?: {data?: unknown}} | null | undefined)?.markPoint?.data;
+    return Array.isArray(items) && items.some((item) => (item as {symbol?: unknown} | null)?.symbol === 'arrow' && Boolean((item as {coord?: unknown}).coord));
+}
+
+/**
+ * Records, from the option a chart was just given whole (`setOption(option, true)`), whether it draws any arrow
+ * marker: call it right after every full render. On a chart whose last full option drew none, `updateArrowRotations`
+ * returns before its `getOption()`, a deep copy of the whole option; a chart never noted is aimed as before (Y-25).
+ */
+export function noteArrowMarkers(chart: echarts.ECharts, option: {series?: unknown}): void {
+    const series = Array.isArray(option.series) ? option.series : option.series ? [option.series] : [];
+    if (series.some(hasArrowMarker)) chartsWithoutArrows.delete(chart);
+    else chartsWithoutArrows.add(chart);
+}
+
 /**
  * After `chart.setOption()`, scan all series for arrow markPoints
  * and recompute their `symbolRotate` using pixel-space coordinates.
@@ -587,13 +610,17 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
  *  - Once a `dataZoom` gesture settles (zoom changes pixel aspect ratio), from the chart's zoom
  *    debounce — never on each tick: `getOption()` deep-clones the whole option, and the write-back
  *    merges every series again (Y-8)
- *  - On `resize` events
+ *  - Once a resize settles, from the same debounce — never on each `ResizeObserver` callback (Y-25)
  *
  * Reads the option afresh on every call and keeps nothing between calls, so what it writes back
  * carries the colours of the option on screen, after a theme or colour rebuild too (Y-8).
+ *
+ * Writes the series back only when an arrow turns by more than `ARROW_ROTATE_EPSILON_DEG`, and
+ * reads nothing on a chart whose last full option, noted by `noteArrowMarkers`, drew no arrow (Y-25).
  */
 export function updateArrowRotations(chart: echarts.ECharts): void {
     if (!chart || chart.isDisposed?.()) return;
+    if (chartsWithoutArrows.has(chart)) return;
 
     const option = chart.getOption() as any;
     if (!option?.series) return;
@@ -648,7 +675,10 @@ export function updateArrowRotations(chart: echarts.ECharts): void {
                 //   math: towardNeighborDeg + 180°
                 //   ECharts (0° = up, anti-clockwise): math_angle - 90°
                 //   Combined: towardNeighborDeg + 180 - 90 = towardNeighborDeg + 90
-                marker.symbolRotate = towardNeighborDeg + 90;
+                const rotation = towardNeighborDeg + 90;
+                // An arrow that has not turned is left as it is: the write-back merges every series again (Y-25)
+                if (typeof marker.symbolRotate === 'number' && Math.abs(marker.symbolRotate - rotation) <= ARROW_ROTATE_EPSILON_DEG) continue;
+                marker.symbolRotate = rotation;
                 needsUpdate = true;
             } catch (_) {
                 // convertToPixel can fail if chart not fully laid out

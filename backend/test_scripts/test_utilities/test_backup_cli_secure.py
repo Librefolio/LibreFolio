@@ -68,6 +68,22 @@ but those ``inspect`` and a dry run already print for a zip (``test_backup_cli.p
     end-of-file or an empty password at the prompt → ``password_required``, nothing written. From a pipe, unchanged (a
     guard, green before and after): the first line is the password — a second one is neither ``create``'s
     confirmation nor part of it — and nothing is asked.
+(m) Lot B-19 (red until it lands; §1-bis, the contract revised): started as root, ``decrypt`` reads ``--password-file``
+    first, as the user that started it — as ``create``, ``inspect`` and ``restore`` do, so that a secret only root can
+    read works — then runs as the owner of the data directory when there is one, with the same
+    ``_drop_root_privileges`` as the other commands (groups dropped, the owner's group, the owner's user, in that
+    order), and only then reads the archive. The order is the barrier: the password file readable until the recorded
+    ``setuid`` and never after it, the archive only from it on. ``--test-db``: the test data directory's owner, never
+    the production one's. Without a data directory (the variable pointing to a folder that does not exist), or not
+    started as root: no identity change, decrypt as before — each of those first shows that the same decrypt, as root
+    with the data directory there, does switch. Not root, the data directory's setting is never read: one that
+    ``get_data_dir()`` refuses (a ``#`` in ``LIBREFOLIO_DATA_DIR``) is never in the way, decrypt as today — after the
+    barrier that, as root, the same setting is read and refused. As root, that setting: one ❌ line naming the problem,
+    exit 1, no traceback, nothing at ``-o``, no prompt, no identity change. A switch refused: exit 1, one ❌ line naming
+    the owner (``uid:gid``) and «Run the command as that user», nothing at ``-o``, the password never asked. An archive
+    it cannot read (mode 000): one ❌ line, ``Cannot read <path>: <the system's reason> (archive_unreadable)``, never
+    ``not_an_envelope``; exit 1, nothing at ``-o``, the password never asked. The cases that switch, or read mode 000,
+    are skipped as root: a folder the test makes is root's, and mode 000 denies root nothing.
 
 No password — a weak, a wrong or a second one included — reaches stdout or stderr of any run.
 
@@ -84,7 +100,10 @@ accepted cost (``log2_n=14``); the restore cases use the real database at the he
 ``alembic upgrade``. The ages the sweep of (j) reads are set with ``os.utime`` — a link's own with
 ``follow_symlinks=False``, never its target's — and checked before the run. At a terminal (l), ``sys.stdin`` is
 watched — every read through it recorded — and end-of-file waits after what was typed ahead, so that no read ever
-waits. POSIX-only (pty, modes, links).
+waits. The identity changes of (m) are recorded instead of made (``os.geteuid``, ``setgroups``, ``setgid``,
+``setuid`` replaced, as ``test_backup_cli.py`` does), ``geteuid`` answering root until the recorded ``setuid``;
+``--test-db`` writes ``LIBREFOLIO_TEST_MODE`` and drops this process's database engines: both put back after the test.
+POSIX-only (pty, modes, links).
 """
 
 from __future__ import annotations
@@ -113,6 +132,7 @@ from typing import Any, TextIO
 
 import pytest
 
+from backend.app.config import get_data_dir
 from backend.app.services.accounts.password_policy import failed_rules
 from backend.app.services.platform.instance_backup.archive import build_archive, check_archive
 from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, backups_dir, ensure_private_dir
@@ -1039,11 +1059,12 @@ INSTANCE_KEY = "test-only-instance-key-never-a-secret-0123456789"
 NO_KEY_TO_ANNOUNCE = [pytest.param("no-key", id="zip-without-the-key"), pytest.param("not-a-zip", id="not-a-zip"), pytest.param("no-manifest", id="key-entry-without-a-manifest")]
 
 
-def decrypting(monkeypatch, capsys, path: Path, out: Path) -> Ran:
-    """``decrypt path -o out``, the password from a file beside the envelope, standard input an empty pipe."""
+def decrypting(monkeypatch, capsys, path: Path, out: Path, *, before: tuple[str, ...] = ()) -> Ran:
+    """``decrypt path -o out``, the password from a file beside the envelope, standard input an empty pipe; ``before``:
+    options of ``backup`` itself (``--test-db``)."""
     flags, typed = given("file", path.parent)
     with stdin_holding(monkeypatch, typed):
-        return run(capsys, "decrypt", str(path), "-o", str(out), *flags)
+        return run(capsys, *before, "decrypt", str(path), "-o", str(out), *flags)
 
 
 def key_lines(ran: Ran) -> list[str]:
@@ -1237,3 +1258,262 @@ def test_password_stdin_from_a_pipe_is_still_its_first_line(tmp_path, monkeypatc
     assert prompts == [], f"from a pipe, nothing is asked: {prompts}"
     not_shown(ran, PASSWORD, WRONG_PASSWORD)
     print_success(f"{name}: the first line of the pipe, nothing asked")
+
+
+# =============================================================================
+# (m) decrypt started as root (B-19)
+# =============================================================================
+
+
+#: Run as root, a folder a test makes is root's — there is no owner to switch to — and mode 000 denies root nothing.
+needs_another_owner = pytest.mark.skipif(cli.AS_ROOT, reason="as root, a folder the test makes is root's (no owner to switch to), and mode 000 denies root nothing")
+
+
+class Identity:
+    """Who this process is, as the command sees it: ``os.geteuid()`` answers ``euid`` until a ``setuid`` changes it, so
+    that a second switch in the same run finds a process that is no longer root, as a real one would; ``setgroups``,
+    ``setgid`` and ``setuid`` are recorded instead of made, as ``test_backup_cli.py``'s ``identity`` fixture records
+    them. ``at_switch`` runs at the ``setuid``: the order barrier."""
+
+    def __init__(self, euid: int, at_switch: Callable[[], None] | None = None) -> None:
+        self.euid = euid
+        self.calls: list[tuple[str, object]] = []
+        self._at_switch = at_switch
+
+    def geteuid(self) -> int:
+        return self.euid
+
+    def setgroups(self, groups: Any) -> None:
+        self.calls.append(("setgroups", list(groups)))
+
+    def setgid(self, gid: int) -> None:
+        self.calls.append(("setgid", gid))
+
+    def setuid(self, uid: int) -> None:
+        self.calls.append(("setuid", uid))
+        self.euid = uid
+        if self._at_switch is not None:
+            self._at_switch()
+
+
+def faked_identity(monkeypatch, euid: int, *, at_switch: Callable[[], None] | None = None, refuse_setuid: bool = False) -> Identity:
+    """This process's identity replaced by an ``Identity`` that starts as ``euid``; ``refuse_setuid``: ``setuid``
+    refused as it is to a process without the privilege (EPERM)."""
+    identity = Identity(euid, at_switch)
+    monkeypatch.setattr(backup_cli.os, "geteuid", identity.geteuid, raising=False)
+    monkeypatch.setattr(backup_cli.os, "setgroups", identity.setgroups, raising=False)
+    monkeypatch.setattr(backup_cli.os, "setgid", identity.setgid, raising=False)
+    monkeypatch.setattr(backup_cli.os, "setuid", cli.refuse if refuse_setuid else identity.setuid, raising=False)
+    return identity
+
+
+def owner_switch(root: Path) -> list[tuple[str, object]]:
+    """The identity changes that make a root process the owner of ``root``, in their order: its groups dropped, then
+    the owner's group, then the owner's user."""
+    owner = root.stat()
+    return [("setgroups", []), ("setgid", owner.st_gid), ("setuid", owner.st_uid)]
+
+
+def an_envelope(tmp_path: Path, name: str) -> tuple[Path, Path, Path]:
+    """A sealed backup of its own, made under ``tmp_path/name``: the zip, its envelope, and where ``decrypt`` writes."""
+    clear = clear_archive(tmp_path / name)
+    return clear, sealed(clear, tmp_path / name / "inputs"), output_path(tmp_path, f"{name}-out")
+
+
+def decrypted_as_before(ran: Ran, clear: Path, out: Path) -> bool:
+    """Whether ``ran`` decrypted as ``decrypt`` always does: exit 0, ``out`` the zip that was sealed."""
+    return ran.code == 0 and out.is_file() and cli.sha256_of(out) == cli.sha256_of(clear)
+
+
+def switched_as_root(capsys, monkeypatch, tmp_path: Path, root: Path) -> None:
+    """The presence barrier of the cases where nothing switches: the same decrypt, as root with the data directory
+    ``root`` there, becomes its owner — so that «no identity change» never holds only because ``decrypt`` never
+    switches (as before B-19)."""
+    identity = faked_identity(monkeypatch, 0)
+    clear, path, out = an_envelope(tmp_path, "barrier")
+    ran = decrypting(monkeypatch, capsys, path, out)
+    assert identity.calls == owner_switch(root) and decrypted_as_before(ran, clear, out), f"the barrier: as root with the data directory there, decrypt becomes its owner, then decrypts — identity changes {identity.calls}, not {owner_switch(root)}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+
+
+def keep_engines(monkeypatch) -> None:
+    """``--test-db`` (``set_test_mode``) drops this process's database engines: they are put back after the test."""
+    from backend.app.db import session  # noqa: PLC0415 — only the --test-db case needs it, as set_test_mode itself
+
+    monkeypatch.setattr(session, "sync_engine", session.sync_engine)
+    monkeypatch.setattr(session, "async_engine", session.async_engine)
+
+
+@needs_another_owner
+def test_decrypt_as_root_first_becomes_the_owner_of_the_data_directory(tmp_path, monkeypatch, capsys, prompts):
+    """(m) B-19, §1-bis: ``--password-file`` read first, as the user that started the command (as ``create``,
+    ``inspect`` and ``restore`` read it: a secret only root can read works); then groups dropped, the owner's group,
+    the owner's user; and only then the archive is read. The order is the barrier: the password file is readable until
+    the recorded ``setuid`` and never after it, the archive only from it on. Then decrypt as always: the zip that was
+    sealed, 0600."""
+    print_section("dev.py backup decrypt, started as root")
+    root = instance(tmp_path, monkeypatch)
+    clear, path, out = an_envelope(tmp_path, "backup")
+    flags, _typed = given("file", path.parent)
+    secret = Path(flags[1])
+
+    def at_the_switch() -> None:
+        path.chmod(0o600)  # the archive: readable from the switch on, so read after it
+        secret.chmod(0o000)  # the password file: readable until the switch, so read before it
+
+    path.chmod(0o000)
+    identity = faked_identity(monkeypatch, 0, at_switch=at_the_switch)
+    with stdin_holding(monkeypatch, ""):
+        ran = run(capsys, "decrypt", str(path), "-o", str(out), *flags)
+    assert identity.calls == owner_switch(root), f"as root, decrypt becomes the owner of the data directory — its groups dropped, the owner's group, the owner's user: {owner_switch(root)}, not {identity.calls}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert decrypted_as_before(ran, clear, out), f"the password file read before the switch (nobody can read it after), the archive after it (nobody could before): exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    mode = stat.S_IMODE(out.stat().st_mode)
+    assert mode == 0o600, f"the zip is readable by its owner only (0600), not {oct(mode)}"
+    assert prompts == [], f"a source was given: nothing is asked: {prompts}"
+    not_shown(ran, PASSWORD)
+    print_success("root → the password file, then setgroups([]), setgid, setuid of the owner, then the archive: decrypted")
+
+
+@needs_another_owner
+def test_decrypt_with_test_db_as_root_becomes_the_owner_of_the_test_data_directory(tmp_path, monkeypatch, capsys, prompts):
+    """(m) B-19: ``--test-db`` honoured, as by the other commands: the owner taken is the test data directory's, never
+    the production one's. The production directory missing, a decrypt that ignored ``--test-db`` would switch to
+    nobody; then the other way round, the test directory missing and the production one there, it would switch to the
+    production directory's owner."""
+    production, test_data = tmp_path / "production", cli.make_data_dir(tmp_path / "test-data").resolve()
+    monkeypatch.delenv("LIBREFOLIO_TEST_MODE", raising=False)  # set_test_mode writes it: put back after the test
+    monkeypatch.setenv("LIBREFOLIO_DATA_DIR", str(production))
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(test_data))
+    keep_engines(monkeypatch)
+    identity = faked_identity(monkeypatch, 0)
+    clear, path, out = an_envelope(tmp_path, "backup")
+    ran = decrypting(monkeypatch, capsys, path, out, before=("--test-db",))
+    assert identity.calls == owner_switch(test_data) and decrypted_as_before(ran, clear, out), f"--test-db as root: the owner of the test data directory, {owner_switch(test_data)}, not {identity.calls}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    cli.make_data_dir(production)
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "test-data-absent"))
+    identity = faked_identity(monkeypatch, 0)
+    clear, path, out = an_envelope(tmp_path, "again")
+    ran = decrypting(monkeypatch, capsys, path, out, before=("--test-db",))
+    assert identity.calls == [] and decrypted_as_before(ran, clear, out), f"--test-db without its test data directory: never the production directory's owner, decrypted as before: identity changes {identity.calls}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert not (tmp_path / "test-data-absent").exists(), "no test data directory is created"
+    print_success("--test-db → the test data directory's owner, never the production one's")
+
+
+@needs_another_owner
+def test_decrypt_as_root_without_a_data_directory_stays_who_it_is(tmp_path, monkeypatch, capsys, prompts):
+    """(m) B-19: decrypting on another computer, no LibreFolio data there (the variable pointing to a folder that does
+    not exist): nothing to switch to, decrypt as before — «it needs no data directory» stays true. The barrier first."""
+    switched_as_root(capsys, monkeypatch, tmp_path, instance(tmp_path, monkeypatch))
+    absent = cli.point_at(monkeypatch, tmp_path / "absent")
+    identity = faked_identity(monkeypatch, 0)
+    clear, path, out = an_envelope(tmp_path, "elsewhere")
+    ran = decrypting(monkeypatch, capsys, path, out)
+    assert identity.calls == [] and decrypted_as_before(ran, clear, out), f"as root without a data directory: no identity change, decrypted as before: {identity.calls}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert not absent.exists(), "no data directory is created"
+    print_success("root, no data directory → no identity change, decrypted")
+
+
+@needs_another_owner
+def test_decrypt_not_started_as_root_changes_no_identity(tmp_path, monkeypatch, capsys, prompts):
+    """(m) B-19: started as the owner itself, not root: nothing to drop, decrypt as before. The barrier first, on the
+    same data directory."""
+    root = instance(tmp_path, monkeypatch)
+    switched_as_root(capsys, monkeypatch, tmp_path, root)
+    identity = faked_identity(monkeypatch, root.stat().st_uid)
+    clear, path, out = an_envelope(tmp_path, "backup")
+    ran = decrypting(monkeypatch, capsys, path, out)
+    assert identity.calls == [] and decrypted_as_before(ran, clear, out), f"not root: no identity change, decrypted as before: {identity.calls}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    print_success("not root → no identity change, decrypted")
+
+
+@needs_another_owner
+def test_decrypt_as_root_that_cannot_become_the_owner_stops_before_anything(tmp_path, monkeypatch, capsys):
+    """(m) B-19: the switch refused (``setuid``, EPERM): one ❌ line naming the owner and what to do, exit 1, nothing at
+    ``-o``, and the password never asked — at a terminal, where it would be, the right one ready to be typed."""
+    root = instance(tmp_path, monkeypatch)
+    _clear, path, out = an_envelope(tmp_path, "backup")
+    faked_identity(monkeypatch, 0, refuse_setuid=True)
+    asked = answering(monkeypatch, PASSWORD)
+    with terminal_holding(monkeypatch, TYPED_AHEAD) as stdin:
+        ran = run(capsys, "decrypt", str(path), "-o", str(out))
+    owner = root.stat()
+    said = [line for line in ran.refused if f"({owner.st_uid}:{owner.st_gid})" in line and "Run the command as that user" in line]
+    assert ran.code == 1 and len(ran.refused) == 1 and said == ran.refused, f"exit 1, one ❌ line naming the owner ({owner.st_uid}:{owner.st_gid}) and «Run the command as that user»: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert list(out.parent.iterdir()) == [], f"nothing at -o: {sorted(entry.name for entry in out.parent.iterdir())}"
+    assert (asked, stdin.reads) == ([], []), f"the password is never asked: prompts {asked}, reads {stdin.reads}"
+    not_shown(ran, PASSWORD, WRONG_PASSWORD)
+    print_success("switch refused → exit 1, the owner named, nothing written, nothing asked")
+
+
+@cli.needs_permission_checks
+def test_decrypt_of_an_archive_it_cannot_read_says_so_before_the_password(tmp_path, monkeypatch, capsys):
+    """(m) B-19: an archive the command cannot read — now possibly a root-only file, once it runs as the server's user —
+    is not «not a secure backup» (``is_envelope`` answers False for a file it cannot read): one ❌ line, ``Cannot read
+    <path>: <the system's reason> (archive_unreadable)``, exit 1, nothing at ``-o``, the password never asked."""
+    instance(tmp_path, monkeypatch)
+    _clear, path, out = an_envelope(tmp_path, "backup")
+    path.chmod(0o000)
+    asked = answering(monkeypatch, PASSWORD)
+    with terminal_holding(monkeypatch, TYPED_AHEAD) as stdin:
+        ran = run(capsys, "decrypt", str(path), "-o", str(out))
+    prefix, code = f"❌ Cannot read {path}: ", "(archive_unreadable)"
+    said = [line for line in ran.refused if line.startswith(prefix) and line.rstrip().endswith(code) and line.rstrip()[len(prefix) : -len(code)].strip()]
+    assert ran.code == 1 and len(ran.refused) == 1 and said == ran.refused, f"exit 1, one ❌ line: {prefix}<the system's reason> {code} — never not_an_envelope: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert list(out.parent.iterdir()) == [], f"nothing at -o: {sorted(entry.name for entry in out.parent.iterdir())}"
+    assert (asked, stdin.reads) == ([], []), f"the password is never asked: prompts {asked}, reads {stdin.reads}"
+    print_success("an archive it cannot read → (archive_unreadable), nothing written, nothing asked")
+
+
+def broken_data_dir_setting(monkeypatch, tmp_path: Path) -> str:
+    """Production mode, ``LIBREFOLIO_DATA_DIR`` set to a value ``get_data_dir()`` refuses here (a ``#`` in it): the
+    message of its ``ValueError``, checked before any command runs."""
+    monkeypatch.delenv("LIBREFOLIO_TEST_MODE", raising=False)
+    monkeypatch.delenv("LIBREFOLIO_TEST_DATA_DIR", raising=False)
+    monkeypatch.setenv("LIBREFOLIO_DATA_DIR", str(tmp_path / "data#broken"))
+    try:
+        found = get_data_dir()
+    except ValueError as exc:
+        return str(exc)
+    pytest.fail(f"precondition: a # in LIBREFOLIO_DATA_DIR must make get_data_dir() raise ValueError here, not give {found}")
+
+
+def refused_for_the_setting(capsys, monkeypatch, envelope_made: tuple[Path, Path, Path], problem: str) -> None:
+    """The presence barrier of the case where the setting is never read: as root, the same decrypt reads it and refuses
+    it — so that «decrypt as today» never holds only because ``decrypt`` reads no setting at all (as before B-19)."""
+    faked_identity(monkeypatch, 0)
+    _clear, path, out = envelope_made
+    ran = decrypting(monkeypatch, capsys, path, out)
+    assert ran.code == 1 and ran.refusals(problem), f"the barrier: as root, decrypt reads the data directory's setting and refuses one get_data_dir() refuses ({problem}): exit {ran.code}: {ran.text[-cli.TAIL:]}"
+
+
+def test_decrypt_not_started_as_root_never_reads_the_data_directory_setting(tmp_path, monkeypatch, capsys, prompts):
+    """(m) B-19, §1-bis: not root there is nothing to switch, so the data directory's setting is never read — one that
+    ``get_data_dir()`` refuses is never in the way: decrypt as today, exit 0, the zip written. The barrier first: as
+    root, the same setting is read, and refused."""
+    barrier, (clear, path, out) = an_envelope(tmp_path, "barrier"), an_envelope(tmp_path, "backup")
+    problem = broken_data_dir_setting(monkeypatch, tmp_path)
+    refused_for_the_setting(capsys, monkeypatch, barrier, problem)
+    identity = faked_identity(monkeypatch, 1000)
+    ran = decrypting(monkeypatch, capsys, path, out)
+    assert identity.calls == [] and decrypted_as_before(ran, clear, out), f"not root, a data directory setting get_data_dir() refuses ({problem}): decrypted as today, never refused for it: identity changes {identity.calls}, exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert prompts == [], f"a source was given: nothing is asked: {prompts}"
+    not_shown(ran, PASSWORD)
+    print_success("not root, a data directory setting it cannot use → decrypted as today")
+
+
+def test_decrypt_as_root_with_a_data_directory_setting_it_cannot_use_stops_with_its_message(tmp_path, monkeypatch, capsys):
+    """(m) B-19, §1-bis: as root the setting must be read, to know whose data this is; one ``get_data_dir()`` refuses is
+    said on one ❌ line naming the problem — exit 1, never a traceback — before anything else: nothing at ``-o``, no
+    prompt (at a terminal, where there would be one, the right password ready to be typed), no identity change."""
+    _clear, path, out = an_envelope(tmp_path, "backup")
+    problem = broken_data_dir_setting(monkeypatch, tmp_path)
+    identity = faked_identity(monkeypatch, 0)
+    asked = answering(monkeypatch, PASSWORD)
+    with terminal_holding(monkeypatch, TYPED_AHEAD) as stdin:
+        ran = run(capsys, "decrypt", str(path), "-o", str(out))
+    said = ran.refusals(problem)
+    assert ran.code == 1 and len(ran.refused) == 1 and said == ran.refused, f"exit 1, one ❌ line naming the problem ({problem}): exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert "Traceback" not in ran.text, f"never a traceback: {ran.text[-cli.TAIL:]}"
+    assert list(out.parent.iterdir()) == [], f"nothing at -o: {sorted(entry.name for entry in out.parent.iterdir())}"
+    assert (asked, stdin.reads, identity.calls) == ([], [], []), f"no prompt, no identity change: prompts {asked}, reads {stdin.reads}, identity changes {identity.calls}"
+    not_shown(ran, PASSWORD, WRONG_PASSWORD)
+    print_success("root, a data directory setting it cannot use → one ❌ line, exit 1, nothing asked, nothing written")

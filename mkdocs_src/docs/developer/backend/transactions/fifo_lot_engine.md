@@ -199,7 +199,7 @@ EventKind = Literal[
 - `SELL` transaction → `SELL`
 - positive `ADJUSTMENT` → `ADJUSTMENT_IN`, its `unit_price` the row's `cost_basis_override` (0 without one)
 - negative `ADJUSTMENT` → `ADJUSTMENT_OUT`, its `unit_price` the row's `cost_basis_override` (0 without one): every fragment closes at that price, in a currency resolved per fragment when the event is applied (see [Hand-over at cost](#handover-at-cost))
-- transaction ID found in `split_ratios_by_tx_id` → `SPLIT`
+- transaction ID found in `split_ratios_by_tx_id` → `SPLIT`, when its ratio passes `is_valid_split_ratio()`; otherwise the row is skipped: never an `ADJUSTMENT_IN` / `ADJUSTMENT_OUT`, no rescale, no exception (lot MF-D4)
 - paired `TRANSFER` legs → synthesized `TRANSFER_DEPART` + `TRANSFER_ARRIVE`
 
 ### 📋 Inventory effects

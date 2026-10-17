@@ -15,6 +15,7 @@ from backend.app.schemas.risk_scenarios import (
     RiskScenarioDimension,
     RiskScenarioMissingHistoryPolicy,
 )
+from backend.app.utils.json_utils import ensure_json_safe
 
 
 class RiskDataFrequency(StrEnum):
@@ -704,6 +705,12 @@ class RiskAnalyticRequest(StrictModel):
     instance_id: str = Field(..., min_length=1, max_length=80, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
     analytic_code: str = Field(..., min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
     parameters: Dict[str, JsonValue] = Field(default_factory=dict)
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def validate_parameters_json(cls, value: object) -> object:
+        """A finite number wherever the parameters hold one (H-34): JsonValue alone lets a NaN or an Infinity through."""
+        return ensure_json_safe(value, "parameters")
 
 
 class RiskQueryRequest(StrictModel):

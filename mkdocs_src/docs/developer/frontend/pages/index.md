@@ -272,11 +272,15 @@ frontend/src/routes/
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="Settings Page" style="width: 100%; display: block;">
 </div>
 
-- **5 tabs** from the tab registry (`SETTINGS_TABS`, see
+- **Tabs** from the tab registry (`SETTINGS_TABS` and `SETTINGS_TAB_GROUPS`, see
   [Settings Components](../components/features/settings.md#tab-registry)): Profile, Preferences,
-  About, Admin (global settings) and Users, which only a superuser sees. `?tab=<id>` opens a tab
-  the user can see, from the first render; an unknown or hidden id is ignored, and a value is
-  applied once, so a page update that keeps it does not take back a tab the user clicked
+  Plugins and About, then the **Administration** group on the right, whose tabs show in a second
+  bar: Global Settings, read by everyone, and Users, Backup, Email and Security, which only a
+  superuser sees (a regular user's group opens Global Settings directly, without a second bar).
+  `?tab=<id>` opens a tab the user can see, from the first render, inside its group for a member;
+  `?tab=administration` opens the group's first tab; an unknown or hidden id is ignored, and a value
+  is applied once, so a page update that keeps it does not take back a tab the user clicked. The
+  Security tab's badge, summed on Administration, counts the security checks that need attention
 - **ProfileTab**: Avatar editing via AssetPickerModal, username and email editing, account
   deletion through `AccountDeletionDialog`
 - **PreferencesTab**: Language, currency, theme, and the Onboarding category (guide replays —
@@ -286,6 +290,10 @@ frontend/src/routes/
 - **UsersTab**: superusers only — the accounts of the instance and the open invitations, with the
   invitation, reset-link and deletion dialogs (see
   [Settings Components](../components/features/settings.md#userstab))
+- **SecurityTab**: superusers only — the configuration checks of the instance
+  (`GET /security/checks`) and the browser's open-registration check, most severe first, with
+  **Check again** and the passed checks folded below (see
+  [Settings Components](../components/features/settings.md#securitytab))
 - **PasswordChangeModal** from profile
 - Mobile responsive with dropdown category selector
 
