@@ -5469,17 +5469,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   SDB-032 tolto). `Cooldowns.reset(key)` resta, eccezione di N58 scritta nel docstring: nessun metodo pubblico dà a
   PCD-011 lo stesso stato pulito. `lint --dead-code` non segnala più le due funzioni.
   Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Lotto A», decisione N-ZA-6.
-- **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
-  a Z). Il ponte della sonda dell'AI Export (`frontend/scripts/run-ai-export-render-prompt-probe.mjs`) carica il
-  renderer fuori da SvelteKit; la sonda importa `$lib/api`, quindi `lib/api/zodios-client.ts`, che importa
-  `priceRefresh.ts` (Z5, `3b016dd4e`, 16/10 11:18) e con lui `instanceNotices.svelte.ts`, un modulo con le rune: il
-  ponte moriva con `rune_outside_svelte`. J l'ha corretto in `985b10cbd` compilando le rune nel ponte
-  (`@sveltejs/vite-plugin-svelte`). Cura: il client non importa moduli con le rune, così il ponte può fare a meno del
-  plugin; per esempio `priceRefresh` riceve l'area degli avvisi da chi la registra all'avvio dell'app. Attenzione
-  (letto nel codice, non provato): sullo stesso percorso c'è `instanceBlock.svelte.ts` di H, con `$state` al primo
-  livello, importato da `zodios-client.ts` dal 15/10 (`cb34327e9`), sulla riga dopo `priceRefresh`: disaccoppiare
-  il solo `instanceNotices` non basta a togliere il plugin, serve anche H. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Wiki-file di Z-3 e Z-20/Z-21».
+- ✅ **Z-20 · Disaccoppiare `zodios-client` dai moduli con le rune** — basso; coordinatore, 16/10 (riga J-26, assegnata
+  a Z). **Chiusa il 17/10 col lotto Z-20** (il commit è del coordinatore; H e J hanno scelto): il client delle API e
+  l'ingresso della sonda non importano più moduli con le rune. `instanceBlock` è diviso in `instanceBlockState.ts`
+  (semplice: le costanti, `isInstanceBlockedError`, il segnale, il reset di sessione), che il client segna, e
+  `instanceBlock.svelte.ts`, la faccia reattiva del layout, allineata in modo sincrono (opzione A di H, con le sue
+  quattro condizioni); il pozzo degli avvisi di `priceRefresh` carica `instanceNotices.svelte` al primo uso. Il ponte
+  della sonda non ha più il plugin di Svelte (sì di J) e il cancello `apiClientRuneFree.gate.test.ts` (`core-unit`) lo
+  tiene vero, da `$lib/api` e dall'ingresso della sonda. Era: dal 16/10 11:18 (Z5) il ponte moriva con
+  `rune_outside_svelte`, e J l'aveva riparato compilando le rune (`985b10cbd`). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z-20 — analisi».
 - ✅ **Z-21 · N58: altre quattro funzioni di Z usate solo dai test** — basso; Z, 16/10 (lotto A, `lint --dead-code`).
   **Chiusa il 17/10 col lotto Z-21** (il commit è del coordinatore): tolte `cooldown_snapshot()`, la proprietà
   `ShutdownWatchdog.armed_at`, `current_shutdown_watchdog()` e `Activity.is_busy()`, con le due menzioni del runner. I
