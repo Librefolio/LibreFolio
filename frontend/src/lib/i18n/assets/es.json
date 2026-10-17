@@ -398,7 +398,8 @@
       "unknownType": "No se ha guardado nada: «{value}» (fila del {date}) no es un tipo de evento. Usa DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT o MATURITY_SETTLEMENT.",
       "generic": "No se ha guardado nada: {message}",
       "inUse": "No se ha guardado nada: el evento {type} del {date} está vinculado a {n, plural, one {# transacción} other {# transacciones}} y no se puede eliminar. Quita primero el vínculo en las transacciones{more, plural, =0 {} one { (y # evento más)} other { (y # eventos más)}}.",
-      "notDeletable": "No se ha guardado nada: uno de los eventos que se van a eliminar ya no existe o no se puede eliminar aquí. Vuelve a cargar los datos e inténtalo de nuevo."
+      "notDeletable": "No se ha guardado nada: uno de los eventos que se van a eliminar ya no existe o no se puede eliminar aquí. Vuelve a cargar los datos e inténtalo de nuevo.",
+      "tooManyDigits": "No se ha guardado nada: el valor del evento {type} del {date}{more, plural, =0 {} one { (y # más)} other { (y # más)}} tiene demasiadas cifras. El valor de un evento tiene como máximo {max} decimales, {significant} cifras significativas y {integer} cifras en la parte entera."
     }
   },
   "providerErrors": {
