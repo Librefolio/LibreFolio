@@ -6143,3 +6143,53 @@ prossimo checkpoint.
   `front check` 0/0 (comprende il formato dei JSON), `mkdocs build` stretto ✓, check-links ✓; nessun test né E2E cita i
   testi vecchi. Porta 6185 libera.
 - ⏳ **Checkpoint J-36** (FROZEN).
+- ✅ **Checkpoint J-36** (2026-10-17): entrato (dev `e5a975c8b`), CHANGELOG 🐛 `5d242b415`; worktree in fast-forward.
+  Prossimo: J-49; i lotti del riordino aspettano una finestra tranquilla (coordinatore).
+
+#### J-49 — il controllo statico dei lettori di `latest_range_end` (17/10, dalle 15:05; base `5d242b415`)
+
+- **Brief al test-author (solo test)**: la classe `TestRangeBoundSeamCoversEveryReader` in
+  `test_financial/test_date_range_bounds.py` (un'unità di directory di `roi-fifo-utils`, il runner non cambia), pura.
+  - **La regola**: una lettura `ast` dei 616 file di `backend/app`, tranne `utils/datetime_utils.py` che definisce il
+    nome. L'insieme dei moduli che legano il nome a livello di modulo (`from …datetime_utils import latest_range_end`,
+    assoluto o relativo) deve essere uguale a `RANGE_BOUND_CONSUMERS`.
+  - **Le violazioni**: l'alias; l'import dentro una funzione o una classe; la lettura dall'oggetto modulo
+    (`datetime_utils.latest_range_end`, `du.latest_range_end`, il percorso puntato intero).
+  - **La prova del rilevatore**: 10 sorgenti finte, mai i file. Cinque erano nel brief, cinque le ha aggiunte il
+    test-author: l'import relativo, l'import in una funzione, il percorso puntato, l'oggetto modulo con alias, un altro
+    aiuto letto dall'oggetto modulo.
+- **Il rosso è un reperto vero (15:0x)**: 11 selezionati, **1 fallito**, 10 verdi. Nessuna violazione, e nessun modulo
+  in lista che non lega il nome. Due moduli lo legano ma mancano dalla lista, tutti e due arrivati oggi:
+  - `backend.app.utils.date_range_limits` (riga 17, X-R65, `30e19b9d9`): `stored_date_bounds()`, i limiti delle date
+    dei prezzi e dei cambi salvati (`price_store.py:213` e `:286`, `refresh.py:570`, `currencies.py:129`);
+  - `backend.app.api.v1.assets.prices` (riga 38, R13-SEC9-4, `ad399d383`): `_range_start_in_bounds`, il `range_start`
+    di `POST /prices/current`.
+
+  È una lacuna latente, non un guasto di oggi: nessuna suite che toglie il limite scrive prezzi o cambi per quelle vie.
+  `test_range_ceiling.py` raggiunge `stored_date_bounds`, ma sostituisce il nome in `date_range_limits` da sé (RC-W01).
+- **La scelta (J)**: aggiungere i due moduli alla lista, non escluderli.
+  - La lista resta «tutti i moduli che legano il nome», senza eccezioni da mantenere a mano.
+  - Il senso della cucitura («come se oggi fosse dopo i loro dati») vale anche per una scrittura: una suite 2032–2091
+    deve poter salvare i suoi prezzi e cambi.
+  - La docstring del modulo nomina i due lettori, che rifiutano una data invece di chiudere un cammino, e rinvia a J-49.
+- > **Note implementazione**: due righe in `RANGE_BOUND_CONSUMERS` e la docstring di `_range_bounds.py`; la classe del
+  > test-author invariata. Revisione: un `import *` sfuggirebbe al rilevatore, ma ruff lo vieta già (F403, nella
+  > selezione `F`); lo stesso per l'import in una funzione (PLC0415).
+- ✅ **Verdi (15:12–15:16)**:
+  - ruff e black puliti sui due file;
+  - `roi-fifo-utils TestRangeBoundSeamCoversEveryReader` **11**;
+  - `range-ceiling` **57**;
+  - `roi-fifo-utils` intero **1386**: comprende le 9 suite di `test_financial/` che tolgono il limite, ora coi due moduli
+    in più;
+  - check-orphans ✓.
+
+  Porta 6185 libera. Script e log in `files/j/j49/` della sessione.
+- **J-3 verificata: non è un difetto** (chiusa insieme a J-49).
+  - **GBM** (`quantlib_worker.py:116,195`): cammina `horizon_days/365` anni a passi di un giorno di calendario. Deriva
+    e covarianza annue sono stimate col fattore osservato (`estimation.py:52-53`), quindi dopo 365 giorni la varianza
+    è quella di un anno, qualunque sia la frequenza della storia.
+  - **Bootstrap** (`resampling.py`, algoritmo `4.0.0`): converte i giorni di calendario nei passi della storia
+    (`calendar_days_to_observations`, frequenza osservata), poi torna ai giorni. La riga `:235` è la conversione
+    inversa, e serve solo a dichiarare la lunghezza del blocco.
+  - Resta una scelta di modello, non un errore: un percorso GBM ha un punto per ogni giorno di calendario.
+- ⏳ **Checkpoint J-49** (FROZEN).
