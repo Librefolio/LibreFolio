@@ -13,7 +13,8 @@ The problem is described by plain data only:
 
 All the conversions go to the FX service in one ``convert_bulk`` call: every foreign
 movement at its own date (the flows), and one unit of every foreign currency on every day
-from its first movement on (the valuation). An amount already in T is taken as it is, so
+from its first movement on, and from 1 January 1900 at the earliest, with only the movements' own days before it (the
+valuation). An amount already in T is taken as it is, so
 cash held only in the report currency never needs a rate. A conversion that cannot be made
 never becomes a zero: the movement stays out of values and flows, and its pair is reported
 with every date it was needed on.
@@ -40,6 +41,7 @@ from typing import Any
 
 from backend.app.schemas.common import Currency
 from backend.app.services.fx.conversion import convert_bulk
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -483,18 +485,28 @@ async def compute_native_cash(
 
 
 def _unit_requests(foreign: Sequence[CashMovement], rates_until: date_type | None) -> list[tuple[str, date_type]]:
-    """``(currency, day)`` for every day a foreign balance may need a rate, currencies by code."""
+    """``(currency, day)`` for every day a foreign balance may need a rate, currencies by code.
+
+    Every day from the currency's first movement — but from ``EARLIEST_RANGE_START`` at the earliest (R13-SEC8: a
+    movement stored centuries back would otherwise ask one per day since). Before the floor only the movements' own
+    days are asked, so a balance counted there still has a rate on or before every later day (``_foreign_value`` never
+    meets a counted balance without one); the cost is bounded by the movements, not by the days.
+    """
     first: dict[str, date_type] = {}
     last: dict[str, date_type] = {}
+    early: dict[str, set[date_type]] = {}
     for movement in foreign:
         currency = movement.currency
         if currency not in first or movement.date < first[currency]:
             first[currency] = movement.date
         if currency not in last or movement.date > last[currency]:
             last[currency] = movement.date
+        if movement.date < EARLIEST_RANGE_START:
+            early.setdefault(currency, set()).add(movement.date)
     requests: list[tuple[str, date_type]] = []
     for currency in sorted(first):
-        day = first[currency]
+        requests.extend((currency, day) for day in sorted(early.get(currency, ())))
+        day = max(first[currency], EARLIEST_RANGE_START)
         end = last[currency] if rates_until is None else rates_until
         while day <= end:
             requests.append((currency, day))
