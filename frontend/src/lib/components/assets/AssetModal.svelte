@@ -1384,9 +1384,23 @@
         // Step 2: Handle provider change
         if (providerNoProvider) {
             // Remove provider
-            await zodiosApi.remove_providers_bulk_api_v1_assets_provider_delete(undefined, {
-                queries: {asset_ids: [assetId]},
-            });
+            try {
+                await zodiosApi.remove_providers_bulk_api_v1_assets_provider_delete(undefined, {
+                    queries: {asset_ids: [assetId]},
+                });
+            } catch (removeErr: unknown) {
+                // X-R62: a removal refused because transactions are linked to the events the provider generated (or to
+                // one linked meanwhile) is said here, inline and in the user's language, as X-R49's refusal below; the
+                // modal stays open on the draft, whose 409 would otherwise read «duplicate name». Any other error goes on.
+                const refusal = wipeRefusalMessage(removeErr, $t, (iso) => formatDay(iso));
+                if (refusal === null) throw removeErr;
+                formError = refusal;
+                pendingSaveAssetId = null;
+                setTimeout(() => {
+                    document.querySelector('[data-form-error]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }, 50);
+                return;
+            }
         } else if (hasProvider) {
             const assignPayload = [buildProviderAssignItem(assetId, providerAssignment())];
             try {
