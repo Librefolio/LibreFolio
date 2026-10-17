@@ -9,10 +9,11 @@
  *   EUR-USD pair must exist.
  */
 
+import type {Route} from '@playwright/test';
 import {expect, test as base} from '../fixtures/playwright';
 import type {Locator, Page, Request, Response} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
-import {waitForSettled} from '../fixtures/app-events';
+import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
@@ -2592,6 +2593,273 @@ test.describe('FX pair page — the summary’s Δ over the range is the backend
             expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
             expect(log.asked, `the page asks the pair from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expected);
             for (const item of log.asked) expect(item, `never from ${range.start}: the backend would refuse the whole request`).toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+});
+
+// ============================================================================
+// The provider editor replaces the pair's routes in one write (workstream X, lot X-R75)
+// ============================================================================
+
+/** `GET /fx/providers`: the provider capabilities the editor's route picker builds its graph from — not `/routes`. */
+const FX_PROVIDERS_PATH = `${API}/fx/providers`;
+
+/** What the browser answers the editor's refused POST with: a fixture string, read on the banner without a translation. */
+const REFUSED_ROUTE_WRITE = 'owned-e2e-route-write-refused';
+
+/**
+ * The quote currencies of the provider editor's tests, one per test and per Playwright project, because FX routes are
+ * global rows. As for `RESERVED_QUOTE`: none is used by any seed, spec or other test (grep of the whole worktree), and
+ * each sorts after EUR, so the pair is stored as EUR-X — what `createMockFxRoute` and `resetReservedPair` address.
+ */
+const EDITOR_QUOTE: Readonly<Record<string, Readonly<Record<'failedSave' | 'removeAll', string>>>> = {
+    desktop: {failedSave: 'NIO', removeAll: 'SRD'},
+    mobile: {failedSave: 'MOP', removeAll: 'ZMW'},
+};
+
+function editorQuote(owner: 'failedSave' | 'removeAll'): string {
+    const project = test.info().project.name;
+    const quote = EDITOR_QUOTE[project]?.[owner];
+    if (!quote) throw new Error(`No currency is reserved for the ${owner} editor test on project "${project}": reserve one that sorts after EUR and that no seed, spec or test uses`);
+    return quote;
+}
+
+/** The FX routes endpoint, whatever its query string: the cured editor's POST carries `?replace=true`. */
+function isFxRoutesUrl(url: URL): boolean {
+    return url.pathname === FX_ROUTES_PATH;
+}
+
+/** A route as the backend stores it, reduced to what the editor decides: its priority and its steps. */
+type StoredRoute = {priority: number; chain_steps: Array<{from: string; to: string; provider: string}>};
+
+/** EUR-`quote` served by MOCKFX alone, as `createMockFxRoute` stores it. */
+function mockFxRoute(quote: string): StoredRoute {
+    return {priority: 1, chain_steps: [{from: 'EUR', to: quote, provider: 'MOCKFX'}]};
+}
+
+/** EUR-`quote` kept with no provider: its MANUAL route, priority 999, the item creation posts for a manual pair. */
+function manualRoute(quote: string): StoredRoute {
+    return {priority: 999, chain_steps: [{from: 'EUR', to: quote, provider: 'MANUAL'}]};
+}
+
+/** The routes stored for EUR-`quote`, by priority, read through the API: never inferred from the page. */
+async function storedRoutes(page: Page, quote: string): Promise<StoredRoute[]> {
+    const listing = schemas.FXConversionRoutesResponse.parse(await jsonFrom<unknown>(await page.request.get(FX_ROUTES_PATH), 'list the FX routes'));
+    return (listing.items ?? [])
+        .filter((item) => item.base === 'EUR' && item.quote === quote)
+        .sort((a, b) => a.priority - b.priority)
+        .map((item) => ({priority: item.priority, chain_steps: item.chain_steps.map(({from, to, provider}) => ({from, to, provider}))}));
+}
+
+/** EUR-`quote` with one MOCKFX route and no rate, registered for the teardown before it exists, and verified. */
+async function setUpOwnedMockFxPair(page: Page, ownedFxQuotes: string[], quote: string): Promise<void> {
+    await test.step(`setup: EUR-${quote} routed through MOCKFX alone, with no rate`, async () => {
+        // Registered before it exists: the teardown deletes whatever this step got to create.
+        ownedFxQuotes.push(quote);
+        await resetReservedPair(page, quote, 'precondition');
+        await createMockFxRoute(page, quote);
+        expect(await storedRoutes(page, quote), `precondition: EUR-${quote} has its MOCKFX route and no other`).toEqual([mockFxRoute(quote)]);
+    });
+}
+
+/**
+ * `GET /fx/providers` answered in the browser for EUR-`quote`: MOCKFX, the provider of the pair's stored route, native
+ * EUR→`quote`, and MOCKFX_FAIL, a second direct route to add, native `quote`→EUR. The picker's DFS walks an edge both
+ * ways, so it offers EUR→`quote` through either.
+ *
+ * Never two providers in the same direction: the picker's currency graph is graphology's default export, the plain
+ * `Graph` (mixed, not multi — whatever its local name `MultiDirectedGraph` in `currencyGraph.ts`), which refuses a
+ * second edge between the same two currencies in the same direction. `buildCurrencyGraph` then throws, and the picker
+ * shows nothing but its error: this setup's first run did exactly that, both providers declared EUR→`quote`.
+ *
+ * Both are registered test providers (`test_only`), which is why the real list never names them: without this answer
+ * the picker could neither show the stored MOCKFX route nor remove it. Answered here, it also keeps ECB's and SNB's
+ * currency discovery off the network. Registered before the page is opened: the page builds its graph once and keeps
+ * it (`currencyGraphStore`). Every other request goes on.
+ */
+async function answerProviderCatalog(page: Page, quote: string): Promise<void> {
+    const native: ReadonlyArray<readonly [code: string, base: string, target: string]> = [
+        ['MOCKFX', 'EUR', quote],
+        ['MOCKFX_FAIL', quote, 'EUR'],
+    ];
+    const catalog = native.map(([code, base, target]) => schemas.FXProviderInfo.parse({code, name: `Owned ${code} fixture`, base_currency: base, base_currencies: [base], target_currencies: [target], description: 'Browser-local deterministic fixture'}));
+    const directions = catalog.flatMap((provider) => provider.base_currencies.flatMap((base) => (provider.target_currencies ?? []).map((target) => `${base}→${target}`)));
+    if (new Set(directions).size !== directions.length) throw new Error(`answerProviderCatalog: two providers share a direction (${directions.join(', ')}); the picker's graph is not multi and would refuse the second edge`);
+    await page.route(
+        (url) => url.pathname === FX_PROVIDERS_PATH,
+        async (route) => {
+            if (route.request().method() !== 'GET') return route.fallback();
+            await route.fulfill({json: catalog});
+        },
+    );
+}
+
+/** The editor's row of one selected route, found by its key (`EUR-X:PROVIDER`), never by its position. */
+function selectedRoute(modal: Locator, key: string): Locator {
+    return modal.locator(`[data-testid="fx-route-selected"][data-route-key="${key}"]`);
+}
+
+/** What a reported text says, without its stack frames: minified, they say where, not what. */
+function whatItSays(text: string): string {
+    const lines = text.split('\n').filter((line) => !/^\s+at /.test(line));
+    return lines.join(' ⏎ ').slice(0, 600);
+}
+
+/**
+ * What the page reports as broken from now on — its `console.error` lines, with where they come from, and its uncaught
+ * exceptions — as a note for the message of a precondition: the first run of this setup failed on «element(s) not found»
+ * while the page had logged why. Diagnostics only, never the subject of an assertion: a console message is an edge, so
+ * the watch is armed before the navigation it explains.
+ */
+function watchPageErrors(page: Page): () => string {
+    const reported: string[] = [];
+    page.on('console', (message) => {
+        if (message.type() !== 'error') return;
+        const where = message.location().url.replace(/^https?:\/\/[^/]+/, '');
+        reported.push(`console.error: ${whatItSays(message.text())}${where ? ` (${where})` : ''}`);
+    });
+    page.on('pageerror', (error) => reported.push(`uncaught: ${whatItSays(error.stack ?? `${error.name}: ${error.message}`)}`));
+    return () => (reported.length === 0 ? ' (the page reported nothing broken)' : `\nWhat the page reported as broken since it was opened:\n${reported.map((line) => `  - ${line}`).join('\n')}`);
+}
+
+/**
+ * `assertion` retried until it passes or `timeout` runs out, with its message's `note` rebuilt at every attempt from
+ * what the page has reported so far: the last attempt's message is the red's, and it lists what was logged until then.
+ */
+async function expectExplained(note: () => string, assertion: (note: string) => Promise<void>, timeout = 10_000): Promise<void> {
+    await expect(async () => assertion(note())).toPass({timeout});
+}
+
+/**
+ * EUR-`quote`'s page, and its provider editor (the FxPairAddModal in edit mode) opened on it: returned once the editor
+ * shows the pair's one stored route, MOCKFX, selected at priority 1 and alone. A precondition that fails says what the
+ * page reported as broken (`watchPageErrors`).
+ */
+async function openProviderEditor(page: Page, quote: string): Promise<Locator> {
+    const pair = `EUR-${quote}`;
+    const reported = watchPageErrors(page);
+    await goToFxDetailPage(page, pair);
+    await expect(page.getByTestId('fx-detail-page'), 'the page shows the pair this test created').toHaveAttribute('data-chart-pair', pair);
+    // Enabled once the page has loaded a provider other than MANUAL for the pair — the MOCKFX route.
+    const syncBtn = page.getByTestId('fx-detail-sync-btn');
+    await expectExplained(reported, (note) => expect(syncBtn, `precondition: the page sees the MOCKFX route${note}`).toBeEnabled({timeout: 1_000}));
+    await page.getByTestId('fx-detail-provider-btn').click();
+    const modal = page.getByTestId('fx-add-pair-modal');
+    await expect(modal).toBeVisible();
+    // Edit mode loads the pair's stored routes and maps them onto the routes the picker computed from the catalogue.
+    const stored = selectedRoute(modal, `${pair}:MOCKFX`);
+    await expectExplained(reported, (note) => expect(stored, `the editor shows the stored MOCKFX route${note}`).toBeVisible({timeout: 1_000}));
+    await expect(stored).toHaveAttribute('data-priority', '1');
+    await expect(modal.getByTestId('fx-route-selected'), 'and no other route').toHaveCount(1);
+    return modal;
+}
+
+/**
+ * The pair page's provider editor (the FxPairAddModal in edit mode) writes the pair's new configuration in one POST that
+ * replaces its routes (X-R75): `POST /fx/providers/routes?replace=true`, which keeps exactly the routes posted for the
+ * pair, atomically; nothing is deleted first. With every route removed it posts the MANUAL route, priority 999: the
+ * pair is kept, manual, as the user guide says.
+ *
+ * Each test brings a pair of its own, EUR-X with one MOCKFX route and no rate, set up and removed as the sync test's
+ * (`ownedFxQuotes`, see the section above the first describe), on a currency reserved per test and per project
+ * (`EDITOR_QUOTE`). Only `GET /fx/providers` is answered in the browser (`answerProviderCatalog`), and in the first test
+ * the editor's POST: every other request, the routes' reads and writes included, reaches the backend, and what the pair
+ * holds is read back through the API.
+ *
+ * Red before the cure, where the editor DELETEs the whole pair and then POSTs: «a failed save …» — the DELETE went
+ * through and the refused POST left the pair with no route; «removing every route …» — with no route picked there is no
+ * POST at all, and the pair is gone. Green once cured: the first on the editor's cure alone (its one POST is refused in
+ * the browser), the second once the backend honours `replace` too.
+ */
+test.describe('FX pair page — the provider editor replaces the pair’s routes in one write (X-R75)', () => {
+    // A ceiling, never a delay: sign-in, the pair's setup, the page, the editor, a reload and the teardown.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('a failed save keeps the pair’s route', async ({page, ownedFxQuotes}) => {
+        const quote = editorQuote('failedSave');
+        const pair = `EUR-${quote}`;
+        await setUpOwnedMockFxPair(page, ownedFxQuotes, quote);
+        try {
+            await answerProviderCatalog(page, quote);
+            const modal = await openProviderEditor(page, quote);
+
+            // The edit: MOCKFX_FAIL added after the stored MOCKFX route.
+            await modal.getByTestId('fx-route-picker-toggle').click();
+            await modal.getByTestId('fx-route-picker').getByTestId('fx-route-direct-MOCKFX_FAIL').click();
+            await expect(selectedRoute(modal, `${pair}:MOCKFX`)).toHaveAttribute('data-priority', '1');
+            await expect(selectedRoute(modal, `${pair}:MOCKFX_FAIL`)).toHaveAttribute('data-priority', '2');
+
+            // From here every write to the routes is recorded, and a POST is refused in the browser with a 500, as a
+            // server error would refuse it. Everything else, a DELETE included, reaches the backend.
+            const writes: string[] = [];
+            const refusePost = async (route: Route) => {
+                const request = route.request();
+                if (request.method() === 'GET') return route.fallback();
+                writes.push(`${request.method()} ${new URL(request.url()).search || '(no query)'}`);
+                if (request.method() !== 'POST') return route.fallback();
+                await route.fulfill({status: 500, json: {detail: REFUSED_ROUTE_WRITE}});
+            };
+            await page.route(isFxRoutesUrl, refusePost);
+            try {
+                const refused = armed(page.waitForRequest((request) => request.method() === 'POST' && isFxRoutesUrl(new URL(request.url())), {timeout: 10_000}));
+                await modal.getByTestId('fx-add-pair-save').click();
+                await refused;
+
+                // The failure is reported on the editor, which stays open on its draft, ready to save again.
+                const banner = modal.getByTestId('info-banner-error');
+                await expect(banner, 'the editor shows the refusal').toBeVisible({timeout: 10_000});
+                await expect(banner).toContainText(REFUSED_ROUTE_WRITE);
+                await expect(modal).toBeVisible();
+                await expect(modal.getByTestId('fx-add-pair-save')).toBeEnabled();
+                await expect(selectedRoute(modal, `${pair}:MOCKFX_FAIL`), 'the draft is kept').toHaveAttribute('data-priority', '2');
+            } finally {
+                // Stop refusing: from here on the page talks to the backend again.
+                await page.unroute(isFxRoutesUrl, refusePost);
+            }
+
+            // A fresh page, on what the backend holds.
+            await page.reload();
+            const detail = page.getByTestId('fx-detail-page');
+            await expect(detail).toBeVisible({timeout: 15_000});
+            await waitForSettled(detail, 20_000);
+
+            expect(await storedRoutes(page, quote), `the failed save left ${pair} its MOCKFX route — what the save sent: ${writes.join(', ')}`).toEqual([mockFxRoute(quote)]);
+            // Enabled once the page has loaded a provider other than MANUAL for the pair: the MOCKFX route is still there.
+            await expect(page.getByTestId('fx-detail-sync-btn'), 'the page still offers to sync the pair').toBeEnabled({timeout: 10_000});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('removing every route keeps the pair, manual', async ({page, ownedFxQuotes}) => {
+        const quote = editorQuote('removeAll');
+        const pair = `EUR-${quote}`;
+        await setUpOwnedMockFxPair(page, ownedFxQuotes, quote);
+        try {
+            await answerProviderCatalog(page, quote);
+            const modal = await openProviderEditor(page, quote);
+
+            // The edit: the only route removed. The picker offers the catalogue's routes again, none of them selected.
+            await selectedRoute(modal, `${pair}:MOCKFX`).getByTestId('fx-route-remove').click();
+            await expect(modal.getByTestId('fx-route-picker-toggle'), 'the editor offers routes to add').toBeVisible();
+            await expect(modal.getByTestId('fx-route-selected'), 'no route is left selected').toHaveCount(0);
+
+            const since = await eventSeq(page);
+            await modal.getByTestId('fx-add-pair-save').click();
+            const updated = await waitForEvent(page, 'fx.pair.updated', {since});
+            expect(updated.detail, 'the editor saved this pair, with no provider').toMatchObject({slug: pair, hasRealProvider: false});
+            await expect(modal).toBeHidden();
+
+            expect(await storedRoutes(page, quote), `${pair} is still configured, with exactly its MANUAL route`).toEqual([manualRoute(quote)]);
+            // After the save the page reloads its providers: the sync control, enabled while MOCKFX served the pair (the
+            // editor's precondition), is disabled now that only MANUAL is left — `isManualOnly`, MANUAL being no provider.
+            await expect(page.getByTestId('fx-detail-sync-btn'), 'the page shows the pair as manual').toBeDisabled({timeout: 10_000});
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
         }
