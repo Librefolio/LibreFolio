@@ -6269,7 +6269,7 @@ Ordine del coordinatore (17/10): TS2769 → X-R44c → X-R60.
   docs-writer nomina anche il `get_plugin_instance()` proprio di `ToolPluginRegistry`, che legge l'istantanea.
 - ✅ **X-R44c chiuso il 17/10 (13:10)**, in attesa del commit del coordinatore.
 
-### X-R60 ⏳ — le colonne Δ: tre note di Y su X-R53 (preparato; rossi dalle 12:50)
+### X-R60 ✅ — le colonne Δ: tre note di Y su X-R53 (12:50–13:35)
 
 - **Disegno** (da `files/drafts/xr60/design.md`): un registro puro `PeriodChangesLedger<K>` in `periodChanges.ts` (ticket
   `{id, asOf, full}`, `begin`/`end`/`busy`/`settle`/`fail`), usato da entrambe le liste. La richiesta di una sola coppia
@@ -6281,3 +6281,34 @@ Ordine del coordinatore (17/10): TS2769 → X-R44c → X-R60.
   `fxStoreRegistry.ts`) non sono toccate.
 - **Rossi** affidati a un test-author (12:50): unità del registro in `periodChanges.test.ts`; E2E nelle due liste,
   accanto ai describe di X-R53 (la corsa FX, l'indicatore, nessuna richiesta inutile, un errore che tiene le Δ).
+- **Rossi** (test-author, 13:10):
+  - **unità**, `periodChanges.test.ts`: 24 casi del registro, uno per scenario con l'ordine d'arrivo scritto, e una mappa
+    «sullo schermo» che lancia se viene toccata (regola 8 in ogni caso);
+  - **E2E**: 5 FX (la corsa, l'indicatore, l'inversione, il salvataggio delle impostazioni, il nuovo tentativo del
+    catalogo dei segnali) e 3 Assets (un errore che tiene le Δ dello stesso giorno, il salvataggio, il nuovo tentativo),
+    accanto ai describe di X-R53. I casi oltre il brief sono coerenti col disegno, tutti tenuti.
+  - **Prima del codice**: unità **24 failed, 39 passed**; E2E **5 + 3 failed**, ognuno all'asserzione prevista:
+    − la coppia mostra il −50 % della ricarica vecchia invece del +1,25 %;
+    − `data-busy` `false` con la richiesta della coppia in volo;
+    − la richiesta di period-changes contata due volte invece di una;
+    − la Δ diventa «—» dopo un errore sullo stesso giorno.
+  > **⚠️ Fuori pista (13:12)** — il pulsante Applica della finestra delle impostazioni del grafico non ha `data-testid`, e
+  > due test lo cercavano per ruolo e testo del catalogo. Il coordinatore approva `data-testid="chart-settings-apply"` su
+  > `ChartSettingsModal.svelte:424` (un solo attributo, nessuna classe: nessun ramo lo tiene aperto). Aggiunto al copione;
+  > il test-author è passato a `getByTestId`.
+- **Codice applicato** (13:19, `xr60_code.py`, 17 sostituzioni in 4 file; le righe di Z-27 non toccate). Prettier e
+  cancello dei colori puliti.
+- **Verdi**:
+  - unità 63 passed;
+  - `front check` 0 errori e 0 avvisi;
+  - slot (13:21–13:28, carico a 5 minuti 30,6): `front-fx fx-list` **18 passed** e `front-asset asset-list` **34 passed**
+    (con X-R53, C-66 e Y-28), poi `front-asset asset-unit` **964 passed**. Porta 6183 libera.
+  > **⚠️ Fuori pista (13:28)** — nello slot ho chiamato `front-asset unit`, che non esiste (exit 2, l'uso dell'argparse):
+  > l'azione è `asset-unit`, rilanciata da sola, verde.
+- **Nessuna riga nel CHANGELOG**: X-R60 rifinisce le colonne Δ di X-R53, che non sono ancora rilasciate (la sua riga le
+  copre).
+- **Documentazione rinviata a X-R64**: i passi che descrivono il flusso (`assets/architecture.md` ~339, `fx/architecture.md`
+  ~203) restano veri dopo X-R60, solo meno dettagliati. Li riscrive anche l'ingresso di X-R59 di MF: toccarli ora darebbe
+  un conflitto sicuro. Il dettaglio di X-R60 (quale risposta resta, l'indicatore, un errore che tiene lo stesso giorno,
+  inversione e impostazioni che non chiedono nulla) va in X-R64, che riscrive quei passi dopo MF e Z-27.
+- ✅ **X-R60 chiuso il 17/10 (13:35)**, in attesa del commit del coordinatore.

@@ -4989,7 +4989,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     `computeDerivedPriceState()` (`lib/utils/assetPriceDerived.ts`) e `FxTable.getDelta()` → `displayFxDelta()`
     (`lib/stores/fxStoreRegistry.ts`, anche nella card e nella pagina della coppia): ultimo / primo − 1, in float.
   - X-R53 ha portato nel backend solo le colonne dei periodi fissi (1D…5Y).
-- **X-R60 · Le colonne Δ: tre note della revisione di Y su X-R53** — piccolo, **dopo X-R48**; X, 17/10 (Y, girata dal
+- ✅ **X-R60 · Le colonne Δ: tre note della revisione di Y su X-R53** (chiusa il 17/10, in attesa del commit del coordinatore: un registro delle richieste in `periodChanges.ts`, 24 casi di unità e 8 E2E) — piccolo, **dopo X-R48**; X, 17/10 (Y, girata dal
   coordinatore). Prima il punto 1.
   1. Cambi, una coppia sola (`loadPairPeriodChanges`): nessun indicatore, quindi `data-busy` può dirsi finito mentre la
      Δ di quella coppia è in volo; e non avanza la versione, quindi una risposta completa più vecchia che arriva dopo
@@ -5011,6 +5011,12 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
     che la modale mostra come errore generico.
   - Da decidere: scollegare prima, come il wipe di X-R48 (con la regola degli SPLIT senza costo), o rifiutare con un
     codice e i collegamenti. Prima un rosso che lo riproduca.
+- **X-R65 · Il pavimento delle date sulle scritture manuali di prezzi e cambi** — decisione notturna N83; X, 17/10
+  (il coordinatore; numerata X-R65 per lo scontro con X-R64).
+  - Le letture si fermano al 1900-01-01 (`EARLIEST_RANGE_START`), le scritture manuali di prezzi e di tassi di cambio
+    no: un prezzo prima del 1900 si può salvare, e «Tutto» risolve allora l'inizio dell'intervallo prima del 1900
+    (visto nella revisione di X-R59: un `range_start` così fa fallire tutta la richiesta di period-changes).
+  - Direzione (N83): lo stesso pavimento sulle scritture manuali, come per le transazioni (N74).
 - ✅ **X-R44c · Solo asset e cambi possono dichiarare `test_only`** (chiusa il 17/10, in attesa del commit del coordinatore: due guardie in `services test-only-providers`, provate con una mutazione) — piccolo, **subito** (il coordinatore, 17/10); X, 17/10.
   - Il filtro di X-R44 sta nella base dei registri (`_withheld()`), ma segnali e rischio (`list_definitions`), BRIM
     (rilevamento ed elenco) e tools (la sua istantanea) leggono il proprio archivio senza chiederlo: un `test_only` lì
@@ -5019,7 +5025,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   aiuto e la sua costante; X, 17/10 (dalla revisione di X-R59: il limite scende da 10.000 a 1.000).
   - Dentro `fetchAssetPeriodChanges`/`fetchFxPeriodChanges` (il registro di X-R60 vede una sola risposta unita); poi
     aggiornare i due passi della documentazione di MF (`assets/architecture.md` ~374, `fx/architecture.md` ~238), che
-    oggi la assegnano a Z-27. Insieme a X-R58.
+    oggi la assegnano a Z-27, aggiungendo il flusso di X-R60 (quale risposta resta, l'indicatore, un errore che tiene le
+    Δ dello stesso giorno, inversione e impostazioni che non chiedono nulla). Insieme a X-R58.
 - **X-R63 · Due vuoti vecchi nella documentazione degli asset** — minimo, al prossimo tocco di quelle pagine; X, 17/10
   (il docs-writer di X-R49).
   - `developer/backend/assets/architecture.md`: la tabella dei moduli non elenca `provider_policy.py`.
