@@ -31,7 +31,7 @@
     import {createPairSlug, displayFxRate, type FxDataPoint, type FxPairConfig, getFxStore, invalidateAllFxStores, loadFxRatesAndSignalsBulk, removeFxStore} from '$lib/stores/fxStoreRegistry';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {extractDaysBack} from '$lib/utils/assetPriceDerived';
-    import {fetchFxPeriodChanges, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
+    import {fetchFxPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {isCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
@@ -172,11 +172,12 @@
     let signalDefinitionsByType = $derived(new Map(signalDefinitions.map((definition) => [definition.type, definition])));
 
     // The Δ columns (1D … 5Y): the backend computes them up to the end of the range, both ways, and lists the
-    // periods (X-R53). Kept apart from the rate flow, and replaced by the latest answer only.
+    // periods (X-R53). Kept apart from the rate flow. Which answer is kept while several are in flight, the ledger says
+    // (X-R60); `periodChangesLoading` copies its `busy`, one-pair requests included.
     let periodSpecs = $state<PeriodSpec[]>([]);
     let periodDeltas = $state<Map<string, {direct: PeriodDeltas; inverse: PeriodDeltas}>>(new Map());
     let periodChangesLoading = $state(false);
-    let periodChangesVersion = 0;
+    const periodChangesLedger = new PeriodChangesLedger<string>();
 
     // Which delta periods are visible for the selected date range
     let visiblePeriods = $derived(visiblePeriodColumns(periodSpecs, dateStart, dateEnd));
@@ -267,7 +268,8 @@
     async function retryBackendSignals() {
         await pageBusy.track('fx-signals-retry', async () => {
             await loadFxSignalDefinitions(true);
-            await fetchAllPairData();
+            // The rates and the signals only: the Δ columns do not depend on the signals (X-R60).
+            await fetchAllPairSeries();
         });
     }
 
@@ -385,7 +387,11 @@
         displayDateStart = 'min';
     }
 
-    /** Rates and signals (the bulk convert, the cache) and the Δ columns (the backend's period changes), together. */
+    /**
+     * Rates and signals (the bulk convert, the cache) and the Δ columns (the backend's period changes), together. The
+     * signals' retry, a settings change and an inversion ask only the rates and signals (`fetchAllPairSeries`): the Δ
+     * columns come both ways and depend on none of them (X-R60).
+     */
     async function fetchAllPairData(propagateError = false) {
         await Promise.all([fetchAllPairSeries(propagateError), loadPeriodChanges()]);
     }
@@ -395,39 +401,54 @@
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
-        const version = ++periodChangesVersion;
-        periodChangesLoading = true;
+        const ticket = periodChangesLedger.begin(dateEnd, true);
+        periodChangesLoading = periodChangesLedger.busy;
         try {
             const result = await fetchFxPeriodChanges(
                 pairs.map((pair) => ({base: pair.config.base, quote: pair.config.quote})),
-                dateEnd,
+                ticket.asOf,
             );
-            if (!current() || version !== periodChangesVersion) return;
+            if (!current()) return;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
+            if (next === null) return;
             if (result.periods.length > 0) periodSpecs = result.periods;
-            periodDeltas = result.deltasByPair;
+            periodDeltas = next;
         } catch (requestError) {
-            if (!current() || version !== periodChangesVersion) return;
+            if (!current()) return;
+            // The Δ computed up to the same day stay: only those of another range go (X-R60).
+            const next = periodChangesLedger.fail(ticket, periodDeltas);
+            if (next === null) return;
             console.error('Failed to fetch FX period changes:', requestError);
-            periodDeltas = new Map();
+            periodDeltas = next;
         } finally {
-            if (version === periodChangesVersion) periodChangesLoading = false;
+            periodChangesLedger.end(ticket);
+            periodChangesLoading = periodChangesLedger.busy;
         }
     }
 
-    /** One pair's Δ columns from the backend, merged into the others' (after its sync, or once added). */
+    /**
+     * One pair's Δ columns from the backend, merged into the others' (after its sync, or once added). The page stays busy
+     * while it is in flight, and a full answer asked before it can no longer overwrite the pair (X-R60).
+     */
     async function loadPairPeriodChanges(index: number) {
         const pair = pairs[index];
         if (!pair) return;
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
-        const version = periodChangesVersion;
+        const ticket = periodChangesLedger.begin(dateEnd, false);
+        periodChangesLoading = periodChangesLedger.busy;
         try {
-            const result = await fetchFxPeriodChanges([{base: pair.config.base, quote: pair.config.quote}], dateEnd);
-            if (!current() || version !== periodChangesVersion) return;
+            const result = await fetchFxPeriodChanges([{base: pair.config.base, quote: pair.config.quote}], ticket.asOf);
+            if (!current()) return;
+            const next = periodChangesLedger.settle(ticket, periodDeltas, result.deltasByPair);
+            if (next === null) return;
             if (result.periods.length > 0) periodSpecs = result.periods;
-            periodDeltas = new Map([...periodDeltas, ...result.deltasByPair]);
+            periodDeltas = next;
         } catch (requestError) {
             if (current()) console.error(`Failed to fetch the period changes of ${pair.config.slug}:`, requestError);
+        } finally {
+            periodChangesLedger.end(ticket);
+            periodChangesLoading = periodChangesLedger.busy;
         }
     }
 
@@ -612,7 +633,7 @@
             setGlobalSettings(s, 'fx');
         }
         if (shouldReloadBackend) {
-            void pageBusy.track('fx-settings', () => fetchAllPairData());
+            void pageBusy.track('fx-settings', () => fetchAllPairSeries());
         }
     }
 
@@ -1191,7 +1212,7 @@
                     onrefresh={handleRefreshPair}
                     onsync={handleSyncPair}
                     onsettings={handleCardSettings}
-                    oninversionchange={() => void fetchAllPairData()}
+                    oninversionchange={() => void fetchAllPairSeries()}
                 />
             {/each}
         </div>
@@ -1207,7 +1228,7 @@
             onsync={handleSyncPair}
             onrefresh={handleRefreshPair}
             ondelete={handleDeletePair}
-            oninversionchange={() => void fetchAllPairData()}
+            oninversionchange={() => void fetchAllPairSeries()}
             onselectionchange={(rows) => {
                 selectedFxRows = rows;
             }}
