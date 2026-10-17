@@ -3526,3 +3526,136 @@ sostituito, così restano sicuri in entrambi gli stati.
    - `check_source_paths.py`: 7 percorsi mancanti su 4118, tutti di prima e in altre pagine, nessuno nella nuova;
    - il grafo non è aggiornato: graphify non c'è in questo worktree, come per le altre voci di stanotte.
    Checkpoint FROZEN al coordinatore.
+
+### Z-14b + Z-15 — piano per il mattino (17/10 ~05:05, sola lettura; parte solo se il developer dice sì)
+
+> **Richiesta** (coordinatore, 17/10 ~04:57): «So you're ready in the morning: a **read-only plan for Z-14b + Z-15**,
+> with the exact files per owner, the reds, the E2E and the slot, ready to start if the developer says yes.»
+
+**La domanda per il developer** (una sola; in grassetto la mia raccomandazione): «Dopo un recupero dei prezzi (un
+risveglio, un ritorno all'app), le viste già sullo schermo si riallineano da sole, senza dire "occupato"?» Se sì:
+- D1, il pannello di rischio mentre ricarica: **in silenzio** (le cifre cambiano quando arrivano le nuove), oppure
+  l'icona che gira e la sezione attenuata, come dopo una sincronizzazione.
+- D2, le analisi su richiesta già a schermo (stress, replay, simulazione): **restano come sono** (le ha lanciate
+  l'utente, e una simulazione costa), oppure si rilanciano.
+- D3, il ritorno su una pagina dei prezzi dopo un recupero: **i punti vecchi subito, aggiornati in background**,
+  oppure il caricamento come una prima visita (oggi). Serve comunque alla ricarica silenziosa di una pagina aperta:
+  senza, quella ricarica accenderebbe `aria-busy`.
+
+**Stato reale** (HEAD `75a1107a7`, con Y11 sulle pagine degli asset, merge `d32d0f3d9`):
+- Il bus: `{kind: 'prices'}` (`notifyPricesCaughtUp`, `stores/portfolio/portfolioMutation.ts:155`). Ricaricano solo
+  il Dashboard (`dashboard/+page.svelte:729–737`) e la pagina del broker (`brokers/[id]/+page.svelte:449–456`), in
+  background e fuori da `pageBusy`; i loro commenti dicono che rischio e lotti restano stale.
+- Rischio: ogni pannello ha un `createRiskPanelController` (`lib/features/risk/riskPanelController.svelte.ts`):
+  Dashboard e broker (`RiskLevelsPanel`), lista asset (`AssetSetRiskPanel`, più controller), dettaglio asset
+  (`AssetRiskScenariosView`). L'onda di base si ricarica all'apertura o al cambio d'ambito (`pageBusy` `risk-load`) e
+  a `refreshVersion` (`risk-refresh`). `riskStore` segna stale a ogni segnale del bus (`riskStore.svelte.ts:307`).
+  `loadBase` mette la cache a schermo e accende `refreshing` (riga 464): in `RiskResultFrame` un'icona che gira
+  (`{testId}-refreshing`) e la sezione al 60 %.
+- Lotti: `LotsAnalysisPanel.svelte`, `loadMain` (~riga 221), mette la cache a schermo e, se stale, chiede di nuovo
+  senza indicatori. Manca solo chi lo richiami dopo un recupero: oggi lo fanno gli `$effect` sugli input e
+  `refreshVersion`.
+- Le quattro pagine dei prezzi leggono i negozi con `getMissingIntervals`. Dopo Z-14 un negozio stale dà tutto
+  l'intervallo come mancante, e la pagina mostra il caricamento:
+  - dettaglio asset, `routes/(app)/assets/[id]/+page.svelte`: `loadChartData` (1262–1345) fa
+    `loading = !pricesFromCache`, e `aria-busy`/`data-busy` della radice `asset-detail-page` (2189–2190) seguono
+    `loading`;
+  - dettaglio cambio, `routes/(app)/fx/[pair]/+page.svelte`: `loadChartData` (760–800) fa
+    `loading = !hasCachedRange`, con `data-busy={loading}` sulla radice `fx-detail-page` (1243);
+  - lista asset, `routes/(app)/assets/+page.svelte`: `fetchAllPriceData` (~640–700), `loadingPrices` per asset;
+  - lista cambi, `routes/(app)/fx/+page.svelte`: `fetchAllPairData` (~450–540), `loading: true` per coppia.
+  Nessuna delle quattro ascolta il bus.
+
+**Disegno** (decisioni N-Z14b-1…3 e N-Z15-1…2, «da rivedere»):
+- N-Z14b-1: un aiuto, mio: `lib/features/price-refresh/onPricesCaughtUp.ts`.
+  - `onPricesCaughtUp(reload)` si registra sul bus con una chiave unica per chiamata, perché una pagina può avere più
+    controller di rischio.
+  - Reagisce solo a `prices`, e chiama `reload` in un microtask, dopo che ogni negozio ha segnato stale.
+  - Rende la funzione che smette; pagine e pannelli lo chiamano nel loro ciclo di vita.
+  - Dashboard e broker restano come sono.
+- N-Z14b-2: `TimeSeriesStore` espone `isStale`, in sola lettura. Regola delle quattro pagine (D3): se il negozio è
+  stale e ha punti per l'intervallo, quei punti vanno subito a schermo e la richiesta parte senza `loading` (quindi
+  senza `aria-busy`/`data-busy`); altrimenti come oggi.
+- N-Z14b-3: ogni pagina dei prezzi, con `onPricesCaughtUp`, rilegge l'intervallo che mostra, attraverso la sua
+  funzione di oggi (`loadChartData`, `fetchAllPriceData`, `fetchAllPairData`) e fuori da `pageBusy`. Y11 ha messo
+  l'«Aggiorna» di queste pagine su `pageBusy`, e la ricarica non è un «Aggiorna».
+- N-Z15-1: il controller del rischio, con `onPricesCaughtUp`, richiede la sua onda di base senza force e fuori da
+  `pageBusy`. Con D1 «in silenzio» non accende `refreshing` (un'opzione di `loadBase`). Un solo file vale per tutti i
+  pannelli di rischio.
+- N-Z15-2: il pannello dei lotti, con `onPricesCaughtUp`, richiama `loadMain` e `loadSelectionHistories` senza force
+  e fuori da `pageBusy`; la cache stale li fa chiedere di nuovo senza indicatori.
+- Con D2 «restano», nessun rilancio delle analisi su richiesta.
+
+**File per proprietario** (lo scrittore lo assegna il coordinatore; proprietari letti nella storia dei merge):
+
+| proprietario | file | cosa |
+|---|---|---|
+| Z | `lib/features/price-refresh/onPricesCaughtUp.ts` (nuovo) e `onPricesCaughtUp.test.ts` | l'aiuto |
+| Z | `lib/stores/core/TimeSeriesStore.ts`, `lib/stores/__tests__/TimeSeriesStore.test.ts` | `isStale` |
+| Z | `e2e/portfolio/price-refresh-reload.spec.ts`; la `desc` di `price-refresh` in `scripts/test_runner/_frontend_portfolio.py` (condiviso) | gli E2E |
+| Y (Y4b, Y11) | `lib/features/risk/riskPanelController.svelte.ts`, `riskPanelController.test.ts` | N-Z15-1 |
+| Y (spostato con Y3; colori di BK; nella lista del coordinatore J: da confermare) | `lib/features/brokers/lots/LotsAnalysisPanel.svelte` | N-Z15-2, solo `<script>` |
+| Y (Y11; nella storia anche X, C-66, e AF, colori) | `routes/(app)/assets/[id]/+page.svelte`, `routes/(app)/assets/+page.svelte`, `routes/(app)/fx/[pair]/+page.svelte`, `routes/(app)/fx/+page.svelte` | N-Z14b-2 e 3, solo `<script>` |
+| DV, BK | `routes/(app)/dashboard/+page.svelte`, `routes/(app)/brokers/[id]/+page.svelte` | i commenti di `reloadAfterPriceCatchUp` |
+| docs-writer | `developer/frontend/state/domain-state.md`, `live-ticker.md#price-refresh`, `state/registries.md` («Invalidating»), la pagina di sviluppo del rischio se descrive i ricaricamenti | doc |
+
+Nessuna area dei colori: niente markup né classi. Il lotto T della lista asset tocca le righe 1707–1708, cioè il
+markup: un altro pezzo del file.
+
+**Rossi** (test-author, prima del codice):
+- `onPricesCaughtUp.test.ts` (`front-utility core-unit`):
+  - solo `prices` chiama, e dopo gli ascoltatori del dispatch;
+  - due chiamate danno due ricariche (chiavi uniche);
+  - dopo lo stop, nulla.
+- `TimeSeriesStore.test.ts` (`front-fx fx-unit`): `isStale` vero dopo `markStale()`, falso dopo `invalidateAll()`.
+- `riskPanelController.test.ts` (`front-portfolio risk-controller-unit`):
+  - con `{kind: 'prices'}` l'onda di base è chiesta di nuovo, senza force, con `pageBusy.busy` falso e (D1)
+    `refreshing` falso;
+  - con `mutation` e `refresh` no;
+  - le analisi su richiesta restano intatte (D2).
+- Le pagine e il pannello dei lotti hanno la logica nei `.svelte`: li coprono gli E2E.
+
+**E2E** (nel mio spec, `front-portfolio price-refresh`). Stesso recupero simulato e stesso registro di `data-busy`,
+con in più le radici `asset-detail-page`, `fx-detail-page`, `assets-page` e `fx-page`:
+- (i) Dashboard col pannello di rischio aperto. Dopo un recupero che ha aggiornato qualcosa, di nuovo
+  `POST /risk/query`, con le stesse domande e senza navigare; radice e «Aggiorna» mai occupati; (D1) nessuna icona
+  `-refreshing`. Controllo: un recupero che non ha aggiornato nulla non chiede niente.
+- (j) Dashboard col pannello dei lotti aperto su una posizione: di nuovo `POST /portfolio/lots/analysis`, e nessun
+  «occupato».
+- (k) Dettaglio asset aperto: la sua `prices/query` con `include_price: true`, senza navigare; `asset-detail-page` mai
+  `data-busy`; il grafico resta.
+- (l) Lo stesso per il dettaglio di un cambio: `convert`, `fx-detail-page`.
+- (m) Liste asset e cambi aperte: chiedono di nuovo prezzi e cambi; le radici non sono mai occupate.
+- (g') e (h'): (g) e (h) di oggi, più «al ritorno dopo il recupero la radice non dice mai occupato» (D3).
+
+Oggi rossi per il motivo giusto: in (i)–(m) nessuna richiesta, in (g') e (h') `data-busy` acceso.
+
+**Slot**:
+- `front-portfolio price-refresh` intero: 8 casi oggi, 7 in più; stima 15–20 min.
+- La regressione delle pagine toccate, stima 20–25 min: `front-asset asset-detail`, `front-asset asset-list`,
+  `front-asset live-pause`, `front-fx fx-detail`, `front-fx fx-list`, `front-portfolio risk-asset-detail`.
+- Due slot, o uno da ~45 min.
+
+Controlli leggeri: `core-unit`, `fx-unit`, `asset-unit`, `risk-controller-unit`, `store-unit`, `component-unit` e
+`front check`.
+
+**Passi, dopo il sì**:
+1. analisi del turno: rileggere le righe e le firme di `loadBase`, `fetchAllPriceData` e `fetchAllPairData`;
+2. rossi;
+3. codice: l'aiuto e `isStale` sono miei; i file di Y col suo via da scrittore, o li fa Y;
+4. doc;
+5. controlli leggeri;
+6. slot;
+7. checkpoint FROZEN.
+
+Stima: mezza giornata, più gli slot.
+
+**Rischi**:
+- Richieste in più dopo un recupero: una per vista aperta, e solo quando il recupero ha aggiornato qualcosa. Nel cloud
+  succede una volta, al risveglio.
+- Il dettaglio asset ha molte guardie di generazione (`chartRequestGeneration`): la ricarica passa da `loadChartData`,
+  non da un percorso nuovo.
+- File aperti da altre sessioni (Y, X, i colori): solo `<script>`, ma ogni via va annunciato.
+
+**Fatto quando**: i rossi sono verdi; i 7 E2E sono verdi nello slot, con i loro controlli; la ricarica non accende
+mai `data-busy`; la doc è aggiornata; Z-14b e Z-15 sono ✅ nel backlog.
