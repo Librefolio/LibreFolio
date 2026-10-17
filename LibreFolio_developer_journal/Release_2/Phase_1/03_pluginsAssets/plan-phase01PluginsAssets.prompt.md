@@ -5218,3 +5218,47 @@ controlla questi testi, e il componente non ha un file di test.
 >   coordinatore.
 > - **W-B58 entrato** (dev `4e9d1815f`): via libera a X-R38. Le mie due note alla revisione di `price_query.py` sono
 >   diventate **X-R40**. Ordine: O-8 → X-R38 → X-R40.
+
+**O-8 committato ed entrato** (coordinatore, 02:06): `9c3b9d803` e `b2c31632c`, dev `b1b4960c4`. Il CHANGELOG era in
+conflitto in coda a «Fixed» (H-28, Z-14, MF-E1): il coordinatore ha messo la mia riga dopo le loro.
+- **⚠️ Fuori pista**: il fast-forward del mio ramo è fallito. La modifica facoltativa del test-author in
+  `scripts/test_runner/_backend_services.py` (la descrizione di `provider-policy`) si sovrapponeva a quella di Z-21 in
+  dev. L'ho tolta (il patch è in `files/checks/xr24_runner_desc.patch`). HEAD resta `b2c31632c`: il coordinatore
+  committa X-R24/25 e poi porta dev nel mio ramo, con `max_integer_digits` di W-B58. Poi X-R38, poi X-R40.
+
+### X-R24 e X-R25 — la ricerca senza `providers`, e il test di justETF ✅ (2026-10-17, 01:55–02:20; consegnato, due corse aspettano lo slot)
+
+> **Note implementazione**:
+> - **I rossi** (test-author):
+>   - `test_provider_policy.py`, sezione 6: `search()` e `search_stream()` senza `providers` non devono chiedere i
+>     provider `test_only`. Due controlli verdi: un provider `test_only` nominato nella richiesta si chiede ancora.
+>     Tutto in processo, con il registro vero e un sostituto per codice;
+>   - `test_search_to_prices.py` (X-R25): al passo 1 `providers=justetf`, con un timeout tutto suo di 90 s, come in
+>     `test_assets_provider.py`. Inoltre `test_search_provides_all_required_fields` ora chiede `providers=mockprov`:
+>     senza, dopo la cura sarebbe diventato rosso, perché contava sui risultati del mock;
+>   - aggiornati i commenti vecchi («mockprov also returns Apple», il paragrafo F21 su `search_rank`).
+> - **Rosso confermato** (02:07): `services provider-policy` → **2 rossi, 50 verdi**, esattamente i due casi senza
+>   `providers`.
+> - **Il codice**:
+>   - in `services/assets/search.py`, `_default_search_codes()`: ogni provider registrato tranne quelli `test_only`,
+>     come li elenca `GET /assets/provider`. Lo usano i due rami. Il flag si legge con
+>     `getattr(get_plugin(code), "test_only", False)`, così un codice che il registro non conosce resta (ci conta un
+>     test di `asset-source`);
+>   - la docstring di `services/assets/__init__.py` ora dice che `AssetSourceProvider` e `AssetSourceError` stanno in
+>     `base.py`;
+>   - in `api/v1/assets/providers.py`, le descrizioni OpenAPI del parametro `providers` (la lista e le due ricerche)
+>     dicevano «default: all»: ora «every registered provider but the test-only ones». Va lanciato `api sync`.
+> - **Verde** (02:08): `provider-policy` **52/52**, `asset-source` **61/61**; ruff e black puliti.
+> - **Doc** (docs-writer): `asset_plugin_guide.md` «How It Works»:
+>   - passo 2: il frontend chiama lo streaming con i `providers` scelti, e il REST solo come ripiego. **Chiude
+>     X-R34**;
+>   - passo 3: senza `providers`, ogni provider registrato tranne quelli di test.
+> - **Manca**: `api sync`, `mkdocs build` stretto, `check-links`; poi uno slot per `api assets-provider` (le ricerche
+>   dal vivo senza `providers`) ed `e2e search-to-prices` (X-R25, con la rete).
+> - **Congelamento per la galleria** (coordinatore, 02:17), fino alle 03:30 circa: niente passi pesanti; i controlli
+>   leggeri solo a carico < 50, ma il carico era 170. Il coordinatore chiede il checkpoint subito, con le corse di rete
+>   segnate come non lanciate: le fa nello slot sulla revisione combinata, prima dell'ingresso. Così il merge di dev porta
+>   `max_integer_digits` e parte X-R38.
+>   - Ho fermato `api sync`, che aspettava al cancello, prima del commit, per non lanciare niente durante il merge.
+>   - Non lanciati: `api sync` (il client generato non è tracciato), `mkdocs build` stretto e `check-links` (si fanno
+>     quando il carico lo permette), `api assets-provider` ed `e2e search-to-prices` (nello slot).
