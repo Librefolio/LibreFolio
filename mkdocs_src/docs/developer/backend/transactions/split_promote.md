@@ -150,7 +150,8 @@ both. After resolving the references, the stage:
    takes no cost basis (`cost_basis_allowed()` is false: the giving side of a
    `TRANSFER`), such as an `ADJUSTMENT` taking units out that a split left with a
    cost; the receiving side keeps its own (decision 47);
-7. applies recognized `resolved_fields`;
+7. applies the merged values of `resolved_fields`, the keys the request names (see
+   [Request shape](#promote-request-shape));
 8. marks same-batch correlation keys as consumed so the later create-link stage
    does not process them again; and
 9. emits a `promote` result containing the same two row IDs.
@@ -178,9 +179,9 @@ The batch payload does not contain `new_type`. The current metadata permits:
 
 The match is symmetric: either row may be supplied as side A.
 
-### 📦 Request shape
+### 📦 Request shape {: #promote-request-shape }
 
-A saved-row promote can include values already resolved by the merge UI:
+A saved-row promote can carry merged values, `resolved_fields`:
 
 ```json
 POST /transactions/commit
@@ -200,10 +201,35 @@ POST /transactions/commit
 }
 ```
 
-The recognized `resolved_fields` keys are `description`, `tags`, `date`, and
-`cost_basis_override`. Description, tags, and date are applied to both rows. For
-an asset transfer, the cost basis is applied to the positive-quantity receiver
-and cleared from the sender.
+`resolved_fields` is a `TXPromoteResolvedFields` (`backend/app/schemas/transactions/batch.py`;
+H-41, within R13-SEC7-3): a `StrictModel` typed like a create's fields, so an unknown key is
+refused.
+
+| Key | Type | Applied to |
+|-----|------|------------|
+| `description` | `Optional[str]`, at most 500 characters | Both rows |
+| `tags` | `Optional[List[str]]`, through the create's tag validator (`validate_tags_list()`: a list, or a comma-separated string) | Both rows |
+| `date` | `Optional[date]`; an explicit `null` is refused | Both rows |
+| `cost_basis_override` | `Optional[Currency]` | For an asset transfer, the positive-quantity receiver only; the sender's is cleared (decision 47) |
+
+`_apply_promote_resolved_fields()` (`batch_creates.py`) applies the keys the request
+names (`model_fields_set`): a key left out leaves both rows alone, and an explicit
+`null` clears the description, the tags or the cost basis. Once parsed, the resolved
+cost basis is checked against its column (`check_decimal_limits()`, see
+[Decimal limits](service.md#decimal-limits)) and the resolved date against the range
+(`check_dates()`, see [Transaction dates](service.md#transaction-dates)), before any
+stage applies them.
+
+A value the model refuses becomes an issue of the promote at the batch's parse
+(`_parse_lenient()`): `operation` `promote`, pydantic's error type as `code`, `params`
+null, and a `field` named by the merged field itself, without the `resolved_fields.`
+prefix (`_loc_to_field()`): `description`, `tags`, `date`, `cost_basis_override`,
+`cost_basis_override.amount`, or the unknown key. The issue thus carries that field's
+label. As with any parse refusal of this lenient batch, the other operations are
+still checked, then nothing is saved (`committed=False`). Before H-41 the dict was
+applied as sent: a malformed date, tags or cost basis raised out of the batch, a 500;
+a description that was no string reached the `Text` column; an unknown key was
+ignored.
 
 The Transactions page sends a saved-row promote on its own, outside the
 workspace, when exactly two selected rows are unpaired, sit on brokers the user
@@ -211,7 +237,13 @@ can edit, and match a rule (`findPromoteMatch()` on the `promote_from` metadata
 of `GET /transactions/types`, which finds none when a row is linked to an asset
 event and the target type refuses the link). **🔗 Promote pair** then opens a plain
 confirmation, or `PromoteMergeModal` when the two rows differ in description,
-tags, date or cost basis; only the merge dialog adds `resolved_fields`.
+tags, date or cost basis; only the merge dialog adds `resolved_fields`, with
+`description` and `tags` alone, as **Merge all** does in the bulk workspace
+(`PromoteAllModal`): `date` and `cost_basis_override` come from API clients only.
+The merged description joins the two with a line break (`mergeStrings()` in
+`frontend/src/lib/features/transactions/bulk/promoteHelpers.ts`), so two long
+descriptions can pass 500 characters and are then refused, as a create's
+description is (`TXCreateItem.description` takes 500 too).
 
 A mixed saved/new request uses a create correlation value:
 
@@ -242,9 +274,9 @@ rows contain only reciprocal `related_transaction_id` values.
 A promote item has no `cost_basis_mode`, and `apply_promotes()` does not calculate
 WAC. The later `_compute_wac_for_auto_items()` worklist is built only from parsed
 create and update items. Promote-specific cost-basis resolution therefore comes
-from `resolved_fields.cost_basis_override`, supplied by the frontend merge flow
-or another API client; without that key, the receiver keeps the cost basis it
-already has, and the sender is left without one (step 6).
+from `resolved_fields.cost_basis_override`, which only an API client sends (the
+merge dialogs send `description` and `tags`); without that key, the receiver keeps
+the cost basis it already has, and the sender is left without one (step 6).
 
 Because `apply_promotes()` writes `related_transaction_id` before the WAC step, a
 create or update in Auto that the promote makes the receiving side averages its
@@ -266,10 +298,17 @@ different contract:
 
 - request: `from_tx_id`, `to_tx_id`, `new_type`, and the optional
   `asset_id`, `quantity`, and `cost_basis_override` fields needed for
-  `TRANSFER`;
+  `TRANSFER`; a `quantity`, or a `cost_basis_override` amount, whose exponent is
+  outside ±100 is refused with a 422 before any work (R13-SEC7-3, see
+  [Decimal Columns](../../architecture/database/index.md#decimal-columns));
 - implementation: snapshot the two `DEPOSIT`/`WITHDRAWAL` rows, delete them,
   build two replacement create payloads with a shared `link_uuid`, and call
-  `execute_batch()` with those deletes and creates; and
+  `execute_batch()` with those deletes and creates. The payloads are raw dicts:
+  a `TRANSFER`'s quantity and cost basis go in their short form, `str(v)`, with
+  the signs from `copy_abs()` and `copy_negate()`. Neither a fixed-point
+  expansion (`format(v, "f")`) nor a decimal context is involved (`abs()` of
+  `1E+1000000` raises `decimal.Overflow`), so the batch refuses a value past its
+  column's limits (R13-SEC7-3); and
 - response: `TXTransferPromoteResponse`, whose fields include the legacy
   `rolled_back`, `new_from_tx_id`, `new_to_tx_id`, and `errors`.
 
@@ -297,7 +336,8 @@ their stage loops continue. Common stable codes are:
 
 The service does not roll the session back itself. `/transactions/validate`
 always rolls back; `/transactions/commit` commits only when
-`TXBatchResponse.committed` is true and rolls back otherwise. Access denial may
+`TXBatchResponse.committed` is true and rolls back otherwise. Access denial, a
+value past its column's digits before the decimal point or a date out of range may
 return before either mutation stage, and balance replay stops after its first
 balance exception, so the overall pipeline is not an unconditional
 collect-every-error pass.
