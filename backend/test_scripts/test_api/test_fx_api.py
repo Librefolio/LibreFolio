@@ -26,6 +26,7 @@ from backend.app.schemas import FXBulkDeleteResponse, FXBulkUpsertResponse, FXCo
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import (
     FXConversionRequest,
+    FXConversionRouteReadItem,
     FXConversionRoutesResponse,
     FXCreateRoutesResponse,
     FXDeleteItem,
@@ -970,6 +971,300 @@ async def test_manual_full_pair_delete_no_reinstate(test_server):
         ars_clp = [i for i in items if i["base"] == "ARS" and i["quote"] == "CLP"]
         assert len(ars_clp) == 0, f"Pair should be completely deleted, but found: {ars_clp}"
         print_success("✓ Full pair delete: pair completely gone, MANUAL NOT reinstated")
+
+
+# ============================================================================
+# X-R75: POST /fx/providers/routes?replace=true — a pair's routes replaced by one request
+# ============================================================================
+#
+# The FX pair modal edits a pair's routes with DELETE /fx/providers/routes [{base, quote}] (the whole pair, no MANUAL
+# reinstated: Test 17), then POST /fx/providers/routes: a POST that fails leaves the pair with no route at all. The cure
+# (create_routes_bulk): a query parameter ``replace``, default false -- the upsert by (base, quote, priority), as before.
+# With ``replace=true``, in the same transaction, after the validation (the 400 of an unknown provider first, rolled
+# back) and after the upsert, every route of a pair the request names -- base and quote sorted, as the endpoint stores
+# them -- whose priority was not posted for that pair is deleted; then the MANUAL rules as before (a real provider posted
+# removes the MANUAL sentinel). A refusal (400, 409, 500) rolls everything back; a 422 never reaches the handler. The
+# answer is an FXCreateRoutesResponse, as before.
+#
+# FX routes are global. Each test owns its pairs, of currencies nothing else in the repository names -- no API, service
+# or E2E test, no fixture, no mock data, no frontend or backend source (DZD TND LYD IQD JOD DOP NIO PAB KYD AOA CDF LRD
+# SDG DJF: checked by grep over backend/, frontend/e2e, frontend/src and scripts/ when these tests were written) -- and
+# drops them whole before and after, after a red too. The routes name ECB, FED, BOE, SNB and MOCKFX: a route is
+# configuration, nothing here syncs, and the lane's server runs no scheduler (LIBREFOLIO_NO_SCHEDULER), so no request
+# reaches a provider.
+
+R75_ROUTES_URL = f"{API_BASE}/fx/providers/routes"
+R75_ROUTES_PATH = "/api/v1/fx/providers/routes"  # the operation's key in the OpenAPI document
+R75_MANUAL_PRIORITY = 999  # the MANUAL sentinel's priority (MANUAL_PRIORITY): the contract's number, written here
+
+#: One pair per test, written as stored (base < quote).
+R75_EXACT = ("DZD", "TND")  # Test 18a
+R75_EXACT_HOP = "LYD"  # the currency 18a's chain goes through: no route of DZD/LYD or LYD/TND is posted
+R75_MANUAL = ("IQD", "JOD")  # Test 18b
+R75_REFUSED = ("DOP", "NIO")  # Test 18d
+R75_REFUSED_BREAK = ("PAB", "KYD")  # 18d's broken chain leaves DOP for PAB, then starts again from KYD
+R75_UPSERT = ("AOA", "CDF")  # Test 18e
+R75_MAIN = ("LRD", "SDG")  # Test 18f: its chain goes LRD → DJF → SDG
+R75_FIRST_HOP = ("DJF", "LRD")  # Test 18f: new, posted beside the main pair as LRD → DJF
+R75_SECOND_HOP = ("DJF", "SDG")  # Test 18f: configured before, not named by the replace
+
+#: A pair's routes as the listing gives them: (priority, [(from, to, provider), ...]), by priority.
+R75Listing = list[tuple[int, list[tuple[str, str, str]]]]
+
+
+def _r75_route(base: str, quote: str, priority: int, *steps: tuple[str, str, str]) -> dict:
+    """A route as a client posts it: the pair as written, its priority, its steps as (from, to, provider)."""
+    return {"base": base, "quote": quote, "priority": priority, "chain_steps": [{"from": origin, "to": target, "provider": provider} for origin, target, provider in steps]}
+
+
+def _r75_direct(pair: tuple[str, str], priority: int, provider: str) -> dict:
+    """A one-step route of ``pair``, from its base to its quote."""
+    base, quote = pair
+    return _r75_route(base, quote, priority, (base, quote, provider))
+
+
+def _r75_expected(routes: list[dict]) -> R75Listing:
+    """What the listing of their pair must hold after ``routes``: each priority with its steps as posted."""
+    return sorted((route["priority"], [(step["from"], step["to"], step["provider"]) for step in route["chain_steps"]]) for route in routes)
+
+
+async def _r75_listed(client: httpx.AsyncClient, pair: tuple[str, str]) -> R75Listing:
+    """The routes ``GET /fx/providers/routes`` lists for ``pair`` (as stored, base < quote); nobody else's are read."""
+    response = await client.get(R75_ROUTES_URL, timeout=TIMEOUT)
+    assert response.status_code == 200, f"listing the routes: {response.status_code} {response.text[:300]}"
+    routes = [FXConversionRouteReadItem.model_validate(item) for item in response.json()["items"] if (item["base"], item["quote"]) == pair]
+    return sorted((route.priority, [(step.from_currency, step.to_currency, step.provider) for step in route.chain_steps]) for route in routes)
+
+
+async def _r75_post(client: httpx.AsyncClient, routes: list[dict], replace: str | None = None) -> httpx.Response:
+    """``POST /fx/providers/routes`` with ``routes``: ``?replace=<replace>`` when given, no query string otherwise."""
+    params = {} if replace is None else {"replace": replace}
+    return await client.post(R75_ROUTES_URL, params=params, json=routes, timeout=TIMEOUT)
+
+
+def _r75_saved(response: httpx.Response) -> None:
+    """A POST the endpoint accepted: 201, an ``FXCreateRoutesResponse`` (the schema of before), no route refused."""
+    assert response.status_code == 201, f"expected 201, got {response.status_code}: {response.text[:500]}"
+    body = FXCreateRoutesResponse(**response.json())
+    assert body.error_count == 0, f"no route may be refused: {body}"
+
+
+async def _r75_drop(client: httpx.AsyncClient, *pairs: tuple[str, str]) -> None:
+    """Delete every route of ``pairs``: the full-pair DELETE, which reinstates no MANUAL (Test 17)."""
+    response = await client.request("DELETE", R75_ROUTES_URL, json=[{"base": base, "quote": quote} for base, quote in pairs], timeout=TIMEOUT)
+    assert response.status_code == 200, f"dropping {pairs}: {response.status_code} {response.text[:300]}"
+
+
+async def _r75_seed(client: httpx.AsyncClient, pair: tuple[str, str], routes: list[dict]) -> None:
+    """``pair`` dropped, then configured with ``routes`` by a POST without ``replace``; the listing checked."""
+    await _r75_drop(client, pair)
+    _r75_saved(await _r75_post(client, routes))
+    assert await _r75_listed(client, pair) == _r75_expected(routes), f"barrier: {pair[0]}/{pair[1]} does not hold the routes just posted"
+
+
+@pytest.mark.asyncio
+async def test_routes_replace_keeps_exactly_the_posted_priorities(test_server):
+    """Test 18a (X-R75): ``POST /fx/providers/routes?replace=true`` leaves a pair exactly the priorities it posts.
+
+    DZD/TND holds priorities 1, 2 and 3 (ECB, FED, BOE, direct). A replace posting priority 1 (SNB, direct) and priority
+    2 (a chain through LYD: ECB, then FED) answers 201 and leaves exactly those two, with the steps posted: priority 3 is
+    gone. Then a replace posting priority 1 alone, the pair written the other way round (TND/DZD, MOCKFX), leaves exactly
+    that route: the pair a request names is the pair as stored.
+    Red before X-R75: the parameter is ignored, the upsert leaves priority 3 in place.
+    """
+    print_section("Test 18a: routes replace keeps exactly the posted priorities")
+
+    base, quote = R75_EXACT
+    seeded = [_r75_direct(R75_EXACT, 1, "ECB"), _r75_direct(R75_EXACT, 2, "FED"), _r75_direct(R75_EXACT, 3, "BOE")]
+    replacement = [_r75_direct(R75_EXACT, 1, "SNB"), _r75_route(base, quote, 2, (base, R75_EXACT_HOP, "ECB"), (R75_EXACT_HOP, quote, "FED"))]
+    turned_round = [_r75_route(quote, base, 1, (quote, base, "MOCKFX"))]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_EXACT, seeded)
+
+            _r75_saved(await _r75_post(client, replacement, replace="true"))
+            listed = await _r75_listed(client, R75_EXACT)
+            assert listed == _r75_expected(replacement), f"after a replace posting priorities 1 and 2, {base}/{quote} must hold exactly them, as posted; it holds {listed}"
+            print_success(f"✓ {base}/{quote}: priorities 1 and 2 as posted, priority 3 gone")
+
+            _r75_saved(await _r75_post(client, turned_round, replace="true"))
+            listed = await _r75_listed(client, R75_EXACT)
+            assert listed == _r75_expected(turned_round), f"a replace posted as {quote}/{base} names the pair stored as {base}/{quote}: it must hold exactly priority 1, as posted; it holds {listed}"
+            print_success(f"✓ posted as {quote}/{base}: {base}/{quote} holds priority 1 alone")
+        finally:
+            await _r75_drop(client, R75_EXACT)
+
+
+@pytest.mark.asyncio
+async def test_routes_replace_with_the_manual_item_leaves_the_pair_manual(test_server):
+    """Test 18b (X-R75): a replace posting the MANUAL item alone keeps the pair, manual.
+
+    IQD/JOD holds priorities 1 and 2 (ECB, FED). ``?replace=true`` with the MANUAL item alone -- one step IQD → JOD,
+    provider MANUAL, priority 999: what the modal posts for a pair left without a provider -- answers 201 and leaves
+    exactly that route. Back: a replace posting one real route (priority 1, MOCKFX) leaves exactly that one, the MANUAL
+    route gone.
+    Red before X-R75: the parameter is ignored, the real routes stay beside the MANUAL one.
+    """
+    print_section("Test 18b: routes replace with the MANUAL item alone leaves the pair manual")
+
+    base, quote = R75_MANUAL
+    seeded = [_r75_direct(R75_MANUAL, 1, "ECB"), _r75_direct(R75_MANUAL, 2, "FED")]
+    manual = [_r75_direct(R75_MANUAL, R75_MANUAL_PRIORITY, "MANUAL")]
+    real = [_r75_direct(R75_MANUAL, 1, "MOCKFX")]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_MANUAL, seeded)
+
+            _r75_saved(await _r75_post(client, manual, replace="true"))
+            listed = await _r75_listed(client, R75_MANUAL)
+            assert listed == _r75_expected(manual), f"after a replace posting the MANUAL item alone, {base}/{quote} must hold exactly it (MANUAL, priority {R75_MANUAL_PRIORITY}); it holds {listed}"
+            print_success(f"✓ {base}/{quote}: the MANUAL route alone, the real ones gone")
+
+            _r75_saved(await _r75_post(client, real, replace="true"))
+            listed = await _r75_listed(client, R75_MANUAL)
+            assert listed == _r75_expected(real), f"after a replace posting one real route, {base}/{quote} must hold exactly it, the MANUAL one gone; it holds {listed}"
+            print_success(f"✓ {base}/{quote}: one real route again, the MANUAL one gone")
+        finally:
+            await _r75_drop(client, R75_MANUAL)
+
+
+@pytest.mark.asyncio
+async def test_openapi_documents_replace_on_the_routes_post(test_server):
+    """Test 18c (X-R75): the OpenAPI document the lane's backend serves (``GET /api/v1/openapi.json``) gives ``POST
+    /api/v1/fx/providers/routes`` a query parameter ``replace``: optional, a boolean, default false.
+
+    Red before X-R75: the operation has no ``replace`` parameter.
+    """
+    print_section("Test 18c: the OpenAPI document gives POST /fx/providers/routes a replace parameter")
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(f"{API_BASE}/openapi.json", timeout=TIMEOUT)
+    assert response.status_code == 200, f"GET /openapi.json: {response.status_code} {response.text[:300]}"
+    operation = response.json()["paths"][R75_ROUTES_PATH]["post"]
+    parameters = {(parameter["name"], parameter["in"]): parameter for parameter in operation.get("parameters", [])}
+    replace = parameters.get(("replace", "query"))
+    assert replace is not None, f"POST {R75_ROUTES_PATH} documents no query parameter replace; its parameters: {sorted(parameters)}"
+    assert not replace.get("required", False), f"replace must be optional: {replace}"
+    schema = replace.get("schema", {})
+    assert schema.get("type") == "boolean", f"replace must be a boolean: {schema}"
+    assert schema.get("default") is False, f"replace must default to false: {schema}"
+    print_success(f"✓ POST {R75_ROUTES_PATH}: replace, in the query, boolean, default false")
+
+
+@pytest.mark.asyncio
+async def test_routes_refused_replace_changes_nothing(test_server):
+    """Test 18d (X-R75, guard): a replace the endpoint refuses leaves the pair as it was.
+
+    DOP/NIO holds priorities 1, 2 and 3 (ECB, FED, BOE). ``?replace=true`` with priority 1 (SNB: valid, and not the
+    stored route) and priority 2 naming the provider NOT_A_PROVIDER: 400, the unknown provider named, and the three
+    routes exactly as before. The same with priority 2 a broken chain instead (DOP → PAB, then KYD → NIO: the steps do
+    not join): 422 on that item, and the three routes exactly as before.
+    Green before X-R75 (the parameter ignored, both refused as today) and after: the replace runs after the validation,
+    in the same transaction, and a 422 never reaches the handler.
+    """
+    print_section("Test 18d: a refused routes replace changes nothing")
+
+    base, quote = R75_REFUSED
+    left_for, resumed_from = R75_REFUSED_BREAK
+    seeded = [_r75_direct(R75_REFUSED, 1, "ECB"), _r75_direct(R75_REFUSED, 2, "FED"), _r75_direct(R75_REFUSED, 3, "BOE")]
+    unknown_provider = [_r75_direct(R75_REFUSED, 1, "SNB"), _r75_direct(R75_REFUSED, 2, "NOT_A_PROVIDER")]
+    broken_chain = [_r75_direct(R75_REFUSED, 1, "SNB"), _r75_route(base, quote, 2, (base, left_for, "ECB"), (resumed_from, quote, "ECB"))]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_REFUSED, seeded)
+
+            response = await _r75_post(client, unknown_provider, replace="true")
+            assert response.status_code == 400, f"a route naming an unknown provider: expected 400, got {response.status_code}: {response.text[:500]}"
+            assert "NOT_A_PROVIDER" in response.text, f"the 400 must name the unknown provider: {response.text[:500]}"
+            listed = await _r75_listed(client, R75_REFUSED)
+            assert listed == _r75_expected(seeded), f"a replace refused with 400 changed {base}/{quote}: it holds {listed}"
+            print_success(f"✓ 400 (unknown provider): {base}/{quote} unchanged")
+
+            response = await _r75_post(client, broken_chain, replace="true")
+            assert response.status_code == 422, f"a broken chain: expected 422, got {response.status_code}: {response.text[:500]}"
+            errors = response.json()["detail"]
+            assert any(list(error.get("loc", []))[:2] == ["body", 1] for error in errors), f"the 422 must refuse the request's second route, the broken chain: {errors}"
+            listed = await _r75_listed(client, R75_REFUSED)
+            assert listed == _r75_expected(seeded), f"a replace refused with 422 changed {base}/{quote}: it holds {listed}"
+            print_success(f"✓ 422 (broken chain): {base}/{quote} unchanged")
+        finally:
+            await _r75_drop(client, R75_REFUSED)
+
+
+@pytest.mark.asyncio
+async def test_routes_post_without_replace_upserts_as_before(test_server):
+    """Test 18e (X-R75, guard): without ``replace``, and with ``replace=false``, the POST is the upsert by (base, quote,
+    priority) of before: a priority it does not post stays.
+
+    AOA/CDF holds priorities 1, 2 and 3 (ECB, FED, BOE). A POST of priorities 1 and 2 (SNB, MOCKFX) without the
+    parameter: 201, priorities 1 and 2 as posted, priority 3 (BOE) still there. A POST of priorities 1 and 2 again (FED,
+    ECB) with ``replace=false``: 201, the same, priority 3 still there.
+    Green before X-R75 (the parameter ignored) and after (false is the default).
+    """
+    print_section("Test 18e: routes POST without replace upserts as before")
+
+    base, quote = R75_UPSERT
+    seeded = [_r75_direct(R75_UPSERT, 1, "ECB"), _r75_direct(R75_UPSERT, 2, "FED"), _r75_direct(R75_UPSERT, 3, "BOE")]
+    kept = seeded[2:]
+    without_parameter = [_r75_direct(R75_UPSERT, 1, "SNB"), _r75_direct(R75_UPSERT, 2, "MOCKFX")]
+    replace_false = [_r75_direct(R75_UPSERT, 1, "FED"), _r75_direct(R75_UPSERT, 2, "ECB")]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_seed(client, R75_UPSERT, seeded)
+
+            _r75_saved(await _r75_post(client, without_parameter))
+            listed = await _r75_listed(client, R75_UPSERT)
+            assert listed == _r75_expected(without_parameter + kept), f"a POST of priorities 1 and 2 without replace must update them and keep priority 3 of {base}/{quote}; it holds {listed}"
+            print_success(f"✓ no parameter: {base}/{quote} priorities 1 and 2 updated, priority 3 kept")
+
+            _r75_saved(await _r75_post(client, replace_false, replace="false"))
+            listed = await _r75_listed(client, R75_UPSERT)
+            assert listed == _r75_expected(replace_false + kept), f"a POST of priorities 1 and 2 with replace=false must update them and keep priority 3 of {base}/{quote}; it holds {listed}"
+            print_success(f"✓ replace=false: {base}/{quote} priorities 1 and 2 updated, priority 3 kept")
+        finally:
+            await _r75_drop(client, R75_UPSERT)
+
+
+@pytest.mark.asyncio
+async def test_routes_replace_with_an_intermediate_pair(test_server):
+    """Test 18f (X-R75, guard): one replace configures a new pair and the new pair of its chain's first hop, and leaves
+    the pair of its second hop, which it does not name, as it was.
+
+    LRD/SDG and DJF/LRD hold nothing; DJF/SDG holds priorities 1 and 2 (FED, MOCKFX). ``?replace=true`` with LRD/SDG
+    priority 1 (the chain LRD → DJF → SDG: ECB, then FED), LRD/SDG priority 2 (direct, BOE) and the first hop's one-step
+    route, written in the chain's direction (LRD → DJF, ECB, priority 1; stored as DJF/LRD): 201; LRD/SDG and DJF/LRD
+    hold exactly what was posted for each, DJF/SDG exactly what it held. The replace is per pair, on the pair as stored,
+    and only on the pairs the request names: a step crossing a pair does not name it.
+    Green before X-R75 (both posted pairs new, nothing to remove) and after: the contract's guard.
+    """
+    print_section("Test 18f: routes replace with an intermediate pair")
+
+    base, quote = R75_MAIN
+    hop = R75_FIRST_HOP[0]
+    second_hop = [_r75_direct(R75_SECOND_HOP, 1, "FED"), _r75_direct(R75_SECOND_HOP, 2, "MOCKFX")]
+    main = [_r75_route(base, quote, 1, (base, hop, "ECB"), (hop, quote, "FED")), _r75_direct(R75_MAIN, 2, "BOE")]
+    first_hop = [_r75_route(base, hop, 1, (base, hop, "ECB"))]
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            await _r75_drop(client, R75_MAIN, R75_FIRST_HOP)
+            await _r75_seed(client, R75_SECOND_HOP, second_hop)
+            assert (await _r75_listed(client, R75_MAIN), await _r75_listed(client, R75_FIRST_HOP)) == ([], []), "barrier: the pairs this replace configures must be new"
+
+            _r75_saved(await _r75_post(client, main + first_hop, replace="true"))
+            main_listed = await _r75_listed(client, R75_MAIN)
+            first_hop_listed = await _r75_listed(client, R75_FIRST_HOP)
+            second_hop_listed = await _r75_listed(client, R75_SECOND_HOP)
+            assert main_listed == _r75_expected(main), f"{base}/{quote} must hold exactly the two routes posted for it; it holds {main_listed}"
+            assert first_hop_listed == _r75_expected(first_hop), f"the first hop's pair, posted as {base}/{hop}, must hold exactly its route as {'/'.join(R75_FIRST_HOP)}; it holds {first_hop_listed}"
+            assert second_hop_listed == _r75_expected(second_hop), f"{'/'.join(R75_SECOND_HOP)}, which the request does not name, must keep its routes; it holds {second_hop_listed}"
+            print_success(f"✓ {base}/{quote} and {'/'.join(R75_FIRST_HOP)} as posted, {'/'.join(R75_SECOND_HOP)} untouched")
+        finally:
+            await _r75_drop(client, R75_MAIN, R75_FIRST_HOP, R75_SECOND_HOP)
 
 
 @pytest.mark.asyncio
