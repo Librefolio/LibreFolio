@@ -89,6 +89,7 @@ from backend.app.services.financial_math.portfolio.contributions import (
     period_return_on_start,
     transfer_costs_moved_out,
     transfer_tract_adjustments,
+    transfer_tracts_moved_in,
     window_start,
 )
 from backend.app.services.financial_math.returns import (
@@ -1598,6 +1599,7 @@ class PortfolioService:
         end_states = {(ps.broker_id, ps.asset_id): ps for ps in engine_result.position_states_end}
         tract_adjustments = transfer_tract_adjustments(engine_result.internal_asset_transfers, date_from, effective_end)
         moved_out = transfer_costs_moved_out(engine_result.internal_asset_transfers, date_from, effective_end)
+        moved_in = transfer_tracts_moved_in(engine_result.internal_asset_transfers, date_from, effective_end)
 
         lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
         lot_moves = {key: quantity_moves(txns, lot_split_ids) for key, txns in lot_txns_by_key.items()}
@@ -1661,8 +1663,15 @@ class PortfolioService:
             if is_fully_sold:
                 opened, closed = closed_position_window(lot_moves.get(pos_key, []))
                 # MF-A5: the base is the cost of every unit that left, sold or moved by a counted tract; a unit that left
-                # another way leaves no base, and the general rule stands
-                base = closed_position_base(per_cost_sold.get(pos_key, Decimal("0")), per_sales.get(pos_key, 0), moved_out.get(pos_key), exits_in(lot_moves.get(pos_key, []), date_from, effective_end))
+                # another way leaves no base, and the general rule stands. MF-A8: units received by a counted tract enter
+                # the base at their value on arrival, as they enter the row's result
+                base = closed_position_base(
+                    per_cost_sold.get(pos_key, Decimal("0")),
+                    per_sales.get(pos_key, 0),
+                    moved_out.get(pos_key),
+                    exits_in(lot_moves.get(pos_key, []), date_from, effective_end),
+                    moved_in.get(pos_key),
+                )
                 closed_annualized = closed_position_annualized(period_pnl, base, opened, closed, date_from)
                 if closed_annualized is not None:
                     period_annualized = closed_annualized
