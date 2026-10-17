@@ -58,13 +58,13 @@ SQLite keeps the value of a `NUMERIC` column as a double (`REAL`; `INTEGER` for 
 value) and ignores the declared precision: the model's column type decides how the value
 is read back (`backend/app/db/models.py`; C-97, issue #43).
 
-| Columns | Type | Decimal places |
-|---------|------|----------------|
-| `transactions.quantity` | `RealDecimal(22, 10)` | 10 |
-| `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 |
-| `transactions.amount`, `asset_events.value` | `Numeric(18, 6)` | 6 |
-| `fx_rates.rate` | `Numeric(24, 10)` | 10 |
-| `price_history.volume` | `Numeric(24, 0)` | 0 |
+| Columns | Type | Decimal places | Digits before the point |
+|---------|------|----------------|-------------------------|
+| `transactions.quantity` | `RealDecimal(22, 10)` | 10 | 15 |
+| `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 | 12 |
+| `transactions.amount`, `asset_events.value` | `Numeric(18, 6)` | 6 | 15 for the amount, 12 for the event value |
+| `fx_rates.rate` | `Numeric(24, 10)` | 10 | not checked |
+| `price_history.volume` | `Numeric(24, 0)` | 0 | 24 |
 
 - **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
   `0.123457` (a quantity, before C-97), and a wider scale shows the double's noise
@@ -73,17 +73,46 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   decimal that represents it (its `repr`), at most 15 significant digits
   (`REAL_SIGNIFICANT_DIGITS`), rounded to the scale when it has more decimals and padded to
   6 decimals (`READ_MIN_SCALE`) when it has fewer: `10` reads `10.000000`, as with
-  `Numeric(18, 6)`.
-- **Input limits.** A value sent in — a transaction's quantity, cash amount or manual
-  per-unit cost basis, a manual price or event value — over its column's decimal places,
-  or over 15 significant digits, is refused, never rounded (`decimal_limit_issue()` in
-  `backend/app/db/precision.py`; trailing zeros do not count): see
+  `Numeric(18, 6)`. `RealDecimal`'s read never raises (W-B58; before, it raised on a
+  stored ±inf and on any value from 1e54 up): one row that cannot be read would take down
+  every listing that loads it, for every user. A stored double that is not finite (±inf,
+  written before the size limits or by hand), or a stored value that is no number at all,
+  reads `None`, logged once per process: the row loads, and can be deleted. A finite
+  double of any size reads back exactly, even past its column's digits before the point:
+  a release 1.2 database never enforced them, and reading such a quantity as `None` would
+  erase a position. Writing a value a double cannot hold, such as `Decimal("1E+400")`,
+  raises `ValueError` (*not finite as a double*) in `process_bind_param()`, whoever writes
+  it: no ±inf reaches a `RealDecimal` column any more. The `Numeric` columns have neither
+  guard: `transactions.amount`, `asset_events.value`, `price_history.volume` and
+  `fx_rates.rate` store a value past a double's range as ±inf without an error, and read a
+  stored ±inf back as `Decimal('Infinity')`, not `None`.
+- **Input limits.** A value sent in — a transaction's quantity, cash amount or per-unit
+  cost basis (manual, or the one a promotion resolves), a manual price or event value —
+  over its column's decimal places, over 15 significant digits, or over its column's
+  digits before the decimal point, is refused, never rounded (`decimal_limit_issue()` in
+  `backend/app/db/precision.py`; trailing zeros do not count). It checks them in that
+  order and answers the first one failed, with its maximum: `decimalPlacesExceeded`,
+  `significantDigitsExceeded` or `integerDigitsExceeded`, the last also for a value that
+  is not finite. The digits before the point are `max_integer_digits()`'s: 15 for
+  `transactions.quantity` and `transactions.amount`, as many as a REAL gives back
+  (decision N63: a thousand billion VND or IDR is a real amount, and release 1.2, which
+  never enforced the declarations on SQLite, may already hold one), otherwise what the
+  column declares, precision − scale. It counts the value's own digits, never through a
+  decimal context, so nothing rounds, overflows or underflows: `1E+60`, one digit and no
+  decimals, is refused for its size, and `1E+1000000` and `1E-2000000` are refused, never
+  a 500 or a zero. A manual volume is checked for its size only
+  (`integer_digits_issue()`): its decimals pass, and read back rounded. See
   [Decimal limits](../../backend/transactions/service.md#decimal-limits),
   [Asset Architecture](../../backend/assets/architecture.md) for prices and
   [Asset Events](../../backend/assets/events.md) (`EVENT_TOO_MANY_DIGITS`). A provider's
   prices are truncated instead: `truncate_priceHistory()` keeps 12 decimal places, then 15
-  significant digits, both rounded down. A BRIM plugin rounds a value it computes, never
-  one it reads from the file, with `round_computed_value()` (see
+  significant digits, both rounded down. A provider's value that no truncation makes fit
+  is skipped, never written: `storable_value()` answers `None` for a value that is not
+  finite or past its column's digits before the point, and `storable_price()` also for a
+  non-zero close that truncates to 0; a provider's event whose value is past 12 digits
+  before the point, or not finite, is dropped too (`integer_digits_issue()`). A BRIM
+  plugin rounds a value it computes, never one it reads from the file, with
+  `round_computed_value()` (see
   [Decimal places](../patterns/brim_plugin_guide.md#decimal-places)).
 - **Never `SUM` in SQL.** A `SUM` adds the stored doubles, not the decimals. Sum the values
   read back in Python, with `financial_math` (`position_quantities()`, `native_balances()`),

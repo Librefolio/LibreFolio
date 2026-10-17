@@ -10,6 +10,8 @@ Provides shared utilities for all CLI modules:
 - Command execution helpers
 """
 
+import contextlib
+import hashlib
 import os
 import re
 import secrets
@@ -577,8 +579,22 @@ def _counts_for_the_build(path: Path, src_dir: Path) -> bool:
     return not any(part.startswith(".") for part in parts) and not any(part in _TEST_ONLY_FOLDERS for part in parts[:-1])
 
 
+#: The folders whose Python files shape the Tool codecs, below the project root (``_tool_contract_sources``).
+_TOOL_CONTRACT_FOLDERS = (("backend", "app", "schemas"), ("backend", "app", "services", "tools"), ("backend", "app", "services", "tool_plugins"))
+
+#: Where a successful frontend build records the Tool codegen inputs it was made from, below the project root (H-24).
+TOOL_CONTRACT_INPUTS_MARKER = Path("frontend") / "build" / ".tool-contract-inputs"
+
+#: The listing's format, hashed with it: a record written under another rule no longer matches, at the cost of one build.
+_TOOL_CONTRACT_LISTING = "tool-contract-inputs/1"
+
+
 def _tool_contract_sources(project_root: Path) -> list[Path]:
-    """Enumerate Tool codegen inputs, including newly bundled plugins."""
+    """The Tool codegen inputs that exist, newly bundled plugins included: their content or their presence shapes the codecs.
+
+    In the three folders, the ``.py`` files, with nothing hidden (a name starting with ``.``) and nothing in a
+    ``__pycache__`` (H-24).
+    """
     sources = [
         project_root / "dev.py",
         project_root / "scripts" / "list_api_endpoints.py",
@@ -586,18 +602,50 @@ def _tool_contract_sources(project_root: Path) -> list[Path]:
         project_root / "frontend" / "scripts" / "generate-tools-client.mjs",
         *sorted((project_root / "frontend" / "scripts").glob("tools-*")),
     ]
-    for directory in (
-        project_root / "backend" / "app" / "schemas",
-        project_root / "backend" / "app" / "services" / "tools",
-        project_root / "backend" / "app" / "services" / "tool_plugins",
-    ):
-        if directory.exists():
-            sources.append(directory)
-            sources.extend(
-                source for source in directory.rglob("*")
-                if "__pycache__" not in source.parts and (source.is_dir() or source.suffix == ".py")
-            )
-    return sources
+    for folder in (project_root.joinpath(*parts) for parts in _TOOL_CONTRACT_FOLDERS):
+        sources.extend(source for source in sorted(folder.rglob("*.py")) if not any(part.startswith(".") or part == "__pycache__" for part in source.relative_to(folder).parts))
+    return [source for source in sources if source.is_file()]
+
+
+def _tool_contract_folders(project_root: Path) -> list[Path]:
+    """The three folders and their subfolders, ``__pycache__`` aside: a build that recorded no listing reads their mtimes."""
+    folders = []
+    for folder in (project_root.joinpath(*parts) for parts in _TOOL_CONTRACT_FOLDERS):
+        if folder.is_dir():
+            folders.append(folder)
+            folders.extend(sorted(path for path in folder.rglob("*") if path.is_dir() and "__pycache__" not in path.parts))
+    return folders
+
+
+def tool_contract_fingerprint(project_root: Path) -> str:
+    """The Tool codegen inputs' names, hashed: an input added, removed or renamed changes it, a ``.DS_Store`` does not (H-24)."""
+    names = sorted(source.relative_to(project_root).as_posix() for source in _tool_contract_sources(project_root))
+    return hashlib.sha256("\n".join([_TOOL_CONTRACT_LISTING, *names]).encode()).hexdigest()
+
+
+def record_tool_contract_inputs(project_root: Path, fingerprint: str) -> None:
+    """Record the inputs a successful build made its Tool codecs from (``cmd_fe_build``): bookkeeping, never an error."""
+    with contextlib.suppress(OSError):  # without it, the next check reads the folders' mtimes: one rebuild too many at worst
+        (project_root / TOOL_CONTRACT_INPUTS_MARKER).write_text(fingerprint, encoding="utf-8")
+
+
+def _tool_contracts_changed(project_root: Path, build_time: float) -> bool:
+    """Whether the Tool codecs may be older than their inputs, for ``check_frontend_needs_build()`` (H-24).
+
+    An input newer than the build has changed. A removed one leaves no date behind: the listing the last successful
+    build recorded (``record_tool_contract_inputs``) tells an input added, removed or renamed apart from what only sits
+    next to the inputs, a ``.DS_Store``, an editor's hidden file, a ``__pycache__``. A build that recorded none, made
+    before the record existed or by ``npm run build`` alone, falls back on the folders' mtimes, which see all of them.
+    """
+    if any(source.stat().st_mtime > build_time for source in _tool_contract_sources(project_root)):
+        return True
+    try:
+        recorded = (project_root / TOOL_CONTRACT_INPUTS_MARKER).read_text(encoding="utf-8").strip()
+    except OSError:
+        recorded = ""
+    if recorded:
+        return recorded != tool_contract_fingerprint(project_root)
+    return any(folder.stat().st_mtime > build_time for folder in _tool_contract_folders(project_root))
 
 
 def check_frontend_needs_build() -> bool:
@@ -647,9 +695,8 @@ def check_frontend_needs_build() -> bool:
 
         # Tool codecs are derived from these inputs, not from the generated files'
         # timestamps. New bundled plugins are discovered without a handwritten list.
-        for source in _tool_contract_sources(project_root):
-            if source.exists() and source.stat().st_mtime > build_time:
-                return True
+        if _tool_contracts_changed(project_root, build_time):
+            return True
 
     except Exception as exc:  # noqa: S110 — staleness probe must never break a build check
         _ = exc

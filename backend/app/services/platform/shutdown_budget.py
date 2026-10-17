@@ -167,11 +167,6 @@ class ShutdownWatchdog:
         return self._budget
 
     @property
-    def armed_at(self) -> float | None:
-        entry = self._armed.get("at")
-        return None if entry is None else entry[0]
-
-    @property
     def deadline(self) -> float | None:
         entry = self._armed.get("at")
         return None if entry is None else entry[0] + self._budget
@@ -241,11 +236,6 @@ def install_shutdown_watchdog(*, budget_seconds: int | None = None) -> ShutdownW
         _watchdog = watchdog
     logger.debug("Shutdown watchdog installed", budget_seconds=budget)
     return watchdog
-
-
-def current_shutdown_watchdog() -> ShutdownWatchdog | None:
-    """The watchdog installed in this process, if any."""
-    return _watchdog
 
 
 def shutdown_deadline(*, clock: Callable[[], float] = time.monotonic) -> float | None:
