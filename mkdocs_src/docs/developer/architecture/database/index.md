@@ -115,11 +115,13 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   [Asset Architecture](../../backend/assets/architecture.md) for prices and
   [Asset Events](../../backend/assets/events.md) (`EVENT_TOO_MANY_DIGITS`). A provider's
   prices are truncated instead: `truncate_priceHistory()` keeps 12 decimal places, then 15
-  significant digits, both rounded down. A provider's value that no truncation makes fit
+  significant digits, both rounded down; a provider's event value likewise keeps 6 decimal
+  places, then 15 significant digits (`storable_value()`, W-B68), so it reads back as written.
+  A provider's value that no truncation makes fit
   is skipped, never written: `storable_value()` answers `None` for a value that is not
   finite or past its column's digits before the point, and `storable_price()` also for a
   non-zero close that truncates to 0; a provider's event whose value is past 12 digits
-  before the point, or not finite, is dropped too (`integer_digits_issue()`). A BRIM
+  before the point, or not finite, is dropped too (`storable_value()`). A BRIM
   plugin rounds a value it computes, never one it reads from the file, with
   `round_computed_value()` (see
   [Decimal places](../patterns/brim_plugin_guide.md#decimal-places)).
