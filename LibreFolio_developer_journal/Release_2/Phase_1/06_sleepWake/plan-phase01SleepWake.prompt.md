@@ -4701,3 +4701,152 @@ riletti da me. Percorsi sotto `frontend/src/`.
    (`files/z27_build.sh`); `services ai-export` 1 070 in 414 s, rc 0 (carico 24 alla partenza; dentro anche i test del
    budget di J-50). Porta 6186 libera.
 9. ✅ 17/10 ~13:10 — Backlog: Z-27 chiusa per la parte di Z (A e C); le colonne Δ restano a X con X-R59/X-R60.
+10. ✅ 17/10 ~13:11 — Il coordinatore ha fatto entrare Z-27 e SEC9-2: `107fff751`, `8d236fa11`, `61a6b758b`,
+    `26691436c` → dev `726d90d72`; CHANGELOG `f1786a883` (la riga 🔒 di Z-25 a 1 milione, la riga 🔄 nuova). Il mio
+    ramo è avanzato lì (verificato, albero pulito). Le mie note per X le gira lui; i segnali persi a un fallimento
+    parziale dei cambi vanno a X con X-R58.
+
+### X-R65 (N83) — date assurde nelle scritture manuali di prezzi e cambi: analisi (17/10 ~13:15, sola lettura)
+
+> **Assegnazione** (coordinatore, 17/10 ~13:12, dalla coda di X): «X-R65 (N83). Manual price and FX writes must refuse
+> dates outside [`EARLIEST_RANGE_START` (1900-01-01), `latest_range_end()`] with a coded 422, the same rule as N74 for
+> transactions. The paths are `POST /assets/prices`, plus the manual FX rate write and any bulk upsert/import of manual
+> prices or rates. Also check that provider writes can't store pre-1900 dates (refuse or note). Origin: J's SEC8-1b,
+> where a price at 0001-01-01 lets a risk replay or a query walk about 740k days per asset. Start with an analysis
+> (exact routes and services, error code naming consistent with W's SEC7-3), then reds first. X reviews.»
+
+**Stato reale.**
+- Gli estremi esistono: `EARLIEST_RANGE_START` (`utils/datetime_utils.py:106`) e `latest_range_end()` (domani, col
+  calendario del server). N74 (W, SEC7-3) per le transazioni: `transaction_date_bounds()`
+  (`transactions/transaction_batch_stages.py:202`), [1900-01-01, oggi più un anno]; ogni riga fuori riceve il codice
+  `dateOutOfRange` (`TXValidationCode.DATE_OUT_OF_RANGE`) su `date`, con `params {"min", "max"}`; il batch non si salva.
+- Prezzi, manuali: `POST /assets/prices` (`api/v1/assets/prices.py:45`) →
+  `PriceStoreOperations.bulk_upsert_prices(…, "MANUAL")` (`services/assets/price_store.py:155`). Prima di scrivere
+  rifiuta già le cifre di troppo (`_reject_prices_over_the_limit`, un `ValueError` che la rotta rende 400 con una
+  stringa); nessun controllo della data. La chiama l'editor dei dati dell'asset (`AssetDataEditorSection.svelte:310`),
+  anche per il suo import CSV.
+- Prezzi, dai fornitori: lo stesso servizio con la chiave del fornitore, da `assets/refresh.py:582`. I punti sono
+  tagliati solo sopra (`last_price_day`): una data prima del 1900 restituita da un fornitore viene salvata. Il caso
+  probabile è lo Scheduled Investment, che genera i prezzi da una data d'inizio scritta dall'utente. I punti che
+  nessuna colonna tiene sono già saltati con un avviso (`_unstorable_provider_point`, W-B58): il posto naturale.
+- `price_query.py:961` (avvio F.2) scrive solo oggi: limitato.
+- Cambi, manuali: `POST /fx/currencies/rate` (`api/v1/fx/currencies.py:99`), voce per voce, errori come stringhe in
+  `errors[]` (200 parziale, 400 se tutto fallisce); nessun controllo della data. Lo chiama l'editor dei cambi
+  (`FxDataEditorSection.svelte:188`), anche per l'import CSV (`FxDataImportModal`).
+- Cambi, dai fornitori: `services/fx/sync.py` (insert a `:366`, `:773`, `:848`), date filtrate da
+  `_is_date_within_sync_range` (`:35`), senza pavimento quando l'inizio è `"min"`. I fornitori partono dal 1971 (FED)
+  o dopo: nessuna data prima del 1900 in pratica.
+- Web app: i due editor mostrano `e?.message` (il generico «Request failed with status code 4xx»), non il `detail`,
+  già oggi per i 400. Mostrare il messaggio codificato è di X (gli editor), con X-R58 o dopo.
+
+**Proposta.**
+1. Una regola in un posto: `stored_date_bounds()` → `(EARLIEST_RANGE_START, latest_range_end())`, con
+   `DateOutOfRangeError` e `date_out_of_range_detail()`, in `utils/date_range_limits.py` (accanto ai rifiuti di Z-25).
+2. Prezzi manuali: in `bulk_upsert_prices` per `MANUAL`, prima di ogni scrittura, accanto a
+   `_reject_prices_over_the_limit`; la rotta risponde 422 `{"code": "dateOutOfRange", "message", "params": {"min",
+   "max"}, "items": [{"asset_id", "dates": [...]}]}` (al più 10 date per asset, col conto). Nulla scritto.
+3. Prezzi dai fornitori: i punti fuori dagli estremi saltati come quelli che nessuna colonna tiene (W-B58): avviso
+   nel log, detto nel messaggio del risultato dell'asset; il resto scritto.
+4. Cambi manuali: la rotta controlla tutte le voci prima del ciclo; una data fuori → 422 con `items: [{"index",
+   "date"}]`, nulla scritto (come N74, il batch non si salva).
+5. Cambi dai fornitori: nota (nessun fornitore ha dati prima del 1900); in più, facoltativo, un pavimento di una riga
+   in `_is_date_within_sync_range`.
+6. Fuori: le righe già salvate prima del 1900 (il riempimento le cammina ancora: ~740 000 giorni, sotto il budget di
+   1 milione); gli eventi (`POST /assets/events`), che non fanno camminare nulla (si leggono dentro l'intervallo); la
+   data d'inizio di uno Scheduled Investment nei suoi parametri (di X).
+
+**Superfici.** Prodotto: `utils/date_range_limits.py` (mio), `services/assets/price_store.py`,
+`api/v1/assets/prices.py`, `api/v1/fx/currencies.py` (scrittore io, X rivede). Test (test-author): `services
+asset-source-guards` (`test_asset_source_upsert_guards.py`: il servizio, manuale e fornitore), `api assets-price`,
+`api fx`. Documentazione (inglese): `developer/backend/assets/architecture.md`, `developer/backend/fx/architecture.md`.
+Una riga 🔒 nel CHANGELOG. Peso: S–M.
+
+**Decisioni chieste.** D-XR65-1: il codice, `dateOutOfRange` con `params {min, max}` come N74 (consigliato: il web
+app può riusare il messaggio delle transazioni), o `date_out_of_range` come i codici HTTP di Z-25. D-XR65-2: i
+fornitori di cambi, solo la nota o anche il pavimento di una riga (consigliato). D-XR65-3: le righe già salvate prima
+del 1900, fuori (consigliato: una voce a parte) o un pavimento in lettura nel riempimento dei prezzi.
+
+> **Decisione** (coordinatore, 17/10 ~13:17): «X-R65 decisions: **D1:** snake_case `date_out_of_range` with `params
+> {min, max}`, consistent with the codes already on those routes (`bulk_too_many_items`,
+> `period_changes_too_many_days`). The editors' coded messages are X's later. **D2:** yes, the one-line FX floor.
+> **D3:** a separate item in your section. Proposal approved otherwise; reds first. X reviews.»
+
+**Contratto (N83).**
+- `utils/date_range_limits.py`: `stored_date_bounds()` → `(EARLIEST_RANGE_START, latest_range_end())`, con
+  `latest_range_end` importato per nome (la cucitura di J lo abbassa lì); `DateOutOfRangeError(items, earliest,
+  latest)` (un'`Exception`, non un `ValueError`: la rotta dei prezzi rende 400 i `ValueError`);
+  `date_out_of_range_detail(items, earliest, latest)` → `{"code": "date_out_of_range", "message", "params": {"min",
+  "max"}, "items", "count"}` (date ISO; `items` al più 10, `count` il totale).
+- Prezzi manuali (`bulk_upsert_prices`, `MANUAL`): prima di ogni scrittura, una voce per asset con date fuori,
+  `{"asset_id", "dates"}` (al più 10, in ordine d'ingresso); `count` le date fuori in tutto. La rotta: 422. Nulla
+  scritto.
+- Prezzi dai fornitori: i punti fuori saltati come W-B58, avviso nel log e nel messaggio del risultato; il resto
+  scritto.
+- Cambi manuali (`POST /fx/currencies/rate`): tutte le voci prima del ciclo; `items` `{"index", "date"}`; 422, nulla
+  scritto.
+- Cambi dai fornitori: `_is_date_within_sync_range` falso prima di `EARLIEST_RANGE_START`.
+
+**Passi.**
+1. ✅ 17/10 ~13:20–13:45 — Rossi di test-author (21 casi: 19 rossi per la ragione giusta, 2 guardie verdi prima e
+   dopo); nessun codice di prodotto toccato.
+   - `test_range_ceiling.py` RC-W01…W07 (gli aiuti, le due rotte chiamate direttamente; la rotta dei cambi non
+     scrive nulla, nemmeno le voci buone); `test_asset_source_upsert_guards.py` (manuale: rifiuto prima di ogni
+     istruzione, due asset, date in ordine d'ingresso al più 10; fornitore: punti fuori tolti, nominati e nel log;
+     la via reale del refresh non salva il 1899-12-31 e lo nomina fra gli errori); `test_fx_sync_service.py` (il
+     pavimento, con inizio `"min"` e no; la sincronizzazione non salva prima del 1900); RC-API-05 e 06.
+   - Conti: `range-ceiling` 50 → 51 + 6 rossi, `fx-sync-service` 35 → 35 + 3, `asset-source-guards` 29 → 30 + 8,
+     `api assets-price` 21 + 1, `api fx` 25 + 1. Database della corsia pulito dopo i rossi.
+   - Toccato un test mio di X-R55: RC-000 diceva che `date_range_limits` non ha `latest_range_end`; ora l'accetta se
+     è la funzione di `datetime_utils`, e rifiuta ancora un secondo tetto. Il coordinatore: «fine; mention it».
+2. ✅ 17/10 ~13:25–13:40 — Bozza fuori dal repo (`files/xr65-draft/apply_xr65.py`, 16 sostituzioni esatte in cinque
+   file), provata su una copia: applicazione, compilazione, black pulito, inverso esatto.
+   - Prima, due verifiche. Gli scenari lontani di J (2032–2091, `lift_range_bound`) salvano righe ORM dirette: le
+     scritture manuali non li toccano. Nessun test esistente scrive con le vie manuali una data prima del 1900 o dopo
+     domani (le date estreme trovate sono interrogazioni, o un parser di un fornitore).
+   - `ensure_rates_multi_source` (`fx/sync.py:111`) salva ogni osservazione senza filtro, ma è «unwired»: solo i test
+     lo chiamano. La via viva, `sync_pairs_bulk` (rotta e scheduler), passa da `_is_date_within_sync_range`: il
+     pavimento la copre.
+   - Prezzi manuali: il controllo dopo quello delle cifre, prima di ogni lettura o scrittura; prezzi dai fornitori: i
+     punti fuori tolti prima di quelli che nessuna colonna tiene, con il loro avviso e la loro parte del messaggio.
+3. ✅ 17/10 ~13:47 — Applicata al repo (16 sostituzioni, +90 −4): `ruff` e `black` puliti su prodotto e test;
+   `import backend.app.main` riuscito (nessun import circolare). Impronta in `files/xr65-draft/applied.md5`.
+   Il refresh mette fra i suoi errori ogni messaggio con «rejected»: il mio lo fa, e nomina le date.
+4. ✅ 17/10 ~13:52 — Testi del runner, col via del coordinatore («runner text only (desc/print_info plus those 5
+   comment lines)»): `asset-source-guards` e `fx-sync-service` (`_backend_services.py`), `assets-price` e `fx`
+   (`_backend_api.py`), e la mia voce `range-ceiling`. `ruff` e `black` puliti.
+
+5. ✅ 17/10 14:00–14:12 — Controlli leggeri, corsia 6186, uno alla volta (carico 21–47): `files/xr65_light.sh
+   green`, log in `files/logs/z_xr65_green_*.log`.
+   - I casi nuovi: `services range-ceiling` 57, `fx-sync-service` 38, `asset-source-guards` 38; `api assets-price`
+     22, `api fx` 26.
+   - Le altre suite che scrivono prezzi o cambi a mano: `services asset-digit-limits` 79, `current-price-storable`
+     27, `asset-source` 61, `asset-source-refresh` 18, `fx-core` 42; `utils real-decimal` 267; `api fx-unit` 48,
+     `prices-currency-coherence` 5, `prices-sync-delta` 5, `period-changes` 24, `events-target-currency` 7,
+     `portfolio` 51, `backup-export-extras` 8; `schemas openapi-client-text` 78. Porta 6186 libera.
+6. ✅ 17/10 ~14:00–14:20 — Documentazione (docs-writer, solo inglese, pagine senza traduzioni):
+   `developer/backend/assets/architecture.md` (`#stored-date-bounds`, le righe del modulo e della rotta, e la frase di
+   W-B62 sul conto del refresh), `developer/backend/fx/architecture.md` (`#stored-rate-dates`),
+   `developer/backend/fx/configuration.md` (le due frasi superate: la sincronizzazione non scrive prima del 1900, la
+   rotta manuale rifiuta tutto con un 422).
+
+   > **⚠️ Fuori pista**: il controllo di docs-writer ha trovato un mio difetto. Il refresh conta e annuncia i punti
+   > prima dell'upsert (`refresh.py:569`, `kept_items` senza i soli punti che nessuna colonna tiene, W-B62): una data
+   > fuori dagli estremi, saltata dall'upsert, sarebbe ancora contata e annunciata. Cura in
+   > `files/xr65-draft/apply_xr65b.py` (provata su una copia); prima il rosso, chiesto a test-author.
+   > E una mia affermazione senza appoggio: «i fornitori di cambi partono dal 1971 (FED)». Nel repo c'è solo
+   > l'inizio della BCE (1999), e per `"min"` i fornitori chiedono dal 1900-01-01 (`fx/base.py:21`). Il pavimento
+   > resta giusto; la frase no.
+   - Notato per X (non mio, di prima): nel caricamento manuale il rifiuto per valuta diversa (`price_store.py:250`)
+     arriva asset per asset, dopo che i precedenti sono già scritti.
+7. ✅ 17/10 ~14:13–14:17 — Il difetto del conto. Rosso di test-author:
+   `test_a_provider_refresh_neither_counts_nor_announces_a_price_before_1900` (una riga del 1899-12-30 lasciata da
+   prima, il fornitore che dà 1899-12-30, 1899-12-31 e due giorni buoni): (2, 2, 4) con le due date annunciate contro
+   (1, 1, 2); il database era già giusto. `points_fetched` non fissato: come per W-B62, un punto scartato resta
+   «recuperato». Applicato `files/xr65-draft/apply_xr65b.py` (il conto con gli stessi estremi dell'upsert); `ruff` e
+   `black` puliti. Verdi: `services asset-source-guards` 39, `asset-source-refresh` 18, `asset-source` 61.
+
+8. ✅ 17/10 14:19–14:20 — `mkdocs build` stretto rc 0, nessun avviso (carico 22); `check-links` 97 validi
+   (`files/xr65_build.sh`). Da docs-writer, per X (di prima, non mio): una data rifiutata dal controllo OHLC
+   (chiusura fuori da [minimo, massimo], `price_store.py:338`) passa `kept_items`, e il refresh la conta e la annuncia
+   senza scriverla.
+9. ✅ 17/10 ~14:21 — Backlog: nessuna riga da chiudere nella mia sezione (X-R65 è nella coda di X); Z-30 aperta.

@@ -12,7 +12,9 @@ the restart, the swap, the commit and a rollback. One restore, one ticket (decis
 replaces it, a new confirmation and a cancel remove it (``apply.confirm_restore``, ``apply.cancel_restore``), and its
 own holder presenting it expired removes it; until then it answers as often as asked, a final outcome included, so
 that a final answer lost on its way (a connection cut while LibreFolio starts) can be read again. This module does
-not import ``apply``, which imports it: the caller hands ``read_outcome`` the state of the restore.
+not import ``apply``, which imports it: the caller hands ``read_outcome`` the state of the restore, or the function
+that reads it, called only for the ticket of a restart not expired: no other caller makes LibreFolio read the state,
+nor log that it cannot (B-41).
 """
 
 import contextlib
@@ -21,6 +23,8 @@ import hmac
 import os
 import re
 import secrets
+import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -46,6 +50,12 @@ _PARTIAL_SUFFIX = ".part"
 #: The ticket file is a few hundred bytes: a larger one is not ours.
 _MAX_RECORD_BYTES = 4096
 _IN_PROGRESS = frozenset({"applying", "applied", "rolling_back"})
+
+#: The failure of each data directory's ticket file last logged as an error (B-42). Any 43 URL-safe characters reach
+#: that file without a session: a failure is logged once, then at debug while it lasts, and again once the file has been
+#: written, removed or read in between, or fails otherwise.
+_REPORTED: dict[str, tuple[str, str | None]] = {}
+_REPORTED_GUARD = threading.Lock()
 
 
 class OutcomeTicket(BaseModel):
@@ -78,6 +88,24 @@ def _fsync_dir(folder: Path) -> None:
             os.close(fd)
 
 
+def _report(data_dir: Path, event: str, error: str | None = None) -> None:
+    """A failure to read the ticket file: an error the first time, a debug line while the same failure lasts (B-42)."""
+    with _REPORTED_GUARD:
+        repeated = _REPORTED.get(str(data_dir)) == (event, error)
+        _REPORTED[str(data_dir)] = (event, error)
+    fields = {} if error is None else {"error": error}
+    if repeated:
+        logger.debug(event, **fields)
+    else:
+        logger.error(event, **fields)
+
+
+def _forget(data_dir: Path) -> None:
+    """The ticket file written, removed or read: its next failure is a new one, logged as an error (B-42)."""
+    with _REPORTED_GUARD:
+        _REPORTED.pop(str(data_dir), None)
+
+
 def issue_ticket(stage_id: str, *, data_dir: Path | None = None, now: datetime | None = None) -> str:
     """A new ticket for the outcome of the restore of ``stage_id``, replacing any other.
 
@@ -101,34 +129,42 @@ def issue_ticket(stage_id: str, *, data_dir: Path | None = None, now: datetime |
         os.fsync(handle.fileno())
     os.replace(partial, target)
     _fsync_dir(folder)
+    _forget(data_dir)
     logger.info("Restore outcome ticket issued", stage_id=stage_id, expires_at=record.expires_at.isoformat())
     return ticket
 
 
 def _read_record(data_dir: Path) -> OutcomeTicket | None:
-    """The ticket file, read without following a link; ``None`` when there is none or it cannot be read (logged)."""
+    """The ticket file, read without following a link; ``None`` when there is none or it cannot be read: logged as an
+    error once while the same failure lasts (``_report``, B-42)."""
     try:
         with os.fdopen(os.open(outcome_ticket_path(data_dir), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)), "rb") as handle:
             raw = handle.read(_MAX_RECORD_BYTES + 1)
     except FileNotFoundError:
+        _forget(data_dir)
         return None
     except OSError as exc:
-        logger.error("The restore outcome ticket cannot be read", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        _report(data_dir, "The restore outcome ticket cannot be read", f"{type(exc).__name__}: {exc.strerror or exc}")
         return None
     if len(raw) > _MAX_RECORD_BYTES:
-        logger.error("The restore outcome ticket is not one this LibreFolio wrote: it is ignored")
+        _report(data_dir, "The restore outcome ticket is not one this LibreFolio wrote: it is ignored")
         return None
     try:
-        return OutcomeTicket.model_validate_json(raw)
+        record = OutcomeTicket.model_validate_json(raw)
     except ValidationError:
-        logger.error("The restore outcome ticket is not one this LibreFolio can read: it is ignored")
+        _report(data_dir, "The restore outcome ticket is not one this LibreFolio can read: it is ignored")
         return None
+    _forget(data_dir)
+    return record
 
 
-def read_outcome(ticket: str | None, state: "RestoreState | None", *, data_dir: Path | None = None, now: datetime | None = None) -> RestoreOutcome | None:
+def read_outcome(ticket: str | None, state: "RestoreState | Callable[[], RestoreState | None] | None", *, data_dir: Path | None = None, now: datetime | None = None) -> RestoreOutcome | None:
     """What became of the restore ``state``, for the holder of its ticket; ``None``, alike, for any ticket that does not
     give it: none, malformed, unknown, of another restore, or expired (then removed). A wrong ticket changes nothing;
-    the right one reads the outcome as often as asked until it expires, a final one included (decision N53)."""
+    the right one reads the outcome as often as asked until it expires, a final one included (decision N53).
+
+    ``state`` may be the function that reads it: called once, and only for the ticket of a restart not expired, so that
+    no other caller makes LibreFolio read the state of the restore, nor log that it cannot (B-41)."""
     if ticket is None or not _TICKET.fullmatch(ticket):
         return None
     data_dir = data_dir or get_data_dir()
@@ -144,6 +180,8 @@ def read_outcome(ticket: str | None, state: "RestoreState | None", *, data_dir: 
     if now >= record.expires_at:
         drop_ticket(data_dir=data_dir)
         return None
+    if callable(state):
+        state = state()
     if state is None or state.stage_id != record.stage_id:
         return None
     phase = "in_progress" if state.status in _IN_PROGRESS else state.status
@@ -157,5 +195,6 @@ def drop_ticket(*, data_dir: Path | None = None) -> None:
         return
     try:
         outcome_ticket_path(data_dir).unlink(missing_ok=True)
+        _forget(data_dir)
     except OSError as exc:
         logger.error("The restore outcome ticket could not be removed", error=f"{type(exc).__name__}: {exc.strerror or exc}")

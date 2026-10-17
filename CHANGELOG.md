@@ -85,6 +85,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🔄 Changed
 
+- Requests that save a currency accept only ISO 4217 alphabetic codes; names such as "Euro" or numeric codes such as "978" are refused (422). Stored data is read as before.
+- After a cancelled setup link, the startup log says the link was withdrawn, not that it expired.
 - The Dashboard warns when transactions are dated before 1900: they still count, but the history starts on 1 January 1900.
 - Testing a provider's settings is limited to 30 times a minute per user (`LIBREFOLIO_PROBE_RATE_LIMIT`, `0` turns it off); a scheduled investment holds at most 10,000 manual events.
 - `./dev.py user deactivate` on the administrator still waiting for its setup cancels its setup link; `./dev.py user demote` refuses it.
@@ -267,6 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Numbers with an absurd exponent and transaction dates outside 1 January 1900 – one year from today are refused with a clear message, instead of slowing the server; the merged fields of a pair promotion are checked like a new transaction's.
 - The lots analysis no longer fails when shares moved by a transfer to or from a broker outside the view (a broker's page, a broker filter, a co-owner who sees one broker, AI Export): units received open a lot at the transfer's cost, units sent close at that day's market price.
 - The lots analysis no longer fails when a transfer between your brokers is still on its way at the end of the chosen period: its units show as in transit.
+- Lots performance for a position entered before the asset's first price: the days before that price are now valued at cost, as on the Dashboard. The TWRR now includes the move from cost to the first price (it used to miss it and disagree with the ROI), and a transfer on such a day no longer empties the chart.
+- Yield on cost for a co-owner: units received from a broker you cannot see no longer make the yield "unavailable"; they count from their arrival, at the transfer's own cost basis.
 - A transaction dated far in the past (e.g. year 1) no longer makes every portfolio report recompute hundreds of thousands of days, nor fail: histories start no earlier than 1 January 1900.
 - A transaction dated in year 1 no longer breaks the lots and the yield on cost.
 - A transaction or report dated at the very edge of the calendar no longer breaks the promote and event suggestions or a broker-report import's checks.
@@ -284,9 +288,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An Auto cost basis is no longer computed over transactions whose stored numbers cannot be read: the broker deletion and the repair of old transfer legs refuse instead of saving a wrong cost, and saving an Automatic cost in the transaction editor says so instead of failing with a server error.
 - A broker whose history holds a transaction with a value that is not a number is no longer checked against wrong balances: saving or comparing with the bank now says so.
 - A cost basis on a transaction that takes none (a purchase, a cash movement, a currency-conversion leg, a merged cash pair) is now refused with a translated message, instead of being saved where nothing reads it. The message for a cost-basis mode on such a transaction is translated too.
+- Several transactions in Auto cost mode saved in one go now each get the right average cost. Before, with two of them for the same asset, broker and day, one could be saved without a cost or overwrite a manual one, and the result depended on the order of the rows.
 - **The Δ columns of the Assets and FX lists (1D … 5Y) are computed by the server.** The browser counted the days in local time, so across a daylight-saving change a period could start one day early (a 1M change on 15 November compared with 15 October instead of 16 October). The server counts calendar days, so the figures no longer depend on the time zone; a one-day range now shows its 1D change too.
 - **Changing an asset's currency no longer turns split adjustments into purchases of unknown cost.** The change deletes the asset's events, splits included; when a split has linked adjustments without a purchase cost, the change is now refused and names the split: give those adjustments a cost first.
 - **Changing a Scheduled Investment plan no longer turns split adjustments into purchases of unknown cost.** New plan parameters, or another provider, delete the events the plan generated; when one of its splits has linked adjustments without a purchase cost, the change of plan or provider is now refused, the asset window says which split, and the plan stays as it was: give those adjustments a cost first.
+- Removing an asset's provider (No Provider) no longer fails with a server error showing database text when a transaction is linked to an event the provider generated: the removal is refused, and the form names the event and how many transactions to unlink first.
+- FX rates and prices: deleting more than a thousand separate days (or ranges) at once no longer fails; a write of more than 10,000 items is refused with a clear error; server errors no longer show internal details. The provider-probe limit (`LIBREFOLIO_PROBE_RATE_LIMIT`) applies without a restart.
+- `./dev.py user create` now refuses a username shorter than 3 or longer than 50 characters, as registration does.
+- A number pasted in scientific notation, like `1e-8` copied from a spreadsheet, is now read exactly instead of turning into another number; one that can't be read, or that has an exponent beyond ±100, is shown in red with an explanation. Pasting a very long text into a number field no longer freezes the page.
 
 #### 🔒 Security
 
@@ -294,6 +303,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Price and FX queries no longer accept date ranges without a ceiling: the end stops at tomorrow and the FX start at 100 years before it; a range reaching year 9999, which previously exhausted the server and ended in an error, now answers at once.
 - Price and FX queries now refuse at once, with an explicit error, a request of more than 1,000 items or one that would build more than 1 million daily points; such a request could previously hold the server for minutes.
 - A risk analysis or an AI Export over a very long period with many assets no longer fails with a server error: it tells you to choose a shorter period (or fewer assets).
+- A risk analysis or a historical replay over a very long or future period no longer walks every day of it: the period ends tomorrow and spans at most 100 years, and a suggested replay window stays inside it.
 - Current prices: an asset requested twice is fetched once, a request over 1,000 assets is refused, conversions over many currency pairs no longer fail, and server errors no longer show internal details.
 - A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
 - The test doubles shipped in the image (`mockprov` for prices, `MOCKFX` and `MOCKFX_FAIL` for exchange rates) are no longer reachable outside test mode. Before, any signed-in user could assign `mockprov` to an asset, which is shared, and give everyone a made-up price series, or route a currency pair through `MOCKFX` and give every conversion a made-up rate. To check an existing instance, look for an asset whose price source is `mockprov` and for an exchange-rate route that names `MOCKFX`.
@@ -301,6 +311,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Frame protection's page policy now also covers SVG and XML documents, and a 304 Not Modified response carries no policy that could replace the cached page's.
 - A restore's archive cannot fill the disk: the check refuses, before unpacking anything, an archive whose files add up to more than `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` (`unpacked_too_large`). There is no limit by default on your own installation; in the managed profile it is 8 times the upload limit (4000 MB). `backup restore` follows it too, and the Security tab reports a value that cannot be used.
 - CSV exports are safe to open in a spreadsheet: in the price, event and exchange-rate exports, a text cell that starts like a formula (`=`, `+`, `-`, `@`) gets a leading apostrophe, so Excel, LibreOffice or Google Sheets show it as text instead of running it; numbers are untouched, and importing an exported events file removes the apostrophe again, so notes come back exactly.
+- A secret file read as root cannot be a trap: `./dev.py backup` reads `--password-file` and `--instance-key-file` only from a regular file (a FIFO, a folder or a device is refused, never waited on), and, run as root, never through a link inside the data directory, which LibreFolio's user could have planted to point at a file only root may read.
 - The initial administrator's setup link can't be replayed: no new link goes to an account set up meanwhile, and a leftover link of an account already set up is refused and retired.
 - A configuration check reports `LIBREFOLIO_TEST_MODE` turned on outside LibreFolio's own test runs as an error, in the startup log and in Settings › Administration › Security; with the managed profile the server does not start.
 - The post-migration and broker-report lock files no longer follow a symbolic link planted in their place, and are created readable by the server's user only.
@@ -330,6 +341,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A restore is never applied while the hosting provider blocks the instance**: one confirmed before the block waits for the unblock. On a blocked instance every restore route answers 423, except reading the outcome of a restart with its ticket, which changes nothing.
 - **The outcome ticket stays out of logs and URLs**: the server keeps only its hash, it travels in a header and expires after an hour; `ticket` joins the query parameters the access log masks.
 - **A tampered backup cannot run code during a restore check** — a check now refuses an archive whose database holds triggers, views or virtual tables, which LibreFolio never creates, before anything of it can run (`database_foreign_objects`): a crafted backup can no longer keep the check busy forever or bring its own code into the server. The schema is read without running any of it, and the connections to the copy use SQLite's `trusted_schema=OFF`.
+- Prices and exchange rates entered by hand are now refused, with an explicit error, when dated before 1 January 1900 or after tomorrow; such a date could make charts and risk analyses walk hundreds of thousands of days. Provider data outside that range is skipped.
+- The restore outcome route, which answers without signing in, no longer fills the server log: it reads the restore's state only for the ticket of the restart, and a ticket file it cannot use is logged once, not at every request.
 
 #### 📚 Documentation
 

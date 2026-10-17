@@ -84,6 +84,18 @@ but those ``inspect`` and a dry run already print for a zip (``test_backup_cli.p
     it cannot read (mode 000): one ❌ line, ``Cannot read <path>: <the system's reason> (archive_unreadable)``, never
     ``not_an_envelope``; exit 1, nothing at ``-o``, the password never asked. The cases that switch, or read mode 000,
     are skipped as root: a folder the test makes is root's, and mode 000 denies root nothing.
+(n) Lot B-38 (red until it lands): ``--password-file`` (``inspect`` of a secure archive, ``create --encrypt``,
+    ``decrypt``) and ``--instance-key-file`` (``restore --dry-run``) are read before the switch of user, where root could
+    be made to read what the server's user plants. A file that is not a regular one — a FIFO, a folder — is refused at
+    once, as root and not: one ❌ line, ``<label>: <path> is not a regular file (password_unreadable |
+    instance_key_unreadable)``, exit 1, nothing written, no prompt after it; a FIFO never makes the command wait (a
+    guard releases it after ``AT_ONCE`` seconds and fails the test). As root, a path that goes through a link inside the
+    data directory — ``<data>/backups/key`` a link, or ``<data>/backups`` itself a link to a folder holding ``key`` — is
+    refused, its target never opened (every open of it recorded): ``<label>: <path> goes through a link inside the data
+    directory: give the file itself, from outside it (…)``, no identity change. Read as today (guards, green before and
+    after), as root: a plain file outside the data directory or inside it (links are refused there, not places), a
+    Kubernetes secret volume's link outside it (``secret`` → ``..data/secret``, ``..data`` → its timestamped folder);
+    not root: a link inside the data directory (no privilege to borrow, no link check). Each case for the four commands.
 
 No password — a weak, a wrong or a second one included — reaches stdout or stderr of any run.
 
@@ -109,8 +121,10 @@ POSIX-only (pty, modes, links).
 from __future__ import annotations
 
 import argparse
+import builtins
 import getpass
 import importlib
+import io
 import os
 import pty
 import random
@@ -122,9 +136,10 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable, Iterator
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
@@ -1517,3 +1532,252 @@ def test_decrypt_as_root_with_a_data_directory_setting_it_cannot_use_stops_with_
     assert (asked, stdin.reads, identity.calls) == ([], [], []), f"no prompt, no identity change: prompts {asked}, reads {stdin.reads}, identity changes {identity.calls}"
     not_shown(ran, PASSWORD, WRONG_PASSWORD)
     print_success("root, a data directory setting it cannot use → one ❌ line, exit 1, nothing asked, nothing written")
+
+
+# =============================================================================
+# (n) B-38 — the secret files read before the switch of user
+# =============================================================================
+
+
+#: Seconds: «at once». A refusal reads nothing; today a FIFO makes the command wait for a writer, forever.
+AT_ONCE = 10
+#: An effective user that is not root (B-19's fake identity): no privilege to borrow, no link check.
+NOT_ROOT = 1000
+#: (B-38) The commands that read a secret file before the switch of user: how each names the file, and its refusal.
+#: ``decrypt`` reads ``--password-file`` before its own switch (B-19), through the same function as ``inspect``.
+READERS = {
+    "inspect": ("password file", "password_unreadable"),
+    "create": ("password file", "password_unreadable"),
+    "decrypt": ("password file", "password_unreadable"),
+    "restore": ("instance key file", "instance_key_unreadable"),
+}
+#: Not a real key: the old instance key a restore is given.
+OLD_INSTANCE_KEY = "LibreFolio-b38-old-instance-key-0123456789"
+#: (B-18) The report line of a restore given ``--instance-key-file``, its archive carrying no key: the file was read.
+KEY_GIVEN_LINE = "   Instance key: not included; given with --instance-key-file"
+#: (B-38) What a secret file read as today may be: as root, a plain file outside the data directory or inside it (links
+#: are refused there, not places), and a Kubernetes secret volume's link outside it; not root, a link inside it.
+READ_AS_TODAY = [
+    pytest.param("plain-file-outside", 0, id="plain-file-outside-as-root", marks=needs_another_owner),
+    pytest.param("plain-file-inside", 0, id="plain-file-inside-as-root", marks=needs_another_owner),
+    pytest.param("kubernetes-link-outside", 0, id="kubernetes-link-outside-as-root", marks=needs_another_owner),
+    pytest.param("link-inside", NOT_ROOT, id="link-inside-not-root"),
+]
+
+
+@dataclass(frozen=True)
+class SecretCommand:
+    """A command of ``READERS``, ready to run on this test's inputs: the text its file must hold, its arguments given that
+    file, how it names the file and its refusal, the check that it read the file and went on as today, and what it
+    writes outside the data directory (``decrypt``'s ``-o``)."""
+
+    secret: str
+    argv: Callable[[Path], list[str]]
+    label: str
+    code: str
+    went_on: Callable[[Ran], None]
+    outputs: tuple[Path, ...] = ()
+
+
+def secret_command(name: str, root: Path, tmp_path: Path, request: pytest.FixtureRequest) -> SecretCommand:
+    """``name`` of ``READERS`` on this test's inputs: ``inspect`` and ``decrypt`` of a secure archive sealed with
+    ``PASSWORD``; ``create --encrypt`` of the data directory ``root``; ``restore --dry-run`` of a restorable backup, given
+    ``OLD_INSTANCE_KEY``."""
+    label, code = READERS[name]
+    if name == "inspect":
+        envelope_path = sealed(clear_archive(tmp_path / "backup"), tmp_path / "inputs")
+
+        def inspected(ran: Ran) -> None:
+            assert ran.code == 0 and VERIFIED_LINE in ran.out, f"inspect: the password read, the archive checked: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+
+        return SecretCommand(PASSWORD, lambda given: ["inspect", str(envelope_path), "--password-file", str(given)], label, code, inspected)
+    if name == "decrypt":
+        clear, envelope_path, out = an_envelope(tmp_path, "sealed")
+
+        def decrypted(ran: Ran) -> None:
+            assert decrypted_as_before(ran, clear, out), f"decrypt: the password read, -o the zip that was sealed: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+
+        return SecretCommand(PASSWORD, lambda given: ["decrypt", str(envelope_path), "-o", str(out), "--password-file", str(given)], label, code, decrypted, (out,))
+    if name == "create":
+
+        def created(ran: Ran) -> None:
+            written = sorted(path for path in backups_dir(root).iterdir() if ENVELOPE_NAME.fullmatch(path.name))
+            assert ran.code == 0 and len(written) == 1, f"create: the password read, one envelope written: {[path.name for path in written]}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+            holds_a_backup_of_the_cli(written[0], PASSWORD, tmp_path / "opened")
+
+        return SecretCommand(PASSWORD, lambda given: ["create", "--encrypt", "--password-file", str(given)], label, code, created)
+    archive = cli.restorable(tmp_path / "backup", request.getfixturevalue("head_database"))
+
+    def checked(ran: Ran) -> None:
+        lines = ran.out.splitlines()
+        assert ran.code == 0 and cli.RESTORABLE_LINE in lines and KEY_GIVEN_LINE in lines, f"restore --dry-run: the key read, the archive checked: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+
+    return SecretCommand(OLD_INSTANCE_KEY, lambda given: ["restore", str(archive), "--dry-run", "--instance-key-file", str(given)], label, code, checked)
+
+
+def nothing_written(command: SecretCommand, root: Path, before: list[str]) -> None:
+    """A refused command wrote nothing: the data directory as it was (no archive, no stage, no decrypt folder), and none
+    of the command's outputs outside it."""
+    assert cli.listing(root) == before, f"nothing written in the data directory: {sorted(set(cli.listing(root)) ^ set(before))}"
+    left = [str(path) for path in command.outputs if path.exists() or path.is_symlink()]
+    assert left == [], f"nothing written outside it: {left}"
+
+
+def not_regular(kind: str, folder: Path) -> Path:
+    """A secret path that is not a regular file, under ``folder``: a FIFO, or a folder."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"secret-{kind}"
+    if kind == "fifo":
+        os.mkfifo(path, 0o600)
+    else:
+        path.mkdir(mode=0o700)
+    return path
+
+
+def planted(root: Path, elsewhere: Path, secret: str, layout: str) -> tuple[Path, Path]:
+    """A secret planted in the data directory ``root`` as the server's user could plant it, leading to a regular file
+    elsewhere holding ``secret``: ``file-link``, ``<data>/backups/key`` a link to it; ``parent-link``, ``<data>/backups``
+    itself a link to the folder that holds it. The path to give, and the file it leads to."""
+    target = password_file(elsewhere, f"{secret}\n", name="key")
+    backups = backups_dir(root)
+    if layout == "file-link":
+        backups.mkdir(mode=0o700)
+        (backups / "key").symlink_to(target)
+    else:
+        backups.symlink_to(elsewhere, target_is_directory=True)
+    given = backups / "key"
+    assert os.path.realpath(given) == os.path.realpath(target) and given.read_text(encoding="utf-8") == f"{secret}\n", f"precondition: {given} leads to the secret"
+    return given, target
+
+
+def kubernetes_volume(folder: Path, secret: str) -> Path:
+    """A secret as a Kubernetes volume mounts it, outside the data directory: ``secret`` a link to ``..data/secret``,
+    ``..data`` a link to the timestamped folder that holds the file. The path to give."""
+    stamped = folder / "..2026_10_17_13_40_00.123456789"
+    password_file(stamped, f"{secret}\n", name="secret")
+    (folder / "..data").symlink_to(stamped.name, target_is_directory=True)
+    given = folder / "secret"
+    given.symlink_to(Path("..data") / "secret")
+    assert given.is_symlink() and given.read_text(encoding="utf-8") == f"{secret}\n", f"precondition: {given} leads to the secret"
+    return given
+
+
+@contextmanager
+def released_after(path: Path, seconds: float = AT_ONCE) -> Iterator[dict[str, bool]]:
+    """A guard for a command that may wait on the FIFO ``path`` for a writer (today's hang): not returned after
+    ``seconds``, it is recorded as hung, and the FIFO is opened for writing and closed again, until the command returns,
+    so that a reader waiting on it gets an end of file instead of waiting forever. ``{"hung": bool}``."""
+    state = {"hung": False}
+    done = threading.Event()
+
+    def watch() -> None:
+        if done.wait(seconds):
+            return
+        state["hung"] = True
+        while not done.wait(0.05):
+            with suppress(OSError):  # no reader waiting on it right now, or not a FIFO
+                os.close(os.open(path, os.O_WRONLY | os.O_NONBLOCK))
+
+    watcher = threading.Thread(target=watch, name="fifo-release", daemon=True)
+    watcher.start()
+    try:
+        yield state
+    finally:
+        done.set()
+        watcher.join()
+
+
+def opens_of(monkeypatch, target: Path) -> list[str]:
+    """Every open of ``target`` in this process — by ``os.open``, ``io.open`` (``Path.open``, ``read_secret_file``) or
+    ``open`` — through whatever path leads to it, a link included: the path asked for, recorded; the open then made."""
+    opened: list[str] = []
+    resolved = os.path.realpath(target)
+    for module, name in ((os, "open"), (io, "open"), (builtins, "open")):
+
+        def tracking(*args: Any, _real: Any = getattr(module, name), **kwargs: Any) -> Any:
+            path = args[0] if args else kwargs.get("file", kwargs.get("path"))
+            if isinstance(path, str | bytes | os.PathLike) and kwargs.get("dir_fd") is None and os.path.realpath(os.fsdecode(path)) == resolved:
+                opened.append(os.fsdecode(path))
+            return _real(*args, **kwargs)
+
+        monkeypatch.setattr(module, name, tracking)
+    return opened
+
+
+@pytest.mark.parametrize("euid", [pytest.param(0, id="as-root"), pytest.param(NOT_ROOT, id="not-root")])
+@pytest.mark.parametrize("name", list(READERS))
+@pytest.mark.parametrize("kind", ["fifo", "folder"])
+def test_a_secret_file_that_is_not_a_regular_file_is_refused_at_once(tmp_path, monkeypatch, capsys, request, kind, name, euid):
+    """(n) B-38: a FIFO or a folder given as the secret file, as root (B-19's fake identity) and not: refused at once —
+    a FIFO never waited on — on one ❌ line, ``<label>: <path> is not a regular file (<code>)``, exit 1; at a terminal
+    where a password would be asked, nothing asked after it; nothing written, no identity change."""
+    print_section("B-38: secret files read before the switch of user")
+    root = instance(tmp_path, monkeypatch)
+    command = secret_command(name, root, tmp_path, request)
+    given = not_regular(kind, tmp_path / "secrets")
+    before = cli.listing(root)
+    identity = faked_identity(monkeypatch, euid)
+    asked = answering(monkeypatch, PASSWORD)
+    with terminal_holding(monkeypatch, TYPED_AHEAD) as stdin, released_after(given) as guard:
+        ran = run(capsys, *command.argv(given))
+    assert not guard["hung"], f"{kind}: refused at once: {AT_ONCE} s without an answer, the command waited on it for a writer: {ran.text[-cli.TAIL:]}"
+    expected = f"❌ {command.label}: {given} is not a regular file ({command.code})"
+    assert (ran.code, ran.refused) == (1, [expected]), f"{kind}: exit 1 and one line, verbatim {expected!r}: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert (asked, stdin.reads, identity.calls) == ([], [], []), f"{kind}: nothing asked after it, no identity change: prompts {asked}, reads {stdin.reads}, identity changes {identity.calls}"
+    nothing_written(command, root, before)
+    print_success(f"{name}, {kind}: not a regular file, at once")
+
+
+@pytest.mark.parametrize("layout", ["file-link", "parent-link"])
+@pytest.mark.parametrize("name", list(READERS))
+def test_as_root_a_secret_file_through_a_link_inside_the_data_directory_is_refused_unopened(tmp_path, monkeypatch, capsys, request, name, layout):
+    """(n) B-38: as root, a path inside the data directory that goes through a link the server's user planted — the
+    file itself a link, or ``backups`` a link to a folder elsewhere — is refused, its target never opened (not even to
+    look at what it is): one ❌ line, ``<label>: <path> goes through a link inside the data directory: give the file
+    itself, from outside it (<code>)``, exit 1, nothing asked after it, nothing written, no identity change."""
+    root = instance(tmp_path, monkeypatch)
+    command = secret_command(name, root, tmp_path, request)
+    given, target = planted(root, tmp_path / "elsewhere", command.secret, layout)
+    before = cli.listing(root)
+    identity = faked_identity(monkeypatch, 0)
+    opens = opens_of(monkeypatch, target)
+    asked = answering(monkeypatch, PASSWORD)
+    with terminal_holding(monkeypatch, TYPED_AHEAD) as stdin:
+        ran = run(capsys, *command.argv(given))
+    opened = list(opens)
+    expected = f"❌ {command.label}: {given} goes through a link inside the data directory: give the file itself, from outside it ({command.code})"
+    assert (ran.code, ran.refused) == (1, [expected]), f"{layout}: exit 1 and one line, verbatim {expected!r} — not read through the link: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert opened == [], f"{layout}: the target never opened, the link checked before any open: opened as {opened}"
+    assert (asked, stdin.reads, identity.calls) == ([], [], []), f"{layout}: nothing asked after it, no identity change: prompts {asked}, reads {stdin.reads}, identity changes {identity.calls}"
+    nothing_written(command, root, before)
+    not_shown(ran, command.secret)
+    print_success(f"{name}, {layout}: refused, the target never opened")
+
+
+@pytest.mark.parametrize(("layout", "euid"), READ_AS_TODAY)
+@pytest.mark.parametrize("name", list(READERS))
+def test_a_secret_file_the_link_check_leaves_alone_is_read_as_today(tmp_path, monkeypatch, capsys, prompts, request, name, layout, euid):
+    """(n) B-38, guards (green before and after). As root, the command reads the file, then becomes the owner of the
+    data directory and goes on: a plain file outside the data directory, a plain file inside it (``backups/key``: links
+    are refused there, not places), a Kubernetes secret volume's link outside it. Not root: a link inside the data
+    directory is followed — no link check without a privilege boundary."""
+    root = instance(tmp_path, monkeypatch)
+    command = secret_command(name, root, tmp_path, request)
+    if layout == "plain-file-outside":
+        given = password_file(tmp_path / "secrets", f"{command.secret}\n")
+    elif layout == "plain-file-inside":
+        backups_dir(root).mkdir(mode=0o700)
+        given = password_file(backups_dir(root), f"{command.secret}\n", name="key")
+    elif layout == "kubernetes-link-outside":
+        given = kubernetes_volume(tmp_path / "secret-volume", command.secret)
+    else:
+        given, _target = planted(root, tmp_path / "elsewhere", command.secret, "file-link")
+    identity = faked_identity(monkeypatch, euid)
+    with stdin_holding(monkeypatch, ""):
+        ran = run(capsys, *command.argv(given))
+    command.went_on(ran)
+    expected = owner_switch(root) if euid == 0 else []
+    assert identity.calls == expected, f"{layout}: the identity changes of today: {expected}, not {identity.calls}"
+    assert prompts == [], f"{layout}: a file was given: nothing is asked: {prompts}"
+    not_shown(ran, command.secret)
+    print_success(f"{name}, {layout}: read as today")

@@ -111,7 +111,8 @@ The eligible quantity $q_j$ is deliberately evaluated at **end of day before pay
 - a same-day **BUY is excluded**;
 - a same-day **SELL is included**, because those units existed at end of day $D_j-1$;
 - broker custody is respected throughout transfer replay;
-- an in-transit fragment still counts for its source broker, never for the destination before arrival.
+- an in-transit fragment still counts for its source broker, never for the destination before arrival;
+- units that arrive from a broker you cannot see — as a co-owner of the receiving broker, for example — count from their arrival: the other broker is never replayed, and their cost is the arriving transfer's own cost basis, part of the average purchase price (without one, YOC is unavailable).
 
 Income remains attached to the broker that recorded it. Moving units from broker A to broker B does **not** automatically carry A's historical income into B's YOC. Later income recorded at B uses B's eligible prior-day quantity and B's average purchase price.
 

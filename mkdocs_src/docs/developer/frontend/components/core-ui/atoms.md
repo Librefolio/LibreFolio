@@ -128,11 +128,24 @@ A **decimal text field that never goes through a JavaScript number**.
 
 - `type="text"` with `inputmode="decimal"`: `,` and `.` both work as the decimal separator, and
   characters that can never belong to a number are filtered out while typing
+- A number pasted in scientific notation is read exactly, never stripped of its `e` (W-B66;
+  `filterDecimalInput`, and `normalizeDecimalInput` for every field that reads through it, in
+  `lib/utils/core/parseDecimalInput.ts`): a text that is wholly such a number, with `.` or `,` as
+  its decimal mark, is expanded to a plain decimal when its exponent is within ±100
+  (`MAX_DECIMAL_EXPONENT`, the backend's bound): `1e-8` → `0.00000001`, `1,5E+3` → `1500`. The
+  usual checks then apply to the result. Any other text holding an exponent — past ±100
+  (`3E+150`), or not wholly a number (`1e5x`, `1.234,5e2`) — stays as typed, invalid, with a
+  `<p>` after the field: `data-testid="<testid>-exponent-error"`, `data-max` 100, and
+  `common.decimalExponentOutOfRange` (*Write the number out in full…*). A text without an
+  exponent filters as before: a lone typed `e` is dropped, `EUR 12,34` gives `12,34`. Before, the
+  filter dropped the `e`, so a pasted `1e-8` became `18`, silently
 - `value` (bindable string) is the field text; on blur or Enter a valid value is rewritten in
   canonical form (`.` separator, trailing zeros trimmed), then `oncommit` fires. An invalid value
   stays as typed: never cut, never coerced on blur
 - Validation is exact: digit budget (`maxIntegerDigits`, `maxFractionDigits`, default 12 each),
-  `min`/`max` (strings, compared as exact decimals), `required`, `allowNegative`;
+  `min`/`max` (strings, compared as exact decimals, once the digits fit the budget: a longer value
+  is invalid anyway, and the comparison would build a BigInt of every pasted digit), `required`,
+  `allowNegative`;
   `onvaliditychange` reports `{normalized, empty, syntaxValid, requiredValid, digitsValid,
   rangeValid, valid}`, and `externalInvalid` lets the parent mark it invalid
 - A fraction longer than `maxFractionDigits` is flagged (`digitsValid: false`, `aria-invalid`, red
@@ -146,7 +159,10 @@ A **decimal text field that never goes through a JavaScript number**.
   a number that looked valid
 - ↑/↓ step by `step` in exact decimal arithmetic, clamped to the bounds (to 0 without
   `allowNegative`); `accelerateOnHold` (default `false`) climbs by powers of ten while the key is
-  held
+  held. A value past the digit budget, or a text kept for its exponent, is not stepped
+- The checks stay linear on a long paste: the regular expressions of `normalizeDecimalInput` and
+  `formatDecimalForDisplay` (`lib/utils/core/formatDecimal.ts`) and its trailing-zero strip used
+  to backtrack quadratically, about 3 s on a 40 000-character text, in the paster's own tab (W-B66)
 
 **Used by**: the PAC planner steps (targets, routing, fees, liquidity, prices).
 
