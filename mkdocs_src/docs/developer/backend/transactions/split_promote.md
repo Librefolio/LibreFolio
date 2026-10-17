@@ -232,11 +232,16 @@ cost basis is checked against its column (`check_decimal_limits()`, see
 stage applies them.
 
 A value the model refuses becomes an issue of the promote at the batch's parse
-(`_parse_lenient()`): `operation` `promote`, pydantic's error type as `code`, `params`
-null, and a `field` named by the merged field itself, without the `resolved_fields.`
-prefix (`_loc_to_field()`): `description`, `tags`, `date`, `cost_basis_override`,
-`cost_basis_override.amount`, or the unknown key. The issue thus carries that field's
-label. As with any parse refusal of this lenient batch, the other operations are
+(`_parse_lenient()`): `operation` `promote`, pydantic's error type as `code`, as `params`
+pydantic's context when it is plain data — `{max_length: 500}` for a description past 500
+characters, `{error: <pydantic's text>}` for a malformed date, `{class_name}` for a cost
+basis that is no object — and `null` otherwise, for a `value_error` or an error without
+context (W-B70, the rule of [Per-type rules](service.md#per-type-rules); before, `params`
+was always null here), and a `field` named by the merged field itself, without the
+`resolved_fields.` prefix (`loc_to_field()` of `backend/app/utils/pydantic_errors.py`):
+`description`, `tags`, `date`, `cost_basis_override`, `cost_basis_override.amount`,
+or the unknown key. The issue thus carries that field's label.
+As with any parse refusal of this lenient batch, the other operations are
 still checked, then nothing is saved (`committed=False`). Before H-41 the dict was
 applied as sent: a malformed date, tags or cost basis raised out of the batch, a 500;
 a description that was no string reached the `Text` column; an unknown key was
@@ -253,8 +258,14 @@ tags, date or cost basis; only the merge dialog adds `resolved_fields`, with
 (`PromoteAllModal`): `date` and `cost_basis_override` come from API clients only.
 The merged description joins the two with a line break (`mergeStrings()` in
 `frontend/src/lib/features/transactions/bulk/promoteHelpers.ts`), so two long
-descriptions can pass 500 characters and are then refused, as a create's
-description is (`TXCreateItem.description` takes 500 too).
+descriptions can pass 500 characters, which the backend refuses with `string_too_long`,
+as it refuses a create's (`TXCreateItem.description` takes 500 too). The frontend stops
+before it (W-B70; the backend limit is unchanged): `PromoteMergeModal` counts the merged
+description in code points, as Python's `len()` does (`textLength()` against
+`TX_DESCRIPTION_MAX_LENGTH`), and keeps **Confirm promotion** disabled past 500;
+**Merge all** with *Combine* leaves such a pair unpromoted, for the merge dialog, and a
+warning counts the pairs left (see
+[Promote suggestions](../../frontend/state/transaction-draft.md#promote-suggestions)).
 
 A mixed saved/new request uses a create correlation value:
 

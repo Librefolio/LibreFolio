@@ -74,6 +74,30 @@ Both wrappers:
 - expose `scrollToDate(date)`: with the editor open, a double-click on the chart (a long press of
   about 0.8 s on touch) scrolls to that date.
 
+**What the server refused** (X-R46) is worded by `frontend/src/lib/api/writeRefusal.ts`, in the
+interface language, with ISO dates, the same way in both wrappers:
+
+- **A save refused whole**: the `catch` shows `saveErrorText(error, t)`. `writeRefusalMessage()`
+  words the coded refusals: 422 `date_out_of_range` (the dates and the bounds), 422
+  `price_currency_mismatch` (the dates and both currencies; the editor sends no currency, so its
+  own saves never meet it), 422 `bulk_too_many_items` (`common.writeRefusal.tooManyItems`: the
+  maximum, the count, *Save them in smaller parts*) and 400 `fx_rates_refused` (each date with
+  its reason, through `rejectedMessage()`). Any other error falls back to `extractErrorMessage()`,
+  which prefers the server's own `detail` (its `message`, for an object) to Axios's *Request failed
+  with status code …*; an events refusal, already worded by `eventSaveErrorMessage()`, keeps its
+  sentence. The sentence fills the *Failed to save: …* banner and the error toast (*FX save
+  failed: …* on the FX page), and `onsave` is not called: the editor stays open with the pending
+  rows.
+- **A save taken in part**: a 200 names the dates it left out in `rejected` (FX) or in its asset's
+  `results[].rejected` (asset), and the counts come from the answer: `results.length` saved and
+  `rejected.length` refused for FX (`fxDetail.refusedCount`), the asset's `count` saved and its
+  `rejected` as `pricesRefused` for the asset (`assets.dataEditor.pricesRefused`, and in the
+  `assets.data.saved` event). `rejectedMessage()` names up to five refused dates, then
+  *and N more*, each with its reason (`common.writeRefusal.reason.*`), and the summary toast is a
+  **warning** that stays 20 s (`REFUSAL_TOAST_MS`) instead of a success. The asset wrapper adds
+  its result's `message` when the result accounts for fewer prices than were sent (the asset
+  deleted meanwhile).
+
 Asset only:
 
 - **Two tabs**, **Prices** and **Events**, whose badges count the dirty rows, share one
@@ -106,7 +130,7 @@ Asset only:
   more), the split's ratio for `EVENT_INVALID_SPLIT_RATIO` (`events.saveError.invalidSplitRatio`:
   the first split at fault, and how many more), and the value typed for a 422 on a type
   (`EVENT_NOT_EDITABLE`, `EVENT_NOT_DELETABLE` and `EVENT_ASSET_NOT_FOUND` ask for a reload
-  instead). It shows as a *Save failed: …* toast and a
+  instead). It shows as a *Failed to save: …* toast and a
   banner above the tabs, and `onsave` is not called: the editor stays open with the pending rows.
   Prices are sent before events, so the prices of that save may already be stored.
 - **Refresh while editing**: a `chartData` or `events` refresh that lands while a tab has dirty

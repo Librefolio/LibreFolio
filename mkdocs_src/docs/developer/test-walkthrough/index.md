@@ -61,6 +61,7 @@ Playwright spec files (Vitest files are not listed).
 | `--assume-scoped` | Experiment for the `--workers` parallel pass of backend categories: every pytest unit counts as parallel-safe, whatever isolation class the catalogue gives it, except the units with a written `exclusive_because`. No effect at one worker or with `--no-shared-server`. The reds are the work list, not a regression |
 | `--test-port PORT` / `--port PORT` | Port of this run's test backend. Defaults to `TEST_PORT`, then `6041` — see [Isolated Runtime Lanes](#isolated-runtime-lanes) |
 | `--data-dir PATH` | Test data root of this run. Defaults to `LIBREFOLIO_TEST_DATA_DIR`, then `backend/data/test` — see [Isolated Runtime Lanes](#isolated-runtime-lanes) |
+| `--lane-setting NAME=VALUE` | A setting of this run's instance, repeatable: only `LIBREFOLIO_PROFILE`, `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY`. None by default: the instance's defaults — see [Lane Settings](#lane-settings) |
 
 !!! note "Where the flags go"
 
@@ -151,6 +152,53 @@ only when `/api/v1/system/test-lane-health` echoes that identity in the
 `X-LibreFolio-Test-Lane` header, and the shared test server refuses to start on a port that
 another process already holds: it never reuses or terminates another lane's server. The
 contract is covered by `./dev.py test utils runtime-isolation`.
+
+#### Lane Settings {: #lane-settings }
+
+A lane may set three settings of its own instance with `--lane-setting NAME=VALUE`:
+`LIBREFOLIO_PROFILE`, `LIBREFOLIO_FRAME_PROTECTION` and `LIBREFOLIO_CSP_REPORT_ONLY`
+(`TEST_LANE_SETTABLE` in `scripts/cli_base.py`). They are what a hosting provider's instance runs
+with, so the suite can meet the managed profile, its frame protection and its report-only content
+security policy for real. Nothing else can be set this way: never a secret, a port, a data
+directory or one of the runner's own names.
+
+```bash
+# The cloud smoke on a lane of its own, in the managed profile (on any lane, it runs only when named)
+./dev.py test --test-port 6181 --data-dir /tmp/lane-h --lane-setting LIBREFOLIO_PROFILE=managed front-utility cloud-smoke
+
+# Repeatable: the managed profile with its frame protection off
+./dev.py test --lane-setting LIBREFOLIO_PROFILE=managed --lane-setting LIBREFOLIO_FRAME_PROTECTION=false front-utility auth
+```
+
+- **Checked first.** One option per setting, before the category like every flag of
+  `./dev.py test`. `parse_lane_settings()` checks them before the environment is touched: each
+  item `NAME=VALUE`, a name of the three, given once, with a value that is not empty and holds no
+  `;` and no line break. Anything else stops the run with an error that names the item. The value
+  itself (`selfhosted` or `managed`, a boolean for the two switches) is checked by the instance,
+  when it reads its settings.
+- **Set after the cleanup, then handed down.** `configure_test_runtime()` sets them once it has
+  removed the developer's settings, and exports `LIBREFOLIO_TEST_LANE_SETTINGS`: the `NAME=VALUE`
+  pairs sorted by name and joined by `;`. That name is under the kept `LIBREFOLIO_TEST_*` prefix,
+  so the variable travels down the lane's process tree (the runner, Playwright,
+  `dev.py server --test`, uvicorn's workers), and each nested `configure_test_runtime()` sets the
+  settings again after its own cleanup. Playwright's `webServer` (`WEB_SERVER_ENV` in
+  `frontend/playwright.config.ts`) passes the variable on only when it is set.
+- **From the command line only.** A `LIBREFOLIO_TEST_LANE_SETTINGS` line in the checkout's `.env`
+  stops the run, with or without `--lane-setting` and under `pipenv run` too, with an error that
+  names `--lane-setting` and `.env`: a forgotten line would silently change every lane of the
+  checkout. A run's children never read `.env` (`PIPENV_DONT_LOAD_ENV=1`, set by
+  `configure_test_runtime()` and by Playwright's `webServer`), so they keep applying the settings
+  they inherited.
+- **Shown.** The runner prints them in one info line: `Test lane settings: LIBREFOLIO_PROFILE=managed`.
+- **A manual test server.** `./dev.py server --test --lane-setting LIBREFOLIO_PROFILE=managed`
+  starts one with the same settings. Without `--test`, `--lane-setting` stops the command with
+  exit code 1, before any build.
+
+A managed lane is still a test lane: test mode is on, with its test-only providers and the test
+users, whose passwords are in `frontend/e2e/fixtures/test-users.ts`. The managed profile refuses
+test mode only outside a test lane, and the lane identity above makes every process of the run
+one: see [Security → Configuration Checks](../architecture/security.md#configuration-checks).
+`./dev.py test utils runtime-isolation` covers the lane settings too.
 
 ### 🔍 Provider Filter Flags (external, all, all-backend)
 

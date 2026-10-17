@@ -190,7 +190,9 @@
       "concat": "Concatena",
       "union": "Unione",
       "promoteSubtitle": "Seleziona la transazione di destinazione",
-      "target": "Destinazione"
+      "target": "Destinazione",
+      "descriptionTooLong": "La descrizione unita supera i {max} caratteri: accorciala per confermare.",
+      "mergeAllLeftTooLong": "{count, plural, one {# coppia è rimasta} other {# coppie sono rimaste}} da unire a mano: la descrizione unita supererebbe i {max} caratteri."
     },
     "validate": {
       "now": "Verifica ora",
@@ -262,7 +264,8 @@
       "decimalParsing": "Deve essere un numero valido",
       "intParsing": "Deve essere un numero intero valido",
       "valueError": "Valore non valido",
-      "extraForbidden": "Campo non previsto"
+      "extraForbidden": "Campo non previsto",
+      "stringTooLong": "Al massimo {max_length} caratteri"
     },
     "fields": {
       "broker_id": "Broker",

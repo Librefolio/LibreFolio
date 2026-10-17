@@ -81,6 +81,7 @@ from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.pydantic_errors import error_params, loc_to_field
 from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
@@ -89,11 +90,6 @@ logger = structlog.get_logger(__name__)
 # without BOM) first; then Windows-1252, which Excel on Windows and many banks write;
 # Latin-1 last, because it decodes any byte sequence and so always succeeds.
 TEXT_ENCODINGS: Tuple[str, ...] = ("utf-8-sig", "cp1252", "latin-1")
-
-# What a lone validation error's context may hold to become its params (W-B75, the batch's rule of W-B72): a business
-# rule's ``{type, qty, …}``. pydantic's ``value_error`` holds the exception itself, which no response can carry.
-_PLAIN_PARAM_TYPES = (str, int, float, bool, type(None))
-
 
 # =============================================================================
 # EXCEPTIONS
@@ -536,27 +532,6 @@ class BRIMProvider(ABC):
     # Transaction construction helpers (parent responsibility)
     # -------------------------------------------------------------------------
 
-    @staticmethod
-    def _loc_to_field(loc: tuple) -> Optional[str]:
-        """Convert Pydantic loc tuple to a dot-separated field path, skipping indices."""
-        parts = [str(p) for p in loc if not isinstance(p, int)]
-        return ".".join(parts) if parts else None
-
-    @staticmethod
-    def _lone_error_params(err: dict) -> Optional[dict]:
-        """The ``params`` of a validation error met alone: the context of a model-level error, when it is plain data.
-
-        The rule of the transaction batch's ``_lone_error_params`` (W-B72), so a row the parse refuses and the same row
-        the batch refuses carry the same ``params`` (W-B75). A business rule keeps its context (``{type}``,
-        ``{type, qty}``, …); a field's error — pydantic's own, ``string_too_long``, a validator's ``value_error`` — keeps
-        ``None``: its ``field`` names it. A ``value_error``'s context holds the exception itself: copied as it was, it
-        made the parse answer 500.
-        """
-        context = err.get("ctx")
-        if err.get("loc") or not context or not all(isinstance(value, _PLAIN_PARAM_TYPES) for value in context.values()):
-            return None
-        return dict(context)
-
     def _create_transaction(
         self,
         row_num: int,
@@ -570,8 +545,8 @@ class BRIMProvider(ABC):
         On success: appends to ``transactions`` and returns the item.
         On ValidationError: extracts structured issues from Pydantic, appends to
         ``validation_issues``, and returns None. Each issue carries the error's code,
-        message and field; a packed business rule keeps its context as ``params``,
-        a lone error as ``_lone_error_params`` decides (W-B75).
+        message and field, and its plain context as ``params`` (``error_params``,
+        the transaction batch's rule: W-B72, W-B75, W-B70).
 
         Plugins should call this instead of ``TXCreateItem(...)`` directly so that
         the parent class owns the error-handling contract and the frontend receives
@@ -593,7 +568,7 @@ class BRIMProvider(ABC):
                                 row=row_num,
                                 code=sub_err.get("code", "unknown"),
                                 message=sub_err.get("msg", ""),
-                                params=sub_err.get("ctx") if sub_err.get("ctx") else None,
+                                params=error_params(sub_err),
                                 context=context,
                             )
                         )
@@ -603,8 +578,8 @@ class BRIMProvider(ABC):
                             row=row_num,
                             code=err_type,
                             message=err.get("msg", str(e)),
-                            field=self._loc_to_field(err.get("loc", ())),
-                            params=self._lone_error_params(err),
+                            field=loc_to_field(err.get("loc", ())),
+                            params=error_params(err),
                             context=context,
                         )
                     )

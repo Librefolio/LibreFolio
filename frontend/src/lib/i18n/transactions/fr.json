@@ -190,7 +190,9 @@
       "concat": "Concaténer",
       "union": "Union",
       "promoteSubtitle": "Sélectionnez la transaction de destination",
-      "target": "Destination"
+      "target": "Destination",
+      "descriptionTooLong": "La description fusionnée dépasse {max} caractères : raccourcissez-la pour confirmer.",
+      "mergeAllLeftTooLong": "{count, plural, one {# paire est restée} other {# paires sont restées}} à fusionner à la main : la description fusionnée dépasserait {max} caractères."
     },
     "validate": {
       "now": "Valider maintenant",
@@ -262,7 +264,8 @@
       "decimalParsing": "Doit être un nombre valide",
       "intParsing": "Doit être un entier valide",
       "valueError": "Valeur invalide",
-      "extraForbidden": "Champ inattendu"
+      "extraForbidden": "Champ inattendu",
+      "stringTooLong": "{max_length} caractères au maximum"
     },
     "fields": {
       "broker_id": "Courtier",

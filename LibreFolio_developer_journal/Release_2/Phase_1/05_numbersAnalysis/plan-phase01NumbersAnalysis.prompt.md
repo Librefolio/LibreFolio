@@ -6633,4 +6633,136 @@ prossimo checkpoint.
   - prettier pulito sui 2 file di Y.
 
   Porta 6185 libera.
-- ⏳ **Checkpoint CP-10d** (FROZEN).
+- ✅ **CP-10d entrato** (17/10): dev `0cf8eb4d5` (`de5846a0b`), nessun import rimasto in dev; nessuna riga di
+  CHANGELOG. Il coordinatore comunica a tutti il nome nuovo del modulo.
+
+#### Revisione di MF-A8; la voce seguente (17/10 ~18:40, sola lettura; base `de5846a0b`)
+
+- ✅ **MF-A8** (dev `bc466d969`): `transfer_tracts_moved_in` con lo stesso predicato `counted_tract`;
+  `closed_position_base(..., moved_in)` con base > 0. Il mio esempio dà 60/600. OK, più una nota facoltativa:
+  `CostOut` ora contiene anche un termine di valore.
+- Ordine del coordinatore: **J-21 → documentazione (J-18, J-23, J-38) → J-16**; la contabilità del backlog nel
+  prossimo commit del diario.
+
+#### J-21 — la linea di un segnale del backend si interrompe dove il backend non manda un valore (17/10, dalle ~18:45; base `de5846a0b`)
+
+- ✅ **Analisi (sola lettura)**: il `connectNulls: false` approvato era sbagliato.
+  - Sul grafico giornaliero dell'asset l'asse contiene i giorni riportati, senza quotazione propria
+    (`backward_fill_info`, `assets/[id]/+page.svelte:330-334`).
+  - I plugin che contano le sessioni (`computes_on_quote_days = True`, `signals/base.py:86`; il filtro in
+    `signals/execution.py:365-368`, decisione del developer del 30/09) in quei giorni **non hanno punti**.
+    `buildOverlaySignalSeries` (`chartCoreHelpers.ts:312-313`) ci mette `null`, e oggi `connectNulls: true` li unisce,
+    giustamente. Con `false`, EMA, RSI, MACD e gli altri si interromperebbero a ogni fine settimana e festivo.
+  - I valori nulli **espliciti** il backend li manda solo dove il valore non c'è:
+    - `build_line_computation` (`signals/risk_adapters.py:298`) emette `SignalValuePoint(value=None)` per il
+      riscaldamento e per le finestre indefinite (Sharpe e Beta a varianza nulla);
+    - il Rolling Return a calendario, per `missing_reference` e per i prezzi non validi.
+  - Mi sono fermato prima dei rossi. Il coordinatore ha dato il via all'**alternativa precisa**: la linea si divide
+    solo nei punti che il backend manda senza valore; i giorni assenti dall'uscita restano uniti. Y rivede; nessun
+    cambio di colori o classi.
+- **Disegno** (solo `charts/signals/backendRenderer.ts`, file di Y con il via):
+  - `renderScalarSeries` divide una linea o un'area in **run** a ogni punto senza valore. Più nulli di fila fanno un
+    buco solo; quelli iniziali (riscaldamento) e finali non fanno run.
+  - Ogni run è un `RenderedSignal` con la stessa etichetta:
+    - una sola voce di legenda;
+    - date disgiunte, quindi nessuna riga doppia nel tooltip, che salta i null e deduplica per nome
+      (`PriceChartFull.svelte:985-987`);
+    - stesso asse (`assignOverlaySignalAxes` per `axisKey`).
+  - Gli indicatori d'inizio stanno sul primo run, quelli di fine sull'ultimo.
+  - Livelli e regioni stanno solo sul primo run: `buildSignalReferencePrimitives` disegna `markLine`/`markArea` per
+    serie, quindi su ogni run li ripeterebbe. Le linee a fette di stile restano senza, come prima.
+  - Le fette di stile si calcolano dentro ogni run. Il tetto di 100 fette resta per uscita, ma una fusione non
+    attraversa mai un buco.
+  - Un valore isolato fra due buchi diventa un run di un punto: c'è nei dati e nel tooltip, senza segmento. Il
+    confronto a calendario locale, che usa già `connectNulls: false` (`assets/[id]/+page.svelte:774`), fa lo stesso.
+  - Senza buchi l'uscita è identica a oggi. Barre invariate; bande fuori perimetro.
+  - Gli id dei run cominciano con `${config.id}:${series.key}:`. `previewPolicy`, i riassunti delle pagine e
+    `rollingRiskSignals` leggono il prefisso, quindi non cambiano.
+- **Ricaduta, decisione del coordinatore (a)**: il badge «📈N» del pannello dei segnali, nei file di X
+  (`assets/[id]/+page.svelte:915`, `fx/[pair]/+page.svelte:503`), conta `max(data.length)` sui segnali resi di una
+  configurazione, quindi mostrerebbe il run più lungo.
+  - È già sbagliato oggi per RSI, CCI, MFI e StochRSI: le fette di stile danno il tratto più lungo fra due
+    attraversamenti di soglia.
+  - Correzione: `renderedSignalPointCount` in `backendRenderer.ts` conta le date distinte, e le due pagine la
+    chiamano. Per le uscite non divise il valore resta quello di oggi.
+  - Per avere un rosso su un'asserzione, prima estraggo la funzione con la semantica di oggi (nessun cambio), poi il
+    rosso, poi la correzione. X rivede le due righe.
+- ✅ **Rossi** (test-author, 17/10 ~19:00–19:25), sul codice vecchio:
+  - `backendRendererSegments.test.ts` (`front-utility core-unit`), nuovo describe «a point the backend sent without a
+    value breaks the line»: **11 rossi** (a, b, e, f, g, h, i, j, k, più n — il buco esplicito accanto a un fine
+    settimana assente — e m — 120 tratti con stile: una fetta per tratto) e **3 controlli** verdi (c: il fine
+    settimana assente resta unito; d: nulli iniziali e finali; l: le barre). Ognuno cade su un'asserzione.
+  - `backendRenderer.test.ts` (`front-ai-export unit`): i due test del calendario portati al contratto nuovo
+    (tre tratti, il livello zero sul primo), **2 rossi**.
+  - Il badge, dopo l'estrazione a semantica invariata (`patch_extract.py`, applicata): describe «signals panel badge»,
+    **3 rossi** (linea con stile: `3` invece di `6`; tratti: premessa sui due tratti; uscite su date diverse: `4`
+    invece di `6`) e **3 controlli** (stesse date di due uscite → 4; linea semplice; vuoto → 0).
+  - Conteggi sul codice vecchio: core-unit 14 falliti / 8 865 passati; ai-export unit 2 / 672.
+- ✅ **Correzione** (`patch_fix.py`, 8 modifiche, identica all'uscita provata a secco): `splitLineSignal` al posto di
+  `applyValueRegionLineStyles`; `limitStyledSegments` con il tratto in ogni fetta e la fusione solo nello stesso
+  tratto (si ferma quando restano solo fusioni fra tratti); `renderScalarSeries` tiene i tratti mentre toglie i punti
+  senza valore; `renderedSignalPointCount` conta le date distinte. Per una linea senza buchi l'algoritmo del tetto è
+  quello di prima, scelta per scelta.
+- ✅ **Verdi (17/10 ~19:35–19:55)**:
+  - `front-utility core-unit` **8 879/8 879**;
+  - `front-ai-export unit` **674/674**;
+  - `front-asset asset-unit` **1 110/1 110** (contiene anche `chartCoreHelpers.test.ts` e `backendRenderer.test.ts`);
+  - `front check`: 0 errori, 0 avvisi;
+  - prettier pulito sui 6 file del frontend.
+- ✅ **Doc**: una frase nella guida dei plugin dei segnali («2. Execution»: un punto senza valore spezza la linea, i
+  giorni senza punto restano uniti); devWiki, sezione nuova in `concepts/absence-sentinel-vs-nullable-type.md` con le
+  righe delle fonti, e `log.md`.
+- Limite noto, da dire a Y: un valore isolato fra due buchi è un tratto di un punto, presente nei dati e nel tooltip
+  ma senza segmento né simbolo (`showSymbol: false`), come nel confronto a calendario locale. Alle risoluzioni
+  settimanali e mensili (`downsampleRenderedSignal` raggruppa ogni serie per conto suo) due tratti nello stesso
+  secchio vi hanno ciascuno un rappresentante: il buco non si vede, la linea fa un gradino, e il tooltip mostra il
+  primo. È la stessa proprietà delle fette di stile di oggi a ogni attraversamento: **J-56**, dopo la 1.3, a Y.
+- ✅ Nessuna prova E2E cambia: gli `📈N` di `e2e/assets/asset-detail.spec.ts` sono tutti di schede `calendar-peer-*`
+  (confronti fra asset), il cui conteggio viene da un ramo che non tocco.
+
+#### Documentazione: J-18, J-23, J-38 (17/10, dalle ~19:30; base `de5846a0b`)
+
+- ✅ **J-18 verificata, già coperta**: nessuna modifica. Le istruzioni del DB non contengono più «`Numeric(18, 6)`
+  for precision»; da C-97 e W-B60 importi, quantità e prezzi sono `RealDecimal` (al più 15 cifre significative,
+  valore oltre i limiti rifiutato), e la pagina dev del DB, «Decimal Columns», dice che SQLite tiene un `NUMERIC`
+  come double, con gli esempi di lettura. Resta solo un esempio illustrativo nella skill `wiki-file`
+  (`SKILL.md:125`: «need explicit Numeric(18,6) to avoid precision loss»): file condiviso, lo segnalo al coordinatore.
+- ✅ **J-23** (diretta, 4 lingue, due link):
+  - `technical-analysis/index.*.md`: il concetto del Rolling Return sta sotto Returns
+    (`../fundamentals/returns.md#rolling-return`);
+  - `indicators/index.*.md`: la riga Underwater Drawdown porta a `current-drawdown` (come il `docs_path` del plugin
+    e la pagina dei segnali).
+  - Timbrata `technical-analysis/index.en.md` (`translate-stamp`, MD5 `d3f0511d→18dfdafd`, it/fr/es).
+  - `indicators/index.en.md` **non** timbrata: ha già un debito vero da `af919560c` (CP-10a, solo EN: la frase delle
+    sessioni e le righe del Rolling Return e del Rolling Beta), che resta alla pipeline.
+- ✅ **J-38** (docs-writer, solo EN, nessuna traduzione):
+  - il diagramma taglia e assegna lo stato dentro il ciclo e tiene da parte le serie estese; le annotazioni girano
+    dopo, sulle serie estese, e tornano solo gli eventi visibili;
+  - «3. Annotations» riscritta: taglio per segnale, annotazioni dopo, regole degli avvisi `annotation_unavailable`
+    (sorgente senza serie, bersaglio non `ok`/`partial`, calcolo che solleva);
+  - «1. Planning»: un lotto incoerente solleva `SignalRequestValidationError`, ferma tutto il lotto, 422 sui tre
+    endpoint del grafico.
+  - Verificati nel codice i tre punti aggiunti dal docs-writer: le serie estese solo per `ok`/`partial`
+    (`execution.py`, unico ritorno con `tuple(computation.series)`); i percorsi `/assets/prices/query`,
+    `/fx/currencies/convert`, `/signals/preview`; l'avviso della sorgente senza serie (`annotations.py:99`).
+- ✅ **Verdi**: `mkdocs build` stretto ✓ (3 085 URL), `mkdocs check-links` ✓ (97), devWiki `check_source_paths.py`
+  i soliti 7 mancanti.
+
+#### J-16 — il messaggio del test del gemello compatto del PAC (17/10, dalle ~19:55; base `de5846a0b`; file di X)
+
+- ✅ **Fatta** (test-author, solo il messaggio; X rivede): in `test_api/test_pac_planner_tool_api.py`, il nuovo
+  `_batch_outcomes(payload, results, **items)` e il messaggio dell'asserzione dei conteggi di
+  `test_pac_compute_plans_the_compact_twin_like_the_explicit_request`.
+  - Il messaggio: `(status, error)` per elemento; `execution_id` e `metrics` di chi non è riuscito (startup, tempi,
+    picco di memoria osservato: dicono se il worker non è mai partito o è caduto dopo, utile per J-19);
+    `metrics.server_processing_ms` del lotto. Mai il piano. Solo `.get`, quindi il messaggio non solleva.
+  - Ritorna una stringa: pytest 9 accorcia a 240 caratteri un messaggio che non lo è.
+  - Campi verificati in `schemas/tools.py` (`execution_id`, `startup_ms`, `peak_observed_bytes`,
+    `server_processing_ms`).
+- ✅ **Prova**:
+  - `api pac-planner-tool` **12/12** (23,7 s);
+  - ruff e black puliti;
+  - condizioni invariate (albero sintattico confrontato con HEAD, messaggi e helper a parte);
+  - messaggio provato su un `(1, 1)` finto (`/tmp/libreFolio_j16_demo.py`, 638 caratteri);
+  - porta 6185 libera.
+- Il triage con `test-triage` resta per la prossima caduta.

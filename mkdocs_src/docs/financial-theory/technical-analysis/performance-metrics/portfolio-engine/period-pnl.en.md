@@ -153,7 +153,7 @@ A position's start and end values are the portfolio's own valuation of it at the
 - its cost basis, for a holding whose asset has no mark at all (`ESTIMATED_AT_COST`);
 - converted at the exchange rate of the boundary day itself.
 
-The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference.
+The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference. Dust aside: a row counts a residual of $10^{-5}$ units or fewer as not held, the portfolio values it ([§7](index.md#7-period-contribution)).
 
 - **Internal transfer.** A security moved between two of your brokers inside the period splits its result: the sending broker's row answers for the units until they arrive, the receiving broker's from their arrival, and the total is unchanged. A transfer already in transit at $t_0$, or still in transit at $t_1$, keeps the plain boundary values ([§7](index.md#7-period-contribution)).
 - **Unknown values.** A position held at a boundary whose unrealized gain/loss is unknown there — a missing exchange rate, an incomplete cost — has an unknown $\Delta\mathrm{UGL}(a,b)$, never the known side minus zero.

@@ -33,9 +33,13 @@
  *        the selection toolbar offers the merge; the regression test of C-46, see «PC5» below;
  *   PC6  (the 💡's window, not the save) a new +5 on B, two saved −5 on A outside the editor, today and
  *        yesterday → with «Max Δ days» at 0 the 💡 offers today's alone, and moving the slider to 1
- *        searches again and offers both; red until the cure, see «PC6» below.
+ *        searches again and offers both; red until the cure, see «PC6» below;
+ *   PC7  (W-B70, the notes' limit) «Merge all», combining both texts, on two saved cash pairs: the pair whose
+ *        notes combine into exactly 500 characters is merged and saved; the pair whose notes would combine into
+ *        501 is left as two rows, each with its own notes, and the editor says so — a warning and the app event
+ *        `tx.bulk.promote-all.left-for-manual-merge`, `{pairs: 1}`; red until the cure, see «PC7» below.
  *
- * PC1 and PC3, the two tests that save, each prove three things: the commit's answer, read
+ * PC1 and PC3, the two tests whose save is refused, each prove three things: the commit's answer, read
  * against the request the editor actually sent (indexes are looked up there by id and link_uuid,
  * never assumed); that nothing was written (the owned ledger is exactly as it was before the
  * save); and that the refused-save banner's issue (`tx-bulk-error` → `tx-bulk-issue`, i.e.
@@ -142,6 +146,26 @@
  * than from the slider. With nothing to rewrite the rows, once the editor has settled a request at 1
  * can only come from the slider.
  *
+ * ## PC7: «Merge all» never writes notes past 500 characters, red until the cure (W-B70)
+ *
+ * A transaction's notes hold 500 characters (`max_length=500` on a create and on a promote's
+ * `resolved_fields`, counted by Python's `len()`). «Merge all» combining both texts writes `left\nright`
+ * into the two rows of every pair it merges, and nothing checks the length: two notes of 250 combine into
+ * 501 characters, the pair is shown merged, and the save is refused on its promote (`string_too_long`),
+ * nothing saved. The decision (D-W70-4 a): such a pair is left unmerged, each row keeping its own notes —
+ * no text is ever cut — and the editor says so, with a warning toast and the app event
+ * `tx.bulk.promote-all.left-for-manual-merge`, `{pairs: <how many>}`, whose name and detail are what PC7
+ * reads (never the toast's text); every other pair is merged as before. The limit is inclusive, and PC7
+ * sits on both sides of it: the merged pair combines into exactly 500 characters and its save is asserted,
+ * so a limit off by one in either direction, in the editor or against the backend, turns it red.
+ *
+ * Both pairs are saved rows (edit + edit: the promote carries the combined notes as `resolved_fields`),
+ * each a WITHDRAWAL on A and a DEPOSIT on B of an amount no other row shares, so the banner offers exactly
+ * these two pairs and «Merge all» is on offer. The notes open on words that tell the four rows apart; a
+ * filler only sets their length. Today PC7 is red on the pair that must stay two rows: «Merge all» merges
+ * it into one, whose notes are the 501 characters. Its save is not asserted refused: that is today's defect,
+ * and the cure's save must go through.
+ *
  * ## The save gate
  *
  * Save opens `tx-bulk-unseen-suggestions` instead of committing while a merge suggestion is still
@@ -150,7 +174,10 @@
  * banner, first seen on screen, is then asserted gone — and the 💡 could only offer saved rows of
  * the owned asset outside the editor, of which there are none. So Save must reach the commit:
  * `saveExpectingRefusal` waits for the refused-save banner OR the gate, and fails by name if it is
- * the gate, rather than clicking past it.
+ * the gate, rather than clicking past it. In PC7 the banner still offers the pair left behind, but it
+ * has been touched («Merge all» is clicked inside it), and the 💡 has nothing to offer either: every
+ * owned row but the float is in the editor, the float pairs with none, and no other row of the user
+ * carries the pairs' amounts. Its save, `saveExpectingCommit`, names the gate too if nothing is sent.
  *
  * ## Owned data, parallel-safe
  *
@@ -165,7 +192,7 @@
  */
 import {expect, test as base, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
-import {waitForSettled} from '../fixtures/app-events';
+import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {optionsClosed} from '../fixtures/probe';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
@@ -201,7 +228,7 @@ type PromoteItem = {id_a?: number; id_b?: number; link_uuid_a?: string; link_uui
 type CommitRequest = {creates?: CreateItem[]; updates?: Array<{id: number}>; deletes?: number[]; splits?: unknown[]; promotes?: PromoteItem[]};
 type Issue = {operation: string; index: number; ref_id?: number | null; code?: string | null; field?: string | null};
 type CommitBody = {committed: boolean; issues?: Issue[]; results?: Array<{operation: string; index?: number; ids?: number[]; status?: string}>};
-type LedgerRow = {id: number; broker_id: number; type: string; quantity: string; related_transaction_id: number | null; cost_basis_override: Money | null; asset_event_id: number | null};
+type LedgerRow = {id: number; broker_id: number; type: string; quantity: string; related_transaction_id: number | null; cost_basis_override: Money | null; asset_event_id: number | null; description?: string | null};
 /** One row the editor asks the database search about (`TXPromoteSuggestInput`), as the editor sends it. */
 type SuggestInput = {id: number; type: string; broker_id: number; date: string; asset_id?: number | null; quantity?: number | null; asset_event_id?: number | null};
 /** One promote-suggest request: the rows it asked about, and the candidates per asked id (JSON keys are strings). */
@@ -296,6 +323,13 @@ function adjustment(broker: Broker, asset: Asset, date: string, quantity: string
 
 function cashRow(broker: Broker, type: 'DEPOSIT' | 'WITHDRAWAL', date: string, amount: string, description: string): CreateItem {
     return {broker_id: broker.id, type, date, quantity: '0', cash: {code: 'EUR', amount}, description};
+}
+
+/** Notes of exactly `length` characters, all ASCII: `marker`, the words that tell a row apart, then a filler. */
+function notesOf(marker: string, length: number): string {
+    const notes = `${marker} ${'x'.repeat(length - marker.length - 1)}`;
+    expect(notes, `notes of ${length} characters`).toHaveLength(length);
+    return notes;
 }
 
 /** Commit the owned rows in one batch; returns them in the order given, each with its id. */
@@ -654,6 +688,29 @@ async function saveExpectingRefusal(page: Page): Promise<{request: CommitRequest
     await expect(gate.or(refused), 'Save answers with the refused-save banner (or, wrongly, with the unseen-suggestions gate)').toBeVisible({timeout: SAVE_TIMEOUT});
     await expect(gate, 'Save opened the unseen-suggestions gate: a merge suggestion was still on offer, and nothing was committed').toHaveCount(0);
     const response = await answered;
+    return {request: response.request().postDataJSON() as CommitRequest, body: await jsonFrom<CommitBody>(response, 'Save All')};
+}
+
+/**
+ * Save All on a batch the backend must accept; returns the request the editor sent and the answer, whatever it says
+ * (the caller asserts `committed` next to the answer described).
+ *
+ * As for `saveExpectingRefusal`, Save must reach the commit (see «The save gate» in the header). A save that sends
+ * nothing names the unseen-suggestions gate if that is what stands in the way, before the wait's own timeout is
+ * reported.
+ */
+async function saveExpectingCommit(page: Page): Promise<{request: CommitRequest; body: CommitBody}> {
+    await waitForSettled(page.getByTestId('tx-bulk-modal-root'), SAVE_TIMEOUT);
+    const save = page.getByTestId('tx-bulk-commit');
+    await expect(save).toBeEnabled({timeout: UI_TIMEOUT});
+    const answered = page.waitForResponse((response) => isCommitRequest(response.request()), {timeout: SAVE_TIMEOUT});
+    // Handled below; this keeps a rejection from surfacing as unhandled before it is awaited.
+    void answered.catch(() => undefined);
+    await save.click();
+    const response = await answered.catch(async (error: unknown): Promise<never> => {
+        await expect(page.getByTestId('tx-bulk-unseen-suggestions'), 'Save opened the unseen-suggestions gate instead of committing: a merge suggestion was still on offer, unseen').toHaveCount(0);
+        throw error;
+    });
     return {request: response.request().postDataJSON() as CommitRequest, body: await jsonFrom<CommitBody>(response, 'Save All')};
 }
 
@@ -1063,5 +1120,89 @@ test.describe('Bulk editor — a promoted receiver without a cost basis is refus
 
         // Nothing was saved: the editor is left open and discarded by the cleanup.
         await expectLedgerUntouched(page, brokers, before);
+    });
+
+    test('PC7: «Merge all», combining both texts, merges the pair whose notes fit in 500 characters and leaves the other two rows, each with its own notes (W-B70)', async ({page, owned}) => {
+        // The owned asset is not used: the brokers come with it.
+        const {brokers} = await ownAssetAndBrokers(page, owned);
+        const fitsMark = `PCB fits ${owned.suffix}`;
+        const overMark = `PCB over ${owned.suffix}`;
+        const fits = {out: notesOf(`${fitsMark} out`, 250), in: notesOf(`${fitsMark} in`, 249)};
+        const over = {out: notesOf(`${overMark} out`, 250), in: notesOf(`${overMark} in`, 250)};
+        expect(`${fits.out}\n${fits.in}`, 'premise: one pair’s notes combine into exactly 500 characters').toHaveLength(500);
+        expect(`${over.out}\n${over.in}`, 'premise: the other’s into 501').toHaveLength(501);
+        // A: the float (the day before, in no pair), then each pair's withdrawal; B: each pair's deposit. Each pair has an amount of its own.
+        const [float, fitsOut, fitsIn, overOut, overIn] = await commitOwnedRows(page, [
+            {label: 'float', create: cashRow(brokers.a, 'DEPOSIT', dayBefore(owned.today), '1000', `PCB float ${owned.suffix}`)},
+            {label: 'fits out', create: cashRow(brokers.a, 'WITHDRAWAL', owned.today, '-137.31', fits.out)},
+            {label: 'fits in', create: cashRow(brokers.b, 'DEPOSIT', owned.today, '137.31', fits.in)},
+            {label: 'over out', create: cashRow(brokers.a, 'WITHDRAWAL', owned.today, '-248.69', over.out)},
+            {label: 'over in', create: cashRow(brokers.b, 'DEPOSIT', owned.today, '248.69', over.in)},
+        ]);
+        const before = await readOwnedLedger(page, brokers);
+        expect(before.map((row) => row.id)).toEqual([float.id, fitsOut.id, fitsIn.id, overOut.id, overIn.id].sort(byId));
+
+        await openEditorOn(page, brokers, [fitsOut, fitsIn, overOut, overIn]);
+        const fitsRows = bulkRowsWith(page, fitsMark);
+        const overRows = bulkRowsWith(page, overMark);
+        await expect(fitsRows, 'one pair is two rows').toHaveCount(2, {timeout: UI_TIMEOUT});
+        await expect(overRows, 'and so is the other').toHaveCount(2, {timeout: UI_TIMEOUT});
+
+        // Two pairs on offer, which is what makes «Merge all» appear; combining both texts is its default.
+        const banner = await expectBannerOffers(page, 2);
+        await banner.getByTestId('promote-suggest-merge-all').click();
+        const mergeAll = page.getByTestId('promote-all-modal');
+        await expect(mergeAll).toBeVisible({timeout: UI_TIMEOUT});
+        await expect(mergeAll.getByTestId('promote-all-choice-merge').getByRole('radio'), 'combining both texts, the default').toBeChecked();
+        const since = await eventSeq(page);
+        await mergeAll.getByTestId('promote-all-confirm').click();
+        await expect(mergeAll).toBeHidden({timeout: UI_TIMEOUT});
+
+        // The pair whose notes fit is merged, as before: one row, with its partner, showing both texts.
+        await expect(fitsRows, 'the pair whose notes combine into exactly 500 characters is merged into one row').toHaveCount(1, {timeout: UI_TIMEOUT});
+        await expect(fitsRows.getByTestId('tx-bulk-date'), 'with its partner').toHaveAttribute('data-partner-date', owned.today);
+        await expect(fitsRows, 'showing both texts').toContainText(`${fitsMark} out`);
+        await expect(fitsRows).toContainText(`${fitsMark} in`);
+
+        // The pair whose notes would not fit stays two rows, each with its own notes, whole. Today's red: «Merge all»
+        // merges every pair, this one into a row whose notes are the 501 characters.
+        await expect(overRows, 'the pair whose notes would combine into 501 characters stays two rows, unmerged').toHaveCount(2, {timeout: UI_TIMEOUT});
+        for (const [notes, otherMark] of [
+            [over.out, `${overMark} in`],
+            [over.in, `${overMark} out`],
+        ]) {
+            const row = bulkRowsWith(page, notes);
+            await expect(row, 'a row keeps its own notes, whole').toHaveCount(1);
+            await expect(row, 'and only its own').not.toContainText(otherMark);
+            await expect(row.getByTestId('tx-bulk-date'), 'with no partner').toHaveAttribute('data-partner-date', '');
+        }
+
+        // The editor says so: the app event counts the pairs left for a manual merge, and the user gets a warning.
+        const leftBehind = await waitForEvent(page, 'tx.bulk.promote-all.left-for-manual-merge', {since});
+        expect(leftBehind.detail, 'one pair left for a manual merge').toMatchObject({pairs: 1});
+        await expect(page.getByTestId('toast-warning'), 'and a warning on screen').toBeVisible();
+        // Left for a manual merge, not dropped: the banner still offers that pair, alone.
+        await expectBannerOffers(page, 1);
+
+        // Save: the merged pair is the one promote, its notes the 500 characters, and the batch is saved.
+        const {request, body} = await saveExpectingCommit(page);
+        const answer = describeAnswer(request, body, {float: float.id, fitsOut: fitsOut.id, fitsIn: fitsIn.id, overOut: overOut.id, overIn: overIn.id});
+        expect(body.committed, `the batch is saved — ${answer}`).toBe(true);
+        const promotes = request.promotes ?? [];
+        expect(
+            promotes.map((item) => [item.id_a ?? 0, item.id_b ?? 0].sort(byId)),
+            `one promote, the fitting pair's — ${answer}`,
+        ).toEqual([[fitsOut.id, fitsIn.id].sort(byId)]);
+        const combined = promotes[0].resolved_fields?.description;
+        expect([`${fits.out}\n${fits.in}`, `${fits.in}\n${fits.out}`], `its notes are both texts, one per line: the 500 characters — ${answer}`).toContain(combined);
+        await expect(page.getByTestId('tx-bulk-modal'), 'a saved batch closes the editor').toBeHidden({timeout: UI_TIMEOUT});
+
+        // What the database holds: the merged pair linked, with the combined notes; the other two rows as they were.
+        const after = await readOwnedLedger(page, brokers);
+        const savedRow = (id: number) => after.find((row) => row.id === id);
+        expect(savedRow(fitsOut.id), 'the merged pair is a Cash Transfer, linked, with the combined notes').toMatchObject({type: 'CASH_TRANSFER', related_transaction_id: fitsIn.id, description: combined});
+        expect(savedRow(fitsIn.id), 'on both legs').toMatchObject({type: 'CASH_TRANSFER', related_transaction_id: fitsOut.id, description: combined});
+        expect(savedRow(overOut.id), 'the pair left behind is as it was: the withdrawal, unlinked, its own notes whole').toMatchObject({type: 'WITHDRAWAL', related_transaction_id: null, description: over.out});
+        expect(savedRow(overIn.id), 'and the deposit, unlinked, its own notes whole').toMatchObject({type: 'DEPOSIT', related_transaction_id: null, description: over.in});
     });
 });

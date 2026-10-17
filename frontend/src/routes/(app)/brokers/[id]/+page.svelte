@@ -3,7 +3,7 @@
      * Broker Detail Page — header + overview/positions/transactions tabs
      */
     import {get} from 'svelte/store';
-    import {onMount} from 'svelte';
+    import {onDestroy, onMount} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
@@ -70,6 +70,7 @@
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+    import {createLazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -97,6 +98,25 @@
     let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
     let positionsContribution: PositionsContribution | null = null;
     let contributionLoading = false;
+    // Y-24: a failed candles or contribution request is asked again at most three times, 2, 4 and 8 s later, then not
+    // until the scope changes or the user's Refresh (`handleRefresh`). Before, the contribution was asked again at
+    // once, without end, and the candles never again.
+    const candlesRetry = createLazyReportRetry();
+    const contributionRetry = createLazyReportRetry();
+    onDestroy(() => {
+        candlesRetry.dispose();
+        contributionRetry.dispose();
+    });
+    // The candles' loading flag must be a signal, as on the Dashboard: the loader's guard reads it inside GrowthChart's
+    // effect, which has to wake when a request ends — to ask for the scope on screen once an old scope's answer was
+    // dropped, or to wait for the retry after a failure (Y-24). The legacy compiler makes a `let` a signal only when a
+    // reactive statement or the template reads it.
+    $: void pnlCandlesLoading;
+
+    /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
+    function reportScope(): string {
+        return `${data.brokerId}|${dateFrom}|${dateTo}|${targetCurrency}`;
+    }
 
     let editModalOpen = false;
     let importFilesModalOpen = false;
@@ -352,11 +372,19 @@
      * detail: total candle only", and the per-broker overlay is exactly what must not appear.
      */
     async function loadPnlCandles() {
-        if (pnlCandles || pnlCandlesLoading) return;
+        // Read before the first await, and `canAsk` before the other guards: GrowthChart's effect depends on all of them,
+        // so a request ending or a retry falling due wakes it (Y-24).
+        const askedScope = reportScope();
+        const allowed = candlesRetry.canAsk(askedScope);
+        if (pnlCandles || pnlCandlesLoading || !allowed) return;
         pnlCandlesLoading = true;
         try {
             // Only pnl_candles is read, so every other section is switched off.
             const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
+            // An answer of another scope is not this one's: the scope on screen asks for its own.
+            if (reportScope() !== askedScope) return;
+            if (report) candlesRetry.succeeded(askedScope);
+            else candlesRetry.failed(askedScope);
             pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
         } finally {
             pnlCandlesLoading = false;
@@ -364,11 +392,17 @@
     }
 
     async function loadContribution() {
-        if (!broker || positionsContribution || contributionLoading) return;
+        const askedScope = reportScope();
+        const allowed = contributionRetry.canAsk(askedScope);
+        if (!broker || positionsContribution || contributionLoading || !allowed) return;
         contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
             const report = await fetchReport([broker.id], dateFrom || undefined, dateTo || undefined, targetCurrency, false, true, false, false, false);
+            if (reportScope() !== askedScope) return;
+            // The outcome is recorded before `finally` lets the flag go: the effect it wakes reads it (Y-24).
+            if (report) contributionRetry.succeeded(askedScope);
+            else contributionRetry.failed(askedScope);
             positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
         } finally {
             contributionLoading = false;
@@ -432,6 +466,9 @@
     }
 
     async function handleRefresh() {
+        // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
+        candlesRetry.reset();
+        contributionRetry.reset();
         requestPortfolioRefresh();
         refreshVersion += 1;
         await pageBusy.track('broker-refresh', async () => {
