@@ -6910,7 +6910,7 @@ sulla base `23f6578f3`.
   - Un test per la FIFO al posto dello stato ora si può scrivere, con un timeout: la lettura `lstat`-prima la ignora,
     prima restava appesa.
   Dettagli: piano 07, «B-32».
-- **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
+- ✅ **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
   — basso; B, 17/10 (revisione di H su B-18: LOW-1 e due appunti; piano di H §14 «Review di B-18»).
   - **LOW-1**: su un'istanza senza chiave (dal cloud a un server nuovo), se la verifica non può crearla (`secrets/` non
     scrivibile) tutto resta illeggibile. Però `instance_key_status()` dice ancora `not_created` con `problem=None`, e la
@@ -6919,6 +6919,14 @@ sulla base `23f6578f3`.
   - **Doc**: `cli_tools` deve dire che un vecchio `LIBREFOLIO_INSTANCE_KEY` vale «as written, spaces included»;
     `backup_restore` deve aggiungere `chmod 600` sul file della chiave vecchia mentre sta in `backups/`.
   Niente codice prima del via del coordinatore. Dettagli: piano 07, «B-18».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 14:10).
+  - `_print_given_key` prende il ramo dell'eccezione anche con `not_created`: «`<path>`: there is no instance key yet,
+    and it could not be created». Un test accanto a c7.
+  - `cli_tools`: «as written in the variable, spaces included», e la riga dell'eccezione.
+  - Il `chmod 600`: dopo B-38 la chiave non passa più da `backups/`; va sul file `old-instance.key` dell'host
+    (`backup_restore` l.320).
+  Dettagli: piano 07, «B-34».
 - ✅ **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
   nel self-hosted; B, 17/10 (BZ parte 1, F3).
   - `staging.space_needed` e `_check_space` (`staging.py:462-470`) confrontano le dimensioni dichiarate dal manifest
