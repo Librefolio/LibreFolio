@@ -397,7 +397,7 @@ A lot's reference price is the denominator of its Open Return, `relative_return 
 | `CARRIED`: a quote or a trade mark of an earlier day | `mark.unit_price`, `"fallback"` | `REFERENCE_PRICE_FALLBACK` |
 | `MISSING`: no observation on or before that day | `reference_unit_price=None`, `"unavailable"` (the lookup returns `None`) | `REFERENCE_PRICE_UNAVAILABLE` |
 
-The lots banner groups the issues of one code into a single message, with a chip for each lot, so the two messages (`dataQuality.referencePriceFallback`, `dataQuality.referencePriceUnavailable`) say how the reference is chosen and never a price: one price could not stand for every lot of the group (J-36). The `reference_price` param of `REFERENCE_PRICE_FALLBACK` stays in `message_params`, unread by the texts.
+The lots banner groups the issues of one code that name a lot into a single message, with a chip for each lot, so the two messages (`dataQuality.referencePriceFallback`, `dataQuality.referencePriceUnavailable`) say how the reference is chosen and never a price: one price could not stand for every lot of the group (J-36). The `reference_price` param of `REFERENCE_PRICE_FALLBACK` stays in `message_params`, unread by the texts.
 
 An `ADJUSTMENT` is never an observation (developer decision P2): a lot opened by an opening position, a succession or a transfer from an untracked broker is compared with the market — the last quote, or a `BUY` / `SELL` more recent than it — and with its own cost basis only when the asset has no observation on or before its opening day.
 
@@ -597,7 +597,7 @@ The report currency is the analysis `target_currency`, with `asset_leg=False`. E
 - **Acquisitions of unknown cost** (`unknown_cost_movement_ids` on any line): one `MISSING_COST_BASIS` issue for the analysed asset, built with `missing_cost_basis_assets=[(asset.id, asset.display_name)]` — the same issue as the portfolio banner;
 - `calculation_status` turns from `COMPLETE` to `DEGRADED` when a line misses a rate or a cost basis, **or** any other conversion of the analysis is missing: the gap is isolable.
 
-In the panel, the issues appear in `LotDataQualityBanner`, grouped by code and without call-to-action buttons.
+In the panel, the issues appear in `LotDataQualityBanner`: one block per code, without call-to-action buttons. The issues of a code that name a lot (a finite `message_params.lot_id`) share one line, the first one's message, and the visible lots are its chips. Each issue without a lot gets a line of its own, with its own params (J-53): each orphan income or cost pool, which the engine reports with one issue per pool (`financial_math/fifo/engine.py:899-913`, `:1015-1029`), with its own amount, currency and day; and each notice of `_report_gaps()`, so both `MISSING_FX_RATES` messages show: `dataQuality.missingFxRates` (the pairs with a provider, with their date range) and `dataQuality.missingFxRatesManual` (the manual pairs). The banner adds no total: an amount-degraded orphan pool is stated in its own currency (see [Economic events and degraded pools](#degraded-economic-pools)), and each pool has its own day. The banner itself is described in [Lots Analysis](../../frontend/components/features/lots-analysis.md).
 
 ---
 
