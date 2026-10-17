@@ -36,6 +36,7 @@ from backend.app.services.accounts.onboarding_service import reset_onboarding_pr
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.user_service import search_users
 from backend.app.services.email import verification as email_verification
+from backend.app.services.platform.instance_key import InstanceKeyError
 
 logger = get_logger(__name__)
 
@@ -151,9 +152,17 @@ async def revoke_invite(invite_id: int, admin: Annotated[User, Depends(require_a
 @router.post("/address-probe", response_model=AddressProbeIssued, summary="A nonce to check that this instance answers at another address (admin)")
 def issue_address_probe(admin: Annotated[User, Depends(require_admin)]) -> AddressProbeIssued:
     """A short-lived signed nonce: ``GET <address>/api/v1/auth/address-probe?nonce=…`` answers ``match: true`` only
-    when this instance answers at that address. Sync: deriving the key reads the instance key file.
+    when this instance answers at that address. Sync: deriving the key reads the instance key file. An instance key
+    that cannot be used answers 503 ``INSTANCE_KEY_UNAVAILABLE`` (H-19): the configuration checks say why.
     """
-    nonce, expires_at = address_probe.issue_probe_nonce()
+    try:
+        nonce, expires_at = address_probe.issue_probe_nonce()
+    except InstanceKeyError:
+        logger.warning("Address probe: the instance key cannot be used, no nonce issued", admin_id=admin.id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error_code": "INSTANCE_KEY_UNAVAILABLE", "message": "The instance key cannot be used: see the configuration checks"},
+        ) from None
     return AddressProbeIssued(nonce=nonce, expires_at=expires_at)
 
 
