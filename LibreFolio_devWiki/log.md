@@ -3769,3 +3769,12 @@ mistyped literal, not on the behaviour, which the page on the settlement keeps a
 Filed: [[problems/act-act-lost-a-day-per-year-end]], [[problems/maturity-settlement-counted-the-final-coupon-twice]].
 Updated: [[features/F-045]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Y-8: the arrow markers are re-aimed once a zoom settles, not on every tick
+`updateArrowRotations()` read `getOption()`, a deep clone of the whole option, and wrote every series back on each
+`dataZoom` tick of `LineChart`, `CandlestickChart` and `PriceChartFull`. The arrows are now re-aimed in the debounce
+that re-spaces the labels, reading the option afresh each time: a cached option would paint pre-rebuild colours back
+after a theme or Designer Lab rebuild, which a light → dark → zoom unit test pins. A full render of `LineChart` now
+restores the saved zoom before it re-aims, as `CandlestickChart` did: the restore's event only schedules the settle (Y-8b).
+Updated: [[concepts/echarts-chart-gotchas]].
+Graph: not updated; graphify is not available in this worktree.
