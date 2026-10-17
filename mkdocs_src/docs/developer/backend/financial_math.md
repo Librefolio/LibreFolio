@@ -141,9 +141,9 @@ on `as_of` is exactly 0.
 
 `range_change(reference, anchor)` (`returns.py`) holds the change of a price or rate over the whole range a page
 shows, from its first point to its last (X-R59, decision N80): the whole-range Δ of the Assets cards and the Δ Abs /
-Δ % of the FX pages. The browser still computes them in floats from the first and last point of the loaded series
-(`computeDerivedPriceState()` in `frontend/src/lib/utils/assetPriceDerived.ts`, `displayFxDelta()` in
-`frontend/src/lib/stores/fxStoreRegistry.ts`); the web app is to read the endpoints' `range_change` instead. The
+Δ % of the FX pages. The browser no longer computes them: the web app reads the endpoints' `range_change`
+(`assetRangeDelta()` and `fxRangeDeltas()` in `frontend/src/lib/utils/rangeChange.ts`); the asset detail page reads it
+from `POST /assets/prices/period-changes` for its stored series and `POST /assets/prices/current` for a live quote. The
 function returns a frozen `RangeChange` of unrounded Decimals: `change_abs`, `anchor − reference`; `change_ratio`,
 `anchor / reference − 1`; and the same for the inverted quote (an FX pair read the other way round),
 `inverse_change_abs`, `1 / anchor − 1 / reference`, and `inverse_change_ratio`, `reference / anchor − 1`. All four are
