@@ -5203,6 +5203,169 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   Svelte e nessuna classe).
 > - **Backlog**: B-31 ✅; B-32 nuovo.
 
+### B-19 — `backup decrypt` lanciato da root (2026-10-17, 08:47-09:23) — ✅ 🧊 FROZEN (checkpoint delle 09:23)
+
+> **B-31 entrato** (coordinatore, 08:47): dev `997c358f5`, CHANGELOG 🐛 `547545b8e`; HEAD portata in avanti a
+> **`547545b8e`**, pulita. Prossimi: **B-19** (piccolo, prima il rosso), poi l'**analisi di B7**. B-32, B-18 e B-20
+> restano nel backlog; la galleria di B5b passa alla squadra dei colori.
+>
+> **Stato reale**: ogni comando di `dev.py backup` che usa la cartella dei dati passa al suo proprietario quando parte
+> da root (`_data_dir()` → `_drop_root_privileges`, `scripts/backup_cli.py`). `cmd_decrypt` non lo fa: con
+> `docker compose exec` lo zip appartiene a root. In più, `is_envelope()` risponde `False` per un file che non può
+> leggere: un archivio illeggibile riceve oggi il falso `not_an_envelope`. Dopo il passaggio al proprietario, un file
+> di root diventerebbe illeggibile proprio così.
+>
+> **Contratto congelato** (file della sessione, `b19-test-brief.md`, alle 08:49):
+>
+> - per prima cosa, prima di toccare l'archivio o `-o` e prima di chiedere la password: se una cartella dei dati
+>   esiste (`--test-db` compreso), si passa al suo proprietario con lo stesso `_drop_root_privileges`. Un passaggio
+>   fallito stampa il suo messaggio ed esce con 1;
+> - senza cartella dei dati si resta l'utente che lancia: «It needs no data directory» resta vero;
+> - un archivio illeggibile → `❌ Cannot read <path>: <motivo> (archive_unreadable)` ed esce con 1, prima della password.
+>
+> - **Rossi in scrittura** (TA-E, `test_backup_cli_secure.py`); doc al docs-writer (`cli_tools.en.md`).
+> - **Codice pronto** in `b19-wip/apply_b19.py` (3 operazioni in `scripts/backup_cli.py`: `_decrypt_as_owner`,
+>   `_readable_envelope`, `cmd_decrypt`). Ruff (C901 compreso: i controlli dell'archivio sono andati in un helper per
+>   tenere `cmd_decrypt` a 10) e black puliti sulla copia.
+> - ✅ **Rossi scritti** (TA-E): 6 funzioni nella sezione (m) di `test_backup_cli_secure.py`, nessuna verde oggi. Una
+>   finta identità registra i cambi; dopo un `setuid` registrato non risponde più root. L'archivio e il file della
+>   password restano illeggibili fino a quel `setuid`, per provare l'ordine. Saltati quando i test girano da root.
+> - **⚠️ Fuori pista — revisione del contratto (09:02)**, dalle note di TA-E:
+>   - `create`, `inspect` e `restore` leggono `--password-file` **prima** di cambiare utente. Cambiare per primo in
+>     decrypt rifiuterebbe un segreto leggibile solo da root (un Docker secret) che gli altri tre accettano. Allora
+>     decrypt legge prima `--password-file` (come gli altri), poi cambia utente, ancora prima dell'archivio, di `-o` e
+>     di ogni domanda (`_password_file_first`; `_unlock` accetta la password già letta);
+>   - `get_data_dir()` può sollevare `ValueError`. Senza essere root non lo chiama più: non c'è nulla da cambiare. Da
+>     root, un valore inutilizzabile stampa `❌ <messaggio>` ed esce con 1, senza traceback.
+>   La patch (5 operazioni) passa ruff, con la complessità, e black. TA-E aggiorna l'ordine nel suo test e aggiunge i
+>   due casi del `ValueError`; il docs-writer aggiunge una clausola sul file della password.
+> - ✅ **Test aggiornati** (TA-E): 8 funzioni nella sezione (m). L'ordine ora prova il file della password letto prima
+>   del cambio e l'archivio dopo. Due casi nuovi: un `LIBREFOLIO_DATA_DIR` con `#` (`get_data_dir()` solleva
+>   `ValueError`) da root dà una riga ❌ ed esce con 1, senza traceback né domande; non da root decifra come oggi.
+> - ✅ **Doc** (docs-writer): `cli_tools.en.md` (l.593-595 e 636-640, più la clausola sul file della password letto
+>   prima del cambio; traduzioni: debito, niente stamp) e `backup_restore.en.md` l.344-354 (l'esempio diviso fra host e
+>   Docker, `-o` scrivibile in `backups/`). La frase generale di `docker_advanced.en.md` l.221 (`docker compose exec`
+>   crea file di root) resta per B7d: quella pagina si riscrive comunque per Litestream.
+> - ✅ **Rosso** (09:06, corsia 6187, carico 30): `utils backup-cli-secure` 8 falliti e 58 passati, gli 8 nuovi.
+> - ✅ **Codice** (09:06): `apply_b19.py`, 5 operazioni in `scripts/backup_cli.py`; ruff (C901 compreso) e black puliti.
+> - ✅ **Verdi** (09:06-09:07): `utils backup-cli-secure` 66, `utils backup-cli` 102, `utils backup-cli-restore` 77.
+> - ✅ **Doc** (09:08-09:12): `mkdocs build` strict OK (92 s), `check-links` OK, `utils gate-docs-links` 63.
+> - **Revisione del cambio di A8b a `backup.spec.ts`** (dev `6e2b2c8b7`, letto con `git diff`; chiesta dal
+>   coordinatore): corretto.
+>   - FBKP-001a (membro): la presenza passa a `settings-tab-administration`, e restano le assenze di
+>     `settings-tab-admin`, `settings-tab-backup` e `backup-tab`;
+>   - FBKP-001b (admin): precondizione «Profile selezionata», poi `openSettingsTab(page, 'backup')`, la scheda
+>     selezionata e la card idle.
+>   Selettori `data-testid`, tempi conservati. Nessuna richiesta.
+> - **B7a, tentativo** (09:12-09:23): il demone Docker non gira su questa macchina, e `docker pull` è rimasto ad
+>   aspettarlo; fermato. Non è stato creato nulla; tolta la cartella vuota del binario. Lo script ora controlla prima
+>   `docker info`. Chiesto al coordinatore chi avvia Docker Desktop.
+>   **Coordinatore**: Docker non si avvia (la macchina è del developer, e B7b aspetta comunque le sue risposte). Lo spike
+>   passa **alla mattina, con il developer presente** (è nella sua lista).
+
+### B7 — Litestream: analisi (2026-10-17, 08:50-08:55) — 🧊 inviata al coordinatore, prima del codice
+
+> **Stato reale** (HEAD `547545b8e`), confrontato con §3.13 e §3.16:
+>
+> - **Litestream** non c'è in nessun file. `.env.example:297` ha la sezione «Backup and Litestream» con le sole
+>   variabili del backup.
+> - **Immagine**: stadio finale `python:3.13-slim` con `gosu` e `tzdata`/`tzdata-legacy` (CP7a, P-4);
+>   `ENTRYPOINT ["/entrypoint.sh"]`; `CMD ["uvicorn", …, "--port", "6040"]`; `HEALTHCHECK` su `/api/v1/system/health`,
+>   `start-period` 15 s.
+> - **`entrypoint.sh`** è cambiato dal piano: ora calcola un budget di spegnimento (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`,
+>   8 s di default, 3/8 a uvicorn per svuotare le richieste), poi `chown` della cartella dei dati e `exec gosu`.
+> - **I due compose**: `restart: unless-stopped`, healthcheck `/system/health`, **nessuno `stop_grace_period`**, quindi
+>   valgono i 10 s di Docker.
+> - **CP7a di H** ha portato tzdata, le porte, `dev.py docker exec` con gli id numerici e la versione del frontend
+>   nell'immagine. `/system/ready` esiste (DB raggiungibile e schema alla head), ma l'healthcheck usa ancora `/health`.
+>   CP7b è HTTP (cache di `/_app`, default del profilo gestito, CSP in sola segnalazione): nessun legame con B7, salvo
+>   la tabella dei default del profilo, dove Litestream non serve.
+> - **Dati**: un solo DB, `sqlite/app.db` (WAL, attesa 30 s). Lo zip del backup prende solo `sqlite/app.db` da una
+>   copia coerente, quindi `.app.db-litestream` non ci entra mai. Il ripristino scambia tutta `sqlite/`, quindi lo
+>   stato locale di Litestream se ne va con la cartella vecchia (come in §3.13).
+> - **Litestream v0.5.17** è ancora l'ultima versione (31/08/2026, API GitHub). Le funzioni del piano esistono tutte,
+>   lette nella doc ufficiale:
+>   - l'espansione `${VAR}`;
+>   - `restore -if-db-not-exists -if-replica-exists`, e `-integrity-check quick|full`;
+>   - `replicate -exec` («esce quando esce il figlio») e `-restore-if-db-not-exists`;
+>   - `shutdown-sync-timeout` (v0.5.6, default 30 s);
+>   - S3 `sse-customer-key` o `sse-customer-key-path` (v0.5.6; nel file di configurazione solo in YAML, non come
+>     parametri dell'URL);
+>   - SFTP `password`, `key-path` e `host-key` (v0.5.3: se è vuota, **la chiave del server non si verifica**);
+>   - `retention.enabled: false` (v0.5.8: le credenziali non hanno bisogno del permesso di cancellare);
+>   - heartbeat (v0.5.6, mandato solo se ogni DB è sincronizzato), `auto-recover` e `reset` (v0.5.7).
+>   La cifratura age **non esiste più** dalla v0.5: SSE-C (solo S3) è l'unica cifratura a riposo. Una replica `file://`
+>   o SFTP tiene i dati di ogni utente in chiaro.
+>
+> **Il contratto regge, con questi aggiornamenti**:
+>
+> 1. **Avviatore** `scripts/docker/start_server.py` come `CMD`. La catena è entrypoint (root, chown) → `gosu` →
+>    avviatore → `os.execvp`. Con Litestream acceso il PID 1 diventa `litestream`, e uvicorn è suo figlio; spento, il
+>    PID 1 è uvicorn, come oggi. L'avviatore applica per prima cosa `apply_pending_restore()`, poi lo fa il passo
+>    del lifespan, che non trova più nulla.
+> 2. **Ripristino automatico come passo a parte**: `litestream restore -if-db-not-exists -if-replica-exists
+>    -integrity-check quick`, prima di `replicate`. Se fallisce, **l'avvio si ferma**. Partire con un DB vuoto lo
+>    replicherebbe come una linea nuova, e il prossimo ripristino automatico prenderebbe il DB vuoto.
+> 3. **Dopo uno scambio** (ripristino in avanti o indietro) lo stato locale di Litestream va tolto. In avanti se ne va
+>    già con la cartella; all'indietro la cartella vecchia torna con il suo `.app.db-litestream`, che va rimosso.
+>    Così la prima sincronizzazione scrive uno snapshot completo. **Da provare nello spike**: che quello snapshot prenda
+>    un TXID sopra il massimo della replica, e che un ripristino automatico successivo prenda la linea nuova. Se non è
+>    così, servono un sotto-percorso per ogni ripristino o un azzeramento documentato.
+> 4. **Spegnimento**: 8 s del budget, più la sincronizzazione finale, più margine. Propongo `shutdown-sync-timeout: 10s`
+>    nella configurazione generata, `stop_grace_period: 30s` nei due compose (innocuo da spento: Docker aspetta solo
+>    quanto serve) e `kill_timeout = 30` per Fly nella doc. **Da provare**: che `litestream` inoltri SIGTERM/SIGINT
+>    a uvicorn e poi sincronizzi.
+> 5. **Segreti**: l'avviatore li risolve (`env_secret`, `_FILE` compresi) in variabili interne e scrive nel file solo
+>    i riferimenti `${…}`: nessun segreto su disco. SSE-C con `sse-customer-key-path` quando c'è `_FILE`.
+>
+> **Variabili** (§3.16, confermate, più tre proposte): `…_REPLICA_URL` (vuota = spento; `s3://`, `sftp://`, `file:///`),
+> `…_ACCESS_KEY_ID`, `…_SECRET_ACCESS_KEY(_FILE)`, `…_ENDPOINT`, `…_REGION`, `…_SSE_C_KEY(_FILE)`,
+> `…_SFTP_PASSWORD(_FILE)`, `…_SFTP_KEY_FILE`, `…_SFTP_HOST_KEY`, `…_RESTORE_ON_START` (1), `…_CONFIG` (vince su
+> tutto). Le proposte: `…_RETENTION` (D3), `…_HEARTBEAT_URL` (D5) e l'obbligo di `…_SFTP_HOST_KEY` per SFTP (D7). Ogni
+> default lascia il self-hosted com'è (Litestream spento); nessun default nuovo nel profilo gestito.
+>
+> **Immagine**: il tarball di v0.5.17 per `TARGETARCH`, verificato con lo `sha256` di `checksums.txt` fissato nel
+> `Dockerfile` (ci sono anche gli SBOM); circa 13 MB compressi, in tutte e due le varianti; pronto per arm64 (B9).
+>
+> **Backup e ripristino**:
+>
+> - il backup zip legge il DB con l'API di backup di SQLite mentre Litestream tiene la sua transazione di lettura:
+>   compatibili;
+> - la copia del controllo B2/B4 è un altro file, che Litestream non guarda;
+> - lo scambio del ripristino avviene prima di Litestream, attraverso l'avviatore. Il commit al primo avvio riuscito
+>   non cambia; il rollback passa anche lui dall'avviatore (punto 3);
+> - il riavvio chiesto dalla UI: uvicorn esce, Litestream esce con lui, Docker riavvia il container, l'avviatore
+>   applica;
+> - Litestream copre **solo il DB** (decisione 9): `custom-uploads/`, `broker_reports/`, `scenario_catalog/` e
+>   `secrets/` viaggiano negli zip. Nel cloud la chiave d'istanza arriva dall'ambiente.
+>
+> **Test**:
+>
+> - leggeri: l'avviatore, con `execvp` e `subprocess` sostituiti (spento/acceso, la configurazione generata per S3,
+>   SFTP e file, SSE-C, nessun segreto nel file, `_FILE`, il ripristino all'avvio, `…_CONFIG`, il ripristino in attesa
+>   prima di tutto, lo stato tolto dopo un rollback, un ripristino che fallisce ferma l'avvio). Poi le letture in
+>   `config/backup.py`, e controlli statici di `Dockerfile` e compose (stadio Litestream, `sha256` per architettura,
+>   `CMD`, `stop_grace_period`), nel test di H `release-image-contract` o in uno mio;
+> - Docker (ogni run con il via del coordinatore, pulizia alla fine: container, volumi, immagini, reti):
+>   - lo **spike** (punti 3 e 4) con l'immagine ufficiale `litestream/litestream:0.5.17` e una replica `file://` su un
+>     volume temporaneo: la linea dopo uno scambio in avanti e uno all'indietro, e i segnali;
+>   - l'immagine nostra con Litestream spento (avvio come oggi, `docker stop` nel limite) e acceso (scrittura, stop, DB
+>     tolto, riavvio, ripristinato);
+>   - MinIO facoltativo; SSE-C su MinIO chiede TLS: fuori.
+>
+> **Lotti proposti**: B7a lo spike (solo Docker, nessun file del repo); B7b avviatore, configurazione e test leggeri;
+> B7c immagine e compose, con le prove Docker; B7d le doc (`docker_advanced`, `configuration`, Fly e `kill_timeout`,
+> «Porta a casa»).
+>
+> **Decisioni per il developer**: le D1-D10 del messaggio al coordinatore.
+>
+> **Coordinatore** (risposta all'analisi): D1-D10 vanno nella lista del developer per la mattina. **Spike B7a
+> approvato**, come run pesante: aspetta uno slot libero (gate F, A e W in corso), circa 10 minuti. Usa l'immagine
+> ufficiale `litestream/litestream:0.5.17` e una replica `file://` su un volume temporaneo, con **pulizia completa** alla
+> fine (container, volumi, immagini, reti) e la prova nel piano. **B7b e i lotti dopo aspettano le risposte del
+> developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
+> `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
+
 ### B4 — contratto in bozza, in sola lettura (2026-10-16, 04:18-04:30) — in attesa del via (ordine B3 → B5 → B4)
 
 > Mentre l'`all-backend` di B3 aspetta lo slot (coordinatore: «continua con B4 in sola lettura»). Bozza del contratto

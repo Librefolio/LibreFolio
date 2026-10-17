@@ -341,14 +341,17 @@ docker compose up -d
 A secure backup (`.lfbk`) is not a zip: first turn it into its zip with `backup decrypt` («Decrypt a Secure Archive» in [CLI Admin Tools](cli_tools.md)), where LibreFolio's command line runs, then unzip that zip as above. With Docker, a restore is simpler: it takes the `.lfbk` as it is ([From a Hosted Instance to Your Server](#to-your-server)).
 
 ```bash
-# On a host installation; in a LibreFolio container, with the paths inside it
+# Host installation
 pipenv run ./dev.py backup decrypt librefolio-backup-20261015-121500.lfbk -o librefolio-backup-20261015-121500.zip
+
+# Docker, in a running LibreFolio container: the paths inside it, and the zip where the container's user can write
+docker compose exec librefolio python dev.py backup decrypt /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.lfbk -o /app/backend/data/prod-docker/backups/librefolio-backup-20261015-121500.zip
 ```
 
 - 📂 The data folder must be empty, or not exist yet: if LibreFolio has already started on it, stop LibreFolio and move `LibreFolio-data` aside first. Nothing of other data may mix with the archive's.
 - 🔎 Nothing checks the archive first: a damaged archive, or one from a newer LibreFolio, shows only when the start fails. A restore, from Settings › Administration › Backup or the command line, checks it on a copy before anything changes.
 - 🧹 The `manifest.json` left in `LibreFolio-data/` is harmless: you can delete it.
-- 🔓 `backup decrypt` asks the password at the terminal, or reads it with `--password-file` or `--password-stdin`. It never replaces a file: an `-o` that already exists is refused, and nothing is written. Only the user who ran it can read the zip (`0600`): it holds every user's data in clear, so delete it once unzipped. When the backup carries the instance key, the command adds `🔑 It also holds the instance key: with it, every saved provider key can be read.`: whoever has that zip can also read the saved keys of the data providers.
+- 🔓 `backup decrypt` asks the password at the terminal, or reads it with `--password-file` or `--password-stdin`. It never replaces a file: an `-o` that already exists is refused, and nothing is written. Only the owner of the zip can read it (`0600`): the user who ran the command, or with Docker the container's user. It holds every user's data in clear, so delete it once unzipped. When the backup carries the instance key, the command adds `🔑 It also holds the instance key: with it, every saved provider key can be read.`: whoever has that zip can also read the saved keys of the data providers.
 - 🗝️ From a clear backup, there is no `secrets/`: LibreFolio creates a new instance key the first time it needs one. When you move your own installation, put its `secrets/` back into `LibreFolio-data/` before the first start, and the saved secrets stay readable.
 - 🔐 The zip of a secure backup holds `secrets/instance.key` when the backup carries the key: unzipped, the key is in place, and the saved keys of the data providers stay readable. Before the first start, make the folder and the file private, or the start log has a warning («Startup Checks» in [Environment Variables](configuration.md)): `chmod 700 LibreFolio-data/secrets` and `chmod 600 LibreFolio-data/secrets/instance.key`.
 - ⛔ Use the key of a backup only this way, on an empty data folder, and on an installation that sets neither `LIBREFOLIO_INSTANCE_KEY` nor `LIBREFOLIO_INSTANCE_KEY_FILE`: a key set there wins over `secrets/instance.key`, and the saved keys of the data providers would stay unreadable. Never put it in place of a key already in use: what was saved under that key would become unreadable. To bring a secure backup to an installation that has its own key, restore it: the restore re-encrypts the saved keys with that installation's key.
