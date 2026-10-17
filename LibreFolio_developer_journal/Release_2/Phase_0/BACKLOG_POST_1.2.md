@@ -4547,25 +4547,32 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   attivato senza `DEMOTE_FIRST`; in più la scheda annulla con lo stesso corpo di una disattivazione (una riga vecchia
   disattiva il proprietario nuovo), e `user deactivate` può disattivare l'unico admin. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-51».
-- **A-52 · L'eliminazione di sé conta gli admin attivi prima del lock di scrittura** — basso (classe A-51); A (17/10,
+- ✅ **A-52 · L'eliminazione di sé conta gli admin attivi prima del lock di scrittura** — basso (classe A-51); chiusa il
+  17/10 (commit del coordinatore): `refreshed_under_lock`, poi il conteggio (ACCDEL-LOCK-01…03); A (17/10,
   analisi del lotto A-11/A-16/A-40/A-26). `DELETE /auth/users/me` legge `count_active_superusers()` senza
   `begin_writes`: gli ultimi due admin attivi che si eliminano nello stesso istante passerebbero entrambi, e l'istanza
   resterebbe senza admin. `DELETE /users/{id}` e il PATCH decidono già sotto il lock. Cura: `begin_writes(session,
   User)` e il conteggio ripetuto, rosso prima. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «Lotto A-11/A-16/A-40/A-26».
-- **A-53 · `developer/api/curl-testing.md`: l'esempio «Update preferences» usa una rotta che non esiste** — minimo
-  (doc); dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
+- ✅ **A-53 · `developer/api/curl-testing.md`: l'esempio «Update preferences» usa una rotta che non esiste** — minimo;
+  chiusa il 17/10 (commit del coordinatore): l'esempio usa `GET` e `PUT /api/v1/settings/user`. Doc; dal `docs-writer` del lotto A-11/A-16/A-40 (17/10). `PATCH /api/v1/auth/users/me/preferences` con
   `{language, currency}`: le preferenze sono `PUT /api/v1/settings/user` (`language`, `base_currency`, `theme`,
   `avatar_url`). Pagina solo EN.
-- **A-54 · Un account cancellato da un altro admin nella stessa finestra risponde 500, non 404** — basso (classe A-51);
+- ✅ **A-54 · Un account cancellato da un altro admin nella stessa finestra risponde 500, non 404** — basso (classe A-51);
+  chiusa il 17/10 (commit del coordinatore): `user_service.refreshed_under_lock` nei quattro punti e, approvate dal
+  coordinatore, in tre rotte con lo stesso difetto (link di reset, revoca delle sessioni, reset dell'onboarding): il 404
+  di `_user_or_404` (la stringa nuda: decisione del coordinatore), «User 'x' not found» nella CLI (UADM-LOCK-01/02/10–12, LOCK-CLI-01, ACCDEL-LOCK-03);
   dalla revisione di E di A-51 (17/10), tramite il coordinatore. Dopo `begin_writes`, `session.refresh(user)` solleva
   `InvalidRequestError` su una riga appena cancellata (prima era `StaleDataError`, sempre un 500), in quattro punti:
   `update_user_status` (PATCH), `set_user_active` e `set_user_admin` (CLI), il ramo «in attesa» di `DELETE /users/{id}`.
   Cura: un aiuto che la intercetta, fa rollback e risponde il 404 di `_user_or_404` (con `USER_NOT_FOUND`: da decidere),
   nella CLI «User 'x' not found». Proposta nel lotto «decidere sotto il lock» (A-52, A-54, A-55, A-56).
-- **A-55 · `DELETE /users/{id}` rilegge sotto il lock solo l'admin in attesa** — basso; da E (17/10), come A-54. Un
+- ✅ **A-55 · `DELETE /users/{id}` rilegge sotto il lock solo l'admin in attesa** — basso; chiusa il 17/10 (commit del
+  coordinatore): ogni cancellazione decide sotto il lock (UADM-LOCK-03); da E (17/10), come A-54. Un
   account promosso da un altro admin nella finestra viene cancellato senza `DEMOTE_FIRST` (non può togliere l'ultimo
   admin attivo: chi cancella lo è). Cura: rileggere sotto il lock per ogni cancellazione.
-- **A-56 · Il limite di utenti si conta prima del lock** — basso (conta per i limiti dei piani); da E (17/10, la
+- ✅ **A-56 · Il limite di utenti si conta prima del lock** — basso (conta per i limiti dei piani); chiusa il 17/10
+  (commit del coordinatore): la riattivazione del PATCH e `create_invite` contano dopo `begin_writes` (UADM-LOCK-04/05);
+  da E (17/10, la
   riattivazione, preesistente), e da A la creazione degli inviti. Il PATCH guarda `usage.full` prima di
   `update_user_status`, `create_invite` conta prima di ogni scrittura: due operazioni concorrenti a limite − 1 lo
   superano di uno. La registrazione è già sicura: riconta dopo la sua scrittura, sotto il lock. Cura: contare dopo
