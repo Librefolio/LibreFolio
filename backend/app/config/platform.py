@@ -70,6 +70,12 @@ def owning_test_lane_id() -> str | None:
     return os.environ.get("LIBREFOLIO_TEST_LANE_ID")
 
 
+#: The lengths of a test lane id the readiness probe accepts (``GET /system/test-lane-health``), bounds included; the
+#: runner makes 32 characters (``secrets.token_hex(16)``). ``platform.test_mode`` counts no other id as a lane (H-49).
+TEST_LANE_ID_MIN_LENGTH = 16
+TEST_LANE_ID_MAX_LENGTH = 128
+
+
 def frozen_app_version() -> str | None:
     """``LF_APP_VERSION``: the version a build is frozen at, reported instead of ``git describe`` or ``VERSION``.
 

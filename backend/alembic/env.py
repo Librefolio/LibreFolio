@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, event, pool
 
 # Add the backend directory to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -78,6 +78,17 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _schema_untrusted(dbapi_connection, _connection_record) -> None:
+    """Every connection of an upgrade turns ``trusted_schema`` off before anything else (B-37): a restore's check upgrades
+    an archive's database (``-x sqlalchemy.url``), whose schema LibreFolio did not write. LibreFolio's own schema holds
+    only tables and indexes, so the live upgrade is the same."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA trusted_schema=OFF")
+    finally:
+        cursor.close()
+
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
@@ -90,6 +101,7 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    event.listen(connectable, "connect", _schema_untrusted)
 
     with connectable.connect() as connection:
         context.configure(

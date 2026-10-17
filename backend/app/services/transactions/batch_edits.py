@@ -311,6 +311,7 @@ def _validate_updated_final_state(
         asset_event_id=transaction.asset_event_id,
         cost_basis_mode=item.cost_basis_mode,
         changed_fields=changed_fields,
+        cost_basis_set=item.cost_basis_override is not None,
     )
 
 
