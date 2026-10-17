@@ -107,6 +107,7 @@ async def apply_promotes(
             continue
 
         rule_issues = _promoted_state_issues(context, original_index, target_type, transaction_a, transaction_b)
+        rule_issues += _resolved_cost_issues(original_index, target_type, transaction_a, transaction_b, item)
         if rule_issues:
             context.issues.extend(rule_issues)
             continue
@@ -146,6 +147,26 @@ async def apply_promotes(
                 status="success",
             )
         )
+
+
+def _resolved_cost_issues(original_index: int, target_type: TransactionType, transaction_a: Transaction, transaction_b: Transaction, item: TXPromoteBatchItem) -> list[TXValidationIssue]:
+    """N78 (W-B72): a cost basis the promotion resolves is refused when neither row can take one under the new type — a
+    cash pair — instead of being written on both. Clearing it (null) is always allowed."""
+    cost = item.resolved_fields.cost_basis_override if item.resolved_fields is not None else None
+    if cost is None or any(cost_basis_allowed(target_type, transaction.quantity) for transaction in (transaction_a, transaction_b)):
+        return []
+    quantity = max(transaction_a.quantity or 0, transaction_b.quantity or 0)
+    return [
+        TXValidationIssue(
+            operation="promote",
+            index=original_index,
+            ref_id=None,
+            error=f"{target_type.value} with qty={quantity} takes no cost basis",
+            code="costBasisNotAllowed",
+            params={"type": target_type.value, "qty": str(quantity)},
+            field="cost_basis_override",
+        )
+    ]
 
 
 def _promoted_state_issues(

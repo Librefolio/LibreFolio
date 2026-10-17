@@ -36,10 +36,27 @@
  *     (the tab or the dialog): the contract pins neither.
  *   - wording: the «N / max» text, the hint naming LIBREFOLIO_REGISTRATION, the dates.
  *   - colours: the `lf-*` roles have gates of their own.
+ *
+ * Accounts lot A-43 (release 1.3, workstream A — the coordinator's contract of 17/10, 10:36, and its decisions of 11:42),
+ * cases UTAB-55…UTAB-60: cancelling the setup link of the administrator waiting for it (F02, `pending_setup: true`; its
+ * row: `UserRow.pendingSetup.test.ts`). `users-action-cancel-setup` asks first, with the keys
+ * `settings.usersTab.confirm.cancelSetup.title|message|confirm`, as a danger: the link handed over stops working.
+ * Confirmed, one `PATCH /users/{id}` `{is_active: false}` — on a waiting administrator the backend revokes its link and
+ * keeps it waiting — and no other write; the row is the answer, still waiting; the event is
+ * `accounts.user.setup-cancelled`, with a success toast — the link stops working out of sight —, the key
+ * `settings.usersTab.toasts.setupCancelled` given the username. Cancelled, nothing. The backend refuses to demote it with
+ * 409 `PENDING_SETUP`: a row drawn before the server said it waits still offers «Demote», and the toast takes the wording
+ * `accountErrors.ts` gives that code since A7b (UTAB-58, a guard: green today). The keys of the confirmation and of the
+ * toast are sentences in the four catalogues, naming no value but the username. Four things the rest of this file leaves
+ * alone are read there, each the subject of its case: the confirmation's danger, as `btn-danger` (ConfirmModal publishes
+ * its variant only as that class, and `GlobalSettingsTab.test.ts` reads its amber one so); a toast's message, which
+ * through the identity translator is the key the tab chose; the values that key was given, from the translator's own
+ * calls (the identity translator is a spy for this alone); and the real catalogues. Red until A-43, every case marked
+ * so; the two guards (UTAB-58, UTAB-59, the catalogue reader's positive control) are green today.
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
-import {readable, writable} from 'svelte/store';
+import {get, readable, writable} from 'svelte/store';
 import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';
@@ -48,8 +65,9 @@ import {assertEffectsRun} from '$test/runes.svelte';
 
 vi.mock('$lib/i18n', () => {
     // An identity translator: a label renders as its own key, so nothing below can lean on a phrase. The object form
-    // (`$_({id, values})`) answers its id, so no call shape can turn a label into a crash.
-    const identity = readable((input: unknown) => (typeof input === 'string' ? input : String((input as {id?: unknown} | null)?.id ?? '')));
+    // (`$_({id, values})`) answers its id, so no call shape can turn a label into a crash. A spy since A-43, its answers
+    // unchanged: the values a message was given, which the identity drops, are read from its calls (`translator()`).
+    const identity = readable(vi.fn((input: unknown) => (typeof input === 'string' ? input : String((input as {id?: unknown} | null)?.id ?? ''))));
     return {
         _: identity,
         t: identity,
@@ -160,10 +178,17 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
 
 import UsersTab from './UsersTab.svelte';
 import {zodiosApi} from '$lib/api';
+import {_ as translatorStore} from '$lib/i18n';
+// The real catalogues, read only by the last block of A-43: the tab renders through the identity translator above.
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 
 // --- Fixtures -------------------------------------------------------------
 
-type Account = {id: number; username: string; email: string; is_active: boolean; is_superuser: boolean; created_at: string; protected: boolean};
+/** `pending_setup` as `GET /users` lists it since A7b: only A-43's fixtures carry it. */
+type Account = {id: number; username: string; email: string; is_active: boolean; is_superuser: boolean; created_at: string; protected: boolean; pending_setup?: boolean};
 type Invite = {id: number; grants_admin: boolean; email: string | null; created_at: string; expires_at: string; created_by_user_id: number | null};
 type Usage = {used: number; max_users?: number | null; billing_url?: string | null};
 
@@ -252,6 +277,9 @@ const createInvite = () => handle(zodiosApi.create_invite_api_v1_users_invites_p
 const revokeInvite = () => handle(zodiosApi.revoke_invite_api_v1_users_invites__invite_id__delete);
 const issueProbe = () => handle(zodiosApi.issue_address_probe_api_v1_users_address_probe_post);
 
+/** The identity translator of the `$lib/i18n` mock, a spy: the values a message was given, which it drops (A-43's toast). */
+const translator = () => handle(get(translatorStore));
+
 /** Every route that changes something on the server, by the name a failure should print. */
 const WRITES: Record<string, () => Mocked> = {
     'PATCH /users/{id}': patchUser,
@@ -318,7 +346,7 @@ async function openPanel(userId: number): Promise<HTMLElement> {
     return rowOf(userId);
 }
 
-type Action = 'deactivate' | 'reactivate' | 'promote' | 'demote' | 'reset-link' | 'sign-out' | 'restart-guides' | 'delete';
+type Action = 'deactivate' | 'reactivate' | 'promote' | 'demote' | 'reset-link' | 'sign-out' | 'restart-guides' | 'delete' | 'cancel-setup';
 
 const actionIn = (row: HTMLElement, action: Action) => within(row).getByTestId(`users-action-${action}`);
 const offered = (row: HTMLElement, action: Action) => within(row).queryByTestId(`users-action-${action}`);
@@ -995,5 +1023,152 @@ describe('UsersTab — the live invitations (UTAB-52…54)', () => {
         expect(listInvites().mock.calls.length, 'no reload').toBe(invitesBefore);
         expect(notify.mock.calls.length, 'no event').toBe(notesBefore);
         expect(inviteRowsOf(INVITE_FOR_FRIEND.id)).toHaveLength(1);
+    });
+});
+
+// =========================================================================
+describe('UsersTab — cancelling the setup link of the waiting administrator (UTAB-55…60, A-43)', () => {
+    /** The administrator of LIBREFOLIO_ADMIN_EMAIL as the bootstrap leaves it (F02): inactive, an administrator, waiting for its setup link. */
+    const WAITING_ADMIN = makeAccount(8, 'f02_admin', {is_active: false, is_superuser: true, pending_setup: true});
+    /** The same account in a list older than the server's answer, drawn before the server said it waits: «Demote» is on. */
+    const STALE_WAITING_ADMIN = makeAccount(WAITING_ADMIN.id, WAITING_ADMIN.username, {is_active: false, is_superuser: true});
+    const WITH_WAITING_ADMIN: Scene = {accounts: [...ACCOUNTS, WAITING_ADMIN]};
+
+    const CANCEL_SETUP = {title: 'settings.usersTab.confirm.cancelSetup.title', message: 'settings.usersTab.confirm.cancelSetup.message', confirm: 'settings.usersTab.confirm.cancelSetup.confirm'};
+    const SETUP_CANCELLED_TOAST = 'settings.usersTab.toasts.setupCancelled';
+
+    // red until A-43
+    it('UTAB-55: cancel setup asks first, in a danger confirmation worded by the cancelSetup keys', async () => {
+        await mount(WITH_WAITING_ADMIN);
+        const row = await openPanel(WAITING_ADMIN.id);
+
+        await fireEvent.click(actionIn(row, 'cancel-setup'));
+
+        const dialog = await confirmation();
+        // These are keys from this file's identity translator, not catalogue text.
+        expect(screen.getByTestId('users-confirm')).toHaveTextContent(CANCEL_SETUP.title);
+        expect(within(dialog).getByTestId('confirm-modal-message')).toHaveTextContent(CANCEL_SETUP.message);
+        const confirm = within(dialog).getByTestId('confirm-modal-confirm');
+        expect(confirm).toHaveTextContent(CANCEL_SETUP.confirm);
+        // A feature assertion of the contract, selection by test id: the danger is the subject, and ConfirmModal publishes it only so.
+        expect(confirm).toHaveClass('btn-danger');
+        expectNothingWritten();
+    });
+
+    // red until A-43
+    it('UTAB-56: confirmed — one PATCH {is_active: false} for that account and no other write; the row is the answer, still waiting; accounts.user.setup-cancelled, with a success toast naming the account', async () => {
+        await mount(WITH_WAITING_ADMIN);
+        const row = await openPanel(WAITING_ADMIN.id);
+
+        await fireEvent.click(actionIn(row, 'cancel-setup'));
+        await confirmation();
+        expect(patchUser(), 'nothing is sent before the confirmation').not.toHaveBeenCalled();
+        await acceptConfirmation();
+
+        await waitFor(() => expect(patchUser()).toHaveBeenCalledTimes(1));
+        const [body, options] = patchUser().mock.calls[0];
+        expect(body, 'the body is the subject').toEqual({is_active: false});
+        expect(options, 'the options come second: (body, {params})').toEqual(expect.objectContaining({params: {user_id: WAITING_ADMIN.id}}));
+        const note = await oneNote('accounts.user.setup-cancelled');
+        expect(note.detail).toEqual(expect.objectContaining({user_id: WAITING_ADMIN.id}));
+        // The link stops working out of sight, so a toast is owed: a field of the same call. Its message is the key (the
+        // identity translator); the values that key was given are read from the translator's own calls.
+        expect(note.toast, 'one notification, two halves').toEqual(expect.objectContaining({variant: 'success', message: SETUP_CANCELLED_TOAST}));
+        expect(translator(), 'the toast names the account').toHaveBeenCalledWith(SETUP_CANCELLED_TOAST, expect.objectContaining({values: {username: WAITING_ADMIN.username}}));
+        await waitFor(() => expect(screen.queryByTestId('users-confirm')).not.toBeInTheDocument());
+        await settled();
+
+        // The answer keeps it waiting — its link is revoked, not its setup —, whether the tab reloaded or took the answer.
+        const after = rowOf(WAITING_ADMIN.id);
+        expect(after).toHaveAttribute('data-pending-setup', 'true');
+        expect(after).toHaveAttribute('data-active', 'false');
+        expect(within(after).getByTestId('users-badge-pending-setup')).toBeInTheDocument();
+        expect(patchUser(), 'one PATCH').toHaveBeenCalledTimes(1);
+        for (const [route, call] of Object.entries(WRITES)) if (route !== 'PATCH /users/{id}') expect(call(), `${route} was not asked`).not.toHaveBeenCalled();
+        expect(notes('accounts.user.deactivated'), 'a cancellation, not announced as a deactivation').toHaveLength(0);
+        expect(notes('accounts.action.failed')).toHaveLength(0);
+    });
+
+    // red until A-43
+    it('UTAB-57: cancelling the confirmation sends nothing, reloads nothing, and the account still waits', async () => {
+        await mount(WITH_WAITING_ADMIN);
+        const row = await openPanel(WAITING_ADMIN.id);
+        const listsBefore = listUsers().mock.calls.length;
+        const notesBefore = notify.mock.calls.length;
+
+        await fireEvent.click(actionIn(row, 'cancel-setup'));
+        await declineConfirmation();
+
+        expectNothingWritten();
+        expect(listUsers().mock.calls.length, 'no reload').toBe(listsBefore);
+        expect(notify.mock.calls.length, 'no event').toBe(notesBefore);
+        expect(rowOf(WAITING_ADMIN.id)).toHaveAttribute('data-pending-setup', 'true');
+    });
+
+    // guard — green today: accountErrors.ts maps PENDING_SETUP since A7b, and a demotion goes through that mapping
+    it('UTAB-58: a demotion refused with 409 PENDING_SETUP (a stale row) → that code, the toast worded settings.usersTab.errors.PENDING_SETUP, and the row redrawn as the server has it', async () => {
+        patchUser().mockRejectedValue(conflict('PENDING_SETUP'));
+        await mount({accounts: [...ACCOUNTS, STALE_WAITING_ADMIN]});
+        const row = await openPanel(STALE_WAITING_ADMIN.id);
+        // The server knows the account waits; the list on screen predates it.
+        Object.assign(onServer(STALE_WAITING_ADMIN.id), {pending_setup: true});
+        const listsBefore = listUsers().mock.calls.length;
+
+        await fireEvent.click(actionIn(row, 'demote'));
+        await acceptConfirmation();
+
+        const failure = await oneNote('accounts.action.failed');
+        expect(failure.detail).toEqual(expect.objectContaining({code: 'PENDING_SETUP', user_id: STALE_WAITING_ADMIN.id, action: expect.any(String)}));
+        // The wording is the subject here; through the identity translator it is a key, not a phrase.
+        expect(failure.toast).toEqual(expect.objectContaining({variant: 'error', message: 'settings.usersTab.errors.PENDING_SETUP'}));
+        expect(notes('accounts.user.demoted'), 'a refusal is not announced as done').toHaveLength(0);
+        await waitFor(() => expect(listUsers().mock.calls.length, 'the tab reloads after a refusal too').toBeGreaterThan(listsBefore));
+        await waitFor(() => expect(rowOf(STALE_WAITING_ADMIN.id), 'the reloaded row waits').toHaveAttribute('data-pending-setup', 'true'));
+    });
+
+    describe('its keys are sentences in the four catalogues', () => {
+        const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+        /** The leaf at a dotted key, read from the catalogue itself. */
+        function leafOf(catalogue: unknown, key: string): unknown {
+            let node = catalogue;
+            for (const part of key.split('.')) node = node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined;
+            return node;
+        }
+
+        /** The ICU arguments a message names, read as `accountErrors.test.ts` reads them: `username` for «Deactivate {username}?». */
+        function placeholdersOf(message: string): string[] {
+            return [...new Set([...message.matchAll(/\{\s*([A-Za-z_]\w*)\s*[,}]/g)].map((match) => match[1]))].sort();
+        }
+
+        /** The values `confirmCopy` hands an account's confirmation: the username to its title and message, nothing to its button. */
+        const confirmationOf = (name: string): Record<string, string[]> => ({
+            [`settings.usersTab.confirm.${name}.title`]: ['username'],
+            [`settings.usersTab.confirm.${name}.message`]: ['username'],
+            [`settings.usersTab.confirm.${name}.confirm`]: [],
+        });
+
+        /** What keeps each key from reaching the user as a sentence: a language without it, or a value the tab does not fill. */
+        function defectsOf(keys: Record<string, string[]>): string[] {
+            return Object.entries(keys).flatMap(([key, filled]) =>
+                Object.entries(CATALOGUES).flatMap(([language, catalogue]) => {
+                    const message = leafOf(catalogue, key);
+                    if (typeof message !== 'string' || message.trim() === '') return [`${language}: no sentence at ${key}`];
+                    return placeholdersOf(message)
+                        .filter((name) => !filled.includes(name))
+                        .map((name) => `${language}: ${key} names {${name}}, which the tab does not fill`);
+                }),
+            );
+        }
+
+        // guard — the reader's positive control: the keys of the deactivation, and the toast of the sign-out, drawn today
+        it('UTAB-59: the keys of the deactivation confirmation and of the sign-out toast are sentences in the four catalogues, naming no value but the username', () => {
+            expect(defectsOf({...confirmationOf('deactivate'), 'settings.usersTab.toasts.signedOut': ['username']})).toEqual([]);
+        });
+
+        // red until A-43
+        it('UTAB-60: the keys of the cancelSetup confirmation and of its toast are sentences in the four catalogues, naming no value but the username', () => {
+            expect(defectsOf({...confirmationOf('cancelSetup'), [SETUP_CANCELLED_TOAST]: ['username']})).toEqual([]);
+        });
     });
 });

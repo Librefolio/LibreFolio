@@ -548,7 +548,7 @@ All these checks run after the service's parameter validation and observation ga
 | Stochastic workload: paths × horizon × assets | 200 000 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Bootstrap history: observations × assets | 250 000 | `quant/engine.py` | `unavailable` · `resource_limit` |
 | Optimization returns: observations × assets | 2 000 000 | `quant/optimization_engine.py` | `unavailable` · `resource_limit` |
-| Prices of the scope, every analytic: assets × days of the period (or of a replay window) | `MAX_BULK_ITEM_DAYS = 5_000_000` (Z-25) | `assets/price_query.py`, raised as `BulkTooManyDaysError` and turned into the refusal by `risk/scope.py::prepare_asset_series` (J-50) | `unavailable` · `resource_limit`, remedy `period_or_assets`, for every analytic of the request (a replay window: that analytic only) |
+| Prices of the scope, every analytic: assets × days of the period (or of a replay window) | `MAX_BULK_ITEM_DAYS = 1_000_000` (Z-25, lowered by R13-SEC9-2) | `assets/price_query.py`, raised as `BulkTooManyDaysError` and turned into the refusal by `risk/scope.py::prepare_asset_series` (J-50) | `unavailable` · `resource_limit`, remedy `period_or_assets`, for every analytic of the request (a replay window: that analytic only) |
 
 `simulation` builds every `resource_limit` with `_resource_limit()` (`risk_plugins/simulation/plugin.py`).
 The builders call it directly; the three engine budgets raise `SimulationResourceLimitError` in
