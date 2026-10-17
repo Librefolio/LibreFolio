@@ -101,6 +101,7 @@
         "off": "El límite de inicios de sesión fallidos está desactivado (LIBREFOLIO_LOGIN_LIMIT=off): las contraseñas pueden probarse sin pausa. Vuelve a activarlo, salvo que sea una instancia de prueba.",
         "invalid": "LIBREFOLIO_LOGIN_LIMIT vale «{value}», que no es ni on ni off: el servidor no arranca con este valor."
       }
-    }
+    },
+    "askAdminToResetPassword": "Pide a tu administrador un enlace para restablecer la contraseña: puede crear uno para tu cuenta."
   }
 }
