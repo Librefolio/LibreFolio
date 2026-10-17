@@ -26,7 +26,8 @@ export type BackupJobState = 'idle' | 'loading' | 'starting' | 'running' | 'done
 export type BackupFailure = 'start' | 'read' | 'remove' | 'job';
 
 export interface BackupJobApi {
-    start(): Promise<InstanceBackupJob>;
+    /** `password`: a secure backup (lot B4). */
+    start(password?: string): Promise<InstanceBackupJob>;
     get(jobId: string): Promise<InstanceBackupJob>;
     remove(jobId: string): Promise<void>;
 }
@@ -118,8 +119,11 @@ export class BackupJobController {
         await this.#read(jobId, generation, false);
     }
 
-    /** Start a new backup. Ignored while busy. When it cannot start, an archive already on offer stays on offer. */
-    async start(): Promise<void> {
+    /**
+     * Start a new backup; with `password`, a secure one, whose password goes to the server once and is never kept here.
+     * Ignored while busy. When it cannot start, an archive already on offer stays on offer.
+     */
+    async start(password?: string): Promise<void> {
         if (this.busy) return;
         const offered = this.state === 'done' ? this.job : null;
         const generation = this.#next();
@@ -127,7 +131,7 @@ export class BackupJobController {
         this.#setError(null, null);
         this.job = null;
         try {
-            const job = await this.#api.start();
+            const job = await (password === undefined ? this.#api.start() : this.#api.start(password));
             if (this.#stale(generation)) return;
             this.#watched = job.job_id;
             this.#settle(job, generation, true);
