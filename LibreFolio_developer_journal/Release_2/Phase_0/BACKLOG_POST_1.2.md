@@ -6713,7 +6713,7 @@ sulla base `23f6578f3`.
   - **Doc**: `cli_tools` deve dire che un vecchio `LIBREFOLIO_INSTANCE_KEY` vale «as written, spaces included»;
     `backup_restore` deve aggiungere `chmod 600` sul file della chiave vecchia mentre sta in `backups/`.
   Niente codice prima del via del coordinatore. Dettagli: piano 07, «B-18».
-- **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
+- ✅ **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
   nel self-hosted; B, 17/10 (BZ parte 1, F3).
   - `staging.space_needed` e `_check_space` (`staging.py:462-470`) confrontano le dimensioni dichiarate dal manifest
     (uguali alle intestazioni dello zip) soltanto con il disco libero.
@@ -6724,6 +6724,13 @@ sulla base `23f6578f3`.
     - La forma è una variabile `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` (senza valore di default, così il self-hosted non
       cambia) oppure K volte il limite di caricamento: **da decidere**.
     - Test: un manifest oltre la soglia è rifiutato prima di scrivere un byte.
+
+  ✅ **Fatto il 17/10** (checkpoint delle 12:36).
+  - `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`: senza default nel self-hosted; nel profilo ospitato 8 volte il limite di
+    caricamento (decisione N82, K misurato); un valore esplicito vince.
+  - Il controllo dello staging viene prima dello spazio (`unpacked_too_large`). L'avvio della verifica risponde 503
+    `backup_restore_unavailable`, e la CLI segue la stessa regola.
+  - Controllo della configurazione `backup.restore_limit`. Dettagli: piano 07, «B-35».
 - **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
   - `post_migration._row_counts` (`backend/app/db/post_migration/__init__.py:70-72`) costruisce
     `f'SELECT count(*) FROM "{name}"'` senza raddoppiare `"`. B-28 lascia passare tabelle con qualsiasi nome.
@@ -6755,6 +6762,11 @@ sulla base `23f6578f3`.
     foglio di calcolo.
   - Cura: un `'` davanti ai valori di testo che cominciano così, mai ai numeri (`-1.5` resta). Test: `=1+1` diventa
     `'=1+1`.
+- ✅ **B-40 · La tabella «What It Lists» della scheda Sicurezza non ha i due controlli di B-9** — minimo; H con H-46, 17/10.
+  `admin/settings.en.md` («What It Lists») non elenca `backup.panel_token` e `backup.upload_limit`, e la pagina dice che
+  i risultati seguono l'ordine della tabella. Le due righe vanno nel prossimo lotto, nel loro posto dell'ordine.
+  ✅ **Fatto il 17/10** in B-35 (checkpoint delle 12:36): le tre righe di B (`backup.panel_token`,
+  `backup.upload_limit`, `backup.restore_limit`) fra il «Log level» della piattaforma e il primo controllo di A.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo

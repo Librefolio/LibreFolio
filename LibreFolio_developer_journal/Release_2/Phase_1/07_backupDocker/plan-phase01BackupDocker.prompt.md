@@ -5366,6 +5366,91 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-35 — un tetto a quello che un archivio scompatta (2026-10-17, 11:59-12:36) — ✅ 🧊 FROZEN (checkpoint delle 12:36)
+
+> **Coordinatore** (11:59): BZ parte 1 va bene. Ordine:
+> 1. B-35 (da solo, prima);
+> 2. B-39;
+> 3. B-36 e B-37 (scrittura permessa su `db/post_migration/__init__.py` e su `env.py` di Alembic, solo per le virgolette
+>    e `trusted_schema=OFF`; H rivede);
+> 4. B-38 lato CLI;
+> 5. B-34, poi le righe di «What It Lists» (B-40).
+>
+> Forma di B-35: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, sul totale dichiarato, prima di `_check_space`.
+> - Self-hosted: nessun default.
+> - Profilo ospitato: K volte il limite di caricamento, con K scelto e giustificato da me.
+> - Un valore esplicito vince sempre.
+> - Decisione N82, nella lista del developer.
+>
+> - **K = 8, misurato** (12:05): l'archivio comprime con deflate livello 6. Il database di test passa 4,1:1, una storia
+>   di prezzi sintetica di 52 MB 3,9:1; immagini e PDF restano vicini a 1:1.
+>   - Con K = 4 un archivio pesante di database verrebbe rifiutato proprio al limite di caricamento.
+>   - 8 lascia il doppio di margine e taglia comunque il caso peggiore di deflate (circa 1000:1) di oltre 100 volte.
+>   - Ospitato: 500 MB → 4000 MB. Approvato dal coordinatore (12:15).
+> - **Contratto** (`b35-contract.md`, 12:10, con §1b alle 12:16):
+>   - il lettore `backup_max_restore_mb()` in `config/backup.py`: nel profilo ospitato, se non impostato, vale
+>     `8 × backup_max_upload_mb()`. Eredita da lì il `ProfileDefaultError`, quindi fallisce chiuso; non va nella tabella
+>     di H, perché è un multiplo che segue il limite del fornitore;
+>   - in staging, `max_unpacked` → `unpacked_too_large`, prima dello spazio, dichiarato in `RestoreErrorCode`;
+>   - l'avvio della verifica risponde 503 `backup_restore_unavailable`;
+>   - la CLI segue la stessa regola, con `=0` per un comando;
+>   - 2 codici × 4 lingue;
+>   - una riga in `.env.example`;
+>   - **§1b**: il controllo della configurazione `backup.restore_limit`, chiesto subito dal coordinatore, con il
+>     permesso di ritoccare la tupla in `test_config_audit.py` di H. Se il limite di caricamento non si legge, il
+>     controllo nomina comunque la variabile giusta (`{variable}`);
+>   - doc: anche le tre righe di B in `settings.en.md` «What It Lists» (B-40).
+> - **Codice pronto** in `b35-wip/apply_b35.py`: 30 operazioni in 9 file più i 4 cataloghi; ruff, black e prettier
+>   puliti sulla copia emessa.
+> - **Rossi in scrittura**:
+>   - TA-S: il lettore e il controllo in `test_backup_checks.py`, la mappa in `test_config_audit.py`, staging;
+>   - TA-B: l'API in `test_backup_restore.py`;
+>   - TA-E: la CLI, sezione (i);
+>   - TA-F: Vitest, 7 casi rossi, scritti;
+>   - docs-writer: 5 pagine più `settings`.
+> - ✅ **Rossi scritti** (12:00-12:08):
+>   - **TA-S**:
+>     - `test_backup_checks.py` (h): il lettore e il controllo; (c), (e) a tre, (f) e (g) aggiornati;
+>     - `test_config_audit.py` (di H): l'import e la voce della mappa, nient'altro. L'ordine resta simbolico;
+>     - `test_backup_staging.py` (m).
+>   - **TA-B**: `test_backup_restore.py` (h), con archivi di dimensione esatta (8 MiB, e 8 MiB + 1 byte) che fissano
+>     K = 8 e i MiB; la fixture `instance` pulisce la nuova variabile.
+>   - **TA-E**: (i), 5 casi, con `no_inherited_restore_limit`.
+>   - **TA-F**: 6 casi.
+>   - **Docs-writer**: le 6 pagine più «Startup Checks».
+> - **⚠️ Fuori pista — `{variable}` (12:20)**: nel profilo ospitato, con la variabile non impostata, un
+>   `BackupConfigError` può venire dalla variabile del caricamento. Il controllo prende quindi il nome da
+>   `exc.variable`, nel messaggio e nel riassunto. Contratto §1b corretto, TA-S e il docs-writer avvisati. Il
+>   riassunto `profileTable` sta in una costante: la riga superava 300 caratteri.
+> - ✅ **Rossi** (corsia 6187):
+>   - `services backup-checks`: 45 falliti e 48 passati;
+>   - `services backup-staging`: 7 falliti e 161 passati;
+>   - `services config-audit`: errore di raccolta, atteso, perché il file di H importa il nuovo controllo in cima;
+>   - `utils backup-cli-restore`: 5 falliti e 102 passati;
+>   - Vitest: 6 falliti e 350 passati;
+>   - `api backup-restore` (slot 2, 12:11-12:17): **10 falliti** e 151 passati.
+> - ✅ **Patch applicata** (12:17:49): 30 operazioni in 9 file più 4 cataloghi. `i18n build` 5033 chiavi e
+>   `i18n check` strict puliti; ruff e black puliti.
+> - **⚠️ Fuori pista — un sostituto di `stage_archive` (12:22)**: il primo verde di `api backup-restore` dava
+>   1 fallito. Il sostituto in `test_a_check_that_fails_otherwise_ends_failed_with_its_code` non aveva la keyword
+>   nuova: `TypeError`, poi `stage_failed`. TA-B ci ha aggiunto `instance_key=None, max_unpacked=None`; l'altro
+>   sostituto prende già `**kwargs`.
+> - ✅ **Verdi**:
+>   - API: `api backup-restore` **161** (12:24) e `api backup-restore-apply` **170**; `api sync` uscita 0. Slot
+>     liberato alle 12:24:26;
+>   - servizi (12:24-12:28): `backup-checks` 93, `backup-staging` 168, `config-audit` 156, `config-env-example` 38,
+>     `profile-defaults` 112, `accounts-checks` 76, `email-checks` 87, `backup-secure` 77;
+>   - utils (12:28-12:30): `backup-cli-restore` 107, `backup-cli` 102, `backup-cli-secure` 66;
+>   - Vitest (12:32): la cartella `backup` più `GlobalSettingsTab.test.ts`, **982 su 982**.
+> - ✅ **Doc** (12:32-12:34): `mkdocs build` strict (66 s), `check-links`, gate 63.
+> - ✅ **Controlli statici**: ruff e black su tutti i 15 file Python cambiati; prettier sui file del frontend;
+>   `git diff --check` pulito. Porta 6187 libera.
+> - **Per H** (revisione dopo l'entrata):
+>   - il lettore non passa da `profile_default`: segue il limite di caricamento, che ci passa;
+>   - la voce nella mappa di `test_config_audit.py`;
+>   - `developer/architecture/settings.md` l.79-84: inoltrato al coordinatore.
+> - **Backlog**: B-35 ✅, B-40 ✅ (le righe di B in «What It Lists»).
+
 ### B-18, riparazione — il cancello G rosso: `instance_key_invalid` non dichiarato (2026-10-17, 11:40-11:52) — ✅ 🧊 FROZEN
 
 > **Coordinatore, urgente prima di BZ** (11:40): il cancello G (`api backup-restore`) è rosso su
