@@ -12,6 +12,7 @@ from sqlalchemy import select as sql_select
 from sqlalchemy.dialects.sqlite import insert
 
 from backend.app.db.models import FxRate
+from backend.app.db.precision import fx_rate_limits_text, storable_fx_rate
 from backend.app.logging_config import get_logger
 from backend.app.utils.runtime.cache import clear_cache
 
@@ -52,6 +53,32 @@ def normalize_rate_for_storage(base: str, quote: str, rate: Decimal) -> tuple[st
         return quote, base, Decimal("1") / rate
 
 
+def normalize_storable_rate(base: str, quote: str, rate: Decimal) -> tuple[str, str, Decimal] | None:
+    """``normalize_rate_for_storage`` that never raises (X-R38): the pair in alphabetical order and the rate, inverted when
+    base > quote, or None when the rate is not a finite number above 0, or its inverse overflows (``1 / 1E-1000000``) or
+    underflows to 0 (``1 / 1E+1000030``, X-R50). Whether ``fx_rates.rate`` can keep the result is ``storable_fx_rate``'s
+    answer.
+    """
+    if not isinstance(rate, Decimal):
+        try:
+            rate = Decimal(str(rate))
+        except ArithmeticError:
+            return None
+    if not rate.is_finite() or rate <= 0:
+        return None
+    try:
+        normalized = normalize_rate_for_storage(base, quote, rate)
+    except ArithmeticError:
+        return None
+    # The default context does not trap an underflow: the inverse of a huge rate comes back as 0 (X-R50)
+    return normalized if normalized[2] > 0 else None
+
+
+def fx_rate_refusal(base: str, quote: str, rate_date: date) -> str:
+    """Why a manual rate is refused (X-R38): the pair, in the order it is stored, its date and ``fx_rates.rate``'s limits."""
+    return f"The rate of {min(base, quote)}/{max(base, quote)} on {rate_date.isoformat()} cannot be stored: {fx_rate_limits_text()}"
+
+
 # ============================================================================
 # RATE STORAGE (bulk upsert and delete)
 # ============================================================================
@@ -73,13 +100,15 @@ async def upsert_rates_bulk(
         Results are in the same order as input rates
 
     Raises:
-        ValueError: If validation fails for any rate
+        ValueError: If validation fails for any rate, among them a rate ``fx_rates.rate`` cannot keep once normalized
+            (X-R38: at most 14 digits before the decimal point, above 0 at 10 decimal places), named with its pair,
+            date and the limits; nothing of the call is written
     """
 
     if not rates:
         return []
 
-    # Validate and normalize all rates first
+    # Validate and normalize all rates first: nothing of the call is written when one is refused
     normalized_rates = []
     for rate_date, base, quote, rate_value, source in rates:
         base = base.upper()
@@ -88,13 +117,16 @@ async def upsert_rates_bulk(
         if base == quote:
             raise ValueError(f"Base and quote must be different (got {base} == {quote})")
 
-        if rate_value <= 0:
+        if rate_value.is_finite() and rate_value <= 0:
             raise ValueError(f"Rate must be positive (got {rate_value})")
 
-        # Ensure alphabetical ordering
-        if base > quote:
-            base, quote = quote, base
-            rate_value = Decimal("1") / rate_value
+        # Alphabetical ordering, the rate inverted when base > quote; then what fx_rates.rate can keep (X-R38): 1E+400
+        # was stored as a REAL inf, its inverse and 1E-11 as values that read back 0, a NaN raised, the inverse of
+        # 1E-1000000 overflowed
+        normalized = normalize_storable_rate(base, quote, rate_value)
+        if normalized is None or storable_fx_rate(normalized[2]) is None:
+            raise ValueError(fx_rate_refusal(base, quote, rate_date))
+        base, quote, rate_value = normalized
 
         normalized_rates.append((rate_date, base, quote, rate_value, source))
 

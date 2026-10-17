@@ -203,7 +203,7 @@
     - 27 non hanno ancora un ruolo.
   - Il resto aspetta la designer o la 1.3. Nella cartella di sessione del coordinatore:
     - i motivi, file per file: `designer/colori-residui-motivi.csv`;
-    - le domande per lei: `designer/domande-per-la-designer.md`, 30 punti.
+    - le domande per lei: `designer/domande-per-la-designer.md`, 30 punti (35 dopo la notte del 16→17/10).
 - **Regole nuove del 16/10:**
   - **Gate prima di ogni ingresso, sul merge col target:** `--check` più i tre gate Vitest dei colori
     (`tools/pre_entry_gates.sh`, nella cartella di sessione del coordinatore).
@@ -231,21 +231,63 @@
   posticipalo, oggi non ha tempo».
   - Il riferimento della sera è la galleria `designer-16b` (`fa374e41d`, 2.862 PNG).
   - Il builder `build_designer_round.py` è nel target (`0ab2b6095`). Lo zip si farà su una galleria nuova.
+- **21:06 del 16/10, il developer vede `DataTable` coi colori vecchi.** Testuale: «le DataTable e relativi componenti
+  mostrano ancora in chiaro e scuro i vecchi colori, è perché non si è mergiato o ti è sfuggito?»
+  - **Era sfuggito al coordinatore: un errore di misura.** I 583 token di componente di `lib/theme/components/*.css`
+    erano ancora letterali di R-3, e il conteggio m1/m2 (classi Tailwind, hex nei `.svelte`/`.ts`) non li vedeva.
+    Da allora `progress.py` conta anche i token di componente e i letterali di `lib/theme/*.ts`.
+  - Decisione del developer, presa con una domanda: «Stasera: analisi brevi e lavoro leggero subito, slot pesanti
+    quando la 1.3 libera la corsia».
+- **Notte 16→17/10** (il developer dorme dalle 21:50; D-T27/D-T28; le domande per lui stanno in
+  `review/notte-16-17/domande-bloccanti.md`, il briefing in `review/notte-16-17/briefing-mattina.md`, nella cartella di
+  sessione del coordinatore). Ingressi della notte, ognuno con l'albero uguale alla simulazione e i controlli sul ramo
+  unito (gate, `api sync`, `front check`):
+
+  | Commit | Cosa |
+  |---|---|
+  | `70e798a4e` | L: inventario delle fonti di colore fuori dalle metriche (`L-designerLab/audit-colori-fuori-metrica.md`): ~506 punti in più |
+  | `9016f47c3` | T: le tabelle (231 token di `table.css`), i 23 «ruolo-mancante» (D-T27, ruolo più vicino), la spec L3 |
+  | `9d3607eb6` | AF: file, media e menu contestuale (334 token; `dialogs.css` e `files.css` cancellati) |
+  | `b58108665` | T: `CompactCashCell` (12 token) |
+  | `323c61b73` | DV: **B4**, i neutri di tutti i grafici sui ruoli (`chartNeutrals`), più 8 ruoli per i canvas e `resolve()` sempre in sRGB |
+  | `55b53d8c1` | AF: `drawnColors.ts` sui ruoli (la griglia dell'anteprima file, i segnaposto, le iniziali) |
+  | `6db57ebdb`, `9c831fcdc` | DV e G: lo skill (righe di `roleColors`/`drawnColors`) e il record della galleria della notte |
+
+  - **Misure alle 04:40:** m1 697 → 674 (561 categorie, 109 interruttori, 4 senza ruolo); token di componente
+    letterali 583 → 6, tutti categoriali; `chartTheme.ts` 277 → 152 letterali, tutti serie, categorie, stati e segni
+    (DV-10); `drawnColors.ts` 32 → 3.
+  - **Galleria della notte** di G, «prima» `778156983` e «dopo» `55b53d8c1`, stesso giorno, 78 test: 2.016 PNG per
+    lato, 0 misti G-18. Foglio:
+    `LibreFolio_visual_review/diffs/g-night17-prima-778156983__vs__g-night17-dopo-55b53d8c1/contact_sheet.it.html`.
+  - **Decisioni della notte, da confermare col developer:** la tabella L3 del rischio passa al `selected` comune
+    (la sua review 4 del 06/10 chiedeva un verde più chiaro di quello di `DataTable`); TD-3 resta (`action` per la card
+    «Allocazione Patrimoniale», contrasto in scuro alla designer, punto 30).
+  - **Trovati e sistemati:** FM6 di `tx-wac-formmodal` (TC-18), regressione dei `fix(db)` della sera, già corretta da
+    W (`de901f228`); il runner che rifaceva il build per un `.DS_Store` (H-24); `resolve()` che restituiva `oklab()`.
+  - **Errori del coordinatore:** la metrica cieca sui token (sopra); due volte una galleria completa non annunciata
+    come blocco (16/10 17:22 e 17/10 02:01), con il carico a 172; un fast-forward chiesto a un figlio, subito rifatto
+    dal coordinatore.
+- **Regole nuove della notte:**
+  - **Dopo una base merge che porta API nuove, `api sync` prima di `front check`:** il client generato è ignorato da
+    git e un worktree lo tiene vecchio (27 errori finti in `features/backup/**`).
+  - **Una galleria completa o grande si annuncia alla 1.3 come blocco quando la si programma**, non quando parte.
+  - **Un ruolo letto da JS si chiede a DV** (`ChartRole` in `roleColors.ts`), con `PENDING_READERS` finché non ha un
+    lettore; `color()` restituisce sempre `#rrggbb` o `rgba()`.
 
 ## 🛤️ Workstream e corsie
 
 | Codice | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | nessuna porta fissa (prove leggere); 6150 è usata dalla 1.3 per il server di review del developer (16/10) | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato fino a L-20** (`460529690`, 16/10): il test `picker` passa davvero su un colore del rimappaggio scuro. Prima: livello delle categorie e segnale C4 (L-16, `2c485d3d4`), percorsi dei grafici dopo gli spostamenti di Y (L-18, `f96043473`). Aperte L-17 e L-19 (esempi scaduti della doc), peso basso; sessione ferma |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **G-18 nel target** (`005ebcbf9`, 16/10): conta nelle gallerie gli elementi misti composti a runtime. Il builder del pacchetto del giro 3 è nel target (`0ab2b6095`); la galleria `designer-16b` (`fa374e41d`) è il riferimento del 16/10 sera; run filtrata `settings/plugins` per la 1.3, stabile (`b9679a7d8`). Prima: G-13 (`7f58a6292`, coppia di riferimento e regola della data UTC) e `gallery_tool sheet` (`d7a74e5de`). Aperte G-11 e G-17; fa le gallerie e le run filtrate |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato fino a L-20** (`460529690`) e all'**inventario delle fonti di colore fuori dalle metriche** (`70e798a4e`, 16/10 notte; L-21 e L-22 aperte). Prima: L-16, L-18. Aperte L-17, L-19, L-21 (il censimento a runtime di ECharts e delle librerie), L-22; sessione ferma |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **G-18 nel target** (`005ebcbf9`); builder del pacchetto del giro 3 (`0ab2b6095`); run filtrate per la 1.3 (`settings/plugins`, `settings/email`, `backup ready`); **galleria della notte del 17/10** con «prima» e «dopo» dello stesso giorno (2.016 PNG per lato, 0 misti; `9c831fcdc`). Aperte G-11, G-17, G-20 (solo il fallimento: il successo resta muto per P8, B-27 ritirata; `e2212f97c`), G-21 (X-R32) |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`); sessione archiviata il 15/10 su richiesta del developer |
-| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo sulla punta `81bc305b9` (16/10, 18:53; m1 934), worktree `preview-colori`, DB nuovo (`001_initial.py` cambiato da C-97a), shell staccata `preview6160j` |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato fino al resto della UI** (`4d8ae68c4`, 16/10): skill comune `design-system` (`6e569084a`, D-T29), ruoli (`f043c1b58`), scanner e regola dei campi nativi (`be911db7e`), gate G5/G6, token di componente 1, 2a, 2b e 2c, TC-15. Ferma: il lotto degli interruttori e i ruoli di categoria aspettano la designer. **Unico che crea ruoli** (`tokens.css`, `toneClasses.ts`) |
-| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a W6-d** (`3805bf2ca`, 16/10): W6 (`adbc2a4b7`: rischio, dashboard, strumenti, grafici, DV-8, DV-9, `ui/display`), fix C4 (`1c7b9def2`), TC-15 e G-18 di `BackendTimingBar` (`81bc305b9`), binari del PAC (W6-e, `e3d85fdc8`), `PositionsPanel` ed `ExposureTable` con `aria-pressed` (W6-d; `AllocationPanel` resta su `action`, TD-3). Restano categorie, TD-1 e DV-7: aspettano la designer. Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` |
+| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo sulla punta `ec6aa2007` (17/10, 04:39; tutti i lotti della notte), worktree `preview-colori`, DB nuovo, shell staccata `preview6160k` |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | **integrato fino a `CompactCashCell`** (`b58108665`, 17/10 notte): skill comune `design-system` (`6e569084a`, D-T29), ruoli (`f043c1b58`), scanner e regola dei campi nativi (`be911db7e`), resto della UI e token di componente 1–2c (`4d8ae68c4`), le tabelle (231 token, `9016f47c3`), i 23 «ruolo-mancante» (D-T27), la spec L3, TC-18 chiuso. Fermo: interruttori e categorie aspettano la designer. **Unico che crea ruoli CSS** (`tokens.css`, `toneClasses.ts`) |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | **integrato fino a B4** (`323c61b73`, 17/10 notte): W6, W6-d, W6-e, TC-15, G-18 di `BackendTimingBar` e B4, cioè i neutri di tutti i grafici sui ruoli, più 8 ruoli per i canvas e `resolve()` in sRGB (B4b). Restano serie, categorie, stati e segni (DV-10), per la designer. Possiede `chartCategories.ts`, `chartPalettes.ts`, `chartTheme.ts`, `roleColors.ts` (i ruoli letti da JS, `ChartRole`) |
 | IW | `IW - colori dell'import` | `IW-importColors/` | 6151 + `/tmp/librefolio-r2-iw` | **chiuso**, integrato (`e9b4ac6b0`, 16/10): `components/transactions/import/**`, `wizard/**` e le modali dell'import |
 | TR | `TR - colori delle transazioni` | `TR-transactionColors/` | 6154 + `/tmp/librefolio-r2-tr` | **chiuso**, integrato (`e402d3b87`, 16/10). Categorie, interruttore e scrollbar aspettano la designer |
-| AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | **tecnicamente completo**, tutto nel target (`c179a5144` e docs `5eaf67ff1`, 16/10): lotti 1–9, AF-4 (`ModalBase` `tone="danger"`), AF-6, `app.css` C4. Area m1 1.946 → 170, m2 6 → 0; 323 E2E verdi in 3 slot. Restano AF-1 (designer), AF-2, AF-3, AF-5, AF-7 (lotto degli interruttori di T), AF-8 e AF-10 (punti 26 e 12 della raccolta). Revisione del developer da fare (piano AF, sezione 12) |
+| AF | `AF - colori di asset e cambi` | `AF-assetFxColors/` | 6157 + `/tmp/librefolio-r2-af` | **area chiusa**, tutto nel target fino a `drawnColors` (`55b53d8c1`, 17/10 notte): lotti 1–9, AF-4, AF-6, AF-12 (la spec `image-crop`), i token di file, media e menu (334, `9d3607eb6`), `drawnColors.ts` (32 → 3). Restano AF-1 (designer), AF-2, AF-3, AF-5, AF-7, AF-8, AF-10, AF-11, AF-14. Revisione del developer da fare (piano AF, sezione 12) |
 | BK | `BK - colori dei broker` | `BK-brokerColors/` | 6158 + `/tmp/librefolio-r2-bk` | **area chiusa** (`979d0a151`, 16/10): lotto dei broker (`939e4998a`) e L4 `LotCustodyModal` (205 → 20, con la prop mista di G-18 tolta). Area m1 1.153 → 159, tutte annotate: BK-1 69, BK-2 84, BK-3 4, BK-5 2, più i `<style>` di T (BK-6); aspettano la designer o il lotto degli interruttori di T |
 | IM | `IM - colori delle impostazioni` | `IM-settingsColors/` | 6159 + `/tmp/librefolio-r2-im` | **chiuso**, integrato (`1248b7908`, 16/10) |
 
