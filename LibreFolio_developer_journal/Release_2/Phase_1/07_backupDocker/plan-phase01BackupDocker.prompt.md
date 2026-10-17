@@ -5366,6 +5366,48 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > developer.** Intanto B-19, poi B-32, B-18 e B-20, piccoli, ognuno col suo checkpoint. I controlli statici di
 > `Dockerfile` e compose (in B7b) vanno in **un test nuovo mio**, non in `release-image-contract` di H.
 
+### B-34 — la causa giusta quando l'istanza non ha ancora una chiave, e le frasi della doc (2026-10-17, 14:00-14:10) — ✅ 🧊 FROZEN (checkpoint delle 14:10)
+
+> **B-38 entrato** (coordinatore, 14:00): `1ed071c2f` → dev `c2a09b960`, CHANGELOG 🔒 `9b02120a7`; HEAD portata in
+> avanti. La correzione di `security.md` l.706-708 e il residuo H-47 vanno ad H. Via a B-34.
+>
+> - **LOW-1 di H**:
+>   - Su un'istanza senza chiave, dove la verifica non può crearla, `instance_key_status()` dice `not_created` e
+>     `problem=None`, e la riga D2 accusa la chiave data.
+>   - Cura: il ramo dell'eccezione prende anche `not_created`, e la riga dice «`<path>`: there is no instance key yet,
+>     and it could not be created».
+>   - Patch: `b34-wip/apply_b34.py`, 1 operazione; ruff e black puliti.
+> - **Doc**:
+>   - in `cli_tools`, un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file così com'è, spazi compresi;
+>   - la riga dell'eccezione copre anche il caso nuovo;
+>   - il `chmod 600` non serve più: B-38 ha spostato la chiave in `/root`. Da controllare che nessuna pagina la metta
+>     ancora in `backups/`.
+> - **Rossi in scrittura** (TA-E, accanto a c7); doc (docs-writer).
+> - ✅ **Rosso scritto** (TA-E): in `test_backup_cli_restore.py`, dopo c7,
+>   `test_when_this_instance_has_no_key_yet_and_none_can_be_created_it_is_said_instead_of_blaming_the_key_given`.
+>   - Un'istanza senza chiave, con `secrets/` a 0o500 (un aiuto rimette i permessi nel `finally`), e una chiave data.
+>   - Atteso: la riga «This instance's own key cannot be used…», con `there is no instance key yet, and it could not be
+>     created`; mai la riga che accusa la chiave data.
+>   - Desc del runner (`_backend_utils.py`, `backup-cli-restore`) allungata, in aggiunta.
+> - ✅ **Rosso** (corsia 6187): `utils backup-cli-restore` **1 fallito** e 107 passati, esattamente il caso nuovo
+>   (`files/logs/b34_red.log`).
+> - ✅ **Patch applicata** (14:03:03): 1 operazione in `_print_given_key` di `scripts/backup_cli.py`; ruff e black
+>   puliti.
+> - ✅ **Verdi**: `backup-cli-restore` **108**, `backup-cli-secure` **106**; porta 6187 libera.
+> - ✅ **Doc** (docs-writer, più una frase mia):
+>   - `cli_tools.en.md` l.563: il valore di un vecchio `LIBREFOLIO_INSTANCE_KEY` va nel file «as written in the
+>     variable, spaces included»; il file di `LIBREFOLIO_INSTANCE_KEY_FILE` «as it is»;
+>   - `cli_tools.en.md` l.568: la riga dell'eccezione copre anche un'istanza senza chiave, con il testo del problema;
+>   - il secondo appunto di H (`chmod 600` sulla chiave vecchia in `backups/`) non vale più alla lettera: dopo B-38 la
+>     chiave non passa più dai dati, e nessuna pagina la mette in `backups/` o in `LibreFolio-data/` (grep). Il senso
+>     vale ancora sull'host: in `backup_restore.en.md` l.320 il file `old-instance.key` accanto a `docker-compose.yml`
+>     è «kept private (`chmod 600 old-instance.key`)», come il file della password a l.96. Pagina solo inglese.
+>   - Traduzioni di `cli_tools`: debito vero (due frasi cambiate di senso), nessun `translate-stamp`, come in B-38.
+> - ✅ **Controlli** (14:05-14:10, ripetuti dopo la frase di l.320): `mkdocs build` strict, `check-links`, gate 63; ruff e black puliti sui 3 file
+>   Python; `git diff --check` pulito; porta 6187 libera.
+> - **Backlog**: B-34 ✅. CHANGELOG: nessuna voce (un messaggio della CLI più preciso, dentro B-18 della stessa
+>   release).
+
 ### B-38 — i file dei segreti letti da root: regolari, mai attraverso un link nella cartella dei dati (2026-10-17, 13:36-13:58) — ✅ 🧊 FROZEN (checkpoint delle 13:58)
 
 > **B-36/B-37 entrati** (coordinatore, 13:39): `2eff9e623` più il merge `05d1dc76a` → dev `d1976bca8`. Un conflitto

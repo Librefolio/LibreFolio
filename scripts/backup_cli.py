@@ -582,7 +582,9 @@ def _print_given_key(report, instance_key_given: bool) -> None:
     from backend.app.services.platform.instance_key import instance_key_status  # noqa: PLC0415
 
     # This instance's own key unusable re-encrypts nothing, whatever the key given: then it is not the given key's fault.
-    problem = instance_key_status().problem
+    # Nor when it has none yet: the check, which needed it, could not create it (B-34, H's LOW-1: `secrets/` not writable).
+    status = instance_key_status()
+    problem = status.problem or (f"{status.path}: there is no instance key yet, and it could not be created" if status.source == "not_created" else None)
     if problem is not None:
         print(f"⚠️  This instance's own key cannot be used, so nothing was re-encrypted with the key given: {_safe(problem)}")
         return
