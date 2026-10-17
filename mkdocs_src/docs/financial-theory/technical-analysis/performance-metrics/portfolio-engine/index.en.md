@@ -284,14 +284,14 @@ An outgoing ADJUSTMENT moves no cash, so no pool of §6 changes: its value $P \c
 
 ---
 
-## 📐 9. Pre-Frame / Frame Architecture
+## 📐 9. One Daily Replay
 
-| Phase | Date range | Computes |
-|-------|-----------|----------|
-| Pre-frame | $[t_{\mathrm{first}},\ t_0)$ | Cash, qty, WAC, pools — no market evaluation |
-| Frame | $[t_0,\ t_1]$ | Full daily: prices, FX, position states, portfolio states |
+| Range | Date range | Role |
+|-------|-----------|------|
+| Replay | $[\min(t_{\mathrm{first}},\ t_0),\ t_1]$ | Every day, with the same rules: cash, qty, WAC, pools, prices, FX, position and portfolio states |
+| Frame | $[t_0,\ t_1]$ | The days whose states are returned |
 
-Pre-frame transactions update accumulators (cash ledger, WAC pools, 3-pool K/R/W) without any market evaluation: no price is read and no position is valued. Each movement is converted at the rate of its own date, as in the frame, and on every day the rate of a held foreign currency changes, the cash is revalued at that day's rate and the exchange result enters the pools (§6), so the pools are correct at $t_0$. This enables efficient range-based caching.
+There is one replay, from the first movement $t_{\mathrm{first}}$ (or $t_0$, when earlier) to $t_1$. A movement dated before $t_0$ follows the same rules as any other: it is converted at the rate of its own date and moves the WAC pools and the 3-pool K/R/W, and on every day the rate of a held foreign currency changes the cash is revalued and the exchange result enters the pools (§6). The states are returned from $t_0$, so a day's state does not depend on the frame it is read in. A day on which no term of the model changes — no movement, rate, quote, split, transit boundary or price turning stale — carries the previous day's state.
 
 ---
 
