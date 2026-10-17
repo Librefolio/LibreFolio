@@ -36,6 +36,7 @@ AI_EXPORT_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_ai_export_composer.py",
     "backend/test_scripts/test_services/test_ai_export_dataset_analysis_catalogs.py",
     "backend/test_scripts/test_services/test_ai_export_portfolio_fifo_summary_in_transit.py",
+    "backend/test_scripts/test_services/test_ai_export_price_day_budget.py",
     "backend/test_scripts/test_services/test_ai_export_runtime_service.py",
     "backend/test_scripts/test_services/test_ai_export_structural_invariants.py",
     "backend/test_scripts/test_services/test_ai_export_telemetry.py",
@@ -89,6 +90,7 @@ RISK_SERVICE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_risk_warnings_i18n.py",
     "backend/test_scripts/test_services/test_risk_eligibility.py",
     "backend/test_scripts/test_services/test_risk_exclusion_reasons.py",
+    "backend/test_scripts/test_services/test_risk_price_day_budget.py",
 )
 
 PAC_PLANNER_CORE_TEST_PATHS = (

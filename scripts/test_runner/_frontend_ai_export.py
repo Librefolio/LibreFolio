@@ -11,6 +11,7 @@ AI_EXPORT_UNIT_TEST_PATHS = (
     "src/lib/features/ai-export/__tests__/aiExportClipboard.test.ts",
     "src/lib/features/ai-export/__tests__/aiExportMemory.test.ts",
     "src/lib/features/ai-export/__tests__/aiExportOptions.test.ts",
+    "src/lib/features/ai-export/__tests__/aiExportTooManyPriceDays.test.ts",
     "src/lib/features/ai-export/__tests__/aiExportUi.test.ts",
     "src/lib/features/ai-export/__tests__/backendCatalogCompatibility.test.ts",
     "src/lib/features/ai-export/__tests__/catalogCompatibility.test.ts",
