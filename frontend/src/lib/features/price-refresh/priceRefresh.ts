@@ -22,7 +22,7 @@
  */
 
 import {startActivePolling, type ActivePolling, type PollOutcome} from '$lib/features/live-updates/activePolling';
-import {instanceNotices, type InstanceNotice} from '$lib/features/instance/instanceNotices.svelte';
+import type {InstanceNotice} from '$lib/features/instance/instanceNotices.svelte';
 import {notifyPricesCaughtUp} from '$lib/stores/portfolio/portfolioMutation';
 import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
@@ -102,11 +102,26 @@ function httpStatusOf(error: unknown): number | null {
     return typeof status === 'number' ? status : null;
 }
 
+/**
+ * The app's notice area, loaded on first use (Z-20): imported statically, its runes would run wherever the API
+ * client is imported, the AI Export probe's Node bridge included. One promise for every call, so a `hide` never
+ * overtakes its `show`.
+ */
+let noticeArea: Promise<typeof import('$lib/features/instance/instanceNotices.svelte')> | null = null;
+
+function loadNoticeArea(): Promise<typeof import('$lib/features/instance/instanceNotices.svelte')> {
+    noticeArea ??= import('$lib/features/instance/instanceNotices.svelte');
+    return noticeArea;
+}
+
 export function createPriceRefresh(deps: Partial<PriceRefreshDeps> = {}): PriceRefreshTracker {
     // The defaults are read when used, not when this module loads: the API client imports this module, and a test that
     // mocks one of these modules only in part (the client's own tests) must still load it.
     const fetchStatus = deps.fetchStatus ?? fetchStatusFromApi;
-    const notices = deps.notices ?? {show: (notice: InstanceNotice) => instanceNotices.show(notice), hide: (id: string) => instanceNotices.hide(id)};
+    const notices = deps.notices ?? {
+        show: (notice: InstanceNotice) => void loadNoticeArea().then(({instanceNotices}) => instanceNotices.show(notice)),
+        hide: (id: string) => void loadNoticeArea().then(({instanceNotices}) => instanceNotices.hide(id)),
+    };
     const refreshPortfolio = deps.refreshPortfolio ?? (() => notifyPricesCaughtUp());
     const startPolling: typeof startActivePolling = deps.startPolling ?? ((options) => startActivePolling(options));
 
