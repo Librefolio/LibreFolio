@@ -42,6 +42,13 @@ The `common.py` module provides shared building blocks used across all subsystem
 - Supports arithmetic: `+`, `-`, negation, comparison (same currency only)
 - `Currency.validate_code(v)` — static method for use in `@field_validator` on any schema
 - Cached validation via `@lru_cache(256)` for performance
+- **Writes are strict, reads are lenient (E-18).** `Currency.validate_code` and `CurrencyCode` also accept a currency
+  name or a numeric code (`"Euro"`, `"978"`) and return them as given, so they are for what is read back from the
+  database only. A field a request **stores** uses the strict rule: `IsoCurrencyCode` (a `str` field) or
+  `IsoCurrencyAmount` (a `Currency` field, same class and wire shape), both built on `iso_currency_code()` — an ISO
+  4217 alphabetic code, any case. Never let the strict rule reach a model the read paths also build from stored rows:
+  `FXConversionRouteReadItem` subclasses the request `FXConversionRouteItem`, so it turns the check off with its
+  `ClassVar` `iso_currencies_required = False`.
 
 ### Response Base Classes (Generic)
 
