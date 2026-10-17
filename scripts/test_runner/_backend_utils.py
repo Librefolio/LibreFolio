@@ -313,6 +313,17 @@ def utils_gate_aiosqlite_leak(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "aiosqlite leak gate tests", verbose=verbose)
 
 
+def utils_gate_usable_fx_rate(verbose: bool = False, test_names: list = None) -> bool:
+    """Test X-R45: one condition for a usable FX rate, and every reader of fx_rates calls it or is a named raw reader."""
+    print_section("Utils: Usable FX Rate Gate (X-R45)")
+    print_info("Testing: backend/app/db/precision.py (usable_fx_rate_clause, usable_fx_rate_bounds) on a private in-memory SQLite; every select naming FxRate under backend/app, read with ast")
+    print_info(
+        "Tests: the clause compiled from usable_fx_rate_bounds() keeps 1E-10, 1.5 and 99999999999999 and drops 0, 1E-11, -1.5, inf, 1E+14 and 1E+19; scanner controls (rows, rate, date aggregate, column, aliases, models.FxRate, join, select_from, nested def, method, module level); every raw reader still reads every row; no other reader without the clause"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_usable_fx_rate_gate.py", test_names)
+    return run_command(cmd, "Usable FX rate gate tests", verbose=verbose)
+
+
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
     """Test bounded Tool JSON encoding and sanitized validation errors."""
     print_section("Utils: Tool Wire")
@@ -741,6 +752,16 @@ Tests for utility modules and helper functions:
         desc="No async def under backend/app/api/v1 calls a synchronous function of backend/app/services/brim/brim_provider.py (its top-level defs and their aliases) directly: such I/O runs on the event loop and must go through await asyncio.to_thread(fn, ...); a reference handed to to_thread, the body of a nested def or lambda, an awaited coroutine of the module and a sync handler are allowed; every import form is followed (from-import, import as, plain, relative, lazy, a function imported by name); the detector is proven both ways on in-memory sources, and the scan must reach an API module that imports the store",
         # ast and filesystem reads of the repository's sources, never imported; the control
         # cases are in-memory strings. No DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-usable-fx-rate",
+        utils_gate_usable_fx_rate,
+        name="Usable FX Rate Gate (X-R45)",
+        desc="usable_fx_rate_clause() in db/precision.py, compiled from usable_fx_rate_bounds() (fx_rates.rate >= 1E-10 AND fx_rates.rate < 1E+14), keeps 1E-10, 1.5 and 99999999999999 and drops 0, 1E-11, -1.5, inf, 1E+14 and 1E+19 on a private SQLite; every function under backend/app whose select (any alias of it, select_from, join) names FxRate calls the clause or is one of RAW_FX_RATE_READERS (the sync's change detection, the storage write and delete, the delete endpoint's count, the backup export, the portfolio cache fingerprint, the AI Export source lookup), each entry still a raw reader; the scanner proven both ways on an in-memory module",
+        # PURE: a private in-memory SQLite engine per test, disposed at teardown; the sources of backend/app read with
+        # ast, never imported; the control module an in-memory string. No lane DB, no server, no network, no writes.
         isolation="pure",
     )
     add_test(
