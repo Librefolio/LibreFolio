@@ -48,7 +48,7 @@ The `ValueError` reaches `validate_params()`, which raises `AssetSourceError` wi
 
 100 years cover any dated security and the model of a perpetual; dates outside 1900–2200 are not a live security's.
 
-Tests: `./dev.py test schemas scheduled-investment-bounds` (each limit and its boundary value, `validate_params()` → `INVALID_PARAMS`) and `./dev.py test services scheduled-investment-cost-bounds` (the COMPOUND late closed form against the former day-by-day walk, the one-pass late history, the cache cap, the late horizon, the late settlement).
+Tests: `./dev.py test schemas scheduled-investment-bounds` (each limit and its boundary value, `validate_params()` → `INVALID_PARAMS`) and `./dev.py test services scheduled-investment-cost-bounds` (the COMPOUND late closed form against the former day-by-day walk, each late history point equal to the value on its date and independent of the read window, a late-history cost linear in its days, the cache cap, the late horizon, the late settlement).
 
 !!! info "Why: R13-SEC7-2"
 
@@ -70,6 +70,8 @@ The three terms run from the first period's start, or from the last auto-coupon,
 - **COMPOUND**: `I_day = (P₀ + accrued_interest) × r × Δt` — interest on the principal plus the interest accrued so far; the manual events do not enter the base
 
 **Emission**: Price points are emitted only at maturation dates (not every day), matching the `maturation_frequency`. Start and end dates of each period always produce a point regardless. A maturation date's point is the day's value before its coupon.
+
+**History range**: `get_history_value(start_date, end_date)` returns the points and events dated in the range; a start before the schedule's first value adds an `initial_value` anchor point on that start. `start_date="min"` (`AssetHistoryStartDate`, «from the earliest available point») is the earliest of the schedule's first value date and its first manual event's date, or `end_date` with neither. The history is then the one an explicit start on that date returns: a manual event before the schedule's start brings the anchor on its date. The refresh asks for `"min"` when it resumes an asset with no stored price yet, that is on its first sync. Before lot MF-SI1, `"min"` raised `CALCULATION_ERROR` (the literal was still compared with dates), so the first sync of every new Scheduled Investment asset failed. Test: `./dev.py test services scheduled-investment-min-start`.
 
 ### 👣 The Accrual Walk {: #accrual-walk }
 
@@ -136,20 +138,21 @@ During the grace period (from the day after maturity through `maturity + grace_p
 Both interest types are closed-form, one segment per rate. With `m` the maturity date, `V_m` the value on it, `g = m + grace_period_days` and `Δt` from `calculate_day_count_fraction()`:
 
 - **SIMPLE**: `V(t) = V_m + P₀ × r_last × Δt(m, min(t, g)) + P₀ × r_late × Δt(g, t)`, the last term only once `t > g`.
-- **COMPOUND**: `V(t) = V_m × compound_growth(m, min(t, g), r_last) × compound_growth(g, t, r_late)` (`_late_compound_growth`). `compound_growth(a, b, r)` from `financial_math/interest.py` is `Π (1 + r × Δt(d − 1, d))` over the days `d` in `(a, b]`, 1 for an empty or reversed span: the daily step `V += V × r × Δt` in closed form, one power per run of equal day fractions — one power under ACT/365 and ACT/360, one per calendar year under ACT/ACT, and under 30/360 one per step size (0, 1, 2 or 3 days over 360), counted month by month.
+- **COMPOUND**: `V(t) = V_m × compound_growth(m, min(t, g), r_last) × compound_growth(g, t, r_late)` (`_late_compound_growth`). `compound_growth(a, b, r)` from `financial_math/interest.py` is `Π (1 + r × Δt(d − 1, d))` over the days `d` in `(a, b]`, 1 for an empty or reversed span: the daily step `V += V × r × Δt` in closed form, at a cost that does not grow with the span (see Technical Notes below). The grace-period factor is the same for every date after the grace period, and the memo of `compound_growth` computes it once.
 
-`get_history_value()` builds the late maturation grid, from the day after maturity to the end of the late range (below), values it with `_late_interest_values`, and emits only the dates of the requested range:
+Every reader values a late date the same way, with `_compute_late_interest_value()`:
 
-- **COMPOUND** values the whole grid from maturity, in one pass: each date's value grows from the previous grid date's by `_late_compound_growth` over the days between them. A date's value therefore never depends on the window it is read in: the start of the requested range does not change the chain of products that leads to it.
-- **SIMPLE** is closed-form per date, so it values only the emitted dates and the last date of the grid.
+- `get_history_value()` builds the late maturation grid, from the day after maturity to the end of the late range (below), and values only the dates of the requested range plus the last date of the grid (`_late_interest_values`), SIMPLE and COMPOUND alike;
+- `get_current_value()` values today's date;
+- with `generate_interest`, the late MATURITY_SETTLEMENT is dated on the last date of the grid and carries that date's late price, the value the chart draws on it.
 
-With `generate_interest`, the late MATURITY_SETTLEMENT is dated on the last date of the grid and is always that date's late price, the value the chart draws on it.
+A day therefore has the same digits in the history, in the current value and in the settlement, and a date's value never depends on the window it is read in.
 
 Late interest is valued up to `SCHEDULE_MAX_DATE` (2200-12-31) at most: `get_history_value()` ends the late range, and its grid, at `min(end_date, SCHEDULE_MAX_DATE)` and emits no point after it; a schedule with late interest that matures on that very day emits nothing after maturity (the flat line drawn after the maturity of a schedule without late interest does not apply).
 
-!!! info "Closed form, one pass (R13-SEC7-2)"
+!!! info "Closed form per date (R13-SEC7-2, MF-SI1)"
 
-    Before R13-SEC7-2, COMPOUND late interest walked day by day from maturity for every date it was asked on, so a long DAILY late history cost a number of steps quadratic in its days. The closed form and the one-pass history make it linear in the dates of the late grid, and the horizon caps how many there can be. Under ACT/ACT, the SIMPLE dates reuse the memoized year prefix of the day count (see Technical Notes below). The closed form is also more exact than rounding at every step: the COMPOUND late values moved only in the last two or three of the 28 significant digits of the `Decimal`, far below the 12 decimals a stored price keeps.
+    Before R13-SEC7-2, COMPOUND late interest walked day by day from maturity for every date it was asked on, so a long DAILY late history cost a number of steps quadratic in its days. Now a date costs the same however far it is from maturity, so a history costs in proportion to the dates it values, and the horizon caps how many there can be. Under ACT/ACT, SIMPLE late interest reads the memoized year prefix of the day count (see Technical Notes below). The closed form is also more exact than rounding at every step: the COMPOUND late values differ from the former day-by-day walk only in the last digits of the 28-digit `Decimal`, far below the 12 decimals a stored price keeps.
 
 ---
 
@@ -165,13 +168,15 @@ The engine caches the full schedule computation as a `tuple[dict, list[FAAssetEv
 
 The cache is a module-level TTL cache (`get_ttl_cache("scheduled_investment")`, 256 entries, 48 h TTL), in memory and per process. It survives across multiple sync calls but is cleared on server restart.
 
-Measured times, rounded (one process at nice 10, machine load around 35; indicative, not a benchmark):
+Measured times, rounded (one process at nice 10; indicative, not a benchmark). The first, second and last rows were measured at a machine load around 35, the late-interest rows (after MF-SI1) around 25:
 
 | Schedule | Time |
 |---|---|
 | Typical: 5 years, MONTHLY | ~13 ms the first time, then ~0 ms from the cache |
 | The bounds' worst case: 100 years, DAILY, SIMPLE or COMPOUND (over the cap, never cached) | ~130 ms for the current value, ~250 ms for the full history |
-| Matured in 1950, DAILY COMPOUND late interest up to today | ~70 ms for a 7-day history (the whole late grid from maturity is valued), ~150 ms for the full one |
+| Matured in 1900, DAILY COMPOUND late interest: a 7-day history | ~40–130 ms (120–270 ms before MF-SI1) |
+| The same, full history to 2200-12-31 (≈ 110 000 points) | ~1.9 s under ACT/365, ~2.9 s under ACT/ACT, ~3.9 s under 30/360, within the 55 s timeout of the sync's history call |
+| The same, current value | ~1–2 ms |
 | The report's DAILY schedule from year 1 to year 9999 | refused in < 1 ms (`INVALID_PARAMS`) |
 
 ---
@@ -211,7 +216,13 @@ A P2P loan of €10,000 with 5% simple annual interest (ACT/365), one period fro
 
 ## 🔧 Technical Notes
 
-- **Interest math in the financial math layer**: the day count conventions and simple interest — `calculate_day_count_fraction()`, which implements ACT/365, ACT/360, ACT/ACT (ISDA: a span is cut at each 1 January it crosses, each piece over its own year's length, the pieces summed in calendar order) and 30/360 through three helpers, and `calculate_simple_interest()` — live in `backend/app/services/financial_math/interest.py` (lot CP-14a, U10, developer decision D-8), and the plugin imports them from there. `_compute_maturation_dates()` stays in `scheduled_investment/plugin.py`: it reads the domain's `MaturationFrequency`. Before U10 the primitives lived in the plugin itself, which had absorbed the former `backend/app/utils/financial_math.py`; the [layer guard](../financial_math.md#layer-guard) now fails if one of them is defined anywhere else in `backend/app`. Since R13-SEC7-2, `interest.py` also holds `compound_growth()`, the closed form of daily compounding that COMPOUND late interest uses (see [Late Interest](#late-interest)), and the ACT/ACT sum across years memoizes its full-year prefix: `_act_act_years_before(start, end_year)`, the pieces from the start to 1 January of the end year, in an LRU cache of 4 096 entries. A long run of dates from one start, such as a SIMPLE late-interest history, sums the years once per end year instead of once per date, with the same digits as the plain per-year sum.
+- **Interest math in the financial math layer**: the day count conventions and simple interest — `calculate_day_count_fraction()`, which implements ACT/365, ACT/360, ACT/ACT (ISDA: a span is cut at each 1 January it crosses, each piece over its own year's length, the pieces summed in calendar order) and 30/360 through three helpers, and `calculate_simple_interest()` — live in `backend/app/services/financial_math/interest.py` (lot CP-14a, U10, developer decision D-8), and the plugin imports them from there. `_compute_maturation_dates()` stays in `scheduled_investment/plugin.py`: it reads the domain's `MaturationFrequency`. Before U10 the primitives lived in the plugin itself, which had absorbed the former `backend/app/utils/financial_math.py`; the [layer guard](../financial_math.md#layer-guard) now fails if one of them is defined anywhere else in `backend/app`.
+- **Daily compounding and the memos (R13-SEC7-2, MF-SI1)**: `interest.py` also holds `compound_growth()`, the closed form of daily compounding that COMPOUND late interest uses (see [Late Interest](#late-interest)). Its cost does not grow with the span:
+    - ACT/365 and ACT/360: one power;
+    - ACT/ACT: the first year's days, one power for the whole common years and one for the whole leap years in between, then the last year's days;
+    - 30/360: one power per step size (0, 1, 2 or 3 days over 360). The step counts of the span are differences of closed-form counts up to each date: a whole year has 7 steps of 0 (onto the 31sts), one of 3 (common year) or 2 (leap year) onto 1 March, the rest of 1, then month by month in the last year. Integers, so exact.
+
+    It is memoized (`_compound_growth`, an LRU cache of 4 096 entries), keyed on the span, the rate as written (`0.05` and `0.050` are equal `Decimal`s with other digits), the convention and the caller's `Decimal` precision and rounding. The ACT/ACT day count across years memoizes its full-year prefix with the same precision-and-rounding key: `_act_act_years_before(start, end_year, …)`, the pieces from the start to 1 January of the end year, in an LRU cache of 4 096 entries. A long run of dates from one start, such as a SIMPLE late-interest history, sums the years once per end year instead of once per date, with the same digits as the plain per-year sum.
 - **`identifier_type`**: Always `AUTO_GENERATED` — the engine generates its own UUID identifier.
 - **`params_schema`**: Exposes a single `ui_component` field (`key: "_ui_component"`, `default: "scheduled_investment"`) telling the frontend to render the dedicated `ScheduledInvestmentEditor` instead of generic fields.
 - **Events**: there is no `supports_events` flag. `get_history_value()` returns price points and events together in `FAHistoricalData.events` (auto-generated + manual, filtered to the requested range).
