@@ -5262,3 +5262,142 @@ conflitto in coda a «Fixed» (H-28, Z-14, MF-E1): il coordinatore ha messo la m
 >   - Ho fermato `api sync`, che aspettava al cancello, prima del commit, per non lanciare niente durante il merge.
 >   - Non lanciati: `api sync` (il client generato non è tracciato), `mkdocs build` stretto e `check-links` (si fanno
 >     quando il carico lo permette), `api assets-provider` ed `e2e search-to-prices` (nello slot).
+
+**X-R24/25 committato** (coordinatore, 02:25): `e22251856` e `cdcf1325b`. **Ventesimo aggiornamento di base**: dev
+`b1b4960c4` unito senza conflitti, HEAD **`30918aed6`**, pulito, con `max_integer_digits` di W-B58. Le due corse di
+rete (`api assets-provider`, `e2e search-to-prices`) si fanno nello slot dopo il congelamento della galleria, sulla
+revisione combinata, prima dell'ingresso.
+
+**Slot 1** (03:31–03:37, porta 6183): `db populate --force` ✅; `api assets-provider` **24/24** ✅ (43 s), su `30918aed6`
+più l'X-R38 non committato (tocca solo i cambi, nulla della ricerca degli asset). `e2e search-to-prices` **non partito**:
+alle 03:35 il blocco della galleria dei colori è cominciato in anticipo, e il coordinatore ha chiesto di finire il pezzo in
+corso e di non avviare il successivo.
+> **⚠️ Fuori pista**: per fermare il ciclo di `slot.sh` senza uccidere il pezzo in corso, ho dato a `check.sh` un
+> controllo su un file `STOP`, sostituendolo con una rinomina atomica (l'istanza in esecuzione tiene il vecchio inode), e
+> ho creato il file. Il pezzo 3 si è fermato da solo. Poi ho tolto il file. Il pre-bind di questo pezzo ha ricostruito il
+> frontend, vecchio dopo il ventesimo aggiornamento di base: circa 5 minuti dei 6.
+
+### X-R38 — i tassi di cambio che nessuna colonna può tenere ✅ (2026-10-17, 02:25–03:45; consegnato, le corse `api` aspettano lo slot)
+
+**Stato verificato** (su `30918aed6`):
+- `FxRate.rate` è `Numeric(24, 10)`: 14 cifre prima della virgola e 10 dopo.
+- **Le scritture**:
+  - `upsert_rates_bulk` controlla solo che la valuta di base sia diversa da quella quotata e che il tasso sia positivo,
+    poi inverte se `base > quote`, senza controlli;
+  - l'endpoint `POST /fx/currencies/rate` inverte anche lui prima di chiamare il servizio;
+  - la sync dei provider e i tassi a catena passano da `truncate_fx_rate`, che solleva un'eccezione da circa 1E+50.
+- **Le letture**:
+  - `convert_bulk` moltiplica o divide per il tasso salvato (righe ~249–251), e `compute_chain_rate` divide (~62):
+    uno 0 salvato dà `DivisionByZero` (un 500), un `inf` dà importi infiniti;
+  - i confronti della sync passano un valore salvato a `truncate_fx_rate`, che con un valore vecchio enorme solleva
+    un'eccezione.
+
+**Disegno** (direzione del coordinatore: la stessa di W-B58):
+- `storable_fx_rate(value)` in `db/precision.py`, accanto a `storable_price` di W. È un'aggiunta; ora è uno stub che
+  solleva `NotImplementedError`. Restituisce il valore troncato, oppure `None` se non è finito, se ha più di 14 cifre
+  intere, o se troncato dà 0;
+- **scritture**:
+  - manuale: dopo la normalizzazione, un `ValueError` che nomina coppia, data e limiti, e niente scritto della
+    chiamata; l'endpoint risponde con un errore per voce, e 400 se tutte falliscono, mai 500;
+  - provider e catene: l'osservazione si salta, con un solo avviso per sync;
+- **letture**: un valore vecchio inutilizzabile conta come «tasso mancante» in `convert_bulk` e come leg mancante in
+  `compute_chain_rate`; nei confronti della sync conta come cambiato, così il valore nuovo lo sovrascrive.
+- **I rossi**: affidati al test-author (02:28), solo scrittura finché dura il congelamento.
+
+**Rossi confermati** (03:03, carico 38–42, una categoria alla volta, prima del codice): `utils real-decimal` 23/230
+rossi, `services fx-core` 11/37, `services fx-sync-service` 23/34, `services fx-conversion` 26/44; nessun altro rosso, e
+ogni rosso per la ragione giusta (lo stub che solleva `NotImplementedError`; tassi salvati oggi, o che sollevano
+`InvalidOperation`, `DivisionByZero`, `Overflow`). `api fx-unit` (13 casi, 12 rossi previsti) aspetta uno slot: la categoria
+`api` avvia il server della corsia.
+
+> **⚠️ Fuori pista (03:10) — lo schema del tasso manuale, approvato dal coordinatore.** I 4 casi «non finito» di
+> `api fx-unit` servono il router dei cambi su un `FastAPI()` proprio (in processo, senza server): l'handler globale di
+> A7b-2, installato in `main.py`, non li raggiunge. In più, misurato in processo: `coerce_rate` (`schemas/fx.py`) chiamava
+> `Decimal(v)` da sé, quindi `"abc"`, `true` e `"0x10"` sollevavano `InvalidOperation`, che non è un `ValueError` e passa
+> oltre Pydantic (500, che A7b-2 non copre); e un rifiuto rimandava `Decimal('Infinity')`, che il renderer JSON non sa
+> scrivere (500). Proposta al coordinatore, approvata: le stringhe e gli interi vanno a Pydantic così come sono, un float
+> finito come prima, un float non finito come testo; ogni rifiuto diventa un 422 con un `input` serializzabile, senza
+> bisogno di A7b-2 (che resta la rete per tutta l'app). Il test-author ha aggiunto 3 rossi (`"abc"`, `true`, `"0x10"`: 422,
+> `loc` sul `rate`, niente salvato) e una guardia (un numero JSON `1.5` e un intero `2` accettati come prima).
+
+**Codice** (03:20, script a sostituzioni contate `files/checks/xr38_code.py`: 28 sostituzioni in 6 file, ogni ancora
+verificata unica prima di scrivere e di nuovo prima di ogni sostituzione):
+- `db/precision.py`:
+  - `storable_fx_rate` = `storable_value(…, FxRate, "rate")` più «mai 0»;
+  - `fx_rate_limits_text()`, i limiti a parole letti dal modello (14 cifre, 10 decimali);
+  - `usable_fx_rate_bounds()` = (`1E-10`, `1E+14`), per l'SQL delle letture.
+- `services/fx/storage.py`:
+  - `normalize_storable_rate`: la normalizzazione che non solleva mai; `None` se il tasso non è finito, se non è sopra
+    0, o se l'inverso va in overflow;
+  - `fx_rate_refusal`: coppia, data e limiti;
+  - `upsert_rates_bulk`: il controllo «positivo» solo sui finiti, poi la normalizzazione e `storable_fx_rate`;
+    `ValueError` prima di scrivere qualsiasi cosa della chiamata. Il valore salvato resta quello normalizzato, come
+    prima: niente cambia per i tassi validi.
+- `api/v1/fx/currencies.py`: l'inversione entra nel `try` della voce, tramite `normalize_storable_rate`.
+- `schemas/fx.py`: `coerce_rate`, come sopra.
+- `services/fx/conversion.py`:
+  - `compute_chain_rate`: una gamba inutilizzabile dà `None` (`_usable_rate`);
+  - `convert_bulk`: il filtro SQL `rate >= 1E-10 AND rate < 1E+14`, sia nell'ancora del riempimento all'indietro sia
+    nella finestra. Nessun controllo per riga in Python: ogni double in quell'intervallo si rilegge conservabile, e il
+    percorso è caldo (conversioni giornaliere del portafoglio).
+- `services/fx/sync.py`:
+  - in `ensure_rates_multi_source`, una sola passata di normalizzazione, che salta e raccoglie per coppia; l'inserimento
+    usa le osservazioni tenute; il vecchio valore si confronta con `storable_fx_rate`, e `None` conta come cambiato;
+  - in `sync_pairs_bulk`:
+    - fase 2: `_collect_leg_rates` mette da parte (`leg_unusable`) ciò che non si normalizza;
+    - fase 3: un passo singolo e le catene (`_storable_chain_rates`) saltano ciò che la colonna non tiene;
+    - un solo avviso per coppia e per sync (`_warn_unusable_rates`), che unisce le date delle gambe e del tasso salvato;
+  - `_count_actual_changes` confronta con `storable_fx_rate`;
+  - il messaggio PARTIAL dice «nessun tasso che il database possa tenere» quando tutte le date sono state saltate.
+- Ruff segnalava C901 su due chiusure (11 > 10). Invece di un `noqa`, ho estratto due funzioni di modulo
+  (`_collect_leg_rates`, `_storable_chain_rates`).
+- Controlli: ruff e black puliti sui 6 file; `import backend.app.main` ok.
+- Limite noto, scritto nella docstring: SQLite tiene il tasso come double, quindi un tasso a pochi millesimi sotto
+  `1E+14`, con più cifre di quante un double ne tenga (`99999999999999.999`), si salva come `1E+14`, e le letture lo
+  saltano. Il test vuole `storable_fx_rate("99999999999999.99999999999")` conservabile: lascio il limite sulle cifre,
+  com'è per W-B58.
+
+**Verdi** (03:17–03:27, una categoria alla volta, carico < 50, corsia 6183):
+- i quattro file dei rossi: `utils real-decimal` 230/230, `services fx-core` 37/37, `services fx-sync-service` 34/34,
+  `services fx-conversion` 44/44;
+- i vicini: `schemas fx-routes` 34, `db fx-rates` 6 (`ensure_rates_multi_source`), `services fx-catalog` 8,
+  `rate-limit-results` 23, `rate-limit-errors` 55, `rate-limit-boundaries` 33, `financial-math` 825 (consumatori di
+  `convert_bulk`).
+- Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6183 --data-dir
+  /tmp/librefolio-r13-x <cat> <azione>`, tramite `files/checks/check.sh`. Log in `files/checks/logs/xr38_*`.
+- **Non girati** (la categoria avvia il server della corsia, quindi serve uno slot): `api fx-unit` (17 casi X-R38: 13 del
+  primo giro, più i 3 rossi di `"abc"`/`true`/`"0x10"` e la guardia dei numeri JSON), `api fx`, `api fx-sync`,
+  `api fx-signals`, `api fx-compress-errors`; facoltativi `front-fx fx-editor` e `fx-sync-mock`.
+
+**Backlog** (sezione X): aggiunte X-R43 (impostazioni dei plugin, un intero di 401 cifre dà 500; dal coordinatore), X-R44
+(`mockprov` nominabile e assegnabile in produzione; dalla revisione R13-SEC5 di E, prima del rilascio, dopo X-R38; più la
+nota per F05: chiudere anche il fornitore *nominato*) e X-R45 (i lettori diretti di `fx_rates` che non saltano i tassi vecchi
+inutilizzabili: una migrazione di dati, col via del developer, oppure il filtro in ogni lettore).
+> **⚠️ Fuori pista**: avevo dato il numero X-R44 ai lettori diretti; il coordinatore l'ha assegnato a `mockprov`, quindi
+> i lettori diretti sono diventati X-R45.
+
+**CHANGELOG**: una riga 🐛 in coda a «Fixed» di `[Unreleased]`: tassi rifiutati, saltati nella sync, letture che li
+saltano, 422 invece di 500.
+
+**Documentazione** (docs-writer, solo EN, 03:20–03:42):
+- `developer/architecture/database/index.md`: la riga `fx_rates.rate` ora dice 14 cifre; la fine del punto «Read.»; un
+  punto nuovo, «Exchange rates.»;
+- `developer/backend/fx/configuration.md`, «📅 Chain Dates, Writes and Counters» e la tabella degli stati: le gambe
+  inutilizzabili, ciò che la colonna tiene, i rifiuti manuali, l'endpoint, i contatori, `partial`;
+- `developer/backend/fx/architecture.md`: il riempimento all'indietro sui soli tassi utilizzabili, i limiti SQL della
+  finestra, il limite noto dei double;
+- `user/fx/detail/data-editor.en.md`: due frasi in «💾 Save your changes». La pagina è stata timbrata con
+  `translate-stamp`; le pagine IT, FR ed ES non hanno le due frasi (si portano a mano, se si vuole).
+- `mkdocs build` stretto ✅ (03:37, carico 34, 71 s, nessun WARNING) e `check-links` ✅ (97 link validi). Durante lo slot
+  avevo chiesto al docs-writer di non scrivere sotto `mkdocs_src/`: il pre-bind del server ricostruisce la documentazione
+  a ogni avvio.
+> **⚠️ Fuori pista — X-R46, trovato dal docs-writer.** L'editor dei cambi (`FxDataEditorSection.svelte`, `handleSave()`)
+> non mostra i rifiuti del server. Con un 400 mostra «Request failed with status code 400»; con un 200 che porta `errors`
+> conta il tasso rifiutato fra i salvati. Con X-R38 questi rifiuti diventano raggiungibili dall'editor. È lavoro di
+> frontend, fuori dal lotto: va nel backlog, proposto subito dopo X-R38. La frase della pagina utente dice solo «rifiutato
+> e non salvato», che è vero lato server.
+
+**Consegna** (03:45, FROZEN): 19 file tracciati, nessun file nuovo; ruff e black puliti su tutti gli 11 file Python;
+`git diff --check` pulito; porta 6183 libera. Non girati: `api fx-unit`, `fx`, `fx-sync`, `fx-signals`,
+`fx-compress-errors` (dopo il blocco della galleria). Commit proposti: `fix(fx): refuse or skip unstorable rates`
+(codice, test, documentazione, CHANGELOG, hash delle traduzioni) e `docs(journal): X-R38, backlog X-R43–X-R46`.
