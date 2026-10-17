@@ -62,13 +62,15 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
 |---------|------|----------------|-------------------------|
 | `transactions.quantity` | `RealDecimal(22, 10)` | 10 | 15 |
 | `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 | 12 |
-| `transactions.amount`, `asset_events.value` | `Numeric(18, 6)` | 6 | 15 for the amount, 12 for the event value |
+| `transactions.amount`, `asset_events.value` | `RealDecimal(18, 6)` | 6 | 15 for the amount, 12 for the event value |
 | `fx_rates.rate` | `Numeric(24, 10)` | 10 | 14 |
 | `price_history.volume` | `Numeric(24, 0)` | 0 | 24 |
 
 - **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
   `0.123457` (a quantity, before C-97), and a wider scale shows the double's noise
-  (`65000.123456` at scale 12 reads `65000.123456000001`). `RealDecimal`
+  (`65000.123456` at scale 12 reads `65000.123456000001`), as does scale 6 from about 11
+  digits before the point (`123456789012.345` reads `123456789012.345001`,
+  `-99999999999999.9` reads `-99999999999999.906250`: an amount, before W-B60). `RealDecimal`
   (`backend/app/db/real_decimal.py`) writes the same double and reads back the shortest
   decimal that represents it (its `repr`), at most 15 significant digits
   (`REAL_SIGNIFICANT_DIGITS`), rounded to the scale when it has more decimals and padded to
@@ -82,8 +84,14 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   a release 1.2 database never enforced them, and reading such a quantity as `None` would
   erase a position. Writing a value a double cannot hold, such as `Decimal("1E+400")`,
   raises `ValueError` (*not finite as a double*) in `process_bind_param()`, whoever writes
-  it: no ±inf reaches a `RealDecimal` column any more. The `Numeric` columns have neither
-  guard: `transactions.amount`, `asset_events.value`, `price_history.volume` and
+  it: no ±inf reaches a `RealDecimal` column any more. Amounts and event values have been
+  `RealDecimal(18, 6)` since W-B60, with the same declaration and DDL (`NUMERIC(18, 6)`, no
+  migration): they read back as written, always with 6 decimals as before (`-100` reads
+  `-100.000000`), and these guards cover them. An amount that release 1.2 stored with more
+  than 15 significant digits (10 or more digits before the point, plus decimals; since the
+  C-97 input limits, no new amount has more than 15) now reads rounded at the 15th: at most
+  0.000005 from what 1.2 read with 10 digits before the point, about ten times more for
+  each further one. The `Numeric` columns have neither guard: `price_history.volume` and
   `fx_rates.rate` store a value past a double's range as ±inf without an error, and read a
   stored ±inf back as `Decimal('Infinity')`, not `None`. The FX writers no longer send such a
   rate, and the conversions skip one already stored (X-R38, below).
@@ -411,5 +419,6 @@ The admin view of the same layout is [Filesystem Structure](../../../admin/files
 | `broker_reports/` | `services/brim/brim_provider.py` | Reports and sidecars by status and broker, plus `.locks/` ([File Lifecycle](../../backend/brim/architecture.md#file-lifecycle)) |
 | `logs/librefolio.log` | `logging_config.py` | structlog `JSONRenderer` lines; `TimedRotatingFileHandler` (`when="W0"`, `utc=True`, `backupCount=52`) whose rotator gzips each archive to `librefolio.log.<date>.gz` |
 | `scheduler_state.json` | `services/platform/scheduler/state.py` | Last run of the `current_price` and `history_sync` jobs, with the count of items a provider's pause deferred (`last_items_deferred`) and their `retry_at`, and the failures in a row (`consecutive_failures`) and `next_attempt_at`, the end of the wait after them ([Provider Pauses and Failures](../../backend/scheduler.md#pauses-and-failures)); written then renamed; a missing or corrupt file means a fresh state |
+| `.scheduler.lock` | `services/platform/scheduler/run_lock.py` | Empty lock that serialises the scheduler's runs across the worker processes ([Several Workers](../../backend/scheduler.md#cross-process-lock)): an exclusive `flock`, the file created `0600` by the first run that takes it and opened with `O_NOFOLLOW`, never deleted. Safe to leave in place; never delete it while LibreFolio runs. Not used where Python has no `fcntl` |
 | `secrets/instance.key` | `services/platform/instance_key.py` | The [instance key](../security.md#instance-key), only when neither `LIBREFOLIO_INSTANCE_KEY` nor `LIBREFOLIO_INSTANCE_KEY_FILE` is set. Created by the first `derive_key()` call, not by `ensure_data_dirs()`: `secrets.token_urlsafe(32)` and a newline (43 characters, 44 bytes), folder `0700`, file `0600`. Published with a hard link so that the first key wins, then never rewritten; a file that goes missing is generated again, see the [known limitation](../security.md#instance-key). `validate_test_data_dir()` keeps a test root from aliasing it |
 | `scenario_catalog/{historical,hypothetical}/` | the administrator | Optional host scenarios ([Scenario Catalogue](../../backend/risk/architecture.md#scenario-catalog)) |

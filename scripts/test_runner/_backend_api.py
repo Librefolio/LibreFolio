@@ -83,6 +83,15 @@ def api_assets_price(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Assets Price API tests", verbose=verbose)
 
 
+def api_period_changes(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the MF-P2 period-change route tests."""
+    print_section("Period Changes API Tests (MF-P2)")
+    print_info("Tests: POST /assets/prices/period-changes, POST /fx/currencies/period-changes")
+    print_info("Tests: 401 without a session, 422 for base == quote, answer shape, the pages' numbers")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_period_changes_api.py", test_names)
+    return run_command(cmd, "Period changes API tests", verbose=verbose)
+
+
 def api_signal_catalogs(verbose: bool = False, test_names: list = None) -> bool:
     """Run static Asset/FX signal catalog API tests."""
     print_section("Signal Catalog API Tests")
@@ -950,6 +959,8 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-unit", api_fx_unit, name="FX API Unit", desc="Direct handler unit tests, no live server")
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync")
+    # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
+    add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
     add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
     add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
@@ -979,7 +990,7 @@ Tests for REST API endpoints (server auto-started):
         "system-wake",
         api_system_wake,
         name="System API Wake-up",
-        desc="POST /system/wake-sync and LIBREFOLIO_WAKE_TOKEN(_FILE): wake_token() (variable or file, BOM and trailing line breaks dropped, variable wins, blank is unset, the panel token's rule value for value: anything but visible ASCII refused first, 31 characters refused, never the value, 32 taken, unreadable file); unset → 404 Not Found as a path that does not exist; unusable → 503 wake_unavailable and one error line naming the variable; missing or wrong token → 401 wake_unauthorized, WWW-Authenticate: Bearer; with it, run_due_jobs('wake') as a task, one at a time (token first, then 409 wake_in_progress until the run ends, a disconnect included, the run never cancelled); 200 application/json no-store streamed: a space at once, one per WAKE_KEEPALIVE_SECONDS, then WakeSyncResponse mirroring the RunReport, any status; a raising run → error, its class name only; started/finished/failed logged; D-W3 on the real scheduler: blocked, nothing past the switches; OpenAPI (WakeToken, WakeSyncResponse, 401/404/409/503) and the composition; through the middleware stack in flight without presence, the first gzip chunk before the run ends; the token never in an answer or the log",
+        desc="POST /system/wake-sync and LIBREFOLIO_WAKE_TOKEN(_FILE): wake_token() (variable or file, BOM and trailing line breaks dropped, variable wins, blank is unset, the panel token's rule value for value: anything but visible ASCII refused first, 31 characters refused, never the value, 32 taken, unreadable file); unset → 404 Not Found as a path that does not exist; unusable → 503 wake_unavailable and one error line naming the variable; missing or wrong token → 401 wake_unauthorized, WWW-Authenticate: Bearer; with it, run_due_jobs('wake') as a task, one at a time (token first, then 409 wake_in_progress until the run ends, a disconnect included, the run never cancelled); 200 application/json no-store streamed: a space at once, one per WAKE_KEEPALIVE_SECONDS, then WakeSyncResponse mirroring the RunReport, any status; a raising run → error, its class name only; started/finished/failed logged; D-W3 on the real scheduler: blocked, nothing past the switches, the run lock included; Z-11 (N71) on the real run_due_jobs: a worker that is not the leader answers ok with its jobs through the lock across processes, not_leader only without fcntl; OpenAPI (WakeToken, WakeSyncResponse, 401/404/409/503) and the composition; through the middleware stack in flight without presence, the first gzip chunk before the run ends; the token never in an answer or the log",
         # PURE: an app of the test holds the system router under /api/v1 (the middleware stack added where it is under
         # test), run_due_jobs is replaced on the wake module by a fake (the real one runs once, blocked, every collaborator
         # past its switches trapped) and the token variables are set with monkeypatch: no data directory, DB, server or

@@ -16,8 +16,8 @@ The contract (developer's decisions of 16/10):
   10 reads back 10.000000).
 * ``Transaction.quantity`` is ``RealDecimal(22, 10)``; ``Transaction.cost_basis_override`` (a PER-UNIT price,
   decision D5) and ``PriceHistory`` open, high, low, close and adjusted_close are ``RealDecimal(24, 12)``.
-  Unchanged: ``amount``, ``AssetEvent.value`` (``Numeric(18, 6)``), ``volume`` (``Numeric(24, 0)``),
-  ``FxRate.rate`` (``Numeric(24, 10)``).
+  Unchanged by C-97a: ``amount``, ``AssetEvent.value`` (``Numeric(18, 6)``, until W-B60 below), ``volume``
+  (``Numeric(24, 0)``), ``FxRate.rate`` (``Numeric(24, 10)``).
 * ``db/precision.py``: ``get_model_column_precision`` reads a ``RealDecimal`` column;
   ``truncate_to_db_precision`` / ``truncate_priceHistory`` cut to the scale, then, on a ``RealDecimal``
   column, to 15 significant digits, both ``ROUND_DOWN``; ``truncate_fx_rate`` is unchanged. New
@@ -72,6 +72,25 @@ also answers None when the double of the truncated rate, ``float(truncate_fx_rat
 whose double stays below it is kept as before. X-R50 reverses the X-R38 case ``14-integer-digits-cut-at-10-decimals``
 (``99999999999999.99999999999``, kept as ``99999999999999.9999999999``, whose double is ``1E+14``): it moved to the X-R50 reds.
 
+W-B60 (17/10, the follow-up of W-B58): ``Transaction.amount`` and ``AssetEvent.value`` are still plain ``Numeric(18, 6)``.
+Measured before the cure: SQLAlchemy reads them through ``'%.6f'`` of the stored double, so from about 11 integer digits
+the double's noise lands in the 6 decimals — ``123456789012.345`` reads ``123456789012.345001``, ``12345678901.2345``
+``12345678901.234501``, ``-99999999999999.9`` ``-99999999999999.906250``; a stored REAL ±inf reads
+``Decimal('Infinity')``; nothing refuses ``Decimal('1E+400')`` on write; ``truncate_to_db_precision`` keeps 19
+significant digits of an amount and ``round_computed_value`` 16, more than the column gives back. The cure's contract:
+
+* both columns become ``RealDecimal(18, 6)``: the same precision and scale, the same DDL (``NUMERIC(18, 6) NOT NULL``),
+  no migration, the value written as today (a REAL, or the INTEGER SQLite keeps for a whole value);
+* the read-back is exact, always with 6 decimals as today: ``123456789012.345`` → ``123456789012.345000``,
+  ``-99999999999999.9`` → ``-99999999999999.900000``, ``12345678901.2345`` → ``12345678901.234500``, whatever the input
+  limits of the column; what reads well today reads the same, form included (``-100`` → ``-100.000000``, ``0.000001``
+  → ``0.000001``, ``999999999999999`` → ``999999999999999.000000``);
+* a stored REAL ±inf reads ``None``; binding a value a double cannot hold (``Decimal('1E+400')``) raises the
+  ``ValueError`` of W-B58, naming "finite" — through the engine, a ``StatementError`` whose ``orig`` it is;
+* like every ``RealDecimal`` column, ``truncate_to_db_precision`` cuts an amount to 6 decimals, then 15 significant
+  digits, both ``ROUND_DOWN`` (``1234567890123.4567891`` → ``1234567890123.45``), and ``round_computed_value`` rounds it
+  to 6 decimals, then 15 significant digits, both ``ROUND_HALF_EVEN`` (``1234567890.1234567`` → ``1234567890.12346``).
+
 Reds fail at run time, never at collection: the column types are read from the models when a test
 runs (``Transaction.__table__.c.quantity.type``), and ``decimal_limit_issue``, ``round_computed_value``,
 ``max_integer_digits``, ``integer_digits_issue``, ``storable_value``, ``storable_fx_rate`` and ``INTEGER_DIGITS_EXCEEDED``
@@ -89,6 +108,7 @@ import pytest
 from sqlalchemy import Column, Engine, Integer, MetaData, Numeric, Table, create_engine, select, text
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.exc import StatementError
+from sqlalchemy.schema import CreateColumn
 from sqlalchemy.types import TypeDecorator, TypeEngine
 
 from backend.app.db import precision
@@ -105,12 +125,16 @@ _REAL_DECIMAL_COLUMNS = [
     pytest.param(PriceHistory, "adjusted_close", (24, 12), id="PriceHistory.adjusted_close"),
 ]
 
-# The numeric columns C-97a leaves as they are.
+# The numeric columns C-97a and W-B60 leave as they are: an amount and an event value go to RealDecimal in W-B60.
 _UNCHANGED_COLUMNS = [
-    pytest.param(Transaction, "amount", (18, 6), id="Transaction.amount"),
-    pytest.param(AssetEvent, "value", (18, 6), id="AssetEvent.value"),
     pytest.param(PriceHistory, "volume", (24, 0), id="PriceHistory.volume"),
     pytest.param(FxRate, "rate", (24, 10), id="FxRate.rate"),
+]
+
+# The columns W-B60 moves to RealDecimal, with the declaration they keep, (18, 6): a transaction amount, an event value.
+_AMOUNT_COLUMNS = [
+    pytest.param(Transaction, "amount", id="Transaction.amount"),
+    pytest.param(AssetEvent, "value", id="AssetEvent.value"),
 ]
 
 # The columns the round trips exercise: a quantity (scale 10 after the cure), a per-unit cost basis and a price (scale 12).
@@ -306,7 +330,8 @@ def test_get_model_column_precision_reads_the_new_declaration(model, column, dec
 
 @pytest.mark.parametrize(("model", "column", "declared"), _UNCHANGED_COLUMNS)
 def test_guard_the_other_numeric_columns_keep_their_type_and_declaration(model, column, declared):
-    """GUARD (green before and after): amounts, cost basis, event values, volume and FX rates are not part of C-97a."""
+    """GUARD (green before and after): the volume and FX rates are part of neither C-97a nor W-B60. An amount and an event
+    value left this list with W-B60 (``test_an_amount_and_an_event_value_are_real_decimals``)."""
     column_type = _column_type(model, column)
 
     assert type(column_type) is Numeric, f"{model.__name__}.{column} became a {type(column_type).__name__}: C-97a leaves it Numeric{declared}"
@@ -374,11 +399,27 @@ def test_guard_a_price_that_fits_is_not_changed_by_truncation():
     assert precision.truncate_priceHistory(Decimal("175.123456")) == Decimal("175.123456")
 
 
-def test_guard_an_amount_gets_no_significant_digit_cut():
-    """GUARD (green before and after): the 15-significant-digit cut is for RealDecimal columns only; ``amount`` stays Numeric(18, 6)."""
-    found = precision.truncate_to_db_precision(Decimal("1234567890123.4567891"), Transaction, "amount")
+@pytest.mark.parametrize(
+    ("model", "column", "typed", "expected", "rule"),
+    [
+        pytest.param(Transaction, "amount", "1234567890123.4567891", "1234567890123.45", "6 decimals, then 15 significant digits, ROUND_DOWN", id="Transaction.amount-15-significant-digits"),
+        pytest.param(Transaction, "amount", "999999999999999.9999999", "999999999999999", "15 significant digits, ROUND_DOWN: never rounded up to 1E+15", id="Transaction.amount-significant-digits-round-down"),
+        pytest.param(AssetEvent, "value", "1234567890123.4567891", "1234567890123.45", "6 decimals, then 15 significant digits, ROUND_DOWN", id="derived-AssetEvent.value-15-significant-digits"),
+    ],
+)
+def test_truncate_to_db_precision_cuts_an_amount_to_6_decimals_then_15_significant_digits(model, column, typed, expected, rule):
+    """Red today: the column is a plain ``Numeric(18, 6)``, so the cut stops at the scale — 1234567890123.456789 keeps 19
+    significant digits, 999999999999999.999999 21: more than the column gives back, so what is compared before a write is
+    not what is read after it.
 
-    assert found == Decimal("1234567890123.456789"), f"an amount of 1234567890123.4567891 truncates to {found}: expected 1234567890123.456789 (6 decimals, no significant-digit cut)"
+    Contract (W-B60): like every ``RealDecimal`` column, 6 decimals, then 15 significant digits, both ``ROUND_DOWN``:
+    1234567890123.45, and 999999999999999, never rounded up to 1E+15. This test replaces the C-97a guard
+    ``test_guard_an_amount_gets_no_significant_digit_cut``, which pinned the cut stopping at the scale. The event value
+    is derived from "both columns become ``RealDecimal(18, 6)``".
+    """
+    found = precision.truncate_to_db_precision(Decimal(typed), model, column)
+
+    assert found == Decimal(expected), f"{model.__name__}.{column}: {typed} truncates to {found}: expected {expected} ({rule})"
 
 
 @pytest.mark.parametrize(
@@ -460,7 +501,7 @@ def _round_computed_value():
         pytest.param(Decimal(1000) / Decimal(3), Transaction, "cost_basis_override", "333.333333333333", id="cost-basis-1000-over-3"),
         pytest.param(Decimal(100000) / Decimal(3), Transaction, "cost_basis_override", "33333.3333333333", id="cost-basis-100000-over-3-15-significant-digits"),
         pytest.param(Decimal(2) / Decimal(3), Transaction, "cost_basis_override", "0.666666666667", id="cost-basis-2-over-3-rounded-up"),
-        pytest.param(Decimal(1) / Decimal(3), Transaction, "amount", "0.333333", id="amount-1-over-3-no-significant-digit-step"),
+        pytest.param(Decimal(1) / Decimal(3), Transaction, "amount", "0.333333", id="amount-1-over-3-6-decimals"),
         pytest.param(Decimal(1) / Decimal(3), Transaction, "quantity", "0.3333333333", id="quantity-1-over-3-scale-10"),
         pytest.param(Decimal("1.0000000000005"), Transaction, "cost_basis_override", "1.000000000000", id="tie-at-the-scale-to-even"),
         pytest.param(Decimal("12345.12345678905"), Transaction, "cost_basis_override", "12345.1234567890", id="tie-at-15-significant-digits-to-even"),
@@ -505,6 +546,28 @@ def test_round_computed_value_keeps_the_form_of_a_value_that_fits(computed, mode
     assert found == Decimal(form), f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}: expected {form}"
     issue = _decimal_limit_issue()(found, model, column)
     assert issue is None, f"round_computed_value({computed}, {model.__name__}, {column!r}) = {found}, which decimal_limit_issue refuses: {issue}"
+
+
+@pytest.mark.parametrize(
+    ("model", "column"),
+    [
+        pytest.param(Transaction, "amount", id="Transaction.amount"),
+        pytest.param(AssetEvent, "value", id="derived-AssetEvent.value"),
+    ],
+)
+def test_round_computed_value_rounds_an_amount_to_6_decimals_then_15_significant_digits(model, column):
+    """Red today: the column is a plain ``Numeric(18, 6)``, so the rounding stops at the scale: 1234567890.1234567 comes
+    back 1234567890.123457, 16 significant digits, which ``decimal_limit_issue`` refuses and a REAL does not give back.
+
+    Contract (W-B60): like every ``RealDecimal`` column, 6 decimals, then 15 significant digits, both ``ROUND_HALF_EVEN``:
+    1234567890.12346 (…123457 rounds up at the 15th digit), which ``decimal_limit_issue`` accepts. The event value is
+    derived from "both columns become ``RealDecimal(18, 6)``".
+    """
+    found = _round_computed_value()(Decimal("1234567890.1234567"), model, column)
+
+    assert found == Decimal("1234567890.12346"), f"round_computed_value(1234567890.1234567, {model.__name__}, {column!r}) = {found}: expected 1234567890.12346 (6 decimals, then 15 significant digits, ROUND_HALF_EVEN)"
+    issue = _decimal_limit_issue()(found, model, column)
+    assert issue is None, f"round_computed_value(1234567890.1234567, {model.__name__}, {column!r}) = {found}, which decimal_limit_issue refuses: {issue}"
 
 
 # --------------------------------------------------------------------------- #
@@ -591,10 +654,12 @@ _BEYOND_A_DOUBLE = [
 
 def _process_bind_param(model, column: str):
     """The column type's own ``process_bind_param``, looked up when the test runs: ``RealDecimal`` has none before R13-SEC2
-    (``TypeDecorator``'s raises ``NotImplementedError``)."""
+    (``TypeDecorator``'s raises ``NotImplementedError``), and a plain ``Numeric`` none at all (W-B60: an amount and an
+    event value before their cure)."""
     column_type = _column_type(model, column)
-    if type(column_type).process_bind_param is TypeDecorator.process_bind_param:
-        pytest.fail(f"{type(column_type).__name__} ({model.__name__}.{column}) has no process_bind_param of its own: Decimal('1E+400') goes to SQLite as float('inf'), a REAL inf every later read of the row fails on (R13-SEC2)")
+    own = getattr(type(column_type), "process_bind_param", None)
+    if own is None or own is TypeDecorator.process_bind_param:
+        pytest.fail(f"{type(column_type).__name__} ({model.__name__}.{column}) has no process_bind_param of its own: Decimal('1E+400') goes to SQLite as float('inf'), a REAL inf that no read gives back as a number (R13-SEC2, W-B60)")
     return column_type.process_bind_param
 
 
@@ -1002,3 +1067,119 @@ def test_xr50_guard_storable_fx_rate_keeps_a_rate_whose_double_stays_below_1E14(
     truncated = precision.truncate_fx_rate(Decimal(typed))
     assert found == Decimal(expected), f"storable_fx_rate({typed}) = {found!r}: expected {expected}, its double {double!r} is below 1E+14 (X-R50 refuses from 1E+14 only)"
     assert isinstance(found, Decimal) and found.as_tuple() == truncated.as_tuple(), f"storable_fx_rate({typed}) = {found!r}: expected the value as truncate_fx_rate gives it, {truncated!r}"
+
+
+# --------------------------------------------------------------------------- #
+# W-B60: an amount and an event value read back exactly
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(("model", "column"), _AMOUNT_COLUMNS)
+def test_an_amount_and_an_event_value_are_real_decimals(model, column):
+    """Red today: both are a plain ``Numeric(18, 6)``, read through ``'%.6f'`` of the stored double.
+
+    Contract (W-B60): ``backend.app.db.real_decimal.RealDecimal``, a TypeDecorator over Numeric, as the seven columns of
+    C-97a.
+    """
+    column_type = _column_type(model, column)
+    kind = f"{type(column_type).__module__}.{type(column_type).__qualname__}"
+
+    assert kind == "backend.app.db.real_decimal.RealDecimal", f"{model.__name__}.{column} is a {kind}: from about 11 integer digits its read shows the double's noise in the 6 decimals (W-B60: RealDecimal(18, 6))"
+    assert isinstance(column_type, TypeDecorator), f"RealDecimal must be a TypeDecorator, it is a {type(column_type).__mro__}"
+    assert isinstance(column_type.impl, Numeric), f"RealDecimal must decorate Numeric, it decorates {column_type.impl!r}"
+
+
+@pytest.mark.parametrize(("model", "column"), _AMOUNT_COLUMNS)
+def test_guard_an_amount_and_an_event_value_keep_their_declaration_and_ddl(model, column):
+    """GUARD (green before and after): W-B60 changes how the value is read, not the column — still (18, 6), and the same
+    DDL, ``NUMERIC(18, 6) NOT NULL``, so no migration and every file already written stays readable."""
+    table_column = model.__table__.c[column]
+
+    assert precision.get_model_column_precision(model, column) == (18, 6), f"{model.__name__}.{column} is declared {precision.get_model_column_precision(model, column)}: W-B60 keeps (18, 6)"
+    ddl = str(CreateColumn(table_column).compile(dialect=_SQLITE))
+    assert ddl == f"{column} NUMERIC(18, 6) NOT NULL", f"{model.__name__}.{column} is created as {ddl!r}: W-B60 keeps {column} NUMERIC(18, 6) NOT NULL, without a migration"
+
+
+@pytest.mark.parametrize(("model", "column"), _AMOUNT_COLUMNS)
+@pytest.mark.parametrize(
+    ("typed", "form"),
+    [
+        pytest.param("123456789012.345", "123456789012.345000", id="123456789012.345"),
+        pytest.param("-99999999999999.9", "-99999999999999.900000", id="-99999999999999.9"),
+        pytest.param("12345678901.2345", "12345678901.234500", id="12345678901.2345"),
+    ],
+)
+def test_an_amount_or_an_event_value_reads_back_exactly_with_6_decimals(memory_engine, model, column, typed, form):
+    """Red today: ``'%.6f'`` of the stored double shows its noise in the 6 decimals — 123456789012.345 reads
+    123456789012.345001, -99999999999999.9 -99999999999999.906250, 12345678901.2345 12345678901.234501.
+
+    Contract (W-B60): the value written, always with 6 decimals as today. Compared as text, so the 6 decimals are pinned.
+    The read does not depend on the input limits: -99999999999999.9, past an event value's 12 integer digits, is a double
+    like any other.
+    """
+    read, _storage = _write_and_read(memory_engine, _column_type(model, column), Decimal(typed))
+
+    assert isinstance(read, Decimal), f"{model.__name__}.{column} reads back a {type(read).__name__}, not a Decimal"
+    assert str(read) == form, f"{typed} in {model.__name__}.{column} reads back as {read}: expected {form}, the value written with 6 decimals (W-B60)"
+
+
+@pytest.mark.parametrize(("model", "column"), _AMOUNT_COLUMNS)
+@pytest.mark.parametrize(
+    ("typed", "form", "storage"),
+    [
+        pytest.param("-100", "-100.000000", "integer", id="-100"),
+        pytest.param("0.000001", "0.000001", "real", id="0.000001"),
+        pytest.param("999999999999999", "999999999999999.000000", "integer", id="999999999999999"),
+    ],
+)
+def test_guard_an_amount_or_an_event_value_that_reads_well_today_reads_the_same(memory_engine, model, column, typed, form, storage):
+    """GUARD (green before and after): what ``Numeric(18, 6)`` reads without noise today reads the same after W-B60, form
+    included, and is written as today: a whole value as an INTEGER, a fraction as a REAL."""
+    read, stored_as = _write_and_read(memory_engine, _column_type(model, column), Decimal(typed))
+
+    assert isinstance(read, Decimal), f"{model.__name__}.{column} reads back a {type(read).__name__}, not a Decimal"
+    assert (str(read), stored_as) == (form, storage), f"{typed} in {model.__name__}.{column} reads back as {read}, stored as {stored_as}: today, and after W-B60, {form}, stored as {storage}"
+
+
+@pytest.mark.parametrize(("model", "column"), _AMOUNT_COLUMNS)
+@pytest.mark.parametrize("stored", [pytest.param(float("inf"), id="plus-inf"), pytest.param(float("-inf"), id="minus-inf")])
+def test_a_stored_infinite_amount_or_event_value_reads_back_as_none(memory_engine, model, column, stored):
+    """Red today: ``Numeric(18, 6)`` reads a REAL ±inf as ``Decimal('Infinity')`` (``'%.6f'`` of inf), which breaks
+    later, wherever the value is summed or sent.
+
+    Contract (W-B60): ``None``, as in every ``RealDecimal`` column (W-B58): no amount or event value is infinite.
+    """
+    read, storage = _read_back_never_raising(memory_engine, model, column, stored)
+
+    assert storage == "real", f"the fixture itself is wrong: {stored!r} was stored as {storage}"
+    assert read is None, f"a REAL {stored!r} in {model.__name__}.{column} reads back {read!r}: expected None, since no Decimal of the column is infinite (W-B60)"
+
+
+@pytest.mark.parametrize(("model", "column"), _AMOUNT_COLUMNS)
+@pytest.mark.parametrize("value", _BEYOND_A_DOUBLE)
+def test_binding_a_value_a_double_cannot_hold_into_an_amount_or_an_event_value_raises_naming_finite(model, column, value):
+    """Red today: a plain ``Numeric`` has no ``process_bind_param``; the value is bound as ``float('inf')``.
+
+    Contract (W-B60): the ``process_bind_param`` of ``RealDecimal`` (W-B58) raises ``ValueError``, its message containing
+    "finite", for any value that becomes ±inf as a float — ``Decimal('1E+400')`` the brief's, the others those W-B58
+    refuses on every ``RealDecimal`` column.
+    """
+    bind = _process_bind_param(model, column)
+
+    with pytest.raises(ValueError, match="finite"):
+        bind(value, _SQLITE)
+
+
+@pytest.mark.parametrize(("model", "column"), _AMOUNT_COLUMNS)
+def test_writing_a_value_a_double_cannot_hold_into_an_amount_or_an_event_value_is_refused(memory_engine, model, column):
+    """Red today: ``Decimal('1E+400')`` is written, a REAL inf, and reads back ``Decimal('Infinity')``.
+
+    Contract (W-B60): the INSERT fails with a ``StatementError`` whose ``orig`` is the ``ValueError`` of
+    ``process_bind_param``, naming "finite": nothing reaches the file.
+    """
+    try:
+        read, storage = _write_and_read(memory_engine, _column_type(model, column), Decimal("1E+400"))
+    except StatementError as refusal:
+        assert isinstance(refusal.orig, ValueError) and "finite" in str(refusal.orig), f"Decimal('1E+400') in {model.__name__}.{column} was refused with {refusal.orig!r}: expected the ValueError of process_bind_param, naming 'finite'"
+        return
+    pytest.fail(f"Decimal('1E+400') was written to {model.__name__}.{column} as {storage} and reads back {read!r} (W-B60: refuse it on write)")

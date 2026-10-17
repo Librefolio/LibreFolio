@@ -5075,3 +5075,338 @@ coordinatore, con `git --no-optional-locks` e limitata ai file nominati; le altr
   checkout principale, che non leggo; la voce del log lo dice.
 - Due correzioni prima di consegnare: la rotta dei plugin usa il `NoInputEchoRoute` comune di `api/no_echo.py`
   (portato da B4), non una copia sua; una frase poco chiara nella pagina dei file nascosti, riscritta.
+
+### Lotto «H-36: dietro un proxy che uvicorn non considera fidato, il limite per indirizzo si fa da parte» (R13-SEC6 di E, N70, 2026-10-17, mattina) — in corso
+
+> Chiesto dal coordinatore, urgente, prima dell'ingresso di A8a: dietro un proxy non configurato (l'immagine di
+> default) il limite per indirizzo di A8a mette insieme tutti i visitatori, e 50 tentativi sbagliati bloccano
+> l'accesso di tutti. Tre consegne: (1) un helper in `client_address.py` che A usa per saltare il limite per indirizzo;
+> (2) un controllo di configurazione in `CONFIG_CHECKS`; (3) una frase nei documenti di installazione/Docker. Prima i
+> rossi. Entra insieme ad A8a, o appena prima.
+>
+> **Punti vincolanti di E** (li verifica in review): rilevazione che il client non può provocare (peer privato,
+> loopback o link-local **e** un header di inoltro, per richiesta; mai «header da un peer non fidato» da solo); i proxy
+> pubblici restano alla configurazione, e il controllo *informa* quando gli header arrivano da un peer pubblico non
+> fidato; facoltativo, a mia scelta, la voce più a destra di `X-Forwarded-For` come chiave.
+>
+> **Contratto concordato con A** (dal coordinatore): `forwarded_by_untrusted_proxy(request: HTTPConnection) -> bool`
+> in `client_address.py`, vero quando: c'è `X-Forwarded-For`/`Forwarded`/`X-Real-IP`; `LIBREFOLIO_CLIENT_IP_HEADER` non
+> dà l'indirizzo; uvicorn non ha applicato l'inoltro (`request.client.host` non è tra gli indirizzi di XFF); il peer è
+> locale (loopback, RFC 1918, link-local, CGNAT 100.64/10, ULA/loopback IPv6). Il controllo del locale sta dentro
+> l'helper.
+
+**Analisi** (sola lettura, HEAD `333cead4d`, pulito; A8a = `66873b0c9`, non ancora in HEAD):
+
+1. **uvicorn 0.52.4, verificato nel sorgente installato** (`uvicorn/middleware/proxy_headers.py`):
+   - riscrive `scope["client"]` solo se il peer è in `trusted_hosts` (`--forwarded-allow-ips`, o `FORWARDED_ALLOW_IPS`,
+     `127.0.0.1` di default); unisce tutte le righe `x-forwarded-for` con `", "`;
+   - prende la prima voce non fidata da destra (con `*`, la prima), e la passa a `_parse_host_port`: `1.2.3.4:80` →
+     (`1.2.3.4`, 80), `[::1]:80` → (`::1`, 80), un IP nudo → porta 0. Quindi, dopo una riscrittura, `client.host` è
+     l'host di una voce di XFF, tolti porta e parentesi;
+   - ignora `Forwarded` e `X-Real-IP`; l'app non può leggere la configurazione della fiducia (la flag della CLI non
+     arriva all'app): resta il confronto di appartenenza concordato.
+2. **Il «locale» ha già una casa**: `utils/runtime/network.py:classify_ip` (piano 36) dà `loopback` (127/8, ::1),
+   `vpn` (100.64/10 e il /48 ULA di Tailscale), `lan` (10/8, 172.16/12, 192.168/16, 169.254/16, fe80::/10, fc00::/7),
+   `public`, `unknown` (nessuno, non leggibile, non specificato, multicast); normalizza parentesi, zona e IPv4-mapped.
+   È esattamente l'insieme concordato (lista di E + CGNAT di A). La usa già il controllo SMTP di E
+   (`classify_ip(name) in ("loopback", "lan", "vpn")`). La riuso: nessuna seconda lista.
+3. **Parsing delle voci di XFF**: `network._parse_ip` toglie già parentesi, porta (un solo `:`) e zona, come
+   `_parse_host_port` di uvicorn. Diventa pubblica (`parse_ip`, 3 righe: la definizione e due chiamate), invece di
+   copiare la logica di uvicorn.
+4. **Chi chiama oggi**: `client_address(request)` in `auth.py:278` (registrazione, A) e in `email.py:159,204` (E);
+   `client_rate_key` in `email/flows.py` e `email/verification.py`. A userà l'helper in `login_throttle`; E può usarlo
+   per i suoi limiti per indirizzo (il controllo li copre comunque).
+5. **Il controllo è a runtime**: all'avvio non è arrivata nessuna richiesta, quindi il controllo osserva quello che
+   l'helper ha visto dall'avvio: solo nomi di header, mai un indirizzo (N58). All'avvio è `ok`; per il log c'è una riga
+   per processo, alla prima osservazione di ogni classe.
+
+**Progetto**:
+
+- `client_address.py`:
+  - `_FORWARDING_HEADERS = ("X-Forwarded-For", "Forwarded", "X-Real-IP")`;
+  - `_untrusted_forwarding: dict[str, set[str]] = {"local": set(), "public": set()}`: i nomi visti, per classe del
+    peer; i test lo svuotano come `_warned` (H-22: niente funzione solo per i test);
+  - `forwarded_by_untrusted_proxy(request)`: nessun header di inoltro → falso; l'header configurato dà un indirizzo
+    (`_one_address`, senza avviso: l'avviso resta di `client_address()`) → falso; peer `unknown` → falso; uvicorn ha
+    seguito XFF (`parse_ip(peer)` uguale a `parse_ip` di una voce) → falso; altrimenti annota i nomi sotto `local` o
+    `public` e dà vero solo per `local`;
+  - la prima annotazione di ogni classe scrive una riga: `warning` per `local`, `info` per `public`, con `headers`
+    (nomi) e nient'altro;
+  - `untrusted_forwarding_seen(peer_class) -> tuple[str, ...]`: i nomi, nell'ordine di `_FORWARDING_HEADERS`; lo legge il
+    controllo.
+- `config_audit.py`: `check_client_address()` (`platform.client_address`): `warning`
+  `instance.checks.clientAddress.untrustedProxy` se è stato visto un proxy locale non fidato, `info`
+  `…publicForwarding` se solo peer pubblici, altrimenti `ok` `…ok`; `detail = {"headers": "X-Forwarded-For, …"}`.
+  In `CONFIG_CHECKS` subito dopo `check_session_cookie`.
+- i18n: tre chiavi `instance.checks.clientAddress.*` in `frontend/src/lib/i18n/instance/{en,it,fr,es}.json`, poi la
+  build del catalogo.
+- Documenti (docs-writer, solo inglese): un paragrafo in `admin/connection_checks.en.md#client-address`, una frase in
+  `admin/docker_advanced.en.md` §2 che ci rimanda, il contratto in `developer/architecture/security.md`. Nessuno
+  stamp: il debito di `connection_checks` è già H-5, `docker_advanced` si aggiunge a H-5.
+
+**Decisioni mie** (dentro il perimetro):
+
+- **CGNAT incluso**: è nel contratto concordato con A, e `classify_ip` lo tratta come `vpn` (Tailscale). Lo segnalo a E.
+- **La voce più a destra di XFF come chiave (punto 3 di E): no, per ora.** Dietro un peer privato che non è un proxy
+  che aggiunge (un client in LAN, o un proxy che passa l'XFF del client così com'è) quella voce la sceglie il client:
+  ruotandola si aggira il limite, scrivendo l'indirizzo di un altro lo si blocca. Il salto non ha la seconda falla. La
+  cura vera è configurare la fiducia, e il controllo la chiede.
+- **Socket unix e peer senza indirizzo**: `unknown` → falso. LibreFolio gira su TCP (dev.py e Docker).
+- **Conflitti con A8a**: A8a tocca `config_audit.py` (righe 19 e 22, gli import; dopo `check_log_level,`;
+  `log_configuration_audit`) e `test_config_audit.py` (docstring (c), import, la fine di `CHECK_IDS`, `_configure`,
+  `_accounts_checks`, i due test di (c)). Le mie righe stanno lontane da quei pezzi: l'import tra `email.checks` e
+  `instance_key`, la funzione prima di `CONFIG_CHECKS`, la registrazione dopo `check_session_cookie,` (una riga
+  invariata di distanza), in `CHECK_IDS` dopo `check_session_cookie`, i test in fondo al blocco (a). Il test d'ordine
+  di A ricava le piattaforme dall'ordine di `CHECK_IDS`, quindi regge. Verifica con `git merge-file` prima del
+  checkpoint.
+
+**Rossi** (test-author, nessun comando lanciato): blocco nuovo in `test_client_address.py` (contratto dell'helper, la
+prova con il vero `ProxyHeadersMiddleware` di uvicorn, l'annotazione e il log una volta per classe, nessun indirizzo nei
+log) e test del controllo in `test_config_audit.py`.
+
+**Selettori**: `services client-address`, `services config-audit`, `services config-package`,
+`services config-env-example`, `utils i18n-*` se servono; ruff/black; `mkdocs build` e `check-links`; la build e il
+controllo del catalogo i18n.
+
+> **Aggiunta al contratto** (coordinatore, da E, adottata, 17/10 mattina): tutti i punti di chiamata (login,
+> cambio password e profilo di A; resend, forgot e register di E) leggono già un indirizzo `None` come «nessun conteggio
+> per indirizzo». Quindi H aggiunge `rate_limit_address(request) -> str | None`: `None` quando il predicato è vero,
+> altrimenti `client_address(request)`. A e E lo chiamano al posto di una logica loro; la riga di log una volta per
+> processo resta nell'helper di H. Scelta mia: `client_address()` viene letto per primo, così il suo avviso su un
+> header configurato ma malformato non sparisce mai dietro il predicato.
+
+1. ✅ **Cura in prova** (17/10, mattina): `files/h36/apply.py`, che scrive le copie in `files/h36/dry/` e niente nel
+   worktree senza `--apply`.
+   > **Note implementazione**:
+   > - Ruff e black sono puliti sulle tre copie, come su HEAD.
+   > - `git merge-file` contro `66873b0c9` (A8a) dà 0 conflitti, sia su `config_audit.py` sia su `.env.example`.
+   > - Le quattro sorgenti i18n rifatte con `json.dumps(indent=2, ensure_ascii=False)` sono identiche byte per byte
+   >   all'originale prima dell'aggiunta: la forma canonica è verificata.
+   > - Starlette 1.6.0: `Headers.__contains__` e `getlist` mettono il nome in minuscolo. Il test `name in
+   >   request.headers` vale quindi per qualunque maiuscola.
+2. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina).
+   - `test_client_address.py`: paragrafo (h) nella docstring e un blocco (h) nuovo in fondo, 20 test e 238 casi.
+     Coprono: il contratto dell'helper, Request e WebSocket, i peer locali, pubblici e illeggibili, il seguito di
+     uvicorn, l'header configurato, la nota e il log una volta per classe, `untrusted_forwarding_seen`,
+     `rate_limit_address`, il vero `ProxyHeadersMiddleware` di uvicorn su uno scope grezzo, e il controllo visto da fuori.
+   - La barriera è la fixture `fresh_untrusted_forwarding`: rossi solo i test di (h), ognuno per conto suo.
+   - `test_config_audit.py`: paragrafo (f), `check_client_address` in `CHECK_IDS` dopo `check_session_cookie`, e un
+     blocco (f) in fondo (11 casi). Rosso all'import della raccolta, come accettato.
+   - Comando: `files/runs/h36-red-1.sh` (`services client-address`). Esito: **122 passed, 238 errors**. Tutti i 238
+     errori hanno lo stesso messaggio, «client_address.py has no _untrusted_forwarding, where
+     forwarded_by_untrusted_proxy() notes … (H-36, N70)». I test da (a) a (g) restano verdi.
+   > **⚠️ Fuori pista**: ruff I001 vuole l'import `from backend.app.services.platform import client_address as …`
+   > subito dopo la riga `email.checks`, che A8a riscrive. Con `git merge-file` contro `4a93f1f54` (il ramo di A, che
+   > discende da `66873b0c9`) c'era 1 conflitto. Rimedio: `from backend.app.services.platform.client_address import …`
+   > nel posto ordinato, dopo `from backend.app.services.platform import config_audit`, con una riga invariata in
+   > mezzo. Lo scrive il test-author.
+   > **⚠️ Fuori pista**: sempre in `security.md`, il punto «Callers.» del docs-writer andava in conflitto con
+   > `4a93f1f54`, che riscrive l'ultima riga di quel punto. Rimedio: torna il testo di HEAD e cambia solo la prima frase,
+   > cioè la regola `rate_limit_address`. Le frasi sui chiamanti di A ed E le aggiornano loro quando passano alla
+   > funzione nuova.
+   - Dopo il rimedio: `services config-audit` rosso alla raccolta, «ImportError: cannot import name
+     'PUBLIC_FORWARDING_SUMMARY' from …client_address» (`files/runs/h36-red-2.sh`). Ruff e black puliti sui due test.
+3. ✅ **Cura applicata** (17/10, mattina): `files/h36/apply.py --apply`, poi `cmp` con le copie di prova. Gli 8 file sono
+   identici.
+   - `network.py`: `_parse_ip` diventa `parse_ip`. Cambiano la definizione, le due chiamate e la docstring del modulo.
+   - `client_address.py`:
+     - le costanti `UNTRUSTED_PROXY_SUMMARY` e `PUBLIC_FORWARDING_SUMMARY`, e `_FORWARDING_HEADERS`;
+     - lo stato `_untrusted_forwarding`;
+     - le funzioni `forwarded_by_untrusted_proxy`, `rate_limit_address` (legge prima `client_address`),
+       `_followed_by_uvicorn`, `_note_untrusted_forwarding` e `untrusted_forwarding_seen`;
+     - la docstring del modulo, e «(a test client)» tolto dalla docstring di `client_address`.
+   - `config_audit.py`: `check_client_address` registrato dopo `check_session_cookie`, più una frase nella docstring del
+     modulo.
+   - `instance/{en,it,fr,es}.json`: `instance.checks.clientAddress.{ok,untrustedProxy,publicForwarding}`, dopo
+     `sessionCookie`. I termini seguono i documenti di ogni lingua: «proxy inverse» in FR, «proxy inverso» in ES,
+     «reverse proxy» in IT.
+   - `.env.example`: quattro righe di commento nella sezione «The Visitor's Address», nessuna variabile nuova.
+4. ✅ **Documenti** (docs-writer, solo inglese, nessun comando).
+   - `admin/connection_checks.en.md`: un blocco in fondo a `#client-address` su come LibreFolio riconosce un proxy di cui
+     non si fida, i limiti per indirizzo, il log, il controllo, il rimedio e gli header da un indirizzo pubblico.
+   - `admin/docker_advanced.en.md`: due frasi nel §2.
+   - `developer/architecture/security.md`:
+     - nella tabella dei controlli, due righe `platform.client_address` e una frase («ok» all'avvio);
+     - nella tabella delle funzioni, tre righe;
+     - in «Callers.» cambia solo la prima frase (vedi il fuori pista sopra);
+     - la sottosezione nuova `#untrusted-proxy`: i cinque passi, il perché del peer locale, Docker Desktop, una sola
+       casa per «locale», le note, il controllo, e l'opzione XFF più a destra scartata.
+   > **⚠️ Fuori pista** (dal docs-writer, segnalato e non corretto): testi di A ed E diventano falsi per un proxy locale
+   > di cui non ci si fida.
+   > - A, `4a93f1f54`: il primo paragrafo di `connection_checks` e `configuration.en.md` («50 tentativi… rifiuterebbero
+   >   ogni accesso»).
+   > - E: `email.en.md:424` («un solo conteggio di 10 richieste») e `:422` («indirizzi esatti»; uvicorn accetta anche
+   >   reti); `developer/backend/email.md`, che dice ancora `client_address(request)`.
+   > - La riga `i18n_key` di A dice «15 messages»: con le mie tre chiavi diventano 18.
+   >
+   > Passati al coordinatore.
+5. ✅ **Controlli leggeri**, uno alla volta, con il carico sotto 50 (`files/runs/h36-green-1.sh` e `h36-green-2.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services client-address` | 360 passed |
+   | `services config-audit` | 101 passed |
+   | `services config-env-example` | 38 passed |
+   | `services email-checks` | 87 passed |
+   | `services config-package` | 853 passed |
+   | `dev.py i18n check` | rc 0, 4970 chiavi, strict |
+   | `utils gate-i18n-catalog` | 176 passed |
+   | `utils gate-i18n-usage` | 195 passed |
+   | `dev.py i18n audit` | `clientAddress` non compare tra le chiavi morte o non verificate |
+   | sonda in processo su `network.py` | `classify_ip` 12 casi, `client_address` 3, `parse_ip` 3; `_parse_ip` non c'è più |
+   | ruff, black (5 file Python) | puliti |
+   | `mkdocs build` | rc 0, 0 avvisi |
+   | `mkdocs check-links` | 97 link validi |
+   | `git diff --check` | pulito |
+
+   - `git merge-file` contro `4a93f1f54` (il ramo di A, che contiene `66873b0c9`), dalla base comune `c9cb27e4c`: **0
+     conflitti** su tutti i 10 file condivisi o vicini.
+   - Non eseguito: `api system` (contiene i test di `classify_ip`; è un passo pesante con il server, la sonda in
+     processo lo sostituisce); la prova combinata con A8a, che spetta al cancello del coordinatore.
+6. ✅ **Prova sulla revisione combinata** (17/10, 06:11–06:16), chiesta dal coordinatore prima dell'ingresso. Base
+   aggiornata da lui: merge `3c1444e0c` = H-36 (`36cc0119d`, `b3e9f9c8a`, `b36e22454`) + dev `abf8391fb`, pulita.
+   - `files/runs/h36-combined.sh`, un comando alla volta: `services client-address` 360, `config-audit` 101,
+     `config-env-example` 38, `email-checks` 87, `config-package` 856 (+3 da dev), `i18n check` strict (4973 chiavi),
+     `mkdocs build` rigoroso con 0 avvisi, `check-links` 97.
+   - Pulita prima e dopo, porta 6181 libera.
+   - Il merge di `security.md` è controllato: il pezzo di dev (riga 1388, backup) è lontano dai miei, e non ci sono
+     marcatori.
+   - La riga della CHANGELOG la scrive il coordinatore all'ingresso di A8a + E-13, quando il salto per indirizzo ha
+     effetto.
+
+### Lotto «H-37: `profile_default` fallisce chiuso per una variabile che il profilo non elenca» (R13-SEC7 di E, 2026-10-17, mattina) — in corso
+
+> Chiesto dal coordinatore, dopo H-36: «`profile_default` (`config/__init__.py:584`): una voce `managed` mancante dà 0,
+> cioè nessun limite; deve fallire chiuso (rifiutare l'avvio, o un default sicuro dichiarato per campo). Prima i rossi;
+> E rivede.» È la nota 5 di R13-SEC7 nel piano di E (`08_email`, «Esito di R13-SEC7»).
+
+**Analisi** (sola lettura, HEAD `3c1444e0c`):
+
+1. `profile_default(name, fallback)` dà il `fallback` quando il profilo attivo non elenca `name`, e questo vale in
+   qualunque profilo. Per l'unico lettore, `backup_max_upload_mb()` di B (`config/backup.py:78`, fallback `0`), togliere
+   la voce `managed` vuol dire «nessun limite» in managed: un fail-open.
+2. **Nessun altro lettore.** Ho cercato `profile_default(` negli alberi di tutti i 31 rami locali: c'è solo quello di B,
+   ed è elencato (500). La cura non cambia il comportamento di oggi.
+3. **Il test di B fissa apposta il fail-open**: `test_backup_restore.py:1400`,
+   `test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call`, controlla che senza la voce il limite
+   sia 0. Va riscritto: è un file di B (`api backup-restore`, passo pesante).
+4. `test_profile_defaults.py` (mio) fissa la stessa regola: il paragrafo (f) («e in managed per un nome che non
+   elenca») e `test_managed_gives_back_the_fallback_itself_for_a_variable_it_does_not_list`.
+5. **I documenti**: `developer/architecture/settings.md` (il paragrafo di `ENVIRONMENT_PROFILE_DEFAULTS`, la guardia e
+   il «come aggiungere una variabile») e `security.md:1461-1463` (quando il limite «non si può leggere»). La pagina admin
+   `hosting_providers#managed-profile` non dice nulla sulle variabili non elencate.
+6. Per H-27 `settings.md` dice già: «il controllo gira alla chiamata del lettore, mai all'avvio: solo il lettore sa che
+   tipo si aspetta; la tabella è codice, protetta prima del rilascio dai test». Vale lo stesso per una voce mancante:
+   solo il lettore sa quale variabile legge.
+
+**Progetto** (la scelta fra le due forme proposte):
+
+- **Fallire chiuso alla chiamata.** Sotto ogni profilo tranne `selfhosted`, un nome che il profilo non elenca solleva
+  `ProfileDefaultError`. Il messaggio nomina la variabile, il profilo e `ENVIRONMENT_PROFILE_DEFAULTS`, e dice che ogni
+  profilo tranne `selfhosted` deve dare un valore a ogni variabile letta da `profile_default`.
+  - Il lettore si ferma: le rotte di B prendono già `ProfileDefaultError` (B-21), quindi l'upload dà 503
+    `backup_upload_unavailable` e lo stato `upload_limit_mb: null`, con un errore nel log che nomina la variabile.
+  - `selfhosted` resta com'è: il fallback, senza controlli.
+- **La stessa regola sul sorgente**, nella guardia (h): ogni chiamata `profile_default(<nome>, …)` di un modulo di
+  sezione deve avere il suo nome elencato da ogni profilo tranne `selfhosted`. Un autotest toglie la voce `managed` e
+  verifica che la guardia la segnali.
+- **Non rifiuto l'avvio.**
+  - Per saperlo all'avvio servirebbe un terzo elenco, le variabili lette, oltre alla tabella e ai lettori. Oggi lo
+    tiene la guardia (h), sul sorgente.
+  - E il raggio d'azione: una voce mancante fermerebbe ogni istanza managed all'aggiornamento, mentre così si chiude
+    solo la funzione che legge quel valore.
+  - È la stessa scelta che H-27 ha documentato per il tipo.
+- **`ProfileDefaultError` resta un `TypeError`** (H-27; B la prende per nome). Cambia la docstring: «manca, oppure è di
+  un altro tipo».
+- **Fuori perimetro**: `PROFILE_DEFAULTS` (i campi di `Settings`) ha la stessa forma, e senza la voce
+  `LIBREFOLIO_FRAME_PROTECTION` un'istanza managed tornerebbe al default del codice (spento). Il test (a) lo fissa
+  intero contro `MANAGED_DEFAULTS`. Lo segnalo a E e non propongo nulla.
+
+**Rossi** (test-author): `test_profile_defaults.py`, paragrafi (f), (g) e (h), più il test del lettore vero di B con la
+voce tolta. Con l'OK del coordinatore, anche la riga di `test_backup_restore.py:1400` e il caso «missing» nei test
+503/null di B-21.
+
+**Selettori**: `services profile-defaults`, `services config-package`, `services config-env-example`; `api
+backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check-links`.
+
+> **Approvazione** (coordinatore, 17/10 mattina): la scelta va bene, cioè fallire chiuso alla chiamata
+> (`ProfileDefaultError` fuori da `selfhosted`), la guardia (h) sul sorgente con il suo autotest e nessun rifiuto
+> all'avvio, coerente con H-27. In più:
+> - OK di scrittura su `test_api/test_backup_restore.py` di B: si riscrive il test del fail-open e si aggiunge il caso
+>   «missing» in `WRONG_TABLE_LIMITS`, con `wrong_table_entry` che impara `delitem`. Lo fa il test-author; B rivede al
+>   checkpoint, perché è su B-16, solo frontend.
+> - Uno slot per i 3 test di `api backup-restore` per nome: lo chiedo quando la cura è pronta.
+>
+> **Nota per E** (chiesta dal coordinatore): `PROFILE_DEFAULTS`, i campi di `Settings`, ha la stessa forma. Senza la voce
+> managed di `LIBREFOLIO_FRAME_PROTECTION` (o di `LIBREFOLIO_CSP_REPORT_ONLY`, o dei due tempi di riposo), un'istanza
+> managed torna in silenzio al default del codice: la protezione dei frame spenta. Oggi lo ferma solo il test (a)
+> (`MANAGED_DEFAULTS`, uguaglianza intera), prima del rilascio. Una chiusura a runtime richiederebbe un elenco
+> dichiarato dei campi per profilo: non è in H-37, lo decide E.
+
+1. ✅ **Cura in prova** (17/10, mattina): `files/h37/apply.py` scrive `dry/config_init.py`.
+   - Cambiano tre pezzi di `config/__init__.py`: il commento sopra `ENVIRONMENT_PROFILE_DEFAULTS`, la docstring di
+     `ProfileDefaultError` e `profile_default()`.
+   - In `profile_default()`, per un nome non elencato, `selfhosted` dà ancora il fallback; ogni altro profilo solleva
+     `ProfileDefaultError`. Il messaggio nomina la variabile, il profilo e `ENVIRONMENT_PROFILE_DEFAULTS`.
+   - Il ramo di un nome elencato non cambia: il controllo di tipo di H-27.
+   - Ruff e black sono puliti sulla copia di prova, come su HEAD.
+2. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina).
+   - `test_profile_defaults.py`, 25 casi nuovi e 1 tolto:
+     - `test_managed_refuses_a_variable_it_does_not_list`, al posto del vecchio test del fallback in managed; 6
+       fallback (`object`, `0`, `0.0`, `""`, `False`, `None`);
+     - la variante con il profilo scritto in altro modo (2 casi);
+     - il lettore vero di B con la voce tolta (rosso) e lo stesso in self-hosted (verde, 2 casi);
+     - la guardia (h) nella direzione nuova, con il suo autotest;
+     - `fallback_like`, che ora regge una voce uguale al valore vuoto del suo tipo (dalla review dei documenti: H-37
+       rende obbligatoria anche una voce uguale al fallback), con il suo test (8 casi);
+     - un caso (g) con la voce uguale al default del lettore (4 casi).
+   - Docstring: (f), (g), (h) e «How».
+   - `test_backup_restore.py` di B, solo il blocco (e) e il suo paragrafo, con l'OK del coordinatore:
+     - il test della guardia B4: con la voce tolta deve dare `ProfileDefaultError`, mai 0;
+     - `MISSING` (con `repr` «no entry») in `WRONG_TABLE_LIMITS`;
+     - `wrong_table_entry` impara `delitem`.
+   - Comando: `files/runs/h37-red-1.sh` (`services profile-defaults`). Esito: **9 failed, 103 passed**, esattamente i 9
+     previsti: `test_managed_refuses_…[×6]`, `…another_case_refuses_…[×2]` e
+     `test_a_missing_managed_upload_limit_stops_its_reader`. In ognuno il fallback, o lo 0, torna indietro.
+   - Ruff pulito. Black voleva andare a capo in tre `pytest.fail` lunghi: applicato al mio file di test, solo
+     formattazione.
+   - I rossi di B (3 test, 11 casi) aspettano lo slot `api`.
+   > **⚠️ Fuori pista** (dal test-author, non corretto): la `desc` del catalogo di `services profile-defaults`
+   > (`_backend_services.py`) non nomina né H-27 né H-37. Le etichette «B-21, RED until the routes catch it» nel file di
+   > B sono vecchie: lo dico a B.
+3. ✅ **Slot 1** (concesso dal coordinatore, 06:38–06:43, corsia 6181), `files/runs/h37-slot.sh`:
+   - **Rosso**, prima della cura: `api backup-restore` sui 3 test per nome, **3 failed / 8 passed**.
+     - La guardia B4: «backup_max_upload_mb() returns 0, where H's profile_default raises ProfileDefaultError».
+     - I due `[missing]` di B-21: «precondition: H's table giving no entry … not 0».
+   - **Cura applicata**: `files/h37/apply.py --apply`, identica alla copia di prova (`cmp`).
+   - **Verde**: gli stessi 3 test, **11 passed**. Porta libera alla fine.
+4. ✅ **Documenti** (docs-writer, solo inglese, pagine per sviluppatori senza traduzioni):
+   - `settings.md`, il punto di `ENVIRONMENT_PROFILE_DEFAULTS`: la regola nuova, il perché (anche il raggio d'azione), la
+     guardia nelle due direzioni con i due autotest, e «la voce managed è obbligatoria anche al valore del fallback»;
+   - `security.md:1461-1463`: «nessun valore (ogni profilo tranne `selfhosted`, H-37) o un valore del tipo sbagliato».
+   > **⚠️ Fuori pista** (dal docs-writer): `fallback_like()` non reggeva una voce uguale al valore vuoto del suo tipo,
+   > che H-37 rende legittima. Lo ha corretto il test-author, con un test dell'aiuto.
+5. ✅ **La riga `desc`** di `services profile-defaults` in `_backend_services.py`, con l'OK del coordinatore, solo
+   aggiunta: H-27 e H-37 accodati. `git merge-file` contro dev `0dc58c70b`, che ha già le righe di Z: 0 conflitti.
+   Il modulo del runner si carica e la `desc` contiene i due lotti. `services profile-defaults --list` elenca i test
+   nuovi.
+6. ✅ **Controlli leggeri** dopo la cura (`files/runs/h37-green-light.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services profile-defaults` | 112 passed |
+   | `services config-package` | 856 passed |
+   | `services config-misc` | 12 passed |
+   | `services config-env-example` | 38 passed |
+   | ruff, black (4 file) | puliti |
+   | `mkdocs build` | rc 0, 0 avvisi |
+   | `check-links` | 97 |
+   | `git diff --check` | pulito |
+
+   - `git merge-file` di tutti gli 8 file cambiati contro dev `0dc58c70b` (base comune `d107b6f26`): 0 conflitti.
+   - Non eseguito: `api backup-restore` intero (bastano i 3 test per nome, come deciso dal coordinatore) e
+     `all-backend`, che spettano al cancello.
+   > **Note per B**, alla review del suo file:
+   > - le etichette «B-21, RED until the routes catch it» nel blocco (e) sono vecchie;
+   > - la docstring di `backup_max_upload_mb()` (`config/backup.py:73-74`), «else `0`, the self-hosted default», ora vale
+   >   solo per `selfhosted`. Non l'ho toccata: è codice di produzione di B, e non ho l'OK.
