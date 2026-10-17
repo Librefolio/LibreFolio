@@ -28,6 +28,14 @@
  * (`formatExactDecimal`), from the string the server echoes and never through a float: «-0,5» in Italian,
  * French and Spanish. Red before the cure for it/fr/es; the English case, and a ratio of 0, are guards.
  *
+ * F5 (workstream J, P-10, decision 27): EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST (409), a SPLIT retyped while
+ * linked incoming adjustments have no purchase cost, gets a sentence of its own,
+ * `events.saveError.splitAdjustmentsWithoutCost`: the split by its date and type labels, `n` costless
+ * adjustments and the `hidden` ones among them (R13-SEC7, X-R47b), whole numbers, never NaN. Through the
+ * real catalogue it reads the contract's text in English and a sentence of its own in Italian, French and
+ * Spanish; there `t` is svelte-i18n's own, as the app passes `$t`. Red before the cure, but for its
+ * `existingEvents` guard.
+ *
  * `t` is a stand-in for svelte-i18n's `$t`: it records the key and the values and renders them the
  * way a template does (`String(value)`), so an object passed as a value would show as
  * `[object Object]` here exactly as it would on screen.
@@ -36,7 +44,8 @@
  * (no deletions, no `existingAmountText`) it fails to load too: the import names a missing export.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {waitLocale} from 'svelte-i18n';
+import {get} from 'svelte/store';
+import {_, waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {eventRefusal, eventSaveErrorMessage, existingAmountText, existingEvents, type ExistingEvent} from './eventSaveError';
@@ -402,6 +411,163 @@ describe('eventSaveErrorMessage — the refusals that had a sentence keep it (C-
         eventSaveErrorMessage(err, t, [], typeLabel, dateLabel);
 
         expect(onlyCall(calls)).toEqual(expected);
+    });
+});
+
+/**
+ * F5 (workstream J, P-10, decision 27) — a split retyped over adjustments without a purchase cost.
+ *
+ * `POST /assets/events` refuses an edit that changes a SPLIT's type while linked incoming ADJUSTMENTs have
+ * no purchase cost: without the split those units would become acquisitions of unknown cost
+ * (`event_store._reject_split_retype_without_costs`). 409 EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST, whose
+ * `params` always carry, besides `asset_id` and `item_index`: `event_id`, the stored SPLIT; `date`, its
+ * date (ISO); `transaction_ids`, the costless adjustments the caller can see (a broker access), sorted —
+ * `[]` when they see none, and, fail-closed, for a call without a caller (X-R47b); and
+ * `hidden_transactions_count`, how many of them sit at brokers the caller cannot see (R13-SEC7).
+ *
+ * The sentence has a key of its own, `events.saveError.splitAdjustmentsWithoutCost`, and four values,
+ * equated: the split by the caller's labels (`date` from the params, `type` from `typeLabel('SPLIT')`);
+ * `hidden`, `hidden_transactions_count` as a whole number from 0 — missing, not a number, negative or
+ * fractional counts as 0, never NaN; and `n`, every adjustment at fault: the ids listed
+ * (`transaction_ids` when it is an array, none otherwise) plus the hidden ones.
+ *
+ * Through the catalogue (ICU plurals on `n` and `hidden`), English reads the contract's text, and each of
+ * the four languages a sentence of its own: not the generic one, not the bare key and, in Italian, French
+ * and Spanish, not the English text the catalogue build fills a missing translation with
+ * (`scripts/i18n_catalog.py`). It names the split by its labels, writes `n` and, unless it is 0,
+ * `hidden` — never a 0 —, and leaves no ICU syntax behind.
+ *
+ * Red (F5) today, every test but the `existingEvents` guard: the code has no branch, so the generic key is
+ * called instead, with the server's English sentence, and through the catalogue the user reads «Nothing
+ * was saved: EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST: <the server's sentence>». The guard is green today and
+ * after: a 409 like EVENT_EXISTS, but «+ New event» has no event to offer, so the user reads the sentence.
+ */
+describe('eventSaveErrorMessage — a split retyped over costless adjustments (P-10, F5)', () => {
+    const CODE = 'EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST';
+    const KEY = 'events.saveError.splitAdjustmentsWithoutCost';
+
+    /** The refusal of a retype of the SPLIT of 2026-02-10 (event 51), with its costless adjustments as the params list them. */
+    function retypedSplit(adjustments: Record<string, unknown>) {
+        return refusal(409, CODE, {asset_id: 7, item_index: 0, event_id: 51, date: '2026-02-10', ...adjustments});
+    }
+
+    it('EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST has its own sentence: the split by its date and type labels, and its costless adjustments, the hidden ones counted in', () => {
+        const {t, calls} = fakeT();
+        const message = eventSaveErrorMessage(retypedSplit({transaction_ids: [12, 15], hidden_transactions_count: 1}), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', n: 3, hidden: 1}});
+        expectReadable(message, CODE);
+    });
+
+    it('with every costless adjustment in sight, none is hidden: n 1, hidden 0', () => {
+        const {t, calls} = fakeT();
+        eventSaveErrorMessage(retypedSplit({transaction_ids: [12], hidden_transactions_count: 0}), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', n: 1, hidden: 0}});
+    });
+
+    it('fail-closed, none in sight (or no caller): no id listed, every adjustment counted as hidden — n 2, hidden 2', () => {
+        const {t, calls} = fakeT();
+        const message = eventSaveErrorMessage(retypedSplit({transaction_ids: [], hidden_transactions_count: 2}), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', n: 2, hidden: 2}});
+        expectReadable(message, CODE);
+    });
+
+    it.each([
+        ['hidden_transactions_count missing', {transaction_ids: [12, 15]}, 2, 0],
+        ["hidden_transactions_count 'x'", {transaction_ids: [12, 15], hidden_transactions_count: 'x'}, 2, 0],
+        ['hidden_transactions_count -1', {transaction_ids: [12, 15], hidden_transactions_count: -1}, 2, 0],
+        ['hidden_transactions_count 1.5', {transaction_ids: [12, 15], hidden_transactions_count: 1.5}, 2, 0],
+        ['hidden_transactions_count null', {transaction_ids: [12, 15], hidden_transactions_count: null}, 2, 0],
+        // Not an array: no id listed, whatever a length says.
+        ["transaction_ids a string, '12,15'", {transaction_ids: '12,15', hidden_transactions_count: 1}, 1, 1],
+        ['transaction_ids an object with a length', {transaction_ids: {0: 12, 1: 15, length: 2}, hidden_transactions_count: 1}, 1, 1],
+        ['transaction_ids null', {transaction_ids: null, hidden_transactions_count: 1}, 1, 1],
+        ['transaction_ids missing', {hidden_transactions_count: 1}, 1, 1],
+    ])('%s: hidden is a whole number from 0, n the ids listed plus the hidden ones — never NaN', (_label, adjustments, n, hidden) => {
+        const {t, calls} = fakeT();
+        eventSaveErrorMessage(retypedSplit(adjustments), t, [], typeLabel, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: 'D<2026-02-10>', type: 'T<SPLIT>', n, hidden}});
+    });
+
+    it('existingEvents is null for it: a 409 like EVENT_EXISTS, but no event a create would duplicate', () => {
+        expect(existingEvents(retypedSplit({transaction_ids: [12], hidden_transactions_count: 0}))).toBeNull();
+    });
+
+    /**
+     * Through the catalogue: `t` is svelte-i18n's own, as the app passes `$t`, and the language is switched
+     * in place as in the X-R47 block (`currentLanguage.set`, then `waitLocale`), back to English after each
+     * test. No navigator is stubbed: the figures are whole numbers below 10, written alike in every locale,
+     * and the date and the type are the file's labels. Each text is formatted while its own language is
+     * current (devpy-i18n, rule 5). A key svelte-i18n does not find renders as the key itself.
+     */
+    describe('through the catalogue, in the four languages', () => {
+        type UiLanguage = 'en' | 'it' | 'fr' | 'es';
+
+        /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+        async function uiLanguage(lang: UiLanguage): Promise<void> {
+            currentLanguage.set(lang);
+            await waitLocale(lang);
+        }
+
+        /** What the user reads in the current language: `n` costless adjustments, `hidden` of them at brokers they cannot see. */
+        function sentence(n: number, hidden: number): string {
+            const listed = [12, 15, 18].slice(0, n - hidden);
+            return eventSaveErrorMessage(retypedSplit({transaction_ids: listed, hidden_transactions_count: hidden}), get(_), [], typeLabel, dateLabel);
+        }
+
+        /** The figures a sentence writes, those of the date label aside. */
+        function figures(message: string): string[] {
+            return message.replace(/D<2026-02-10>/g, '').match(/\d+/g) ?? [];
+        }
+
+        afterEach(async () => {
+            // The language is module-level state: it goes back for the rest of the file.
+            await uiLanguage('en');
+        });
+
+        it('English reads the contract: one adjustment, then three with one at a broker the user cannot see', async () => {
+            await uiLanguage('en');
+
+            expect({one: sentence(1, 0), several: sentence(3, 1)}).toEqual({
+                one: "Nothing was saved: the T<SPLIT> event of D<2026-02-10> has 1 linked adjustment without a purchase cost. Without the split, those units would count as bought at an unknown price: give the adjustments a purchase cost first, then change the event's type.",
+                several:
+                    "Nothing was saved: the T<SPLIT> event of D<2026-02-10> has 3 linked adjustments without a purchase cost (1 of them at a broker you cannot see). Without the split, those units would count as bought at an unknown price: give the adjustments a purchase cost first, then change the event's type.",
+            });
+        });
+
+        it.each<[UiLanguage, number, number]>([
+            ['en', 1, 0],
+            ['en', 3, 1],
+            ['it', 1, 0],
+            ['it', 3, 1],
+            ['fr', 1, 0],
+            ['fr', 3, 1],
+            ['es', 1, 0],
+            ['es', 3, 1],
+        ])('%s, n = %i and hidden = %i: a sentence of its own, the split by its labels, its figures written, no ICU syntax left', async (lang, n, hidden) => {
+            await uiLanguage(lang);
+            const message = sentence(n, hidden);
+
+            expect(message, `control: the ${lang} catalogue has the message, not the bare key`).not.toBe(KEY);
+            expectReadable(message, CODE);
+            expect(message, 'the split, by its date label').toContain('D<2026-02-10>');
+            expect(message, 'the split, by its type label').toContain('T<SPLIT>');
+            expect(message, 'every argument and plural formatted').not.toMatch(/[{}]/);
+            expect(figures(message), `n = ${n} is written, and hidden = ${hidden} unless it is 0`).toEqual(expect.arrayContaining([n, hidden].filter((figure) => figure > 0).map(String)));
+            expect(figures(message), 'no figure 0: with nothing hidden, the sentence says nothing of hidden adjustments').not.toContain('0');
+        });
+
+        it.each(['it', 'fr', 'es'] as const)('%s writes its own words, not the English text the catalogue build fills a missing translation with', async (lang) => {
+            await uiLanguage('en');
+            const english = sentence(3, 1);
+            expectReadable(english, CODE); // control: two sentences of this refusal are compared, not two generic ones
+            await uiLanguage(lang);
+
+            expect(sentence(3, 1), `the ${lang} sentence`).not.toBe(english);
+        });
     });
 });
 

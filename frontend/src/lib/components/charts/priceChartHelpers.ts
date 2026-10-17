@@ -24,6 +24,7 @@ import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {CHART_GAIN_LOSS, PRICE_SERIES} from '$lib/theme/chartTheme';
+import {changePct} from '$lib/charts/signals/MeasureSignal';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {
@@ -591,7 +592,8 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
  * `CHART_GAIN_LOSS.tooltipDelta` in `$lib/theme/chartTheme`) — the contract
  * this asserts. In percentage view the value already is the delta; in
  * absolute view both the absolute and percentage delta from `firstValue` are
- * shown (a `firstValue` of 0 yields a 0% delta rather than dividing by 0).
+ * shown. The percentage is the charts' one Δ% rule, `changePct` of
+ * `MeasureSignal.ts`: a `firstValue` of 0 has none, and shows «—» (N65, J-44).
  */
 export function buildDeltaHtml(value: number, firstValue: number, isPercentage: boolean): string {
     const color = (n: number) => (n >= 0 ? CHART_GAIN_LOSS.tooltipDelta.gain : CHART_GAIN_LOSS.tooltipDelta.loss);
@@ -602,8 +604,8 @@ export function buildDeltaHtml(value: number, firstValue: number, isPercentage: 
     }
 
     const deltaAbs = value - firstValue;
-    const deltaPct = firstValue !== 0 ? ((value - firstValue) / firstValue) * 100 : 0;
-    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${formatPercent(deltaPct)})</span>`;
+    const deltaPct = changePct(firstValue, value);
+    return ` <span style="font-size:10px;color:${color(deltaAbs)}">(Δ ${formatFixed(deltaAbs, 4, {signed: true})} / ${deltaPct === null ? '—' : formatPercent(deltaPct)})</span>`;
 }
 
 /**
