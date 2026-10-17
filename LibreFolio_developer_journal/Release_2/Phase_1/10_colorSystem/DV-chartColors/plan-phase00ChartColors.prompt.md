@@ -2210,7 +2210,33 @@ Z-29b su `LineChart.svelte`, che resta fuori.
   > **Prove** sul ramo unito (`files/r3-light-merged/`, carico sotto 5): `api sync` senza file tracciati cambiati;
   > Prettier, compilatore e ratchet puliti; `front check` 0 e 0; **32 file Vitest, 1500 test, tutti verdi**
   > (i 31 di prima più `assetTypeTables.test.ts` di T, 49).
-- [ ] G3-9, lo slot di circa 55 minuti nella 6156, al via del coordinatore.
+- [x] ✅ (18/10/2026, 00:50) G3-9, lo slot di circa 55 minuti nella 6156, al via del coordinatore.
+  > **Via alle 00:23** sul commit `08512c952` (genitore `3dba7f894`: il flag e R3-5), carico a 4, la 1.3 ferma.
+  > Script `files/r3-slot/dv_r3_slot.sh 01:20` (nessun passo nuovo dopo le 01:20), log in `files/r3-slot/`: `api sync`,
+  > `core-unit`, `component-unit`, poi gli E2E con `--workers 1`: `dashboard`, `asset-detail`, `risk-lab`, `risk`,
+  > broker `detail`, `front-user broker-sharing`, `pac-allocator-real`, `allocation-negative-cash`,
+  > `front-designer-lab live`.
+  > **Esito** (00:24:24–00:44:46, carico 4–15; tutti i progetti E2E sono `[desktop]`):
+  > - `api sync` verde, nessun file tracciato cambiato (il solo modificato è questo piano);
+  > - `core-unit`: 217 file, 9280 test; `component-unit`: 187 file, 4978 test; tutti verdi;
+  > - E2E **220 su 222**: `dashboard` 26/27, `asset-detail` 39, `risk-lab` 44, `risk` 38, broker `detail` 40,
+  >   `broker-sharing` 17, `pac-allocator-real` 1, `allocation-negative-cash` 4, `front-designer-lab live` 11/12.
+  > **I due rossi, col protocollo di `test-triage`** (rilanciati da soli alle 00:48, log `12_` e `13_`):
+  > - **`dashboard`, «Positions panel publishes its loading state through data-busy»: assunzione.** Da solo passa
+  >   (2,9 s). Il test trattiene la *prima* POST `/portfolio/report` dopo la rotta, ma `login()` (nel `beforeEach`)
+  >   atterra su `/dashboard` e aspetta solo che l'app arrivi: una richiesta della pagina d'atterraggio partita dopo la
+  >   rotta (lazy, o un ritentativo di Y-24) è «la prima», il `goto` la abbandona, il report della pagina nuova passa e
+  >   il pannello (`summaryLoading = reportLoading && !summary`) non è mai occupato. Stesso ordine dei test di B4, dove
+  >   passava: la finestra la apre il flusso del report del target, non il giro 3, che non tocca né il pannello né il
+  >   caricamento. Rimedio nel test: `page.goto('about:blank')` prima della rotta, oppure trattenere la richiesta della
+  >   pagina sotto prova e non la prima che passa.
+  > - **`front-designer-lab live`, «export JSON, reset all, import back»: assunzione, deterministica** (rossa anche da
+  >   sola). Il sottotitolo delle transazioni (`546204732`, 16/10, `text-lf-muted`) e l'intestazione di `DataTable`
+  >   (`77bfa6a39`, 16/10, `th { color: var(--lf-text-muted) }`) leggono lo stesso ruolo: la modifica della variabile
+  >   (rosa, su `<html>`) vince su quella del letterale della sua definizione (blu), e l'intestazione è rosa. Lo spec è
+  >   fermo al 16/10 alle 02:29, prima dei due commit; la modifica dei grafici (verde) non c'entra. Rimedio nel test:
+  >   due elementi con fonti di colore diverse, e la precondizione scritta.
+  > - Porta 6156 libera alla fine; HEAD invariato. Nel backlog DV-12 e DV-13.
 
 ## Definizione di fatto
 
