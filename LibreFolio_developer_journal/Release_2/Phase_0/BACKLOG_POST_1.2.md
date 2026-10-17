@@ -7484,6 +7484,34 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
       prendere l'errore (oggi irraggiungibile).
     - Commit al checkpoint di E-18.
   - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «MF-SEC9b» ed «E-18».
+- **E-19 · L'avviso dei codici di valuta non ISO salvati** — medio-piccolo (avviso), medio (correzione); coordinatore,
+  17/10 (seguito di E-18).
+  - Dopo E-18 una riga salvata con `978` o `EURO` non si salva più dopo una modifica, e l'utente non la vede: il
+    selettore mostra un campo vuoto.
+    - Gli asset danno 422 a ogni modifica, e correggerli dal modulo passa dal wipe della Policy D.
+    - Le rotte FX in modifica si perdono.
+    - Il cruscotto manda verso tassi che ora danno 422.
+  - Ci sono altre due fonti:
+    - il ripristino di un backup vecchio, sempre;
+    - un buco di E-18: la `base_currency` dell'utente controlla solo la lunghezza.
+  - Gap-fix del BRIM: i movimenti salvati con un codice non ISO restano fuori dal confronto, e propone un deposito
+    correttivo per denaro che c'è già. La cura è nello stile di W-B74.
+  - 17/10, E: analisi fatta. Decisioni dello sviluppatore aperte:
+    - D1, il modello di correzione: A guidato dall'utente, B da riga di comando, C automatico in `post_migration`;
+    - D2, la correzione degli asset senza wipe;
+    - D3, la gravità.
+  - 17/10, coordinatore: D3 deciso (`warning`); D1 e D2 allo sviluppatore. Via su E-19a (backend) ed E-19b (utente).
+  - 17/10, E: **E-19a fatto**.
+    - `base_currency` stretto; `suggested_iso_currency()` (limite 80, mai GBX/ZAC/ILA, ambiguo = nessuno); il 422 che
+      nomina il codice.
+    - `stored_currencies.py`: 14 posti, l'avviso d'avvio e `dev.py db currencies`.
+    - La guardia del gap-fix (W rivede) e il passo d'avvio (H rivede).
+    - 14 suite, 3 800 verdi; OpenAPI identico; build stretta e `check-links` puliti.
+    - Commit al checkpoint di E-19a.
+  - Resta **E-19b**: `IssueCode.NON_ISO_CURRENCY` al posto di `MISSING_FX_*`, il banner senza bottone, il selettore
+    col valore salvato, l'avviso del ripristino (via di B), i18n nelle 4 lingue, `api sync`.
+  - Per D1, se si sceglie C: la rietichettatura automatica deve escludere anche `GBp`, non solo GBX/ZAC/ILA.
+  - Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E-19».
 
 ## Y · Cruscotto e grafici (fase 01)
 

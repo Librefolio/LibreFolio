@@ -395,6 +395,62 @@ Usage::
 
 #: How many characters of a refused currency text the error quotes (E-18): enough to recognise it, never a long input.
 _REFUSED_CURRENCY_SHOWN = 16
+#: The longest text ``suggested_iso_currency`` looks up (E-19a): above every ISO 4217 currency name (XXX's, 65).
+_SUGGESTION_MAX_LENGTH = 80
+#: Codes that look like currencies but count a subunit (E-19a): the pence of London (``GBX``), the cents of Johannesburg
+#: (``ZAC``) and the agorot of Tel Aviv (``ILA``), as market-data services write them. An amount in one is a hundredth of
+#: the unit, so no ISO code is ever suggested for them: relabelling would make every amount 100 times too large.
+NEVER_RELABELLED_CURRENCY_CODES = frozenset({"GBX", "ZAC", "ILA"})
+
+
+def shown_currency_text(text: str) -> str:
+    """At most 16 characters of a currency text, with ``…`` past them (E-18): what an error, a log or a list quotes."""
+    return text if len(text) <= _REFUSED_CURRENCY_SHOWN else text[:_REFUSED_CURRENCY_SHOWN] + "…"
+
+
+def _is_iso_alpha_3(code: str) -> bool:
+    """``code``, already stripped and upper-cased, is three ASCII letters ISO 4217 lists as an alphabetic code."""
+    return len(code) == 3 and code.isascii() and code.isalpha() and pycountry.currencies.get(alpha_3=code) is not None
+
+
+def is_canonical_iso_currency(value: Any) -> bool:
+    """``value`` is stored as ``iso_currency_code`` stores it (E-19a): an ISO 4217 code, upper case, nothing around it.
+
+    ``"EUR"`` is; ``"eur"`` and ``" EUR"`` are not (an exact comparison misses them), nor ``"978"`` or ``"EURO"``.
+    """
+    return isinstance(value, str) and value == value.strip().upper() and _is_iso_alpha_3(value)
+
+
+@lru_cache(maxsize=256)
+def _iso_currency_candidates(code: str) -> tuple[str, ...]:
+    """The ISO 4217 alphabetic codes whose numeric code or name is ``code`` (stripped, upper case), sorted (E-19a).
+
+    One for a numeric code and most names (``"978"``, ``"EURO"``: EUR), two for a name ISO 4217 gives two currencies
+    (``"BOLÍVAR SOBERANO"``: VED and VES), none for anything else, a subunit code or a text past 80 characters included.
+    """
+    if not code or len(code) > _SUGGESTION_MAX_LENGTH or code in NEVER_RELABELLED_CURRENCY_CODES:
+        return ()
+    return tuple(sorted({currency.alpha_3 for currency in pycountry.currencies if code in (getattr(currency, "numeric", None), currency.name.upper())}))
+
+
+def suggested_iso_currency(value: Any) -> Optional[str]:
+    """The ISO 4217 alphabetic code a currency value stands for, or None (E-19a).
+
+    The text is stripped (NBSP included) and upper-cased. A valid code comes back as such — ``"eur"`` gives ``"EUR"``,
+    ``"GBp"`` gives ``"GBP"``, as ``iso_currency_code`` stores them. A value the old lenient validation stored, a numeric
+    code or a currency name (``"978"``, ``"Euro"``), gives the one code whose numeric code or name it is. None: not a
+    text, empty, past 80 characters, standing for no code or for two (``"Bolívar Soberano"``: VED and VES), or one of
+    ``NEVER_RELABELLED_CURRENCY_CODES``.
+    """
+    if not isinstance(value, str):
+        return None
+    code = value.strip().upper()
+    if code in NEVER_RELABELLED_CURRENCY_CODES:
+        return None
+    if _is_iso_alpha_3(code):
+        return code
+    candidates = _iso_currency_candidates(code)
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def iso_currency_code(value: Any) -> str:
@@ -405,15 +461,19 @@ def iso_currency_code(value: Any) -> str:
     the whitespace around the text is stripped (NBSP included) and the case is free — ``" eur "`` and ``"GBp"`` give
     ``"EUR"`` and ``"GBP"`` —, and what is left must be three ASCII letters ISO 4217 lists as an alphabetic code
     (``XXX``, ``XTS`` and the metals included). Anything else raises ``ValueError``, quoting at most 16 characters of
-    the text. The read paths keep ``Currency.validate_code``: a value stored before stays readable and deletable.
+    the text and naming the code it stands for when there is one (E-19a: ``'840'``: USD; a name two currencies share:
+    both). The read paths keep ``Currency.validate_code``: a value stored before stays readable and deletable.
     """
     if not isinstance(value, str):
         raise ValueError(f"Currency code must be a string, got {type(value).__name__}")
     code = value.strip().upper()
-    if len(code) == 3 and code.isascii() and code.isalpha() and pycountry.currencies.get(alpha_3=code) is not None:
+    if _is_iso_alpha_3(code):
         return code
-    shown = code if len(code) <= _REFUSED_CURRENCY_SHOWN else code[:_REFUSED_CURRENCY_SHOWN] + "…"
-    raise ValueError(f"Invalid currency code {shown!r}: expected an ISO 4217 alphabetic code, such as EUR")
+    shown = shown_currency_text(code)
+    candidates = _iso_currency_candidates(code)
+    if candidates:
+        raise ValueError(f"Invalid currency code {shown!r}: the ISO 4217 alphabetic code is {' or '.join(candidates)}")
+    raise ValueError(f"Invalid currency code {shown!r}: expected an ISO 4217 alphabetic code, such as EUR or USD")
 
 
 IsoCurrencyCode = Annotated[str, BeforeValidator(iso_currency_code)]

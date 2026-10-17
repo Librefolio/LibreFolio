@@ -535,6 +535,18 @@ def cmd_db_check(args):
     return run_pipenv(["python", "-m", "backend.alembic.check_constraints_hook"], env=env)
 
 
+def cmd_db_currencies(args):
+    """List the stored currency codes that are not ISO 4217 codes (E-19a): read-only, exit 1 when it lists some."""
+    db_file, ok = _existing_db_file(args)
+    if not ok:
+        return 1
+    print(Colors.success(f"Checking stored currency codes: {db_file or get_database_path()}"))
+    command = ["python", "-m", "backend.app.services.platform.stored_currencies"]
+    if db_file is not None:
+        command += ["--db-file", str(db_file)]
+    return run_pipenv(command)
+
+
 def cmd_db_current(args):
     """Show current database migration."""
     db_file, ok = _existing_db_file(args)
@@ -2659,6 +2671,10 @@ Examples:
     db_p = db_sub.add_parser("check", help="Verify CHECK constraints")
     db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
     db_p.set_defaults(func=cmd_db_check)
+
+    db_p = db_sub.add_parser("currencies", help="List stored currency codes that are not ISO 4217 codes")
+    db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
+    db_p.set_defaults(func=cmd_db_currencies)
 
     db_p = db_sub.add_parser("current", help="Show current migration")
     db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")

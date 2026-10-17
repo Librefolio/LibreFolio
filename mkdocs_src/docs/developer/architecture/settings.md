@@ -342,6 +342,12 @@ New `UserSettings` rows are seeded **from** the global defaults at creation
 (`get_or_create_user_settings`), so the global default reaches users who never chose, while an
 explicit user choice always wins afterwards.
 
+Both are written only as ISO 4217 alphabetic codes: the global `default_currency` through the settings layer's own
+check, a user's `base_currency` (`PUT /settings/user`, the welcome flow) through `IsoCurrencyCode` since E-19a. Before,
+the user's field checked only its length, so an API client could store `978` or `XYZ`; such a stored value is reported
+by the stored-currency check (admin guide, [Command-Line Tools](../../admin/cli_tools.md), «Currency Codes That Are Not
+ISO Codes»).
+
 !!! warning "Why this helper exists (audit 08, P0-1)"
 
     It replaced a **phantom `base_currency` global key** that was never registered anywhere:

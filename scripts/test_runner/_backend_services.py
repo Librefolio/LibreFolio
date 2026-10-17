@@ -1336,6 +1336,22 @@ def services_config_audit(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Configuration checks tests", verbose=verbose)
 
 
+def services_stored_currencies(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19a: the stored currency codes that are not ISO 4217 codes, found read-only, logged at startup, listed by the CLI."""
+    print_section("Services: Stored Currencies (E-19a)")
+    print_info("Testing: backend/app/services/platform/stored_currencies.py (14 places, findings, summary, startup warning, CLI)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_stored_currency_audit.py", test_names)
+    return run_command(cmd, "Stored currencies tests", verbose=verbose)
+
+
+def services_gap_fix_currency_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """E-19a: the gap-fix refuses a broker whose cash is held in codes that are not ISO 4217 codes."""
+    print_section("Services: Gap-fix Currency Guard (E-19a)")
+    print_info("Testing: backend/app/services/brim/brim_gap_fix.py (_refuse_non_iso_cash)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_gap_fix_currency_guard.py", test_names)
+    return run_command(cmd, "Gap-fix currency guard tests", verbose=verbose)
+
+
 def services_plugin_secrets_check(verbose: bool = False, test_names: list = None) -> bool:
     """Test the startup check of the stored plugin secrets: its result, its log, never raising, no key generated (H-15)."""
     print_section("Services: Plugin Secrets Check")
@@ -2329,6 +2345,15 @@ Note: No backend server required.
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base defaults + text-encoding fallback")
     add_test(cat, "brim-report-sets", services_brim_report_sets, name="BRIM Report Sets", desc="Report-set schemas, contract defaults, combined-file storage")
     add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
+    add_test(
+        cat,
+        "gap-fix-currency-guard",
+        services_gap_fix_currency_guard,
+        name="Gap-fix Currency Guard",
+        desc="E-19a: the gap-fix refuses (409 ledger_unreadable) a broker whose cash up to the checkpoint holds non-ISO codes, naming them",
+        # PURE: a private in-memory SQLite per test, as test_brim_gap_fix.py does; never the lane's database.
+        isolation="pure",
+    )
     add_test(cat, "brim-create-transaction", services_brim_create_transaction, name="BRIM Create Transaction", desc="_create_transaction + _loc_to_field")
     add_test(
         cat,
@@ -2639,6 +2664,15 @@ Note: No backend server required.
     add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
+    add_test(
+        cat,
+        "stored-currencies",
+        services_stored_currencies,
+        name="Stored Currencies",
+        desc="E-19a: stored currency codes that are not ISO 4217 codes in 14 places, read-only; the startup warning and the CLI listing",
+        # PURE: each test builds its own SQLite file under tmp_path (and one subprocess reads it); never the lane's database.
+        isolation="pure",
+    )
     add_test(
         cat,
         "plugin-secrets-check",
