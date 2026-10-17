@@ -1,15 +1,17 @@
 /**
  * livePriceService.ts — Shared utility for fetching live current prices.
  *
- * Single API wrapper used by:
- * - routes/(app)/assets/+page.svelte (assets list, cards + table)
- * - routes/(app)/assets/[id]/+page.svelte (asset detail summary)
+ * Used by:
+ * - routes/(app)/assets/+page.svelte (assets list, cards + table): `fetchCurrentPrices` and the poll's outcome;
+ * - the asset detail page's live poll (`components/assets/detail/assetDetailLive.svelte.ts`): the helpers only, since
+ *   it posts its one id itself.
  *
  * Always non-blocking: callers fire-and-forget via promises. `livePollOutcome` and `livePollFailure` turn an answer, or
  * a request that failed, into what the live poller needs to space the next one (`activePolling.ts`, Z7): the end of a
  * provider's pause, the server's `Retry-After`, or a failure that doubles the wait.
  */
 import {axiosInstance} from '$lib/api';
+import {sendBulkBatches} from '$lib/api/bulkBatches';
 import type {PollOutcome} from '$lib/features/live-updates/activePolling';
 
 export type LivePriceDirection = 'up' | 'down' | 'neutral';
@@ -45,12 +47,19 @@ export function toLivePriceResult(raw: any): LivePriceResult {
 
 /**
  * Fetch current live prices for a list of asset IDs.
- * Wraps POST /api/v1/assets/prices/current.
+ * Wraps POST /api/v1/assets/prices/current, which answers at most 1,000 ids per request (R13-SEC9-1): a longer list goes
+ * in batches (`sendBulkBatches`, lot Z-27), one after the other, the answers in order (X-R64). All or nothing: a failed
+ * batch rejects with its own error, as axios raised it, so that `livePollFailure` still reads its `Retry-After`.
  */
 export async function fetchCurrentPrices(ids: number[]): Promise<LivePriceResult[]> {
     if (ids.length === 0) return [];
-    const res = await axiosInstance.post('/api/v1/assets/prices/current', ids);
-    const results: any[] = res.data?.results ?? [];
+    const outcome = await sendBulkBatches(
+        ids,
+        () => 0,
+        (batch) => axiosInstance.post('/api/v1/assets/prices/current', batch),
+    );
+    if (outcome.failed) throw outcome.error;
+    const results: any[] = outcome.answers.flatMap(({answer}) => answer.data?.results ?? []);
     return results.map(toLivePriceResult);
 }
 

@@ -88,6 +88,10 @@ logger = structlog.get_logger(__name__)
 # Latin-1 last, because it decodes any byte sequence and so always succeeds.
 TEXT_ENCODINGS: Tuple[str, ...] = ("utf-8-sig", "cp1252", "latin-1")
 
+# What a lone validation error's context may hold to become its params (W-B75, the batch's rule of W-B72): a business
+# rule's ``{type, qty, …}``. pydantic's ``value_error`` holds the exception itself, which no response can carry.
+_PLAIN_PARAM_TYPES = (str, int, float, bool, type(None))
+
 
 # =============================================================================
 # EXCEPTIONS
@@ -536,6 +540,21 @@ class BRIMProvider(ABC):
         parts = [str(p) for p in loc if not isinstance(p, int)]
         return ".".join(parts) if parts else None
 
+    @staticmethod
+    def _lone_error_params(err: dict) -> Optional[dict]:
+        """The ``params`` of a validation error met alone: the context of a model-level error, when it is plain data.
+
+        The rule of the transaction batch's ``_lone_error_params`` (W-B72), so a row the parse refuses and the same row
+        the batch refuses carry the same ``params`` (W-B75). A business rule keeps its context (``{type}``,
+        ``{type, qty}``, …); a field's error — pydantic's own, ``string_too_long``, a validator's ``value_error`` — keeps
+        ``None``: its ``field`` names it. A ``value_error``'s context holds the exception itself: copied as it was, it
+        made the parse answer 500.
+        """
+        context = err.get("ctx")
+        if err.get("loc") or not context or not all(isinstance(value, _PLAIN_PARAM_TYPES) for value in context.values()):
+            return None
+        return dict(context)
+
     def _create_transaction(
         self,
         row_num: int,
@@ -548,7 +567,9 @@ class BRIMProvider(ABC):
 
         On success: appends to ``transactions`` and returns the item.
         On ValidationError: extracts structured issues from Pydantic, appends to
-        ``validation_issues``, and returns None.
+        ``validation_issues``, and returns None. Each issue carries the error's code,
+        message and field; a packed business rule keeps its context as ``params``,
+        a lone error as ``_lone_error_params`` decides (W-B75).
 
         Plugins should call this instead of ``TXCreateItem(...)`` directly so that
         the parent class owns the error-handling contract and the frontend receives
@@ -581,7 +602,7 @@ class BRIMProvider(ABC):
                             code=err_type,
                             message=err.get("msg", str(e)),
                             field=self._loc_to_field(err.get("loc", ())),
-                            params=err_ctx if err_ctx else None,
+                            params=self._lone_error_params(err),
                             context=context,
                         )
                     )
