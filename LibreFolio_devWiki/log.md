@@ -3718,3 +3718,15 @@ stay in the plan. `developer/backend/email.md` still shows the masked notice and
 `check_source_paths.py`: 5 missing (8 occurrences) of 4108, all pre-existing, none on this page.
 Updated: [[domains/email]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-17] file | Page busy, the E2E budget, and a direct Playwright run in a lane
+Three pages from Y's night of 16→17/10 (Y11 closing lots, Y-21, Y-22). The concept: the `pageBusy` contract of
+decision 48 / P3: tokens on the trigger and never in a load function, `join` (N55), the post-sync rule, N64, the
+panels' own tokens, the button contract and the hold/record/control E2E pattern; nothing in the wiki described it.
+Two problems: waits chained past the 30 s test budget (a block budget, real poll deadlines, the tooltip retry's
+per-attempt rest); and a direct Playwright run in a coordinated lane (`LF_SETUP_DONE=1`, the lane guard, never
+edit a script bash is running). `check_source_paths.py`: 7 missing (12 occurrences) of 4127, all pre-existing,
+none on these pages.
+Filed: [[concepts/page-busy-refresh-button]], [[problems/e2e-chained-waits-outlast-the-test-budget]],
+[[problems/direct-playwright-run-in-a-test-lane]].
+Graph: not updated; graphify is not available in this worktree.

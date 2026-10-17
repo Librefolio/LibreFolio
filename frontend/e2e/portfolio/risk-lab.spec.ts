@@ -7042,13 +7042,17 @@ test.describe('Asset Global risk laboratory', () => {
         await expect.poll(lossWaves, {timeout: 15_000, message: 'L1° must have been asked'}).toBeGreaterThan(0);
         await expect.poll(paidWaves, {timeout: 15_000, message: 'L3° must have been asked'}).toBeGreaterThan(0);
         expect(priceQueries, 'the page must have loaded its price series').toBeGreaterThan(0);
-        const before = {correlation: correlationWaves(), loss: lossWaves(), paid: paidWaves(), prices: priceQueries};
 
-        // The reload sits in the page toolbar on this tab, beside the sync.
+        // The reload sits in the page toolbar on this tab, beside the sync. It is the
+        // tab's Refresh (Y11, decision 48): disabled while the page's big requests are in
+        // flight — the list's first load, and every section's base wave, which the polls
+        // above saw asked, not landed. Waited for with the polls' own budget, and before
+        // the baseline below, so that its counts are those of a page at rest.
         const toolbar = page.getByTestId('assets-controls');
         const reload = toolbar.getByTestId('risk-reload-button');
         await expect(reload).toBeVisible();
-        await expect(reload).toBeEnabled();
+        await expect(reload, 'the reload must be pressable once the opening waves are in').toBeEnabled({timeout: 15_000});
+        const before = {correlation: correlationWaves(), loss: lossWaves(), paid: paidWaves(), prices: priceQueries};
         await reload.click();
 
         // Every base is re-read, section by section. `>`, as in the sync test: how many
