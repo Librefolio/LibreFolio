@@ -6512,6 +6512,79 @@ prossimo checkpoint.
 
   Porta 6185 libera.
 - ⏳ **Checkpoint J-52** (FROZEN).
+- ✅ **Checkpoint J-52** (2026-10-17): entrato (dev `df1194de4`, merge `ae3f02530`, conflitto del backlog risolto dal
+  coordinatore con la chiusura di J-53, tenendo le due), CHANGELOG 🐛 `7cff26b61`; worktree in fast-forward.
 - Patch pronta, non applicata: `files/j/j52/apply_fix.py` (3 ancore: versione col commento, l'eco, la frase di «Replay
   Coverage» in `risk/architecture.md`). Prova a secco OK. Verdi previsti: lint, il file, `risk-all`, `schemas risk`,
   doc.
+
+#### Revisioni di J-53 e MF-A5; CP-10d in attesa (17/10 ~17:45, sola lettura; base `7cff26b61`)
+
+- **CP-10d: non ancora** (coordinatore). `assets/` è aperta in Z (`refresh.py`, `provider_management.py`) e in X
+  (`price_store.py`), i file del runner in sei worktree: ricontrolla dopo le due revisioni.
+  - Lo script è pronto, non applicato: `files/j/cp10d/apply_rename.py` (21 file, 43 menzioni, un `mv` semplice perché
+    `git mv` metterebbe in stage). A secco OK su `a3d4d60a7`: va rifatto prima di applicarlo.
+  - Restano col loro nome, come dice CP-10d («soli import e `applyTo`»): il file di test `test_series_preparation.py` e
+    l'azione `series-preparation` del runner, che quindi non si tocca. Fuori anche diari, `TODO_FUTURI.md` e le cache di
+    graphify.
+  - Due commenti sono nei file di Y (`assetSetLevels.ts`, `.test.ts`).
+- **J-53** (`fd8aeaf18`, Y): **OK**.
+  - Una riga per le issue su un lotto, coi chip; una riga per ogni issue senza lotto, deduplicata per chiave e parametri.
+  - I quattro codici senza lotto del motore (`TRANSFER_PAIR_MISSING`, `FIFO_SOURCE_QUANTITY_MISSING`, `SHORT_*`) fanno
+    fallire l'analisi, quindi vanno all'avviso. Al banner arrivano solo fondi orfani, «al costo» e cambi: nessuna riga
+    ripetuta.
+- **MF-A5** (`f7057cb2f`): **OK sul lato del mittente**.
+  - La base = costo venduto + costo spostato dalle tratte contate (`counted_tract`). Un'uscita non coperta fa
+    ripiegare; l'esempio dà 12,5%; il nit «fell to zero» è corretto.
+  - **Reperto (medio-basso, di MF), lo specchio sul lato del ricevente**: il P&L di una riga che riceve unità con una
+    tratta contata parte dal loro valore d'arrivo (`−tract`), mentre la base resta il costo storico. Comprato 500, vale
+    600 all'arrivo, venduto 660: 60/500 = 12% invece di 60/600 = 10%. Cura proposta: aggiungere alla base le tratte
+    ricevute, oppure ripiegare.
+- **J-53, le modifiche di Y a `lots_analysis_service.md`** (l.400 e l.600), verificate:
+  - «the issues of one code that name a lot» è esatto;
+  - i fondi orfani sono uno per fondo (`fifo/engine.py:899-913`, `:1015-1029`);
+  - `_report_gaps()` passa da `build_data_quality_report`: due `MISSING_FX_RATES` e un `MISSING_COST_BASIS`, senza
+    lotto;
+  - l'ancora `#degraded-economic-pools` esiste.
+- **CP-10d ancora fermo** (coordinatore, ~17:50): `assets/` aperta in X e Z, `_backend_services.py` in A ed E. In
+  coda, dalla sezione di W: W-B55.
+
+#### W-B55 — la decisione 47 in un'altra valuta, da capo a fondo (17/10, dalle 17:50; base `7cff26b61`; solo test, W rivede)
+
+- **La lacuna**: dalla cancellazione del broker che riceve fino ai numeri in un'altra valuta, nessun test fa tutto il
+  percorso.
+  - La gamba che cede diventa `ADJUSTMENT −q` al costo Auto del suo broker (`_handover_cost` → `compute_wac_iterative`,
+    nella valuta dell'ultimo acquisto).
+  - J-24 realizza D − C nel giorno della consegna.
+  - Oggi la cosa è coperta a metà: lo specchio di W (`TestOrphanOutgoingTransfer`) scrive la riga in EUR; il libro
+    estero di J (`TestForeignAdjustmentOutHandsOverAtItsDate`) legge una riga USD scritta a mano.
+- **Il caso** (brief al test-author): la classe `TestOrphanOutgoingTransferInAnotherCurrency` nel file di W, con il
+  controllo (riga scritta a mano) e l'orfano (cancellazione vera).
+  - X″ in USD, rapporto in EUR.
+  - Giorno 1: 1000 USD e 10 X″ a 100 USD, EUR/USD 1,25.
+  - Giorno 3: 4 X″ da A a B, EUR/USD 1,60, prezzo 110 USD; poi B cancellato. Lettura il giorno 3, su date FX che nessun
+    altro test scrive.
+- **Attesi (derivati da J)**:
+  - la riga: `ADJUSTMENT −4`, 100 `USD`;
+  - Dashboard: investito 550 (800 − 250), realizzato −70 (250 − 320), non realizzato −67,5, patrimonio 412,5, P&L
+    −137,5;
+  - lotti: costo 800, proventi 250, realizzato −70, valore aperto 412,5, P&L totale −137,5;
+  - Dashboard e lotti dicono −70.
+- ✅ **Esecuzione (18:0x)**: **verde sulle due origini**, al primo giro. File 27/27 (21 + 6 nuovi). Nessun valore
+  corretto dopo la corsa.
+  - **La riga** lasciata dalla cancellazione è esattamente quella del controllo: `ADJUSTMENT −4`, 100 `USD`, senza
+    partner.
+  - **Dashboard**: investito 550, realizzato −70, patrimonio 412,5, P&L −137,5; costo aperto 480; X″ 6 a 80 (valore
+    412,5, guadagno −67,5).
+  - **Lotti**: COMPLETE, un lotto di 10, costo 800, proventi 250, realizzato −70, valore aperto 412,5, P&L di mercato
+    −67,5, totale −137,5.
+  - **Parità**: −70 e −137,5 da una parte e dall'altra.
+  - **Date**: 3 e 5 dicembre 2018, libere in tutti i test (le altre scritture EUR/USD stanno nel 2018-11, nel 2046-47,
+    nel 2024 e nel 1990; il popolamento parte da oggi − 3 anni). Scritte con «cancella e poi aggiungi».
+  - **Aiuti di W toccati**, tutti con parole chiave e valori di oggi come predefiniti: `_user_and_asset(currency=)`,
+    `_lots(date_to=)`, `_dashboard(date_to=)`. I 21 test di prima restano verdi.
+- ✅ **Verifica di J (18:1x)**: `services orphan-transfer-numbers` **27**, check-orphans ✓, ruff e black puliti (corsa del
+  test-author); porta 6185 libera.
+- **Esito: la decisione 47 in USD è corretta da capo a fondo**, quindi nessun difetto. W-B55 si chiude con la consegna di
+  soli test; la riga è nella sezione di W e la chiude il coordinatore.
+- ⏳ **Checkpoint W-B55** (FROZEN; W rivede).
