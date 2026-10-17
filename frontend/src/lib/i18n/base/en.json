@@ -119,7 +119,11 @@
     "backToDefault": "Back to default",
     "createForex": "Create forex…",
     "unknownError": "unknown error",
-    "decimalPlacesExceeded": "{max, plural, =0 {Whole numbers only} one {At most # decimal place} other {At most # decimal places}}"
+    "decimalPlacesExceeded": "{max, plural, =0 {Whole numbers only} one {At most # decimal place} other {At most # decimal places}}",
+    "bulkRefusal": {
+      "tooManyItems": "Some values could not be loaded: the server takes at most {max, number} items in one request, and this one held {count, number}.",
+      "tooManyDays": "Some values could not be loaded: the server builds at most {max, number} daily values in one request, and this one needed more. Choose a shorter period."
+    }
   },
   "csvImport": {
     "title": "Import CSV Data",
