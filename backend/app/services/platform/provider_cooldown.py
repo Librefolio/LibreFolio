@@ -23,7 +23,7 @@ from backend.app.config.sleep_wake import (
     provider_cooldown_settings,
 )
 from backend.app.logging_config import get_logger
-from backend.app.utils.runtime.cooldown import Cooldowns, CooldownState
+from backend.app.utils.runtime.cooldown import Cooldowns
 
 logger = get_logger(__name__)
 
@@ -81,13 +81,3 @@ def record_no_verdict(domain: str, provider: str, scope: str | None = None) -> N
     if not _settings().enabled:
         return
     PROVIDER_COOLDOWNS.released((domain, provider, scope))
-
-
-def cooldown_snapshot() -> tuple[CooldownState, ...]:
-    """The pauses this process holds, least recently used first: for the log and a future admin panel."""
-    return PROVIDER_COOLDOWNS.snapshot()
-
-
-def reset_provider_cooldowns() -> None:
-    """Forget every pause."""
-    PROVIDER_COOLDOWNS.clear()

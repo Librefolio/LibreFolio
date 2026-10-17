@@ -19,13 +19,14 @@
     import type {ColumnDef, DataRow} from '$lib/components/ui/data-editor/DataEditorTypes';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
-    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {assetDataSaveSummary, type AssetDataSaveCounts} from './assetDataSaveSummary';
     import PriceDataImportModal from './PriceDataImportModal.svelte';
     import EventDataImportModal from './EventDataImportModal.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {eventSaveErrorMessage} from '$lib/components/transactions/events/eventSaveError';
+    import {eventSaveErrorMessage} from '$lib/features/transactions/events/eventSaveError';
     import {_ as t, locale} from '$lib/i18n';
-    import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/utils/transactions/eventTypes';
+    import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/features/transactions/events/eventTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
 
@@ -271,7 +272,7 @@
         error = null;
 
         try {
-            const parts: string[] = [];
+            const counts: AssetDataSaveCounts = {pricesSaved: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0};
 
             // ─── PRICES ─────────────────────────────────────
             if (dirtyPrices.length > 0) {
@@ -312,7 +313,7 @@
                             prices: priceItems,
                         },
                     ]);
-                    parts.push(`${validUpserts.length} prices saved`);
+                    counts.pricesSaved = validUpserts.length;
                 }
 
                 if (deletePrices.length > 0) {
@@ -341,10 +342,10 @@
                             date_ranges: ranges,
                         },
                     ]);
-                    parts.push(`${deletePrices.length} prices deleted`);
+                    counts.pricesDeleted = deletePrices.length;
                 }
 
-                if (invalidCount > 0) parts.push(`${invalidCount} skipped (invalid)`);
+                counts.pricesSkipped = invalidCount;
             }
 
             // ─── EVENTS ─────────────────────────────────────
@@ -391,20 +392,18 @@
                             const id = dbEventId(row);
                             return id === null || !deletedIds.has(id);
                         });
-                        parts.push($t('events.deleteSuccess', {values: {n: deletedIds.size}}));
+                        counts.eventsDeleted = deletedIds.size;
                     }
                     if (validEvents.length > 0) {
-                        parts.push(`${validEvents.length} events saved`);
+                        counts.eventsSaved = validEvents.length;
                     }
                 }
             }
 
-            // Only show success toast when there's something to report. Avoids the
-            // empty "Asset data:    " toast when an attempted delete was fully blocked
-            // by RESTRICT (in_use) — the warning toast already informs the user.
-            if (parts.length > 0) {
-                toasts.success(`Asset data: ${parts.join(', ')}`);
-            }
+            // The event always; the toast only when there is something to report (O-8). A delete fully blocked by
+            // RESTRICT (in_use) reports nothing here: the warning toast already informs the user.
+            const summary = assetDataSaveSummary(counts, $t);
+            notify({name: 'assets.data.saved', detail: {...counts}, toast: summary === null ? undefined : {variant: 'success', message: summary}});
 
             // Compute expanded date range from appended price rows
             const appendedPrices = priceRows.filter((r) => r.status === 'appended');
@@ -424,9 +423,9 @@
             onsave?.(expandedRange);
         } catch (e: any) {
             console.error('Failed to save asset data:', e);
-            const msg = e?.message || 'unknown error';
-            error = 'Failed to save: ' + msg;
-            toasts.error(`Save failed: ${msg}`);
+            const msg = e?.message || $t('common.unknownError');
+            error = $t('dataEditor.saveFailed', {values: {error: msg}});
+            notify({name: 'assets.data.saveFailed', detail: {error: msg}, toast: {variant: 'error', message: error}});
         } finally {
             saving = false;
         }
@@ -466,7 +465,7 @@
 <div class="space-y-3">
     <!-- Error banner -->
     {#if error}
-        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft">
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft" data-testid="asset-editor-error">
             {error}
         </div>
     {/if}

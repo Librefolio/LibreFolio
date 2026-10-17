@@ -3,11 +3,14 @@
 Covered here: data-directory resolution and its production guards, lane runtime
 configuration (including the instance configuration a lane drops, and
 ``Settings`` reading no dotenv file in test mode), CLI/runner wiring,
-shared-backend ownership, the ``exec_unmasked`` spawn wrapper, and
-``mkdocs gallery --no-populate`` reusing a lane's test database. Every test is
-PURE — no server, no database, no network — using ``tmp_path``, in-memory
-fakes, and (only where a real signal is the subject) short-lived subprocesses
-that just print or wait.
+shared-backend ownership, the ``exec_unmasked`` spawn wrapper,
+``mkdocs gallery --no-populate`` reusing a lane's test database, and the
+frontend build's staleness probe (``check_frontend_needs_build``): what it
+counts as an input, and the listing of the Tool codegen inputs a successful
+build records, which it compares instead of the folders' mtimes (H-24r).
+Every test is PURE — no server, no database, no network — using ``tmp_path``,
+in-memory fakes, and (only where a real signal is the subject) short-lived
+subprocesses that just print or wait.
 """
 
 from __future__ import annotations
@@ -2298,6 +2301,21 @@ class TestGalleryHandsTheSetupToPlaywright:
 # edited after the last build must make the build stale as well: otherwise the
 # app keeps serving the old text, and an E2E that reads the file
 # (`layout/changelog-locale.spec.ts`) disagrees with the bundle it runs against.
+#
+# Not all of `frontend/src` is an input of the bundle, though (H-24). A file
+# there is left out of the comparison when, read relative to `src`:
+#   - a part of its path starts with `.`: the Finder's `.DS_Store`, an
+#     AppleDouble `._App.svelte`, a `.gitignore`, the translation catalogue's
+#     stamp `lib/i18n/.generated`, anything inside a hidden folder;
+#   - its name contains `.test.` or `.spec.`: a Vitest file;
+#   - one of its folders is named exactly `__tests__` or `__mocks__`: Vitest's
+#     harnesses, fixtures and module mocks, which no app code imports.
+# None of them reaches the bundle, so one newer than the build must not force a
+# rebuild of minutes — as a `.DS_Store` the Finder dropped into `src` once did.
+# Everything else still counts, the near-misses included (`latest.ts`,
+# `testing/helpers.ts`, `lib/tests/x.ts`, `lib/__tests__.ts`), and a folder
+# above `src`, in the checkout's own path, hides nothing.
+#
 # The project root is a tree under `tmp_path` and every mtime is set with
 # `os.utime`: no clock, no sleep, no repository file touched.
 
@@ -2307,31 +2325,37 @@ OLDER_MTIME = BUILD_MTIME - 3600
 NEWER_MTIME = BUILD_MTIME + 3600
 
 
-@pytest.fixture
-def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
-    """A built frontend under a ``tmp_path`` project root, every input an hour older than the build.
+def make_frontend_project(monkeypatch, root: Path) -> dict[str, Path]:
+    """A built frontend under the project root ``root``, every input an hour older than the build.
 
     Inputs: one ``frontend/src`` file, ``frontend/package.json`` and the root
     markdown files a test may move forward — the two changelogs and a README that
     is not one. The Tool codegen inputs are absent here, verified rather than
     assumed: they could otherwise answer either way for the guards below.
+    ``cli_base.get_project_root`` answers ``root`` for the rest of the test.
     """
     files = {
-        "index.html": tmp_path / "frontend" / "build" / "index.html",
-        "source": tmp_path / "frontend" / "src" / "app.html",
-        "package.json": tmp_path / "frontend" / "package.json",
-        "CHANGELOG.md": tmp_path / "CHANGELOG.md",
-        "CHANGELOG.it.md": tmp_path / "CHANGELOG.it.md",
-        "README.md": tmp_path / "README.md",
+        "index.html": root / "frontend" / "build" / "index.html",
+        "source": root / "frontend" / "src" / "app.html",
+        "package.json": root / "frontend" / "package.json",
+        "CHANGELOG.md": root / "CHANGELOG.md",
+        "CHANGELOG.it.md": root / "CHANGELOG.it.md",
+        "README.md": root / "README.md",
     }
     for path in files.values():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic build input\n", encoding="utf-8")
         os.utime(path, (OLDER_MTIME, OLDER_MTIME))
     os.utime(files["index.html"], (BUILD_MTIME, BUILD_MTIME))
-    monkeypatch.setattr(cli_base, "get_project_root", lambda: tmp_path)
-    assert [path for path in cli_base._tool_contract_sources(tmp_path) if path.exists()] == [], "a Tool codegen input exists under the fake root"
+    monkeypatch.setattr(cli_base, "get_project_root", lambda: root)
+    assert [path for path in cli_base._tool_contract_sources(root) if path.exists()] == [], "a Tool codegen input exists under the fake root"
     return files
+
+
+@pytest.fixture
+def frontend_project(monkeypatch, tmp_path) -> dict[str, Path]:
+    """``make_frontend_project`` with ``tmp_path`` itself as the project root."""
+    return make_frontend_project(monkeypatch, tmp_path)
 
 
 # The translation catalogue is an input of the build too (workstream U, step U-2): `src/lib/i18n/<lang>.json` is
@@ -2366,6 +2390,51 @@ def frontend_catalogue(frontend_project, tmp_path) -> dict[str, Path]:
     assert cli_base.generated_catalogs(tmp_path) == [i18n / f"{language}.json" for language in CATALOGUE_LANGUAGES], "premise: the probe sees the four generated catalogues"
     assert [path for path in cli_base._tool_contract_sources(tmp_path) if path.exists()] == [], "a Tool codegen input exists under the fake root"
     return {**frontend_project, **files}
+
+
+# The files under `frontend/src` the H-24 rule leaves out, by their path relative to `src`, each with what it is.
+NOT_BUNDLED_SOURCES = {
+    ".DS_Store": "the Finder's folder metadata",
+    "lib/components/.DS_Store": "the Finder's folder metadata, in a subfolder",
+    "lib/components/._App.svelte": "an AppleDouble file, the metadata macOS keeps beside App.svelte on a volume without extended attributes",
+    "lib/api/.gitignore": "a hidden file",
+    "lib/i18n/.generated": "the translation catalogue's stamp",
+    "lib/.cache/x.ts": "a file inside a hidden folder",
+    "lib/.cache/vite/x.ts": "a file deeper inside a hidden folder",
+    "x.test.ts": "a Vitest file",
+    "lib/components/x.dom.test.ts": "a Vitest file",
+    "lib/utils/x.spec.ts": "a Vitest file",
+    "routes/x/page.test.ts": "a Vitest file",
+    "__tests__/component.ts": "a Vitest harness",
+    "lib/charts/__tests__/fixtures/series.json": "a Vitest fixture",
+    "__mocks__/$app/navigation.ts": "a Vitest module mock",
+}
+
+# The files under `frontend/src` it must keep counting: ordinary inputs, then the near-misses of each of its clauses — a
+# name or a folder that merely contains "test", "spec" or "__tests__".
+BUNDLED_SOURCES = {
+    "lib/utils/format.ts": "a module",
+    "lib/components/App.svelte": "a component",
+    "lib/data/currencies.json": "a JSON module",  # not under lib/i18n/base/, where a JSON would make a catalogue due and answer True for that reason
+    "lib/i18n/assets/prefixes.txt": "a subsystem's key prefixes, read by the catalogue generator",
+    "latest.ts": "'test' in the name, not '.test.'",
+    "contest.svelte": "'test' in the name, not '.test.'",
+    "lib/utils/x.testing.ts": "'.test' in the name, not '.test.'",
+    "inspect.ts": "'spec' in the name, not '.spec.'",
+    "spectrum.ts": "'spec' in the name, not '.spec.'",
+    "testing/helpers.ts": "'test' in a folder's name",
+    "lib/tests/x.ts": "a folder named tests, not __tests__",
+    "lib/my__tests__/x.ts": "a folder whose name merely contains __tests__",
+    "lib/__tests__.ts": "a file, not a folder, named like __tests__",
+}
+
+
+def add_newer_source(project: dict[str, Path], relative: str) -> None:
+    """Write ``frontend/src/<relative>`` into a ``make_frontend_project`` tree, an hour newer than its build."""
+    path = project["source"].parent / relative  # the project's one source is frontend/src/app.html
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("synthetic source\n", encoding="utf-8")
+    os.utime(path, (NEWER_MTIME, NEWER_MTIME))
 
 
 class TestFrontendBuildStaleness:
@@ -2414,5 +2483,427 @@ class TestFrontendBuildStaleness:
     @pytest.mark.parametrize("newer", ["base/it.json", "fragment", "generator"], ids=["a-base-source", "a-plugin-fragment", "the-generator"])
     def test_a_catalogue_input_newer_than_the_build_needs_a_rebuild(self, frontend_catalogue, newer):
         os.utime(frontend_catalogue[newer], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    @pytest.mark.parametrize("relative", list(NOT_BUNDLED_SOURCES))
+    def test_a_newer_file_that_is_not_an_input_of_the_bundle_leaves_it_up_to_date(self, frontend_project, relative):
+        add_newer_source(frontend_project, relative)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-24: frontend/src/{relative} ({NOT_BUNDLED_SOURCES[relative]}) is not an input of the bundle: newer than the build, it must not force a rebuild"
+
+    @pytest.mark.parametrize("relative", list(BUNDLED_SOURCES))
+    def test_a_newer_input_of_the_bundle_needs_a_rebuild(self, frontend_project, relative):
+        # Green before H-24 and after it: these keep the cure from leaving out more than it should.
+        add_newer_source(frontend_project, relative)
+
+        assert cli_base.check_frontend_needs_build() is True, f"frontend/src/{relative} ({BUNDLED_SOURCES[relative]}) is an input of the bundle: newer than the build, it must make the build stale"
+
+    @pytest.mark.parametrize("left_out", [".DS_Store", "x.test.ts", "__tests__/component.ts"], ids=["a-hidden-file", "a-vitest-file", "a-tests-folder"])
+    def test_a_file_left_out_is_skipped_and_the_scan_goes_on(self, frontend_project, left_out):
+        # The left-out file sits at most one folder down in `src`, the bundled one two: `rglob` yields the first before
+        # the second, so a rule that ended the scan at a left-out file, instead of skipping it, would answer False here.
+        add_newer_source(frontend_project, left_out)
+        add_newer_source(frontend_project, "lib/utils/format.ts")
+
+        assert cli_base.check_frontend_needs_build() is True, f"frontend/src/lib/utils/format.ts is newer than the build: leaving frontend/src/{left_out} out must not end the scan"
+
+    @pytest.mark.parametrize("folder", [".hidden-root", "__tests__"], ids=["a-hidden-folder", "a-tests-folder"])
+    def test_a_folder_above_src_hides_none_of_its_sources(self, monkeypatch, tmp_path, folder):
+        # The rule reads each path relative to `src`: a checkout may live under a hidden folder, or one named
+        # `__tests__` — here the project root itself is that folder — and its sources must still count.
+        project = make_frontend_project(monkeypatch, tmp_path / folder)
+        assert cli_base.check_frontend_needs_build() is False
+
+        os.utime(project["source"], (NEWER_MTIME, NEWER_MTIME))
+
+        assert cli_base.check_frontend_needs_build() is True, f"frontend/src/app.html is an input of the bundle: {folder}, a folder above src, must not hide it"
+
+
+# ── Frontend build staleness — the Tool codegen inputs, their listing recorded at build time (H-24 residual) ──
+#
+# The Tool codecs a build generates (`cmd_api_sync`) derive from Python sources — `backend/app/schemas`, the Tool
+# services, the bundled Tool plugins — and from a few fixed scripts. The probe compared their mtimes with the build's,
+# and the three folders' own mtimes as well, so that a `.py` removed after the build made it stale. But a folder's mtime
+# also moves when the Finder drops a `.DS_Store` in it or Python creates a `__pycache__`, and no filter on mtimes can
+# tell those from a removed file: each cost a rebuild of minutes. So a successful build records the inputs' listing — a
+# fingerprint of their paths relative to the project root, taken before the API sync — in
+# `frontend/build/.tool-contract-inputs`, and the probe reads it:
+#   - an input newer than the build makes it stale, as before;
+#   - with a listing recorded, the build is stale exactly when the listing changed: a `.py` added, removed, renamed or
+#     moved in with an old mtime, a new plugin folder, whatever the mtimes say. A `.DS_Store`, a `__pycache__`, a
+#     hidden `.py` (`.c.py`, Emacs' lock `.#c.py`, one inside a hidden folder) are not inputs and change nothing;
+#   - without one (a build made before the cure, a record that failed, an empty marker) the folders' mtimes decide, as
+#     before: a `.DS_Store` then still costs one rebuild, and that build records the listing.
+#
+# "After the build" is NEWER_MTIME, given with `os.utime` to the new file and to every folder its creation moved;
+# "arrived with an old mtime" (moved in, renamed, a folder reset after a removal) is OLDER_MTIME, so that only the
+# listing can tell. The clock is never read. The names the cure adds to `cli_base` are looked up when a test runs: until
+# they exist, the tests that need them fail on "H-24r: cli_base.<name> is missing", never at collection.
+
+#: The Tool codegen inputs ``make_tool_contract_project`` writes, by key, relative to the project root: a ``.py`` in each
+#: of the three folders (the plugin's in its own subfolder) and one of the fixed files.
+TOOL_CONTRACT_INPUTS = {
+    "schemas/a.py": "backend/app/schemas/a.py",
+    "services/tools/b.py": "backend/app/services/tools/b.py",
+    "tool_plugins/demo/c.py": "backend/app/services/tool_plugins/demo/c.py",
+    "generate-tools-client.mjs": "frontend/scripts/generate-tools-client.mjs",
+}
+
+#: The folders of that tree a ``.py`` input can live in, by key: the three the probe watches and the plugin's subfolder.
+TOOL_CONTRACT_FOLDERS = {
+    "schemas": "backend/app/schemas",
+    "services/tools": "backend/app/services/tools",
+    "tool_plugins": "backend/app/services/tool_plugins",
+    "tool_plugins/demo": "backend/app/services/tool_plugins/demo",
+}
+
+#: Files beside the inputs that are not inputs, by their path relative to the folder they appear in, each with what it is.
+NOT_TOOL_CONTRACT_INPUTS = {
+    ".DS_Store": "the Finder's folder metadata",
+    "__pycache__/c.cpython-313.pyc": "Python's bytecode cache",
+    ".c.py": "a hidden .py",
+    ".#c.py": "Emacs' lock file, here a regular file",
+    ".cache/c.py": "a .py inside a hidden folder",
+    "static/icon.png": "a plugin's asset, not Python",
+}
+
+
+def tool_contract_name(name: str):
+    """``cli_base.<name>``, looked up when the test runs: a name the cure has not added yet fails the test, not its collection."""
+    if not hasattr(cli_base, name):
+        pytest.fail(f"H-24r: cli_base.{name} is missing")
+    return getattr(cli_base, name)
+
+
+def set_mtime(mtime: float, *paths: Path) -> None:
+    """Give each of ``paths`` ``mtime`` as its access and modification time."""
+    for path in paths:
+        os.utime(path, (mtime, mtime))
+
+
+def add_tool_file(folder: Path, relative: str, mtime: float) -> Path:
+    """Write the file ``folder/<relative>``, then give ``mtime`` to it and to every folder its creation moved, ``folder`` included."""
+    path = folder / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"synthetic\n")
+    set_mtime(mtime, path, *(parent for parent in path.parents if parent.is_relative_to(folder)))
+    return path
+
+
+def remove_tool_file(path: Path, folder_mtime: float) -> None:
+    """Remove ``path``, then give its folder, whose mtime the removal moved, ``folder_mtime``."""
+    path.unlink()
+    set_mtime(folder_mtime, path.parent)
+
+
+def rename_tool_file(path: Path, name: str) -> Path:
+    """Rename ``path`` to ``name`` in its folder: the file keeps its mtime, the folder's is reset an hour before the build."""
+    renamed = path.with_name(name)
+    os.rename(path, renamed)
+    set_mtime(OLDER_MTIME, path.parent)
+    return renamed
+
+
+#: Changes to the inputs' listing that no mtime shows: every file and folder involved ends an hour older than the build.
+LISTING_CHANGES = {
+    "an-input-added": lambda project: add_tool_file(project.folders["services/tools"], "added.py", OLDER_MTIME),
+    "an-input-removed": lambda project: remove_tool_file(project.inputs["schemas/a.py"], OLDER_MTIME),
+    "an-input-renamed": lambda project: rename_tool_file(project.inputs["tool_plugins/demo/c.py"], "d.py"),
+}
+
+
+def make_tool_contract_project(monkeypatch, root: Path) -> SimpleNamespace:
+    """``make_frontend_project`` plus the Tool codegen inputs ``TOOL_CONTRACT_INPUTS``, all an hour older than the build.
+
+    So are the folders of ``TOOL_CONTRACT_FOLDERS``: writing the files moved their mtimes to now, so they are set last.
+    That the probe lists every input written here is verified, not assumed. Returns the project's ``root``, and its
+    ``inputs`` and ``folders`` by key.
+    """
+    make_frontend_project(monkeypatch, root)
+    inputs = {key: root / relative for key, relative in TOOL_CONTRACT_INPUTS.items()}
+    folders = {key: root / relative for key, relative in TOOL_CONTRACT_FOLDERS.items()}
+    for path in inputs.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# synthetic Tool codegen input\n", encoding="utf-8")
+    set_mtime(OLDER_MTIME, *inputs.values(), *folders.values())
+    assert set(inputs.values()) <= set(cli_base._tool_contract_sources(root)), "premise: the probe lists every Tool codegen input written here"
+    return SimpleNamespace(root=root, inputs=inputs, folders=folders)
+
+
+@pytest.fixture
+def tool_contract_project(monkeypatch, tmp_path) -> SimpleNamespace:
+    """``make_tool_contract_project`` with ``tmp_path`` itself as the project root."""
+    return make_tool_contract_project(monkeypatch, tmp_path)
+
+
+def record_tool_contract_listing(root: Path) -> None:
+    """Record the inputs' listing under ``root`` as a successful build does, through the cure's own two functions.
+
+    ``frontend/build/`` exists, so the record lands, and with nothing changed yet the build is up to date: both are
+    verified. The marker's exact content is pinned once, in ``TestToolContractListing``.
+    """
+    fingerprint = tool_contract_name("tool_contract_fingerprint")(root)
+    tool_contract_name("record_tool_contract_inputs")(root, fingerprint)
+    marker = root / tool_contract_name("TOOL_CONTRACT_INPUTS_MARKER")
+    assert marker.is_file() and marker.read_text(encoding="utf-8").strip(), f"premise: the listing was recorded in {marker}"
+    assert cli_base.check_frontend_needs_build() is False, "premise: right after the record, with nothing changed, the build is up to date"
+
+
+def write_tool_contract_marker(root: Path, content: str) -> None:
+    """Overwrite the recorded listing with ``content``: a listing another build recorded, or an empty one."""
+    (root / tool_contract_name("TOOL_CONTRACT_INPUTS_MARKER")).write_text(content, encoding="utf-8")
+
+
+def assert_no_listing_recorded(root: Path) -> None:
+    """The old rule's premise, verified without the cure's names: the build folder holds its ``index.html`` alone."""
+    assert sorted(path.name for path in (root / "frontend" / "build").iterdir()) == ["index.html"], "premise: no listing is recorded"
+
+
+class TestToolContractListing:
+    """What a build records: the Tool codegen inputs, the fingerprint of their listing, and the marker it goes to."""
+
+    @pytest.mark.parametrize("checkout", ["checkout", ".hidden-checkout"], ids=["a-plain-folder", "a-hidden-folder"])
+    def test_the_inputs_are_the_files_that_exist_never_a_folder_nor_a_file_that_is_not_one(self, monkeypatch, tmp_path, checkout):
+        # The fixed files the tree holds (the generator alone: dev.py and the others are absent, so left out, not listed
+        # missing) and the `.py` files of the three folders, nothing hidden and no `__pycache__` below the folder; a
+        # hidden folder above it, here the checkout's own, hides nothing.
+        project = make_tool_contract_project(monkeypatch, tmp_path / checkout)
+        for relative in NOT_TOOL_CONTRACT_INPUTS:
+            add_tool_file(project.folders["tool_plugins/demo"], relative, OLDER_MTIME)
+
+        listed = sorted(path.relative_to(project.root).as_posix() for path in cli_base._tool_contract_sources(project.root))
+
+        assert listed == sorted(TOOL_CONTRACT_INPUTS.values()), "H-24r: the Tool codegen inputs are the files that exist, without a folder or a file that is not an input"
+
+    def test_without_a_record_the_folders_watched_are_the_three_and_their_subfolders_but_pycache(self, tool_contract_project):
+        folders_of = tool_contract_name("_tool_contract_folders")
+        root = tool_contract_project.root
+        for folder in tool_contract_project.folders.values():
+            add_tool_file(folder, "__pycache__/c.cpython-313.pyc", OLDER_MTIME)
+
+        watched = sorted(path.relative_to(root).as_posix() for path in folders_of(root))
+
+        assert watched == sorted(TOOL_CONTRACT_FOLDERS.values())
+
+    def test_the_same_inputs_give_the_same_fingerprint(self, tool_contract_project):
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+
+        assert fingerprint(tool_contract_project.root) == fingerprint(tool_contract_project.root)
+
+    def test_the_fingerprint_reads_the_inputs_relative_to_the_project_root(self, monkeypatch, tmp_path):
+        # The same inputs in two checkouts: one listing, so one fingerprint, wherever the checkout lives.
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        first = make_tool_contract_project(monkeypatch, tmp_path / "first")
+        second = make_tool_contract_project(monkeypatch, tmp_path / "second")
+
+        assert fingerprint(first.root) == fingerprint(second.root)
+
+    def test_touching_the_inputs_keeps_the_fingerprint(self, tool_contract_project):
+        # Names, no mtimes: an input newer than the build is the mtime check's business, not the listing's.
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        before = fingerprint(tool_contract_project.root)
+
+        set_mtime(NEWER_MTIME, *tool_contract_project.inputs.values())
+
+        assert fingerprint(tool_contract_project.root) == before
+
+    @pytest.mark.parametrize("change", list(LISTING_CHANGES))
+    def test_an_input_added_removed_or_renamed_changes_the_fingerprint(self, tool_contract_project, change):
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        before = fingerprint(tool_contract_project.root)
+
+        LISTING_CHANGES[change](tool_contract_project)
+
+        assert fingerprint(tool_contract_project.root) != before
+
+    @pytest.mark.parametrize("relative", list(NOT_TOOL_CONTRACT_INPUTS))
+    def test_a_file_that_is_not_an_input_keeps_the_fingerprint(self, tool_contract_project, relative):
+        fingerprint = tool_contract_name("tool_contract_fingerprint")
+        before = fingerprint(tool_contract_project.root)
+
+        add_tool_file(tool_contract_project.folders["tool_plugins/demo"], relative, NEWER_MTIME)
+
+        assert fingerprint(tool_contract_project.root) == before, f"H-24r: tool_plugins/demo/{relative} ({NOT_TOOL_CONTRACT_INPUTS[relative]}) is not a Tool codegen input"
+
+    def test_the_fingerprint_is_a_sha256_hex_digest_that_names_no_input(self, tool_contract_project):
+        value = tool_contract_name("tool_contract_fingerprint")(tool_contract_project.root)
+
+        assert isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value), f"not a lowercase sha256 hex digest: {value!r}"
+        names = sorted({part for relative in TOOL_CONTRACT_INPUTS.values() for part in Path(relative).parts})
+        assert [name for name in names if name in value] == [], "the fingerprint carries the listing itself, not its digest"
+
+    def test_the_marker_is_a_hidden_file_of_the_build(self):
+        # Every build empties frontend/build/, so a listing there never outlives the build it describes; and a hidden
+        # file of the build is never served (H-28).
+        marker = tool_contract_name("TOOL_CONTRACT_INPUTS_MARKER")
+
+        assert Path(marker) == Path("frontend") / "build" / ".tool-contract-inputs"
+
+    def test_record_writes_exactly_the_fingerprint_into_the_marker(self, tool_contract_project):
+        fingerprint, record = tool_contract_name("tool_contract_fingerprint"), tool_contract_name("record_tool_contract_inputs")
+        marker = tool_contract_project.root / tool_contract_name("TOOL_CONTRACT_INPUTS_MARKER")
+        value = fingerprint(tool_contract_project.root)
+
+        record(tool_contract_project.root, value)
+
+        assert marker.read_text(encoding="utf-8") == value
+
+    def test_record_without_a_build_folder_raises_nothing_and_writes_nothing(self, tool_contract_project):
+        # Bookkeeping, like the build-mode marker: a record that fails costs one rebuild later (the old rule decides),
+        # never the build that made it.
+        fingerprint, record = tool_contract_name("tool_contract_fingerprint"), tool_contract_name("record_tool_contract_inputs")
+        root = tool_contract_project.root
+        shutil.rmtree(root / "frontend" / "build")
+        value = fingerprint(root)
+        before = tree_snapshot(root)
+
+        record(root, value)
+
+        assert tree_snapshot(root) == before
+
+
+class TestToolContractInputsRecorded:
+    """``check_frontend_needs_build()`` once a build recorded the listing: the listing decides, never a folder's mtime."""
+
+    def test_nothing_changed_since_the_recorded_build_leaves_it_up_to_date(self, tool_contract_project):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        assert cli_base.check_frontend_needs_build() is False
+
+    @pytest.mark.parametrize("folder", list(TOOL_CONTRACT_FOLDERS))
+    def test_a_ds_store_the_finder_drops_after_the_build_leaves_it_up_to_date(self, tool_contract_project, folder):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        add_tool_file(tool_contract_project.folders[folder], ".DS_Store", NEWER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-24r: a .DS_Store moved the mtime of {folder} past the build, but no input changed"
+
+    @pytest.mark.parametrize("folder", list(TOOL_CONTRACT_FOLDERS))
+    def test_a_pycache_python_creates_after_the_build_leaves_it_up_to_date(self, tool_contract_project, folder):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        add_tool_file(tool_contract_project.folders[folder], "__pycache__/c.cpython-313.pyc", NEWER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-24r: a __pycache__ moved the mtime of {folder} past the build, but no input changed"
+
+    @pytest.mark.parametrize("relative", [".c.py", ".#c.py", ".cache/c.py"], ids=["a-hidden-py", "an-emacs-lock", "a-py-in-a-hidden-folder"])
+    def test_a_hidden_py_written_after_the_build_leaves_it_up_to_date(self, tool_contract_project, relative):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        add_tool_file(tool_contract_project.folders["tool_plugins/demo"], relative, NEWER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is False, f"H-24r: tool_plugins/demo/{relative} ({NOT_TOOL_CONTRACT_INPUTS[relative]}) is not a Tool codegen input"
+
+    @pytest.mark.parametrize("noise", [".DS_Store", "__pycache__/c.cpython-313.pyc", ".c.py"], ids=["a-ds-store", "a-pycache", "a-hidden-py"])
+    def test_a_real_change_beside_the_noise_still_needs_a_rebuild(self, tool_contract_project, noise):
+        # The probe turns any exception into "up to date", so the cases above would pass as well if the noise made it
+        # raise. Here the noise stays, and an input goes that only the listing can see.
+        record_tool_contract_listing(tool_contract_project.root)
+        add_tool_file(tool_contract_project.folders["tool_plugins/demo"], noise, NEWER_MTIME)
+
+        remove_tool_file(tool_contract_project.inputs["services/tools/b.py"], OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    @pytest.mark.parametrize("removed", list(TOOL_CONTRACT_INPUTS))
+    def test_an_input_removed_needs_a_rebuild_though_no_mtime_moved(self, tool_contract_project, removed):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        remove_tool_file(tool_contract_project.inputs[removed], OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-24r: {TOOL_CONTRACT_INPUTS[removed]} is gone: the codecs the build generated from it are stale"
+
+    def test_an_input_renamed_with_its_old_mtime_needs_a_rebuild(self, tool_contract_project):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        rename_tool_file(tool_contract_project.inputs["tool_plugins/demo/c.py"], "d.py")
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    @pytest.mark.parametrize("folder", list(TOOL_CONTRACT_FOLDERS))
+    def test_a_py_moved_in_with_an_old_mtime_needs_a_rebuild(self, tool_contract_project, folder):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        add_tool_file(tool_contract_project.folders[folder], "moved_in.py", OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True, f"H-24r: a .py arrived in {folder} with an old mtime: only the listing can tell"
+
+    def test_a_new_plugin_folder_with_old_mtimes_needs_a_rebuild(self, tool_contract_project):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        add_tool_file(tool_contract_project.folders["tool_plugins"], "new_plugin/plugin.py", OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    @pytest.mark.parametrize("newer", list(TOOL_CONTRACT_INPUTS))
+    def test_an_input_newer_than_the_build_needs_a_rebuild(self, tool_contract_project, newer):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        set_mtime(NEWER_MTIME, tool_contract_project.inputs[newer])
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    def test_a_listing_recorded_by_another_build_needs_a_rebuild(self, tool_contract_project):
+        record_tool_contract_listing(tool_contract_project.root)
+
+        write_tool_contract_marker(tool_contract_project.root, "0" * 64)
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    @pytest.mark.parametrize(("ds_store", "expected"), [(False, False), (True, True)], ids=["nothing-changed", "a-ds-store-after-the-build"])
+    def test_an_empty_marker_is_no_record_and_the_folders_decide(self, tool_contract_project, ds_store, expected):
+        # Not a listing that differs, which would make every build stale, nor one that matches, which would hide a
+        # removed .py: no record at all, and the old rule.
+        record_tool_contract_listing(tool_contract_project.root)
+        write_tool_contract_marker(tool_contract_project.root, "")
+        if ds_store:
+            add_tool_file(tool_contract_project.folders["tool_plugins/demo"], ".DS_Store", NEWER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is expected
+
+    def test_a_hidden_folder_above_the_checkout_hides_no_input(self, monkeypatch, tmp_path):
+        project = make_tool_contract_project(monkeypatch, tmp_path / ".hidden-checkout")
+        record_tool_contract_listing(project.root)
+
+        remove_tool_file(project.inputs["schemas/a.py"], OLDER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True, "H-24r: an input is read relative to its folder: a hidden folder above the checkout must not hide it"
+
+
+class TestToolContractInputsWithoutARecord:
+    """No listing recorded, as after a build made before the cure: the folders' mtimes decide, the rule the record replaces.
+
+    Green before the cure and after it: these need none of its names, and keep its fallback what the probe did until now.
+    """
+
+    def test_nothing_changed_leaves_it_up_to_date(self, tool_contract_project):
+        assert_no_listing_recorded(tool_contract_project.root)
+
+        assert cli_base.check_frontend_needs_build() is False
+
+    @pytest.mark.parametrize("folder", list(TOOL_CONTRACT_FOLDERS))
+    def test_a_ds_store_after_the_build_still_needs_a_rebuild(self, tool_contract_project, folder):
+        # The price the record removes: without one, a folder's mtime cannot tell a .DS_Store from a removed .py.
+        assert_no_listing_recorded(tool_contract_project.root)
+        assert cli_base.check_frontend_needs_build() is False, "premise: up to date before the change"
+
+        add_tool_file(tool_contract_project.folders[folder], ".DS_Store", NEWER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    def test_an_input_removed_after_the_build_needs_a_rebuild(self, tool_contract_project):
+        assert_no_listing_recorded(tool_contract_project.root)
+        assert cli_base.check_frontend_needs_build() is False, "premise: up to date before the change"
+
+        remove_tool_file(tool_contract_project.inputs["tool_plugins/demo/c.py"], NEWER_MTIME)
+
+        assert cli_base.check_frontend_needs_build() is True
+
+    def test_an_input_newer_than_the_build_still_needs_a_rebuild(self, tool_contract_project):
+        assert_no_listing_recorded(tool_contract_project.root)
+        assert cli_base.check_frontend_needs_build() is False, "premise: up to date before the change"
+
+        set_mtime(NEWER_MTIME, tool_contract_project.inputs["tool_plugins/demo/c.py"])
 
         assert cli_base.check_frontend_needs_build() is True

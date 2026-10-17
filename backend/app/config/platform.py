@@ -13,7 +13,16 @@ secret counts as unset.
 import os
 from datetime import date
 
+from pydantic import EmailStr, TypeAdapter, ValidationError
+
 from backend.app.config import env_secret, env_secret_origin, env_url
+
+_SUPPORT_URL = "LIBREFOLIO_SUPPORT_URL"
+#: What the address after ``mailto:`` may not hold: a query, a fragment, an escape, a second address, the
+#: ``Name <address>`` form or a path (``mailto://``). ``EmailStr`` accepts ``?``, ``#``, ``%`` and ``/`` in a local part
+#: and unwraps angle brackets, so they are refused before it reads the address; it strips whitespace, refused anywhere.
+_MAILTO_FORBIDDEN = frozenset('?#%,;<>"/')
+_EMAIL = TypeAdapter(EmailStr)
 
 
 def scheduler_disabled() -> bool:
@@ -105,8 +114,26 @@ def instance_deletion_date() -> date | None:
 def support_url() -> str | None:
     """``LIBREFOLIO_SUPPORT_URL``: where the users of the instance ask for help, such as an asset the search does not find.
 
-    A hosting provider sets its own support page. Unset or blank: ``None``, and the app links to the project's issues
-    on GitHub. An address that is not ``http(s)://`` raises ``ValueError`` (``env_url``): the service that publishes
-    it logs the error and leaves the default link.
+    Two forms: an ``http(s)://`` page, by the rule of ``env_url``, or ``mailto:`` and one email address, checked by
+    pydantic's ``EmailStr`` without any DNS lookup and returned as ``mailto:`` and the address as it normalizes it (the
+    scheme in any case, saved lowercase). The address is public: the app shows it to every user. A hosting provider sets
+    its own. Unset or blank: ``None``: the asset search then offers a new issue on the project's GitHub on a self-hosted
+    instance, and no report link on a managed one (N61). Any other value raises ``ValueError``, naming the variable: the
+    service that publishes it logs the error and publishes ``None``.
     """
-    return env_url("LIBREFOLIO_SUPPORT_URL")
+    value = os.environ.get(_SUPPORT_URL, "").strip()
+    if value[:7].lower() == "mailto:":
+        return _mailto(value)
+    return env_url(_SUPPORT_URL)
+
+
+def _mailto(value: str) -> str:
+    """``mailto:`` and the one address ``value`` holds after it, as ``EmailStr`` normalizes it; ``ValueError`` otherwise."""
+    address = value[7:]
+    problem = f"{_SUPPORT_URL}={value!r}: expected mailto: and one email address, with nothing else"
+    if not address or any(character.isspace() or character in _MAILTO_FORBIDDEN for character in address):
+        raise ValueError(problem)
+    try:
+        return f"mailto:{_EMAIL.validate_python(address)}"
+    except ValidationError as exc:
+        raise ValueError(problem) from exc

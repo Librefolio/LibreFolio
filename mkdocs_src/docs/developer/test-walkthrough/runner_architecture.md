@@ -359,6 +359,11 @@ and a shared `htmlcov-backend/` would be written by every worker at once.
   execution follows exactly the route it followed before the migration.
 - `--workers N` parallelises the isolation-safe units and leaves everything else serial — a
   WRITE-GLOBAL unit stays serial even at `--workers 8`.
+- The parallel pass plans category by category, so it runs only for a whole backend category
+  (`<category> all`) or a whole suite (`all`, `all-backend`): naming one action, or filtering by test
+  name (pytest `-k`, which only a named action takes), keeps the serial path. The check is
+  `_parallel_prepass_applies()`, which follows the same scope rule as the consolidated pre-passes
+  (`_backend_consolidation_scope()`).
 - `--workers auto` resolves to half the cores, because a development machine is not dedicated to tests
   and timing-sensitive tests degrade under load.
 - On a **frontend** category the same flag sets Playwright's browser workers, capped at half the
@@ -546,8 +551,8 @@ repopulate. Running `npx playwright test` by hand never has it, so that path is 
 
 `./dev.py test front-fx fx-list` still means one invocation for one spec. Consolidation applies to
 `all` of a category and to `all-frontend` — the cases where the actions would have run back to back
-anyway. `--no-consolidate`, `--test-names`, `--ui`, `--headed` and `--debug` all return to the 1:1
-shape.
+anyway. `--no-consolidate`, `--ui`, `--headed` and `--debug` all return to the 1:1 shape. Neither
+`all` nor `all-frontend` takes test names: a name after either stops the command with exit code 2.
 
 ### Per-unit outcomes are part of it, not a follow-up
 
@@ -730,7 +735,7 @@ A category registered in `TEST_REGISTRY` maps to a dictionary containing:
 
 * `_meta`: General information about the category (used for `--help` texts) and, when the category declares them in `make_category()`, these keys:
     * `setup`: What the category does to its environment before its units run: `services` recreates the test database empty, `api` reseeds it. `run_category_setup()` runs it once per invocation, whichever caller reaches it first.
-    * `setup_exclusive`: The setup needs the database file to itself (`services`), so it is hoisted to before the shared backend starts.
+    * `setup_exclusive`: The setup needs the database file to itself (`services`), so it is hoisted to before the shared backend starts. For one action run on its own that the catalogue declares `pure` (as `declared_isolation()` resolves it: an `exclusive_because` means `write-global`, else the action's own `isolation`, else the category's `default_isolation`), the setup is skipped, since such a unit opens no database, and one line says the lane's database is left as it is. A whole category, `all` and any action not declared `pure` (one with no declared class at all included) still run it. The skip holds at any `--workers`, since the parallel pass does not run for one action.
     * `setup_needed`: For one action run on its own, a no-argument callable that returns why the setup must run first, or `None` (a check that raises counts as a reason). With a reason, `ensure_category_setup()` prints it in one line and runs the setup. `api` returns one when the lane's test database is missing, unreadable or lacks one of its fixture users.
     * `default_isolation`: The isolation class of every unit that declares neither `isolation` nor `exclusive_because` — see [Declaring a class — and earning it](#declaring-a-class-and-earning-it).
 * A set of actions (e.g., `"decimal-precision"`, `"all"`), where each action points to:
@@ -829,8 +834,10 @@ To add a new test action to an existing category:
 1. Open the category module (e.g., `_backend_utils.py` for utility tests).
 2. Write a function that executes your test suite using the shared runner helpers. Accept
    `test_names`: an action registered with the default `test_names=True` receives the test names
-   the user passes. `run_command` requires a description, the label it prints, also used to name the
-   unit's log file:
+   the user passes, and `./dev.py test <category> --help` marks it `[TEST_NAME]`. One registered
+   with `test_names=False` refuses them: the runner exits with code 2 before anything runs, rather
+   than running the whole action as if no name had been given. `run_command` requires a
+   description, the label it prints, also used to name the unit's log file:
    ```python
    def utils_my_new_utility(verbose: bool = False, test_names: list = None) -> bool:
        """Run tests for the new utility helper."""

@@ -1,6 +1,6 @@
 /**
- * «Updating prices…» end to end, and the open page that catches up after it without saying it is busy (release 1.3,
- * workstream Z, lots Z5, Z-13 and Z-18).
+ * «Updating prices…» end to end, the open page that catches up after it without saying it is busy, and the price pages
+ * that ask their prices again after it (release 1.3, workstream Z, lots Z5, Z-13, Z-18 and Z-14).
  *
  * Z5. While the server catches up on prices, every `/api/` answer carries `X-LibreFolio-Price-Refresh: starting|running`.
  * The axios interceptor hands the headers to `priceRefresh.observe()`; from the first one the tracker asks
@@ -30,6 +30,28 @@
  *   (f) Dashboard on its Positions tab, with the Performance view saved: the same as (d), with a contribution on screen —
  *       cached at load, turned stale by the catch-up, and asked again by the reload beside the main report.
  *
+ * Z-14. The asset charts and the FX charts keep caches of their own for the session (`assetPriceStoreRegistry`,
+ * `fxStoreRegistry`), and the price and rate answers fill backward the days without a value: a range once loaded holds a
+ * point for every day, and was never asked again — not after a catch-up either. The end of a catch-up that updated
+ * something (`{kind: 'prices'}`) turns those caches stale as well, and a page that loads a range it loaded before asks
+ * it again. Each case leaves the page for the Dashboard through the sidebar, presses the Dashboard's Refresh there, and
+ * comes back with the browser's Back: an in-app navigation, which the caches survive (a document load would empty them
+ * and prove nothing — the document's time origin is checked at every return). The Refresh is the catch-up's trigger,
+ * made explicit: the tracker hears the header only on an answer, and a Dashboard whose report is cached and fresh asks
+ * nothing when it opens — after the FX page, which writes nothing, it is. The Refresh asks the main report with force,
+ * and that answer is checked before the notice is awaited. It is pressed on the control's round trip too, so that the
+ * catch-up is the only difference between the two returns — and the control proves as well that a user's Refresh alone
+ * (`{kind: 'refresh'}`) leaves the price caches alone. The range ends today: it is the one a catch-up changes.
+ *   (g) Asset detail, the mock's asset with a provider. The control first: back without a catch-up, the page's
+ *       `POST /assets/prices/query` item for the asset carries `include_price: false` — the prices from the cache, the
+ *       events only — although the live poll on the way (`POST /assets/prices/current`, a portfolio mutation for the
+ *       bus) and the Dashboard's Refresh ran. Then a catch-up that updated something ends on the Dashboard, and back on
+ *       the asset the item carries `include_price: true`.
+ *   (h) FX detail, a configured pair, without backend signals (with them the page asks its whole range at every load,
+ *       cached or not; the first load's request shows it has none). The control: back without a catch-up, no
+ *       `POST /fx/currencies/convert` for the pair at all once the page is settled. After the catch-up, back on the pair,
+ *       one whose ranges cover the page's.
+ *
  * The catch-up is the stub's, never the lane's. Nothing real runs on the shared backend, and nothing a real catch-up of
  * that backend (its startup, say) says can reach a case. One route on `**​/api/v1/**`, installed after the sign-in and
  * before the page under test loads:
@@ -50,6 +72,9 @@
  * The record, kept inside the page by an init script, every entry stamped with one sequence number:
  *   - each `POST /api/v1/portfolio/report` the page sends (`fetchReport`, portfolioStore), with its body, at `send()`,
  *     and how many of them are back;
+ *   - each price or rate query a chart sends (`POST /api/v1/assets/prices/query`, `POST /api/v1/fx/currencies/convert`,
+ *     Z-14), with its body, at `send()`; once its answer is back, the seq then, the HTTP status and what the answer held
+ *     (the prices per asset, the number of rates);
  *   - each status answer the tracker has read, stamped ONE TASK LATER (a `MessageChannel` message). The tracker reads
  *     the answer and, in the same task, hides the notice and sends the signal; the page's listener reloads in a
  *     microtask, and the report leaves through axios in microtasks too. So when the record says an `idle` was read,
@@ -84,21 +109,28 @@
  * client-side mark); the broker id is read with `page.request` (which no route intercepts), by name. The status route is
  * answered in the browser and the header is added in the browser, per page: no other test sees either. Nothing is
  * written on the backend, so there is nothing to clean up: the view (f) saves lives in this context's own localStorage,
- * and the routes and the init script go with the page.
+ * and the routes and the init script go with the page. (g) and (h) read as well — the asset and the pair are found with
+ * `page.request`, by name and provider, by route; the Dashboard's Refresh they press asks a report, a computation, and
+ * marks client-side — and the one writer on their path, the live poll of the asset page
+ * (`POST /assets/prices/current` writes today's candle), is answered in the browser with an empty result, as
+ * asset-live-pause.spec.ts answers it.
  *
- * Desktop only: the tracker and the reload do not depend on the viewport, and (c) moves through the sidebar.
+ * Desktop only: the tracker and the reload do not depend on the viewport, and (c), (g) and (h) move through the sidebar.
  *
  * Expected. (a)–(c) pin Z5 and Z-13, green (before Z-13 they were red at the reload, (c) at its control — its two
  * absences are green with or without Z-13, and the control is what keeps them from being vacuous). Before the code of
  * Z-18: (e) green, a regression pin of Y11; (d) red at its last assertion only — the Dashboard's root says busy through
  * the reload, `loadAll()` setting `reportLoading` — with its premises, its button pin and its control green before it;
  * (f) the same, its root raised by `contributionRefreshing` too (`loadContribution()`, on the stale cached contribution).
+ * Before the code of Z-14: (g) and (h) red at the return after the catch-up — the page takes the range it had loaded from
+ * its cache again (`include_price: false`; no convert at all) — with their premises and controls green.
  */
 
 import type {APIResponse} from '@playwright/test';
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
+import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 
 const API = '/api/v1';
@@ -119,6 +151,17 @@ const POLL_BUDGET_MS = 3 * POLL_MS;
 const PAGE_TIMEOUT = 30_000;
 /** The mock's broker with positions (populate_mock_data.py), found by name, never by position. */
 const BROKER_WITH_HOLDINGS = 'Interactive Brokers';
+/** Z-14: the query each chart sends for its range — the asset detail's prices, the FX detail's rates. */
+const PRICES_QUERY_PATH = `${API}/assets/prices/query`;
+const CONVERT_PATH = `${API}/fx/currencies/convert`;
+/** The asset detail's live poll, answered in the browser in (g): the endpoint writes today's candle. */
+const LIVE_PRICES_ROUTE = '**/api/v1/assets/prices/current';
+/** The mock's asset with a provider (populate_mock_data.py: populate_assets, populate_asset_provider_assignments), found by name and provider, never by position. */
+const PRICED_ASSET = {displayName: 'Apple Inc.', providerCode: 'yfinance'} as const;
+/** A pair the mock configures a route for (populate_mock_data.populate_fx_currency_pair_sources), checked through the routes, never assumed. */
+const CONFIGURED_PAIR = {base: 'EUR', quote: 'USD'} as const;
+/** How far back the range of (g) and (h) starts: well inside the mock's prices and rates, which run to today. */
+const RANGE_DAYS = 60;
 
 type CatchUpHeader = 'starting' | 'running' | null;
 type PriceRefreshState = 'idle' | 'starting' | 'running';
@@ -201,11 +244,24 @@ interface BusyEntry {
     value: string | null;
 }
 
+/** A price or rate query a chart sent (Z-14): its body at `send()`, then what came back. */
+interface QueryEntry {
+    seq: number;
+    path: string;
+    body: unknown;
+    /** The seq at which its answer was back (load, error or abort); null while it is in flight. */
+    settled: number | null;
+    status: number | null;
+    /** `prices/query`: the prices per asset of the answer; `convert`: how many results. Null in flight, or unreadable. */
+    answer: {items?: Array<{asset_id: unknown; prices: number}>; results?: number} | null;
+}
+
 /** The record the init script keeps on `window` (see the header). */
 interface PageRecord {
     seq: number;
     reports: Array<{seq: number; body: ReportBody | null}>;
     reportsSettled: number;
+    queries: QueryEntry[];
     statusRead: Array<{seq: number; state: string}>;
     noticeShown: number[];
     busy: BusyEntry[];
@@ -216,11 +272,12 @@ interface PageRecord {
 /** Arms the record for every document this page opens from now on: call it before the page under test loads. */
 async function recordPage(page: Page): Promise<void> {
     await page.addInitScript(
-        ({reportPath, statusPath, noticeSelector, busyTestIds}: {reportPath: string; statusPath: string; noticeSelector: string; busyTestIds: string[]}) => {
+        ({reportPath, statusPath, queryPaths, noticeSelector, busyTestIds}: {reportPath: string; statusPath: string; queryPaths: {prices: string; convert: string}; noticeSelector: string; busyTestIds: string[]}) => {
             const record = {
                 seq: 0,
                 reports: [] as Array<{seq: number; body: unknown}>,
                 reportsSettled: 0,
+                queries: [] as Array<{seq: number; path: string; body: unknown; settled: number | null; status: number | null; answer: unknown}>,
                 statusRead: [] as Array<{seq: number; state: string}>,
                 noticeShown: [] as number[],
                 busy: [] as Array<{seq: number; testId: string; kind: 'mount' | 'change'; value: string | null}>,
@@ -242,13 +299,50 @@ async function recordPage(page: Page): Promise<void> {
                 }
             };
 
-            // XHR: what axios, and so `fetchReport`, uses today.
+            // The price and rate queries of the charts (Z-14): the body when it leaves, then what its answer held.
+            const isQueryPath = (path: string): boolean => path === queryPaths.prices || path === queryPaths.convert;
+            const summary = (path: string, text: string): unknown => {
+                let data: {items?: unknown; results?: unknown} | null;
+                try {
+                    data = JSON.parse(text) as {items?: unknown; results?: unknown} | null;
+                } catch {
+                    return null;
+                }
+                if (data === null || typeof data !== 'object') return null;
+                if (path === queryPaths.prices) {
+                    const items = Array.isArray(data.items) ? (data.items as Array<{asset_id?: unknown; prices?: unknown} | null>) : [];
+                    return {
+                        items: items.map((item) => {
+                            const prices = item?.prices;
+                            return {asset_id: item?.asset_id ?? null, prices: Array.isArray(prices) ? prices.length : 0};
+                        }),
+                    };
+                }
+                return {results: Array.isArray(data.results) ? data.results.length : 0};
+            };
+            /** Records a query as it leaves; the function returned records its answer. */
+            const sendQuery = (path: string, body: unknown): ((status: number, text: string) => void) => {
+                const entry = {seq: ++record.seq, path, body: parsed(body), settled: null as number | null, status: null as number | null, answer: null as unknown};
+                record.queries.push(entry);
+                return (status, text) => {
+                    entry.status = status;
+                    entry.answer = summary(path, text);
+                    entry.settled = ++record.seq;
+                };
+            };
+
+            // XHR: what axios, and so `fetchReport` and the two charts' queries, uses today.
             const reportXhrs = new WeakSet<XMLHttpRequest>();
+            const queryXhrs = new WeakMap<XMLHttpRequest, string>();
             const nativeOpen = XMLHttpRequest.prototype.open;
             const nativeSend = XMLHttpRequest.prototype.send;
             XMLHttpRequest.prototype.open = function (this: XMLHttpRequest, ...args: unknown[]) {
-                if (String(args[0]).toUpperCase() === 'POST' && pathOf(String(args[1])) === reportPath) reportXhrs.add(this);
+                const isPost = String(args[0]).toUpperCase() === 'POST';
+                const path = pathOf(String(args[1]));
+                if (isPost && path === reportPath) reportXhrs.add(this);
                 else reportXhrs.delete(this);
+                if (isPost && isQueryPath(path)) queryXhrs.set(this, path);
+                else queryXhrs.delete(this);
                 return Reflect.apply(nativeOpen, this, args);
             } as XMLHttpRequest['open'];
             XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, ...args: unknown[]) {
@@ -258,11 +352,17 @@ async function recordPage(page: Page): Promise<void> {
                         record.reportsSettled += 1;
                     });
                 }
+                const queryPath = queryXhrs.get(this);
+                if (queryPath !== undefined) {
+                    const answered = sendQuery(queryPath, args[0]);
+                    // axios leaves `responseType` empty for JSON and parses the text itself.
+                    this.addEventListener('loadend', () => answered(this.status, this.responseType === '' || this.responseType === 'text' ? this.responseText : ''));
+                }
                 return Reflect.apply(nativeSend, this, args);
             } as XMLHttpRequest['send'];
 
-            // fetch: what the tracker uses for the status. A report sent with fetch is recorded too, so that a change of
-            // transport cannot hide one.
+            // fetch: what the tracker uses for the status. A report or a chart query sent with fetch is recorded too, so
+            // that a change of transport cannot hide one.
             const nativeFetch = window.fetch;
             const nextTask = new MessageChannel();
             const queued: Array<() => void> = [];
@@ -273,11 +373,19 @@ async function recordPage(page: Page): Promise<void> {
                 const path = pathOf(url);
                 const isReport = method === 'POST' && path === reportPath;
                 if (isReport) record.reports.push({seq: ++record.seq, body: parsed(init?.body)});
+                const answered = method === 'POST' && isQueryPath(path) ? sendQuery(path, init?.body) : null;
                 let response: Response;
                 try {
                     response = await nativeFetch.call(window, input, init);
+                } catch (error) {
+                    answered?.(0, '');
+                    throw error;
                 } finally {
                     if (isReport) record.reportsSettled += 1;
+                }
+                if (answered !== null) {
+                    const copy = response.clone();
+                    answered(response.status, await copy.text().catch(() => ''));
                 }
                 if (path !== statusPath) return response;
                 const read = response.json.bind(response);
@@ -355,7 +463,7 @@ async function recordPage(page: Page): Promise<void> {
                 true,
             );
         },
-        {reportPath: REPORT_PATH, statusPath: STATUS_PATH, noticeSelector: NOTICE_SELECTOR, busyTestIds: [...BUSY_TEST_IDS]},
+        {reportPath: REPORT_PATH, statusPath: STATUS_PATH, queryPaths: {prices: PRICES_QUERY_PATH, convert: CONVERT_PATH}, noticeSelector: NOTICE_SELECTOR, busyTestIds: [...BUSY_TEST_IDS]},
     );
 }
 
@@ -585,6 +693,228 @@ async function saveDashboardPerformanceView(page: Page): Promise<void> {
     await pressToggle(panel.getByTestId('positions-toggle-performance'), 'the Performance view of the positions panel could not be chosen');
     await pressToggle(panel.getByTestId('positions-toggle-table'), 'the table view of the positions panel could not be chosen');
     await expect(panel.getByTestId('contribution-table'), "the Dashboard's Performance view shows no contribution: check populate_mock_data.py").toBeVisible({timeout: PAGE_TIMEOUT});
+}
+
+// Z-14: the caches of the price charts, (g) and (h).
+
+type DateRange = {start: string; end: string};
+type Pair = {slug: string; base: string; quote: string};
+/** An item of a `POST /assets/prices/query` body, as the asset page writes it. */
+type PriceQueryItem = {asset_id?: unknown; date_range?: DateRange; include_price?: unknown; include_events?: unknown};
+/** An item of a `POST /fx/currencies/convert` body, as the FX page writes it. */
+type ConvertItem = {from_amount?: {code?: unknown}; to?: unknown; date_range?: DateRange; signals?: unknown[]};
+
+/** The range of (g) and (h), written in the URL: two months ending today — the days a catch-up changes. */
+function rangeEndingToday(): DateRange {
+    return {start: daysAgoIso(RANGE_DAYS), end: todayIso()};
+}
+
+/** The id of the mock's asset with a provider, by name and provider through `GET /assets/query` (`page.request`, which no route intercepts). */
+async function pricedAssetId(page: Page): Promise<number> {
+    const response = await page.request.get(`${API}/assets/query?search=${encodeURIComponent(PRICED_ASSET.displayName)}`);
+    expect(response.ok(), `GET ${API}/assets/query → HTTP ${response.status()}`).toBe(true);
+    const matches = ((await response.json()) as Array<{id: number; display_name: string; provider_code: string | null}>).filter((asset) => asset.display_name === PRICED_ASSET.displayName && asset.provider_code === PRICED_ASSET.providerCode);
+    if (matches.length !== 1) throw new Error(`${PRICED_ASSET.displayName} with its ${PRICED_ASSET.providerCode} provider must be one asset ${TEST_USER.username} can read — check populate_mock_data.py (populate_assets, populate_asset_provider_assignments); found ${matches.length}`);
+    return matches[0].id;
+}
+
+/** `base`/`quote` as a pair with a configured route, in canonical order, checked through `GET /fx/providers/routes` (`page.request`). */
+async function configuredPair(page: Page, base: string, quote: string): Promise<Pair> {
+    const canonicalBase = base < quote ? base : quote;
+    const canonicalQuote = base < quote ? quote : base;
+    const slug = `${canonicalBase}-${canonicalQuote}`;
+    const response = await page.request.get(`${API}/fx/providers/routes`);
+    expect(response.ok(), `GET ${API}/fx/providers/routes → HTTP ${response.status()}`).toBe(true);
+    const items = ((await response.json()) as {items?: Array<{base: string; quote: string}>}).items ?? [];
+    const slugs = [...new Set(items.map((item) => [item.base, item.quote].sort().join('-')))];
+    if (!slugs.includes(slug)) throw new Error(`${slug} has no configured route — check populate_mock_data.populate_fx_currency_pair_sources (pairs seen: ${slugs.join(', ') || 'none'})`);
+    return {slug, base: canonicalBase, quote: canonicalQuote};
+}
+
+/**
+ * `POST /assets/prices/current` — the asset page's live poll — answered in the browser with a schema-valid empty result, as
+ * asset-live-pause.spec.ts answers it: the endpoint asks a live provider and writes today's candle, and nothing here may
+ * write. For the axios interceptor each answer is still a successful mutation: `{kind: 'mutation'}` on the bus. Registered
+ * after `simulateCatchUp`, so that it answers before that route sees the request. Counts its answers.
+ */
+async function stubLivePrices(page: Page): Promise<{served: number}> {
+    const live = {served: 0};
+    await page.route(LIVE_PRICES_ROUTE, async (route) => {
+        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: []})});
+        live.served += 1;
+    });
+    return live;
+}
+
+function assetDetail(page: Page): Locator {
+    return page.getByTestId('asset-detail-page');
+}
+
+function fxDetail(page: Page): Locator {
+    return page.getByTestId('fx-detail-page');
+}
+
+/** The time origin of the document on screen: an in-app navigation keeps it; a document load — which empties every cache of the page — changes it. */
+async function documentOrigin(page: Page): Promise<number> {
+    return page.evaluate(() => performance.timeOrigin);
+}
+
+/** Through the sidebar to the Dashboard, settled, every report back: the chart page is destroyed, the caches it filled — module singletons — stay. */
+async function leaveForDashboard(page: Page): Promise<void> {
+    await page.getByTestId('nav-dashboard').click();
+    await expect(dashboard(page)).toBeVisible({timeout: PAGE_TIMEOUT});
+    await waitForSettled(dashboard(page), PAGE_TIMEOUT);
+    await reportsSettled(page);
+}
+
+/** The Dashboard at rest: every report back, its root settled, its Refresh idle — nothing of it in flight. */
+async function dashboardSettled(page: Page): Promise<void> {
+    await reportsSettled(page);
+    await waitForSettled(dashboard(page), PAGE_TIMEOUT);
+    await expect(page.getByTestId('sync-button'), 'the Dashboard never let go of its Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+}
+
+/**
+ * The Dashboard's Refresh (`sync-button`), pressed once the page lets it be, and checked: the click reached the page, and
+ * the main report it asks with force (`loadAll(true)`) was sent after it and is back — `message` says what its absence
+ * means where it is pressed. Read-only on the server, the report being a computation; on the client «Aggiorna»'s
+ * `{kind: 'refresh'}`, which Z-14 leaves the price caches alone on. No history entry: one Back still returns to the chart
+ * page. Ends on the Dashboard at rest.
+ */
+async function refreshDashboard(page: Page, message: string): Promise<void> {
+    const button = page.getByTestId('sync-button');
+    const before = (await pageRecord(page)).seq;
+    await expect(button, 'the Refresh button cannot be pressed: a load of the Dashboard is still pending').toBeEnabled({timeout: PAGE_TIMEOUT});
+    await button.click();
+    let clicked = -1;
+    await expect
+        .poll(
+            async () => {
+                clicked = (await pageRecord(page)).clicks.find((click) => click.seq > before && click.testId === 'sync-button')?.seq ?? -1;
+                return clicked;
+            },
+            {message: 'the click on the Refresh button never reached the page', timeout: POLL_BUDGET_MS},
+        )
+        .toBeGreaterThan(before);
+    await expect
+        .poll(
+            async () => {
+                const record = await pageRecord(page);
+                return mainReportsSince(record, clicked).length > 0 && record.reportsSettled >= record.reports.length;
+            },
+            {message, timeout: PAGE_TIMEOUT},
+        )
+        .toBe(true);
+    await dashboardSettled(page);
+}
+
+/** Back to the chart page with the browser's own Back, an in-app navigation; returns where the record stood before it. */
+async function backInApp(page: Page, root: Locator): Promise<number> {
+    const mark = (await pageRecord(page)).seq;
+    await page.goBack();
+    await expect(root, 'Back did not return to the chart page').toBeVisible({timeout: PAGE_TIMEOUT});
+    return mark;
+}
+
+/** The items of a `prices/query` body that ask about `assetId`. */
+function assetItems(entry: QueryEntry, assetId: number): PriceQueryItem[] {
+    if (!Array.isArray(entry.body)) return [];
+    return (entry.body as Array<PriceQueryItem | null>).filter((item): item is PriceQueryItem => item !== null && typeof item === 'object' && item.asset_id === assetId);
+}
+
+/** How many prices of `assetId` the answer of a `prices/query` carried. */
+function pricesOf(entry: QueryEntry, assetId: number): number {
+    return entry.answer?.items?.find((item) => item.asset_id === assetId)?.prices ?? 0;
+}
+
+/** Waits until the page has sent a `prices/query` asking about `assetId` after `since` and its answer is back; returns the first such query and the asset's item. */
+async function assetQueryLanded(page: Page, assetId: number, since: number, message: string): Promise<{entry: QueryEntry; item: PriceQueryItem}> {
+    let landed: {entry: QueryEntry; item: PriceQueryItem} | null = null;
+    await expect
+        .poll(
+            async () => {
+                const entry = (await pageRecord(page)).queries.find((query) => query.seq > since && query.path === PRICES_QUERY_PATH && assetItems(query, assetId).length > 0);
+                landed = entry !== undefined && entry.settled !== null ? {entry, item: assetItems(entry, assetId)[0]} : null;
+                return landed !== null;
+            },
+            {message, timeout: PAGE_TIMEOUT},
+        )
+        .toBe(true);
+    return landed!;
+}
+
+/** The items of a `convert` body that ask about `pair`, whichever way round. */
+function pairItems(entry: QueryEntry, pair: Pair): ConvertItem[] {
+    if (!Array.isArray(entry.body)) return [];
+    return (entry.body as Array<ConvertItem | null>).filter((item): item is ConvertItem => item !== null && typeof item === 'object' && [String(item.from_amount?.code), String(item.to)].sort().join('-') === pair.slug);
+}
+
+/** The `convert` requests sent after `since` that ask about `pair`. */
+function pairConvertsSince(record: PageRecord, pair: Pair, since: number): QueryEntry[] {
+    return record.queries.filter((query) => query.seq > since && query.path === CONVERT_PATH && pairItems(query, pair).length > 0);
+}
+
+/** Waits until the page has sent a `convert` asking about `pair` after `since` and its answer is back; returns the first such request. */
+async function pairConvertLanded(page: Page, pair: Pair, since: number, message: string): Promise<QueryEntry> {
+    let landed: QueryEntry | null = null;
+    await expect
+        .poll(
+            async () => {
+                const entry = pairConvertsSince(await pageRecord(page), pair, since)[0];
+                landed = entry !== undefined && entry.settled !== null ? entry : null;
+                return landed !== null;
+            },
+            {message, timeout: PAGE_TIMEOUT},
+        )
+        .toBe(true);
+    return landed!;
+}
+
+/**
+ * The FX page has finished loading, on `pair`, with a rate on screen: its chart (the root's `data-busy`, `loading`) and the
+ * rest of its first load (the Refresh button's, `pageBusy`). A rate request the load needed has left and come back by
+ * then — on a miss the root stays busy until the answer —, so what the record holds of this load is all of it.
+ */
+async function fxDetailSettled(page: Page, pair: Pair): Promise<void> {
+    const root = fxDetail(page);
+    await waitForSettled(root, PAGE_TIMEOUT);
+    await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load of the FX page never let go of its Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+    await expect(root).toHaveAttribute('data-chart-pair', pair.slug);
+    await expect(root, `the page of ${pair.slug} shows no rate: nothing is cached for a catch-up to turn stale — check populate_mock_data.populate_fx_rates`).toHaveAttribute('data-chart-last-rate', /\d/);
+}
+
+/** `YYYY-MM-DD` of a UTC midnight. */
+function isoDay(day: Date): string {
+    return `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`;
+}
+
+/** The days of [start, end] that none of `ranges` covers, bounds inclusive. */
+function daysNotCovered(ranges: ReadonlyArray<DateRange | undefined>, start: string, end: string): string[] {
+    const missing: string[] = [];
+    for (const day = new Date(`${start}T00:00:00Z`); day <= new Date(`${end}T00:00:00Z`); day.setUTCDate(day.getUTCDate() + 1)) {
+        const iso = isoDay(day);
+        if (!ranges.some((range) => range !== undefined && range.start <= iso && iso <= range.end)) missing.push(iso);
+    }
+    return missing;
+}
+
+/**
+ * A catch-up that updated something, run and ended on the Dashboard. The header goes on every API answer from before the
+ * sidebar is clicked, but the tracker hears it only on an answer, and the Dashboard may ask nothing when it opens: its
+ * report cached and fresh — after the FX page of (h), which writes nothing, it is. So the trigger is explicit, the
+ * Dashboard's Refresh, pressed as on the control's round trip: it asks the main report with force, and that answer,
+ * carrying the header, starts the tracker. Checked before the notice is awaited — a main report sent after the click,
+ * so after the header was set, is back —, so that a red names the cause. Then the end, awaited as in (a), and the reload
+ * in background it causes there (Z-13), up to the Dashboard at rest: nothing of it is in flight when the case goes back.
+ */
+async function catchUpEndsOnDashboard(page: Page, catchUp: CatchUp): Promise<void> {
+    const since = (await pageRecord(page)).seq;
+    catchUp.header = 'running';
+    catchUp.status = running();
+    await leaveForDashboard(page);
+    await refreshDashboard(page, 'premise: no API answer after the header was set: nothing could start the tracker — the Refresh on the Dashboard asked no main report, or its answer never came back');
+    await endRunningCatchUp(page, catchUp, since, true);
+    await dashboardSettled(page);
 }
 
 test.beforeEach(async ({page}, testInfo) => {
@@ -821,5 +1151,100 @@ test.describe('The reload in background is not a load the user asked for (Z-18, 
             busyRaised(record, 'dashboard-page', mark, clicked),
             'the Dashboard said it was busy through the reload in background after a price catch-up — for its report (`reportLoading`) or for the contribution of the Performance view (`contributionRefreshing`): a screen reader announces «busy» for a price refresh nobody asked for (Z-18)',
         ).toEqual([]);
+    });
+});
+
+test.describe('A price page asks its prices again after a catch-up (Z-14)', () => {
+    test('(g) asset detail: back in-app after a catch-up that updated something, the page asks again the prices of the range it had loaded — without a catch-up the cache answers', async ({page}) => {
+        // A load, two round trips through the Dashboard — its Refresh pressed on each — and a catch-up of a few polls.
+        test.setTimeout(120_000);
+        const assetId = await pricedAssetId(page);
+        const range = rangeEndingToday();
+        const catchUp = await simulateCatchUp(page, {header: null, status: idle(false)});
+        const live = await stubLivePrices(page);
+        await navigateTo(page, `/assets/${assetId}?start=${range.start}&end=${range.end}`);
+        const root = assetDetail(page);
+        await expect(root).toBeVisible({timeout: PAGE_TIMEOUT});
+
+        // The first load: a fresh document has nothing cached. Settled, its answer is in the cache.
+        const first = await assetQueryLanded(page, assetId, 0, `the page of asset ${assetId} never asked for its prices, or the answer never came back`);
+        await waitForSettled(root, PAGE_TIMEOUT);
+        const origin = await documentOrigin(page);
+        expect(first.item, 'premise: the first load asks the prices of the range in the URL').toMatchObject({include_price: true, date_range: range});
+        expect(pricesOf(first.entry, assetId), `premise: the first answer carried no price of asset ${assetId} from ${range.start} to ${range.end}, so nothing was cached — check populate_mock_data.populate_price_history`).toBeGreaterThan(0);
+        await expect.poll(() => live.served, {message: 'premise: the live poll of the asset page never answered — the range ends today and the asset has a provider, so it asks when the page opens (Z-8, Z-3)', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
+
+        await test.step('control: through the Dashboard and its Refresh, back without a catch-up, the prices come from the cache', async () => {
+            await leaveForDashboard(page);
+            await refreshDashboard(page, 'the control: the Refresh on the Dashboard asked no main report, or its answer never came back — the control would not walk the path the catch-up walks');
+            const mark = await backInApp(page, root);
+            const control = await assetQueryLanded(page, assetId, mark, `back on asset ${assetId}, the page never asked for its events, or the answer never came back`);
+            await waitForSettled(root, PAGE_TIMEOUT);
+            expect(await documentOrigin(page), 'the return was a document load, which empties every cache: nothing can be proved through it').toBe(origin);
+            expect(control.item.date_range, 'premise: back on the asset the page asks the same range').toEqual(range);
+            expect(
+                control.item.include_price,
+                "premise: back on the asset without a catch-up the prices must come from the cache (include_price false) — the cache did not survive the in-app navigation, or the portfolio mutation of the live poll or the Dashboard's Refresh ({kind: 'refresh'}) turned it stale, which Z-14 rules out; either way what follows proves nothing",
+            ).toBe(false);
+        });
+
+        // The live poll's mutations left the Dashboard's report stale, so its opening asks it again and that answer could
+        // start the tracker by itself; the Refresh is pressed all the same, as on the control's round trip (see
+        // catchUpEndsOnDashboard).
+        await test.step('a catch-up that updated something ends on the Dashboard', () => catchUpEndsOnDashboard(page, catchUp));
+
+        const mark = await backInApp(page, root);
+        const after = await assetQueryLanded(page, assetId, mark, `back on asset ${assetId} after the catch-up, the page never asked for its prices, or the answer never came back`);
+        await waitForSettled(root, PAGE_TIMEOUT);
+        expect(await documentOrigin(page), 'the return was a document load, which empties every cache: nothing can be proved through it').toBe(origin);
+        expect(after.item.date_range, 'premise: back on the asset the page asks the same range').toEqual(range);
+        expect(after.item.include_price, 'the server caught up on prices and the asset page took the range it had loaded before from its session cache (include_price false): the days the catch-up filled show the prices of before until the page is reloaded (Z-14)').toBe(true);
+    });
+
+    test('(h) FX detail: back in-app after a catch-up that updated something, the page asks again the rates of the range it had loaded — without a catch-up it asks nothing', async ({page}) => {
+        // A load, two round trips through the Dashboard — its Refresh pressed on each — and a catch-up of a few polls.
+        test.setTimeout(120_000);
+        const pair = await configuredPair(page, CONFIGURED_PAIR.base, CONFIGURED_PAIR.quote);
+        const range = rangeEndingToday();
+        const catchUp = await simulateCatchUp(page, {header: null, status: idle(false)});
+        await navigateTo(page, `/fx/${pair.slug}?start=${range.start}&end=${range.end}`);
+        const root = fxDetail(page);
+        await expect(root).toBeVisible({timeout: PAGE_TIMEOUT});
+
+        // The first load: a fresh document has nothing cached. Settled, its answer is in the cache.
+        const first = await pairConvertLanded(page, pair, 0, `the page of ${pair.slug} never asked for its rates, or the answer never came back`);
+        await fxDetailSettled(page, pair);
+        const origin = await documentOrigin(page);
+        const firstItems = pairItems(first, pair);
+        const firstRanges = firstItems.map((item) => item.date_range);
+        expect(
+            firstItems.flatMap((item) => item.signals ?? []),
+            'premise: the page runs without backend signals — the chart settings start with none and this context saved none. With them the page asks its whole range at every load, cached or not, and could not tell the cache from a catch-up',
+        ).toEqual([]);
+        expect(daysNotCovered(firstRanges, range.start, range.end), 'premise: the first load asks the whole range of the URL').toEqual([]);
+        expect(first.answer?.results ?? 0, `premise: the first answer carried no rate of ${pair.slug}, so nothing was cached — check populate_mock_data.populate_fx_rates`).toBeGreaterThan(0);
+
+        await test.step('control: through the Dashboard and its Refresh, back without a catch-up, the rates come from the cache and no convert leaves', async () => {
+            await leaveForDashboard(page);
+            await refreshDashboard(page, 'the control: the Refresh on the Dashboard asked no main report, or its answer never came back — the control would not walk the path the catch-up walks');
+            const mark = await backInApp(page, root);
+            await fxDetailSettled(page, pair);
+            expect(await documentOrigin(page), 'the return was a document load, which empties every cache: nothing can be proved through it').toBe(origin);
+            expect(
+                pairConvertsSince(await pageRecord(page), pair, mark),
+                `premise: back on ${pair.slug} without a catch-up the cached range must answer and no convert leave — the cache did not survive the in-app navigation, the Dashboard's Refresh ({kind: 'refresh'}) turned it stale, which Z-14 rules out, or the page asks its whole range anyway; either way what follows proves nothing`,
+            ).toEqual([]);
+        });
+
+        // The FX page writes nothing, so the Dashboard's report is still fresh here and its opening asks nothing: the Refresh
+        // is what starts the tracker (see catchUpEndsOnDashboard).
+        await test.step('a catch-up that updated something ends on the Dashboard', () => catchUpEndsOnDashboard(page, catchUp));
+
+        const mark = await backInApp(page, root);
+        await fxDetailSettled(page, pair);
+        expect(await documentOrigin(page), 'the return was a document load, which empties every cache: nothing can be proved through it').toBe(origin);
+        const asked = pairConvertsSince(await pageRecord(page), pair, mark).flatMap((entry) => pairItems(entry, pair).map((item) => item.date_range));
+        expect(asked.length, `the server caught up on rates and the page of ${pair.slug} took the range it had loaded before from its session cache — no convert left: the days the catch-up filled show the rates of before until the page is reloaded (Z-14)`).toBeGreaterThan(0);
+        expect(daysNotCovered(asked, range.start, range.end), 'the rates asked again after the catch-up must cover the whole range on screen: every day of it was loaded before').toEqual([]);
     });
 });

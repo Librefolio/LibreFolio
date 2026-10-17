@@ -21,9 +21,17 @@
  * card's known keys are on screen, so a red names all of them at once.
  *
  * Written red-first, before `LinkStatusCard.svelte` exists: the file fails on the import until it does.
+ *
+ * Accounts lot A7b (F02, the initial administrator; plan A7b, C1): where a new link comes from depends on the page. On
+ * `/invite` and `/reset-password` an administrator sends one, hence `auth.link.askAdmin`; on `/setup` no administrator
+ * exists yet — the setup link comes from the hosting provider, or from `./dev.py user setup-link` — so that page passes
+ * its own line, `auth.setup.newLinkHint`. The contract: an optional prop `hintKey` (default `auth.link.askAdmin`), drawn
+ * for the same five dead-link statuses as before and for no other, in `link-status-hint`. The describe «the hint, the
+ * page's to choose» is red until A7b: today the line has no test id and the prop does not exist. The cases above keep
+ * pinning the default.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {cleanup, fireEvent, render, screen} from '$test/component';
+import {cleanup, fireEvent, render, screen, within} from '$test/component';
 
 const mocks = vi.hoisted(() => ({
     goto: vi.fn((..._args: unknown[]) => Promise.resolve()).mockName('goto'),
@@ -118,6 +126,47 @@ describe('LinkStatusCard — what it says', () => {
         render(LinkStatusCard, {props: {status: 'closed'}});
 
         expect(keysShown()).toEqual([MESSAGE.closed]);
+    });
+});
+
+describe("LinkStatusCard — the hint, the page's to choose (A7b)", () => {
+    /** The line `/setup` passes: no administrator exists yet to ask for a new link. */
+    const SETUP_HINT = 'auth.setup.newLinkHint';
+
+    /** The hint line, by its test id; `null` when the card draws none. */
+    const hint = () => within(root()).queryByTestId('link-status-hint');
+
+    // red until A7b
+    it.each(DEAD_LINKS)('draws auth.link.askAdmin in link-status-hint when the page passes no hintKey and the link is %s', (status) => {
+        render(LinkStatusCard, {props: {status}});
+
+        expect(hint(), 'the hint line, by its test id').not.toBeNull();
+        expect(hint()?.textContent?.trim(), 'the default: an administrator sends the new link').toBe(ASK_ADMIN);
+    });
+
+    // red until A7b
+    it.each(DEAD_LINKS)("draws the page's hintKey in its place when the link is %s, and not auth.link.askAdmin", (status) => {
+        render(LinkStatusCard, {props: {status, hintKey: SETUP_HINT}});
+
+        expect(hint(), 'the hint line, by its test id').not.toBeNull();
+        expect(hint()?.textContent?.trim(), 'the key the page passed').toBe(SETUP_HINT);
+        expect(root().innerHTML, 'the default is replaced, not added to').not.toContain(ASK_ADMIN);
+        expect(keysShown(), 'the message itself does not change').toEqual([MESSAGE[status]]);
+    });
+
+    // red until A7b
+    it.each(['checking', 'closed', 'error'] as LinkStatus[])('draws no hint while %s, though the page passed one; the same card draws it once the link turns out expired', async (status) => {
+        const {rerender} = render(LinkStatusCard, {props: {status, hintKey: SETUP_HINT, onretry: vi.fn()}});
+
+        expect(root(), 'premise: the card is drawn').toHaveAttribute('data-status', status);
+        expect(keysShown(), 'premise: with its message').toContain(MESSAGE[status]);
+        expect(hint()).toBeNull();
+        expect(root().innerHTML).not.toContain(SETUP_HINT);
+
+        // The control: the absence above is the status's doing, not a hint line that is never drawn.
+        await rerender({status: 'expired'});
+
+        expect(hint()?.textContent?.trim()).toBe(SETUP_HINT);
     });
 });
 
