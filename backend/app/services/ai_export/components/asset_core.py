@@ -81,6 +81,7 @@ from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import Domain, PeriodBehavior
 from backend.app.services.ai_export.dependencies import BuildContext
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.lots_analysis_service import analysis_failure_codes
 
 # =============================================================================
 # Static methodology text for asset.provenance (never user/provider content)
@@ -508,10 +509,12 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
     scope = context.scope
     assert scope is not None
     lots_response = await context.db_resource(ASSET_LOTS_RESOURCE, load_asset_lots(scope))
+    failed = lots_response.calculation_status == "FAILED"
 
     eligible_lots = []
     omitted_degraded_lot_count = 0
-    for lot in lots_response.lots or ():
+    # A FAILED reconstruction exports no lot: every figure of its replay would be wrong (J-12, N81).
+    for lot in () if failed else (lots_response.lots or ()):
         # Eligibility follows the shared FIFO status semantics
         # (`FifoEngineResult.get_lot_states()`): open/partial iff
         # `open_quantity != 0`, always retained regardless of `closing_date`.
@@ -588,6 +591,8 @@ async def _build_lot_detail(context: BuildContext, dependencies: Mapping[str, Se
         period=DateRangeModel(start=scope.period_start, end=scope.period_end),
         target_currency=lots_response.target_currency,
         cost_allocation_semantics="Lot fees and taxes include only costs deterministically allocated to this Asset's lots. Broker-level unallocated costs are not included and must not be interpreted as zero.",
+        lot_reconstruction_status=lots_response.calculation_status,
+        failure_codes=tuple(analysis_failure_codes(lots_response)),
         lots=tuple(rows),
         omitted_degraded_lot_count=omitted_degraded_lot_count,
         unavailable_amount_lot_count=sum(1 for row in rows if _has_unavailable_amount(row)),
@@ -687,7 +692,9 @@ def _has_unavailable_amount(row: AssetLotDetailRow) -> bool:
 
 ASSET_LOT_DETAIL_SPEC = ComponentSpec(
     component_id="asset.lot_detail",
-    version=3,  # v2 (F6): opening_reference_unit_price/_source + opening_market_value; v3 (B3b): unvalued amounts are null
+    # v2 (F6): opening_reference_unit_price/_source + opening_market_value; v3 (B3b): unvalued amounts are null;
+    # v4 (J-12): lot_reconstruction_status + failure_codes, and a FAILED reconstruction exports no lot
+    version=4,
     domains=frozenset({Domain.ASSET}),
     output_model=AssetLotDetailPayload,
     builder=_build_lot_detail,

@@ -114,21 +114,65 @@ stored cost basis is read by no balance: those reds keep exactly one issue. The 
 alone replay ``dest`` only, and refuse nothing; the row of another asset on ``source``, under a batch that creates the
 pair, is refused by the replay alone (``test_unreadable_row_of_another_asset_is_refused_by_the_replay_alone``).
 
+N78 (W-B72; the night decision N78, refined by the coordinator's (a) of 17/10) — a cost basis on a type and side that
+take none, the ``TestN78…`` classes: RED until its cure but for the guards. ``cost_basis_allowed`` (``TX_TYPE_METADATA``)
+lets a cost basis in only on a TRANSFER or an ADJUSTMENT with a quantity above 0; rule 12 of
+``validate_transaction_business_rules`` reads only ``cost_basis_mode``, so a ``cost_basis_override`` sent without a mode is
+stored on any type, by a create (``batch_creates.apply_creates``) or an update (``batch_edits._apply_update_values``). Only
+an API client sends one: the form gates on ``cbAllowed``, the BRIM plugins set one only on an incoming ADJUSTMENT. The
+contract:
+
+- rule 12b, ``validate_transaction_business_rules(..., cost_basis_set=False)``: a request that SETS a non-null
+  ``cost_basis_override`` without a ``cost_basis_mode`` where ``cost_basis_allowed`` refuses one gets
+  ``costBasisNotAllowed`` ``{"type": <type>, "qty": str(quantity)}`` — EXCEPT on an ADJUSTMENT with a quantity below 0,
+  whose stored cost is decision 47's handover cost, which decision 4 lets an update of the same batch set. With a mode,
+  rule 12's ``costBasisModeIncompatible`` speaks alone, no double issue;
+- a create is refused at the batch's parse: its issue on ``operation`` "create" and its index, ``params`` ``{type, qty}``,
+  and no result; an update that sets one on a stored row whose final type and side take none, on its index and
+  ``ref_id`` (``_validate_updated_final_state``). The promote's side is ``test_transaction_decimal_places.py``'s;
+- a LONE business-rule error keeps its params (the coordinator's approval, 17/10): ``_parse_lenient`` keeps the context of
+  a lone model-level error (``loc`` empty, plain values) as ``params``, as it already does for the errors
+  ``multipleBusinessRuleErrors`` packs; a field-level pydantic error and a ``value_error`` keep None. Today a lone one
+  gets None, so every refusal of a create here, rule 12's or rule 12b's, pins its params: ``{type, qty}``, the quantity
+  compared as a number. The contract's own tests are ``test_transaction_service.py``'s (``TestParseLenientParams…``);
+- rows already stored with a stray cost basis are kept: an update that does not set the cost basis passes, and an
+  explicit null (clearing) is never refused — what it does to the cost is decision P5's;
+- ``transactions.errors.costBasisNotAllowed`` and ``transactions.errors.costBasisModeIncompatible`` — today the only
+  business-rule code without a message — in EN, IT, FR and ES; and a gate holds every business-rule code of
+  ``schemas/transactions/transactions.py`` (its ``PydanticCustomError`` literals but the wrapper
+  ``multipleBusinessRuleErrors``) to its message in the four languages.
+
+Reds: a BUY +5 and the USD leg of an FX_CONVERSION pair created with a cost basis and no mode (today committed with it
+stored); an update setting one on a stored BUY +3 (today committed); a cost basis sent WITH a mode on a BUY, whose lone
+``costBasisModeIncompatible`` must carry ``{type: BUY, qty: 5}`` (today params None: RED until the lone-params cure, the
+rest of it a guard); the two messages and the gate. Guards: an ADJUSTMENT +5 with a manual cost basis, a received
+TRANSFER with one, an Auto row sending the form's currency hint commit; the giving side of an ADJUSTMENT — one created at
+−5 with a cost basis and no mode, an update setting one on a stored ADJUSTMENT −4 — commits and holds it (the exception);
+a notes-only edit of a BUY or an ADJUSTMENT −4 stored with a stray cost basis commits and keeps it; a create sending an
+explicit null commits.
+
+The conflict this file first flagged — decision 4's guard ``test_split_keeps_the_cost_an_update_of_the_same_batch_gives_the_giving_leg``
+gives the giving leg a split leaves, an ADJUSTMENT −4, a cost of its own through an update without a mode, which the first
+N78 refused — is resolved by the coordinator's (a), 17/10: decisions 4 and 47 are the developer's and win, so rule 12b
+leaves an ADJUSTMENT below 0 alone, and that guard stays as it is.
+
 Ownership. Every test builds its own asset and brokers under a unique marker, in a session rolled back at the end:
 ``execute_batch`` never commits (its caller does), so nothing reaches the lane's database. The two scaffolds that
 change module state — an entry of ``TX_TYPE_METADATA``, ``SWAP_GROUPS`` — go through ``monkeypatch``, which puts
 them back. W-B69's plants are raw SQL in the same session, rolled back with it.
 
 Run: ``./dev.py test services transaction-cost-basis-rule`` (the action ``services_transaction_cost_basis_rule``); W-B69's
-cases alone: ``./dev.py test services transaction-cost-basis-rule WB69``.
+cases alone: ``./dev.py test services transaction-cost-basis-rule WB69``; N78's: ``… transaction-cost-basis-rule N78``.
 """
 
+import ast
 import re
 import sys
 import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -1822,3 +1866,410 @@ class TestWB69TheCodeAndItsMessages:
         missing = [code.value for code in TXValidationCode if not str(messages.get(f"transactions.errors.{code.value}") or "").strip()]
 
         assert missing == [], f"transactions.errors has no {language} message for {missing}"
+
+
+# ============================================================================
+# RED AND GUARDS — N78 (W-B72): A COST BASIS ON A TYPE AND SIDE THAT TAKE NONE
+# ============================================================================
+
+# The cure's code, as a literal: no rule answers it before N78.
+COST_BASIS_NOT_ALLOWED = "costBasisNotAllowed"
+# Rule 12's code, which speaks alone when the request names a mode.
+COST_BASIS_MODE_INCOMPATIBLE = "costBasisModeIncompatible"
+# N78's two messages: its new code's, and the one rule 12 has answered without a message until now.
+N78_CODES = (COST_BASIS_NOT_ALLOWED, COST_BASIS_MODE_INCOMPATIBLE)
+# What the other leg of a pair gets when a refusal at the parse leaves it alone in its link_uuid.
+LINK_UUID_PAIR_COUNT = TXValidationCode.LINK_UUID_PAIR_COUNT.value
+# The creates N78 refuses (_n78_refused_create), each at index 1 behind a row valid on its own. The giving side of an
+# ADJUSTMENT is not one of them: the refined N78 (the coordinator's (a), 17/10) leaves it to decisions 4 and 47.
+N78_CREATE_CASES = ("buy", "fx-conversion-leg")
+N78_MODES = ("auto", "manual")
+# The form's currency hint: the cost_basis_override it sends beside cost_basis_mode "auto", of which the batch reads the
+# code alone (auto_cost.py); its amount is no average, so the Auto cost cannot be mistaken for it.
+CURRENCY_HINT = {"code": EUR, "amount": "1"}
+# The schema whose PydanticCustomError literals are the business-rule codes, and the wrapper _parse_lenient unpacks
+# into the codes it packs: never shown, so it needs no message.
+BUSINESS_RULES_SOURCE = Path(transaction_schemas.__file__)
+BUSINESS_RULES_WRAPPER = "multipleBusinessRuleErrors"
+
+
+def _cost_sent(cost: Currency = STORED_COST) -> dict:
+    """A cost basis as a payload carries it: ``{"code", "amount"}``, the amount a string."""
+    return {"code": cost.code, "amount": str(cost.amount)}
+
+
+def _braced(params: dict) -> str:
+    """Params as a message names them: ``{type: BUY, qty: 5}``."""
+    return "{" + ", ".join(f"{key}: {value}" for key, value in params.items()) + "}"
+
+
+def _type_and_qty(params: dict | None) -> tuple | dict | None:
+    """N78's params ``{type, qty}`` as ``(type, quantity)``, the quantity read as a number: a stored row's quantity may print
+    3 or 3.000000. Anything else as it is, for the message."""
+    if isinstance(params, dict) and set(params) == {"type", "qty"}:
+        try:
+            return params["type"], Decimal(str(params["qty"]))
+        except InvalidOperation:
+            return params
+    return params
+
+
+def _n78_description(world: World) -> str:
+    """The description of every row an N78 batch creates: what finds them again, or proves them absent."""
+    return f"{world.marker} N78 batch"
+
+
+async def _n78_batch_rows(world: World) -> list[int]:
+    """The ids of the rows N78's batches sent that the database holds."""
+    statement = select(Transaction.id).where(Transaction.description == _n78_description(world)).order_by(Transaction.id)
+    return list((await world.session.execute(statement)).scalars())
+
+
+async def _n78_as_the_endpoint(world: World, *, creates: list[dict] | None = None, updates: list[dict] | None = None) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` runs it, its transaction included — ``_commit_as_the_endpoint``, creates
+    included: kept when the service answers committed, rolled back otherwise. Read the rows back by id afterwards
+    (``_stored_cost``), never through a copy the rollback expired."""
+    savepoint = await world.session.begin_nested()
+    response = await _run_batch(world, commit=True, creates=creates, updates=updates)
+    if response.committed:
+        await savepoint.commit()
+    else:
+        await savepoint.rollback()
+    return response
+
+
+def _n78_issues(response: TXBatchResponse) -> list[TXValidationIssue]:
+    """Every ``costBasisNotAllowed`` issue of the batch."""
+    return [issue for issue in response.issues if issue.code == COST_BASIS_NOT_ALLOWED]
+
+
+async def _n78_today(world: World, response: TXBatchResponse, operation: str, index: int) -> str:
+    """What the batch did with row ``operation`` ``index``, for a red's message: committed, and the cost basis each of its
+    rows now stores; or refused, and with what."""
+    if not response.committed:
+        return f"the batch was refused with [{_render(response.issues)}], none a {COST_BASIS_NOT_ALLOWED} on {operation} {index}"
+    ids = next((result.ids for result in response.results if result.operation == operation and result.index == index), [])
+    stored = []
+    for tx_id in ids:
+        stored.append(f"id={tx_id} holding {_show(await _stored_cost(world, tx_id))}")
+    return f"the batch committed it with that cost basis stored: {operation} {index} is {', '.join(stored) or 'no row'}"
+
+
+@dataclass
+class N78Create:
+    """A batch of creates whose row ``index`` carries a cost basis, without a mode, on a type and side that take none."""
+
+    label: str
+    creates: list[dict]
+    index: int
+    #: The params of its refusal: ``{"type": <type>, "qty": str(quantity)}``, the quantity as the payload parses.
+    params: dict
+    #: The other leg of its pair, left alone in its ``link_uuid`` once the row is refused at the parse; None outside a pair.
+    partner_index: int | None = None
+
+
+def _n78_refused_create(world: World, case: str) -> N78Create:
+    """The create ``case`` names, at index 1 behind a row valid on its own — a DEPOSIT of 500 EUR on ``dest``, or the EUR leg
+    of its FX_CONVERSION pair — so that the index of its refusal is its own, not a default.
+
+    ``buy``: a BUY +5 on ``dest`` paying 500 EUR (``dest`` allows a cash overdraft). ``fx-conversion-leg``: the USD leg
+    (+110) of an FX_CONVERSION pair on ``dest`` selling 100 EUR, its quantity left out (0). Each carries 42 EUR
+    (``STORED_COST``) and no ``cost_basis_mode``, and is valid in every other respect: only its cost basis can refuse it.
+    """
+    day = MOVE_DAY.isoformat()
+    description = _n78_description(world)
+    deposit = {"broker_id": world.dest.id, "type": "DEPOSIT", "date": day, "cash": {"code": EUR, "amount": "500"}, "description": description}
+    if case == "buy":
+        buy = {"broker_id": world.dest.id, "asset_id": world.asset.id, "type": "BUY", "date": day, "quantity": "5", "cash": {"code": EUR, "amount": "-500"}, "cost_basis_override": _cost_sent(), "description": description}
+        return N78Create(label="a BUY +5", creates=[deposit, buy], index=1, params={"type": "BUY", "qty": "5"})
+    if case == "fx-conversion-leg":
+        link_uuid = str(uuid.uuid4())
+        sold = {"broker_id": world.dest.id, "type": "FX_CONVERSION", "date": day, "cash": {"code": EUR, "amount": "-100"}, "link_uuid": link_uuid, "description": description}
+        bought = {"broker_id": world.dest.id, "type": "FX_CONVERSION", "date": day, "cash": {"code": "USD", "amount": "110"}, "link_uuid": link_uuid, "cost_basis_override": _cost_sent(), "description": description}
+        return N78Create(label="the USD leg (+110) of an FX_CONVERSION pair", creates=[sold, bought], index=1, params={"type": "FX_CONVERSION", "qty": "0"}, partner_index=0)
+    raise ValueError(f"unknown N78 create case {case!r}")
+
+
+def _called_name(func: ast.expr) -> str | None:
+    """The name a call calls: ``PydanticCustomError`` for ``PydanticCustomError(...)`` and ``module.PydanticCustomError(...)``."""
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return None
+
+
+def _business_rule_codes() -> list[str]:
+    """Every business-rule code of ``schemas/transactions/transactions.py``: the literal first argument of each
+    ``PydanticCustomError`` it builds, but the wrapper ``multipleBusinessRuleErrors``.
+
+    Read from the source's syntax tree, so a code a cure adds joins the gate by itself. A code passed by name instead of as
+    a literal would escape it, which is checked; and so are codes every version has, so a parse that finds nothing cannot
+    pass the gate.
+    """
+    tree = ast.parse(BUSINESS_RULES_SOURCE.read_text(encoding="utf-8"))
+    calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call) and _called_name(node.func) == "PydanticCustomError"]
+    by_name = [node.lineno for node in calls if not (node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str))]
+    assert by_name == [], f"scaffold: the gate reads each code as the literal first argument of PydanticCustomError; the calls at lines {by_name} of {BUSINESS_RULES_SOURCE.name} pass it otherwise, and escape the gate"
+    codes = sorted({node.args[0].value for node in calls} - {BUSINESS_RULES_WRAPPER})
+    assert {"qtyPositive", "cashRequired", COST_BASIS_MODE_INCOMPATIBLE} <= set(codes), f"scaffold: the business-rule codes read from {BUSINESS_RULES_SOURCE.name} miss codes every version has: {codes}"
+    return codes
+
+
+def _error_text(messages: dict, code: str) -> str:
+    """The text of ``transactions.errors.<code>`` in a flattened catalogue, stripped; empty when it has none."""
+    return str(messages.get(f"transactions.errors.{code}") or "").strip()
+
+
+class TestN78ACostBasisWhereNoneIsTaken:
+    """RED until N78 (W-B72): a ``cost_basis_override`` sent without a ``cost_basis_mode`` on a type and side that take none
+    (``cost_basis_allowed`` False) — but the giving side of an ADJUSTMENT, the refined N78's exception
+    (``TestN78GuardsTheGivingSideOfAnAdjustment``) — is refused with ``costBasisNotAllowed`` ``{type, qty}``.
+
+    Today rule 12 reads only ``cost_basis_mode``: the batch commits the row with its cost basis stored — noise the math
+    ignores on a row of quantity 0, but that the list, the export and the backup carry. Each test runs the batch as
+    ``POST /transactions/commit`` does, its transaction included (``_n78_as_the_endpoint``), and reads the rows back.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("case", N78_CREATE_CASES)
+    async def test_create_with_a_cost_basis_where_none_is_taken_is_refused_at_the_parse(self, world, case):
+        """RED until N78: one ``costBasisNotAllowed`` on create 1, ``params`` ``{type, qty}`` — ``qty`` the quantity as
+        parsed — the way the batch reports rule 12's codes; refused at the parse, so create 1 has no result; nothing else
+        refuses the batch, but for the pair the other leg left alone in its ``link_uuid`` (``linkUuidPairCount``, accepted,
+        not required); not committed, nothing it sent stored."""
+        batch = _n78_refused_create(world, case)
+        subject = batch.creates[batch.index]
+        side = (TransactionType(subject["type"]), Decimal(subject.get("quantity", "0")))
+        assert "cost_basis_mode" not in subject and not cost_basis_allowed(*side), f"precondition broken: {batch.label} must carry no cost_basis_mode, on a type and side that take no cost basis; cost_basis_allowed{side} = {cost_basis_allowed(*side)}"
+        assert not (side[0] == TransactionType.ADJUSTMENT and side[1] < 0), f"precondition broken: {batch.label} is the giving side of an ADJUSTMENT, which the refined N78 leaves to decisions 4 and 47"
+
+        response = await _n78_as_the_endpoint(world, creates=batch.creates)
+
+        refusal = f"{COST_BASIS_NOT_ALLOWED} {_braced(batch.params)} on create {batch.index}"
+        on_the_row = [issue for issue in _n78_issues(response) if (issue.operation, issue.index) == ("create", batch.index)]
+        if not on_the_row:
+            pytest.fail(f"N78 (W-B72): {batch.label} created with a cost basis and no mode must be refused with {refusal}; today {await _n78_today(world, response, 'create', batch.index)}")
+        assert [(issue.operation, issue.index) for issue in _n78_issues(response)] == [("create", batch.index)], f"N78: exactly one {refusal}, and none elsewhere: {_render(response.issues)}"
+        assert on_the_row[0].params == batch.params, (
+            f"N78: the {COST_BASIS_NOT_ALLOWED} of create {batch.index} must carry params {batch.params}, as rule 12's issues do; it carries {on_the_row[0].params!r}. "
+            "_parse_lenient keeps the ctx of a business-rule error only when several are packed (multipleBusinessRuleErrors): a lone one gets params None"
+        )
+        assert response.committed is False, f"N78: the batch was refused, yet answered committed: {response.results}"
+        assert ("create", batch.index) not in {(result.operation, result.index) for result in response.results}, f"N78: refused at the parse, create {batch.index} never reaches apply_creates, so it has no result: {response.results}"
+        consequences = {("create", batch.partner_index, LINK_UUID_PAIR_COUNT)} if batch.partner_index is not None else set()
+        others = [issue for issue in response.issues if issue.code != COST_BASIS_NOT_ALLOWED and (issue.operation, issue.index, issue.code) not in consequences]
+        assert others == [], f"N78: only the cost basis may refuse this batch: {_render(others)}"
+        assert await _n78_batch_rows(world) == [], "N78: the batch was refused, yet rows it sent are stored"
+
+    @pytest.mark.asyncio
+    async def test_update_setting_a_cost_basis_on_a_stored_buy_is_refused(self, world):
+        """RED until N78: ``{id, cost_basis_override: 42 EUR}`` on a stored BUY +3 gets one ``costBasisNotAllowed`` on
+        update 0, ``ref_id`` the BUY, ``params`` ``{type: BUY, qty: 3}`` (the quantity compared as a number), and nothing
+        else; not committed, and the BUY still holds no cost basis. Today the update commits and the BUY holds 42 EUR."""
+        buy = _stored_row(world, broker=world.dest, tx_type=TransactionType.BUY, quantity=Decimal("3"), amount=Decimal("-300"), currency=EUR)
+        world.session.add(buy)
+        await world.session.flush()
+        buy_id = buy.id
+        assert not cost_basis_allowed(TransactionType.BUY, Decimal("3")), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on a BUY"
+        assert await _stored_cost(world, buy_id) == (None, None), f"scaffold: the BUY id={buy_id} must be stored without a cost basis"
+
+        response = await _n78_as_the_endpoint(world, updates=[{"id": buy_id, "cost_basis_override": _cost_sent()}])
+
+        refusal = f"{COST_BASIS_NOT_ALLOWED} {{type: BUY, qty: 3}} on update 0"
+        found = _n78_issues(response)
+        if not found:
+            pytest.fail(f"N78 (W-B72): an update setting a cost basis of {STORED_COST.amount} {STORED_COST.code} on the stored BUY +3 id={buy_id} must be refused with {refusal}; today {await _n78_today(world, response, 'update', 0)}")
+        assert [(issue.operation, issue.index, issue.ref_id, _type_and_qty(issue.params)) for issue in found] == [("update", 0, buy_id, ("BUY", Decimal("3")))], f"N78: expected exactly one {refusal}, ref_id {buy_id}: {_render(found)}"
+        assert response.committed is False, f"N78: the update was refused, yet the batch answered committed: {response.results}"
+        assert [issue for issue in response.issues if issue.code != COST_BASIS_NOT_ALLOWED] == [], f"N78: only the cost basis may refuse this update: {_render(response.issues)}"
+        stored_after = await _stored_cost(world, buy_id)
+        assert stored_after == (None, None), f"N78: the update was refused, yet the BUY id={buy_id} holds {_show(stored_after)}"
+
+
+class TestN78GuardsWhereACostBasisIsTaken:
+    """Guards, green today and after N78: where ``cost_basis_allowed`` lets a cost basis in — a TRANSFER's receiving leg, an
+    ADJUSTMENT adding quantity — a manual one commits, and an Auto row sending the form's currency hint commits with its
+    Auto cost. A cure that judged a cost basis by its presence instead of by the type and side would turn them red."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", [None, "manual"], ids=["no-mode", "manual"])
+    async def test_adjustment_in_with_a_manual_cost_basis_commits(self, world, mode):
+        """Guard: an ADJUSTMENT +5 on ``dest`` at 42 EUR — without a mode, as the form sends a manual cost, or in ``manual``
+        — commits, and holds 42 EUR."""
+        created = {**_created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode=mode), "cost_basis_override": _cost_sent()}
+
+        response = await _n78_as_the_endpoint(world, creates=[created])
+
+        assert response.committed is True and response.issues == [], f"An ADJUSTMENT +{ADJUSTMENT_QUANTITY} with a manual cost basis (mode {mode}) was refused: {_render(response.issues)}"
+        stored = await _stored_cost(world, _created_id(response, 0))
+        assert stored == (STORED_COST.amount, STORED_COST.code), f"The ADJUSTMENT +{ADJUSTMENT_QUANTITY} was committed with {_show(stored)}, not the {STORED_COST.amount} {STORED_COST.code} it was sent with"
+
+    @pytest.mark.asyncio
+    async def test_received_transfer_with_a_manual_cost_basis_commits(self, world):
+        """Guard: a TRANSFER pair source → dest whose receiving leg (index 1) carries 42 EUR without a mode commits; the
+        receiving leg holds 42 EUR, the giving leg none."""
+        giving, receiving = _created_pair(world)
+        receiving["cost_basis_override"] = _cost_sent()
+
+        response = await _n78_as_the_endpoint(world, creates=[giving, receiving])
+
+        assert response.committed is True and response.issues == [], f"A TRANSFER pair whose receiving leg carries a manual cost basis was refused: {_render(response.issues)}"
+        legs = {"giving": await _stored_cost(world, _created_id(response, 0)), "receiving": await _stored_cost(world, _created_id(response, 1))}
+        assert legs == {"giving": (None, None), "receiving": (STORED_COST.amount, STORED_COST.code)}, f"The TRANSFER pair was committed with the cost bases {legs}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    async def test_auto_with_a_currency_hint_commits_with_its_auto_cost(self, world, shape):
+        """Guard: an Auto row — ``cost_basis_mode`` ``auto`` and ``cost_basis_override`` the currency hint ``{EUR, 1}``, as the
+        form's create payload sends it (``txPayloadHelpers.ts``) — on a TRANSFER's receiving leg or an ADJUSTMENT +5 on
+        ``source`` commits, and holds its Auto cost, ``source``'s average, 100 EUR: not the hint's amount."""
+        if shape == "transfer_in":
+            creates, subject_index = _created_pair(world, cost_basis_mode="auto"), 1
+        else:
+            creates, subject_index = [_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")], 0
+        creates[subject_index]["cost_basis_override"] = dict(CURRENCY_HINT)
+
+        response = await _n78_as_the_endpoint(world, creates=creates)
+
+        assert response.committed is True and response.issues == [], f"An Auto {SHAPE_LABELS[shape]} sending a currency hint was refused: {_render(response.issues)}"
+        stored = await _stored_cost(world, _created_id(response, subject_index))
+        assert stored == (UNIT_COST, EUR), f"Auto cost of the {SHAPE_LABELS[shape]}: expected {UNIT_COST} {EUR}, the average of source's BUY; it holds {_show(stored)} (wac_results={response.wac_results})"
+
+
+class TestN78GuardsTheGivingSideOfAnAdjustment:
+    """Guards, green today and after the refined N78 (the coordinator's (a), 17/10): rule 12b leaves alone an ADJUSTMENT
+    with a quantity below 0, although ``cost_basis_allowed`` refuses it a cost basis. Its stored cost is decision 47's
+    handover cost — the cost CP-16 hands its units over at — and decision 4 lets an update of the same batch set it
+    (``test_split_keeps_the_cost_an_update_of_the_same_batch_gives_the_giving_leg``, unchanged). Decisions 4 and 47 are the
+    developer's, and win. A cure that applied rule 12b to every side ``cost_basis_allowed`` refuses turns these red: each
+    checks first that the table does refuse the side, so the commit rests on the exception and not on the table.
+    """
+
+    @pytest.mark.asyncio
+    async def test_create_of_an_adjustment_out_with_a_cost_basis_commits_and_holds_it(self, world):
+        """Guard: an ADJUSTMENT −5 on ``source`` — which holds the ``world``'s 10 units, so it does not go short — created
+        with 42 EUR and no mode commits, and holds 42 EUR."""
+        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -ADJUSTMENT_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side, or this commit rests on the table and not on the exception"
+        created = {**_created_adjustment(world, broker=world.source, quantity=-ADJUSTMENT_QUANTITY), "cost_basis_override": _cost_sent(), "description": _n78_description(world)}
+
+        response = await _n78_as_the_endpoint(world, creates=[created])
+
+        assert response.committed is True and response.issues == [], f"N78 refined (the coordinator's (a), 17/10): an ADJUSTMENT -{ADJUSTMENT_QUANTITY} created with a cost basis and no mode is the exception decisions 4 and 47 keep, so it must commit; it was refused: {_render(response.issues)}"
+        stored = await _stored_cost(world, _created_id(response, 0))
+        assert stored == (STORED_COST.amount, STORED_COST.code), f"The ADJUSTMENT -{ADJUSTMENT_QUANTITY} was committed with {_show(stored)}, not the {STORED_COST.amount} {STORED_COST.code} it was sent with"
+
+    @pytest.mark.asyncio
+    async def test_update_setting_a_cost_basis_on_a_stored_adjustment_out_commits_and_holds_it(self, world):
+        """Guard: ``{id, cost_basis_override: 42 EUR}``, no mode, on an ADJUSTMENT −4 stored on ``source`` without a cost
+        commits, and the row holds 42 EUR: decision 4's update of a giving leg, on a row stored as one."""
+        row = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=-TRANSFER_QUANTITY)
+        world.session.add(row)
+        await world.session.flush()
+        row_id = row.id
+        assert not cost_basis_allowed(TransactionType.ADJUSTMENT, -TRANSFER_QUANTITY), "precondition broken: TX_TYPE_METADATA must refuse a cost basis on an ADJUSTMENT's giving side, or this commit rests on the table and not on the exception"
+        assert await _stored_cost(world, row_id) == (None, None), f"scaffold: the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} must be stored without a cost basis"
+
+        response = await _n78_as_the_endpoint(world, updates=[{"id": row_id, "cost_basis_override": _cost_sent()}])
+
+        assert response.committed is True and response.issues == [], f"N78 refined (coordinator's (a), 17/10): a cost basis set with no mode on the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} is the exception decisions 4 and 47 keep, so the update must commit: {_render(response.issues)}"
+        assert _update_results(response) == [(0, (row_id,), "success")], f"Committed, but the row was not updated: {response.results}"
+        stored = await _stored_cost(world, row_id)
+        assert stored == (STORED_COST.amount, STORED_COST.code), f"The update committed, yet the ADJUSTMENT -{TRANSFER_QUANTITY} id={row_id} holds {_show(stored)}, not {STORED_COST.amount} {STORED_COST.code}"
+
+
+class TestN78GuardsStrayCostsAndNulls:
+    """Guards, green today and after N78: what N78 leaves alone. A row stored with a stray cost basis — as an older version,
+    an API client or decision 47's handover left it — stays editable and keeps it; an explicit null, clearing, is never
+    refused."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", LEGACY_SHAPES)
+    async def test_notes_edit_of_a_row_with_a_stray_cost_basis_commits_and_keeps_it(self, world, shape):
+        """Guard: a notes-only edit — the cost key left out — of a BUY +3 or an ADJUSTMENT −4 stored with a cost basis of
+        42 EUR although its type and side take none (planted through the ORM, ``_legacy_row_with_cost``) commits; the notes
+        land and the stray cost basis stays. N78 judges a cost basis the request sets, never one the row stores."""
+        row = await _legacy_row_with_cost(world, shape)
+        row_id = row.id
+        side = (row.type, row.quantity)
+        assert not cost_basis_allowed(*side), f"precondition broken: a {LEGACY_LABELS[shape]} must take no cost basis; cost_basis_allowed{side} = True"
+        notes = f"{world.marker} notes edited"
+
+        response = await _n78_as_the_endpoint(world, updates=[{"id": row_id, "description": notes}])
+
+        assert response.committed is True and response.issues == [], f"N78: a notes-only edit of a {LEGACY_LABELS[shape]} stored with a stray cost basis sets no cost basis, so it must commit; it was refused: {_render(response.issues)}"
+        stored = await _stored_cost(world, row_id)
+        assert stored == (STORED_COST.amount, STORED_COST.code), f"N78: rows stored with a stray cost basis are kept, yet after a notes-only edit the {LEGACY_LABELS[shape]} id={row_id} holds {_show(stored)} instead of {STORED_COST.amount} {STORED_COST.code}"
+        description = (await world.session.execute(select(Transaction.description).where(Transaction.id == row_id))).scalar_one()
+        assert description == notes, f"Committed, but the notes of id={row_id} read {description!r}"
+
+    @pytest.mark.asyncio
+    async def test_create_with_an_explicit_null_cost_basis_commits(self, world):
+        """Guard: a BUY +5 created with ``cost_basis_override: null`` — sent, and null — commits without a cost basis: a null
+        sets nothing. The update that sends the null on a row with a stray cost basis is decision P5's guard
+        (``test_a_null_where_no_cost_is_taken_is_ignored``); a promote resolving it on a cash pair is
+        ``test_transaction_decimal_places.py``'s."""
+        buy = {"broker_id": world.dest.id, "asset_id": world.asset.id, "type": "BUY", "date": MOVE_DAY.isoformat(), "quantity": "5", "cash": {"code": EUR, "amount": "-500"}, "cost_basis_override": None, "description": _n78_description(world)}
+        assert "cost_basis_override" in transaction_schemas.TXCreateItem.model_validate(buy).model_fields_set, "scaffold: the create must SEND cost_basis_override (an explicit null), or this is the case of a key left out"
+
+        response = await _n78_as_the_endpoint(world, creates=[buy])
+
+        assert response.committed is True and response.issues == [], f"N78: an explicit null cost basis sets none, so a BUY sending it must commit; it was refused: {_render(response.issues)}"
+        stored = await _stored_cost(world, _created_id(response, 0))
+        assert stored == (None, None), f"The BUY sent with a null cost basis was committed with {_show(stored)}"
+
+
+class TestN78AModeLetsRule12SpeakAlone:
+    """Where the request names a mode, rule 12 speaks alone (N78: no double issue) — with its params since the
+    coordinator's approval of 17/10: a LONE model-level business-rule error keeps its context as ``params`` in
+    ``_parse_lenient``. The one issue is a guard, green today; its params are RED until that lone-params cure: today
+    ``_parse_lenient`` keeps the ``ctx`` of a business-rule error only when ``multipleBusinessRuleErrors`` packs several, so
+    a lone one reaches the app with ``params`` None, and its message without the type it names."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("mode", N78_MODES)
+    async def test_a_cost_basis_with_a_mode_where_none_is_taken_gets_rule_12s_issue_alone(self, world, mode):
+        """RED until the lone-params cure (its params), a guard for the rest: a BUY +5 sent with a cost basis AND
+        ``cost_basis_mode`` ``auto`` or ``manual`` is refused by rule 12 alone — one issue, ``costBasisModeIncompatible`` on
+        create 0, no ``costBasisNotAllowed`` beside it, green today — and that lone issue carries ``params``
+        ``{type: BUY, qty: 5}``, the quantity compared as a number: today None."""
+        buy = {"broker_id": world.dest.id, "asset_id": world.asset.id, "type": "BUY", "date": MOVE_DAY.isoformat(), "quantity": "5", "cash": {"code": EUR, "amount": "-500"}, "cost_basis_override": _cost_sent(), "cost_basis_mode": mode, "description": _n78_description(world)}
+
+        response = await _n78_as_the_endpoint(world, creates=[buy])
+
+        assert response.committed is False, f"A BUY sent with cost_basis_mode={mode} was committed: {response.results}"
+        assert [(issue.operation, issue.index, issue.code) for issue in response.issues] == [("create", 0, COST_BASIS_MODE_INCOMPATIBLE)], f"N78: with a mode, rule 12's {COST_BASIS_MODE_INCOMPATIBLE} speaks alone, no {COST_BASIS_NOT_ALLOWED} beside it: {_render(response.issues)}"
+        params = response.issues[0].params
+        assert _type_and_qty(params) == ("BUY", Decimal("5")), (
+            f"N78 (W-B72), lone params: the lone {COST_BASIS_MODE_INCOMPATIBLE} of create 0 must carry params {{type: BUY, qty: 5}}, the context rule 12 gives it; today it carries {params!r}. "
+            "_parse_lenient keeps the ctx of a business-rule error only when several are packed (multipleBusinessRuleErrors): a lone one gets params None"
+        )
+
+
+class TestN78TheMessages:
+    """RED until N78: the messages of its two codes, and the gate that holds every business-rule code to its message.
+
+    ``costBasisModeIncompatible`` is today the one business-rule code without a ``transactions.errors.<code>``, in any
+    language, so the app shows the backend's raw English (``resolveIssueMessage``'s fallback); ``costBasisNotAllowed`` is
+    new. Read without the English fallback (``load_catalog(language, fallback=False)``): what the sources translate.
+    """
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    @pytest.mark.parametrize("code", N78_CODES)
+    def test_n78_codes_have_their_message(self, code, language):
+        """RED until N78: ``transactions.errors.<code>`` is a non-empty text in ``language``."""
+        messages = flatten(load_catalog(language, fallback=False))
+
+        assert _error_text(messages, code), f"N78 (W-B72): transactions.errors.{code} has no {language} message, so the app shows the backend's raw English"
+
+    @pytest.mark.parametrize("language", UI_LANGUAGES)
+    def test_every_business_rule_code_has_its_message(self, language):
+        """RED until N78 (``costBasisModeIncompatible``), then a gate: every business-rule code of
+        ``schemas/transactions/transactions.py`` (``_business_rule_codes``) has a non-empty ``transactions.errors.<code>``
+        in ``language``; a code a cure adds joins the gate by itself."""
+        codes = _business_rule_codes()
+        messages = flatten(load_catalog(language, fallback=False))
+
+        missing = [code for code in codes if not _error_text(messages, code)]
+
+        assert missing == [], f"N78 (W-B72): every business-rule code of {BUSINESS_RULES_SOURCE.name} needs transactions.errors.<code> in {language}; none for {missing} (of {len(codes)} codes)"

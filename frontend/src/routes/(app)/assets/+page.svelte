@@ -66,6 +66,7 @@
     import {computeDerivedPriceState} from '$lib/utils/assetPriceDerived';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
+    import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
@@ -750,22 +751,39 @@
         assets = assets.map((a) => ({...a, loadingPrices: needFetch.some((nf) => nf.id === a.id)}));
 
         try {
-            // Bulk query only assets with gaps — SAME single request as before (the
-            // backend runs one SQL query for all requested assets; splitting this into
-            // several smaller requests would lose that optimization, so it stays as one
-            // call). Use axiosInstance directly (bypassing Zodios' automatic response
-            // validation) so the raw, not-yet-validated body can be handed to the shared
-            // worker pool: validating + computing derived state for every asset in one
-            // synchronous main-thread block was what monopolized the thread long enough
-            // to delay click/navigation handling on large "ALL date range" loads.
-            const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', queryItems);
-            const rawItems: unknown[] = rawResponse.data?.items ?? [];
-
-            const {results, invalidItemErrors} = await processPriceItemsInParallel(rawItems);
+            // One request for the assets with gaps or backend signals while they stay under the
+            // backend's caps: the backend then runs one SQL query for all of them. A larger list is
+            // split into batches (lot Z-27, `lib/api/bulkBatches.ts`), sent one after the other and
+            // applied together at the end. Each batch uses axiosInstance directly (bypassing Zodios'
+            // automatic response validation) so its raw, not-yet-validated body can be handed to the
+            // shared worker pool: validating + computing derived state for every asset in one
+            // synchronous main-thread block was what monopolized the thread long enough to delay
+            // click/navigation handling on large "ALL date range" loads.
+            const today = todayIso();
+            const outcome = await sendBulkBatches(
+                queryItems,
+                (item) => bulkRangeDays(item.date_range.start, item.date_range.end, today) + (item.signals.length > 0 ? BULK_SIGNAL_MARGIN_DAYS : 0),
+                async (items) => {
+                    const rawResponse = await axiosInstance.post('/api/v1/assets/prices/query', items);
+                    const rawItems: unknown[] = rawResponse.data?.items ?? [];
+                    return processPriceItemsInParallel(rawItems);
+                },
+            );
+            const results = outcome.answers.flatMap(({answer}) => answer.results);
+            const invalidItemErrors = outcome.answers.flatMap(({answer}) => answer.invalidItemErrors);
             if (invalidItemErrors.length > 0) {
                 console.error('Some price-query items failed validation:', invalidItemErrors);
             }
-            signalRequestFailed = invalidItemErrors.length > 0 && [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
+            // The assets of a batch that got no answer are left as the catch below leaves them:
+            // their cache kept, their signals untouched and reported as failed.
+            const answeredIds = new Set(outcome.answers.flatMap(({batch}) => batch.items.map((item) => item.asset_id)));
+            const unansweredIds = new Set(queryItems.filter((item) => !answeredIds.has(item.asset_id)).map((item) => item.asset_id));
+            if (outcome.failed) {
+                console.error('Failed to fetch prices bulk:', outcome.error);
+            }
+            const anySignals = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);
+            const unansweredSignals = [...requestContexts].some(([assetId, context]) => unansweredIds.has(assetId) && context.plan.requests.length > 0);
+            signalRequestFailed = (invalidItemErrors.length > 0 && anySignals) || unansweredSignals;
 
             // Populate caches (cheap: just Map.set calls) and build a per-asset lookup
             // of the already-computed derived UI state (last price, chart data).
@@ -782,6 +800,7 @@
             }
 
             for (const [assetId, context] of requestContexts) {
+                if (unansweredIds.has(assetId)) continue;
                 const state = resultStateForAsset(assetId);
                 const processed = derivedByAssetId.get(assetId);
                 const mapped = mapSignalInstanceResults(context.configs, context.plan, processed?.signals ?? []);
@@ -802,7 +821,8 @@
                 }
                 return {...asset, loadingPrices: false};
             });
-            resolveMaxStartFromAssets();
+            // As before a failure: «All» resolves only from a complete load, never from part of it.
+            if (!outcome.failed) resolveMaxStartFromAssets();
         } catch (e: any) {
             console.error('Failed to fetch prices bulk:', e);
             signalRequestFailed = [...requestContexts.values()].some((context) => context.plan.requests.length > 0);

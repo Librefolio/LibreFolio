@@ -212,6 +212,8 @@ async def revoke_tokens(
         conditions.append(AccountToken.user_id == user_id)
     if purpose is not None:
         conditions.append(AccountToken.purpose == purpose)
+    # Always this one UPDATE, even when no live token can match: it takes SQLite's write lock, and the setup-link callers
+    # read «waiting» again under it (A-42). Never select the live ids first and skip the UPDATE when there are none.
     statement = update(AccountToken).where(*conditions).values(revoked_at=now or utcnow()).execution_options(synchronize_session=False)
     revoked = (await session.execute(statement)).rowcount
     if revoked:

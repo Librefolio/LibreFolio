@@ -1441,7 +1441,9 @@ function technicalPayload(
 // only semantics text keeps the payload shape, so that version renders exactly like its v1. The lot
 // and FIFO bumps (B3b) only make amounts nullable, which the generic renderer already prints as `null`; the
 // reconciliation bump (C-53) only changes what `reconciled` means for a rounding-size residual. The drawdown
-// bump (MF-D2) only lets a total loss keep its section with `remaining_to_peak_ratio` null.
+// bump (MF-D2) only lets a total loss keep its section with `remaining_to_peak_ratio` null. The FIFO lots and
+// lot detail bumps (J-12) add the reconstruction status and the FAILED assets (identity and codes only), which
+// the generic renderer prints as a scalar and a table.
 const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new Map([
     ['portfolio.provenance', new Set([1, 2, 3])],
     ['broker.provenance', new Set([1, 2, 3])],
@@ -1449,9 +1451,9 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['broker.positions', new Set([1, 2])],
     ['asset.provenance', new Set([1, 2])],
     ['asset.positions_by_broker', new Set([1, 2])],
-    ['asset.lot_detail', new Set([1, 2, 3])],
-    ['portfolio.fifo_lots', new Set([1, 2])],
-    ['broker.fifo_lots', new Set([1, 2])],
+    ['asset.lot_detail', new Set([1, 2, 3, 4])],
+    ['portfolio.fifo_lots', new Set([1, 2, 3])],
+    ['broker.fifo_lots', new Set([1, 2, 3])],
     ['portfolio.fifo_summary', new Set([1, 2, 3])],
     ['broker.fifo_summary', new Set([1, 2, 3])],
     ['portfolio.reconciliation', new Set([1, 2])],
