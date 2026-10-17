@@ -77,8 +77,8 @@ come evento di interesse: il valore riparte da $V_0$, e $I$ e le somme ripartono
 
 - **Prima del primo periodo**, il valore è il Valore Iniziale.
 - **Dopo l'ultimo periodo**, rimane al suo importo finale, a meno che gli interessi di mora siano attivi. Con
-  **Genera Cedola** sull'ultimo periodo e nessun interesse di mora, un evento di regolamento a scadenza chiude
-  l'asset a quell'importo.
+  **Genera Cedola** sull'ultimo periodo e nessun interesse di mora, l'ultima cedola è pagata alla data di fine e
+  un evento di regolamento a scadenza chiude l'asset al valore che resta dopo di essa: il Valore Iniziale.
 - **Il grafico** riceve un punto a ogni data di **Frequenza**: scegli **Giornaliera** per una linea continua.
 
 ??? example "🧮 Un prestito di €10.000 al 5%, con una cedola ogni mese"

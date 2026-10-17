@@ -90,6 +90,8 @@ Auto-generated when:
 - The last schedule period has `generate_interest = True` **and** no `late_interest` is configured
 - **Or** `late_interest` has `generate_interest = True` (settlement at the last late maturation date)
 
+Without late interest, the settlement is worth what the last day leaves after its coupon: the principal when the final coupon is paid that day, as the INTEREST event of the same date, or the day's value when no coupon is paid (no gain above the principal). `values[last_end]`, the chart's last point, stays the pre-coupon peak. Before CP-14b (J-39) the settlement read that peak, so the final coupon was counted twice.
+
 After settlement, the engine is "off" — `get_current_value()` returns the settlement value for all future dates.
 
 See [Asset Events](events.md) for the full event type reference.
@@ -164,7 +166,7 @@ A P2P loan of €10,000 with 5% simple annual interest (ACT/365), one period fro
 
 ## 🔧 Technical Notes
 
-- **Interest math in the financial math layer**: the day count conventions and simple interest — `calculate_day_count_fraction()`, which implements ACT/365, ACT/360, ACT/ACT and 30/360 through three helpers, and `calculate_simple_interest()` — live in `backend/app/services/financial_math/interest.py` (lot CP-14a, U10, developer decision D-8), and the plugin imports them from there. `_compute_maturation_dates()` stays in `scheduled_investment/plugin.py`: it reads the domain's `MaturationFrequency`. Before U10 the primitives lived in the plugin itself, which had absorbed the former `backend/app/utils/financial_math.py`; the [layer guard](../financial_math.md#layer-guard) now fails if one of them is defined anywhere else in `backend/app`.
+- **Interest math in the financial math layer**: the day count conventions and simple interest — `calculate_day_count_fraction()`, which implements ACT/365, ACT/360, ACT/ACT (ISDA: a span is cut at each 1 January it crosses, each piece over its own year's length) and 30/360 through three helpers, and `calculate_simple_interest()` — live in `backend/app/services/financial_math/interest.py` (lot CP-14a, U10, developer decision D-8), and the plugin imports them from there. `_compute_maturation_dates()` stays in `scheduled_investment/plugin.py`: it reads the domain's `MaturationFrequency`. Before U10 the primitives lived in the plugin itself, which had absorbed the former `backend/app/utils/financial_math.py`; the [layer guard](../financial_math.md#layer-guard) now fails if one of them is defined anywhere else in `backend/app`.
 - **`identifier_type`**: Always `AUTO_GENERATED` — the engine generates its own UUID identifier.
 - **`params_schema`**: Exposes a single `ui_component` field (`key: "_ui_component"`, `default: "scheduled_investment"`) telling the frontend to render the dedicated `ScheduledInvestmentEditor` instead of generic fields.
 - **Events**: there is no `supports_events` flag. `get_history_value()` returns price points and events together in `FAHistoricalData.events` (auto-generated + manual, filtered to the requested range).
