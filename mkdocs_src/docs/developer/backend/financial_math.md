@@ -76,6 +76,7 @@ backend/app/services/financial_math/
     ├── conversions.py       FxRateResolver, a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price and performance histories
+    ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     └── average_cost_lines.py  per-broker and cumulative WAC history points
 ```
 

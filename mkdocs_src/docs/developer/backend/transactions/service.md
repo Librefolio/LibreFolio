@@ -59,7 +59,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()`, then `check_decimal_limits()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount or manual cost basis over its column's limit (C-97, see [Decimal limits](#decimal-limits)) |
+| 1 | `parse_inputs()`, then `check_decimal_limits()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -97,7 +97,10 @@ Raw create, update, split, and promote rows are parsed leniently, and the mutati
 loops append row-level failures while continuing with other rows. This is not a
 promise that every possible error is collected:
 
-- any `accessDenied` issue causes an early response before mutation stages run;
+- any `accessDenied` issue, or a checked value past its column's digits before the
+  decimal point (see [Decimal limits](#decimal-limits)), causes an early response right
+  after the access check, before the mutation stages run: `committed=False`, the issues
+  collected so far, empty results;
 - inline WAC, and with it the cost of a split's giving leg, is skipped when a
   non-balance issue already exists; and
 - balance replay catches the first balance exception and does not continue through
@@ -136,30 +139,53 @@ an update that touches the cost (see [Persisted Cost Basis](wac.md#persisted-cos
 ### 🔢 Decimal limits {: #decimal-limits }
 
 `check_decimal_limits()` (`transaction_batch_stages.py`; C-97, issue #43) reads every
-parsed create and update. A `quantity` keeps 10 decimal places, a `cash.amount` 6 and a
+parsed create and update, and the cost basis each promote resolves
+(`resolved_fields.cost_basis_override`, the merged value of the PromoteMergeModal), on the
+same `cost_basis_override` column: until W-B58 a promote's cost skipped the check, and the
+REAL rounded it in silence. A `quantity` keeps 10 decimal places, a `cash.amount` 6 and a
 manual `cost_basis_override` — a per-unit price — 12, the scales of their `transactions`
-columns; any of them at most 15 significant digits: `decimal_limit_issue()`
-(`backend/app/db/precision.py`) takes the scale from the model and does not count
-trailing zeros. An Auto cost basis (`cost_basis_mode` `auto` or `auto-detail`) is not
+columns; any of them at most 15 significant digits; and at most 15 digits before the
+decimal point for a quantity or a cash amount (decision N63), 12 for a cost basis:
+`decimal_limit_issue()` (`backend/app/db/precision.py`) takes the scale and the digits
+before the point (`max_integer_digits()`) from the model, and does not count trailing
+zeros. An Auto cost basis (`cost_basis_mode` `auto` or `auto-detail`) is not
 checked: the batch recomputes its amount and reads only its currency (`auto_cost.py`),
 so the preview's average the Form sends back, 100 / 3 in full, is no value of the user's.
 A value over a limit
-is refused, never rounded: one issue per field, with code `decimalPlacesExceeded` or
-`significantDigitsExceeded` (both in `TXValidationCode`, listed by
-`GET /transactions/types` → `validation_codes`), params `{"max": N}` and `field`
-(`quantity`, `cash.amount` or `cost_basis_override`). The frontend puts the field label
-in front (`resolveValidationMessage.ts`): *Quantity: At most 10 decimal places*.
+is refused, never rounded: one issue per field, with code `decimalPlacesExceeded`,
+`significantDigitsExceeded` or `integerDigitsExceeded` (all three in `TXValidationCode`,
+listed by `GET /transactions/types` → `validation_codes`), the first in that order when a
+value is over several, `integerDigitsExceeded` also for a value that is not finite;
+params `{"max": N}` and `field` (`quantity`, `cash.amount` or `cost_basis_override`). A
+promote's issue has `operation` `promote` and the promote's index. The English `error`
+names the field and the limit, such as *Quantity: at most 15 digits before the decimal
+point*. The frontend puts the field label in front of the three codes
+(`FIELD_PREFIXED_CODES` in `resolveValidationMessage.ts`; the third is
+`transactions.errors.integerDigitsExceeded`, *At most {max} digits before the decimal
+point*): *Quantity: At most 10 decimal places*.
 
 The issue keeps the batch from being committed, but the row stays in it: the later
 stages still apply it, so a linked pair is not broken by it, and the batch's other
 issues are reported with it (the inline WAC is skipped, as for any non-balance issue).
+Not so when a checked value has more digits before the decimal point than its column
+takes, or is not finite, whatever code its issue got (a quantity of 400 digits keeps
+`significantDigitsExceeded`, the first in order): `check_decimal_limits()` then returns
+`True`, and `execute_batch()` stops right after `preload_and_authorize()`, step 2 above,
+with the early response of a denied access: `committed=False`, the issues collected so
+far, no results. The stages after it compute with the values (products, averages, the
+double a REAL stores), and a value that large broke them with a 500 where the user is
+owed the issue (W-B58).
 The check runs when a batch is confirmed (`/transactions/validate`,
 `/transactions/commit`), not when a broker import builds its rows (decision D2): the
 import hands its rows to the bulk workspace, which shows the refusal with the batch's
 other issues. A figure a plugin computes instead of reading it, such as a per-unit cost
-from a total, is rounded by the plugin and never reaches this refusal (decision D6, see
-[Decimal places](../../architecture/patterns/brim_plugin_guide.md#decimal-places)). The
-column types are in [Decimal Columns](../../architecture/database/index.md#decimal-columns).
+from a total, is rounded by the plugin (decision D6, see
+[Decimal places](../../architecture/patterns/brim_plugin_guide.md#decimal-places)): on a
+`RealDecimal` column, a quantity or a per-unit cost, it then meets neither of the first
+two refusals (the amount is `Numeric`, whose significant digits the rounding does not
+cap); no rounding takes away digits before the decimal point, which are checked as for
+any other value. The column types are in
+[Decimal Columns](../../architecture/database/index.md#decimal-columns).
 
 ---
 

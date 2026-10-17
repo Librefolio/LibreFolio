@@ -39,6 +39,7 @@ graph TD
         Report["🧠 portfolioStore (invalidate)"]
         Risk["🛡️ riskStore (markRiskStale)"]
         Lots["📦 lotsAnalysisStore (own mark)"]
+        PriceStores["🏭 asset price and FX registries (markStale on every store)"]
     end
 
     subgraph Page ["Dashboard page"]
@@ -56,6 +57,7 @@ graph TD
     Bus --> Report
     Bus --> Risk
     Bus --> Lots
+    Bus -->|"kind: prices only"| PriceStores
     Bus -->|"kind: prices, after the dispatch"| Fetch
     Report -.->|"report + stale flag"| Peek
     Peek --> Render
@@ -80,7 +82,7 @@ graph TD
 
 ### 📣 `portfolioMutation`: the signal bus
 
-The axios response interceptor (`frontend/src/lib/api/zodios-client.ts`) passes the method, the URL, and the response body of every **successful** response to `notifyPortfolioMutation()`. `isPortfolioAffectingMutation()` keeps the writes that change what a portfolio view shows, and the bus dispatches `{kind: 'mutation', method, path}` to every listener registered with `registerPortfolioMutationListener()`. The **Refresh** button goes through the same bus: `requestPortfolioRefresh()` dispatches `{kind: 'refresh'}`. So does the end of a price catch-up, with a signal of its own: `notifyPricesCaughtUp()` dispatches `{kind: 'prices'}`. The **Updating prices…** tracker (`frontend/src/lib/features/price-refresh/priceRefresh.ts`) sends it when a catch-up is over, if it saw one of the catch-up's jobs running and the catch-up brought something up to date (`last_refreshed`): see [Updating prices…](../components/features/live-ticker.md#price-refresh). The report, risk and lots caches mark their answers stale on any kind; the Dashboard and the broker detail page, while on screen, also reload on `prices` ([How a page uses the cache](#how-a-page-uses-the-cache)).
+The axios response interceptor (`frontend/src/lib/api/zodios-client.ts`) passes the method, the URL, and the response body of every **successful** response to `notifyPortfolioMutation()`. `isPortfolioAffectingMutation()` keeps the writes that change what a portfolio view shows, and the bus dispatches `{kind: 'mutation', method, path}` to every listener registered with `registerPortfolioMutationListener()`. The **Refresh** button goes through the same bus: `requestPortfolioRefresh()` dispatches `{kind: 'refresh'}`. So does the end of a price catch-up, with a signal of its own: `notifyPricesCaughtUp()` dispatches `{kind: 'prices'}`. The **Updating prices…** tracker (`frontend/src/lib/features/price-refresh/priceRefresh.ts`) sends it when a catch-up is over, if it saw one of the catch-up's jobs running and the catch-up brought something up to date (`last_refreshed`): see [Updating prices…](../components/features/live-ticker.md#price-refresh). The report, risk and lots caches mark their answers stale on any kind; the asset price and FX registries mark their stores stale on `prices` alone ([The other listeners](#the-other-listeners)); the Dashboard and the broker detail page, while on screen, also reload on `prices` ([How a page uses the cache](#how-a-page-uses-the-cache)).
 The bus never spins the **Refresh** button: it waits only for the requests its page tracks in `pageBusy`, and a reload on `prices` tracks none ([Page busy](app-state.md#page-busy)).
 
 | Write (under `/api/v1`) | Counts as a change |
@@ -106,6 +108,8 @@ Reads and failed requests count as nothing. An answer the rules cannot read (a s
 | `lotsAnalysisStore.svelte.ts` | Moves its own mark: every lots analysis is stale and kept, so `peekLotsAnalysis()` still returns it while `fetchLotsAnalysis()` asks again. | `resetLotsAnalysisCache()` |
 
 Both follow the report's rules — one request per key, an answer stored under the mark it was asked in and never over a newer one — with two differences. `queryRisk()` and `fetchLotsAnalysis()` **reject** on failure, leaving the previous answer cached. And a lots key is the user plus the request with its object keys sorted and its `broker_ids`, `requested_analyses`, and `selected_lot_ids` lists sorted, so the same question in any order shares one entry. `getRiskQuerySnapshot()` is the risk counterpart of `peekReport()`: `{key, status, response, error, stale}`.
+
+The two price registries listen on `prices` alone. `assetPriceStoreRegistry.ts` and `fxStoreRegistry.ts` register when they are imported, under their own names, and on `{kind: 'prices'}` call `markStale()` on every `TimeSeriesStore` they hold: the points stay readable, and the next read of a range asks the server again, once, so a price or FX page loaded after the catch-up shows the prices and rates it brought. A `mutation` or a `refresh` leaves them alone: the live-price poll writes today's candle, a mutation, every 30 s on an asset's page, and would otherwise turn every cached series stale each time. See [Registries & Caches](registries.md#how-it-works).
 
 One component listens too. `AssetEventPicker.svelte`, the **Linked Event** field of the [transaction form](../components/features/transaction-form.md), registers with `registerPortfolioMutationListener()` under a key of its own instance (`asset-event-picker:<uid>`, the uid random per picker, so two pickers never replace each other's listener) and unregisters in `onDestroy`. It reacts only to a `mutation` on `/api/v1/assets/events…` — a new event or **Edit this** from the form's mini modal, a data editor save — and ignores `refresh` and `prices`. It then clears its fetch key and reads the events around the transaction date again: `fetchEvents()` returns early on the same asset, date and range, so without this the field would keep showing an edited event's old values.
 

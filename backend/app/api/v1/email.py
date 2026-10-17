@@ -191,8 +191,9 @@ async def confirm_email_verification(body: EmailVerificationConfirmRequest, sess
 async def resend_email_verification(body: EmailVerificationResendRequest, request: Request, session: AsyncSession = Depends(get_session_generator)) -> EmailVerificationResendResponse:
     """For an account waiting for its verification link: the sign-in's credentials, then a new link by email.
 
-    The credentials are checked as the sign-in checks them: 401 ``Invalid credentials`` for a wrong password or an
-    unknown account, the same answer and the same cost; 403 ``ACCOUNT_DISABLED`` for an account an administrator
+    The credentials are checked as the sign-in checks them: 401 ``INVALID_CREDENTIALS`` for a wrong password or an
+    unknown account, the same answer and the same cost; any other 401 of this public route is the block's, which an
+    anonymous caller gets on a blocked instance (E-11); 403 ``ACCOUNT_DISABLED`` for an account an administrator
     deactivated. 409 ``EMAIL_VERIFICATION_NOT_NEEDED`` for an active account; 409 ``EMAIL_UNAVAILABLE``,
     ``EMAIL_LINKS_UNAVAILABLE`` (without the ``problem``: not an administrator); 409 ``USER_LIMIT_REACHED`` when the old link expired and the instance is full now; 429
     ``EMAIL_RATE_LIMITED`` with ``Retry-After`` (10 requests per 15 minutes per address, before the password; per
@@ -204,7 +205,8 @@ async def resend_email_verification(body: EmailVerificationResendRequest, reques
     try:
         language = await verification.resend_verification(session, identifier=body.username, password=body.password, address=address)
     except verification.VerificationCredentialsError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials") from None
+        # Its own code: the web app reads any other 401 of this route as the instance's block (E-11).
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"error_code": "INVALID_CREDENTIALS", "message": "Invalid credentials"}) from None
     except verification.VerificationAccountDisabledError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"}) from None
     except verification.EmailVerificationNotNeededError:

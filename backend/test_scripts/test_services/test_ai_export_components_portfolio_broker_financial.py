@@ -1430,7 +1430,11 @@ class TestUnvaluedFifoFigures:
     def test_summary_takes_its_currency_from_a_market_value_when_every_nullable_amount_is_unknown(self, unrealized_pnl):
         """A lot can have all eight nullable amounts unknown (no rate at its opening nor at its closures) and still a
         market value, priced at today's rate. The summary's currency is read from every known amount: its market totals
-        keep that currency -- EUR here, appearing nowhere else -- and nothing raises. The summed totals stay unknown."""
+        keep that currency -- EUR here, appearing nowhere else -- and nothing raises. The summed totals stay unknown.
+
+        MF-E1 (T-B8): the market totals sum the lots valued in full, open value and unrealized P&L both known. A lot with
+        its market value alone is not one of them, so its 700 is no longer summed: the open value is unknown with its
+        P&L. Before MF-E1: ``open_value`` was EUR 700 in the market-value-only case too."""
         unknown = dict.fromkeys(_NULLABLE_ROW_FIELDS)
 
         def eur(amount: object) -> Currency:
@@ -1441,9 +1445,8 @@ class TestUnvaluedFifoFigures:
 
         summary = shared_payloads.summarize_fifo_asset_rows([priced, unpriced])
 
-        assert summary.open_value == eur(700)
-        expected_unrealized = (eur(200), eur(200), eur(0)) if unrealized_pnl is not None else (None, None, None)
-        assert (summary.unrealized_pnl, summary.potential_gain, summary.potential_loss) == expected_unrealized
+        expected_market = (eur(700), eur(200), eur(200), eur(0)) if unrealized_pnl is not None else (None, None, None, None)
+        assert (summary.open_value, summary.unrealized_pnl, summary.potential_gain, summary.potential_loss) == expected_market
         assert {name: getattr(summary, name) for name in _SUMMED_MONEY_FIELDS} == dict.fromkeys(_SUMMED_MONEY_FIELDS)
 
     def test_summary_still_rejects_known_figures_in_two_currencies(self):
@@ -1464,6 +1467,33 @@ class TestUnvaluedFifoFigures:
         market = ("open_value", "unrealized_pnl", "potential_gain", "potential_loss")
         assert {name: getattr(summary, name) for name in market} == {"open_value": _money(700), "unrealized_pnl": _money(200), "potential_gain": _money(200), "potential_loss": _money(0)}
         assert (summary.valued_open_lot_count, summary.unavailable_open_lot_count, summary.value_coverage_status) == (1, 1, "partial")
+
+    @pytest.mark.parametrize(
+        "half_valued",
+        [
+            # The case the lots analysis produces: a market price, but a P&L it could not form (a proceeds rate missing).
+            pytest.param({"open_value": _money(300), "unrealized_pnl": None}, id="value-known-pnl-unknown"),
+            # Its mirror, which the row model admits: the same rule holds the other way round.
+            pytest.param({"open_value": None, "unrealized_pnl": _money(50)}, id="pnl-known-value-unknown"),
+        ],
+    )
+    def test_summary_market_totals_sum_the_same_lots_the_coverage_counts(self, half_valued):
+        """MF-E1 (T-B8): open value and unrealized P&L sum the same open lots -- those with both known, the
+        `valued_open_rows` that `valued_open_lot_count` counts. Three open lots: both known, one of the two known,
+        neither: each total is the first lot's alone, and the coverage it states is one valued lot of three.
+
+        Before MF-E1 each total summed the lots where it alone was known: open value 1000 (700 + 300) beside an
+        unrealized P&L of 200 -- two figures over two different sets of lots, and a coverage that matched neither
+        (mirror: unrealized P&L 250 beside an open value of 700)."""
+        rows = [_fifo_row("L1", **_MARKET_FIGURES), _fifo_row("L2", **half_valued), _fifo_row("L3")]
+        assert all(row.open_quantity != 0 for row in rows), "precondition: the three lots are open"
+
+        summary = shared_payloads.summarize_fifo_asset_rows(rows)
+
+        market = ("open_value", "unrealized_pnl", "potential_gain", "potential_loss")
+        assert {name: getattr(summary, name) for name in market} == {"open_value": _money(700), "unrealized_pnl": _money(200), "potential_gain": _money(200), "potential_loss": _money(0)}
+        # Unchanged: the coverage counts already read the lots with both figures known.
+        assert (summary.valued_open_lot_count, summary.unavailable_open_lot_count, summary.value_coverage_status) == (1, 2, "partial")
 
     @pytest.mark.parametrize(
         ("second_lot", "expected"),
@@ -1644,24 +1674,28 @@ class TestUnavailableAmountLotCount:
 
 class TestFifoComponentVersion:
     """B3b made the FIFO lot and summary money figures nullable (null = unavailable): each FIFO component moved from
-    version 1 to 2, on the real spec and on the frozen catalog placeholder together. The catalog is imported in the
-    test rather than at module level, so a parity failure on import reds these tests only."""
+    version 1 to 2, on the real spec and on the frozen catalog placeholder together. MF-E1 (T-B8) moves the two FIFO
+    summaries on to 3 -- an asset's open value and unrealized P&L sum the same lots, those valued in full -- with the
+    same payload shape; the FIFO lots stay at 2. The catalog is imported in the test rather than at module level, so a
+    parity failure on import reds these tests only."""
 
     @pytest.mark.parametrize(
-        ("component_id", "components"),
+        ("component_id", "components", "version"),
         [
-            pytest.param("portfolio.fifo_summary", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio-fifo-summary"),
-            pytest.param("portfolio.fifo_lots", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, id="portfolio-fifo-lots"),
-            pytest.param("broker.fifo_summary", broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker-fifo-summary"),
-            pytest.param("broker.fifo_lots", broker_financial.BROKER_FINANCIAL_COMPONENTS, id="broker-fifo-lots"),
+            # Before MF-E1: 2.
+            pytest.param("portfolio.fifo_summary", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, 3, id="portfolio-fifo-summary"),
+            pytest.param("portfolio.fifo_lots", portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS, 2, id="portfolio-fifo-lots"),
+            # Before MF-E1: 2.
+            pytest.param("broker.fifo_summary", broker_financial.BROKER_FINANCIAL_COMPONENTS, 3, id="broker-fifo-summary"),
+            pytest.param("broker.fifo_lots", broker_financial.BROKER_FINANCIAL_COMPONENTS, 2, id="broker-fifo-lots"),
         ],
     )
-    def test_fifo_component_is_versioned_v2_in_registry_and_placeholder(self, component_id, components):
+    def test_fifo_component_version_in_registry_and_placeholder(self, component_id, components, version):
         from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red these tests only
 
         real = next(spec for spec in components if spec.component_id == component_id)
         placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
-        assert (real.version, placeholder.version) == (2, 2)
+        assert (real.version, placeholder.version, real.schema_version) == (version, version, 1)
 
 
 # =============================================================================
