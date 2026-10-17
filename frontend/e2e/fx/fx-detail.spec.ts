@@ -15,7 +15,7 @@ import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
-import {localIso, todayIso} from '../fixtures/dates';
+import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 import {goToFxDetailPage} from './fx-helpers';
 
@@ -2345,5 +2345,255 @@ test.describe('FX Detail Page', () => {
         await goToFxDetailPage(page, 'EUR-USD');
         await page.getByTestId('fx-detail-back-btn').click();
         await expect(page).toHaveURL(/\/fx$/, {timeout: 10_000});
+    });
+});
+
+// ============================================================================
+// The summary's Δ over the range is the backend's (workstream Y, lot X-R59 A)
+// ============================================================================
+
+/** The FX period changes, whatever their query string. */
+const FX_PERIOD_CHANGES = /\/api\/v1\/fx\/currencies\/period-changes(\?.*)?$/;
+
+/** The pair the summary is read on: the seeded EUR/USD, canonical (alphabetical) as the backend and the stores key it. */
+const RANGE_PAIR = {base: 'EUR', quote: 'USD'} as const;
+
+/** One pair of a period-changes request (`FXPeriodChangesRequest`). */
+type FxRangeChangesQuery = {base: string; quote: string; as_of: string; range_start?: string | null};
+
+/** A pair's Δ over the range as a stub answers it (`FXRangeChange`): decimal strings, null where the backend has none. */
+type FxRangeChange = {change_abs: string | null; change_ratio: string | null; inverse_change_abs: string | null; inverse_change_ratio: string | null};
+
+/**
+ * +42.42 % as configured, −21.21 % inverted, which is neither the inversion of the first (−29.79 %) nor its negation,
+ * so the inverted page shows it only by reading `inverse_change_ratio`. No seeded rate moves 42 % in two months: a
+ * figure on screen comes from the answer.
+ */
+const STUBBED_RANGE_CHANGE: FxRangeChange = {change_abs: '0.1234', change_ratio: '0.4242', inverse_change_abs: '-0.0567', inverse_change_ratio: '-0.2121'};
+
+/** What the range of the range-change test answers once changed: −13.13 % as configured, a figure of its own. */
+const CHANGED_RANGE_CHANGE: FxRangeChange = {change_abs: '-0.0321', change_ratio: '-0.1313', inverse_change_abs: '0.0222', inverse_change_ratio: '0.1515'};
+
+/** A Δ over the range the backend could not compute: every field null, both ways. */
+const NO_RANGE_CHANGE: FxRangeChange = {change_abs: null, change_ratio: null, inverse_change_abs: null, inverse_change_ratio: null};
+
+/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
+const EARLIEST_RANGE_START = '1900-01-01';
+
+/** What `routePairRangeChanges` saw: every item asked, what went wrong, how many requests it answered. */
+type FxRangeChangesLog = {asked: FxRangeChangesQuery[]; failures: string[]; answered: number};
+
+/**
+ * The FX period changes, routed through the backend: every request is recorded, and each answer goes back with each
+ * pair's `range_change` replaced by what `stubFor` gives for the item that asked it — null: as the backend gave it. A
+ * non-OK answer is a failure, passed on as it came.
+ */
+async function routePairRangeChanges(page: Page, stubFor: (asked: FxRangeChangesQuery) => FxRangeChange | null): Promise<FxRangeChangesLog> {
+    const log: FxRangeChangesLog = {asked: [], failures: [], answered: 0};
+    await page.route(FX_PERIOD_CHANGES, async (route) => {
+        try {
+            const body = (route.request().postDataJSON() as FxRangeChangesQuery[] | null) ?? [];
+            log.asked.push(...body);
+            const response = await route.fetch();
+            if (!response.ok()) {
+                log.failures.push(`HTTP ${response.status()}: ${await response.text()}`);
+                await route.fulfill({response});
+                return;
+            }
+            const answer = (await response.json()) as {items?: Array<{base: string; quote: string; range_change?: Record<string, unknown> | null}>};
+            const items = (answer.items ?? []).map((item) => {
+                const asked = body.find((query) => query.base === item.base && query.quote === item.quote);
+                const stub = asked ? stubFor(asked) : null;
+                return stub ? {...item, range_change: {...(item.range_change ?? {}), ...stub}} : item;
+            });
+            await route.fulfill({response, json: {...answer, items}});
+        } catch (error) {
+            // Nobody awaits a route callback, so what it throws would land on whatever runs next: recorded, and the
+            // request let through, for the test to fail on its own assertions.
+            log.failures.push(String(error));
+            await route.continue().catch(() => undefined);
+        } finally {
+            log.answered += 1;
+        }
+    });
+    return log;
+}
+
+/**
+ * A percentage as any of the four languages writes it, matched whole, as `percentCell` reads a Δ cell of the lists:
+ * `+1.25%` (English), `+1,25%` (Italian), `+1,25 %` (French, Spanish: a no-break space before the sign); a minus may be
+ * `-` or `−`. The figure is read, never a translation.
+ */
+function percentText(figure: string): RegExp {
+    const parts = /^([+-])(\d+)\.(\d+)$/.exec(figure);
+    if (!parts) throw new Error(`percentText: ${figure} is not a signed decimal such as +1.25`);
+    return new RegExp(`^\\s*${parts[1] === '+' ? '\\+' : '[-\\u2212]'}${parts[2]}[.,]${parts[3]}\\s?%\\s*$`);
+}
+
+/**
+ * The pair page's summary shows the pair's Δ over the range on screen (X-R59, lot A): the change from the first to the
+ * last day of the range, which the backend computes both ways — the `range_change` of
+ * `POST /fx/currencies/period-changes`, asked for the pair canonical (alphabetical) whichever way the URL shows it, from
+ * the first day of the range (`range_start`, raised to 1900-01-01, the first day the backend values, for a range that
+ * starts before it) to its last (`as_of`): on load, on a range change and after a refresh. Shown as configured the
+ * summary reads `change_ratio`; inverted, `inverse_change_ratio`; where the backend has none it draws no Δ beside the
+ * rate. The browser computes none.
+ *
+ * The pair is the seeded EUR/USD, read and never written: the real answer is fetched and only its `range_change` is
+ * changed, with figures its rates do not give over these days. The range before 1900 has its rates answered in the
+ * browser, empty, so no conversion is walked back over a century; its period changes still reach the backend, which says
+ * whether it takes the first day asked. The refresh button publishes the page's big requests (`data-busy`, `pageBusy`),
+ * the Δ over the range among them: the barrier before reading what an answer left.
+ *
+ * Red before the cure of lot A: the page never asks the endpoint — the route never fires — and computes its Δ from the
+ * rates it charted.
+ */
+test.describe('FX pair page — the summary’s Δ over the range is the backend’s (X-R59)', () => {
+    // A ceiling, never a delay: the page loads the pair's rates, its signals and its Δ, and some tests load them again.
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('the page asks the canonical pair from the first day of the range on screen; the summary shows the answer’s Δ, the inverse one once swapped', async ({page}) => {
+        // About two months ending on a known day in the past.
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        try {
+            const log = await routePairRangeChanges(page, () => STUBBED_RANGE_CHANGE);
+            // Opened by URL: on a full load the query is what seeds the page's period.
+            const root = await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            await expect(root, 'premise: the page shows the seeded EUR-USD').toHaveAttribute('data-chart-pair', 'EUR-USD');
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes: its Δ is still computed in the browser', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the page asks the pair from the first day of the range on screen to the last').toContainEqual(expected);
+
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            await expect(delta, 'as configured: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+
+            // The page's own swap: the URL shows the pair inverted, and the summary reads the inverse field.
+            await page.getByTestId('fx-detail-swap-btn').click();
+            await expect(page).toHaveURL(/\/fx\/USD-EUR(?:\?|$)/, {timeout: 10_000});
+            await expect(delta, 'inverted: inverse_change_ratio -0.2121').toHaveText(percentText('-21.21'), {timeout: 10_000});
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'what the swap asked is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            for (const item of log.asked) expect(item, 'whichever way the URL shows the pair, every request asks it canonical over the range on screen').toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('opened inverted, the page still asks the canonical pair, and the summary shows the answer’s inverse Δ', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        try {
+            const log = await routePairRangeChanges(page, () => STUBBED_RANGE_CHANGE);
+            const root = await openSyntheticDetail(page, `/fx/USD-EUR?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            await expect(root, 'premise: the page keys the pair canonical, EUR-USD').toHaveAttribute('data-chart-pair', 'EUR-USD');
+            await expect(page.getByTestId('fx-detail-pair-label'), 'premise: and shows it inverted, USD → EUR').toHaveText(/USD[\s\S]*EUR/);
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes: its Δ is still computed in the browser', timeout: 10_000}).toBeGreaterThan(0);
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            expect(log.asked, 'the page asks the pair canonical, EUR first, though the URL shows it inverted').toContainEqual(expected);
+
+            await expect(page.getByTestId('fx-price-summary-range-delta'), 'inverted: inverse_change_ratio -0.2121, not the direct +42.42 %').toHaveText(percentText('-21.21'), {timeout: 10_000});
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            for (const item of log.asked) expect(item, 'every request asks the pair canonical over the range on screen').toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a range change asks the Δ from the new first day, and the summary shows the new answer', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        // A later first day, the same last: the range shrinks to about a month.
+        const changed = {start: daysAgoIso(40), end: range.end};
+        try {
+            // The answer depends on the first day asked: the stub for the first range, a figure of its own for the changed one.
+            const log = await routePairRangeChanges(page, (asked) => (asked.range_start === changed.start ? CHANGED_RANGE_CHANGE : STUBBED_RANGE_CHANGE));
+            await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            await expect(delta, 'the first range: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+            const refresh = page.getByTestId('fx-detail-refresh-btn');
+            await expect(refresh, 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            const askedBefore = log.asked.length;
+
+            // The range on screen changes through the page's own picker.
+            const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+            const startInput = picker.getByTestId('date-range-input-start');
+            const endInput = picker.getByTestId('date-range-input-end');
+            await startInput.fill(changed.start);
+            await expect(startInput).toHaveValue(changed.start);
+            await endInput.fill(changed.end);
+            await expect(endInput).toHaveValue(changed.end);
+            await endInput.press('Enter');
+            await expect(picker, 'the picker closed on the new range').toHaveAttribute('data-open', 'false');
+
+            await expect(delta, 'the changed range: its own answer, change_ratio -0.1313').toHaveText(percentText('-13.13'), {timeout: 10_000});
+            await expect(refresh, 'the reload of the changed range is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            const askedAfter = log.asked.slice(askedBefore);
+            expect(askedAfter.length, 'the range change asked the Δ over the range again').toBeGreaterThan(0);
+            for (const item of askedAfter) expect(item, 'after the change, every request asks the pair from the new first day to the last').toEqual({...RANGE_PAIR, as_of: changed.end, range_start: changed.start});
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a refresh asks the Δ again, and an answer with every field null leaves the summary its rate and no Δ', async ({page}) => {
+        const range = {start: daysAgoIso(70), end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
+        let answer: FxRangeChange = STUBBED_RANGE_CHANGE;
+        try {
+            const log = await routePairRangeChanges(page, () => answer);
+            const root = await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+            const delta = page.getByTestId('fx-price-summary-range-delta');
+            // Presence first: the load's answer is on screen, beside the pair's rate.
+            await expect(delta, 'the load: change_ratio 0.4242').toHaveText(percentText('+42.42'), {timeout: 10_000});
+            const refresh = page.getByTestId('fx-detail-refresh-btn');
+            await expect(refresh, 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            await expect(refresh).toBeEnabled();
+
+            // The page's refresh, over the same range: this time the backend has no Δ.
+            answer = NO_RANGE_CHANGE;
+            const askedBefore = log.asked.length;
+            const answeredBefore = log.answered;
+            await refresh.click();
+            await expect.poll(() => log.answered, {message: 'the refresh never asked the Δ over the range again', timeout: 10_000}).toBeGreaterThan(answeredBefore);
+            await expect(refresh, 'the refresh is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the period changes reached the page').toEqual([]);
+            for (const item of log.asked.slice(askedBefore)) expect(item, 'the refresh asks the same pair over the same range').toEqual(expected);
+
+            // The summary still draws its rate — the half the Δ sits beside — and no Δ.
+            await expect(root, 'the pair still shows a rate').toHaveAttribute('data-chart-last-rate', /\d/);
+            await expect(page.getByTestId('fx-price-summary-missing')).toHaveCount(0);
+            await expect(delta, 'every field of range_change is null: no Δ in the summary').toHaveCount(0);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
+    });
+
+    test('a range that starts before 1900 asks the Δ from 1900-01-01, which the backend takes', async ({page}) => {
+        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+        const range = {start: '1899-12-01', end: daysAgoIso(10)};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: EARLIEST_RANGE_START};
+        try {
+            // The chart's rates answered in the browser, empty: no conversion is walked back over a century.
+            await page.route(`**${FX_CONVERT_PATH}`, async (route) => {
+                await route.fulfill({json: {results: [], success_count: 0, errors: []}});
+            });
+            const log = await routePairRangeChanges(page, () => null);
+            await openSyntheticDetail(page, `/fx/EUR-USD?start=${range.start}&end=${range.end}`, 'fx-detail-page');
+
+            await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
+            await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
+            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
+            expect(log.asked, `the page asks the pair from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expected);
+            for (const item of log.asked) expect(item, `never from ${range.start}: the backend would refuse the whole request`).toEqual(expected);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
+        }
     });
 });
