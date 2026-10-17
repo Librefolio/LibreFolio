@@ -477,9 +477,12 @@ address `rate_limit_address(http_request)` gives, and workstream E's «send the 
   accounts. `dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off` in the environment of the lane's server, after
   `configure_test_runtime()` has dropped every `LIBREFOLIO_*` of `.env` and of the shell: the lane's server always
   runs with the limit off ([Test lanes and the instance's configuration](#test-lanes-and-the-instances-configuration)).
-  `backend/test_scripts/conftest.py` sets it in every pytest process too, with `os.environ.setdefault()` (a value
-  already in that process's environment wins), since the in-process apps of many test files share one process and
-  its two limiters. The limit's own tests turn it on with `monkeypatch`, on limiters of their own.
+  `backend/test_scripts/conftest.py` sets it in every pytest process too, since the in-process apps of many test
+  files share one process and its two limiters. It sets it at import with `os.environ.setdefault()` (a value
+  already in that process's environment wins), and an autouse fixture puts that value back before each test that
+  no longer has it: `configure_test_runtime()`, which `setup_test_database()` reaches when a test module is
+  imported, removes it at collection. The limit's own tests turn it on, or remove it, with `monkeypatch` after
+  that fixture, on limiters of their own.
 - **Per process, in memory.** A restart forgets every count, and with N worker processes (`dev.py server --workers N`)
   each keeps its own, so the limits are N times these; the Docker image runs one worker. Each limiter holds at most
   10,000 keys (the limiter's `max_keys`): a new key beyond them evicts the key with the fewest failures still in the
@@ -655,8 +658,10 @@ limits) can neither reach the tests nor change their outcome.
   `configure_test_runtime()`, which would remove it again).
 - One setting is the lanes' own, on purpose: the [failed sign-in limit](#login-limit) is off, since the
   suites sign in wrongly on purpose. `dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off` for the
-  lane's server after the cleanup, and `backend/test_scripts/conftest.py` sets it in every pytest
-  process that does not have it already.
+  lane's server after the cleanup. `backend/test_scripts/conftest.py` sets it in every pytest process
+  that does not have it already, and puts it back before each test that lost it: set once at import, it
+  did not survive the modules that configure the lane at collection, and in a combined run the limit was
+  on for every test.
 
 ### 🧬 Instance Key {: #instance-key }
 
