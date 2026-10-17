@@ -10,7 +10,8 @@ from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ens
 def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset unit tests (Vitest) — price store, price/chart derived-state, local
     signal regression, chart aggregation, and worker-pool infra; the whole-range Δ read
-    from the backend (X-R59: rangeChange, the period-changes fetchers' range_start)."""
+    from the backend (X-R59: rangeChange, the period-changes fetchers' range_start, the
+    asset detail page's summary Δ)."""
     cmd = [
         "npx",
         "vitest",
@@ -20,6 +21,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/utils/__tests__/periodChanges.test.ts",
         "src/lib/utils/__tests__/periodChanges.rangeChange.test.ts",
         "src/lib/utils/__tests__/rangeChange.test.ts",
+        "src/lib/components/assets/detail/assetDetailRangeChange.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregationGolden.test.ts",
         "src/lib/components/charts/__tests__/lineChartHelpers.test.ts",
