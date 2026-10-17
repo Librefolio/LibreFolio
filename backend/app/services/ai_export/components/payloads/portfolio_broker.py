@@ -58,6 +58,7 @@ from backend.app.services.ai_export.components.resources import LotsResultsResou
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
+from backend.app.services.financial_math.lots.summary import residual_cost
 from backend.app.services.financial_math.returns import price_return
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
@@ -156,22 +157,18 @@ def lot_status(lot: Any) -> _FifoLotStatus:
 
 
 def lot_residual_cost_basis(lot: Any) -> Decimal | None:
-    """Return original cost attributable to the still-open quantity.
+    """Return original cost attributable to the still-open quantity (``financial_math.lots.summary.residual_cost``).
 
     `None` when the lot is still open and its original cost is unknown (a missing FX rate);
     a closed lot has no residual cost, so it is 0 whatever its cost.
     """
 
-    open_quantity = abs(_lot_decimal(getattr(lot, "open_quantity", None)))
-    if open_quantity.is_zero():
-        return Decimal("0")
     original_cost = getattr(lot, "original_cost", None)
-    if original_cost is None:
-        return None
-    original_quantity = abs(_lot_decimal(getattr(lot, "original_quantity", None)))
-    if original_quantity.is_zero():
-        return Decimal("0")
-    return _lot_decimal(original_cost) * open_quantity / original_quantity
+    return residual_cost(
+        _lot_decimal(original_cost) if original_cost is not None else None,
+        _lot_decimal(getattr(lot, "open_quantity", None)),
+        _lot_decimal(getattr(lot, "original_quantity", None)),
+    )
 
 
 def has_nonzero_open_lot(lots: Sequence[Any]) -> bool:
@@ -547,8 +544,9 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
 
     The cost, proceeds, realized, income/fee/tax, total and net totals are `None` as soon as one lot's
     part is unknown (a missing FX rate, or no market value). Market-value totals (open value, unrealized
-    P&L, potential gain and loss) keep summing the valued open lots, with their coverage stated in
-    `value_coverage_status` and the valued/unavailable open lot counts.
+    P&L, potential gain and loss) sum the same lots — the valued open lots, whose value and unrealized P&L
+    are both known (v3, T-B8) — with their coverage stated in `value_coverage_status` and the
+    valued/unavailable open lot counts.
     """
 
     rows = tuple(rows)
@@ -598,8 +596,8 @@ def summarize_fifo_asset_rows(rows: Sequence[FifoLotRow]) -> FifoAssetSummaryRow
         residual_cost_basis=_sum_complete("residual_cost_basis"),
         cumulative_proceeds=_sum_complete("cumulative_proceeds"),
         realized_pnl=_sum_complete("realized_pnl"),
-        open_value=_sum_optional("open_value", open_rows),
-        unrealized_pnl=_sum_optional("unrealized_pnl", open_rows),
+        open_value=_sum_optional("open_value", valued_open_rows),
+        unrealized_pnl=_sum_optional("unrealized_pnl", valued_open_rows),
         potential_gain=potential_gain,
         potential_loss=potential_loss,
         total_pnl=_sum_complete("total_pnl"),

@@ -267,6 +267,37 @@ class TestIntegratedComponentCatalog:
             "schema_version": 1,
         }
 
+    @pytest.mark.parametrize("component_id", ["portfolio.fifo_summary", "broker.fifo_summary"])
+    def test_fifo_summary_components_are_version_3_on_both_sides_of_the_catalog(
+        self,
+        component_registry: ComponentRegistry,
+        component_id: str,
+    ):
+        """MF-E1 (T-B8): an asset's open value and unrealized P&L sum the same open lots, those valued in
+        full, so the FIFO summary components move to version 3 — on the real spec AND on its frozen
+        placeholder, which the replacement validation requires to be equal. The payload shape does not
+        change: schema_version stays 1. Pins the numbers, so a bump on one side only cannot stay green.
+
+        Before MF-E1: version 2 on the three sides."""
+        placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
+        real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
+        registered = component_registry.get(component_id)
+
+        # The integrated catalog still validates with the new numbers.
+        validate_portfolio_broker_replacements(PORTFOLIO_BROKER_COMPONENTS, placeholders=ALL_FOUNDATION_COMPONENTS)
+        assert registered is real
+        assert {
+            "placeholder version": placeholder.version,
+            "real version": real.version,
+            "registered version": registered.version,
+            "schema_version": real.schema_version,
+        } == {
+            "placeholder version": 3,
+            "real version": 3,
+            "registered version": 3,
+            "schema_version": 1,
+        }
+
 
 class TestAnalysisCatalog:
     def test_expected_analysis_counts(self):
