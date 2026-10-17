@@ -118,7 +118,8 @@
     "user": "Usuario",
     "backToDefault": "Volver al predeterminado",
     "createForex": "Crear forex…",
-    "unknownError": "error desconocido"
+    "unknownError": "error desconocido",
+    "decimalPlacesExceeded": "{max, plural, =0 {Solo números enteros} one {Como máximo # decimal} other {Como máximo # decimales}}"
   },
   "csvImport": {
     "title": "Importar datos CSV",
