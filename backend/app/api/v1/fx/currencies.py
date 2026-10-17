@@ -3,9 +3,9 @@
 import re
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import List
+from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import delete as sql_delete
 from sqlmodel import select
@@ -13,8 +13,9 @@ from sqlmodel import select
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import FxRate, User
 from backend.app.db.session import get_session_generator
-from backend.app.schemas.common import BackwardFillInfo, Currency, DateRangeModel
+from backend.app.schemas.common import PERIOD_CHANGES_MAX_AS_OF_DAYS, BackwardFillInfo, Currency, DateRangeModel
 from backend.app.schemas.fx import (
+    PERIOD_CHANGES_MAX_PAIRS,
     FXBulkDeleteResponse,
     FXBulkUpsertResponse,
     FXConversionRequest,
@@ -594,13 +595,16 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
 
 @router_currencies.post("/period-changes", response_model=FXPeriodChangesResponse)
 async def query_fx_period_changes_bulk(
-    requests: List[FXPeriodChangesRequest],
+    requests: Annotated[List[FXPeriodChangesRequest], Body(max_length=PERIOD_CHANGES_MAX_PAIRS)],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
     """The FX table's fixed-period changes (1D … 5Y) of several pairs, up to each one's ``as_of``, in both orientations.
 
     The rate on a day is the conversion of 1 base on that day, as ``POST /currencies/convert`` gives it. Each change is a
-    fraction, null without a rate on either day.
+    fraction, null without a rate on either day. At most ``PERIOD_CHANGES_MAX_PAIRS`` pairs and
+    ``PERIOD_CHANGES_MAX_AS_OF_DAYS`` distinct ``as_of`` days, each from 1900-01-01 (MF-P2b): 422 otherwise.
     """
+    if len({item.as_of for item in requests}) > PERIOD_CHANGES_MAX_AS_OF_DAYS:
+        raise HTTPException(status_code=422, detail=f"At most {PERIOD_CHANGES_MAX_AS_OF_DAYS} distinct as_of days per request")
     return FXPeriodChangesResponse(items=await get_fx_period_changes_bulk(requests, session))

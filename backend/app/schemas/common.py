@@ -25,10 +25,10 @@ from functools import lru_cache
 from typing import Annotated, Any, List, Literal, Optional, Union
 
 import pycountry
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 from pydantic.functional_serializers import PlainSerializer
 
-from backend.app.utils.datetime_utils import parse_ISO_date
+from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, parse_ISO_date
 
 # =============================================================================
 # SAFE DECIMAL — no scientific notation in JSON output
@@ -559,6 +559,31 @@ class PeriodBoundedModel(StrictModel):
         if self.period_end < self.period_start:
             raise ValueError(f"period_end ({self.period_end}) must be >= period_start ({self.period_start})")
         return self
+
+
+# =============================================================================
+# FIXED-PERIOD CHANGES REQUESTS (MF-P2b, R13-SEC8)
+# =============================================================================
+
+#: The distinct ``as_of`` days one fixed-period changes request may value. Each costs ten valued days — the anchor and one
+#: reference per period, a grouped price query each for the assets —, so the cost of a request follows its distinct
+#: anchors, not its length. The Assets and FX tables send one.
+PERIOD_CHANGES_MAX_AS_OF_DAYS = 5
+
+
+def period_changes_as_of(value: date_type) -> date_type:
+    """The ``as_of`` of a fixed-period changes item: on or after ``EARLIEST_RANGE_START`` (1 January 1900).
+
+    Nothing is valued before it, and up to 0005-12-30 the five-year reference day (1 825 days back) would fall before
+    year 1: ``date`` would overflow, a 500.
+    """
+    if value < EARLIEST_RANGE_START:
+        raise ValueError(f"as_of ({value}) must be on or after {EARLIEST_RANGE_START}")
+    return value
+
+
+#: The ``as_of`` field of a fixed-period changes item (see :func:`period_changes_as_of`).
+PeriodChangesAsOf = Annotated[date_type, AfterValidator(period_changes_as_of)]
 
 
 class BaseDeleteResult(BaseModel):

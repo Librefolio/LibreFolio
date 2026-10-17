@@ -1,15 +1,17 @@
 """Asset price endpoints (``/assets/prices``): manual upsert and delete, signal catalog, bulk and current queries, provider sync."""
 
-from typing import List
+from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
+from backend.app.schemas.common import PERIOD_CHANGES_MAX_AS_OF_DAYS
 from backend.app.schemas.prices import (
+    PERIOD_CHANGES_MAX_ASSETS,
     FAAssetDelete,
     FABulkDeleteResponse,
     FABulkUpsertResponse,
@@ -197,7 +199,7 @@ async def sync_prices_bulk(
 
 @price_router.post("/period-changes", response_model=FAPeriodChangesResponse)
 async def query_period_changes_bulk(
-    requests: List[FAPeriodChangesQueryItem],
+    requests: Annotated[List[FAPeriodChangesQueryItem], Body(max_length=PERIOD_CHANGES_MAX_ASSETS)],
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
@@ -205,5 +207,9 @@ async def query_period_changes_bulk(
 
     Reads the stored price history only: the price on a day is the last stored one on or before it, converted at that
     day's rate when ``target_currency`` is given. Each change is a fraction, null without a usable price on either day.
+    At most ``PERIOD_CHANGES_MAX_ASSETS`` items and ``PERIOD_CHANGES_MAX_AS_OF_DAYS`` distinct ``as_of`` days, each from
+    1900-01-01 (MF-P2b): 422 otherwise.
     """
+    if len({item.as_of for item in requests}) > PERIOD_CHANGES_MAX_AS_OF_DAYS:
+        raise HTTPException(status_code=422, detail=f"At most {PERIOD_CHANGES_MAX_AS_OF_DAYS} distinct as_of days per request")
     return FAPeriodChangesResponse(items=await get_period_changes_bulk(requests, session))

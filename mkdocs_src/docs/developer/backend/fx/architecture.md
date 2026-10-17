@@ -164,6 +164,9 @@ linearly for each item (PR #30 by Martin Sova, commit `5aa267f11`).
 `fixed_period_changes()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
 - **Request**: a list of `{base, quote, as_of}`. `base` and `quote` must differ, or the request is refused (422).
+  The limits (MF-P2b, finding R13-SEC8): at most `PERIOD_CHANGES_MAX_PAIRS` (1 000) pairs, at most
+  `PERIOD_CHANGES_MAX_AS_OF_DAYS` (5) distinct `as_of` days, and each `as_of` on or after `EARLIEST_RANGE_START`
+  (1 January 1900; up to 0005-12-30 the 5Y day fell before year 1, a 500): 422 otherwise.
 - **Rate on a day**: the conversion of 1 `base` into `quote` on that day by `convert_bulk()`, with its unlimited
   backward fill. It is the rate `POST /api/v1/fx/currencies/convert` returns for that day, up to that endpoint's
   [ceiling](#convert-range-ceiling): `as_of` has none. One `convert_bulk()` batch serves every pair and day of the
