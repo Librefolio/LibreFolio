@@ -302,6 +302,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removing an asset's provider (No Provider) no longer fails with a server error showing database text when a transaction is linked to an event the provider generated: the removal is refused, and the form names the event and how many transactions to unlink first.
 - FX rates and prices: deleting more than a thousand separate days (or ranges) at once no longer fails; a write of more than 10,000 items is refused with a clear error; server errors no longer show internal details. The provider-probe limit (`LIBREFOLIO_PROBE_RATE_LIMIT`) applies without a restart.
 - Broker import: a report with about 90 or more different securities no longer fails while matching its assets. Large FX rate deletions no longer hold up the server, and the live-price fallback is read safely under load.
+- Broker import: matching a large report's assets no longer holds up the server for other users.
 - Prices: deleting several date ranges of an asset now reports each row once, also when ranges overlap or the asset is named twice, and an empty delete request no longer fails; large deletions count far faster.
 - A manual price upload for several assets is refused as a whole when one of its prices is in a currency other than its asset's: before, the assets before it were already saved. The refusal (422 `price_currency_mismatch`) names every asset at fault.
 - `./dev.py user create` now refuses a username shorter than 3 or longer than 50 characters, as registration does.
