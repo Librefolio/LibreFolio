@@ -1114,6 +1114,61 @@ describe('B-30 — a check that cannot start on a full disk, or with its folders
 });
 
 // =====================================================================================================================
+// B-35 — an archive too large once unpacked; a restore limit the server cannot read (written red first)
+// =====================================================================================================================
+
+/*
+ * After B-35 the check refuses an archive whose declared total, unpacked, is above the instance's cap: it ends `failed`
+ * with `unpacked_too_large` (B-35 §2), as any check that fails. `POST /backup/restore/stage` answers 503
+ * `backup_restore_unavailable` when that cap cannot be read (§3: no check started, the upload kept on the server), as
+ * any check that cannot start. The flow is today's for each, pinned as the cases around pin it, and the sentence is the
+ * one the card shows (`restoreErrorKey`, as RestoreCard.svelte resolves it).
+ *
+ * Red today: `restoreErrorKey` knows neither code and gives `backup.restore.errors.unexpected`.
+ */
+describe('B-35 — an archive too large once unpacked; a restore limit the server cannot read', () => {
+    it('a check that fails with unpacked_too_large: failed (check) as any check that fails, forgotten, announced once, never read again, worded by backup.restore.errors.unpacked_too_large', async () => {
+        const {controller, api, storage, events} = await checking();
+        api.getCheck.mockResolvedValueOnce(failedStage('unpacked_too_large'));
+
+        await vi.advanceTimersByTimeAsync(POLL_MS);
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('unpacked_too_large');
+        expect(controller.failure).toBe('check');
+        expect(controller.busy).toBe(false);
+        expect(storage.items.has(KEY), 'an ended check is forgotten').toBe(false);
+        expect(events()).toEqual([['backup.restore.failed', {code: 'unpacked_too_large', what: 'check'}]]);
+        await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+        expect(api.getCheck, 'an ended check was read again').toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.unpacked_too_large');
+    });
+
+    it('the check refused to start — 503 backup_restore_unavailable: failed (check) as any check that cannot start, the upload announced first, worded by backup.restore.errors.backup_restore_unavailable', async () => {
+        const {controller, api, storage, events} = await idle();
+        api.upload.mockResolvedValueOnce(uploaded());
+        api.startCheck.mockRejectedValueOnce(refusal(503, 'backup_restore_unavailable'));
+
+        await controller.upload(archive());
+        await flush();
+
+        expect(api.startCheck.mock.calls).toEqual([[UPLOAD_ID]]);
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe('backup_restore_unavailable');
+        expect(controller.failure).toBe('check');
+        expect(controller.busy).toBe(false);
+        expect(controller.stage, 'no check exists').toBeNull();
+        expect(storage.setItem, 'no check exists to remember').not.toHaveBeenCalled();
+        expect(events()).toEqual([
+            ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
+            ['backup.restore.failed', {code: 'backup_restore_unavailable', what: 'check'}],
+        ]);
+        expect(restoreErrorKey(controller.errorCode), 'the sentence the card shows').toBe('backup.restore.errors.backup_restore_unavailable');
+    });
+});
+
+// =====================================================================================================================
 describe('checking: the stage read every pollMs until it ends', () => {
     it('remembered, read every pollMs and not before, through its phases and bytes; done → the report, announced once, never read again', async () => {
         const {controller, api, storage, events} = await idle();

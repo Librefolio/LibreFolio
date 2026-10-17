@@ -173,6 +173,7 @@
         "backup_too_large": "L'archivio è più grande di quanto accetta questo LibreFolio ({limit} MB).",
         "backup_no_space": "Sul server non c'è abbastanza spazio libero per questo archivio.",
         "backup_upload_unavailable": "LibreFolio ora non riesce a leggere il suo limite di caricamento: riprova più tardi.",
+        "backup_restore_unavailable": "LibreFolio ora non riesce a leggere il suo limite di ripristino: riprova più tardi.",
         "backup_upload_failed": "L'archivio non è stato salvato sul server: la causa è nel log del server.",
         "backup_upload_not_found": "L'archivio caricato non c'è più: invialo di nuovo.",
         "restore_folder_unusable": "La cartella del ripristino nella cartella dei dati non è una cartella normale: chi gestisce il server deve sistemarla.",
@@ -187,6 +188,7 @@
         "manifest_unreadable": "La descrizione dell'archivio non si può leggere.",
         "manifest_too_large": "La descrizione dell'archivio è troppo grande.",
         "too_many_entries": "L'archivio contiene troppi file.",
+        "unpacked_too_large": "Scompattato, l'archivio è più grande di quanto questo LibreFolio accetta per un ripristino.",
         "duplicate_entry": "L'archivio contiene due volte lo stesso file.",
         "unexpected_entry": "L'archivio contiene un file che la sua descrizione non elenca.",
         "not_a_file": "L'archivio contiene qualcosa che non è un file normale.",
@@ -242,6 +244,12 @@
         "unlimited": "Un ripristino accetta archivi di qualsiasi dimensione.",
         "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB non si può usare (un numero intero di megabyte, 0 per nessun limite): i caricamenti per un ripristino sono rifiutati finché non si corregge.",
         "profileTable": "Le impostazioni predefinite del profilo di LibreFolio non danno al limite di caricamento alcun valore, o gliene danno uno del tipo sbagliato, quindi i caricamenti per un ripristino sono rifiutati: imposta LIBREFOLIO_BACKUP_MAX_UPLOAD_MB a un numero intero di megabyte e segnala l'errore."
+      },
+      "restoreLimit": {
+        "limited": "Una verifica per un ripristino accetta archivi che scompattati arrivano fino a {limit_mb} MB.",
+        "unlimited": "Una verifica per un ripristino accetta archivi che scompattati hanno qualsiasi dimensione.",
+        "invalid": "{variable} non si può usare (un numero intero di megabyte, 0 per nessun limite): le verifiche per un ripristino sono rifiutate finché non si corregge.",
+        "profileTable": "Le impostazioni predefinite del profilo di LibreFolio non danno al limite di caricamento alcun valore, o gliene danno uno del tipo sbagliato, quindi le verifiche per un ripristino sono rifiutate: imposta LIBREFOLIO_BACKUP_MAX_RESTORE_MB a un numero intero di megabyte e segnala l'errore."
       }
     }
   }

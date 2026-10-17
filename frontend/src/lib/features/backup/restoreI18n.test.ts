@@ -240,6 +240,8 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'unsupported_entry',
             'checksum_mismatch',
             'missing_entry',
+            // B-35: the archive's declared total, unpacked, above the instance's cap (checked before the free space).
+            'unpacked_too_large',
             'no_space',
             'stage_failed',
             'database_damaged',
@@ -279,6 +281,8 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'restore_restart_failed',
             // B-32: a state of the restore the server cannot read.
             'restore_state_unreadable',
+            // B-35: the restore limit of the instance cannot be read, so no check starts.
+            'backup_restore_unavailable',
             'network',
             'unexpected',
         ],
@@ -412,5 +416,26 @@ describe('B-32 — a state of the restore the server cannot read', () => {
 
         expectMessage('backup.restore.errors.restore_state_unreadable');
         expect(placeholdersOf(messageOf(en, 'backup.restore.errors.restore_state_unreadable') as string)).toEqual([]);
+    });
+});
+
+// =====================================================================================================================
+// B-35 — an archive too large once unpacked; a restore limit the server cannot read (written red first)
+// =====================================================================================================================
+
+/*
+ * The check refuses an archive whose declared total, unpacked, is above the instance's cap: `unpacked_too_large`, an
+ * error of the check (B-35 §2). `POST /backup/restore/stage` answers 503 `backup_restore_unavailable` when that cap
+ * cannot be read (§3). restoreText.ts words each by `backup.restore.errors.<code>` (§4): a message of the four
+ * catalogues naming no placeholder, as the English ones of the contract name none. Both codes are also in the lists
+ * above. Red today: neither the entries of `ERROR_KEYS` nor the keys exist.
+ */
+describe('B-35 — an archive too large once unpacked; a restore limit the server cannot read', () => {
+    it.each(['unpacked_too_large', 'backup_restore_unavailable'])('ERROR_KEYS.%s is backup.restore.errors.<code>, a message of the four catalogues naming no placeholder', (code) => {
+        const key = `backup.restore.errors.${code}`;
+        expect(ERROR_KEYS[code], 'restoreText.ts words the code').toBe(key);
+
+        expectMessage(key);
+        expect(placeholdersOf(messageOf(en, key) as string)).toEqual([]);
     });
 });

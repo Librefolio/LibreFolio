@@ -230,13 +230,14 @@ def _remove_replaced_uploads(data_dir: Path, *, keep: str) -> None:
 # =============================================================================
 
 
-def start_check(upload_id: str, *, data_dir: Path | None = None, password: str | None = None) -> RestoreCheck:
+def start_check(upload_id: str, *, data_dir: Path | None = None, password: str | None = None, max_unpacked: int | None = None) -> RestoreCheck:
     """Check the upload ``upload_id`` in the background, on a copy; its first state.
 
     ``UploadNotFoundError`` when there is no such upload, ``StagingBusyError`` while another check runs,
     ``BackupPathError`` when ``.restore`` is not a plain folder. A secure backup needs its ``password``, checked here:
     ``PasswordRequiredError`` without one, ``EnvelopeError`` (``wrong_password``, ``envelope_damaged``,
     ``envelope_unsupported``) when it does not open it; the upload then stays, and no check starts. A zip ignores it.
+    ``max_unpacked``: the most bytes the archive may unpack to (B-35, ``staging.stage_archive``); ``None``: no limit.
     """
     data_dir = data_dir or get_data_dir()
     if not is_job_id(upload_id):
@@ -254,7 +255,7 @@ def start_check(upload_id: str, *, data_dir: Path | None = None, password: str |
         phase: StagePhase = "decrypting" if key is not None else "checking"
         check = RestoreCheck(stage_id=new_stage_id(), upload_id=upload_id, status="running", phase=phase, done_bytes=0, total_bytes=0, created_at=_now())
         _write_state(data_dir, check)
-        threading.Thread(target=_run_check, args=(data_dir, check, lock, key), name=f"restore-check-{check.stage_id[:8]}", daemon=True).start()
+        threading.Thread(target=_run_check, args=(data_dir, check, lock, key, max_unpacked), name=f"restore-check-{check.stage_id[:8]}", daemon=True).start()
     except BaseException:
         lock.release()
         raise
@@ -272,7 +273,7 @@ def _envelope_key(upload: Path, password: str | None) -> EnvelopeKey | None:
     return unlock(upload, password)
 
 
-def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock, key: EnvelopeKey | None = None) -> None:
+def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock, key: EnvelopeKey | None = None, max_unpacked: int | None = None) -> None:
     """The thread of one check: the copy, its state along the way, its end; the upload removed in any case."""
     upload = upload_path(data_dir, check.upload_id)
     current = check
@@ -290,7 +291,7 @@ def _run_check(data_dir: Path, check: RestoreCheck, lock: _RunLock, key: Envelop
 
     error_code: str | None = None
     try:
-        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key)
+        stage_archive(upload, data_dir, stage_id=check.stage_id, progress=progress, lock=lock, key=key, max_unpacked=max_unpacked)
     except StagingError as exc:
         error_code = exc.code
     except BackupPathError:

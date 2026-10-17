@@ -205,14 +205,16 @@ def new_stage_id() -> str:
     return uuid4().hex
 
 
-def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = None, progress: StageProgress | None = None, lock: _RunLock | None = None, key: EnvelopeKey | None = None, instance_key: str | None = None) -> StagingReport:
+def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = None, progress: StageProgress | None = None, lock: _RunLock | None = None, key: EnvelopeKey | None = None, instance_key: str | None = None, max_unpacked: int | None = None) -> StagingReport:
     """Check the archive at ``archive_path`` for a restore into ``data_dir``, on a copy, and return the report.
 
     ``key``: the key of a secure backup (``envelope.unlock``); without it, such an archive is refused
     (``password_required``). ``instance_key``: the instance key of the installation the archive came from, for an
     archive that does not carry its own (``dev.py backup restore --instance-key-file``, B-18): its saved plugin secrets
     are re-encrypted from it with this instance's key; the archive's own key wins. Not a key: ``StagingError``
-    ``instance_key_invalid``, before anything is created, its text in no message.
+    ``instance_key_invalid``, before anything is created, its text in no message. ``max_unpacked``: the most bytes the
+    archive may unpack to (``LIBREFOLIO_BACKUP_MAX_RESTORE_MB``, B-35; ``None``: no limit); above it, ``StagingError``
+    ``unpacked_too_large`` before anything is unpacked.
 
     The copy and its report stay in ``.restore/stage/<stage id>/``; on any refusal nothing of them is left. One archive
     is checked at a time: ``StagingBusyError`` while another is. ``StagingError`` says why an archive is refused.
@@ -232,7 +234,7 @@ def stage_archive(archive_path: Path, data_dir: Path, *, stage_id: str | None = 
         root = stage_dir(data_dir, stage_id)
         root.mkdir(mode=0o700)
         try:
-            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress, key, instance_key)
+            report = _stage(archive_path, root, stage_id, progress if progress is not None else _no_progress, key, instance_key, max_unpacked)
         except BaseException:
             shutil.rmtree(root, ignore_errors=True)
             raise
@@ -291,7 +293,7 @@ def _refuse_unusable_instance_key(instance_key: str | None) -> None:
         raise StagingError("instance_key_invalid", f"The instance key given is too short: an instance key has at least {INSTANCE_KEY_MIN_LENGTH} characters") from None
 
 
-def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress, key: EnvelopeKey | None = None, instance_key: str | None = None) -> StagingReport:
+def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgress, key: EnvelopeKey | None = None, instance_key: str | None = None, max_unpacked: int | None = None) -> StagingReport:
     data_root = root / STAGE_DATA_FOLDER
     encrypted = is_envelope(archive_path)
     if encrypted:
@@ -300,6 +302,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
     with _open_archive(archive_path) as archive:
         manifest = _read_manifest(archive)
         entries = _checked_entries(archive, manifest)
+        _check_unpacked_limit(manifest, max_unpacked)
         _check_space(root, manifest)
         # The archive's own key wins over one given for the restore (B-18, decision D1).
         archive_key = _archive_instance_key(archive, manifest) if INSTANCE_KEY_ENTRY in entries else instance_key
@@ -462,6 +465,13 @@ def _archive_instance_key(archive: zipfile.ZipFile, manifest: BackupManifest) ->
 def space_needed(manifest: BackupManifest) -> int:
     """What a check needs free: every entry unpacked, room for the upgrade to rewrite the database, a margin."""
     return sum(entry.size for entry in manifest.files) + 2 * manifest.files[0].size + _SPACE_MARGIN
+
+
+def _check_unpacked_limit(manifest: BackupManifest, max_unpacked: int | None) -> None:
+    """Refuse an archive that unpacks to more than a restore accepts (B-35): the total its manifest declares, which
+    ``_checked_entries`` matched entry by entry with the zip's own sizes, and past which the unpacking never reads."""
+    if max_unpacked is not None and sum(entry.size for entry in manifest.files) > max_unpacked:
+        raise StagingError("unpacked_too_large", "Unpacked, the archive is larger than this LibreFolio accepts for a restore")
 
 
 def _check_space(root: Path, manifest: BackupManifest) -> None:
