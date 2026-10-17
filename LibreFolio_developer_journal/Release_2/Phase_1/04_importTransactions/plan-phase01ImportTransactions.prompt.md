@@ -5312,9 +5312,46 @@ le paga più (passo 3 del disegno); altri giri per giorno su tutta la storia, se
    > è parcheggiata in `files/wb69_mine/` (copia e diff, sha256 `3f48c081db18…`) e il file riportato al contenuto di HEAD con
    > `git show HEAD:… >` (nessun comando git che scrive): fuori dal checkpoint e dal giro completo sulla revisione combinata. La metà di
    > MF (17 test, file a sé) gli è stata mandata direttamente (`files/wb69_for_mf/`), con la bozza di `auto_cost.py` e il cucito.
-6. ⏳ **Handoff** (CHECKPOINT READY), poi il giro completo (`all-backend --workers 2`) sulla revisione combinata, in uno slot: copre
-   anche i file `api` (transfer-promotion, brokers, batch-split-promote, tx-balance-walk, transactions-validate) che chiedono la
-   ricostruzione del frontend.
+6. ✅ **Handoff** (2026-10-17 08:3x): CHECKPOINT READY, FROZEN. Committati dal coordinatore: `c0b67f4c8` (cura), `61acbc16b` (test),
+   `4bd1d28f6` (doc), `6da4ae0ae` (giornale); base `eced298f8` (+ dev `eed325d99`), poi **`5ece98c29`** (+ dev `73443c6db`: W-B69 di MF,
+   X-R53, B-31, Y-25; `wac.md`, `service.md`, `database/index.md` fusi da soli).
+7. ⏳ **Giro completo** (`files/scripts/allb_sec73.sh`, slot 2, `5ece98c29`, 08:55–09:48, carico a 5 minuti 48,8 alla partenza):
+   **rosso**. 5 categorie su 7 verdi (External, DB, Utils, Schema, E2E); Services: worker 0 21 falliti / 8239 passati, worker 1 2 / 7444
+   (5 saltati); API: worker 1 7 / 1072 (2 saltati). Porta libera dopo.
+   - **`services asset-digit-limits`, due casi `1E+400` (miei)**. (a) **Regressione vera**: `event_store._storable_events` analizzava
+     l'evento del provider con `FAAssetEventPoint(**raw)` *prima* del controllo delle cifre intere di W-B58, e il limite d'esponente di
+     SEC7-3 (in `Currency`) faceva alzare quell'analisi: un refresh perdeva **tutti** i suoi eventi invece di scartare quello. (b) Il
+     caso dell'evento manuale: `FAEventUpsert` ora rifiuta `1E+400` al confine (il contratto di SEC7-3: un 422, niente scritto), e il
+     test di W-B58 costruiva la richiesta aspettando l'`EVENT_TOO_MANY_DIGITS` del magazzino → da ri-fissare.
+   - **`email-verification`** (21 services + 7 API, non miei): tutti `EmailRateLimitedError` con `retry_after` ≈ 899 s, il
+     `SlidingWindowLimiter` in memoria di 15 minuti (`RESEND_BY_ADDRESS`/`FORGOT_BY_ADDRESS`) speso da test che dividono un processo
+     sotto 2 worker. Da soli verdi (09:51–09:52, carico 27–30: services 127, API 60), e così nei cancelli F (`f4dab3db7`) e D del
+     coordinatore: isolamento fra test, non SEC7-3; passato a E dal coordinatore.
+   > **⚠️ Fuori pista**: la base è cambiata (`eced298f8` → `5ece98c29`) mentre il primo lancio aspettava ancora nel cancello del carico:
+   > fermato senza che il giro fosse partito (nessuna riga «start», porta libera, nessun processo) e rilanciato sulla base nuova.
+8. ✅ **Cura in avanti** (`files/scripts/sec73_fix_events.py --apply`, 2026-10-17 09:5x): in `_storable_events` l'analisi di ogni
+   evento grezzo dentro un `try`; un `ValidationError` lo scarta con lo stesso avviso, col giorno e il tipo, **mai il valore** (può essere
+   lungo a piacere). Ruff e black puliti. Il caso manuale lo ri-fissa il test-author `3f86d648` (un test proprio per `1E+400`: il rifiuto
+   dello schema al confine, niente scritto; `1E+13` e `1E+60` restano al rifiuto del magazzino), più un evento del provider di 5 000
+   cifre scartato. Poi `services asset-digit-limits` e le unità vicine.
+   > **Note implementazione**: `services asset-digit-limits` **79 passati, 0 falliti** (test-author, carico 29,6: il rosso della
+   > regressione verde, il nuovo test del rifiuto dello schema per l'evento manuale, il nuovo evento del provider di 5 000 cifre); le
+   > vicine (09:56–09:58, carico 26): `services asset-event-store` 71, `services event-split-ratio` 78, `services asset-source-guards`
+   > 29, `api assets-events` 45. Doc: `developer/backend/assets/events.md`, il paragrafo dello scarto dei provider (l'evento rifiutato
+   > dallo schema, scartato uno alla volta, nel log solo data e tipo). Il controllo che l'avviso non porti il valore lungo non è nel
+   > test (il file non cattura i log): lo garantisce il codice (`(refused by the schema)`).
+
+#### Revisione del lotto di MF (W-B69, la sua metà) — ✅ (2026-10-17)
+
+`1b4e4a27d` (in dev `c61a2db4d`), dopo il fatto, in sola lettura via git: `auto_cost.py` uguale alla mia bozza e al contratto
+(`UnreadablePoolError(count)` senza id; `_unreadable_pool_rows` coi filtri della facciata, il costo salvato ma letto `None`; il cucito per
+riga col rilancio senza lista); `lone_transfer_legs.py` solo commenti; i 17 test identici byte per byte a quelli consegnati (sha256
+`1272a3d3c0b6…`), registrati come `services auto-cost-unreadable-pool` (classe `write-scoped` della categoria); doc accurata (il
+paragrafo finale di `wac.md#unreadable-pool` lo riscrivo con la mia metà). Nota senza azione: in `delete_by_broker` un sopravvissuto
+con la quantità illeggibile fallisce su `survivor.quantity < 0` (TypeError): la cancellazione fallisce intera, con un messaggio tecnico
+(classe W-B74/W-B63). **Pavimento condiviso di N74**: MF definisce `EARLIEST_RANGE_START = date(1900, 1, 1)` in
+`utils/datetime_utils.py` (MF-SEC8-2); io tolgo `TRANSACTION_DATE_MIN` e lo importo nel primo lotto dopo la sua entrata (più
+`service.md:207`), così nessuno importa da un modulo di servizio (accordo con MF e coordinatore, 17/10 08:5x).
 
 #### H-41 dentro SEC7-3 — i campi uniti di una promozione, tipati (2026-10-17)
 
@@ -5357,3 +5394,77 @@ salva più. Residuo di chiarezza (W-B70, sotto): l'unione non avvisa, e `string_
    > `delete_by_broker`, le gambe sole) va a **MF**; a me resta la parte del batch (`autoCostUnreadable` negli stadi), dopo SEC7-3, e la
    > revisione del lotto di MF. Il cucito che ho chiesto: `_compute_wac_for_auto_items(..., unreadable=lista)` raccoglie per riga in
    > `auto_cost.py` (file di MF). Materiale a MF: `files/wb69_for_mf/` (la mia bozza, la metà dei rossi).
+
+### W-B71, W-B72, W-B74 — analisi (2026-10-17, sola lettura, HEAD `eced298f8`)
+
+Richiesta del coordinatore (17/10 08:36): analisi in sola lettura durante l'attesa dello slot; li faccio dopo il giro completo e
+l'entrata, nell'ordine che scelgo.
+
+#### W-B71 — 500 ai bordi del calendario (suggerimenti, gap-fix)
+
+**Stato reale**: tre punti fanno `data ± timedelta` su una data della richiesta, senza limiti:
+- `services/transactions/promotion.py:315-316`, `promote_suggest_bulk`: `inp.date ∓ timedelta(days=tolerance_days)` (0–30, 7 di
+  default; `TXPromoteSuggestInput.date` qualsiasi);
+- `services/transactions/event_suggestions.py:63-64`: `req.date ∓ timedelta(days=req.tolerance_days)` (0–7, 0 di default:
+  con 0 nessun overflow);
+- `services/transactions/balances.py:151`, `get_balances_at_end_of`: `as_of + timedelta(days=1)`, chiamato dal gap-fix BRIM
+  (`services/brim/brim_gap_fix.py:74`, `as_of` dei punti di controllo della richiesta, `schemas/brim.py:794/806`).
+Con `0001-01-01` o `9999-12-31` un `OverflowError`: un 500 per quella richiesta (niente memoria né CPU).
+
+**Disegno**: un aiuto `shift_date(d, days)` in `utils/datetime_utils.py` che satura a `date.min`/`date.max` invece di alzare, nei
+tre punti. Non un 422 sugli input: le due richieste di suggerimento sono a lotti (le bozze del Bulk), e una sola riga col giorno
+sbagliato toglierebbe i suggerimenti a tutte; il salvataggio la rifiuta comunque (N74). Per il gap-fix, `date.max` come «fine del
+giorno» prende tutte le righe: lo stesso significato. Rossi: le tre richieste ai due bordi (oggi 500), guardie dentro i bordi.
+**Peso**: piccolo (~1 ora con i test).
+
+#### W-B72 — il costo unito su entrambe le righe di una coppia di cassa
+
+**Stato reale**: `_apply_promote_cost_basis` (`batch_creates.py`) mette il costo sulla gamba di quantità positiva, o su
+**entrambe** quando nessuna l'ha (coppia di cassa: FX_CONVERSION, CASH_TRANSFER), dopo la pulizia di `cost_basis_allowed` e dopo
+`_promoted_state_issues` (che controlla le regole senza i campi uniti): nessun controllo lo vede. Non sbaglia i numeri:
+`cost_movement_from_transaction` (`financial_math/average_cost.py`) esce prima su una quantità 0, quindi il costo resta rumore
+salvato (lista, export, backup). Solo da un client dell'API: l'interfaccia manda solo descrizione e tag. **Più largo del
+reperto**: create e update non rifiutano un `cost_basis_override` su un tipo che non ne prende (la regola 12 guarda solo
+`cost_basis_mode`); l'update lo scrive sempre (`batch_edits.py:270`), la create anche (`batch_creates.py:51`). I plugin BRIM lo
+mettono solo su un ADJUSTMENT in entrata (Crédit Agricole `:1079`, Intesa `:389`), il frontend solo dove `cbAllowed`.
+
+**Disegno** (decisione da prendere, D-W72-1): (a) solo la promozione: un costo unito non nullo quando nessuna gamba ne prende
+(`cost_basis_allowed(target_type, quantity)`) → issue della promozione; oppure (b) **ogni scrittura** (consigliata): la regola 12
+estesa a `cost_basis_override` (create, update che lo imposta, promozione), codice nuovo `costBasisNotAllowed` `{type, qty}` (4
+lingue), nessun plugin né l'interfaccia toccati; le righe già salvate restano (un update che non tocca il costo passa). Rossi per
+ciascuna via, guardie sui tipi che lo prendono. **Peso**: piccolo-medio (~1,5 ore con (b)).
+
+#### W-B74 — una riga illeggibile e il giro dei saldi
+
+**Stato reale**: due facce. (1) **Nella finestra del giro** (`_validate_broker_balances`, `balances.py`): una quantità o un importo
+letto `None` (W-B58) entra in `tx.amount != 0` (vero) e poi in una somma: `TypeError`, che `validate_balances`
+(`transaction_batch_stages.py`) rende «Balance validation error: …» senza codice, indice -1. (2) **Prima della finestra**, peggio:
+`_get_balances_before_date` passa da `cash_movement_from_transaction` (`financial_math/native_cash.py:95`: un importo `None` →
+nessun movimento) e `position_quantities` (`ledger_totals.py:100`: `not quantity` → saltata): la riga **sparisce in silenzio**, e il
+saldo d'inizio è sbagliato (un prelievo illeggibile prima di `from_date` fa sembrare la cassa più alta: un batch che andava
+rifiutato passa, o il contrario). Nemmeno la lista le mostra: `TXReadItem.quantity` è obbligatorio e `Currency(amount=None)` è
+rifiutato (W-B63).
+
+**Disegno**: all'inizio di `_validate_broker_balances`, il conteggio delle righe del broker (fino all'ultima data del giro) con un
+importo (con valuta) o una quantità (con asset) letti `None` → `BalanceValidationError` con un codice nuovo `ledgerUnreadable`
+`{brokerId, count}`, sulla riga del batch che ha portato al giro; messaggio in 4 lingue che non manda alla lista (che non le mostra)
+ma all'amministratore. Lo stesso conteggio in `get_balances_at_end_of` (gap-fix: oggi le salta). Un solo aiuto di query, vicino a
+quello di MF per W-B69 (`_unreadable_pool_rows`) se il suo lotto è entrato: da condividere, non da copiare. La via d'uscita per
+l'utente resta W-B63 (D-W63-1, col developer). Rossi: una riga illeggibile prima e dentro la finestra (oggi: saldo sbagliato
+accettato, e il codice mancante), guardie su un registro leggibile. **Peso**: medio (~2 ore con i18n e doc).
+
+#### Ordine proposto
+
+**W-B74** (dati: un saldo sbagliato in silenzio), poi **W-B71** (meccanico), poi **W-B72** dopo D-W72-1. W-B74 dopo l'entrata
+del lotto di MF, per condividere l'aiuto di query.
+
+**Decisione** (coordinatore, 17/10 08:39): **D-W72-1 → (b)**, la regola 12 estesa a `cost_basis_override` su ogni scrittura,
+`costBasisNotAllowed {type, qty}`, le righe già salvate restano: **decisione notturna N78**, da rivedere col developer. Ordine
+approvato: W-B74 (dopo l'entrata di W-B69 di MF, aiuto condiviso) → W-B71 → W-B72.
+
+**Aggiunta a W-B72** (17/10 08:4x, sola lettura): dei 22 codici delle regole di business (`PydanticCustomError` in
+`schemas/transactions/transactions.py`) uno solo non ha la chiave `transactions.errors.*` in nessuna lingua:
+`costBasisModeIncompatible`, il codice della regola 12 che N78 estende (l'altro, `multipleBusinessRuleErrors`, è l'involucro che il
+parse del batch apre, mai mostrato). Oggi l'utente lo legge in inglese grezzo. Nel lotto di W-B72: la sua chiave (4 lingue) accanto
+a `costBasisNotAllowed`, e un cancello che dia a ogni codice delle regole una chiave, come quello di W-B69 per `TXValidationCode`.
+Script di W-B71 pronto (`files/scripts/wb71_cure.py`, dry run pulito su 4 file).
