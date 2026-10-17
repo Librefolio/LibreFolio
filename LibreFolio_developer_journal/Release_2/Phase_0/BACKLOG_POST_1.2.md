@@ -6343,16 +6343,21 @@ da Y il 15/10.
   - È un'inversione di livello: la UI generica dipende da una feature.
   - Da chiudere in FE9, spostando il contratto fra grafico e segnale in `components/charts` o in un modulo neutro.
   - Dettagli: piano di Y, §0.3 e §7 «Y3 e Y4 — analisi».
-- **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
-  Y, 15/10 (Y8). `charts/lineChartHelpers.ts:594` chiama `chart.getOption()`, che clona tutta l'opzione, e i tre
-  gestori di `dataZoom` la chiamano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
-  `PriceChartFull.svelte:612`.
-  - Contraddice la nota di `PriceChartFull.svelte:604-609` («do NOT read chartInstance.getOption() here»), scritta
-    proprio contro gli scatti sui grafici con anni di dati giornalieri.
-  - È preesistente, e 47-1 non la peggiora: le sue letture aspettano che il gesto si fermi.
-  - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
-    o rinviata come le etichette.
-  - Dettagli: piano di Y, §7 «Y8 — passo 3».
+- ✅ **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
+  Y, 15/10 (Y8). ✅ 17/10: le frecce si riallineano una volta, a gesto fermo, nel rinvio che già ridistanzia le etichette
+  (`LineChart` e `CandlestickChart` nel timer da 120 ms, `PriceChartFull` nel ramo «risoluzione tenuta» del rinvio da
+  200 ms); i gestori di `dataZoom` non leggono più `getOption()` e non riscrivono le serie. Nessuna cache: l'opzione si
+  legge al momento, quindi la riscrittura porta i colori correnti (condizione del programma colori). Fissato da 3 rossi
+  per passo e assestamento e da 4 guardie del colore chiaro → scuro → zoom (`LineChart.test.ts`,
+  `PriceChartFull.test.ts`), con la prova del morso: una cache del primo `getOption()` porta le 4 guardie al rosso.
+  Nello stesso lotto, Y-8b: `LineChart.renderChart()` ora ripristina lo zoom salvato prima di riallineare, come
+  `CandlestickChart` (prima, dopo un ridisegno di un grafico zoomato, le frecce restavano orientate sull'asse intero fino
+  all'assestamento); un rosso in `LineChart.test.ts`. Commit al checkpoint.
+  - Prima: `charts/lineChartHelpers.ts:594` chiamava `chart.getOption()`, che clona tutta l'opzione, e i tre gestori di
+    `dataZoom` la chiamavano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
+    `PriceChartFull.svelte:612`, contro la nota di `PriceChartFull.svelte:604-609` («do NOT read
+    chartInstance.getOption() here»).
+  - Dettagli: piano di Y, «Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom».
 - **Y-9 · Il layout del PAC da telefono, da rivedere sugli scatti mobile dopo Y7** — basso; Y, 15/10 (Y7), per la
   decisione 50 del developer. Y7 fa scorrere con la tabella le colonne di selezione e azioni sotto i 768 px (D-Y17).
   Restano le larghezze dichiarate di `TargetsStep` (`features/tools/pac-allocator/planner/steps/TargetsStep.svelte`:
@@ -6504,6 +6509,19 @@ da Y il 15/10.
     `canRequestPnlCandles` più `untrack`) toglie il ciclo, ma serve una «chiave di scope» perché un cambio di periodo
     o un Refresh dopo un errore chiedano di nuovo.
   - Dettagli: piano di Y, «Y-16».
+- **Y-25 · Il ridimensionamento riallinea le frecce a ogni callback, e la riscrittura parte anche senza angoli cambiati**
+  — minimo, prestazioni; `test-author` di Y, 17/10 (analisi di Y-8). Comportamento preesistente, della stessa natura di
+  Y-8 ma su un gesto raro.
+  - Il `ResizeObserver` di `LineChart`, `CandlestickChart` e `PriceChartFull` chiama `updateArrowRotations` a ogni
+    callback, cioè a ogni frame mentre si trascina il bordo della finestra: una copia di `getOption()` e una riscrittura
+    di tutte le serie ciascuna, oltre al `resize()`.
+  - `updateArrowRotations` riscrive le serie appena trova una freccia, anche se nessun angolo è cambiato; il primo
+    disegno fa tre copie e tre riscritture in circa 50 ms (il disegno e i due passi della stabilità); ogni ridisegno di
+    un grafico zoomato ne fa una in più, 120 ms dopo, perché il ripristino dello zoom non è `silent`.
+  - Possibili rimedi: rinviare il riallineamento del ridimensionamento come quello dello zoom; non riscrivere quando
+    nessun angolo cambia (il test di Y-8 sull'assestamento va allora rifatto con lo zoom vero del registratore di
+    Y-8b, che cambia gli angoli).
+  - Dettagli: piano di Y, «Y-8 · `updateArrowRotations()` e `getOption()` a ogni passo dello zoom».
 
 ## MF · Matematica finanziaria (fase 01)
 
