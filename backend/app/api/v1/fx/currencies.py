@@ -38,7 +38,7 @@ from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.signals.service import SignalService
-from backend.app.utils.date_range_limits import range_span_floor
+from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, MAX_BULK_ITEMS, bulk_too_many_days_detail, bulk_too_many_items_detail, range_span_floor
 from backend.app.utils.datetime_utils import latest_range_end
 
 router_currencies = APIRouter(prefix="/currencies", tags=["FX Currencies"])
@@ -411,6 +411,10 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
     Uses unlimited backward-fill logic: if rate for exact date is not available,
     uses the most recent rate before the requested date.
 
+    Limits: each range ends at ``latest_range_end()`` and spans 100 years at most (X-R55); at most ``MAX_BULK_ITEMS``
+    conversions (422 ``bulk_too_many_items``) and at most ``MAX_BULK_ITEM_DAYS`` daily and signal items over the whole
+    request (422 ``bulk_too_many_days``), both refused before any item is built (Z-25).
+
     Args:
         request: List of conversions to perform
         session: Database session
@@ -419,6 +423,9 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
         Conversion results with rate information for each conversion (one result per day)
     """
 
+    if len(request) > MAX_BULK_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(request), MAX_BULK_ITEMS))
+
     signal_service = SignalService()
     signal_plans: dict[int, SignalExecutionPlan] = {}
     bulk_conversions = []
@@ -426,8 +433,11 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
 
     latest_end = latest_range_end()
     served_ranges: dict[int, DateRangeModel] = {}
+    # Z-25: every block of days is planned and counted first, and built only once the whole request is within the
+    # budget, so a request over it is refused before a single item is built.
+    day_blocks: list[tuple[str, int, FXConversionRequest, Currency, date, date]] = []
+    item_days = 0
     for conv_idx, conversion in enumerate(request):
-        to_cur = conversion.to_currency
         # X-R55: the range ends at latest_range_end() and spans RANGE_SPAN_LIMIT_DAYS at most; a conversion entirely
         # after that end asks nothing, and its signals run on an empty series.
         requested_end = min(conversion.date_range.end or conversion.date_range.start, latest_end)
@@ -436,25 +446,9 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
         if in_range and (visible_start, requested_end) != (conversion.date_range.start, conversion.date_range.end or conversion.date_range.start):
             conversion = conversion.model_copy(update={"date_range": DateRangeModel(start=visible_start, end=requested_end)})
         served_ranges[conv_idx] = conversion.date_range
-
-        current_date = visible_start
-        while current_date <= requested_end:
-            bulk_conversions.append(
-                (
-                    conversion.from_amount,
-                    to_cur,
-                    current_date,
-                )
-            )
-            conversion_metadata.append(
-                {
-                    "kind": "daily",
-                    "original_idx": conv_idx,
-                    "conversion": conversion,
-                    "date": current_date,
-                }
-            )
-            current_date += timedelta(days=1)
+        if in_range:
+            day_blocks.append(("daily", conv_idx, conversion, conversion.from_amount, visible_start, requested_end))
+            item_days += (requested_end - visible_start).days + 1
 
         if conversion.signals:
             context = SignalExecutionContext(
@@ -477,28 +471,36 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
             )
             signal_start = max(conversion.date_range.start - timedelta(days=warmup_days), range_span_floor(requested_end))
             signal_plans[conv_idx] = plan
-            signal_amount = Currency(
-                code=conversion.from_amount.code,
-                amount=Decimal("1"),
+            if in_range:
+                signal_amount = Currency(
+                    code=conversion.from_amount.code,
+                    amount=Decimal("1"),
+                )
+                day_blocks.append(("signal", conv_idx, conversion, signal_amount, signal_start, requested_end))
+                item_days += (requested_end - signal_start).days + 1
+
+        if item_days > MAX_BULK_ITEM_DAYS:
+            raise HTTPException(status_code=422, detail=bulk_too_many_days_detail(item_days, MAX_BULK_ITEM_DAYS))
+
+    for kind, original_idx, block_conversion, amount, first_day, last_day in day_blocks:
+        current_date = first_day
+        while current_date <= last_day:
+            bulk_conversions.append(
+                (
+                    amount,
+                    block_conversion.to_currency,
+                    current_date,
+                )
             )
-            current_date = signal_start
-            while in_range and current_date <= requested_end:
-                bulk_conversions.append(
-                    (
-                        signal_amount,
-                        to_cur,
-                        current_date,
-                    )
-                )
-                conversion_metadata.append(
-                    {
-                        "kind": "signal",
-                        "original_idx": conv_idx,
-                        "conversion": conversion,
-                        "date": current_date,
-                    }
-                )
-                current_date += timedelta(days=1)
+            conversion_metadata.append(
+                {
+                    "kind": kind,
+                    "original_idx": original_idx,
+                    "conversion": block_conversion,
+                    "date": current_date,
+                }
+            )
+            current_date += timedelta(days=1)
 
     bulk_results, bulk_errors = await convert_bulk(
         session,

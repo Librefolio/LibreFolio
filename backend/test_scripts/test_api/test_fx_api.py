@@ -20,6 +20,7 @@ from decimal import Decimal
 import httpx
 import pytest
 
+from backend.app.api.v1.fx import currencies as convert_route
 from backend.app.config import get_settings
 from backend.app.schemas import FXBulkDeleteResponse, FXBulkUpsertResponse, FXConvertResponse
 from backend.app.schemas.common import Currency, DateRangeModel
@@ -1121,3 +1122,82 @@ async def test_convert_extreme_end_is_bounded(test_server):
         assert not late, f"{len(late)} conversions after the ceiling {ceiling}: {late[0]} … {late[-1]}"
         assert (body.results, body.errors) == ([], [])
         print_success(f"✓ no conversion, no error, in {elapsed:.2f} s")
+
+
+# ============================================================================
+# Z-25 (N77): a bulk conversion has two caps, its items and its item-days
+# ============================================================================
+#
+# POST /fx/currencies/convert refuses more than MAX_BULK_ITEMS (1 000) conversions before any work, and stops counting
+# the daily and signal items it is about to build as soon as they pass MAX_BULK_ITEM_DAYS (5 million): both are a 422
+# with a coded detail, and nothing is converted. Identity conversions (CHF → CHF) need no rate and write nothing. The
+# lowered budgets, the warm-up and the conversions past the ceiling are pinned at service level (services
+# range-ceiling, BL-I and BL-F).
+
+BULK_REJECT_SECONDS = 30.0  # a refusal is answered once the count passes the budget; 7.3 million conversions, minutes
+BULK_MAX_ITEMS = 1_000  # the contract's numbers (N77), written here and not read from the code under test
+BULK_MAX_ITEM_DAYS = 5_000_000
+CONVERSION_SPAN_DAYS = 36_526  # X-R55: a conversion runs from range_span_floor(end), 36 525 days back, to its end
+
+
+def _identity_conversions(count: int, start: str, end: str) -> list[dict]:
+    return [{"from_amount": {"code": "CHF", "amount": str(100 + n)}, "to": "CHF", "date_range": {"start": start, "end": end}} for n in range(count)]
+
+
+def _coded_refusal(response: httpx.Response, code: str) -> dict:
+    """The 422's detail, its code checked and a non-empty message; returned for the numbers."""
+    assert response.status_code == 422, f"{response.status_code}: {response.text[:300]}"
+    detail = response.json()["detail"]
+    assert isinstance(detail, dict) and detail.get("code") == code, detail
+    assert isinstance(detail.get("message"), str) and detail["message"].strip(), detail
+    return detail
+
+
+@pytest.mark.asyncio
+async def test_convert_more_than_1000_items_is_refused(test_server):
+    """BL-API-02 (Z-25, N77): 1 001 one-day conversions answer 422 ``{"code": "bulk_too_many_items", "message",
+    "max_items": 1000, "items": 1001}``.
+
+    Red before Z-25: 200, the 1 001 conversions made.
+    """
+    print_section("BL-API-02: conversion of 1 001 items refused")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=_identity_conversions(BULK_MAX_ITEMS + 1, "2025-06-18", "2025-06-18"), timeout=TIMEOUT)
+        detail = _coded_refusal(response, "bulk_too_many_items")
+        assert {key: value for key, value in detail.items() if key not in ("code", "message")} == {"max_items": BULK_MAX_ITEMS, "items": BULK_MAX_ITEMS + 1}
+        print_success(f"✓ 422 {detail['code']}: {detail['items']} items, at most {detail['max_items']}")
+
+
+@pytest.mark.asyncio
+async def test_convert_over_the_item_day_budget_is_refused_fast(test_server):
+    """BL-API-03 (Z-25, N77, guard): 200 conversions of 100 years — 36 526 daily items each, 7 305 200 in all —
+    answer 422 ``{"code": "bulk_too_many_days", "message", "max_item_days": 5000000, "item_days": n}`` within
+    ``BULK_REJECT_SECONDS``, ``n`` the count when it passed the budget: more than 5 000 000, at most the 5 004 062 of the
+    first 137 conversions.
+
+    Not sent to code whose route reads no ``MAX_BULK_ITEM_DAYS``: there the lane's shared backend would build and
+    convert the 7.3 million items, its event loop blocked for minutes and every neighbour test with it (the size X-R55
+    kept out of the API cases). The test fails at once instead.
+    Red before Z-25: the route read no budget — the request not sent.
+    """
+    print_section("BL-API-03: conversion over the item-day budget refused")
+
+    if not hasattr(convert_route, "MAX_BULK_ITEM_DAYS"):
+        pytest.fail("the conversion route reads no MAX_BULK_ITEM_DAYS: 7.3 million item-days not sent to the lane's shared backend")
+    crossing = -(-(BULK_MAX_ITEM_DAYS + 1) // CONVERSION_SPAN_DAYS)  # the conversion whose items pass the budget: 137th
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        started = time.monotonic()
+        try:
+            response = await client.post(f"{API_BASE}/fx/currencies/convert", json=_identity_conversions(200, "1800-01-01", "2025-06-18"), timeout=BULK_REJECT_SECONDS)
+        except httpx.TimeoutException:
+            pytest.fail(f"no answer within {BULK_REJECT_SECONDS:.0f} s for 7.3 million item-days")
+        elapsed = time.monotonic() - started
+        detail = _coded_refusal(response, "bulk_too_many_days")
+        assert set(detail) == {"code", "message", "max_item_days", "item_days"}, detail
+        assert detail["max_item_days"] == BULK_MAX_ITEM_DAYS
+        assert BULK_MAX_ITEM_DAYS < detail["item_days"] <= crossing * CONVERSION_SPAN_DAYS, detail
+        assert elapsed < BULK_REJECT_SECONDS, f"{elapsed:.1f} s"
+        print_success(f"✓ 422 {detail['code']} at {detail['item_days']:,} item-days, in {elapsed:.2f} s")
