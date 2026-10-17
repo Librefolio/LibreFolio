@@ -4372,11 +4372,13 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
   refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
   estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
-- **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; dal `docs-writer` di A-21a
-  (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
+- ✅ **A-46 · `./dev.py user create` non controlla la lunghezza del nome (3–50)** — minimo; chiusa il 17/10 (commit del
+  coordinatore): `user_service._new_username_refusal()` (la `@`, poi 3–50) in `create_user` e `update_profile`
+  (UNAME-020…023); dal `docs-writer` di A-21a (17/10). La riga di comando rifiuta la `@` (A-21a) ma non un nome di 2 caratteri o di 60, che la registrazione e il
   profilo rifiutano. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-21a.5».
-- **A-47 · `USERNAME_INVALID` riconosciuto dal testo del messaggio** — minimo; dalla revisione di E di A-21a (17/10,
-  LOW). `auth.py` (registrazione via `registration_service`, profilo) sceglie il codice confrontando
+- ✅ **A-47 · `USERNAME_INVALID` riconosciuto dal testo del messaggio** — minimo; chiusa il 17/10 (commit del
+  coordinatore): `AccountError` (un `str` con `.code`), i chiamanti guardano il codice (UNAME-030/031, UNAME-API-12);
+  dalla revisione di E di A-21a (17/10, LOW). `auth.py` (registrazione via `registration_service`, profilo) sceglie il codice confrontando
   `error == USERNAME_RESERVED_MESSAGE`: un cambio di parole lo romperebbe in silenzio. Meglio un codice restituito da
   `user_service.create_user`/`update_profile`. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
   «A-21a — Revisione di E».
