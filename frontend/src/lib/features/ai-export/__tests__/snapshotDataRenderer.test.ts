@@ -1253,8 +1253,10 @@ describe('AI Export compact Snapshot Data renderer', () => {
         });
 
         it.each([
-            ['asset.lot_detail v4', 'asset.lot_detail', 4, 1],
-            ['portfolio.fifo_lots v3', 'portfolio.fifo_lots', 3, 1],
+            // J-12 (N81): asset.lot_detail v4 and the FIFO lots v3 render compactly (snapshotDataRendererFailedLots.test.ts).
+            // Before J-12: v4 and v3 here, the first versions the renderer did not know.
+            ['asset.lot_detail v5', 'asset.lot_detail', 5, 1],
+            ['portfolio.fifo_lots v4', 'portfolio.fifo_lots', 4, 1],
             // Before MF-E1 this was v3, the first version the renderer did not know.
             ['broker.fifo_summary v4', 'broker.fifo_summary', 4, 1],
             ['asset.lot_detail v3 with schema 2', 'asset.lot_detail', 3, 2],

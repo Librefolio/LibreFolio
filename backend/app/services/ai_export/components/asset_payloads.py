@@ -40,6 +40,7 @@ from typing import Literal
 from pydantic import Field
 
 from backend.app.schemas.common import Currency, CurrencyCode, DateRangeModel, SafeDecimal, StrictModel
+from backend.app.schemas.portfolio import LotAnalysisStatus
 
 
 class AssetComponentModel(StrictModel):
@@ -518,12 +519,19 @@ class AssetLotDetailPayload(AssetComponentModel):
     that cannot be valued in the target currency (a missing FX rate). It is
     always present, 0 included: a compact table drops a column that is null in
     every row, so the count is the trace that those amounts are unavailable.
+
+    `lot_reconstruction_status` is the status of the lots analysis (COMPLETE,
+    DEGRADED, FAILED) and `failure_codes` the sorted unique codes that failed
+    it. A FAILED reconstruction exports no lot: every lot figure of its replay
+    would be wrong (J-12, N81).
     """
 
     asset_id: int
     period: DateRangeModel
     target_currency: CurrencyCode
     cost_allocation_semantics: str
+    lot_reconstruction_status: LotAnalysisStatus
+    failure_codes: tuple[str, ...] = ()
     lots: tuple[AssetLotDetailRow, ...] = ()
     omitted_degraded_lot_count: int = 0
     unavailable_amount_lot_count: int = Field(..., ge=0)
