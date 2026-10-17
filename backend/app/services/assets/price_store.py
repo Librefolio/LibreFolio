@@ -26,6 +26,7 @@ from backend.app.schemas import (
 )
 from backend.app.schemas.prices import FACurrentValue
 from backend.app.utils.datetime_utils import utcnow
+from backend.app.utils.sql_chunks import chunks
 
 logger = structlog.get_logger(__name__)
 
@@ -457,12 +458,12 @@ class PriceStoreOperations:
         if not conditions:
             return FABulkDeleteResponse(deleted_count=0, results=[])
 
-        # Execute single DELETE with OR of all conditions
-        stmt = delete(PriceHistory).where(or_(*conditions))
-        result = await session.execute(stmt)
+        # One DELETE per chunk of ranges, in one transaction (MF-SEC9a): SQLite refuses an OR of a thousand terms
+        deleted_count = 0
+        for chunk in chunks(conditions):
+            result = await session.execute(delete(PriceHistory).where(or_(*chunk)))
+            deleted_count += result.rowcount
         await session.commit()
-
-        deleted_count = result.rowcount
 
         # Build results per asset with exact counts
         results = [
