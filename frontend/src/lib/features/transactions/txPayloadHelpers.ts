@@ -8,6 +8,7 @@
 
 import {type TypeRule, getCostBasisRule} from '$lib/features/transactions/transactionTypeStore';
 import type {BrimEvidence} from '$lib/types/files';
+import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
 
 // =============================================================================
 //  Types
@@ -155,6 +156,17 @@ export function buildSignedCash(cash: CashValue | null | undefined, rule: string
     if (!cash) return null;
     const resolved = typeof rule === 'boolean' ? (rule ? 'negative' : 'free') : rule;
     return {code: cash.code, amount: applySign(cash.amount, resolved)};
+}
+
+/** A quantity or a cash amount as the bulk editor holds it (W-B65). For a rule that demands a negative value, a negative
+ *  value becomes its magnitude, its digits exact, trailing zeros dropped, never exponent notation (`-0.00000001` →
+ *  `0.00000001`, `-0.020000` → `0.02`). Anything else comes back as given: a magnitude, a zero, a text that is no plain
+ *  decimal, and every value of any other rule, whose sign is information (an ADJUSTMENT's or a TRANSFER leg's quantity,
+ *  under `nonzero`). The inverse of `applySign` on the `negative` rule, and idempotent: the Form pushes signed values, and an
+ *  untouched «Apply» lands where the row started (`fieldsFromTx`, `applyFormPayload` in `TransactionBulkModal`). */
+export function magnitudeForRule(value: string, rule: string): string {
+    if (rule !== 'negative' || exactDecimalSign(value) !== -1) return value;
+    return formatDecimalForDisplay(applySign(value, 'positive'), {maxFrac: value.length});
 }
 
 /** Canonical signed cash amount for a transaction, whatever representation it arrives in.

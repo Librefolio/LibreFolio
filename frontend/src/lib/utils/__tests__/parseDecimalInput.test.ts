@@ -1,5 +1,8 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {decimalArrowStep, exactDecimalArrowStep, filterDecimalInput, normalizeDecimalInput, resetDecimalArrowHold, stepDecimalValue, stepExactDecimalValue} from '$lib/utils/core/parseDecimalInput';
+// W-B64: the module itself too, so that `decimalDigitCounts` is read as a property: a named import of an export that does
+// not exist yet would fail every case of this file, not only its own.
+import * as decimalInput from '$lib/utils/core/parseDecimalInput';
 
 describe('filterDecimalInput', () => {
     it('drops letters immediately while preserving decimal punctuation and every digit', () => {
@@ -455,5 +458,103 @@ describe('a huge paste costs linear time (W-B66, D-W66-1 (b))', () => {
         const {result, ms} = timed(() => normalizeDecimalInput(text));
         expect(result === expected, `read as ${shown(result)}, not ${shown(expected)}: today the e is dropped`).toBe(true);
         expect(ms, `normalizeDecimalInput took ${ms.toFixed(0)} ms on ${text.length} characters`).toBeLessThan(BOUND_MS);
+    });
+});
+
+/*
+ * W-B64 — the digits of a decimal, counted as the backend counts them.
+ *
+ * The backend (`precision._digit_counts`, backend/app/db/precision.py) counts no leading zero of the integer part and
+ * no trailing zero of the fraction: `0.10000000000` has one decimal, `5.0` none, `0000000000001.5` one integer digit.
+ * The decimal fields counted characters, and refused values the backend keeps. W-B64 gives them one count to share,
+ * beside the reader whose output it takes: `decimalDigitCounts(value)`.
+ *
+ * The contract:
+ * - Its input is a canonical decimal, as `normalizeDecimalInput` returns one (`/^-?(?:\d+(?:\.\d*)?|\.\d+)$/`); anything
+ *   else answers null. Reading a typed text — a comma, an exponent, a blank — stays `normalizeDecimalInput`'s job.
+ * - `integerDigits`: the digits before the point, leading zeros not counted (`0.5` → 0, `007` → 1, `1000` → 4).
+ * - `fractionDigits`: the digits after the point, trailing zeros not counted (`0.10000000000` → 1, `5.0` → 0).
+ * - `stripped`: the same number without those zeros, `0` where no integer digit is left; the sign kept unless the
+ *   number is zero (`-0012.5000` → `-12.5`, `-0.0` → `0`, `.5` → `0.5`, `12.` → `12`).
+ * - Linear: 40 000 zeros cost no more than reading them, wherever they stand.
+ */
+
+/** What `decimalDigitCounts` answers: declared here, so the cases compile before the export exists. */
+interface DigitCounts {
+    integerDigits: number;
+    fractionDigits: number;
+    stripped: string;
+}
+
+/**
+ * `decimalDigitCounts`, called through the module. Until the export exists every case below fails here, on the
+ * assertion that names what is missing, rather than on a TypeError thrown before any assertion ran.
+ */
+function decimalDigitCounts(value: string): DigitCounts | null {
+    const counter = (decimalInput as unknown as Record<string, unknown>).decimalDigitCounts;
+    expect(typeof counter, 'parseDecimalInput exports no decimalDigitCounts(value): nothing counts the digits of a decimal as the backend does').toBe('function');
+    return (counter as (value: string) => DigitCounts | null)(value);
+}
+
+/** Not a canonical decimal: [text, why]. */
+const NOT_CANONICAL: ReadonlyArray<readonly [string, string]> = [
+    ['', 'empty'],
+    ['-', 'a sign alone'],
+    ['.', 'a point alone'],
+    ['1e-8', 'an exponent, which normalizeDecimalInput expands first'],
+    ['1,5', 'a comma, which normalizeDecimalInput reads first'],
+    ['abc', 'no number at all'],
+    [' 1', 'a blank, which normalizeDecimalInput trims first'],
+];
+
+/** The contract's examples: [rule, text, integer digits, fraction digits, stripped], each row named by the rule it pins. */
+const COUNTED: ReadonlyArray<readonly [string, string, number, number, string]> = [
+    ['a zero integer part counts no digit', '0.5', 0, 1, '0.5'],
+    ['leading zeros count no digit', '007', 1, 0, '7'],
+    ['an integer keeps its trailing zeros', '1000', 4, 0, '1000'],
+    ['zero counts no digit', '0', 0, 0, '0'],
+    ['trailing zeros count no decimal', '0.10000000000', 0, 1, '0.1'],
+    ['a zero fraction counts no decimal', '5.0', 1, 0, '5'],
+    ['a closing point counts no decimal', '12.', 2, 0, '12'],
+    ['an opening point has a zero integer part', '.5', 0, 1, '0.5'],
+    ['both kinds of zero dropped, the sign kept', '-0012.5000', 2, 1, '-12.5'],
+    ['zero written with decimals is zero', '0.000', 0, 0, '0'],
+    ['a negative zero is zero, with no sign', '-0.0', 0, 0, '0'],
+    ['a negative integer keeps its sign', '-7', 1, 0, '-7'],
+];
+
+/** 40 000 zeros, wherever they stand: [label, text, counts]. */
+const HUGE_ZEROS: ReadonlyArray<readonly [string, string, DigitCounts]> = [
+    ['5. and 40 000 zeros', `5.${'0'.repeat(HUGE)}`, {integerDigits: 1, fractionDigits: 0, stripped: '5'}],
+    ['40 000 zeros, then .5', `${'0'.repeat(HUGE)}.5`, {integerDigits: 0, fractionDigits: 1, stripped: '0.5'}],
+    ['5., 40 000 zeros, then a 1: zeros that do not end the text', `5.${'0'.repeat(HUGE)}1`, {integerDigits: 1, fractionDigits: HUGE + 1, stripped: `5.${'0'.repeat(HUGE)}1`}],
+];
+
+/** Counts as a failure message can show them: `stripped` whole when short, its two ends and its length when huge. */
+function shownCounts(counts: DigitCounts | null): unknown {
+    return counts && {...counts, stripped: shown(counts.stripped)};
+}
+
+describe('decimalDigitCounts — digits counted as the backend counts them (W-B64)', () => {
+    // Red before the W-B64 cure: parseDecimalInput exports no decimalDigitCounts.
+    it.each(NOT_CANONICAL)('answers null for %j: %s, not a canonical decimal', (text) => {
+        expect(decimalDigitCounts(text)).toBeNull();
+    });
+
+    // Red before the W-B64 cure, for the same reason.
+    it.each(COUNTED)('%s: %j → %i integer digits, %i decimals, stripped %j', (_rule, text, integerDigits, fractionDigits, stripped) => {
+        expect(decimalDigitCounts(text)).toEqual({integerDigits, fractionDigits, stripped});
+    });
+
+    /*
+     * Red before the W-B64 cure, for the same reason. The first row is the contract's; the two others put the zeros
+     * where the cost of a careless strip shows: before the integer digit, and inside the fraction — on zeros that do not
+     * end the text, `/0+$/` is quadratic (W-B66, formatDecimalForDisplay).
+     */
+    it.each(HUGE_ZEROS)('counts %s, in linear time', (_label, text, expected) => {
+        const {result, ms} = timed(() => decimalDigitCounts(text));
+        expect(shownCounts(result), `the counts of ${shown(text)}`).toEqual(shownCounts(expected));
+        expect(result?.stripped === expected.stripped, 'stripped is exactly the text expected, not only its two ends and its length').toBe(true);
+        expect(ms, `decimalDigitCounts took ${ms.toFixed(0)} ms on ${text.length} characters`).toBeLessThan(BOUND_MS);
     });
 });
