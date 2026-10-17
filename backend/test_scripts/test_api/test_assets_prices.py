@@ -1085,9 +1085,9 @@ async def test_query_extreme_end_is_bounded(test_server):
 # ============================================================
 #
 # POST /assets/prices/query refuses more than MAX_BULK_ITEMS (1 000) items before reading anything: a 422 with a coded
-# detail. Its item-day budget (5 million, bulk_too_many_days) is pinned at service level only (services range-ceiling,
+# detail. Its item-day budget (1 million, bulk_too_many_days) is pinned at service level only (services range-ceiling,
 # BL-A01…A07): over the real budget through the route, code without it would make the lane's shared backend fill
-# millions of points, the cost the cap exists to refuse.
+# over a million points, the cost the cap exists to refuse.
 
 BULK_MAX_ITEMS = 1_000  # the contract's number (N77), written here and not read from the code under test
 
