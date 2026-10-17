@@ -1,8 +1,8 @@
 """A checked restore, applied at the next start of the server (lot B3).
 
-A restore confirmed from Settings › Backup or from ``dev.py backup restore`` waits in ``.restore/restore.json``, the
-state of the one restore of a data directory, until a start applies it: the startup step ``pending-restore``
-(``app_lifespan.py``) runs before any step reads the data.
+A restore confirmed from Settings › Administration › Backup or from ``dev.py backup restore`` waits in
+``.restore/restore.json``, the state of the one restore of a data directory, until a start applies it: the startup
+step ``pending-restore`` (``app_lifespan.py``) runs before any step reads the data.
 
 - **The swap.** The four folders an archive carries (``SWAPPED_FOLDERS``) swap places with those of the checked copy,
   by renames inside the data directory, each instant whatever its size: the live ones go to ``.restore/previous/``, the
@@ -213,6 +213,18 @@ class RestoreNotPendingError(RestoreStateError):
     code = "restore_not_pending"
 
 
+class RestoreStateUnreadableError(RestoreStateError):
+    """The state file of the restore is there, but the file system does not let it be read: its owner or permissions, a
+    disk error (B-32). Whether a restore waits, or is being applied, is not known. ``reason`` is what the file system
+    said, never a path."""
+
+    code = "restore_state_unreadable"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"The state of the restore cannot be read: {reason}")
+        self.reason = reason
+
+
 class RestoreApplyError(RestoreStateError):
     """The undo of a swap failed: the data directory is half restored, and the server must not start on it."""
 
@@ -306,19 +318,34 @@ def _apply_lock(data_dir: Path) -> Iterator[None]:
 
 
 def _read_state(data_dir: Path) -> RestoreState | None:
-    """The state file, read without following a link; ``None`` when there is none or it cannot be read (logged)."""
+    """The state file, read without following a link. ``None`` when there is none, when it is not a file (a link, a
+    folder: never followed) or not a state this LibreFolio can read (§10), both logged. ``RestoreStateUnreadableError``
+    when the file system does not let it be read (logged): whether a restore waits is then not known (B-32)."""
+    path = restore_state_path(data_dir)
     try:
-        with os.fdopen(os.open(restore_state_path(data_dir), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)), "rb") as handle:
+        if not stat.S_ISREG(os.lstat(path).st_mode):
+            logger.error("The state of the restore is not a file: it is ignored")
+            return None
+        with os.fdopen(os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)), "rb") as handle:
             raw = handle.read()
     except FileNotFoundError:
         return None
     except OSError as exc:
         logger.error("The state of the restore cannot be read", error=f"{type(exc).__name__}: {exc.strerror or exc}")
-        return None
+        raise RestoreStateUnreadableError(exc.strerror or type(exc).__name__) from None
     try:
         return RestoreState.model_validate_json(raw)
     except ValidationError:
         logger.error("The state of the restore is not one this LibreFolio can read: it is ignored")
+        return None
+
+
+def _state_at_start(data_dir: Path) -> RestoreState | None:
+    """The state, for a startup step: one the file system does not let be read is logged by the reader and left as it
+    is, and the start goes on with the data as it is, as for a state no restore can hold (§10, B-32)."""
+    try:
+        return _read_state(data_dir)
+    except RestoreStateUnreadableError:
         return None
 
 
@@ -375,7 +402,8 @@ def _move(source: Path, target: Path) -> None:
 
 def read_restore(data_dir: Path | None = None) -> RestoreState | None:
     """The restore of the data directory: waiting, being applied, or the last one that ended. ``None`` when there is
-    none, or when ``.restore`` or the state file is a link (never followed) or cannot be read."""
+    none, when ``.restore`` or the state file is a link (never followed), or when the state is not one this LibreFolio
+    can read. ``RestoreStateUnreadableError`` when the file system does not let the state be read (B-32)."""
     data_dir = data_dir or get_data_dir()
     if not _restore_folder(data_dir):
         return None
@@ -383,8 +411,12 @@ def read_restore(data_dir: Path | None = None) -> RestoreState | None:
 
 
 def protected_stage(data_dir: Path) -> str | None:
-    """The stage of a restore not finished yet: its copy must be neither pruned nor dropped."""
-    state = read_restore(data_dir)
+    """The stage of a restore not finished yet: its copy must be neither pruned nor dropped. ``None`` as well when the
+    state cannot be read (logged by the reader), as before B-32."""
+    try:
+        state = read_restore(data_dir)
+    except RestoreStateUnreadableError:
+        return None
     return state.stage_id if state is not None and state.status in ACTIVE else None
 
 
@@ -424,7 +456,8 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None =
 
     ``BackupPathError`` when ``.restore`` is a link or a file; then ``RestoreStageMissingError``,
     ``RestoreNotRestorableError``, ``RestoreStageExpiredError``, ``RestoreStageOutdatedError``, in this order; then
-    ``RestoreAlreadyPendingError``.
+    ``RestoreAlreadyPendingError``, or ``RestoreStateUnreadableError`` when the state there cannot be read: a restore
+    half applied may be behind it, and its journal is never written over (B-32).
     """
     data_dir = data_dir or get_data_dir()
     now = now or _now()
@@ -473,9 +506,12 @@ def cancel_restore(*, data_dir: Path | None = None, drop_copy: bool = False) -> 
     A copy that cannot be removed is logged, never raised: the restore is cancelled already, and the copy goes when its
     check expires (``restore_jobs.prune``).
     The one-time ticket of its outcome goes too. Without a restore nothing is created, not even the lock.
+    ``RestoreStateUnreadableError`` when the state cannot be read: nothing is dropped (B-32).
     """
     data_dir = data_dir or get_data_dir()
-    if not _has_state(data_dir):
+    # Read first without the lock, as prepare_restart does: a state that cannot be read is said, never taken for none.
+    waiting = read_restore(data_dir)
+    if waiting is None or waiting.status != "pending":
         raise RestoreNotPendingError("No restore waits for the next start")
     with _apply_lock(data_dir):
         state = _read_state(data_dir)
@@ -500,7 +536,8 @@ def prepare_restart(*, data_dir: Path | None = None) -> tuple[RestoreState, str]
     """The restore waiting for the next start, and a new one-time ticket of its outcome (``outcome.issue_ticket``),
     issued under the restore's lock: a cancel or a confirmation cannot come in between, and two restart requests take
     turns on the ticket's file. ``RestoreNotPendingError`` when none waits; then nothing is written, not even the lock.
-    ``BackupPathError`` or an ``OSError`` when the ticket cannot be written.
+    ``RestoreStateUnreadableError`` when the state cannot be read (B-32); ``BackupPathError`` or an ``OSError`` when the
+    ticket cannot be written.
     """
     data_dir = data_dir or get_data_dir()
     # Read first without the lock, as a refused restart writes nothing (not even the lock); then again under it.
@@ -597,7 +634,7 @@ def apply_pending_restore(data_dir: Path | None = None, *, boot: Boot | None = N
         return None
     boot = boot or current_boot()
     with _apply_lock(data_dir):
-        state = _read_state(data_dir)
+        state = _state_at_start(data_dir)
         if state is None:
             return None
         if state.status == "pending":
@@ -741,7 +778,7 @@ def finish_pending_restore(data_dir: Path | None = None, *, boot: Boot | None = 
         return None
     boot = boot or current_boot()
     with _apply_lock(data_dir):
-        state = _read_state(data_dir)
+        state = _state_at_start(data_dir)
         if state is None:
             return None
         if state.status == "applied" and state.boot != boot:
