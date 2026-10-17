@@ -6,9 +6,11 @@ process: at startup (``"startup"``), at the loop's tick every 60 s (``"tick"``),
 own and reports a generic ``JobOutcome``, so a future job (notifications, say) is one more entry. The whole run is
 busy work (``ACTIVITY.busy("scheduler")``): the idle monitor never suspends the machine in the middle of it.
 
-Nothing runs with the scheduler off (``LIBREFOLIO_NO_SCHEDULER`` or the setting), on a blocked instance
-(``LIBREFOLIO_BLOCKED``: a blocked instance does not update its prices) or outside the leader worker: with several
-workers only one runs the jobs, and another answers ``not_leader``.
+Nothing runs with the scheduler off (``LIBREFOLIO_NO_SCHEDULER`` or the setting) or on a blocked instance
+(``LIBREFOLIO_BLOCKED``: a blocked instance does not update its prices). With several workers any of them may run the
+jobs, one run at a time for the data directory: a run holds the lock of ``run_lock.py`` from the moment it reads the
+state, and one that waited reads what the first one saved (Z-11). Where that lock is not available (no ``fcntl``:
+Windows), only the leader worker runs them, and another answers ``not_leader``.
 
 After a Fly resume the wall clock is corrected within a few hundred milliseconds, and a request may be served before:
 a run for ``"return"`` or ``"wake"`` waits ``CLOCK_SETTLE_SECONDS`` before it reads the time. A history-sync slot missed
@@ -34,6 +36,7 @@ import structlog
 from backend.app.config.platform import instance_blocked, scheduler_disabled
 from backend.app.services.platform.scheduler.jobs import run_current_price_refresh, run_history_sync
 from backend.app.services.platform.scheduler.leader import am_i_leader
+from backend.app.services.platform.scheduler.run_lock import cross_process_lock_available, scheduler_run_lock
 from backend.app.services.platform.scheduler.settings import SchedulerSettings, load_scheduler_settings
 from backend.app.services.platform.scheduler.state import JobState, SchedulerState, load_state, save_state
 from backend.app.services.platform.sleep_wake.activity import current_activity
@@ -470,11 +473,24 @@ async def _run_locked(reason: str) -> RunReport:
         return report("disabled")
     if instance_blocked():
         return report("blocked")
-    if not await asyncio.to_thread(am_i_leader):
+    cross_process = cross_process_lock_available()
+    if not cross_process and not await asyncio.to_thread(am_i_leader):
         return report("not_leader")
     settings = await load_scheduler_settings()
     if not settings.scheduler_enabled:
         return report("disabled")
+    if not cross_process:
+        return report(*await _run_due(reason, settings))
+    async with scheduler_run_lock():
+        return report(*await _run_due(reason, settings))
+
+
+async def _run_due(reason: str, settings: SchedulerSettings) -> tuple[str, tuple[JobOutcome, ...]]:
+    """Read the state and the time, then run the jobs that are due, in order: the overall status and each outcome.
+
+    Under the lock across processes the state is read once the lock is held, so a run that waited for another
+    process's run sees what that one saved, and finds its jobs not due.
+    """
     state = await asyncio.to_thread(load_state)
     now = utc_now()
     outcomes: list[JobOutcome] = []
@@ -484,14 +500,14 @@ async def _run_locked(reason: str) -> RunReport:
         else:
             outcomes.append(JobOutcome(job.name, "not_due", retry_at=_pending_retry_at(job.state_of(state), now)))
     jobs = tuple(outcomes)
-    return report(_overall_status(jobs), jobs)
+    return _overall_status(jobs), jobs
 
 
 async def run_due_jobs(reason: RunReason) -> RunReport:
-    """Run the jobs that are due, one run at a time in this process, and report how each ended.
+    """Run the jobs that are due, one run at a time in this process and for the data directory, and report how each ended.
 
     A run for a return or a wake-up first gives the clock ``CLOCK_SETTLE_SECONDS``. The run is busy work from start to
-    end, the wait for the lock included. A job that raises is reported as ``error`` with its class name, and the next
+    end, the waits for the locks included: this process's, then the one across processes (``run_lock.py``). A job that raises is reported as ``error`` with its class name, and the next
     job still runs; a cancellation goes through.
     """
     if reason not in get_args(RunReason):
