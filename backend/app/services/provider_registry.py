@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Type
 
-from backend.app.config import PROJECT_ROOT
+from backend.app.config import PROJECT_ROOT, is_test_mode
 from backend.app.logging_config import get_logger
 from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
 
@@ -142,10 +142,20 @@ class AbstractPluginRegistry:
         storage[code] = plugin_class
 
     @classmethod
+    def _withheld(cls, plugin_class: Type | None) -> bool:
+        """X-R44: a plugin that exists for the tests (``test_only``) is not served outside test mode.
+
+        No lookup finds it and no list names it, so no request reaches it on a production instance: not a search that
+        names it, an assignment, a probe, a refresh, a setting. ``is_test_mode()`` is read at each call.
+        """
+        return plugin_class is not None and bool(getattr(plugin_class, "test_only", False)) and not is_test_mode()
+
+    @classmethod
     def get_plugin(cls, code: str):
-        """Return a registered class by code after auto-discovery."""
+        """Return a registered class by code after auto-discovery; ``None`` for a test-only one outside test mode."""
         cls.auto_discover()
-        return cls._get_storage().get(cls._normalize_lookup_code(code))
+        plugin_class = cls._get_storage().get(cls._normalize_lookup_code(code))
+        return None if cls._withheld(plugin_class) else plugin_class
 
     @classmethod
     def get_plugin_instance(cls, code: str, **kwargs):
@@ -160,9 +170,9 @@ class AbstractPluginRegistry:
 
     @classmethod
     def list_plugin_codes(cls) -> list[str]:
-        """Return all registered codes in registration order."""
+        """Return all registered codes in registration order, without the test-only ones outside test mode."""
         cls.auto_discover()
-        return list(cls._get_storage())
+        return [code for code, plugin_class in cls._get_storage().items() if not cls._withheld(plugin_class)]
 
     @classmethod
     def auto_discover(cls) -> None:
@@ -376,6 +386,8 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
         providers = []
         cls.auto_discover()
         for code, provider_class in list(cls._providers.items()):
+            if cls._withheld(provider_class):
+                continue
             try:
                 instance = provider_class()
                 name = getattr(instance, "provider_name", None) or getattr(instance, "name", code)
