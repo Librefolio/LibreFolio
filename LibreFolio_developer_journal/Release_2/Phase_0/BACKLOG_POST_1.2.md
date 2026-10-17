@@ -6512,6 +6512,8 @@ sulla base `23f6578f3`.
     un'altra quando la chiave di questa istanza non si può usare.
   - Doc in `cli_tools.en.md`, con una sottosezione nuova, e in `backup_restore.en.md`. Revisione di H al checkpoint.
   Dettagli: piano 07, «B-18».
+  - 17/10, 11:52: il cancello G era rosso, perché `instance_key_invalid` mancava in `RestoreErrorCode`. Ora è
+    dichiarato, e `api backup-restore` dà 146 passati. Dettagli: piano 07, «B-18, riparazione».
 - ✅ **B-19 · `backup decrypt` lanciato da root scrive uno zip di root** — minimo; B, 17/10 (docs-writer, B4). Gli altri
   comandi di `dev.py backup` lavorano come il proprietario della cartella dei dati (`_drop_root_privileges`); `decrypt`
   non legge la cartella dei dati, quindi con `docker compose exec` lo zip appartiene a root. La guida lo dice. Proposta:
@@ -6702,6 +6704,57 @@ sulla base `23f6578f3`.
   - Un test per la FIFO al posto dello stato ora si può scrivere, con un timeout: la lettura `lstat`-prima la ignora,
     prima restava appesa.
   Dettagli: piano 07, «B-32».
+- **B-34 · `--instance-key-file`: la causa giusta quando questa istanza non ha ancora una chiave, e due frasi della doc**
+  — basso; B, 17/10 (revisione di H su B-18: LOW-1 e due appunti; piano di H §14 «Review di B-18»).
+  - **LOW-1**: su un'istanza senza chiave (dal cloud a un server nuovo), se la verifica non può crearla (`secrets/` non
+    scrivibile) tutto resta illeggibile. Però `instance_key_status()` dice ancora `not_created` con `problem=None`, e la
+    riga ⚠️ di D2 accusa la chiave data. Cura: in `_print_given_key`, il ramo dell'eccezione anche per
+    `source == "not_created"`, più un caso accanto a c7.
+  - **Doc**: `cli_tools` deve dire che un vecchio `LIBREFOLIO_INSTANCE_KEY` vale «as written, spaces included»;
+    `backup_restore` deve aggiungere `chmod 600` sul file della chiave vecchia mentre sta in `backups/`.
+  Niente codice prima del via del coordinatore. Dettagli: piano 07, «B-18».
+- **B-35 · Il limite di caricamento non limita quanto un archivio scompatta** — 🟡 MEDIO nel profilo ospitato, basso
+  nel self-hosted; B, 17/10 (BZ parte 1, F3).
+  - `staging.space_needed` e `_check_space` (`staging.py:462-470`) confrontano le dimensioni dichiarate dal manifest
+    (uguali alle intestazioni dello zip) soltanto con il disco libero.
+  - `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` (500 MB nel cloud) limita lo zip, non quello che se ne scompatta. Un deflate da
+    500 MB può dichiarare e scrivere centinaia di GB durante la verifica.
+  - Il danno: un DoS dell'istanza stessa su un volume isolato; dell'host dove i volumi condividono un disco senza quote.
+  - Cura: una soglia sul totale dichiarato, controllata prima di `_check_space`: `backup_too_large` con il limite.
+    - La forma è una variabile `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` (senza valore di default, così il self-hosted non
+      cambia) oppure K volte il limite di caricamento: **da decidere**.
+    - Test: un manifest oltre la soglia è rifiutato prima di scrivere un byte.
+- **B-36 · Nomi di tabella non quotati nei conteggi delle correzioni post-migrazione** — ⚪ basso; BZ parte 1, F1.
+  - `post_migration._row_counts` (`backend/app/db/post_migration/__init__.py:70-72`) costruisce
+    `f'SELECT count(*) FROM "{name}"'` senza raddoppiare `"`. B-28 lascia passare tabelle con qualsiasi nome.
+  - Con una correzione da applicare, il nome di un archivio ostile rompe la verifica (`stage_failed`). Su un database
+    ripristinato, rompe un avvio successivo in cui una correzione si applica.
+  - sqlite3 esegue un solo statement e non carica estensioni: nessuna fuga dalla copia.
+  - Cura: quotare come `snapshot._quoted`. Test: una tabella `x"y` con una correzione pendente.
+  - **Il modulo non è di B**: passa dal coordinatore.
+- **B-37 · `trusted_schema` resta acceso su due connessioni alla copia** — ⚪ basso, difesa in profondità; BZ parte 1, F2.
+  - Le connessioni sono quella delle correzioni post-migrazione (`PM:211`) e il motore di Alembic su `-x sqlalchemy.url`.
+    Sono le uniche alla copia senza `PRAGMA trusted_schema=OFF`.
+  - Dopo B-28 restano solo tabelle e indici, e nessuna funzione dell'app è registrata lì: nessun exploit noto.
+  - Cura: spegnerlo in entrambe. **Proprietari fuori da B** (post_migration, `env.py`).
+- **B-38 · La CLI da root legge i file della password e della chiave attraverso link e FIFO** — ⚪ basso, rafforzamento;
+  BZ parte 1, F4.
+  - `read_secret_file` apre con `path.open("rb")`.
+  - La guida di B-18 suggerisce `LibreFolio-data/backups/` per la chiave vecchia, una cartella dell'utente del server.
+    Quell'utente può scambiare il file con un link a un file di root (letto da root, usato come chiave, mai stampato) o
+    con una FIFO (il comando si blocca). Per farlo deve essere già ostile, e possiede già tutti i dati.
+  - Cura:
+    - nella CLI, per i file letti da root: `O_NOFOLLOW|O_NONBLOCK` e `fstat` regolare (o un'opzione di
+      `read_secret_file`, che è di H);
+    - nella guida, la chiave fuori dalla cartella dei dati.
+    Test: un link o una FIFO come `--instance-key-file` da root → ❌, niente letto.
+- **B-39 · Formule nei CSV esportati** — ⚪ basso; BZ parte 1, F5.
+  - Ogni utente può scrivere le `notes` degli eventi di un asset (`POST /assets/events`), e ogni utente può esportarle
+    in CSV (`GET /backup/asset/{id}/events`, `series_export.stream_rows_as_csv`).
+  - Una nota che comincia con `=`, `+`, `-`, `@`, tab o CR diventa una formula quando un altro utente apre il file in un
+    foglio di calcolo.
+  - Cura: un `'` davanti ai valori di testo che cominciano così, mai ai numeri (`-1.5` resta). Test: `=1+1` diventa
+    `'=1+1`.
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
