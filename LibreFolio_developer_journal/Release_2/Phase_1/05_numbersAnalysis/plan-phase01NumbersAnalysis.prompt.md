@@ -5141,3 +5141,251 @@ prossimo checkpoint.
   >     nessuna riga reale arriva alla perdita totale, quindi il ramo nuovo di D2 lo provano solo i test di MF.
   >   - **MF-D2 chiusa senza reperti.**
   > - Porte 6185 e 6195 libere alle 05:40.
+- ✅ **CP-14b entrato** (coordinatore): dev `4111239a7`; CHANGELOG (le 3 righe 🐛) e indice (T-D9 ✅, T-U8, J-44 a J
+  dopo F5, riusando `changePct`, X rivede in lettura) in `252835dce`. HEAD avanzato a `252835dce`. Via: J-43 (rosso
+  prima), F5 dopo X-R47, poi J-44.
+
+#### J-43 — l'avviso delle quote diverse fra le gambe di un trasferimento (17/10, dalle 05:45; base `252835dce`)
+
+- **Analisi (sola lettura, 05:45–05:55)**:
+  - **Come scritta: confermata.** In `financial_math/portfolio/classifier.py:132-149` l'avviso sta nel ramo
+    `pair_key not in processed_pairs and tx.date != paired.date`: due gambe dello stesso giorno non avvisano mai.
+  - **Più grande: l'avviso non esce mai dal classificatore, in nessuna data.** `engine.py:246` legge di
+    `classification` solo `classified`, `in_transit_intervals`, `external_cash_flows`; `build_data_quality_report`
+    ha `classifier_warnings` (`data_quality.py:80` → `DataQualityReport.warnings`) ma nessun chiamante lo passa;
+    `DataQualityReport.share_mismatch_warnings` e `in_transit_cost_basis_warnings` non li riempie nessuno. La tabella
+    del motore in `77b976ebc` (giugno) li dava già «schema ✅, popolato ❌».
+  - **Il modello è voluto**: D-MF4 = a (J2, `test_transfer_keeps_returns.py`) — lo scarto fra le gambe a quote diverse
+    è un risultato (P&L), mai capitale. L'avviso è l'unica spiegazione che l'utente avrebbe di quel P&L.
+  - `DataQualityBanner.svelte` rende le issue per `message_i18n_key`: un'issue INFO nuova si vedrebbe senza codice
+    di UI.
+- **Proposta al coordinatore (05:55, needs_input)**:
+  - **J-43a** (subito, come scritta): l'avviso anche per le coppie dello stesso giorno, una volta per coppia. Rosso
+    prima (test-author). Da sola non la vede nessuno.
+  - **J-43b** (serve il via): portare fuori dal motore gli avvisi del classificatore, riempire
+    `share_mismatch_warnings` e aggiungere un `DataQualityIssue` INFO `TRANSFER_SHARE_MISMATCH` con la chiave i18n
+    in 4 lingue; tocca l'enum `IssueCode` (`api sync`), i payload dell'AI Export che portano i codici (da verificare,
+    sonda se li portano), il banner della Dashboard (W/V, revisione). Alternativa: togliere i campi morti.
+- **Via del coordinatore (~05:50): J-43 a + b; b come decisione notturna N72** (da rivedere col developer). Vincoli: AI
+  Export (enum chiuso? versione o esclusione, dirlo prima), una chiave in 4 lingue con `dev.py i18n` (nessun codice di
+  UI, W rivede in lettura), `api sync` dopo l'enum coi file generati nel checkpoint, una riga di CHANGELOG e la pagina
+  sviluppatore della qualità dei dati.
+- ✅ **Vincolo 1, AI Export (~05:52, risposto al coordinatore prima di scrivere)**: l'export non porta codici della
+  qualità dei dati (né issue né avvisi del rapporto); legge solo `data_quality_status` nei 4 componenti del drawdown,
+  e lo stato non dipende dalle issue INFO né da `share_mismatch_warnings`. Nessun contratto cambia: niente salto di
+  versione, niente sonda. Vicino: il rischio legge il rapporto del portafoglio (`risk/scope.py:158`), da verificare nei
+  verdi.
+- **Rossi affidati al test-author (~05:55)**, contratto: `ShareMismatch` (models), `ClassificationResult.share_mismatches`
+  e `PortfolioCalculationResult.share_mismatches`; `build_data_quality_report(share_mismatches=…)` → una issue INFO
+  `TRANSFER_SHARE_MISMATCH` (`dataQuality.transferShareMismatch`, `{count}`, gruppo `transfer_share_mismatch`, senza
+  CTA) e `share_mismatch_warnings`, solo le coppie con data ≤ `period_to`; lo stato non cambia; i due chiamanti di
+  `portfolio_service` passano `engine_result.share_mismatches`.
+  - Dati di prova: nei dati finti l'admin ha IB al 40 % e DEGIRO/Coinbase al 100 %, e2e_test_user IB al 30 %; i due
+    TRANSFER collegati sono dello stesso giorno → dopo la cura la Dashboard di entrambi avrà la riga INFO (galleria da
+    rifare per la Dashboard; le E2E che vogliono «nessun banner», `data-quality-real.spec.ts:507,662`, usano dati
+    propri: da provare nello slot).
+- ✅ **Chiave i18n (~05:58)**: `dev.py i18n add dataQuality.transferShareMismatch` in 4 lingue (stile «{count} … (s) —
+  spiegazione» delle chiavi vicine; «la tua quota», «votre part», «tu participación», «courtiers», «brókers»);
+  `dev.py i18n check`: 4970 chiavi, rigoroso, pulito.
+- **MF → J (~06:02), MF-D4** (SPLIT già salvati con rapporto ≤ 0): risposto OK a (a) — le righe collegate restano la
+  riscalatura, cade solo il rapporto — e alla issue `INVALID_SPLIT_RATIO` (warning, `navigate_asset`) con un campo
+  `invalid_split_events` sul risultato del motore. Concordate le posizioni nei file comuni (models, data_quality,
+  `IssueCode`, service, pagina) per non toccarsi le righe; la chiave i18n si tocca a fine namespace, banale.
+
+#### R13-SEC7-1 — intervallo di date senza limiti (DoS), priorità massima (17/10, dalle 06:00; base `252835dce`)
+
+- **Assegnazione del coordinatore (~06:00)**: E, MEDIUM 8/10. `OpenDateRangeModel` controlla solo `end >= start`; il
+  motore prende `actual_to = date_to` senza limite e `builder.build()` gira sul ciclo degli eventi: `POST
+  /portfolio/report {"date_range":{"end":"9999-12-30"}}` rigioca ~2,9 M giorni. Stesse strade: `/risk/query`
+  (portafoglio), `/portfolio/lots/analysis`, il `period` dell'AI Export. Ordine: dopo J-43a, prima di J-43b. Io unico
+  scrittore di `portfolio/engine.py` (MF-D4 aspetta il mio ingresso). Rossi prima, uno per strada; E rivede.
+- **Analisi (06:00–06:08, sola lettura)**:
+  - motore: `engine.py:250-251` libero a tutte e due le estremità (anche `0001-01-01` esplode); cicli giornalieri
+    `engine.py:524/547`, `daily_state.py:306`;
+  - lotti: vettore proprio, `lots_analysis_service.py:98` e `_date_range(computed_from, actual_to)` (:231),
+    `lots/conversions.py:182`;
+  - AI Export: `runtime_service.py:517` copia `request.period` in `BuildScope`; i componenti ciclano sul periodo
+    (`technical_shared.py:886`, le serie di prezzo di `price_query.py:149`);
+  - fuori dalle 4 strade (instradati dal coordinatore): `price_query.py:149` e il ciclo di conversione FX
+    (`fx/currencies.py:427/471`) → X; `transactions/balances.py:75` → W dentro SEC7-3.
+- **Disegno, approvato dal coordinatore (~06:10)**:
+  - motore: `actual_to = min(date_to or oggi, oggi + 1 giorno)` (un giorno di tolleranza per i fusi a est di UTC),
+    `actual_from = max(date_from, prima transazione)`; un `period_start` prima della prima transazione dava già una
+    fotografia vuota e `period_boundaries` tratta già un `date_from` prima di ogni stato come «parte vuoto»: cambiano
+    solo i giorni vuoti in testa alla storia; un intervallo tutto prima della prima transazione non dà stati;
+  - lotti: lo stesso limite della fine a `:98`;
+  - AI Export: in testa a `prepare_request`, una copia della richiesta col periodo limitato (`fine ≤ oggi + 1`,
+    `inizio ≥ fine − 100 anni`); `build_snapshot` usa `prepared.request`, così `BuildScope`, `exported_period`,
+    `snapshot_as_of` e `history_coverage.requested_period` dicono lo stesso periodo (i validatori del `meta` li
+    legano). `requested_period` sta nel `meta` (copertura FX), non in un payload di componente: nessun contratto di
+    componente cambia, niente salto; da scrivere nel commit e nella pagina `ai_export_snapshot.md`;
+  - fuori dal ciclo (`to_thread`): non economico (oggetti ORM con attributi pigri) → **SEC7-1b** nell'indice.
+- **Rossi affidati a un secondo test-author (~06:08)**, file nuovi (motore + servizio + lotti + rischio; AI Export),
+  fine futura moderata (oggi + 400) e inizio vecchio moderato (prima transazione − 3000) perché il codice vecchio
+  fallisca in fretta; le guardie coi valori estremi in una classe a parte (sul codice vecchio si bloccherebbero).
+- ✅ **J-43, rossi (test-author ~05:55–06:10; corsa 06:12, codice vecchio, carico 42)**: `services roi-fifo-utils
+  ShareMismatch test_share_mismatch_warning native_cash_guard` → **27 rossi, 15 verdi** (13 guardie, il test vecchio
+  dell'avviso, la rete della cassa nativa). Letto il **motivo di ogni rosso** (lezione di CP-14b): `ValueError` (codice
+  assente), `TypeError` (parametro `share_mismatches` assente), `AttributeError` (`ShareMismatch`,
+  `share_mismatches`), `AssertionError: []` per le coppie dello stesso giorno (nessun avviso: J-43a), i rossi del
+  servizio senza issue. Tutti per il motivo giusto. File: `test_scope_classifier.py` (`TestShareMismatch`, l.624),
+  `test_data_quality_report.py` (`TestTransferShareMismatchIssue`, l.571), `test_portfolio_service.py`
+  (`TestTransferShareMismatchDataQuality`, l.1923). Log: `files/j/j43/red_j43.log`.
+  > Conseguenze dichiarate dal test-author: la rete `fixtures/native_cash_guard/eur_only_golden.json` cambia nei 6
+  > blocchi `data_quality` (W1: 2 stringhe e una issue da 2; W2 con `period_to` 14/1: 1 stringa e una issue da 1, la
+  > coppia del trasferimento è del 16/1; lo stato non cambia; il dump del motore no) — da rigenerare dopo il codice e
+  > confrontare con questo elenco. I dati finti danno la riga INFO a e2e_test_user (IB 30 %) e all'admin (IB 40 %):
+  > il commento di `frontend/e2e/gallery.spec.ts:1709` diventa falso; l'enum zod di `generated.ts` va rigenerato
+  > (`api sync`), o i loro rapporti non si leggono più.
+- ✅ **J-43a, codice (06:14–06:15)**: `classifier.py` — il controllo delle quote esce dal ramo delle date diverse e resta una
+  volta per coppia; `ShareMismatch` (models, gambe in ordine di id, data della gamba più tarda) in
+  `ClassificationResult.share_mismatches`; il campo `PortfolioCalculationResult.share_mismatches` (lo riempie il motore
+  in J-43b). `services roi-fifo-utils TestShareMismatch test_share_mismatch_warning`: **26 verdi**. ruff e black puliti.
+- ✅ **J-43b, codice (06:16–06:23)**, nell'attesa dei rossi di SEC7-1 (file che SEC7-1 non tocca, `engine.py` per
+  ultimo e con una riga sola, lontana dal punto del limite delle date):
+  > **Note implementazione**:
+  > - `IssueCode.TRANSFER_SHARE_MISMATCH` (`schemas/portfolio.py`, dopo `MWRR_NOT_CALCULABLE`);
+  > - `data_quality.py::build_data_quality_report(share_mismatches=…)`: le coppie con data ≤ `period_to` (anche prima
+  >   di `period_from`: il loro risultato è nelle cifre cumulative) → una issue INFO (`dataQuality.transferShareMismatch`,
+  >   `{count}`, gruppo `transfer_share_mismatch`, senza CTA) e `share_mismatch_warnings`, una riga per coppia nella
+  >   forma dell'avviso del classificatore («Linked internal pair (id, id): share mismatch broker N=s vs broker M=s,
+  >   complete on …»), quella che la rete della cassa nativa rietichetta (`_ID_PATTERNS`); lo stato non cambia;
+  > - `portfolio_service.py`: i due chiamanti passano `engine_result.share_mismatches`;
+  > - `engine.py`: `result.share_mismatches = classification.share_mismatches` prima del salvataggio nella cache del
+  >   blob (la chiave contiene ruolo e quota di ogni broker: nessun risultato vecchio).
+  > - **Verdi**: il sottoinsieme J-43 **41** (poi la rete), `roi-fifo-utils` **1158** (tutto `test_financial/`),
+  >   `portfolio-engine` **41**, `financial-math` **851**; ruff e black puliti.
+  > - **Rete della cassa nativa rigenerata** (`LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1`): il diff
+  >   (`files/j/j43/golden_check.py`, `.log`) è **esattamente** quello dichiarato dal test-author, 12 percorsi nei 6 blocchi
+  >   `data_quality` (W1 issue da 2 e 2 stringhe, W2 da 1 e 1; lo stato e il dump del motore invariati); le etichette
+  >   della copia doppia (`tx:ct_out_A`, `broker A`) escono giuste.
+  > - **`api sync`**: `openapi.json` cambia solo per il valore nuovo dell'enum; `generated.ts` lo porta in 3 punti. I
+  >   file generati sono ignorati da git (solo i `.gitkeep`): nessun file generato nel checkpoint; ogni build del
+  >   frontend li rigenera e un cambio in `backend/app/schemas` rende la build vecchia (H-24).
+  > - `dev.py front check`: **0 errori, 0 avvisi** (nessuna mappa esaustiva su `IssueCode` si rompe).
+  > - E2E: le specifiche della Dashboard sui dati reali decidono dal rapporto (`data-quality-real.spec.ts:507`, «se ci
+  >   sono issue apri il banner e cerca la tua riga») o servono issue finte: la riga INFO nuova non le rompe. Cambiano
+  >   le foto della galleria della Dashboard coi dati veri dell'utente demo, e il commento di `gallery.spec.ts:1709`
+  >   («the populated DB produces no data-quality issues») diventa falso: da segnalare al coordinatore.
+  > - Doc: `developer/frontend/data-quality-banner.md` (riga del codice e riga «come provocarla»); pagina utente della
+  >   Dashboard, un paragrafo in 4 lingue. **Nessun timbro**: la cache di traduzione di `user/dashboard/index.en.md` non
+  >   coincide con l'MD5 di HEAD (debito di traduzione preesistente, non mio), e un timbro lo congelerebbe.
+- **Revisione di X `5f68a8db0` (06:20, richiesta del coordinatore)**: P-10 convive bene col filtro di visibilità
+  (la decisione conta ancora tutte le rettifiche; nei dettagli solo gli id visibili più `hidden_transactions_count`;
+  il messaggio dà solo il totale). **Rosso bloccante**: la regola (d) della guardia (`AssetEventType.SPLIT` nominato in
+  `event_store.py` alle righe 108, 416, 422, provato con lo scanner stesso della guardia): proposto un predicato
+  `is_split_event_type` in `splits.py`. Per F5: il messaggio tradotto conta visibili + nascosti.
+- ✅ **SEC7-1, rossi (test-author 06:08–06:33; corsa 06:35, codice vecchio, carico 43)**: file nuovi
+  `test_financial/test_date_range_bounds.py` (motore, `get_report`, ambito di portafoglio del rischio, lotti; ognuno col
+  suo libro, prima transazione 60 giorni fa) e `test_ai_export_period_bounds.py` (azione nuova
+  `services ai-export-period-bounds`, `isolation="pure"`); le guardie coi valori estremi in `TestExtremeRangesFinishQuickly`,
+  escluse dalla corsa dei rossi (sul codice vecchio si bloccherebbero).
+  > - `roi-fifo-utils "date_range_bounds and not TestExtremeRangesFinishQuickly"`: **7 rossi, 9 verdi**;
+  >   `ai-export-period-bounds "not TestExtremeRangesFinishQuickly"`: **4 rossi, 2 verdi**. Motivo letto per ognuno:
+  >   stati e storie fino al 21/11/2027 (oggi + 400), primo stato nel 2018 (prima transazione − 3000), 2001 stati
+  >   vuoti per un intervallo tutto prima della prima transazione, periodo AI che parte dal 0001-01-01. Tutti giusti.
+  > **⚠️ Fuori pista (deciso)**: il limite a domani rompe ~30 test esistenti che vivono nel 2032–2091 per possedere i
+  > loro dati (8 file di `test_financial/`; nessuna API né E2E). Scartato un limite dai dati (`max(oggi, ultima
+  > transazione) + 1`: una transazione salvata nel 9999 tornerebbe a bloccare il rigioco). Tenuto domani, con una
+  > cucitura di test: `datetime_utils.latest_range_end()` importato per nome nei 5 moduli consumatori, che una fixture
+  > autouse di modulo alza per quelle suite (test-author). Approvato dal coordinatore (~06:40), con la chiusura a ogni
+  > ingresso; le date assurde salvate (una transazione del 0001-01-01 fa camminare ~740 000 giorni) → **W, dentro
+  > SEC7-3** (controllo della data alla scrittura), niente J-46.
+- ✅ **SEC7-1, codice (06:35–06:38)**:
+  > - `utils/datetime_utils.py::latest_range_end()` = `date.today() + 1 giorno` (data locale del server, come i
+  >   `date.today()` dei consumatori: il `today_date()` del modulo è UTC e avrebbe reso instabili le uguaglianze vicino
+  >   a mezzanotte);
+  > - motore: `actual_from = max(date_from, prima transazione)`, `actual_to = min(date_to o oggi, latest_range_end())`;
+  >   un intervallo rovesciato (finisce prima della prima transazione) torna vuoto come il ramo «nessuna transazione»;
+  > - `PortfolioService.get_summary` / `get_report`: la fine chiusa all'ingresso (orizzonte del MWRR, giorni dei prezzi
+  >   vecchi, metadati, chiave della cache L2), e un inizio dopo quella fine portato su di essa;
+  > - lotti: `actual_to` chiuso (anche `requested_date_to` / `computed_date_to` della risposta, stessa variabile);
+  > - rischio (`risk/scope.py`): fine e inizio chiusi prima di costruire `OpenDateRangeModel` (che altrimenti
+  >   rifiuterebbe inizio > fine); `composition_as_of` segue;
+  > - AI Export: `_bounded_period_request()` in testa a `prepare_request` (fine ≤ domani, inizio ≥ fine − 100 anni di
+  >   calendario, 29/2 → 28/2, mai dopo la fine), e `build_snapshot` prosegue con `prepared.request`: scope,
+  >   componenti, piano dei secchi e `meta` (`exported_period`, `snapshot_as_of`, `history_coverage`) leggono lo stesso
+  >   periodo. `requested_period` sta nel `meta`, non in un payload: nessun contratto di componente cambia.
+  > - Verdi: `roi-fifo-utils date_range_bounds` **20** (le guardie estreme comprese: 9999-12-30 e 0001-01-01, tutto il
+  >   file in 4 s), `ai-export-period-bounds` **8**. ruff e black puliti.
+  > - Doc (EN, sviluppatore): `financial_math.md` (il passo 2 del motore), `ai_export_snapshot.md` (il flusso della
+  >   richiesta), `transactions/lots_analysis_service.md` (la passeggiata delle storie).
+- **Revisione di X `5f68a8db0`**: inviata (vedi sopra). In attesa: la cucitura del test-author per le ~30 suite del
+  futuro, poi i verdi interi (`roi-fifo-utils`, `portfolio-engine`, `financial-math`, AI Export in tre parti,
+  `risk-all`, le porte i18n), poi lo slot (le 4 strade API e le E2E della qualità dei dati).
+- ✅ **Cucitura per le suite del futuro (test-author, fino alle 06:47)**: `test_services/_range_bounds.py`
+  (`lift_range_bound`: `latest_range_end` → `date.max` nei 5 moduli consumatori, con `raising=True`, così un consumatore
+  che smette di importare il nome fa fallire le suite invece di schiacciare i loro dati) e una fixture autouse di modulo
+  `range_bound_lifted` negli 8 file; i due file del limite non l'hanno. Regola: un test futuro del limite non va in
+  quegli 8 file.
+- ✅ **Verdi interi (06:43–06:51)**: `risk-all` **902**; AI Export **351 + 430 + 283 = 1064**; `gate-i18n-catalog`
+  **176**, `gate-i18n-usage` **195**; `roi-fifo-utils` **1178** (le suite del futuro con la cucitura, J-43, i 20 del
+  limite), `portfolio-engine` **41**, `financial-math` **851**, `ai-export-period-bounds` **8**, `check-orphans` ok.
+  Doc: `mkdocs build` stretto ok, `check-links` **97**, `translate-validate` della pagina della Dashboard 0 errori, 0
+  avvisi.
+- **Revisione di MF `db5486ae9` (06:45, richiesta del coordinatore)**: accettabile. Il diff della rete è esattamente il
+  dichiarato (44 percorsi `late_interest_value_at`, 12 casi, al più 1,051e-25 relativo; nient'altro); arrotondamento
+  soltanto, modello invariato (base della mora = valore prima della cedola, la domanda J-39 resta al developer).
+  Nota non bloccante: la storia COMPOUND della mora (prodotto lungo la griglia) e la data singola (forma chiusa dalla
+  scadenza) possono ora differire nelle ultime cifre.
+- Slot da chiedere: `files/j/j43/slot.sh` (`db populate --force`, `api portfolio`, `api risk`, `api ai-export`,
+  E2E `front-portfolio banners`, `data-quality-real`, `stale-price-banner`).
+- **Checkpoint J-43 + SEC7-1 consegnato (17/10 ~06:58)**, su richiesta del coordinatore: lo slot gira sulla revisione
+  combinata dopo il suo commit e il merge di dev (la base `252835dce` è indietro di W-B60, MF SEC7-2, MF-P2, H-36/37,
+  Z-11; tre file aperti cambiano anche su dev: l'indice, `financial_math.md`, `_backend_services.py`). `slot.sh` ha in
+  testa `roi-fifo-utils`, `financial-math`, `portfolio-engine`. FROZEN fino al suo messaggio.
+- ✅ **J-43 + SEC7-1 committati** (coordinatore): `a46f85bda` (fix, un commit solo), `67639ced0` (diario); merge
+  `0fe56d2bf` = i miei + dev `38adbfde0` (W-B60, MF SEC7-2, MF-P2, H-36/37, Z-11, X-R47b): indice, `financial_math.md`
+  e runner fusi da soli, devWiki senza conflitti. Slot 1 su `0fe56d2bf` (07:02), `files/j/j43/slot.sh`.
+- **Revisione di X `1b6d65da7` (06:58)**: OK. `splits.py::is_split_event_type` (stringa normalizzata == membro
+  `StrEnum`; non solleva mai); regola (d) a zero righe in `event_store.py` ed `events.py` (scanner della guardia); P-10
+  chiude per difetto (senza chiamante `transaction_ids` [] e tutti contati nascosti; parametri sempre con entrambi i
+  campi); il mio blocco P-10 di `test_asset_event_store.py` chiede come il titolare e continua a fissare gli id.
+- ✅ **Slot 1 di J-43 + SEC7-1 (06:56–07:07, su `0fe56d2bf`)**: `roi-fifo-utils` **1178**, `financial-math` **1076**
+  (coi test di MF SEC7-2 arrivati col merge), `portfolio-engine` **41**; `db populate --force` exit 0; `api portfolio`
+  **51**, `api risk` **15**, `api ai-export` **15**; E2E `front-portfolio banners` **20**, `data-quality-real` **3**,
+  `stale-price-banner` **2**. Porte 6185 e 6195 libere alle 07:07.
+- **Coordinatore (07:00)**: X-R47 è entrato (dev `952c68cd5`): F5 dopo l'ingresso di J-43/SEC7-1, su una base che ha
+  entrambi; poi J-44. **J-45 (SEC7-1b) passa a MF** (`run_in_executor` con un pool dedicato, `max_workers=2`): dopo il mio
+  ingresso `engine.py` va a MF per MF-D4 + J-45, io rivedo.
+- ✅ **J-43 + SEC7-1 entrati** (coordinatore 07:08): diario `07ae05dc6` → dev `09cb9231a`, CHANGELOG (✨ avviso + 🐛
+  intervalli) `46c66f0c8`; HEAD avanzato a `46c66f0c8`. Via: F5, poi J-44. `engine.py` passa a MF (MF-D4 + J-45).
+- **Revisione di MF `f37b1d0ea` (07:13)**: OK. MF-SI1 («min» confrontato coi giorni: ogni investimento programmato nuovo
+  falliva la prima sincronizzazione) curato: «min» = il primo fra il primo valore del calendario e il primo evento
+  manuale; una forma chiusa per data per storia, valore corrente e liquidazione (chiude la mia nota). Provato in
+  memoria su 400 intervalli a caso fino a 9000 giorni: `compound_growth` contro il prodotto giorno per giorno a 60
+  cifre ≤ 4e-24 relativo nelle 4 convenzioni; i conteggi dei passi 30/360 uguali al conteggio a forza bruta 400/400.
+
+#### F5 — il messaggio tradotto del rifiuto P-10 (17/10, dalle 07:10; base `46c66f0c8`, con X-R47)
+
+- Contratto: in `features/transactions/events/eventSaveError.ts` (di W; W rivede) il caso
+  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` → `events.saveError.splitAdjustmentsWithoutCost` con `{date, type, n, hidden}`:
+  `hidden` = `hidden_transactions_count` (intero ≥ 0, altrimenti 0), `n` = gli id visibili + `hidden` (i parametri
+  portano sempre i due campi da X-R47b). Chiave in 4 lingue con `dev.py i18n` (plurali ICU; il ramo `many` in FR).
+- Rossi affidati al test-author (07:10). In parallelo (file diversi) i rossi di **J-44** (07:17): `changePct`
+  esportato da `MeasureSignal.ts`, `buildDeltaHtml` con `—` su un primo valore 0 (vista assoluta), colore e vista
+  percentuale invariati; da riscrivere il test che fissava lo 0 % e il caso francese M-18.
+- ✅ **F5, rossi (test-author 07:10–07:23; corsa 07:24, codice vecchio)**: in `eventSaveError.test.ts` (di W) un blocco
+  nuovo (l.445–572): 24 rossi e una guardia (`existingEvents` resta `null` per questo 409). Motivo letto: chiamata la
+  chiave generica con la frase inglese del server, al posto di `events.saveError.splitAdjustmentsWithoutCost`. Vincoli
+  sulle traduzioni posti dai test: `{type}` in ogni lingua, un ramo muto `=0 {}` per `hidden` (in francese `one` copre
+  lo 0), `#` nei rami `one`, ogni lingua con parole sue (la build riempie di inglese una traduzione mancante).
+- ✅ **J-44, rossi (test-author 07:17–07:24; corsa 07:25)**: 4 rossi, 50 verdi. `changePct` non esportato (barriera),
+  `(Δ +10.0000 / 0.00%)` e `(Δ -10.0000 / 0.00%)` al posto di `—`, il caso francese M-18 `{10, 0}`. Selettore giusto:
+  `front-utility core-unit buildDeltaHtml MeasureSignal` (Vitest filtra sul nome dei test, non sul file).
+- ✅ **Codice (07:26–07:28)**:
+  > - F5: `eventSaveError.ts`, il caso `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST` (`hidden` intero ≥ 0 o 0; `n` = id
+  >   visibili + `hidden`; `type` = `typeLabel('SPLIT')`); la chiave in 4 lingue con `dev.py i18n add` (in
+  >   `i18n/assets/`); la pagina utente `user/assets/detail/data-editor.en.md`, un punto nella lista dei rifiuti (solo
+  >   EN: la lista non esiste ancora in IT/FR/ES, debito di traduzione preesistente; nessun timbro).
+  > - J-44: `changePct` esportato da `MeasureSignal.ts`; `priceChartHelpers.ts::buildDeltaHtml` lo importa: vista
+  >   assoluta con `—` su un primo valore 0, colore e vista percentuale invariati; JSDoc aggiornato;
+  >   `financial_math.md` regola 6, una frase.
+  > - Mirati: `front-utility core-unit costless buildDeltaHtml MeasureSignal` **79 verdi**. Prettier pulito.
+- ✅ **Verdi interi di F5 + J-44 (07:28–07:39)**: `front-utility core-unit` **8020**, `component-unit` **4498**,
+  `front-portfolio chart-safety-unit` **86** (la guardia delle eccezioni della matematica finanziaria),
+  `gate-i18n-catalog` **176**, `gate-i18n-usage` **195**, `dev.py front check` **0 errori, 0 avvisi**, `check-orphans`
+  ok; `mkdocs build` stretto ok, `check-links` **97**. Porta 6185 libera.
+- **J-44 → Y?** Il coordinatore (07:38) l'ha passata a Y mentre era già fatta e verde qui: gliel'ho detto, scelta **(a)**
+  (07:41): resta nel checkpoint di F5, **Y rivede** (riusa `changePct`). Indice: J-44 ✅ con la nota.
+- **Checkpoint F5 + J-44 consegnato (17/10 ~07:45)**: FROZEN.

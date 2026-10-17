@@ -7,6 +7,7 @@ contract pinned here:
 1. ``RateDecision(allowed, remaining, retry_after)``, frozen.
 2. ``SlidingWindowLimiter(limit, window_seconds, *, max_keys=10_000, clock=time.monotonic)``: ``limit < 1``,
    ``window_seconds <= 0`` or ``max_keys < 1`` is a ``ValueError``; ``limit`` and ``window_seconds`` are properties.
+   There is no ``eviction_scan`` any more: passing one is a ``TypeError``.
 3. The window: a hit at ``t`` counts while ``clock() - t < window_seconds``; at exactly ``window_seconds`` later it no
    longer does.
 4. ``peek`` decides and never counts. Allowed while ``count < L``, with ``remaining = L - count`` and ``retry_after``
@@ -16,14 +17,33 @@ contract pinned here:
 6. A per-call ``limit`` replaces the default for that call only (``< 1`` is a ``ValueError``); lowered below the count,
    the wait is for enough hits to expire.
 7. Keys are independent and ``None`` is a key like any other; ``count``, ``reset`` (one key), ``clear`` (every key)
-   and ``len`` (the keys tracked).
-8. At most ``max_keys`` keys: a new key beyond them evicts the least recently used one — used meaning peeked, hit or
-   counted — and its hits are forgotten with it.
+   and ``len``: the keys with at least one hit still in the window — a key whose hits all left it is not counted, even
+   if nobody read it since.
+8. At most ``max_keys`` keys, always: a new key is never refused for want of room, and after a ``hit`` the keys are
+   never more than ``max_keys``. Room is made by evicting the lightest key — the one with the fewest hits still in the
+   window at that moment — and among the lightest the least recently used, used meaning peeked, hit or counted.
+   Expired hits never count, whether or not the key was read since: the limiter keeps an exact expiry index, a heap
+   with one entry per key (its oldest hit), so a key whose hits left the window keeps no protection. No limit enters
+   the choice, neither the limiter's own nor a call's, and there is no search: the lightest key is found wherever it
+   stands in the order of use, at a cost that does not grow with the keys. The new key is never the one evicted, and
+   an evicted key's hits are forgotten with it. The index is bounded too: the heap, the private ``_expiry`` (a list),
+   holds at most ``2 * len(limiter) + 64`` entries after any public call, whatever evicted or reset keys leave behind.
+   (E-14, from workstream E's review of N70: a spray of fresh keys, one hit each — the sign-in failures per
+   identifier, for one — must never free a key with more hits, neither a locked one nor one a hit short of its limit.
+   The N70 rule, the least recently used key not full among the ``eviction_scan`` least recently used, let a spray
+   free both: a key that stops a hit short is never full, and 31 full keys right after a locked one hide it from the
+   scan until it is the least recently used.)
 9. Thread-safe: threads hitting one key with a limit of N get exactly N hits allowed, each ``remaining`` value once.
 
 Every test drives an injected fake clock: nothing waits for time to pass. Pure: no database, no server, no network.
 
-Red until ``backend/app/utils/runtime/rate_window.py`` exists: the module does not import.
+Red until E-14 (the code follows these tests): today a new key evicts, among the 32 least recently used keys
+(``eviction_scan``), the first that is not full, else the least recently used; ``len`` counts a key until somebody
+reads it after its hits left the window; and there is no expiry heap. Red: RWL-003 (``eviction_scan`` still in the
+signature), RWL-020 (``lower-call-limit``), RWL-022 (``last``), RWL-025, RWL-026, RWL-027 (both cases), RWL-028 and
+RWL-029. RWL-014, RWL-015, RWL-016, RWL-018, RWL-019, RWL-020 (``higher-call-limit``), RWL-021, RWL-022 (``first``,
+``index-20``), RWL-023, RWL-024 and RWL-017 pin what holds before and after; RWL-001, RWL-002 and RWL-004 to RWL-013
+do not depend on the eviction.
 """
 
 from __future__ import annotations
@@ -105,21 +125,29 @@ def test_the_limiter_refuses_a_meaningless_configuration(arguments: tuple, keywo
     print_success("ValueError")
 
 
+# red until E-14: SlidingWindowLimiter still takes eviction_scan
 def test_the_limiter_exposes_its_limit_and_window_and_its_defaults() -> None:
-    """RWL-003 — contract 2: ``limit`` and ``window_seconds`` as given; ``max_keys`` 10 000 and ``clock`` ``time.monotonic`` by default, keyword-only. The real clock works without anybody moving it: two hits in an hour, the second refused for at most the hour."""
-    print_section("RWL-003: properties and defaults")
+    """RWL-003 — contract 2: ``limit`` and ``window_seconds`` as given, and the whole signature pinned: ``limit`` and ``window_seconds``, then ``max_keys`` (10 000) and ``clock`` (``time.monotonic``), keyword-only, and nothing else — ``eviction_scan`` is gone, and passing it is a ``TypeError``. The real clock works without anybody moving it: two hits in an hour, the second refused for at most the hour."""
+    print_section("RWL-003: properties and signature")
 
     limiter = SlidingWindowLimiter(3, 3600.0)
     assert (limiter.limit, limiter.window_seconds) == (3, 3600.0)
-    parameters = inspect.signature(SlidingWindowLimiter).parameters
-    assert (parameters["max_keys"].default, parameters["max_keys"].kind) == (10_000, inspect.Parameter.KEYWORD_ONLY)
-    assert (parameters["clock"].default, parameters["clock"].kind) == (time.monotonic, inspect.Parameter.KEYWORD_ONLY)
+    signature = [(parameter.name, parameter.kind, parameter.default) for parameter in inspect.signature(SlidingWindowLimiter).parameters.values()]
+    expected = [
+        ("limit", inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.empty),
+        ("window_seconds", inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.empty),
+        ("max_keys", inspect.Parameter.KEYWORD_ONLY, 10_000),
+        ("clock", inspect.Parameter.KEYWORD_ONLY, time.monotonic),
+    ]
+    assert signature == expected, f"the signature is not (limit, window_seconds, *, max_keys=10_000, clock=time.monotonic): {[name for name, _, _ in signature]}"
+    with pytest.raises(TypeError):
+        SlidingWindowLimiter(3, 3600.0, eviction_scan=32)
 
     real = SlidingWindowLimiter(1, 3600.0)
     assert real.hit("k").allowed
     refused = real.hit("k")
     assert not refused.allowed and 0.0 < refused.retry_after <= 3600.0
-    print_success("limit 3, window 3600, max_keys 10 000, clock time.monotonic")
+    print_success("limit 3, window 3600; (limit, window_seconds, *, max_keys=10 000, clock=time.monotonic), no eviction_scan")
 
 
 # =============================================================================
@@ -287,7 +315,7 @@ def test_keys_are_independent_and_none_is_a_key(clock: FakeClock) -> None:
 
 
 def test_reset_forgets_one_key_and_clear_forgets_them_all(clock: FakeClock) -> None:
-    """RWL-013 — contract 7: ``len`` is the number of keys tracked; ``reset`` drops one (``None`` included, an unknown key quietly), ``clear`` drops all."""
+    """RWL-013 — contract 7: ``len`` counts the keys with a hit in the window (the clock never moves here); ``reset`` drops one (``None`` included, an unknown key quietly), ``clear`` drops all."""
     print_section("RWL-013: reset, clear, len")
     limiter = SlidingWindowLimiter(3, WINDOW, clock=clock)
     for key in ("alice", "alice", "bob", None):
@@ -310,13 +338,33 @@ def test_reset_forgets_one_key_and_clear_forgets_them_all(clock: FakeClock) -> N
     print_success("reset one, clear all")
 
 
+# red until E-14: today len counts a key until somebody reads it after its hits left the window
+def test_len_counts_only_the_keys_with_a_hit_in_the_window(clock: FakeClock) -> None:
+    """RWL-029 — contract 7: ``len`` counts the keys with at least one hit still in the window, whether or not anybody read them since. ``a`` is hit at 1000 and ``b`` at 1030; at 1065 the hit of ``a`` has left the window, nobody having read ``a`` since, and the keys are one, ``b``; at 1095 the hit of ``b`` has left too, and they are none."""
+    print_section("RWL-029: len counts the keys with a hit in the window")
+    limiter = SlidingWindowLimiter(3, WINDOW, clock=clock)
+    clock.now = 1_000.0
+    assert limiter.hit("a").allowed
+    clock.now = 1_030.0
+    assert limiter.hit("b").allowed
+    assert len(limiter) == 2
+
+    clock.now = 1_065.0
+    assert len(limiter) == 1, "a, whose only hit left the window at 1060, is still counted: nobody read it since"
+    assert limiter.count("b") == 1
+
+    clock.now = 1_095.0
+    assert len(limiter) == 0, "b, whose only hit left the window at 1090, is still counted: nobody read it since"
+    print_success("2 keys at 1030, 1 at 1065, none at 1095")
+
+
 # =============================================================================
 # 8. BOUNDED MEMORY
 # =============================================================================
 
 
-def test_a_new_key_beyond_max_keys_evicts_the_least_recently_used(clock: FakeClock) -> None:
-    """RWL-014 — contract 8: with room for two, ``c`` evicts ``a``, the key nobody used since."""
+def test_a_new_key_beyond_max_keys_evicts_the_least_recently_used_of_the_lightest_keys(clock: FakeClock) -> None:
+    """RWL-014 — contract 8: with room for two and one hit on every key (a limit of 5, far from reached), ``c`` evicts the least recently used of the lightest keys: ``a``, the key nobody used since."""
     print_section("RWL-014: eviction")
     limiter = SlidingWindowLimiter(5, WINDOW, max_keys=2, clock=clock)
     for key in ("a", "b", "c"):
@@ -330,7 +378,7 @@ def test_a_new_key_beyond_max_keys_evicts_the_least_recently_used(clock: FakeClo
 
 @pytest.mark.parametrize("use", ["peek", "hit", "count"])
 def test_using_a_key_keeps_it(clock: FakeClock, use: str) -> None:
-    """RWL-015 — contract 8: peeking, hitting or counting ``a`` makes ``b`` the least recently used, so ``c`` evicts ``b``."""
+    """RWL-015 — contract 8: a limit of 5, far from reached; peeking, hitting or counting ``a`` makes ``b`` the least recently used — and, when ``a`` is hit, the lighter too — so ``c`` evicts ``b``."""
     print_section(f"RWL-015: {use} keeps a key")
     limiter = SlidingWindowLimiter(5, WINDOW, max_keys=2, clock=clock)
     limiter.hit("a")
@@ -346,16 +394,252 @@ def test_using_a_key_keeps_it(clock: FakeClock, use: str) -> None:
     print_success(f"{use}('a') → b evicted")
 
 
-def test_an_evicted_key_starts_over(clock: FakeClock) -> None:
-    """RWL-016 — contract 8: the bound on memory is a bound on what is remembered — a full key evicted by another is allowed again."""
-    print_section("RWL-016: eviction forgets the hits")
+def test_when_the_only_other_key_is_full_it_is_evicted_all_the_same(clock: FakeClock) -> None:
+    """RWL-016 — contract 8: with room for one key, the only other key goes, full as it is — memory stays bounded, and that bound is a bound on what is remembered: evicted, the full ``a`` is allowed again. The new key is never the one evicted."""
+    print_section("RWL-016: the only other key goes, full as it is")
     limiter = SlidingWindowLimiter(1, WINDOW, max_keys=1, clock=clock)
 
     assert limiter.hit("a").allowed
     assert not limiter.hit("a").allowed
     assert limiter.hit("b").allowed
+    assert len(limiter) == 1
+    assert limiter.count("b") == 1
     assert limiter.hit("a").allowed
-    print_success("a forgotten with its eviction")
+    print_success("a full, evicted by b all the same: forgotten")
+
+
+@pytest.mark.parametrize("light", ["b", None])
+def test_a_new_key_evicts_the_lighter_key_and_spares_an_older_heavier_one(clock: FakeClock, light: str | None) -> None:
+    """RWL-018 — contract 8: room for 2, ``a`` full and older (the least recently used) plus a key with one hit: a new key evicts the lighter one, not the least recently used. ``a`` keeps its two hits and stays refused for the whole window, ``c`` is allowed; the lighter key is ``b``, or ``None`` — a key like any other here too (contract 7)."""
+    print_section(f"RWL-018: a full and older, {light!r} with one hit, then c")
+    limiter = SlidingWindowLimiter(2, WINDOW, max_keys=2, clock=clock)
+    assert [limiter.hit(key).remaining for key in ("a", "a", light)] == [1, 0, 1]
+
+    assert limiter.hit("c") == RateDecision(True, 1, 0.0)
+
+    assert limiter.peek("a") == RateDecision(False, 0, 60.0), f"a, two hits, was evicted although {light!r} had one"
+    assert limiter.count("a") == 2
+    assert limiter.count(light) == 0
+    assert limiter.count("c") == 1
+    assert len(limiter) == 2
+    print_success(f"{light!r} evicted; a kept, refused for 60 s")
+
+
+@pytest.mark.parametrize("second_hit_of_a", [pytest.param(1_005.0, id="every-hit-expired"), pytest.param(1_040.0, id="one-hit-expired")])
+def test_a_key_weighs_only_its_hits_still_in_the_window(clock: FakeClock, second_hit_of_a: float) -> None:
+    """RWL-019 — contract 8: a key weighs the hits still in the window when the room is made. ``a`` takes two hits (1000, then 1005 or 1040), ``b`` two at 1050, and ``a`` is peeked refused at 1055 — ``b`` is now the least recently used. At 1070 the hit of 1000 has left the window, and that of 1005 with it: ``a`` weighs one hit or none, ``b`` still two, and ``a`` makes the room for ``c``, not ``b``, which stays refused for 40 s."""
+    print_section(f"RWL-019: a's hits at 1000 and {second_hit_of_a:g}, c at 1070")
+    limiter = SlidingWindowLimiter(2, WINDOW, max_keys=2, clock=clock)
+    clock.now = 1_000.0
+    limiter.hit("a")
+    clock.now = second_hit_of_a
+    assert limiter.hit("a") == RateDecision(True, 0, 0.0)
+    clock.now = 1_050.0
+    limiter.hit("b")
+    assert limiter.hit("b") == RateDecision(True, 0, 0.0)
+    clock.now = 1_055.0
+    assert not limiter.peek("a").allowed
+
+    clock.now = 1_070.0
+    assert limiter.hit("c") == RateDecision(True, 1, 0.0)
+
+    assert limiter.peek("b") == RateDecision(False, 0, 40.0), "b, two hits in the window, was evicted although the hits of a had left it"
+    assert limiter.count("a") == 0
+    assert limiter.count("c") == 1
+    assert len(limiter) == 2
+    print_success("a gone; b kept, refused for 40 s")
+
+
+@pytest.mark.parametrize(
+    ("limit", "call_limit", "hits_of_b", "evicted"),
+    [
+        pytest.param(2, 5, 1, "b", id="higher-call-limit"),
+        pytest.param(3, 2, 2, "c", id="lower-call-limit"),  # red until E-14: today b, below the limiter's limit of 3, is not full and goes
+    ],
+)
+def test_no_limit_enters_the_choice(clock: FakeClock, limit: int, call_limit: int, hits_of_b: int, evicted: str) -> None:
+    """RWL-020 — contract 8: no limit enters the choice, neither the limiter's own nor the per-call one of the hit that makes the room: only the hits in the window do. Room for three: ``a`` at the limiter's limit, ``b`` with fewer hits, ``c`` with one; the new ``d`` comes with a per-call limit, and ``a`` stays, refused. With a limit of 2 and ``d`` at 5, ``b`` and ``c`` weigh one hit each and ``b``, the least recently used, goes: the higher call limit does not make ``a`` evictable. With a limit of 3 and ``d`` at 2, ``c`` goes, the lightest, and ``b`` keeps its two hits, although they are fewer than the limiter's limit."""
+    print_section(f"RWL-020: limit {limit}, d hit with limit={call_limit}")
+    limiter = SlidingWindowLimiter(limit, WINDOW, max_keys=3, clock=clock)
+    for key in ["a"] * limit + ["b"] * hits_of_b + ["c"]:
+        assert limiter.hit(key).allowed
+
+    assert limiter.hit("d", limit=call_limit) == RateDecision(True, call_limit - 1, 0.0)
+
+    assert limiter.peek("a") == RateDecision(False, 0, 60.0), f"a, {limit} hits, the heaviest key, was evicted"
+    counts = {key: limiter.count(key) for key in "abcd"}
+    assert counts == {"a": limit, "b": hits_of_b, "c": 1, "d": 1} | {evicted: 0}, f"{counts}: the key evicted must be {evicted}, the least recently used of the lightest, whatever the limits"
+    assert len(limiter) == 3
+    print_success(f"{evicted} evicted, a kept: no limit entered the choice")
+
+
+@pytest.mark.parametrize("new", ["c", None])
+def test_among_keys_of_equal_weight_the_least_recently_used_goes(clock: FakeClock, new: str | None) -> None:
+    """RWL-021 — contract 8: room for two, ``a`` then ``b`` hit until full, two hits each; the new key evicts the least recently used of the two, ``a`` — memory stays bounded, full keys or not — and never itself: ``b`` stays refused, the new key keeps its hit (``None`` too), and ``a`` starts over."""
+    print_section(f"RWL-021: a and b two hits each, then {new!r}")
+    limiter = SlidingWindowLimiter(2, WINDOW, max_keys=2, clock=clock)
+    assert [limiter.hit(key).remaining for key in ("a", "a", "b", "b")] == [1, 0, 1, 0]
+
+    assert limiter.hit(new) == RateDecision(True, 1, 0.0)
+
+    assert len(limiter) == 2
+    assert limiter.peek("b") == RateDecision(False, 0, 60.0)
+    assert limiter.count(new) == 1
+    assert limiter.peek("a") == RateDecision(True, 2, 0.0)
+    print_success("a evicted, full as it was; b still refused, the new key kept")
+
+
+@pytest.mark.parametrize(
+    "position",
+    [
+        pytest.param(0, id="first"),
+        pytest.param(20, id="index-20"),
+        pytest.param(39, id="last"),  # red until E-14: today the scan of 32 sees only full keys, and the least recently used of them goes
+    ],
+)
+def test_the_lightest_key_goes_wherever_it_stands_in_the_order_of_use(clock: FakeClock, position: int) -> None:
+    """RWL-022 — contract 8: the lightest key goes, wherever it stands in the order of use — there is no search that stops after a few keys. Room for 40, a limit of 2: 39 keys with two hits each, and ``light`` with one, placed first (the least recently used), 21st, or last (the most recently used) of the 40. A new key evicts ``light``; the 39 others keep their two hits and stay refused for the whole window. (The N70 search looked at the 32 least recently used keys only: with ``light`` last it saw 32 full keys, and evicted the least recently used of them.)"""
+    print_section(f"RWL-022: light at index {position} of the 40, then new")
+    limiter = SlidingWindowLimiter(2, WINDOW, max_keys=40, clock=clock)
+    heavy = [f"heavy-{index}" for index in range(39)]
+    for key in heavy[:position] + ["light"] + heavy[position:]:
+        for _ in range(1 if key == "light" else 2):
+            assert limiter.hit(key).allowed
+    assert len(limiter) == 40
+
+    assert limiter.hit("new") == RateDecision(True, 1, 0.0)
+
+    assert limiter.count("light") == 0, f"light, the only key with one hit, was not the one evicted from index {position} of the order of use"
+    kept = {key: (limiter.count(key), limiter.peek(key)) for key in heavy}
+    assert kept == dict.fromkeys(heavy, (2, RateDecision(False, 0, 60.0))), f"keys with two hits were evicted: {[key for key, (hits, _) in kept.items() if hits != 2]}"
+    assert limiter.count("new") == 1
+    assert len(limiter) == 40
+    print_success(f"light evicted from index {position}; the 39 keys with two hits kept, refused for 60 s")
+
+
+def test_the_bound_holds_and_a_full_key_outlives_a_hundred_new_ones(clock: FakeClock) -> None:
+    """RWL-023 — contract 8: room for three, ``full`` at its limit, then 100 new keys with one hit each. Every new key is allowed, the keys are two, then three after every hit and never more, and at the end ``full`` is still there and refused, beside the last two new keys."""
+    print_section("RWL-023: a full key among 100 new ones")
+    limiter = SlidingWindowLimiter(2, WINDOW, max_keys=3, clock=clock)
+    assert [limiter.hit("full").remaining for _ in range(2)] == [1, 0]
+
+    sizes = []
+    for index in range(100):
+        assert limiter.hit(f"new-{index}") == RateDecision(True, 1, 0.0)
+        sizes.append(len(limiter))
+
+    assert sizes == [2] + [3] * 99
+    assert limiter.peek("full") == RateDecision(False, 0, 60.0), "the full key was evicted by new keys while lighter keys were there to go"
+    assert [limiter.count(f"new-{index}") for index in (97, 98, 99)] == [0, 1, 1]
+    print_success("never more than 3 keys; full kept and refused")
+
+
+def test_a_locked_identifier_stays_locked_through_a_thousand_fresh_ones(clock: FakeClock) -> None:
+    """RWL-024 — contract 8, review R13-SEC6 at scale: the sign-in failures per identifier (10 in 15 minutes, ``services/accounts/login_throttle.py``) with room for 100 keys. ``victim`` is locked by 10 failures; then 1 000 fresh identifiers fail once each, every failure counted. The spray must not free ``victim``: an 11th attempt is still refused for the whole window, and its 10 failures are all there."""
+    print_section("RWL-024: a locked identifier through 1 000 fresh ones")
+    limiter = SlidingWindowLimiter(10, 15 * 60, max_keys=100, clock=clock)
+    assert [limiter.hit("victim").remaining for _ in range(10)] == list(range(9, -1, -1))
+
+    refused = [index for index in range(1_000) if not limiter.hit(f"fresh-{index}").allowed]
+
+    assert refused == []
+    assert len(limiter) == 100
+    assert limiter.hit("victim") == RateDecision(False, 0, 900.0), "1 000 fresh identifiers freed the locked one: it has 10 more attempts"
+    assert limiter.count("victim") == 10
+    print_success("victim still locked for 900 s after 1 000 fresh identifiers")
+
+
+# red until E-14: today a key one hit short of its limit is not full, and the 100th fresh identifier evicts it
+def test_a_key_one_hit_short_of_its_limit_outlives_a_thousand_fresh_ones(clock: FakeClock) -> None:
+    """RWL-025 — contract 8, E-14: the sign-in failures per identifier (10 in 15 minutes) with room for 100 keys. ``target`` takes 9 failures and stops, one short of the lock; then 1 000 fresh identifiers fail once each, every failure counted. The spray must not free ``target``: it still counts its 9 failures and has one attempt left, not 10."""
+    print_section("RWL-025: a key a hit short of its limit through 1 000 fresh ones")
+    limiter = SlidingWindowLimiter(10, 15 * 60, max_keys=100, clock=clock)
+    assert [limiter.hit("target").remaining for _ in range(9)] == list(range(9, 0, -1))
+
+    refused = [index for index in range(1_000) if not limiter.hit(f"fresh-{index}").allowed]
+
+    assert refused == []
+    assert len(limiter) == 100
+    assert limiter.count("target") == 9, "1 000 fresh identifiers freed the key a hit short of its limit: its 9 failures are forgotten, and it has 10 more attempts"
+    assert limiter.peek("target") == RateDecision(True, 1, 0.0)
+    print_success("target kept with its 9 hits, 1 attempt left, after 1 000 fresh identifiers")
+
+
+# red until E-14: today the victim and the 31 full keys right after it fill the scan of 32, and the least recently used, the victim, goes
+def test_a_locked_key_outlives_a_spray_behind_thirty_one_full_ones(clock: FakeClock) -> None:
+    """RWL-026 — contract 8, E-14: the sign-in failures per identifier (10 in 15 minutes) with room for 100 keys. ``victim`` is locked by 10 failures; right after, 31 keys ``shield-0`` … ``shield-30`` take 10 each and are locked too; then 1 000 fresh identifiers fail once each, every failure counted. The full keys behind it must not expose ``victim`` to the spray: an 11th attempt is still refused for the whole window, and its 10 failures are all there."""
+    print_section("RWL-026: a locked key, 31 full ones right after it, then 1 000 fresh ones")
+    limiter = SlidingWindowLimiter(10, 15 * 60, max_keys=100, clock=clock)
+    assert [limiter.hit("victim").remaining for _ in range(10)] == list(range(9, -1, -1))
+    for index in range(31):
+        assert [limiter.hit(f"shield-{index}").allowed for _ in range(10)] == [True] * 10
+
+    refused = [index for index in range(1_000) if not limiter.hit(f"fresh-{index}").allowed]
+
+    assert refused == []
+    assert len(limiter) == 100
+    assert limiter.hit("victim") == RateDecision(False, 0, 900.0), "the spray freed the locked key once the 31 full keys behind it had made it the least recently used: it has 10 more attempts"
+    assert limiter.count("victim") == 10
+    print_success("victim still locked for 900 s behind 31 full keys and 1 000 fresh identifiers")
+
+
+# red until E-14: today c evicts the least recently used key not full, fresh, whatever old still weighs in the window
+@pytest.mark.parametrize(
+    ("late_hit", "peeked"),
+    [
+        pytest.param(None, RateDecision(True, 1, 0.0), id="every-hit-expired"),
+        pytest.param(1_030.0, RateDecision(False, 0, 10.0), id="one-hit-live"),
+    ],
+)
+def test_expired_hits_protect_nothing_even_on_a_key_used_since(clock: FakeClock, late_hit: float | None, peeked: RateDecision) -> None:
+    """RWL-027 — contract 8: expired hits never count, whether or not the key was read since. Room for two, a limit of 5: ``old`` takes four hits at 1000 — in the second case a fifth at 1030, and it is full —, ``fresh`` two at 1040, and ``old`` is peeked at 1050: it is the most recently used now. At 1065 the hits of 1000 have left the window, and ``old`` weighs nothing, or the one hit of 1030, against the two of ``fresh``: being the most recently used does not keep ``old``, nor does having been full. ``c`` takes its room; ``fresh`` keeps its two hits, ``c`` has one, and the keys are two."""
+    late = "" if late_hit is None else f" and once at {late_hit:g}"
+    print_section(f"RWL-027: old hit 4 times at 1000{late}, fresh twice at 1040, old peeked at 1050, c at 1065")
+    limiter = SlidingWindowLimiter(5, WINDOW, max_keys=2, clock=clock)
+    clock.now = 1_000.0
+    assert [limiter.hit("old").remaining for _ in range(4)] == [4, 3, 2, 1]
+    if late_hit is not None:
+        clock.now = late_hit
+        assert limiter.hit("old") == RateDecision(True, 0, 0.0)
+    clock.now = 1_040.0
+    assert [limiter.hit("fresh").remaining for _ in range(2)] == [4, 3]
+    clock.now = 1_050.0
+    assert limiter.peek("old") == peeked
+
+    clock.now = 1_065.0
+    assert limiter.hit("c") == RateDecision(True, 4, 0.0)
+
+    assert limiter.count("fresh") == 2, "fresh, two hits in the window, was evicted although old weighed less: its hits of 1000 had left the window"
+    assert limiter.count("c") == 1
+    assert limiter.count("old") == 0
+    assert len(limiter) == 2
+    print_success("old gone; fresh kept with its 2 hits, c with 1")
+
+
+# red until E-14: today there is no expiry heap
+def test_the_expiry_heap_stays_bounded(clock: FakeClock) -> None:
+    """RWL-028 — contract 8, the memory bound of the expiry index, white box: ``_expiry`` is the documented private expiry heap (a list), and after any public call it holds at most ``2 * len(limiter) + 64`` entries, whatever evicted or reset keys leave behind. Room for 10, a limit of 3: 5 000 fresh keys with one hit each, the clock advancing 0.05 s per key, and every 7th key reset right after its hit; the bound is checked after every call."""
+    print_section("RWL-028: the expiry heap through 5 000 keys, every 7th reset")
+    limiter = SlidingWindowLimiter(3, WINDOW, max_keys=10, clock=clock)
+    assert isinstance(getattr(limiter, "_expiry", None), list), "no _expiry list: the limiter keeps no expiry heap"
+
+    def assert_bounded(call: str) -> None:
+        entries = len(limiter._expiry)
+        keys = len(limiter)
+        assert entries <= 2 * keys + 64, f"after {call}: {entries} entries in the expiry heap for {keys} keys, more than 2 * {keys} + 64"
+
+    assert_bounded("the constructor")
+    for index in range(5_000):
+        clock.now = START + index * 0.05
+        key = f"fresh-{index}"
+        assert limiter.hit(key) == RateDecision(True, 2, 0.0)
+        assert_bounded(f"hit({key!r})")
+        if index % 7 == 0:
+            limiter.reset(key)
+            assert_bounded(f"reset({key!r})")
+
+    assert len(limiter) == 10
+    print_success("never more than 2 * len + 64 entries in the expiry heap; 10 keys at the end")
 
 
 # =============================================================================

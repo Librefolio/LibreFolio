@@ -270,17 +270,19 @@ own values.
 | `type` | Value written (JSON) | Value from a variable | Bounds |
 |--------|----------------------|-----------------------|--------|
 | `string` | Text without control characters, from `min_length` to `max_length` characters: 1 to 4096 by default, 8 to 4096 for a secret | Taken as written for a secret; stripped otherwise | `min_length`, `max_length` |
-| `number` | A finite number, not a boolean | `float()` of the stripped text | `minimum`, `maximum` |
-| `integer` | A whole number (`5`, not `5.0`) | `int()` of the stripped text | `minimum`, `maximum` |
+| `number` | A finite number, not a boolean; an integer value only within ±9 007 199 254 740 991 (`MAX_SAFE_INTEGER`, 2^53 − 1) | `float()` of the stripped text | `minimum`, `maximum` |
+| `integer` | A whole number (`5`, not `5.0`), only within ±9 007 199 254 740 991 (`MAX_SAFE_INTEGER`, 2^53 − 1) | `int()` of the stripped text | `minimum`, `maximum` |
 | `boolean` | `true` or `false` | `1`, `true`, `yes`, `on` or `0`, `false`, `no`, `off`, in any case | — |
 | `select` | Text, one of the option values | The stripped text, one of the option values | `options` |
 
 A value is checked by `validate_value()` when it is written and by `parse_env_value()` when it comes
 from a variable. The message says why it is refused (`too short: at least 8 characters`,
 `not one of the options`) and never contains the value, so a secret never travels back in a 422 or
-reaches a log. A saved value that the field refuses later, because the plugin narrowed a bound or
-dropped an option, counts as unset: the field takes its default and reports the problem
-`invalid_stored`.
+reaches a log. An integer is accepted only within ±`MAX_SAFE_INTEGER`: up to it a double, and so the
+JavaScript number the settings page edits, holds every integer exactly; past it the message is
+`too large: at most 9007199254740991 in absolute value`, checked before the bounds. A saved value
+that the field refuses later, because the plugin narrowed a bound or dropped an option, counts as
+unset: the field takes its default and reports the problem `invalid_stored`.
 
 At registration, `validate_declaration()` checks that:
 
@@ -294,7 +296,7 @@ At registration, `validate_declaration()` checks that:
   and `_`, neither starting with `LIBREFOLIO_PLUGIN_` (the prefix of the derived names) nor ending in
   `_FILE`; no two fields declare the same one;
 - lengths are set only on a `string`, with `1 <= min_length <= max_length <= 4096`; bounds only on a
-  `number` or an `integer`, finite, `minimum <= maximum`;
+  `number` or an `integer`, finite, an integer bound within `MAX_SAFE_INTEGER`, `minimum <= maximum`;
 - a `select` has options with distinct, non-empty values and non-blank English labels, and no other
   type has options;
 - a `default` passes the same checks as a written value.

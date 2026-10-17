@@ -35,8 +35,10 @@ in. The public endpoints of that, pinned here:
    and its link works.
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/password-reset`` gives ``TOKEN_INVALID``; a
-refusal sets no session cookie. Not here: ``/auth/setup`` on a blocked instance — whether it joins the routes allowed
-while blocked waits for a developer decision (A7).
+refusal sets no session cookie. Not here: ``/auth/setup`` on a blocked instance. It stays off the routes allowed while
+blocked (decision P16(d)): a caller without a session gets the 401 of ``get_current_user``, as every public route
+outside ``ALLOWED_WHEN_BLOCKED`` does; ``test_instance_block.py`` pins that list by name and by route, so adding the
+setup to it would show there.
 
 Where each case runs, and why. A pending administrator is a row of ``users``, an inactive superuser: in the lane's
 database it would be one more administrator account for every concurrent unit to see, a setup would make it an active

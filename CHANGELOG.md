@@ -66,7 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings › Plugins**: price and exchange-rate sources can ask for settings. Personal ones are yours; instance-wide ones (an API key, for example) are set by an administrator, and a saved secret is never shown again, not even in a source's error message or in the address of an asset's page. A server variable can set the instance-wide ones and lock them. Each family and each plugin is shown with its icon.
 - **Asset search**: justETF and Borsa Italiana can show only your preferred currency or language; a provider that still needs settings says so, with a «Configure» button, also in the provider panel of an asset; a legend explains the 👑.
 - **Idle suspension on Fly.io**: with `LIBREFOLIO_IDLE_SUSPEND_MODE=fly` the machine asks Fly to suspend it after `LIBREFOLIO_IDLE_SUSPEND_MINUTES` (5) without a user and with no work in progress; Fly resumes it at the next request. Off by default; documented in the admin page "Sleep and Wake".
-- `LIBREFOLIO_CLIENT_IP_HEADER`: behind a reverse proxy that passes the visitor's address in a header of its own (`Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx), the per-address limits of the emails (sign-up, «send the link again», forgotten password) count each visitor on their own instead of all visitors together. Unset by default; set it only when every request crosses that proxy.
+- `LIBREFOLIO_CLIENT_IP_HEADER`: behind a reverse proxy that passes the visitor's address in a header of its own (`Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx), the per-address limits of the emails (sign-up, «send the link again», forgotten password) count each visitor on their own instead of all visitors together. Unset by default; set it only when every request crosses that proxy. Without it, behind a proxy LibreFolio does not trust on a local address (a proxy container in front of the Docker image), these limits leave its requests out instead of counting every visitor together; the other limits still apply, and the log and the security checks say so.
+- **A limit on failed sign-ins**: after 10 wrong passwords in 15 minutes for one username or email address, or 50 from one address, sign-ins wait (the login page says so). Wrong current passwords when changing the password or the email address, and **Send the link again**, count too. On by default; `LIBREFOLIO_LOGIN_LIMIT=off` turns it off for test instances, with a warning at every start. Behind a reverse proxy on a local address that LibreFolio does not trust, only the per-name limit applies, and the server logs a warning; trust the proxy with `FORWARDED_ALLOW_IPS` or `LIBREFOLIO_CLIENT_IP_HEADER`.
+- API: `GET /api/v1/security/checks` (administrators) evaluates the instance's configuration checks on demand.
+- The start log names an unusable hosting-panel backup token (`LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) or restore upload limit (`LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`) right away, not at the first call.
 - While the server catches up on prices — at startup, on the first visit after a pause, or at a scheduled wake-up — the app shows "Updating prices…" above the pages.
 - `./dev.py user set-email <username> <address>` changes an account's email address from the command line (sessions ended and verification reset on a real change, as from the Profile).
 - **Faster first broker import, optional**: `LIBREFOLIO_BRIM_PREWARM=true` prepares the broker-import processes at startup, with their plugins loaded, so the first import after a start is about 4 s faster, at the cost of about 80 MB of memory and 1.4 s of CPU at every server start. Off by default.
@@ -74,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test configuration says what it read**: only the last few days of prices, while a new asset gets its whole price history when it is created.
 - **Premium sources first in the asset search**: an instance can mark price sources as premium (`LIBREFOLIO_ASSET_PROVIDERS_PREMIUM`) and set their order (`LIBREFOLIO_ASSET_PROVIDERS_ORDER`). When a premium source takes part in a search, its results come first under a «Premium» badge, and the others wait in a closed «Non-premium sources (community)» section that, once opened, warns that LibreFolio does not vouch for them. Without a premium source the list looks as before.
 - **«Can't find it? Let us know»** after every asset search: a report of the search — the text, the sources asked and what each answered, the currency, type and identifiers already in the form, the version — sent from your own device. `LIBREFOLIO_SUPPORT_URL` says where: an email address (`mailto:` and one address), or a support page that opens with the report copied for you; without it, on a self-hosted instance, a GitHub issue you review before sending; on an instance run by a hosting provider the link appears only once the provider sets an address. Nothing about you or your portfolio goes in it.
+- **Dashboard: a transfer between two brokers you own at different shares now shows an info note**: each side counts at its own share, and the difference counts as a gain or loss.
 
 ### 🔄 Changed
 
@@ -246,9 +250,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Growth chart: in the weekly and monthly views, a broker line that stops in the middle of a week or month keeps its last value for that period instead of leaving a gap.
 - **A restore whose restart never happens says so** — if LibreFolio does not stop after **Restore and restart**, the page no longer waits forever: after a minute it says to restart LibreFolio yourself, and offers **Back to Backup**, where the waiting restore can be restarted or cancelled.
 - Very large cash amounts and event values (eleven digits or more before the decimal point) read back exactly, without a stray digit in the sixth decimal place.
+- Scheduled Investment: a schedule must lie between 1900 and 2200, span at most 100 years with at most 1,200 periods; larger ones are refused as invalid instead of tying up the server, and long late-interest histories are computed in one pass.
+- A portfolio, lots, risk or AI Export request with a date range reaching far into the future or the past no longer freezes the server: a range now ends no later than tomorrow and starts no earlier than your first transaction.
+- Scheduled Investment: the first sync of a new asset no longer fails, and an asset's late-interest value is the same in its history, its current price and its settlement.
+- A number too large for the server (`1E+400`) or `NaN` in a request body gets a validation error instead of a server error.
+- Zooming or panning a price chart with arrow-ended signals (the measure tool, or a signal styled with arrows) no longer stutters: the arrows are re-aimed once the gesture pauses.
+- Asset events: changing the type of a split whose adjustments have no purchase cost is refused with a message in your language that counts those adjustments, including any at a broker you cannot see.
+- Charts: the tooltip's change from the first point shows «—» instead of 0 % when the chart starts at zero.
+- Dashboard: a split stored with an invalid ratio no longer breaks the portfolio report or the lots analysis; it is ignored and named in the data-quality warnings, so you can fix it in the asset's events.
+- A full disk when uploading an archive, or at the start of a backup or of a restore check, now says there is not enough free space instead of a generic error.
+- A portfolio report over a long range or many assets no longer freezes the server for other users while it is computed.
 
 #### 🔒 Security
 
+- Price and FX queries no longer accept date ranges without a ceiling: the end stops at tomorrow and the FX start at 100 years before it; a range reaching year 9999, which previously exhausted the server and ended in an error, now answers at once.
+- A number that is not finite (`NaN`, `Infinity`) nested in a provider's parameters or in a risk analytic's parameters is refused (422): a provider's was saved and read back as `null`.
+- A password change and an administrator's sign-out-everywhere arriving at the same moment both end the sessions: the cookie the first issued no longer survives the second.
+- The in-memory limits forget the visitor with the fewest attempts first: a flood of new usernames or addresses no longer resets the count of one being guessed.
+- In the managed profile, the startup log and the security checks report frame protection turned off (a warning) and the report-only Content-Security-Policy turned off (info).
+- Behind a reverse proxy LibreFolio does not trust, the limits per visitor's address no longer count every visitor together: such requests are left out, and LibreFolio warns once in its log and in the security checks until `FORWARDED_ALLOW_IPS` or `LIBREFOLIO_CLIENT_IP_HEADER` is set.
 - **Nothing left in clear after a crash** — at every start, LibreFolio removes what a backup, a restore check or `dev.py backup inspect` left on disk when it was stopped outright (a power cut, `kill -9`): a decrypted archive, even a partial one, an `inspect` folder older than an hour, and the database copy and clear zip of a backup that died. Nothing a running command still holds is touched, and nothing through a link. Finished backups past their hour are removed at start too, not only at the next backup.
 - **Passwords never shown** — `--password-stdin` at a terminal now asks the password without showing it (twice for `dev.py backup create`), and the password fields of a secure backup in Settings › Backup are marked as new passwords, so a password manager does not fill in your account password there.
 - **What a decrypted backup holds** — `dev.py backup decrypt` now says when the zip also holds the instance key, which opens every saved provider key.
@@ -276,6 +296,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The admin guide says what to do when LibreFolio has replaced a lost instance key: put your copy of `secrets/instance.key` back before anyone enters a plugin secret again.
 - Backups inside Docker are documented: `dev.py backup` works in the image, the archives go to `backups/` and, like `secrets/`, only LibreFolio's user can read them.
+- **A split with a ratio of 0 or below is refused when you save it.** Such a split was saved, and as soon as a transaction was linked to it the Dashboard failed to load. The events editor now names the split at fault; a provider's split with such a ratio is skipped.
 
 ### ⚠️ Breaking changes
 

@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Literal
 
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.services.financial_math.portfolio.models import ClassificationResult, ClassificationType, ClassifiedTransaction, InTransitInterval
+from backend.app.services.financial_math.portfolio.models import ClassificationResult, ClassificationType, ClassifiedTransaction, InTransitInterval, ShareMismatch
 
 # Transaction types that are always external cash flows when unlinked
 _EXTERNAL_CASH_TYPES = {TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}
@@ -86,6 +86,7 @@ class ScopeAwareTransactionClassifier:
         in_transit_intervals: list[InTransitInterval] = []
         external_cash_flows: list[tuple[date_type, int, Decimal, str]] = []
         warnings: list[str] = []
+        share_mismatches: list[ShareMismatch] = []
 
         # Track which linked pairs we've already processed (avoid duplicates)
         processed_pairs: set[tuple[int, int]] = set()
@@ -128,25 +129,30 @@ class ScopeAwareTransactionClassifier:
                 ctxn = ClassifiedTransaction(tx=tx, classification="linked_internal", paired_tx=paired, share=share)
                 classified.append(ctxn)
 
-                # In-transit: only create once per pair, only if dates differ
-                if pair_key not in processed_pairs and tx.date != paired.date:
-                    interval = self._build_in_transit_interval(tx, paired)
-                    if interval is not None:
-                        # F2 — ownership scaling: attribute in-transit value at the
-                        # departure broker's actual ownership share, not a fixed 100%.
-                        # Without this, a <100%-owned shared broker would report the
-                        # full untouched value while it is in transit, then jump to the
-                        # correct scaled value the moment it lands — an owner-share
-                        # regression `_build_in_transit_interval` deliberately leaves
-                        # for this call site to close, since only here is
-                        # `self.broker_shares` in scope.
-                        interval.share = self.broker_shares.get(interval.departure_leg.broker_id, Decimal("1"))
-                        in_transit_intervals.append(interval)
+                # In-transit, and the share check: once per pair (the first of its two legs met)
+                if pair_key not in processed_pairs:
+                    # In-transit: only if the dates differ
+                    if tx.date != paired.date:
+                        interval = self._build_in_transit_interval(tx, paired)
+                        if interval is not None:
+                            # F2 — ownership scaling: attribute in-transit value at the
+                            # departure broker's actual ownership share, not a fixed 100%.
+                            # Without this, a <100%-owned shared broker would report the
+                            # full untouched value while it is in transit, then jump to the
+                            # correct scaled value the moment it lands — an owner-share
+                            # regression `_build_in_transit_interval` deliberately leaves
+                            # for this call site to close, since only here is
+                            # `self.broker_shares` in scope.
+                            interval.share = self.broker_shares.get(interval.departure_leg.broker_id, Decimal("1"))
+                            in_transit_intervals.append(interval)
 
-                    # Warn if share percentages differ between source/dest brokers
+                    # J-43: brokers owned at different shares, on any dates (a same-day pair too): each leg counts at
+                    # its own broker's share, so the gap between them is a result (D-MF4 = a), which the data-quality
+                    # report explains with this record.
                     paired_share = self.broker_shares.get(paired.broker_id, Decimal("1"))
                     if share != paired_share:
                         warnings.append(f"Linked internal pair ({tx.id}, {paired.id}): share mismatch " f"broker {tx.broker_id}={share} vs broker {paired.broker_id}={paired_share}")
+                        share_mismatches.append(self._share_mismatch(tx, share, paired, paired_share))
             else:
                 # ── LINKED EXTERNAL — only this leg in scope ──
                 # Determine if this leg is inflow or outflow based on amount/quantity sign
@@ -165,8 +171,15 @@ class ScopeAwareTransactionClassifier:
             in_transit_intervals=in_transit_intervals,
             external_cash_flows=external_cash_flows,
             warnings=warnings,
+            share_mismatches=share_mismatches,
         )
         return result
+
+    @staticmethod
+    def _share_mismatch(tx: Transaction, share: Decimal, paired: Transaction, paired_share: Decimal) -> ShareMismatch:
+        """The pair as a ShareMismatch: its legs ordered by transaction id, dated on the later leg."""
+        (low_id, low_broker, low_share), (high_id, high_broker, high_share) = sorted(((tx.id or 0, tx.broker_id, share), (paired.id or 0, paired.broker_id, paired_share)))
+        return ShareMismatch(tx_ids=(low_id, high_id), broker_ids=(low_broker, high_broker), shares=(low_share, high_share), date=max(tx.date, paired.date))
 
     @staticmethod
     def _classify_external_leg(tx: Transaction) -> ClassificationType:

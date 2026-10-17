@@ -93,6 +93,13 @@
       "openRegistrationLocked": "La registrazione è aperta, fissata da LIBREFOLIO_REGISTRATION, e questa istanza è raggiungibile da fuori dalla tua rete locale: chiunque la trovi può crearsi un account. Cambia la variabile per chiuderla.",
       "openRegistrationAction": "Cambia chi può registrarsi"
     },
-    "instanceBlocked": "Questa istanza è bloccata dal suo fornitore: riprova quando sarà sbloccata."
+    "instanceBlocked": "Questa istanza è bloccata dal suo fornitore: riprova quando sarà sbloccata.",
+    "checks": {
+      "loginLimit": {
+        "ok": "Gli accessi sbagliati sono limitati: dopo 10 in 15 minuti per un nome utente o un'email, o 50 da un indirizzo, l'accesso aspetta.",
+        "off": "Il limite degli accessi sbagliati è spento (LIBREFOLIO_LOGIN_LIMIT=off): le password si possono provare senza pause. Riaccendilo, a meno che questa non sia un'istanza di prova.",
+        "invalid": "LIBREFOLIO_LOGIN_LIMIT vale «{value}», che non è né on né off: il server non si avvia con questo valore."
+      }
+    }
   }
 }

@@ -224,6 +224,21 @@
         "submit": "Comprobar la copia",
         "cancel": "Cancelar"
       }
+    },
+    "checks": {
+      "panelToken": {
+        "ok": "El token de copia de seguridad del panel del proveedor está definido y se puede usar.",
+        "off": "No hay ningún token de copia de seguridad para un panel del proveedor: las rutas de copia del panel están desactivadas.",
+        "notVisibleAscii": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN contiene caracteres que una cabecera de solicitud no transporta tal cual (espacios, tabulaciones o caracteres fuera del ASCII visible): las rutas de copia del panel responden 503 hasta que se corrija.",
+        "tooShort": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN es demasiado corto: usa al menos {minimum} caracteres aleatorios. Las rutas de copia del panel responden 503 hasta que se corrija.",
+        "unreadable": "No se puede leer el token de copia de seguridad del panel: {reason}"
+      },
+      "uploadLimit": {
+        "limited": "Una restauración acepta archivos de hasta {limit_mb} MB.",
+        "unlimited": "Una restauración acepta archivos de cualquier tamaño.",
+        "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB no se puede usar (un número entero de megabytes, 0 para ningún límite): las subidas para una restauración se rechazan hasta que se corrija.",
+        "profileTable": "Los valores predeterminados del perfil de LibreFolio no dan ningún valor al límite de subida, o le dan uno del tipo equivocado, así que las subidas para una restauración se rechazan: define LIBREFOLIO_BACKUP_MAX_UPLOAD_MB como un número entero de megabytes e informa del error."
+      }
     }
   }
 }

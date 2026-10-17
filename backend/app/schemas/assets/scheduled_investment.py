@@ -26,6 +26,20 @@ from backend.app.schemas.common import (
 )
 
 # ============================================================================
+# BOUNDS (R13-SEC7-2, night decision N73)
+# ============================================================================
+
+# The schedule is generated day by day: an unbounded span is unbounded work and memory (a dry-run probe of a
+# year-1-to-9999 DAILY schedule walked millions of days). 100 years cover any dated security and the model of a
+# perpetual; dates outside 1900-2200 are not a live security's.
+SCHEDULE_MIN_DATE = date(1900, 1, 1)
+SCHEDULE_MAX_DATE = date(2200, 12, 31)
+SCHEDULE_MAX_SPAN_DAYS = 36_525
+SCHEDULE_MAX_PERIODS = 1_200
+LATE_INTEREST_MAX_GRACE_DAYS = 36_525
+
+
+# ============================================================================
 # ENUMS FOR FINANCIAL CALCULATIONS
 # ============================================================================
 
@@ -133,6 +147,14 @@ class FAInterestRatePeriod(StrictModel):
             raise ValueError("Interest rate must be non-negative")
         return rate
 
+    @field_validator("start_date", "end_date")
+    @classmethod
+    def validate_date_bounds(cls, v):
+        """A period lies between SCHEDULE_MIN_DATE and SCHEDULE_MAX_DATE."""
+        if not SCHEDULE_MIN_DATE <= v <= SCHEDULE_MAX_DATE:
+            raise ValueError(f"period dates must be between {SCHEDULE_MIN_DATE} and {SCHEDULE_MAX_DATE}")
+        return v
+
     @field_validator("end_date")
     @classmethod
     def validate_date_range(cls, v, info):
@@ -175,9 +197,11 @@ class FALateInterestConfig(StrictModel):
     @field_validator("grace_period_days")
     @classmethod
     def validate_grace_period(cls, v):
-        """Ensure grace period is non-negative."""
+        """Ensure grace period is non-negative and at most LATE_INTEREST_MAX_GRACE_DAYS."""
         if v < 0:
             raise ValueError("Grace period must be non-negative")
+        if v > LATE_INTEREST_MAX_GRACE_DAYS:
+            raise ValueError(f"Grace period must be at most {LATE_INTEREST_MAX_GRACE_DAYS} days")
         return v
 
 
@@ -211,6 +235,8 @@ class FAScheduledInvestmentSchedule(StrictModel):
         - Periods must not overlap
         - Periods must not have gaps (contiguous dates)
         - Periods must be ordered by start_date
+        - At most SCHEDULE_MAX_PERIODS periods, dates in [SCHEDULE_MIN_DATE, SCHEDULE_MAX_DATE], spanning at most
+          SCHEDULE_MAX_SPAN_DAYS (R13-SEC7-2)
 
     Example:
         {
@@ -259,9 +285,14 @@ class FAScheduledInvestmentSchedule(StrictModel):
         """Ensure schedule periods are contiguous and non-overlapping."""
         if not v:
             return v  # Allow empty schedule (probe returns initial_value)
+        if len(v) > SCHEDULE_MAX_PERIODS:
+            raise ValueError(f"A schedule has at most {SCHEDULE_MAX_PERIODS} periods, got {len(v)}")
 
         # Sort by start_date to ensure proper ordering
         sorted_schedule = sorted(v, key=lambda p: p.start_date)
+        span_days = (max(p.end_date for p in sorted_schedule) - sorted_schedule[0].start_date).days
+        if span_days > SCHEDULE_MAX_SPAN_DAYS:
+            raise ValueError(f"A schedule spans at most {SCHEDULE_MAX_SPAN_DAYS} days (100 years), got {span_days}")
 
         # Check for overlaps and gaps
         for i in range(len(sorted_schedule) - 1):

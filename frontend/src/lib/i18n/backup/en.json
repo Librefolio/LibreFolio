@@ -224,6 +224,21 @@
         "submit": "Check the backup",
         "cancel": "Cancel"
       }
+    },
+    "checks": {
+      "panelToken": {
+        "ok": "The hosting panel's backup token is set and can be used.",
+        "off": "No backup token is set for a hosting panel: the panel's backup routes are off.",
+        "notVisibleAscii": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN holds characters a request header cannot carry as written (spaces, tabs or characters outside visible ASCII): the panel's backup routes answer 503 until it is fixed.",
+        "tooShort": "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN is too short: use at least {minimum} random characters. The panel's backup routes answer 503 until it is fixed.",
+        "unreadable": "The hosting panel's backup token cannot be read: {reason}"
+      },
+      "uploadLimit": {
+        "limited": "A restore accepts archives of up to {limit_mb} MB.",
+        "unlimited": "A restore accepts archives of any size.",
+        "invalid": "LIBREFOLIO_BACKUP_MAX_UPLOAD_MB cannot be used (a whole number of megabytes, 0 for no limit): restore uploads are refused until it is fixed.",
+        "profileTable": "LibreFolio's own profile defaults give the upload limit no value, or one of the wrong type, so restore uploads are refused: set LIBREFOLIO_BACKUP_MAX_UPLOAD_MB to a whole number of megabytes and report the error."
+      }
     }
   }
 }

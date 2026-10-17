@@ -31,6 +31,16 @@ not written yet: an account that waits is written as ``hold_for_verification`` l
    the route, answers them — a caller without a session gets the plain-string 401 of ``get_current_user`` —, and the web
    app reads a 401 of theirs that is not E's own refusal as that block. This module mounts the routers without the
    block's dependency, so its ``blocked`` cases read the routes' own answers; behind ``/api/v1`` the block answers first.
+7. Behind a reverse proxy LibreFolio does not trust (decision N70; lot E-13, on H's helper H-36) — the usual deployment:
+   the Docker image behind the proxy HTTPS needs, neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor ``FORWARDED_ALLOW_IPS``
+   set —, every visitor arrives from the proxy's private address with an ``X-Forwarded-For`` the app does not trust.
+   Two visitors behind one private proxy never share one «resend» budget: the route counts H-36's
+   ``rate_limit_address(request)``, the address of 4 but for a request from a local peer (``classify_ip``: loopback,
+   private, link-local, unique-local, CGNAT) carrying ``X-Forwarded-For``, ``Forwarded`` or ``X-Real-IP`` whose
+   address neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor uvicorn gave: ``None``, counted under no address. A public
+   address's own forwarding headers move nothing, and a private address without one — a device of the local network
+   talking to LibreFolio directly — keeps its own budget. EVA-018 pins the skip, red before the cure; EVA-019 and
+   EVA-020 are guards, green before and after.
 
 Pure: the real auth and email routers run in-process on a private SQLite file under ``tmp_path`` (NullPool, disposed
 at teardown); accounts are rows with a real bcrypt hash at cost 4; tokens are issued by A's token service. An autouse
@@ -77,6 +87,7 @@ from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken
 from backend.app.services.email import delivery, smtp, verification
 from backend.app.services.email.links import email_link
 from backend.app.services.email.messages import build_verification
+from backend.app.services.platform.client_address import _untrusted_forwarding, untrusted_forwarding_seen
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.fixtures.email.fake_smtp import FakeSmtpServer
@@ -167,6 +178,13 @@ def _nothing_reported_yet() -> Iterator[None]:
     delivery._report_invalid.cache_clear()
     yield
     delivery._report_invalid.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _nothing_noted_yet(monkeypatch: pytest.MonkeyPatch) -> None:
+    """H's ``_untrusted_forwarding`` (decision N70) holds fresh empty sets for each test, the process's own put back after it: the forwarding headers of section 6 — «local» from EVA-018, «public» from EVA-019 — leave no note, so a later reader's first noting of a class, the only one that logs its warning, still logs it."""
+    monkeypatch.setitem(_untrusted_forwarding, "local", set())
+    monkeypatch.setitem(_untrusted_forwarding, "public", set())
 
 
 @pytest.fixture
@@ -368,18 +386,18 @@ async def _browser(private: _Private, *, client: tuple[str, int] | None = FIRST_
         yield browser
 
 
-async def _post(private: _Private, path: str, body: object, *, client: tuple[str, int] | None = FIRST_CLIENT) -> httpx.Response:
-    """One anonymous ``POST`` of ``body`` as JSON, from a fresh browser at ``client``."""
+async def _post(private: _Private, path: str, body: object, *, client: tuple[str, int] | None = FIRST_CLIENT, headers: dict[str, str] | None = None) -> httpx.Response:
+    """One anonymous ``POST`` of ``body`` as JSON, from a fresh browser at ``client``, carrying ``headers``."""
     async with _browser(private, client=client) as browser:
-        return await browser.post(path, json=body)
+        return await browser.post(path, json=body, headers=headers)
 
 
 async def _confirm(private: _Private, token: str) -> httpx.Response:
     return await _post(private, CONFIRM, {"token": token})
 
 
-async def _resend(private: _Private, username: str, password: str = ACCOUNT_PASSWORD, *, client: tuple[str, int] | None = FIRST_CLIENT) -> httpx.Response:
-    return await _post(private, RESEND, {"username": username, "password": password}, client=client)
+async def _resend(private: _Private, username: str, password: str = ACCOUNT_PASSWORD, *, client: tuple[str, int] | None = FIRST_CLIENT, headers: dict[str, str] | None = None) -> httpx.Response:
+    return await _post(private, RESEND, {"username": username, "password": password}, client=client, headers=headers)
 
 
 def _detail(response: httpx.Response) -> dict[str, Any]:
@@ -887,3 +905,90 @@ def test_neither_route_is_allowed_on_a_blocked_instance() -> None:
 
     assert allowed == [], f"on a blocked instance the block, not the route, must answer these public routes: the web app reads a 401 of theirs that is not E's own refusal as the instance's block (lots E-10, E-11); in ALLOWED_WHEN_BLOCKED: {allowed}"
     print_success("neither route in the list: on a blocked instance the block answers them")
+
+
+# =============================================================================
+# 6. BEHIND A PROXY LIBREFOLIO DOES NOT TRUST (DECISION N70, LOT E-13)
+# =============================================================================
+
+#: The address every request comes from behind a reverse proxy LibreFolio does not trust: the proxy's own, private —
+#: the Docker bridge's, or an IPv6 unique-local one. Any port: the key of an address never holds it.
+PRIVATE_PROXIES = [pytest.param("172.17.0.1", id="docker-bridge-ipv4"), pytest.param("fd00::2", id="unique-local-ipv6")]
+PROXY_PORT = 40100
+#: Two visitors, as a forwarding header names them: A asks first, B after.
+VISITOR_A = "203.0.113.10"
+VISITOR_B = "203.0.113.20"
+#: A device of the local network that talks to LibreFolio directly: a private address, and no forwarding header.
+LAN_DEVICE = ("192.168.1.5", 40200)
+#: H-36's forwarding headers, exactly its list: (the header, what precedes the address in it). A reverse proxy writes
+#: them for the visitor it forwards.
+FORWARDING_HEADERS = [
+    pytest.param("X-Forwarded-For", "", id="x-forwarded-for"),
+    pytest.param("Forwarded", "for=", id="forwarded"),
+    pytest.param("X-Real-IP", "", id="x-real-ip"),
+]
+#: The forwarding headers a client at a public address may write itself: the same three.
+OWN_FORWARDING_HEADERS = FORWARDING_HEADERS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("header", "prefix"), FORWARDING_HEADERS)
+@pytest.mark.parametrize("proxy", PRIVATE_PROXIES)
+async def test_two_visitors_behind_one_private_proxy_do_not_share_the_resend_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, proxy: str, header: str, prefix: str) -> None:
+    """EVA-018 — contract 7, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``RESEND_BY_ADDRESS`` at one request for this test, email ready. Both requests come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor and each for a name no account has, so that no limit per account applies. Visitor A: 401 ``INVALID_CREDENTIALS``. Visitor B, through the same proxy: 401 too, never 429. Then the skip itself, which B's answer alone would not prove: the limiter per address holds no key at all — neither visitor counted under an address, the proxy's or their own. Nothing sent. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
+    print_section(f"EVA-018: two visitors behind {proxy}, {header}")
+    by_address = SlidingWindowLimiter(1, SHIPPED_RESEND.window_seconds, clock=clock)
+    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", by_address)
+    peer = (proxy, PROXY_PORT)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        first = await _resend(private, f"{NOBODY}_a", client=peer, headers={header: f"{prefix}{VISITOR_A}"})
+        second = await _resend(private, f"{NOBODY}_b", client=peer, headers={header: f"{prefix}{VISITOR_B}"})
+
+    assert (first.status_code, first.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"barrier: visitor A reaches the password check: {first.status_code} {first.text}"
+    assert second.status_code != 429, f"two visitors behind one private proxy ({proxy}) shared one per-address budget: visitor B was refused because visitor A had asked: {second.text}"
+    assert (second.status_code, second.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"{second.status_code} {second.text}"
+    assert len(by_address) == 0, f"a request through a reverse proxy LibreFolio does not trust ({proxy}, {header}) is counted under no address (N70): the limiter per address holds {len(by_address)} key(s)"
+    assert untrusted_forwarding_seen("local") == (header,), f"N70's skip notes the {header} of a local peer: noted {untrusted_forwarding_seen('local')}"
+    assert fake.connections == 0
+    print_success("401 for each visitor, and no key in the limiter per address: the skip")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("header", "prefix"), OWN_FORWARDING_HEADERS)
+async def test_a_public_clients_own_forwarding_header_moves_nothing(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, header: str, prefix: str) -> None:
+    """EVA-019 — contract 7, a guard, green before and after the cure: ``RESEND_BY_ADDRESS`` at one request for this test, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10``, then ``203.0.113.20``, each time for a name no account has: 401, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900`` — the whole window, counted from the first —: what a client writes never moves its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    print_section(f"EVA-019: a public client's own {header}")
+    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_RESEND.window_seconds, clock=clock))
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        first = await _resend(private, f"{NOBODY}_a", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_A}"})
+        second = await _resend(private, f"{NOBODY}_b", client=FIRST_CLIENT, headers={header: f"{prefix}{VISITOR_B}"})
+
+    assert (first.status_code, first.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"barrier: the first request reaches the password check: {first.status_code} {first.text}"
+    assert second.status_code == 429, f"a client at a public address chose its own budget with a {header} header it wrote itself: {second.status_code} {second.text}"
+    assert _detail(second) == {"error_code": "EMAIL_RATE_LIMITED", "retry_after": 900, "message": RATE_LIMITED_MESSAGE}
+    assert second.headers.get("retry-after") == "900"
+    assert fake.connections == 0
+    print_success(f"401, then 429 whatever its own {header} says")
+
+
+@pytest.mark.asyncio
+async def test_a_private_client_without_a_forwarding_header_keeps_its_own_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+    """EVA-020 — contract 7, a guard, green before and after the cure: ``RESEND_BY_ADDRESS`` at one request for this test, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header —, twice for a name no account has: 401, then 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 900 and ``Retry-After: 900``: a private address alone is not a proxy, and keeps its own budget. Nothing sent. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    print_section("EVA-020: a device of the local network")
+    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", SlidingWindowLimiter(1, SHIPPED_RESEND.window_seconds, clock=clock))
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        first = await _resend(private, f"{NOBODY}_a", client=LAN_DEVICE)
+        second = await _resend(private, f"{NOBODY}_b", client=LAN_DEVICE)
+
+    assert (first.status_code, first.json()) == (401, INVALID_CREDENTIALS_ANSWER), f"barrier: the first request reaches the password check: {first.status_code} {first.text}"
+    assert second.status_code == 429, f"a private address without a forwarding header lost its own budget: {second.status_code} {second.text}"
+    assert _detail(second) == {"error_code": "EMAIL_RATE_LIMITED", "retry_after": 900, "message": RATE_LIMITED_MESSAGE}
+    assert second.headers.get("retry-after") == "900"
+    assert fake.connections == 0
+    print_success("401, then 429: its own budget")

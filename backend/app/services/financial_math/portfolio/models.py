@@ -119,6 +119,8 @@ class ClassificationResult:
     in_transit_intervals: list[InTransitInterval] = field(default_factory=list)
     external_cash_flows: list[tuple[date_type, int, Decimal, str]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # J-43: the linked internal pairs between brokers owned at different shares, one per pair.
+    share_mismatches: list[ShareMismatch] = field(default_factory=list)
 
     def get_needed_paired_ids(self) -> set[int]:
         """IDs of linked txs whose pair is not in the scope transaction set."""
@@ -361,6 +363,36 @@ class InternalAssetTransfer:
     cost_moved: Decimal | None
 
 
+@dataclass(frozen=True, slots=True)
+class ShareMismatch:
+    """A linked internal pair between two brokers owned at different shares (J-43).
+
+    Each leg counts at its own broker's share, so what the departure sends and what the arrival brings differ: that
+    gap is a result, never capital (D-MF4 = a). This record lets the data-quality report explain it to the user.
+    """
+
+    # The pair's two transaction ids, lower id first; the brokers and the shares follow the same order.
+    tx_ids: tuple[int, int]
+    broker_ids: tuple[int, int]
+    shares: tuple[Decimal, Decimal]
+    # The later of the two legs' dates: the day the pair is complete.
+    date: date_type
+
+
+@dataclass(frozen=True, slots=True)
+class InvalidSplitEvent:
+    """A SPLIT asset event stored with a ratio the layer cannot use (None, not finite, or ≤ 0; MF-D4).
+
+    It counts as missing: its linked ADJUSTMENT rows stay the split's rescale (cost kept, never in-kind capital), but no
+    ratio restates a trade price observed before it (market quotes are never restated). The data-quality report names
+    its asset.
+    """
+
+    event_id: int
+    asset_id: int
+    date: date_type
+
+
 @dataclass
 class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
@@ -389,6 +421,10 @@ class PortfolioCalculationResult:
     average_costs: dict[tuple[int, int], AverageCost] = field(default_factory=dict)
     # SELLs replayed, in replay order, with proceeds and historical cost in target_currency
     realized_sales: list[RealizedSale] = field(default_factory=list)
+    # MF-D4: the SPLIT events whose stored ratio is unusable, counted as missing (one per event, by event id).
+    invalid_split_events: list[InvalidSplitEvent] = field(default_factory=list)
     # Conversions a movement (cost, cash, external flow, in-transit cost) needed and could not
     # get: pair "FROM/TO" -> dates. Valuation failures are per day in DailyPortfolioState.missing_fx_pairs.
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
+    # J-43: the classification's linked internal pairs between brokers owned at different shares.
+    share_mismatches: list[ShareMismatch] = field(default_factory=list)

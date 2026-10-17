@@ -79,7 +79,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Lots analysis: lot summary and histories, economic events, average cost lines | `services/financial_math/lots/` |
 | Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return (also as a float for a return series), the observed annualization factor of a return series, the fixed-period changes of a price or rate (1D … 5Y, both orientations), the gain that recovers a drawdown | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
-| Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360) and simple interest | `services/financial_math/interest.py` |
+| Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest, daily compounding over a span in closed form | `services/financial_math/interest.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | Stock splits linked to the ledger: their rows, the usable ratio, and the incoming adjustments without a cost a SPLIT may not lose by a retype | `services/financial_math/splits.py` |
@@ -113,7 +113,7 @@ at the root. The truncation to the database precision reads the models, so it li
 | Uploads and file previews | `backend/app/services/files/` |
 | Email (optional SMTP: transport, hourly budget, templates in 4 languages, config checks) | `backend/app/services/email/` (config in `backend/app/config/email.py`; sliding-window limiter in `backend/app/utils/runtime/rate_window.py`) |
 | API Endpoints | `backend/app/api/v1/*.py` |
-| Config & Data Paths | `backend/app/config/` (base in `__init__.py`, one module per owner section; env vars are read only here; secrets through `env_secret()`, which also reads `NAME_FILE`; every variable documented in `.env.example`, new lines commented) |
+| Config & Data Paths | `backend/app/config/` (base in `__init__.py`, one module per owner section; env vars are read only here; secrets through `env_secret()`, which also reads `NAME_FILE`; every variable documented in `.env.example`, new lines commented; a new security `Settings` field states its `managed` value in `PROFILE_DEFAULTS` in the same lot, or why `managed` keeps the code default (H-39)) |
 | FX Providers | `backend/app/services/fx_providers/` |
 | Asset Providers | `backend/app/services/asset_source_providers/` |
 | Broker Import | `backend/app/services/brim_providers/` |

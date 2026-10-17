@@ -4559,7 +4559,7 @@ non sposti il registro.
 
 ### E-13 — I limiti per indirizzo di E dietro un proxy non fidato (aiuto di H-36)
 
-#### E-13.0 — Analisi e rossi ⏳ (2026-10-17, 05:15–)
+#### E-13.0 — Analisi e rossi ✅ (2026-10-17, 05:15–05:35)
 > **Il via del coordinatore** (05:15): un lotto piccolo di E. Appena H-36 è dentro, lo stesso aiuto si applica ai tre
 > limiti per indirizzo di E: `RESEND_BY_ADDRESS`, `FORGOT_BY_ADDRESS`, `REGISTRATION_EMAILS_BY_ADDRESS`. I rossi ora,
 > il codice dopo H-36. Le mie indicazioni su N70 sono diventate vincolanti per A e H.
@@ -4644,6 +4644,222 @@ non sposti il registro.
 > Anche `login_throttle` di A8a tratta `None` come «solo l'identificativo». Ho proposto il contratto uniforme: l'aiuto di
 > H-36 rende `None` per una richiesta che passa da un proxy locale non fidato, e ogni chiamata lo passa al posto di
 > `client_address(request)`. Così E-13 è una riga per chiamata.
+
+#### E-13.2 — Cura, test e documenti ✅ (2026-10-17, 06:55–07:12)
+> **La base** (coordinatore, 06:55): il mio ramo è avanzato a `da640e33a`, cioè A8a più N70 (`5225f4f05`) più dev
+> `c8ea9ddd4` (H-36, H-37, W-B60, SEC7-2…). I quattro file sporchi sono intatti.
+>
+> **La cura**, una riga per chiamata, come il contratto di E-13.1:
+> - `api/v1/email.py`: forgot (`:160`) e resend (`:208`) passano `rate_limit_address(request)` al posto di
+>   `client_address(request)`; l'import è a `:40`.
+> - `api/v1/auth.py` di A: `/auth/register` (`:299`) passa `rate_limit_address(http_request)` a
+>   `registration_email_allowed()`, e l'import a `:51` è ridotto a `rate_limit_address`. **A rivede la riga.** Le altre
+>   tre chiamate di `auth.py` (`:156`, `:361`, `:424`) erano già passate a `rate_limit_address` con N70, per mano di A.
+>
+> **I test** (`test-author` `71c36ade`, due giri, solo i tre file, nessuna suite eseguita da lui):
+> - **R asserisce anche che il limitatore privato per indirizzo non tiene nessuna chiave** (`len(...) == 0`), dopo
+>   l'asserzione che B è ammesso. Nota del test-author di A: B ammesso, da solo, potrebbe venire da un altro meccanismo.
+> - **R è parametrizzato** sui tre header di H-36 (`X-Forwarded-For`, `Forwarded: for=`, `X-Real-IP`) per i due peer
+>   (`172.17.0.1`, `fd00::2`): sei casi per file.
+> - Una costante `FORWARDING_HEADERS`, a cui punta `OWN_FORWARDING_HEADERS`: G1 e G2 restano invariati.
+> - **La pulizia** (secondo giro): R e G1 lasciavano i nomi degli header in `_untrusted_forwarding` di H. Il warning
+>   «una volta per processo» parte solo se l'insieme della classe è vuoto, quindi gli avanzi di E lo avrebbero ingoiato
+>   a un lettore successivo. La cura è una fixture con `monkeypatch.setitem` sulle due classi, come
+>   `test_config_audit.py:810-811`. Il test-author l'ha fatta **autouse** (`_nothing_noted_yet`), perché anche
+>   EMA-035, già esistente, lascia una nota «public» (un `X-Forwarded-For` falsificato da `198.51.100.7`). Ha aggiunto
+>   anche l'asserzione facoltativa: in R, `untrusted_forwarding_seen("local") == (header,)`, la prova che la richiesta
+>   è passata dal salto di N70.
+>
+> **I documenti**:
+> - `admin/email.en.md`, «Behind a reverse proxy»:
+>   - `FORWARDED_ALLOW_IPS` accetta anche reti;
+>   - il caso del proxy non fidato **su un indirizzo locale**: i limiti per indirizzo lo saltano; restano quelli per
+>     identificativo, per account e per casella, e il budget orario; il log avvisa una volta;
+>   - il caso **su un indirizzo pubblico**: un solo conteggio condiviso;
+>   - il link a *The Visitor's Address*.
+> - `developer/backend/email.md`:
+>   - `rate_limit_address(request)` nelle righe della tabella dei limiti (`:648`, `:910`, `:912`) e nelle rotte
+>     (`:1076`, `:1110`);
+>   - il paragrafo «Which client address», con le decisioni P17 e N70, il `None` che significa «nessun conteggio» e
+>     `FORWARDED_ALLOW_IPS` con le reti;
+>   - la tabella Testing: EMA-001…052, EVA-001…020, EVH-001…016.
+> - `developer/architecture/security.md` (pagina di A e H; solo le frasi su E): `:375-377`, `:411-413` e `:2301-2306`
+>   dicevano ancora che le rotte di E leggono `client_address()`.
+> - devWiki:
+>   - `domains/email.md`, «Behind a proxy», riscritto. Ho tolto l'esempio «Fly's, without the variable», perché il
+>     proxy di Fly può arrivare all'app da un indirizzo privato.
+>   - Una voce in `log.md`.
+>   - `check_source_paths.py`: 7 percorsi mancanti (12 occorrenze) su 4186, tutti preesistenti, nessuno su questa
+>     pagina.
+>
+> **Il catalogo del runner** (`scripts/test_runner/_backend_api.py`, superficie condivisa, solo le tre voci di E): una
+> frase in coda alle descrizioni di `email`, `email-verification` e `email-verification-hooks` (il salto dietro un
+> proxy locale non fidato, il conteggio che resta per un client pubblico e per un dispositivo della LAN).
+>
+> **⚠️ Fuori pista**: il primo build stretto è fallito per un mio link, `connection_checks.md#client-address` da
+> `admin/email.en.md`. La pagina esiste solo in inglese, quindi il build italiano la usa così com'è e cerca l'ancora in
+> `connection_checks.it.md`, che non la ha ancora (l'ancora di H esiste solo in inglese). Per questo l'introduzione del
+> paragrafo cita la sezione senza ancora. Ho tolto il link e ripreso le parole di H: il log avvisa una volta per
+> processo, e i controlli di sicurezza lo segnalano come warning di `platform.client_address`.
+>
+> **Prove** (07:06–07:09, carico 35; `files/tools/e13_docs.sh`, poi `files/tools/e9_suites.sh e13greens …`, una cosa
+> alla volta):
+>
+> | Controllo | Esito |
+> |---|---|
+> | `ruff check` e `black --check` (`email.py`, `auth.py`, i tre test, `_backend_api.py`) | puliti |
+> | `api email-verification` | 60 / 60 (i 6 casi R ora verdi) |
+> | `api email` | 168 / 168 |
+> | `api email-verification-hooks` | 26 / 26 |
+> | `mkdocs build` stretto | 0 righe WARNING/ERROR, 3085 URL di asset risolti |
+> | `mkdocs check-links` | 97 link validi |
+> | `git diff --check` | pulito |
+> | Porta 6188 | libera |
+>
+> **Non eseguiti**: lo slot combinato del coordinatore (`login-throttle`, `security-checks`, `auth`, `registration`,
+> `users-admin` e i servizi di A8a e di E) e `all-backend`.
+
+#### E-13.3 — Slot combinato ✅ (2026-10-17, 07:11–07:20)
+> **Il via del coordinatore** (07:11): E-13 è committato (`bfa2729e9` fix, `aad2a2bbf` docs, `39fad6fd3` journal).
+> La base è aggiornata a `8c9550ec6` = A8a + N70 + E-13 + dev `4c767685f` (H-37, X-R47, J-43/SEC7-1, MF…), pulita.
+> Lo slot 1 è mio, corsia 6188, una invocazione alla volta. A rivede intanto la riga di `/auth/register`.
+>
+> **Esito** (`files/tools/e13_combined.sh`, 07:13–07:20, carico 24; servizi e utils in-process, `db populate --force`
+> sulla data-dir della corsia, API con `--no-shared-server`): **18 invocazioni su 18 verdi, 1 633 test, nessun
+> fallito.**
+>
+> | Invocazione | Passati |
+> |---|---|
+> | services `login-throttle` | 33 |
+> | services `accounts-checks` | 76 |
+> | services `config-audit` | 102 |
+> | services `client-address` | 360 |
+> | services `email-verification` | 127 |
+> | services `email-flows` | 149 |
+> | services `email-delivery` | 124 |
+> | utils `rate-window` | 39 |
+> | `db populate --force` | ✅ |
+> | api `email-verification` | 60 |
+> | api `email` | 168 |
+> | api `email-verification-hooks` | 26 |
+> | api `email-change-notice` | 14 |
+> | api `login-throttle` | 55 |
+> | api `security-checks` | 3 |
+> | api `auth` | 95 |
+> | api `registration` | 102 |
+> | api `users-admin` | 100 |
+>
+> Alla fine la porta 6188 è libera e l'albero è pulito: le suite non hanno toccato file tracciati.
+
+### E-14 — Nessuno sfratto mirato di una chiave più pesante (`rate_window.py`)
+
+#### E-14.0 — Il via e la correzione del disegno ✅ (2026-10-17, 07:30–07:45)
+> **Il via del coordinatore** (07:30): sì, nella 1.3, subito, perché serve al cloud. Il file è mio (A non lo tocca
+> più): i test RWL con i rossi prima, poi le due frasi «310 contro 100 000». `email.md` è mia; per `security.md:431-437`
+> A ha già dato l'ok, e la rivede al checkpoint.
+>
+> **⚠️ Fuori pista: il disegno approvato non basta, e l'errore è mio.** Nella revisione di N70 non avevo contato chi si
+> ferma a **9** fallimenti: la chiave non diventa mai piena, resta «aperta», e uno spruzzo la sfratta nell'ordine
+> d'uso, come oggi. Misurato (`files/e9/e14_policies.py`, in memoria; log in `files/logs/e14_policies.log`),
+> richieste per tentativo in più:
+>
+> | Attacco | Oggi (K=32) | Indice delle aperte | Meno colpi |
+> |---|---|---|---|
+> | spruzzo ingenuo | mai | mai | mai |
+> | fermo a 9, poi spruzzo | **1 111** | **1 111** | **mai** |
+> | fermo a 9, 31 chiavi da 9 subito dopo, poi spruzzo | 1 111 | 1 111 | mai |
+> | ogni altra chiave pesante (9-10 colpi) | 10 000 | 10 000 | 10 000 |
+>
+> Lock nel caso peggiore, per chiave nuova (carico 50-59, valori gonfiati): 72 µs oggi, 6,9 µs con l'indice, 14,8 µs
+> con «meno colpi».
+>
+> **Il disegno di E-14 diventa «meno colpi»**: si sfratta la chiave con meno colpi ancora nella finestra, e tra
+> quelle la meno usata.
+> - **Scadenza esatta**: un heap con una voce per chiave (il suo colpo più vecchio) e i secchi per conteggio. Senza,
+>   una chiave i cui colpi sono scaduti terrebbe una protezione che non merita più: proprio il buco che un indice
+>   pigro aprirebbe.
+> - **Nessuna ricerca**: il costo di una chiave nuova non cresce con le chiavi.
+> - **Heap compattato** oltre il doppio delle chiavi: la memoria resta limitata, qualunque sia il ritmo delle richieste.
+> - **`eviction_scan` sparisce**: nessun chiamante dell'app lo passa.
+>
+> Ho mandato la correzione al coordinatore (07:4x), dicendo che procedo così salvo un suo stop.
+
+#### E-14.1 — Rossi ✅ (2026-10-17, 07:38–07:50)
+> **Test** (`test-author`, solo `test_rate_window.py` e la riga `rate-window` del catalogo in `_backend_utils.py`):
+> - contratto 2 senza `eviction_scan` (RWL-002, RWL-003);
+> - il contratto 8 riscritto;
+> - `len` conta solo le chiavi con un colpo nella finestra;
+> - RWL-020 (nessun limite entra nella scelta);
+> - RWL-022 (la chiave più leggera va, ovunque stia);
+> - nuovi: la chiave a 9 attraverso uno spruzzo; la chiave bloccata con 31 piene subito dopo; i colpi scaduti non
+>   proteggono; il limite dell'heap.
+
+> **Scritti** dal `test-author` `4d842cb8` (07:38–07:48). Il file e il catalogo sono gli unici toccati. L'agente ha
+> eseguito solo `py_compile`, `ruff`, `black` (carico 27-28) e `--collect-only`. I test raccolti passano da 39 a 45.
+> - RWL-003 fissa la firma intera, e passare `eviction_scan` è un `TypeError`.
+> - RWL-020 diventa `test_no_limit_enters_the_choice`.
+> - RWL-022 mette la chiave leggera in posizione 0, 20 o 39 su 40.
+> - Nuovi: RWL-025 (a 9 attraverso 1 000 fresche), RWL-026 (bloccata con 31 piene dietro), RWL-027 (due casi: i colpi
+>   scaduti non proteggono), RWL-028 (tetto di `_expiry`, white-box dichiarato), RWL-029 (`len`).
+>
+> **Rossi visti** (07:50, `files/tools/e9_suites.sh e14reds utils:rate-window`, carico 26): **9 falliti, 36 passati**,
+> proprio i 9 previsti, ognuno per la ragione giusta:
+> - la firma ha ancora `eviction_scan`;
+> - `len` conta `a` scaduta;
+> - con un limite per chiamata più basso va `b` invece di `c`;
+> - la chiave leggera in posizione 39 non viene presa;
+> - la chiave a 9 viene liberata da 1 000 fresche;
+> - la chiave bloccata con 31 piene dietro viene liberata;
+> - nei due casi di RWL-027 va `fresh` al posto di `old`;
+> - non c'è `_expiry`.
+
+#### E-14.2 — Codice ✅ (2026-10-17, 07:50–07:53)
+> **La bozza, poi applicata così com'era** (`files/e9/rate_window_e14.py` → `rate_window.py`, 07:50), dopo i rossi visti.
+> - **Struttura**: `_hits` (i colpi vivi per chiave), `_by_count` (gruppi per conteggio, ognuno dal meno usato),
+>   `_expiry` (heap di `(colpo più vecchio, seriale, chiave)`; le voci col seriale vecchio sono stantie e saltate).
+> - **Sfratto**: la prima chiave del gruppo più basso, mai quella nuova. `_compact()` ricostruisce l'heap oltre
+>   2·chiavi + 64: dopo uno sfratto, un `reset` o una scadenza.
+> - **Una chiave nuova nasce con il suo colpo**, così l'heap ricostruito non legge mai una coda vuota. Il ciclo di
+>   sfratto si ferma se non c'è un'altra chiave, quindi mai un ciclo infinito sotto il lock.
+>
+> **Fuzz differenziale** (`files/e9/e14_fuzz.py`, log `files/logs/e14_fuzz.log`): 300 semi × 4 000 operazioni a caso
+> contro un modello a forza bruta. Tornano tutti: decisioni, `retry_after`, conteggi, `len`, lo sfratto di una chiave
+> più leggera, i gruppi, i seriali e il tetto dell'heap.
+>
+> **Costi misurati sulla bozza** (`files/e9/e14_draft_cost.py`; carico 33-44):
+> - nessuno spruzzo sfratta X: bloccata, a 9, a 9 con 31 chiavi da 9, bloccata con 31 piene;
+> - rendere pesante ogni chiave: 90 000 richieste, 10 000 per tentativo;
+> - heap al massimo 19 741 voci, contro il tetto di 20 064;
+> - 28 µs per chiave nuova con i suoi 10 colpi, accanto a 10 000 chiavi piene.
+
+> **Verdi** (07:51–07:53, carico 28-38; `files/tools/e9_suites.sh e14greens …` ed `e14users …`, una suite alla
+> volta; ruff e black puliti su `rate_window.py`):
+>
+> | Suite | Passati |
+> |---|---|
+> | utils `rate-window` | 45 / 45 (i 9 rossi ora verdi) |
+> | services `login-throttle` | 33 |
+> | services `email-flows` | 149 |
+> | services `email-verification` | 127 |
+> | services `email-delivery` | 124 |
+> | api `login-throttle` | 55 |
+> | api `email` | 168 |
+> | api `email-verification` | 60 |
+> | api `email-verification-hooks` | 26 |
+> | api `email-change-notice` | 14 |
+
+#### E-14.3 — Docs, controlli e checkpoint ✅ (2026-10-17, 07:53–07:56)
+> **Documenti** (`files/e9/e14_docs.py`):
+> - `developer/backend/email.md`, «The Sliding-Window Limiter»: la firma senza `eviction_scan`, `len`, e quattro punti
+>   (memoria, perché vanno i più leggeri, scadenza esatta, nessuna ricerca) con i numeri misurati; la riga Testing
+>   (RWL-001…029).
+> - `security.md:431-437` (pagina di A, con il suo ok; A la rivede al checkpoint): la frase sullo sfratto riscritta;
+>   «310 contro 100 000» lascia il posto ai costi veri.
+> - devWiki `domains/email.md`: il punto «Eviction from the in-memory limiters», con la lezione. Più una voce in
+>   `log.md`.
+>
+> **Prove**: `mkdocs build` stretto con 0 righe WARNING/ERROR; `check-links` con 97 link validi; `git diff --check`
+> pulito; porta 6188 libera.
 
 ### R13-SEC7 — Revisione di sicurezza di ciò che è entrato in dev dopo le mie revisioni (2026-10-17, 05:40–)
 > **Il compito del coordinatore** (05:3x), mentre aspetto H-36 e poi A8a più N70, cioè E-13, ed E-8 dopo A8b:
@@ -4822,3 +5038,173 @@ non sposti il registro.
 > (500), il costo Auto, le righe vecchie, D-SEC2-1 di nuovo (le scritture dei dati condivisi).
 >
 > Nessuna correzione da parte mia.
+
+> **R13-SEC7 committato** (coordinatore, 05:57; il piano è in dev, da `132932198` a `d5126c19a`; i test di E-13
+> restano fuori). Lo smistamento, e ogni lotto lo rivedo io al suo checkpoint:
+> - **SEC7-1** (l'intervallo delle date) va a **J**, con priorità massima: il taglio nel motore, nessuna modifica a
+>   `schemas/common.py` per ora;
+> - **SEC7-2** (l'orizzonte degli investimenti programmati) va a **MF**, dopo l'ingresso di MF-P2: il tetto, la forma
+>   chiusa per COMPOUND, niente cache per i risultati enormi;
+> - **SEC7-3** (`format(v, "f")`) va a **W**, dopo l'ingresso di W-B60: `str(v)` o il `Decimal` nei dict grezzi, un
+>   limite di grandezza al confine (`SafeDecimal`, `Currency`, `_decimal_fixed_point`), e il 500 di `promotion.py:127`;
+> - **gli id di altri utenti nel 409**, LOW, vanno a **X** dentro X-R47; **l'`OverflowError` delle impostazioni dei
+>   plugin** va a X, dopo;
+> - **`profile_default` che fallisce chiuso** va a **H**, come H-37 dopo H-36;
+> - **il costo Auto** (`de901f228`) va nel backlog di W; **le righe vecchie non finite** sono già D-W63-1 e X-R45 per
+>   il developer; D-SEC2-1 è già nell'elenco.
+
+> **La forma di H-36 per E-13** (coordinatore, 06:11, note di H): `client_address.rate_limit_address(request)`, dove
+> `None` vuol dire nessun conteggio per indirizzo, cioè il contratto uniforme proposto alle 05:35. I miei tre limiti
+> trattano già `None` così.
+>
+> **La cura di E-13**, quando arriva il mio turno, sulla base con A8a, N70 e H-36:
+> 1. **Il codice**: `rate_limit_address(request)` al posto di `client_address(request)` nelle rotte di `api/v1/email.py`
+>    (resend; forgot), e nella riga `/auth/register` di `auth.py` che passa l'indirizzo a
+>    `registration_email_allowed()`, con la revisione di A.
+>    - Dopo il merge di A8a, il resend passa lo stesso indirizzo anche a `login_throttle`: un solo valore per tutti e
+>      due.
+> 2. **`admin/email.en.md`**:
+>    - `:422`: «List your proxy's exact addresses» non basta, perché `FORWARDED_ALLOW_IPS` accetta anche reti (CIDR);
+>    - `:424`: «every visitor shares the proxy's address, and one count of 10 requests» diventa falso. Dietro un proxy
+>      locale non fidato i limiti per indirizzo **non contano**: restano quelli per identificativo, per account, per
+>      casella e il budget orario, e la scheda Security avvisa (H-36).
+> 3. **`developer/backend/email.md`**: le righe che dicono ancora `client_address(request)` (`:648`, `:659`, `:904`,
+>    `:1069`, `:1103`) diventano `rate_limit_address(request)`, con un rimando alla regola del proxy locale di H.
+> 4. **Le prove**: i rossi EVA-018, EMA-050 ed EVH-014 diventano verdi; le guardie restano verdi; poi le suite email,
+>    `api auth` e `api registration`, e mkdocs stretto.
+
+> **La revisione di X-R47 e del LOW di R13-SEC7** (`5f68a8db0`, 06:20, sola lettura): **sano, nessun reperto sopra la
+> soglia.**
+> - Gli id visibili si filtrano con `BrokerUserAccess`, come `delete_events_bulk`; `hidden_transactions_count` conta
+>   gli altri, e il messaggio dà solo il totale.
+> - Il rapporto dello split deve esserci, essere finito e sopra 0 (`splits.py:96`), e si controlla dopo
+>   `_reject_too_many_digits`.
+> - **La domanda del coordinatore**, cioè cosa succede senza un chiamante: oggi `bulk_upsert_events` ha un solo
+>   chiamante, la rotta, che passa sempre l'utente. Ma il default `None` vuol dire «tutti gli id», e il `getattr(…,
+>   "id", None)` della rotta fa lo stesso: **fallisce aperto**.
+>   - Nota LOW per X: `_current_user.id` nella rotta, e `current_user_id` obbligatorio, oppure con `None` nessun id
+>     mostrato.
+
+> **Il percorso «Settings › Email» dopo A8b** (coordinatore, 06:32, note di A): con A8b la scheda passa nel gruppo
+> Amministrazione, e il testo va allineato.
+> - **Dove compare** (26 punti):
+>   - la sorgente i18n `email/{en,it,fr,es}.json:113-114` (`settingNeedsEmail`, `settingUnavailable`), più i
+>     cataloghi generati;
+>   - `admin/email.en.md` (11), `admin/index.en.md` (1), `security.md:385` (1);
+>   - il commento e un test di `EmailSettingsTab` (`.svelte:2`, `.test.ts`);
+>   - la devWiki `domains/email.md` (2).
+> - **L'etichetta del gruppo** la prendo esatta dalle chiavi i18n di A8b nelle 4 lingue, senza inventare.
+> - **Ho chiesto** se A8b sarà nella base di E-13; altrimenti l'allineamento va in E-8, che viene comunque dopo A8b.
+> - Nel `.svelte` tocco solo il commento.
+>
+> **Decisione** (coordinatore, 06:33): A8b non sarà nella base di E-13, perché resta su un ramo a parte fino a dopo
+> l'ingresso di A8a, N70 ed E-13. **L'allineamento del percorso va in E-8**, insieme al selettore della lingua (N69),
+> sulla base che contiene A8b.
+
+> **La revisione di R13-SEC7-2** (MF, `db5486ae9`, 06:47–06:55): **chiuso.**
+> - **I limiti** stanno sui modelli che il plugin usa a ogni chiamata (probe, sync, storia): date fra il 1900 e il
+>   2200, al più 1 200 periodi, una durata di al più 36 525 giorni, una tolleranza di al più 36 525 giorni.
+> - **La finestra della mora** si ferma a `SCHEDULE_MAX_DATE`.
+> - **`compound_growth`** è una vera forma chiusa, con potenze per tratti di frazione uguale.
+> - **La cache** non tiene nulla oltre 3 660 punti.
+> - **Gli eventi** si raggruppano per data una volta sola: costo lineare.
+> - Note:
+>   - `asset_events` senza `max_length`: è il limite generico sulla dimensione della richiesta;
+>   - il caso peggiore permesso, circa 250 ms, si può ripetere, perché il probe non ha un limite per utente;
+>   - i tassi illimitati finiscono in un overflow preso.
+
+> **La revisione di H-37** (`373cb53e6`, dopo l'ingresso in dev `b37e926af`): **sano.**
+> - Un profilo diverso da `selfhosted` che non elenca la variabile solleva `ProfileDefaultError`.
+> - L'unico lettore è il limite di upload, preso nella rotta del ripristino: 503 all'upload, `None` per la sola
+>   visualizzazione.
+>
+> **La nota di H su `PROFILE_DEFAULTS`** (i campi di `Settings`, per esempio la protezione dei frame del profilo
+> managed). **La mia decisione: nessuna chiusura a runtime.**
+> - La tabella è codice, e il test (a), con l'uguaglianza intera, già ferma una voce persa in ogni `all-backend`.
+> - Un elenco a runtime sarebbe una seconda copia della stessa tabella.
+> - La proposta, per H: un controllo `config_audit` che avvisa quando, sotto `managed`, la protezione dei frame è
+>   spenta (e un'informazione per il CSP in sola segnalazione); e una regola di revisione: un campo di sicurezza nuovo
+>   dichiara il suo valore managed nello stesso lotto.
+
+> **La revisione di X-R47b** (`1b6d65da7` = `8914eacf3~1`, 07:0x, sola lettura): **chiuso.**
+> - Senza chiamante, i dettagli del P-10 portano `transaction_ids: []` e `hidden_transactions_count` uguale al totale.
+>   La forma è sempre la stessa: nessun'altra chiave porta gli id nascosti, e il test lo fissa.
+> - La rotta passa `_current_user.id`: viene da `Depends(get_current_user)`, quindi c'è sempre. È l'unico chiamante di
+>   `bulk_upsert_events` in `backend/app`; il sync dei provider passa da `_upsert_asset_events` e non arriva al P-10.
+> - `is_split_event_type` (StrEnum, non solleva mai) è più robusto del vecchio confronto con `str(...)`.
+> - Nota cosmetica: un ratio in forma esponenziale (`-1E-7`) arriva alla UI così com'è, senza localizzazione.
+>
+> **Il lookup per username o email** (trovato da A nell'analisi di A-21; A lo cura dopo l'ingresso, io rivedo):
+> `get_user_by_username_or_email()` è `username == id OR lower(email) == lower(id)` più `.first()`.
+> - **Misurato** (`files/e9/lookup_order.py`, in memoria, SQLite 3.54.0 della venv, gli indici di 001 e 009): il piano
+>   è `MULTI-INDEX OR` con l'indice dello username per primo. `.first()` rende chi ha lo username **in ogni caso**, che
+>   B si sia registrato prima o dopo, con o senza ANALYZE.
+> - **Non serve la registrazione aperta**: l'aggiornamento del profilo cambia lo username senza password (solo il
+>   cambio di email la chiede), e `schemas/auth.py:60` controlla solo la lunghezza, da 3 a 50 caratteri.
+> - **L'effetto**: login, forgot e resend **per email** di B falliscono finché A tiene il nome; per username
+>   funzionano. Nessuna presa dell'account, nessuna enumerazione nuova («Email already registered» c'è già).
+>   **MEDIUM 8/10.**
+> - **I punti per la cura**, mandati al coordinatore:
+>   - (a) gli username con `@` esistono già. Quindi: niente `@` nei nuovi username (registrazione, rinomina,
+>     creazione da admin, env di bootstrap); nessuna email uguale a uno username esistente; con `@`, il lookup cerca
+>     prima l'email e poi lo username esatto, solo se nessun account ha quell'email; senza `@`, solo lo username esatto;
+>   - (b) niente username case-insensitive finché `ix_users_username` è BINARY: «Bob» e «bob» convivono;
+>   - (c) i test, in entrambi gli ordini di registrazione;
+>   - (d) facoltativo, per H: il conteggio delle collisioni legacy nel controllo di sicurezza.
+
+> **La revisione di N70 a posteriori** (07:2x, sola lettura). I commit: A `b0d3d2d4f` (`rate_window.py`), `c11a98e18`
+> (`auth.py` e `login_throttle.py`) e `5225f4f05` (docs); H-36 `36cc0119d`. Sono entrati in dev con `440616c61`.
+> **Nessun reperto sopra la soglia.**
+> - **Il codice è sano.**
+>   - `_evict_one` non sfratta mai la chiave nuova e termina sempre: oltre `max_keys` chiavi ce n'è sempre un'altra.
+>   - Giudica «piena» sui colpi vivi e sul `limit` del costruttore. L'unico limitatore con un limite per chiamata è
+>     `INSTANCE_BUDGET`, che ha una chiave sola e non sfratta mai.
+>   - Le tre rotte di `auth.py` e le tre di E passano `rate_limit_address`; con `None`, `login_throttle` conta solo
+>     l'identificativo.
+>   - Il rilevamento di H-36 tiene: peer locale, header di inoltro, e né `LIBREFOLIO_CLIENT_IP_HEADER` né uvicorn
+>     hanno dato l'indirizzo. Tiene anche il controllo `platform.client_address`, che riporta solo i nomi degli header.
+> - **K resta 32.** Misurato con la classe vera (`files/e9/n70_evict_cost.py`, in memoria, orologio finto; log in
+>   `files/logs/n70_evict_cost.log`), con limite 10, finestra 900 s e `max_keys` 10 000:
+>
+> | Scenario | Richieste per sfrattare un identificativo bloccato |
+> |---|---|
+> | LRU semplice | 10 000 |
+> | N70, K=32, spruzzo ingenuo | mai (fermato a 60 000) |
+> | N70, K=32, mirato (31 chiavi piene, poi lo spruzzo) | 10 279 |
+> | N70, K=128, mirato | 11 143 |
+>
+>   Il costo è circa `max_keys` + 10·(K−1), quindi K non è la leva. Il lock nel caso peggiore (ogni chiave piena), per
+>   chiave nuova: 39 µs con K=32, 98 µs con K=128, 7 ms senza tetto.
+> - **La leva vera** (LOW, sotto la soglia) è un indice O(1) delle chiavi non piene: si sfratta la meno usata tra le
+>   aperte, e una piena solo se non ce n'è nessuna aperta.
+>   - Il prototipo è nella cartella di sessione (`files/e9/n70_open_index.py`, mai nel repo). Lo sfratto mirato costa
+>     100 000 richieste (10×); lo spruzzo ingenuo non sfratta mai; il lock nel caso peggiore scende a 9,9 µs. In
+>     memoria costa un `OrderedDict` in più, circa 1 MB a 10 000 chiavi.
+>   - Nel cloud i limiti per indirizzo sono attivi (`Fly-Client-IP`: 50 ogni 15 minuti per /64). Oggi un /56, cioè 256
+>     /64, basta per circa uno sfratto ogni 15 minuti, e raddoppia i tentativi su un identificativo. Con l'indice ne
+>     servirebbero circa 2 000.
+>   - Dietro un proxy locale non fidato (limiti per indirizzo saltati, H-36 avvisa), a R richieste al secondo: oggi
+>     circa 84·R tentativi in più al giorno, con l'indice circa 8·R.
+>   - La proposta è **E-14** nel backlog: piccola, circa 30 righe nel mio file più i test RWL. Dopo la 1.3, o nella
+>     1.3 se il developer la vuole.
+> - **Docs da precisare.** `developer/backend/email.md:1352-1354` è una pagina mia, la frase è di A: confronta «about
+>   310 failures» con «about 100,000». Ma i 310 si aggiungono ai circa 10 000 dello spruzzo, che serve a ogni sfratto.
+>   `security.md:436-437` («about 310 failures more») è giusta se «more» vuol dire «oltre lo spruzzo». Le correggo nel
+>   prossimo lotto (E-14 o E-8); `security.md` con l'ok di A.
+> - **Nota per H**, che non viene da N70: `connection_checks.en.md:328-329` dice «Docker Engine on Linux keeps the
+>   visitor's address». Vale per IPv4 (DNAT). Per quel che so, un visitatore IPv6 che raggiunge un container senza
+>   IPv6 passa da `docker-proxy` e arriva dal gateway della rete, senza header di inoltro. N70 non lo vede, e tutti i
+>   visitatori IPv6 condividono un conteggio per indirizzo: il DoS di R13-SEC6, solo per IPv6 e solo con l'esposizione
+>   diretta, senza reverse proxy. La proposta è una frase nei docs, da verificare su un host Linux.
+
+> **La revisione di X-R43 a posteriori** (`f69f8bdc5`, già in dev `3e7948446`; 07:5x, sola lettura): **chiusa, nessun
+> reperto.**
+> - `validate_value` controlla gli interi con `abs ≤ 2^53−1` e i float con `isfinite`, quindi non solleva mai
+>   `OverflowError`. Il messaggio non porta il valore.
+> - Scrittura: un `INVALID_VALUE` per elemento.
+> - Env: oltre 4 300 cifre `int()` alza `ValueError`, che è preso, e diventa `invalid_env`; `float("1e999")` vale `inf`,
+>   rifiutato.
+> - Riga salvata: `_from_row` prende `ValueError` e `SettingValueError`. Le vecchie righe tra 2^53 e circa 1e308, che
+>   il vecchio `isfinite` accettava, ora diventano `invalid_stored`.
+> - Dichiarazioni: `_check_bounds` gira **prima** della verifica del default. Serve, perché `validate_value` formatta i
+>   limiti con `:g`, e `format(2**1100, 'g')` alza `OverflowError` (verificato).

@@ -49,6 +49,7 @@ from backend.app.db.models import (
 from backend.app.logging_config import get_logger
 from backend.app.schemas.assets.events import FAAssetEventPoint
 from backend.app.schemas.assets.scheduled_investment import (
+    SCHEDULE_MAX_DATE,
     DayCountConvention,
     FAInterestRatePeriod,
     FAScheduledInvestmentSchedule,
@@ -64,7 +65,7 @@ from backend.app.schemas.prices import (
 from backend.app.schemas.provider import FAProviderKind
 from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.financial_math.interest import calculate_day_count_fraction, calculate_simple_interest
+from backend.app.services.financial_math.interest import calculate_day_count_fraction, calculate_simple_interest, compound_growth
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.runtime.cache import get_ttl_cache
 
@@ -107,6 +108,9 @@ logger = get_logger(__name__)
 
 # Cache: hash(params) → dict[date, Decimal] — all scheduled values at maturation dates
 _CACHE = get_ttl_cache("scheduled_investment", maxsize=256, ttl=172800)  # 48h
+# A result with more points is computed on every call, never stored: ten years of DAILY points (~1 MB), so the 256
+# entries stay bounded (R13-SEC7-2, N73).
+_CACHE_MAX_POINTS = 3_660
 
 
 def _cache_key(schedule: FAScheduledInvestmentSchedule) -> str:
@@ -301,7 +305,8 @@ def _generate_schedule_values(
         )
 
     result = (values, auto_events)
-    _CACHE.set(key, result)
+    if len(values) <= _CACHE_MAX_POINTS:
+        _CACHE.set(key, result)
     return result
 
 
@@ -358,6 +363,22 @@ def _compute_value_at(
     return value
 
 
+def _late_compound_growth(schedule: FAScheduledInvestmentSchedule, start: date_type, end: date_type, maturity_date: date_type) -> Decimal:
+    """The COMPOUND late-interest growth from ``start`` to ``end``: a day up to the end of the grace period accrues at the
+    last period's rate, a day after it at the late rate."""
+    li = schedule.late_interest
+    grace_end = maturity_date + timedelta(days=li.grace_period_days)
+    last_rate = schedule.schedule[-1].annual_rate
+    growth = compound_growth(start, min(end, grace_end), last_rate, schedule.day_count)
+    return growth * compound_growth(max(start, grace_end), end, li.annual_rate, schedule.day_count)
+
+
+def _late_interest_values(schedule: FAScheduledInvestmentSchedule, dates: list[date_type], last_scheduled_value: Decimal, maturity_date: date_type) -> dict[date_type, Decimal]:
+    """The late-interest value on each of ``dates``: the closed form of each date, in constant time (``compound_growth``),
+    so the history, the current value and the settlement read the same digits for a day, whatever window is read."""
+    return {day: _compute_late_interest_value(schedule, day, last_scheduled_value, maturity_date) for day in dates}
+
+
 def _compute_late_interest_value(
     schedule: FAScheduledInvestmentSchedule,
     target_date: date_type,
@@ -370,7 +391,8 @@ def _compute_late_interest_value(
     The grace period runs at the last period's rate, then late interest at its own rate.
     Uses skip formula (D9) for efficiency:
     - SIMPLE: closed-form V = V_maturity + P * r * Δt, one segment per rate
-    - COMPOUND: day-by-day only for the requested sub-range
+    - COMPOUND: closed-form V = V_maturity · Π (1 + r · f) (``compound_growth``), one segment per rate (R13-SEC7-2: the
+      day-by-day loop made the late history quadratic)
 
     Args:
         schedule: Full schedule config (provides day_count, late_interest)
@@ -388,22 +410,7 @@ def _compute_late_interest_value(
     last_rate = schedule.schedule[-1].annual_rate
 
     if li.interest_type == InterestType.COMPOUND:
-        value = last_scheduled_value
-        current = maturity_date + timedelta(days=1)
-        while current <= target_date:
-            rate = last_rate if current <= grace_end else li.annual_rate
-            frac = calculate_day_count_fraction(
-                start_date=current - timedelta(days=1),
-                end_date=current,
-                convention=convention,
-            )
-            value += calculate_simple_interest(
-                principal=value,
-                annual_rate=rate,
-                time_fraction=frac,
-            )
-            current += timedelta(days=1)
-        return value
+        return last_scheduled_value * _late_compound_growth(schedule, maturity_date, target_date, maturity_date)
 
     # SIMPLE skip formula: the grace segment, then the late segment once the grace period is over.
     grace_fraction = calculate_day_count_fraction(
@@ -613,7 +620,12 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
             # Destructure cached tuple (values, auto_events)
             cached, cached_auto_events = _generate_schedule_values(schedule)
             maturity_date = max(cached.keys()) if cached else None
-            effective_start = min(cached.keys()) if start_date == "min" and cached else start_date
+            # "min" is the earliest available point: the schedule's first value or its first manual event, whichever comes
+            # first (a refresh reads "min" once, on the first sync, so an earlier event would never be read again); with
+            # neither, end_date (MF-SI1).
+            effective_start = start_date
+            if start_date == "min":
+                effective_start = min([*cached.keys(), *(event.date for event in schedule.asset_events)], default=end_date)
 
             # Check for MATURITY_SETTLEMENT in cached events
             settlement_evt = next((e for e in cached_auto_events if e.type == "MATURITY_SETTLEMENT"), None)
@@ -628,41 +640,43 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
 
             # Handle post-maturity range with late interest maturation dates
             late_auto_events: list[FAAssetEventPoint] = []
-            if maturity_date and end_date > maturity_date and schedule.late_interest:
+            # Late interest is valued up to SCHEDULE_MAX_DATE at most (R13-SEC7-2, N73): no point is emitted after it.
+            late_end = min(end_date, SCHEDULE_MAX_DATE)
+            if maturity_date and late_end > maturity_date and schedule.late_interest:
                 li = schedule.late_interest
                 late_start = max(maturity_date + timedelta(days=1), effective_start)
                 late_mat_dates = _compute_maturation_dates(
                     maturity_date + timedelta(days=1),
-                    end_date,
+                    late_end,
                     li.maturation_frequency,
                 )
                 sorted_late_dates = sorted(late_mat_dates)
                 last_late_date = sorted_late_dates[-1] if sorted_late_dates else None
+                valued_dates = [d for d in sorted_late_dates if not (settlement_date and d > settlement_date)]
+                emitted_dates = [d for d in valued_dates if late_start <= d <= late_end]
+                late_values = _late_interest_values(schedule, sorted({*emitted_dates, *valued_dates[-1:]}), cached[maturity_date], maturity_date)
 
-                for d in sorted_late_dates:
-                    if late_start <= d <= end_date:
-                        # Skip if past settlement
-                        if settlement_date and d > settlement_date:
-                            break
-                        value = _compute_late_interest_value(schedule, d, cached[maturity_date], maturity_date)
-                        prices.append(FAPricePoint(date=d, close=value, currency=currency))
+                for d in emitted_dates:
+                    value = late_values[d]
+                    prices.append(FAPricePoint(date=d, close=value, currency=currency))
 
-                        # Auto-generate late INTEREST events if generate_interest=True
-                        if li.generate_interest:
-                            interest_amount = value - principal
-                            if interest_amount > 0:
-                                late_auto_events.append(
-                                    FAAssetEventPoint(
-                                        date=d,
-                                        type="INTEREST",
-                                        value=Currency(code=currency, amount=interest_amount),
-                                        notes="Auto-generated late interest payout",
-                                    )
+                    # Auto-generate late INTEREST events if generate_interest=True
+                    if li.generate_interest:
+                        interest_amount = value - principal
+                        if interest_amount > 0:
+                            late_auto_events.append(
+                                FAAssetEventPoint(
+                                    date=d,
+                                    type="INTEREST",
+                                    value=Currency(code=currency, amount=interest_amount),
+                                    notes="Auto-generated late interest payout",
                                 )
+                            )
 
                 # Late interest MATURITY_SETTLEMENT at last maturation date
                 if li.generate_interest and last_late_date and not settlement_date:
-                    settle_value = _compute_late_interest_value(schedule, last_late_date, cached[maturity_date], maturity_date)
+                    # The last late price itself, so the settlement equals the chart's last point.
+                    settle_value = late_values[last_late_date]
                     late_auto_events.append(
                         FAAssetEventPoint(
                             date=last_late_date,
@@ -672,8 +686,9 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                         )
                     )
 
-            elif maturity_date and end_date > maturity_date:
-                # No late interest config — emit maturity value as flat line at end_date
+            elif maturity_date and end_date > maturity_date and not schedule.late_interest:
+                # No late interest config — emit maturity value as flat line at end_date (with late interest, a maturity
+                # on the horizon itself emits nothing after it)
                 if end_date not in cached:
                     if not settlement_date or end_date <= settlement_date:
                         prices.append(FAPricePoint(date=end_date, close=cached[maturity_date], currency=currency))
@@ -686,16 +701,16 @@ class ScheduledInvestmentProvider(AssetSourceProvider):
                     prices.append(FAPricePoint(date=end_date, close=settlement_evt.value.amount, currency=currency))
 
             # If start_date is before schedule, emit initial_value as anchor
-            if cached and start_date < min(cached.keys()):
-                prices.insert(0, FAPricePoint(date=start_date, close=principal, currency=currency))
+            if cached and effective_start < min(cached.keys()):
+                prices.insert(0, FAPricePoint(date=effective_start, close=principal, currency=currency))
 
             # Sort by date (in case late interest dates interleave)
             prices.sort(key=lambda p: p.date)
 
             # Merge cached auto-events + late auto-events + manual events, filtered to range
-            all_events = [e for e in cached_auto_events if start_date <= e.date <= end_date]
-            all_events += [e for e in late_auto_events if start_date <= e.date <= end_date]
-            all_events += [e for e in schedule.asset_events if start_date <= e.date <= end_date]
+            all_events = [e for e in cached_auto_events if effective_start <= e.date <= end_date]
+            all_events += [e for e in late_auto_events if effective_start <= e.date <= end_date]
+            all_events += [e for e in schedule.asset_events if effective_start <= e.date <= end_date]
             all_events.sort(key=lambda e: e.date)
 
             return FAHistoricalData(
