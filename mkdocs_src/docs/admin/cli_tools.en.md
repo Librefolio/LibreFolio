@@ -31,6 +31,7 @@ pipenv run ./dev.py server --force
 - 🧮 More workers serve more requests at once: use them on any machine with more than one CPU. `auto` starts $\max(1,\ 2\,(n-1))$ workers on $n$ CPUs.
 - ⏳ The server first builds the web interface and this documentation when they are missing or out of date, so the first start takes a few minutes. If the interface does not build, the server does not start.
 - 🔑 A restart signs everybody out, unless `JWT_SECRET` is set in `.env` (see [Configuration](configuration.md)).
+- ⏹️ Ctrl+C stops the server cleanly: `dev.py` gives it up to the [shutdown budget](configuration.md#shutdown) plus 2 seconds to stop (10 seconds by default), then ends it; a second Ctrl+C ends it at once. A SIGTERM sent to `dev.py` alone, by a process supervisor for example, gets the same wait: `dev.py` passes it on to the server.
 
 ??? note "⚙️ Other server options — rarely needed"
 
@@ -426,7 +427,7 @@ pipenv run ./dev.py backup restore /mnt/nas/librefolio/librefolio-backup-2026101
 A [secure archive](#backup-secure) asks its password first, as `inspect` does, and is decrypted into the folder of the copy, as `.restore/stage/<id>/archive.zip`, which is removed once unpacked. A check killed outright leaves that decrypted archive, or its part `archive.zip.part`: the next start of LibreFolio removes it. Then the check goes through six steps, and stops at the first one that refuses the archive:
 
 1. **A LibreFolio archive.** Only an archive LibreFolio wrote, with its `manifest.json`, is accepted: a data directory zipped by hand is not. Every entry is checked before a byte is written: the manifest lists it (or announces it, for the instance key of a secure archive), it is a plain file (not a folder, a link or an encrypted entry), its name appears only once, even ignoring upper and lower case, its size is the one in the manifest, and the whole fits in the free space.
-2. **Unpacked.** Each entry is written into a new file of the copy, never through a link nor over another file, and its SHA-256 is compared with the manifest's.
+2. **Unpacked.** Each entry is written into a new file of the copy, never through a link nor over another file, and its SHA-256 is compared with the manifest's. Then, before anything else opens the copy, the schema of its database is read, and nothing of it runs: a trigger, a view or a virtual table, which LibreFolio never creates and whose SQL would run during the check and in the server after a restore, refuses the archive (`database_foreign_objects`).
 3. **The revision decides.** The migration (Alembic) revision of the database, given by the manifest and confirmed by the database itself:
     - this LibreFolio's own revision: the database is restored as it is;
     - an older one: the copy is upgraded to this LibreFolio's revision, in a process of its own, which is stopped if it lasts more than an hour;
@@ -480,7 +481,8 @@ It ends with `✅ The archive can be restored. Dry run: the instance was left as
     | `checksum_mismatch` | An entry's size or SHA-256 differs from the manifest: the archive is damaged or was changed |
     | `no_space` | Not enough free space for the copy |
     | `stage_failed` | The copy could not be written: the error printed just above gives the cause |
-    | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade |
+    | `database_damaged` | The backup's database fails SQLite's integrity check, before or after the upgrade, or SQLite cannot read its schema |
+    | `database_foreign_objects` | The backup's database holds a trigger, a view or a virtual table, which LibreFolio never creates: it was not made by LibreFolio, or was changed. Use another backup |
     | `manifest_mismatch` | The backup's database is not the one its manifest describes |
     | `revision_missing` | The backup's database records no migration revision |
     | `revision_unknown` | The backup comes from a newer LibreFolio, or not from this one: update LibreFolio, then check it again |

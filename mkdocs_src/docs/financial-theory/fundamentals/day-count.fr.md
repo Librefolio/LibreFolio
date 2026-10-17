@@ -7,7 +7,7 @@ Une **convention de calcul des jours** détermine la manière dont les intérêt
 
 ## 🔧 Utilisation dans LibreFolio
 
-Les conventions de calcul des jours sont activement utilisées par le fournisseur de source d'actifs **Scheduled Investment** pour les calculs de rendement synthétique. La fonction `calculate_day_count_fraction()` se trouve dans le module du fournisseur lui-même (`backend/app/services/asset_source_providers/scheduled_investment/plugin.py`), implémente les quatre conventions et retourne une fraction de temps `Decimal` utilisée dans les calculs d'accumulation d'intérêts.
+Les conventions de calcul des jours sont activement utilisées par le fournisseur de source d'actifs **Scheduled Investment** pour les calculs de rendement synthétique. La fonction `calculate_day_count_fraction()` se trouve dans la couche des mathématiques financières (`backend/app/services/financial_math/interest.py`), implémente les quatre conventions et retourne une fraction de temps `Decimal` sur laquelle le fournisseur Scheduled Investment construit l'accumulation des intérêts.
 
 La convention par défaut est **ACT/365**.
 

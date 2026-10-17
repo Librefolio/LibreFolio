@@ -22,6 +22,8 @@ from backend.app.schemas.fx import (
     FXConvertResponse,
     FXDeleteItem,
     FXDeleteResult,
+    FXPeriodChangesRequest,
+    FXPeriodChangesResponse,
     FXSignalQueryResult,
     FXUpsertItem,
     FXUpsertResult,
@@ -30,7 +32,8 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
 from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, SignalDomain, SignalExecutionContext, SignalPricePoint
 from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx.conversion import convert_bulk
-from backend.app.services.fx.storage import delete_rates_bulk, upsert_rates_bulk
+from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
+from backend.app.services.fx.storage import delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
 from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
@@ -123,15 +126,14 @@ async def upsert_rates_endpoint(
             errors.append(error_msg)
             continue
 
-        # Ensure alphabetical ordering (base < quote)
-        if base > quote:
-            base, quote = quote, base
-            # Invert rate
-            rate_value = Decimal("1") / rate_item.rate
-        else:
-            rate_value = rate_item.rate
-
         try:
+            # Alphabetical ordering (base < quote), the rate inverted: inside the item's try, since the inverse of a tiny
+            # rate overflows (1 / 1E-1000000) and a rate fx_rates.rate cannot keep is the item's error, never a 500 (X-R38)
+            normalized = normalize_storable_rate(base, quote, rate_item.rate)
+            if normalized is None:
+                raise ValueError(fx_rate_refusal(base, quote, rate_item.rate_date))
+            base, quote, rate_value = normalized
+
             # Use bulk service function
             rate_results = await upsert_rates_bulk(session, [(rate_item.rate_date, base, quote, rate_value, rate_item.source)])
 
@@ -577,3 +579,17 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
         errors=compressed_errors,
         signal_results=signal_results,
     )
+
+
+@router_currencies.post("/period-changes", response_model=FXPeriodChangesResponse)
+async def query_fx_period_changes_bulk(
+    requests: List[FXPeriodChangesRequest],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """The FX table's fixed-period changes (1D … 5Y) of several pairs, up to each one's ``as_of``, in both orientations.
+
+    The rate on a day is the conversion of 1 base on that day, as ``POST /currencies/convert`` gives it. Each change is a
+    fraction, null without a rate on either day.
+    """
+    return FXPeriodChangesResponse(items=await get_fx_period_changes_bulk(requests, session))

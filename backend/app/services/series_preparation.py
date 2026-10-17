@@ -27,7 +27,7 @@ from backend.app.schemas.risk import (
     PreparedAssetSeriesSet,
 )
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
-from backend.app.services.financial_math.returns import price_return
+from backend.app.services.financial_math.returns import float_price_return, observed_annualization
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 
@@ -62,24 +62,6 @@ def gap_slots(
 ) -> int:
     """Count missing cadence slots between two observed dates."""
     return max(0, distance_slots(previous, current, cadence) - 1)
-
-
-def observed_annualization(
-    n_observations: int,
-    baseline_date: date | None,
-    final_date: date | None,
-) -> tuple[int, float | None]:
-    """Return calendar span and observed annualization factor."""
-    if n_observations < 0:
-        raise ValueError("n_observations cannot be negative")
-    if n_observations == 0:
-        return 0, None
-    if baseline_date is None or final_date is None:
-        raise ValueError("non-empty observations require baseline and final dates")
-    calendar_days = (final_date - baseline_date).days
-    if calendar_days <= 0:
-        raise ValueError("final_date must follow baseline_date")
-    return calendar_days, n_observations * 365 / calendar_days
 
 
 def fx_content_fingerprint(
@@ -168,14 +150,6 @@ def mark_market_closed_carries(points: dict[date, FAPricePoint], market_holidays
         previous = stored
         marked[point_date] = point
     return marked
-
-
-def _price_return_value(previous_close: Decimal, current_close: Decimal) -> float:
-    """The price-only return between two valuation points, whose closes are validated positive."""
-    change = price_return(previous_close, current_close)
-    if change is None:
-        raise ValueError("a valuation point has no positive close")
-    return float(change)
 
 
 def _valuation_point(
@@ -364,7 +338,7 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
             AssetReturnPoint(
                 date=current.valuation_date,
                 previous_valuation_date=previous.valuation_date,
-                value=_price_return_value(previous.target_close, current.target_close),
+                value=float_price_return(previous.target_close, current.target_close),
             )
             for previous, current in zip(
                 valuation_points,
@@ -461,6 +435,5 @@ __all__ = [
     "fx_content_fingerprint",
     "gap_slots",
     "mark_market_closed_carries",
-    "observed_annualization",
     "prepare_asset_series_set",
 ]

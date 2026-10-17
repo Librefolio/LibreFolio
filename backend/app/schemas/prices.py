@@ -370,3 +370,49 @@ class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):
     - success_count: int
     - errors: List[str]
     """
+
+
+# ============================================================================
+# FA FIXED-PERIOD CHANGES (MF-P2, D-MF6 b)
+# ============================================================================
+
+
+class FAPeriodChangesQueryItem(StrictModel):
+    """One asset of a fixed-period changes request: the Assets table's Δ columns (1D … 5Y), up to ``as_of``."""
+
+    asset_id: int = Field(..., description="Asset ID")
+    as_of: date_type = Field(..., description="Anchor day: the end of the range the table shows")
+    target_currency: Optional[str] = Field(None, description="Value the prices in this currency, each day's at that day's rate (None = native currency)")
+
+    @field_validator("target_currency")
+    @classmethod
+    def target_currency_validate(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            return Currency.validate_code(v)
+        return v
+
+
+class FAPeriodChange(StrictModel):
+    """The change of an asset's price over one fixed period, as a fraction (0.05 = +5 %)."""
+
+    key: str = Field(..., description="Period key: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y")
+    days: int = Field(..., ge=1, description="Calendar days of the period")
+    change_ratio: Optional[SafeDecimal] = Field(None, description="Price on as_of / price on as_of − days − 1; null without a usable price on either day")
+
+
+class FAPeriodChangesResult(StrictModel):
+    """The fixed-period changes of one asset.
+
+    The price on a day is the last stored price on or before it, the rule of the price history's backward fill; with a
+    ``target_currency`` it is converted at that day's rate.
+    """
+
+    asset_id: int = Field(..., description="Asset ID")
+    as_of: date_type = Field(..., description="Anchor day")
+    currency: Optional[str] = Field(None, description="Currency of the compared prices: target_currency when given, else the asset's own on as_of (null with no price up to as_of)")
+    periods: List[FAPeriodChange] = Field(default_factory=list, description="One entry per fixed period, in display order")
+    errors: List[str] = Field(default_factory=list, description="Non-fatal warnings (e.g. a missing FX rate)")
+
+
+class FAPeriodChangesResponse(BaseListResponse[FAPeriodChangesResult]):
+    """Bulk response of fixed-period changes: one item per requested asset, in request order."""

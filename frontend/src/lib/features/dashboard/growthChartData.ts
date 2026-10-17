@@ -390,20 +390,27 @@ export function aggregateMetric(values: Array<number | null>, resolution: ChartR
         return value == null ? [] : [{date, value}];
     });
     const aggregated = aggregateLineSeries(sourcePoints, resolution);
+    // Matched by calendar bucket, not by date (Y-2): the aggregated point stands on the last day WITH a value, the
+    // bucket on the last day of the history. A line that stops mid-period (a broker leaving the scope on a Wednesday)
+    // keeps its last value there, as `ladderLast` does, instead of turning into a gap; a bucket with no value at all
+    // stays a gap. Both sides compute `bucketEnd` with `mapDateToBucket`.
     const lookup = new Map<string, AggregatedLookupEntry>(
-        aggregated.map((point) => [
-            point.date,
-            {
-                value: point.value,
-                bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date,
-                bucketEnd: 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date,
-            },
-        ]),
+        aggregated.map((point) => {
+            const bucketEnd = 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date;
+            return [
+                bucketEnd,
+                {
+                    value: point.value,
+                    bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date,
+                    bucketEnd,
+                },
+            ];
+        }),
     );
 
-    const aggregatedValues = buckets.map((bucket) => lookup.get(bucket.date)?.value ?? null);
+    const aggregatedValues = buckets.map((bucket) => lookup.get(bucket.bucketEnd)?.value ?? null);
     const points = buckets.map((bucket, index) => {
-        const meta = lookup.get(bucket.date);
+        const meta = lookup.get(bucket.bucketEnd);
         return toSeriesPoint(
             {
                 ...bucket,

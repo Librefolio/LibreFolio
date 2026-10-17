@@ -298,7 +298,7 @@ class FEDProvider(FXRateProvider):
                 # Example: 1 EUR = 1.08 USD → (date, 'EUR', 'USD', 1.08)
                 observations.append((rate_date, currency, self.base_currency, fred_rate))
 
-            except (ValueError, IndexError, ZeroDivisionError) as e:
+            except (ValueError, IndexError, ArithmeticError) as e:  # ArithmeticError: a value that is no number, the line only (X-R50)
                 logger.debug(f"Skipping invalid line in FRED CSV: {line[:50]}... ({e})")
                 continue
 

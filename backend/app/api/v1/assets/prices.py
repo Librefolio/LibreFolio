@@ -14,6 +14,8 @@ from backend.app.schemas.prices import (
     FABulkDeleteResponse,
     FABulkUpsertResponse,
     FACurrentPriceResponse,
+    FAPeriodChangesQueryItem,
+    FAPeriodChangesResponse,
     FAPriceQueryItem,
     FAPriceQueryResponse,
     FAUpsert,
@@ -25,6 +27,7 @@ from backend.app.schemas.signals import (
     SignalDomain,
 )
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.period_changes import get_period_changes_bulk
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 
@@ -185,3 +188,22 @@ async def sync_prices_bulk(
     except Exception as e:
         logger.exception(f"Error in bulk refresh prices: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# ============================================================================
+# FIXED-PERIOD CHANGES (MF-P2)
+# ============================================================================
+
+
+@price_router.post("/period-changes", response_model=FAPeriodChangesResponse)
+async def query_period_changes_bulk(
+    requests: List[FAPeriodChangesQueryItem],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """The Assets table's fixed-period changes (1D … 5Y) of several assets, up to each one's ``as_of``.
+
+    Reads the stored price history only: the price on a day is the last stored one on or before it, converted at that
+    day's rate when ``target_currency`` is given. Each change is a fraction, null without a usable price on either day.
+    """
+    return FAPeriodChangesResponse(items=await get_period_changes_bulk(requests, session))
