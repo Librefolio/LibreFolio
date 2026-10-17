@@ -21,6 +21,16 @@
  * sentence in the four catalogues — green on today's codes, which proves the reader, and the gate `PENDING_SETUP`
  * passes through once it joins the list.
  *
+ * Accounts lot A-51 (release 1.3, workstream A — the coordinator's OK of 17/10, 14:52): «Cancel setup link» sends
+ * `PATCH /users/{id}` with `{is_active: false, cancel_setup: true}`, and when the administrator completed its setup
+ * meanwhile the backend answers 409 `{detail: {error_code: 'SETUP_COMPLETED', message}}` and changes nothing (the
+ * backend reds of A-51, `test_users_admin_api.py`; the tab's side, `UsersTab.test.ts` UTAB-61…62). The contract under
+ * test, as for `PENDING_SETUP`: that 409 → `{code: 'SETUP_COMPLETED', key: 'settings.usersTab.errors.SETUP_COMPLETED'}`,
+ * the server's `message` never shown — `SETUP_COMPLETED` joins `ACCOUNT_ERROR_CODES` (AERR-13); and that key is a
+ * sentence in the four catalogues, naming no value, as `describeAccountError` fills none for it (AERR-14). Until A-51
+ * the code is one this build does not know, so it gets the generic failure (AERR-08's guard) — hence the reds; AERR-11
+ * picks it up once it joins the list. Red until A-51, both cases.
+ *
  * The refusals are shaped as axios builds them (`isAxiosError`, `response.status`, `response.data.detail`), with the
  * bodies of `api/v1/users.py`. Node environment: nothing renders.
  */
@@ -37,6 +47,7 @@ import {ACCOUNT_ERROR_CODES, accountErrorText, describeAccountError, type Accoun
 const SERVER_SENTENCE = 'An English sentence nobody should read';
 const BILLING = 'https://billing.example.test/librefolio/subscription';
 const PENDING_SETUP_KEY = 'settings.usersTab.errors.PENDING_SETUP';
+const SETUP_COMPLETED_KEY = 'settings.usersTab.errors.SETUP_COMPLETED';
 
 /** The codes `ACCOUNT_ERROR_CODES` lists before A7b. */
 const CODES_BEFORE_A7B = ['LAST_ADMIN', 'USER_LIMIT_REACHED', 'REGISTRATION_DISABLED', 'ACCOUNT_PROTECTED', 'SELF_DELETION', 'DEMOTE_FIRST'];
@@ -169,5 +180,18 @@ describe('describeAccountError — every key it answers is a sentence in the fou
     // guard
     it.each(['NOT_FOUND', 'INVALID_INPUT', 'DELETION_FAILED', 'generic'])('AERR-12: the key of %s, read from the status: no value given', (name) => {
         expectSentenceInEveryCatalogue(`settings.usersTab.errors.${name}`, undefined);
+    });
+});
+
+// =========================================================================
+describe('describeAccountError — a setup completed meanwhile (A-51)', () => {
+    // red until A-51
+    it('AERR-13: the 409 SETUP_COMPLETED → its code and settings.usersTab.errors.SETUP_COMPLETED, never the server sentence', () => {
+        expect(describeAccountError(conflict('SETUP_COMPLETED'))).toEqual({code: 'SETUP_COMPLETED', key: SETUP_COMPLETED_KEY});
+    });
+
+    // red until A-51
+    it('AERR-14: settings.usersTab.errors.SETUP_COMPLETED is a sentence in the four catalogues, naming no value it is not given', () => {
+        expectSentenceInEveryCatalogue(SETUP_COMPLETED_KEY, describeAccountError(conflict('SETUP_COMPLETED')).params);
     });
 });

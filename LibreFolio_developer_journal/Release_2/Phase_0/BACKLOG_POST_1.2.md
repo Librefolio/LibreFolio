@@ -4445,7 +4445,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
 - ✅ **A-44 · L'admin iniziale che non ha mai fatto il setup non si può annullare** — unita ad **A-43** dal coordinatore
   (17/10, 03:09): disattivarlo è l'annullamento. Dettagli delle voci di E: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Revisione di E».
-- **A-45 · `developer/api/index.md`: `/auth` «token refresh» non esiste** — minimo (doc, solo inglese); dal
+- ✅ **A-45 · `developer/api/index.md`: `/auth` «token refresh» non esiste** — minimo (doc, solo inglese); chiusa il 17/10
+  (commit del coordinatore): la riga elenca le rotte vere; dal
   `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
   refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
   estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
@@ -4478,6 +4479,14 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   ma `_keep_pending_admin` avvisa «The initial administrator's setup link has expired»: il rimedio è giusto, la causa
   no. Cura: leggere l'ultimo link di setup e dire «cancelled» quando è revocato. Dettagli:
   [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-43.5».
+- ✅ **A-51 · Annullamento e cancellazione dell'admin in attesa decisi da letture prima del lock** — basso (classe A-42);
+  chiusa il 17/10 (commit del coordinatore): il PATCH con `cancel_setup` (409 `SETUP_COMPLETED`), `update_user_status`,
+  `set_user_active` e `set_user_admin` decidono sotto il lock, la DELETE rilegge sotto il lock (`DEMOTE_FIRST`);
+  dalla revisione di E di A-42/A-43 (17/10), tramite il coordinatore; prima della 1.3 (coordinatore, 14:44). Se il setup
+  si completa in quel millisecondo l'annullamento è un no-op con un 200 vecchio e la cancellazione toglie l'admin appena
+  attivato senza `DEMOTE_FIRST`; in più la scheda annulla con lo stesso corpo di una disattivazione (una riga vecchia
+  disattiva il proprietario nuovo), e `user deactivate` può disattivare l'unico admin. Dettagli:
+  [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A-51».
 
 ## X · Plugin, asset e ricerca (fase 01)
 

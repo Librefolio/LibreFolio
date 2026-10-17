@@ -105,7 +105,9 @@ keeps working, with a `code`. `USERNAME_INVALID` for a new username against its 
 `update_profile()`. `register_user()` and `PUT /api/v1/auth/profile` branch on the code, never on the wording:
 `USERNAME_INVALID` becomes the `RegistrationError` `USERNAME_INVALID`, or the profile's `400` with that `error_code`;
 any other refusal keeps its plain-string `400`, through the `RegistrationError` `ACCOUNT_EXISTS` for registration
-(not in `_REGISTRATION_REFUSALS`).
+(not in `_REGISTRATION_REFUSALS`). An `AccountError` survives `copy.copy`, `copy.deepcopy` and `pickle` with its code:
+its `__getnewargs__()` hands back the code with the message, where `str`'s own would give the message alone and
+`AccountError.__new__()` would raise `TypeError` (UNAME-032).
 {: #username-refusal-codes }
 
 Tests: `./dev.py test services username-rules` (`backend/test_scripts/test_services/test_username_rules.py`: the `@`
@@ -113,7 +115,8 @@ refused by `user create` and in `LIBREFOLIO_ADMIN_USERNAME`, and nothing else of
 a username, in any A–Z case, refused by `register_user()`, `user set-email` and `user create`; a legacy name left as it
 is; UNAME-020 to UNAME-023, lot A-46: a length of 2 or 51 refused by `user create`, `create_user()` and
 `update_profile()`, 3 and 50 taken, a legacy name of either length kept; UNAME-030 and UNAME-031, lot A-47: the code of
-every refusal, the message unchanged, and `register_user()` deciding on the code once the message is reworded),
+every refusal, the message unchanged, and `register_user()` deciding on the code once the message is reworded; UNAME-032:
+an `AccountError` copied, deep-copied and pickled keeps its code),
 `./dev.py test services username-lookup` (`test_username_lookup.py`: an address finds its owner before a legacy
 name written like it, in both orders of the rows; the exact legacy fallback; without `@` a username only, exact) and
 `./dev.py test api username-rules` (`backend/test_scripts/test_api/test_username_rules_api.py`, in-process: the
@@ -223,7 +226,8 @@ Activation, promotion, logout and every refused operation leave the version alon
 `change-password`; a missing or wrong current password, or an address or a username already
 taken, on `PUT /auth/profile`; an unknown user; the last active administrator; *already an admin* or *not an admin*; the
 demotion of the initial administrator waiting for its setup (lot A-43,
-[The Setup Link's Lifecycle](#setup-link-lifecycle)); a reset or setup link that is not valid, a link refused because
+[The Setup Link's Lifecycle](#setup-link-lifecycle)); a cancellation of its setup link refused with `SETUP_COMPLETED`
+(lot A-51); a reset or setup link that is not valid, a link refused because
 its account was set up before included. So do issuing a reset or setup link, which ends nothing until it is spent, a
 `PATCH` whose values equal the current ones, and a profile change that changes no email (a new username, or the
 stored email sent again, as written or in another A–Z case).
@@ -1716,7 +1720,7 @@ change; what each rule guards against is in [The Setup Link's Lifecycle](#setup-
 | An activation | `./dev.py user activate` → `user_service.set_user_active(…, True)`, the waiting administrator included; `PATCH /api/v1/users/{user_id}` with `is_active: true` → `user_service.update_user_status()`, which the waiting administrator never reaches (`409` `PENDING_SETUP` first) | Retired |
 | A new password | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent → `user_service.complete_password_reset()`; `POST /api/v1/auth/change-password` | Retired |
 | A setup link presented for an account already active, or for an account another of whose setup links was already consumed (lot A-42) | `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()`, which refuses it (`400` `TOKEN_INVALID`) | Every one not consumed retired, not only the one presented |
-| A deactivation of the initial administrator waiting for its setup: the cancellation of its link (lot A-43) | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()`, refused for a [protected account](access_control.md#account-protection) | Revoked, not retired: the account still waits, for a new link |
+| A deactivation of the initial administrator waiting for its setup: the cancellation of its link (lot A-43) | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()`, refused for a [protected account](access_control.md#account-protection); the Users tab adds `cancel_setup: true`, refused with `409` `SETUP_COMPLETED` when the account waits no more (lot A-51) | Revoked, not retired: the account still waits, for a new link |
 | A deactivation of any other account (lot A-43) | The same entry points | Retired |
 | A new address, not the same one in another A–Z case (decision P18) | `LIBREFOLIO_ADMIN_EMAIL` at a start (`bootstrap_admin_service._follow_variables()`); `user_service.update_profile()`, behind `./dev.py user set-email` and `PUT /api/v1/auth/profile` | Revoked, not retired: they went to the earlier address, and the account still waits, for a link that reaches the new one |
 | The setup | A live setup link spent by `POST /api/v1/auth/setup` | That one consumed, the others revoked |
@@ -1785,8 +1789,8 @@ consumed sibling counts: a link re-armed after a revoked or an expired one still
 
 **Deactivating is the cancellation** (A-43). A deactivation ends the account's setup links in its own transaction,
 through `user_service._end_setup_links()`, behind `set_user_active(…, False)` (`./dev.py user deactivate`) and
-`update_user_status()` (`PATCH /api/v1/users/{user_id}` with `is_active: false`). Whether the account waits is read
-before anything changes:
+`update_user_status()` (`PATCH /api/v1/users/{user_id}` with `is_active: false`, plus `cancel_setup: true` from the
+Users tab: below). Whether the account waits is read before anything changes, under the write lock since lot A-51:
 
 - **The initial administrator waiting for its setup**, inactive already: its setup links are **revoked**. That is the
   cancellation of the link handed over, the **Cancel setup link** of the Users tab
@@ -1818,11 +1822,32 @@ The waiting administrator keeps its role until its setup: its demotion is refuse
 `account_tokens.user_id`. The routes and their answers are in
 [The Initial Administrator](access_control.md#initial-admin).
 
-Tests: A42-001 to A42-006, A43-001 to A43-005 and A50-001 to A50-004 (the WARNING of a start after a cancellation or
-an address change, and of an expiry) of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
-of `./dev.py test api admin-setup`, and UADM-072 to UADM-079 of `./dev.py test api users-admin` (UADM-079: the
-cancellation of a protected waiting administrator refused, its link still working); the Users tab's side, UTAB-55 to
-UTAB-60 and UPS-12 to UPS-23, is in
+**A setup completed meanwhile** (A-51). Each of these decisions reads «waiting», and the setup can complete between
+that read and the write: from a Users tab loaded before it, or in the same millisecond. Read stale, the cancellation,
+sent as `{is_active: false}`, the body of a deactivation, would have deactivated the new owner; a deletion would have
+removed an active administrator never demoted; and on a new instance, where the waiting administrator is the only
+account, `./dev.py user demote` removed the only administrator, while `./dev.py user deactivate` answered success and
+ended the new owner's sessions without deactivating it. The cure is the one of A-42, the write lock first:
+
+- `update_user_status()`, `set_user_active()` and `set_user_admin()` take SQLite's write lock
+  (`backend.app.db.session.begin_writes()`), read the account again (`session.refresh()`), and only then decide: a
+  deactivation or a demotion, the last active administrator, «waiting». On a new instance, the command line's two then
+  refuse the administrator just set up as the last active one, nothing changed.
+- The Users tab cancels with `{is_active: false, cancel_setup: true}`: the cancellation and nothing else. An account
+  that no longer waits answers `409` `SETUP_COMPLETED`, rolled back, with an INFO line. A plain `{is_active: false}`
+  keeps its meaning, a deactivation decided on the account as the lock finds it, and its answer matches the database.
+- `DELETE /api/v1/users/{user_id}`, when its first read says «waiting», takes the lock, reads the account again and
+  asks once more: a setup completed in the meantime makes it `409` `DEMOTE_FIRST`, nothing deleted.
+
+The details, with the answers of each route: [A setup completed meanwhile](access_control.md#setup-completed-meanwhile).
+
+Tests: A42-001 to A42-006, A43-001 to A43-005, A50-001 to A50-004 (the WARNING of a start after a cancellation or
+an address change, and of an expiry) and A51-007 and A51-008 (`user deactivate` and `user demote` while the setup
+completes) of `./dev.py test services admin-bootstrap`, SETUP-016 to SETUP-018
+of `./dev.py test api admin-setup`, and UADM-072 to UADM-079 and A51-001 to A51-006 of `./dev.py test api users-admin`
+(UADM-079: the cancellation of a protected waiting administrator refused, its link still working; A51: the setup
+completed while the Users tab acts); the Users tab's side, UTAB-55 to UTAB-62, UPS-12 to UPS-23 and AERR-13 and
+AERR-14, is in
 [Users Tab and Account Deletion Tests](../frontend/components/features/settings.md#users-tests).
 
 ### 🧾 Transactions and Logs
