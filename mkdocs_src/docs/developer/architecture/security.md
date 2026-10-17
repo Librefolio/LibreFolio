@@ -58,12 +58,14 @@ password» or «send the link again» could find A (workstream E's review, rated
 1. **No `@` in a new username** (`USERNAME_RESERVED_CHARACTER` in `backend/app/config/accounts.py`). Refused by
    `user_service.create_user()` (registration, open or by invitation, the first account included, and
    `./dev.py user create`), by `user_service.update_profile()` for a username that changes (the name an account
-   already has is not checked again), and by `admin_bootstrap_config()` for `LIBREFOLIO_ADMIN_USERNAME`. Nothing else
+   already has is not checked again), both through `_new_username_refusal()`, and by `admin_bootstrap_config()` for
+   `LIBREFOLIO_ADMIN_USERNAME`. Nothing else
    changes: spaces, accents, `.`, `_`, `-` and `+` are still taken. `POST /api/v1/auth/register` and
    `PUT /api/v1/auth/profile` answer `400` with
    `{"error_code": "USERNAME_INVALID", "message": "A username cannot contain @: the sign-in reads it as an email address"}`
-   in `detail`: the message is `USERNAME_RESERVED_MESSAGE`, which `register_user()` raises as the `RegistrationError`
-   `USERNAME_INVALID` (listed in `_REGISTRATION_REFUSALS`) and the profile route recognizes. The command line prints
+   in `detail`: the message is `USERNAME_RESERVED_MESSAGE`, and the code that of the service's refusal, which
+   `register_user()` raises as the `RegistrationError` `USERNAME_INVALID` (listed in `_REGISTRATION_REFUSALS`) and the
+   profile route answers ([Refusals with a code](#username-refusal-codes)). The command line prints
    that message after `❌` and exits with `1`. A `LIBREFOLIO_ADMIN_USERNAME` with an `@` raises the
    `AdminBootstrapConfigError` `ADMIN_USERNAME_INVALID`, whose message names the variable and the `@`, and stops the
    start ([The Initial Administrator](access_control.md#initial-admin)): the administrator signs in with
@@ -87,13 +89,37 @@ every account has one, and with that exact name while no account has it as its a
 Usernames are still compared exactly as written, capitals included. The administrator's side: «Usernames with an @»
 in [Users & Invitations](../../admin/users.md).
 
+**The length of a new username** (lot A-46). `_new_username_refusal()` checks the `@` first, then the length: 3 to 50
+characters (`USERNAME_MIN_LENGTH` and `USERNAME_MAX_LENGTH` in `backend/app/config/accounts.py`, which
+`LIBREFOLIO_ADMIN_USERNAME` follows too). Registration and the Profile refuse another length before the service, with
+the `422` of their request schemas (`AuthRegisterRequest`, `UpdateProfileRequest`); `./dev.py user create` had no such
+check, and now stops with `❌ A username must be 3 to 50 characters long` (`USERNAME_LENGTH_MESSAGE`), exit `1`, writing
+nothing. Over HTTP the `422` must stay first: the app words `USERNAME_INVALID` as the rule of the `@`
+(`auth.validation.usernameNoAt`). A name an account keeps is never checked again: one of 2 or 51 characters, which
+`user create` could write before lot A-46, stays as it is, and `./dev.py user set-email` still finds the account by it.
+
+**Refusals with a code** (lot A-47). `create_user()` and `update_profile()` answer `(None, error)` on a refusal, `error`
+a `user_service.AccountError`: a `str` subclass holding the message as before, so a caller that prints or compares it
+keeps working, with a `code`. `USERNAME_INVALID` for a new username against its rules, the `@` or the length;
+`USERNAME_TAKEN`; `EMAIL_TAKEN`, an address registered or another account's username; `USER_NOT_FOUND`, from
+`update_profile()`. `register_user()` and `PUT /api/v1/auth/profile` branch on the code, never on the wording:
+`USERNAME_INVALID` becomes the `RegistrationError` `USERNAME_INVALID`, or the profile's `400` with that `error_code`;
+any other refusal keeps its plain-string `400`, through the `RegistrationError` `ACCOUNT_EXISTS` for registration
+(not in `_REGISTRATION_REFUSALS`).
+{: #username-refusal-codes }
+
 Tests: `./dev.py test services username-rules` (`backend/test_scripts/test_services/test_username_rules.py`: the `@`
 refused by `user create` and in `LIBREFOLIO_ADMIN_USERNAME`, and nothing else of the character set; an address that is
 a username, in any A–Z case, refused by `register_user()`, `user set-email` and `user create`; a legacy name left as it
-is), `./dev.py test services username-lookup` (`test_username_lookup.py`: an address finds its owner before a legacy
+is; UNAME-020 to UNAME-023, lot A-46: a length of 2 or 51 refused by `user create`, `create_user()` and
+`update_profile()`, 3 and 50 taken, a legacy name of either length kept; UNAME-030 and UNAME-031, lot A-47: the code of
+every refusal, the message unchanged, and `register_user()` deciding on the code once the message is reworded),
+`./dev.py test services username-lookup` (`test_username_lookup.py`: an address finds its owner before a legacy
 name written like it, in both orders of the rows; the exact legacy fallback; without `@` a username only, exact) and
 `./dev.py test api username-rules` (`backend/test_scripts/test_api/test_username_rules_api.py`, in-process: the
-registration, profile and login routes, workstream E's scenes); for the app, `./dev.py test front-utility core-unit`
+registration, profile and login routes, workstream E's scenes; UNAME-API-12 to UNAME-API-14: both routes deciding on
+the code, the answer of the `@` as before, and a length still refused with `422` first); for the app,
+`./dev.py test front-utility core-unit`
 (`registrationErrors.test.ts`) and `./dev.py test front-utility component-unit` (`RegisterCard.test.ts`,
 `tabs/ProfileTab.test.ts`).
 
@@ -310,8 +336,8 @@ the current password and ends the account's other sessions. No other route chang
 | `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
 | `429` | `{"error_code": "TOO_MANY_ATTEMPTS", "message": …}`, with `Retry-After` | An email change with a `current_password`, while the account's username or the request's address is past the [failed sign-in limit](#login-limit): the password is not checked, nothing is written |
 | `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, the failure counts toward the [failed sign-in limit](#login-limit) under the account's username, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
-| `400` | `{"error_code": "USERNAME_INVALID", "message": …}` | A new `username` holding `@` ([rule 1](#sign-in-identifier), lot A-21a): the name the account already has is not checked again. After the password when the email changes too. Nothing is written |
-| `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or is another account's username, in any A–Z case too ([rule 2](#sign-in-identifier), lot A-21a), or the name belongs to another account, compared exactly. Nothing is written |
+| `400` | `{"error_code": "USERNAME_INVALID", "message": …}` | A new `username` holding `@` ([rule 1](#sign-in-identifier), lot A-21a): the name the account already has is not checked again. After the password when the email changes too. Nothing is written. The route answers the code of the service's refusal, never its wording ([Refusals with a code](#username-refusal-codes), lot A-47); a length outside 3–50 never gets here, the `422` below comes first |
+| `400` | *Email already registered* or *Username already taken*, plain strings as before, the service's code (`EMAIL_TAKEN`, `USERNAME_TAKEN`) left out | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or is another account's username, in any A–Z case too ([rule 2](#sign-in-identifier), lot A-21a), or the name belongs to another account, compared exactly. Nothing is written |
 | `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
 | `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
 
