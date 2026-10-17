@@ -1824,3 +1824,280 @@ Quattro commit, uno per lotto che cambia numeri:
   L87–88, L143–162; `financial_math.md` L69, L124–134, L552. `mkdocs build` stretto exit 0, `check-links` exit 0. Due
   docstring corretti dopo il suo appunto («routes»: `convert_bulk` non triangola).
 - **Da fare in slot**: `api period-changes`, `api assets-price` (le rotte nuove stanno nello stesso router).
+
+#### MF-P2 entrato; R13-SEC7-2 — DoS della Scheduled Investment (17/10, 06:0x)
+- Coordinatore: MF-P2 committato `ed954008e`, base `ba2cd3cf6` (slot 2: `api period-changes` 6, `api assets-price` 18,
+  `financial-math` 871, `period-changes` 20, `fx-core` 42), **entrato** in dev `aa4370905`, HEAD ff **`aa4370905`**.
+  **MF-D4 fermo** (J unico scrittore di `engine.py`, `data_quality.py`, `schemas/portfolio.py`, `portfolio_service.py`,
+  i18n `dataQuality.*` per J-43b e SEC7-1): riparte sulla base con l'ingresso di J, accordo con J tenuto — (a) le righe
+  restano il riscalamento, cade solo il rapporto; `IssueCode.INVALID_SPLIT_RATIO`, `group_key="invalid_split_ratio"`,
+  `dataQuality.invalidSplitRatio` `{count}`, `affected_asset_ids/names`, CTA `navigate_asset`; `InvalidSplitEvent(event_id,
+  asset_id, date)` in `models.py`, `PortfolioCalculationResult.invalid_split_events`; la chiave i18n la scrivo io con
+  `dev.py i18n`; punti dei pezzi suggeriti da J (dopo `MISSING_COST_BASIS`, campo prima di `missing_fx`, ecc.).
+- **R13-SEC7-2** (E, MEDIUM 8/10): le date dei periodi sono controllate solo in ordine
+  (`schemas/assets/scheduled_investment.py:220-241`); `_accrual_days` (`scheduled_investment/plugin.py:168-211`) cammina
+  un giorno alla volta; `POST /assets/provider/probe` (prova a secco, ogni utente) con un piano dall'anno 1 al 9999
+  DAILY → ~3,65 M giorni due volte (storia + `_compute_value_at`), in thread che il timeout di 15 s non ferma, e ~0,7 GB
+  in cache per piano; salvato su un asset condiviso blocca anche la sincronizzazione.
+- **Riverifica** (`aa4370905`):
+  - schema: `FAInterestRatePeriod` solo `end ≥ start`; `FAScheduledInvestmentSchedule.validate_schedule_continuity`
+    solo sovrapposizioni/buchi; `grace_period_days` solo ≥ 0; nessun limite al numero di periodi.
+  - `_compute_maturation_dates` DAILY costruisce un insieme di tutti i giorni; `_generate_schedule_values` mette in
+    cache (`maxsize=256`, 48 h) un dict con un valore per data di maturazione: DAILY = un valore al giorno.
+  - **Quadratico**: in `get_history_value` ogni data di maturazione del periodo di mora chiama
+    `_compute_late_interest_value`, che col COMPOUND rifà il ciclo giornaliero dalla scadenza a quella data.
+  - La sonda: storia dagli ultimi 7 giorni a oggi; `validate_params` gira **dentro** il thread (errore
+    `INVALID_PARAMS` per operazione, HTTP 200); l'assegnazione (`bulk_assign_providers`) non valida i parametri; la
+    sincronizzazione sì (`refresh.py:148`): con lo schema limitato un piano salvato fuori misura fallisce subito, non
+    blocca.
+- **Decisione notturna N73** (da rivedere; mia, su delega del coordinatore):
+  - periodi con le date in **[1900-01-01, 2200-12-31]**; durata dal primo inizio all'ultima fine **≤ 100 anni**
+    (36 525 giorni); **≤ 1 200 periodi** (100 anni mensili); `grace_period_days` **≤ 36 525**;
+  - la mora si valuta al massimo fino al **2200-12-31** (le date oltre non si emettono);
+  - in cache solo i risultati **≤ 3 660 punti** (10 anni giornalieri); oltre, ricalcolati a ogni chiamata, mai salvati.
+  - Perché: 100 anni coprono ogni titolo a scadenza reale e il modello di un perpetuo; 1900–2200 esclude solo date
+    impossibili per un titolo vivo; il tetto della cache tiene il caso peggiore a ~256 × 1 MB.
+- **Piano di cura**: limiti nello schema (`ValueError` → `INVALID_PARAMS` come oggi; dove lo schema è un modello
+  dell'API, 422); in `financial_math/interest.py` una forma chiusa del composto giornaliero
+  `compound_growth(start, end, annual_rate, convention)` = Π (1 + r · frazione del giorno) — ACT/365 e ACT/360 una
+  potenza, ACT/ACT una potenza per anno, 30/360 per mese (passi da 0, 1, 2, 3 trecentosessantesimi); la mora COMPOUND
+  con la forma chiusa (valore corrente) e incrementale fra date consecutive (storia): lineare; nessuna cache sopra il
+  tetto. Rossi prima (test-author); rivedono J (CP-14) ed E.
+- ✅ **Codice SEC7-2** (2026-10-17, solo scrittura, poi i rossi):
+  - `schemas/assets/scheduled_investment.py`: costanti `SCHEDULE_MIN_DATE`, `SCHEDULE_MAX_DATE`, `SCHEDULE_MAX_SPAN_DAYS`,
+    `SCHEDULE_MAX_PERIODS`, `LATE_INTEREST_MAX_GRACE_DAYS` (N73); validatori sulle date del periodo, sul numero dei
+    periodi e sulla durata (in `validate_schedule_continuity`), sulla mora.
+  - `financial_math/interest.py`: `compound_growth(start, end, annual_rate, convention)` = Π (1 + r · f(d−1, d)) in forma
+    chiusa (ACT/365 e ACT/360 una potenza; ACT/ACT una per anno, l'anno di d−1; 30/360 per mese, passi da 0/1/2/3
+    trecentosessantesimi, `_thirty_360_daily_steps`). **Verifica** (script mio, 1 200 intervalli casuali, 4 convenzioni,
+    contro il prodotto giorno per giorno a precisione 60): scarto relativo massimo **4,1·10⁻²⁵**.
+  - plugin: `_late_compound_growth` (grazia al tasso dell'ultimo periodo, poi quello di mora), `_compute_late_interest_value`
+    COMPOUND = V · crescita in forma chiusa; `_late_interest_values` (COMPOUND incrementale fra date emesse
+    consecutive: una passata; SIMPLE in forma chiusa per data); la storia della mora fino a `SCHEDULE_MAX_DATE` al
+    massimo; `_CACHE_MAX_POINTS = 3 660` (sopra, calcolato e mai salvato).
+  - Effetto sul golden dell'accrual (di J, CP-14a/b): `services synthetic-yield` 1 rosso, `accrual_golden`, **solo** le
+    chiavi `late_interest_value_at` dei casi COMPOUND, alle ultime 2–3 cifre su 28 (~10⁻²³ relativo; es. 14072,65031608087426483844185
+    → …844314): la forma chiusa è più esatta dell'arrotondamento a ogni passo; da rigenerare dichiarato. Verdi
+    `synthetic-yield-integration` 15, `scheduled-investment-param-change` 3.
+  - **Il «422»**: lo schema rifiuta con `ValueError`; dalla sonda arriva come `INVALID_PARAMS` per operazione (HTTP 200,
+    come ogni altro parametro non valido), dalla sincronizzazione come errore dell'asset, subito: nessun lavoro lungo. Un
+    422 sulla sonda chiederebbe di validare prima dei thread (cambio di contratto della sonda per tutti i fornitori):
+    da decidere con E/J, non fatto.
+- ✅ **Rossi e reperti di test-author** (primo giro): 3 file nuovi —
+  `test_schemas/test_scheduled_investment_bounds.py` (limiti, `INVALID_PARAMS`), `test_financial_math/test_compound_growth.py`
+  (forma chiusa vs prodotto giorno per giorno, 169 casi), `test_services/test_scheduled_investment_cost_bounds.py`
+  (mora COMPOUND = vecchio ciclo, storia = valore per data, guardia di costo deterministica sulle chiamate di
+  `calculate_day_count_fraction`, tetto della cache, orizzonte); 221 verdi sull'albero, 22 rossi su HEAD per il motivo
+  giusto. Righe del runner aggiunte (dichiarate): `_backend_schemas.py` → `scheduled-investment-bounds`,
+  `_backend_services.py` → `scheduled-investment-cost-bounds` (dopo `synthetic-yield-integration`).
+- ⚠️ **Fuori pista — tre buchi della mia prima cura** (trovati da test-author): (1) scadenza esattamente sul 2200-12-31 →
+  il ramo «senza mora» emetteva un punto dopo l'orizzonte → ora `elif … and not schedule.late_interest`; (2) la mora
+  SIMPLE in ACT/ACT restava super-lineare (la frazione cicla gli anni dalla scadenza: 41 s fino al 2200) → (3) l'importo
+  del `MATURITY_SETTLEMENT` di mora differiva dall'ultimo prezzo nelle ultime cifre → ora il valore stesso della griglia.
+  Per (2) avevo scritto un ACT/ACT O(1) (una divisione esatta, arrotondata una volta): **rompeva** il contratto di J
+  (`test_day_count_conventions.py::TestACTACTYearEnds::test_span_across_a_leap_year_end`, somma per anno cifra per cifra) e
+  l'additività al 1° gennaio (22 270 intervalli su 148 840 a 1 ulp) → **tornato indietro**: la stessa somma anno per
+  anno, nello stesso ordine, con il prefisso degli anni interi in `lru_cache(4096)` (`_act_act_years_before`): cifre
+  identiche (20 000 intervalli casuali, `str` uguali a HEAD), costo ammortizzato. In più la storia COMPOUND della mora
+  cresce dalla scadenza su tutta la griglia (il valore d'una data non dipende più dalla finestra letta); la SIMPLE
+  valuta solo le date emesse e l'ultima.
+- **Misure** (un processo, `nice 10`, carico ~35): piano tipico 5 anni MONTHLY 13 ms la prima volta, poi in cache; il
+  caso peggiore ammesso (100 anni DAILY, fuori cache) ~130 ms il valore corrente, ~250 ms la storia intera; scadenza 1950
+  con mora DAILY COMPOUND fino a oggi ~70 ms (7 giorni) / ~150 ms (intera); **l'attacco anno 1–9999 DAILY rifiutato in
+  0,6 ms** (`INVALID_PARAMS`).
+- `start_date="min"` di `get_history_value` solleva su HEAD e sull'albero (`start_date < min(cached)` col letterale):
+  difetto preesistente, fuori perimetro → riga **MF-SI1** nel backlog.
+- ⚠️ **Fuori pista — il memo e il contesto Decimal** (test-author): `_act_act_years_before` in cache restituiva la
+  somma arrotondata nel contesto di chi l'aveva riempita per primo (60 cifre in un `localcontext`, poi 60 cifre anche nel
+  contesto normale). Nessun effetto oggi nel prodotto (l'unico `localcontext` di `backend/app`, `ledger_totals`, non
+  chiama le frazioni), ma un accoppiamento nascosto → `precision` e `rounding` del chiamante nella chiave del memo.
+  Riprova: 60 cifre nel `localcontext`, 28 fuori.
+- ✅ **Test finali** (test-author, terzo giro): `test_act_act_fraction.py` riscritto (uguaglianza `str` col ciclo di HEAD
+  su 18 intervalli e 8 490 coppie, lunghe serie da un inizio, additività al 1° gennaio su ~13 000 tagli, costo
+  ammortizzato), sezione H (indipendenza dalla finestra, 4 convenzioni × DAILY/MONTHLY), guardia di costo SIMPLE ACT/ACT
+  col memo. Mutazioni: (a) tolta → gli 8 casi H rossi; memo spento → i 5 test di costo rossi, le cifre verdi.
+- ✅ **Rossi** (`files/sec7.sh red`, 06:38, patch prodotto `78587084…`, rimessa con lo stesso sha):
+  `schemas scheduled-investment-bounds` **13 failed / 5 passed**; `financial-math "test_compound_growth or act_act"` →
+  errore di raccolta (`ImportError` di `compound_growth`); `services scheduled-investment-cost-bounds` **13 failed / 50
+  passed** (costo, cache, orizzonte).
+- ✅ **Verdi** (06:39–06:41): `scheduled-investment-bounds` 18, `schemas assets` 70, `financial-math` **1076**,
+  `scheduled-investment-cost-bounds` 63, `synthetic-yield-integration` 15, `scheduled-investment-param-change` 3,
+  `utils day-count` **43** (il contratto ACT/ACT di J verde), `utils provider-core-cache` 46; `synthetic-yield` 23 + il
+  golden rosso atteso.
+- ✅ **Golden rigenerato e rivisto** (`files/sec7.sh regen`): **44 percorsi**, tutti `late_interest_value_at` dei casi con
+  mora COMPOUND (s2 ×8, s3 compound ×4), scarto relativo massimo **1,05·10⁻²⁵**; nient'altro (values, value_at,
+  auto_events, mora SIMPLE). Cambio dichiarato nel commento del golden in `test_synthetic_yield.py` (come CP-14b).
+  `synthetic-yield` **24** verde.
+- ✅ **Doc** (docs-writer, due giri): `provider_scheduled_investment.md` (L36–56 «Bounds», L122, L136–154 mora, L156–175
+  cache con il tetto e i tempi misurati, L214 ACT/ACT col memo), `financial_math.md` (L71, L555 — anche
+  `test_act_act_fraction.py`, ritocco mio —, L583), utente `scheduled-investment.en.md` L40–47 (nota «Limits of a
+  schedule»). `mkdocs build` stretto exit 0 (anche dopo il mio ritocco), `check-links` exit 0. **Debito di traduzione**
+  it/fr/es della pagina utente: una nota in più (`admonition-count`, `admonition-type`, link `#late-interest`).
+- ruff/black (11 file) puliti, `git diff --check` pulito, porta libera.
+
+#### SEC7-2 entrato; MF-SI1 + la nota di J (17/10, 06:46)
+- Coordinatore: SEC7-2 committato `db5486ae9` + giornale `d6927b129`, base `bda5c80d6` (dev `0dc58c70b`); combinata
+  leggera verde (`financial-math` 1076, `synthetic-yield` 24, `synthetic-yield-integration` 15, `cost-bounds` 63,
+  `scheduled-investment-bounds` 18, `day-count` 43, `mkdocs build` stretto 0) → **entrato** dev `7198d8028`, CHANGELOG
+  `c8ea9ddd4`, HEAD ff **`c8ea9ddd4`**. N73 adottata per la revisione; il 422 sulla sonda non serve (`INVALID_PARAMS` è
+  il contratto). J: golden accettato; **nota non bloccante**: la storia COMPOUND della mora (prodotto lungo la griglia) e
+  la data singola (forma chiusa) differiscono nelle ultime cifre per lo stesso giorno → allinearle se costa poco, nel
+  lotto di MF-SI1. E: chiuso; note sotto soglia (tetto opzionale su `asset_events`, la sonda senza limite per utente) al
+  mio backlog. Prossimi: **MF-SI1**, poi analisi in sola lettura di **SEC7-1b** (il motore fuori dal ciclo degli eventi;
+  nessuna modifica a `engine.py`, di J).
+- ✅ **MF-SI1 — codice**: `get_history_value` — `effective_start` per `"min"` = il più presto fra il primo valore e il primo
+  evento manuale (altrimenti `end_date`); i due confronti col letterale (l'ancora del valore iniziale, i tre filtri degli
+  eventi) usano `effective_start`. ⚠️ **Fuori pista — più largo del previsto**: `refresh.py:164` passa `"min"` quando
+  l'asset non ha prezzi, quindi **la prima sincronizzazione di ogni nuovo asset Scheduled Investment falliva**
+  (`CALCULATION_ERROR`). Decisione mia: `"min"` arriva al primo evento manuale anche se precede il piano (letto una sola
+  volta, alla prima sincronizzazione: un evento prima sarebbe perso per sempre); prima del piano l'ancora del valore
+  iniziale, come una partenza esplicita anticipata.
+- ✅ **La nota di J — allineamento esatto**: invece di portare la data singola sulla griglia, `compound_growth` diventa
+  **O(1)** nell'intervallo e la storia usa la stessa forma chiusa data per data: storia, valore corrente e chiusura
+  coincidono (`str` uguali, misurato sulle 4 convenzioni); l'indipendenza dalla finestra vale per costruzione; sparisce
+  il passaggio lungo la griglia. ACT/ACT: primo anno, una potenza per gli anni comuni interi e una per i bisestili,
+  ultimo anno (identico a HEAD con ≤ 1 anno intero; 9 su 12 000 intervalli ≤ 800 giorni a 1,1·10⁻²⁷); 30/360: conteggi
+  dei passi come differenze di conteggi in forma chiusa fino a ciascuna data (interi: identici al ciclo per mese su
+  30 000 intervalli). `_compound_growth` in `lru_cache(4096)` con la tariffa **come scritta** nella chiave (`0.05` e
+  `0.050` sono Decimal uguali con cifre diverse: con tasso 0 `1.000…` contro `1`), e precisione/arrotondamento.
+- **Misure** (mora DAILY COMPOUND da una scadenza nel 1900): finestra di 7 giorni 40–130 ms (HEAD 120–270 ms, il
+  passaggio lungo la griglia); storia intera fino al 2200 (≈110 000 punti) 1,9 s ACT/365, 2,9 s ACT/ACT, 3,9 s 30/360
+  (HEAD 1,5–1,7 s); valore corrente 1–2 ms; il timeout della storia nella sincronizzazione è 55 s. Il segmento della
+  grazia, uguale per ogni data dopo, viene dal memo.
+- Suite esistenti verdi sull'albero (06:53–06:55): `scheduled-investment-bounds` 18, `schemas assets` 70,
+  `financial-math` 1076, `cost-bounds` 63, `synthetic-yield` **24 (golden intatto)**, `synthetic-yield-integration` 15,
+  `param-change` 3, `day-count` 43, `provider-core-cache` 46.
+- Test: test-author `mf-si1-tests` — `test_scheduled_investment_min_start.py` (8 casi; 4 rossi su HEAD per il
+  `TypeError`; mutazioni sbagliate prese), in corso l'adeguamento a «primo evento» e i test dell'allineamento, dell'O(1) e
+  della chiave del memo. Riga del runner aggiunta (dichiarata): `scheduled-investment-min-start` (pura). Doc:
+  docs-writer `sec7-2-docs`, secondo seguito.
+
+#### SEC7-1b — analisi in sola lettura: il motore fuori dal ciclo degli eventi (17/10, ~07:1x; nessuna modifica)
+- **Il reperto** (E, R13-SEC7 reperto 1, `08_email/plan-phase01Email.prompt.md` ~:4720): `builder.build()` gira sul ciclo
+  degli eventi (`financial_math/portfolio/engine.py:424`), CPU pura; J taglia la fine dell'intervallo (SEC7-1), qui la
+  seconda metà: spostare il calcolo in un thread. `engine.py` è di J: niente modifiche mie.
+- **Che cosa riceve il costruttore** (`engine.py:402-423`): `classified_txs` (`ClassifiedTransaction` con **istanze ORM
+  `Transaction` vive**, `tx` e `paired_tx`), `in_transit_intervals` (gambe ORM), `price_map`/`ohlc_map`/`fx_rate_map`
+  (tuple e dict già caricati), `average_costs` (dataclass), `native_cash` (`NativeCash`: movimenti e tassi già convertiti
+  da un solo `convert_bulk`, nessuna sessione dentro), `mark_series` (costruite sul ciclo da `build_asset_price_series`,
+  osservazioni normalizzate), `split_history` (tuple). Tutto è caricato **prima**; il costruttore non fa I/O.
+- **Attributi ORM pigri**: il costruttore legge solo **colonne** (`tx.id, amount, quantity, broker_id, type, asset_id,
+  date, currency, cost_basis_override, cost_basis_currency`, `paired_tx.id`, `departure_leg.currency`,
+  `arrival_leg.date`); nessuna relazione (`related_transaction` è la sola, pigra, mai letta: il classificatore usa la
+  colonna `related_transaction_id`); nessuna colonna `deferred`. Le sessioni nascono con `expire_on_commit=False`
+  (`db/session.py:173`), nessun `rollback`/`expire`/`refresh` nei percorsi del motore. Quindi leggere quelle istanze da
+  un altro thread non tocca la sessione. **Il rischio residuo**: un attributo scaduto o una relazione letta in futuro
+  farebbe un caricamento pigro dal thread → `MissingGreenlet`. Guardia proposta: un test che costruisce col sessione
+  chiusa e le istanze `expunge`-ate (un caricamento pigro solleverebbe `DetachedInstanceError`), oppure `raiseload` sulla
+  relazione nei test.
+- **Sessioni**: la sessione non entra nel thread (tutte le `await self.db.execute` sono prima e dopo); nessun chiamante
+  usa la stessa sessione in concorrenza (`gather`/`create_task` assenti in `portfolio_service.py`, `risk/`,
+  `ai_export/`, `pac_allocator/source/distribution.py`): mentre il thread lavora la coroutine della richiesta è sospesa
+  e nessun'altra tocca quelle istanze.
+- **Stato condiviso**: nel percorso del costruttore solo costanti (`classifier.py` insiemi di tipi) e le `lru_cache` di
+  `interest.py` (thread-safe; chiave con contesto Decimal e tariffa scritta, SEC7-2); la cache dei blob
+  (`_portfolio_blob_cache`) si scrive sul ciclo dopo l'`await`. Il contesto `decimal` è per thread: l'app non cambia mai
+  il contesto globale (nessun `getcontext().prec =`/`setcontext`), quindi il thread ha lo stesso 28/HALF_EVEN; da tenere
+  così (un test di parità lo fisserebbe).
+- **Costo e comportamento**: `to_thread` costa decine di µs, niente rispetto al calcolo; il GIL resta (Python puro),
+  quindi nessun parallelismo, ma il ciclo riprende il GIL ogni 5 ms (intervallo di commutazione) → le altre richieste
+  rallentano invece di fermarsi. Un thread non si cancella: con il client disconnesso il calcolo finisce comunque e il
+  risultato si butta (la scrittura in cache è dopo l'`await`, non avviene) — con il tetto della durata di SEC7-1 è
+  limitato. L'esecutore predefinito (`min(32, cpu+4)` thread) è condiviso da ~75 `to_thread`: tanti report pesanti
+  insieme lo occuperebbero.
+- **Proposta per J** (scrittore di `engine.py`):
+  1. `result = await loop.run_in_executor(_ENGINE_EXECUTOR, builder.build)` con un **esecutore dedicato** piccolo
+     (`ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")`): limita la concorrenza dei calcoli
+     pesanti e non affama gli altri `to_thread`; in alternativa `asyncio.to_thread(builder.build)` (minimo).
+  2. Test (rossi prima, test-author): il costruttore gira fuori dal thread del ciclo (nome del thread o un ticker che
+     avanza durante un calcolo lungo); golden `native_cash_guard` identico; la guardia degli attributi pigri sopra.
+  3. Fuori perimetro ma simile: i post-calcoli di `portfolio_service` (viste derivate, contributi) e il replay del
+     rischio restano sul ciclo; col tetto della durata sono limitati: da misurare prima di spostarli.
+- **Coordinatore** (06:59): analisi buona. Dopo l'ingresso di J-43/SEC7-1 **`engine.py` passa a me** (J va su F5/J-44 nel
+  frontend), unico scrittore, in quest'ordine: (1) **MF-D4** (rapporto non valido = split mancante +
+  `INVALID_SPLIT_RATIO`, come concordato con J); (2) **SEC7-1b = J-45** (passata a me): esecutore dedicato
+  `ThreadPoolExecutor(max_workers=2, thread_name_prefix="portfolio-engine")` e i 3 rossi (costruzione fuori dal thread
+  del ciclo, golden identico, guardia degli attributi pigri); rivedono J ed E. Prima: chiudere MF-SI1 → checkpoint.
+- ✅ **Test MF-SI1 + allineamento** (test-author `mf-si1-tests`, due giri): `test_scheduled_investment_min_start.py` (10
+  casi: «min» = la chiamata esplicita a `min(primo inizio, primo evento)`, l'evento prima del piano con l'ancora alla sua
+  data, piano vuoto con e senza eventi, parità delle partenze esplicite); `test_scheduled_investment_late_alignment.py`
+  (32: valore corrente il giorno D = chiusura della storia su D, per `str`, 4 convenzioni × DAILY/MONTHLY × 3 finestre;
+  la chiusura di mora = ultima chiusura = forma chiusa); `test_financial_math/test_compound_growth_span_cost.py` (costo
+  indipendente dall'intervallo: ≤ 48 chiamate di `calendar`, 46 col 30/360 in dicembre; conteggi 30/360 = ciclo per mese
+  di HEAD esatti; ACT/ACT = prodotto per anno ≤ 1e-26 su intervalli corti, ≤ 1e-22 dal prodotto a 60 cifre su quelli
+  lunghi; il memo tiene `0.000` e `0` distinti e il contesto). Mutazioni: sei rotture, tutte prese. Docstring di
+  `test_scheduled_investment_cost_bounds.py` e di `min_start` allineati.
+- **Riga del runner** (dichiarata): `scheduled-investment-late-alignment` (pura), oltre a `scheduled-investment-min-start`;
+  descrizione di `scheduled-investment-cost-bounds` corretta («closed form per date, bounded day counts»).
+- ✅ **Rossi** (`files/si1.sh red`, 07:05, patch prodotto `367626ec…` = `interest.py` + plugin, rimessa con lo stesso sha):
+  `scheduled-investment-min-start` **6 failed / 4 passed** (`CALCULATION_ERROR`); `scheduled-investment-late-alignment`
+  **32 failed** (la storia a griglia di HEAD: …726649 contro …726644); `financial-math test_compound_growth_span_cost`
+  **2 failed / 33 passed** (ACT/ACT 251, 30/360 6 001 chiamate).
+- ✅ **Verdi** (07:05–07:07): `min-start` 10, `late-alignment` 32, `financial-math` **1111**, `cost-bounds` 63,
+  `synthetic-yield` **24 (golden intatto, byte per byte)**, `synthetic-yield-integration` 15, `param-change` 3,
+  `scheduled-investment-bounds` 18, `day-count` 43, `provider-core-cache` 46, `asset-source-refresh` 18. ruff/black puliti,
+  `git diff --check` pulito, porta libera.
+- ✅ **Doc** (docs-writer, terzo giro): `provider_scheduled_investment.md` L51, L74 («History range»: `"min"`), L141–155
+  (forma chiusa per data), L171–180 (tempi), L220–226 (`compound_growth` O(1) e i memo); `financial_math.md` L71,
+  L517–527. `mkdocs build` stretto 0, `check-links` 0. Pagina utente invariata.
+
+#### MF-SI1 entrato; MF-D4 — uno split col rapporto non valido conta come mancante (17/10, 07:1x)
+- Coordinatore: MF-SI1 committato `f37b1d0ea` + giornale `8535de2b2`, base `576296a21` (dev `46c66f0c8`: J-43/SEC7-1,
+  X-R47, H-37, Z-24), combinata leggera verde (`financial-math` 1111, `synthetic-yield` 24, `-integration` 15,
+  `min-start` 10, `late-alignment` 32, `cost-bounds` 63, `asset-source-refresh` 18) → **entrato** dev `16f8c74ed`,
+  CHANGELOG `4c767685f`, HEAD ff **`4c767685f`**. J: OK (forme chiuse ≤ 4e-24, passi 30/360 400/400; nota: l'ACT/ACT
+  che salta gli anni può differire nelle ultime cifre dal prodotto per anno su intervalli di più anni, nessun golden lo
+  fissa). **`engine.py` è mio** (J-43/SEC7-1 entrati): MF-D4, poi J-45/SEC7-1b.
+- ✅ **Codice MF-D4** (opzione (a), concordata con J):
+  - `portfolio/models.py`: `InvalidSplitEvent(event_id, asset_id, date)` (frozen, prima di `PortfolioCalculationResult`);
+    `PortfolioCalculationResult.invalid_split_events` (dopo `realized_sales`, prima di `missing_fx`).
+  - `portfolio/engine.py`: nel caricamento degli split la riga resta in `split_linked_tx_ids` (riscalamento: costo
+    tenuto, mai capitale in natura), un rapporto non valido non crea `SplitRecord` (nessun prezzo di scambio
+    precedente viene riportato alle unità nuove; le quotazioni di mercato non lo sono mai) e va in `invalid_split_events` (una per evento, per id); niente più `ValueError` (il report
+    rispondeva 500). La chiave della cache tiene già le righe e i record: correggere il rapporto la cambia.
+  - `schemas/portfolio.py`: `IssueCode.INVALID_SPLIT_RATIO` dopo `MISSING_COST_BASIS`. `data_quality.py`: parametro
+    `invalid_split_assets` dopo `missing_cost_basis_assets`, blocco WARNING dopo quello di `MISSING_COST_BASIS`
+    (`dataQuality.invalidSplitRatio`, `{count}` = asset, `affected_asset_ids/names`, CTA `navigate_asset`,
+    `group_key="invalid_split_ratio"`). `portfolio_service.py`: `_invalid_split_assets(engine_result)` e l'argomento in
+    entrambe le chiamate (sommario e report).
+  - Lotti: `fifo/engine.py::classify_events` salta lo SPLIT col rapporto non valido (la riga resta legata allo split:
+    né ADJUSTMENT né riscalamento; nessuna riga SPLIT nella cronologia del lotto); YoC invariato (rende già il broker non
+    disponibile).
+  - i18n: `dataQuality.invalidSplitRatio` con `dev.py i18n add` nella sorgente `dataQuality/` (4 lingue, terminologia di
+    `events.saveError.invalidSplitRatio`); `i18n check` stretto verde. `api sync` exit 0 (enum nuovo; client non
+    tracciato). Il frontend non mappa i codici (il banner è generico): nessun `.svelte`.
+  - Suite esistenti verdi col codice: `financial-math` 1111, `roi-fifo-utils` **1178** (golden del motore),
+    `portfolio-engine` 41, `lots-analysis-pure` 177, `event-split-ratio` 78 (non fissava il `raise`).
+- In corso: test-author `mf-d4-tests` (motore, report, servizio, lotti, parità YoC e split valido), docs-writer
+  `mf-d4-docs`.
+- ✅ **Doc MF-D4** (docs-writer): `data-quality-banner.md` L22, L102 (riga `INVALID_SPLIT_RATIO`), L137–138 (la
+  regola), L149, L182 (come provocarlo: dopo X-R47 solo righe salvate prima o scritte nel DB); `assets/events.md`
+  L150–154; `financial_math.md` L145–152 (il passo 2 del motore senza `ValueError`); `lots_analysis_service.md` L120;
+  `fifo_lot_engine.md` L202 (la regola di `classify_events`, condizionale). `mkdocs build` stretto 0 (carico 38),
+  `check-links` 0 (lanciato per errore a carico 56: segnalato).
+- ⚠️ **Fuori pista — «quotazioni»**: il rapporto dello split riporta alle unità nuove solo i segni **derivati dagli
+  scambi** (`daily_state.py:1026-1029`, `mark.estimated`), mai le quotazioni di mercato: docstring di `models.py`,
+  `data_quality.py` e commento di `engine.py` corretti («no ratio restates a trade price observed before it»).
+- **Residui segnalati dal docs-writer, da portare al coordinatore**: (1) lotti contro WAC: il FIFO salta la riga legata
+  allo split non valido, le righe del WAC (`average_cost_lines`) ne applicano la quantità come uno split → le quantità
+  dei lotti e del pool divergono per quell'asset, una vendita dopo può dare `FIFO_SOURCE_QUANTITY_MISSING`
+  (dato corrotto: il report del portafoglio lo segnala); (2) la CTA `navigate_asset` può essere un vicolo cieco per un
+  evento del fornitore (non modificabile per id, `EVENT_NOT_EDITABLE`; non cancellabile con transazioni legate,
+  `EVENT_IN_USE`): area di X; (3) `test_event_split_ratio.py:335` ha ancora il messaggio del 500 (a test-author);
+  (4) la sezione della copertura dei test in `data-quality-banner.md` era già vecchia (39 test / 7 codici): non toccata.
+- ✅ **Test MF-D4** (test-author `mf-d4-tests`): `test_financial/test_portfolio_engine/test_invalid_split_ratio.py`
+  (puro, 40: guardie del rapporto, `InvalidSplitEvent`, il blocco del report, FIFO che salta la riga per ogni rapporto
+  non valido e riscala con 2 e 0,5) e `test_financial/test_invalid_split_ratio_ledger.py` (DB, annullato in rollback:
+  motore — nessuna eccezione, l'evento registrato, la riga resta `SPLIT_RESCALE`, costo 1000 e capitale invariati,
+  prezzo non riportato; un evento su due broker = un record; due eventi = due record per id —, `get_summary` e
+  `get_report` con e senza sommario: un solo `INVALID_SPLIT_RATIO`, nessun `MISSING_COST_BASIS`; lotti: 10 a 100 senza
+  riga dello split; YoC `UNAVAILABLE`/`INVALID_SPLIT`; rapporto 2: tutto come prima). Su HEAD i lotti sollevavano per
+  ogni rapporto non valido (0 `DivisionByZero`, −2 `Lot cost invariant violated`, None `Expected Decimal value`,
+  NaN/Inf `InvalidOperation`). Prosa di `test_event_split_ratio.py` (docstring, messaggio a :335) aggiornata, nessuna
+  asserzione toccata. Nessuna riga del runner: `roi-fifo-utils` gira tutto `test_financial/`.
+- ✅ **Rossi** (`files/d4.sh red`, 07:26, patch prodotto `df239e79…`, rimessa con lo stesso sha):
+  `roi-fifo-utils invalid_split_ratio` **49 failed / 18 passed** — `ValueError` del motore 18, lotti 23
+  (`DivisionByZero`, `Expected Decimal value`, invariante, `InvalidOperation`), parametro/codice/campo mancanti 7.
+- ✅ **Verdi** (07:26–07:37, attese per carico): `invalid_split_ratio` 67, `roi-fifo-utils` **1245** (golden),
+  `portfolio-engine` 41, `lots-analysis-pure` 177, `financial-math` 1111, `event-split-ratio` 78,
+  `utils gate-i18n-catalog` 176. ruff/black puliti. **Da fare in slot**: `api portfolio` (enum nuovo, report).

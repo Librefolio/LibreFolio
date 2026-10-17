@@ -36,6 +36,8 @@
     "assetCostNoEligibleLots": "Nessun lotto idoneo per {economic_type} di {target_amount} {target_currency} il {as_of_date} — costo non allocato",
     "missingFxRatesAfterSync": "Mancano ancora tassi FX per {pairs} tra {date_from} e {date_to} ({dates_count} date): il provider non ne ha restituiti per quelle date. Inseriscili a mano nella pagina della coppia.",
     "missingCostBasis": "{count} asset con un'acquisizione senza costo d'acquisto — conteggiata a zero finché non lo imposti",
-    "valuedAtCost": "{count} asset valutati al costo — nessun prezzo disponibile da oltre 2 settimane (al {as_of_date})"
+    "valuedAtCost": "{count} asset valutati al costo — nessun prezzo disponibile da oltre 2 settimane (al {as_of_date})",
+    "transferShareMismatch": "{count} trasferimento/i tra broker in cui la tua quota è diversa — la differenza conta come guadagno o perdita",
+    "invalidSplitRatio": "{count} asset con un frazionamento dal rapporto non valido — ignorato finché non lo correggi negli eventi dell'asset"
   }
 }

@@ -52,6 +52,14 @@ current-price tests drive ``_QuoteDouble``, a provider double the registry hands
 which the PEPE asset is assigned for that test alone (``assigned``); they read today's row with raw SQL, past the column
 types, so a REAL inf or 1e60 written today is seen as the float it is.
 
+W-B60 (17/10, the follow-up of W-B58): an event value reads back exactly. ``AssetEvent.value`` was a plain
+``Numeric(18, 6)``, read through ``'%.6f'`` of the stored double, so from about 11 integer digits the double's noise
+landed in the 6 decimals: a dividend of 12345678901.2345 EUR — 4 decimals, 15 significant digits, 11 integer digits,
+within every limit of a manual event — read back 12345678901.234501. It becomes ``RealDecimal(18, 6)``, the same
+declaration: written by ``bulk_upsert_events`` and read back through the events query (``query_events_bulk``, what
+``POST /assets/events/query`` answers), it is 12345678901.234500, with 6 decimals as today; what reads well today keeps
+its form (1.5 reads 1.500000, 0.000001 reads 0.000001). Compared as text, so the 6 decimals are pinned.
+
 Each red says what the user faces; a GUARD passes before and after the cure. A refusal is looked for
 as the router meets it: nobody commits after a refused call, the session just closes, so "nothing
 written" sees exactly what the service committed by itself.
@@ -70,6 +78,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 import pytest_asyncio
@@ -90,7 +99,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1.assets import events as events_api
 from backend.app.db.models import Asset, AssetEvent, AssetProviderAssignment, AssetType, PriceHistory, ProviderInputType
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.assets.events import FAEventUpsert
+from backend.app.schemas.assets.events import FAEventQueryItem, FAEventUpsert
+from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint, FAUpsert
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.event_store import EventStoreOperations
@@ -106,6 +116,9 @@ BASE_DATE = date(1991, 4, 8)
 # A provider code, as a refresh tags its rows (``_persist_refresh_item``). Only a provenance tag here:
 # nothing is fetched.
 PROVIDER = "yfinance"
+
+# The caller ``POST /assets/events`` is called with, directly: the route reads only its id, these requests never reach the P-10 filter, and 0 is no user's id.
+_CALLER = SimpleNamespace(id=0)
 
 
 def _day(offset: int) -> date:
@@ -539,13 +552,13 @@ async def test_the_events_endpoint_answers_400_event_too_many_digits(owned):
     """Red. Before: 200, the dividend stored. With the service refusing but no entry in ``_REFUSAL_STATUS``: 500.
 
     Contract: 400, ``detail.error_code`` EVENT_TOO_MANY_DIGITS, nothing written. The route function is
-    called as FastAPI calls it, minus HTTP: its dependencies given directly.
+    called as FastAPI calls it, minus HTTP: its dependencies given directly, the caller ``_CALLER``.
     """
     item = _event_item(owned.asset_id, [_event(0, "DIVIDEND", "0.1234567")])
     answer: HTTPException | None = None
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
-            await events_api.upsert_events_bulk([item], session=session, _current_user=None)
+            await events_api.upsert_events_bulk([item], session=session, _current_user=_CALLER)
         except HTTPException as refusal:
             answer = refusal
     if answer is None:
@@ -964,13 +977,13 @@ async def test_the_events_endpoint_answers_400_for_an_event_beyond_12_integer_di
     """Red today: 200, the dividend of 1E+13 EUR stored.
 
     Contract (R13-SEC2): 400, ``detail.error_code`` EVENT_TOO_MANY_DIGITS, ``detail.params.max_integer_digits`` 12,
-    nothing written. The route function is called as FastAPI calls it, minus HTTP.
+    nothing written. The route function is called as FastAPI calls it, minus HTTP, the caller ``_CALLER``.
     """
     item = _event_item(owned.asset_id, [_event(0, "DIVIDEND", "1E+13")])
     answer: HTTPException | None = None
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
-            await events_api.upsert_events_bulk([item], session=session, _current_user=None)
+            await events_api.upsert_events_bulk([item], session=session, _current_user=_CALLER)
         except HTTPException as refusal:
             answer = refusal
     if answer is None:
@@ -1020,3 +1033,52 @@ async def test_a_provider_event_that_cannot_be_stored_is_dropped_and_the_others_
     written = [(row.date, str(row.type), row.value, row.provider_assignment_id) for row in rows]
     expected = [(_day(0), "DIVIDEND", Decimal("1.5"), assigned.assignment_id), (_day(2), "INTEREST", Decimal("2.25"), assigned.assignment_id)]
     assert written == expected, f"the provider events, one of them a dividend of {amount} EUR on {_day(1)}, were written as {_describe_events(rows)}: expected the two others alone"
+
+
+# --------------------------------------------------------------------------- #
+# W-B60: an event value reads back exactly, with 6 decimals
+# --------------------------------------------------------------------------- #
+
+
+async def _queried_values(owned: _Owned, first: int, last: int) -> list[str]:
+    """The values of the PEPE asset's events from day ``first`` to day ``last``, as the events query answers them
+    (``query_events_bulk``, what ``POST /assets/events/query`` calls), in date order, each as its text: the form included."""
+    request = FAEventQueryItem(asset_id=owned.asset_id, date_range=DateRangeModel(start=_day(first), end=_day(last)))
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        (result,) = await AssetSourceManager.query_events_bulk([request], session)
+    return [str(event.value.amount) for event in result.events]
+
+
+async def _upsert_events_within_the_limits(data: list[FAEventUpsert], story: str) -> None:
+    """``_upsert_events`` for events within every limit: a refusal fails the test as a broken scaffold."""
+    try:
+        await _upsert_events(data)
+    except AssetSourceError as refusal:
+        pytest.fail(f"scaffold: {story}, within every limit of a manual event, was refused: {refusal.error_code} {refusal.message}")
+
+
+@pytest.mark.asyncio
+async def test_a_manual_event_value_of_15_significant_digits_reads_back_exactly_through_the_events_query(owned):
+    """Red today: ``AssetEvent.value`` is a plain ``Numeric(18, 6)``, read through ``'%.6f'`` of the stored double: a
+    dividend of 12345678901.2345 EUR (4 decimals, 15 significant digits, 11 integer digits) reads back 12345678901.234501.
+
+    Contract (W-B60): ``RealDecimal(18, 6)``: the events query answers 12345678901.234500, the value typed with 6 decimals.
+    """
+    story = "a PEPE dividend of 12345678901.2345 EUR"
+    await _upsert_events_within_the_limits([_event_item(owned.asset_id, [_event(0, "DIVIDEND", "12345678901.2345")])], story)
+
+    queried = await _queried_values(owned, 0, 0)
+
+    assert queried == ["12345678901.234500"], f"W-B60: {story} reads back through the events query as {queried}: expected ['12345678901.234500'], the value typed with 6 decimals (stored: {_describe_events(await _stored_events(owned))})"
+
+
+@pytest.mark.asyncio
+async def test_guard_a_manual_event_value_that_reads_well_today_keeps_its_form_through_the_events_query(owned):
+    """Guard: green today and after. Dividends of 1.5 and 0.000001 EUR read back through the events query as 1.500000 and
+    0.000001, the form ``Numeric(18, 6)`` gives them today."""
+    story = "PEPE dividends of 1.5 and 0.000001 EUR"
+    await _upsert_events_within_the_limits([_event_item(owned.asset_id, [_event(0, "DIVIDEND", "1.5"), _event(1, "DIVIDEND", "0.000001")])], story)
+
+    queried = await _queried_values(owned, 0, 1)
+
+    assert queried == ["1.500000", "0.000001"], f"W-B60: {story} read back through the events query as {queried}: expected ['1.500000', '0.000001'], today's form"

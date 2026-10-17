@@ -43,6 +43,7 @@ A save is refused, with a message that names the event at fault, when:
 - **an event is in another currency than the asset's**: this comes from a CSV line, which keeps the currency it was written in ([below](#import-from-csv));
 - **an event's new Type is the one another of your events has on that date**: swapping the types of two events in one save works, and so does deleting that other event in the same save;
 - **you delete an event a transaction is linked to**: the message names the event and how many transactions use it. Remove the link from those transactions first. Before LibreFolio 1.3, the rest of the save went through and that deletion was skipped with a warning;
+- **you change the Type of a split whose linked adjustments have no purchase cost**: without the split, those units would count as bought at an unknown price. The message counts those adjustments, including any at a broker you cannot see; give them a purchase cost first, then change the Type;
 - **a Type is not one of the five**: this too comes from a CSV line.
 
 ---

@@ -8,7 +8,7 @@ LibreFolio is a **self-hosted** application. The primary security assumption is 
 
 ### ✅ In Scope
 
-- **🔐 Authentication**: Stateless JWT-based authentication via HTTP-only session cookies with configurable expiration, and [session revocation](#session-revocation) per account.
+- **🔐 Authentication**: Stateless JWT-based authentication via HTTP-only session cookies with configurable expiration, [session revocation](#session-revocation) per account, and a [limit on failed sign-ins](#login-limit).
 - **🛡️ Data Segregation**: Strict isolation between users via Role-Based Access Control (RBAC).
 - **✏️ Input Validation**: Preventing injection attacks via strict Pydantic schemas; a request that fails them gets a `422` that never sends its input back ([Validation Errors Without the Input](#validation-errors)).
 - **🧼 Output Escaping**: User- and provider-supplied text is escaped or sanitized before the browser can render it as HTML.
@@ -31,6 +31,9 @@ LibreFolio uses **stateless JWT (JSON Web Token)** authentication stored in **HT
    id), `sv` (the account's session version, see [Session Revocation](#session-revocation)), `iat` and `exp`
 3. The browser **automatically includes** this cookie on all subsequent requests
 4. `<img>` tags, `fetch()` calls, and page navigations all send the cookie seamlessly
+
+Before the account is even looked up, the sign-in asks the [failed sign-in limit](#login-limit): past it, the answer is
+`429` `TOO_MANY_ATTEMPTS`, and no password is checked.
 
 A refused sign-in is logged without what was typed, because the field takes an email address too and no address goes
 in a log (workstream E's rule, lot A-22): *Login failed: user not found* carries nothing about the identifier, *Login
@@ -105,8 +108,9 @@ the generation it was issued at, the `sv` claim. Raising the account's version e
 every device, at its next request. There is still no session store: the check compares one integer column of the user
 row that `get_current_user()` already loads on every request.
 
-`user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
-not commit: the caller commits it with the change that asks for it. Seven changes call it:
+`await user_service.end_sessions(session, user)` (`backend/app/services/accounts/user_service.py`) raises the version
+by one in SQL, in the caller's transaction, and does not commit: the caller commits it with the change that asks for
+it. Seven changes call it:
 
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
@@ -117,6 +121,23 @@ not commit: the caller commits it with the change that asks for it. Seven change
 | Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
 | Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
 | Setup of the initial administrator | A [setup link](access_control.md#initial-admin) spent by `POST /api/v1/auth/setup` → `bootstrap_admin_service.complete_admin_setup()` | All of them, though an account waiting for its setup has none: the same response sets a new cookie at the new version, which signs the administrator in |
+
+**One increment in SQL** (lot A8a, backlog A-34, from workstream E's security review). `end_sessions()` used to add one
+to the object's own copy (`user.session_version += 1`): two requests that loaded the same account before either
+committed — the user changing the password, which re-issues the device's cookie at the new version, and an
+administrator's «sign out everywhere» — both stored v+1, so the cookie re-issued between them survived the second. It
+now runs one Core statement on the session's own connection (`await session.connection()`),
+`UPDATE users SET session_version = session_version + 1 WHERE id = :id RETURNING session_version`, and sets the
+returned value on the object with `set_committed_value()`: two such requests raise the version by two.
+
+- **Core, not an ORM `update(User)`**, which would autoflush first. Nothing is flushed or refreshed: a field the caller
+  already changed, such as a new hash, stays pending for the caller's commit, neither written early nor lost.
+- **The version alone does not mark the object changed**: it is set as committed, since the statement already wrote it
+  in the transaction. After the caller's commit the object still holds it (the request's session keeps its objects,
+  `expire_on_commit=False`), so the cookie that `change-password` re-issues carries the new version.
+- **The nine call sites** — six in `user_service`, the `change-password` route, `revoke_account_sessions()` in
+  `backend/app/api/v1/users.py` and `complete_admin_setup()` in `bootstrap_admin_service.py` — await it with their own
+  session. A call written in the old shape, `end_sessions(user)`, fails at once with a `TypeError`.
 
 Activation, promotion, logout and every refused operation leave the version alone: a new password that misses a
 [password rule](#password-rules), wherever it is chosen; a wrong current password, or a new password equal to it, on
@@ -175,7 +196,11 @@ stored value. The value is recorded in the restore's state (`session_version`). 
     where the new cookie signs it straight back in. The race is benign, and the code does not try to close it.
 
 Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
-token, the check, the command-line callers and the refusals, in-process; its contract 7, the live reset links revoked
+token, the check, the command-line callers and the refusals, in-process; its contract 5, rewritten in lot A8a (A-34):
+`end_sessions()` a coroutine function of `(session, user)`, its increment in the caller's transaction at once and
+committed by the caller only (a fresh connection still reads the old version, a rollback leaves it there), a field set
+before it left pending for the caller's commit, and two requests that loaded the account before either committed
+raising the version by two, the cookie re-issued between them refused; its contract 7, the live reset links revoked
 by `reset_password()` and by a real address change in `update_profile()`, the account's setup link retired by the
 first and revoked by the second (lot A7b-2), every other link left as it was),
 `./dev.py test api session-revocation` (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password
@@ -184,7 +209,7 @@ revoked by a password or an address change, kept by the own address in other A�
 and, for the administrator API and the reset links, `./dev.py test api users-admin` and
 `./dev.py test api registration`. The email change has its own tests: see [Changing the Email](#email-change). The
 restore's version: `./dev.py test services backup-apply` (the clock behind, a restore on top of another, then a
-password change that adds one).
+password change that adds one, through the helper of contract 5, `_end_sessions_of()`).
 
 ### ✉️ Changing the Email {: #email-change }
 
@@ -208,8 +233,9 @@ the current password and ends the account's other sessions. No other route chang
 - **The body.** `UpdateProfileRequest` (`backend/app/schemas/auth.py`) has an optional `current_password` of at least
   one character: an empty string is refused with `422`.
 - **Checked first.** The route (`update_profile()` in `backend/app/api/v1/auth.py`) checks the password before
-  anything else, uniqueness included, so whoever lacks it cannot probe which addresses are registered. bcrypt runs in
-  a worker thread (`asyncio.to_thread(verify_password, …)`), as for the password change.
+  anything else, uniqueness included, so whoever lacks it cannot probe which addresses are registered. Only the
+  [failed sign-in limit](#login-limit) comes before, and past it refuses with `429` without checking the password.
+  bcrypt runs in a worker thread (`asyncio.to_thread(verify_password, …)`), as for the password change.
 - **The sessions.** `user_service.update_profile()` calls `end_sessions()`, revokes the account's live reset links
   ([Session Revocation](#session-revocation)) and sets `users.email_verified_at` back to `NULL` (the new address is
   not verified, and no flow of release 1.3 verifies a changed one), in the commit of the new address. The route then
@@ -227,13 +253,14 @@ the current password and ends the account's other sessions. No other route chang
 | Answer | `detail` | When |
 |--------|----------|------|
 | `400` | `{"error_code": "CURRENT_PASSWORD_REQUIRED", "message": …}` | An email change without `current_password`, left out or `null` |
-| `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
+| `429` | `{"error_code": "TOO_MANY_ATTEMPTS", "message": …}`, with `Retry-After` | An email change with a `current_password`, while the account's username or the request's address is past the [failed sign-in limit](#login-limit): the password is not checked, nothing is written |
+| `400` | `{"error_code": "CURRENT_PASSWORD_INVALID", "message": …}` | A wrong `current_password`. Nothing is written, the failure counts toward the [failed sign-in limit](#login-limit) under the account's username, and the warning *Email change refused: wrong current password* goes to the log with `user_id` |
 | `400` | *Email already registered* or *Username already taken*, plain strings as before | The password was right, or not needed, but the address belongs to another account, in any A–Z case, or the name does, compared exactly. Nothing is written |
 | `422` | Validation errors | An empty `current_password`, an invalid `email`, a `username` outside 3–50 characters |
 | `200` | — | The change is committed. After an email change, the answer sets the new `session` cookie, and the log has *Email changed, other sessions ended* (`user_id`) |
 
-Not covered yet: the notice to the previous address is lot E4's (workstream E), and the route counts no wrong
-passwords: limiting the guesses here is planned with the login attempt limit (lot A8).
+Since lot A8a, a wrong current password here counts toward the [failed sign-in limit](#login-limit), under the
+account's username, as on the password change.
 
 The [Profile tab](../frontend/components/features/settings.md#profiletab) asks for the password in the email row; the
 user's side is [Profile](../../user/settings/profile.md), section «Changing Your Email».
@@ -269,7 +296,7 @@ list, and the API asked only for 8 characters (`min_length=8` in the request sch
   so an account whose password predates them keeps signing in with it.
 
 Each entry point checks the new password first, as soon as the request body is valid (and, for `change-password`, the
-session):
+session and the [failed sign-in limit](#login-limit)):
 
 | Entry point | Checked before |
 |-------------|----------------|
@@ -320,6 +347,136 @@ setup link left unspent, the password read before the token); `./dev.py test uti
 `validate_password()`, then `user create` and `user reset` on a copy of the image's files). The app's half:
 `./dev.py test front-utility core-unit` (`passwordRules.test.ts`) and `./dev.py test front-utility component-unit`
 (`PasswordStrength.test.ts`).
+
+### 🚦 Failed Sign-in Limit {: #login-limit }
+
+Since lot A8a (release 1.3, F15, decision D-A5), the sign-in counts its failures and stops checking passwords once
+there are too many, so a password can no longer be guessed at the pace bcrypt allows. The module is
+`backend/app/services/accounts/login_throttle.py`. It counts with workstream E's
+[sliding-window limiter](../backend/email.md#rate-window) (`backend/app/utils/runtime/rate_window.py`), and keys the
+address its callers pass with workstream H's `client_rate_key()` ([The Client's Address](#client-address)): at the
+routes of `auth.py`, `rate_limit_address(request)`, `None` behind a local [proxy nobody trusts](#untrusted-proxy)
+(decision N70), where only the identifier's limit applies.
+
+| Limiter | Key | Limit |
+|---------|-----|-------|
+| `LOGIN_BY_IDENTIFIER` | `identifier_key(identifier)`: what was typed in the identifier field, stripped, with A–Z folded and nothing else (`user_service.email_fold()`, decision P18), whether an account matches it or not. `" Alice "`, `"ALICE"` and `"alice"` share one key; `"Émile"` and `"émile"` do not | 10 failures in 15 minutes (`WINDOW_SECONDS`) |
+| `LOGIN_BY_ADDRESS` | `client_rate_key(address)`: an IPv4 address whole, an IPv6 one by its /64 | 50 failures in 15 minutes |
+
+| Function | Contract |
+|----------|----------|
+| `refusal(identifier, address) -> RateDecision \| None` | `None` while both limits allow one more failure; otherwise the refusing decision (`allowed` false, `remaining` 0), the longer `retry_after` when both refuse. It only looks (`peek()`): no call counts. Without an address (`None`: `rate_limit_address()` gives it behind a [proxy nobody trusts](#untrusted-proxy), `client_address()` for a connection without one) only the identifier's limit applies |
+| `record_failure(identifier, address)` | One failure in each limit (`hit()`), the address's only with an address |
+| `record_success(identifier)` | Forgets the identifier's failures (`reset()`); the address keeps its own |
+| `identifier_key(identifier)` | The identifier's key, as above |
+
+The functions read the two limiters from the module when they run, so a test puts limiters of its own in their place
+(`monkeypatch.setattr`). Four checks of a password call them: three routes of `backend/app/api/v1/auth.py`, with the
+address `rate_limit_address(http_request)` gives, and workstream E's «send the link again» (`resend_verification()` in
+`backend/app/services/email/verification.py`, for `POST /email/verification/resend`), with the same
+`rate_limit_address(request)`, which its route in `backend/app/api/v1/email.py` reads (lot E-13).
+
+| Route | Before the password is checked | A wrong password | The right password |
+|-------|--------------------------------|------------------|--------------------|
+| `POST /auth/login` | `_refuse_too_many_failures(request.username, address)`, before the account is looked up | `record_failure(request.username, address)`, then `401` *Invalid credentials*, an unknown identifier included | `record_success(request.username)`, once the cookie is set. The `403`s of an inactive account, `ACCOUNT_DISABLED` and `EMAIL_NOT_VERIFIED`, which only the right password gets, neither count nor reset |
+| `POST /auth/change-password` | `_refuse_too_many_failures(current_user.username, address)`, before `_refuse_weak_password()` | `record_failure(current_user.username, address)`, then `400` *Current password is incorrect* | `record_success(current_user.username)` |
+| `PUT /auth/profile`, when the email changes | `_refuse_too_many_failures(current_user.username, address)`, after the `400` `CURRENT_PASSWORD_REQUIRED` | `record_failure(current_user.username, address)`, then `400` `CURRENT_PASSWORD_INVALID` | `record_success(current_user.username)` |
+| `POST /email/verification/resend` | `refusal(identifier, address)`, `identifier` being the body's `username` as typed, after E's per-address limit (`RESEND_BY_ADDRESS`) and before the account is looked up: `EmailRateLimitedError` with its wait | `record_failure(identifier, address)`, then `401` *Invalid credentials*, an unknown identifier included | `record_success(identifier)`, as soon as the password is checked, before the account's state is read: whatever follows resets, the `409` `EMAIL_VERIFICATION_NOT_NEEDED` of an active account and the `403` `ACCOUNT_DISABLED` included |
+
+- **The refusal.** `_refuse_too_many_failures()` answers `429` with
+  `{"error_code": "TOO_MANY_ATTEMPTS", "message": "Too many failed attempts: try again later"}` in `detail` and
+  `Retry-After`, the wait of `refusal()` in whole seconds, rounded up, at least 1. No bcrypt runs and, at the sign-in,
+  no account is looked up: the same answer, at the same cost, whether an account matches or not. It writes no log line
+  of its own. The resend answers with its other limits' `429` instead, `EMAIL_RATE_LIMITED` with `retry_after` in
+  `detail` and the same `Retry-After` header, so its page words it as it words them.
+- **A refused attempt is not counted**: it never reaches `record_failure()`, so knocking does not push the unlock
+  away, and `Retry-After` seconds later the right password signs in.
+- **One account, two keys.** The identifier counts as typed: an account's username and its email are two keys, so
+  alternating them gives about 20 guesses per account every 15 minutes, still under the address's 50.
+- **The other checks of the current password** count under the account's **username**, the key of a sign-in typed
+  with it, and under the address `rate_limit_address()` gives, as at the sign-in: 10 wrong current passwords also lock
+  the sign-in by username, and failed sign-ins by username lock the password change and the email change. Deleting
+  one's own account (`DELETE /auth/users/me`) asks for no password: nothing to limit.
+- **Not limited, on purpose** (the coordinator's decision, backlog A-41): a wrong token of an invitation, reset or setup
+  link (`tokens/inspect`, `password-reset`, `setup`, an `invite_token` at the registration). The tokens LibreFolio
+  draws are 256 random bits ([Single-use Account Tokens](#account-tokens)), out of reach of guessing, and a limit per
+  address would refuse every user behind one NAT. «Forgot password» checks no password and keeps workstream E's own
+  limits ([A Forgotten Password](../backend/email.md#flow-forgot)).
+- **«Send the link again» shares the sign-in's counts** (lot A8a; the coordinator's decision, reviewed by workstream
+  E). It checks the sign-in's credentials without a session, so with only E's per-address limit it was a way to try
+  passwords past the identifier's limit. It now counts under the sign-in's own two keys, the identifier as typed and
+  the address, both ways: wrong passwords at the resend lock the sign-in, and failed sign-ins refuse the resend before
+  its password is checked. Unlike the sign-in, whose `403`s neither count nor reset, the right password resets the
+  identifier at once, as the password change and the email change do. E's own limits stay
+  ([Sending the Link Again](../backend/email.md#verification-resend)); `RESEND_BY_ADDRESS` counts a request first,
+  whatever happens next. Its address is the `rate_limit_address()` its route reads since lot E-13, as at the sign-in:
+  behind a local [proxy nobody trusts](#untrusted-proxy) neither `RESEND_BY_ADDRESS` nor the sign-in's address count
+  the request, and the resend and the sign-in share the identifier's count alone.
+- **The switch.** `login_limit_enabled()` (`backend/app/config/accounts.py`) reads `LIBREFOLIO_LOGIN_LIMIT` at each
+  call, through `login_limit_value()`: the value as set, stripped, or `None` when it is unset or blank. Unset, blank
+  or `on` in any case, on; `off` in any case, off, and then `refusal()` answers `None` and `record_failure()` records
+  nothing. Any other value, `1`, `true` and `yes` included, raises `ValueError` naming the variable and the stripped
+  value: `LIBREFOLIO_LOGIN_LIMIT='maybe': expected on or off`. `log_configuration_audit()` calls it right after
+  `admin_bootstrap_config()`, so such a value stops the start; while the limit is off, every start logs the warning
+  of the check `accounts.login_limit` ([Configuration Checks](#configuration-checks)).
+- **The test lanes run with it off**: their suites sign in wrongly on purpose, from one address, against shared
+  accounts. `dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off` in the environment of the lane's server, after
+  `configure_test_runtime()` has dropped every `LIBREFOLIO_*` of `.env` and of the shell: the lane's server always
+  runs with the limit off ([Test lanes and the instance's configuration](#test-lanes-and-the-instances-configuration)).
+  `backend/test_scripts/conftest.py` sets it in every pytest process too, with `os.environ.setdefault()` (a value
+  already in that process's environment wins), since the in-process apps of many test files share one process and
+  its two limiters. The limit's own tests turn it on with `monkeypatch`, on limiters of their own.
+- **Per process, in memory.** A restart forgets every count, and with N worker processes (`dev.py server --workers N`)
+  each keeps its own, so the limits are N times these; the Docker image runs one worker. Each limiter holds at most
+  10,000 keys (the limiter's `max_keys`): a new key beyond them evicts, among the 32 least recently used
+  (`eviction_scan`), the first that is not full, and the least recently used only when those 32 are all full
+  ([The Sliding-Window Limiter](../backend/email.md#rate-window), decision N70). A locked identifier is full, so a
+  spray of fresh identifiers, one failure each, does not push it out; plain least-recently-used eviction let at most
+  10,000 of them hand it 10 new attempts, and behind a [proxy nobody trusts](#untrusted-proxy) no limit per address
+  slows such a spray. The bound on the search has a price: 31 identifiers locked just after the victim's, about 310
+  failures more, fill the search with full keys, and the fallback evicts the victim all the same.
+- **Behind a reverse proxy** the address must be the visitor's ([The Client's Address](#client-address)). Behind one
+  that LibreFolio does not trust, every visitor has the proxy's address: counted together, 50 failures from anyone, at
+  about one a second, would refuse every sign-in through it, the right password included (security review R13-SEC6).
+  So the three routes of `auth.py` pass `rate_limit_address()` (decision N70): `None`, decided per request, for a
+  request from a local peer that carries a forwarding header neither uvicorn nor `LIBREFOLIO_CLIENT_IP_HEADER` applied
+  ([Behind a Proxy Nobody Trusts](#untrusted-proxy)), which is then counted and refused by its identifier alone.
+  `None` is no key here: the limiter would count it like any other, so `refusal()` and `record_failure()` leave the
+  address out rather than count every «no address» together. The warning logged once per process,
+  `UNTRUSTED_PROXY_SUMMARY`, and the notes behind the check `platform.client_address` are workstream H's: both come
+  from `forwarded_by_untrusted_proxy()`, which `rate_limit_address()` calls.
+- **A public peer's forwarding headers change nothing**: a client on the internet cannot switch its own limit per
+  address off by adding one. Behind a proxy on a public address that LibreFolio does not trust (a CDN left
+  unconfigured), every visitor still shares its address and its 50 failures, until `FORWARDED_ALLOW_IPS` or
+  `LIBREFOLIO_CLIENT_IP_HEADER` gives LibreFolio the visitor's.
+
+The login page already turns any `429` of the sign-in into `auth.tooManyAttempts` (`loginErrorKey()` in
+`frontend/src/lib/stores/app/auth.ts`, see [LoginCard](../frontend/components/features/auth.md)), and the
+verification notice words the resend's `EMAIL_RATE_LIMITED` with the minutes to wait, as before
+(`resendFailureMessage()`, [In the Frontend](../backend/email.md#verification-frontend)). The password-change modal and
+the Profile tab have no text of their own for `TOO_MANY_ATTEMPTS` yet. The administrator's side is
+[Configuration](../../admin/configuration.md), section «Failed Sign-ins».
+
+Tests: `./dev.py test services login-throttle` (`backend/test_scripts/test_services/test_login_throttle.py`: the two
+limits on an injected clock, the A–Z key, the IPv6 /64, no address and no shared count of «no address», a refusal not
+counted, a success that forgets the identifier only, the longer wait, the switch off), `./dev.py test services accounts-checks`
+(`test_services/test_accounts_checks.py`: `login_limit_enabled()` on, off and invalid, the check
+`accounts.login_limit` in `CONFIG_CHECKS`, the startup audit stopping on an invalid value before it logs any check,
+the import orders in fresh interpreters), `./dev.py test api login-throttle` (`test_api/test_login_throttle_api.py`:
+pure, in-process apps on private SQLite files, the limit turned on with limiters of its own on a fake clock: the `429`
+with an exact `Retry-After` before any bcrypt, the same for an unknown identifier, per address, the password change
+and the email change under the account's username, the switch; «send the link again»: wrong resends lock the sign-in,
+failed sign-ins refuse the resend before its password, the right password at the resend resets the identifier, a
+wrong resend counts on the address; [`GET /security/checks`](#security-checks-endpoint); and, behind a local proxy
+nobody trusts (N70, section 8, `TestUntrustedLocalProxy`, LT-API-20…25): from `lan`, `loopback` and CGNAT (`vpn`)
+peers forwarding `X-Forwarded-For`, `Forwarded` or `X-Real-IP`, fifty failures lock nobody else out while the
+identifier's lock holds; a public peer with the same headers, and a local peer without them, keep the lock per
+address; at each of the three routes, a wrong password through the proxy counts on the identifier alone, and an
+address its own failures locked refuses its direct requests but not those the proxy forwards),
+`./dev.py test utils rate-window` (RWL-024: a locked identifier stays locked through 1,000 fresh ones, see
+[The Sliding-Window Limiter](../backend/email.md#testing)), and
+`./dev.py test api security-checks` (`test_api/test_security_checks_api.py`, on the lane's server, where
+`accounts.login_limit` is a `warning` since the lane runs with the limit off).
 
 ### 💻 Using curl
 
@@ -384,8 +541,9 @@ Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
 administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
 Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
-`backend/app/config/backup.py` reads it only when the hosting panel calls one of its routes, never at
-startup, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
+`backend/app/config/backup.py` reads it for the startup checks (`check_panel_token()`, `backup.panel_token`: one error
+line in the start log, never a stop; [Configuration Checks of the Backup](#backup-config-checks)) and at each call of
+the hosting panel's routes, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
 `BackupConfigError` for a token with anything but visible ASCII characters, spaces included
 (`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`), or shorter than 32 characters
 (`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). `require_panel_token()` in `backend/app/api/v1/backup/panel.py` turns
@@ -434,6 +592,10 @@ limits) can neither reach the tests nor change their outcome.
   `.env.example` (a test requires it). A test that needs a setting sets it in its own process, after
   any helper that configures the lane (`setup_test_database()` and its siblings call
   `configure_test_runtime()`, which would remove it again).
+- One setting is the lanes' own, on purpose: the [failed sign-in limit](#login-limit) is off, since the
+  suites sign in wrongly on purpose. `dev.py server --test` sets `LIBREFOLIO_LOGIN_LIMIT=off` for the
+  lane's server after the cleanup, and `backend/test_scripts/conftest.py` sets it in every pytest
+  process that does not have it already.
 
 ### 🧬 Instance Key {: #instance-key }
 
@@ -769,6 +931,40 @@ part on its own, the locks held, the links, a part that raises, a clean data dir
 `restore-commit` before `backup-leftovers` in `./dev.py test services backup-apply` (`test_backup_apply.py`, section
 (j)).
 
+#### Configuration Checks of the Backup {: #backup-config-checks }
+
+`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives two checks in the shape of H's `ConfigCheck`
+([Configuration Checks](#configuration-checks)), under the same rules: they change nothing, never raise, and never put
+the token or a file's content in a result. With them, an unusable token or upload limit shows in the start log, not only
+at the hosting panel's first call or at the first restore upload.
+
+| `check_id` | State | `i18n_key` | `detail` | Severity |
+|------------|-------|------------|----------|----------|
+| `backup.panel_token` (reads `backup_download_token()`) | Neither `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` nor its `_FILE` is set, the default: the panel's routes answer `404` | `backup.checks.panelToken.off` | — | `ok`: a default start logs nothing new, as email off is `ok` too |
+| `backup.panel_token` | A usable token | `backup.checks.panelToken.ok` | — | `ok` |
+| `backup.panel_token` | `BackupConfigError` `BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`: a space, a tab or a character outside visible ASCII | `backup.checks.panelToken.notVisibleAscii` | — | `error` |
+| `backup.panel_token` | `BackupConfigError` `BACKUP_DOWNLOAD_TOKEN_TOO_SHORT` | `backup.checks.panelToken.tooShort` | `{"minimum": 32}` | `error` |
+| `backup.panel_token` | `SecretFileError`: the `_FILE` cannot give the token | `backup.checks.panelToken.unreadable` | `{"reason": …}`, the error's text: the variable and the path, never the content | `error` |
+| `backup.upload_limit` (reads `backup_max_upload_mb()`) | A limit, the managed profile's 500 included | `backup.checks.uploadLimit.limited` | `{"limit_mb": n}` | `ok` |
+| `backup.upload_limit` | No limit: `0`, or unset in the self-hosted profile | `backup.checks.uploadLimit.unlimited` | — | `ok` |
+| `backup.upload_limit` | `BackupConfigError` `BACKUP_MAX_UPLOAD_MB_INVALID`: not a whole number | `backup.checks.uploadLimit.invalid` | — | `error` |
+| `backup.upload_limit` | `ProfileDefaultError`: the entry of `ENVIRONMENT_PROFILE_DEFAULTS`, asked only while the variable is unset, is missing or of the wrong type (H-27, H-37; [Settings](settings.md)) | `backup.checks.uploadLimit.profileTable` | — | `error` |
+
+- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit)` is unpacked in
+  `CONFIG_CHECKS` right after `check_log_level`, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
+  `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs the two
+  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of
+  [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
+  error line at each call.
+- **The import.** `config_audit` imports this module to build its tuple, so `checks.py` imports `ConfigCheck` only
+  when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
+  can be imported first.
+- **The messages.** `backup.checks.*`, in the `backup` i18n subsystem, written whole in the module for the i18n usage
+  scan; no page shows them until the «Security» tab.
+
+Tests: `./dev.py test services backup-checks` (`backend/test_scripts/test_services/test_backup_checks.py`), and
+`./dev.py test services config-audit`.
+
 ## 🩺 Configuration Checks {: #configuration-checks }
 
 `backend/app/services/platform/config_audit.py` checks the settings that leave an instance weaker than
@@ -778,7 +974,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, `instance.checks.*`, written whole in the module of the check (`config_audit.py`, `plugin_secrets_check.py`) so the i18n usage scan (`scripts/i18n_usage.py`) sees it. The 15 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; no page shows them yet, as the checks only reach the log |
+| `i18n_key` | Key of its message, written whole in the module of the check so the i18n usage scan (`scripts/i18n_usage.py`) sees it: `instance.checks.*` for the platform's (`config_audit.py`, `plugin_secrets_check.py`), whose 18 messages, the two of the [plugin secrets check](#plugin-secrets-check) included, are in the `instance` i18n subsystem; `auth.checks.*` for workstream A's (`services/accounts/checks.py`), whose three messages are in the `auth` subsystem; `backup.checks.*` for workstream B's (`services/platform/instance_backup/checks.py`), whose nine messages are in the `backup` subsystem ([Configuration Checks of the Backup](#backup-config-checks)); `email.checks.*` for workstream E's ([Email Service](../backend/email.md#configuration-checks)). No page shows the `instance`, `auth` and `backup` messages yet: the checks reach the log, and [`GET /security/checks`](#security-checks-endpoint) returns them for the «Security» tab of the admin settings, which does not exist yet |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -799,6 +995,22 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `platform.client_address` | Since the start, forwarding headers came from an untrusted local peer ([Behind a Proxy Nobody Trusts](#untrusted-proxy)): `instance.checks.clientAddress.untrustedProxy`, `detail` `{"headers": …}` with the names met, such as `"X-Forwarded-For, X-Real-IP"`, summary `UNTRUSTED_PROXY_SUMMARY` | `warning` |
 | `platform.client_address` | Since the start, they came from untrusted public peers only: `instance.checks.clientAddress.publicForwarding`, the names met in `headers`, summary `PUBLIC_FORWARDING_SUMMARY` | `info` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
+| `backup.panel_token` | `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, or its `_FILE`, is set but cannot be used: `backup.checks.panelToken.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
+| `backup.upload_limit` | `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, or the profile's entry for it, cannot be used: `backup.checks.uploadLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
+| `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
+| `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
+
+Workstream A's check, `ok` as `auth.checks.loginLimit.ok` while the limit is on, is `check_login_limit()` in
+`backend/app/services/accounts/checks.py`, in the tuple `ACCOUNTS_CONFIG_CHECKS`, which `config_audit.py` unpacks into
+`CONFIG_CHECKS` right before workstream E's `EMAIL_CONFIG_CHECKS`: E's three checks, `email.smtp`,
+`email.smtp_encryption` and `email.links`, stay last ([Email Service](../backend/email.md#configuration-checks)). It
+reads the variable only through `backend/app/config/accounts.py`, `login_limit_enabled()` and `login_limit_value()`,
+never from `os.environ`: the rule of the configuration package ([Settings System](settings.md)). Like E's module,
+`checks.py` imports `ConfigCheck` inside the check, when it runs, and under `TYPE_CHECKING` for its annotation:
+`config_audit` imports it to build its tuple, so either module can be imported first.
+
+So `CONFIG_CHECKS` is the platform's checks, then workstream B's two
+([Configuration Checks of the Backup](#backup-config-checks)), then A's, then E's three, which close it.
 
 At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
 `backend/app/services/platform/app_lifespan.py`) runs `log_configuration_audit()` in a thread
@@ -816,15 +1028,18 @@ At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
    value raises `AdminBootstrapConfigError`, which names the variable and never the token, and an
    unreadable `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE` raises `SecretFileError`, on an instance with
    accounts too: see [The Initial Administrator](access_control.md#initial-admin).
-4. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
+4. `login_limit_enabled()` (the same module): a `LIBREFOLIO_LOGIN_LIMIT` other than `on` or `off` raises
+   `ValueError`, which names the variable and the value: see [Failed Sign-in Limit](#login-limit).
+5. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
    `InstanceKeyError`. The administrator chose that source, so the server does not start without it.
-5. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
+6. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
-Tests: `./dev.py test services config-audit`; the stop on a `LIBREFOLIO_ADMIN_*` value is in
-`./dev.py test services admin-bootstrap`. What the administrator sees and does is in
-[Configuration](../../admin/configuration.md), section «Startup Checks».
+Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` included: the platform's checks, A's,
+then E's three); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
+`accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
+What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks».
 
 ### 🧩 Plugin Secrets Check {: #plugin-secrets-check }
 
@@ -834,7 +1049,8 @@ lost `secrets/instance.key` generated again, data restored without its `secrets/
 `LIBREFOLIO_INSTANCE_KEY`. It needs the database, and `CONFIG_CHECKS` run before the `database` step,
 so it cannot be one of them. `check_plugin_secrets(session) -> ConfigCheck` returns the `ConfigCheck`
 of `config_audit.py` all the same, so that the «Security» tab of the admin settings, which does not
-exist yet, can show it with the others. Unlike the functions of `CONFIG_CHECKS`, it can raise, on a
+exist yet, can show it with the others; [`GET /security/checks`](#security-checks-endpoint) already
+returns it after them. Unlike the functions of `CONFIG_CHECKS`, it can raise, on a
 database error for one: the startup step below catches it.
 
 It asks `plugin_secrets_key_status(session)` (`backend/app/services/plugin_settings/crypto.py`),
@@ -867,6 +1083,31 @@ Tests: `./dev.py test services plugin-secrets-check`
 `./dev.py test services app-lifecycle`. What the administrator sees and does is in
 [Configuration](../../admin/configuration.md), section «Startup Checks».
 
+### 📋 The Checks on Demand {: #security-checks-endpoint }
+
+`GET /api/v1/security/checks` (`backend/app/api/v1/security.py`, a router with `prefix="/security"` and the tag
+`Security`, included by one line of `api/v1/router.py`) evaluates the checks now, for administrators only
+(`require_admin`: `401` without a session, `403` *Admin access required* for a member). It runs `run_config_checks()`
+in a worker thread (`asyncio.to_thread`: some checks read files, such as the instance key), then
+`check_plugin_secrets(session)` on the request's session, and answers every result in that order, the `ok` ones
+included, so that a page can show what is not:
+
+| Model (`backend/app/schemas/security.py`) | Fields |
+|-------------------------------------------|--------|
+| `SecurityChecksResponse` | `items`: a list of `SecurityCheckRead` |
+| `SecurityCheckRead` | `check_id`; `severity`, `ok`, `info`, `warning` or `error`; `i18n_key`; `detail`, the parameters of the message |
+
+An item never carries the English `summary`, which may name a host or a path (nor does
+[`GET /email/status`](../backend/email.md#api-status)), and never a secret value. The «Security» tab of the admin
+settings, which does not exist yet, is the page meant to read it. On a [blocked instance](#instance-block) the route is
+not on the allow-list: an administrator gets `423`.
+
+Tests: `./dev.py test api login-throttle` (in-process: `401` and `403`, every check once, as `run_config_checks()` and
+`check_plugin_secrets()` evaluate them, `accounts.login_limit` `ok` with the limit on and a `warning` with `off`, no
+secret value in the body, nor the SMTP server and user that a summary names) and `./dev.py test api security-checks`
+(on the lane's server: `accounts.login_limit` a `warning`, since the lane runs with the limit off; `platform.jwt_secret`
+and `platform.plugin_secrets` listed; a member `403`, no session `401`).
+
 ## 🛡️ Endpoint Protection
 
 All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI), except the hosting panel's backup routes (`/backup/panel/jobs…`), which authenticate with the panel token instead: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
@@ -875,7 +1116,7 @@ All endpoints that access or modify user data require a valid session cookie (`D
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/auth/login` | POST | User login |
+| `/auth/login` | POST | User login, under the [failed sign-in limit](#login-limit) |
 | `/auth/logout` | POST | Clear session cookie |
 | `/auth/register` | POST | New user registration, under the [password rules](#password-rules), the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
 | `/auth/tokens/inspect` | POST | The status of an invitation, password-reset or setup link, for whoever holds its token: see [Links in use](#account-token-links) |
@@ -973,7 +1214,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. Two kinds of route take a token of their own instead of a session cookie, sent as `Authorization: Bearer`: the hosting panel's backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`) and the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`). The panel's token is compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`): a missing or wrong token answers `401`, and while no token is set the panel's routes answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups). The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
 
 !!! info "📁 Files are protected too"
 
@@ -1459,8 +1700,10 @@ Every `RestoreStatus` carries `upload_limit_mb`, the largest archive `PUT /backu
 the answer, in megabytes: `0` for no limit, `null` when the limit cannot be read (the upload then answers `503`
 `backup_upload_unavailable`, and an error naming the variable is logged). It cannot be read when
 `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` is not a whole number (`BackupConfigError`), or when `ENVIRONMENT_PROFILE_DEFAULTS`
-gives the active profile a value of the wrong type for it (`ProfileDefaultError`, [Settings](settings.md); B-21):
-`_upload_limit()` and `_readable_limit_mb()` in `restore.py` treat the two alike, so the status still answers `200`.
+gives the active profile no value for it (any profile but `selfhosted`, H-37) or a value of the wrong type
+(`ProfileDefaultError`, [Settings](settings.md); B-21): `_upload_limit()` and `_readable_limit_mb()` in `restore.py`
+treat the two alike, so the status still answers `200`. The startup checks report it too (`backup.upload_limit`,
+[Configuration Checks of the Backup](#backup-config-checks)).
 
 On the server, `./dev.py backup restore ARCHIVE` confirms as `cli`, once the word `restore` is typed at a terminal or
 with `--yes`, and `./dev.py backup pending [--cancel]` shows the restore, or drops it with its copy. The command prints
@@ -1892,12 +2135,26 @@ object it is missing from, a password or a token of the body included. Since lot
   malformed request to any of them would get it back in the answer. The plugin-settings routes already kept the input
   out of their `422`, for their secrets (`_NoInputEchoRoute`, see [Plugin Settings](patterns/plugin_settings.md#secrets));
   the rule now holds for every route.
+- **Non-finite numbers** (a follow-up of A-35, found by workstream X). Python's `json` reads `1E+400` and `-1E+400` as
+  infinities and takes `NaN`, `Infinity` and `-Infinity`, which RFC 8259 does not have. A `Decimal` field refuses each
+  with `finite_number`, and FastAPI's default `422` carried the value as `input` (`inf`), which Starlette's JSON
+  renderer (`allow_nan=False`) cannot write: the answer was a `500`, on any route with a `Decimal` in its body. Without
+  the `input`, the handler's answer is a readable `422`: one error, `finite_number`, whose `msg` does not hold the
+  value, without `ctx`.
+- **What it does not remove** (backlog A-38). The handler drops `input` only: `msg` and `ctx` stay as Pydantic wrote
+  them. A validator that formats the value into its message (`raise ValueError(f"… {value}")`) puts part of it in
+  `msg`, while the `ValueError` itself, in `ctx.error`, serializes to `{}`. None of the routes that take a credential
+  does it today, and their tests look for the secret in the whole answer.
 
 Tests: `./dev.py test api validation-errors` (`backend/test_scripts/test_api/test_validation_errors_api.py`): in
 process, a small app with and without the handler — a password too short, a missing field, two errors at once, a query
 parameter, a body that is not JSON, then a valid request and a route's own `422`, answered as before —; on the lane's
 server, every route with a secret in its body, the secret field invalid and another field missing, the secret nowhere
-in the answer; the shape a plain `422` keeps, and the OpenAPI schema.
+in the answer; the shape a plain `422` keeps, and the OpenAPI schema. Its section 4, the non-finite numbers: in process,
+`1E+400`, `-1E+400`, `NaN`, `Infinity` and `-Infinity` on a plain and on a constrained `Decimal`, a `500` without the
+handler (the premise) and a `422` that a strict JSON parser reads with it, 20 cases; on the lane, `1E+400` and `NaN` as
+the amount of `POST /api/v1/fx/currencies/convert`, a `Decimal`, refused before the route runs, signed in as an account
+of the test's own.
 
 A `422` never sends the request's input back; a `500` from a response that breaks its model never writes the response
 to the log: see [Request Logs](#request-logs).
@@ -2082,8 +2339,11 @@ profile, names that header: `Fly-Client-IP` on Fly.io, `X-Real-IP` from Nginx's
   never hold a client's address (a refusal logs at most the account,
   never the address); uvicorn's access log, like any web server's, writes the connection's address on each request
   line (see [Request Logs](#request-logs)). The three per-address email limits read
-  their address with `client_address()`: «forgot password» and «send the link again» in `backend/app/api/v1/email.py`,
-  the registration email in `backend/app/api/v1/auth.py`. Their key follows the rule of `client_rate_key()`.
+  their address with `rate_limit_address()` too (lot E-13): «forgot password» and «send the link again» in
+  `backend/app/api/v1/email.py`, the registration email in `backend/app/api/v1/auth.py`. The
+  [failed sign-in limit](#login-limit) takes it in `backend/app/api/v1/auth.py`, for the sign-in, the password change
+  and the email change; at «send the link again» it counts with the address `email.py` reads. Their key follows the rule
+  of `client_rate_key()`.
 - **Not the indicator.** `GET /system/connection` (`backend/app/api/v1/system/connection.py`) keeps
   `client_address(forwarded_for, peer)` of `backend/app/utils/runtime/network.py`, a different function that classifies
   the last `X-Forwarded-For` value: advisory only, it gates nothing.

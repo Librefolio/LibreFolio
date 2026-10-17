@@ -5263,3 +5263,326 @@ controllo del catalogo i18n.
      conflitti** su tutti i 10 file condivisi o vicini.
    - Non eseguito: `api system` (contiene i test di `classify_ip`; è un passo pesante con il server, la sonda in
      processo lo sostituisce); la prova combinata con A8a, che spetta al cancello del coordinatore.
+6. ✅ **Prova sulla revisione combinata** (17/10, 06:11–06:16), chiesta dal coordinatore prima dell'ingresso. Base
+   aggiornata da lui: merge `3c1444e0c` = H-36 (`36cc0119d`, `b3e9f9c8a`, `b36e22454`) + dev `abf8391fb`, pulita.
+   - `files/runs/h36-combined.sh`, un comando alla volta: `services client-address` 360, `config-audit` 101,
+     `config-env-example` 38, `email-checks` 87, `config-package` 856 (+3 da dev), `i18n check` strict (4973 chiavi),
+     `mkdocs build` rigoroso con 0 avvisi, `check-links` 97.
+   - Pulita prima e dopo, porta 6181 libera.
+   - Il merge di `security.md` è controllato: il pezzo di dev (riga 1388, backup) è lontano dai miei, e non ci sono
+     marcatori.
+   - La riga della CHANGELOG la scrive il coordinatore all'ingresso di A8a + E-13, quando il salto per indirizzo ha
+     effetto.
+
+### Lotto «H-37: `profile_default` fallisce chiuso per una variabile che il profilo non elenca» (R13-SEC7 di E, 2026-10-17, mattina) — in corso
+
+> Chiesto dal coordinatore, dopo H-36: «`profile_default` (`config/__init__.py:584`): una voce `managed` mancante dà 0,
+> cioè nessun limite; deve fallire chiuso (rifiutare l'avvio, o un default sicuro dichiarato per campo). Prima i rossi;
+> E rivede.» È la nota 5 di R13-SEC7 nel piano di E (`08_email`, «Esito di R13-SEC7»).
+
+**Analisi** (sola lettura, HEAD `3c1444e0c`):
+
+1. `profile_default(name, fallback)` dà il `fallback` quando il profilo attivo non elenca `name`, e questo vale in
+   qualunque profilo. Per l'unico lettore, `backup_max_upload_mb()` di B (`config/backup.py:78`, fallback `0`), togliere
+   la voce `managed` vuol dire «nessun limite» in managed: un fail-open.
+2. **Nessun altro lettore.** Ho cercato `profile_default(` negli alberi di tutti i 31 rami locali: c'è solo quello di B,
+   ed è elencato (500). La cura non cambia il comportamento di oggi.
+3. **Il test di B fissa apposta il fail-open**: `test_backup_restore.py:1400`,
+   `test_the_managed_limit_is_the_entry_of_the_profile_table_read_at_each_call`, controlla che senza la voce il limite
+   sia 0. Va riscritto: è un file di B (`api backup-restore`, passo pesante).
+4. `test_profile_defaults.py` (mio) fissa la stessa regola: il paragrafo (f) («e in managed per un nome che non
+   elenca») e `test_managed_gives_back_the_fallback_itself_for_a_variable_it_does_not_list`.
+5. **I documenti**: `developer/architecture/settings.md` (il paragrafo di `ENVIRONMENT_PROFILE_DEFAULTS`, la guardia e
+   il «come aggiungere una variabile») e `security.md:1461-1463` (quando il limite «non si può leggere»). La pagina admin
+   `hosting_providers#managed-profile` non dice nulla sulle variabili non elencate.
+6. Per H-27 `settings.md` dice già: «il controllo gira alla chiamata del lettore, mai all'avvio: solo il lettore sa che
+   tipo si aspetta; la tabella è codice, protetta prima del rilascio dai test». Vale lo stesso per una voce mancante:
+   solo il lettore sa quale variabile legge.
+
+**Progetto** (la scelta fra le due forme proposte):
+
+- **Fallire chiuso alla chiamata.** Sotto ogni profilo tranne `selfhosted`, un nome che il profilo non elenca solleva
+  `ProfileDefaultError`. Il messaggio nomina la variabile, il profilo e `ENVIRONMENT_PROFILE_DEFAULTS`, e dice che ogni
+  profilo tranne `selfhosted` deve dare un valore a ogni variabile letta da `profile_default`.
+  - Il lettore si ferma: le rotte di B prendono già `ProfileDefaultError` (B-21), quindi l'upload dà 503
+    `backup_upload_unavailable` e lo stato `upload_limit_mb: null`, con un errore nel log che nomina la variabile.
+  - `selfhosted` resta com'è: il fallback, senza controlli.
+- **La stessa regola sul sorgente**, nella guardia (h): ogni chiamata `profile_default(<nome>, …)` di un modulo di
+  sezione deve avere il suo nome elencato da ogni profilo tranne `selfhosted`. Un autotest toglie la voce `managed` e
+  verifica che la guardia la segnali.
+- **Non rifiuto l'avvio.**
+  - Per saperlo all'avvio servirebbe un terzo elenco, le variabili lette, oltre alla tabella e ai lettori. Oggi lo
+    tiene la guardia (h), sul sorgente.
+  - E il raggio d'azione: una voce mancante fermerebbe ogni istanza managed all'aggiornamento, mentre così si chiude
+    solo la funzione che legge quel valore.
+  - È la stessa scelta che H-27 ha documentato per il tipo.
+- **`ProfileDefaultError` resta un `TypeError`** (H-27; B la prende per nome). Cambia la docstring: «manca, oppure è di
+  un altro tipo».
+- **Fuori perimetro**: `PROFILE_DEFAULTS` (i campi di `Settings`) ha la stessa forma, e senza la voce
+  `LIBREFOLIO_FRAME_PROTECTION` un'istanza managed tornerebbe al default del codice (spento). Il test (a) lo fissa
+  intero contro `MANAGED_DEFAULTS`. Lo segnalo a E e non propongo nulla.
+
+**Rossi** (test-author): `test_profile_defaults.py`, paragrafi (f), (g) e (h), più il test del lettore vero di B con la
+voce tolta. Con l'OK del coordinatore, anche la riga di `test_backup_restore.py:1400` e il caso «missing» nei test
+503/null di B-21.
+
+**Selettori**: `services profile-defaults`, `services config-package`, `services config-env-example`; `api
+backup-restore` (pesante, serve uno slot); ruff e black; `mkdocs build` e `check-links`.
+
+> **Approvazione** (coordinatore, 17/10 mattina): la scelta va bene, cioè fallire chiuso alla chiamata
+> (`ProfileDefaultError` fuori da `selfhosted`), la guardia (h) sul sorgente con il suo autotest e nessun rifiuto
+> all'avvio, coerente con H-27. In più:
+> - OK di scrittura su `test_api/test_backup_restore.py` di B: si riscrive il test del fail-open e si aggiunge il caso
+>   «missing» in `WRONG_TABLE_LIMITS`, con `wrong_table_entry` che impara `delitem`. Lo fa il test-author; B rivede al
+>   checkpoint, perché è su B-16, solo frontend.
+> - Uno slot per i 3 test di `api backup-restore` per nome: lo chiedo quando la cura è pronta.
+>
+> **Nota per E** (chiesta dal coordinatore): `PROFILE_DEFAULTS`, i campi di `Settings`, ha la stessa forma. Senza la voce
+> managed di `LIBREFOLIO_FRAME_PROTECTION` (o di `LIBREFOLIO_CSP_REPORT_ONLY`, o dei due tempi di riposo), un'istanza
+> managed torna in silenzio al default del codice: la protezione dei frame spenta. Oggi lo ferma solo il test (a)
+> (`MANAGED_DEFAULTS`, uguaglianza intera), prima del rilascio. Una chiusura a runtime richiederebbe un elenco
+> dichiarato dei campi per profilo: non è in H-37, lo decide E.
+
+1. ✅ **Cura in prova** (17/10, mattina): `files/h37/apply.py` scrive `dry/config_init.py`.
+   - Cambiano tre pezzi di `config/__init__.py`: il commento sopra `ENVIRONMENT_PROFILE_DEFAULTS`, la docstring di
+     `ProfileDefaultError` e `profile_default()`.
+   - In `profile_default()`, per un nome non elencato, `selfhosted` dà ancora il fallback; ogni altro profilo solleva
+     `ProfileDefaultError`. Il messaggio nomina la variabile, il profilo e `ENVIRONMENT_PROFILE_DEFAULTS`.
+   - Il ramo di un nome elencato non cambia: il controllo di tipo di H-27.
+   - Ruff e black sono puliti sulla copia di prova, come su HEAD.
+2. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina).
+   - `test_profile_defaults.py`, 25 casi nuovi e 1 tolto:
+     - `test_managed_refuses_a_variable_it_does_not_list`, al posto del vecchio test del fallback in managed; 6
+       fallback (`object`, `0`, `0.0`, `""`, `False`, `None`);
+     - la variante con il profilo scritto in altro modo (2 casi);
+     - il lettore vero di B con la voce tolta (rosso) e lo stesso in self-hosted (verde, 2 casi);
+     - la guardia (h) nella direzione nuova, con il suo autotest;
+     - `fallback_like`, che ora regge una voce uguale al valore vuoto del suo tipo (dalla review dei documenti: H-37
+       rende obbligatoria anche una voce uguale al fallback), con il suo test (8 casi);
+     - un caso (g) con la voce uguale al default del lettore (4 casi).
+   - Docstring: (f), (g), (h) e «How».
+   - `test_backup_restore.py` di B, solo il blocco (e) e il suo paragrafo, con l'OK del coordinatore:
+     - il test della guardia B4: con la voce tolta deve dare `ProfileDefaultError`, mai 0;
+     - `MISSING` (con `repr` «no entry») in `WRONG_TABLE_LIMITS`;
+     - `wrong_table_entry` impara `delitem`.
+   - Comando: `files/runs/h37-red-1.sh` (`services profile-defaults`). Esito: **9 failed, 103 passed**, esattamente i 9
+     previsti: `test_managed_refuses_…[×6]`, `…another_case_refuses_…[×2]` e
+     `test_a_missing_managed_upload_limit_stops_its_reader`. In ognuno il fallback, o lo 0, torna indietro.
+   - Ruff pulito. Black voleva andare a capo in tre `pytest.fail` lunghi: applicato al mio file di test, solo
+     formattazione.
+   - I rossi di B (3 test, 11 casi) aspettano lo slot `api`.
+   > **⚠️ Fuori pista** (dal test-author, non corretto): la `desc` del catalogo di `services profile-defaults`
+   > (`_backend_services.py`) non nomina né H-27 né H-37. Le etichette «B-21, RED until the routes catch it» nel file di
+   > B sono vecchie: lo dico a B.
+3. ✅ **Slot 1** (concesso dal coordinatore, 06:38–06:43, corsia 6181), `files/runs/h37-slot.sh`:
+   - **Rosso**, prima della cura: `api backup-restore` sui 3 test per nome, **3 failed / 8 passed**.
+     - La guardia B4: «backup_max_upload_mb() returns 0, where H's profile_default raises ProfileDefaultError».
+     - I due `[missing]` di B-21: «precondition: H's table giving no entry … not 0».
+   - **Cura applicata**: `files/h37/apply.py --apply`, identica alla copia di prova (`cmp`).
+   - **Verde**: gli stessi 3 test, **11 passed**. Porta libera alla fine.
+4. ✅ **Documenti** (docs-writer, solo inglese, pagine per sviluppatori senza traduzioni):
+   - `settings.md`, il punto di `ENVIRONMENT_PROFILE_DEFAULTS`: la regola nuova, il perché (anche il raggio d'azione), la
+     guardia nelle due direzioni con i due autotest, e «la voce managed è obbligatoria anche al valore del fallback»;
+   - `security.md:1461-1463`: «nessun valore (ogni profilo tranne `selfhosted`, H-37) o un valore del tipo sbagliato».
+   > **⚠️ Fuori pista** (dal docs-writer): `fallback_like()` non reggeva una voce uguale al valore vuoto del suo tipo,
+   > che H-37 rende legittima. Lo ha corretto il test-author, con un test dell'aiuto.
+5. ✅ **La riga `desc`** di `services profile-defaults` in `_backend_services.py`, con l'OK del coordinatore, solo
+   aggiunta: H-27 e H-37 accodati. `git merge-file` contro dev `0dc58c70b`, che ha già le righe di Z: 0 conflitti.
+   Il modulo del runner si carica e la `desc` contiene i due lotti. `services profile-defaults --list` elenca i test
+   nuovi.
+6. ✅ **Controlli leggeri** dopo la cura (`files/runs/h37-green-light.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services profile-defaults` | 112 passed |
+   | `services config-package` | 856 passed |
+   | `services config-misc` | 12 passed |
+   | `services config-env-example` | 38 passed |
+   | ruff, black (4 file) | puliti |
+   | `mkdocs build` | rc 0, 0 avvisi |
+   | `check-links` | 97 |
+   | `git diff --check` | pulito |
+
+   - `git merge-file` di tutti gli 8 file cambiati contro dev `0dc58c70b` (base comune `d107b6f26`): 0 conflitti.
+   - Non eseguito: `api backup-restore` intero (bastano i 3 test per nome, come deciso dal coordinatore) e
+     `all-backend`, che spettano al cancello.
+   > **Note per B**, alla review del suo file:
+   > - le etichette «B-21, RED until the routes catch it» nel blocco (e) sono vecchie;
+   > - la docstring di `backup_max_upload_mb()` (`config/backup.py:73-74`), «else `0`, the self-hosted default», ora vale
+   >   solo per `selfhosted`. Non l'ho toccata: è codice di produzione di B, e non ho l'OK.
+7. ✅ **Ingresso** (17/10, 06:47): `1ddd820c7` (fix, documenti, diario) è entrato in dev `b37e926af`, senza riga di
+   CHANGELOG. Il mio HEAD è avanzato a `b37e926af`, pulito.
+   - E ha rivisto H-37: «sound», nessuna correzione. Ha deciso su `PROFILE_DEFAULTS`: nessuna chiusura a runtime, ma un
+     controllo di visibilità, che diventa **H-39** (dopo Z-24).
+   - B riceve le mie due note.
+
+### Lotto «Z-24: `.scheduler.lock` fra i percorsi protetti della cartella dati di test» (2026-10-17, mattina) — in corso
+
+> Chiesto dal coordinatore mentre H-35 aspetta A8a. È una voce di Z (Z-11, dal suo test-author), «minimo,
+> facoltativo», sul mio file `config/__init__.py`. Prima i rossi.
+
+**Analisi** (sola lettura, HEAD `b37e926af`):
+
+1. `validate_test_data_dir()` (`config/__init__.py:450`) ha in `managed_paths` `scheduler_state.json`, ma non il
+   `.scheduler.lock` che Z-11 ha aggiunto (`services/platform/scheduler/run_lock.py`, `LOCK_FILE_NAME`, nella cartella
+   dati accanto allo stato).
+   - Un symlink al suo posto oggi passa la guardia; lo ferma solo l'`O_NOFOLLOW` di Z quando lo apre.
+   - Un hardlink al lock di produzione farebbe aspettare a turno i giri dei due server.
+2. **L'inventario dei percorsi fissi sotto la radice dati.** Sono tutti in `managed_paths` tranne il lock: `sqlite/`,
+   `custom-uploads/`, `broker_reports/`, `logs/` (anche `scheduler_jobs.jsonl`), `scheduler_state.json`,
+   `secrets/instance.key`, `scenario_catalog/`, `backups/` e `.restore/` (B).
+3. **Considerati e non aggiunti**: `sqlite/app.db-wal` e `-shm` (WAL attivo, `db/session.py`), e
+   `sqlite/app.db.post-migration.lock`. Un alias di uno di questi da solo non è un errore realistico: ogni modo di
+   condividere il DB fa alias anche di `app.db`, che è già rifiutato per primo. Se il coordinatore li vuole, sono due
+   righe.
+4. **Un buco nei test**: il ramo «Test data path aliases production data» (hardlink, `samefile`) non ha nessun test. Il
+   test dei symlink (`test_runtime_isolation.py`, `TestDataDirResolution`) copre solo `sqlite`, `sqlite/app.db`,
+   `secrets`, `secrets/instance.key`, `backups` e `.restore`.
+5. **Documenti**: `database/index.md#data-directory` elenca già `.scheduler.lock`, e descrive la guardia in modo
+   generico, come `test-walkthrough` e `security.md:502`. Non serve cambiarli.
+
+**Progetto**:
+- `Path(".scheduler.lock")` in `managed_paths`, subito dopo `scheduler_state.json`.
+- Rossi (test-author, `test_runtime_isolation.py`):
+  - il parametro `.scheduler.lock`, più `scheduler_state.json`, nel test dei symlink;
+  - un test nuovo dell'hardlink, con «aliases production data», su `sqlite/app.db`, `secrets/instance.key`,
+    `scheduler_state.json` (verdi: coprono il ramo scoperto) e `.scheduler.lock` (rosso);
+  - una barriera che il nome sia il `LOCK_FILE_NAME` di Z.
+- Backlog: Z-24 è nella sezione di Z, e non la tocco. Lo chiudo nel mio piano e lo segnalo al coordinatore.
+
+**Selettori**: `utils runtime-isolation` (puro), e `services config-package` perché il file è `config/__init__.py`.
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina), in `test_runtime_isolation.py`,
+   `TestDataDirResolution`:
+   - `scheduler_state.json` e `.scheduler.lock` aggiunti al test dei symlink;
+   - un test nuovo dell'hardlink («aliases production data»), su `sqlite/app.db`, `secrets/instance.key`,
+     `scheduler_state.json` e `.scheduler.lock`, con skip se il filesystem rifiuta gli hard link;
+   - la barriera `test_the_scheduler_lock_named_here_is_the_one_the_scheduler_takes`, sulla costante
+     `SCHEDULER_LOCK` della classe.
+   - Comando: `files/runs/z24-red.sh` (`utils runtime-isolation`). Esito: **2 failed, 296 passed**, i due
+     `[.scheduler.lock]`, tutti e due con «DID NOT RAISE ValueError».
+   > **⚠️ Fuori pista**: la barriera importava `run_lock`, e l'import si porta dietro l'`__init__` del pacchetto
+   > scheduler: 1246 moduli in ~1,9 s (misurato con `-X importtime`), modelli del DB compresi, dentro un'unità pura.
+   > Ora legge `LOCK_FILE_NAME` dal sorgente con `ast` (lo schema di `_assigned_value` in `test_test_runner_cli.py`),
+   > con `import ast` in cima al file.
+2. ✅ **Cura** (`files/z24/apply.py --apply`, identica alla copia di prova): `Path(".scheduler.lock")` in
+   `managed_paths` dopo `scheduler_state.json`, con un commento (Z-11, `run_lock.LOCK_FILE_NAME`).
+3. ✅ **Controlli leggeri** (`files/runs/z24-green.sh`): `utils runtime-isolation` 298 passed, `services
+   config-package` 857, `utils dev-cli-db-path` 15. Ruff e black puliti, `git diff --check` pulito.
+   - `git merge-file` contro dev `952c68cd5` (base comune `b37e926af`): 0 conflitti. Dev cambia
+     `backend.instructions.md` in un'altra tabella, e il backlog altrove.
+   - La voce Z-24 sta nella sezione di Z: la chiude il coordinatore.
+
+> **H-39, la parte già fatta, nello stesso checkpoint**: approvato dal coordinatore (06:52). In managed, la CSP
+> report-only spenta è un info e la protezione dei frame spenta un warning; il self-hosted è sempre ok.
+> - La regola di review è una riga nella voce «Config & Data Paths» di `.github/instructions/backend.instructions.md`:
+>   «un campo `Settings` di sicurezza nuovo dichiara il suo valore `managed` in `PROFILE_DEFAULTS` nello stesso lotto,
+>   o perché `managed` tiene il default del codice (H-39)».
+> - La riga accanto a C-99 è del coordinatore.
+> - I due controlli e le loro chiavi i18n aspettano B-9, che scrive in `config_audit.py`, `test_config_audit.py`,
+>   `security.md` e `settings.md`.
+>   - La cura in prova è pronta: `files/h39/apply.py`, che scrive le copie in `dry/`. Ruff e black puliti, 0 conflitti
+>     con A8a.
+>   - Le chiavi restano fuori dal worktree: senza il codice sarebbero morte, e un `instance/*.json` sporco potrebbe
+>     fermare l'avanzamento del ramo se B-9 lo tocca.
+4. ✅ **Ingresso** (17/10, 07:07): Z-24 e la regola di H-39 sono entrati in dev `36a487e84`. Z-24 è chiusa nel backlog
+   dal coordinatore (`b58f22357`), e il mio HEAD è avanzato lì, pulito.
+   - Nota di proprietà fino all'ingresso di B-9: B scrive in `config_audit.py`, `test_config_audit.py`, `security.md` e
+     `settings.md` (l. 68-70). Li rivedo al suo checkpoint, e non li tocco fino ad allora.
+   - Il coordinatore ha dato l'ordine: H-34, poi H-19, poi H-3 (solo l'analisi, se serve una decisione del developer).
+
+### Lotto «H-34: `Infinity` e `NaN` dentro il JSON libero di una richiesta» (2026-10-17, mattina) — in corso
+
+> Residuo di H-32, dal backlog (dal test-author e dal docs-writer di H-32). Ora è assegnato ad H dal coordinatore.
+
+**Analisi** (sola lettura, in processo, HEAD `b58f22357`; `files/h34/inventory.py` e `files/h34/probe.py`):
+
+1. **Inventario delle posizioni libere** (`Any`, `object`, `JsonValue`) che una richiesta dell'app vera raggiunge. Ho
+   usato il percorso di H-32 (`_Walk` di `test_request_float_inputs.py`), con un'aggiunta che le annota. Sono **5**,
+   nessun problema di percorso:
+
+   | Posizione | Tipo | Rotte |
+   |-----------|------|-------|
+   | `FAProviderAssignmentItem.provider_params{*}` (X) | `Any` | `POST /assets/provider` |
+   | `FAProviderProbeRequest.provider_params{*}` (X) | `Any` | `POST /assets/provider/probe` |
+   | `RiskAnalyticRequest.parameters{*}` (J) | `JsonValue` | `POST /risk/query` |
+   | `SignalRequest.params{*}` | `JsonValue` | `POST /assets/prices/query`, `/fx/currencies/convert`, `/signals/preview` |
+   | `ToolComputeItem.parameters` | `JsonValue` | `POST /tools/compute` |
+
+2. **La prova** (validazione in modalità Python, come fa FastAPI dopo `json.loads`, che trasforma `NaN`, `Infinity` e
+   `1e400` in float). Il valore usato è `{"top": inf, "deep": [1, {"x": nan}], "neg": -inf}`:
+   - `JsonValue` rispetta l'`allow_inf_nan=False` del modello: `ToolComputeItem` (`ToolTransportModel`, `strict=True,
+     allow_inf_nan=False`) dà 422, e in più `services/tools/wire.py` rifiuta le costanti già nel parsing (il campo era
+     segnato «da verificare»: è protetto);
+   - `SignalRequest.params` ha già `ensure_json_safe`;
+   - `RiskAnalyticRequest.parameters`: **accettato**;
+   - `FAProviderAssignmentItem`: **accettato** con `borsa_italiana`, `justetf`, `mockprov` e `yfinance`, il cui
+     `validate_params` accetta le chiavi in più; `css_scraper` e `scheduled_investment` rifiutano per altri motivi.
+     I valori finiscono nel DB come `Infinity` (il JSON di SQLAlchemy usa `json.dumps`), e una lettura con
+     `response_model` li ridà come `null` (H-32).
+   - `FAProviderProbeRequest`: stessa base, `FAProviderConfigBase`, quindi stesso esito. Nella mia sonda l'operazione
+     era sbagliata, e il 422 veniva da quella.
+3. Nessun codice interno costruisce questi modelli con valori Python non JSON: l'unico `RiskAnalyticRequest(...)`
+   interno (`ai_export/components/drawdown_context.py:348`) non passa `parameters`.
+4. Nessun ramo locale cambia `schemas/provider.py` o `schemas/risk.py` rispetto alla sua base con dev.
+
+**Progetto**:
+- `FAProviderConfigBase` (`schemas/provider.py`, X) e `RiskAnalyticRequest` (`schemas/risk.py`, J) ricevono un
+  `field_validator(mode="before")` che chiama `ensure_json_safe(value, "<campo>")`, come `SignalRequest.params`.
+  Risposta 422; il gestore globale di A7b-2 non ripete il valore. Va in tutti e due il proprietario: OK di scrittura
+  dal coordinatore, poi review di X e J.
+- La guardia nel mio `test_request_float_inputs.py` (lavoro del test-author):
+  - la passata trova esattamente le 5 posizioni libere, e una nuova fallisce («aggiungila con la sua sonda»);
+  - per ognuna, un corpo minimo valido con un valore non finito annidato dà `ValidationError`, mentre lo stesso corpo
+    finito passa (barriera).
+- Documenti: il paragrafo va in `security.md#request-numbers`, che è chiuso fino all'ingresso di B-9. Proposta:
+  arriva con i documenti di H-39.
+
+> **Approvazione** (coordinatore, 07:2x): OK di scrittura su `schemas/provider.py` (rivede X) e su `schemas/risk.py`
+> (rivede J). Il paragrafo di `security.md#request-numbers` arriva con i documenti di H-39, dopo B-9. Questo checkpoint
+> è solo codice e test. Per la CHANGELOG il coordinatore vuole una voce 🔒 breve: un `Infinity` o un `NaN` annidato
+> nei parametri di un provider veniva salvato e riletto come `null`.
+
+1. ✅ **Rossi** (test-author, che non ha lanciato nulla; 17/10, mattina), solo in `test_request_float_inputs.py`:
+   - il paragrafo (g) «H-34: free-form JSON», e la passata ora annota le posizioni libere (`free_form` in
+     `RequestFloats`);
+   - `KNOWN_FREE_FORM` con le 5 posizioni e le loro sonde. Il provider scelto è `mockprov`, il cui `validate_params`
+     non fa nulla per costruzione, con una barriera che sia registrato;
+   - 6 posizionamenti: in cima `inf`, `-inf` e `nan`, `inf` in una lista, `nan` in un dizionario annidato, `-inf` in
+     un dizionario dentro una lista;
+   - 62 casi nuovi: la passata trova esattamente le 5 posizioni; ognuna rifiuta (30); lo stesso corpo finito passa
+     (30, la barriera); un autotest della passata su un'app sua.
+   - Comando: `files/runs/h34-red.sh`. Esito: **18 failed, 77 passed**, cioè le due posizioni dei provider e quella
+     del rischio, ognuna per 6 posizionamenti. Ruff e black puliti.
+   > **⚠️ Fuori pista** (dal test-author, poi verificato): `TXMixedBatch` (W) ha i corpi in `List[dict]`, e la
+   > passata non apre un contenitore nudo. Le righe vengono validate dopo, una per una, in `TXCreateItem`,
+   > `TXUpdateItem`, `TXSplitBatchItem` e `TXPromoteBatchItem` (`files/h34/tx_probe.py`):
+   > - nessuna foglia float, e gli importi sono `SafeDecimal`, che rifiuta anche `"Infinity"` scritto come testo;
+   > - resta una posizione libera, `TXPromoteBatchItem.resolved_fields{*}`, applicata così com'è:
+   >   - `description` va nella colonna `Text` senza controllo di tipo né di lunghezza, e un numero renderebbe ogni
+   >     lettura un 500;
+   >   - `cost_basis_override` e `date` hanno errori che probabilmente escono come 500.
+   >
+   > È più largo dei numeri non finiti ed è di W: registrato come **H-41**, da passare a W. Non lo tocco.
+2. ✅ **Cura** (`files/h34/apply.py --apply`, identica alla copia di prova): un `field_validator(mode="before")`
+   chiama `ensure_json_safe`, in `FAProviderConfigBase.provider_params` e in `RiskAnalyticRequest.parameters`.
+3. ✅ **Controlli leggeri** (`files/runs/h34-green.sh`):
+
+   | Comando | Esito |
+   |---------|-------|
+   | `services request-float-inputs` | 95 passed |
+   | `schemas assets` | 70 passed |
+   | `schemas risk` | 88 passed |
+   | `services risk-asset-set` | 55 passed |
+   | `services asset-source-refresh` | 18 passed |
+   | `services plugin-settings-runtime` | 120 passed |
+   | `utils provider-core-cache` | 46 passed |
+   | ruff, black (3 file) | puliti |
+   | `git diff --check` | pulito |
+
+   - **OpenAPI invariato.** Ho confrontato, chiave per chiave, il documento dell'app su HEAD (copiata da
+     `git archive` nella cartella di sessione) con quello attuale. L'unica differenza è `/info/version` (il
+     `git describe` del worktree).
+   - Non eseguito: le rotte vere (`api assets…`, `api risk…`), passi pesanti che spettano al cancello.
+   - Documenti: il paragrafo di `security.md#request-numbers` arriva con H-39 (deciso dal coordinatore).
+   - Backlog: la nota della cura in H-34; nuove **H-40** (IPv6 su Docker Engine, la frase di E) e **H-41**
+     (`resolved_fields`, W).
