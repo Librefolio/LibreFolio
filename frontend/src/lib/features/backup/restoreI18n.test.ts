@@ -242,6 +242,7 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'no_space',
             'stage_failed',
             'database_damaged',
+            'database_foreign_objects',
             'manifest_mismatch',
             'head_unknown',
             'revision_missing',
@@ -352,5 +353,21 @@ describe('B4 — the keys of the secure backup', () => {
         ['restoreText.ts', 'backup.restore.errors.unexpected'],
     ])('positive control: the scan finds in %s a key of today, %s', (file, key) => {
         expect(namedKeys(source(file)).keys).toContain(key);
+    });
+});
+
+// =====================================================================================================================
+// B-28 — a database holding objects LibreFolio never creates is refused (written red first)
+// =====================================================================================================================
+
+/*
+ * The check refuses an archive whose database holds triggers, views or other schema objects LibreFolio never creates:
+ * `database_foreign_objects` (B-28 brief §1, §3), worded by restoreText.ts with `backup.restore.errors.<code>`, as every
+ * error of the check. The lists above are written out, not derived from the generated `RestoreErrorCode`: the key is
+ * required here by name. Red today: it does not exist.
+ */
+describe('B-28 — the refusal of a database holding objects LibreFolio never creates', () => {
+    it('backup.restore.errors.database_foreign_objects is a message of the four catalogues, with the same placeholders in each', () => {
+        expectMessage('backup.restore.errors.database_foreign_objects');
     });
 });
