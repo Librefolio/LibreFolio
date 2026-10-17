@@ -6561,7 +6561,7 @@ sulla base `23f6578f3`.
   ripristino, che resta in attesa; una copia che non si toglie dopo → 204 e un WARNING (anche da CLI). Riavvio: il suo
   500 ora ha il messaggio e un test. Tre messaggi × 4 lingue in `ERROR_KEYS`. Test: 17 rossi API, 2 nei servizi, 6
   Vitest, poi tutti verdi.
-- **B-32 · Dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile** — basso; B, 17/10 (B-31: TA-F,
+- ✅ **B-32 · Dopo un annullamento rifiutato: la scheda, la CLI e uno stato illeggibile** — basso; B, 17/10 (B-31: TA-F,
   TA-B, il docs-writer).
   - In `restoreFlow.cancelPending()` la riga `state = 'pending'` è morta (`#fail` mette subito `failed`): un
     annullamento rifiutato finisce sulla schermata di errore con «Try again», non sul blocco del ripristino in attesa con
@@ -6572,6 +6572,27 @@ sulla base `23f6578f3`.
   - Uno stato illeggibile (EACCES, EIO) fa dire a `_read_state` `None`: l'annullamento risponde 404 «not pending», lo
     stato del ripristino dice «none», mentre un ripristino può essere ancora in attesa.
   Dettagli: piano 07, «B-31».
+
+  ✅ **Fatto il 17/10** (checkpoint delle 10:29).
+  - Un annullamento rifiutato resta sul ripristino in attesa, con l'errore accanto, Riavvia e Annulla di nuovo.
+  - `pending --cancel`:
+    - un `OSError` → ❌ `restore_cancel_failed`, uscita 1, senza traceback;
+    - una copia rimasta → ✅ senza «with its copy», più ⚠️. Lo dice un `lstat`: un errore conta come «ancora lì».
+  - Uno stato che il file system non lascia leggere → `restore_state_unreadable`:
+    - 500 su stato, annullamento, riavvio e conferma; la conferma non scrive sopra;
+    - ❌ con uscita 1 in `pending`, `pending --cancel` e `restore`.
+    Un link o un contenuto non valido restano «none»; l'avvio, l'esito e la pulizia leggono come prima.
+  - Commenti «Settings › Administration › Backup». Dettagli: piano 07, «B-32».
+- **B-33 · Uno stato illeggibile all'avvio e nella pulizia** — basso; B, 17/10 (B-32, residuo dichiarato; il
+  coordinatore lo ha messo nella lista del developer).
+  - Un avvio che non riesce a leggere lo stato del ripristino registra l'errore e va avanti coi dati come sono, anche se
+    quello stato era `applying` o `applied` (dati scambiati a metà). Fermare l'avvio (fail closed) o servire (com'è
+    oggi) è una **decisione del developer**.
+  - `protected_stage` legge «nessuno»: con uno stato illeggibile la pulizia (`prune`, `remove_check`) può togliere la
+    copia di un ripristino forse ancora in attesa; l'avvio dopo direbbe `stage_missing`.
+  - Un test per la FIFO al posto dello stato ora si può scrivere, con un timeout: la lettura `lstat`-prima la ignora,
+    prima restava appesa.
+  Dettagli: piano 07, «B-32».
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
