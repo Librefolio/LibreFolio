@@ -530,7 +530,7 @@ describe('TransactionFormModal — exact quantity contract', () => {
         expect(within(screen.getByTestId('tx-form-quantity-wrap')).getAllByRole('textbox')).toHaveLength(1);
         expect(input).toHaveAttribute('type', 'text');
         expect(input).toHaveAttribute('inputmode', 'decimal');
-        expect(input).toHaveAttribute('maxlength', '23');
+        // No maxlength pin here any more: C-97b removes the attribute (pinned in ExactDecimalInput.test.ts).
         expect(input).not.toHaveAttribute('aria-valuenow');
         expectNoImportantNeutralQuantityBorder(input);
         if (type === 'BUY') expect(screen.getByTestId('tx-form-cash-wrap')).toBeInTheDocument();
@@ -775,7 +775,9 @@ describe('TransactionFormModal — exact quantity contract', () => {
         });
     });
 
-    it.each(['1.1234567', '1000000000000.1'])('keeps precision overflow %j visible, invalid, and out of payloads', async (raw) => {
+    // C-97b guard: the overflow is 11 decimals, past the quantity's 10. It was 7 decimals while the form
+    // allowed 6, a value C-97b makes valid; the limit itself must survive the cure.
+    it.each(['0.12345678912', '1000000000000.1'])('keeps precision overflow %j visible, invalid, and out of payloads', async (raw) => {
         const onPushDraft = vi.fn();
         mount({
             mode: 'create',
@@ -918,6 +920,107 @@ describe('TransactionFormModal — exact quantity contract', () => {
             if (warningVisible) expect(screen.getByTestId('tx-form-cost-basis-warning')).toBeInTheDocument();
             else expect(screen.queryByTestId('tx-form-cost-basis-warning')).toBeNull();
         });
+    });
+});
+
+/**
+ * C-97b — the quantity keeps ten decimals. C-97a made a transaction keep a quantity up to 10 decimal
+ * places (15 significant digits) and refuse more with the maximum, never rounding. The form lags:
+ * TxFormSingleSection and TxFormPairSection give the quantity's ExactQuantityInput
+ * `maxFractionDigits={6}`, so a quantity the backend keeps is refused here.
+ *
+ * Pinned through the field (`tx-form-quantity`): ten decimals are valid in the single form and in
+ * the pair form, and reach the pushed draft whole; eleven are flagged, and the message under the
+ * field (`tx-form-quantity-digits-error`, its text the cure's choice) carries `data-max="10"`. The
+ * guard that eleven decimals stay out of every payload is «keeps precision overflow» above.
+ */
+describe('TransactionFormModal — a quantity keeps ten decimals (C-97b)', () => {
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    const TEN_DECIMALS = '0.1234567891';
+    const ELEVEN_DECIMALS = '0.12345678912';
+
+    /** A complete standalone BUY: the single form. */
+    function buyItems() {
+        return [txRow({type: 'BUY', quantity: '1', cash: {code: 'EUR', amount: '-100'}})];
+    }
+
+    /** A TRANSFER pair: the pair form, its shared quantity in `tx-form-quantity`. */
+    function transferItems() {
+        const {sender, receiver} = transferPair();
+        return [sender, receiver];
+    }
+
+    /** Within the budget: no message — absent, or rendered hidden. */
+    function expectNoQuantityDigitsError() {
+        const message = screen.queryByTestId('tx-form-quantity-digits-error');
+        if (message) expect(message, 'tx-form-quantity-digits-error shows for a quantity within the budget').not.toBeVisible();
+    }
+
+    // Red today: the single form passes maxFractionDigits={6}, so ten decimals are aria-invalid and Save stays disabled.
+    it('BUY (single form): ten decimals are a valid quantity, and reach the pushed draft whole', async () => {
+        const onPushDraft = vi.fn();
+        mount({mode: 'create', items: buyItems(), commitOnSave: false, onPushDraft});
+        const input = (await screen.findByTestId('tx-form-quantity')) as HTMLInputElement;
+
+        await fireEvent.input(input, {target: {value: TEN_DECIMALS}});
+
+        expect(input).toHaveValue(TEN_DECIMALS);
+        expect(input, 'ten decimals are within the quantity a transaction keeps (C-97a: 10)').toHaveAttribute('aria-invalid', 'false');
+        expectNoQuantityDigitsError();
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+
+        await fireEvent.click(screen.getByTestId('tx-form-save'));
+
+        expect(onPushDraft).toHaveBeenCalledTimes(1);
+        expect(onPushDraft.mock.calls[0]?.[0], 'the draft carries the ten decimals, none cut').toMatchObject({type: 'BUY', quantity: TEN_DECIMALS});
+        expect(commitTransactions).not.toHaveBeenCalled();
+    });
+
+    // Red today: the pair form passes maxFractionDigits={6} as well.
+    it('TRANSFER (pair form): ten decimals are a valid quantity', async () => {
+        mount({mode: 'create', items: transferItems(), commitOnSave: false, onPushDraft: vi.fn()});
+        const input = (await screen.findByTestId('tx-form-quantity')) as HTMLInputElement;
+        expect(screen.getByTestId('tx-form-dual-split'), 'premise: the pair form').toBeInTheDocument();
+
+        await fireEvent.input(input, {target: {value: TEN_DECIMALS}});
+
+        expect(input).toHaveValue(TEN_DECIMALS);
+        expect(input, 'ten decimals are within the quantity a transaction keeps (C-97a: 10)').toHaveAttribute('aria-invalid', 'false');
+        expectNoQuantityDigitsError();
+    });
+
+    // Red today: eleven decimals are already flagged and block Save (that part is the guard: the limit
+    // survives the cure), but no message says why.
+    it.each([
+        ['BUY (single form)', buyItems],
+        ['TRANSFER (pair form)', transferItems],
+    ] as const)('%s: eleven decimals are refused, and the message under the field names the budget of ten', async (_label, items) => {
+        mount({mode: 'create', items: items(), commitOnSave: false, onPushDraft: vi.fn()});
+        const input = (await screen.findByTestId('tx-form-quantity')) as HTMLInputElement;
+
+        await fireEvent.input(input, {target: {value: ELEVEN_DECIMALS}});
+
+        expect(input).toHaveValue(ELEVEN_DECIMALS);
+        expect(input, 'eleven decimals are over the quantity budget').toHaveAttribute('aria-invalid', 'true');
+        await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeDisabled());
+        const message = screen.queryByTestId('tx-form-quantity-digits-error');
+        expect(message, 'tx-form-quantity-digits-error must say why eleven decimals are refused; no such element is rendered').not.toBeNull();
+        expect(message).toBeVisible();
+        expect(message, 'the message carries the quantity budget: ten decimals').toHaveAttribute('data-max', '10');
     });
 });
 
