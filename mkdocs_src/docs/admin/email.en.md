@@ -341,8 +341,12 @@ of being copied by hand. While email is **Ready** and `LIBREFOLIO_PUBLIC_URL` ca
 2. For an invitation, check the address in **Send to**: it starts with the one written in the
    invitation, and you can change it. A reset link has no field: it goes to the address of its
    account.
-3. Click **Send by email**. The dialog says *Sent to …* with the address, or why the email did not
-   go out ([Sending Errors](#sending-errors)).
+3. For an invitation, choose the **Language of the email**: **The instance's language** writes it
+   in the instance's **Default Language** ([Global Settings](settings.md)); pick English,
+   Italiano, Français or Español for someone who reads another one. A reset link goes in its
+   account's language.
+4. Click **Send by email**. The dialog says *Sent to …* with the address and the language the email
+   was written in, or why the email did not go out ([Sending Errors](#sending-errors)).
 
 The rules:
 
@@ -350,8 +354,9 @@ The rules:
   dialog shows: only the secret part of the link travels from the dialog. The dialog says so above
   the button.
 - **An invitation** goes to the address in **Send to**, or else to the one written in the
-  invitation, in the instance's **Default Language**: the dialog has no choice of language. It
-  names you as the person who invites, and says so when the new account will be an administrator.
+  invitation, in the language chosen in **Language of the email**, the instance's **Default
+  Language** unless you picked another. It is the email's language only: it does not become the
+  language of the account the invitation creates. It names you as the person who invites, and says so when the new account will be an administrator.
 - **A password-reset link** goes only to the address of its account, in the account's language,
   and only while the account is active.
 - **Only a live link** goes out: one that has expired, was used or was revoked is refused, and a
@@ -477,9 +482,9 @@ that LibreFolio emails to the address of the account. The switch is in
   ([Emails with a Link](#public-url)), and an instance that no hosting provider blocks. Until then,
   while it is off, the switch is greyed
   out, with the hint *Needs an email with a link to go out: set up SMTP and LIBREFOLIO_PUBLIC_URL
-  first (Settings › Email).* Should that change between the moment you open the tab and your save,
+  first (Settings › Administration › Email).* Should that change between the moment you open the tab and your save,
   the save is refused — *Email verification needs an email with a link to go out, and none can go
-  now: check Settings › Email.* — and nothing of it is stored.
+  now: check Settings › Administration › Email.* — and nothing of it is stored.
 - **Turning it off always works.** The accounts already waiting keep waiting: their links still
   work, and so does **Send the link again**. To let one in at once, activate it
   ([Waiting Accounts](#verification-waiting)).

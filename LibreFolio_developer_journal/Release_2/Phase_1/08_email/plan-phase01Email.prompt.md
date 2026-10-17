@@ -4416,6 +4416,175 @@ non sposti il registro.
 >
 > Il codice viene dopo A8b, su una base che lo contiene. Questa analisi va col prossimo checkpoint del journal.
 
+#### E-8.2 — Rossi ✅ (2026-10-17, 08:23–08:42)
+> **Il via del coordinatore** (08:22): E-8 parte ora, mentre A8b fa il suo slot (circa 30 minuti, poi l'ingresso). Dentro
+> ci sono il selettore della lingua dell'invito (N69) e la lingua nell'esito. Solo l'allineamento dei percorsi «Settings
+> › Email» aspetta A8b nella mia base: il coordinatore lo porta al mio checkpoint.
+>
+> **Il disegno, dopo le skill `design-system` e `devpy-i18n`**:
+> - **Il selettore** è il `SimpleSelect` dell'app, lo stesso dei menu a tendina nei dialoghi (`PluginSettingsForm`) e
+>   della lingua dell'istanza (`GlobalSettingsTab`, dentro `SettingSelect`), non un `<select>` nativo:
+>   - `testId="send-link-email-language"`, le opzioni `send-link-email-language-option-<valore>`;
+>   - un'etichetta visibile, ripetuta in `ariaLabel`;
+>   - prima «La lingua dell'istanza» (valore vuoto), poi le 4 lingue di `LANGUAGE_OPTIONS`, ognuna col nome nativo e la
+>     bandiera;
+>   - disabilitato durante l'invio.
+> - **La richiesta**: col default nessun `language`, il comportamento di oggi; con una scelta, `language: '<codice>'`.
+>   Il reset non lo manda mai.
+> - **L'esito**: «Sent to {to}, in {language}.», col nome nativo della lingua presa dalla **risposta** (il codice, se
+>   l'interfaccia non lo conosce), per i due scopi, e `data-language` sull'elemento (niente testo tradotto nell'E2E).
+>   L'app non ha nomi di lingua tradotti: i selettori usano `LOCALE_NAMES`.
+> - **i18n**: `email.sendLink.languageLabel` e `email.sendLink.languageInstance` nuove (con `./dev.py i18n add`, la
+>   sorgente è `frontend/src/lib/i18n/email/`); `email.sendLink.sent` prende `{language}` nelle 4 lingue.
+>
+> **I rossi**, dal `test-author` `a47f03fb`: Vitest `SendLinkByEmail.test.ts` e `sendLinkApi.test.ts`, più un caso
+> ESL-E nella spec E2E `email-send-link.spec.ts`, che mocka `POST /email/links`. Le specifiche E2E girano solo in uno
+> slot.
+
+> **Scritti** (`test-author` `a47f03fb`, 08:23–08:40):
+> - Vitest `SendLinkByEmail.test.ts`: SLE-06 e SLE-08 aggiornati, nuovi da SLE-10 a SLE-17.
+> - `sendLinkApi.test.ts`: SLA-15 (con l'alias) e SLA-16 (col trasporto vero).
+> - E2E `email-send-link.spec.ts`:
+>   - il server simulato risponde con il `language` della richiesta (`en` senza), e dà un 500 invece di restare appeso;
+>   - ESL-E-01 prova che il default non manda la chiave e controlla `data-language="en"`;
+>   - ESL-E-02, il reset, non ha il selettore;
+>   - nuovo ESL-E-05: un invito in Italiano.
+> - **La chiave assente è fissata in modo stretto**: nemmeno `language: undefined` (`toStrictEqual` e `not.toHaveProperty`).
+>
+> **⚠️ Fuori pista**: il testo dell'esito. Avevo proposto «Sent to {to}, in {language}.», ma con il nome nativo («en
+> Italiano», «in Italiano» maiuscolo) suona male in 3 lingue su 4. Ho scelto la forma a etichetta «Sent to {to}.
+> Language: {language}.», e l'ho detto al `test-author` prima che finisse. I test non spellano la frase, quindi niente
+> da cambiare.
+>
+> **Rossi visti** (08:42, carico 41; `vitest run` dei 2 file): **21 falliti, 109 passati**, ognuno per l'assenza della
+> funzione (niente etichetta né selettore, niente `data-language` né `{language}`, niente `language` nel corpo). Due
+> passano per natura: SLE-11 (il reset non ha selettore) e il caso `language: undefined` di SLA-15.
+
+#### E-8.3 — Codice, i18n e docs ✅ (2026-10-17, 08:42–08:55)
+> **Il codice** (dalle bozze di `files/e8/`):
+> - `SendLinkByEmail.svelte`: il `SimpleSelect` sotto l'indirizzo, solo per l'invito, con `dropdownPosition="auto"`
+>   (sul mobile il dialogo finisce in fondo allo schermo). `language` entra nella richiesta solo se scelta
+>   (`...(chosen ? {language: chosen} : {})`). L'esito si scrive con la lingua della **risposta**, e c'è
+>   `data-language`.
+> - `sendLinkApi.ts`: `language?: SupportedLocale`, mandato solo se c'è.
+> - **i18n**, con `./dev.py i18n add` e `update`, nella sorgente `email/`:
+>   - nuove `email.sendLink.languageLabel` e `email.sendLink.languageInstance`;
+>   - `email.sendLink.sent` prende `{language}` nelle 4 lingue;
+>   - `i18n check` stretto è pulito (4 992 chiavi).
+> - **Catalogo** `_frontend_utility.py:1071`, la descrizione di `email-send-link`, con il testo proposto dal
+>   `test-author`.
+>
+> **Docs** (`files/e8/e8_docs.py`):
+> - `admin/email.en.md`: il passo 3 nuovo (la lingua); la regola «An invitation», che diceva «the dialog has no
+>   choice of language»; l'esito con la lingua.
+> - `admin/users.en.md`: il punto «The language».
+> - `developer/backend/email.md`: la riga di `sendLinkApi.ts`, i punti «The language» e «The outcome», i test hook, i
+>   Testing (SLE-01…17, SLA-01…16, ESL-E-01…05).
+> - **Verificato prima di scriverlo**: la lingua di un account nuovo nasce dalle sue `UserSettings`, cioè
+>   `DEFAULT_LANGUAGE` o quella che sceglie lui, mai alla registrazione e mai dall'invito. Per questo la frase dice
+>   solo «it does not become the language of the account».
+>
+> **La nota di A su E-14 è sistemata qui.** «Least recently used» diventa «used or regrouped longest ago», perché una
+> chiave va in fondo al gruppo anche quando un suo colpo esce dalla finestra. Vale in sei posti: `rate_window.py`
+> (docstring del modulo, commento, `_evict_one`), il contratto 8 di `test_rate_window.py`, `email.md` (due punti),
+> `security.md:432`, devWiki `domains/email.md` e il catalogo `_backend_utils.py`. Il comportamento non cambia.
+>
+> **Prove**:
+>
+> | Controllo | Esito |
+> |---|---|
+> | `vitest run` dei 2 file | 130 / 130 (i 21 rossi ora verdi) |
+> | `prettier --check` (da `frontend/`) | pulito, dopo un `--write` sul componente |
+> | gate dei colori `theme-roles.mjs --check` | pulito |
+> | `i18n check` | stretto, pulito |
+> | `dev.py front check` (svelte-check) | 0 errori, 0 warning |
+> | utils `rate-window` | 45 / 45 |
+> | ruff e black | puliti |
+> | `mkdocs build` stretto | 0 righe WARNING/ERROR |
+> | `check-links` | 97 link validi |
+> | porta 6188 | libera |
+>
+> **⚠️ Fuori pista**:
+> - Il primo `front check` ha dato 13 errori, tutti in `features/backup/` di B. Il client generato del mio worktree
+>   (ignorato da git, delle 02:31) era più vecchio della fase `decrypting` di B. `./dev.py api sync` lo ha rigenerato
+>   (solo file ignorati), e il secondo `front check` è pulito.
+> - Ho lanciato `api sync` e il secondo `front check` con il carico a 54, sopra la soglia di 50: un mio errore, da non
+>   ripetere.
+>
+> **Non eseguiti**: la spec E2E `email-send-link` (ESL-E-01…05), che chiede uno slot, e le categorie Vitest intere.
+> **Resta**: l'allineamento dei percorsi «Settings › Email» (26 punti), dopo A8b nella mia base.
+
+#### E-8.4 — I percorsi «Settings › Email» dopo A8b ✅ (analisi 08:57–09:05; applicato 09:12–09:2x)
+> **Il punto di partenza** (coordinatore, 08:56): la parte 1 è committata (punta `443eda316`), la base è `86e2b05a7`
+> (la mia più dev `73443c6db`, pulita). Lo slot E2E è in coda, e la parte 2 aspetta l'ingresso di A8b.
+>
+> **A8b**, letto dagli oggetti git (`4fcf24e10`, punta del ramo di A `36ab58445`):
+> - L'etichetta del gruppo è `settings.administration`: Administration, Amministrazione, Administration,
+>   Administración.
+> - I docs di A8b scrivono sempre «Settings › Administration › <scheda>»: Backup 45 volte, Email 10, Global e Users 2,
+>   Security 1.
+> - **A8b ha già allineato 9 degli 11 punti di `admin/email.en.md`**, più `admin/index.en.md` e `security.md`.
+>
+> **I segmenti verificati** sulle etichette vere: `nav.settings` (Settings, Impostazioni, Paramètres, Configuración),
+> `settings.administration`, `email.tab.label` (Email, Email, E-mail, Correo).
+>
+> **Cosa resta dopo A8b**, con il testo esatto:
+> 1. **i18n**, 8 valori, con `./dev.py i18n update`:
+>    - `email.verification.settingNeedsEmail`: «(Settings › Email)» → «(Settings › Administration › Email)»;
+>      «(Impostazioni › Email)» → «(Impostazioni › Amministrazione › Email)»; «(Paramètres › E-mail)» → «(Paramètres ›
+>      Administration › E-mail)»; «(Configuración › Correo)» → «(Configuración › Administración › Correo)».
+>    - `email.verification.settingUnavailable`: lo stesso inserimento, alla fine della frase, nelle 4 lingue.
+>    - **I lettori**: `GlobalSettingsTab.svelte:284` e il suo hint. Il Vitest `GlobalSettingsTab.verification.test.ts`
+>      legge le chiavi, non il testo; l'E2E non ha un appiglio sul testo. Quindi nessun test cambia.
+> 2. **`admin/email.en.md`, i 2 punti che A8b non ha toccato** (`:480` e `:482` nella punta di A): citano parola per
+>    parola le due frasi inglesi, e vanno allineati insieme a queste.
+> 3. **devWiki** `domains/email.md:25` (il test email) e `:66` (l'etichetta del diagramma mermaid).
+> 4. **Commenti**: `EmailSettingsTab.svelte:2`, `EmailSettingsTab.test.ts:3`, `e2e/fixtures/galleryEmail.ts:2`.
+> 5. **`e2e/settings/email-tab.spec.ts`** `:2`, `:127`, `:137` e `:178` (due commenti e due titoli di `describe`):
+>    congelati finché A8b non entra (A tocca la `:167`).
+> 6. **Catalogo** `_frontend_utility.py` `:789`, `:910` e `:1076`: le descrizioni delle mie suite più una frase in
+>    quella di `core-unit`.
+> 7. **Del coordinatore**: `CHANGELOG.md:47` e `:48` («Settings › Email» → «Settings › Administration › Email»).
+> 8. **Lasciato com'è**: `TODO_Completati.md:19`, perché è storico.
+>
+> **Il peso**: piccolo, una ventina di righe. Nessun file di traduzione dei docs, perché quelle pagine esistono solo
+> in inglese.
+
+> **Applicato** (09:12, sulla base `5bbc0622e`):
+> - **Il merge**: il coordinatore ha portato A8b (dev `6e2b2c8b7`) nel mio ramo, e ha tolto il congelamento di
+>   `email-tab.spec.ts`. Il CHANGELOG lo ha allineato lui (i 3 punti).
+> - **Controllato dopo il merge automatico** (`email.en.md`, `users.en.md`, `security.md`, `email.md`, il catalogo):
+>   le frasi di E-8, E-13 ed E-14 sono intatte, e gli hunk di A8b toccano solo i percorsi.
+> - **i18n**, 8 valori (`files/e8/e8_i18n_paths.py`, con `./dev.py i18n update`): ogni valore nuovo è derivato dal
+>   vecchio, inserendo il gruppo nella sua lingua.
+> - **Testo**, 15 modifiche in 8 file (`files/e8/e8_paths.py`):
+>   - le 2 frasi citate di `admin/email.en.md`;
+>   - devWiki `:25` e `:66`;
+>   - i commenti di `EmailSettingsTab.svelte`, `EmailSettingsTab.test.ts` e `galleryEmail.ts`;
+>   - `email-tab.spec.ts`: 2 commenti e 2 titoli di `describe`;
+>   - il catalogo `:789`, `:910` e `:1076`. La `:910` è la frase di A8b sui link della scheda Sicurezza: il plugin non
+>     ha gruppo (`settingsTabs.ts:75`), quindi diventa «Settings › Administration › Email and Settings › Plugins».
+> - Più, in `users.en.md`, la lingua spostata nel punto «The result», per non dirla due volte.
+> - **Resta solo `TODO_Completati.md:19`**, storico, lasciato com'è.
+>
+> **⚠️ Fuori pista**: `i18n check`, prettier, ruff e black sono partiti con il carico a 68. Sono leggeri, ma la soglia è
+> 50: un secondo errore mio. Da qui in poi, solo script che aspettano il carico (`files/tools/e8p2_checks.sh`).
+>
+> **Prove** (09:14–09:21; `files/tools/e8p2_checks.sh`, che ha aspettato il carico sotto 50):
+>
+> | Controllo | Esito |
+> |---|---|
+> | Vitest `GlobalSettingsTab.verification.test.ts` ed `EmailSettingsTab.test.ts` | 54 / 54 |
+> | `i18n check` | stretto, pulito (5 015 chiavi) |
+> | prettier, ruff e black | puliti |
+> | `mkdocs build` stretto | 0 righe WARNING/ERROR |
+> | `check-links` | 97 link validi |
+> | `git diff --check` | pulito |
+> | porta 6188 | libera |
+>
+> **Non eseguite**: le spec E2E `email-send-link` (parti 1 e 2) e `email-tab` (titoli dei `describe` cambiati), nello
+> slot in coda.
+
 ### R13-SEC6 — A8a (il limite dei login falliti, `security/checks`) e i miei file (2026-10-17, 05:03–)
 > **Il compito del coordinatore** (05:02): A8a, cioè il codice `66873b0c9`, le docs `4a93f1f54` e il merge di dev
 > `125c19f0e`, con E-11 in `email.md`. Letto dagli oggetti git, mai dal worktree di A. Due parti:
@@ -5208,3 +5377,110 @@ non sposti il registro.
 >   il vecchio `isfinite` accettava, ora diventano `invalid_stored`.
 > - Dichiarazioni: `_check_bounds` gira **prima** della verifica del default. Serve, perché `validate_value` formatta i
 >   limiti con `:g`, e `format(2**1100, 'g')` alza `OverflowError` (verificato).
+
+> **E-14 è entrato** (coordinatore, 07:58): dev `70dccc16f`, CHANGELOG 🔒 `c2b4ec20e`. Il mio HEAD è avanzato a
+> `c2b4ec20e`. A: **OK**, 127/127 con il mio `rate_window.py`.
+>
+> **La nota di A, non bloccante**: quando un colpo scade, `_expire` rimette la chiave alla fine (la più usata) del
+> gruppo più basso. Così il «least recently used» del docstring è un po' largo. **Da sistemare nel prossimo lotto**
+> (E-8), con una frase esatta.
+>
+> **R13-SEC8** (07:58, sola lettura): `backend/app` da dev `1a937b93e` a `c2b4ec20e`, senza ciò che ho già rivisto
+> (SEC7-2, X-R47b, H-37, X-R43, N70, E-14).
+> - **12 commit**: Z-11 (`2db7edd68`, `5ab865a63`); B-28 (`9403ecda0`); B-29 (`c96861834`); i controlli di backup
+>   (`b35581e5b`); W-B60 (`841130215`); MF-P2 (`ed954008e`); J-43/SEC7-1 (`a46f85bda`); `051409d25`; MF-SI1
+>   (`69cc2faac`, `f37b1d0ea`); `d5d080a84`.
+> - `66873b0c9` (A8a) è dentro `125c19f0e`, già rivisto in SEC6.
+> - Prima l'agente `security-review` (07:59).
+
+> **La revisione di A-21a** (`5da71d037`, 08:0x, sola lettura, la cura del mio MEDIUM sul lookup): **chiusa, nessun
+> reperto.**
+> - **Regola 3 (il lookup)**: con `@` prima l'indirizzo (A-Z senza maiuscole, P18), poi il nome legacy esatto; senza
+>   `@`, solo lo username esatto, mai un indirizzo. Gli abusivi già presenti perdono effetto, qualunque sia l'ordine di
+>   scrittura. I miei flussi e i miei docs passano dalla stessa funzione, quindi ereditano la cura.
+> - **Regola 1**: niente `@` nei nuovi username. Vale in `create_user` (registrazione, invito, CLI), nella rinomina di
+>   `update_profile` e in `LIBREFOLIO_ADMIN_USERNAME`. Ogni scrittura di `username` o `email` passa da lì.
+> - **Regola 2**: `address_is_a_username` (`lower()` sui due lati) in `create_user` e nel cambio d'indirizzo. È testata
+>   su registrazione, profilo, CLI `user create` e `set-email`, nei due ordini.
+> - Gli username restano case-sensitive fino all'indice unico (A-21b), come chiedeva il mio punto (b).
+> - `_follow_variables` senza la regola 2: **innocuo**, come dice A. L'env è dell'operatore, e l'admin in attesa
+>   esiste solo su un'istanza nuova.
+> - **Note non bloccanti**:
+>   - `USERNAME_INVALID` è mappato confrontando il testo del messaggio;
+>   - il conteggio delle collisioni legacy nel controllo di sicurezza (punto d, per H) resta facoltativo.
+
+> **Esito di R13-SEC8** (08:2x). L'agente `security-review` stavolta ha funzionato (18 minuti); io ho verificato le
+> sue note di DoS, che le sue regole escludono dai reperti ma la nostra soglia no. **Due reperti MEDIUM.**
+> - **SEC8-1, MEDIUM 9/10 (misurato).** Il limite di SEC7-1 copre solo gli ingressi del portafoglio. Tre rotte aperte a
+>   ogni utente camminano ancora giorno per giorno su un `DateRangeModel` senza limite:
+>   - `/assets/prices/query` (`_build_backward_filled_series`, `price_query.py:140-182`, lista senza limite);
+>   - `/risk/query` con scope di asset (`risk/scope.py:335-347`, fino a 100 asset) e `replay_range`;
+>   - `/fx/currencies/convert`.
+>
+>   Misurato in memoria sulla funzione vera (`files/e9/sec8_series_cost.py`): 25,5 µs e circa 1,9 KB per giorno. Una
+>   fine nel 9999 costa **circa 74 s e 5,2 GiB per asset**, sul loop: una richiesta sola porta l'istanza fuori memoria.
+>   Cura: un limite al bordo sulle date delle richieste, più un `max_length` sulle liste.
+> - **SEC8-2, MEDIUM 7/10 (per analogia).** L'inizio del replay è la prima transazione, e `TXCreateItem.date` non ha un
+>   pavimento. Una BUY del 0001-01-01 fa rigiocare circa 740 000 giorni a ogni summary, report o lots. Con J-45 un
+>   utente tiene occupati i 2 worker. Cura: un pavimento sulle date scritte, e l'inizio limitato allo stesso.
+> - **Note**:
+>   - MF-P2: liste senza `max_length`; un `as_of` prima dell'anno 6 dà `OverflowError`, un 500;
+>   - Z-11: l'attesa del lock non ha timeout (LOW);
+>   - W-B60: ±inf o testo salvati si leggono come None nelle colonne NOT NULL (LOW, solo da DB vecchi o da restore);
+>   - SEC7-3 è ancora aperto da W, e su `/fx/currencies/convert` si moltiplica con SEC8-1.
+>
+> **La revisione di J-45** (`43a7f0156`, il motore fuori dal loop; MF): **nessun rischio di thread.**
+> - `build()` legge solo colonne caricate e mai la sessione; nessun `gather` sulla stessa sessione.
+> - Né il builder né i suoi import hanno stato mutabile a livello di modulo.
+> - Il contesto `decimal` è condiviso per riferimento da `copy_context()`, ma nessuno lo muta: proposta la regola «solo
+>   `localcontext()`».
+> - Il resto è disponibilità, non thread: 2 worker, coda senza limite, e la build di una richiesta cancellata continua.
+>   La cura è SEC8-2.
+
+> **Lo smistamento di SEC8** (coordinatore, 08:22). Rivedo ognuno al suo checkpoint.
+> - **SEC8-1**:
+>   - `price_query` e la conversione FX li chiude già **X-R55** (Z): la fine non supera `latest_range_end()`, l'inizio
+>     FX al massimo 100 anni prima; è nel suo checkpoint ora.
+>   - Le liste bulk le limita **Z-25**, nella 1.3, subito dopo.
+>   - Lo scope di asset del rischio passa da `get_prices_bulk`, quindi è coperto.
+>   - `replay_range` di `risk/replay.py` va a **J (SEC8-1b)**.
+> - **SEC8-2**: il pavimento sulle scritture è **N74** di W (dentro SEC7-3); il limite del replay per le righe vecchie
+>   va a **MF** (motore, lots, `native_cash`).
+> - Le note: liste e `as_of` di MF-P2 → **MF-P2b**; il timeout del lock di Z-11 → **Z-26**; ±inf di W-B60 → **W-B63**
+>   (pulizia).
+> - **J-45**: OK. La mia regola «solo `localcontext()`» entra nelle istruzioni di financial-math (MF).
+
+> **La revisione di H-39 a posteriori** (`52adadc05`, più i docs di H-34 e H-40 in `a64fb8d07`; 09:1x, sola lettura):
+> **chiusa, nessun reperto.**
+> - Con `managed`, la protezione dei frame spenta dà `warning` e il CSP report-only spento dà `info`; acceso, o
+>   self-hosted, `ok`.
+> - L'attesa è una costante scritta nel controllo, non letta da `PROFILE_DEFAULTS`, come avevo chiesto a H-37.
+> - `LIBREFOLIO_PROFILE` è un `Literal` normalizzato.
+> - La mancata applicazione del CSP non è un reperto: è la tappa prevista (prima il report-only).
+> - **Suggerimento LOW per il cloud**: applicare già `object-src 'none'; base-uri 'self'; form-action 'self'` accanto
+>   a `frame-ancestors`. È difesa in profondità e non rompe niente. `script-src` viene dopo la fase di report-only.
+> - **I docs di H-40** (IPv6 su Docker, la mia nota di SEC8): corretti. Se non è stato verificato su un host Linux,
+>   basta scrivere nel piano di H che viene dalla documentazione di Docker.
+> - **I docs di H-34**: coerenti con il codice. `TXMixedBatch` è dichiarato onestamente fuori dalla visita.
+
+> **La revisione di MF-SEC8-2** (`ee440a5db`, ramo di MF `fddeb819a`, 09:4x, sola lettura; è la cura del mio SEC8-2):
+> **chiusa, nessun reperto.** Il mio SEC8-2 è curato anche prima della N74 di W.
+> - **L'emissione parte dal pavimento del 1900-01-01**: `calculate`, il `computed_from` e il `display_from` dei lots,
+>   `_unit_requests`, l'FX in transito del motore e i calendari del builder (`max(_replay_from, pavimento)`). Non resta
+>   nessuna camminata, né il `date.min − 1` che dava `OverflowError`.
+> - **Le righe vecchie sono rigiocate esatte, al costo delle righe**: prima di `date_from` un giorno quieto salta con
+>   `bisect` al prossimo giorno sporco. I giorni sporchi vengono solo da eventi, e `date_from` è uno di loro.
+>   `rate_change_days` fa una bisezione su una lista costruita dai giorni pavimentati.
+> - **La regola 7** («solo `localcontext()`») è nelle istruzioni di financial-math.
+> - **Residuo LOW**: dopo la N74, un report dal 1900 emette circa 46 000 giorni, cioè 3,5 volte un portafoglio dal 1990.
+>   La cura facoltativa resta «un replay alla volta per utente». È una scelta di prodotto.
+
+> **Lo slot E2E di E-8** (coordinatore, 09:48; parti 1 e 2, sulla punta `20c70013e`; `files/tools/e8_e2e_slot.sh`,
+> corsia 6188, `--workers 2`, una spec alla volta, macchina condivisa con J e H):
+>
+> | Spec | Esito | Durata |
+> |---|---|---|
+> | `front-utility email-send-link` (da ESL-E-01 a ESL-E-05, compreso l'invito in Italiano) | 5 passati | 349 s |
+> | `front-utility email-tab` (con i titoli «Settings › Administration › Email») | 5 passati | 87 s |
+>
+> La porta 6188 è libera alla fine (09:55). E-8 è pronto all'ingresso.

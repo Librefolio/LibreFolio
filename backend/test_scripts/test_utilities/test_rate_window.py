@@ -21,7 +21,8 @@ contract pinned here:
    if nobody read it since.
 8. At most ``max_keys`` keys, always: a new key is never refused for want of room, and after a ``hit`` the keys are
    never more than ``max_keys``. Room is made by evicting the lightest key — the one with the fewest hits still in the
-   window at that moment — and among the lightest the least recently used, used meaning peeked, hit or counted.
+   window at that moment — and among the lightest the one used or regrouped longest ago: a key goes to the end of its
+   group when it is peeked, hit or counted, and when a hit of its leaves the window.
    Expired hits never count, whether or not the key was read since: the limiter keeps an exact expiry index, a heap
    with one entry per key (its oldest hit), so a key whose hits left the window keeps no protection. No limit enters
    the choice, neither the limiter's own nor a call's, and there is no search: the lightest key is found wherever it

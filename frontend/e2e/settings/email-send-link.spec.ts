@@ -6,19 +6,25 @@
  * reads of the page simulated (`page.route`, owned by each test and removed by it):
  *   - `GET /api/v1/system/instance`: the real answer with `email` replaced (`fixtures/instance-email.ts`), links ready
  *     or not; the lane itself has no SMTP server;
- *   - `POST /api/v1/email/links`: a simulated server that records what it is asked and answers the email sent (checked
- *     against the generated `EmailLinkResponse`) or a refusal. The real route — which would answer 409, email being
- *     off on the lane — is never reached, and nothing is sent.
+ *   - `POST /api/v1/email/links`: a simulated server that records what it is asked and answers the email sent — in the
+ *     language the request asked for, `en` (standing for the instance's default) without one, checked against the
+ *     generated `EmailLinkResponse` — or a refusal. The real route — which would answer 409, email being off on the
+ *     lane — is never reached, and nothing is sent.
  * Covered:
- *   ESL-E-01  an invitation, links ready: the action in the link step, prefilled with the invitation's address; it posts
- *             {purpose: invite, the token of the link shown, to} and says «sent» with the address the server answered;
+ *   ESL-E-01  an invitation, links ready: the action in the link step, prefilled with the invitation's address; left on
+ *             the instance's language, it posts {purpose: invite, the token of the link shown, to} with no `language`
+ *             key at all, and says «sent» with the address the server answered and its language (`data-language`);
  *             `email.link.sent` recorded with the purpose and the language;
- *   ESL-E-02  a reset link, links ready: no address to type, the account's own address said instead; it posts
- *             {purpose: password_reset, the token} without `to`; «sent», and `email.link.sent`;
+ *   ESL-E-02  a reset link, links ready: no address to type and no language to choose, the account's own address said
+ *             instead; it posts {purpose: password_reset, the token} without `to` or `language`; «sent» with the
+ *             language answered, and `email.link.sent`;
  *   ESL-E-03  an invitation, the simulated server refuses with 429 EMAIL_RATE_LIMITED: «failed», the wait recorded in
  *             `email.link.sendFailed`, the action still offered;
  *   ESL-E-04  an invitation, email available but links not: the link step without the action — `LinkShare` drawn with
- *             its copy button and its actions row, so the absence is of the action alone.
+ *             its copy button and its actions row, so the absence is of the action alone;
+ *   ESL-E-05  an invitation in Italiano (lot E-8, decision N69): `it` chosen in the action's language select; it posts
+ *             exactly {purpose: invite, token, to, language: it}; «sent» with `data-language="it"`, the language the
+ *             server answered, and `email.link.sent` {purpose: invite, language: it}.
  * Assertions read test ids, `data-*`, the request bodies and the events, never a translated text (the address in the
  * outcome is data, not a translation).
  *
@@ -175,29 +181,51 @@ interface LinkAnswer {
     headers?: Record<string, string>;
 }
 
-/** The email sent, as the route answers it: checked against the generated schema, as the client checks it on arrival. */
-function sentAnswer(purpose: EmailLinkResponse['purpose'], to: string): LinkAnswer {
-    return {status: 200, body: schemas.EmailLinkResponse.parse({purpose, to, language: 'en'})};
+/** A fixed answer, or one built from the JSON body of the request it answers. */
+type LinkReply = LinkAnswer | ((requested: unknown) => LinkAnswer);
+
+/**
+ * The email sent, as the route answers it: in the language the request asked for, else in `en`, standing for the
+ * instance's default language — checked against the generated schema, as the client checks it on arrival. A language
+ * the schema refuses throws, and the simulated server records why instead of answering it.
+ */
+function sentAnswer(purpose: EmailLinkResponse['purpose'], to: string): LinkReply {
+    return (requested) => {
+        const asked = (requested as {language?: unknown} | null)?.language;
+        return {status: 200, body: schemas.EmailLinkResponse.parse({purpose, to, language: asked ?? 'en'})};
+    };
 }
 
 interface LinkServer {
     /** Every request the path received, its method and JSON body: answered when `POST`, fallen back otherwise. */
     requests: Array<{method: string; body: unknown}>;
+    /** Why a `POST` could not be answered as asked — no answer could be built from it —: a test asserts it empty. */
+    problems: string[];
     unroute: () => Promise<void>;
 }
 
-/** Answer `POST /api/v1/email/links` from a simulated server — that path and that method only — with `answer`. */
-async function simulateLinkServer(page: Page, answer: LinkAnswer): Promise<LinkServer> {
+/** Answer `POST /api/v1/email/links` from a simulated server — that path and that method only — with `reply`. */
+async function simulateLinkServer(page: Page, reply: LinkReply): Promise<LinkServer> {
     const requests: LinkServer['requests'] = [];
+    const problems: string[] = [];
     const handler = async (route: Route) => {
         const request = route.request();
         const post = request.method() === 'POST';
-        requests.push({method: request.method(), body: post ? request.postDataJSON() : null});
+        const body: unknown = post ? request.postDataJSON() : null;
+        requests.push({method: request.method(), body});
         if (!post) return route.fallback();
+        let answer: LinkAnswer;
+        try {
+            answer = typeof reply === 'function' ? reply(body) : reply;
+        } catch (error) {
+            // Nobody awaits a route callback: recorded instead, and answered, so that the page does not wait forever.
+            problems.push(`no answer could be built for ${JSON.stringify(body)}: ${String(error)}`);
+            answer = {status: 500, body: {detail: {error_code: 'SIMULATION_FAILED'}}};
+        }
         await route.fulfill({status: answer.status, headers: answer.headers, json: answer.body});
     };
     await page.route(isLinks, handler);
-    return {requests, unroute: () => page.unroute(isLinks, handler)};
+    return {requests, problems, unroute: () => page.unroute(isLinks, handler)};
 }
 
 /** The instance read as asked, at least once, by this page: the precondition of every presence and absence below. */
@@ -272,7 +300,7 @@ async function tokenShown(share: Locator): Promise<string> {
 test.setTimeout(180_000);
 
 test.describe('«Send by email» in the share dialogs — links ready', () => {
-    test('ESL-E-01: an invitation — prefilled with its address; posts {purpose, token, to}; «sent» with the address answered, and the event', async ({page, owned}) => {
+    test('ESL-E-01: an invitation — prefilled with its address; on the instance’s language posts {purpose, token, to} and no language; «sent» with the address and the language answered, and the event', async ({page, owned}) => {
         const email = owned.inviteAddress('sent');
         const instance = await serveInstanceEmail(page, {available: true, links: true});
         const server = await simulateLinkServer(page, sentAnswer('invite', email));
@@ -289,19 +317,24 @@ test.describe('«Send by email» in the share dialogs — links ready', () => {
             const since = await eventSeq(page);
             await action.getByTestId('send-link-email-button').click();
 
+            // The round trip first, then what it carried: a wrong body is then named, instead of an event never seen.
+            const outcome = action.getByTestId('send-link-email-outcome');
+            await expect(outcome, 'the request is answered').toHaveAttribute('data-outcome', /^(sent|failed)$/, {timeout: ACTION_MS});
+            expect(server.requests, 'one request: the token of the link shown and the address, nothing else').toEqual([{method: 'POST', body: {purpose: 'invite', token, to: email}}]);
+            expect(server.requests[0].body, 'left on the instance’s language: no language key at all, the backend decides').not.toHaveProperty('language');
+            expect(server.problems, 'the simulated server answered as asked').toEqual([]);
+            await expect(outcome).toHaveAttribute('data-outcome', 'sent');
+            await expect(outcome, 'the language the server answered: the instance’s default, en on the simulated server').toHaveAttribute('data-language', 'en');
+            await expect(outcome, 'the outcome names where the email went, as the server answered it').toContainText(email);
             const sent = await waitForEvent(page, 'email.link.sent', {since, timeout: ACTION_MS});
             expect(sent.detail, 'the event names the purpose and the language the email went in').toEqual({purpose: 'invite', language: 'en'});
-            const outcome = action.getByTestId('send-link-email-outcome');
-            await expect(outcome).toHaveAttribute('data-outcome', 'sent');
-            await expect(outcome, 'the outcome names where the email went, as the server answered it').toContainText(email);
-            expect(server.requests, 'one request: the token of the link shown and the address, nothing else').toEqual([{method: 'POST', body: {purpose: 'invite', token, to: email}}]);
         } finally {
             await server.unroute();
             await instance.dispose();
         }
     });
 
-    test('ESL-E-02: a reset link — no address to type, the account’s own address said; posts {purpose, token} without to; «sent», and the event', async ({page, owned}) => {
+    test('ESL-E-02: a reset link — no address to type nor language to choose, the account’s own address said; posts {purpose, token} without to or language; «sent», and the event', async ({page, owned}) => {
         const account = await owned.register('reset');
         const instance = await serveInstanceEmail(page, {available: true, links: true});
         const server = await simulateLinkServer(page, sentAnswer('password_reset', account.email));
@@ -315,14 +348,18 @@ test.describe('«Send by email» in the share dialogs — links ready', () => {
             await expect(action).toHaveAttribute('data-purpose', 'password_reset');
             await expect(action.getByTestId('send-link-email-target'), 'a reset link goes to its account’s own address, said instead of a field').toBeVisible();
             await expect(action.getByTestId('send-link-email-to'), 'no address to type for a reset link').toHaveCount(0);
+            await expect(action.getByTestId('send-link-email-language'), 'no language to choose: a reset link’s email goes in its account’s language').toHaveCount(0);
 
             const since = await eventSeq(page);
             await action.getByTestId('send-link-email-button').click();
 
             const sent = await waitForEvent(page, 'email.link.sent', {since, timeout: ACTION_MS});
             expect(sent.detail).toEqual({purpose: 'password_reset', language: 'en'});
-            await expect(action.getByTestId('send-link-email-outcome')).toHaveAttribute('data-outcome', 'sent');
-            expect(server.requests, 'one request: the token alone, no address').toEqual([{method: 'POST', body: {purpose: 'password_reset', token}}]);
+            const outcome = action.getByTestId('send-link-email-outcome');
+            await expect(outcome).toHaveAttribute('data-outcome', 'sent');
+            await expect(outcome, 'the language the server answered').toHaveAttribute('data-language', 'en');
+            expect(server.requests, 'one request: the token alone, no address, no language').toEqual([{method: 'POST', body: {purpose: 'password_reset', token}}]);
+            expect(server.problems, 'the simulated server answered as asked').toEqual([]);
         } finally {
             await server.unroute();
             await instance.dispose();
@@ -352,6 +389,46 @@ test.describe('«Send by email» in the share dialogs — links ready', () => {
             await expect(action.getByTestId('send-link-email-button'), 'still offered: the wait is the server’s to enforce').toBeEnabled();
             const methods = server.requests.map(({method}) => method);
             expect(methods, 'one request').toEqual(['POST']);
+        } finally {
+            await server.unroute();
+            await instance.dispose();
+        }
+    });
+
+    test('ESL-E-05: an invitation in Italiano — chosen in its language select; posts exactly {purpose, token, to, language: it}; «sent» in the language answered, and the event', async ({page, owned}) => {
+        const email = owned.inviteAddress('lang');
+        const instance = await serveInstanceEmail(page, {available: true, links: true});
+        const server = await simulateLinkServer(page, sentAnswer('invite', email));
+        try {
+            await openUsersTab(page);
+            const {dialog, share} = await inviteThroughDialog(page, email);
+            const token = await tokenShown(share);
+            expectServed(instance, true);
+            const action = dialog.getByTestId('send-link-email');
+            await expect(action, '«send by email» is offered in the link step').toBeVisible({timeout: UI_MS});
+            await expect(action).toHaveAttribute('data-purpose', 'invite');
+
+            const trigger = action.getByTestId('send-link-email-language-button');
+            await expect(trigger, 'an invitation offers the language of its email').toBeEnabled({timeout: UI_MS});
+            await trigger.click();
+            const list = action.getByTestId('send-link-email-language-dropdown');
+            await expect(list, 'the select opens its list').toBeVisible({timeout: UI_MS});
+            await expect(list.getByTestId('send-link-email-language-option-instance'), 'the instance’s language is chosen by default').toHaveAttribute('aria-selected', 'true');
+            await list.getByTestId('send-link-email-language-option-it').click();
+            await expect(list, 'a choice closes the list').toHaveCount(0, {timeout: UI_MS});
+
+            const since = await eventSeq(page);
+            await action.getByTestId('send-link-email-button').click();
+
+            // The round trip first, then what it carried: a wrong body is then named, instead of an event never seen.
+            const outcome = action.getByTestId('send-link-email-outcome');
+            await expect(outcome, 'the request is answered').toHaveAttribute('data-outcome', /^(sent|failed)$/, {timeout: ACTION_MS});
+            expect(server.requests, 'one request: the token of the link shown, the address and the language chosen, nothing else').toStrictEqual([{method: 'POST', body: {purpose: 'invite', token, to: email, language: 'it'}}]);
+            expect(server.problems, 'the simulated server answered as asked').toEqual([]);
+            await expect(outcome).toHaveAttribute('data-outcome', 'sent');
+            await expect(outcome, 'the language the server answered, which echoes the one asked for').toHaveAttribute('data-language', 'it');
+            const sent = await waitForEvent(page, 'email.link.sent', {since, timeout: ACTION_MS});
+            expect(sent.detail, 'the event names the purpose and the language the email went in').toEqual({purpose: 'invite', language: 'it'});
         } finally {
             await server.unroute();
             await instance.dispose();

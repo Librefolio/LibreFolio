@@ -1,5 +1,5 @@
 /**
- * Settings › Email E2E (workstream E, lot E2b): the administrators' Email tab.
+ * Settings › Administration › Email E2E (workstream E, lot E2b): the administrators' Email tab.
  *
  * Two halves:
  *   - on the lane's own backend: an administrator opens the tab through `?tab=email` and finds email off — the lane runs
@@ -124,7 +124,7 @@ async function simulateEmailServer(page: Page, {before, after, answer, hold = fa
     };
 }
 
-/** Sign the administrator in and open Settings › Email through its URL; the tab, once its first read has landed. */
+/** Sign the administrator in and open Settings › Administration › Email through its URL; the tab, once its first read has landed. */
 async function openEmailTab(page: Page): Promise<Locator> {
     await login(page, TEST_ADMIN);
     await navigateTo(page, '/settings?tab=email');
@@ -134,7 +134,7 @@ async function openEmailTab(page: Page): Promise<Locator> {
     return tab;
 }
 
-test.describe('Settings › Email — on the lane’s backend', () => {
+test.describe('Settings › Administration › Email — on the lane’s backend', () => {
     test('an administrator opens it with ?tab=email: email is off, explained, and the guide is one click away', async ({page}) => {
         await login(page, TEST_ADMIN);
         // The precondition, read before anything on screen: this lane runs without an SMTP server.
@@ -175,7 +175,7 @@ test.describe('Settings › Email — on the lane’s backend', () => {
     });
 });
 
-test.describe('Settings › Email — a test email, on a simulated server', () => {
+test.describe('Settings › Administration › Email — a test email, on a simulated server', () => {
     test('ready, 48 of 50 left, a warning: the test email is sent, recorded, and the status read again', async ({page}) => {
         const server = await simulateEmailServer(page, {before: readyStatus(48), after: readyStatus(47), answer: sentAnswer('en'), hold: true});
         try {

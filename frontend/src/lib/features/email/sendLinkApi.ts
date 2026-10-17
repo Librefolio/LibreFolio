@@ -7,6 +7,7 @@
  * to know: the token of a link, and whether emails with a link can go out.
  */
 import {zodiosApi} from '$lib/api';
+import type {SupportedLocale} from '$lib/i18n';
 import type {LinkPurpose} from '$lib/features/auth/linkToken';
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {refusalDetail, refusalStatus, retryAfterOf} from './emailApi';
@@ -29,6 +30,8 @@ export interface LinkEmailRequest {
     token: string;
     /** An invitation only: where to send it; without it, the address written in the invitation. */
     to?: string;
+    /** An invitation only: the language of the email; without it, the instance's default language (decision N69). */
+    language?: SupportedLocale;
 }
 
 export interface LinkEmailSent {
@@ -36,8 +39,8 @@ export interface LinkEmailSent {
     language: string;
 }
 
-export async function sendLinkByEmail({purpose, token, to}: LinkEmailRequest): Promise<LinkEmailSent> {
-    const answer = await zodiosApi.send_link_api_v1_email_links_post(to ? {purpose, token, to} : {purpose, token});
+export async function sendLinkByEmail({purpose, token, to, language}: LinkEmailRequest): Promise<LinkEmailSent> {
+    const answer = await zodiosApi.send_link_api_v1_email_links_post({purpose, token, ...(to ? {to} : {}), ...(language ? {language} : {})});
     return {to: answer.to, language: answer.language};
 }
 
