@@ -7,7 +7,8 @@ a security were valued at the day's rate. Foreign cash showed no exchange-rate g
 loss, and the first purchase after a rate move left a negative cash balance behind (B1).
 
 The approved fix (spec §2, D-beta). The builder takes ``native_cash`` (a ``NativeCash``,
-required). On every rate-change day — pre-frame days before ``frame_start`` included —
+required). On every rate-change day of the replay — one replay from the first movement, the
+days before ``date_from`` included, states emitted from ``date_from`` on (J1) —
 after that day's cash deltas and before its transaction pool rules, each broker holding
 foreign cash takes ``fxr = native_cash.value_at(day)[b] - cumulative_cash_by_broker[b]``:
 the cash moves by ``fxr`` (aggregate and broker alike), the returns pool R takes it, and a
@@ -237,8 +238,8 @@ def _classify(txs, scope, *, shares=None, external_paired=None):
 def _overrides(classification, *, date_to, date_from=D0, price_map=None, fx_rate_map=None, asset_currencies=None) -> dict:
     """Builder kwargs for a classified scenario; every asset is a "Stock" with no classification,
     quoted in EUR unless ``asset_currencies`` says otherwise. A ``date_from`` after the first
-    transaction is a window run: ``frame_start`` is left to default to it, as ``calculate()``
-    does, and the earlier transactions are replayed pre-frame."""
+    transaction is a window run: one replay from the first movement, with the same rules every
+    day, and the states emitted from ``date_from`` on (J1)."""
     price_map = price_map or {}
     asset_ids = {ctxn.tx.asset_id for ctxn in classification.classified if ctxn.tx.asset_id is not None} | set(price_map)
     return {

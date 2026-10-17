@@ -7,7 +7,7 @@ Validates the core architectural invariants:
 3. 3-pool event-driven (K, R, W)
 4. Position states emission (start + end snapshots)
 5. Realized sales (proceeds and historical cost)
-6. Pre-frame / frame separation
+6. A run from a date_from after the first movement (one replay, states from date_from)
 """
 
 from datetime import date
@@ -77,7 +77,6 @@ def _build(
     fx_rate_map=None,
     split_history=None,
     split_linked_tx_ids=None,
-    frame_start=None,
     date_from=date(2025, 1, 1),
     date_to=date(2025, 1, 10),
     mark_series=None,
@@ -106,7 +105,6 @@ def _build(
         target_currency="EUR",
         date_from=date_from,
         date_to=date_to,
-        frame_start=frame_start,
         split_history=split_history or {},
         split_linked_tx_ids=split_linked_tx_ids or set(),
         mark_series=mark_series,
@@ -632,12 +630,14 @@ class TestInKindAdjustmentCapital:
         assert last.cumulative_external_cash_flow == Decimal("0")
         assert last.total_pnl == Decimal("0")
 
-    def test_preframe_priced_adjustment_carries_capital_into_frame(self):
-        """An opening ADJUSTMENT before frame_start seeds the capital baseline so a
+    def test_priced_adjustment_before_date_from_carries_capital_into_the_states(self):
+        """An opening ADJUSTMENT before date_from seeds the capital baseline so a
         bounded period starts with the right capital (not a phantom P&L)."""
         txs = [_c(_tx(tx_id=1, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("10"), amount=Decimal("0"), cbo=Decimal("100"), cbo_ccy="EUR", dt=date(2025, 1, 2)))]
         prices = {1: [(date(2025, 1, 2), Decimal("120"), "EUR"), (date(2025, 1, 5), Decimal("120"), "EUR")]}
-        result = _build(txs, price_map=prices, frame_start=date(2025, 1, 5))
+        result = _build(txs, price_map=prices, date_from=date(2025, 1, 5))
+        assert result.daily_states[0].date == date(2025, 1, 5)
+        assert result.daily_states[0].cumulative_external_cash_flow == Decimal("1000")
         last = result.daily_states[-1]
         assert last.cumulative_external_cash_flow == Decimal("1000")
         assert last.total_pnl == Decimal("200")
@@ -684,14 +684,15 @@ class TestPositionStates:
         result = _build(txs)
         assert len(result.position_states_end) == 0
 
-    def test_start_positions_from_preframe(self):
-        """Positions at frame_start reflect pre-frame accumulation."""
+    def test_start_positions_at_date_from_include_earlier_movements(self):
+        """Positions at the end of date_from include the movements replayed before it."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, quantity=Decimal("5"), amount=Decimal("-600"), dt=date(2025, 1, 8))),
         ]
-        # frame_start=Jan 5 → pre-frame includes tx1, frame includes tx2
-        result = _build(txs, frame_start=date(2025, 1, 5))
+        # date_from=Jan 5 → tx1 is replayed before the first emitted state, tx2 after it
+        result = _build(txs, date_from=date(2025, 1, 5))
+        assert result.position_states_start_date == date(2025, 1, 5)
         assert len(result.position_states_start) == 1
         assert result.position_states_start[0].quantity == Decimal("10")
         # End includes both
@@ -724,30 +725,30 @@ class TestRealizedSales:
 
 
 # =============================================================================
-# 6. PRE-FRAME / FRAME SEPARATION
+# 6. A RUN FROM A date_from AFTER THE FIRST MOVEMENT
 # =============================================================================
 
 
-class TestPreframeFrame:
-    """Verify pre-frame processes txs without market eval."""
+class TestDateFromAfterTheFirstMovement:
+    """J1: one replay from the first movement, with the same rules every day; only the states from date_from are emitted."""
 
-    def test_preframe_no_states_emitted(self):
-        """Transactions before frame_start don't produce daily states."""
+    def test_no_states_before_date_from(self):
+        """Transactions before date_from don't produce daily states."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
         ]
-        result = _build(txs, frame_start=date(2025, 1, 5))
-        # States only from frame_start to date_to
+        result = _build(txs, date_from=date(2025, 1, 5))
+        # States only from date_from to date_to
         assert all(s.date >= date(2025, 1, 5) for s in result.daily_states)
         assert result.daily_states[0].date == date(2025, 1, 5)
 
-    def test_preframe_accumulates_cash(self):
-        """Pre-frame deposit is reflected in frame's cash value."""
+    def test_cash_before_date_from_is_carried(self):
+        """A deposit before date_from is in the first emitted state's cash value."""
         txs = [
             _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
         ]
-        result = _build(txs, frame_start=date(2025, 1, 5))
-        # First frame day should show cash=1000 from pre-frame deposit
+        result = _build(txs, date_from=date(2025, 1, 5))
+        # The first emitted day shows cash=1000 from the earlier deposit
         assert result.daily_states[0].cash_value == Decimal("1000")
 
 
