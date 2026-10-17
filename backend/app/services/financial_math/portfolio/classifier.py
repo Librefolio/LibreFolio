@@ -213,11 +213,11 @@ class ScopeAwareTransactionClassifier:
         else:
             departure, arrival = tx_b, tx_a
 
+        if departure.date == arrival.date:
+            return None  # Same-day transfer — no transit window (compared first: a pair on date.min has no day before)
+
         start = departure.date
         end = arrival.date - timedelta(days=1)
-
-        if start > end:
-            return None  # Same-day transfer — no transit window
 
         # Determine type: cash or asset
         if departure.type in _ASSET_LINKED_TYPES or arrival.type in _ASSET_LINKED_TYPES:
