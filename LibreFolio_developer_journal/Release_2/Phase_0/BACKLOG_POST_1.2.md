@@ -8342,8 +8342,8 @@ punto di partenza, l'audit dello stesso giorno:
   `fx/sync.py:234` in blocchi (`utils/sql_chunks.OR_TERMS_PER_QUERY`), un tetto di scrittura `MAX_BULK_WRITE_ITEMS`
   (10 000) su `POST`/`DELETE /fx/currencies/rate` e `DELETE /prices`, la sonda letta a ogni chiamata. Restano da
   verificare `brim_provider.py:2030` e `pac_allocator/source/wac.py:44`. Dettagli: piano MF, sezione «MF-SEC9a».
-- **MF-J45c · Il report in cache `portfolio_layer2` è un oggetto condiviso fra le richieste** — minimo, robustezza;
-  **Pronto (17/10)**: guardia `test_financial/test_portfolio_l2_report_shared.py` (API, rischio, AI Export intero), nessuna
+- ✅ **MF-J45c · Il report in cache `portfolio_layer2` è un oggetto condiviso fra le richieste** — minimo, robustezza;
+  **Chiusa il 17/10**, dev `ab74aafbf`: guardia `test_financial/test_portfolio_l2_report_shared.py` (API, rischio, AI Export intero), nessuna
   scrittura trovata, nessun cambio di prodotto. Nota: i risultati del rischio portano l'oggetto `data_quality` del report
   in cache tale e quale (secondo riferimento, oggi nessuna scrittura; la guardia la vedrebbe).
   test-author di MF, 17/10 (MF-J45b). Come il risultato del motore (ora condiviso anche dal single-flight, con una
@@ -8400,11 +8400,33 @@ punto di partenza, l'audit dello stesso giorno:
   `daily_state.py` alla stessa soglia resta dopo la 1.3 (coordinatore).
   giornaliero valuta ogni quantità > 0, le righe considerano ≤ 1e-5 come non tenuta: la stessa soglia dai due lati, o il
   §7 dice «polvere a parte». Dettagli: piano MF, «MF-A5».
-- **MF-A7 · `oldest_open_lot_date` senza soglia della polvere** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di
-  **Pronto (17/10, nella 1.3 per il coordinatore)**: i lotti più vecchi che insieme tengono la polvere o meno sono messi
+- ✅ **MF-A7 · `oldest_open_lot_date` senza soglia della polvere** — basso, numeri, dopo la 1.3; J, 17/10 (revisione di
+  **Chiusa il 17/10** (nella 1.3 per il coordinatore), dev `09d29671d`, CHANGELOG `5af05312b`: i lotti più vecchi che insieme tengono la polvere o meno sono messi
   da parte, None se la posizione tiene solo polvere.
   MF-A2). Un residuo di polvere può spostare l'inizio della finestra di ricaduta dell'annualizzato. Dettagli: piano MF,
   «MF-A5».
+- **MF-A10 · Le finestre di detenzione leggono la quantità grezza, le righe quella alla quota** — basso, numeri, nella
+  1.3 (coordinatore); J, 17/10 (revisione di MF-A7). **Pronto (17/10)**. `quantity_moves` → `oldest_open_lot_date`,
+  `closed_position_window` leggono `tx.quantity`; il test della polvere della riga (`is_fully_sold`, `qty_at_end`) e la
+  lista delle posizioni leggono la quantità del motore alla quota (`daily_state.py:380`). Su un broker posseduto in
+  parte (s < 1) un residuo in (polvere, polvere/s] è polvere per la riga e non per la finestra: s = 0,5, residuo
+  0,000012 del 2015 e un BUY del 2024 → la finestra parte ancora dal 2015; chiusa a polvere/quota con residuo grezzo
+  sopra la polvere → `closed=None` (A2/A5). Cura: la convenzione del motore, `quantity_moves(..., share=…)`, i due
+  chiamanti passano la quota del broker. Rossi prima con s = 0,5. Dettagli: piano MF, «MF-A10».
+- **MF-A11 · Una base unica per le righe aperte nel periodo** — basso-medio, numeri (**da decidere, developer**); J,
+  17/10 (revisione di MF-A9). Proposta di J: ogni riga aperta nel periodo prende la base `costo alla fine +
+  closed_position_base(cost_sold, sales, moved_out, exits, moved_in)` quando ogni uscita è coperta, altrimenti il solo
+  costo alla fine come oggi; la finestra parte dalla prima apertura nel periodo. Toglie il limite di MF-A9 (righe con
+  uscite) ed è continua all'ultima vendita: oggi −10 % da aperta contro −1 % da chiusa. Cambia valori: nelle domande
+  del developer (coordinatore). Caso estremo trovato col test di MF-A10: a broker intero un residuo di 0,000012 (sopra
+  la polvere) lascia una riga tenuta con costo alla fine 0,0012, e l'annualizzato vale 1 774 600,33 (oggi): con la base
+  proposta (0,0012 + il costo venduto) torna sensato. Dettagli: piano MF, «MF-A10».
+- **MF-A12 · La variazione d'un giorno delle posizioni scritta in linea** — minimo, nessun valore (salvo un pareggio
+  d'arrotondamento); MF, 17/10 (analisi di J-14). In `get_summary` `price_change_1d = ((corrente − precedente) /
+  precedente).quantize(0,0001)` (`portfolio_service.py` ~:745) e `gain_loss_change_1d_percent = (variazione / |valore
+  precedente| × 100).quantize(0,01)` con la guardia `|precedente| > 0,01` (~:759), accanto a `returns.price_return`
+  (`fine/inizio − 1`) e `returns.change_ratio`. Nella 1.3 dopo J-14 se resta piccola (coordinatore): test di parità, il
+  pareggio dichiarato. Dettagli: piano MF, «J-14 — analisi».
 - **MF-SEC9f · Altri OR per elemento, censiti da E** — minimo, informazione; E, 17/10 (revisione di MF-SEC9a).
   `scheduler/jobs.py:100` costruisce un termine per coppia configurata: rifiutato solo con ~1 000 coppie, improbabile.
   `portfolio/engine.py:133` è sicuro. Nessuna azione ora. Dettagli: piano 08 di E, «MF-SEC9a».
