@@ -3803,7 +3803,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     setup già consegnato al vecchio indirizzo resta buono; lo stesso per `user set-email` sull'account in attesa.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Analisi e
     contratto».
-- **A-34 · `end_sessions` incrementa la copia in memoria: due incrementi concorrenti ne contano uno** — basso;
+- ✅ **A-34 · `end_sessions` incrementa la copia in memoria: due incrementi concorrenti ne contano uno** — basso;
+  chiusa il 17/10 in A8a (commit del coordinatore): `await end_sessions(session, user)`, un `UPDATE … RETURNING` Core
+  sulla connessione della sessione più `set_committed_value`; due richieste → +2 (`services session-version`).
   dalla revisione di E («R13-SEC»), tramite il coordinatore (16/10). Valutata in A7b-2 e lasciata: non costa poco
   (`test_session_version.py` ne fissa la forma sincrona, contratto 5; 9 chiamate da rendere asincrone). Con A8.
   - `user_service.end_sessions` fa `user.session_version += 1` sull'oggetto: due richieste quasi simultanee
@@ -3828,6 +3830,49 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   aggiornare `developer/architecture/patterns/plugin_settings.md` (riga sulla classe). Il test di
   `test_plugin_settings_api.py` resta: passa dal server vero. Dettagli: [piano
   02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Decisioni del coordinatore».
+- **A-39 · `admin/configuration`: l'avviso del link scaduto e quello del cambio d'indirizzo** — minimo (doc, con
+  traduzioni); dal `docs-writer` di A7b-2, tramite il coordinatore (17/10). La pagina dice che ogni avvio senza un link
+  vivo scrive l'avviso di scadenza; dopo A-33 l'avvio che applica un indirizzo nuovo scrive invece «The initial
+  administrator's address changed: the setup link handed over before no longer works; …», e quelli dopo l'avviso di
+  scadenza. Una frase, e la stessa nelle tre traduzioni. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2.2».
+- **A-40 · `user activate` sull'admin in attesa avvisa del limite di utenti anche se il suo posto è già contato** —
+  minimo; dal `docs-writer` di A7b-2, tramite il coordinatore (17/10); preesistente. A istanza piena il CLI scrive
+  l'avviso del limite (che supera), ma l'admin in attesa era già contato fra i posti (D-A10): l'attivazione non ne
+  occupa uno nuovo. Cura possibile: nel CLI, nessun avviso quando l'account era in attesa. Dettagli: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2.2».
+- **A-41 · Un limite per indirizzo sui token sbagliati (inspect, setup, reset, invito)** — basso; proposto in A8 (C2) e
+  tenuto fuori dal coordinatore (17/10): i token sono lunghi (256 bit) e casuali, la forza bruta non è praticabile, e un
+  limite per indirizzo rischia di bloccare utenti dietro lo stesso NAT. Da riprendere solo se compare un motivo nuovo
+  (per esempio token più corti). Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+  «A8 — Analisi e contratto».
+- **A-38 · Il 422 toglie solo `input`: `msg` e `ctx` portano parti del valore dove un validatore lo formatta** — basso;
+  dalla revisione di E di A7b-2 («R13-SEC4»), tramite il coordinatore (17/10).
+  - Esempi: `schemas/common.py:98` (valuta), `schemas/settings.py:434-459` (orari, giorni, fuso, valuta), `uuid_parsing`.
+    Nessuno tocca una credenziale oggi (verificato in A7b-2: `ctx.error` esce vuoto, il valore passa da `msg`).
+  - In parte già coperto: `test_validation_errors_api.py` vuole il segnale assente da **tutta** la risposta sulle otto
+    rotte con credenziali, ma solo per le forme d'errore che esercita. Cura: una regola in `security.md#validation-errors`
+    («un validatore non mette il valore nel messaggio») e, se serve, un test che la imponga per ogni campo segreto.
+- **A-42 · Una gara fra un setup e un nuovo link di setup** — basso; dalla revisione di E di A7b-2 («R13-SEC4»).
+  `issue_setup_link` e il riarmo all'avvio decidono «in attesa» da una lettura fatta prima del BEGIN differito: un
+  `POST /auth/setup` chiuso in quella finestra lascia un link vivo all'account appena attivato. Cura proposta da E: rifiutare
+  il consumo (e il rilascio) quando un altro link di setup dell'account è già consumato.
+- **A-43 · La disattivazione non tocca i link di setup (con A-44: annullare l'admin iniziale)** — basso; dalla revisione
+  di E di A7b-2 («R13-SEC4»); A-44 unita qui dal coordinatore (17/10, 03:09). Dopo A8a.
+  - Disattivare l'admin **in attesa** è l'annullamento: i suoi link si **revocano** (non si ritirano: resta in attesa,
+    così `user setup-link`, la via dell'operatore, gli dà ancora un link nuovo; un ritiro lo toglierebbe dall'attesa e
+    `setup-link` non lo troverebbe più).
+  - Disattivare un account **non** in attesa **ritira** i link di setup che avesse (i database delle build precedenti
+    della 1.3, con link vivi su account già attivati).
+  - Cambiano per costruzione: UADM-062 e UADM-067 (`{is_active: false}` sull'admin in attesa: resta in attesa, ma il
+    link non vale più), le varianti di UADM-069 e SETUP-016 che lo disattivano.
+- ✅ **A-44 · L'admin iniziale che non ha mai fatto il setup non si può annullare** — unita ad **A-43** dal coordinatore
+  (17/10, 03:09): disattivarlo è l'annullamento. Dettagli delle voci di E: [piano
+  02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A7b-2 — Revisione di E».
+- **A-45 · `developer/api/index.md`: `/auth` «token refresh» non esiste** — minimo (doc, solo inglese); dal
+  `docs-writer` di A8a (17/10). La riga del router dice «Authentication (login, token refresh)»: non c'è nessun
+  refresh, il cookie dura `session_ttl_hours` (`security.md` «Token Expiration»). Lasciata fuori da A8a perché
+  estranea. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A8a.6».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
